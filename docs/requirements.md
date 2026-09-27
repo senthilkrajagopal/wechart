@@ -842,6 +842,14 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R35 — designs 11 and 12, and what the backend can't yet do** (2026-09-27, the user, after seeing designs 11 and 12)
+- The user: "i checked the ui design.. and it looks great.. if any of the ui is not based on the backend design., and if it requires redesigning any of the backend (xcube) then it can be put in the backlog. If it is achievable by simple changes in the backend.. then we should do it..."
+  - *Read as the approval of designs 11 (Generate cubes) and 12 (the Model overview), as drawn. Their "Proposals (need approval)" notes stay proposals.*
+  - *Where a design draws something the backend does not provide:*
+    - *if it takes a simple change in wechart's API or in xcube, make it;*
+    - *if it needs xcube redesigned, put it in `docs/phase-2/backlog.md` and draw the UI without it.*
+  - *Changes to xcube still go through the Cube-expert agent, and are built on only once its image is published.*
+
 **R34 — the Model workspace and Generate cubes, as a priority** (2026-09-27, the user, after T472)
 - The user: "Cleanup the models page.. add models page and generate cube page.. all of them are not in sync with the rest of the app and the ui design.. if required use an ui expert agent. take this as a priority. since the app is already running the ui expert can use that to check the experience."
   - *Read as the approval, for the Model workspace, of phase-1 design 03 (`docs/design/reviews/2026-09-24/designs/03-model-workspace.html`), which R33's "bugs and consistency only" had left unapplied. It covers:*

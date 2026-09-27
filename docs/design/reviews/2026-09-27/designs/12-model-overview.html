@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Design 12 · Model overview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" />
+<style>
+  :root {
+    --bg-page: #f4f4f2; --bg-surface: #ffffff; --bg-raised: #ffffff; --bg-subtle: #f0efec; --bg-hover: #efeeea;
+    --border-subtle: #e3e2de; --border-strong: #c9c7c1;
+    --text-primary: #1f1f1e; --text-secondary: #5c5b57; --text-muted: #6e6c67; --text-on-accent: #ffffff;
+    --accent: #1f6f86; --accent-soft: #e3f0f4; --accent-ring: rgba(31,111,134,.35);
+    --role-dim: #2d6ab4; --role-dim-soft: #e6eef8;
+    --ok: #1d7a3f; --ok-icon: #0ca30c; --warn: #8a5a00; --warn-icon: #fab219; --err: #c2362f; --err-icon: #d03b3b;
+    --shadow-pop: 0 8px 24px rgba(20,20,18,.14), 0 1px 3px rgba(20,20,18,.1);
+    --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-code: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    --note: #c8176b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #dcdad4; color: var(--text-primary); font: 400 14px/20px var(--font-ui); -webkit-font-smoothing: antialiased; min-width: 1440px; }
+  .doc { width: 1440px; margin: 0 auto; }
+  .doc-head { background: #1f1f1e; color: #f2f2f0; padding: 28px 32px 22px; }
+  .doc-head .k { font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; color: #b4b3ab; }
+  .doc-head h1 { margin: 6px 0; font-size: 24px; line-height: 32px; font-weight: 600; }
+  .doc-head p { margin: 0 0 6px; color: #d6d5cf; max-width: 1160px; }
+  .doc-head .ids { margin-top: 10px; font: 400 12px/16px var(--font-code); color: #b4b3ab; }
+  .doc-head code { color: #f2f2f0; background: #333; padding: 0 4px; border-radius: 3px; font: 400 12px var(--font-code); }
+  .screen { position: relative; width: 1440px; height: 900px; overflow: hidden; background: var(--bg-page); }
+  .pin { position: absolute; z-index: 300; width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.35); }
+  .notes { background: #fff; padding: 28px 32px 40px; }
+  .notes h2 { margin: 0 0 4px; font-size: 20px; line-height: 26px; font-weight: 600; }
+  .notes > p { margin: 0 0 18px; color: var(--text-secondary); max-width: 1120px; }
+  .notelist { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 40px; margin: 0; padding: 0; list-style: none; }
+  .notelist li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
+  .notelist .n { width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; }
+  .notelist li > div > b { display: block; font-weight: 600; }
+  .notelist .t { color: var(--text-secondary); }
+  .fix { display: block; margin-top: 2px; font: 600 12px/16px var(--font-code); color: var(--note); }
+  .prop { display: inline-block; margin-top: 4px; padding: 1px 6px; border: 1px dashed var(--note); border-radius: 4px; color: var(--note); font: 600 12px/16px var(--font-ui); }
+  .notes code, .states code { font: 400 12px var(--font-code); background: var(--bg-subtle); padding: 0 4px; border-radius: 3px; }
+  .states { background: #f7f6f3; padding: 28px 32px 40px; border-top: 1px solid var(--border-subtle); }
+  .states h2 { margin: 0 0 16px; font-size: 20px; line-height: 26px; font-weight: 600; }
+  .srow { display: grid; grid-template-columns: 676px 1fr; gap: 24px; align-items: start; margin-bottom: 28px; }
+  .state h3 { margin: 0 0 4px; font-size: 14px; line-height: 20px; font-weight: 600; }
+  .state p { margin: 0 0 8px; font-size: 13px; line-height: 19px; color: var(--text-secondary); }
+  .frame { background: var(--bg-page); border: 1px solid var(--border-strong); border-radius: 6px; position: relative; overflow: hidden; }
+  .decision { margin: 26px 0 0; padding: 16px 20px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-page); max-width: 1376px; }
+  .decision h3 { margin: 0 0 8px; font-size: 16px; line-height: 22px; font-weight: 600; }
+  .decision > p { margin: 0 0 10px; color: var(--text-secondary); font-size: 13px; line-height: 18px; }
+  .decision table { border-collapse: collapse; width: 100%; font-size: 13px; line-height: 18px; }
+  .decision th, .decision td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--border-subtle); }
+  .decision th { font-size: 12px; color: var(--text-secondary); font-weight: 600; background: var(--bg-subtle); }
+  .decision td.w { white-space: nowrap; font: 600 12px/18px var(--font-code); color: var(--note); }
+
+  /* app */
+  svg.i { width: 16px; height: 16px; flex: none; }
+  svg.s { width: 14px; height: 14px; flex: none; }
+  svg.t12 { width: 12px; height: 12px; flex: none; }
+  .topbar { height: 48px; display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-mark { width: 22px; height: 22px; border-radius: 5px; background: var(--accent); color: var(--text-on-accent); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+  .wsnav { display: flex; gap: 2px; height: 100%; }
+  .wsnav span { display: flex; align-items: center; padding: 0 12px; height: 100%; color: var(--text-secondary); border-bottom: 2px solid transparent; }
+  .wsnav span.on { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--accent); }
+  .spacer { flex: 1; }
+  .search { display: flex; align-items: center; gap: 8px; width: 260px; height: 32px; padding: 0 10px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-subtle); color: var(--text-muted); font-size: 13px; }
+  .search kbd { margin-left: auto; font: 600 12px/16px var(--font-ui); border: 1px solid var(--border-strong); border-radius: 4px; padding: 0 4px; }
+  .iconbtn { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 6px; color: var(--text-secondary); flex: none; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--role-dim-soft); color: var(--role-dim); display: grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; }
+  .btn { height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-surface); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 14px; color: var(--text-primary); flex: none; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+  .btn.pressed { box-shadow: 0 0 0 3px var(--accent-ring); }
+  .btn.dis { opacity: .45; }
+  .btn.ghost { border-color: transparent; background: none; }
+  .btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
+  .btn.link { border: 0; background: none; padding: 0; height: auto; color: var(--accent); font-size: 12px; font-weight: 600; }
+  .btn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; font-weight: 600; white-space: nowrap; }
+  .status.ok { color: var(--ok); } .status.err { color: var(--err); } .status.run { color: var(--accent); } .status.idle { color: var(--text-secondary); }
+  .status.q { font-weight: 400; color: var(--text-secondary); }
+  .xs { font-size: 12px; line-height: 16px; } .muted { color: var(--text-muted); } .sec { color: var(--text-secondary); } .strong { font-weight: 600; }
+  .mono { font-family: var(--font-code); font-size: 12px; }
+  .notebar { display: flex; gap: 8px; align-items: flex-start; padding: 8px 12px; border-radius: 6px; font-size: 12px; line-height: 16px; background: var(--accent-soft); color: var(--text-primary); border: 1px solid var(--border-subtle); }
+  .notebar.err { background: color-mix(in srgb, var(--err-icon) 9%, var(--bg-surface)); }
+  .notebar > span { flex: 1; min-width: 0; display: grid; gap: 6px; }
+  .card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; overflow: hidden; }
+  .grid-table { border-collapse: collapse; width: 100%; font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums; table-layout: fixed; }
+  .grid-table th { background: var(--bg-subtle); text-align: left; font-weight: 600; height: 28px; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .grid-table th.sorted { color: var(--text-primary); }
+  .grid-table th .sort { display: inline-flex; align-items: center; gap: 4px; }
+  .grid-table td { height: 34px; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .grid-table tr:last-child td { border-bottom: 0; }
+  .grid-table tr.hover td { background: var(--bg-hover); cursor: pointer; }
+  .grid-table .num { text-align: right; }
+  .grid-table .zero { color: var(--text-muted); }
+  .grid-table .flink { font: 400 12px var(--font-code); color: var(--accent); }
+  .grid-table .mem { color: var(--text-secondary); }
+  .grid-table .mem b { font-weight: 400; color: var(--text-muted); }
+  .fcell { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .fcell .flink { overflow: hidden; text-overflow: ellipsis; }
+  .mark { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; line-height: 16px; color: var(--text-secondary); white-space: nowrap; flex: none; }
+  .mark.err { color: var(--err); }
+  .tag { display: inline-flex; align-items: center; gap: 3px; font: 600 12px/16px var(--font-ui); color: var(--text-secondary); border: 1px solid var(--border-strong); border-radius: 3px; padding: 0 5px; white-space: nowrap; background: var(--bg-surface); flex: none; }
+  .tt { position: absolute; z-index: 40; background: var(--bg-raised); border: 1px solid var(--border-subtle); border-radius: 6px; box-shadow: var(--shadow-pop); padding: 8px 10px; font-size: 12px; line-height: 16px; display: grid; gap: 2px; }
+  .tt b { font-weight: 600; }
+  .menu { position: absolute; z-index: 40; background: var(--bg-raised); border: 1px solid var(--border-subtle); border-radius: 6px; box-shadow: var(--shadow-pop); padding: 4px; display: grid; }
+  .menu .mi { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 4px; font-size: 12px; }
+  .menu .mi.hover { background: var(--bg-hover); }
+  .menu .sep { height: 1px; background: var(--border-subtle); margin: 4px 0; }
+  .sk { height: 10px; border-radius: 3px; background: var(--bg-subtle); display: block; }
+
+  /* tree (design 03 + MW-02/MW-03) */
+  .tree-pane { background: var(--bg-surface); border-right: 1px solid var(--border-subtle); display: flex; flex-direction: column; min-height: 0; }
+  .thead { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; border-bottom: 1px solid var(--border-subtle); }
+  .thead h2 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; }
+  .dir { height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 12px; font: 600 12px var(--font-code); color: var(--text-secondary); }
+  .file { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 28px; font: 400 12px var(--font-code); }
+  .file .fn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .file.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .file .tag, .file .mark { margin-left: auto; font-family: var(--font-ui); font-weight: 400; }
+  .file .tag { font-weight: 600; }
+  .tacts { padding: 12px; display: grid; gap: 6px; border-top: 1px solid var(--border-subtle); margin-top: 8px; }
+  .tacts .btn { justify-content: flex-start; }
+
+  /* overview */
+  .ov { padding: 16px 24px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .ov > * { width: 100%; }
+  .titlerow { display: flex; align-items: center; gap: 10px; height: 32px; }
+  .titlerow h1 { margin: 0; font-size: 20px; line-height: 26px; font-weight: 600; }
+  .empty { padding: 28px 24px; display: grid; gap: 8px; justify-items: start; }
+  .empty b { font-size: 14px; line-height: 20px; font-weight: 600; }
+
+  /* editor bits for state E (design 03) */
+  .editor-head { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface); min-height: 44px; }
+  .tabs { display: flex; align-items: center; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface); }
+  .tabs .tb { height: 36px; padding: 0 9px; font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .tabs .tb .ct { font-weight: 400; color: var(--text-muted); }
+  .tabs .tb.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+  .field { display: grid; gap: 4px; }
+  .lbl { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); }
+  .input { height: 28px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg-surface); padding: 0 8px; width: 100%; display: flex; align-items: center; gap: 6px; font-size: 12px; min-width: 0; white-space: nowrap; overflow: hidden; }
+  .input.ph { color: var(--text-muted); }
+  .input.focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-ring); }
+  .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 4px; overflow: hidden; flex: none; }
+  .seg span { height: 26px; padding: 0 10px; font-size: 12px; display: flex; align-items: center; background: var(--bg-surface); border-left: 1px solid var(--border-subtle); }
+  .seg span:first-child { border-left: 0; }
+  .seg span.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.5 10.5l3 3" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></symbol>
+  <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--accent)"/><path d="M8 7v4.2M8 4.6v.4" style="stroke:var(--bg-surface)" stroke-width="1.7"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-chevd" viewBox="0 0 16 16"><path d="M3.5 6L8 10.5 12.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-sort" viewBox="0 0 16 16"><path d="M8 3.5v9M4.5 7L8 3.5 11.5 7" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-cube" viewBox="0 0 16 16"><path d="M8 1.8l5.5 3v6.4L8 14.2l-5.5-3V4.8z M2.5 4.8L8 7.8l5.5-3M8 7.8v6.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+  <symbol id="i-view" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2 6.5h12" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-db" viewBox="0 0 16 16"><ellipse cx="8" cy="4" rx="5" ry="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="s-ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--ok-icon)"/><path d="M4.7 8.2l2.2 2.2 4.4-4.7" stroke="#fff" stroke-width="1.8" fill="none"/></symbol>
+  <symbol id="s-err" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--err-icon)"/><path d="M5.4 5.4l5.2 5.2M10.6 5.4l-5.2 5.2" stroke="#fff" stroke-width="1.8"/></symbol>
+  <symbol id="s-idle" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5V8l2.4 1.5" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="s-run" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" style="stroke:var(--border-strong)" stroke-width="2"/><path d="M8 1.8a6.2 6.2 0 0 1 6.2 6.2" fill="none" style="stroke:var(--accent)" stroke-width="2"/></symbol>
+</svg>
+
+<div class="doc">
+  <header class="doc-head">
+    <div class="k">wechart · UI review 2026-09-27 · Design 12 · for the Model workspace cleanup (R34)</div>
+    <h1>Model overview — one table of every cube and view, beside design 03's tree</h1>
+    <p>With no file open, <code>/model</code> shows one card per file (critique MW-01). Each card has an underlined 13/600 mono path, an uppercase "CUBE" tag, and member names as 13 px running text. Five cards fill the 852 px pane, so the views sit below the fold. The 720 px InfoBar doesn't line up with the 960 px cards, and the title row has no action. The tree beside it has a 97 px "Files" head with three bordered buttons wrapping onto two rows, folder labels 16 px tall with no ▾, inset pill rows, and no Jinja tag (MW-02, MW-03). The re-check asked for "the overview as a table of files" (UX-079, item 57).</p>
+    <p>This design draws the overview as one card with a grid table, one row per cube or view, as MW-01 recommends. It sits beside design 03's tree, with the head, rows and foot MW-02 and MW-03 recommend. Everything the cards list today is still there: each file, what it defines, its members, whether it can be read, and whether it's a Jinja template (AC-131). It adds the unpublished mark the tree already shows.</p>
+    <div class="ids">Addresses UX-079 · re-check item 57 · MW-01 · MW-02 · MW-03 · UX-109 (cleanup item 1) · AC-131 · AC-140 · rules 1, 3, 17 · Decisions D1 (path 13/600 mono) and D5 (tags 12 px; Jinja tooltip "Jinja template · read-only here") · Content: infra/cube/model/, read with packages/core/src/model/objects.ts as the overview reads it · Frame: design 01's page · Tree and editor: design 03</div>
+  </header>
+
+  <!-- ===================== MAIN SCREEN ===================== -->
+  <div class="screen">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span>Explore</span><span class="on">Model</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span>Security</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<kbd>⌘K</kbd></div>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="avatar">AD</span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:240px 1fr;height:852px">
+      <aside class="tree-pane">
+        <div class="thead"><h2>Model</h2><span class="status ok q" style="margin-left:auto"><svg class="s"><use href="#s-ok"/></svg>All published</span></div>
+        <div style="padding:4px 0">
+          <div class="dir">▾ model/cubes/</div>
+          <div class="file"><span class="fn">customers.yml</span></div>
+          <div class="file"><span class="fn">monthly_orders.yml</span></div>
+          <div class="file"><span class="fn">orders.yml</span></div>
+          <div class="file"><span class="fn">product_catalog.yml</span></div>
+          <div class="file"><span class="fn">products.yml</span></div>
+          <div class="file" title="templated_example.yml"><span class="fn">templated_example.yml</span><span class="tag" title="Jinja template · read-only here"><svg class="t12"><use href="#i-lock"/></svg>Jinja</span></div>
+          <div class="dir" style="margin-top:4px">▾ model/views/</div>
+          <div class="file"><span class="fn">order_summary.yml</span></div>
+          <div class="file"><span class="fn">secured_orders.yml</span></div>
+        </div>
+        <div class="tacts">
+          <span class="btn sm">+ New cube</span>
+          <span class="btn sm">+ New view</span>
+          <span class="btn sm">+ Generate from a data source…</span>
+        </div>
+      </aside>
+
+      <main class="ov">
+        <div class="titlerow"><h1>Model</h1><span class="spacer"></span><span class="btn primary"><svg class="s"><use href="#i-plus"/></svg>New<svg class="s"><use href="#i-chevd"/></svg></span></div>
+        <div class="notebar"><svg class="i"><use href="#i-info"/></svg><span>Every cube and view in the model, by file. Open a row to edit its file.</span></div>
+        <div class="card">
+          <table class="grid-table" aria-label="Cubes and views">
+            <colgroup><col style="width:232px" /><col style="width:92px" /><col style="width:168px" /><col style="width:88px" /><col style="width:80px" /><col style="width:60px" /><col style="width:74px" /><col style="width:80px" /><col /></colgroup>
+            <thead><tr>
+              <th class="sorted" aria-sort="ascending"><span class="sort">File<svg class="s"><use href="#i-sort"/></svg></span></th>
+              <th>Kind</th><th>Name</th>
+              <th class="num">Dimensions</th><th class="num">Measures</th><th class="num">Joins</th><th class="num">Pre-aggs</th><th class="num">Segments</th>
+              <th>Members</th>
+            </tr></thead>
+            <tbody>
+              <tr><td><span class="flink">cubes/customers.yml</span></td><td>Cube</td><td class="mono">customers</td><td class="num">4</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="mem">id, name, country, signed_up_at <b>·</b> count</td></tr>
+              <tr class="hover"><td><span class="flink">cubes/monthly_orders.yml</span></td><td>Cube</td><td class="mono">monthly_orders</td><td class="num">3</td><td class="num">2</td><td class="num zero">0</td><td class="num">1</td><td class="num zero">0</td><td class="mem">id, status, ordered_at <b>·</b> count, total_amount <b>·</b> by_status_month</td></tr>
+              <tr><td><span class="flink">cubes/orders.yml</span></td><td>Cube</td><td class="mono">orders</td><td class="num">3</td><td class="num">3</td><td class="num">2</td><td class="num zero">0</td><td class="num zero">0</td><td class="mem">id, status, ordered_at <b>·</b> count, total_amount, average_amount <b>·</b> customers, products</td></tr>
+              <tr><td><span class="flink">cubes/product_catalog.yml</span></td><td>Cube</td><td class="mono">product_catalog</td><td class="num zero">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="mem">count</td></tr>
+              <tr><td><span class="flink">cubes/products.yml</span></td><td>Cube</td><td class="mono">products</td><td class="num">3</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td><td class="mem">id, name, category <b>·</b> count</td></tr>
+              <tr><td><span class="flink">cubes/templated_example.yml</span></td><td colspan="2"><span class="tag" title="Jinja template · read-only here"><svg class="t12"><use href="#i-lock"/></svg>Jinja template · read-only</span></td><td class="num muted">—</td><td class="num muted">—</td><td class="num muted">—</td><td class="num muted">—</td><td class="num muted">—</td><td class="muted">Not listed: a template isn't read here</td></tr>
+              <tr><td><span class="flink">views/order_summary.yml</span></td><td>View</td><td class="mono">order_summary</td><td class="num sec" colspan="2">2 included</td><td class="num muted">—</td><td class="num muted">—</td><td class="num muted">—</td><td class="mem">orders.count, orders.status</td></tr>
+              <tr><td><span class="flink">views/secured_orders.yml</span></td><td>View</td><td class="mono">secured_orders</td><td class="num sec" colspan="2">4 included</td><td class="num muted">—</td><td class="num muted">—</td><td class="num muted">—</td><td class="mem">orders.count, orders.total_amount, orders.status, orders.ordered_at</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="xs muted" style="margin:0">Sorted by file. A file that defines several cubes or views has a row for each, under the same path.</p>
+      </main>
+    </div>
+
+    <!-- Members tooltip on the hovered row -->
+    <div class="tt" style="left:1100px;top:252px;width:316px">
+      <b class="mono">monthly_orders</b>
+      <span><span class="sec">Dimensions</span> · <span class="mono">id, status, ordered_at</span></span>
+      <span><span class="sec">Measures</span> · <span class="mono">count, total_amount</span></span>
+      <span><span class="sec">Pre-aggs</span> · <span class="mono">by_status_month</span></span>
+    </div>
+
+    <!-- pins: tree head 48–92; title row 64–96; notebar 108–142; card 154, header 154–183, rows of 34 from 183 -->
+    <span class="pin" style="left:66px;top:58px">1</span>
+    <span class="pin" style="left:150px;top:98px">2</span>
+    <span class="pin" style="left:136px;top:266px">3</span>
+    <span class="pin" style="left:110px;top:405px">4</span>
+    <span class="pin" style="left:1292px;top:68px">5</span>
+    <span class="pin" style="left:1392px;top:113px">6</span>
+    <span class="pin" style="left:252px;top:188px">7</span>
+    <span class="pin" style="left:330px;top:157px">8</span>
+    <span class="pin" style="left:712px;top:358px">9</span>
+    <span class="pin" style="left:1000px;top:222px">10</span>
+    <span class="pin" style="left:772px;top:392px">11</span>
+    <span class="pin" style="left:1392px;top:222px">12</span>
+    <span class="pin" style="left:252px;top:222px">13</span>
+  </div>
+
+  <!-- ===================== NOTES ===================== -->
+  <section class="notes">
+    <h2>What changes, and why</h2>
+    <p>The overview keeps what it says and changes how it says it. Each cube or view gets a row you can scan across instead of a card you read down, in the same frame as Data sources and design 01. The tree beside it takes design 03's shape. Today's function set is unchanged. A row opens its file, and New cube, New view and Generate open what they open today.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>A 44 px tree head: "Model" and the model's state</b><span class="t">"Model" at 14/600, then "✓ All published", or "◷ 1 unpublished" when there are drafts (state C), at 12 px with icon and label. Its height matches the editor head beside it, so the first folder and the form's tabs line up. Today the head is 97 px, reads "Files", and says nothing about drafts.</span><span class="fix">MW-02 · design 03 pin 1 · rule 3</span></div></li>
+      <li><span class="n">2</span><div><b>Folders as 28 px rows with ▾ and the <code>model/</code> root</b><span class="t">"▾ model/cubes/" and "▾ model/views/" at 12/600 mono secondary, as buttons with <code>aria-expanded</code>. The files under them are 28 px rows indented 28 px, edge to edge; the open file is a full-width <code>accent-soft</code> row, and focus draws inside the row. Today the folder labels are 16 px tall with no ▾, and the rows are inset pills.</span><span class="fix">MW-03 · MW-04 · rule 17</span></div></li>
+      <li><span class="n">3</span><div><b>A Jinja tag with a lock, at 12 px</b><span class="t"><code>templated_example.yml</code> is the sample's Jinja template (as the seed says since T446; design 03 drew the tag on <code>product_catalog.yml</code>, which is plain YAML now). The tag is 12 px, not design 03's 11 (D5). Its tooltip reads "Jinja template · read-only here", because the file opens read-only (AC-140). At 240 px the name truncates to make room, with the full name in its tooltip.</span><span class="fix">MW-03 · D5 · rule 1 · AC-140</span></div></li>
+      <li><span class="n">4</span><div><b>The three ways to add, at the tree's foot</b><span class="t">+ New cube, + New view and + Generate from a data source… as 24 px buttons in a block after the last folder, as design 03 draws the first two. Today they're three bordered buttons wrapping in the head. Generate opens design 11's pane.</span><span class="fix">MW-02 · design 03 pin 1 · design 11</span></div></li>
+      <li><span class="n">5</span><div><b>The page frame: title left, one primary right</b><span class="t">"Model" at 20/600, 24 px in from the pane's edge, with a primary <b>+ New ▾</b> on the right. It offers New cube, New view and Generate from a data source… (state A), the same three actions as the tree's foot, in the place every other page keeps its primary. Today the title row has no action.</span><span class="fix">MW-01 · UX-109 · cleanup item 1</span></div></li>
+      <li><span class="n">6</span><div><b>The InfoBar and the card share one width</b><span class="t">The InfoBar has the info icon, and both it and the card run the pane's width inside its 24 px gutters, so their right edges line up. Today the note is 720 px and the cards 960 px. The note says what the page lists and what a row does.</span><span class="fix">MW-01 · UX-109</span></div></li>
+      <li><span class="n">7</span><div><b>One card, one grid table, one row per cube or view</b><span class="t">A 28 px <code>bg-subtle</code> header in 12/600 and 34 px rows in 12 px, with tabular figures (direction §4's admin list). All eight rows fit above the fold, where today five cards fill it and the views sit below. A file that defines several cubes or views has a row for each, under the same path, so the rows stay sorted by file.</span><span class="fix">UX-079 · item 57 · MW-01 · direction §4</span></div></li>
+      <li><span class="n">8</span><div><b>File: a mono link, sorted ascending</b><span class="t">The path in the code face, as a link without an underline (today it's underlined), in the tree's order. The File header sorts, with the arrow and <code>aria-sort</code>; it is the only sortable column. A draft or an unreadable file carries the tree's own mark after its path: "◷ unpublished" or "✕ problems" (states C, D).</span><span class="fix">MW-01 · rule 3</span></div></li>
+      <li><span class="n">9</span><div><b>Kind as a word; a Jinja template as a locked tag</b><span class="t">"Cube" or "View" in words, where today it's an uppercase tag. A Jinja file's cubes can't be read here (<code>objectsOf</code>), so its row says "Jinja template · read-only" with the lock across Kind and Name, and its Members cell says why nothing is listed. The full sentence is in the tooltip, as today's card says it.</span><span class="fix">MW-01 · AC-140 · rule 3</span></div></li>
+      <li><span class="n">10</span><div><b>Counts: Dimensions, Measures, Joins, Pre-aggs, Segments</b><span class="t">Right-aligned, in tabular figures, with zeros muted. A dash means the count doesn't apply (views have no joins or pre-aggregations). The order follows the editor's tabs.</span><span class="fix">MW-01 · rule 1</span></div></li>
+      <li><span class="n">11</span><div><b>A view counts what it includes</b><span class="t">A view's members are its includes, by path (<code>orders.count</code>), as the overview's parser reads them. It doesn't know whether each is a dimension or a measure. So one cell across the two columns says "2 included", and Members names them. Nothing here is invented from the cube.</span><span class="fix">AC-131 · objects.ts</span></div></li>
+      <li><span class="n">12</span><div><b>Members, truncated, with the full list on hover and focus</b><span class="t">The names in the counts' order, dimensions · measures · joins · pre-aggs · segments (hierarchies too, when a cube has any), truncated to the cell. Hover or focus shows them grouped by kind in a tooltip, so every member today's cards list is still one step away (AC-131).</span><span class="fix">MW-01 · AC-131</span></div></li>
+      <li><span class="n">13</span><div><b>A row opens its file</b><span class="t">The whole row is the target, and it takes <code>bg-hover</code> on hover. Enter opens it from the keyboard. The File link stays a real link, so a new tab still works. Opening a file puts focus on its tree row (as built), drawn inside the row (MW-04).</span><span class="fix">MW-01 · MW-04</span></div></li>
+    </ol>
+
+    <div class="decision">
+      <h3>What the overview shows today, and where it is here</h3>
+      <p>From <code>FileList.tsx</code>, <code>ModelFilePage.tsx</code> and <code>FileTree.tsx</code>.</p>
+      <table>
+        <thead><tr><th style="width:470px">Today</th><th>In this design</th><th>Where</th></tr></thead>
+        <tbody>
+          <tr><td>Every model file, as a card with its path as a link</td><td>The File column, a link, sorted by path</td><td class="w">pins 7, 8</td></tr>
+          <tr><td>The cubes and views each file defines ("CUBE customers")</td><td>A row each, with Kind and Name</td><td class="w">pins 7, 9</td></tr>
+          <tr><td>Their measures, dimensions, segments, hierarchies, joins, pre-aggregations and a view's includes, by name</td><td>Counts, and Members with the full list in the tooltip</td><td class="w">pins 10–12</td></tr>
+          <tr><td>A file that can't be read, with the parser's line</td><td>"✕ problems" after the path, and the parser's line across the rest of the row, in the error colour</td><td class="w">state D</td></tr>
+          <tr><td>A Jinja template's note (its cubes aren't listed)</td><td>The locked tag, "Not listed", and the note in the tooltip</td><td class="w">pin 9</td></tr>
+          <tr><td>"Reading the model…"; the error; "There are no model files."</td><td>A skeleton table with the status line; an error notebar with Retry (rule 18); an empty card with the three ways to start</td><td class="w">states B, F</td></tr>
+          <tr><td>New cube, New view and Generate cubes in the tree's head</td><td>At the tree's foot, and in <b>+ New ▾</b></td><td class="w">pins 4, 5 · state A</td></tr>
+          <tr><td>Drafts marked "unpublished" in the tree</td><td>The same mark in the table, and "◷ n unpublished" in the tree's head</td><td class="w">pin 1 · state C</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="decision">
+      <h3>Proposals (need approval)</h3>
+      <p>Neither is drawn.</p>
+      <table>
+        <thead><tr><th style="width:470px">Proposal</th><th>Why</th><th>From</th></tr></thead>
+        <tbody>
+          <tr><td><span class="prop">Proposal — needs your approval</span><br />New view writes no <code>cubes</code> and opens on the Cubes tab, with "+ cube" open and the join-path picker focused. A 12 px note in the empty tab reads "A view shows nothing until it includes a cube."</td><td>Today New view writes <code>join_path: customers</code> and <code>includes: "*"</code>, a cube and members you didn't choose, and opens on General. Data-modeling.md Y.10 makes <code>cubes</code> optional, so an empty view is valid.</td><td class="w">MW-19</td></tr>
+          <tr><td><span class="prop">Proposal — needs your approval</span><br />Reword the Jinja note without "xcube", for example: "wechart publishes plain YAML only, so this template is never rendered or served; it opens read-only here."</td><td>"xcube" is the Cube fork's internal name (your open decision D3). The tooltip in pin 9 uses today's sentence until you decide.</td><td class="w">MW-16 · D3</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== STATES ===================== -->
+  <section class="states">
+    <h2>Other states</h2>
+
+    <div class="srow">
+      <div class="frame" style="height:230px;background:var(--bg-page)">
+        <div class="ov" style="padding:16px 24px">
+          <div class="titlerow"><h1>Model</h1><span class="spacer"></span><span class="btn primary pressed"><svg class="s"><use href="#i-plus"/></svg>New<svg class="s"><use href="#i-chevd"/></svg></span></div>
+          <div class="notebar"><svg class="i"><use href="#i-info"/></svg><span>Every cube and view in the model, by file. Open a row to edit its file.</span></div>
+          <div class="card" style="height:60px"></div>
+        </div>
+        <div class="menu" style="right:24px;top:54px;width:240px">
+          <div class="mi hover"><svg class="s"><use href="#i-cube"/></svg>New cube</div>
+          <div class="mi"><svg class="s"><use href="#i-view"/></svg>New view</div>
+          <div class="sep"></div>
+          <div class="mi"><svg class="s"><use href="#i-db"/></svg>Generate from a data source…</div>
+        </div>
+      </div>
+      <div class="state">
+        <h3>A · + New ▾, open</h3>
+        <p>The three ways to add a model file, in the order the tree's foot lists them. Generate is set apart and ends with "…", because it opens a pane (design 11) rather than a file. New cube and New view open the new file at once (state E). Arrow keys move through the menu, and Esc closes it and returns focus to the button (rule 85).</p>
+      </div>
+    </div>
+
+    <div class="srow">
+      <div class="frame" style="height:330px;background:var(--bg-page)">
+        <div style="display:grid;grid-template-columns:200px 1fr;height:100%">
+          <aside class="tree-pane">
+            <div class="thead"><h2>Model</h2></div>
+            <div style="padding:10px 12px" class="xs muted">No files yet.</div>
+            <div class="tacts" style="margin-top:0">
+              <span class="btn sm">+ New cube</span>
+              <span class="btn sm">+ New view</span>
+              <span class="btn sm" style="overflow:hidden">+ Generate from a data…</span>
+            </div>
+          </aside>
+          <main class="ov">
+            <div class="titlerow"><h1>Model</h1><span class="spacer"></span><span class="btn primary"><svg class="s"><use href="#i-plus"/></svg>New<svg class="s"><use href="#i-chevd"/></svg></span></div>
+            <div class="notebar"><svg class="i"><use href="#i-info"/></svg><span>Every cube and view in the model, by file. Open a row to edit its file.</span></div>
+            <div class="card"><div class="empty">
+              <b>There are no model files.</b>
+              <span class="xs sec">Generate cubes from a data source's tables, or start a cube or a view by hand.</span>
+              <span style="display:flex;gap:8px;margin-top:4px"><span class="btn sm">Generate from a data source…</span><span class="btn sm">New cube</span><span class="btn sm">New view</span></span>
+            </div></div>
+          </main>
+        </div>
+      </div>
+      <div class="state">
+        <h3>B · An empty model</h3>
+        <p>Today's sentence, "There are no model files.", as the card's heading, then what to do about it. The three actions are secondary buttons, so + New stays the page's one primary. The tree says "No files yet." with its foot unchanged, and its head shows no state, because there is nothing to publish.</p>
+      </div>
+    </div>
+
+    <div class="srow">
+      <div class="frame" style="height:250px;background:var(--bg-page)">
+        <div style="display:grid;grid-template-columns:170px 1fr;height:100%">
+          <aside class="tree-pane">
+            <div class="thead" style="padding:0 8px"><h2>Model</h2><span class="status idle" style="margin-left:auto;font-weight:400"><svg class="s"><use href="#s-idle"/></svg>1 unpublished</span></div>
+            <div style="padding:4px 0">
+              <div class="dir">▾ model/cubes/</div>
+              <div class="file" style="padding-right:8px"><span class="fn">monthly_orders.yml</span></div>
+              <div class="file" style="padding-right:8px"><span class="fn">new_cube_1.yml</span><span class="mark" title="unpublished"><svg class="s"><use href="#s-idle"/></svg></span></div>
+              <div class="file" style="padding-right:8px"><span class="fn">orders.yml</span></div>
+            </div>
+          </aside>
+          <main class="ov" style="gap:0;padding:12px">
+            <div class="card">
+              <table class="grid-table">
+                <colgroup><col style="width:252px" /><col style="width:46px" /><col style="width:106px" /><col /></colgroup>
+                <thead><tr><th class="sorted"><span class="sort">File<svg class="s"><use href="#i-sort"/></svg></span></th><th>Kind</th><th>Name</th><th>Members</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="flink">cubes/monthly_orders.yml</span></td><td>Cube</td><td class="mono">monthly_orders</td><td class="mem">id, status, ordered_at · count, …</td></tr>
+                  <tr><td><div class="fcell"><span class="flink">cubes/new_cube_1.yml</span><span class="mark"><svg class="s"><use href="#s-idle"/></svg>unpublished</span></div></td><td>Cube</td><td class="mono">new_cube_1</td><td class="mem">id · count</td></tr>
+                  <tr><td><span class="flink">cubes/orders.yml</span></td><td>Cube</td><td class="mono">orders</td><td class="mem">id, status, ordered_at · count, …</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </main>
+        </div>
+      </div>
+      <div class="state">
+        <h3>C · An unpublished draft</h3>
+        <p>A file made with New cube and not yet published appears in its place in the table, marked "◷ unpublished" as the tree marks it, and the tree's head reads "◷ 1 unpublished". The table lists the store's files and the drafts, as the tree does (<code>ModelFilePage</code>'s <code>all</code>). Today the overview lists only the store's files, so a draft is in the tree but not on the page. Opening the row opens the draft with its head reading "◷ New file · not published" (state E). The frame is narrowed, so the counts are left out here; at full width every column shows.</p>
+      </div>
+    </div>
+
+    <div class="srow">
+      <div class="frame" style="height:250px;background:var(--bg-page)">
+        <div style="display:grid;grid-template-columns:170px 1fr;height:100%">
+          <aside class="tree-pane">
+            <div class="thead" style="padding:0 8px"><h2>Model</h2><span class="status idle" style="margin-left:auto;font-weight:400"><svg class="s"><use href="#s-idle"/></svg>1 unpublished</span></div>
+            <div style="padding:4px 0">
+              <div class="dir">▾ model/views/</div>
+              <div class="file" style="padding-right:8px"><span class="fn">new_view_1.yml</span><span class="mark err" title="problems"><svg class="s"><use href="#s-err"/></svg></span></div>
+              <div class="file" style="padding-right:8px"><span class="fn">order_summary.yml</span></div>
+              <div class="file" style="padding-right:8px"><span class="fn">secured_orders.yml</span></div>
+            </div>
+          </aside>
+          <main class="ov" style="gap:0;padding:12px">
+            <div class="card">
+              <table class="grid-table">
+                <colgroup><col style="width:228px" /><col style="width:46px" /><col style="width:106px" /><col /></colgroup>
+                <thead><tr><th class="sorted"><span class="sort">File<svg class="s"><use href="#i-sort"/></svg></span></th><th>Kind</th><th>Name</th><th>Members</th></tr></thead>
+                <tbody>
+                  <tr><td><div class="fcell"><span class="flink">views/new_view_1.yml</span><span class="mark err"><svg class="s"><use href="#s-err"/></svg>problems</span></div></td><td colspan="3" style="color:var(--err)" title="line 5: Nested mappings are not allowed in compact mappings">line 5: Nested mappings are not allowed in compact mappings</td></tr>
+                  <tr><td><span class="flink">views/order_summary.yml</span></td><td>View</td><td class="mono">order_summary</td><td class="mem">orders.count, orders.status</td></tr>
+                  <tr><td><span class="flink">views/secured_orders.yml</span></td><td>View</td><td class="mono">secured_orders</td><td class="mem">orders.count, orders.total_amount, …</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </main>
+        </div>
+      </div>
+      <div class="state">
+        <h3>D · A file with problems</h3>
+        <p>A file the parser can't read. Illustrative: a draft view with a YAML error, since the store's files have all been through Cube's compile. Its path carries "✕ problems", as the tree marks it, with icon and label (rule 3). Nothing in it could be read, so the rest of the row gives the parser's line in the error colour, as today's card does, with the full text in its tooltip. Opening the row opens the file, whose Problems panel names the same line (direction §7b). Only because this frame's tree is narrowed to 170 px is the mark drawn as its icon alone; at the tree's 240 px, "✕ problems" fits in full, as in the main screen. Cube's own validation problems show only on the file's page, as today.</p>
+      </div>
+    </div>
+
+    <div class="srow">
+      <div class="frame" style="height:250px;background:var(--bg-surface)">
+        <div style="display:grid;grid-template-columns:1fr;height:100%">
+          <section style="min-width:0">
+            <div class="editor-head"><span class="mono" style="font-size:13px;line-height:18px;font-weight:600">model/cubes/new_cube_1.yml</span><span class="status idle" style="font-weight:400"><svg class="s"><use href="#s-idle"/></svg>New file · not published</span><span class="spacer"></span><span class="btn sm">Discard</span><span class="btn sm primary">Save &amp; reload Cube</span></div>
+            <div class="tabs"><span class="tb on">General</span><span class="tb">Dimensions <span class="ct">1</span></span><span class="tb">Measures <span class="ct">1</span></span><span class="tb">Joins <span class="ct">0</span></span><span class="tb">Pre-aggs <span class="ct">0</span></span></div>
+            <div style="padding:10px 12px" class="row2">
+              <div class="field"><span class="lbl">Name</span><div class="input mono focus"><span style="background:#b9dbe6">new_cube_1</span></div></div>
+              <div class="field"><span class="lbl">Reads from</span><div style="display:flex;gap:8px"><span class="seg"><span class="on">SQL table</span><span>SQL</span></span><div class="input mono ph" style="flex:1">schema.table</div></div></div>
+            </div>
+          </section>
+        </div>
+      </div>
+      <div class="state">
+        <h3>E · New cube or New view from the overview: design 03's state C</h3>
+        <p>Pressing New cube, from + New ▾ or the tree's foot, opens the new file as design 03's state C draws it. That is not redrawn in full here, only the editor's top, to place it. Beside it, the tree row reads "◷ unpublished" and is selected, as in state C. The head has the path at 13/600 mono (decision D1) and "◷ New file · not published". The General tab has Name focused with its text selected (MW-18), and "Reads from" shows the placeholder <code>schema.table</code>, as design 03 draws it. Today the file is written with <code>public.table_name</code> as a value (MW-17).</p>
+        <p>New view opens <code>views/new_view_1.yml</code> the same way, on General, as built. Opening it on the Cubes tab with nothing pre-filled is a proposal (MW-19).</p>
+      </div>
+    </div>
+
+    <div class="srow">
+      <div class="frame" style="height:220px;background:var(--bg-page)">
+        <div style="display:grid;grid-template-columns:1fr 1fr;height:100%">
+          <main class="ov" style="border-right:1px solid var(--border-subtle)">
+            <div class="titlerow"><h1>Model</h1><span class="spacer"></span><span class="btn primary"><svg class="s"><use href="#i-plus"/></svg>New<svg class="s"><use href="#i-chevd"/></svg></span></div>
+            <span class="status run"><svg class="s"><use href="#s-run"/></svg>Reading the model…</span>
+            <div class="card">
+              <div style="height:28px;background:var(--bg-subtle);border-bottom:1px solid var(--border-subtle)"></div>
+              <div style="height:34px;display:flex;align-items:center;gap:16px;padding:0 8px;border-bottom:1px solid var(--border-subtle)"><span class="sk" style="width:120px"></span><span class="sk" style="width:40px"></span><span class="sk" style="width:80px"></span></div>
+              <div style="height:34px;display:flex;align-items:center;gap:16px;padding:0 8px"><span class="sk" style="width:140px"></span><span class="sk" style="width:40px"></span><span class="sk" style="width:60px"></span></div>
+            </div>
+          </main>
+          <main class="ov">
+            <div class="titlerow"><h1>Model</h1><span class="spacer"></span><span class="btn primary"><svg class="s"><use href="#i-plus"/></svg>New<svg class="s"><use href="#i-chevd"/></svg></span></div>
+            <div class="notebar err"><svg class="s" style="margin-top:1px"><use href="#s-err"/></svg><span><span>The model files could not be read (503).</span><span style="display:flex"><span class="btn sm">Retry</span></span></span></div>
+          </main>
+        </div>
+      </div>
+      <div class="state">
+        <h3>F · Reading, and can't read</h3>
+        <p>Left: today's "Reading the model…" as a status line with the running icon, over a skeleton of the table. The title row is drawn at once, so the page doesn't jump when the rows arrive (today the title waits). Right: today's error text in an error notebar, with Retry (rule 18). The tree shows the same line while it reads.</p>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

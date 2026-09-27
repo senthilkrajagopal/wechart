@@ -1,0 +1,933 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Design 11 · Generate cubes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" />
+<style>
+  :root {
+    --bg-page: #f4f4f2; --bg-surface: #ffffff; --bg-raised: #ffffff; --bg-subtle: #f0efec; --bg-hover: #efeeea;
+    --border-subtle: #e3e2de; --border-strong: #c9c7c1;
+    --text-primary: #1f1f1e; --text-secondary: #5c5b57; --text-muted: #6e6c67; --text-on-accent: #ffffff;
+    --accent: #1f6f86; --accent-soft: #e3f0f4; --accent-ring: rgba(31,111,134,.35);
+    --role-dim: #2d6ab4; --role-dim-soft: #e6eef8;
+    --ok: #1d7a3f; --ok-icon: #0ca30c; --warn: #8a5a00; --warn-icon: #fab219; --err: #c2362f; --err-icon: #d03b3b;
+    --shadow-pop: 0 8px 24px rgba(20,20,18,.14), 0 1px 3px rgba(20,20,18,.1);
+    --cm-key: #1f6f86; --cm-str: #8a4b00; --cm-num: #2d6ab4; --cm-com: #6e6c67;
+    --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-code: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    --note: #c8176b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #dcdad4; color: var(--text-primary); font: 400 14px/20px var(--font-ui); -webkit-font-smoothing: antialiased; min-width: 1440px; }
+  .doc { width: 1440px; margin: 0 auto; }
+  .doc-head { background: #1f1f1e; color: #f2f2f0; padding: 28px 32px 22px; }
+  .doc-head .k { font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; color: #b4b3ab; }
+  .doc-head h1 { margin: 6px 0; font-size: 24px; line-height: 32px; font-weight: 600; }
+  .doc-head p { margin: 0 0 6px; color: #d6d5cf; max-width: 1160px; }
+  .doc-head .ids { margin-top: 10px; font: 400 12px/16px var(--font-code); color: #b4b3ab; }
+  .doc-head code { color: #f2f2f0; background: #333; padding: 0 4px; border-radius: 3px; font: 400 12px var(--font-code); }
+  .screen { position: relative; width: 1440px; height: 900px; overflow: hidden; background: var(--bg-page); }
+  .pin { position: absolute; z-index: 300; width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.35); }
+  .notes { background: #fff; padding: 28px 32px 40px; }
+  .notes h2, .states h2 { margin: 0 0 4px; font-size: 20px; line-height: 26px; font-weight: 600; }
+  .notes > p, .states > p { margin: 0 0 18px; color: var(--text-secondary); max-width: 1120px; }
+  .notelist { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 40px; margin: 0; padding: 0; list-style: none; }
+  .notelist li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
+  .notelist .n { width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; }
+  .notelist li > div > b { display: block; font-weight: 600; }
+  .notelist .t { color: var(--text-secondary); }
+  .fix { display: block; margin-top: 2px; font: 600 12px/16px var(--font-code); color: var(--note); }
+  .prop { display: inline-block; margin-top: 4px; padding: 1px 6px; border: 1px dashed var(--note); border-radius: 4px; color: var(--note); font: 600 12px/16px var(--font-ui); }
+  .notes code, .states code { font: 400 12px var(--font-code); background: var(--bg-subtle); padding: 0 4px; border-radius: 3px; }
+  .states { background: #f7f6f3; padding: 28px 32px 40px; border-top: 1px solid var(--border-subtle); }
+  .states h3.group { margin: 28px 0 12px; font-size: 16px; line-height: 22px; font-weight: 600; }
+  .stategrid { display: grid; grid-template-columns: repeat(3, 440px); gap: 28px 24px; align-items: start; }
+  .state { display: grid; gap: 8px; align-content: start; }
+  .state > h3 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; }
+  .state > p { margin: 0; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .frame { border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; background: var(--bg-page); box-shadow: 0 1px 2px rgba(0,0,0,.06); position: relative; }
+  .decision { margin: 26px 0 0; padding: 16px 20px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-page); max-width: 1376px; }
+  .decision h3 { margin: 0 0 8px; font-size: 16px; line-height: 22px; font-weight: 600; }
+  .decision > p { margin: 0 0 10px; color: var(--text-secondary); font-size: 13px; line-height: 18px; }
+  .decision table { border-collapse: collapse; width: 100%; font-size: 13px; line-height: 18px; }
+  .decision th, .decision td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--border-subtle); }
+  .decision th { font-size: 12px; color: var(--text-secondary); font-weight: 600; background: var(--bg-subtle); }
+  .decision td.w { white-space: nowrap; font: 600 12px/18px var(--font-code); color: var(--note); }
+  .decision tr.grp td { background: var(--bg-subtle); font-weight: 600; font-size: 12px; }
+
+  /* app shell */
+  svg.i { width: 16px; height: 16px; flex: none; }
+  svg.s { width: 14px; height: 14px; flex: none; }
+  .topbar { height: 48px; display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-mark { width: 22px; height: 22px; border-radius: 5px; background: var(--accent); color: var(--text-on-accent); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+  .wsnav { display: flex; gap: 2px; height: 100%; }
+  .wsnav span { display: flex; align-items: center; padding: 0 12px; height: 100%; color: var(--text-secondary); border-bottom: 2px solid transparent; }
+  .wsnav span.on { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--accent); }
+  .spacer { flex: 1; }
+  .search { display: flex; align-items: center; gap: 8px; width: 260px; height: 32px; padding: 0 10px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-subtle); color: var(--text-muted); font-size: 13px; }
+  .search kbd { margin-left: auto; font: 600 12px/16px var(--font-ui); border: 1px solid var(--border-strong); border-radius: 4px; padding: 0 4px; }
+  .iconbtn { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 6px; color: var(--text-secondary); flex: none; }
+  .iconbtn.sm { width: 24px; height: 24px; border-radius: 4px; color: var(--text-muted); }
+  .iconbtn.on { background: var(--accent-soft); color: var(--accent); }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--role-dim-soft); color: var(--role-dim); display: grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; }
+  .btn { height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-surface); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 14px; color: var(--text-primary); flex: none; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+  .btn.danger { background: var(--err); border-color: var(--err); color: #fff; font-weight: 600; }
+  .btn.dis { opacity: .45; }
+  .btn.ghost { border-color: transparent; background: none; }
+  .btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
+  .btn.link { border: 0; background: none; padding: 0; height: auto; color: var(--accent); font-size: 12px; font-weight: 600; }
+  .btn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .btn.wrap { color: var(--accent); font-weight: 600; }
+  .input { height: 32px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg-surface); padding: 0 8px; width: 100%; display: flex; align-items: center; gap: 6px; font-size: 14px; min-width: 0; white-space: nowrap; overflow: hidden; }
+  .input.sm { height: 28px; font-size: 12px; }
+  .input.ph { color: var(--text-muted); }
+  .help { font-size: 12px; line-height: 16px; color: var(--text-secondary); margin: 0; }
+  .fpill { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg-surface); font-size: 12px; white-space: nowrap; flex: none; }
+  .fpill b { font-weight: 600; }
+  .fpill.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; font-weight: 600; white-space: nowrap; }
+  .status.ok { color: var(--ok); } .status.err { color: var(--err); } .status.warn { color: var(--warn); } .status.run { color: var(--accent); } .status.idle { color: var(--text-secondary); }
+  .status.q { font-weight: 400; color: var(--text-secondary); }
+  .status .t { font-weight: 400; color: var(--text-secondary); }
+  .xs { font-size: 12px; line-height: 16px; } .muted { color: var(--text-muted); } .sec { color: var(--text-secondary); } .strong { font-weight: 600; }
+  .mono { font-family: var(--font-code); font-size: 12px; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  .notebar { display: flex; gap: 8px; align-items: flex-start; padding: 8px 12px; border-radius: 6px; font-size: 12px; line-height: 16px; background: var(--accent-soft); color: var(--text-primary); border: 1px solid var(--border-subtle); }
+  .notebar.warn { background: color-mix(in srgb, var(--warn-icon) 14%, var(--bg-surface)); }
+  .notebar.err { background: color-mix(in srgb, var(--err-icon) 9%, var(--bg-surface)); }
+  .notebar.ok { background: color-mix(in srgb, var(--ok-icon) 9%, var(--bg-surface)); }
+  .notebar > svg { margin-top: 1px; }
+  .notebar > span { flex: 1; min-width: 0; display: grid; gap: 6px; }
+  .notebar .acts2 { display: flex; gap: 6px; flex-wrap: wrap; }
+  .card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; overflow: hidden; }
+  .grid-table { border-collapse: collapse; width: 100%; font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums; table-layout: fixed; }
+  .grid-table th { background: var(--bg-subtle); text-align: left; font-weight: 600; height: 28px; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .grid-table td { height: 34px; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .grid-table tr:last-child td { border-bottom: 0; }
+  .grid-table .num { text-align: right; }
+  .grid-table .zero { color: var(--text-muted); }
+  .tag { display: inline-flex; align-items: center; gap: 3px; font: 600 12px/16px var(--font-ui); color: var(--text-secondary); border: 1px solid var(--border-strong); border-radius: 3px; padding: 0 5px; white-space: nowrap; background: var(--bg-surface); }
+
+  /* model tree (design 03, with MW-02/MW-03) */
+  .tree-pane { background: var(--bg-surface); border-right: 1px solid var(--border-subtle); display: flex; flex-direction: column; min-height: 0; }
+  .thead { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; border-bottom: 1px solid var(--border-subtle); }
+  .thead h2 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; }
+  .dir { height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 12px; font: 600 12px var(--font-code); color: var(--text-secondary); }
+  .file { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 28px; font: 400 12px var(--font-code); }
+  .file.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .file .fn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .file .tag { margin-left: auto; flex: none; }
+  .tacts { padding: 12px; display: grid; gap: 6px; border-top: 1px solid var(--border-subtle); margin-top: 8px; }
+  .tacts .btn { justify-content: flex-start; }
+
+  /* overview (design 12) */
+  .ov { padding: 16px 24px; display: flex; flex-direction: column; gap: 12px; min-width: 0; overflow: hidden; }
+  .titlerow { display: flex; align-items: center; gap: 10px; height: 32px; }
+  .titlerow h1 { margin: 0; font-size: 20px; line-height: 26px; font-weight: 600; }
+
+  /* docked pane (design 01) */
+  .pane { background: var(--bg-surface); border-left: 1px solid var(--border-subtle); display: flex; flex-direction: column; min-height: 0; position: relative; }
+  .pane-head { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 5px 8px 5px 16px; border-bottom: 1px solid var(--border-subtle); }
+  .pane-head h2 { margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; }
+  .pane-body { flex: 1; min-height: 0; overflow: hidden; }
+  .pane-foot { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border-subtle); background: var(--bg-surface); }
+  .pane-foot .why { flex: 1; text-align: right; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .sect { padding: 14px 16px; border-bottom: 1px solid var(--border-subtle); display: grid; gap: 10px; }
+  .sect:last-child { border-bottom: 0; }
+  .sect > h3 { margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; display: flex; align-items: center; gap: 8px; }
+  .steps { display: flex; align-items: center; gap: 6px; height: 41px; padding: 0 16px; border-bottom: 1px solid var(--border-subtle); }
+  .step { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; color: var(--text-muted); white-space: nowrap; }
+  .step i { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border-strong); display: grid; place-items: center; font-style: normal; font-weight: 600; font-size: 12px; color: var(--text-secondary); background: var(--bg-surface); }
+  .step.done { color: var(--text-secondary); } .step.done i { background: var(--accent-soft); border-color: var(--accent-soft); color: var(--accent); }
+  .step.cur { color: var(--text-primary); font-weight: 600; } .step.cur i { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+  .step-sep { flex: 1; height: 1px; background: var(--border-strong); min-width: 6px; }
+  .ctx { display: flex; align-items: center; gap: 10px; height: 41px; padding: 0 16px; border-bottom: 1px solid var(--border-subtle); font-size: 12px; line-height: 16px; background: var(--bg-page); white-space: nowrap; }
+  .ctx .sum { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .mono-tile { width: 24px; height: 24px; border-radius: 5px; display: grid; place-items: center; background: var(--bg-subtle); border: 1px solid var(--border-subtle); color: var(--text-primary); font: 600 12px/1 var(--font-ui); flex: none; }
+  .dialog { position: absolute; z-index: 60; background: var(--bg-surface); border-radius: 6px; box-shadow: var(--shadow-pop); display: grid; gap: 12px; padding: 20px; border: 1px solid var(--border-subtle); }
+  .dialog h2 { margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; }
+  .dialog p { margin: 0; color: var(--text-secondary); }
+  .acts { display: flex; justify-content: flex-end; gap: 8px; }
+  .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.28); z-index: 50; }
+  .menu { position: absolute; z-index: 40; background: var(--bg-raised); border: 1px solid var(--border-subtle); border-radius: 6px; box-shadow: var(--shadow-pop); padding: 4px; display: grid; }
+  .menu .mi { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 4px; font-size: 12px; }
+  .menu .mi.hover { background: var(--bg-hover); }
+  .menu .sep { height: 1px; background: var(--border-subtle); margin: 4px 0; }
+
+  /* this flow */
+  .cb { width: 16px; height: 16px; border: 1px solid var(--border-strong); border-radius: 3px; background: var(--bg-surface); flex: none; display: inline-grid; place-items: center; }
+  .cb.on { background: var(--accent); border-color: var(--accent); }
+  .cb.on::after { content: ''; width: 8px; height: 4px; border-left: 2px solid var(--text-on-accent); border-bottom: 2px solid var(--text-on-accent); transform: translate(0, -1px) rotate(-45deg); }
+  .radio { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--bg-surface); flex: none; }
+  .radio.on { border: 5px solid var(--accent); }
+  .fbar { display: flex; gap: 8px; align-items: center; }
+  .count { font-size: 12px; line-height: 16px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .tl { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; overflow: hidden; }
+  .tl-h, .tl-r { display: grid; grid-template-columns: 16px 1fr 124px 24px; gap: 0 10px; align-items: center; padding: 0 6px 0 10px; font-size: 12px; line-height: 16px; }
+  .tl-h { height: 28px; background: var(--bg-subtle); font-weight: 600; border-bottom: 1px solid var(--border-subtle); }
+  .tl-r { height: 34px; border-bottom: 1px solid var(--border-subtle); }
+  .tl-r:last-child { border-bottom: 0; }
+  .tl-r .nm { font: 400 12px var(--font-code); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tl-r .ty { color: var(--text-secondary); }
+  .tl-r.open { background: var(--bg-subtle); border-bottom: 0; }
+  .tl-r .b, .sk { height: 10px; border-radius: 3px; background: var(--bg-subtle); display: block; }
+  .tl-foot { display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 6px 0 10px; border-top: 1px solid var(--border-subtle); background: var(--bg-surface); font-size: 12px; line-height: 16px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .rlist .tl-r { grid-template-columns: 16px 1fr auto; }
+  .rlist .tl-r.on { background: var(--accent-soft); }
+  .rlist.sm .tl-r { height: 28px; }
+  .peek { padding: 0 8px 8px; background: var(--bg-subtle); border-bottom: 1px solid var(--border-subtle); }
+  .peek .cap { display: flex; align-items: center; gap: 6px; height: 24px; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .ptab { width: 100%; border-collapse: collapse; font-size: 12px; line-height: 16px; background: var(--bg-surface); border: 1px solid var(--border-subtle); }
+  .ptab th { height: 24px; text-align: left; font-weight: 600; padding: 0 6px; color: var(--text-secondary); border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .ptab td { height: 24px; padding: 0 6px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ptab.fit { table-layout: fixed; }
+  .ptab.fit th, .ptab.fit td { padding: 0 4px; overflow: hidden; text-overflow: ellipsis; }
+  .ptab tr:last-child td { border-bottom: 0; }
+  .ptab td.dt { color: var(--text-secondary); }
+  /* review: one ruled block per file, like design 03's member rows */
+  .fblk { border-bottom: 1px solid var(--border-subtle); }
+  .fblk-head { display: grid; grid-template-columns: 14px 1fr auto; gap: 2px 8px; align-items: center; padding: 8px 16px; }
+  .fblk-head .car { color: var(--text-muted); }
+  .fblk-head .p { font: 600 12px/16px var(--font-code); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fblk-head .sub { grid-column: 2 / -1; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .fblk-body { padding: 0 16px 12px 38px; display: grid; gap: 8px; }
+  .fblk-body h4 { margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+  .disc { display: flex; align-items: center; gap: 6px; height: 24px; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); }
+  .disc .n { font-weight: 400; color: var(--text-muted); }
+  .lo { display: grid; border: 1px solid var(--border-subtle); border-radius: 4px; background: var(--bg-surface); }
+  .lo > div { display: grid; grid-template-columns: auto 1fr; gap: 0 8px; padding: 5px 8px; border-top: 1px solid var(--border-subtle); font-size: 12px; line-height: 16px; }
+  .lo > div:first-child { border-top: 0; }
+  .lo .c { font: 600 12px/16px var(--font-code); }
+  .lo .r { color: var(--text-muted); }
+  .lo .why { grid-column: 1 / -1; color: var(--text-secondary); }
+  .codebox { border: 1px solid var(--border-subtle); border-radius: 4px; overflow: hidden; font: 400 12px/18px var(--font-code); background: var(--bg-surface); }
+  .ln { display: grid; grid-template-columns: 28px 1fr; }
+  .ln .g { color: var(--text-muted); text-align: right; padding-right: 6px; background: var(--bg-subtle); border-right: 1px solid var(--border-subtle); }
+  .ln .c { white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 10px 0 8px; }
+  .yk { color: var(--cm-key); } .ys { color: var(--cm-str); } .yn { color: var(--cm-num); } .yc { color: var(--cm-com); font-style: italic; }
+  .files { display: grid; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-surface); }
+  .files > div { display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 5px 6px 5px 10px; border-top: 1px solid var(--border-subtle); font-size: 12px; line-height: 16px; }
+  .files > div:first-child { border-top: 0; }
+  .files > div.col { display: grid; gap: 4px; padding: 8px 10px; }
+  .locked { opacity: .55; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.5 10.5l3 3" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--accent)"/><path d="M8 7v4.2M8 4.6v.4" style="stroke:var(--bg-surface)" stroke-width="1.7"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-chevd" viewBox="0 0 16 16"><path d="M3.5 6L8 10.5 12.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-chevu" viewBox="0 0 16 16"><path d="M3.5 10L8 5.5 12.5 10" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 16 16"><path d="M10 3.5L5.5 8 10 12.5" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-file" viewBox="0 0 16 16"><path d="M4 1.8h5l3 3v9.4H4z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M9 1.8v3h3" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-sort" viewBox="0 0 16 16"><path d="M8 3.5v9M4.5 7L8 3.5 11.5 7" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="s-ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--ok-icon)"/><path d="M4.7 8.2l2.2 2.2 4.4-4.7" stroke="#fff" stroke-width="1.8" fill="none"/></symbol>
+  <symbol id="s-err" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--err-icon)"/><path d="M5.4 5.4l5.2 5.2M10.6 5.4l-5.2 5.2" stroke="#fff" stroke-width="1.8"/></symbol>
+  <symbol id="s-warn" viewBox="0 0 16 16"><path d="M8 1.5l7 12.5H1z" style="fill:var(--warn-icon)"/><path d="M8 6v4M8 11.6v.4" stroke="#1f1f1e" stroke-width="1.6"/></symbol>
+  <symbol id="s-idle" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5V8l2.4 1.5" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="s-run" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" style="stroke:var(--border-strong)" stroke-width="2"/><path d="M8 1.8a6.2 6.2 0 0 1 6.2 6.2" fill="none" style="stroke:var(--accent)" stroke-width="2"/></symbol>
+</svg>
+
+<div class="doc">
+  <header class="doc-head">
+    <div class="k">wechart · UI review 2026-09-27 · Design 11 · for the Model workspace cleanup (R34)</div>
+    <h1>Generate cubes — design 01's docked pane, in three steps: Source, Tables, Review</h1>
+    <p>You asked for the Model workspace, New cube and Generate cubes to be brought in line with the rest of the app. Today Generate cubes is a centred 960 px modal that grows at every step. Its top moves from y 367 to y 32, its height from 167 to 836 px, and its primary from y ≈502 to y ≈836, until everything scrolls inside it (critique MW-20). It covers the tree and the model, which are exactly what you need to see to avoid a clash. A clash is a plain bullet that reads like a column left out, and the reason Publish is pale sits below the fold (MW-21). The controls are 14/400 labels, native checkboxes in the browser's blue and 75 × 32 "Columns" buttons (MW-22). The column preview doesn't say which table it shows (MW-23). The YAML falls back to <code>ui-monospace</code>, white on white, and scrolls inside the scrolling dialog (MW-24). The foot has three buttons and there is no ✕ (MW-25).</p>
+    <p>This design follows the critique's "Generate cubes: recommended layout" in the frame of the new data source wizard (design 01): a 480 px pane docked beside the model, at a fixed height, with a step rail, a context strip, and Back · Cancel · one primary pinned at the bottom. The API flow, the one publish of every file, the clash rule and every message stay as built. Generate still publishes straight to the model (your decision D4). The table under the notes checks every function against today's, and lists what the critique's layout adds.</p>
+    <div class="ids">Addresses MW-20 · MW-21 · MW-22 · MW-23 · MW-24 · MW-25 · UX-106 · UX-107 · UX-108 · AC-139 · AC-249 · AC-136, AC-137 · rules 1, 3, 17, 18, 85 · Layout: docs/design/critiques/2026-09-27-model-workspace.md › "Generate cubes: recommended layout" · Frame: design 01 · Tree: design 03 · Behind the pane: design 12 · Messages: packages/web/src/workspaces/model/GenerateCubes.tsx · Data: the sample's <code>default</code> PostgreSQL source and its schemas <code>public</code> and <code>generate</code> (infra/sample-db/init.sql, generate.sql) · YAML as the scaffolder writes it (docs/research/cube/introspection-api.md › Generation rules; the fork's YamlSchemaFormatter)</div>
+  </header>
+
+  <!-- ===================== MAIN SCREEN: step 2, Tables ===================== -->
+  <div class="screen">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span>Explore</span><span class="on">Model</span><span>Data sources</span><span>Jobs</span><span>Schedules</span><span>Security</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<kbd>⌘K</kbd></div>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="avatar">AD</span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:240px 1fr 480px;height:852px">
+      <!-- tree (design 03 + MW-02/03) -->
+      <aside class="tree-pane">
+        <div class="thead"><h2>Model</h2><span class="status ok q" style="margin-left:auto"><svg class="s"><use href="#s-ok"/></svg>All published</span></div>
+        <div style="padding:4px 0">
+          <div class="dir">▾ model/cubes/</div>
+          <div class="file">customers.yml</div>
+          <div class="file">monthly_orders.yml</div>
+          <div class="file">orders.yml</div>
+          <div class="file">product_catalog.yml</div>
+          <div class="file">products.yml</div>
+          <div class="file" title="templated_example.yml"><span class="fn">templated_example.yml</span><span class="tag" title="Jinja template · read-only here"><svg class="s" style="width:12px;height:12px"><use href="#i-lock"/></svg>Jinja</span></div>
+          <div class="dir" style="margin-top:4px">▾ model/views/</div>
+          <div class="file">order_summary.yml</div>
+          <div class="file">secured_orders.yml</div>
+        </div>
+        <div class="tacts">
+          <span class="btn sm">+ New cube</span>
+          <span class="btn sm">+ New view</span>
+          <span class="btn sm on">+ Generate from a data source…</span>
+        </div>
+      </aside>
+
+      <!-- overview behind (design 12) -->
+      <main class="ov">
+        <div class="titlerow"><h1>Model</h1><span class="spacer"></span><span class="btn primary"><svg class="s"><use href="#i-plus"/></svg>New<svg class="s"><use href="#i-chevd"/></svg></span></div>
+        <div class="notebar"><svg class="i"><use href="#i-info"/></svg><span>Every cube and view in the model, by file. Open a row to edit its file.</span></div>
+        <div class="card">
+          <table class="grid-table">
+            <colgroup><col style="width:150px" /><col style="width:48px" /><col style="width:112px" /><col style="width:74px" /><col style="width:66px" /><col style="width:44px" /><col style="width:60px" /><col /></colgroup>
+            <thead><tr><th>File <svg class="s" style="vertical-align:-2px"><use href="#i-sort"/></svg></th><th>Kind</th><th>Name</th><th class="num">Dimensions</th><th class="num">Measures</th><th class="num">Joins</th><th class="num">Pre-aggs</th><th>Members</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">cubes/customers.yml</td><td>Cube</td><td class="mono">customers</td><td class="num">4</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="sec">id, name, country, signed_up_at, count</td></tr>
+              <tr><td class="mono">cubes/monthly_orders.yml</td><td>Cube</td><td class="mono">monthly_orders</td><td class="num">3</td><td class="num">2</td><td class="num zero">0</td><td class="num">1</td><td class="sec">id, status, ordered_at, count, total_amount, by_status_month</td></tr>
+              <tr><td class="mono">cubes/orders.yml</td><td>Cube</td><td class="mono">orders</td><td class="num">3</td><td class="num">3</td><td class="num">2</td><td class="num zero">0</td><td class="sec">id, status, ordered_at, count, total_amount, average_amount</td></tr>
+              <tr><td class="mono">cubes/product_catalog.yml</td><td>Cube</td><td class="mono">product_catalog</td><td class="num zero">0</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="sec">count</td></tr>
+              <tr><td class="mono">cubes/products.yml</td><td>Cube</td><td class="mono">products</td><td class="num">3</td><td class="num">1</td><td class="num zero">0</td><td class="num zero">0</td><td class="sec">id, name, category, count</td></tr>
+              <tr><td class="mono">cubes/templated_example.yml</td><td colspan="2"><span class="tag" title="Jinja template · read-only here"><svg class="s" style="width:12px;height:12px"><use href="#i-lock"/></svg>Jinja template</span></td><td class="num muted">—</td><td class="num muted">—</td><td class="num muted">—</td><td class="num muted">—</td><td class="muted">not listed</td></tr>
+              <tr><td class="mono">views/order_summary.yml</td><td>View</td><td class="mono">order_summary</td><td class="num sec" colspan="2">2 included</td><td class="num muted">—</td><td class="num muted">—</td><td class="sec">orders.count, orders.status</td></tr>
+              <tr><td class="mono">views/secured_orders.yml</td><td>View</td><td class="mono">secured_orders</td><td class="num sec" colspan="2">4 included</td><td class="num muted">—</td><td class="num muted">—</td><td class="sec">orders.count, orders.total_amount, orders.status, orders.ordered_at</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="xs muted" style="margin:0">Beside the pane, File and Members truncate and the Jinja tag shortens, each with its full text in a tooltip; Segments, the last count, shows at full width (design 12).</p>
+      </main>
+
+      <!-- the pane, step 2 -->
+      <aside class="pane" aria-label="Generate cubes">
+        <div class="pane-head"><h2>Generate cubes</h2><span class="spacer"></span><span class="iconbtn" title="Close"><svg class="i"><use href="#i-x"/></svg></span></div>
+        <div class="steps">
+          <span class="step done"><i>✓</i>Source</span><span class="step-sep"></span>
+          <span class="step cur"><i>2</i>Tables</span><span class="step-sep"></span>
+          <span class="step"><i>3</i>Review</span>
+        </div>
+        <div class="ctx"><span class="mono-tile">Pg</span><span class="sum"><span class="mono strong">default</span> · PostgreSQL › <span class="mono strong">public</span></span><span class="btn link">Change</span></div>
+        <div class="pane-body">
+          <div class="sect">
+            <h3>Tables</h3>
+            <div class="fbar"><div class="input sm ph" style="flex:1"><svg class="s"><use href="#i-search"/></svg>Search tables</div><span class="fpill">Type · <b>All</b><svg class="s"><use href="#i-chevd"/></svg></span></div>
+            <div class="count">3 tables · 2 chosen</div>
+            <div class="tl" aria-label="Tables in public">
+              <div class="tl-h"><span></span><span>Table</span><span>Type</span><span></span></div>
+              <div class="tl-r"><span class="cb on"></span><span class="nm">customers</span><span class="ty">Table</span><span class="iconbtn sm" title="Columns of customers"><svg class="s"><use href="#i-chevd"/></svg></span></div>
+              <div class="tl-r open"><span class="cb on"></span><span class="nm strong">orders</span><span class="ty">Table</span><span class="iconbtn sm on" title="Columns of orders"><svg class="s"><use href="#i-chevu"/></svg></span></div>
+              <div class="peek">
+                <div class="cap"><span class="mono">orders</span> · 6 columns</div>
+                <table class="ptab">
+                  <thead><tr><th>Column</th><th>Database type</th><th>Cube type</th><th>Key</th></tr></thead>
+                  <tbody>
+                    <tr><td class="mono">id</td><td class="dt">integer</td><td>number</td><td>Primary key</td></tr>
+                    <tr><td class="mono">customer_id</td><td class="dt">integer</td><td>number</td><td class="mono">→ customers.id</td></tr>
+                    <tr><td class="mono">product_id</td><td class="dt">integer</td><td>number</td><td class="mono">→ products.id</td></tr>
+                    <tr><td class="mono">status</td><td class="dt">text</td><td>string</td><td></td></tr>
+                    <tr><td class="mono">amount</td><td class="dt">numeric</td><td>number</td><td></td></tr>
+                    <tr><td class="mono">ordered_at</td><td class="dt">timestamp with time zone</td><td>time</td><td></td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="tl-r"><span class="cb"></span><span class="nm">products</span><span class="ty">Table</span><span class="iconbtn sm" title="Columns of products"><svg class="s"><use href="#i-chevd"/></svg></span></div>
+            </div>
+          </div>
+        </div>
+        <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="spacer"></span><span class="btn ghost">Cancel</span><span class="btn primary">Generate 2 cubes</span></div>
+      </aside>
+    </div>
+
+    <!-- pins: pane head 48–92, rail 92–133, ctx 133–174, sect 174…, foot 843–900 -->
+    <span class="pin" style="left:1120px;top:58px">1</span>
+    <span class="pin" style="left:1368px;top:58px">11</span>
+    <span class="pin" style="left:1170px;top:101px">2</span>
+    <span class="pin" style="left:936px;top:141px">3</span>
+    <span class="pin" style="left:936px;top:218px">4</span>
+    <span class="pin" style="left:1086px;top:250px">5</span>
+    <span class="pin" style="left:936px;top:314px">6</span>
+    <span class="pin" style="left:1362px;top:348px">7</span>
+    <span class="pin" style="left:1080px;top:858px">8</span>
+    <span class="pin" style="left:100px;top:490px">9</span>
+    <span class="pin" style="left:904px;top:170px">10</span>
+  </div>
+
+  <!-- ===================== NOTES ===================== -->
+  <section class="notes">
+    <h2>What changes, and why</h2>
+    <p>The flow, its rules and its words stay as built. What changes is the frame, the order and the density. The frame is stable and doesn't cover the model. The steps say where you are. The table list can be scanned, and each table's columns open where you asked for them. Each generated file has a status, and a clash says how to clear it. The YAML is the model's own code view. Pins 1–11 are on the screen above; pins 12–17 are on states J, K and L below.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>A pane docked beside the model, not a modal over it</b><span class="t">480 px, full height under the app bar, with a rule on its left and a 44 px head with a 16/600 title, as design 01 docks the new data source wizard. The tree and the model stay readable, so you can see which cubes exist while you choose. The pane is the same size at every step, and only its body scrolls. On a file page it takes the YAML and Problems pane's place and the form becomes fluid. Below 1,024 px it covers the page, and the rail shortens to "Step 2 of 3 · Tables", as design 01's state K does.</span><span class="fix">MW-20 · UX-106 · design 01 pin 1 · direction §2</span></div></li>
+      <li><span class="n">2</span><div><b>Three steps: ① Source — ② Tables — ③ Review</b><span class="t">Design 01's rail. A done step shows ✓ on <code>accent-soft</code> and can be clicked; the current one is filled in the accent, with its label at 600; later steps are muted and can't be clicked. The outcome of Publish shows on the Review step (states N, O), so there are three steps and no fourth.</span><span class="fix">design 01 pin 2 · critique layout</span></div></li>
+      <li><span class="n">3</span><div><b>The context strip says where the tables come from</b><span class="t">"default · PostgreSQL › public" on <code>bg-page</code>, from step 2 on, with <b>Change</b> going back to Source. At Review it adds "· 2 tables". The driver is its display name, as on Data sources and in design 01, not the API's "postgres".</span><span class="fix">MW-22 · design 01 pin 3</span></div></li>
+      <li><span class="n">4</span><div><b>Search and Type at filter-bar size</b><span class="t">A 28/12 "Search tables" with its icon takes the free width, beside a <b>Type · All ▾</b> pill. The pill's menu holds All, then Tables, Views, Materialized views and External tables as checkboxes, several at once (state F). A new search or type starts again from the first page (as built). Today the filter is a "Types" legend over four native checkboxes in the browser's blue, where all four unticked silently means every type.</span><span class="fix">MW-22 · UX-107 · UX-108</span></div></li>
+      <li><span class="n">5</span><div><b>One count line</b><span class="t">"3 tables · 2 chosen" in 12/16 secondary with tabular figures. With paging it adds "· 51–100 of 120", and the card's foot has ‹ › (state H). The chosen count holds across pages, searches, types and schemas, as the choice does (as built). Changing the data source clears it (as built).</span><span class="fix">AC-139 · critique layout</span></div></li>
+      <li><span class="n">6</span><div><b>34 px rows in a card</b><span class="t">A 28 px header, then rows with a 16 px checkbox in the accent, the table's name in the code face, and its type in the filter's words ("Table", "View", "Materialized view", "External table"). Clicking a row ticks it. Today the rows are about 41 px, because of the 32 px button in each.</span><span class="fix">direction §4 · rule 17 · UX-108 · MW-22</span></div></li>
+      <li><span class="n">7</span><div><b>Columns open in place, under a caption</b><span class="t">A 24 px chevron at the row's end, named "Columns of orders" and carrying <code>aria-expanded</code>. It opens an inset panel on <code>bg-subtle</code> under its own row, captioned "orders · 6 columns". The panel has 24 px dense rows: Column (mono), Database type, Cube type and Key ("Primary key", or "→ customers.id"). One row is open at a time, and the latest look wins (as built). Today the columns appear under the whole list with no table name, so they can be misread as another table's.</span><span class="fix">MW-23 · direction §4</span></div></li>
+      <li><span class="n">8</span><div><b>Back · Cancel · one primary, pinned</b><span class="t">Back on the left from step 2 on, then Cancel as a ghost, then one primary named for what it does next: "Next: Tables", "Generate 2 cubes", "Publish 2 cubes", then "Close". When the primary is blocked, a 12 px reason sits to its left ("Choose at least one table", state D). Today the review's foot has three buttons (Cancel · Generate · Publish), and "Generate 0 cubes" sits pale with no reason.</span><span class="fix">MW-25 · UX-106 · design 01 pin 8</span></div></li>
+      <li><span class="n">9</span><div><b>Opened from the tree's foot, and from + New ▾</b><span class="t">"+ Generate from a data source…" at the tree's foot, under + New cube and + New view, shown pressed while the pane is open. The overview's <b>+ New ▾</b> offers it too (design 12). Focus goes to the pane's title on open, and back to the control that opened it on close.</span><span class="fix">MW-02 · rule 85 · design 03 pin 1</span></div></li>
+      <li><span class="n">10</span><div><b>The model stays readable behind</b><span class="t">Design 12's table, so you can see which cubes the model already has before you generate. In the sample, every table in <code>public</code> already has a cube (state L is that run).</span><span class="fix">AC-249 · design 12</span></div></li>
+      <li><span class="n">11</span><div><b>✕ in the head, and Esc asks first</b><span class="t">A 32 px ✕ in the same place as on every pane. Esc, ✕ or Cancel close at once when nothing is chosen. Once a table is chosen or a cube is generated, they first ask "Discard this generation?" (state P). Today there's no ✕, and Esc throws away the choice and any cubes you've reviewed.</span><span class="fix">MW-25 · rule 85 · design 01 state I</span></div></li>
+      <li><span class="n">12</span><div><b>The review opens with one summary</b><span class="t">A notebar: "2 cubes ready to publish.", or, when any clashes, "2 of 2 cubes clash with the model. Nothing is published while a cube clashes." with a 24 px <b>Leave out clashing tables</b> (state L). Today's sentence "A column used only in a join, such as a foreign key, is listed as left out too." closes the list, once.</span><span class="fix">MW-21 · rule 3</span></div></li>
+      <li><span class="n">13</span><div><b>One ruled block per file, with a status</b><span class="t">Like design 03's member rows: the path in mono 12/600 with its status as icon and label, <b>✓ Ready</b>, <b>✕ Clashes</b> or <b>⚠ Check</b>. Under it are the counts ("2 dimensions · 2 measures · 1 join"). A block that clashes or needs checking opens by itself; a ready one stays closed until you open it. Today each file is an <code>h3</code> at the browser's 700 over an unframed <code>pre</code>.</span><span class="fix">MW-21 · MW-24 · rule 3</span></div></li>
+      <li><span class="n">14</span><div><b>Columns left out, with Cube's reasons</b><span class="t">"Columns left out (3)": each column in the code face, its database type muted, then today's reason in words ("a number, neither a key nor named like a measure", "its name starts with an underscore", "its member's name is another column's, and Cube kept only one"). With none, today's "Every column is in the cube." is shown.</span><span class="fix">AC-139 "a column is dropped without saying so"</span></div></li>
+      <li><span class="n">15</span><div><b>The YAML at full length, behind a disclosure</b><span class="t">"▸ YAML · 30 lines" opens the model's read-only code view: IBM Plex Mono 12/18, line numbers, design 03's highlighting, and Wrap on. It is shown at full length inside the pane's one scroll, with no scroller of its own (state K). Today it falls back to <code>ui-monospace</code> in a 240 px scroller inside the scrolling dialog, and is cut off at "sql: id".</span><span class="fix">MW-24 · AC-223 · design 03 pin 8</span></div></li>
+      <li><span class="n">16</span><div><b>Publish is one change of every file</b><span class="t">"Publish 2 cubes" sends every generated file as one model change, so their joins compile together (as built). Back returns to Tables with the choice kept. Generating again replaces the review. While publishing, the primary reads "◷ Publishing…", is disabled, and the body is locked.</span><span class="fix">AC-136 · AC-137 · UX-106</span></div></li>
+      <li><span class="n">17</span><div><b>A clash names the existing file and offers the ways out</b><span class="t">An error notebar on its block, in today's words with the name and path in the code face ("customers is already a cube in cubes/customers.yml."; today the backticks print literally). It has two actions. <b>Open cubes/customers.yml</b> opens the existing file in the editor behind the pane, which stays docked. <b>Leave this table out</b> unticks the table and generates the rest again, which is today's advice done in one step. The foot's reason reads "Resolve 2 clashes to publish". The API refuses a clash whatever the pane shows (T276).</span><span class="fix">MW-21 · AC-249 · rule 3</span></div></li>
+    </ol>
+
+    <div class="decision">
+      <h3>Every function Generate cubes has today, and where it is here</h3>
+      <p>From <code>GenerateCubes.tsx</code> and <code>GenerateCubes.test.tsx</code>. There is still no target folder, no renaming of columns or cubes, and no choice of format, and Generate still publishes directly (D4). The last group lists what the critique's layout adds.</p>
+      <table>
+        <thead><tr><th style="width:470px">Today</th><th>In this design</th><th>Where</th></tr></thead>
+        <tbody>
+          <tr><td>Choose a data source (name and driver); choose a schema</td><td>Step 1: a radio list of sources (mono name, driver's display name) and a radio list of schemas. A single source is pre-selected</td><td class="w">state A</td></tr>
+          <tr><td>"Reading the data sources…", "Reading the tables…", "Reading its columns…"; a source, list or table that can't be read, with the API's reason</td><td>Skeleton rows with the status line; an error notebar with the reason, verbatim</td><td class="w">states B, C, E, G</td></tr>
+          <tr><td>Find a table by name; filter by Tables, Views, Materialized views, External tables</td><td>28/12 search; the <b>Type · All ▾</b> pill and its menu</td><td class="w">pin 4 · state F</td></tr>
+          <tr><td>"n tables", paged 50 at a time with Previous / Next</td><td>"3 tables · 2 chosen", with "· 51–100 of 120" and ‹ › in the card's foot</td><td class="w">pin 5 · state H</td></tr>
+          <tr><td>Tick tables; the choice is kept across pages and searches</td><td>Checkbox rows; the chosen count holds across pages</td><td class="w">pins 5, 6</td></tr>
+          <tr><td>One table's columns: column, "Its type", Cube type, key</td><td>The row's chevron opens them in place, captioned. "Its type" becomes "Database type"</td><td class="w">pin 7 · state G</td></tr>
+          <tr><td>Generate n cubes; "Generating…"</td><td>The Tables step's primary; "◷ Generating…" with a skeleton block per table</td><td class="w">pin 8 · state I</td></tr>
+          <tr><td>Each cube's path, YAML, "Left out of the cube:" with reasons, "Every column is in the cube."</td><td>One ruled block per file; "Columns left out (n)"; "▸ YAML · n lines"</td><td class="w">pins 13–15 · states J, K</td></tr>
+          <tr><td>"No count measure: a column's measure took its name, count." · "Not marked as the cube's primary key: …" · the sentence for a file wechart couldn't check</td><td>Warning notebars, verbatim, and ⚠ Check on the block</td><td class="w">state M</td></tr>
+          <tr><td>Clashes: "`x` is already a cube in cubes/x.yml." · "cubes/x.yml is already in the model." · "Nothing is published while a cube clashes…"</td><td>An error notebar on the block; the summary; ✕ Clashes</td><td class="w">pins 12, 17 · state L</td></tr>
+          <tr><td>"A column used only in a join, such as a foreign key, is listed as left out too."</td><td>Once, at the foot of the list</td><td class="w">pin 12</td></tr>
+          <tr><td>Publish n cubes, disabled while a clash remains; "Publishing…"</td><td>The Review step's primary, with its reason beside it when blocked</td><td class="w">pins 16, 17</td></tr>
+          <tr><td>"Published n cubes." with Open ‹path› for each · "Nothing was published:" with each problem by file · "wechart could not be reached."</td><td>Notebars on the Review step, then the files or the problems</td><td class="w">states N, O</td></tr>
+          <tr><td>Cancel; Close once published; Escape closes it</td><td>✕ and Cancel; Close as the only primary once published; Esc asks first when anything is chosen</td><td class="w">pins 8, 11 · state P</td></tr>
+          <tr class="grp"><td colspan="3">Added by the critique's layout (MW-20 … MW-25)</td></tr>
+          <tr><td>—</td><td><b>Next: Tables</b>, a step of its own for the source and schema</td><td class="w">state A</td></tr>
+          <tr><td>—</td><td><b>Retry</b> on a read that failed (rule 18: error states offer Retry); <b>No data source yet.</b> linking to Data sources</td><td class="w">state C</td></tr>
+          <tr><td>—</td><td><b>Clear search</b> when nothing matches</td><td class="w">state F</td></tr>
+          <tr><td>—</td><td><b>Open cubes/x.yml</b> and <b>Leave this table out</b> on a clash; <b>Leave out clashing tables</b> in the summary</td><td class="w">pin 17 · state L</td></tr>
+          <tr><td>Esc closes at once</td><td><b>Discard this generation?</b> when anything is chosen or generated (rule 85)</td><td class="w">pin 11 · state P</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="decision">
+      <h3>Proposals (need approval)</h3>
+      <p>None of these is drawn in the main screen or the states.</p>
+      <table>
+        <thead><tr><th style="width:470px">Proposal</th><th>Why, and what it needs</th><th>From</th></tr></thead>
+        <tbody>
+          <tr><td><span class="prop">Proposal — needs your approval</span><br />"Add 2 cubes as drafts" instead of Publish: they would land in the tree as unpublished files, to be reviewed and saved with Save &amp; reload Cube, as New cube's are.</td><td>You decided (D4) that Generate keeps publishing directly, as built. This is recorded only in case you want to revisit it. It would change AC-136/AC-137's flow.</td><td class="w">critique D4</td></tr>
+          <tr><td><span class="prop">Proposal — needs your approval</span><br />Mark tables that already have a cube as "in model" on the Tables step, before generating.</td><td>In the sample, every table in <code>public</code> clashes, and today you find out only after generating. It needs research first: the scaffolder renames cubes within a batch (introspection-api.md › Cube name), so a table's cube name isn't known until it runs.</td><td class="w">critique layout</td></tr>
+          <tr><td><span class="prop">Proposal — needs your approval</span><br />Health on each data source row at step 1 (icon, label and age), from Data sources.</td><td>It would say before browsing that a source's last test failed. Today's list has no health.</td><td class="w">critique step 1</td></tr>
+          <tr><td><span class="prop">Proposal — needs your approval</span><br />A select-all checkbox for the page in the table list's header.</td><td>The critique draws it. It is a new function, so it is left out of the drawing.</td><td class="w">critique step 2</td></tr>
+          <tr><td><span class="prop">Proposal — needs your approval</span><br />With security on, a target badge in the pane's head, like design 01's "in My workspace".</td><td>Rule 74: a model made in the workspace has a target folder. Generate has no target today.</td><td class="w">critique head</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== STATES ===================== -->
+  <section class="states">
+    <h2>The other steps and states</h2>
+    <p>Drawn at 440 px so three fit in a row; the pane is 480 px. Each frame shows the pane alone; the model behind it is as on the main screen. Content is the sample's (<code>default</code>, with the schemas <code>public</code> and <code>generate</code>) except where a state says it is illustrative.</p>
+
+    <h3 class="group">Step 1 · Source</h3>
+    <div class="stategrid">
+      <!-- A -->
+      <div class="state">
+        <h3>A · Source: the data source, then its schema</h3>
+        <p>Two radio lists in cards. Sources are 34 px rows with the mono name at 12/600 and the driver's display name at 12 secondary; the only source is pre-selected, as built. Schemas are 28 px rows, with a 28/12 search once there are more than 10. The primary is <b>Next: Tables</b>; with no schema chosen, it is blocked with "Choose a schema".</p>
+        <div class="frame"><div class="pane" style="height:460px;border-left:0">
+          <div class="pane-head"><h2>Generate cubes</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step cur"><i>1</i>Source</span><span class="step-sep"></span><span class="step"><i>2</i>Tables</span><span class="step-sep"></span><span class="step"><i>3</i>Review</span></div>
+          <div class="pane-body">
+            <div class="sect">
+              <h3>Data source</h3>
+              <div class="tl rlist"><div class="tl-r on"><span class="radio on"></span><span><span class="mono strong">default</span></span><span class="sec">PostgreSQL</span></div></div>
+            </div>
+            <div class="sect">
+              <h3>Schema</h3>
+              <div class="tl rlist sm">
+                <div class="tl-r"><span class="radio"></span><span class="mono">generate</span><span></span></div>
+                <div class="tl-r on"><span class="radio on"></span><span class="mono strong">public</span><span></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="pane-foot"><span class="spacer"></span><span class="btn ghost">Cancel</span><span class="btn primary">Next: Tables<svg class="s"><use href="#i-chev"/></svg></span></div>
+        </div></div>
+      </div>
+
+      <!-- B -->
+      <div class="state">
+        <h3>B · Reading the data sources</h3>
+        <p>Today's words, as a status line with the running icon, over three 34 px skeleton rows, so the list doesn't jump in. Schemas read the same way once a source is chosen.</p>
+        <div class="frame"><div class="pane" style="height:460px;border-left:0">
+          <div class="pane-head"><h2>Generate cubes</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step cur"><i>1</i>Source</span><span class="step-sep"></span><span class="step"><i>2</i>Tables</span><span class="step-sep"></span><span class="step"><i>3</i>Review</span></div>
+          <div class="pane-body">
+            <div class="sect">
+              <h3>Data source</h3>
+              <span class="status run"><svg class="s"><use href="#s-run"/></svg>Reading the data sources…</span>
+              <div class="tl rlist">
+                <div class="tl-r"><span class="radio" style="border-color:var(--border-subtle)"></span><span class="b" style="width:90px"></span><span class="b" style="width:70px"></span></div>
+                <div class="tl-r"><span class="radio" style="border-color:var(--border-subtle)"></span><span class="b" style="width:120px"></span><span class="b" style="width:70px"></span></div>
+                <div class="tl-r"><span class="radio" style="border-color:var(--border-subtle)"></span><span class="b" style="width:70px"></span><span class="b" style="width:70px"></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="pane-foot"><span class="why">Choose a schema</span><span class="btn ghost">Cancel</span><span class="btn primary dis">Next: Tables<svg class="s"><use href="#i-chev"/></svg></span></div>
+        </div></div>
+      </div>
+
+      <!-- C -->
+      <div class="state">
+        <h3>C · A source that can't be read, and none at all</h3>
+        <p>The API's reason, verbatim, in an error notebar with a 24 px <b>Retry</b> (rule 18). Here it is the component test's case, a missing introspection scope. The same bar stands in for a schema list or a table list that fails. With no data source at all, the section says "No data source yet." and links to Data sources.</p>
+        <div class="frame"><div class="pane" style="height:460px;border-left:0">
+          <div class="pane-head"><h2>Generate cubes</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step cur"><i>1</i>Source</span><span class="step-sep"></span><span class="step"><i>2</i>Tables</span><span class="step-sep"></span><span class="step"><i>3</i>Review</span></div>
+          <div class="pane-body">
+            <div class="sect">
+              <h3>Data source</h3>
+              <div class="notebar err"><svg class="s"><use href="#s-err"/></svg><span><b>The data sources can't be read.</b><span class="mono" style="overflow-wrap:anywhere">Cube did not let wechart browse its data sources: its introspection scope is not granted (infra/cube/cube.js).</span><span class="acts2"><span class="btn sm">Retry</span></span></span></div>
+            </div>
+            <div class="sect">
+              <h3>Data source <span class="xs muted" style="text-transform:none;letter-spacing:0;font-weight:400">· with none at all</span></h3>
+              <p class="help">No data source yet. <span class="btn link">Add one in Data sources</span></p>
+            </div>
+          </div>
+          <div class="pane-foot"><span class="why">Choose a schema</span><span class="btn ghost">Cancel</span><span class="btn primary dis">Next: Tables<svg class="s"><use href="#i-chev"/></svg></span></div>
+        </div></div>
+      </div>
+    </div>
+
+    <h3 class="group">Step 2 · Tables</h3>
+    <div class="stategrid">
+      <!-- D -->
+      <div class="state">
+        <h3>D · No tables chosen</h3>
+        <p>The list is read, but nothing is ticked. The primary is blocked, and its reason sits to its left, as design 01 does. It reads "Generate cubes", not today's "Generate 0 cubes".</p>
+        <div class="frame"><div class="pane" style="height:420px;border-left:0">
+          <div class="pane-head"><h2>Generate cubes</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step done"><i>✓</i>Source</span><span class="step-sep"></span><span class="step cur"><i>2</i>Tables</span><span class="step-sep"></span><span class="step"><i>3</i>Review</span></div>
+          <div class="ctx"><span class="mono-tile">Pg</span><span class="sum"><span class="mono strong">default</span> · PostgreSQL › <span class="mono strong">public</span></span><span class="btn link">Change</span></div>
+          <div class="pane-body">
+            <div class="sect">
+              <div class="fbar"><div class="input sm ph" style="flex:1"><svg class="s"><use href="#i-search"/></svg>Search tables</div><span class="fpill">Type · <b>All</b><svg class="s"><use href="#i-chevd"/></svg></span></div>
+              <div class="count">3 tables · none chosen</div>
+              <div class="tl">
+                <div class="tl-h"><span></span><span>Table</span><span>Type</span><span></span></div>
+                <div class="tl-r"><span class="cb"></span><span class="nm">customers</span><span class="ty">Table</span><span class="iconbtn sm"><svg class="s"><use href="#i-chevd"/></svg></span></div>
+                <div class="tl-r"><span class="cb"></span><span class="nm">orders</span><span class="ty">Table</span><span class="iconbtn sm"><svg class="s"><use href="#i-chevd"/></svg></span></div>
+                <div class="tl-r"><span class="cb"></span><span class="nm">products</span><span class="ty">Table</span><span class="iconbtn sm"><svg class="s"><use href="#i-chevd"/></svg></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="why">Choose at least one table</span><span class="btn primary dis">Generate cubes</span></div>
+        </div></div>
+      </div>
+
+      <!-- E -->
+      <div class="state">
+        <h3>E · Reading the tables</h3>
+        <p>"Reading the tables…" over five 34 px skeleton rows. Search and Type stay usable, and a new question replaces the pending one (as built). If the list can't be read, state C's notebar, with Retry, takes the card's place.</p>
+        <div class="frame"><div class="pane" style="height:420px;border-left:0">
+          <div class="pane-head"><h2>Generate cubes</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step done"><i>✓</i>Source</span><span class="step-sep"></span><span class="step cur"><i>2</i>Tables</span><span class="step-sep"></span><span class="step"><i>3</i>Review</span></div>
+          <div class="ctx"><span class="mono-tile">Pg</span><span class="sum"><span class="mono strong">default</span> · PostgreSQL › <span class="mono strong">public</span></span><span class="btn link">Change</span></div>
+          <div class="pane-body">
+            <div class="sect">
+              <div class="fbar"><div class="input sm ph" style="flex:1"><svg class="s"><use href="#i-search"/></svg>Search tables</div><span class="fpill">Type · <b>All</b><svg class="s"><use href="#i-chevd"/></svg></span></div>
+              <span class="status run"><svg class="s"><use href="#s-run"/></svg>Reading the tables…</span>
+              <div class="tl">
+                <div class="tl-h"><span></span><span>Table</span><span>Type</span><span></span></div>
+                <div class="tl-r"><span class="cb" style="border-color:var(--border-subtle)"></span><span class="b" style="width:110px"></span><span class="b" style="width:44px"></span><span></span></div>
+                <div class="tl-r"><span class="cb" style="border-color:var(--border-subtle)"></span><span class="b" style="width:80px"></span><span class="b" style="width:44px"></span><span></span></div>
+                <div class="tl-r"><span class="cb" style="border-color:var(--border-subtle)"></span><span class="b" style="width:96px"></span><span class="b" style="width:44px"></span><span></span></div>
+                <div class="tl-r"><span class="cb" style="border-color:var(--border-subtle)"></span><span class="b" style="width:70px"></span><span class="b" style="width:44px"></span><span></span></div>
+                <div class="tl-r"><span class="cb" style="border-color:var(--border-subtle)"></span><span class="b" style="width:120px"></span><span class="b" style="width:44px"></span><span></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="why">Choose at least one table</span><span class="btn primary dis">Generate cubes</span></div>
+        </div></div>
+      </div>
+
+      <!-- F -->
+      <div class="state">
+        <h3>F · Type, and a search that finds nothing</h3>
+        <p>The Type menu takes several types at once, and <b>All</b> clears them. The pill names what's ticked. In the sample, <code>public</code> holds only tables, so "cust" with Views finds nothing. The card says so, with <b>Clear search</b>, rather than showing an empty table.</p>
+        <div class="frame"><div class="pane" style="height:420px;border-left:0">
+          <div class="pane-head"><h2>Generate cubes</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step done"><i>✓</i>Source</span><span class="step-sep"></span><span class="step cur"><i>2</i>Tables</span><span class="step-sep"></span><span class="step"><i>3</i>Review</span></div>
+          <div class="ctx"><span class="mono-tile">Pg</span><span class="sum"><span class="mono strong">default</span> · PostgreSQL › <span class="mono strong">public</span></span><span class="btn link">Change</span></div>
+          <div class="pane-body">
+            <div class="sect" style="position:relative">
+              <div class="fbar"><div class="input sm"><svg class="s muted"><use href="#i-search"/></svg><span class="mono">cust</span></div><span class="fpill on">Type · <b>Views</b><svg class="s"><use href="#i-chevu"/></svg></span></div>
+              <div class="count">0 tables · none chosen</div>
+              <div class="tl"><div style="padding:12px;display:grid;gap:6px" class="xs sec"><span>No tables match "cust".</span><span class="btn link" style="justify-self:start">Clear search</span></div></div>
+              <div class="menu" style="right:16px;top:48px;width:200px">
+                <div class="mi"><span class="cb"></span>All</div>
+                <div class="sep"></div>
+                <div class="mi"><span class="cb"></span>Tables</div>
+                <div class="mi hover"><span class="cb on"></span>Views</div>
+                <div class="mi"><span class="cb"></span>Materialized views</div>
+                <div class="mi"><span class="cb"></span>External tables</div>
+              </div>
+            </div>
+          </div>
+          <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="why">Choose at least one table</span><span class="btn primary dis">Generate cubes</span></div>
+        </div></div>
+      </div>
+
+      <!-- G -->
+      <div class="state">
+        <h3>G · A table's columns, and reading them</h3>
+        <p>The seed's <code>generate</code> schema. <code>chrome_visits</code> is open: its foreign key reads "→ chrome_stores.id", and <code>visitors</code> and <code>_loaded_at</code> are columns Cube will leave out. Below it, <code>edge_stores</code> was opened while this was drawn, so it shows three 24 px skeleton rows under its caption. If a table's columns can't be read, the reason shows inline in the panel. Opening one row closes the other; only one is open at a time.</p>
+        <div class="frame"><div class="pane" style="height:560px;border-left:0">
+          <div class="pane-head"><h2>Generate cubes</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step done"><i>✓</i>Source</span><span class="step-sep"></span><span class="step cur"><i>2</i>Tables</span><span class="step-sep"></span><span class="step"><i>3</i>Review</span></div>
+          <div class="ctx"><span class="mono-tile">Pg</span><span class="sum"><span class="mono strong">default</span> · PostgreSQL › <span class="mono strong">generate</span></span><span class="btn link">Change</span></div>
+          <div class="pane-body">
+            <div class="sect">
+              <div class="count">9 tables · 2 chosen</div>
+              <div class="tl">
+                <div class="tl-r"><span class="cb on"></span><span class="nm">chrome_stores</span><span class="ty">Table</span><span class="iconbtn sm"><svg class="s"><use href="#i-chevd"/></svg></span></div>
+                <div class="tl-r open"><span class="cb on"></span><span class="nm strong">chrome_visits</span><span class="ty">Table</span><span class="iconbtn sm on"><svg class="s"><use href="#i-chevu"/></svg></span></div>
+                <div class="peek">
+                  <div class="cap"><span class="mono">chrome_visits</span> · 6 columns</div>
+                  <table class="ptab fit">
+                    <colgroup><col style="width:94px" /><col style="width:80px" /><col style="width:66px" /><col /></colgroup>
+                    <thead><tr><th>Column</th><th>Database type</th><th>Cube type</th><th>Key</th></tr></thead>
+                    <tbody>
+                      <tr><td class="mono">id</td><td class="dt">integer</td><td>number</td><td>Primary key</td></tr>
+                      <tr><td class="mono">store_id</td><td class="dt">integer</td><td>number</td><td class="mono">→ chrome_stores.id</td></tr>
+                      <tr><td class="mono">visitors</td><td class="dt">integer</td><td>number</td><td></td></tr>
+                      <tr><td class="mono">spend_amount</td><td class="dt">numeric</td><td>number</td><td></td></tr>
+                      <tr><td class="mono">visited_at</td><td class="dt" title="timestamp with time zone">timestamp with time zone</td><td>time</td><td></td></tr>
+                      <tr><td class="mono">_loaded_at</td><td class="dt" title="timestamp with time zone">timestamp with time zone</td><td>time</td><td></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="tl-r open"><span class="cb"></span><span class="nm strong">edge_stores</span><span class="ty">Table</span><span class="iconbtn sm on"><svg class="s"><use href="#i-chevu"/></svg></span></div>
+                <div class="peek">
+                  <div class="cap"><span class="mono">edge_stores</span> · <span class="status run" style="font-weight:400"><svg class="s"><use href="#s-run"/></svg>Reading its columns…</span></div>
+                  <div class="ptab" style="display:grid;gap:0">
+                    <div style="height:24px;display:flex;align-items:center;padding:0 6px;border-bottom:1px solid var(--border-subtle)"><span class="sk" style="width:120px"></span></div>
+                    <div style="height:24px;display:flex;align-items:center;padding:0 6px;border-bottom:1px solid var(--border-subtle)"><span class="sk" style="width:90px"></span></div>
+                    <div style="height:24px;display:flex;align-items:center;padding:0 6px"><span class="sk" style="width:140px"></span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="spacer"></span><span class="btn ghost">Cancel</span><span class="btn primary">Generate 2 cubes</span></div>
+        </div></div>
+        <p>Both rows are drawn open only to show the two states side by side; in use, opening <code>edge_stores</code> closes <code>chrome_visits</code>. At 440 px, "timestamp with time zone" is cut, with the full type in its tooltip; at 480 px it fits (main screen).</p>
+      </div>
+
+      <!-- H -->
+      <div class="state">
+        <h3>H · Many tables: paging</h3>
+        <p>Illustrative names: the sample's schemas hold 3 and 9 tables, and 120 is the component test's figure. The count line adds the range, and the card's foot has 24 px ‹ › buttons. Two of the three chosen tables are on page 1; the choice holds across pages, as built.</p>
+        <div class="frame"><div class="pane" style="height:480px;border-left:0">
+          <div class="pane-head"><h2>Generate cubes</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step done"><i>✓</i>Source</span><span class="step-sep"></span><span class="step cur"><i>2</i>Tables</span><span class="step-sep"></span><span class="step"><i>3</i>Review</span></div>
+          <div class="ctx"><span class="mono-tile">Pg</span><span class="sum"><span class="mono strong">warehouse</span> · PostgreSQL › <span class="mono strong">sales</span></span><span class="btn link">Change</span></div>
+          <div class="pane-body">
+            <div class="sect">
+              <div class="fbar"><div class="input sm ph" style="flex:1"><svg class="s"><use href="#i-search"/></svg>Search tables</div><span class="fpill">Type · <b>All</b><svg class="s"><use href="#i-chevd"/></svg></span></div>
+              <div class="count">120 tables · 3 chosen · 51–100 of 120</div>
+              <div class="tl">
+                <div class="tl-h"><span></span><span>Table</span><span>Type</span><span></span></div>
+                <div class="tl-r"><span class="cb"></span><span class="nm">fct_order_lines</span><span class="ty">Table</span><span class="iconbtn sm"><svg class="s"><use href="#i-chevd"/></svg></span></div>
+                <div class="tl-r"><span class="cb on"></span><span class="nm">fct_orders</span><span class="ty">Table</span><span class="iconbtn sm"><svg class="s"><use href="#i-chevd"/></svg></span></div>
+                <div class="tl-r"><span class="cb"></span><span class="nm">fct_payments</span><span class="ty">Table</span><span class="iconbtn sm"><svg class="s"><use href="#i-chevd"/></svg></span></div>
+                <div class="tl-r"><span class="cb"></span><span class="nm">mv_daily_revenue</span><span class="ty">Materialized view</span><span class="iconbtn sm"><svg class="s"><use href="#i-chevd"/></svg></span></div>
+                <div class="tl-r"><span class="cb"></span><span class="nm">v_open_orders</span><span class="ty">View</span><span class="iconbtn sm"><svg class="s"><use href="#i-chevd"/></svg></span></div>
+                <div class="tl-foot"><span>51–100 of 120</span><span class="spacer"></span><span class="iconbtn sm" style="border:1px solid var(--border-strong)" title="Previous page"><svg class="s"><use href="#i-back"/></svg></span><span class="iconbtn sm" style="border:1px solid var(--border-strong)" title="Next page"><svg class="s"><use href="#i-chev"/></svg></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="spacer"></span><span class="btn ghost">Cancel</span><span class="btn primary">Generate 3 cubes</span></div>
+        </div></div>
+      </div>
+    </div>
+
+    <h3 class="group">Step 3 · Review</h3>
+    <div class="stategrid">
+      <!-- I -->
+      <div class="state">
+        <h3>I · Generating</h3>
+        <p>"◷ Generating…" with one skeleton block per chosen table, named, so you can see what is coming. The primary is disabled while it runs. If generation fails, an error notebar gives the API's reason with <b>Retry</b>, and Back returns to Tables.</p>
+        <div class="frame"><div class="pane" style="height:400px;border-left:0">
+          <div class="pane-head"><h2>Generate cubes</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step done"><i>✓</i>Source</span><span class="step-sep"></span><span class="step done"><i>✓</i>Tables</span><span class="step-sep"></span><span class="step cur"><i>3</i>Review</span></div>
+          <div class="ctx"><span class="mono-tile">Pg</span><span class="sum"><span class="mono strong">default</span> · PostgreSQL › <span class="mono strong">generate</span> · 2 tables</span><span class="btn link">Change</span></div>
+          <div class="pane-body">
+            <div class="sect"><span class="status run"><svg class="s"><use href="#s-run"/></svg>Generating…</span></div>
+            <div class="fblk"><div class="fblk-head"><span></span><span class="p muted">cubes/chrome_stores.yml</span><span class="sk" style="width:56px"></span><span class="sub"><span class="sk" style="width:200px"></span></span></div></div>
+            <div class="fblk"><div class="fblk-head"><span></span><span class="p muted">cubes/chrome_visits.yml</span><span class="sk" style="width:56px"></span><span class="sub"><span class="sk" style="width:240px"></span></span></div></div>
+          </div>
+          <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="spacer"></span><span class="btn ghost">Cancel</span><span class="btn primary dis">Publish cubes</span></div>
+        </div></div>
+      </div>
+
+      <!-- J -->
+      <div class="state">
+        <h3>J · Ready: every cube checked</h3>
+        <p>The seed's <code>chrome_stores</code> and <code>chrome_visits</code>, as the scaffolder writes them. Both are Ready, so both stay closed until opened; here <code>chrome_visits</code> is open, showing its three columns left out. Its join to <code>chrome_stores</code> is there because both tables were generated together.</p>
+        <div class="frame"><div class="pane" style="height:640px;border-left:0">
+          <div class="pane-head"><h2>Generate cubes</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step done"><i>✓</i>Source</span><span class="step-sep"></span><span class="step done"><i>✓</i>Tables</span><span class="step-sep"></span><span class="step cur"><i>3</i>Review</span></div>
+          <div class="ctx"><span class="mono-tile">Pg</span><span class="sum"><span class="mono strong">default</span> · PostgreSQL › <span class="mono strong">generate</span> · 2 tables</span><span class="btn link">Change</span></div>
+          <div class="pane-body">
+            <div class="sect"><div class="notebar ok"><svg class="s"><use href="#s-ok"/></svg><span>2 cubes ready to publish. Nothing is in the model until you do.</span></div></div>
+            <div class="fblk"><div class="fblk-head"><svg class="s car"><use href="#i-chev"/></svg><span class="p">cubes/chrome_stores.yml</span><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Ready</span><span class="sub">4 dimensions · 1 measure · 1 column left out</span></div></div>
+            <div class="fblk">
+              <div class="fblk-head"><svg class="s car"><use href="#i-chevd"/></svg><span class="p">cubes/chrome_visits.yml</span><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Ready</span><span class="sub">2 dimensions · 2 measures · 1 join · 3 columns left out</span></div>
+              <div class="fblk-body">
+                <div class="disc"><svg class="s"><use href="#i-chev"/></svg>YAML <span class="n">· 30 lines</span></div>
+                <h4>Columns left out (3)</h4>
+                <div class="lo">
+                  <div><span class="c">store_id</span><span class="r">integer</span><span class="why">a number, neither a key nor named like a measure</span></div>
+                  <div><span class="c">visitors</span><span class="r">integer</span><span class="why">a number, neither a key nor named like a measure</span></div>
+                  <div><span class="c">_loaded_at</span><span class="r">timestamp with time zone</span><span class="why">its name starts with an underscore</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="sect" style="border:0;padding-top:10px"><p class="help">A column used only in a join, such as a foreign key, is listed as left out too.</p></div>
+          </div>
+          <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="spacer"></span><span class="btn ghost">Cancel</span><span class="btn primary">Publish 2 cubes</span></div>
+        </div>
+          <span class="pin" style="left:4px;top:145px">12</span>
+          <span class="pin" style="left:4px;top:202px">13</span>
+          <span class="pin" style="left:4px;top:334px">14</span>
+          <span class="pin" style="left:260px;top:596px">16</span>
+        </div>
+      </div>
+
+      <!-- K -->
+      <div class="state">
+        <h3>K · The YAML, opened at full length</h3>
+        <p><code>chrome_visits</code>'s YAML, as the scaffolder writes it, in the model's read-only code view. All 30 lines are shown, inside the pane's one scroll. Wrap is on, so the join's SQL and the scaffold's last comment line wrap under their indent rather than running off the edge.</p>
+        <div class="frame"><div class="pane" style="height:1010px;border-left:0">
+          <div class="pane-head"><h2>Generate cubes</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step done"><i>✓</i>Source</span><span class="step-sep"></span><span class="step done"><i>✓</i>Tables</span><span class="step-sep"></span><span class="step cur"><i>3</i>Review</span></div>
+          <div class="pane-body">
+            <div class="fblk">
+              <div class="fblk-head"><svg class="s car"><use href="#i-chevd"/></svg><span class="p">cubes/chrome_visits.yml</span><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Ready</span><span class="sub">2 dimensions · 2 measures · 1 join · 3 columns left out</span></div>
+              <div class="fblk-body">
+                <div class="disc"><svg class="s"><use href="#i-chevd"/></svg>YAML <span class="n">· 30 lines</span><span class="spacer"></span><span class="btn sm ghost wrap">↵ Wrap</span></div>
+                <div class="codebox">
+                  <div class="ln"><span class="g">1</span><span class="c"><span class="yk">cubes</span>:</span></div>
+                  <div class="ln"><span class="g">2</span><span class="c">  - <span class="yk">name</span>: chrome_visits</span></div>
+                  <div class="ln"><span class="g">3</span><span class="c">    <span class="yk">sql_table</span>: generate.chrome_visits</span></div>
+                  <div class="ln"><span class="g">4</span><span class="c"> </span></div>
+                  <div class="ln"><span class="g">5</span><span class="c">    <span class="yk">joins</span>:</span></div>
+                  <div class="ln"><span class="g">6</span><span class="c">      - <span class="yk">name</span>: chrome_stores</span></div>
+                  <div class="ln"><span class="g">7</span><span class="c" style="padding-left:calc(8px + 13ch);text-indent:-13ch">        <span class="yk">sql</span>: <span class="ys">"{CUBE}.store_id = {chrome_stores.id}"</span></span></div>
+                  <div class="ln"><span class="g">8</span><span class="c">        <span class="yk">relationship</span>: many_to_one</span></div>
+                  <div class="ln"><span class="g">9</span><span class="c"> </span></div>
+                  <div class="ln"><span class="g">10</span><span class="c">    <span class="yk">dimensions</span>:</span></div>
+                  <div class="ln"><span class="g">11</span><span class="c">      - <span class="yk">name</span>: id</span></div>
+                  <div class="ln"><span class="g">12</span><span class="c">        <span class="yk">sql</span>: id</span></div>
+                  <div class="ln"><span class="g">13</span><span class="c">        <span class="yk">type</span>: number</span></div>
+                  <div class="ln"><span class="g">14</span><span class="c">        <span class="yk">primary_key</span>: <span class="yn">true</span></span></div>
+                  <div class="ln"><span class="g">15</span><span class="c"> </span></div>
+                  <div class="ln"><span class="g">16</span><span class="c">      - <span class="yk">name</span>: visited_at</span></div>
+                  <div class="ln"><span class="g">17</span><span class="c">        <span class="yk">sql</span>: visited_at</span></div>
+                  <div class="ln"><span class="g">18</span><span class="c">        <span class="yk">type</span>: time</span></div>
+                  <div class="ln"><span class="g">19</span><span class="c"> </span></div>
+                  <div class="ln"><span class="g">20</span><span class="c">    <span class="yk">measures</span>:</span></div>
+                  <div class="ln"><span class="g">21</span><span class="c">      - <span class="yk">name</span>: count</span></div>
+                  <div class="ln"><span class="g">22</span><span class="c">        <span class="yk">type</span>: count</span></div>
+                  <div class="ln"><span class="g">23</span><span class="c"> </span></div>
+                  <div class="ln"><span class="g">24</span><span class="c">      - <span class="yk">name</span>: spend_amount</span></div>
+                  <div class="ln"><span class="g">25</span><span class="c">        <span class="yk">sql</span>: spend_amount</span></div>
+                  <div class="ln"><span class="g">26</span><span class="c">        <span class="yk">type</span>: sum</span></div>
+                  <div class="ln"><span class="g">27</span><span class="c"> </span></div>
+                  <div class="ln"><span class="g">28</span><span class="c">    <span class="yk">pre_aggregations</span>:</span></div>
+                  <div class="ln"><span class="g">29</span><span class="c yc" style="padding-left:calc(8px + 8ch);text-indent:-8ch">      # Pre-aggregation definitions go here.</span></div>
+                  <div class="ln"><span class="g">30</span><span class="c yc" style="padding-left:calc(8px + 8ch);text-indent:-8ch">      # Learn more in the documentation: https://docs.cube.dev/docs/pre-aggregations/getting-started-pre-aggregations</span></div>
+                </div>
+                <h4>Columns left out (3)</h4>
+                <div class="lo">
+                  <div><span class="c">store_id</span><span class="r">integer</span><span class="why">a number, neither a key nor named like a measure</span></div>
+                  <div><span class="c">visitors</span><span class="r">integer</span><span class="why">a number, neither a key nor named like a measure</span></div>
+                  <div><span class="c">_loaded_at</span><span class="r">timestamp with time zone</span><span class="why">its name starts with an underscore</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="spacer"></span><span class="btn ghost">Cancel</span><span class="btn primary">Publish 2 cubes</span></div>
+        </div>
+          <span class="pin" style="left:4px;top:146px">15</span>
+        </div>
+        <p>Drawn from the top of the list for room; the summary and <code>chrome_stores</code> sit above it, as in state J.</p>
+      </div>
+    </div>
+
+    <div class="stategrid" style="margin-top:28px">
+      <!-- L -->
+      <div class="state">
+        <h3>L · A clash: Publish blocked</h3>
+        <p>The review's real run: <code>customers</code> and <code>orders</code> from <code>public</code>. The sample model has both cubes already, so both clash, and both blocks open by themselves. Each notebar names the existing file and offers Open and Leave this table out. The foot's reason says what unblocks Publish. The path-only clash reads "cubes/x.yml is already in the model." in the same place. Here, <b>Leave out clashing tables</b> would leave nothing to publish, so it returns to Tables with none chosen.</p>
+        <div class="frame"><div class="pane" style="height:860px;border-left:0">
+          <div class="pane-head"><h2>Generate cubes</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step done"><i>✓</i>Source</span><span class="step-sep"></span><span class="step done"><i>✓</i>Tables</span><span class="step-sep"></span><span class="step cur"><i>3</i>Review</span></div>
+          <div class="ctx"><span class="mono-tile">Pg</span><span class="sum"><span class="mono strong">default</span> · PostgreSQL › <span class="mono strong">public</span> · 2 tables</span><span class="btn link">Change</span></div>
+          <div class="pane-body">
+            <div class="sect"><div class="notebar err"><svg class="s"><use href="#s-err"/></svg><span><span><b>2 of 2 cubes clash with the model.</b> Nothing is published while a cube clashes.</span><span class="acts2"><span class="btn sm">Leave out clashing tables</span></span></span></div></div>
+            <div class="fblk">
+              <div class="fblk-head"><svg class="s car"><use href="#i-chevd"/></svg><span class="p">cubes/customers.yml</span><span class="status err"><svg class="s"><use href="#s-err"/></svg>Clashes</span><span class="sub">4 dimensions · 1 measure</span></div>
+              <div class="fblk-body">
+                <div class="notebar err"><svg class="s"><use href="#s-err"/></svg><span><span><span class="mono">customers</span> is already a cube in <span class="mono">cubes/customers.yml</span>.</span><span class="acts2"><span class="btn sm">Open cubes/customers.yml</span><span class="btn sm">Leave this table out</span></span></span></div>
+                <div class="disc"><svg class="s"><use href="#i-chev"/></svg>YAML <span class="n">· 31 lines</span></div>
+                <p class="help">Every column is in the cube.</p>
+              </div>
+            </div>
+            <div class="fblk">
+              <div class="fblk-head"><svg class="s car"><use href="#i-chevd"/></svg><span class="p">cubes/orders.yml</span><span class="status err"><svg class="s"><use href="#s-err"/></svg>Clashes</span><span class="sub">3 dimensions · 2 measures · 1 join · 2 columns left out</span></div>
+              <div class="fblk-body">
+                <div class="notebar err"><svg class="s"><use href="#s-err"/></svg><span><span><span class="mono">orders</span> is already a cube in <span class="mono">cubes/orders.yml</span>.</span><span class="acts2"><span class="btn sm">Open cubes/orders.yml</span><span class="btn sm">Leave this table out</span></span></span></div>
+                <div class="disc"><svg class="s"><use href="#i-chev"/></svg>YAML <span class="n">· 36 lines</span></div>
+                <h4>Columns left out (2)</h4>
+                <div class="lo">
+                  <div><span class="c">customer_id</span><span class="r">integer</span><span class="why">a number, neither a key nor named like a measure</span></div>
+                  <div><span class="c">product_id</span><span class="r">integer</span><span class="why">a number, neither a key nor named like a measure</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="sect" style="border:0;padding-top:10px"><p class="help">A column used only in a join, such as a foreign key, is listed as left out too.</p></div>
+          </div>
+          <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="why" style="color:var(--err)">Resolve 2 clashes to publish</span><span class="btn primary dis">Publish 2 cubes</span></div>
+        </div>
+          <span class="pin" style="left:4px;top:138px">17</span>
+        </div>
+      </div>
+
+      <!-- M -->
+      <div class="state">
+        <h3>M · Check: the API's warnings</h3>
+        <p>Illustrative: these are the component test's fixtures. The research finds the fork's scaffold no longer drops columns without saying so (introspection-api.md, item 5), so these are the API's own checks for when one does. Each warning is today's sentence, verbatim, in a warning notebar on its block. A block with a warning shows ⚠ Check and opens by itself. None of them blocks Publish.</p>
+        <div class="frame"><div class="pane" style="height:860px;border-left:0">
+          <div class="pane-head"><h2>Generate cubes</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step done"><i>✓</i>Source</span><span class="step-sep"></span><span class="step done"><i>✓</i>Tables</span><span class="step-sep"></span><span class="step cur"><i>3</i>Review</span></div>
+          <div class="ctx"><span class="mono-tile">Pg</span><span class="sum"><span class="mono strong">default</span> · PostgreSQL › <span class="mono strong">generate</span> · 3 tables</span><span class="btn link">Change</span></div>
+          <div class="pane-body">
+            <div class="sect"><div class="notebar warn"><svg class="s"><use href="#s-warn"/></svg><span>3 cubes ready to publish; 3 need a look first.</span></div></div>
+            <div class="fblk">
+              <div class="fblk-head"><svg class="s car"><use href="#i-chevd"/></svg><span class="p">cubes/chrome_stores.yml</span><span class="status warn"><svg class="s"><use href="#s-warn"/></svg>Check</span><span class="sub">4 dimensions · 1 measure</span></div>
+              <div class="fblk-body">
+                <div class="notebar warn"><svg class="s"><use href="#s-warn"/></svg><span><span>Not marked as the cube’s primary key: <span class="mono">opened_at</span>. A join to this cube needs one.</span></span></div>
+                <div class="disc"><svg class="s"><use href="#i-chev"/></svg>YAML <span class="n">· 12 lines</span></div>
+                <p class="help">Every column is in the cube.</p>
+              </div>
+            </div>
+            <div class="fblk">
+              <div class="fblk-head"><svg class="s car"><use href="#i-chevd"/></svg><span class="p">cubes/chrome_visits.yml</span><span class="status warn"><svg class="s"><use href="#s-warn"/></svg>Check</span><span class="sub">1 measure · 1 join</span></div>
+              <div class="fblk-body">
+                <div class="notebar warn"><svg class="s"><use href="#s-warn"/></svg><span>wechart could not read this file to check it against its table: only Cube’s list of what it left out is shown.</span></div>
+                <div class="disc"><svg class="s"><use href="#i-chev"/></svg>YAML <span class="n">· 11 lines</span></div>
+              </div>
+            </div>
+            <div class="fblk">
+              <div class="fblk-head"><svg class="s car"><use href="#i-chevd"/></svg><span class="p">cubes/every_loss.yml</span><span class="status warn"><svg class="s"><use href="#s-warn"/></svg>Check</span><span class="sub">1 column left out</span></div>
+              <div class="fblk-body">
+                <div class="notebar warn"><svg class="s"><use href="#s-warn"/></svg><span>No count measure: a column’s measure took its name, count.</span></div>
+                <div class="disc"><svg class="s"><use href="#i-chev"/></svg>YAML <span class="n">· 24 lines</span></div>
+                <h4>Columns left out (1)</h4>
+                <div class="lo"><div><span class="c">Amount</span><span class="r">numeric</span><span class="why">its member’s name is another column’s, and Cube kept only one</span></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="spacer"></span><span class="btn ghost">Cancel</span><span class="btn primary">Publish 3 cubes</span></div>
+        </div></div>
+      </div>
+
+      <!-- N -->
+      <div class="state">
+        <h3>N · Published, with Open</h3>
+        <p>An ok notebar with today's "Published 2 cubes.", then each file with a 24 px <b>Open</b>. It opens the file in the editor and closes the pane (as built), and it is named "Open cubes/…yml" for assistive technology, as today. The tree lists the files already. Close is the only primary. Back stays, so you can choose other tables and generate again, as today's dialog allows. The rail's third step is done.</p>
+        <div class="frame"><div class="pane" style="height:420px;border-left:0">
+          <div class="pane-head"><h2>Generate cubes</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step done"><i>✓</i>Source</span><span class="step-sep"></span><span class="step done"><i>✓</i>Tables</span><span class="step-sep"></span><span class="step done"><i>✓</i>Review</span></div>
+          <div class="ctx"><span class="mono-tile">Pg</span><span class="sum"><span class="mono strong">default</span> · PostgreSQL › <span class="mono strong">generate</span> · 2 tables</span></div>
+          <div class="pane-body">
+            <div class="sect"><div class="notebar ok"><svg class="s"><use href="#s-ok"/></svg><span>Published 2 cubes.</span></div></div>
+            <div class="sect">
+              <h3>Files</h3>
+              <div class="files">
+                <div><svg class="s muted"><use href="#i-file"/></svg><span class="mono">cubes/chrome_stores.yml</span><span class="spacer"></span><span class="btn sm">Open</span></div>
+                <div><svg class="s muted"><use href="#i-file"/></svg><span class="mono">cubes/chrome_visits.yml</span><span class="spacer"></span><span class="btn sm">Open</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="spacer"></span><span class="btn primary">Close</span></div>
+        </div></div>
+      </div>
+    </div>
+
+    <h3 class="group">Refused, and leaving</h3>
+    <div class="stategrid">
+      <!-- O -->
+      <div class="state">
+        <h3>O · Refused</h3>
+        <p>An error notebar, then each file's messages in the code face, as the API or Cube gave them (today's "Nothing was published:" list). Here it is the test's case: a clash the pane couldn't see, with a cube in a JavaScript file. The model is unchanged. <b>Back to Tables</b> leads, and Publish can be tried again, as today. If wechart can't be reached, "wechart could not be reached." stands alone in the same notebar.</p>
+        <div class="frame"><div class="pane" style="height:440px;border-left:0">
+          <div class="pane-head"><h2>Generate cubes</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step done"><i>✓</i>Source</span><span class="step-sep"></span><span class="step done"><i>✓</i>Tables</span><span class="step-sep"></span><span class="step cur"><i>3</i>Review</span></div>
+          <div class="ctx"><span class="mono-tile">Pg</span><span class="sum"><span class="mono strong">default</span> · PostgreSQL › <span class="mono strong">generate</span> · 2 tables</span><span class="btn link">Change</span></div>
+          <div class="pane-body">
+            <div class="sect"><div class="notebar err"><svg class="s"><use href="#s-err"/></svg><span><span><b>Nothing was published.</b> The model is unchanged.</span><span class="acts2"><span class="btn sm"><svg class="s"><use href="#i-back"/></svg>Back to Tables</span></span></span></div></div>
+            <div class="sect">
+              <h3>Refused</h3>
+              <div class="files">
+                <div class="col"><span style="display:flex;gap:8px;align-items:center"><svg class="s muted"><use href="#i-file"/></svg><span class="mono strong">cubes/chrome_stores.yml</span></span><span class="mono" style="color:var(--err);overflow-wrap:anywhere">`chrome_stores` is already a cube in cubes/stores.js.</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="spacer"></span><span class="btn ghost">Cancel</span><span class="btn primary">Publish 2 cubes</span></div>
+        </div></div>
+        <p>This message is the API's own, so its backticks are kept as it sends them.</p>
+      </div>
+
+      <!-- P -->
+      <div class="state">
+        <h3>P · Esc, ✕ or Cancel with work in it</h3>
+        <p>Design 01's state I, at 400 px. It is titled "Discard this generation?" (16/600), with "Keep editing" focused, and a destructive primary <b>Discard</b> in status-error (UX-106). With tables chosen but nothing generated, the body reads "The 2 chosen tables are forgotten." With nothing chosen, the pane closes at once. Once published, Close asks nothing. Leaving the page asks the same.</p>
+        <div class="frame"><div class="pane" style="height:440px;border-left:0">
+          <div class="pane-head"><h2>Generate cubes</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step done"><i>✓</i>Source</span><span class="step-sep"></span><span class="step done"><i>✓</i>Tables</span><span class="step-sep"></span><span class="step cur"><i>3</i>Review</span></div>
+          <div class="pane-body"></div>
+          <div class="scrim" style="top:44px"></div>
+          <div class="dialog" style="left:19px;width:400px;top:120px">
+            <h2>Discard this generation?</h2>
+            <p>The 2 generated cubes aren't published.</p>
+            <div class="acts"><span class="btn" style="box-shadow:0 0 0 3px var(--accent-ring)">Keep editing</span><span class="btn danger">Discard</span></div>
+          </div>
+          <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="spacer"></span><span class="btn ghost">Cancel</span><span class="btn primary">Publish 2 cubes</span></div>
+        </div></div>
+      </div>
+
+      <!-- Q -->
+      <div class="state">
+        <h3>Q · Opened on a file page</h3>
+        <p>From a file's page, the pane takes the YAML and Problems pane's place and the form becomes fluid, so the tree and the file stay in view. Closing it brings the YAML pane back. Drawn small: the tree at 240, the form, and the pane at 480, on a 1,440 px window.</p>
+        <div class="frame" style="height:250px;background:var(--bg-surface)">
+          <div style="display:grid;grid-template-columns:73px 1fr 146px;height:100%;font-size:12px">
+            <div style="border-right:1px solid var(--border-subtle);padding:6px;display:grid;gap:4px;align-content:start"><span class="xs strong">Model</span><span class="mono" style="font-size:12px;line-height:14px;color:var(--text-muted)">▾ cubes/</span><span style="height:10px;background:var(--accent-soft)"></span><span class="sk"></span><span class="sk"></span><span class="sk"></span><span class="btn sm on" style="justify-self:start;padding:0 4px;height:18px;font-size:12px">+ Gen…</span></div>
+            <div style="padding:6px 8px;display:grid;gap:6px;align-content:start"><span class="mono strong" style="font-size:12px">model/cubes/orders.yml</span><span style="height:14px;border-bottom:2px solid var(--accent);width:60px"></span><span class="sk" style="width:90%"></span><span class="sk" style="width:70%"></span><span class="sk" style="width:80%"></span><span class="sk" style="width:60%"></span><span class="xs muted">The form, fluid</span></div>
+            <div class="pane" style="border-left:1px solid var(--border-subtle);padding:6px;display:grid;gap:6px;align-content:start"><span class="xs strong">Generate cubes</span><span class="step cur" style="font-size:12px"><i style="width:16px;height:16px">2</i>Tables</span><span class="sk"></span><span class="sk"></span><span class="sk"></span><span class="xs muted">480 px pane</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>
