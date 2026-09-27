@@ -259,4 +259,44 @@ describe('what a chart names (T429)', () => {
       ],
     });
   });
+
+  /**
+   * T389's review, AC-272: a text tile's measure token names a member as a
+   * filter does, so it is bound with the dashboard, wherever the tile is.
+   */
+  it('renames the members a text tile’s tokens name, in a section or a tab too', () => {
+    const renames = new Map([['sales', 'fab__sales']]);
+    const text = (inner: string) => `Sales: {{measure:${inner}.count | marking:A}} of {{x}}`;
+    const body = {
+      pages: [
+        {
+          id: 'p',
+          items: [
+            { id: 't1', kind: 'markdown', text: text('sales') },
+            {
+              id: 's',
+              kind: 'section',
+              items: [
+                {
+                  id: 'g',
+                  kind: 'tabs',
+                  tabs: [
+                    { id: 'tab', items: [{ id: 't2', kind: 'markdown', text: text('orders') }] },
+                  ],
+                },
+              ],
+            },
+            { id: 'h', kind: 'header', text: '{{measure:sales.count}}' },
+          ],
+        },
+      ],
+    };
+
+    const renamed = dashboardRenamed(body, renames) as typeof body;
+    const [t1, section, header] = renamed.pages[0]!.items as Record<string, unknown>[];
+    expect(t1?.['text']).toBe(text('fab__sales'));
+    expect(JSON.stringify(section)).toContain(text('orders'));
+    // A header's text is words, not a text tile's: no token is read there.
+    expect(header?.['text']).toBe('{{measure:sales.count}}');
+  });
 });

@@ -318,6 +318,42 @@ describe('a chart or dashboard published into a folder, bound there (T429, AC-27
     await app.close();
   });
 
+  /**
+   * T389's review: a text tile's measure token names a cube as a filter does,
+   * so a dashboard with no filters is bound by its tokens, and refused for a
+   * name no folder on its path holds.
+   */
+  it('binds a dashboard’s text tile tokens in its folder, and refuses one naming a cube off its path', async () => {
+    const { app, written, stored } = await serving();
+    stored['d1'] = { title: 'Revenue', folderId: 'a' };
+    const withText = (text: string) => ({
+      title: 'Revenue',
+      folderId: 'a',
+      pages: [{ id: 'p', items: [{ id: 't', kind: 'markdown', text }] }],
+    });
+    const save = (text: string) =>
+      app.inject({
+        method: 'PUT',
+        url: '/api/documents/dashboard/d1',
+        payload: { body: withText(text), version: 5 },
+      });
+
+    const refused = await save('{{measure:widgets.count}}');
+    expect(refused.statusCode).toBe(422);
+    expect(refused.json()).toEqual({
+      error: 'No folder on this dashboard’s path holds “widgets”.',
+      names: ['widgets'],
+    });
+    expect(written).toEqual([]);
+
+    const saved = await save('Sales: {{measure:sales.count | marking:A}}');
+    expect(saved.statusCode, saved.body).toBe(200);
+    expect(written.map((each) => each.body)).toEqual([
+      withText('Sales: {{measure:fa__sales.count | marking:A}}'),
+    ]);
+    await app.close();
+  });
+
   it('puts the tree to xcube and asks again, for a folder xcube doesn’t hold yet', async () => {
     const { app, written, stored, pushed } = await serving({ withNew: true });
     stored['c1'] = chartBody({ folderId: 'new' }, 'sales');

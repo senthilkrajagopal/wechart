@@ -1,6 +1,6 @@
-import type { ChartDefinition } from '@wechart/core';
+import { tokenMembersOf, type ChartDefinition } from '@wechart/core';
 
-import { cubesOfChart } from './bind';
+import { cubesOfChart, cubesOfDashboard } from './bind';
 
 /**
  * What uses a member (T147, AC-141): the charts that name it, and the
@@ -42,8 +42,11 @@ function namedIn(body: unknown, members: readonly string[]): string[] {
   const found = new Set<string>();
   const read = (value: unknown): void => {
     if (typeof value === 'string') {
+      // A text tile's words name a member only in a measure token (T389's review).
+      const inTokens = value.includes('{{') ? tokenMembersOf(value) : [];
       for (const member of members)
-        if (value === member || value.startsWith(`${member}.`)) found.add(member);
+        if (value === member || value.startsWith(`${member}.`) || inTokens.includes(member))
+          found.add(member);
     } else if (Array.isArray(value)) {
       for (const each of value) read(each);
     } else if (value !== null && typeof value === 'object') {
@@ -109,8 +112,6 @@ export function usersOfCubes(
 } {
   const wanted = new Set(cubes);
   const usesAny = (names: readonly string[]) => names.some((name) => wanted.has(name));
-  const cubeOf = (member: unknown) =>
-    typeof member === 'string' && member.includes('.') ? member.slice(0, member.indexOf('.')) : '';
   return {
     charts: documents
       .filter((document) => {
@@ -121,16 +122,11 @@ export function usersOfCubes(
         return usesAny([source, ...others]);
       })
       .map(({ id, title }) => ({ id, title })),
+    // Its filters' cubes, and its text tiles' tokens' (T389's review).
     dashboards: documents
-      .filter((document) => {
-        if (document.kind !== 'dashboard') return false;
-        const filters = (document.body as { filters?: unknown } | null)?.filters;
-        return usesAny(
-          (Array.isArray(filters) ? (filters as { member?: unknown }[]) : []).map((filter) =>
-            cubeOf(filter.member),
-          ),
-        );
-      })
+      .filter(
+        (document) => document.kind === 'dashboard' && usesAny(cubesOfDashboard(document.body)),
+      )
       .map(({ id, title }) => ({ id, title })),
   };
 }

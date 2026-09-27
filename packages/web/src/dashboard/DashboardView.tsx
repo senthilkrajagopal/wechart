@@ -96,9 +96,11 @@ import { insertElement, insertionPoint, newElement } from './model/insert';
 import { activeFilters, withFilters, withLimit, type ActiveFilter } from '../filters/apply';
 import { GeneratedSql } from '../workspaces/security/GeneratedSql';
 import { ViewQuery } from './ViewQuery';
-import { Markdown } from '../tiles/Markdown';
+import { Markdown, type TokenRender } from '../tiles/Markdown';
+import { MarkingToken, MeasureToken, UnknownMarkingToken } from './tiles/LiveToken';
+import { measureQueryOf } from './tiles/TextTokens';
 import { coverageOf, type Reach } from '../filters/coverage';
-import { chartTilesOf } from '../filters/scope';
+import { chartTilesOf, scopeOf } from '../filters/scope';
 import { effectsOn, type CrossEffects, type CrossSelection } from './crossfilter/apply';
 import { CrossFilterChips } from './crossfilter/CrossFilterChip';
 import {
@@ -492,6 +494,16 @@ interface Drill {
 }
 
 /** A tile's spec with the item its keyboard is on, where it is on one (T306). */
+/** Whether an element is among these, inside a section or a tab group too. */
+function holds(items: readonly Element_[], id: string): boolean {
+  return items.some(
+    (element) =>
+      element.id === id ||
+      (isSection(element) && holds(element.items, id)) ||
+      (isTabGroup(element) && element.tabs.some((tab) => holds(tab.items, id))),
+  );
+}
+
 function withKeyboardItem(
   spec: RenderSpec | undefined,
   item: string | undefined,
@@ -525,11 +537,14 @@ function TileBody({
   onTableViewChange,
   memberTitle,
   notes,
+  tokens,
   rowsTotal,
 }: {
   tile: Tile;
   /** A drafted box plot's rows in all, from its draft (T401's review, AC-315). */
   rowsTotal?: number | undefined;
+  /** A text tile's live values, drawn for its tokens (T389, AC-116). */
+  tokens?: TokenRender | undefined;
   /** What the tile says of its answer, drawn under its head (T253's review). */
   notes?: readonly ReactNode[] | undefined;
   /** A member's title from the model, for what the tile says of one (AC-220). */
@@ -735,7 +750,8 @@ function TileBody({
       return (
         <>
           {editing ? <KindHead kind="Markdown" /> : null}
-          <Markdown text={tile.text ?? ''} />
+          {/* Its tokens as live values: the markings and measures (T389, AC-116). */}
+          <Markdown text={tile.text ?? ''} tokens={tokens} />
         </>
       );
     case 'header':
@@ -873,6 +889,8 @@ interface TileCharts {
    * here — it draws its limited answer like any other chart.
    */
   readonly limitedStates?: Readonly<Record<string, LimitedState>> | undefined;
+  /** A text tile's tokens, drawn as the markings' state and the measures' values (T389, AC-116). */
+  readonly textTokensOf?: ((tileId: string) => TokenRender) | undefined;
   /** Each drafted chart's rows in all, where its query asked (T401's review, AC-315). */
   readonly draftTotals?: Readonly<Record<string, number>> | undefined;
   /** The marking a tile shows, its colour and how many items it holds (AC-098). */
@@ -1492,6 +1510,7 @@ function Elements({
               carried={charts.carried}
               title={charts.titleOf?.(chartId)}
               memberTitle={charts.memberTitle}
+              tokens={charts.textTokensOf?.(element.id)}
               rowsTotal={drill === undefined ? charts.draftTotals?.[chartId] : undefined}
               // A drilled view's own answer, so its own freshness (AC-238).
               answered={drill === undefined ? charts.answered?.[chartId] : drill.answered}
@@ -2509,6 +2528,32 @@ export function DashboardView({
     }
     return covered;
   }, [live, filterValues, crossFilters, reachOf, markFilters]);
+
+  /**
+   * The filters a text tile's measure tokens are asked under (T389's review):
+   * the filter bar's that reach the whole dashboard or the tile's page, and
+   * Filter to or out marked, as a chart on that page is — the prototype's
+   * tokens take the page's filters. A filter scoped to named tiles names
+   * charts, never a text tile.
+   */
+  const textFiltersOf = (tileId: string): ActiveFilter[] => {
+    const pageId = live.pages.find((page) => holds(page.items, tileId))?.id;
+    const reaches = ({ filter }: ActiveFilter) => {
+      const scope = scopeOf(filter);
+      return scope.kind === 'dashboard' || (scope.kind === 'page' && scope.pageId === pageId);
+    };
+    return [
+      ...[...activeFilters(live.filters ?? [], filterValues), ...crossFilters].filter(reaches),
+      ...markFilters.map((each) => ({
+        filter: {
+          id: `mark:${each.id}`,
+          widget: 'checkbox' as const,
+          member: each.members[0] ?? '',
+        },
+        value: { kind: 'cube' as const, filter: each.filter, words: '' },
+      })),
+    ];
+  };
   const [filtered, setFiltered] = useState<FilteredResults>({});
   // A chart being asked again keeps its last answer, busy, meanwhile.
   const onFiltered = useCallback((results: FilteredResults) => {
@@ -3900,6 +3945,45 @@ export function DashboardView({
     carried,
     titleOf: chartTitleOf,
     memberTitle,
+    /**
+     * A text tile's tokens (T389, AC-116; direction.md, "Markdown tokens"):
+     * a marking by its name, as the author sees it, trimmed and in any case,
+     * as the prototype finds one; a measure over the rows its marking holds,
+     * or over all data while it holds nothing — under the filters a chart on
+     * the tile's page is under, and Filter to or out marked, as the
+     * prototype's tokens are (T389's review).
+     */
+    textTokensOf: (tileId: string) => (token, key) => {
+      const named = token.kind === 'marking' ? token.name : token.marking;
+      const same = (name: string) => name.trim().toLowerCase() === named?.trim().toLowerCase();
+      const found = named === undefined ? undefined : markings.find((each) => same(each.name));
+      if (named !== undefined && found === undefined)
+        return <UnknownMarkingToken key={key} name={named} />;
+      const predicate = found === undefined ? undefined : markingOf(marks, found.id);
+      if (token.kind === 'measure')
+        return (
+          <MeasureToken
+            key={key}
+            query={withFilters(measureQueryOf(token, predicate), textFiltersOf(tileId))}
+            member={token.member}
+            formats={formats}
+            context={preview}
+          />
+        );
+      const count = predicate === undefined ? 0 : markedCount(predicate);
+      return (
+        <MarkingToken
+          key={key}
+          text={
+            token.show === 'count'
+              ? count.toLocaleString('en-GB')
+              : count === 0 || predicate === undefined
+                ? 'nothing marked'
+                : summariseMarking(predicate, memberTitle, 5, (id) => chartTitleOfTile(id))
+          }
+        />
+      );
+    },
     typeOf: (chartId: string) => drawn.documents?.[chartId]?.chart.chartType,
     documented: (chartId: string) => drawn.documents?.[chartId] !== undefined,
     answered: withFiltered.answered,

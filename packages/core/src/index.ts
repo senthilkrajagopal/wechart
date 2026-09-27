@@ -208,6 +208,13 @@ export {
 
 export { boxStats, quantile7, type BoxStats, type WhiskerRule } from './stats/boxplot';
 export { countryCodeMarkingOf, holdsCountryCodes, ISO_3166_ALPHA_3 } from './geo/iso3';
+export {
+  firstTokenIn,
+  textPartsOf,
+  textRenamed,
+  tokenMembersOf,
+  type TextToken,
+} from './text-tokens';
 
 export {
   DRIVER_TYPES,

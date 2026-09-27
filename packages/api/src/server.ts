@@ -31,7 +31,13 @@ import { registerSignIn, signInOptionsOf } from './auth/routes';
 import { Forbidden, registerUser, Unauthenticated, userOf } from './auth/user';
 import { registerBuilds } from './jobs/build';
 import { registerSchedules } from './jobs/schedules';
-import { bindChart, bindNames, chartRenamed, dashboardRenamed } from './model/bind';
+import {
+  bindChart,
+  bindNames,
+  chartRenamed,
+  cubesOfDashboard,
+  dashboardRenamed,
+} from './model/bind';
 import { registerIntrospection } from './model/introspection';
 import type { Config } from './config';
 import type { Changeset } from './xcube/changesets';
@@ -712,15 +718,8 @@ export function buildServer({
     if (xcube === undefined || folders === undefined || folderId === null)
       return { kind: 'ok', body };
     const chart = body['chart'] as ChartDefinition | undefined;
-    const filterCubes =
-      kind === 'dashboard'
-        ? (Array.isArray(body['filters']) ? (body['filters'] as { member?: unknown }[]) : [])
-            .map((filter) => filter.member)
-            .filter(
-              (member): member is string => typeof member === 'string' && member.includes('.'),
-            )
-            .map((member) => member.slice(0, member.indexOf('.')))
-        : [];
+    // A dashboard's own: its filters', and its text tiles' tokens' (T389's review).
+    const filterCubes = kind === 'dashboard' ? cubesOfDashboard(body) : [];
     // A chart with no fields yet names no cube: nothing to bind.
     if (kind === 'chart' && (typeof chart?.source?.cube !== 'string' || chart.source.cube === ''))
       return { kind: 'ok', body };

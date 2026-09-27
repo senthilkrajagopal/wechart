@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { firstTokenIn, textPartsOf, type TextToken } from '@wechart/core';
+
 /**
  * A markdown tile's text (AC-208, direction.md §8's Markdown tile): headings,
  * emphasis, lists and line breaks — the prototype's subset — rendered as React
@@ -16,9 +18,22 @@ import type { ReactNode } from 'react';
  * tile's own levels, so none is skipped (T247's review). Each is drawn at the
  * size its own marks ask for, as `data-level`.
  */
-export function Markdown({ text }: { readonly text: string }) {
-  return <div className="markdown">{blocksOf(text)}</div>;
+export function Markdown({
+  text,
+  tokens,
+}: {
+  readonly text: string;
+  /**
+   * Draws a live value where the text has a token (T389, AC-116): a
+   * dashboard's markings and measures. Without it the text is only text.
+   */
+  readonly tokens?: TokenRender | undefined;
+}) {
+  return <div className="markdown">{blocksOf(text, tokens)}</div>;
 }
+
+/** A token's live value, drawn in place of its `{{…}}`. */
+export type TokenRender = (token: TextToken, key: string) => ReactNode;
 
 const HEADING = /^(#{1,6})\s+(.*)$/;
 const BULLET = /^[-*]\s+(.*)$/;
@@ -50,7 +65,8 @@ export function firstReadingOf(text: string): string {
   return '';
 }
 
-function blocksOf(text: string): ReactNode[] {
+function blocksOf(text: string, tokens?: TokenRender): ReactNode[] {
+  const inline = (run: string, key: string) => inlineOf(run, key, tokens);
   const lines = linesOf(text);
   // The tile's own heading levels, shallowest first: each heading's rank
   // among them is its place in the outline, from h3.
@@ -150,12 +166,29 @@ const MARKS: readonly {
   { pattern: /`([^`]+)`/, kind: 'code' },
 ];
 
-function inline(text: string, key: string): ReactNode[] {
+function inlineOf(text: string, key: string, tokens?: TokenRender): ReactNode[] {
+  const inline = (run: string, at: string) => inlineOf(run, at, tokens);
+  const withBreaks = (run: string, at: string) => withBreaksOf(run, at, tokens);
   let earliest: { match: RegExpExecArray; kind: (typeof MARKS)[number]['kind'] } | undefined;
   for (const { pattern, kind } of MARKS) {
     const match = pattern.exec(text);
     if (match !== null && (earliest === undefined || match.index < earliest.match.index))
       earliest = { match, kind };
+  }
+  /**
+   * A token is whole, whatever marks its words hold: one before the first
+   * mark is drawn first, so a `*` in a marking's name never splits it into
+   * text (T389's review). A mark before it — code, or emphasis around it —
+   * is drawn first, and a code span keeps its braces.
+   */
+  const token = tokens === undefined ? undefined : firstTokenIn(text);
+  if (token !== undefined && (earliest === undefined || token.index < earliest.match.index)) {
+    const end = token.index + token.length;
+    return [
+      ...inline(text.slice(0, token.index), `${key}b`),
+      ...withBreaks(text.slice(token.index, end), `${key}t`),
+      ...inline(text.slice(end), `${key}a`),
+    ];
   }
   if (earliest === undefined) return withBreaks(text, key);
 
@@ -197,13 +230,25 @@ function plainOf(text: string): string {
   );
 }
 
-/** Text as it is, a line break within it as <br>. */
-function withBreaks(text: string, key: string): ReactNode[] {
+/**
+ * Text as it is, a line break within it as <br>, and each token as its live
+ * value where there is a way to draw one. Tokens are read here, in the runs
+ * the inline marks leave, so a code span keeps its braces as text.
+ */
+function withBreaksOf(text: string, key: string, tokens?: TokenRender): ReactNode[] {
   if (text === '') return [];
   return text
     .split('\n')
-    .flatMap((part, index) =>
-      index === 0 ? [part] : [<br key={`${key}-br${String(index)}`} />, part],
-    )
+    .flatMap((line, index) => {
+      const parts: ReactNode[] =
+        tokens === undefined
+          ? [line]
+          : textPartsOf(line).map((part, at) =>
+              typeof part === 'string'
+                ? part
+                : tokens(part, `${key}-${String(index)}-t${String(at)}`),
+            );
+      return index === 0 ? parts : [<br key={`${key}-br${String(index)}`} />, ...parts];
+    })
     .filter((part) => part !== '');
 }

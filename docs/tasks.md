@@ -5841,10 +5841,36 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 - [ ] T388 [P] (AC-104) Obtain the marked share with one extra query per tile, keeping the base result cached
   - Files and failing test: as T110 (above) (AC-104).
   - Depends on: none
-- [ ] T389 [P] (AC-116) Render marking and measure tokens in text tiles
+- [x] T389 [P] (AC-116) Render marking and measure tokens in text tiles
   - Files and failing test: as T122 (above) (AC-116).
   - Depends on: none
-
+  - **Done 2026-09-26.** As built:
+    - `packages/core/src/text-tokens.ts` reads the tokens (not `TextTokens.ts` alone), since the API reads them too;
+    - `packages/web/src/dashboard/tiles/{TextTokens.ts,LiveToken.tsx}`, `packages/web/src/tiles/Markdown.tsx` and `packages/web/src/dashboard/DashboardView.tsx`;
+    - from the review, `packages/api/src/model/{bind,references}.ts` and `packages/api/src/server.ts`;
+    - `e2e/text-tokens.spec.ts`.
+  - **The tokens,** as direction.md's "Markdown tokens" has them:
+    - `{{marking:Name.count}}` and `{{marking:Name.summary}}`;
+    - `{{measure:id}}` and `{{measure:id | marking:Name}}`, over the marked rows, or over all rows while the marking holds nothing;
+    - braces matching none of these stay text, and so does a token in a code span.
+    - A token is whole whatever marks its words hold.
+    - A marking is found by name, trimmed and in any case, as the prototype finds one. A name the dashboard lacks says "(no marking “…”)".
+  - **From the review:**
+    - A measure token is asked under the filters a chart on the tile's page is under, and under Filter to or out marked, as the prototype's tokens are (`dashboard.js`, `pageFilters`).
+    - A measure token names a member as a filter does. So a dashboard's tokens are bound at publish in its folder, and one naming a cube off its path is refused (AC-272, `chart-binding.test.ts`). A cube a token uses is refused a delete or rename (AC-275, `references.test.ts`), and an edited member a token names lists its dashboard (AC-141).
+    - Values show at 600 with tabular figures, and keep the last value while the next is asked.
+  - **Tests:**
+    - `text-tokens.test.ts` (parsing, members, renaming);
+    - `TextTokens.test.ts` (the query, items and ranges, as a limited tile's);
+    - `Markdown.test.tsx` (in headings, lists and emphasis; whole; code spans);
+    - `bind.test.ts`, `references.test.ts`, `chart-binding.test.ts`;
+    - e2e `text-tokens.spec.ts`, against the real Cube: 0, "nothing marked" and 240 of 240; then 1, "Orders Status: shipped" and 80 of 240; then, after Filter to marked, 0 and 80 of 80.
+  - **AC-116 ticked** on those.
+  - **Left:**
+    - In a folder, a bound token's text shows the full name (`f…__orders.count`) in the tile's text field, since the text is what is stored.
+    - A text tile's name (the outline, "Edit …") shows its token syntax.
+    - Renaming a marking leaves its tokens naming the old name.
+    - Editing a token's member types a request per keystroke.
 ## P2.13 Charts (F35)
 
 - [x] T390 [P] (AC-041) Fold the remainder into "Other (n)" or drop it, and offer a row limit

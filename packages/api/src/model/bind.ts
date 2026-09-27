@@ -1,4 +1,4 @@
-import type { ChartDefinition } from '@wechart/core';
+import { textRenamed, tokenMembersOf, type ChartDefinition } from '@wechart/core';
 
 import type { XcubeAdmin } from '../xcube/client';
 
@@ -211,14 +211,73 @@ export function dashboardRenamed(
   body: Record<string, unknown>,
   renames: ReadonlyMap<string, string>,
 ): Record<string, unknown> {
-  if (renames.size === 0 || !Array.isArray(body['filters'])) return body;
+  if (renames.size === 0) return body;
   const member = memberRenamed(renames);
+  const withTexts = withTextTiles(body, (text) => textRenamed(text, member));
+  if (!Array.isArray(body['filters'])) return withTexts;
   return {
-    ...body,
+    ...withTexts,
     filters: (body['filters'] as Record<string, unknown>[]).map((filter) =>
       typeof filter['member'] === 'string'
         ? { ...filter, member: member(filter['member']) }
         : filter,
     ),
   };
+}
+
+/** Whether a value is a text tile: a dashboard element of kind `markdown` with its text. */
+const isTextTile = (value: unknown): value is Record<string, unknown> & { text: string } =>
+  value !== null &&
+  typeof value === 'object' &&
+  (value as { kind?: unknown }).kind === 'markdown' &&
+  typeof (value as { text?: unknown }).text === 'string';
+
+/**
+ * A dashboard with each text tile's text changed, wherever the tile is — on
+ * a page, in a section, in a tab — and everything else as it was.
+ */
+function withTextTiles(body: Record<string, unknown>, change: (text: string) => string) {
+  const walk = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(walk);
+    if (value === null || typeof value !== 'object') return value;
+    if (isTextTile(value)) return { ...value, text: change(value.text) };
+    return Object.fromEntries(Object.entries(value).map(([key, each]) => [key, walk(each)]));
+  };
+  return body['pages'] === undefined ? body : { ...body, pages: walk(body['pages']) };
+}
+
+/** Every text tile's text in a dashboard, wherever the tile is. */
+export function textTilesOf(body: unknown): string[] {
+  const texts: string[] = [];
+  const walk = (value: unknown): void => {
+    if (Array.isArray(value)) for (const each of value) walk(each);
+    else if (isTextTile(value)) texts.push(value.text);
+    else if (value !== null && typeof value === 'object')
+      for (const each of Object.values(value)) walk(each);
+  };
+  walk((body as { pages?: unknown } | null)?.pages);
+  return texts;
+}
+
+/**
+ * The cubes a dashboard names of its own (T429, AC-272): its filters', and
+ * its text tiles' measure tokens' (T389's review). Its charts bind apart.
+ */
+export function cubesOfDashboard(body: unknown): string[] {
+  const filters = (body as { filters?: unknown } | null)?.filters;
+  const members = [
+    ...(Array.isArray(filters) ? (filters as { member?: unknown }[]) : []).map(
+      (filter) => filter.member,
+    ),
+    ...textTilesOf(body).flatMap(tokenMembersOf),
+  ];
+  return [
+    ...new Set(
+      members.flatMap((member) =>
+        typeof member === 'string' && member.includes('.')
+          ? [member.slice(0, member.indexOf('.'))]
+          : [],
+      ),
+    ),
+  ];
 }

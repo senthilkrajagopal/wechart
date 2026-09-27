@@ -417,7 +417,7 @@ Traces to: `[docs/inputs §11]`, direction.md §7a, rules 33, 53, 55.
       Fails when: the rows shown do not match the marking, or the total is absent.
 - [x] AC-115 WHEN the user chooses Invert marking or Mark all on a tile, THE SYSTEM SHALL mark exactly the tile's unmarked items, or all of its items, and leave other tiles' contributions to that marking unchanged.
       Fails when: an inverted marking keeps a previously marked item, or Mark all misses a visible item.
-- [ ] AC-116 WHEN a text tile contains a marking token, THE SYSTEM SHALL render the marking's summary or count, and a measure token limited by a marking SHALL show the measure over the marked rows, or over all data when nothing is marked (phase 2, `[R16]`).
+- [x] AC-116 WHEN a text tile contains a marking token, THE SYSTEM SHALL render the marking's summary or count, and a measure token limited by a marking SHALL show the measure over the marked rows, or over all data when nothing is marked (phase 2, `[R16]`).
       Fails when: a token renders as literal text, or a limited measure ignores the marking.
 
 ## F12. Cross-filtering and cross-highlighting

@@ -88,3 +88,43 @@ describe('a markdown tile’s text (AC-208)', () => {
     expect(html('## A\r\nb')).toBe('<div class="markdown"><h3 data-level="2">A</h3><p>b</p></div>');
   });
 });
+
+/**
+ * T389 / AC-116: a text tile's tokens drawn as live values, wherever the
+ * text holds them. `Fails when: a token renders as literal text …`
+ */
+describe('a markdown tile’s tokens (AC-116)', () => {
+  const drawn = (text: string) =>
+    render(
+      <Markdown
+        text={text}
+        tokens={(token, key) => (
+          <b key={key}>{token.kind === 'marking' ? `[${token.name}]` : `[${token.member}]`}</b>
+        )}
+      />,
+    ).container.innerHTML;
+
+  it('draws each token in place, in a heading, a list, emphasis or a paragraph', () => {
+    expect(drawn('## {{marking:A.count}} marked\n\n- **{{measure:orders.count}}** in all')).toBe(
+      '<div class="markdown"><h3 data-level="2"><b>[A]</b> marked</h3><ul><li><strong><b>[orders.count]</b></strong> in all</li></ul></div>',
+    );
+  });
+
+  it('keeps a token whole when its marking’s name holds an emphasis mark', () => {
+    expect(drawn('{{marking:Q3 *core* picks.count}} and *more*')).toBe(
+      '<div class="markdown"><p><b>[Q3 *core* picks]</b> and <em>more</em></p></div>',
+    );
+  });
+
+  it('leaves a token in a code span as its braces', () => {
+    expect(drawn('`{{measure:orders.count}}`')).toBe(
+      '<div class="markdown"><p><code>{{measure:orders.count}}</code></p></div>',
+    );
+  });
+
+  it('draws no token without a way to draw it', () => {
+    expect(html('{{measure:orders.count}}')).toBe(
+      '<div class="markdown"><p>{{measure:orders.count}}</p></div>',
+    );
+  });
+});

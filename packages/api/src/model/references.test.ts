@@ -219,4 +219,52 @@ describe('the items that use a cube (T428)', () => {
       dashboards: [{ id: 'd1', title: 'Board' }],
     });
   });
+
+  /**
+   * T389's review, AC-275: a text tile's measure token uses its cube as a
+   * filter does, so deleting or renaming the cube is refused while it does.
+   */
+  it('names the dashboards whose text tiles’ tokens name the cube, in a section too', () => {
+    const tile = (text: string) => ({ id: 't', kind: 'markdown', text });
+    const documents = [
+      doc('dashboard', 'd1', 'Top', {
+        pages: [{ items: [tile('{{measure:orders.count}} in all')] }],
+      }),
+      doc('dashboard', 'd2', 'Nested', {
+        pages: [
+          { items: [{ kind: 'section', items: [tile('{{measure:orders.count | marking:A}}')] }] },
+        ],
+      }),
+      doc('dashboard', 'd3', 'Words', { pages: [{ items: [tile('orders.count, {{x}}')] }] }),
+    ];
+
+    expect(usersOfCubes(documents, ['orders']).dashboards).toEqual([
+      { id: 'd1', title: 'Top' },
+      { id: 'd2', title: 'Nested' },
+    ]);
+  });
+});
+
+/** T389's review, AC-141: an edited member a text tile's token names is one the dashboard uses. */
+describe('a text tile’s tokens as references', () => {
+  it('lists a dashboard whose text tile names the member in a token', () => {
+    const found = referencesOf(
+      [
+        {
+          kind: 'dashboard',
+          id: 'd-text',
+          title: 'Text',
+          localToDashboardId: null,
+          body: {
+            pages: [{ items: [{ kind: 'markdown', text: 'Open: {{measure:orders.status}}' }] }],
+          },
+        },
+      ],
+      ['orders.status'],
+    );
+
+    expect(found.dashboards).toEqual([
+      { id: 'd-text', title: 'Text', members: ['orders.status'], through: [] },
+    ]);
+  });
 });
