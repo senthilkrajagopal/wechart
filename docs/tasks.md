@@ -8036,6 +8036,49 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - no segment label wraps.
   - Depends on: T482
 
+#### Designs 11 and 12's proposals, approved (R36)
+
+- [ ] T488 (AC-345, AC-346, AC-249) Generate cubes adds drafts, and a draft publishes with the drafts it joins
+  - Files: `packages/web/src/workspaces/model/{GenerateCubes,ModelFilePage}.tsx`, `packages/web/src/workspaces/model/draftJoins.ts` (+ tests), `e2e/generate-cubes.spec.ts`, `e2e/model-design.spec.ts`
+  - Failing test:
+    - `generate-cubes.spec.ts`: Review's primary is "Add 2 cubes as drafts". Pressed, it adds both to the tree marked unpublished, and `/api/meta` is unchanged. A clash still refuses it (AC-249).
+    - `model-design.spec.ts`: opening the visits draft, which joins the stores draft, names `cubes/chrome_stores.yml` beside Save. Saving publishes both in one publish, and both rows are then published.
+    - `draftJoins.test.ts`: the unpublished files a file's cubes join, followed through the joins, and none for a join to a published cube.
+  - Depends on: T485
+- [ ] T489 [P] (AC-347) "In model" on Generate cubes' Tables step
+  - Files: `packages/web/src/workspaces/model/GenerateCubes.tsx` (+ test), `e2e/generate-cubes.spec.ts`
+  - Failing test: `GenerateCubes.test.tsx` and `generate-cubes.spec.ts`:
+    - `public.orders` shows "In model · orders";
+    - `sql_table` is matched as `schema.table`, unquoted and case-insensitive;
+    - a table no cube reads carries no mark.
+  - Depends on: T485
+- [ ] T490 [P] (AC-348) Each data source's health on Generate cubes' Source step
+  - Files: `packages/web/src/workspaces/model/GenerateCubes.tsx` (+ test), `e2e/generate-cubes.spec.ts`
+  - Failing test:
+    - `GenerateCubes.test.tsx`: a source whose last test failed shows the failed icon, the label and its age, from `/api/data-sources`, as `DataSourcesList` shows them. One with no test says "Not tested".
+    - `generate-cubes.spec.ts`: the root's `default` shows the same health as its row in Data sources.
+  - Depends on: T485
+- [ ] T491 [P] (AC-349) Choose every table on the page from the table list's header
+  - Files: `packages/web/src/workspaces/model/GenerateCubes.tsx` (+ test)
+  - Failing test: `GenerateCubes.test.tsx`:
+    - the header checkbox chooses all of the page's tables and leaves the other pages' as they were;
+    - it is mixed when some are chosen and checked when all are;
+    - pressed again, it clears the page.
+  - Depends on: T485
+- [ ] T492 (AC-350) With security on, Generate cubes says "in My workspace" and adds there
+  - Files: `packages/web/src/workspaces/model/GenerateCubes.tsx` (+ test), `e2e/security/model-in-folder.spec.ts`
+  - Failing test: `model-in-folder.spec.ts`, with security on:
+    - the pane's head reads "in My workspace", with the person icon;
+    - the added drafts are in the user's workspace model, and no shared folder's changes.
+  - Depends on: T488, T342, T345
+- [ ] T493 (AC-351, AC-344) New view with no cube chosen for the user, opened on Cubes
+  - Files: `packages/web/src/workspaces/model/ModelFilePage.tsx` (`newFileOf`), `packages/web/src/workspaces/model/form/{CubeForm,ObjectForm}.tsx` (+ tests), `e2e/model-design.spec.ts`
+  - Failing test: `model-design.spec.ts`:
+    - New view's YAML has no `cubes`;
+    - it opens on the Cubes tab with a new cube entry open and its join-path picker focused;
+    - the empty tab says "A view shows nothing until it includes a cube.".
+  - Depends on: T484
+
 ### Phase 2's surfaces, to their approved designs (AC-343)
 
 - [x] T471 (AC-158, AC-159, AC-160, AC-282, AC-325, AC-339, AC-340, AC-343) Rebuild the new data source wizard as design 01's docked pane, with design 02's driver forms
@@ -8171,6 +8214,8 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 | AC-337 | T448 | AC-009 (again) | T426 | AC-189, AC-249 (again, folder items) | T450 |
 | AC-338 | T472 | AC-339 | T471 | AC-340 | T471 |
 | AC-341 | T356 | AC-342 | T475 | AC-343 | T471, T473, T474, T475, T462, T331, T348, T356, T357, T358, T367, T369, T371 |
-| AC-344 | T470, T479–T487 | | | | |
+| AC-344 | T470, T479–T487, T493 | AC-345 | T488 | AC-346 | T488 |
+| AC-347 | T489 | AC-348 | T490 | AC-349 | T491 |
+| AC-350 | T492 | AC-351 | T493 | AC-249 (again, drafts) | T488 |
 
 AC-009, AC-136 and AC-137 are ticked from phase 1. ~~They stay ticked until slice 3 changes how publishing works; T426 and T432 then reword them and retest them (R28 Q9).~~ They keep their wording and their ticks while their tests pass: T447 re-runs them against xcube at slice 2's cut-over, and T426 and T432 again in slice 3 (2026-09-26, `[R29]`). AC-235 was unticked by R29 and is ticked again by T445 and T447.

@@ -66,6 +66,7 @@ Earlier critiques are cited where a finding repeats one of them (`critiques/2026
   - Affects MW-16.
 - **D4 · Generate into drafts or publish directly (proposal).** Should Generate create unpublished drafts in the tree, like New cube, instead of publishing directly? That changes the as-built flow (AC-136/AC-137).
   - Affects the Generate layout below.
+  - *Decided 2026-09-27 (R36): drafts, AC-345 and AC-346 (T488).*
 - **D5 · Two items where design 03 sits under the 12 px floor, or contradicts as-built behaviour.** I propose 12 px throughout.
   - Its `.mbadge` and `.file .tag` are 11 px, which is below rule 1's floor.
   - Its Jinja tag tooltip reads "edit in YAML", but the file is read-only as built (AC-140, AC-332).

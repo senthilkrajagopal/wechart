@@ -852,6 +852,20 @@ Model workspace:
       Fails when: a measure of type "summ" leaves Problems empty.
 - [ ] AC-344 THE SYSTEM SHALL draw the Model workspace as its designs draw it — a model file's editor, its tree, and New cube and New view as phase-1 design 03 (`docs/design/reviews/2026-09-24/designs/03-model-workspace.html`); Generate cubes as design 11 and the Model overview as design 12 (`docs/design/reviews/2026-09-27/designs/11-generate-cubes.html`, `12-model-overview.html`) — with their structure, placement, controls, wording and states, in the tokens of direction.md §3–5 (`[R34]`: the user, 2026-09-27, "Cleanup the models page.. add models page and generate cube page").
       Fails when: a Model surface differs from its design in its layout or placement, its controls or their order, its wording, or a state the design draws. Each surface's task names the design, and the findings of `docs/design/critiques/2026-09-27-model-workspace.md`, it checks against.
+- [ ] AC-345 WHEN the user adds the cubes Generate cubes has generated, THE SYSTEM SHALL add each as an unpublished file in the model's tree and publish none of them until it is saved (`[R36]`, proposal 1 of design 11).
+      Fails when: Cube's model changes as the cubes are added, or a generated file is missing from the tree or its row is not marked unpublished.
+- [ ] AC-346 WHEN the user saves an unpublished file whose cubes join a cube that only another unpublished file defines, THE SYSTEM SHALL publish those files with it in one publish, and name them beside Save before it is pressed (`[R36]`).
+      Fails when: the file is sent alone and Cube refuses the join ("Cube … doesn't exist"), or a file published with it was not named beside Save.
+- [ ] AC-347 WHEN Generate cubes lists a table that a cube in the model already reads from as its `sql_table`, THE SYSTEM SHALL mark the table's row "In model", naming that cube, before anything is generated (`[R36]`, proposal 2 of design 11).
+      Fails when: the seed's `public.orders`, which the `orders` cube reads, is listed without "In model" or without naming `orders`, or a table no cube reads is marked.
+- [ ] AC-348 WHEN Generate cubes lists the data sources to generate from, THE SYSTEM SHALL show beside each its health as Data sources shows it — its icon, its label and how long ago it was tested — or that it has not been tested (`[R36]`, proposal 3 of design 11).
+      Fails when: a data source whose last test failed is listed without that state, or a listed health differs from the same data source's in Data sources.
+- [ ] AC-349 THE SYSTEM SHALL offer, in the header of Generate cubes' table list, a checkbox that chooses or clears every table on the page shown, checked when all of them are chosen and mixed when only some are (`[R36]`, proposal 4 of design 11).
+      Fails when: pressing it leaves a table on the page unchosen or chooses one on another page, or it shows checked while a table on the page is not chosen.
+- [ ] AC-350 WHILE security is enabled, THE SYSTEM SHALL head Generate cubes with "in My workspace" and the person icon, as the new data source pane's head does, and add the cubes to the user's workspace model (`[R36]`, proposal 5 of design 11; direction.md rule 74).
+      Fails when: with security on, the pane's head does not say "in My workspace", or a generated cube is added to a shared folder's model.
+- [ ] AC-351 WHEN the user creates a view with New view, THE SYSTEM SHALL write it with no `cubes`, open it on its Cubes tab ready to add a cube with the join-path picker focused, and say in the empty tab "A view shows nothing until it includes a cube." (`[R36]`, MW-19 of design 12).
+      Fails when: the new view's YAML names a cube or members the user didn't choose, it opens on another tab, or focus is not on the join-path picker.
 
 Jobs, Security, Schedules and Data sources:
 
@@ -1337,3 +1351,4 @@ The criteria phase 1 moved to its backlog on 2026-09-25 are back in this spec un
 | §P2.3 S3 Phase 1 intact with security off, at phase end `[R13, R19]` | AC-308 |
 | The 2026-09-27 UI reviews: phase 2's ten designs approved, with their proposals `[R33]` | AC-338 … AC-343 |
 | The Model workspace and Generate cubes to design 03, 11 and 12, as a priority `[R34]` | AC-344 |
+| Designs 11 and 12's proposals, approved `[R36]` | AC-345 … AC-351 |

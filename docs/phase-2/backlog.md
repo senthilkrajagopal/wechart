@@ -164,6 +164,9 @@ These are not criteria. Each needs either a spec decision or research before it 
 - **Copy link with marks is in the marking chip's menu only.** direction.md also lists it in the tile's ⋯ menu, whose order an e2e pins.
 - **A camelCase `preAggregations` key isn't read by the unknown-name check.** `rollupReferences.ts` (AC-189) reads only `pre_aggregations`. The join check (AC-235) reads both, since Cube accepts both.
 - **Cube's refusal names cubes, not rollups** (AC-235), so it is placed by matching cubes. When a cube's rollups fail on different cubes, Cube reports only the first, and a second publish shows the next.
+- **The flaky markings test's expected count** (added 2026-09-27; the user approved correcting it and put it here, to do after the rest). In `e2e/markings.spec.ts`, "Invert marking and Mark all…" fails 3 of 6 runs alone.
+  - The likely cause: the test predates AC-097's marked share. Once the status tile marks "shipped", the category tile's Components bar is partly marked. Its marked share then draws a third path ("1 of 3", where "1 of 2" is expected) whenever the share's query answers before the first poll.
+  - The fix: correct the expectation to the count the marked share gives, and wait for that share's query, so the test no longer races it.
 
 ## 3. Questions for the user, carried into phase 2
 

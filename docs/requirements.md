@@ -842,6 +842,20 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R36 — the proposals of designs 11 and 12, and the markings flake** (2026-09-27, the user, after Claude listed the open proposals)
+- The user: "okay for both Your OK to fix the flaky markings test's expected count. - The open proposals in 11 and 12 and MW-19... first let me know what is the open proposal for designs 11 and 12 and MW19.. for flaky markings test put in backlog.. we will do it after we complete other things"
+  - *The markings test's expectation is to be corrected, later: it is in `docs/phase-2/backlog.md` §2.*
+- Claude listed design 11's five proposals and design 12's MW-19. The user: "sure okay for all", then "proveed".
+  - *Approved, all six:*
+    1. *Generate cubes adds the generated cubes as unpublished drafts in the tree, saved with "Save & reload Cube" as New cube's are, instead of publishing them. This settles the critique's D4, which had been left as built pending the user (AC-345).*
+    2. *The Tables step marks a table a cube in the model already reads from as "In model", before generating (AC-347).*
+    3. *The Source step shows each data source's health, from Data sources (AC-348).*
+    4. *A select-all checkbox for the page in the table list's header (AC-349).*
+    5. *With security on, the pane's head says "in My workspace", as design 01's does (AC-350).*
+    6. *MW-19: New view writes no `cubes` and opens on its Cubes tab, ready to add one (AC-351).*
+  - *What follows from 1, decided by Claude as the one way the drafts compile:* Cube refuses a join to a cube it doesn't have, at compile ("Cube <name> doesn't exist", research/cube/rollup-join-paths.md and whole-model-publish.md), and Generate's cubes often join one another. So saving a draft publishes with it the unpublished drafts it joins, named beside Save before it is pressed (AC-346).
+  - *Proposal 2's mark reads the model's `sql_table`s, not a predicted cube name: Cube's scaffolder names a cube by its whole batch (research/cube/introspection-api.md, "Cube names depend on the batch"). The clash check after generating is unchanged (AC-249).*
+
 **R35 — designs 11 and 12, and what the backend can't yet do** (2026-09-27, the user, after seeing designs 11 and 12)
 - The user: "i checked the ui design.. and it looks great.. if any of the ui is not based on the backend design., and if it requires redesigning any of the backend (xcube) then it can be put in the backlog. If it is achievable by simple changes in the backend.. then we should do it..."
   - *Read as the approval of designs 11 (Generate cubes) and 12 (the Model overview), as drawn. Their "Proposals (need approval)" notes stay proposals.*
