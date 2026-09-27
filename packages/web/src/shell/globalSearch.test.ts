@@ -115,3 +115,66 @@ describe('what the palette finds', () => {
     expect(globalResults('  ', { catalog, meta, files })).toHaveLength(0);
   });
 });
+
+/**
+ * T450, AC-329: a folder's cube is `fsales__orders` in Cube's field list and
+ * `orders` in its folder. The palette names its fields by their short names
+ * and says which folder the cube is in, never showing the prefixed name.
+ */
+describe('a folder’s fields (T450)', () => {
+  const inFolder = {
+    cubes: [
+      {
+        name: 'fsales__orders',
+        title: 'Orders',
+        type: 'cube',
+        meta: { xcube: { folderId: 'fsales', shortName: 'orders' } },
+        measures: [{ name: 'fsales__orders.count', title: 'Orders Count', shortTitle: 'Count' }],
+        dimensions: [],
+      },
+    ],
+  };
+  const folders = [{ id: 's', title: 'Sales', parentId: 'root', xcubeId: 'fsales' }];
+
+  it('names each by its short name and its cube’s folder path, never the prefixed name', () => {
+    const found = globalResults('count', { catalog: [], meta: inFolder, files: [], folders });
+
+    expect(found.map(({ type, title, detail }) => ({ type, title, detail }))).toEqual([
+      {
+        type: 'Measure',
+        title: 'Orders Count',
+        detail: 'orders.count · cube Orders · Shared / Sales',
+      },
+    ]);
+    // Found by its short name too, and by nothing that shows the prefix.
+    expect(
+      globalResults('orders.count', { catalog: [], meta: inFolder, files: [], folders }),
+    ).toHaveLength(1);
+    expect(globalResults('fsales', { catalog: [], meta: inFolder, files: [], folders })).toEqual(
+      [],
+    );
+  });
+
+  // Every item xcube serves carries `meta.xcube`; the root's is `froot`,
+  // named as it was before folders (T450's review).
+  it('names a root item’s fields as before', () => {
+    const atRoot = {
+      cubes: [
+        {
+          name: 'orders',
+          title: 'Orders',
+          type: 'cube',
+          meta: { xcube: { folderId: 'froot', shortName: 'orders' } },
+          measures: [{ name: 'orders.count', title: 'Orders Count', shortTitle: 'Count' }],
+          dimensions: [],
+        },
+      ],
+    };
+
+    expect(
+      globalResults('count', { catalog: [], meta: atRoot, files: [], folders }).map(
+        ({ detail }) => detail,
+      ),
+    ).toEqual(['orders.count · cube orders']);
+  });
+});

@@ -144,4 +144,30 @@ test.describe('cubes bound and picked on a folder’s path (T429)', () => {
       expect(option.path, option.value).toMatch(/^Shared/);
     for (const option of options) expect(option.text).not.toContain('__');
   });
+
+  /**
+   * T450, AC-329: search names a folder's field by its short name, with its
+   * cube's title and folder path, and never shows the prefixed name.
+   */
+  test('search names a folder’s fields by their short names and folder paths, never a prefixed name', async ({
+    page,
+  }) => {
+    await page.goto('/explore');
+    await expect(page.getByRole('button', { name: /theme/i })).toBeVisible();
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k');
+    const palette = page.getByRole('dialog', { name: /search/i });
+    await palette.getByRole('combobox').fill('picker_sales.count');
+
+    const results = palette.getByRole('listbox', { name: 'Search results' });
+    await expect(
+      results.getByRole('option').filter({
+        // /A/B/C's own is found too: its path runs on past /A/B's.
+        hasText: new RegExp(
+          `picker_sales\\.count · cube Picker Sales · Shared / Picker A ${RUN} / Picker B ${RUN}$`,
+        ),
+      }),
+    ).toHaveCount(1);
+    for (const text of await results.getByRole('option').allTextContents())
+      expect(text).not.toContain('__');
+  });
 });

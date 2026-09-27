@@ -5,6 +5,7 @@ import { META_QUERY } from '../../query/meta';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
+import { FOLDERS_QUERY } from '../explore/folders';
 import { FileList, MODEL_FILES_QUERY } from './FileList';
 import { GenerateCubes } from './GenerateCubes';
 import { FileTree, fileHref } from './FileTree';
@@ -253,6 +254,8 @@ function FileEditor({
   /** The right pane: the YAML, or the join diagram (T144). */
   const [view, setView] = useState<'yaml' | 'joins'>('yaml');
   const allFiles = useQuery(MODEL_FILES_QUERY);
+  // To name the folder of a refusal about another folder's file (T450's review).
+  const folders = useQuery(FOLDERS_QUERY);
   /**
    * The model's join graph, with this file as the form has it now (AC-138):
    * worked out only while the diagram shows, the other files once each.
@@ -414,8 +417,10 @@ function FileEditor({
   const ownErrors = errors.length + invalid.length;
   useEffect(() => {
     const byPath: Record<string, number> = { [path]: ownErrors };
+    // The tree is the root's files: another folder's file of the same path
+    // is not one of them (T450's review).
     for (const problem of [...cubeProblems, ...refusedRollups])
-      byPath[problem.path] = (byPath[problem.path] ?? 0) + 1;
+      if (problem.folderId === undefined) byPath[problem.path] = (byPath[problem.path] ?? 0) + 1;
     reportProblems.current?.(byPath);
   }, [path, ownErrors, cubeProblems, refusedRollups]);
 
@@ -640,7 +645,9 @@ function FileEditor({
                 // Its rollups a publish was refused for, on their rows (T207, AC-189).
                 rollupProblems={refusedRollups.filter(
                   (problem) =>
-                    problem.path === path && problem.preAggregation?.cube === value['name'],
+                    problem.folderId === undefined &&
+                    problem.path === path &&
+                    problem.preAggregation?.cube === value['name'],
                 )}
                 onChange={(next) => {
                   edit('cubes', at, next);
@@ -727,6 +734,7 @@ function FileEditor({
           path={path}
           problems={listed}
           cubeProblems={cubeProblems}
+          folders={folders.data ?? []}
           onPick={(problem) => {
             // To the YAML, where the problem is (the prototype's click does too).
             setView('yaml');

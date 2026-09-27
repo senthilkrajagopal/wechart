@@ -479,7 +479,8 @@ export function buildServer({
   // With the model's files: each rollup's link names its stored file (T449).
   registerBuilds(app, client, modelFiles);
   // With the model's files: a key's SQL is read there (T273's review).
-  registerSchedules(app, client, modelFiles);
+  // And each folder's, under its prefixed names (T450's review).
+  registerSchedules(app, client, modelFiles, folders);
   // A data source's catalog, through Cube's introspection API (T145, AC-139).
   registerIntrospection(
     app,

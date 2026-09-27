@@ -153,4 +153,49 @@ describe('schedulesFrom', () => {
     expect(plain).toMatchObject({ every: '1 hour', when: 'Every 1 hour' });
     expect(plain).not.toHaveProperty('sql');
   });
+
+  /**
+   * T450's review: a folder's rollup is Cube's `<folderId>__<cube>.<rollup>`,
+   * and its key's SQL is read from that folder's file — not missed, and not
+   * taken from the root's cube of the same short name.
+   */
+  it('reads a folder rollup’s key SQL from that folder’s file, under its prefixed name', () => {
+    const file = (folderId: string, sql: string) => ({
+      folderId,
+      path: 'cubes/orders.yml',
+      content: [
+        'cubes:',
+        '  - name: orders',
+        '    sql_table: orders',
+        '    pre_aggregations:',
+        '      - name: main',
+        '        refresh_key:',
+        `          sql: ${sql}`,
+        '          every: 1 hour',
+      ].join('\n'),
+    });
+    const schedules = schedulesFrom(
+      {
+        cubes: [
+          {
+            name: 'orders',
+            preAggregations: [{ name: 'main', refreshKey: { every: '1 hour' } }],
+          },
+          {
+            name: 'fsales__orders',
+            preAggregations: [{ name: 'main', refreshKey: { every: '1 hour' } }],
+          },
+        ],
+      },
+      [file('sales', 'SELECT 2'), file('root', 'SELECT 1')],
+      new Map([['sales', 'fsales']]),
+    );
+
+    // The root's link names its stored file; the folder's names none, since
+    // Model opens only the root's files until T342.
+    expect(schedules.map(({ id, sql, fileName }) => ({ id, sql, fileName }))).toEqual([
+      { id: 'orders.main', sql: 'SELECT 1', fileName: 'cubes/orders.yml' },
+      { id: 'fsales__orders.main', sql: 'SELECT 2', fileName: undefined },
+    ]);
+  });
 });

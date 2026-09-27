@@ -5533,10 +5533,15 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - *2026-09-26, from T334:* model files now sit in folders, but only the root's are sent to xcube (`modelFiles.list()` is the root's), and `POST /api/model/publish` refuses any other folder with 409. ~~This task sends each folder's files as that folder's items … and lifts the 409.~~ That is T452's now; this task keeps the isolation test.
   - ~~Files: `packages/api/src/model/chain.ts` (each served cube's `sql_alias` from its origin folder and resolved data source) … Failing test: `isolation.spec.ts`, against the real Cube: … the same query from each folder returns each one's own count …~~
   - Depends on: T425, T426, T429, T334, T449
-- [ ] T342 (AC-222, AC-131) Open a model in its folder, beside that folder's files, read-only when shared
-  - Files: `packages/web/src/router/routes.tsx` (`/explore/folders/$folderId/models/$path`), `packages/web/src/workspaces/model/{ModelFilePage,FileTree}.tsx`, `packages/web/src/workspaces/model/ModelInFolder.test.tsx`, `e2e/security/model-in-folder.spec.ts`
-  - Failing test: `model-in-folder.spec.ts`: opening a model from a folder shows that folder's files beside the editor with the folder and file in the URL; every object each file defines is listed; a file with an error is marked; in a shared folder the editor is read-only with "Edit in my workspace" and no New cube or New view (AC-222, AC-131).
+- [ ] T342 (AC-222, AC-131, AC-141, AC-329) Open a model in its folder, beside that folder's files, read-only when shared
+  - Files: `packages/web/src/router/routes.tsx` (`/explore/folders/$folderId/models/$path`), `packages/web/src/workspaces/model/{ModelFilePage,FileTree}.tsx`, `packages/web/src/workspaces/model/editedMembers.ts` (+ test), `packages/web/src/workspaces/explore/ExplorePage.tsx` (a model row's link), `packages/web/src/workspaces/model/ModelInFolder.test.tsx`, `e2e/security/model-in-folder.spec.ts`
+  - Failing test: `model-in-folder.spec.ts`:
+    - opening a model from a folder shows that folder's files beside the editor with the folder and file in the URL; every object each file defines is listed; a file with an error is marked; in a shared folder the editor is read-only with "Edit in my workspace" and no New cube or New view (AC-222, AC-131);
+    - a model row in Explore opens that folder's file, never the root's file of the same path;
+    - the model page shows a folder's cubes by title, never a prefixed name (AC-329);
+    - saving a folder file that edits a member lists the charts bound to its full name (`<folderId>__<name>.<member>`), and a root edit to a member that a folder's view or extending cube exposes lists the charts bound to that folder's name (AC-141).
   - Depends on: T334, T345
+  - *2026-09-26, from T450 and its review:* the Model workspace reads only the root's files until this task, so the edited-member list, the model page's names and Explore's model links are this task's.
 
 ## P2.5 Workspaces (F29)
 
@@ -6791,13 +6796,25 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - **Left:**
       - The recorder watches the one address wechart ever gave Cube, not the API's own port.
       - On Linux, the control request needs a host route that compose no longer adds.
-- [ ] T450 (AC-329, AC-189, AC-249) Compare a folder item's members by short name and show them by title, in the checks and places that read the model
-  - Files: `packages/api/src/model/rollupReferences.ts` (it skips names containing `__`), `packages/api/src/model/refreshKeys.ts`, `packages/api/src/model/clashes.ts`, `packages/web/src/workspaces/model/editedMembers.ts`, `packages/web/src/shell/globalSearch.ts`, `packages/web/src/workspaces/model/ModelFilePage.tsx` (+ their tests)
+- [x] T450 (AC-329, AC-189, AC-249) Compare a folder item's members by short name and show them by title, in the checks and places that read the model
+  - Files: `packages/api/src/model/rollupReferences.ts` (it skips names containing `__`), `packages/api/src/model/refreshKeys.ts`, `packages/api/src/model/clashes.ts`, ~~`packages/web/src/workspaces/model/editedMembers.ts`~~ (moved to T342), `packages/web/src/shell/globalSearch.ts`, `packages/web/src/workspaces/model/ModelFilePage.tsx` (+ their tests)
   - Failing test: each module's test, with a model item in a folder (`fsales__orders` in `/v1/meta`, `orders` in its YAML, `meta.xcube = { folderId, shortName }`):
     - a rollup naming an unknown member is refused, and one naming a known member isn't (AC-189);
     - a generated cube clashing with a folder item is named by its short name and folder (AC-249);
-    - search, the Model workspace and the edited-member list show titles, never `fsales__orders` (AC-329).
+    - search ~~, the Model workspace and the edited-member list~~ shows titles, never `fsales__orders` (AC-329). The Model workspace and the edited-member list moved to T342.
   - Depends on: T426, T334
+  - **Done 2026-09-26.**
+    - **Search** (`globalSearch.ts`, `SearchPalette.tsx`): a folder cube's field reads `<short>.<member> · cube <title> · <folder path>`, found by its short name, never by the prefix; a root item (`froot`) reads as before.
+    - **Refusals about another folder's file** (the review): the Problems panel says them with the folder's path and a link to that folder, and the root's file of the same path is neither marked in the tree nor given the rollup's row.
+    - **Schedules** (the review): a folder rollup's key SQL is read from its own folder's file under its prefixed name (`refreshKeys.ts`, `schedules.ts`, all folders' files and their xcube ids); links name only the root's files.
+    - **A generated cube's clash in a folder** carries `folderId`, and the store is unchanged.
+    - Already in place from T452: rollups are checked along each folder's path (`publish.test.ts`, "names a rollup in another folder…").
+    - **Tests:** `globalSearch.test.ts`, `ProblemsPanel.test.tsx`, `schedules.test.ts`, `publish.test.ts`; e2e `security/picker.spec.ts` (search), `folder-models.spec.ts` (the refusal said as the folder's; Schedules' key SQL).
+    - **No AC ticked:** AC-329 waits on T342 and T347, AC-249 on T336.
+    - **Left:**
+      - `rollupReferences.ts` still skips `__` names, which are index-column aliases (`orders__created_at_day`). A folder item names members by short name, and xcube refuses a hand-written full name of an existing item (`xcube-slice-3a.md`).
+      - With security on, a folder hidden from `/api/folders` leaves its cubes' fields without a path until T436 filters `/api/meta`.
+      - Prefixed names still show in Jobs, Schedules, "Data as of", the Acceleration tab, Explore's "Built on" column, the library chart page and dashboard properties, and folder rollups' "Edit in Model" links go to a file Model can't open. No criterion covers those yet; handoff question 26.
 - **T432 (retired 2026-09-26 into T426, `[R30]`; the ID stays and is never reused):** ~~(AC-009, AC-137) Serve metadata from xcube's merged field list, with a new revision seen within 60 s~~ xcube has no field-list route; T426 re-runs AC-009's and AC-137's tests on items mode.
   - ~~Files: `packages/api/src/cube/meta-cache.ts`, `packages/api/src/xcube/meta.ts` (+ test). Failing test: `meta.test.ts`: after a changeset lands, `/api/meta` from either replica returns its new members once xcube reports the revision active on every instance, within 60 s, and without restarting Cube. AC-009 and AC-137 keep their wording, and T447 re-runs their tests against xcube (2026-09-26, `[R29]`); here they are checked again against the merged field list. Depends on: T421, T426~~
 - [x] T433 [P] (AC-332) Refuse to publish a model item that isn't plain YAML
@@ -6912,7 +6929,8 @@ T333, T346, T361 and T365 (above) are rewritten for this slice.
 | AC-047 | T380 | AC-048 | T382 | AC-049 | T381 |
 | AC-050 | T383 | AC-051 | T384 | AC-052 | T385 |
 | AC-093 | T386 | AC-097 | T387 | AC-104 | T388 |
-| AC-116 | T389 | AC-131 | T334, T342 | AC-145 | T375 |
+| AC-116 | T389 | AC-131 | T334, T342 | AC-141 | T342 |
+| AC-145 | T375 | | | | |
 | AC-150 | T372, T373, T374 | AC-151 | T376 | AC-153 | T377 |
 | AC-154 | T377 | AC-155 | T379 | AC-157 | T364 |
 | AC-158 | T363 | AC-159 | T361 | AC-160 | T360, T363 |
@@ -6920,7 +6938,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice.
 | AC-176 | T405 | AC-180 | T407 | AC-187 | T406 |
 | AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
 | AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |
-| AC-234 | T378 | AC-246 | T404 | AC-249 | T336 |
+| AC-234 | T378 | AC-246 | T404 | AC-249 | T336, T450 |
 | AC-251 | T318, T321, T324, T431 | AC-252 | T316, T319, T320 | AC-253 | T317, T321 |
 | AC-254 | T311, T319, T351, T359 | AC-255 | T312, T408 | AC-256 | T313, T323, T325, T326 |
 | AC-257 | T315, T320, T324 | AC-258 | T411 | AC-259 | T314, T330 |
@@ -6950,7 +6968,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice.
 | AC-319 | T418, T421, T422, T423, T444 | AC-320 | T436 | AC-321 | ~~T426~~ T451 |
 | AC-322 | T427 | AC-323 | T347, T440 | AC-324 | T333 |
 | AC-325 | T441 | AC-326 | T420, T437 | AC-327 | T431, T442 |
-| AC-328 | T341, T425, T449, T452 | AC-329 | T429, T450 | AC-330 | T419, T447, T425, T449, T436, T442 |
+| AC-328 | T341, T425, T449, T452 | AC-329 | T429, T450, T342 | AC-330 | T419, T447, T425, T449, T436, T442 |
 | ~~AC-331~~ (retired, `[R30]`) | ~~T430~~ | AC-332 | T433 | AC-333 | T419, T447, T449, T425 |
 | AC-334 | T421, T447 | AC-335 | T446, T447 | AC-336 | T430, T449 |
 | AC-337 | T448 | AC-009 (again) | T426 | AC-189, AC-249 (again, folder items) | T450 |

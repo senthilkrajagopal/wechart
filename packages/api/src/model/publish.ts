@@ -398,7 +398,10 @@ export function registerModelPublishing(
               return [];
             })
           : [];
-      const clashes = clashesOf(changed, inFolder, compiled);
+      const clashes = clashesOf(changed, inFolder, compiled).map((clash) =>
+        // Said as that folder's file, as its rollups' refusals are (T450's review).
+        folderId === ROOT_FOLDER_ID ? clash : { ...clash, folderId },
+      );
       if (clashes.length > 0) return reply.status(422).send({ errors: clashes });
     }
     // A name another file in the folder declares: one item each (T426's

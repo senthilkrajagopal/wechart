@@ -4,7 +4,9 @@ import { USER } from '../auth/guard';
 import type { CubeClient } from '../cube/client';
 import { refreshKeySqlOf } from '../model/refreshKeys';
 import { fileOf, pathsByName } from '../model/split';
+import { ROOT_FOLDER_ID } from '../repos/catalog';
 import type { ModelFile } from '../server';
+import type { PublishedFolders } from '../xcube/folders';
 
 /**
  * Every pre-aggregation's refresh schedule, for the Schedules workspace (T160,
@@ -117,12 +119,20 @@ function scheduleOf(
  * which the metadata drops: such a key is checked on its interval and
  * rebuilds only when the SQL's value changes, not every interval.
  */
-export function schedulesFrom(meta: unknown, files: readonly ModelFile[] = []): Schedule[] {
+export function schedulesFrom(
+  meta: unknown,
+  files: readonly ModelFile[] = [],
+  /** Each published folder's xcube id, by wechart's folder id: its cubes' prefix (T450's review). */
+  folders: ReadonlyMap<string, string> = new Map(),
+): Schedule[] {
   const cubes = asValue(meta)?.['cubes'];
   if (!Array.isArray(cubes)) return [];
-  const sqlOf = refreshKeySqlOf(files);
-  // The stored file declaring each cube, over Cube's `fileName` (T449).
-  const stored = pathsByName(files);
+  const sqlOf = refreshKeySqlOf(files, folders);
+  // The stored file declaring each cube, over Cube's `fileName` (T449): the
+  // root's, which are the files Model opens.
+  const stored = pathsByName(
+    files.filter((file) => (file.folderId ?? ROOT_FOLDER_ID) === ROOT_FOLDER_ID),
+  );
   return cubes.flatMap((cube: unknown) => {
     const value = asValue(cube);
     const all = value?.['preAggregations'];
@@ -150,9 +160,19 @@ export function schedulesFrom(meta: unknown, files: readonly ModelFile[] = []): 
 export function registerSchedules(
   app: FastifyInstance,
   client: CubeClient,
-  modelFiles?: { list(): Promise<readonly ModelFile[]> },
+  modelFiles?: {
+    list(): Promise<readonly ModelFile[]>;
+    all?(): Promise<readonly ModelFile[]>;
+  },
+  /** Where each folder is published, when folders are (T452). */
+  folders?: () => Promise<PublishedFolders>,
 ): void {
   app.get('/api/schedules', USER, async () =>
-    schedulesFrom(await client.metaExtended(), modelFiles ? await modelFiles.list() : []),
+    schedulesFrom(
+      await client.metaExtended(),
+      // Every folder's files where the store has them: a folder's rollups too.
+      modelFiles === undefined ? [] : await (modelFiles.all?.() ?? modelFiles.list()),
+      folders === undefined ? new Map() : (await folders()).ids,
+    ),
   );
 }

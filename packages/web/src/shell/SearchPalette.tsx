@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import { META_QUERY } from '../query/meta';
+import { FOLDERS_QUERY } from '../workspaces/explore/folders';
 import { MODEL_FILES_QUERY } from '../workspaces/model/FileList';
 import { globalResults } from './globalSearch';
 import { useFocusTrap } from './useFocusTrap';
@@ -83,12 +84,15 @@ export function SearchPalette() {
   // catalog is still searched.
   const meta = useQuery({ ...META_QUERY, enabled: open });
   const files = useQuery({ ...MODEL_FILES_QUERY, enabled: open });
+  // Where a folder's cube is said to be (T450, AC-329).
+  const folders = useQuery({ ...FOLDERS_QUERY, enabled: open });
 
   const hits = catalog.data ?? [];
   const results = globalResults(text, {
     catalog: hits.slice(0, CATALOG_SHOWN),
     meta: meta.data,
     files: files.data ?? [],
+    folders: folders.data ?? [],
   });
   const settled = !catalog.isFetching && !meta.isPending && !files.isPending;
   const active = activeKey === null ? -1 : results.findIndex((result) => result.key === activeKey);

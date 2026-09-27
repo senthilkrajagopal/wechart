@@ -1,4 +1,6 @@
 import { StatusIcon } from '../../shell/StatusIcon';
+import { exploreHref, folderChain } from '../explore/folders';
+import type { FolderNode } from '../explore/FolderTree';
 import type { Problem } from './problems';
 
 /**
@@ -26,6 +28,8 @@ function OkGlyph() {
 /** A reason Cube gave for refusing the model, on the file it is about (T142, AC-136). */
 export interface CubeProblem {
   readonly path: string;
+  /** The folder whose file it is, where that isn't the shared root's (T452). */
+  readonly folderId?: string;
   readonly message: string;
   readonly line?: number;
   /**
@@ -50,11 +54,14 @@ export function ProblemsPanel({
   path,
   problems,
   cubeProblems = [],
+  folders = [],
   onPick,
 }: {
   path: string;
   problems: readonly Problem[];
   cubeProblems?: readonly CubeProblem[];
+  /** The folders, to name the one a refusal about another folder's file is in. */
+  folders?: readonly FolderNode[];
   /** A problem picked: the editor goes to where it is. */
   onPick?: (problem: Problem) => void;
 }) {
@@ -104,7 +111,20 @@ export function ProblemsPanel({
                   {problem.preAggregation === undefined ? 'Cube: ' : ''}
                   {problem.message}
                 </span>
-                {problem.path === path ? (
+                {problem.folderId !== undefined ? (
+                  // Another folder's file (T450's review): said with its
+                  // folder, and a way to that folder, never to the root's
+                  // file of the same path.
+                  <a className="model-problems__where" href={exploreHref(problem.folderId)}>
+                    {folderChain(folders, problem.folderId)
+                      .map((crumb) => crumb.title)
+                      .join(' / ')}
+                    {' · '}
+                    {problem.line === undefined
+                      ? problem.path
+                      : `${problem.path}:${String(problem.line)}`}
+                  </a>
+                ) : problem.path === path ? (
                   <span className="model-problems__where">
                     {problem.line === undefined
                       ? problem.path

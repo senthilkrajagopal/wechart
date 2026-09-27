@@ -88,6 +88,37 @@ describe('the problems panel', () => {
     expect(item?.querySelector('svg')?.getAttribute('data-icon')).toBe('warn');
   });
 
+  /**
+   * T450's review, AC-189: a publish refused for another folder's rollup
+   * says which folder, and goes to that folder, not to the root's file of
+   * the same path.
+   */
+  it('names the folder of a refusal about another folder’s file, and goes there', () => {
+    render(
+      <ProblemsPanel
+        path="cubes/summary.yml"
+        problems={[]}
+        cubeProblems={[
+          {
+            path: 'cubes/summary.yml',
+            folderId: 's-1',
+            line: 7,
+            message: 'Pre-aggregation main names what the model doesn’t have: amount (measures).',
+            preAggregation: {
+              cube: 'summary',
+              name: 'main',
+              unknown: [{ list: 'measures', name: 'amount' }],
+            },
+          },
+        ]}
+        folders={[{ id: 's-1', title: 'Sales', parentId: 'root' }]}
+      />,
+    );
+
+    const where = screen.getByRole('link', { name: 'Shared / Sales · cubes/summary.yml:7' });
+    expect(where.getAttribute('href')).toBe('/explore?folder=s-1');
+  });
+
   it('says there are none when the file parses', () => {
     render(<ProblemsPanel path="cubes/x.yml" problems={[]} />);
 

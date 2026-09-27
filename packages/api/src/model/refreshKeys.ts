@@ -1,6 +1,7 @@
 import { refreshEveryRefusal } from '@wechart/core';
 import { isMap, isScalar, isSeq, LineCounter, parseDocument, type Node } from 'yaml';
 
+import { ROOT_FOLDER_ID } from '../repos/catalog';
 import type { ModelFile } from '../server';
 import type { CompileError } from './validate';
 
@@ -86,8 +87,15 @@ export function refreshKeyProblemsOf(files: readonly ModelFile[]): CompileError[
  * read it from the YAML wechart owns (research/cube/refresh-key-schedule.md,
  * "What /v1/meta?extended shows"). Only a plain string: SQL built by code is
  * not read.
+ *
+ * A folder's cube is Cube's `<xcubeId>__<name>` (T450's review), by the
+ * folder's xcube id in `folders`; a folder with none isn't published, and is
+ * left out.
  */
-export function refreshKeySqlOf(files: readonly ModelFile[]): Map<string, string> {
+export function refreshKeySqlOf(
+  files: readonly ModelFile[],
+  folders: ReadonlyMap<string, string> = new Map(),
+): Map<string, string> {
   const found = new Map<string, string>();
   const sqlOf = (key: Node | undefined) => {
     const sql = get(key, ['sql']);
@@ -95,6 +103,10 @@ export function refreshKeySqlOf(files: readonly ModelFile[]): Map<string, string
   };
   for (const file of files) {
     if (!YAML_FILE.test(file.path) || JINJA.test(file.content)) continue;
+    const folderId = file.folderId ?? ROOT_FOLDER_ID;
+    const xcubeId = folderId === ROOT_FOLDER_ID ? '' : folders.get(folderId);
+    if (xcubeId === undefined) continue;
+    const prefix = xcubeId === '' ? '' : `${xcubeId}__`;
     const document = parseDocument(file.content, { merge: true });
     if (document.errors.length > 0) continue;
     const cubes = get(document.contents, ['cubes']);
@@ -108,7 +120,7 @@ export function refreshKeySqlOf(files: readonly ModelFile[]): Map<string, string
         const name = nameOf(rollup);
         const own = get(rollup, KEYS.refreshKey);
         const sql = own === undefined ? sqlOf(cubeKey) : sqlOf(own);
-        if (name !== undefined && sql !== undefined) found.set(`${cubeName}.${name}`, sql);
+        if (name !== undefined && sql !== undefined) found.set(`${prefix}${cubeName}.${name}`, sql);
       }
     }
   }

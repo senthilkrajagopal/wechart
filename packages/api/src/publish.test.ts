@@ -1471,17 +1471,22 @@ describe('publishing into a folder (T452)', () => {
       });
 
     expect((await generate(salesOrders('cubes/orders.yml'))).statusCode).toBe(200);
+    const before = [...store.files];
     const again = await generate(salesOrders('cubes/orders_again.yml'));
 
     expect(again.statusCode).toBe(422);
+    // Said as that folder's, as its rollups' refusals are (T450's review).
     expect(again.json()).toEqual({
       errors: [
         {
           path: 'cubes/orders_again.yml',
+          folderId: 'sales',
           message: '`orders` is already a cube in cubes/orders.yml.',
         },
       ],
     });
+    // And nothing stored changes (AC-249).
+    expect(store.files).toEqual(before);
     await app.close();
   });
 

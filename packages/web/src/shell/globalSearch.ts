@@ -1,3 +1,5 @@
+import { folderChain } from '../workspaces/explore/folders';
+import type { FolderNode } from '../workspaces/explore/FolderTree';
 import { objectsOf } from '../workspaces/model/objects';
 
 /**
@@ -35,6 +37,11 @@ interface MetaMember {
 
 interface MetaCube {
   readonly name: string;
+  readonly title?: string;
+  /** Where xcube published it, and its name there (`meta.xcube`, T450). */
+  readonly meta?: {
+    readonly xcube?: { readonly folderId?: unknown; readonly shortName?: unknown };
+  };
   readonly type?: string;
   readonly isVisible?: boolean;
   readonly public?: boolean;
@@ -46,6 +53,8 @@ export interface SearchSources {
   readonly catalog: readonly CatalogHit[];
   readonly meta: unknown;
   readonly files: readonly { readonly path: string; readonly content: string }[];
+  /** The folders, each with its xcube id: where a folder's cube is said to be (T450). */
+  readonly folders?: readonly FolderNode[];
 }
 
 export function globalResults(text: string, sources: SearchSources): SearchResult[] {
@@ -77,7 +86,32 @@ export function globalResults(text: string, sources: SearchSources): SearchResul
   );
   const fields: SearchResult[] = [];
   for (const cube of cubes) {
-    const owner = `${cube.type === 'view' ? 'view' : 'cube'} ${cube.name}`;
+    // A folder's cube by its short name, its title and its folder path;
+    // never its prefixed name (T450, AC-329). The root's, as before.
+    const xcube = cube.meta?.xcube;
+    const inFolder =
+      typeof xcube?.folderId === 'string' &&
+      xcube.folderId !== 'froot' &&
+      typeof xcube.shortName === 'string'
+        ? { folderId: xcube.folderId, shortName: xcube.shortName }
+        : undefined;
+    const kind = cube.type === 'view' ? 'view' : 'cube';
+    const folder = inFolder && sources.folders?.find((each) => each.xcubeId === inFolder.folderId);
+    const owner =
+      inFolder === undefined
+        ? `${kind} ${cube.name}`
+        : [
+            `${kind} ${cube.title ?? inFolder.shortName}`,
+            ...(folder === undefined
+              ? []
+              : [
+                  folderChain(sources.folders ?? [], folder.id)
+                    .map((crumb) => crumb.title)
+                    .join(' / '),
+                ]),
+          ].join(' · ');
+    const shown = (name: string) =>
+      inFolder === undefined ? name : `${inFolder.shortName}${name.slice(cube.name.length)}`;
     const members = [
       ...(cube.measures ?? []).map((member) => ({ member, type: 'Measure' as const })),
       ...(cube.dimensions ?? []).map((member) => ({ member, type: 'Dimension' as const })),
@@ -85,12 +119,12 @@ export function globalResults(text: string, sources: SearchSources): SearchResul
     for (const { member, type } of members) {
       // A member the model hides is not one to offer: it cannot be queried.
       if (member.public === false || member.isVisible === false) continue;
-      if (!matches(member.title, member.shortTitle, member.name)) continue;
+      if (!matches(member.title, member.shortTitle, shown(member.name))) continue;
       fields.push({
         key: `field:${member.name}`,
         type,
-        title: member.title ?? member.name,
-        detail: `${member.name} · ${owner}`,
+        title: member.title ?? shown(member.name),
+        detail: `${shown(member.name)} · ${owner}`,
         href: openFile(fileOf.get(cube.name)),
       });
     }
