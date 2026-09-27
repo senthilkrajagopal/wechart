@@ -23,7 +23,9 @@ test('the Jobs workspace lists the queries a dashboard issued, with duration and
   const log = page.getByRole('table', { name: 'Queries wechart has issued, newest first' });
   const row = log.getByRole('row').filter({ hasText: 'orders.count' }).first();
   await expect(row).toBeVisible();
-  await expect(row).toContainText(/\d+ ms/);
+  // Its duration as `QueryLog` writes one: ms under a second, else seconds;
+  // a query can pass a second on a busy machine.
+  await expect(row).toContainText(/\d+ ms|\d+\.\d s/);
   await expect(row).toContainText(/Live|orders\./);
 });
 

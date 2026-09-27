@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { createHmac, generateKeyPairSync } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -229,20 +229,17 @@ test.describe.serial('the move to items mode (T430, AC-336)', () => {
   });
 
   test('every seeded chart answers the same, nothing stored changes, and the rollup isn’t rebuilt', async () => {
-    // Served seeded, but kept from xcube's admin routes: it can't move the
-    // model. Its service key is one xcube doesn't hold (T420).
-    const unknownKey = generateKeyPairSync('rsa', {
-      modulusLength: 2048,
-      publicKeyEncoding: { type: 'spki', format: 'pem' },
-      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-    }).privateKey;
+    // Seeded, and kept from xcube: it can't move the model. No model and no
+    // service key, so it sends xcube nothing (T447). A key xcube refuses no
+    // longer does: the API then won't start, since it checks xcube's
+    // credential keys with it first (T455).
     api = await startApi(port, {
       database,
       model,
       settings: {
         WECHART_SEED: '1',
+        WECHART_XCUBE_MODEL: '',
         WECHART_SERVICE_KEY_FILE: '',
-        WECHART_SERVICE_KEY: unknownKey,
       },
     });
     const files = await head(model);

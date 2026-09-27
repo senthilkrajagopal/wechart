@@ -162,14 +162,16 @@ test('the palette finds fields and model files by type, and the arrows and Enter
   // arrive from three sources at different moments, and the active one is
   // kept by identity while the rows around it move.
   const activeId = async () => (await input.getAttribute('aria-activedescendant')) ?? '';
+  // Each read waits for the key's move to land: Safari names the new active
+  // result a moment after the key, which a single read can miss.
   await page.keyboard.press('ArrowDown');
+  await expect.poll(activeId).not.toBe('');
   const first = await activeId();
   await page.keyboard.press('ArrowDown');
+  await expect.poll(activeId).not.toBe(first);
   const next = await activeId();
-  expect(first).not.toBe('');
-  expect(next).not.toBe(first);
   await page.keyboard.press('ArrowUp');
-  expect(await activeId()).toBe(first);
+  await expect.poll(activeId).toBe(first);
   await page.keyboard.press('ArrowDown');
   const second = palette(page).locator(`[id="${next}"]`);
   await expect(second).toHaveAttribute('aria-selected', 'true');
