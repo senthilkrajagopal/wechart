@@ -7,6 +7,7 @@ import { closeDb, getDb } from './db/client';
 import { migrateToLatest } from './db/migrate';
 import { bookmarkStore } from './repos/bookmarks';
 import { catalog } from './repos/catalog';
+import { connectionTestStore } from './repos/connection-tests';
 import { dataSourceStore } from './repos/data-sources';
 import { documents } from './repos/documents';
 import { folderXcubeIds } from './repos/folder-xcube-ids';
@@ -161,8 +162,10 @@ async function main(): Promise<void> {
             unland: (source) => landing.unland(source),
           },
         }),
-    // Connection tests, run by xcube with Cube's own drivers (T361, AC-159).
+    // Connection tests, run by xcube with Cube's own drivers (T361, AC-159),
+    // and each one of a stored data source kept (T362, AC-163).
     ...(connections === undefined ? {} : { connectionTest: (body) => connections.test(body) }),
+    connectionTests: connectionTestStore(db),
     // Signed-in sessions, kept in the metadata database (T316).
     sessions,
     logger: true,

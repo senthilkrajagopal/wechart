@@ -10,6 +10,7 @@ import {
   type Landing,
 } from '../repos/data-sources';
 import { XCUBE_PUBLIC_KEY, type XcubePublicKey } from '../secrets/xcube-key';
+import type { ConnectionTestStore } from '../repos/connection-tests';
 import { XcubeError } from '../xcube/client';
 import { ConnectionRefused, type TestAnswer, type TestedConnection } from '../xcube/connections';
 
@@ -58,6 +59,14 @@ export function viewOf(source: DataSource) {
 
 const NOT_THERE = { error: 'There’s no such data source, or it isn’t yours to see.' };
 
+/** The same fields and values, in whatever order they came. */
+const sameFields = (
+  a: Readonly<Record<string, FieldValue>>,
+  b: Readonly<Record<string, FieldValue>>,
+) =>
+  Object.keys(a).length === Object.keys(b).length &&
+  Object.entries(a).every(([key, value]) => Object.hasOwn(b, key) && b[key] === value);
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 const isFieldValue = (value: unknown): value is FieldValue =>
@@ -87,7 +96,10 @@ export function registerDataSources(
     key,
     landing,
     tester,
+    tests,
   }: {
+    /** Each test of a stored data source, kept and listed (T362, AC-163). */
+    readonly tests?: ConnectionTestStore;
     readonly store: DataSourceStore;
     readonly access: DataSourceAccess;
     readonly landing?: DataSourceLanding;
@@ -150,30 +162,45 @@ export function registerDataSources(
    * A connection test (T361, AC-159): xcube opens the envelopes and connects
    * with Cube's own driver, and its checks — `secrets`, `config`, `connect`,
    * `schemas` — come back as they are, each secret redacted from its error by
-   * xcube. Nothing is stored. The request is wechart's server's (AC-327).
+   * xcube. The data source is never changed by one; a stored one's test is
+   * kept in its history (T362). The request is wechart's server's (AC-327).
+   *
+   * `run` gives xcube's answer, or none, why not already sent.
    */
-  const run = async (reply: FastifyReply, body: TestedConnection) => {
+  const run = async (
+    reply: FastifyReply,
+    body: TestedConnection,
+  ): Promise<TestAnswer | undefined> => {
+    const refuse = async (status: number, sent: Record<string, unknown>) => {
+      await reply.status(status).send(sent);
+      return undefined;
+    };
     if (tester === undefined)
-      return reply
-        .status(503)
-        .send({ error: 'Connection tests need xcube, which this deployment doesn’t run.' });
+      return refuse(503, {
+        error: 'Connection tests need xcube, which this deployment doesn’t run.',
+      });
     try {
       return await tester(body);
     } catch (error) {
       if (error instanceof ConnectionRefused)
-        return reply.status(400).send({ error: error.message, problems: error.problems });
+        return refuse(400, { error: error.message, problems: error.problems });
       if (error instanceof XcubeError)
-        return reply.status(502).send({ error: `xcube refused the test: ${error.message}` });
+        return refuse(502, { error: `xcube refused the test: ${error.message}` });
       // Reached, and slower than a test's two 30 s steps allow.
       if ((error as { name?: unknown } | null)?.name === 'TimeoutError')
-        return reply
-          .status(504)
-          .send({ error: 'xcube took too long to answer the test. Try again.' });
-      return reply
-        .status(503)
-        .send({ error: 'xcube can’t be reached to run the test. Try again once it is back.' });
+        return refuse(504, { error: 'xcube took too long to answer the test. Try again.' });
+      return refuse(503, {
+        error: 'xcube can’t be reached to run the test. Try again once it is back.',
+      });
     }
   };
+
+  // A stored one's tests, newest first (T362, AC-163): for those who may see it.
+  app.get('/api/data-sources/:id/tests', USER, async (request, reply) => {
+    const source = await reached(request, reply, 'read');
+    if (source === undefined) return reply;
+    return tests === undefined ? [] : tests.history(source.id);
+  });
 
   // One not yet saved: the wizard's Test step (T363).
   app.post('/api/data-sources/test', USER, async (request, reply) => {
@@ -194,7 +221,7 @@ export function registerDataSources(
     } catch (failure) {
       return refused(reply, failure);
     }
-    return run(reply, shape);
+    return (await run(reply, shape)) ?? reply;
   });
 
   // A stored one, with the form's changes: tested as their save would store
@@ -218,12 +245,35 @@ export function registerDataSources(
       const kept = Object.fromEntries(
         Object.entries(stored.sealed).filter(([field]) => plan.kept.includes(field)),
       );
-      return await run(reply, {
+      const answer = await run(reply, {
         driver: source.driver,
         authMethod: plan.authMethod,
         fields: plan.fields,
         sealed: { ...kept, ...plan.sealed },
       });
+      if (answer === undefined) return reply;
+      // A test xcube answered, kept in the source's history (T362, AC-163),
+      // said to be of the stored settings or of changes not saved. Its answer
+      // is given even should keeping it fail (T362's review).
+      if (tests !== undefined) {
+        const user = request.wechartUser;
+        const asStored =
+          plan.authMethod === source.authMethod &&
+          Object.keys(plan.sealed).length === 0 &&
+          sameFields(plan.fields, source.fields);
+        await tests
+          .record(source.id, {
+            ok: answer.ok,
+            checks: answer.checks,
+            fields: plan.fields,
+            asStored,
+            by: user === null ? null : { key: user.key, name: user.name },
+          })
+          .catch((error: unknown) => {
+            request.log.warn({ err: error }, 'could not keep a connection test in its history');
+          });
+      }
+      return answer;
     } catch (failure) {
       return refused(reply, failure);
     }

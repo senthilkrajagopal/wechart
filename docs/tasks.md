@@ -5770,15 +5770,43 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - `cube-image.test.ts` 13;
     - Chrome: `security/folder-data-sources.spec.ts` 3;
     - the unit suite (at commit).
-- [ ] T362 (AC-163, AC-298) Record each connection test and show a source's test history
-  - Files: a migration `…_connection-tests.cjs`, `packages/api/src/repos/connection-tests.ts` (+ test), `packages/web/src/workspaces/data-sources/TestHistory.tsx`
+- [x] T362 (AC-163, AC-298) Record each connection test and show a source's test history
+  - Files: a migration `…_connection-tests.cjs`, `packages/api/src/repos/connection-tests.ts` (+ test), ~~`packages/web/src/workspaces/data-sources/TestHistory.tsx`~~ (moved to T363, 2026-09-26: the form it shows in comes with it), `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources/:id/tests`), `packages/api/src/db/schema.ts`, `packages/api/src/server.ts`, `packages/api/src/main.ts`, `packages/api/src/access/data-sources.test.ts`, `e2e/security/folder-data-sources.spec.ts`
   - Failing test: `connection-tests.test.ts`: every test run is stored with its time, checks and outcome, and the source's history lists them newest first (AC-163).
   - Depends on: T361
-- [ ] T363 (AC-158, AC-159, AC-160, AC-161, AC-269, AC-325) Add a data source in the workspace through Type → Connection → Test → Name, refusing a failing test without an override
+  - **Done 2026-09-26. No AC is ticked:**
+    - AC-163's recording is done, but its "show that history per source" is T363's form, which now cites it.
+    - AC-298 waits for its other flows (T346, T352, T368). Test rows hold no secret: the e2e tries a canary password, and neither the history nor its answer holds it.
+  - **As built:**
+    - `connection_tests` (migration `1758340000000`), one row per test xcube answered for a stored data source, gone with its source. Each row holds:
+      - when, and who ran it;
+      - the non-secret fields it connected with;
+      - whether it was of the stored settings or of changes not saved;
+      - each check as xcube said it, nothing more.
+    - Every test is kept, and `GET /api/data-sources/:id/tests` lists all of them, newest first, in the order recorded, to those who may see the source.
+    - An unsaved one's test (the wizard's) belongs to no source.
+    - A test xcube didn't answer isn't one, and isn't kept: it was refused, away, or too slow.
+    - xcube's answer is given even if keeping it fails.
+  - **The cold review (FAIL), fixed:**
+    - The history listed only the newest 50, a number I had made up, so older tests went missing (AC-163's Fails-when). It now lists all.
+    - A trial of the form's unsaved changes, a wrong password say, read as a test of the stored settings. That would have made T364's "health from the last test" show a healthy source as failing, so each test now says which it was.
+    - Ties in one instant came back in random order (now an insertion sequence).
+    - A failure to keep a test answered 500.
+    - The e2e's two identical tests showed no order and no redaction at rest (now a canary).
+    - Stale comments.
+  - **For the user:** every test is kept, with no pruning, as AC-163 asks. Whether old tests should ever be pruned, and after how long, is yours to say if it matters.
+  - **Also:** `wechart_test` had grown to over 70,000 documents left by tests. That pushed `phase1-content.test.ts` past its 5 s under load. It was dropped and rebuilt by the global setup.
+  - **Tests:**
+    - `connection-tests.test.ts` 4;
+    - `access/data-sources.test.ts` 19;
+    - Chrome: `security/folder-data-sources.spec.ts` 3;
+    - units: ui 47, core 444, recommender 123, charts 473, web 1535, api 751.
+- [ ] T363 (AC-158, AC-159, AC-160, AC-161, AC-163, AC-269, AC-325) Add a data source in the workspace through Type → Connection → Test → Name, refusing a failing test without an override
   - Files: `packages/web/src/workspaces/data-sources/{NewSourceWizard,ConnectionForm}.tsx` (+ tests), `packages/api/src/routes/data-sources.ts`, `e2e/security/data-sources.spec.ts`
   - Failing test: `data-sources.spec.ts`: the wizard takes a name, a driver, that driver's fields and a Test step; Create stays disabled until the test passes or "Create anyway" is chosen; the API refuses a create with no passing test and no override (AC-158).
     - *(2026-09-26, `[XD, X6, R31]`)* the Type step offers the eight drivers of T454, each form with its authentication methods and TLS fields and none other (AC-160); an existing data source's form shows its type fixed, saying to make a new data source for another (AC-161); a secret is sealed at submit, not on typing (`credential-sealing.md` Gotcha 9).
     - *(2026-09-26, from T335's review)* a data source's row in Explore opens it in this form, its settings shown and each stored secret said as stored (AC-269's open half: T335 lists them, and its rows open nothing until this form exists).
+    - *(2026-09-26, from T362)* a stored data source's settings show its test history from `GET /api/data-sources/:id/tests`, newest first, each test with its time, who ran it, its outcome and each check (`TestHistory.tsx`; AC-163's showing half: T362 records and lists them);
     - *(2026-09-26, from T361)* the Test step shows each check xcube ran (`secrets`, `config`, `connect`, `schemas`) with its result, and a failed one's error text as xcube redacted it (AC-159's showing half: T361 runs the test and answers the checks);
     - *(2026-09-26, from T441)* the form seals each typed secret at submit with core's `sealSecretV1`, to the key `GET /api/data-sources/sealing-key` gives, and a canary secret typed into it appears in no request body to wechart (the Test step's included), no stored row and no line of the API's log, in Chrome, Firefox and WebKit (AC-325's form half: T441 built the sealer and the key route, and there was no form to type into).
   - Depends on: T454, T361, T345
@@ -7392,7 +7420,7 @@ T333, T346, T361 and T365 (above) are rewritten for this slice, and T335, T362�
 | AC-150 | T372, T373, T374 | AC-151 | T376 | AC-153 | T377 |
 | AC-154 | T377 | AC-155 | T379 | AC-157 | T364 |
 | AC-158 | T363 | AC-159 | T361, T363 | AC-160 | T360, T454, T363 |
-| AC-161 | T335, T363, T365, T442 | AC-163 | T362 | AC-164 | T335 |
+| AC-161 | T335, T363, T365, T442 | AC-163 | T362, T363 | AC-164 | T335 |
 | AC-176 | T405 | AC-180 | T407 | AC-187 | T406 |
 | AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
 | AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |

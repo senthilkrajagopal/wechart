@@ -49,6 +49,7 @@ import { referencesOf, usersOfCubes, type ReferenceDocument } from './model/refe
 import { searchable, visibleCounts, type Visibility } from './access/visible';
 import type { BookmarkStore } from './repos/bookmarks';
 import { MY_WORKSPACE_ID, ROOT_FOLDER_ID } from './repos/catalog';
+import type { ConnectionTestStore } from './repos/connection-tests';
 import type { DataSourceStore } from './repos/data-sources';
 import type { DataSourceLanding } from './routes/data-sources';
 import type { TestAnswer, TestedConnection } from './xcube/connections';
@@ -122,6 +123,8 @@ export interface BuildOptions {
   readonly dataSourceLanding?: DataSourceLanding;
   /** xcube's connection test (T361, AC-159). Unset without xcube: a test says it needs it. */
   readonly connectionTest?: (body: TestedConnection) => Promise<TestAnswer>;
+  /** Each connection test of a stored data source, kept (T362, AC-163). */
+  readonly connectionTests?: ConnectionTestStore;
   /**
    * How Cube's unauthenticated probes — its health (T162), whether it
    * enforces auth (T175) — are asked; `fetch` unless a test says.
@@ -259,6 +262,7 @@ export function buildServer({
   dataSources,
   dataSourceLanding,
   connectionTest,
+  connectionTests,
   healthFetch,
   logger = false,
   introspectionRetryMs,
@@ -528,6 +532,7 @@ export function buildServer({
       store: dataSources,
       ...(dataSourceLanding === undefined ? {} : { landing: dataSourceLanding }),
       ...(connectionTest === undefined ? {} : { tester: connectionTest }),
+      ...(connectionTests === undefined ? {} : { tests: connectionTests }),
       ...(config.xcubePublicKey === undefined ? {} : { key: config.xcubePublicKey }),
       access: async (request, folderId, want) => {
         const seen = await visibilityOf(request);

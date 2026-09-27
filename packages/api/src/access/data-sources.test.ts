@@ -8,6 +8,7 @@ import { pgSessionStore } from '../auth/session-store';
 import { PUBLIC_URL, signIn, USERS } from '../auth/sign-in.fixture';
 import { closeDb, getDb } from '../db/client';
 import { catalog } from '../repos/catalog';
+import { connectionTestStore } from '../repos/connection-tests';
 import { DataSourceRefused, dataSourceStore } from '../repos/data-sources';
 import { documents, type DocumentKind, type StoredDocument } from '../repos/documents';
 import { folderAccessStore, ROOT_ACCESS_ID } from '../repos/folder-access';
@@ -107,6 +108,7 @@ beforeAll(async () => {
     catalog: catalog(getDb()),
     folderAccess: folderAccessStore(getDb()),
     dataSources: sources(),
+    connectionTests: connectionTestStore(getDb()),
   });
   for (const who of ['writer', 'reader', 'nobody']) cookies[who] = await signIn(app, USERS[who]!);
 });
@@ -502,6 +504,85 @@ describe('a connection test, run by xcube (T361, AC-159, AC-312)', () => {
         await app.close();
       }
     }
+  });
+
+  it('records each answered test of a stored one, and lists its history newest first (T362, AC-163)', async () => {
+    const recorded = connectionTestStore(getDb());
+    const asked: unknown[] = [];
+    let answer: unknown = { ok: false, checks };
+    const app = buildServer({
+      config: { ...secured, security: 'off' as const },
+      documents: docs(),
+      catalog: catalog(getDb()),
+      dataSources: sources(),
+      connectionTests: recorded,
+      connectionTest: async (body) => {
+        asked.push(body);
+        if (answer instanceof Error) throw answer;
+        return answer as never;
+      },
+    });
+    try {
+      const made = await sources().create(postgres(ids.b, `${MARK}_tested`));
+      const run = () =>
+        app.inject({ method: 'POST', url: `/api/data-sources/${made.id}/test`, payload: {} });
+      expect((await run()).statusCode).toBe(200);
+      answer = { ok: true, checks: [{ id: 'secrets', status: 'passed', durationMs: 1 }] };
+      // The form's changes, not saved: its fields in another order are no change.
+      const reordered = Object.fromEntries(Object.entries(made.fields).reverse());
+      expect(
+        (
+          await app.inject({
+            method: 'POST',
+            url: `/api/data-sources/${made.id}/test`,
+            payload: { fields: reordered },
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await app.inject({
+            method: 'POST',
+            url: `/api/data-sources/${made.id}/test`,
+            payload: { sealed: { password: sealed('tried') } },
+          })
+        ).statusCode,
+      ).toBe(200);
+      // xcube away: no test was run, so none is recorded.
+      answer = new TypeError('fetch failed');
+      expect((await run()).statusCode).toBe(503);
+
+      const history = await app.inject({
+        method: 'GET',
+        url: `/api/data-sources/${made.id}/tests`,
+      });
+      expect(history.statusCode).toBe(200);
+      const passed = [{ id: 'secrets', status: 'passed', durationMs: 1 }];
+      const admin = { key: 'admin', name: 'admin' };
+      expect(
+        history
+          .json<{ ok: boolean; checks: unknown; by: unknown; asStored: boolean }[]>()
+          .map(({ ok, checks: ran, by, asStored }) => ({ ok, checks: ran, by, asStored })),
+      ).toEqual([
+        { ok: true, checks: passed, by: admin, asStored: false },
+        { ok: true, checks: passed, by: admin, asStored: true },
+        { ok: false, checks, by: admin, asStored: true },
+      ]);
+      // Its envelopes are the source's, never its history's.
+      expect(history.body).not.toContain(sealed(`${MARK}_tested`).ct);
+      expect(history.body).not.toContain(sealed('tried').ct);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('shows a source’s tests only to those who may see it (T362)', async () => {
+    expect(
+      (await as('reader', { method: 'GET', url: `/api/data-sources/${held.b}/tests` })).statusCode,
+    ).toBe(404);
+    expect(
+      (await as('writer', { method: 'GET', url: `/api/data-sources/${held.a}/tests` })).statusCode,
+    ).toBe(200);
   });
 
   it('says when xcube can’t be reached to run it', async () => {

@@ -91,6 +91,19 @@ export interface DataSourceSecretTable {
   updated_at: Generated<Date>;
 }
 
+/** A connection test of a stored data source, as xcube ran it (T362, AC-163). */
+export interface ConnectionTestTable {
+  id: Generated<string>;
+  seq: Generated<string>;
+  data_source_id: string;
+  ran_at: Generated<Date>;
+  ok: boolean;
+  as_stored: boolean;
+  checks: JSONColumnType<unknown[]>;
+  fields: JSONColumnType<Record<string, unknown>>;
+  ran_by: JSONColumnType<{ key: string; name: string } | null, string | null, string | null>;
+}
+
 /** A signed-in session (T316): the session as @fastify/session serialises it. */
 export interface SessionTable {
   id: string;
@@ -106,6 +119,7 @@ export interface Database {
   model_files: ModelFileTable;
   data_sources: DataSourceTable;
   data_source_secrets: DataSourceSecretTable;
+  connection_tests: ConnectionTestTable;
   model_publications: ModelPublicationTable;
   folder_xcube_ids: FolderXcubeIdTable;
 }

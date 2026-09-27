@@ -217,4 +217,54 @@ test('a connection test runs in xcube with Cube’s driver, each check said, and
       expect.objectContaining({ id: 'schemas', status: 'passed' }),
     ],
   });
+
+  // A stored one's tests are kept, newest first (T362, AC-163).
+  const stored = await page.request.post('/api/data-sources', {
+    data: {
+      folderId: 'root',
+      name: `e2e_${RUN}_tested`,
+      driver: 'postgres',
+      authMethod: 'password',
+      fields,
+      sealed: { password: await sealSecretV1(KEY, 'postgres', 'password', fields, 'sample') },
+    },
+  });
+  expect(stored.status(), await stored.text()).toBe(201);
+  const id = ((await stored.json()) as { id: string }).id;
+  try {
+    // As stored, then with a password tried and not saved: a canary, which
+    // no answer, and nothing the history keeps, may hold (AC-298).
+    const canary = `e2e-${RUN}-canary-password`;
+    for (const data of [
+      {},
+      { sealed: { password: await sealSecretV1(KEY, 'postgres', 'password', fields, canary) } },
+    ])
+      expect(
+        (
+          await page.request.post(`/api/data-sources/${id}/test`, { data, timeout: 90_000 })
+        ).status(),
+      ).toBe(200);
+    const answer = await page.request.get(`/api/data-sources/${id}/tests`);
+    const history = (await answer.json()) as {
+      ok: boolean;
+      asStored: boolean;
+      checks: { id: string; status: string; error?: string }[];
+      by: { name: string } | null;
+    }[];
+    expect(
+      history.map(({ ok, asStored, checks }) => [
+        ok,
+        asStored,
+        checks.map((check) => check.status),
+      ]),
+    ).toEqual([
+      [false, false, ['passed', 'passed', 'failed', 'skipped']],
+      [true, true, ['passed', 'passed', 'passed', 'passed']],
+    ]);
+    expect(history[0]?.checks[2]?.error).toMatch(/password authentication failed/);
+    expect(history.every((test) => test.by !== null)).toBe(true);
+    expect(await answer.text()).not.toContain(canary);
+  } finally {
+    await page.request.delete(`/api/data-sources/${id}`);
+  }
 });
