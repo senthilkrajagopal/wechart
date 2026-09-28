@@ -256,6 +256,16 @@ R37 asks for both UI reviews' designs to be built, with the 2026-09-27 ones winn
 - **2026-09-27 design 03, state E:** a "Scheduled health check" row. It is only needed if periodic tests are wanted, which is a spec change.
 - **Explore and the top bar below 1,024 px:** neither review designs them (§3, N16).
 - **2026-09-27 design 04, pin 6:** "Search My workspace" or "Search Sales / EMEA" names the box for its folder, but AC-019's Explore search looks through the whole library, not one folder. Either the search is scoped to the open folder (an AC-019 change), or the box keeps its global label.
+- **Jobs and Schedules, from the 2026-09-28 sync check (R40; `docs/design/reviews/2026-09-28-jobs-schedules/`).** Asked when their work is reached:
+  - "Trigger": the refresh key, as AC-229 says and as built, or who started the last build, as design 10 draws it; or both, as "Trigger" and "Started by".
+  - What AC-234's "cache warm-up" warms: a scheduled build only, chosen dashboards' queries for chosen groups, or nothing (drop the term).
+  - Whose schedules AC-155 suspends (wechart-owned only, or Cube-owned too by publishing `scheduled_refresh: false`), and what "the configured number" is and who sets it.
+  - A rollup with both a refresh key and a wechart schedule: whether wechart offers `scheduled_refresh: false`, and how Schedules labels its owner.
+  - Next runs across a DST change: at today's offset with a caveat, or up to the change.
+  - The refresh worker's indicator: "Refresh worker up", or its last run and error per model (an xcube change).
+  - Data as of for readers, who have no Jobs: what it offers instead of "Open in Jobs" and "Edit schedule".
+  - Whether builds, cancels and schedule changes go in the audit trail.
+  - Whether read-write members see other users' query records in their folders, and whose folder a query spanning folders belongs to.
 - **A key or token entered again, unchanged (T501's review; `xcube-2d5ac86f24.md`, open question 2):** a BigQuery key, Snowflake OAuth token or Dremio token entered again, even the same one, counts as a new target for good. The data source's cubes take an alias and their rollups are rebuilt, the root's included, where R38 keeps names while the target is the same. wechart can't tell it is the same, since it is sealed in the browser anew each time. The options:
   - keep it so (as built);
   - ask xcube to compare such a secret by its opened value when it decides whether a target changed;

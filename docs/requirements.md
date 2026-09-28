@@ -843,6 +843,29 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R40 — Jobs and Schedules, after an independent sync check** (2026-09-28, the user: "can we have independent ui-expert as well as bi tools/cube expert analyze the jobs and schedules.. and see if the ui designs and the requirements are in sync"; the reports are in `docs/design/reviews/2026-09-28-jobs-schedules/`)
+- Claude asked four questions from the two reports. The user chose the recommended answer to each.
+  1. **Every Jobs and Schedules route was open to any signed-in user** (a reader could list every folder's rollups, start builds, and read everyone's queries). The user: "Build T371 properly next".
+     - *Jobs and Schedules are scoped to Super-Admins and each folder's read-write members, for their own folders, as AC-297 says. T371 is built next, ahead of the rest of designs 05 and 06. Data as of keeps a narrow answer for readers.*
+  2. **Design 10 says "building and scheduling need no proposal", but a Cube-owned schedule is a `refresh_key` in the model.** The user: "Schedule edits go by proposal".
+     - *Changing a `refresh_key` is a model change: workspace, propose, approve (§P2.6 E, AC-278). "Direct" covers only building now and wechart-owned schedules (AC-234). AC-297's "schedule" reads so. Design 10's note (pin 6, and the pane's note) and `references.md` are superseded on this point.*
+  3. **AC-150's history of the refresh worker's builds, and AC-151's queue and cancel, need xcube routes that don't exist.** The user: "Ask xcube for both".
+     - *Asked of xcube, through the Cube-expert agent, in `to-xcube/2026-09-28-1100-build-events-and-queue.md`:*
+       - *a model-scoped route listing build outcomes (pre-aggregation, table or partition, who started it, start, end, duration, outcome with error, module and epoch);*
+       - *a queue route with cancel.*
+     - *wechart builds on them once the image is published (R35).*
+  4. **Partitions (AC-145), Run history (AC-150), the queue (AC-151), suspend and Resume (AC-155) and wechart's own schedules (AC-234) have no approved design.** The user: "Draw new designs first".
+     - *A UI design round draws them, with every state (loading, error, empty, refused), and reconciles designs 10 and 07, before they are built.*
+- *The reports' other questions wait in `docs/phase-2/backlog.md` §6, to be asked when their work is reached:*
+  - *the meaning of "Trigger" (AC-229);*
+  - *what "cache warm-up" is (AC-234);*
+  - *whose schedules AC-155 suspends, and the configured number;*
+  - *a rollup with both kinds of schedule;*
+  - *next runs across DST;*
+  - *the refresh worker's indicator;*
+  - *readers' Data as of links;*
+  - *auditing builds.*
+
 **R39 — xcube's slice 7, and JavaScript, Jinja and Python cubes on a changed target, deferred** (2026-09-28, the user, after Claude reported them still open)
 - The user: "requirements and functionality relating to "Lets defer this "Still open: Slice 7 stays deferred, and the file-set gap from before is unchanged: JavaScript, Jinja and Python cubes still aren't renamed when their target changes." it will not be done in this phase." will be deferred and not done in this phase"
   - *Not done in phase 2, and no task builds them:*

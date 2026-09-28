@@ -1360,7 +1360,7 @@ Widths and heights are direction.md tokens unless the Tokens section says otherw
   - A **Folder** column after the name, and a Folder filter.
   - For read-write members who aren't Super-Admins, a scope note: "Showing pre-aggregations of models in the folders where you have read-write access." It names no other folder.
   - Model links open the model editor in its folder, read-only when the folder is shared.
-  - Building and scheduling need no proposal (AC-297).
+  - ~~Building and scheduling need no proposal (AC-297).~~ Building and wechart-owned schedules need no proposal. A Cube-owned schedule is a `refresh_key` in the model, changed by a proposal (AC-297, amended 2026-09-28, R40).
 
 ### What this direction rejects
 

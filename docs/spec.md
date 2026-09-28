@@ -1118,8 +1118,8 @@ Traces to: §P2.4, `[R14, R18]`.
 Purpose: read-write members run and schedule their own folders' rollups.
 Traces to: `[R18]`; F17.
 
-- [ ] AC-297 WHILE a user is a read-write member of some folders and not a Super-Admin, THE SYSTEM SHALL show them in Jobs and Schedules only the pre-aggregations, query records, builds and schedules of the models in those folders, and let them build and schedule those.
-      Fails when: they see, or act on, another folder's rollups, builds, schedules or query records.
+- [ ] AC-297 WHILE a user is a read-write member of some folders and not a Super-Admin, THE SYSTEM SHALL show them in Jobs and Schedules only the pre-aggregations, query records, builds and schedules of the models in those folders, and let them build and schedule those. Scheduling there means wechart-owned schedules (AC-234); a Cube-owned schedule is a model's `refresh_key`, changed by a proposal like any model change (amended 2026-09-28, `[R40]`).
+      Fails when: they see, or act on, another folder's rollups, builds, schedules or query records; or a change to a shared folder's `refresh_key` lands without an approved proposal.
 
 ## F34. Credentials
 

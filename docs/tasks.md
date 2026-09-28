@@ -6438,6 +6438,16 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/api/src/jobs/{build,schedules}.ts`, `packages/api/src/server.ts` (query log), `packages/web/src/workspaces/jobs/JobsPage.tsx`, `packages/api/src/jobs/scope.test.ts`
   - Failing test: `scope.test.ts`: a read-write member of /A who isn't a Super-Admin sees only ~~/A's chains'~~ the pre-aggregations of cubes published in /A, and their builds, schedules and query records. They may build only those, and get 403 for another folder's (AC-297). *(2026-09-26: a pre-aggregation's folder is read from its prefixed cube name, `[IP 3]`.)*
   - Depends on: ~~T339~~ T425 (2026-09-26), T340
+  - *2026-09-28, R40 (the user: "Build T371 properly next"):* built now, ahead of the rest of designs 05 and 06. The sync check found every Jobs and Schedules route open to any signed-in user (`docs/design/reviews/2026-09-28-jobs-schedules/`, UI B1, Cube H1).
+    - A pre-aggregation's folder is `meta.xcube.folderId`, and its short name `meta.xcube.shortName` (`[X3A]`). Rows show the short name with its folder (§P2.6 D; design 10 pin 4).
+    - Readers and users with no read-write folder get `403` from Jobs' and Schedules' routes.
+    - Data as of keeps a narrow answer for readers: the schedule of each rollup a tile they may see uses, and nothing else.
+    - *Small decision, overturnable:* until T340 makes each query name its item, a read-write member's query records are their own. A Super-Admin's are everyone's.
+    - A cube or rollup is built only as its own model's. The service token's model check is xcube's; the folder check is wechart's.
+- [ ] T504 (AC-145, AC-150, AC-151, AC-155, AC-234, AC-297) Design the Jobs and Schedules surfaces no design draws, and reconcile designs 10 and 07 *(added 2026-09-28, R40: "Draw new designs first")*
+  - Through the ui-design skill: partitions and Rebuild selected (AC-145); Run history and a build's log (AC-150); the queue with cancel (AC-151); suspended and Resume (AC-155); the wechart schedule form and its rows (AC-234); every state (loading, error, empty, refused, revoked, out of scope, sign-in off, below 1,024 px); a read-write member's and a Super-Admin's views (AC-297). Design 10 pin 6 reworded (R40.2).
+  - Its open questions are backlog §6's Jobs and Schedules list.
+  - Depends on: none. Blocks T374, T375, T376, T378 and T379's UI.
 - [ ] T372 (AC-150) Record every build wechart starts and follow it to its end on the server
   - Files: a migration `…_build-history.cjs`, `packages/api/src/repos/build-history.ts` (+ test), `packages/api/src/jobs/{build,follow}.ts` (+ tests)
   - Failing test: as T156 (above): the build is stored with its pre-aggregation, "started from Jobs" and each partition's token; the API follows every open token to its end without a browser, and again after a restart; an expired token is "Cube's record expired"; the log keeps every reported state; a 101st record drops the oldest (AC-150).
@@ -8789,15 +8799,15 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 | AC-050 | T383 | AC-051 | T384 | AC-052 | T385 |
 | AC-093 | T386 | AC-097 | T387, T453 | AC-104 | T388 |
 | AC-116 | T389 | AC-131 | T334, T342 | AC-141 | T342 |
-| AC-145 | T375 | | | | |
-| AC-150 | T372, T373, T374 | AC-151 | T376 | AC-153 | T377 |
-| AC-154 | T377 | AC-155 | T379 | AC-157 | T364, T459 |
+| AC-145 | T375, T504 | | | | |
+| AC-150 | T372, T373, T374, T504 | AC-151 | T376, T504 | AC-153 | T377 |
+| AC-154 | T377 | AC-155 | T379, T504 | AC-157 | T364, T459 |
 | AC-158 | T363, T461, T497 | AC-159 | T361, T363 | AC-160 | T360, T454, T363 |
 | AC-161 | T335, T363, T365, T435, T442, T462, T497, T501 | AC-163 | T362, T363, T461, T462 | AC-164 | T335, T497 |
 | AC-176 | T405 | AC-180 | T407 | AC-187 | T406, T466–T470, T476–T478 |
 | AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
 | AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |
-| AC-234 | T378 | AC-246 | T404 | AC-249 | T336, T450 |
+| AC-234 | T378, T504 | AC-246 | T404 | AC-249 | T336, T450 |
 | AC-251 | T318, T321, T324, T431 | AC-252 | T316, T319, T320 | AC-253 | T317, T321 |
 | AC-254 | T311, T319, T351, T359 | AC-255 | T312, T408 | AC-256 | T313, T323, T325, T326 |
 | AC-257 | T315, T320, T324 | AC-258 | T411 | AC-259 | T314, T330 |
@@ -8813,7 +8823,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 | AC-287 | T355, T356 | AC-288 | T352, ~~T426~~ T451 | AC-289 | T354, T357 |
 | AC-290 | T353, T358 | AC-291 | T329, ~~T426~~ T451 | AC-292 | T366 |
 | AC-293 | T367 | AC-294 | T368 | AC-295 | T369 |
-| AC-296 | T370 | AC-297 | T371 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441 |
+| AC-296 | T370 | AC-297 | T371, T504 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441 |
 | AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |
 | AC-302 | T394 | AC-303 | T395 | AC-304 | T396 |
 | AC-305 | T398 | AC-306 | T399 | AC-307 | T409, T444 |
