@@ -1,4 +1,4 @@
-import { MenuButton } from '../../shell/MenuButton';
+import { MenuButton, type MenuItem } from '../../shell/MenuButton';
 
 /**
  * Creating a folder, dashboard or chart in the open folder (AC-020), through
@@ -25,6 +25,12 @@ export interface CreateMenuProps {
    * its wizard, since it can't exist before its connection does.
    */
   readonly onNewSource?: () => void;
+  /**
+   * Importing a dashboard from an export file, offered in My workspace where
+   * it lands (T513, AC-192, AC-356; design 13, state G): under a divider,
+   * after the kinds, so creating stays what New is.
+   */
+  readonly onImport?: () => void;
   readonly busy?: boolean;
 }
 
@@ -35,8 +41,8 @@ const OPTIONS: readonly { kind: CreatableKind; label: string; icon: string; chip
   { kind: 'folder', label: 'Folder', icon: '▣', chip: 'itemicon ic-folder' },
 ];
 
-export function CreateMenu({ onCreate, onNewSource, busy = false }: CreateMenuProps) {
-  const items = OPTIONS.map((option) => ({
+export function CreateMenu({ onCreate, onNewSource, onImport, busy = false }: CreateMenuProps) {
+  const items: MenuItem[] = OPTIONS.map((option) => ({
     key: option.kind as string,
     label: (
       <>
@@ -66,8 +72,24 @@ export function CreateMenu({ onCreate, onNewSource, busy = false }: CreateMenuPr
       disabled: busy,
       onSelect: onNewSource,
     });
+  if (onImport !== undefined)
+    items.push({
+      key: 'import-file',
+      label: (
+        <>
+          <span className="itemicon ic-upload" aria-hidden="true">
+            ⤒
+          </span>
+          Import a dashboard…
+          <span className="menu-button__aside">from a file</span>
+        </>
+      ),
+      separatorBefore: true,
+      disabled: busy,
+      onSelect: onImport,
+    });
   return (
-    <MenuButton label="New" items={items}>
+    <MenuButton label="New" items={items} testId="explore-new">
       ＋ New ▾
     </MenuButton>
   );

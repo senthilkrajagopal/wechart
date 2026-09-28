@@ -2429,6 +2429,101 @@ main:has(.export-pane--over) { padding-right: 480px; }
 }
 .export-toast { max-width: 440px; }
 
+/* Importing a dashboard (T513; design 13, screen 2): design 01's pane,
+   docked beside My workspace where the others dock. */
+.explore--importing { grid-template-columns: 260px minmax(0, 1fr) 480px; }
+.menu-button__aside { margin-left: auto; padding-left: 12px; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.itemicon.ic-upload { background: var(--wc-bg-subtle); color: var(--wc-text-secondary); }
+.import-pane h2:focus { outline: none; }
+.import-pane h2:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 2px; }
+.import-pane__body { gap: 12px; }
+.import-pane__doc {
+  flex: none;
+  width: 14px;
+  height: 17px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px 5px 2px 2px;
+  color: var(--wc-text-secondary);
+}
+.import-pane__drop {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 24px 16px;
+  border: 1px dashed var(--wc-border-strong);
+  border-radius: 8px;
+  background: var(--wc-bg-subtle);
+  text-align: center;
+  font-size: var(--wc-text-sm-size);
+}
+.import-pane__drop > span { color: var(--wc-text-secondary); font-size: var(--wc-text-xs-size); }
+.import-pane__hint code { font-family: var(--wc-font-code); }
+.import-pane__info {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--wc-bg-accent-soft);
+  font-size: var(--wc-text-xs-size);
+  line-height: 18px;
+}
+.import-pane__info > svg { flex: none; margin-top: 2px; }
+.import-pane__note { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.import-pane__chosen { display: flex; align-items: center; gap: 8px; font-size: var(--wc-text-sm-size); }
+.import-pane__size { font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.import-pane__another { margin-left: auto; color: var(--wc-accent); font-weight: 600; font-size: var(--wc-text-xs-size); }
+.import-pane__read { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--wc-text-xs-size); font-weight: 600; color: var(--wc-status-success); }
+.import-pane__holds,
+.import-pane__lands,
+.import-pane__parts { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.import-pane__holds li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+  font-size: var(--wc-text-sm-size);
+}
+.import-pane__what { margin-left: auto; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); white-space: nowrap; }
+.import-pane__refused { display: grid; gap: 8px; outline: none; }
+.import-pane__refused:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 2px; }
+.import-pane__refused-head { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--wc-text-sm-size); font-weight: 600; color: var(--wc-status-error); }
+.import-pane__part {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--wc-status-error) 10%, var(--wc-bg-surface));
+  font-size: var(--wc-text-xs-size);
+  line-height: 18px;
+}
+.import-pane__part p { margin: 0; }
+.import-pane__lands-head { display: flex; align-items: center; gap: 8px; }
+.import-pane__lands-head h3 { margin: 0 auto 0 0; }
+.import-pane__count { display: inline-flex; align-items: center; gap: 4px; font-size: var(--wc-text-xs-size); font-weight: 600; }
+.import-pane__count.is-ok { color: var(--wc-status-success); }
+.import-pane__lands > li { display: grid; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--wc-border-subtle); }
+.import-pane__land { display: flex; align-items: flex-start; gap: 8px; }
+.import-pane__land-text { display: grid; font-size: var(--wc-text-sm-size); }
+.import-pane__land-text > span { font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.import-pane__land-text .is-code { font-family: var(--wc-font-code); }
+.import-pane__lands-as { margin-left: auto; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); white-space: nowrap; }
+.import-pane__warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 0 26px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--wc-status-warning-icon) 16%, var(--wc-bg-surface));
+  font-size: var(--wc-text-xs-size);
+  line-height: 18px;
+}
+.import-pane__warning > svg { flex: none; margin-top: 2px; }
+
 /* Generate cubes as design 11 (T485, AC-344): design 01's pane, docked as the
    Model page's third column — beside the overview, or in the code's place on
    a file's page, the form widening — its steps in cards of 34 px rows. */
@@ -2976,7 +3071,8 @@ input.switch:focus-visible { outline: 2px solid var(--wc-accent); outline-offset
   .admin-page--docked { grid-template-columns: minmax(0, 1fr); }
   .explore--source { grid-template-columns: minmax(0, 1fr); }
   /* Export too: a sheet over the page, which keeps its width (design 13's table). */
-  .explore--export { grid-template-columns: minmax(0, 1fr); }
+  .explore--export,
+  .explore--importing { grid-template-columns: minmax(0, 1fr); }
   .export-pane--over { width: auto; }
   main:has(.export-pane--over) { padding-right: 0; }
   /* Generate cubes covers the page, as design 01's pane does (design 11 pin 1). */

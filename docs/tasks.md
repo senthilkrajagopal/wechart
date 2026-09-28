@@ -9256,7 +9256,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
   - **Tests:** `exportFile.test.ts` (18). The core suite: 474.
   - **AC-359 stays open:** its "nothing is changed" and its real surface are the Import pane's (T513).
   - *Also in this commit:* a type-only fix to T511's `export.test.ts` (`byDashboard` on the test's `Offered`).
-- [ ] T513 (AC-356, AC-357) Import into My workspace: File, Target and Review with its warnings, landing as new drafts
+- [x] T513 (AC-356, AC-357) Import into My workspace: File, Target and Review with its warnings, landing as new drafts
   - Files: `packages/api/src/routes/import.ts` (+ test), `packages/web/src/workspaces/explore/import/ImportPane.tsx` (+ test), My workspace's New menu (Import a dashboard…, under a divider), `e2e/security/export-import.spec.ts`
   - Failing test:
     - `import.test.ts`: an import lands everything as new drafts in the importer's workspace, with the target chosen, and changes no saved item. With sign-in off, it lands in the single user's workspace too (AC-356).
@@ -9267,6 +9267,34 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
       Each warning names only what the user may see (AC-357).
     - The e2e: import the exported file from New › Import a dashboard…; the warnings show; the drafts are in My workspace, and their Propose dialog takes them on.
   - Depends on: T512, T348; models in an import wait on T347 and T350 (design 13, state V)
+  - *As built (2026-09-28; design 13, screen 2 and states G–L, R, S, V, X):*
+    - **The API** (`packages/api/src/routes/import.ts`, wired in `server.ts`): `POST /api/import/review` and `POST /api/import`, each with `{ file, targetFolderId }`. Both answer:
+      - `403` to one with no workspace;
+      - `422` for a file `readExport` refuses, with its parts or where it can't be read, writing nothing;
+      - `400`, `403` or `404` for a target that isn't a shared folder they may write, as `POST /api/documents` does in the workspace (T345).
+      - With sign-in off, the workspace is `mine`.
+    - **Review** lists what lands and each item's warnings, structured: the target's own dashboard or library chart of the kind and title, at its version (`documents.named`); a draft of the kind and title in the workspace, with its target's path, or none where the user can't see it; a data source's name the target holds; and, once models import, a model's path and each cube or view the target already has (AC-270; `warningsOf`, unused while `MODELS_IMPORT` is false, state V). It writes nothing.
+    - **Import** makes the dashboard, its own charts and the library charts in one `createTogether`: new ids, in the importer's workspace, owned by them, with the target, and no origin. A chart the dashboard names that the file doesn't hold stays only where this wechart has it, the importer may open it and it may show on a workspace dashboard; otherwise it becomes a chart no longer available. Whatever shape the file gives the dashboard's references, it names no other chart (`chartsNamedIn`, and a check after renaming).
+    - **The pane** (`packages/web/src/workspaces/explore/import/ImportPane.tsx`), from My workspace's New › Import a dashboard… under a divider (`CreateMenu`, with sign-in off too), docked where Access docks:
+      - File: Choose file… or a drop; read and refused in the browser, the refusal an assertive alert with focus.
+      - Target: design 04's tree (`TargetTree`).
+      - Data sources: passed over until T514.
+      - Review: each warning in design 13's words, counted, "None stops the import"; with sign-in off, "Sign-in is off. Everything still lands in My workspace…".
+      - The toast then says what landed and offers Propose to the target (sign-in on), and the dashboard's row takes focus; closing goes back to New.
+    - **Small decision, overturnable:** a 16 MB body limit on the two routes (several model files outgrow Fastify's default megabyte).
+    - **Not built:** pin 20's "Open my draft"; state U's "you approve it yourself in Reviews" (T359).
+  - **Review (one round, FAIL), fixed:**
+    1. A dashboard body naming a chart inside an object in its `charts` list slipped past the "may they open it" check, and the importer could then open a chart in a folder they can't see. `withChartsRenamed` now walks such entries, `chartsNamedIn` reads the body as the catalog's `dashboardsUsing` does, and the stored body is checked after renaming.
+    2. The in-workspace warning said the second approved replaces the first even for drafts going to different folders.
+    3. No test showed a warning names no folder the user can't see.
+    4. Closing the pane didn't return focus to New.
+    5. Sign-in off was read from "sees everything"; it is now read from the security mode.
+    - The Review query is keyed by the file chosen, not its name. A test now shows the pane closes at once before a file is chosen.
+    - *Left as they are:* one read per chart id the dashboard names outside the file; the global `aliasIn` walking a very deep body first (a 500, writing nothing); a model's workspace check by path, latent until T347.
+    - *Noted:* importing into My workspace can put two drafts of one name side by side, as R44 and AC-357 want; AC-270's same-name rule applies when they are proposed.
+  - **Tests:** `routes/import.test.ts` (9), `ImportPane.test.tsx` (9), and `e2e/security/export-import.spec.ts`: New › Import a dashboard… takes the exported file, Review warns of the target's dashboard and chart and the data source's name, Import lands three drafts going to Sales with Sales unchanged, the toast's Propose opens design 05's dialog ("replaces version 2"); a refused file names each part and imports nothing (Chrome, 8 of 8). Full suites: api 952, web 1884.
+  - **AC-357 and AC-359 ticked** on `e2e/security/export-import.spec.ts` (Review's warnings, never blocking; the refusals naming each part, nothing imported) and `routes/import.test.ts` (the workspace warning and a folder the user can't see; `422` writing nothing). AC-357's model clause holds vacuously while models don't import (state V).
+  - **AC-356 stays open:** its sign-in-on half is shown (drafts only in the importer's workspace, nothing saved changed, no import without a workspace). Its sign-in-off half waits on T359: an import lands in `mine` (the API test), but proposals with sign-in off, and a data source created in `mine` (T514), are T359's (the coordinator's answer, 2026-09-28).
 - [ ] T514 (AC-358, AC-361) Import's data sources: map to an existing one, or create it in the workspace with its secrets and a passing test, under another name where the target has it
   - Files: `packages/web/src/workspaces/explore/import/ImportSources.tsx` (+ test), `packages/api/src/routes/import.ts`
   - Failing test:

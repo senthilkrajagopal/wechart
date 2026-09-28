@@ -71,6 +71,7 @@ import { registerFolderAccess } from './routes/access';
 import { registerAudit } from './routes/audit';
 import { registerDataSources } from './routes/data-sources';
 import { registerExport } from './routes/export';
+import { registerImport } from './routes/import';
 import { registerProposals } from './routes/proposals';
 import type { ProposalStore } from './repos/proposals';
 import type { VersionStore } from './repos/versions';
@@ -989,6 +990,137 @@ export function buildServer({
     ...(folders === undefined ? {} : { published: folders }),
     ...(dataSources === undefined ? {} : { dataSources: () => dataSources.all() }),
   });
+
+  /**
+   * Importing an export file (T513; AC-356, AC-357, AC-359): into the
+   * importer's own workspace as new drafts, with a target they may write, as
+   * `POST /api/documents` makes one there (T345). With sign-in off, `mine`.
+   */
+  const pathsOf = async (request: FastifyRequest) => {
+    const seen = await visibilityOf(request);
+    const all = (cat ? await cat.folders({ counted: false }) : []) as {
+      id: string;
+      title: string;
+      parentId: string | null;
+    }[];
+    const byId = new Map(all.map((folder) => [folder.id, folder]));
+    return (folderId: string): string[] | null => {
+      if (seen !== undefined && !seen.rights.has(folderId)) return null;
+      if (folderId !== ROOT_FOLDER_ID && !byId.has(folderId)) return null;
+      // Its path from Shared: the root's is none.
+      const path: string[] = [];
+      for (
+        let at = byId.get(folderId);
+        at !== undefined && path.length <= all.length;
+        at = at.parentId === null ? undefined : byId.get(at.parentId)
+      )
+        path.unshift(at.title);
+      return path;
+    };
+  };
+  if (docs?.createTogether !== undefined && docs.named !== undefined && docs.get !== undefined) {
+    const createTogether = docs.createTogether.bind(docs);
+    const named = docs.named.bind(docs);
+    const get = docs.get.bind(docs);
+    registerImport(app, {
+      workspaceOf: async (request) => {
+        if (security === 'off') return MY_WORKSPACE_ID;
+        const seen = await visibilityOf(request);
+        if (seen === undefined) return workspaceIdOf(userOf(request).key);
+        const own = workspaceIdOf(userOf(request).key);
+        return seen.rights.has(own) ? own : undefined;
+      },
+      targetOf: async (request, reply, own, target) => {
+        const need = {
+          error: 'Name the shared folder it is to go to: one where you have read-write access.',
+        };
+        if (typeof target !== 'string' || target === '') {
+          await reply.code(400).send(need);
+          return undefined;
+        }
+        const inside = await workspaceRootOf(target);
+        // Another's workspace is as a folder that isn't there (T345's review).
+        if (inside !== null) {
+          await (inside === own ? reply.code(400).send(need) : reply.code(404).send(NOT_THERE));
+          return undefined;
+        }
+        const seen = await visibilityOf(request);
+        const path = (await pathsOf(request))(target);
+        if (seen !== undefined && !mayWrite(seen, target)) {
+          await (seen.rights.has(target)
+            ? reply.code(403).send({ error: READ_ONLY })
+            : reply.code(404).send(NOT_THERE));
+          return undefined;
+        }
+        if (path === null) {
+          await reply.code(404).send(NOT_THERE);
+          return undefined;
+        }
+        return { id: target, path };
+      },
+      holdings: async (request, own, target, titles) => {
+        const pathOf = await pathsOf(request);
+        const found = new Map<string, number>();
+        for (const { kind, title } of titles) {
+          const same = await named(kind, target, title);
+          if (same !== null) found.set(`${kind}:${title}`, same.version);
+        }
+        const mine = [own, ...(await foldersBeneath(own)).map((folder) => folder.id)];
+        const drafts = cat
+          ? (
+              await Promise.all(
+                mine.map(async (folderId) =>
+                  (await cat.contents(folderId, { counted: false })) as {
+                    kind: string;
+                    title: string;
+                    targetFolderId?: string | null;
+                  }[],
+                ),
+              )
+            ).flat()
+          : [];
+        const models = modelFiles === undefined ? [] : await modelFiles.list(target);
+        const held = dataSources === undefined ? [] : await dataSources.inFolder(target);
+        return {
+          target: {
+            named: (kind, title) => {
+              const version = found.get(`${kind}:${title}`);
+              return version === undefined ? undefined : { version };
+            },
+            models: models.map((file) => ({
+              path: file.path,
+              declares: objectsOf(file.path, file.content).objects.map((each) => each.name),
+            })),
+            sourceNames: held.map((source) => source.name),
+          },
+          workspace: drafts
+            .filter((draft) => draft.kind !== 'folder')
+            .map((draft) => ({
+              kind: draft.kind,
+              title: draft.title,
+              targetPath:
+                typeof draft.targetFolderId === 'string' ? pathOf(draft.targetFolderId) : null,
+            })),
+        };
+      },
+      declares: (path, content) => objectsOf(path, content).objects.map((each) => each.name),
+      keepsChart: async (request, chartId, own) => {
+        let chart;
+        try {
+          chart = await get('chart', chartId);
+        } catch (failure) {
+          if (failure instanceof ChartDocumentError) return false;
+          throw failure;
+        }
+        if (chart === null) return false;
+        const seen = await visibilityOf(request);
+        if (seen !== undefined && !(await mayOpen(seen, 'chart', chart))) return false;
+        return staysInItsWorkspace(chart, own);
+      },
+      owner: (request) => userOf(request).key,
+      create: (creates) => createTogether(creates),
+    });
+  }
 
   /**
    * The charts and dashboards that use the members an edit changes, listed

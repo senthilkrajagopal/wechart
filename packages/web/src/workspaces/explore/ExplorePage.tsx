@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useRouterState } from '@tanstack/react-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { META_QUERY } from '../../query/meta';
 import { ME_QUERY } from '../../shell/me';
@@ -19,6 +19,15 @@ import { REVIEWS_QUERY } from '../reviews/reviews';
 import { statusOfItem } from './proposalStatus';
 import { ExportPane } from '../../dashboard/export/ExportPane';
 import { ExportedToast } from '../../dashboard/export/ExportedToast';
+import { ImportPane } from './import/ImportPane';
+
+const counted = (count: number, one: string) =>
+  `${String(count)} ${count === 1 ? one : `${one}s`}`;
+/** "A", "A and B", "A, B and C". */
+const listed = (names: readonly string[]) =>
+  names.length <= 1
+    ? (names[0] ?? '')
+    : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1] ?? ''}`;
 
 /** A path "Sales / EMEA" as the dialog takes it, from Shared. */
 const pathFromShared = (path: string | undefined): string[] =>
@@ -293,6 +302,16 @@ export function ExplorePage() {
    */
   const [exportOf, setExportOf] = useState<CatalogItem | null>(null);
   const [exported, setExported] = useState('');
+  /**
+   * Importing an export file (T513; design 13, screen 2), docked where the
+   * other panes dock; and what the toast offers once it has landed: the
+   * dashboard's Propose (state S), and its row, which takes focus.
+   */
+  const [importing, setImporting] = useState(false);
+  const [imported, setImported] = useState<{ message: string; dashboard?: CatalogItem } | null>(
+    null,
+  );
+  const focusRow = useRef<string | null>(null);
   const closeExport = (item: CatalogItem) => {
     setExportOf(null);
     // Back to the row's ⋯ it came from.
@@ -306,7 +325,11 @@ export function ExplorePage() {
   };
   // The docked panes replace each other: not two at once (T471).
   const accessOpen =
-    mayEditAccess && accessOf === folderId && addingSource === null && exportOf === null;
+    mayEditAccess &&
+    accessOf === folderId &&
+    addingSource === null &&
+    exportOf === null &&
+    !importing;
   const titleOf = (id: string) =>
     rootTitleOf(id) ?? (folders.data ?? []).find((folder) => folder.id === id)?.title ?? id;
 
@@ -329,6 +352,20 @@ export function ExplorePage() {
   const shown = searching ? results : contents;
 
   /**
+   * The imported dashboard's row takes focus once the listing holds it
+   * (design 13, state S): where the pane was left from, the next step is.
+   */
+  useEffect(() => {
+    if (focusRow.current === null) return;
+    const row = document.querySelector<HTMLElement>(
+      `[data-testid="item-${CSS.escape(focusRow.current)}"]`,
+    );
+    if (row === null) return;
+    row.focus();
+    focusRow.current = null;
+  }, [contents.data]);
+
+  /**
    * Whether a chart's source is a cube or a view, for its Built on column
    * (AC-193) — the model's meta says; until it has, the name stands alone.
    */
@@ -347,11 +384,13 @@ export function ExplorePage() {
       className={
         addingSource !== null
           ? 'explore explore--source'
-          : exportOf !== null
-            ? 'explore explore--export'
-            : accessOpen
-              ? 'explore explore--access'
-              : 'explore'
+          : importing
+            ? 'explore explore--importing'
+            : exportOf !== null
+              ? 'explore explore--export'
+              : accessOpen
+                ? 'explore explore--access'
+                : 'explore'
       }
     >
       {/* The prototype's docked Folders pane (AC-194), kept in view as the
@@ -447,8 +486,8 @@ export function ExplorePage() {
               ref={accessButton}
               aria-expanded={accessOpen}
               aria-controls={accessOpen ? ACCESS_PANEL_ID : undefined}
-              // Where the new data source's pane is docked, until it closes.
-              disabled={addingSource !== null}
+              // Where the new data source's pane, or an import's, is docked, until it closes.
+              disabled={addingSource !== null || importing}
               onClick={() => {
                 // It replaces an Export pane open there (T511).
                 setExportOf(null);
@@ -472,7 +511,20 @@ export function ExplorePage() {
             // in the workspace isn't (T345's review).
             // Nor while a data source is being added in its pane: something
             // new would replace it, and what was typed there with it (T471).
-            busy={create.isPending || !known || me.isPending || addingSource !== null}
+            busy={
+              create.isPending || !known || me.isPending || addingSource !== null || importing
+            }
+            // Where an import lands: My workspace, with sign-in off too (T513,
+            // AC-356; design 13, state G).
+            {...(inMyWorkspace && !searching
+              ? {
+                  onImport: () => {
+                    setAccessOf(null);
+                    setExportOf(null);
+                    setImporting(true);
+                  },
+                }
+              : {})}
             onCreate={(kind) => {
               // In a signed-in user's workspace, a dashboard or chart names the
               // shared folder it is to go to first (T345, AC-282). With sign-in
@@ -567,7 +619,7 @@ export function ExplorePage() {
               // Not while a data source is being added in the pane it would
               // replace, with what was typed there (T471).
               onExport={
-                addingSource === null
+                addingSource === null && !importing
                   ? (item) => {
                       setAccessOf(null);
                       setExportOf(item);
@@ -661,6 +713,69 @@ export function ExplorePage() {
         message={exported}
         onDismiss={() => {
           setExported('');
+        }}
+      />
+      {importing ? (
+        <ImportPane
+          signedIn={signedIn}
+          onClose={() => {
+            setImporting(false);
+            // Back to New, where it began (design 13, state X).
+            requestAnimationFrame(() => {
+              document.querySelector<HTMLElement>('[data-testid="explore-new"]')?.focus();
+            });
+          }}
+          onImported={(landed) => {
+            setImporting(false);
+            const created = [
+              counted(landed.created.dashboards, 'dashboard'),
+              counted(landed.created.charts, 'chart'),
+              ...(landed.created.models === 0 ? [] : [counted(landed.created.models, 'model')]),
+              ...(landed.created.dataSources === 0
+                ? []
+                : [counted(landed.created.dataSources, 'data source')]),
+            ];
+            const where = landed.target.path.length === 0 ? 'Shared' : landed.target.path.join(' / ');
+            setImported({
+              message: `Imported to My workspace as new drafts: ${listed(created)}. Nothing in ${where} changed.`,
+              // Proposed as any draft is (design 05): with sign-in on, where proposals are.
+              ...(signedIn
+                ? {
+                    dashboard: {
+                      kind: 'dashboard',
+                      id: landed.dashboard.id,
+                      title: landed.dashboard.title,
+                      owner: null,
+                      updatedAt: new Date().toISOString(),
+                      targetFolderId: landed.target.id,
+                    },
+                  }
+                : {}),
+            });
+            focusRow.current = landed.dashboard.id;
+            void queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
+            void queryClient.invalidateQueries({ queryKey: ['folder-roots'] });
+            void queryClient.invalidateQueries({ queryKey: ['data-sources'] });
+          }}
+        />
+      ) : null}
+      <ExportedToast
+        message={imported?.message ?? ''}
+        action={
+          imported?.dashboard === undefined
+            ? undefined
+            : {
+                label: `Propose to ${
+                  targetPathOf(folders.data ?? [], imported.dashboard.targetFolderId ?? '') ??
+                  'its folder'
+                }…`,
+                onSelect: () => {
+                  if (imported.dashboard !== undefined) setProposing(imported.dashboard);
+                },
+              }
+        }
+        onDismiss={() => {
+          setImported(null);
         }}
       />
       {accessOpen ? (

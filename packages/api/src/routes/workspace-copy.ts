@@ -66,8 +66,14 @@ export function withChartsRenamed(body: unknown, renamed: ReadonlyMap<string, st
   return Object.fromEntries(
     Object.entries(body).map(([key, value]) => {
       if (key === 'chartId' && typeof value === 'string') return [key, renamed.get(value) ?? value];
+      // Anything else in the list walked too, so no `chartId` inside it is missed (T513's review).
       if (key === 'charts' && Array.isArray(value))
-        return [key, value.map((id) => (typeof id === 'string' ? (renamed.get(id) ?? id) : id))];
+        return [
+          key,
+          value.map((id) =>
+            typeof id === 'string' ? (renamed.get(id) ?? id) : withChartsRenamed(id, renamed),
+          ),
+        ];
       return [key, withChartsRenamed(value, renamed)];
     }),
   );

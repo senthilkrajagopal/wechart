@@ -45,6 +45,10 @@ const ids = {
 const sources: string[] = [];
 const published: { folderId: string; name: string }[] = [];
 const envelopes: SealedV1[] = [];
+/** The file the export downloaded, which the import then takes (T513). */
+const exported = { text: '' };
+/** What the imports made in writer's workspace, removed after. */
+const drafts: { kind: string; id: string }[] = [];
 
 const cubeYaml = (name: string, dataSource: string) =>
   [
@@ -194,6 +198,27 @@ async function exportPane(page: Page) {
   await page.getByRole('menuitem', { name: 'Export…' }).click();
   return page.getByRole('dialog', { name: 'Export dashboard' });
 }
+/** My workspace, open in Explore. */
+async function myWorkspace(page: Page) {
+  await page.goto('/explore');
+  await page
+    .getByRole('tree')
+    .getByRole('treeitem', { name: 'My workspace', exact: true })
+    .getByRole('button')
+    .first()
+    .click();
+  await expect(page.getByRole('heading', { name: 'My workspace', level: 1 })).toBeVisible();
+}
+
+/** Sales's items as its members see them, each at when it was last saved. */
+async function folderItems(page: Page) {
+  const answer = await page.request.get(`/api/folders/${ids.sales}/contents`);
+  expect(answer.status()).toBe(200);
+  return ((await answer.json()) as { kind: string; id: string; updatedAt: string }[])
+    .map((item) => `${item.kind}:${item.id}:${item.updatedAt}`)
+    .sort();
+}
+
 /** A dependency's row in the pane, by its box's name. */
 const rowOf = (pane: ReturnType<Page['getByRole']>, name: string) =>
   pane
@@ -204,17 +229,45 @@ test.describe.configure({ mode: 'serial' });
 
 test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
   test.afterAll(async ({ browser }) => {
+    const removed = async (what: string, answer: Promise<APIResponse>) => {
+      const response = await answer;
+      if (![200, 204, 404].includes(response.status()))
+        console.warn(`${what}: ${String(response.status())} ${await response.text()}`);
+    };
+    // writer's imported drafts first: the dashboards' own charts, the library
+    // charts, then the dashboards, so no chart is left using the models.
+    const writer = await browser.newContext({
+      baseURL: BASE_URL,
+      storageState: { cookies: [], origins: [] },
+    });
+    await signInThroughDex(await writer.newPage(), 'writer');
+    for (const { kind, id } of drafts.filter((each) => each.kind === 'dashboard')) {
+      const board = await writer.request.get(`/api/documents/${kind}/${id}`);
+      if (board.status() !== 200) continue;
+      const shown = JSON.stringify((await board.json()) as unknown).match(
+        /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g,
+      );
+      for (const chartId of new Set(shown ?? [])) {
+        const chart = await writer.request.get(`/api/documents/chart/${chartId}`);
+        if (chart.status() !== 200) continue;
+        const body = ((await chart.json()) as { body: Record<string, unknown> }).body;
+        if (body['localToDashboardId'] === id)
+          await removed(`chart ${chartId}`, writer.request.delete(`/api/documents/chart/${chartId}?confirm=true`));
+      }
+    }
+    for (const { kind, id } of [...drafts].sort((a) => (a.kind === 'chart' ? -1 : 1)))
+      await removed(
+        `${kind} ${id}`,
+        writer.request.delete(`/api/documents/${kind}/${id}${kind === 'chart' ? '?confirm=true' : ''}`),
+      );
+    await writer.close();
+
     const context = await browser.newContext({
       baseURL: BASE_URL,
       storageState: { cookies: [], origins: [] },
     });
     await signInThroughDex(await context.newPage(), 'super');
     const request = context.request;
-    const removed = async (what: string, answer: Promise<APIResponse>) => {
-      const response = await answer;
-      if (![200, 204, 404].includes(response.status()))
-        console.warn(`${what}: ${String(response.status())} ${await response.text()}`);
-    };
     // The charts, confirmed though a dashboard shows them, then the dashboard,
     // then what they used.
     for (const id of [ids.revenue, ids.orders, ids.top, ids.margin].filter((each) => each !== ''))
@@ -312,6 +365,8 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
       const download = await downloading;
       expect(download.suggestedFilename()).toBe(FILE);
       const text = readFileSync(await download.path(), 'utf8');
+      // Kept for the import that follows (T513).
+      exported.text = text;
       const file = JSON.parse(text) as {
         format: string;
         items: {
@@ -382,6 +437,145 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
           .map((item) => item.title)
           .sort(),
       ).toEqual(['Orders', 'Revenue']);
+    });
+
+    test('imports the file from My workspace’s New, warns of what the drafts may affect, and lands them as new drafts (T513, AC-356, AC-357)', async ({
+      page,
+    }) => {
+      expect(exported.text).not.toBe('');
+      const salesBefore = await folderItems(page);
+      await myWorkspace(page);
+      const rowsBefore = await page.getByTestId('explore-contents').locator('tbody tr').count();
+      await page.getByRole('button', { name: 'New', exact: true }).click();
+      await page.getByRole('menuitem', { name: /Import a dashboard…/ }).click();
+      const pane = page.getByRole('dialog', { name: 'Import a dashboard' });
+      await expect(pane.getByRole('button', { name: 'Choose file…' })).toBeVisible();
+      await pane.locator('input[type="file"]').setInputFiles({
+        name: FILE,
+        mimeType: 'application/json',
+        buffer: Buffer.from(exported.text),
+      });
+      await expect(pane.getByText('Read · every part is one this wechart has')).toBeVisible();
+      await expect(pane.getByRole('list', { name: 'What it holds' }).getByRole('listitem')).toHaveText([
+        `${TITLE}Dashboard · 2 own charts`,
+        'Top productsLibrary chart',
+        'Margin trendLibrary chart',
+        `${modelPath(names.sales)}Not imported yet`,
+        `${names.emea}PostgreSQL · settings only`,
+      ]);
+      await pane.getByRole('button', { name: /Next: Target/ }).click();
+      await pane.getByRole('treeitem', { name: `Sales ${RUN}` }).click();
+      await pane.getByRole('button', { name: /Next: Review/ }).click();
+
+      // What the drafts may affect once proposed; none of it blocks.
+      await expect(pane.getByTestId(`lands-dashboard-${ids.board}`)).toContainText(
+        `Sales ${RUN} has a dashboard by this name, version 2. Proposed, this draft replaces it once approved.`,
+      );
+      await expect(pane.getByTestId(`lands-chart-${ids.top}`)).toContainText(
+        `Sales ${RUN} has a library chart by this name, version 2. Proposed, this draft replaces it once approved.`,
+      );
+      await expect(pane.getByTestId(`lands-data-source-${names.emea}`)).toContainText(
+        `Sales ${RUN} already has a data source named ${names.emea}.`,
+      );
+      await expect(pane.getByTestId(`lands-model-${modelPath(names.sales)}`)).toContainText(
+        'Not imported yet',
+      );
+      await expect(pane.getByTestId('import-summary')).toHaveText(
+        `${TITLE} → Sales ${RUN} · 3 new drafts · 3 warnings`,
+      );
+      await pane.getByRole('button', { name: 'Import to My workspace' }).click();
+      await expect(pane).toHaveCount(0);
+      const toast = page.getByRole('status').filter({ hasText: 'Imported to My workspace' });
+      await expect(toast).toContainText(
+        `Imported to My workspace as new drafts: 1 dashboard and 4 charts. Nothing in Sales ${RUN} changed.`,
+      );
+
+      // New drafts in My workspace, each going to Sales; Sales as it was.
+      const contents = page.getByTestId('explore-contents');
+      await expect(contents.locator('tbody tr')).toHaveCount(rowsBefore + 3);
+      const listed = (await (await page.request.get('/api/folders/mine/contents')).json()) as {
+        kind: string;
+        id: string;
+        title: string;
+        targetFolderId: string | null;
+        origin: unknown;
+      }[];
+      const landed = listed.filter((item) =>
+        [TITLE, 'Top products', 'Margin trend'].includes(item.title),
+      );
+      drafts.push(...landed.map((item) => ({ kind: item.kind, id: item.id })));
+      expect(landed.map((item) => [item.kind, item.title, item.targetFolderId, item.origin]).sort()).toEqual(
+        [
+          ['chart', 'Margin trend', ids.sales, null],
+          ['chart', 'Top products', ids.sales, null],
+          ['dashboard', TITLE, ids.sales, null],
+        ].sort(),
+      );
+      const board = landed.find((item) => item.kind === 'dashboard')!;
+      await expect(contents.getByTestId(`item-${board.id}`)).toContainText(`Sales ${RUN} · new`);
+      await expect(contents.getByTestId(`item-${board.id}`)).toBeFocused();
+      expect(await folderItems(page)).toEqual(salesBefore);
+
+      // The next step is the usual one: its Propose dialog takes the draft on (design 05).
+      await toast.getByRole('button', { name: `Propose to Sales ${RUN}…` }).click();
+      const dialog = page.getByRole('dialog', { name: `Propose to Sales ${RUN}` });
+      await expect(dialog.getByTestId('propose-item')).toHaveText(
+        `Dashboard · ${TITLE} — replaces version 2`,
+      );
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+      await expect(dialog).toHaveCount(0);
+    });
+
+    test('refuses a file it can’t take, naming each part and why, and imports nothing (AC-359)', async ({
+      page,
+    }) => {
+      await myWorkspace(page);
+      const before = await page.request.get('/api/folders/mine/contents');
+      const titles = ((await before.json()) as { id: string }[]).map((item) => item.id).sort();
+      await page.getByRole('button', { name: 'New', exact: true }).click();
+      await page.getByRole('menuitem', { name: /Import a dashboard…/ }).click();
+      const pane = page.getByRole('dialog', { name: 'Import a dashboard' });
+      const file = JSON.parse(exported.text) as { items: Record<string, unknown>[] };
+      const altered = {
+        ...file,
+        items: [
+          ...file.items.map((item) =>
+            item['kind'] === 'data-source' ? { ...item, driver: 'databricks' } : item,
+          ),
+          { kind: 'alert', title: 'Late orders' },
+        ],
+      };
+      await pane.locator('input[type="file"]').setInputFiles({
+        name: 'q3-board-pack.wechart.json',
+        mimeType: 'application/json',
+        buffer: Buffer.from(JSON.stringify(altered)),
+      });
+      const refusal = pane.getByRole('alert');
+      await expect(refusal).toContainText('Refused · 2 parts this wechart doesn’t have');
+      await expect(refusal.getByRole('listitem')).toHaveText([
+        `Data source ${names.emea}Driver databricks: this wechart connects with PostgreSQL, Amazon Redshift, MySQL, Snowflake, BigQuery, SQL Server, Oracle and Dremio.`,
+        `Item ${String(altered.items.length)}, “Late orders”Kind alert: this wechart imports dashboards, charts, models and data sources.`,
+      ]);
+      await expect(refusal).toBeFocused();
+      await expect(pane.getByRole('button', { name: /Next: Target/ })).toHaveCount(0);
+
+      // A file that ends part-way, too.
+      await pane.locator('input[type="file"]').setInputFiles({
+        name: 'revenue-overview (1).wechart.json',
+        mimeType: 'application/json',
+        buffer: Buffer.from(exported.text.slice(0, 200)),
+      });
+      await expect(pane.getByRole('alert')).toContainText(
+        'revenue-overview (1).wechart.json can’t be read as a wechart export.',
+      );
+      await expect(pane.getByRole('alert')).toContainText('It ends part-way through, at line');
+
+      // Leaving asks first, and nothing was imported.
+      await pane.getByRole('button', { name: 'Cancel' }).click();
+      await pane.getByRole('alertdialog', { name: 'Discard this import?' }).getByRole('button', { name: 'Discard' }).click();
+      await expect(pane).toHaveCount(0);
+      const after = await page.request.get('/api/folders/mine/contents');
+      expect(((await after.json()) as { id: string }[]).map((item) => item.id).sort()).toEqual(titles);
     });
   });
 
