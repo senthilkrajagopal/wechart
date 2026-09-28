@@ -266,11 +266,12 @@ describe('a pivot under a marking', () => {
 
     expect(eastRefunded?.textContent).toBe('2 · Marked: 1');
     expect(eastRefunded?.getAttribute('data-marked')).toBe('partly');
+    // Nothing of it marked: dimmed, as an unmarked cell is (AC-096, T507).
     expect(eastPaid?.textContent).toBe('1');
-    expect(eastPaid?.getAttribute('data-marked')).toBeNull();
-    // Marked in full: its share said, no rule.
+    expect(eastPaid?.getAttribute('data-marked')).toBe('none');
+    // Marked in full: its share said, and drawn as a marked cell (AC-096, T507).
     expect(westRefunded?.textContent).toBe('8 · Marked: 8');
-    expect(westRefunded?.getAttribute('data-marked')).toBeNull();
+    expect(westRefunded?.getAttribute('data-marked')).toBe('whole');
     expect(westPaid?.textContent).toBe('4');
   });
 
@@ -292,7 +293,7 @@ describe('a pivot under a marking', () => {
     const [, eastRefunded] = cellsIn(east!);
 
     expect(eastRefunded?.textContent).toBe('2');
-    expect(eastRefunded?.getAttribute('data-marked')).toBeNull();
+    expect(eastRefunded?.getAttribute('data-marked')).toBe('none');
   });
 
   it('leaves its totals unmarked', () => {
@@ -306,5 +307,71 @@ describe('a pivot under a marking', () => {
       expect(total.textContent).not.toContain('Marked');
       expect(total.getAttribute('data-marked')).toBeNull();
     }
+  });
+});
+
+/**
+ * T507 / AC-096: a pivot's cells are its items, each a row of its answer:
+ * marked cells ruled in the marking's colour, the others dimmed, as the
+ * prototype's pivot has them (`td.mk-full`, `td.mk-none`). Its totals are
+ * no row's, and stay as they are.
+ */
+describe('a pivot showing a marking (AC-096)', () => {
+  const byStatus = (values: readonly string[]) =>
+    spec({
+      marking: {
+        predicate: { items: values.map((value) => [{ member: STATUS, value }]), ranges: [] },
+        colour: '#151107',
+      },
+    });
+  const cellsIn = (row: HTMLElement) => [...row.querySelectorAll('td')];
+
+  it('draws the cells of its marked rows marked and dims the others', () => {
+    render(<PivotTable spec={byStatus(['refunded'])} />);
+    const [east, west] = screen.getAllByTestId('pivot-row');
+
+    expect(
+      [...cellsIn(east!), ...cellsIn(west!)].map((cell) => cell.getAttribute('data-marked')),
+    ).toEqual(['none', 'whole', null, 'none', 'whole', null]);
+    expect(screen.getByTestId('pivot-table').style.getPropertyValue('--wc-mark-colour')).toBe(
+      '#151107',
+    );
+  });
+
+  // T507's review: a cell no row gives is no item, as the prototype's is unclassed.
+  it('leaves a cell with no row as it is', () => {
+    render(
+      <PivotTable
+        spec={spec({
+          rows: [
+            { [REGION]: 'east', [STATUS]: 'paid', [COUNT]: 1 },
+            { [REGION]: 'west', [STATUS]: 'refunded', [COUNT]: 8 },
+          ],
+          marking: {
+            predicate: { items: [[{ member: STATUS, value: 'refunded' }]], ranges: [] },
+            colour: '#151107',
+          },
+        })}
+      />,
+    );
+    const [east] = screen.getAllByTestId('pivot-row');
+
+    // east·paid unmarked; east·refunded has no row.
+    expect(cellsIn(east!).map((cell) => cell.getAttribute('data-marked'))).toEqual([
+      'none',
+      null,
+      null,
+    ]);
+  });
+
+  it('dims nothing while its marking holds nothing', () => {
+    render(<PivotTable spec={byStatus([])} />);
+    const [east] = screen.getAllByTestId('pivot-row');
+
+    expect(cellsIn(east!).map((cell) => cell.getAttribute('data-marked'))).toEqual([
+      null,
+      null,
+      null,
+    ]);
   });
 });

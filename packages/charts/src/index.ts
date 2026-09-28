@@ -75,4 +75,4 @@ export {
   type PartialMark,
   type PartlyMarked,
 } from './marking/partial';
-export { rowSharesOf } from './marking/partialOption';
+export { rowMarksOf, type RowMark } from './marking/partialOption';

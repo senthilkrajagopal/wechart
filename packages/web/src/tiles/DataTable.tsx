@@ -1,4 +1,4 @@
-import { rowSharesOf } from '@wechart/charts';
+import { rowMarksOf } from '@wechart/charts';
 import {
   columnTitleOf,
   formatValue,
@@ -11,7 +11,7 @@ import {
   type RenderSpec,
 } from '@wechart/core';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type CSSProperties } from 'react';
 
 /**
  * The table (AC-037), and the table view every chart can switch to (AC-178).
@@ -119,14 +119,19 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
   });
 
   /**
-   * A row's marked share, where the marking's was answered apart (T453,
-   * AC-097; the user's answer of 2026-09-28, R43): its measures' marked
-   * values beside theirs, and the prototype's left rule where it is marked
-   * in part. Read once per answer, not once per scroll.
+   * How the marking the tile shows draws each row, read once per answer, not
+   * once per scroll:
+   * - marked, bold with a left rule in the marking's colour, and the others
+   *   dimmed (AC-096, T507; direction.md §7a: "Tables: marked rows are bold
+   *   with a left rule; the others are dimmed");
+   * - marked in part, where the marking's share was answered apart (T453,
+   *   AC-097; the user's answer of 2026-09-28, R43): its measures' marked
+   *   values beside theirs, and the prototype's left rule in the secondary
+   *   colour.
    */
-  const sharesOf = useMemo(() => {
+  const marksOf = useMemo(() => {
     const measured = new Set(spec.measures ?? membersOn(spec.encoding, 'y'));
-    return rowSharesOf(
+    return rowMarksOf(
       spec,
       tableColumnsOf(spec.rows, spec.fields).filter((column) => measured.has(column)),
     );
@@ -146,8 +151,8 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
   // A measure's figures are set right, as the prototype's `td.num` (T304).
   const measures = new Set(spec.measures ?? membersOn(spec.encoding, 'y'));
   const align = (column: string) => (measures.has(column) ? 'num' : undefined);
-  const shareOf = (row: Record<string, unknown> | undefined) =>
-    row === undefined ? undefined : sharesOf(row);
+  const markOf = (row: Record<string, unknown> | undefined) =>
+    row === undefined ? undefined : marksOf(row);
   const drawn = virtualizer.getVirtualItems();
   const first = drawn.at(0);
   const last = drawn.at(-1);
@@ -159,7 +164,14 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
       ref={scroller}
       className="data-table"
       data-testid="data-table"
-      style={{ height: `${String(height)}px`, overflow: 'auto' }}
+      style={
+        {
+          height: `${String(height)}px`,
+          overflow: 'auto',
+          // The marked rows' rule, in the marking's colour (AC-096).
+          ...(spec.marking === undefined ? {} : { '--wc-mark-colour': spec.marking.colour }),
+        } as CSSProperties
+      }
       // Scrolled from the keyboard too (T182, AC-176): WebKit does not make a
       // scrolling box focusable of itself. Named, as a focusable region must be.
       // A scrolling region is the one non-control that must take focus: the
@@ -191,13 +203,13 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
 
           {drawn.map((item) => {
             const row = rows[item.index];
-            const share = shareOf(row);
+            const mark = markOf(row);
             return (
               <tr
                 key={item.key}
                 data-testid="table-row"
                 aria-rowindex={item.index + 2}
-                {...(share?.partly === true ? { 'data-marked': 'partly' } : {})}
+                {...(mark === undefined ? {} : { 'data-marked': mark.state })}
                 /**
                  * `aria-selected` only where rows can actually be marked: on a
                  * table without a primary key it would announce a state the
@@ -220,7 +232,7 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
                 }}
               >
                 {columns.map((column) => {
-                  const marked = share?.marked[column];
+                  const marked = mark?.marked[column];
                   return (
                     <td key={column} className={align(column)}>
                       {formatValue(row?.[column], column, spec.formats ?? {}, spec.granularities)}

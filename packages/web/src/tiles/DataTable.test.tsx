@@ -251,16 +251,18 @@ describe('a table under a marking', () => {
 
     expect(cellsOf(books!)).toEqual(['Books', '10 · Marked: 4', '40 · Marked: 45']);
     expect(books!.getAttribute('data-marked')).toBe('partly');
-    // Nothing of Games is marked: no marked share, no rule.
+    // Nothing of Games is marked: no marked share, no rule, and dimmed as an
+    // unmarked row is (AC-096, T507).
     expect(cellsOf(games!)).toEqual(['Games', '20', '30']);
-    expect(games!.getAttribute('data-marked')).toBeNull();
+    expect(games!.getAttribute('data-marked')).toBe('none');
     // Toys is marked in all its rows, but an average says nothing of that:
     // partly marked, as a chart hatches it (T387's review).
     expect(cellsOf(toys!)).toEqual(['Toys', '5 · Marked: 5', '20 · Marked: 20']);
     expect(toys!.getAttribute('data-marked')).toBe('partly');
   });
 
-  it('does not rule a row an additive measure shows marked in full', () => {
+  // A row marked in full is a marked row (AC-096, T507): not the partial rule.
+  it('draws a row an additive measure shows marked in full as a marked row', () => {
     render(
       <DataTable
         spec={spec({
@@ -279,7 +281,7 @@ describe('a table under a marking', () => {
     const toys = screen.getAllByTestId('table-row')[2]!;
 
     expect(cellsOf(toys)).toEqual(['Toys', '5 · Marked: 5']);
-    expect(toys.getAttribute('data-marked')).toBeNull();
+    expect(toys.getAttribute('data-marked')).toBe('whole');
   });
 
   // T453's review: a measure over the marked rows with no value is none, never 0.
@@ -320,6 +322,29 @@ describe('a table under a marking', () => {
     expect(other!.getAttribute('data-marked')).toBe('partly');
   });
 
+  // T507's review: a table of dimensions alone has no measure to say how much
+  // of a row is marked; one with marked rows is not unmarked.
+  it('draws a row with marked rows, and no measure, as marked in part', () => {
+    render(
+      <DataTable
+        spec={spec({
+          encoding: { x: [CATEGORY] },
+          measures: [],
+          rows: [{ [CATEGORY]: 'Books' }, { [CATEGORY]: 'Games' }],
+          marking: {
+            predicate: { items: [[{ member: STATUS, value: 'shipped' }]], ranges: [] },
+            colour: '#151107',
+            share: [{ [CATEGORY]: 'Books' }],
+          },
+        })}
+      />,
+    );
+    const [books, games] = screen.getAllByTestId('table-row');
+
+    expect(books!.getAttribute('data-marked')).toBe('partly');
+    expect(games!.getAttribute('data-marked')).toBe('none');
+  });
+
   it('shows no marked share until one is answered', () => {
     render(
       <DataTable
@@ -336,6 +361,58 @@ describe('a table under a marking', () => {
     const [books] = screen.getAllByTestId('table-row');
 
     expect(cellsOf(books!)).toEqual(['Books', '10']);
-    expect(books!.getAttribute('data-marked')).toBeNull();
+    // Its rows hold no status to be marked by: unmarked, as a chart's items
+    // are while their share is asked (AC-096, T507).
+    expect(books!.getAttribute('data-marked')).toBe('none');
+  });
+});
+
+/**
+ * T507 / AC-096: WHEN a tile shows a marking, THE SYSTEM SHALL draw marked
+ * items … and fade unmarked items. `Fails when: unmarked items render at full
+ * strength, or marked items carry no outline.` A table's items are its rows
+ * (direction.md §7a: "Tables: marked rows are bold with a left rule; the
+ * others are dimmed"), the rule in the marking's colour.
+ */
+describe('a table showing a marking (AC-096)', () => {
+  const byStatus = (predicate: RenderSpec['rows'][number][], whole = false): RenderSpec =>
+    spec({
+      marking: {
+        predicate: {
+          items: predicate.map((values) =>
+            Object.entries(values).map(([member, value]) => ({ member, value: String(value) })),
+          ),
+          ranges: [],
+        },
+        colour: '#151107',
+        ...(whole ? { whole: true } : {}),
+      },
+    });
+
+  it('draws its marked rows marked and dims the others', () => {
+    render(<DataTable spec={byStatus([{ [STATUS]: 'status 1' }])} />);
+    const rows = screen.getAllByTestId('table-row');
+
+    expect(rows.map((row) => row.getAttribute('data-marked'))).toEqual(['none', 'whole', 'none']);
+    // The rule in the marking's colour.
+    expect(screen.getByTestId('data-table').style.getPropertyValue('--wc-mark-colour')).toBe(
+      '#151107',
+    );
+  });
+
+  it('marks every row of a table marked whole', () => {
+    render(<DataTable spec={byStatus([], true)} />);
+
+    expect(
+      screen.getAllByTestId('table-row').map((row) => row.getAttribute('data-marked')),
+    ).toEqual(['whole', 'whole', 'whole']);
+  });
+
+  it('dims nothing while its marking holds nothing', () => {
+    render(<DataTable spec={byStatus([])} />);
+
+    expect(
+      screen.getAllByTestId('table-row').map((row) => row.getAttribute('data-marked')),
+    ).toEqual([null, null, null]);
   });
 });

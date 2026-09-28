@@ -1,4 +1,11 @@
-import { memberOn, membersOn, OTHER_LABEL, type RenderSpec } from '@wechart/core';
+import {
+  isEmptyPredicate,
+  matchesPredicate,
+  memberOn,
+  membersOn,
+  OTHER_LABEL,
+  type RenderSpec,
+} from '@wechart/core';
 
 import { isTrellisType } from '../layout/trellis';
 import { isBarType } from '../series/bar';
@@ -53,6 +60,11 @@ export interface ItemShare {
   readonly part?: 'marked' | 'rest';
   /** A scatter point's two measures, each over its marked rows, by member. */
   readonly markedBy?: Readonly<Record<string, number>>;
+  /**
+   * A line's point that a marking holds whole, from its own rows rather than
+   * a share (T507): on the marked line at its value, with no "Marked:" said.
+   */
+  readonly whole?: boolean;
 }
 
 type Row = Record<string, unknown>;
@@ -167,22 +179,41 @@ function shareMatcher(
   };
 }
 
+/** A table's row under a marking (T453, T507). */
+export interface RowMark {
+  /** Marked in full, in part, or not at all. */
+  readonly state: 'whole' | 'partly' | 'none';
+  /** Its measures over its marked rows, where a share was answered for it. */
+  readonly marked: Readonly<Record<string, number>>;
+}
+
 /**
- * A table's rows under a marking whose share was answered (T453; the user's
- * answer of 2026-09-28, R43): for each, its measures over its marked rows,
- * and whether it is marked in part — where any measure isn't marked in full,
- * which a measure that isn't additive never is (T387's review). None where
- * nothing of it is marked. Top N's "Other (n)" row takes the marked rows of
- * the categories it folds, as a bar's does.
+ * A table's rows under a marking; none where it shows none, or its marking
+ * holds nothing (AC-096: nothing is dimmed then).
+ *
+ * - A table grouped by what the marking names reads each row from itself
+ *   (T507, AC-096): marked, or not — every row where it was marked whole.
+ * - One whose share was answered (T453; the user's answer of 2026-09-28, R43)
+ *   reads each row's measures over its marked rows: marked in part where any
+ *   measure isn't marked in full, which a measure that isn't additive never
+ *   is (T387's review), and not at all where none of it is. Top N's
+ *   "Other (n)" row takes the marked rows of the categories it folds, as a
+ *   bar's does.
  */
-export function rowSharesOf(
+export function rowMarksOf(
   spec: RenderSpec,
   measures: readonly string[],
-): (
-  row: Row,
-) => { readonly marked: Readonly<Record<string, number>>; readonly partly: boolean } | undefined {
+): (row: Row) => RowMark | undefined {
   const marking = spec.marking;
-  if (marking?.share === undefined || marking.whole === true) return () => undefined;
+  if (marking === undefined) return () => undefined;
+  if (marking.whole === true) return () => ({ state: 'whole', marked: {} });
+  if (marking.share === undefined) {
+    if (isEmptyPredicate(marking.predicate)) return () => undefined;
+    return (row) => ({
+      state: matchesPredicate(marking.predicate, row) ? 'whole' : 'none',
+      marked: {},
+    });
+  }
   const share = marking.share;
   const matcher = shareMatcher(share, new Set([...measures, ...measuredOf(spec)]));
   const category = memberOn(spec.encoding, 'x');
@@ -203,8 +234,12 @@ export function rowSharesOf(
       if (value !== undefined) marked[measure] = value;
       return [markedState({ marked: value, total, aggType: marking.aggTypes?.[measure] })];
     });
-    if (states.every((state) => state === 'none')) return undefined;
-    return { marked, partly: states.some((state) => state !== 'whole') };
+    // No measure to say how much of it is marked (a table of dimensions
+    // alone, or blank figures): marked in part where any of its rows is
+    // (T507's review).
+    if (states.length === 0) return { state: matched.length > 0 ? 'partly' : 'none', marked: {} };
+    if (states.every((state) => state === 'none')) return { state: 'none', marked: {} };
+    return { marked, state: states.every((state) => state === 'whole') ? 'whole' : 'partly' };
   };
 }
 
@@ -418,17 +453,7 @@ export function withPartialMarks(option: EChartsOption, spec: RenderSpec): EChar
   if (isBoxplotType(spec.chartType)) {
     const category = memberOn(spec.encoding, 'x');
     const measure = memberOn(spec.encoding, 'y') ?? '';
-    const names = boxesOf(spec).map((box) => box.name);
     const categoryOf = (row: Row) => (category === undefined ? '' : String(row[category] ?? ''));
-    /** Each box's points: its category's rows with a value, as the box is computed from them. */
-    const points = new Map<string, Row[]>();
-    for (const row of spec.rows) {
-      if (numberOf(row[measure]) === undefined) continue;
-      const rows = points.get(categoryOf(row));
-      if (rows === undefined) points.set(categoryOf(row), [row]);
-      else rows.push(row);
-    }
-    const pointsOf = (name: string) => points.get(name) ?? [];
     /**
      * Without "Each point is" its rows are ungrouped (T399): each point is
      * one row of the data, with nothing but its category and its value to
@@ -460,80 +485,7 @@ export function withPartialMarks(option: EChartsOption, spec: RenderSpec): EChar
         return 'whole';
       };
     })();
-    /** Each point's marking, and its rows by category and value, for its outliers. */
-    const pointKinds = new Map<Row, PartialMark['kind']>();
-    const byValue = new Map<string, Row[]>();
-    for (const rows of points.values()) {
-      for (const row of rows) {
-        pointKinds.set(row, kindOfPoint(row));
-        const alike = byValue.get(valueKey(row));
-        if (alike === undefined) byValue.set(valueKey(row), [row]);
-        else alike.push(row);
-      }
-    }
-    const [boxes, outliers, ...rest] = series;
-    const seen = new Map<string, number>();
-    return withSeries([
-      ...(boxes === undefined
-        ? []
-        : [
-            {
-              ...boxes,
-              data: (boxes.data ?? []).map((raw, index) => {
-                // Partly marked when some of its rows are (R43).
-                const rows = pointsOf(names[index] ?? '');
-                const kinds = rows.map((row) => pointKinds.get(row) ?? 'none');
-                const marked = kinds.filter((kind) => kind !== 'none').length;
-                const kind =
-                  marked === 0
-                    ? 'none'
-                    : kinds.every((each) => each === 'whole')
-                      ? 'whole'
-                      : 'pattern';
-                const item = asItem(raw);
-                // A box's colour is its outline: faded, it keeps it.
-                const itemStyle =
-                  kind === 'none'
-                    ? { ...styleOf(item), opacity: UNMARKED_OPACITY }
-                    : wholeStyle(kind, styleOf(item));
-                return {
-                  ...item,
-                  itemStyle,
-                  ...(marked === 0
-                    ? {}
-                    : { share: { marked, total: rows.length } satisfies ItemShare }),
-                };
-              }),
-            },
-          ]),
-      ...(outliers === undefined
-        ? []
-        : [
-            {
-              ...outliers,
-              data: (outliers.data ?? []).map((raw) => {
-                // Each outlier is its row's — the nth of its value in its
-                // category — and is marked or not (R43).
-                const item = asItem(raw);
-                const [name, value] = Array.isArray(item['value']) ? item['value'] : [];
-                const key = `${String(name ?? '')}\u0000${String(numberOf(value))}`;
-                const nth = seen.get(key) ?? 0;
-                seen.set(key, nth + 1);
-                const row = byValue.get(key)?.[nth];
-                if (row === undefined) return raw;
-                const style = { ...styleOf(item), color: colourOf(outliers) };
-                return {
-                  ...item,
-                  itemStyle:
-                    (pointKinds.get(row) ?? 'none') === 'none'
-                      ? { ...style, opacity: UNMARKED_OPACITY, borderWidth: 0 }
-                      : { ...style, ...outline },
-                };
-              }),
-            },
-          ]),
-      ...rest,
-    ]);
+    return withBoxMarks(option, spec, marking.colour, kindOfPoint);
   }
 
   if (isMapType(spec.chartType)) {
@@ -694,6 +646,120 @@ export function withPartialMarks(option: EChartsOption, spec: RenderSpec): EChar
 }
 
 /**
+ * A box plot's boxes and outliers under a marking, each point marked as
+ * `kindOfPoint` says — once per point, in the order of the rows (T453,
+ * T507). A box is faded where none of its points is marked, outlined where
+ * all are marked in full, and outlined and hatched where some are: partly
+ * marked when some of its rows are (R43). Each outlier is its row's — the
+ * nth of its value in its category — and is marked or not (R43).
+ */
+export function withBoxMarks(
+  option: EChartsOption,
+  spec: RenderSpec,
+  colour: string,
+  kindOfPoint: (row: Row) => PartialMark['kind'],
+): EChartsOption {
+  const series = (option['series'] as Series[] | undefined) ?? [];
+  const category = memberOn(spec.encoding, 'x');
+  const measure = memberOn(spec.encoding, 'y') ?? '';
+  const names = boxesOf(spec).map((box) => box.name);
+  const categoryOf = (row: Row) => (category === undefined ? '' : String(row[category] ?? ''));
+  const valueKey = (name: unknown, value: unknown) =>
+    `${String(name ?? '')}\u0000${String(numberOf(value))}`;
+  const outline = { opacity: 1, borderColor: colour, borderWidth: MARKED_OUTLINE_PX };
+
+  /** Each box's points: its category's rows with a value, as the box is computed from them. */
+  const points = new Map<string, Row[]>();
+  /** Each point's marking, and its rows by category and value, for its outliers. */
+  const kinds = new Map<Row, PartialMark['kind']>();
+  const byValue = new Map<string, Row[]>();
+  for (const row of spec.rows) {
+    if (numberOf(row[measure]) === undefined) continue;
+    const box = points.get(categoryOf(row));
+    if (box === undefined) points.set(categoryOf(row), [row]);
+    else box.push(row);
+    kinds.set(row, kindOfPoint(row));
+    const key = valueKey(categoryOf(row), row[measure]);
+    const alike = byValue.get(key);
+    if (alike === undefined) byValue.set(key, [row]);
+    else alike.push(row);
+  }
+
+  const [boxes, outliers, ...rest] = series;
+  const seen = new Map<string, number>();
+  return {
+    ...option,
+    series: [
+      ...(boxes === undefined
+        ? []
+        : [
+            {
+              ...boxes,
+              data: (boxes.data ?? []).map((raw, index) => {
+                const rows = points.get(names[index] ?? '') ?? [];
+                const marks = rows.map((row) => kinds.get(row) ?? 'none');
+                const marked = marks.filter((kind) => kind !== 'none').length;
+                const item = asItem(raw);
+                const style = styleOf(item);
+                // A box's colour is its outline: faded, it keeps it.
+                const itemStyle =
+                  marked === 0
+                    ? { ...style, opacity: UNMARKED_OPACITY }
+                    : marks.every((kind) => kind === 'whole')
+                      ? { ...style, ...outline }
+                      : { ...style, ...outline, decal: HATCH };
+                return {
+                  ...item,
+                  itemStyle,
+                  ...(marked === 0
+                    ? {}
+                    : { share: { marked, total: rows.length } satisfies ItemShare }),
+                };
+              }),
+            },
+          ]),
+      ...(outliers === undefined
+        ? []
+        : [
+            {
+              ...outliers,
+              data: (outliers.data ?? []).map((raw) => {
+                const item = asItem(raw);
+                const [name, value] = Array.isArray(item['value']) ? item['value'] : [];
+                const key = valueKey(name, value);
+                const nth = seen.get(key) ?? 0;
+                seen.set(key, nth + 1);
+                const row = byValue.get(key)?.[nth];
+                if (row === undefined) return raw;
+                const style = { ...styleOf(item), color: colourOf(outliers) };
+                return {
+                  ...item,
+                  itemStyle:
+                    (kinds.get(row) ?? 'none') === 'none'
+                      ? { ...style, opacity: UNMARKED_OPACITY, borderWidth: 0 }
+                      : { ...style, ...outline },
+                };
+              }),
+            },
+          ]),
+      ...rest,
+    ],
+  };
+}
+
+/**
+ * Whether a tile draws marked lines over its faded ones: a line chart's or a
+ * combo's, where its items are partly marked (T387), or where it shows a
+ * marking that holds something (T507).
+ */
+function drawsMarkedLines(spec: RenderSpec): boolean {
+  const marking = spec.marking;
+  if (marking === undefined || !(isLineType(spec.chartType) || isComboType(spec.chartType)))
+    return false;
+  return drawsPartialMarks(spec) || marking.whole === true || !isEmptyPredicate(marking.predicate);
+}
+
+/**
  * A line's marked share, drawn at full strength over its faded total (T387,
  * direction.md §7a) — once the Customize tab has stacked and ordered the
  * lines, so a stacked line's share sits in its own band: on the lines below
@@ -702,8 +768,7 @@ export function withPartialMarks(option: EChartsOption, spec: RenderSpec): EChar
  * one too (T453); its bars are split already.
  */
 export function withMarkedShareLines(option: EChartsOption, spec: RenderSpec): EChartsOption {
-  if (!drawsPartialMarks(spec) || !(isLineType(spec.chartType) || isComboType(spec.chartType)))
-    return option;
+  if (!drawsMarkedLines(spec)) return option;
   const series = (option['series'] as Series[] | undefined) ?? [];
   const valueAt = (one: Series, at: number) => numberOf(asItem((one.data ?? [])[at])['value']);
 
@@ -719,7 +784,10 @@ export function withMarkedShareLines(option: EChartsOption, spec: RenderSpec): E
       const line = data.map((raw, at) => {
         const told = shareIn(raw);
         const total = valueAt(one, at);
-        if (told?.marked === undefined || total === undefined) {
+        // A point the marking holds whole is on its marked line at its value,
+        // outlined as it is (T507).
+        const marked = told?.whole === true ? total : told?.marked;
+        if (marked === undefined || total === undefined) {
           return { value: null, share: { ...told, part: 'marked' } satisfies ItemShare };
         }
         const offset = below.reduce((sum, other) => {
@@ -727,7 +795,8 @@ export function withMarkedShareLines(option: EChartsOption, spec: RenderSpec): E
           return value !== undefined && Math.sign(value) === Math.sign(total) ? sum + value : sum;
         }, 0);
         return {
-          value: offset + told.marked,
+          value: offset + marked,
+          ...(told?.whole === true ? { itemStyle: asItem(raw)['itemStyle'] } : {}),
           share: { ...told, part: 'marked' } satisfies ItemShare,
         };
       });

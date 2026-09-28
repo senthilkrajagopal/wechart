@@ -2,11 +2,14 @@ import { markedState } from '@wechart/charts';
 import {
   columnTitleOf,
   formatValue,
+  isEmptyPredicate,
+  matchesPredicate,
   membersOn,
   pivot,
   rewritesValues,
   type RenderSpec,
 } from '@wechart/core';
+import type { CSSProperties } from 'react';
 
 /**
  * The pivot table (AC-037).
@@ -34,43 +37,74 @@ const numberOf = (raw: unknown): number | undefined => {
 };
 
 /**
- * Each cell's marked share, where the marking's was answered apart (T453,
- * AC-097): drawn as a table's row is in the user's answer of 2026-09-28
- * (R43) — its marked value in it, the left rule where it is marked in part.
- * Extending that answer to a pivot's cells, with its totals unmarked, is a
- * decision of T453's, not the user's, and is open to change. The share's rows are the
- * pivot's own question asked with the marking (T388), keyed as its cells are
- * by their row and column values, the last one a key's as a cell's is. Its
- * totals are left unmarked.
+ * How the marking the tile shows draws each cell; none where it shows none,
+ * or its marking holds nothing (nothing is dimmed then). A cell is a row of
+ * its answer, keyed by its row and column values, the last one a key's as a
+ * cell's is. Its totals are no row's, and are left as they are.
+ *
+ * - A pivot grouped by what the marking names reads each cell from its row
+ *   (T507, AC-096): marked, ruled in the marking's colour, or not, dimmed —
+ *   as the prototype's pivot draws them (`td.mk-full`, `td.mk-none`).
+ * - One whose share was answered apart (T453, AC-097) reads each cell's
+ *   measure over its marked rows: drawn as a table's row is in the user's
+ *   answer of 2026-09-28 (R43), its marked value in it and the left rule in
+ *   the secondary colour where it is marked in part. Extending that answer
+ *   to a pivot's cells is T453's decision, not the user's, and is open to
+ *   change. The share's rows are the pivot's own question asked with the
+ *   marking (T388).
  */
-function cellShares(spec: RenderSpec) {
+function cellMarks(spec: RenderSpec) {
   const marking = spec.marking;
   const rowMembers = membersOn(spec.encoding, 'row');
   const columnMembers = membersOn(spec.encoding, 'column');
   const keyOf = (rowValues: readonly string[], columnValues: readonly string[]) =>
     `${rowValues.join('\u0000')}\u0001${columnValues.join('\u0000')}`;
-  const shared = new Map<string, Record<string, unknown>>();
-  if (marking?.share !== undefined && marking.whole !== true) {
-    for (const row of marking.share) {
+  const byCell = (rows: readonly Record<string, unknown>[]) => {
+    const cells = new Map<string, Record<string, unknown>>();
+    for (const row of rows) {
       const values = (members: readonly string[]) =>
         members.map((member) => String(row[member] ?? ''));
-      shared.set(keyOf(values(rowMembers), values(columnMembers)), row);
+      cells.set(keyOf(values(rowMembers), values(columnMembers)), row);
     }
+    return cells;
+  };
+  type CellMark = {
+    readonly state: 'whole' | 'partly' | 'none';
+    readonly marked?: number;
+  };
+  const none = (): CellMark | undefined => undefined;
+  if (marking === undefined) return none;
+  // A cell no row gives is no item, and is left as it is, as the prototype's
+  // is unclassed (T507's review).
+  const rows = byCell(spec.rows);
+  if (marking.whole === true)
+    return (rowHeader: readonly string[], columnHeader: readonly string[]): CellMark | undefined =>
+      rows.has(keyOf(rowHeader, columnHeader)) ? { state: 'whole' } : undefined;
+  if (marking.share === undefined) {
+    if (isEmptyPredicate(marking.predicate)) return none;
+    return (
+      rowHeader: readonly string[],
+      columnHeader: readonly string[],
+    ): CellMark | undefined => {
+      const row = rows.get(keyOf(rowHeader, columnHeader));
+      if (row === undefined) return undefined;
+      return { state: matchesPredicate(marking.predicate, row) ? 'whole' : 'none' };
+    };
   }
+  const shared = byCell(marking.share);
   return (
     rowHeader: readonly string[],
     columnHeader: readonly string[],
     measure: string,
     total: number | null,
-  ): { readonly marked: number; readonly partly: boolean } | undefined => {
-    const row = shared.get(keyOf(rowHeader, columnHeader));
-    if (row === undefined || total === null) return undefined;
+  ): CellMark | undefined => {
+    if (total === null) return undefined;
     // A share's row with no value for the measure is no measurement, never
-    // 0 (T453's review).
-    const marked = numberOf(row[measure]);
-    if (marked === undefined) return undefined;
-    const state = markedState({ marked, total, aggType: marking?.aggTypes?.[measure] });
-    return state === 'none' ? undefined : { marked, partly: state === 'partly' };
+    // 0 (T453's review): none of it is marked.
+    const marked = numberOf(shared.get(keyOf(rowHeader, columnHeader))?.[measure]);
+    if (marked === undefined) return { state: 'none' };
+    const state = markedState({ marked, total, aggType: marking.aggTypes?.[measure] });
+    return state === 'none' ? { state } : { state, marked };
   };
 }
 
@@ -136,13 +170,20 @@ export function PivotTable({ spec, height = DEFAULT_HEIGHT }: PivotTableProps) {
       : value;
   const rowMembers = membersOn(spec.encoding, 'row');
   const columnMembers = membersOn(spec.encoding, 'column');
-  const shareAt = cellShares(spec);
+  const markAt = cellMarks(spec);
 
   return (
     <div
       className="pivot-table"
       data-testid="pivot-table"
-      style={{ height: `${String(height)}px`, overflow: 'auto' }}
+      style={
+        {
+          height: `${String(height)}px`,
+          overflow: 'auto',
+          // The marked cells' rule, in the marking's colour (AC-096).
+          ...(spec.marking === undefined ? {} : { '--wc-mark-colour': spec.marking.colour }),
+        } as CSSProperties
+      }
     >
       {/* The prototype's pivot in a tile, charts.js pivotHtml (T304): its
           figures set right, its row names and totals in 600. */}
@@ -205,16 +246,16 @@ export function PivotTable({ spec, height = DEFAULT_HEIGHT }: PivotTableProps) {
               {columnHeaders.map((column, c) =>
                 measures.map((measure, m) => {
                   const value = cells[r]?.[c]?.[m] ?? null;
-                  const share = shareAt(header, column, measure, value);
+                  const mark = markAt(header, column, measure, value);
                   return (
                     <td
                       key={`${String(c)}-${measure}`}
                       className="num"
-                      {...(share?.partly === true ? { 'data-marked': 'partly' } : {})}
+                      {...(mark === undefined ? {} : { 'data-marked': mark.state })}
                     >
                       {show(value, m)}
-                      {share === undefined ? null : (
-                        <span className="data-table__marked">{` · Marked: ${show(share.marked, m)}`}</span>
+                      {mark?.marked === undefined ? null : (
+                        <span className="data-table__marked">{` · Marked: ${show(mark.marked, m)}`}</span>
                       )}
                     </td>
                   );

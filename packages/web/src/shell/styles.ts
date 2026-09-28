@@ -4466,6 +4466,17 @@ main:has(.dashboard) {
   box-shadow: inset 3px 0 0 var(--wc-text-secondary);
 }
 .data-table__marked { color: var(--wc-text-secondary); }
+/* A table's row or a pivot's cell a marking holds (T507, AC-096; direction.md
+   §7a: "Tables: marked rows are bold with a left rule; the others are
+   dimmed"): the prototype's .mk-full rule, 3 px, in the marking's colour, a
+   marked row's figures in 600; and its .mk-none, the others at 0.45. */
+.data-table tr[data-marked='whole'] > td { font-weight: 600; }
+.data-table tr[data-marked='whole'] > td:first-child,
+.pivot-table td[data-marked='whole'] {
+  box-shadow: inset 3px 0 0 var(--wc-mark-colour, var(--wc-text-primary));
+}
+.data-table tr[data-marked='none'] > td,
+.pivot-table td[data-marked='none'] { opacity: 0.45; }
 /* The prototype's .select.sm, at this table's own 24 px row height rather
    than its 28 px, so a select does not stretch the row it sits in. */
 .select-sm {

@@ -6754,9 +6754,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
         - T387's types on the real surface too: a stacked bar's segments split (the stacked bar UX-025 saw fading), a line under its marked line, and a pie's slices and a treemap's leaves hatched.
       - The spec and the specs of the surfaces it touches (`markings`, `tiles`, `table-view`, `country-map`, `boxplot`, `crossfilter`) pass in Chrome: 102 tests.
     - **Left, for the user or later:**
-      - The trellis draws no whole marking (AC-096): a trellis marked on its own members shows nothing marked. It is the same family as T507.
-      - A box plot's whole marking reads a box by its category's first row, and its outliers by index. That is also T507's.
-      - Tables draw no whole marking (AC-096: bold with a left rule, the others dimmed).
+      - ~~The trellis draws no whole marking (AC-096). A box plot's whole marking reads a box by its category's first row, and its outliers by index. Tables draw no whole marking.~~ Built by T507.
       - The box's tooltip count (above) is for the user to confirm.
     - AC-097 is ticked.
 - [x] T388 [P] (AC-104) Obtain the marked share with one extra query per tile, keeping the base result cached
@@ -8970,11 +8968,51 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 
 ## P2.19 Found and asked for on 2026-09-28
 
-- [ ] T507 (AC-096) Mark a heatmap's cells and a scatter's points by the rows they draw, not by category index *(added 2026-09-28: found by T453's agent)*
+- [x] T507 (AC-096) Mark a heatmap's cells and a scatter's points by the rows they draw, not by category index *(added 2026-09-28: found by T453's agent)*
   - **Why.** `withMarks` matches heatmap cells and scatter points to rows by category index, so a full marking (AC-096) can mark the wrong cells or points. `option.test.ts` passes by coincidence.
-  - Files: `packages/charts/src/marking/*` (+ tests)
+  - *Amended 2026-09-28, at the coordinator's word:* AC-096's other failing states found by T453 belong here too:
+    - a trellis draws no marking at all;
+    - a box plot reads a box by its category's first row and its outliers by position;
+    - tables draw no marked rows.
+    - Found while building it, the same failing state: a pie grouped by a third member reads a slice by its category and split alone, and a line's segments stay at full strength however few of its points are marked.
+  - Files: `packages/charts/src/marking/{option,partialOption}.ts` (+ `option.test.ts`), `packages/charts/src/{optionFor,index}.ts`, `packages/web/src/tiles/{DataTable,PivotTable}.tsx` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/marked-share.spec.ts`
   - Failing test: a heatmap whose rows are not in category order, and a scatter with repeated categories: marking a row marks exactly its own cell or point (AC-096).
   - Depends on: none
+  - **Done 2026-09-28.** Each item is now read from the rows it was drawn from, never from its place among the categories (`withMarks`).
+    - **Heatmap:** a cell by its column and row values, its colour left to the scale.
+    - **Scatter:** a point by the row its series drew it from (`scatterSeriesOf`, T453's).
+    - **Trellis:** its panels' bars by panel and category. It now takes the marking at all (`optionFor`).
+    - **Pie:** a slice on every member it is grouped by, a third one too (`Slice.grouped`, T453's).
+    - **Box plot:** a box by its points, as its marked share is read (`withBoxMarks`, shared with T453).
+      - Faded where none of its points is marked, outlined where all are, and outlined and hatched where some are (R43: "partly marked when some of its rows are").
+      - Each outlier by its own row: marked or not.
+      - Its tooltip counts its marked points ("n: 10 · Marked: 3") here too: T453's reading, still for the user to confirm.
+    - **Line (and a combo's line):** faded under a full-strength line through its marked points. The segments between adjacent marked points are drawn at full strength, as Spotfire draws a marked line (research `references-markings.md` C3, and the prototype's faded lines). It is T387's marked line, its point outlined as the marking draws it and no "Marked:" said.
+    - **Table:** its rows are its items (direction.md §7a: "Tables: marked rows are bold with a left rule; the others are dimmed").
+      - A marked row is in 600, with a 3 px left rule in the marking's colour: AC-096's "outline in the marking's colour". *Decided here:* the prototype's `.mk-full` rule is in `text-primary`, which mk1 nearly is and the other three slots are not, and its tint of the marked row (`accent-soft`) is left out, as direction.md names only the weight and the rule.
+      - Unmarked rows are dimmed to 0.45, the prototype's `.mk-none`.
+      - With a marked share (T453): a row marked in full is a marked row, one with nothing marked is dimmed, and one marked in part keeps T453's secondary rule. A table of dimensions alone, with no measure to say how much, is marked in part where any of its rows is.
+      - Nothing is dimmed while the marking holds nothing. While a share is asked, or where one was not taken (a filter Cube would not join), its rows are read from themselves and are dimmed, as a chart's items are.
+    - **Pivot:** each cell is its row's. A marked cell gets the rule, the others are dimmed, as the prototype's `td.mk-full` and `td.mk-none` have them. A cell no row gives, and its totals, stay as they are.
+    - **Two of T453's table and pivot tests changed:** they read "no attribute" for a row marked in full or not at all, which AC-096 now draws. They now expect `whole` and `none`. The same held for a table waiting on its share, now dimmed as a chart's items are meanwhile.
+    - **The cold review (PASS) found, and this fixes:**
+      - a table with no measures dimmed rows that held marked rows;
+      - a pivot's empty cells were dimmed, or ruled when marked whole;
+      - the e2e's box plot by status now checks the one outlined box sits under "shipped", and the pivot's rule its colour.
+    - **What the tests show.**
+      - `option.test.ts` (+9) covers each type above against rows out of category order.
+      - `DataTable.test.tsx` (+4) and `PivotTable.test.tsx` (+3).
+      - e2e `marked-share.spec.ts` (Chrome), with the shipped orders marked on tiles grouped by status:
+        - the heatmap's two shipped cells are outlined, under the "shipped" label, and its four others faded;
+        - the scatter's two shipped points are outlined and its four others faded;
+        - the trellis's shipped bar is outlined in each panel and its four others faded;
+        - the pie's four shipped slices are outlined and its eight others faded;
+        - every line is faded, with a full-strength segment over one of them (the unit test shows it is the marked line);
+        - a box plot by status outlines the shipped box alone, unhatched, and fades the two others; one by category with a point per status hatches its boxes (the box plot by status is drawn right by the code before T507 too, by coincidence of its order);
+        - the table's shipped row is in 600 with the rule in the marking's colour and the others dimmed, and the pivot rules the shipped row's cells and dims the rest.
+      - Bars' marking is `markings.spec.ts`'s (T190).
+      - The touched specs pass in Chrome: 150 tests.
+    - AC-096 stays ticked, now on every chart type and table.
 - [ ] T508 (AC-354, AC-355, AC-356, AC-357, AC-358, AC-359) Export a dashboard with the dependencies chosen, and import one into My workspace *(added 2026-09-28, R43)*
   - Designed first: `docs/design/reviews/2026-09-28/designs/13-dashboard-export-import.html`. This entry is split into tasks once the user approves the design.
   - Importing models waits on T347 and T350 (workspace models).

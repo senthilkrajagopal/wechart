@@ -16,7 +16,7 @@ import { barOption, DEFAULT_CANVAS, isBarType, type Canvas } from './series/bar'
 import { withHighlight } from './crossfilter/highlight';
 import { withKeyboardFocus } from './marking/focus';
 import { withMarks } from './marking/option';
-import { withMarkedShareLines, withPartialMarks } from './marking/partialOption';
+import { withMarkedShareLines } from './marking/partialOption';
 import { applyAxes, thinValueLabels } from './axis';
 import { applyCustomize } from './customize';
 import { isTrellisType, trellisOption } from './layout/trellis';
@@ -144,10 +144,10 @@ export function optionFor(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EC
   // Its own axes (an array, per panel, formatted by the layout), and no
   // legend — but a tooltip like every other chart (AC-046, T195), and each
   // panel's value labels thinned like any other's (T391's review). Its bars
-  // partly marked where they are (T453).
+  // marked, and partly marked, as any chart's are (T453, T507).
   if (isTrellisType(spec.chartType)) {
     return thinValueLabels({
-      ...withPartialMarks(trellisOption(spec, canvas), spec),
+      ...withMarks(trellisOption(spec, canvas), spec),
       ...tooltipFor(spec),
     });
   }
