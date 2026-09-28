@@ -64,6 +64,7 @@ import type { ConnectionHealth, TestAnswer, TestedConnection } from './xcube/con
 import type { FolderAccessStore } from './repos/folder-access';
 import type { AuditStore } from './repos/audit';
 import { registerFolderAccess } from './routes/access';
+import { registerAudit } from './routes/audit';
 import { registerDataSources } from './routes/data-sources';
 import { chartCopy, dashboardCopies, type ShownCopy } from './routes/workspace-copy';
 import type { QueryLogEntry, QueryLogPageAsk } from './repos/query-log';
@@ -588,6 +589,20 @@ export function buildServer({
     client,
     introspectionRetryMs === undefined ? {} : { retryMs: introspectionRetryMs },
   );
+  // The audit trail, for Super-Admins (T369, AC-295).
+  if (audit !== undefined)
+    registerAudit(app, {
+      store: audit,
+      folders: async () =>
+        (cat ? await cat.folders({ counted: false }) : []) as {
+          id: string;
+          title: string;
+          parentId: string | null;
+        }[],
+      ...(config.auditRetentionDays === undefined
+        ? {}
+        : { retentionDays: config.auditRetentionDays }),
+    });
   // Each folder's AD groups and its effective access (T314, AC-259, AC-260).
   if (folderAccess !== undefined)
     registerFolderAccess(

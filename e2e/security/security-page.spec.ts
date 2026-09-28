@@ -39,7 +39,11 @@ test.describe('Security, as a Super-Admin sees it', () => {
     const main = page.getByRole('main');
     await expect(main.getByRole('heading', { level: 1 })).toHaveText('Security');
     const tabs = main.getByRole('navigation', { name: 'Security' });
-    await expect(tabs.getByRole('link')).toHaveText(['Policies', 'Preview as groups']);
+    await expect(tabs.getByRole('link')).toHaveText([
+      'Policies',
+      'Preview as groups',
+      'Audit trail',
+    ]);
     await expect(tabs.getByRole('link', { name: 'Policies' })).toHaveAttribute(
       'aria-current',
       'page',

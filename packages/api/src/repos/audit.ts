@@ -68,6 +68,8 @@ export interface AuditStore {
   record(entry: AuditEntry): Promise<void>;
   /** Newest first, always (AC-295): a page, and where the next begins, if there is one. */
   list(filter: AuditFilter): Promise<{ records: AuditRecord[]; next?: string }>;
+  /** How many match the filter in all, whatever page is asked (design 08, pin 3). */
+  count(filter: Omit<AuditFilter, 'limit' | 'after'>): Promise<number>;
   /** Everyone the records name, each once, by name, for the User filter. */
   actors(): Promise<AuditActor[]>;
   /** Removes the records from before `cutoff`; says how many (T370, AC-296). */
@@ -92,7 +94,29 @@ const fromCursor = (cursor: string): [Date, string] | undefined => {
   }
 };
 
+/** Whether a page's cursor is one this trail gave (T369's review): another is refused, not read as the first page. */
+export const isAuditCursor = (cursor: string): boolean => fromCursor(cursor) !== undefined;
+
 export function auditStore(db: Kysely<Database>): AuditStore {
+  /** The records a filter matches; none at all where it names an empty list. */
+  const filtered = (filter: Omit<AuditFilter, 'limit' | 'after'>) => {
+    let query = db.selectFrom('audit_records');
+    if (filter.users !== undefined) {
+      if (filter.users.length === 0) return undefined;
+      query = query.where('actor_key', 'in', [...filter.users]);
+    }
+    if (filter.events !== undefined) {
+      if (filter.events.length === 0) return undefined;
+      query = query.where('event', 'in', [...filter.events]);
+    }
+    if (filter.folderIds !== undefined) {
+      if (filter.folderIds.length === 0) return undefined;
+      query = query.where('folder_id', 'in', [...filter.folderIds]);
+    }
+    if (filter.since !== undefined) query = query.where('at', '>=', filter.since);
+    if (filter.until !== undefined) query = query.where('at', '<', filter.until);
+    return query;
+  };
   return {
     async record(entry) {
       await db
@@ -117,23 +141,18 @@ export function auditStore(db: Kysely<Database>): AuditStore {
         .execute();
     },
 
+    async count(filter) {
+      const query = filtered(filter);
+      if (query === undefined) return 0;
+      const row = await query.select((eb) => eb.fn.countAll<string>().as('n')).executeTakeFirst();
+      return Number(row?.n ?? 0);
+    },
+
     async list(filter) {
       const limit = Math.max(1, Math.min(filter.limit ?? PAGE, 500));
-      let query = db.selectFrom('audit_records').selectAll();
-      if (filter.users !== undefined) {
-        if (filter.users.length === 0) return { records: [] };
-        query = query.where('actor_key', 'in', [...filter.users]);
-      }
-      if (filter.events !== undefined) {
-        if (filter.events.length === 0) return { records: [] };
-        query = query.where('event', 'in', [...filter.events]);
-      }
-      if (filter.folderIds !== undefined) {
-        if (filter.folderIds.length === 0) return { records: [] };
-        query = query.where('folder_id', 'in', [...filter.folderIds]);
-      }
-      if (filter.since !== undefined) query = query.where('at', '>=', filter.since);
-      if (filter.until !== undefined) query = query.where('at', '<', filter.until);
+      const matching = filtered(filter);
+      if (matching === undefined) return { records: [] };
+      let query = matching.selectAll();
       const after = filter.after === undefined ? undefined : fromCursor(filter.after);
       if (after !== undefined)
         query = query.where(sql<boolean>`(at, id) < (${after[0]}, ${after[1]})`);

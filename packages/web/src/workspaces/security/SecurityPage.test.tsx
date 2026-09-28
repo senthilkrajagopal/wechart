@@ -89,6 +89,8 @@ describe('Security in tabs, with sign-in on (T500)', () => {
     expect(links.map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
       ['Policies', '/security'],
       ['Preview as groups', '/security/preview'],
+      // The audit trail joins with T369.
+      ['Audit trail', '/security/audit'],
     ]);
     expect(links[0]?.getAttribute('aria-current')).toBe('page');
     // Said over the list, once the model's files are read.
@@ -114,6 +116,42 @@ describe('Security in tabs, with sign-in on (T500)', () => {
       within(tabs).getByRole('link', { name: 'Preview as groups' }).getAttribute('aria-current'),
     ).toBe('page');
     expect(await screen.findByRole('region', { name: 'Preview a security context' })).toBeTruthy();
+    expect(screen.queryByRole('table', { name: 'Access policies' })).toBeNull();
+  });
+
+  it('holds the audit trail on its own tab, at its own address (T369)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('/api/audit?'))
+          return Response.json({ records: [], total: 0, retentionDays: 365 });
+        if (url === '/api/audit/people' || url === '/api/folders') return Response.json([]);
+        return Response.json({ files: [] });
+      }),
+    );
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <SecurityPage
+          signedIn
+          tab="audit"
+          audit={{ filters: { events: [], subfolders: false, time: 'all' }, onFilters: vi.fn() }}
+        />
+      </QueryClientProvider>,
+    );
+
+    const tabs = screen.getByRole('navigation', { name: 'Security' });
+    expect(
+      within(tabs)
+        .getAllByRole('link')
+        .map((link) => link.getAttribute('href')),
+    ).toEqual(['/security', '/security/preview', '/security/audit']);
+    expect(
+      within(tabs).getByRole('link', { name: 'Audit trail' }).getAttribute('aria-current'),
+    ).toBe('page');
+    expect(await screen.findByText('No records match these filters.')).toBeTruthy();
     expect(screen.queryByRole('table', { name: 'Access policies' })).toBeNull();
   });
 

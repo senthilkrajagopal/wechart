@@ -6,6 +6,7 @@ import {
   redirect,
   useParams,
   useRouter,
+  useRouterState,
 } from '@tanstack/react-router';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
@@ -26,6 +27,7 @@ import { NotFound } from '../shell/NotFound';
 import { StateLine } from '../shell/StatusIcon';
 import { ExplorePage } from '../workspaces/explore/ExplorePage';
 import { JobsPage } from '../workspaces/jobs/JobsPage';
+import { auditFiltersFrom, auditSearchOf } from '../workspaces/security/AuditTrail';
 import { SecuritySurface } from '../workspaces/security/SecuritySurface';
 import { DataSourcesPage } from '../workspaces/data-sources/DataSourcesPage';
 import { SourceSettings } from '../workspaces/data-sources/SourceSettings';
@@ -66,7 +68,23 @@ const securityTabRoute = createRoute({
   path: '/security/$tab',
   component: function SecurityTabSurface() {
     const { tab } = useParams({ strict: false }) as { tab?: string };
-    return <SecuritySurface tab={tab === 'preview' ? 'preview' : undefined} />;
+    const router = useRouter();
+    // The audit trail's filters live in the address, so a filtered trail
+    // can be linked and reloaded (T369; design 08, pin 1).
+    const searched = useRouterState({ select: (state) => state.location.searchStr });
+    const filters = auditFiltersFrom(new URLSearchParams(searched));
+    return (
+      <SecuritySurface
+        tab={tab === 'preview' || tab === 'audit' ? tab : undefined}
+        audit={{
+          filters,
+          onFilters: (next) => {
+            const search = auditSearchOf(next);
+            router.history.push(`/security/audit${search === '' ? '' : `?${search}`}`);
+          },
+        }}
+      />
+    );
   },
 });
 

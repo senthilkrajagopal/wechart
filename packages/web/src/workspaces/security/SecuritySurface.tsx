@@ -4,6 +4,7 @@ import { AppShell } from '../../shell/AppShell';
 import { ME_QUERY } from '../../shell/me';
 import { NotFound } from '../../shell/NotFound';
 import { StateLine } from '../../shell/StatusIcon';
+import type { AuditFilters } from './AuditTrail';
 import { SecurityPage, type SecurityTab } from './SecurityPage';
 
 /**
@@ -13,7 +14,14 @@ import { SecurityPage, type SecurityTab } from './SecurityPage';
  * phase 1's one page, at `/security`. Who is signed in unknown — the answer
  * failed — shows nothing of it: the gate fails closed (T500's review).
  */
-export function SecuritySurface({ tab }: { tab: SecurityTab | undefined }) {
+export function SecuritySurface({
+  tab,
+  audit,
+}: {
+  tab: SecurityTab | undefined;
+  /** The audit trail's filters, from the page's address (T369). */
+  audit?: { readonly filters: AuditFilters; readonly onFilters: (next: AuditFilters) => void };
+}) {
   const me = useQuery({ ...ME_QUERY, retry: false });
   if (me.isPending)
     return (
@@ -32,7 +40,7 @@ export function SecuritySurface({ tab }: { tab: SecurityTab | undefined }) {
     );
   return (
     <AppShell workspace="security">
-      <SecurityPage signedIn={signedIn} tab={tab} />
+      <SecurityPage signedIn={signedIn} tab={tab} {...(audit === undefined ? {} : { audit })} />
     </AppShell>
   );
 }

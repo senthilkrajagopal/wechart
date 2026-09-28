@@ -3133,6 +3133,91 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 }
 .security-tabs > a:hover { color: var(--wc-text-primary); }
 .security-tabs > a[aria-current='page'] { color: var(--wc-accent); border-bottom-color: var(--wc-accent); }
+
+/* The audit trail (T369; design 08): the list, and beside it the open
+   record's inspector, 360 px. */
+.audit-trail { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+.audit-trail--open { grid-template-columns: minmax(0, 1fr) 360px; }
+.audit-trail__list { display: grid; gap: 10px; min-width: 0; }
+.audit-trail__subfolders { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; color: var(--wc-text-secondary); }
+.audit-trail__range { display: inline-flex; gap: 8px; font-size: 12px; }
+.audit-trail__events { position: relative; }
+.audit-trail__events-button { cursor: pointer; padding-right: 10px; }
+.audit-trail__events-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  display: grid;
+  gap: 4px;
+  min-width: 200px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 8px;
+  background: var(--wc-bg-surface);
+  box-shadow: var(--wc-shadow-pop);
+}
+/* Closed, it's gone: its own display would otherwise outrank "hidden". */
+.audit-trail__events-panel[hidden] { display: none; }
+.audit-trail__events-panel label { display: flex; gap: 8px; align-items: center; font-size: 12px; }
+/* Active filters as the dashboard filters' chips: removable, combined with AND (pin 3). */
+.audit-trail__chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.audit-trail__chips ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.filter-chip {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  height: 24px;
+  padding: 0 4px 0 10px;
+  border-radius: 12px;
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-text-primary);
+  font-size: 12px;
+}
+.filter-chip__remove { display: inline-grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--wc-text-secondary); }
+.filter-chip__remove:hover { background: var(--wc-bg-hover); }
+.audit-trail__count,
+.audit-trail__retention,
+.audit-trail__none,
+.audit-trail__immutable { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+/* Empty, the live region stays in the page, so its first line is announced (T369's review). */
+.audit-trail__count:empty { min-height: 0; line-height: 0; }
+/* Time to the second in tabular numerals, the order fixed (pins 4 and 9). */
+.audit-trail__table { font-variant-numeric: tabular-nums; }
+.audit-trail__table th { cursor: default; }
+.audit-trail__time { white-space: nowrap; }
+.audit-trail__event { display: inline-flex; gap: 6px; align-items: center; }
+.audit-trail__summary { text-align: left; color: var(--wc-text-primary); }
+.audit-trail__table tr.is-selected td { background: var(--wc-bg-accent-soft); }
+.audit-trail__pager { display: flex; gap: 8px; justify-content: flex-end; }
+.audit-trail__error { display: flex; gap: 8px; align-items: center; }
+.audit-trail__skeleton { display: grid; gap: 6px; }
+.audit-trail__skeleton span { height: 28px; border-radius: 4px; background: var(--wc-bg-subtle); }
+.audit-trail__inspector {
+  position: sticky;
+  top: 16px;
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 8px;
+  background: var(--wc-bg-surface);
+}
+.audit-trail__inspector-head { display: flex; justify-content: space-between; align-items: center; }
+.audit-trail__inspector-head h3 { display: inline-flex; gap: 6px; align-items: center; margin: 0; font-size: var(--wc-text-sm-size); }
+.audit-trail__inspector-where { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
+.audit-trail__utc { color: var(--wc-text-muted); }
+.audit-trail__groups h4 { margin: 0 0 4px; font-size: 12px; font-weight: 600; }
+.audit-trail__before-after { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 4px 8px; font-size: 12px; }
+.audit-trail__before-after > span:nth-child(odd) { color: var(--wc-text-secondary); }
+.audit-trail__before-after code { font-family: var(--wc-font-code); }
+.audit-trail__before-after ins { text-decoration: none; color: var(--wc-status-success); font-family: var(--wc-font-code); }
+.audit-trail__before-after del { color: var(--wc-status-error); font-family: var(--wc-font-code); }
+.audit-trail__tested { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
+@media (max-width: 1023px) {
+  .audit-trail--open { grid-template-columns: minmax(0, 1fr); }
+}
 /* A screen that needs a Cube API scope wechart lacks (T176, AC-170): said as
    a state, in secondary ink, as an empty tile is — not as a failure. */
 .scope-unavailable { display: grid; gap: 4px; padding: 8px 0; color: var(--wc-text-secondary); }

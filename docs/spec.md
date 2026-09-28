@@ -1108,7 +1108,7 @@ Traces to: §P2.4, `[R14, R18]`.
 
 - [ ] AC-294 THE SYSTEM SHALL record every sign-in, permission change, proposal, approval, rejection, restore and data-source change, each with who, what, which folder and when.
       Fails when: an event of one of those kinds is missing from the record.
-- [ ] AC-295 WHEN a Super-Admin opens the audit trail, THE SYSTEM SHALL list its records newest first, filterable by user, event and folder, and SHALL show it to no one else.
+- [x] AC-295 WHEN a Super-Admin opens the audit trail, THE SYSTEM SHALL list its records newest first, filterable by user, event and folder, and SHALL show it to no one else.
       Fails when: a user who isn't a Super-Admin can open it, or a filter returns a record that doesn't match it.
 - [x] AC-296 THE SYSTEM SHALL remove audit records older than the retention the deployment configures, and one year when none is configured (`[R18]`).
       Fails when: a record older than the retention remains, or a younger one is removed.

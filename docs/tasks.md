@@ -6207,12 +6207,44 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - paging over records kept at once;
     - a refused save records nothing;
     - no record holds an envelope's key id, or any 16-character stretch of its ciphertext or key (`access/audit.test.ts`).
-    - The install Job's record is shown by T369's e2e, where the root's default is seeded.
+    - The install Job's record is shown by ~~T369's e2e, where the root's default is seeded~~ `access/root-default.test.ts`, as T369's trail lists it (2026-09-27).
   - **Open question, not decided here:** a folder moved elsewhere inherits other groups. Nothing records that as a permission change.
-- [ ] T369 (AC-295) Show the audit trail to Super-Admins only, newest first, filtered by user, event and folder
+- [x] T369 (AC-295) Show the audit trail to Super-Admins only, newest first, filtered by user, event and folder
   - Files: `packages/web/src/workspaces/security/AuditTrail.tsx` (+ test), `packages/api/src/routes/audit.ts` (+ test), `e2e/security/audit.spec.ts`
   - Failing test: `audit.spec.ts`: `super` sees the records newest first; the User, Event, Folder and Time filters combine and every row matches them; `writer` gets Not found for the page and 403 from the API (AC-295; rule 82).
   - Depends on: T368
+  - *As built (2026-09-27, before review; design 08 of 2026-09-27, pins 2–9 and states A–C):*
+    - **API:**
+      - `GET /api/audit` takes users, events, folder (and `subfolders=true`), since, until, limit and a page cursor. It answers a page newest first, each record with its folder's path, the total that matches, and the retention in days. `GET /api/audit/people` names everyone the records name.
+      - Both are for Super-Admins alone (403 otherwise; with sign-in off, the one user is one). Anything they can't read is refused `400`, never guessed.
+      - Also files: `packages/api/src/repos/audit.ts` (`count`), `packages/api/src/server.ts`, `packages/api/src/access/audit-trail.test.ts`.
+    - **The page:** the Audit trail tab at `/security/audit`, its filters in the address (`user`, `event`, `folder`, `subfolders`, `time`, `since`, `until`).
+      - Four filters: User (the people the records name), Event (the seven kinds, several at once), Folder (every folder by path, with "Include subfolders"), Time (all, 24 hours, 7 days, 30 days, custom).
+      - The active ones as chips that remove themselves, with Clear filters and "_n_ records · newest first".
+      - Time in local time to the second, UTC on hover. Each event as icon and label.
+      - The inspector: an access change's groups before and after (added ones marked "+"); a data-source change's settings before and after, a secret "Replaced", and "Saved after a passing test".
+      - Newest first always, the headers saying so. Newer and Older pages. The retention said, with its Helm value.
+      - Also files: `packages/web/src/workspaces/security/{SecurityPage,SecuritySurface}.tsx`, `packages/web/src/router/routes.tsx`, `packages/web/src/shell/styles.ts`, `e2e/security/security-page.spec.ts`.
+    - **Small decisions, overturnable:**
+      - The Folder filter is a list of paths, not design 08's tree picker.
+      - With sign-in off there is no audit trail page: Security stays phase 1's.
+      - The data-source change's line says "Saved after a passing test" without the test's time, which the record doesn't keep.
+      - Time defaults to All.
+  - **Done 2026-09-27, after one review round. AC-295 ticked** on `audit.spec.ts` in Chrome, Firefox and Safari:
+    - `super` sees the unfiltered trail newest first, each row's time no later than the one above;
+    - User, Event, Folder and Time chosen on the page combine, stay in the address across a reload, and leave only the matching row;
+    - the record opens in the inspector;
+    - `writer` gets Not found for the page and 403 from the API.
+  - **Review fixes:**
+    1. "Last 24 hours" was counted from when the page opened. It's now counted from when the first page is read. Later pages ask that page's range.
+    2. Another filter's rows stayed under the new chips while the new ones were read. The page before now stays only while paging, and the pager waits.
+    3. A folder inside a workspace was shown as if it were in Shared. The API now says `inWorkspace`, and the page says "A workspace".
+    4. Focus was lost when the inspector closed or a chip was removed. It now goes back to the row, the chip that took its place, or the first filter. The inspector takes focus as it opens.
+    5. Going back to earlier filters reopened an old page. Any other filter now starts at the first page.
+    6. The API guessed instead of refusing. It now answers 400 for an unreadable page, a repeated parameter, `subfolders` other than true or false, and a list that names nothing. The page ignores a custom time that isn't a time.
+    - Also fixed: two style tokens that don't exist, removed groups not struck through, `aria-sort` on Time, the count's live region, and events repeated in the address.
+    - Tests added: each fix above, in `AuditTrail.test.tsx` and `access/audit-trail.test.ts`.
+    - T368's promise is kept in `access/root-default.test.ts`, not the e2e: the security suite's database keeps its `default` from earlier runs, so the e2e can't see a fresh seeding. The seeding is recorded by the Install Job and listed in the trail.
 - [x] T370 (AC-296) Remove audit records older than the configured retention, one year by default
   - Files: `packages/api/src/audit/retention.ts` (+ test), `packages/api/src/config.ts` (`WECHART_AUDIT_RETENTION_DAYS`)
   - Failing test: `retention.test.ts`: with a fixed clock, a record older than the retention is removed and a younger one kept, with and without the setting (AC-296).

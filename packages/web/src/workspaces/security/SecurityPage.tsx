@@ -4,6 +4,7 @@ import { InfoBar } from '../../shell/InfoBar';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { MODEL_FILES_QUERY } from '../model/FileList';
+import { AuditTrail, NO_FILTERS, type AuditFilters } from './AuditTrail';
 import { AuthWarning } from './AuthWarning';
 import { ContextPreview, modelHref } from './ContextPreview';
 import { Scopes } from './Scopes';
@@ -18,10 +19,11 @@ import {
 } from './policies';
 
 /** Security's tabs with sign-in on, each at its own address (T500; design 08, pin 1). */
-export type SecurityTab = 'policies' | 'preview';
+export type SecurityTab = 'policies' | 'preview' | 'audit';
 const TABS: readonly (readonly [SecurityTab, string, string])[] = [
   ['policies', 'Policies', '/security'],
   ['preview', 'Preview as groups', '/security/preview'],
+  ['audit', 'Audit trail', '/security/audit'],
 ];
 
 /**
@@ -35,7 +37,13 @@ const TABS: readonly (readonly [SecurityTab, string, string])[] = [
 export function SecurityPage({
   signedIn = false,
   tab = 'policies',
+  audit,
 }: {
+  /** The audit trail's filters, as the page's address holds them (T369). */
+  readonly audit?: {
+    readonly filters: AuditFilters;
+    readonly onFilters: (next: AuditFilters) => void;
+  };
   /**
    * With sign-in on, Security is the Super-Admins' tabs (T500; design 08).
    * With it off, phase 1's one page stays: the policies, the preview beside.
@@ -104,7 +112,12 @@ export function SecurityPage({
             </a>
           ))}
         </nav>
-        {tab === 'preview' ? (
+        {tab === 'audit' ? (
+          <AuditTrail
+            filters={audit?.filters ?? NO_FILTERS}
+            onFilters={audit?.onFilters ?? (() => undefined)}
+          />
+        ) : tab === 'preview' ? (
           <>
             {/* The model's state said here too: an empty preview isn't "no
                 cubes" while the files are read, or after they fail (T500's review). */}

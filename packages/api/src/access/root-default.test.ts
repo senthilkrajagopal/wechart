@@ -9,6 +9,7 @@ import { pgSessionStore } from '../auth/session-store';
 import { PUBLIC_URL, signIn, USERS } from '../auth/sign-in.fixture';
 import { closeDb, getDb } from '../db/client';
 import { catalog } from '../repos/catalog';
+import { auditStore } from '../repos/audit';
 import { DataSourceRefused, dataSourceStore, type DataSource } from '../repos/data-sources';
 import { documents } from '../repos/documents';
 import { folderAccessStore } from '../repos/folder-access';
@@ -75,6 +76,7 @@ beforeAll(async () => {
     catalog: catalog(getDb()),
     folderAccess: folderAccessStore(getDb()),
     dataSources: sources(),
+    audit: auditStore(getDb()),
     dataSourceLanding: {
       prepare: async () => ({
         land: async (source: DataSource) => {
@@ -101,6 +103,12 @@ afterAll(async () => {
   const left = await rootDefault();
   if (left !== undefined) await sources().remove(left.id);
   if (app !== undefined) await app.close();
+  // The trail's records of this file's seedings: nothing else seeds the test database.
+  await getDb()
+    .deleteFrom('audit_records')
+    .where('actor_key', '=', 'wechart-install-job')
+    .where('folder_id', '=', 'root')
+    .execute();
   await closeDb();
 });
 
@@ -124,6 +132,23 @@ describe('seeding the shared root’s default data source (T443, AC-310)', () =>
     });
     expect((await sources().sealedOf(made!.id)).sealed).toEqual(body.sealed);
     expect(landed).toEqual(['root/default']);
+
+    // In the audit trail, by the Install Job (T368's review), as a Super-Admin sees it (T369).
+    const trail = await app.inject({
+      method: 'GET',
+      url: '/api/audit?users=wechart-install-job&events=data-source-change&folder=root',
+      headers: { cookie: superCookie },
+    });
+    expect(trail.statusCode, trail.body).toBe(200);
+    expect(
+      trail
+        .json<{ records: { actor: unknown; item: { id: string } | null; summary: string }[] }>()
+        .records.find((record) => record.item?.id === made!.id),
+    ).toMatchObject({
+      actor: { key: 'wechart-install-job', name: 'Install Job' },
+      item: { id: made!.id },
+      summary: 'Seeded at install',
+    });
   });
 
   it('answers only the Job’s token: none, another, or a signed-in Super-Admin’s session is refused, and nothing is made', async () => {
