@@ -174,6 +174,30 @@ describe('a folder’s data sources, listed and opened (T335, AC-269, AC-164)', 
     expect(answer.body).not.toContain(sealed('warehouse').ct);
     expect(answer.body).not.toContain(sealed('warehouse').enc);
   });
+
+  /**
+   * T462 (AC-269, design 03 of 2026-09-27): its settings page heads it with
+   * its folder's path and says whether the user may change it there.
+   */
+  it('opens one with its folder’s path and whether the user may change it there', async () => {
+    const own = (await opened('writer', held.b)).json<Record<string, unknown>>();
+    expect([own['folderPath'], own['canWrite'], own['inWorkspace']]).toEqual([
+      [
+        { id: ids.a, title: `A ${MARK}` },
+        { id: ids.b, title: `B ${MARK}` },
+      ],
+      true,
+      false,
+    ]);
+    const above = (await opened('writer', held.a)).json<Record<string, unknown>>();
+    expect([above['folderPath'], above['canWrite']]).toEqual([
+      [{ id: ids.a, title: `A ${MARK}` }],
+      false,
+    ]);
+    expect(
+      (await opened('writer', held.root)).json<Record<string, unknown>>()['folderPath'],
+    ).toEqual([]);
+  });
 });
 
 describe('who may change them (AC-262, AC-263, AC-264)', () => {

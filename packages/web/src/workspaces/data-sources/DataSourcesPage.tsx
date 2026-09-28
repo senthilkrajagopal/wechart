@@ -68,10 +68,16 @@ export function DataSourcesPage() {
         </div>
         {addFailed === null ? null : <StateLine kind="err">{addFailed}</StateLine>}
         <InfoBar>
-          {/* Design 01's note (T496); how to change one comes with its page (T462). */}
+          {/* Design 01's note (T496): how to change one, where there's a workspace to (T462). */}
           <p>
-            Every data source you can see, in every folder. Health is the newest test of its stored
-            settings.
+            Every data source you can see, in every folder.
+            {hasWorkspace ? (
+              <>
+                {' '}
+                To change one, open it and choose <b>Edit in my workspace</b>.
+              </>
+            ) : null}{' '}
+            Health is the newest test of its stored settings.
           </p>
         </InfoBar>
         {sources.isPending || me.isPending ? (

@@ -18,9 +18,9 @@ The 2026-09-27 inventory of both reviews, item by item, is the source for "left"
 |---|---|---|---|---|---|---|
 | 11 | Generate cubes | **Complete** | T485, T488–T491 | — | Proposal 5, "in My workspace" (T492, waits on T342 and T347) | 8ef30f1, 2026-09-27 |
 | 12 | Model overview | **Complete** | T479, T484, T486, T493, T495 | — | — | 8ef30f1, 2026-09-27 |
-| 01 | New data source wizard | **Complete** | T471, T472, T490, T496 | — (the list's "open it and choose Edit in my workspace" comes with T462) | Checks ticking one by one (xcube); vendor logos (decision) | pending |
+| 01 | New data source wizard | **Complete** | T471, T472, T490, T496, T462 (the list's names open their page) | — | Checks ticking one by one (xcube); vendor logos (decision) | 55aa7c1, 2026-09-27 |
 | 02 | Driver forms | Partly built | T471 | Ask before replacing Access (T473); My workspace first (T348); a target change clears the secret, and the link icon (T462) | — | — |
-| 03 | Data source settings | Not built | — | The settings page (T462) | History and version line (proposal chain); the scheduled-check row (decision) | — |
+| 03 | Data source settings | In progress | T462 (the page: head, line, the five tabs read-only, Edit in my workspace, Discard my copy) | Changing it (T497): rename, the Connection form, Test to save, leaving with changes; Usage's Model column | History and version line (proposal chain); Propose (T358); the scheduled-check row (decision) | — |
 | 07 | Access panel | Partly built | T330 | T473 | The audit note (T368); the panel with sign-in off (decision) | — |
 | 09 | Sign-in and roles | Partly built | T317–T321 | The switcher by role (T331, with T342); the signed-out, sign-in-failed and no-groups pages; the single-user chip replacing the avatar; Owner by name; no access anywhere | Reviews (proposal chain) | — |
 | 04 | My workspace | Partly built | T345, T346 | T348 and T331's parts; the target tree with a filter; search named for its place | Statuses and Propose (proposal chain); models (T437 → T347) | — |

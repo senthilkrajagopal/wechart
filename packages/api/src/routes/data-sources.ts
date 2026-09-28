@@ -341,9 +341,24 @@ export function registerDataSources(
     });
   });
 
+  /**
+   * One data source, for its settings page (T462, AC-269; design 03 of
+   * 2026-09-27): headed by its folder's path, the paths of what it was
+   * copied from and where it is to go, and whether the user may change it
+   * there or only through a copy in their workspace (rule 71).
+   */
   app.get('/api/data-sources/:id', USER, async (request, reply) => {
     const source = await reached(request, reply, 'read');
-    return source === undefined ? reply : viewOf(source);
+    if (source === undefined) return reply;
+    const pathOf = await listing.pathOf();
+    return {
+      ...viewOf(source),
+      folderPath: pathOf(source.folderId),
+      canWrite: (await access(request, source.folderId, 'write')) === undefined,
+      inWorkspace: await inAWorkspace(source),
+      ...(source.origin === null ? {} : { originPath: pathOf(source.origin.folderId) }),
+      ...(source.targetFolderId === null ? {} : { targetPath: pathOf(source.targetFolderId) }),
+    };
   });
 
   /**

@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import { initialValues, type ConnectionValues } from './ConnectionForm';
-import { changesSince, signsInOf, tlsOf, whereOf } from './connectionSummary';
+import {
+  changesSince,
+  signsInOf,
+  storedRowsOf,
+  storedValuesOf,
+  tlsOf,
+  whereOf,
+} from './connectionSummary';
 
 /**
  * T471 (design 01, states C, G and L): what a test is of, said in a line
@@ -91,5 +98,61 @@ describe('what changed since a test (state L)', () => {
         { ...tested, authMethod: 'client-certificate' },
       )[0],
     ).toBe('Sign in with (Password → Client certificate)');
+  });
+});
+
+/**
+ * T462 (design 03 state A): a stored data source's settings, read-only, a
+ * row each — where it connects, how it signs in, each secret said stored and
+ * never shown (AC-164), and TLS.
+ */
+describe('a stored one’s settings, a row each', () => {
+  it('says a PostgreSQL source’s host and port, database, sign-in, secret and TLS', () => {
+    const fields = {
+      host: 'sample-db',
+      port: 5432,
+      database: 'sample',
+      user: 'sample',
+      ssl: false,
+    };
+    expect(
+      storedRowsOf('postgres', storedValuesOf('postgres', 'password', fields), ['password']),
+    ).toEqual([
+      ['Type', 'PostgreSQL'],
+      ['Host and port', 'sample-db:5432'],
+      ['Database', 'sample'],
+      ['Signs in with', 'Password, as sample'],
+      ['Password', 'Stored · encrypted'],
+      ['TLS', 'Off'],
+    ]);
+    const verified = { ...fields, ssl: true, sslRejectUnauthorized: true };
+    expect(
+      storedRowsOf('postgres', storedValuesOf('postgres', 'password', verified), ['password']).at(
+        -1,
+      ),
+    ).toEqual(['TLS', 'On · verifies the server’s certificate']);
+  });
+
+  it('reads a stored source’s shape from what it holds', () => {
+    expect(storedValuesOf('dremio', 'token', { url: 'https://api.dremio.cloud' }).shape).toBe(
+      'cloud',
+    );
+    expect(storedValuesOf('dremio', 'token', { host: 'dremio', port: 9047 }).shape).toBe(
+      'software',
+    );
+    expect(storedValuesOf('oracle', 'password', { connectString: 'db:1521/x' }).shape).toBe(
+      'connect-string',
+    );
+    expect(
+      storedRowsOf(
+        'oracle',
+        storedValuesOf('oracle', 'password', { connectString: 'db:1521/x', user: 'u' }),
+        ['password'],
+      ).slice(0, 3),
+    ).toEqual([
+      ['Type', 'Oracle'],
+      ['Connect string', 'db:1521/x'],
+      ['Signs in with', 'User and password, as u'],
+    ]);
   });
 });

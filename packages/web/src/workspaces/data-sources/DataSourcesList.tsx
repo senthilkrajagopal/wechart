@@ -253,7 +253,12 @@ export function DataSourcesList({
               return (
                 <tr key={source.id} data-testid={`source-${source.id}`}>
                   {/* A name as Cube's model writes it, in the code face (design 01). */}
-                  <td className="is-code sources-name">{source.name}</td>
+                  <td className="is-code sources-name">
+                    {/* Opens its settings, the page Explore's row opens (T462, state J). */}
+                    <a href={`/explore/data-sources/${encodeURIComponent(source.id)}`}>
+                      {source.name}
+                    </a>
+                  </td>
                   <td>
                     <a href={`/explore?folder=${encodeURIComponent(source.folderId)}`}>
                       {pathLabel(source)}

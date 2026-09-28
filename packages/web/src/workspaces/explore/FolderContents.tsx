@@ -114,10 +114,8 @@ const plural = (count: number, one: string) => `${String(count)} ${one}${count =
  * open in their folder with T342; until then they are listed by name.
  */
 export const opensFromExplore = (item: CatalogItem): boolean =>
-  item.kind === 'data-source'
-    ? // Its settings open with T363's page; until then, its name alone.
-      false
-    : item.kind !== 'model' || item.folderId === SHARED_ROOT.id;
+  // A data source opens in its settings (T462, UX-222), a model in its editor.
+  item.kind === 'data-source' || item.kind !== 'model' || item.folderId === SHARED_ROOT.id;
 
 /** The Type column: a chart by its chart type, never only "Chart" (AC-193). */
 function typeText(item: CatalogItem): string {

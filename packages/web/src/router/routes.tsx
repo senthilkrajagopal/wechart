@@ -27,6 +27,7 @@ import { ExplorePage } from '../workspaces/explore/ExplorePage';
 import { JobsPage } from '../workspaces/jobs/JobsPage';
 import { SecurityPage } from '../workspaces/security/SecurityPage';
 import { DataSourcesPage } from '../workspaces/data-sources/DataSourcesPage';
+import { SourceSettings } from '../workspaces/data-sources/SourceSettings';
 import { SchedulesPage } from '../workspaces/schedules/SchedulesPage';
 import { ModelFilePage } from '../workspaces/model/ModelFilePage';
 import { LibraryChartPage } from '../workspaces/explore/LibraryChartPage';
@@ -522,6 +523,24 @@ const modelFileRoute = createRoute({
   },
 });
 
+/**
+ * A stored data source's settings (T462, AC-269; design 03 of 2026-09-27):
+ * an Explore item, under its folder's breadcrumb, opened from its row in
+ * Explore or in Data sources.
+ */
+const dataSourceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/explore/data-sources/$objectId',
+  component: function DataSourceSurface() {
+    const params = useParams({ strict: false }) as { objectId?: string };
+    return (
+      <AppShell workspace="explore">
+        <SourceSettings id={decodeURIComponent(params.objectId ?? '')} />
+      </AppShell>
+    );
+  },
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   sourcesRoute,
@@ -530,6 +549,7 @@ const routeTree = rootRoute.addChildren([
   // Before chartRoute: the editor path is more specific than /charts/$objectId.
   chartEditorRoute,
   chartRoute,
+  dataSourceRoute,
   modelFileRoute,
 ]);
 

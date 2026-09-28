@@ -154,7 +154,7 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
       const table = main.getByRole('table', { name: 'Data sources' });
       const row = table.getByRole('row').filter({ hasText: `sales_${RUN}` });
       await expect(row.getByRole('cell').nth(2)).toHaveText('PostgreSQL');
-      const path = row.getByRole('link');
+      const path = row.getByRole('cell').nth(1).getByRole('link');
       await expect(path).toHaveText(`Sources parent ${RUN} / Sources ${RUN}`);
       await expect(path).toHaveAttribute('href', `/explore?folder=${made.folder}`);
       const health = row.getByTestId('source-health');
@@ -222,6 +222,155 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
         'href',
         '/explore',
       );
+    });
+  });
+
+  /**
+   * T462 (AC-269, AC-161, AC-163; design 03 of 2026-09-27): a stored data
+   * source opens in its settings under its folder's breadcrumb, from Data
+   * sources and from Explore. In a shared folder it is read-only, changed
+   * through a copy in the user's workspace (rule 71): state A. The copy is
+   * headed with where it came from and is to go, and Discard my copy
+   * removes it after asking.
+   */
+  test.describe('as writer, opening one', () => {
+    test.use({ role: 'writer' });
+
+    test('opens its settings from Data sources and Explore: read-only in its folder, with its tests and Cube’s use', async ({
+      page,
+    }) => {
+      await page.goto('/data-sources');
+      const list = page.getByRole('main').getByRole('table', { name: 'Data sources' });
+      await list.getByRole('link', { name: `sales_${RUN}`, exact: true }).click();
+      await expect(page).toHaveURL(/\/explore\/data-sources\/[^/?]+$/);
+      const main = page.getByRole('main');
+      await expect(
+        main.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link'),
+      ).toHaveText(['Explore', 'Shared', `Sources parent ${RUN}`, `Sources ${RUN}`]);
+      await expect(main.getByRole('heading', { level: 1 })).toHaveText(`sales_${RUN}`);
+      await expect(main.locator('.source-settings__driver')).toHaveText('PostgreSQL');
+      await expect(main.locator('.source-settings__access')).toHaveText(
+        `Read-only · in Sources parent ${RUN} / Sources ${RUN}`,
+      );
+      await expect(main.getByRole('button', { name: 'Edit in my workspace' })).toBeVisible();
+      // What it is the health of, said on its own page (pin 4).
+      await expect(main.getByTestId('source-health')).toHaveText(/^Last test passed · /);
+
+      // Its connection as a definition list: no field to type in, the secret said stored.
+      const tabs = main.getByRole('tablist', { name: 'Data source' });
+      await expect(tabs.getByRole('tab')).toHaveText([
+        'General',
+        'Connection',
+        'Test history',
+        'Usage',
+        'In Cube',
+      ]);
+      await expect(tabs.getByRole('tab', { name: 'Connection' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      const connection = main.getByRole('tabpanel', { name: 'Connection' });
+      await expect(connection.getByRole('textbox')).toHaveCount(0);
+      await expect(connection.locator('dt')).toHaveText([
+        'Type',
+        'Host and port',
+        'Database',
+        'Signs in with',
+        'Password',
+        'TLS',
+      ]);
+      await expect(connection.locator('dd')).toHaveText([
+        'PostgreSQL',
+        'sample-db:5432',
+        'sample',
+        'Password, as sample',
+        'Stored · encrypted',
+        'Off',
+      ]);
+
+      // Its tests, newest first: the super's, then the one it was made from (AC-163).
+      await tabs.getByRole('tab', { name: 'Test history' }).click();
+      const history = main.getByRole('tabpanel', { name: 'Test history' }).getByRole('table');
+      await expect(history.getByRole('row')).toHaveCount(3);
+      await expect(history.getByRole('row').nth(1)).toContainText('Passed');
+      await expect(history.getByRole('row').nth(1)).toContainText('Stored settings');
+      // Cube's use of it, as xcube's reports tell it (AC-161).
+      await tabs.getByRole('tab', { name: 'In Cube' }).click();
+      await expect(
+        main.getByRole('tabpanel', { name: 'In Cube' }).getByTestId('cube-state'),
+      ).toBeVisible();
+      await tabs.getByRole('tab', { name: 'Usage' }).click();
+      await expect(main.getByRole('tabpanel', { name: 'Usage' })).toContainText(
+        'No published cube uses it.',
+      );
+
+      // Its row in Explore opens the same page (UX-222).
+      await page.goto(`/explore?folder=${made.folder}`);
+      await page
+        .getByTestId('explore-contents')
+        .getByRole('button', { name: `sales_${RUN}`, exact: true })
+        .click();
+      await expect(main.getByRole('heading', { level: 1 })).toHaveText(`sales_${RUN}`);
+    });
+
+    test('opens its parent’s view only, with no way to change it', async ({ page }) => {
+      await page.goto('/data-sources');
+      await page
+        .getByRole('main')
+        .getByRole('table', { name: 'Data sources' })
+        .getByRole('link', { name: `parent_${RUN}`, exact: true })
+        .click();
+      const main = page.getByRole('main');
+      await expect(main.getByRole('heading', { level: 1 })).toHaveText(`parent_${RUN}`);
+      await expect(main.locator('.source-settings__access')).toHaveText(
+        `Read-only · in Sources parent ${RUN}`,
+      );
+      await expect(main.getByRole('button', { name: 'Edit in my workspace' })).toHaveCount(0);
+    });
+
+    test('copies it into My workspace, headed with where it came from, and discards the copy after asking', async ({
+      page,
+    }) => {
+      await page.goto('/data-sources');
+      await page
+        .getByRole('main')
+        .getByRole('table', { name: 'Data sources' })
+        .getByRole('link', { name: `sales_${RUN}`, exact: true })
+        .click();
+      const main = page.getByRole('main');
+      const original = page.url();
+      await main.getByRole('button', { name: 'Edit in my workspace' }).click();
+      await expect(page).not.toHaveURL(original);
+      await expect(
+        main.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link'),
+      ).toHaveText(['Explore', 'My workspace']);
+      await expect(main.locator('.source-settings__status')).toHaveText('Draft');
+      await expect(main.locator('.source-settings__origin')).toHaveText(
+        `Copied from Sources parent ${RUN} / Sources ${RUN} › sales_${RUN} · version 1`,
+      );
+      await expect(main.locator('.source-settings__target')).toHaveText(
+        `Target: Sources parent ${RUN} / Sources ${RUN}`,
+      );
+      // Kept for the suite's clean-up, should this test stop short of discarding it.
+      made.sources.push(decodeURIComponent(page.url().split('/').pop() ?? ''));
+      // Asked first; Escape keeps it, and puts focus back on what asked (T462's review).
+      const discard = main.getByRole('button', { name: 'Discard my copy…' });
+      await discard.click();
+      const question = page.getByRole('alertdialog', { name: 'Discard your copy?' });
+      await expect(question.getByRole('button', { name: 'Keep it' })).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(question).toHaveCount(0);
+      await expect(discard).toBeFocused();
+      await discard.click();
+      await question.getByRole('button', { name: 'Discard' }).click();
+      await expect(page).toHaveURL(/\/explore\?folder=/);
+      await page.goto('/data-sources');
+      await expect(
+        page
+          .getByRole('main')
+          .getByRole('table', { name: 'Data sources' })
+          .getByRole('link', { name: `sales_${RUN}`, exact: true }),
+      ).toHaveCount(1);
     });
   });
 

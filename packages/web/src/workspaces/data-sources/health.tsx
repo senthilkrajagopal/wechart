@@ -25,11 +25,14 @@ export function HealthBadge({
   source,
   now = new Date(),
   id,
+  phrased = false,
 }: {
   source: Pick<ListedSource, 'lastTest'>;
   /** For a test to fix the clock. */
   now?: Date;
   id?: string | undefined;
+  /** "Last test passed", as a data source's own page says it, not the list's "Passed". */
+  phrased?: boolean;
 }) {
   const { kind, label } = healthOf(source);
   const ran =
@@ -42,7 +45,8 @@ export function HealthBadge({
       data-state={kind}
     >
       <StatusIcon kind={kind} />
-      {label}
+      {/* On its own page, what it is the health of is said (design 03 pin 4). */}
+      {phrased && kind !== 'idle' ? `Last test ${label.toLowerCase()}` : label}
       {ran === null ? null : (
         <span className="status__when" title={ran.toLocaleString()}>
           {' · '}

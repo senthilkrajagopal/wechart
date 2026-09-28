@@ -5951,17 +5951,59 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - AC-158 ticked:
       - its create half by T363's "a new one made only from its passing test" and `e2e/security/new-data-source.spec.ts`;
       - its edit half by this task's tests.
-- [ ] T462 (AC-269, AC-161, AC-163, AC-310) Open a stored data source in its settings, from Explore and from Data sources *(added 2026-09-27, split from T461; built to `docs/design/reviews/2026-09-27/designs/` once the user approves them)*
-  - Files: `packages/web/src/workspaces/data-sources/{SourceSettings,TestHistory}.tsx` (+ tests), `packages/web/src/router/routes.tsx`, `e2e/security/data-sources.spec.ts`
-  - Failing test: `data-sources.spec.ts`:
-    - a data source's row in Explore and in Data sources opens its settings under its folder's breadcrumb, read-only where the user may not change it (rule 70);
-    - its type is shown fixed, saying to make a new data source for another type (AC-161);
-    - each stored secret reads "Stored · encrypted", and is typed only to replace it (AC-164);
-    - its test history is listed newest first, each test with its time, who ran it, its outcome and each check (AC-163);
-    - T365's `CubeState` is shown (AC-161's showing half);
-    - the root's `default` opens and changes like any other (AC-310);
-    - Save is offered only once the Test of the change has passed (T461's rule).
+- [x] T462 (AC-269, AC-161, AC-163) Open a stored data source in its settings, from Explore and from Data sources *(added 2026-09-27, split from T461; built to design 03 of 2026-09-27. Re-split 2026-09-27: changing it is T497)*
+  - **Done 2026-09-27.** Tested in `e2e/security/data-sources.spec.ts` ("as writer, opening one", three tests, in Chrome, Firefox and Safari), the API's `access/data-sources.test.ts` ("opens one with its folder's path…"), `connectionSummary.test.ts`, `DataSourcesList.test.tsx` and `FolderContents.test.tsx`.
+  - **Opening it** (AC-269's data source half; UX-222):
+    - A data source's row in Explore, and its name in Data sources, open `/explore/data-sources/:id`, under Explore.
+    - The page sits under its folder's breadcrumb: Explore / Shared or My workspace / each folder / its name.
+    - `GET /api/data-sources/:id` now also answers its folder's path, the paths of what it was copied from and where it is to go, whether the user may change it there (`canWrite`), and whether it is in a workspace.
+  - **The head:**
+    - Its driver's mark, its name at 20/600 in the code face, and its driver as a badge. A workspace copy is marked Draft.
+    - The line under it:
+      - in a shared folder, "Read-only · in …" (rule 71);
+      - a copy says "Copied from … › name · version n" and "Target: …";
+      - its health, "Last test passed · 2 h ago";
+      - Cube's use of it, "Cube uses these settings · 2 instances".
+  - **The tabs, on one card:**
+    - General: its name, folder and version.
+    - Connection: its settings as a definition list. Its type is in words. Addresses and names are in the code face. Each stored secret reads "Stored · encrypted" behind a lock, never shown (AC-164). TLS says whether it verifies the server's certificate.
+    - Test history, newest first (AC-163): the time ("Today 14:21"), who ran it, the outcome in icon and words, whether it was of the stored settings or a trial of changes, and each check as an icon. A failure names its check and Cube's text.
+    - Usage: the cubes bound to it, with their folders, and those in folders the user can't see counted. The note says a binding holds until the cube is published again (AC-273).
+    - In Cube: T365's state, then each instance that reported within the hour, with its version, its state and when it reported (AC-161's showing half).
+  - **Edit in my workspace** (a read-write member, with sign-in on): copies it (T346) and opens the copy.
+  - **Discard my copy…**, on a copy only: asks first ("Discard your copy?"), then removes it and opens My workspace.
+  - **From the review:**
+    - A copy of a source in the Shared root said "Copied from My workspace". What a copy came from and where it is to go are shared folders, so "Shared".
+    - A copy's Usage said "No published cube uses it". xcube binds cubes to the original, which the copy stands in for (AC-280), so a copy's Usage now shows the original's.
+    - In Cube kept a report once it passed the hour (AC-161). Instances are now filtered to the hour as they are drawn, and asked again each minute.
+    - "Discard my copy…" showed on a source made new in the workspace, which isn't a copy.
+    - The question left focus on the page. It now goes back to what asked, and a re-render no longer pulls focus back to Keep.
+    - A failed read of the list now says so in Usage.
+    - The version is in the head's line (state A).
+    - Tables scroll inside the card rather than being cut off.
+  - **Shared with the wizard:** its four checks, their guidance, sealing and the API's reasons moved to `connectionTest.tsx`, for T497's "Test to save".
+  - Data sources' note now says "To change one, open it and choose Edit in my workspace" to those with a workspace.
+  - **Left:**
+    - Changing it is T497: rename, the Connection form, Test to save, and leaving with changes.
+    - Usage's Model column needs the API to name each cube's file.
+    - The version line's "approved … by" and History wait on the proposal chain (backlog §6).
+  - AC-163 ticked.
+    - AC-269 waits on models opened from their folder (T342).
+    - AC-161 and AC-310 wait on T497.
+  - Files: `packages/web/src/workspaces/data-sources/SourceSettings.tsx`, `packages/web/src/workspaces/data-sources/{connectionSummary.ts,health.tsx,DataSourcesList.tsx,DataSourcesPage.tsx}` (+ tests), `packages/web/src/workspaces/explore/FolderContents.tsx` (+ test), `packages/web/src/router/routes.tsx`, `packages/web/src/shell/styles.ts`, `packages/api/src/routes/data-sources.ts`, `packages/api/src/access/data-sources.test.ts`, `e2e/security/data-sources.spec.ts`
   - Depends on: T461, T365
+- [ ] T497 (AC-161, AC-310, AC-158, AC-164, AC-312) Change a data source on its settings page, saved only after a passing test of the change *(added 2026-09-27, split from T462; design 03 of 2026-09-27)*
+  - Files: `packages/web/src/workspaces/data-sources/SourceSettings.tsx`, `packages/web/src/workspaces/data-sources/ConnectionForm.tsx` (+ tests), `e2e/security/data-sources.spec.ts`
+  - Failing test: `data-sources.spec.ts`:
+    - in a workspace copy, or in place with sign-in off, General renames it without a test (state B), and says which published cubes still name it (AC-275);
+    - Connection is the form, its type fixed with the way to use another (AC-161, pin 5);
+    - a changed field is tinted with its old value, and a target field wears the link icon (AC-312);
+    - changing a target field asks for its secret again, saying why (pin 7);
+    - "Test to save" beside the form lists what changed and Cube's four checks (pin 8); there is no way round it (pin 9);
+    - Save is enabled only by a passing test of exactly these settings, and a change after the pass clears it (pin 10, T461);
+    - leaving with unsaved changes asks first (state I);
+    - the root's `default` opens and changes like any other (AC-310).
+  - Depends on: T462
 - [x] T364 (AC-157, AC-233) List every visible data source with its folder, driver and health *(2026-09-27: the cubes using each moved to T459; its AC-001 clause is T331's; its AC-161 showing is T363's)*
   - Files: `packages/web/src/workspaces/data-sources/DataSourcesPage.tsx` (replacing the deferred page), `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources`), `e2e/security/data-sources.spec.ts`; *as built (2026-09-27):* also `DataSourcesList.tsx` (+ test), `router/routes.tsx`, `admin/DeferredPage.tsx` (removed), `shell/styles.ts`, `shell/AccountMenu.tsx` (`Me.readWrite`), `packages/api/src/server.ts` (the listing's rule and paths; `/api/me`'s `readWrite`), `repos/connection-tests.ts` (`latestAsStored`, a test's `settings`), `repos/data-sources.ts` (`settingsPrint`), a migration `…_connection-test-settings.cjs`, `access/data-sources.test.ts`, `e2e/admin.spec.ts`
   - Failing test: `data-sources.spec.ts`: the page shows its title and note, lists every source the user may see with folder path, driver, health from the last test ~~and the cubes using it~~, and none they may not; `/sources` opens it~~; `reader` has no Data sources entry~~ (AC-157, AC-233~~, AC-001~~).
@@ -8363,8 +8405,8 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 | AC-145 | T375 | | | | |
 | AC-150 | T372, T373, T374 | AC-151 | T376 | AC-153 | T377 |
 | AC-154 | T377 | AC-155 | T379 | AC-157 | T364, T459 |
-| AC-158 | T363, T461 | AC-159 | T361, T363 | AC-160 | T360, T454, T363 |
-| AC-161 | T335, T363, T365, T435, T442, T462 | AC-163 | T362, T363, T461, T462 | AC-164 | T335 |
+| AC-158 | T363, T461, T497 | AC-159 | T361, T363 | AC-160 | T360, T454, T363 |
+| AC-161 | T335, T363, T365, T435, T442, T462, T497 | AC-163 | T362, T363, T461, T462 | AC-164 | T335, T497 |
 | AC-176 | T405 | AC-180 | T407 | AC-187 | T406, T466–T470, T476–T478 |
 | AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
 | AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |
@@ -8388,8 +8430,8 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 | AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |
 | AC-302 | T394 | AC-303 | T395 | AC-304 | T396 |
 | AC-305 | T398 | AC-306 | T399 | AC-307 | T409, T444 |
-| AC-308 | T410 | ~~AC-309~~ | retired 2026-09-25 (was T337) | AC-310 | ~~T338~~ T435, T443, T462 |
-| ~~AC-311~~ | retired 2026-09-25 (T333 now serves AC-324) | AC-312 | T335, T454, T361 | AC-313 | T397, T398 |
+| AC-308 | T410 | ~~AC-309~~ | retired 2026-09-25 (was T337) | AC-310 | ~~T338~~ T435, T443, T497 |
+| ~~AC-311~~ | retired 2026-09-25 (T333 now serves AC-324) | AC-312 | T335, T454, T361, T497 | AC-313 | T397, T398 |
 | AC-314 | T400 | AC-315 | T401 | AC-316 | T316, T321 |
 | AC-317 | T412 | AC-318 | T416 | AC-139 | T413, T417 |
 | AC-248 | T414, T415, T417 | AC-250 | T413, T420 | AC-009 | T447, T432 |

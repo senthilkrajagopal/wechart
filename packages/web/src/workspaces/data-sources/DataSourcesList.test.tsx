@@ -178,6 +178,10 @@ describe('the data sources a user may see (T364, AC-157)', () => {
 
     const cells = cellsOf(rows()[0]!);
     expect(cells[0]?.classList.contains('is-code')).toBe(true);
+    // Its name opens its settings (T462, design 03 state J).
+    expect(within(cells[0]!).getByRole('link', { name: 'warehouse' }).getAttribute('href')).toBe(
+      '/explore/data-sources/ds-1',
+    );
     const then = new Date('2026-09-26T10:00:00.000Z');
     expect(cells[5]?.textContent).toBe(shortDay(then, new Date()));
     expect(cells[5]?.querySelector('time')?.getAttribute('title')).toBe(then.toLocaleString());

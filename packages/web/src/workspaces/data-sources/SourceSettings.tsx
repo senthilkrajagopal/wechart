@@ -1,0 +1,697 @@
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from '@tanstack/react-router';
+import { DRIVERS, type DriverType, type FieldValue } from '@wechart/core';
+import { useEffect, useId, useRef, useState } from 'react';
+
+import type { Me } from '../../shell/AccountMenu';
+import { shortAgo, shortDay } from '../../shell/relativeAge';
+import { StateLine, StatusIcon } from '../../shell/StatusIcon';
+import { TableScroll } from '../../shell/TableScroll';
+import { onTabKey } from '../../shell/tabKeys';
+import { useFocusTrap } from '../../shell/useFocusTrap';
+import { MY_WORKSPACE, SHARED_ROOT } from '../explore/roots';
+import { CubeState, cubeStateLabel, type CubeStateView } from './CubeState';
+import type { ListedSource } from './DataSourcesList';
+import { CHECK_LABELS } from './connectionTest';
+import { DriverMark } from './driverMarks';
+import { storedRowsOf, storedValuesOf } from './connectionSummary';
+import { HealthBadge } from './health';
+import { DATA_SOURCES_QUERY } from './query';
+
+/**
+ * A stored data source's settings (T462; AC-269, AC-161, AC-163, AC-310),
+ * drawn as design 03 of 2026-09-27: opened from its row in Explore or in
+ * Data sources, under its folder's breadcrumb, with its name in the code
+ * face, its driver, and a line saying where it is, where it came from and is
+ * to go, its health and Cube's use of it. Five tabs: General, Connection,
+ * Test history, Usage and In Cube.
+ *
+ * In a shared folder it is read-only: a read-write member changes it through
+ * a copy in their workspace, "Edit in my workspace" (rule 71, AC-280). A copy
+ * is headed as a draft, with Discard my copy.
+ */
+
+type Folder = { readonly id: string; readonly title: string };
+
+export interface StoredSource {
+  readonly id: string;
+  readonly folderId: string;
+  readonly name: string;
+  readonly driver: DriverType;
+  readonly authMethod: string;
+  readonly fields: Readonly<Record<string, FieldValue>>;
+  readonly secrets: Readonly<Record<string, { readonly stored: boolean }>>;
+  readonly targetFolderId: string | null;
+  readonly origin: {
+    readonly id: string;
+    readonly version: number;
+    readonly folderId: string;
+  } | null;
+  readonly version: number;
+  readonly updatedAt: string;
+  readonly folderPath: readonly Folder[];
+  /** Whether the user may change it in its folder (AC-262). */
+  readonly canWrite: boolean;
+  readonly inWorkspace: boolean;
+  readonly originPath?: readonly Folder[];
+  readonly targetPath?: readonly Folder[];
+}
+
+interface HistoryTest {
+  readonly id: string;
+  readonly ranAt: string;
+  readonly ok: boolean;
+  readonly asStored: boolean;
+  readonly checks: readonly {
+    readonly id: string;
+    readonly status: string;
+    readonly durationMs?: number;
+    readonly error?: string;
+  }[];
+  readonly by: { readonly key: string; readonly name: string } | null;
+}
+
+export const sourceQuery = (id: string) => ({
+  queryKey: ['data-source', id],
+  queryFn: async (): Promise<StoredSource> => {
+    const response = await fetch(`/api/data-sources/${encodeURIComponent(id)}`);
+    if (response.status === 404)
+      throw new Error('There’s no such data source, or it isn’t yours to see.');
+    if (!response.ok)
+      throw new Error(`The data source could not be read (${String(response.status)}).`);
+    return (await response.json()) as StoredSource;
+  },
+});
+
+/** Its own folder's root: My workspace for one in a workspace, else Shared. */
+const rootOf = (source: Pick<StoredSource, 'inWorkspace'>) =>
+  source.inWorkspace ? MY_WORKSPACE : SHARED_ROOT;
+/** Its own folder's path as Explore names it: its root by its title, then each folder's. */
+const pathText = (source: StoredSource, path: readonly Folder[]) =>
+  path.length === 0 ? rootOf(source).title : path.map((folder) => folder.title).join(' / ');
+/**
+ * A shared folder's path — what a copy came from, where it is to go: the
+ * Shared root is "Shared", never the workspace the copy is in (T462's review).
+ */
+const sharedPathText = (path: readonly Folder[] | undefined) =>
+  path === undefined || path.length === 0
+    ? SHARED_ROOT.title
+    : path.map((folder) => folder.title).join(' / ');
+const folderHref = (id: string) => `/explore?folder=${encodeURIComponent(id)}`;
+
+const TABS = [
+  ['general', 'General'],
+  ['connection', 'Connection'],
+  ['history', 'Test history'],
+  ['usage', 'Usage'],
+  ['cube', 'In Cube'],
+] as const;
+type Tab = (typeof TABS)[number][0];
+
+export function SourceSettings({ id }: { id: string }) {
+  const source = useQuery(sourceQuery(id));
+  if (source.isPending) return <StateLine kind="run">Reading the data source…</StateLine>;
+  if (source.isError) return <StateLine kind="err">{source.error.message}</StateLine>;
+  // Keyed by the source: a copy opened from its original is another page's state.
+  return <Settings key={source.data.id} source={source.data} />;
+}
+
+function Settings({ source }: { source: StoredSource }) {
+  const base = useId();
+  const queryClient = useQueryClient();
+  const router = useRouter();
+  const [tab, setTab] = useState<Tab>('connection');
+  const [asking, setAsking] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+  const me = useQuery({
+    queryKey: ['me'],
+    queryFn: async () => (await (await fetch('/api/me')).json()) as Me,
+  });
+  const list = useQuery(DATA_SOURCES_QUERY);
+  const listed = list.data?.find((each) => each.id === source.id);
+  /** A copy's original, whose cubes the copy stands in for (AC-280): its Usage. */
+  const original =
+    source.origin === null ? undefined : list.data?.find((each) => each.id === source.origin?.id);
+  const root = rootOf(source);
+  const discardButton = useRef<HTMLButtonElement>(null);
+  /** Changed through a copy in the user's workspace, which sign-in gives (rule 71). */
+  const copies =
+    !source.inWorkspace &&
+    source.canWrite &&
+    me.data?.security === 'oidc' &&
+    (me.data.superAdmin || me.data.readWrite === true);
+
+  const editInWorkspace = async () => {
+    setFailed(null);
+    const response = await fetch(`/api/data-sources/${encodeURIComponent(source.id)}/copy`, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      const said = (await response.json().catch(() => ({}))) as { error?: string };
+      setFailed(said.error ?? `It could not be copied (${String(response.status)}).`);
+      return;
+    }
+    const copy = (await response.json()) as StoredSource;
+    void queryClient.invalidateQueries({ queryKey: DATA_SOURCES_QUERY.queryKey });
+    router.history.push(`/explore/data-sources/${encodeURIComponent(copy.id)}`);
+  };
+  const discardCopy = async () => {
+    const response = await fetch(`/api/data-sources/${encodeURIComponent(source.id)}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      setAsking(false);
+      discardButton.current?.focus();
+      const said = (await response.json().catch(() => ({}))) as { error?: string };
+      setFailed(said.error ?? `Your copy could not be discarded (${String(response.status)}).`);
+      return;
+    }
+    void queryClient.invalidateQueries({ queryKey: DATA_SOURCES_QUERY.queryKey });
+    globalThis.location.assign(folderHref(MY_WORKSPACE.id));
+  };
+
+  return (
+    <div className="source-settings">
+      {/* Under its folder's breadcrumb, wherever it was opened from (pin 1). */}
+      <nav aria-label="Breadcrumb" className="source-settings__crumbs">
+        <a href="/explore">Explore</a>
+        <span aria-hidden="true"> / </span>
+        <a href={folderHref(root.id)}>{root.title}</a>
+        {source.folderPath.map((folder) => (
+          <span key={folder.id}>
+            <span aria-hidden="true"> / </span>
+            <a href={folderHref(folder.id)}>{folder.title}</a>
+          </span>
+        ))}
+        <span aria-hidden="true"> / </span>
+        <span aria-current="page">{source.name}</span>
+      </nav>
+
+      {/* Its name in the code face, its type and its state (pin 2). */}
+      <div className="source-settings__head">
+        <DriverMark type={source.driver} />
+        <h1 className="is-code source-settings__name">{source.name}</h1>
+        <span className="badge source-settings__driver">{DRIVERS[source.driver].label}</span>
+        {source.inWorkspace ? <span className="badge source-settings__status">Draft</span> : null}
+        <span className="source-settings__spacer" />
+        {/* A copy only: one made new in the workspace is the only one there is. */}
+        {source.inWorkspace && source.canWrite && source.origin !== null ? (
+          <button
+            ref={discardButton}
+            type="button"
+            className="btn"
+            onClick={() => {
+              setAsking(true);
+            }}
+          >
+            Discard my copy…
+          </button>
+        ) : null}
+        {copies ? (
+          <button type="button" className="btn btn-primary" onClick={() => void editInWorkspace()}>
+            Edit in my workspace
+          </button>
+        ) : null}
+      </div>
+      {failed === null ? null : <StateLine kind="err">{failed}</StateLine>}
+
+      {/* Where it is, where it came from and is to go, its health and Cube's use (pin 4). */}
+      <div className="source-settings__line">
+        {source.inWorkspace ? (
+          <>
+            {source.origin === null ? null : (
+              <span className="source-settings__origin">
+                Copied from {sharedPathText(source.originPath)} ›{' '}
+                <a href={`/explore/data-sources/${encodeURIComponent(source.origin.id)}`}>
+                  {source.name}
+                </a>{' '}
+                · version {String(source.origin.version)}
+              </span>
+            )}
+            {source.targetPath === undefined ? null : (
+              <span className="source-settings__target">
+                Target: <b>{sharedPathText(source.targetPath)}</b>
+              </span>
+            )}
+          </>
+        ) : (
+          <span className="badge source-settings__access">
+            Read-only · in {pathText(source, source.folderPath)}
+          </span>
+        )}
+        {/* Its version, as the line of a shared one says it (state A). */}
+        <span className="source-settings__version">Version {String(source.version)}</span>
+        {listed === undefined ? null : (
+          <span className="source-settings__health">
+            <HealthBadge source={listed} phrased />
+          </span>
+        )}
+        <CubeUse id={source.id} />
+      </div>
+
+      {/* The tabs and the chosen one's panel, on one card. */}
+      <div className="source-settings__card">
+        <div
+          role="tablist"
+          aria-label="Data source"
+          className="edit-sidebar__tabs source-settings__tabs"
+        >
+          {TABS.map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              id={`${base}-${key}`}
+              aria-selected={tab === key}
+              aria-controls={`${base}-${key}-panel`}
+              tabIndex={tab === key ? 0 : -1}
+              onClick={() => {
+                setTab(key);
+              }}
+              onKeyDown={(event) => {
+                onTabKey(event, (at) => {
+                  setTab(TABS[at]?.[0] ?? key);
+                });
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div
+          role="tabpanel"
+          id={`${base}-${tab}-panel`}
+          aria-labelledby={`${base}-${tab}`}
+          className="source-settings__panel"
+        >
+          {tab === 'general' ? (
+            <dl className="source-settings__rows">
+              <dt>Name</dt>
+              <dd className="is-code">{source.name}</dd>
+              <dt>Folder</dt>
+              <dd>{pathText(source, source.folderPath)}</dd>
+              <dt>Version</dt>
+              <dd>{String(source.version)}</dd>
+            </dl>
+          ) : tab === 'connection' ? (
+            <dl className="source-settings__rows">
+              {storedRowsOf(
+                source.driver,
+                storedValuesOf(source.driver, source.authMethod, source.fields),
+                Object.entries(source.secrets)
+                  .filter(([, secret]) => secret.stored)
+                  .map(([field]) => field),
+              ).map(([label, value]) => (
+                <Row key={label} label={label} value={value} />
+              ))}
+            </dl>
+          ) : tab === 'history' ? (
+            <TestHistory id={source.id} />
+          ) : tab === 'usage' ? (
+            list.isError ? (
+              <StateLine kind="err">{list.error.message}</StateLine>
+            ) : (
+              <Usage source={source} listed={source.origin === null ? listed : original} />
+            )
+          ) : (
+            <InCube id={source.id} />
+          )}
+        </div>
+      </div>
+
+      {asking ? (
+        <AskToDiscardCopy
+          source={source}
+          onKeep={() => {
+            setAsking(false);
+            // Back on what asked (T462's review).
+            discardButton.current?.focus();
+          }}
+          onDiscard={() => void discardCopy()}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/** Said in words, not the code face: what isn't a name or an address (design 03 state A). */
+const IN_WORDS = new Set(['Type', 'TLS', 'Given']);
+
+function Row({ label, value }: { label: string; value: string }) {
+  const who = label === 'Signs in with' ? /^(.*), as (.+)$/.exec(value) : null;
+  return (
+    <>
+      <dt>{label}</dt>
+      <dd>
+        {value === 'Stored · encrypted' ? (
+          <span className="source-settings__stored">
+            <span className="secret-pasted__lock" aria-hidden="true" />
+            {value}
+          </span>
+        ) : label === 'Signs in with' ? (
+          // "Password, as cube_reader": the way in words, the name in the code face.
+          who === null ? (
+            value
+          ) : (
+            <>
+              {who[1]}, as <span className="is-code">{who[2]}</span>
+            </>
+          )
+        ) : IN_WORDS.has(label) || IN_WORDS.has(value) ? (
+          value
+        ) : (
+          <span className="is-code">{value}</span>
+        )}
+      </dd>
+    </>
+  );
+}
+
+/** Cube's use of it, in the head's line: its state and how many instances told (pin 4). */
+function CubeUse({ id }: { id: string }) {
+  const state = useCubeState(id);
+  if (state.data === undefined) return null;
+  const { kind, label } = cubeStateLabel(state.data);
+  const count = withinTheHour(state.data, new Date()).length;
+  return (
+    <span className={`status status--${kind} source-settings__cube-use`}>
+      <StatusIcon kind={kind} />
+      {label}
+      {count === 0 ? null : (
+        <span className="status__when">
+          {' · '}
+          {count === 1 ? '1 instance' : `${String(count)} instances`}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function useCubeState(id: string) {
+  return useQuery({
+    queryKey: ['data-source', id, 'cube-state'],
+    queryFn: async (): Promise<CubeStateView> => {
+      const response = await fetch(`/api/data-sources/${encodeURIComponent(id)}/cube-state`);
+      if (!response.ok) {
+        const said = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(
+          said.error ?? `Cube’s use of it could not be read (${String(response.status)}).`,
+        );
+      }
+      return (await response.json()) as CubeStateView;
+    },
+    // Asked again each minute while the page is open: an instance's report ages out of the
+    // hour, and Cube picks a change up as it runs (AC-161; T462's review).
+    refetchInterval: 60_000,
+  });
+}
+
+const HOUR = 60 * 60 * 1000;
+/** Only instances that reported within the hour, as of now, not as of the answer (AC-161). */
+const withinTheHour = (view: CubeStateView, now: Date) =>
+  view.state === 'unlanded'
+    ? []
+    : view.instances.filter(
+        (instance) => now.getTime() - new Date(instance.reportedAt).getTime() <= HOUR,
+      );
+
+/** When a test ran, short, on one 24-hour clock: "Today 14:21", "Sep 24, 09:40" (state E). */
+function shortWhen(then: Date, now: Date): string {
+  const clock = then.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return then.toDateString() === now.toDateString()
+    ? `Today ${clock}`
+    : `${shortDay(then, now)}, ${clock}`;
+}
+
+/**
+ * Its tests, newest first (AC-163; design 03 state E): when, who ran it, its
+ * outcome in icon and words, whether of the stored settings or a trial of
+ * changes, and each check; a failure opens to its check and Cube's text.
+ */
+function TestHistory({ id }: { id: string }) {
+  const tests = useQuery({
+    queryKey: ['data-source', id, 'tests'],
+    queryFn: async (): Promise<HistoryTest[]> => {
+      const response = await fetch(`/api/data-sources/${encodeURIComponent(id)}/tests`);
+      if (!response.ok)
+        throw new Error(`Its tests could not be read (${String(response.status)}).`);
+      return (await response.json()) as HistoryTest[];
+    },
+  });
+  if (tests.isPending) return <StateLine kind="run">Reading its tests…</StateLine>;
+  if (tests.isError) return <StateLine kind="err">{tests.error.message}</StateLine>;
+  if (tests.data.length === 0)
+    return <p className="source-settings__none">It hasn’t been tested yet.</p>;
+  const now = new Date();
+  return (
+    <TableScroll label="Tests">
+      <table className="query-log source-settings__history" aria-label="Tests">
+        <thead>
+          <tr>
+            <th scope="col">When</th>
+            <th scope="col">Run by</th>
+            <th scope="col">Outcome</th>
+            <th scope="col">Of</th>
+            <th scope="col">Checks</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tests.data.map((test) => {
+            const failed = test.checks.find((check) => check.status === 'failed');
+            return (
+              <tr key={test.id}>
+                <td>
+                  <time dateTime={test.ranAt} title={new Date(test.ranAt).toLocaleString()}>
+                    {shortWhen(new Date(test.ranAt), now)}
+                  </time>
+                </td>
+                <td>{test.by?.name ?? '—'}</td>
+                <td>
+                  <span className={`status status--${test.ok ? 'ok' : 'err'}`}>
+                    <StatusIcon kind={test.ok ? 'ok' : 'err'} />
+                    {test.ok ? 'Passed' : 'Failed'}
+                  </span>
+                  {failed === undefined ? null : (
+                    <span className="source-settings__failure">
+                      Failed at {CHECK_LABELS[failed.id] ?? failed.id}
+                      {failed.error === undefined ? null : (
+                        <code className="source-settings__error">{failed.error}</code>
+                      )}
+                    </span>
+                  )}
+                </td>
+                <td>{test.asStored ? 'Stored settings' : 'Trial of changes'}</td>
+                <td>
+                  <span className="source-settings__checks">
+                    {test.checks.map((check) => {
+                      const kind =
+                        check.status === 'passed'
+                          ? 'ok'
+                          : check.status === 'failed'
+                            ? 'err'
+                            : 'idle';
+                      return (
+                        <span
+                          key={check.id}
+                          className={`status status--${kind}`}
+                          title={`${CHECK_LABELS[check.id] ?? check.id}: ${check.status}`}
+                        >
+                          <StatusIcon kind={kind} />
+                          <span className="visually-hidden">
+                            {CHECK_LABELS[check.id] ?? check.id}: {check.status}
+                          </span>
+                        </span>
+                      );
+                    })}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </TableScroll>
+  );
+}
+
+/**
+ * The published cubes bound to it, with their folders (design 03 state F),
+ * as Data sources lists them (T459): a change's reach, seen before it is
+ * proposed. Those in folders the user can't see are counted, never named.
+ */
+function Usage({ source, listed }: { source: StoredSource; listed: ListedSource | undefined }) {
+  if (listed === undefined) return <StateLine kind="run">Reading which cubes use it…</StateLine>;
+  if (listed.usedBy === null)
+    return (
+      <p className="source-settings__none">Not known: Cube didn’t answer which cubes use it.</p>
+    );
+  const hidden = listed.usedElsewhere ?? 0;
+  return (
+    <div className="source-settings__usage">
+      {listed.usedBy.length === 0 ? (
+        <p className="source-settings__none">No published cube uses it.</p>
+      ) : (
+        <table className="query-log" aria-label={`Cubes using ${source.name}`}>
+          <thead>
+            <tr>
+              <th scope="col">Cube</th>
+              <th scope="col">Folder</th>
+            </tr>
+          </thead>
+          <tbody>
+            {listed.usedBy.map((cube) => (
+              <tr key={`${cube.folderId}/${cube.name}`}>
+                <td className="is-code">{cube.name}</td>
+                <td>
+                  <a href={folderHref(cube.folderId)}>
+                    {cube.folderPath.length === 0
+                      ? SHARED_ROOT.title
+                      : cube.folderPath.map((folder) => folder.title).join(' / ')}
+                  </a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {hidden === 0 ? null : (
+        <p className="source-settings__none">
+          {hidden === 1
+            ? '1 more cube uses it, in a folder you can’t see.'
+            : `${String(hidden)} more cubes use it, in folders you can’t see.`}
+        </p>
+      )}
+      <p className="info-bar source-settings__note" role="note">
+        <StatusIcon kind="info" />
+        Cubes bind to a data source when they’re published, and keep that binding until they’re
+        published again.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Cube's use of it (AC-161; design 03 states G and H): its state, then each
+ * instance that reported within the hour, on which version, live or not.
+ */
+function InCube({ id }: { id: string }) {
+  const state = useCubeState(id);
+  if (state.isPending) return <StateLine kind="run">Asking Cube…</StateLine>;
+  if (state.isError) return <StateLine kind="err">{state.error.message}</StateLine>;
+  const view = state.data;
+  const now = new Date();
+  const instances = withinTheHour(view, now);
+  return (
+    <div className="source-settings__cube">
+      <CubeState view={view} />
+      {instances.length === 0 ? null : (
+        <>
+          <TableScroll label="Cube instances">
+            <table className="query-log" aria-label="Cube instances">
+              <thead>
+                <tr>
+                  <th scope="col">Instance</th>
+                  <th scope="col">Settings</th>
+                  <th scope="col">State</th>
+                  <th scope="col">Reported</th>
+                </tr>
+              </thead>
+              <tbody>
+                {instances.map((instance) => {
+                  const kind = !instance.current
+                    ? 'idle'
+                    : instance.state === 'live'
+                      ? 'ok'
+                      : 'err';
+                  return (
+                    <tr key={instance.instance}>
+                      <td className="is-code">{instance.instance}</td>
+                      <td>
+                        {instance.version === null ? '—' : `Version ${String(instance.version)}`}
+                      </td>
+                      <td>
+                        <span className={`status status--${kind}`}>
+                          <StatusIcon kind={kind} />
+                          {!instance.current
+                            ? 'Previous version'
+                            : instance.state === 'live'
+                              ? 'Live'
+                              : 'Failed'}
+                        </span>
+                      </td>
+                      <td title={new Date(instance.reportedAt).toLocaleString()}>
+                        {shortAgo(new Date(instance.reportedAt), now)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </TableScroll>
+          <p className="source-settings__none">
+            Only instances that reported within the last hour are listed.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** "Discard my copy…" asks first (rule 85): its answer that loses nothing is focused. */
+function AskToDiscardCopy({
+  source,
+  onKeep,
+  onDiscard,
+}: {
+  source: StoredSource;
+  onKeep: () => void;
+  onDiscard: () => void;
+}) {
+  const ids = useId();
+  const box = useRef<HTMLDivElement>(null);
+  const keep = useRef<HTMLButtonElement>(null);
+  useFocusTrap(box);
+  // Read through a ref: the page's re-renders mustn't pull focus back to Keep (T462's review).
+  const keeping = useRef(onKeep);
+  useEffect(() => {
+    keeping.current = onKeep;
+  }, [onKeep]);
+  useEffect(() => {
+    keep.current?.focus();
+    // Esc keeps it, as the answer that loses nothing.
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') keeping.current();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+    };
+  }, []);
+  return (
+    <div className="source-settings__veil">
+      <div
+        ref={box}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={`${ids}-title`}
+        aria-describedby={`${ids}-body`}
+        className="source-pane__ask"
+      >
+        <h3 id={`${ids}-title`}>Discard your copy?</h3>
+        <p id={`${ids}-body`}>
+          Your copy of <span className="is-code">{source.name}</span>, and any change in it, is
+          removed.
+          {source.origin === null ? '' : ` ${sharedPathText(source.originPath)} keeps its own.`}
+        </p>
+        <div className="source-pane__ask-actions">
+          <button ref={keep} type="button" className="btn" onClick={onKeep}>
+            Keep it
+          </button>
+          <button type="button" className="btn btn-danger" onClick={onDiscard}>
+            Discard
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

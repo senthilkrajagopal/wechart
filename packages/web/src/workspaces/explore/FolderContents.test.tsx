@@ -555,7 +555,7 @@ describe('data sources in a folder (T335, AC-269)', () => {
     ).toBe('data-source');
   });
 
-  it('offers no rename or move yet, and doesn’t open until its settings page is there', async () => {
+  it('offers no rename or move yet, and opens its settings page (T462, UX-222)', async () => {
     const onOpen = vi.fn();
     render(
       <FolderContents
@@ -569,9 +569,10 @@ describe('data sources in a folder (T335, AC-269)', () => {
     );
 
     expect(screen.queryByRole('button', { name: 'Actions for default' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'default' })).toBeNull();
-    screen.getByTestId('item-ds-1').focus();
+    await userEvent.click(screen.getByRole('button', { name: 'default' }));
+    expect(onOpen).toHaveBeenLastCalledWith(sources[0]);
+    screen.getByTestId('item-ds-2').focus();
     await userEvent.keyboard('{Enter}');
-    expect(onOpen).not.toHaveBeenCalled();
+    expect(onOpen).toHaveBeenLastCalledWith(sources[1]);
   });
 });

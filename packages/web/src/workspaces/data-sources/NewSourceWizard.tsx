@@ -3,12 +3,10 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import {
   DRIVER_TYPES,
   DRIVERS,
-  sealSecretV1,
   SHORT_NAME,
   type DriverType,
   type FieldValue,
   type SealedV1,
-  type XcubeKey,
 } from '@wechart/core';
 
 import { InfoBar } from '../../shell/InfoBar';
@@ -25,6 +23,14 @@ import {
   type ConnectionValues,
 } from './ConnectionForm';
 import { changesSince, signsInOf, tlsOf, whereOf, type TestedValues } from './connectionSummary';
+import {
+  CHECK_LABELS,
+  ConnectionChecks,
+  errorOf,
+  sealerOf,
+  type Check,
+  type Seal,
+} from './connectionTest';
 import { DriverMark, TLS_DEFAULT, WAYS_TO_SIGN_IN } from './driverMarks';
 import { TargetTree } from './TargetTree';
 
@@ -50,19 +56,7 @@ import { TargetTree } from './TargetTree';
  *   "test first, and dont save if test fails"), which the API holds it to
  *   too.
  */
-export type Seal = (
-  driver: DriverType,
-  field: string,
-  fields: Readonly<Record<string, FieldValue>>,
-  secret: string,
-) => Promise<SealedV1>;
-
-interface Check {
-  readonly id: string;
-  readonly status: 'passed' | 'failed' | 'skipped';
-  readonly durationMs: number;
-  readonly error?: string;
-}
+export type { Seal };
 
 /** What the test sent, the settings it was of, and xcube's answer to it. */
 interface Tested extends TestedValues {
@@ -76,58 +70,8 @@ interface Tested extends TestedValues {
   readonly at: string;
 }
 
-/** xcube's checks, in the order it runs them, as AC-159 names them. */
-const CHECKS = [
-  { id: 'secrets', label: 'Open the secrets' },
-  { id: 'config', label: 'Build the connection’s configuration' },
-  { id: 'connect', label: 'Connect' },
-  { id: 'schemas', label: 'Read the catalog' },
-] as const;
-const CHECK_LABELS: Record<string, string> = Object.fromEntries(
-  CHECKS.map((check) => [check.id, check.label]),
-);
-
-/** What to look at when a check fails, before Cube's own words. */
-const GUIDANCE: Record<string, string> = {
-  secrets: 'Cube couldn’t open the secrets. Enter them again.',
-  config: 'Cube couldn’t build a connection from these settings. Check each of them.',
-  connect:
-    'Cube’s driver couldn’t connect. Check the host and port, the user and password, and whether the database accepts connections from Cube.',
-  schemas: 'Cube connected, but couldn’t read the catalog. Check that this user may list schemas.',
-};
-
 const THE_RULE =
   'A data source is made only from a test of exactly these settings that passed. Changing any setting afterwards means testing again.';
-
-/** Seals to the key wechart's API gives out (T441), read once. */
-function sealerOf(): Seal {
-  let key: Promise<XcubeKey> | undefined;
-  return async (driver, field, fields, secret) => {
-    key ??= fetch('/api/data-sources/sealing-key').then(async (response) => {
-      if (!response.ok) throw new Error(await errorOf(response, 'read the key to seal it to'));
-      return (await response.json()) as XcubeKey;
-    });
-    return sealSecretV1(
-      await key.catch((error: unknown) => {
-        key = undefined;
-        throw error;
-      }),
-      driver,
-      field,
-      fields,
-      secret,
-    );
-  };
-}
-
-async function errorOf(response: Response, doing: string): Promise<string> {
-  const body = (await response.json().catch(() => ({}))) as {
-    error?: string;
-    problems?: string[];
-  };
-  const said = [body.error, ...(body.problems ?? [])].filter(Boolean).join(' ');
-  return said === '' ? `Could not ${doing} (${String(response.status)}).` : said;
-}
 
 /** "Host, Database and Password". */
 const listed = (names: readonly string[]) =>
@@ -428,7 +372,7 @@ export function NewSourceWizard({
     busy === null && named && !nameTaken && (targets === undefined || target !== '') && passedKept;
 
   const firstFailed = tested?.checks.find((check) => check.status === 'failed');
-  const took = (tested?.checks ?? []).reduce((sum, check) => sum + check.durationMs, 0);
+  const took = (tested?.checks ?? []).reduce((sum, check) => sum + (check.durationMs ?? 0), 0);
   /** The test's outcome, said as it changes (T363's review). */
   const outcome =
     busy === 'test'
@@ -721,67 +665,13 @@ export function NewSourceWizard({
             <h3 id={`${ids}-checks`} className="connection-form__legend">
               {tested === null ? 'Checks Cube runs' : 'Checks Cube ran'}
             </h3>
-            <ul className="connection-checks" aria-label="Checks">
-              {CHECKS.map((each) => {
-                const check = tested?.checks.find((one) => one.id === each.id);
-                // Cube answers every check at once: while it runs, each is
-                // said to be under way, none claimed further along (T471's review).
-                const state = check?.status ?? (busy === 'test' ? 'running' : 'not-run');
-                return (
-                  <li key={each.id} className={`connection-checks__check is-${state}`}>
-                    <span className="connection-checks__row">
-                      <StatusIcon
-                        kind={
-                          state === 'passed'
-                            ? 'ok'
-                            : state === 'failed'
-                              ? 'err'
-                              : state === 'running'
-                                ? 'run'
-                                : 'idle'
-                        }
-                      />
-                      <span className="connection-checks__label">{each.label}</span>
-                      <span className="connection-checks__time">
-                        {state === 'passed' || state === 'failed'
-                          ? `${String(check?.durationMs ?? 0)} ms`
-                          : state === 'skipped'
-                            ? 'Skipped'
-                            : state === 'running'
-                              ? 'Testing'
-                              : 'Not run'}
-                      </span>
-                    </span>
-                    {state === 'failed' ? (
-                      <div className="connection-checks__failure">
-                        <p>{GUIDANCE[each.id]}</p>
-                        {check?.error === undefined ? null : <pre>{check.error}</pre>}
-                        <div className="connection-checks__fixes">
-                          <button
-                            type="button"
-                            className="link-button"
-                            onClick={() => {
-                              goTo(1, 'sign-in');
-                            }}
-                          >
-                            Change sign-in
-                          </button>
-                          <button
-                            type="button"
-                            className="link-button"
-                            onClick={() => {
-                              goTo(1, 'where');
-                            }}
-                          >
-                            Change where it connects
-                          </button>
-                        </div>
-                      </div>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
+            <ConnectionChecks
+              checks={tested?.checks}
+              running={busy === 'test'}
+              onFix={(group) => {
+                goTo(1, group);
+              }}
+            />
             {/* The rule, said once, before a run (state C). */}
             {tested === null && busy !== 'test' ? (
               <p className="source-pane__rule" role="note">

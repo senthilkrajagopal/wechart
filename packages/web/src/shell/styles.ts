@@ -2798,6 +2798,9 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
   line-height: 16px;
 }
 .query-log td.sources-name { font-weight: 600; }
+/* A name opens its page, read as a name: no underline until pointed at (design 01's list). */
+.sources-name a { color: var(--wc-text-primary); text-decoration: none; }
+.sources-name a:hover { text-decoration: underline; }
 .query-log :is(th, td).sources-num { text-align: right; }
 .sources-used-by { display: inline-block; }
 .sources-used-by__count { font-variant-numeric: tabular-nums; }
@@ -2819,6 +2822,82 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
   white-space: normal;
 }
 .sources-used-by__tip[hidden] { display: none; }
+/* A stored data source's settings (T462; design 03 of 2026-09-27): its
+   breadcrumb, a head with its name in the code face, its type and state, a
+   line of where it is and how it is, then five tabs on one card. */
+.source-settings { display: grid; gap: 10px; align-content: start; min-width: 0; }
+.source-settings__crumbs { color: var(--wc-text-secondary); font-size: 12px; line-height: 16px; }
+.source-settings__crumbs a { color: var(--wc-text-secondary); text-decoration: none; }
+.source-settings__crumbs a:hover { text-decoration: underline; }
+.source-settings__crumbs [aria-current='page'] { color: var(--wc-text-primary); }
+.source-settings__head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.source-settings__name { margin: 0; font-size: 20px; line-height: 26px; font-weight: 600; }
+.source-settings__spacer { flex: 1; }
+.source-settings__line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  align-items: center;
+  color: var(--wc-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+.source-settings__target b { color: var(--wc-text-primary); font-weight: 600; }
+.source-settings__card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+}
+.source-settings__tabs { padding: 0 8px; }
+.source-settings__panel { min-width: 0; padding: 16px; }
+.source-settings__rows {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
+  gap: 10px 16px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+}
+.source-settings__rows dt { color: var(--wc-text-secondary); font-size: 12px; }
+.source-settings__rows dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.source-settings__stored {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 999px;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-secondary);
+  font-size: 12px;
+  line-height: 20px;
+}
+.source-settings__none { margin: 0; color: var(--wc-text-secondary); font-size: 12px; line-height: 16px; }
+.source-settings__failure { display: block; margin-top: 4px; color: var(--wc-text-secondary); font-size: 12px; }
+.source-settings__error {
+  display: block;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 4px;
+  background: var(--wc-bg-subtle);
+  font: 12px/18px var(--wc-font-code);
+  white-space: pre-wrap;
+}
+.source-settings__checks { display: inline-flex; gap: 2px; }
+.source-settings__usage,
+.source-settings__cube { display: grid; gap: 10px; }
+.source-settings__veil {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--wc-text-primary) 28%, transparent);
+}
 .sources-used-by__tip ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .sources-footnote { margin: 0; color: var(--wc-text-secondary); font-size: 12px; line-height: 16px; }
 .query-log--sticky thead th {
