@@ -258,7 +258,10 @@ R37 asks for both UI reviews' designs to be built, with the 2026-09-27 ones winn
 - **2026-09-27 design 04, pin 6:** "Search My workspace" or "Search Sales / EMEA" names the box for its folder, but AC-019's Explore search looks through the whole library, not one folder. Either the search is scoped to the open folder (an AC-019 change), or the box keeps its global label.
 - **Jobs and Schedules, from the 2026-09-28 sync check (R40; `docs/design/reviews/2026-09-28-jobs-schedules/`).** Asked when their work is reached:
   - "Trigger": the refresh key, as AC-229 says and as built, or who started the last build, as design 10 draws it; or both, as "Trigger" and "Started by".
-  - What AC-234's "cache warm-up" warms: a scheduled build only, chosen dashboards' queries for chosen groups, or nothing (drop the term).
+  - What AC-234's "cache warm-up" warms: a scheduled build only, chosen dashboards' queries for chosen groups, or nothing (drop the term). Warming results conflicts with AC-008: the service token can't run queries, and results differ per group set. The options (xcube's analysis, R41):
+    - drop result-cache warm-ups, and warm only pre-aggregations, which is a build;
+    - let wechart sign per-group tokens for warm-ups (an AC-008 change);
+    - ask xcube for a service-scoped warm-up route that runs queries as a stated group set.
   - Whose schedules AC-155 suspends (wechart-owned only, or Cube-owned too by publishing `scheduled_refresh: false`), and what "the configured number" is and who sets it.
   - A rollup with both a refresh key and a wechart schedule: whether wechart offers `scheduled_refresh: false`, and how Schedules labels its owner.
   - Next runs across a DST change: at today's offset with a caveat, or up to the change.
@@ -308,3 +311,9 @@ The user: these "will be deferred and not done in this phase". No task builds th
 - **JavaScript, Jinja and Python cubes on a changed target.** When a data source's target changes, xcube aliases only YAML cubes. A JavaScript, Jinja or Python cube in a file-set model keeps its alias, so its rollups renew only on their refresh keys. Its results are still its epoch's own (`~/Work/xcube-exchange/to-wechart/2026-09-28-0100-changed-in-place.md`).
   - wechart isn't affected today: its models are items, and it publishes only YAML (AC-332, AC-335).
   - It matters once dynamic models are brought in (requirements R6, deferred).
+- **The refresh worker's build history (R41, 2026-09-28).** The user: "History of the refresh worker's build.. we can defer this to the next phase.. and anything else blocked by it to next phase".
+  - AC-150's refresh-worker half, and T373. AC-150 keeps the builds wechart starts.
+  - What only that history supplies, for builds Cube starts on its own:
+    - design 10's "Failed", "Duration vs average", "Trigger: Schedule" and "Recent builds";
+    - design 07's last build outcome, and who started it.
+  - xcube would record build events from Cube's logger in every process, map orchestrators to models, and serve `GET …/builds?after=`, each event tagged with its pre-aggregation and folder (`docs/inputs/2026-09-28-jobs-schedules-analysis.md`).

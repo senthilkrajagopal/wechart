@@ -6447,13 +6447,14 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 - [ ] T504 (AC-145, AC-150, AC-151, AC-155, AC-234, AC-297) Design the Jobs and Schedules surfaces no design draws, and reconcile designs 10 and 07 *(added 2026-09-28, R40: "Draw new designs first")*
   - Through the ui-design skill: partitions and Rebuild selected (AC-145); Run history and a build's log (AC-150); the queue with cancel (AC-151); suspended and Resume (AC-155); the wechart schedule form and its rows (AC-234); every state (loading, error, empty, refused, revoked, out of scope, sign-in off, below 1,024 px); a read-write member's and a Super-Admin's views (AC-297). Design 10 pin 6 reworded (R40.2).
   - Its open questions are backlog §6's Jobs and Schedules list.
+  - *R41:* nothing that needs the refresh worker's build history, which is deferred: no "Failed", "Duration vs average", "Trigger: Schedule" or "Recent builds" for builds Cube starts on its own. Built states and last-built times come from xcube's partitions route. Running and queued come from the queue route (xcube, item 1). The refresh worker's status comes from item 3.
   - Depends on: none. Blocks T374, T375, T376, T378 and T379's UI.
 - [ ] T372 (AC-150) Record every build wechart starts and follow it to its end on the server
   - Files: a migration `…_build-history.cjs`, `packages/api/src/repos/build-history.ts` (+ test), `packages/api/src/jobs/{build,follow}.ts` (+ tests)
   - Failing test: as T156 (above): the build is stored with its pre-aggregation, "started from Jobs" and each partition's token; the API follows every open token to its end without a browser, and again after a restart; an expired token is "Cube's record expired"; the log keeps every reported state; a 101st record drops the oldest (AC-150).
   - *2026-09-26:* with the API on two replicas (AC-319), exactly one replica follows each token, and every write is idempotent (research `cube/ha-topology.md`, table row 5). The test runs two followers against one database.
   - Depends on: T371
-- [ ] T373 (AC-150) ~~Record the refresh worker's builds through Cube's `logger` option~~ Pull the refresh worker's builds from xcube into wechart's history *(rewritten 2026-09-26: Cube never calls wechart, so xcube records build events through Cube's `logger` option and wechart pulls them, `[AD 1, R27]`; research `cube/xcube-runtime.md`, finding 6)*
+- [moved to the next phase] T373 (AC-150) ~~Record the refresh worker's builds through Cube's `logger` option~~ Pull the refresh worker's builds from xcube into wechart's history *(rewritten 2026-09-26: Cube never calls wechart, so xcube records build events through Cube's `logger` option and wechart pulls them, `[AD 1, R27]`; research `cube/xcube-runtime.md`, finding 6. **Deferred 2026-09-28, R41:** the user, "History of the refresh worker's build.. we can defer this to the next phase"; `docs/phase-2/backlog.md` §7)*
   - Files: `packages/api/src/xcube/builds.ts` (+ test), `packages/api/src/repos/build-history.ts`. xcube's build-event record and its route come from the Cube side; the route is proposed on the plan's contract, which lists none yet.
   - Failing test: `builds.test.ts`, against the stub xcube:
     - a completed or failed refresh-worker build is stored once as "started by Cube's refresh worker", however many replicas pull;
@@ -6472,6 +6473,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: a queue listing and cancel endpoint in ~~the `cube-introspection` package~~ xcube, as an admin route under the service credential. It comes from the Cube side and is proposed on the plan's contract (2026-09-26). wechart: `packages/api/src/jobs/queue.ts` (+ test), `packages/web/src/workspaces/jobs/BuildQueue.tsx`
   - Failing test: `queue.test.ts`, against the rebuilt Cube: every queued build appears with its pre-aggregation, partition, state and token, and cancelling removes it (AC-151).
   - Depends on: T372
+  - *2026-09-28, R41:* asked of xcube in `to-xcube/2026-09-28-1200-jobs-schedules-routes.md`, item 1, with whether a cancelled refresh-worker build is queued again at its next tick. Built once its image is published. A read-write member sees and cancels only their folders' entries (AC-297). Its UI follows T504's design.
 - [ ] T377 (AC-153, AC-154) Fix what T258's, T159's and T160's reviews found, then tick AC-153 and AC-154 again
   - Files and failing tests: as T264 (above), each finding with a test that fails first
   - Depends on: ~~T339~~ T426 (2026-09-26: schedules are read from the published modules)
@@ -8800,7 +8802,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 | AC-093 | T386 | AC-097 | T387, T453 | AC-104 | T388 |
 | AC-116 | T389 | AC-131 | T334, T342 | AC-141 | T342 |
 | AC-145 | T375, T504 | | | | |
-| AC-150 | T372, T373, T374, T504 | AC-151 | T376, T504 | AC-153 | T377 |
+| AC-150 | T372, ~~T373~~ (next phase, R41), T374, T504 | AC-151 | T376, T504 | AC-153 | T377 |
 | AC-154 | T377 | AC-155 | T379, T504 | AC-157 | T364, T459 |
 | AC-158 | T363, T461, T497 | AC-159 | T361, T363 | AC-160 | T360, T454, T363 |
 | AC-161 | T335, T363, T365, T435, T442, T462, T497, T501 | AC-163 | T362, T363, T461, T462 | AC-164 | T335, T497 |

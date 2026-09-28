@@ -521,7 +521,7 @@ With security on, a deployment that names no Super-Admin group refuses to start 
   - A proposal overlay may be queried by its author, the target folder's read-write members and Super-Admins until it is approved or rejected, then dropped.
   - Names resolve in the overlay first, then along the target's or origin's folder path `[R27]`.
 - **wechart keeps each published version** of its model items, for history, compare and restore. xcube holds only what is published now `[R27]`.
-- **Build history:** xcube records the refresh worker's builds, and wechart pulls them into its own history `[R27]`.
+- **Build history:** ~~xcube records the refresh worker's builds, and wechart pulls them into its own history `[R27]`.~~ **Deferred to the next phase** `[R41]`: phase 2 keeps the history of the builds wechart starts. The refresh worker's builds, and what only they supply, come later.
 - **Scale:** designed for 100–200 model-bearing folders. ~~Sharding is a later add-on `[AD 9]`.~~ **Superseded** `[IP 4, plan]`: thousands of cubes, with modules keeping compile and planning costs flat.
 - **Callers:** only wechart's server calls Cube or xcube, for now `[AD 10]`.
 - **High availability of the query path:** 2 or more Cube instances with the Cube Store queue, and a stateless wechart API on 2 or more replicas. Cube Store stays single-node for now `[AD 11]`. It is tested: stopping one Cube instance and one API replica during use loses no signed-in session and fails no query the web app retries `[R27]`.
@@ -842,6 +842,23 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: How should wechart decide that a dimension holds ISO-3 country codes? A: "Values, plus a model override (Recommended)"
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
+
+**R41 — the refresh worker's build history, deferred; the rest worked out with xcube** (2026-09-28, the user)
+- The user sent xcube's analysis of Jobs and Schedules (`docs/inputs/2026-09-28-jobs-schedules-analysis.md`): "please review it.. and work with cube for implementing these..".
+- Then: "History of the refresh worker's build.. we can defer this to the next phase.. and anything else blocked by it to next phase".
+  - *Deferred to the next phase, and no task builds them in phase 2:*
+    - *the refresh worker's builds in wechart's history: AC-150's worker half, and T373;*
+    - *what only that history supplies, for builds Cube starts on its own:*
+      - *design 10's "Failed", "Duration vs average", "Trigger: Schedule" and "Recent builds" for such builds;*
+      - *design 07's last build outcome, and who started it;*
+      - *a "* * * * *" rollup in Run history within one check period (AC-150's Fails-when).*
+  - *R40.3's first ask of xcube, the build-event route, is withdrawn.*
+  - *Asked of xcube now (`to-xcube/2026-09-28-1200-jobs-schedules-routes.md`):*
+    - *the build queue with cancel, R40.3's second ask, with each entry's pre-aggregation (AC-151);*
+    - *hidden cubes on the admin meta, so every rollup is listed (AC-154);*
+    - *the refresh worker's status: the revision it serves, its last tick and its errors (AC-156).*
+  - *wechart moves Jobs' and Schedules' field list to xcube's admin `…/meta?revision=` before security goes on (the analysis; T371 and T437).*
+  - *The analysis's options for AC-234's cache warm-up go to the backlog question (R40).*
 
 **R40 — Jobs and Schedules, after an independent sync check** (2026-09-28, the user: "can we have independent ui-expert as well as bi tools/cube expert analyze the jobs and schedules.. and see if the ui designs and the requirements are in sync"; the reports are in `docs/design/reviews/2026-09-28-jobs-schedules/`)
 - Claude asked four questions from the two reports. The user chose the recommended answer to each.
