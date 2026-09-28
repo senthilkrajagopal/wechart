@@ -1,24 +1,37 @@
-import { useQuery } from '@tanstack/react-query';
+import { useId, useState, type MouseEvent } from 'react';
 
-import { StateLine } from '../../shell/StatusIcon';
+import { StatusIcon } from '../../shell/StatusIcon';
 import { objectsOf, type FileObjects, type MemberKind, type ModelObject } from './objects';
 
 /**
- * The Model workspace's file list (T137, AC-131): every model file, and under
- * each the cubes and views it defines with their members, grouped by kind.
+ * The Model workspace's overview (T137, AC-131), as design 12 draws it (T486,
+ * AC-344; MW-01): one card holding a table, a row per cube or view — its
+ * file, kind and name, how many of each member it has, and the members, all
+ * of them one step away in a tooltip grouped by kind — sorted by file.
  */
 interface ModelFile {
   readonly path: string;
   readonly content: string;
 }
 
-const GROUPS: readonly [kind: MemberKind, label: string][] = [
-  ['measure', 'Measures'],
+/** The counts' columns, in the editor's tabs' order (design 12 pin 10). */
+const COUNTED: readonly [kind: MemberKind, header: string][] = [
   ['dimension', 'Dimensions'],
+  ['measure', 'Measures'],
+  ['join', 'Joins'],
+  ['pre-aggregation', 'Pre-aggs'],
+  ['segment', 'Segments'],
+];
+
+/** Every kind a member may be, in the Members cell's and tooltip's order (pin 12). */
+const LISTED: readonly [kind: MemberKind, title: string][] = [
+  ['dimension', 'Dimensions'],
+  ['measure', 'Measures'],
+  ['join', 'Joins'],
+  // As design 12's tooltip and the Pre-aggs column say it (T486's review).
+  ['pre-aggregation', 'Pre-aggs'],
   ['segment', 'Segments'],
   ['hierarchy', 'Hierarchies'],
-  ['join', 'Joins'],
-  ['pre-aggregation', 'Pre-aggregations'],
   ['include', 'Includes'],
 ];
 
@@ -47,74 +60,271 @@ export const MODEL_FILES_QUERY = {
   },
 };
 
-function ObjectEntry({ object }: { object: ModelObject }) {
-  const label = `${object.kind === 'cube' ? 'Cube' : 'View'} ${object.name}`;
+/** The file's page, as the tree links it. */
+const hrefOf = (path: string) => `/model/files/${encodeURIComponent(path)}`;
+
+/** A code file's kind, as its row names it (pin 9). */
+const codeLabel = (code: NonNullable<FileObjects['code']>) =>
+  code === 'Jinja' ? 'Jinja template' : code;
+const codeWhy = (code: NonNullable<FileObjects['code']>) =>
+  code === 'Jinja' ? 'a template isn’t read here' : `${code} isn’t read here`;
+
+const namesOf = (object: ModelObject, kind: MemberKind) =>
+  object.members.filter((member) => member.kind === kind).map((member) => member.name);
+
+/** The members, by kind, in the pins' order, as the cell and its tooltip list them. */
+const groupsOf = (object: ModelObject) =>
+  LISTED.map(([kind, title]) => [title, namesOf(object, kind)] as const).filter(
+    ([, names]) => names.length > 0,
+  );
+
+function Members({ object }: { object: ModelObject }) {
+  const tip = useId();
+  const groups = groupsOf(object);
+  if (groups.length === 0) return <span className="model-overview__none">None</span>;
   return (
-    <div role="group" aria-label={label} className="model-object">
-      <p className="model-object__name">
-        <span className="model-object__kind">{object.kind}</span> {object.name}
-      </p>
-      {GROUPS.map(([kind, title]) => {
-        const names = object.members.filter((member) => member.kind === kind).map((m) => m.name);
-        return names.length === 0 ? null : (
-          <div key={kind} className="model-object__group">
-            <span className="model-object__group-title">{title}</span>
-            <ul aria-label={title}>
-              {names.map((name) => (
-                <li key={name}>{name}</li>
-              ))}
-            </ul>
-          </div>
-        );
-      })}
-    </div>
+    <span className="model-overview__members-cell">
+      {/* Focusable, so the tooltip opens from the keyboard too (pin 12): the
+          cell is truncated, and the full list is its description. */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+      <span className="model-overview__members" tabIndex={0} aria-describedby={tip}>
+        {groups.map(([, names]) => names.join(', ')).join(' · ')}
+      </span>
+      <span id={tip} role="tooltip" className="model-overview__tip">
+        <b className="is-code">{object.name}</b>
+        {groups.map(([title, names]) => (
+          <span key={title} className="model-overview__tip-row">
+            <span className="model-overview__tip-kind">{title}</span> ·{' '}
+            <span className="is-code">{names.join(', ')}</span>
+          </span>
+        ))}
+      </span>
+    </span>
   );
 }
 
-export function FileList() {
-  const files = useQuery(MODEL_FILES_QUERY);
+/** One file's rows: one per cube or view, or one saying why it has none listed. */
+interface Row {
+  readonly path: string;
+  readonly key: string;
+  readonly read: FileObjects;
+  readonly object?: ModelObject;
+}
 
-  if (files.isPending)
+function rowsOf(files: readonly ModelFile[]): Row[] {
+  return files.flatMap((file) => {
+    const read = objectsOf(file.path, file.content);
+    return read.objects.length === 0
+      ? [{ path: file.path, key: file.path, read }]
+      : read.objects.map((object, at) => ({
+          path: file.path,
+          // By place too: a draft may name two cubes alike (T486's review).
+          key: `${file.path} ${String(at)} ${object.kind} ${object.name}`,
+          read,
+          object,
+        }));
+  });
+}
+
+/** By path as the tree orders them, code point by code point (pin 8; T486's review). */
+const byPath = (a: ModelFile, b: ModelFile) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+
+export function FileList({
+  files,
+  unpublished,
+  onOpen,
+  onNew,
+  onGenerate,
+}: {
+  /** The model's files: the store's, and the drafts made here. */
+  files: readonly ModelFile[];
+  /** Files not yet published: marked, as the tree marks them (state C). */
+  unpublished: ReadonlySet<string>;
+  onOpen: (path: string) => void;
+  onNew: (kind: 'cube' | 'view') => void;
+  onGenerate: () => void;
+}) {
+  const [ascending, setAscending] = useState(true);
+
+  if (files.length === 0)
+    // Nothing seeded: an empty or missing model directory (logged by the API). State B.
     return (
-      <StateLine kind="run" className="model-files__note">
-        Reading the model…
-      </StateLine>
-    );
-  if (files.isError)
-    return (
-      <StateLine kind="err" className="model-files__note">
-        {files.error.message}
-      </StateLine>
+      <div className="model-overview model-overview--empty">
+        <p className="model-overview__empty-title">There are no model files.</p>
+        <p className="model-overview__empty-text">
+          Generate cubes from a data source’s tables, or start a cube or a view by hand.
+        </p>
+        <div className="model-overview__empty-actions">
+          <button type="button" className="btn-sm" onClick={onGenerate}>
+            Generate from a data source…
+          </button>
+          <button
+            type="button"
+            className="btn-sm"
+            onClick={() => {
+              onNew('cube');
+            }}
+          >
+            New cube
+          </button>
+          <button
+            type="button"
+            className="btn-sm"
+            onClick={() => {
+              onNew('view');
+            }}
+          >
+            New view
+          </button>
+        </div>
+      </div>
     );
 
-  if (files.data.length === 0)
-    // Nothing seeded: an empty or missing model directory (logged by the API).
-    return <p className="model-files__note">There are no model files.</p>;
+  const sorted = [...files].sort((a, b) => (ascending ? 1 : -1) * byPath(a, b));
+  /**
+   * The whole row opens its file (pin 13) — its Members too, whose tooltip is
+   * for hover and focus — but not the link, which opens it itself.
+   */
+  const openRow = (path: string) => (event: MouseEvent<HTMLTableRowElement>) => {
+    if ((event.target as HTMLElement).closest('a, button') !== null) return;
+    onOpen(path);
+  };
+  /** The link opens in place; a new tab, as a link does. */
+  const openLink = (path: string) => (event: MouseEvent<HTMLAnchorElement>) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
+      return;
+    event.preventDefault();
+    onOpen(path);
+  };
 
   return (
-    <div className="model-files" data-testid="model-files">
-      {files.data.map((file) => {
-        const read = objectsOf(file.path, file.content);
-        return (
-          <section key={file.path} aria-label={file.path} className="model-file">
-            <h2 className="model-file__path">
-              {/* Opens the file on its forms (T138). */}
-              <a href={`/model/files/${encodeURIComponent(file.path)}`}>{file.path}</a>
-            </h2>
-            {read.problem === undefined ? null : (
-              <StateLine kind="err" className="model-file__problem">
-                {read.problem}
-              </StateLine>
-            )}
-            {read.code === undefined ? null : (
-              <p className="model-file__note">{codeNoteOf(file.path, read.code)}</p>
-            )}
-            {read.objects.map((object) => (
-              <ObjectEntry key={`${object.kind} ${object.name}`} object={object} />
+    <>
+      <div className="model-overview" data-testid="model-files">
+        <table className="grid-table model-overview__table" aria-label="Cubes and views">
+          <thead>
+            <tr>
+              <th scope="col" aria-sort={ascending ? 'ascending' : 'descending'}>
+                {/* Its arrow is drawn from `aria-sort`, not written (pin 8). */}
+                <button
+                  type="button"
+                  className="model-overview__sort"
+                  onClick={() => {
+                    setAscending(!ascending);
+                  }}
+                >
+                  File
+                </button>
+              </th>
+              <th scope="col">Kind</th>
+              <th scope="col">Name</th>
+              {COUNTED.map(([, header]) => (
+                <th key={header} scope="col" className="is-num">
+                  {header}
+                </th>
+              ))}
+              <th scope="col">Members</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rowsOf(sorted).map(({ path, key, read, object }) => (
+              <tr key={key} className="model-overview__row" onClick={openRow(path)}>
+                <td>
+                  <span className="model-overview__file">
+                    <a className="is-code" href={hrefOf(path)} onClick={openLink(path)}>
+                      {path}
+                    </a>
+                    {unpublished.has(path) ? (
+                      <span className="model-tree__tag">
+                        <StatusIcon kind="idle" />
+                        unpublished
+                      </span>
+                    ) : null}
+                    {read.problem === undefined ? null : (
+                      <span className="model-overview__mark is-err">
+                        <StatusIcon kind="err" />
+                        problems
+                      </span>
+                    )}
+                  </span>
+                </td>
+                {read.problem !== undefined ? (
+                  // Nothing in it could be read: the parser's line, in full on hover (state D).
+                  <td colSpan={COUNTED.length + 3} className="is-err" title={read.problem}>
+                    {read.problem}
+                  </td>
+                ) : read.code !== undefined ? (
+                  <>
+                    <td colSpan={2}>
+                      <span className="model-overview__code" title={codeNoteOf(path, read.code)}>
+                        {/* The lock the data source form's pasted secret wears. */}
+                        <span className="secret-pasted__lock" aria-hidden="true" />
+                        {codeLabel(read.code)} · read-only
+                      </span>
+                    </td>
+                    {COUNTED.map(([, header]) => (
+                      <td key={header} className="is-num is-muted">
+                        —
+                      </td>
+                    ))}
+                    <td className="is-muted">Not listed: {codeWhy(read.code)}</td>
+                  </>
+                ) : object === undefined ? (
+                  <td colSpan={COUNTED.length + 3} className="is-muted">
+                    Defines no cube or view
+                  </td>
+                ) : (
+                  <>
+                    <td>{object.kind === 'cube' ? 'Cube' : 'View'}</td>
+                    <td className="is-code">{object.name}</td>
+                    {object.kind === 'view' ? (
+                      <ViewCounts object={object} />
+                    ) : (
+                      COUNTED.map(([kind, header]) => {
+                        const count = namesOf(object, kind).length;
+                        return (
+                          <td key={header} className={`is-num${count === 0 ? ' is-zero' : ''}`}>
+                            {count}
+                          </td>
+                        );
+                      })
+                    )}
+                    <td className="model-overview__members-td">
+                      <Members object={object} />
+                    </td>
+                  </>
+                )}
+              </tr>
             ))}
-          </section>
-        );
-      })}
-    </div>
+          </tbody>
+        </table>
+      </div>
+      <p className="model-overview__caption">
+        Sorted by file. A file that defines several cubes or views has a row for each, under the
+        same path.
+      </p>
+    </>
+  );
+}
+
+/**
+ * A view counts what it includes, by path, and its own members: the parser
+ * can't say which of its includes are dimensions and which measures, so one
+ * cell spans both (pin 11). A view has no joins, pre-aggregations or
+ * segments of its own: those don't apply.
+ */
+function ViewCounts({ object }: { object: ModelObject }) {
+  const included = namesOf(object, 'include').length;
+  const own = object.members.filter((member) => member.kind !== 'include').length;
+  return (
+    <>
+      <td colSpan={2} className="is-num is-secondary">
+        {`${String(included)} included${own === 0 ? '' : ` · ${String(own)} own`}`}
+      </td>
+      {COUNTED.slice(2).map(([, header]) => (
+        <td key={header} className="is-num is-muted">
+          —
+        </td>
+      ))}
+    </>
   );
 }

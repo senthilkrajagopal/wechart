@@ -586,6 +586,7 @@ main:has(.explore) {
 }
 .menu-button__menu--end { right: 0; }
 .menu-button__menu--start { left: 0; }
+.menu-button__sep { height: 1px; margin: 4px 0; background: var(--wc-border-subtle); }
 .menu-button__item {
   display: flex;
   width: 100%;
@@ -603,28 +604,117 @@ main:has(.explore) {
 .menu-button__item:focus-visible { background: var(--wc-bg-hover); }
 .menu-button__item.is-danger { color: var(--wc-status-error); }
 
-/* The Model workspace's files (T137, AC-131): each file a card, and under it
-   the cubes and views it defines, their members grouped by kind. */
+/* The Model workspace's files (T137, AC-131), as design 12's overview (T486). */
 /* Spacing only: the overview's size is .workspace-title's, the page title
    every workspace shares (AC-231); a file's path heads its editor at 13/600
    (T479). */
 .model-workspace h1 { margin: 0 0 16px; }
-.model-files { display: grid; gap: 12px; max-width: 960px; }
-.model-file {
-  padding: 12px 16px;
+/* The overview as design 12 (T486, MW-01): "Model" and its one primary + New ▾
+   in the title row; the InfoBar and one card holding a grid table, sharing
+   the pane's width inside its gutters; a row per cube or view — a 28 px
+   header in 12/600 on bg-subtle, 34 px rows at 12 px in tabular figures —
+   the whole row opening its file. */
+.model-overview__title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.model-overview__title-row > .workspace-title { flex: 1; margin: 0; }
+.model-page__overview > .info-bar { max-width: none; }
+/* Not clipped: a bottom row's Members tooltip hangs below the card (T486's
+   review); the header's corners rounded on its corner cells instead. */
+.model-overview {
   border: 1px solid var(--wc-border-subtle);
   border-radius: 6px;
   background: var(--wc-bg-surface);
 }
-.model-file__path {
-  margin: 0 0 8px;
-  font-family: var(--wc-font-code);
-  font-size: 13px;
-  font-weight: 600;
+.model-overview__table { table-layout: auto; }
+.model-overview__table thead th { position: static; }
+.model-overview__table thead th:first-child { border-top-left-radius: 5px; }
+.model-overview__table thead th:last-child { border-top-right-radius: 5px; }
+.model-overview__caption { margin: 8px 0 0; font-size: 12px; color: var(--wc-text-muted); }
+.model-overview__table tbody td { height: 34px; }
+.model-overview__table tbody tr:last-child td { border-bottom: 0; }
+.model-overview__row { cursor: pointer; }
+.model-overview__table .is-num { text-align: right; }
+.model-overview__table .is-zero,
+.model-overview__table .is-muted { color: var(--wc-text-muted); }
+.model-overview__table .is-secondary { color: var(--wc-text-secondary); }
+/* The unreadable file's line truncates in its cell; the mark on its path doesn't (T486's review). */
+.model-overview__table td.is-err { color: var(--wc-status-error); max-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.model-overview__table .is-code { font-family: var(--wc-font-code); }
+.model-overview__file { display: flex; align-items: center; gap: 8px; }
+.model-overview__file > a { color: var(--wc-accent); text-decoration: none; }
+.model-overview__file > a:hover { text-decoration: underline; }
+.model-overview__mark { display: inline-flex; flex: none; align-items: center; gap: 4px; font-size: 12px; }
+.model-overview__mark.is-err { color: var(--wc-status-error); }
+/* The only sortable column, its arrow drawn from aria-sort (pin 8). */
+.model-overview__sort {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
 }
-.model-file__problem { margin: 0; color: var(--wc-text-primary); }
-.model-file__note { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
-/* The workspace's own notes: reading, none, or a file that is not plain YAML. */
+/* The arrow left out of the button's name: aria-sort says it (T486's review). */
+.model-overview__table th[aria-sort='ascending'] .model-overview__sort::after {
+  content: ' ↑';
+  content: ' ↑' / '';
+}
+.model-overview__table th[aria-sort='descending'] .model-overview__sort::after {
+  content: ' ↓';
+  content: ' ↓' / '';
+}
+.model-overview__code { display: inline-flex; align-items: center; gap: 6px; color: var(--wc-text-secondary); }
+/* Members truncated to the cell; all of them, by kind, on hover or focus (pin 12). */
+.model-overview__members-td { width: 100%; max-width: 0; }
+.model-overview__members-cell { position: relative; display: block; }
+.model-overview__members {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--wc-font-code);
+  color: var(--wc-text-secondary);
+}
+.model-overview__tip {
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  /* Touching its cell, so the pointer can move onto it without it closing. */
+  top: 100%;
+  display: none;
+  gap: 4px;
+  width: max-content;
+  max-width: 360px;
+  padding: 8px 10px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-raised, var(--wc-bg-surface));
+  box-shadow: var(--wc-shadow-pop, 0 4px 12px rgba(0, 0, 0, 0.15));
+  white-space: normal;
+}
+.model-overview__members-cell:hover > .model-overview__tip,
+.model-overview__members:focus-visible + .model-overview__tip { display: grid; }
+.model-overview__tip-kind { color: var(--wc-text-secondary); }
+.model-overview__none { color: var(--wc-text-muted); }
+/* State B: no files, what to do about it; the three ways to add as secondary buttons. */
+.model-overview--empty { display: grid; gap: 4px; padding: 24px; justify-items: start; }
+.model-overview__empty-title { margin: 0; font-weight: 600; }
+.model-overview__empty-text { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
+.model-overview__empty-actions { display: flex; gap: 8px; margin-top: 4px; }
+/* State F: reading, the table's frame beneath — its 28 px header band and 34 px
+   rows of bars; can't read, its words and Retry on the error's ground. */
+.model-overview--reading { margin-top: 12px; }
+.model-overview__skeleton-head { height: 28px; border-bottom: 1px solid var(--wc-border-subtle); border-radius: 5px 5px 0 0; background: var(--wc-bg-subtle); }
+.model-overview__skeleton-row { display: flex; align-items: center; gap: 16px; height: 34px; padding: 0 8px; border-bottom: 1px solid var(--wc-border-subtle); }
+.model-overview__skeleton-row:last-child { border-bottom: 0; }
+.model-overview__skeleton-row > .skeleton-bar { height: 10px; }
+.model-overview__failed {
+  max-width: none;
+  align-items: center;
+  background: color-mix(in srgb, var(--wc-status-error) 10%, var(--wc-bg-surface));
+}
+.model-overview__failed > svg { color: var(--wc-status-error); }
+.model-overview__failed > p { flex: 1; }
+/* The join diagram's note (JoinEditor), kept when the overview's cards went. */
 .model-files__note { margin: 0; color: var(--wc-text-secondary); }
 /* A file that is code or a template (T146): why it is read-only, above its text. */
 .model-readonly { display: grid; gap: 8px; max-width: 960px; }
@@ -636,27 +726,6 @@ main:has(.explore) {
   color: var(--wc-text-secondary);
   font-size: 12px;
 }
-.model-object { padding: 8px 0; border-top: 1px solid var(--wc-border-subtle); }
-.model-object__name { margin: 0 0 4px; font-weight: 600; }
-.model-object__kind {
-  margin-right: 6px;
-  padding: 0 4px;
-  border: 1px solid var(--wc-border-subtle);
-  border-radius: 3px;
-  color: var(--wc-text-muted);
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-.model-object__group { display: flex; gap: 8px; align-items: baseline; font-size: 13px; }
-.model-object__group-title {
-  flex: 0 0 120px;
-  color: var(--wc-text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-}
-.model-object__group ul { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0; list-style: none; }
-.model-file__path a { color: inherit; }
 
 /* A model file's forms (T138, AC-132; direction.md §7b): the tabs as the edit
    sidebar's, fields as the prototype's .field — two short ones to a row, SQL
@@ -692,7 +761,6 @@ main:has(.model-page) {
 }
 .model-page__main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .model-page__main > .state-line { margin: var(--wc-surface-padding); }
-.model-page__overview > .workspace-title { margin-bottom: 12px; }
 .model-page__overview { flex: 1; min-height: 0; overflow: auto; padding: var(--wc-surface-padding); }
 .model-page__overview > .info-bar { margin-bottom: 12px; }
 .model-tree { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--wc-border-subtle); background: var(--wc-bg-surface); }

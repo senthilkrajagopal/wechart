@@ -25,6 +25,8 @@ export interface MenuItem {
   readonly danger?: boolean;
   /** For a test to find the item by what it stands for, not its words. */
   readonly testId?: string;
+  /** Set apart from the items before it by a rule (design 12 state A: Generate). */
+  readonly separatorBefore?: boolean;
 }
 
 export interface MenuButtonProps {
@@ -149,7 +151,10 @@ export function MenuButton({
           className={`menu-button__menu menu-button__menu--${align}`}
           onKeyDown={onMenuKey}
         >
-          {items.map((item, index) => (
+          {items.map((item, index) => [
+            item.separatorBefore === true ? (
+              <div key={`${item.key} rule`} role="separator" className="menu-button__sep" />
+            ) : null,
             <button
               key={item.key}
               ref={(element) => {
@@ -178,8 +183,8 @@ export function MenuButton({
               }}
             >
               {item.label}
-            </button>
-          ))}
+            </button>,
+          ])}
         </div>
       ) : null}
     </span>

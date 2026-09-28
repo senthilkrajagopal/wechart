@@ -17,23 +17,28 @@ test('the Model workspace lists each model file with what it defines', async ({ 
   await page.goto('/model');
   await expect(page.getByRole('heading', { name: 'Model', level: 1 })).toBeVisible();
 
-  const orders = page.getByRole('region', { name: 'cubes/orders.yml' });
-  const cube = orders.getByRole('group', { name: 'Cube orders' });
-  await expect(cube.getByRole('list', { name: 'Measures' })).toContainText('total_amount');
-  await expect(cube.getByRole('list', { name: 'Dimensions' })).toContainText('ordered_at');
-  await expect(cube.getByRole('list', { name: 'Joins' })).toContainText('customers');
+  // A row per cube or view (design 12, T486); every member one step away, by
+  // kind, in the Members cell's tooltip on hover or focus.
+  const table = page.getByRole('table', { name: 'Cubes and views' });
+  const rowOf = (path: string) =>
+    table.getByRole('row').filter({ has: page.getByRole('link', { name: path, exact: true }) });
+  const orders = rowOf('cubes/orders.yml');
+  await expect(orders.getByRole('cell').nth(1)).toHaveText('Cube');
+  await expect(orders.getByRole('cell').nth(2)).toHaveText('orders');
+  const members = orders.locator('.model-overview__members');
+  await members.hover();
+  const tip = orders.getByRole('tooltip');
+  await expect(tip).toBeVisible();
+  await expect(tip).toContainText('Measures · count, total_amount, average_amount');
+  await expect(tip).toContainText('Dimensions · id, status, ordered_at');
+  await expect(tip).toContainText('Joins · customers, products');
 
-  for (const file of ['cubes/customers.yml', 'cubes/products.yml']) {
-    await expect(page.getByRole('region', { name: file })).toBeVisible();
-  }
+  for (const file of ['cubes/customers.yml', 'cubes/products.yml'])
+    await expect(rowOf(file)).toHaveCount(1);
   // A view's members: what it includes from its cubes, by path.
-  const view = page
-    .getByRole('region', { name: 'views/order_summary.yml' })
-    .getByRole('group', { name: 'View order_summary' });
-  await expect(view.getByRole('list', { name: 'Includes' }).getByRole('listitem')).toHaveText([
-    'orders.count',
-    'orders.status',
-  ]);
+  await expect(rowOf('views/order_summary.yml').locator('.model-overview__members')).toHaveText(
+    'orders.count, orders.status',
+  );
 });
 
 /**

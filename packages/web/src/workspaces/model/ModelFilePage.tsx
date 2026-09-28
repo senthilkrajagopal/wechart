@@ -3,6 +3,7 @@ import { useBlocker, useRouter, type ShouldBlockFn } from '@tanstack/react-route
 
 import { META_QUERY } from '../../query/meta';
 import { InfoBar } from '../../shell/InfoBar';
+import { MenuButton, type MenuItem } from '../../shell/MenuButton';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
@@ -1121,11 +1122,14 @@ export function ModelFilePage({
   const setGenerating = (next: boolean) => {
     queryClient.setQueryData(GENERATING_KEY, next);
   };
-  /** Closed: focus back on what opened it (design 11 pin 9, rule 85). */
+  /** Closed: focus back on what opened it (design 11 pin 9, rule 85), else the tree's. */
+  const generateOpener = useRef<HTMLElement | null>(null);
   const closeGenerate = () => {
     setGenerating(false);
     setTimeout(() => {
-      page.current?.querySelector<HTMLElement>('.model-tree__generate')?.focus();
+      const opener = generateOpener.current;
+      if (opener?.isConnected === true) opener.focus();
+      else page.current?.querySelector<HTMLElement>('.model-tree__generate')?.focus();
     }, 0);
   };
   const makeNew = (kind: 'cube' | 'view') => {
@@ -1136,6 +1140,69 @@ export function ModelFilePage({
     setMade(next);
     open(next.path);
   };
+  /**
+   * Generate cubes opened; already open, pressed again, it takes you to the
+   * pane. What opened it — the tree's foot, + New ▾ (whose menu has given focus
+   * back to its button), the empty overview's button — gets focus back on close
+   * (design 11 pin 9, rule 85; T486's review).
+   */
+  const startGenerate = () => {
+    if (generating) {
+      page.current?.querySelector<HTMLElement>('.generate-pane h2')?.focus();
+      return;
+    }
+    generateOpener.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setGenerating(true);
+  };
+  /**
+   * The overview's + New ▾ (design 12 pin 5, state A): the tree foot's three
+   * ways to add, in its order; Generate last, as it opens a pane, not a file.
+   */
+  const newItems: readonly MenuItem[] = [
+    {
+      key: 'cube',
+      label: (
+        <>
+          <span className="itemicon ic-model" aria-hidden="true">
+            ◇
+          </span>
+          New cube
+        </>
+      ),
+      onSelect: () => {
+        makeNew('cube');
+      },
+    },
+    {
+      key: 'view',
+      label: (
+        <>
+          <span className="itemicon ic-model" aria-hidden="true">
+            ◈
+          </span>
+          New view
+        </>
+      ),
+      onSelect: () => {
+        makeNew('view');
+      },
+    },
+    {
+      key: 'generate',
+      // Set apart: it opens a pane, not a file (state A).
+      separatorBefore: true,
+      label: (
+        <>
+          <span className="itemicon ic-source" aria-hidden="true">
+            ◍
+          </span>
+          Generate from a data source…
+        </>
+      ),
+      onSelect: startGenerate,
+    },
+  ];
   /** A file made here, discarded: it goes, and the overview opens (AC-226). */
   const discardDraft = (draft: string) => {
     if (made?.path === draft) setMade(undefined);
@@ -1167,27 +1234,69 @@ export function ModelFilePage({
         onOpen={open}
         onNew={makeNew}
         generating={generating}
-        onGenerate={() => {
-          // Already open: pressed again, it takes you to the pane.
-          if (generating) page.current?.querySelector<HTMLElement>('.generate-pane h2')?.focus();
-          else setGenerating(true);
-        }}
+        onGenerate={startGenerate}
       />
       <div className="model-page__main">
-        {files.isPending ? (
+        {path === undefined ? (
+          // No file open: every cube and view, by file (AC-131), as design 12
+          // draws it (T486): the title row at once, its one primary + New ▾.
+          <div className="model-page__overview">
+            <div className="model-overview__title-row">
+              <h1 className="workspace-title">Model</h1>
+              <MenuButton label="New" items={newItems}>
+                ＋ New ▾
+              </MenuButton>
+            </div>
+            {files.isPending ? (
+              // State F: reading, the table's frame drawn beneath (no jump when it comes).
+              <>
+                <StateLine kind="run">Reading the model…</StateLine>
+                <div className="model-overview model-overview--reading" aria-hidden="true">
+                  <div className="model-overview__skeleton-head" />
+                  {[120, 140].map((width) => (
+                    <div key={width} className="model-overview__skeleton-row">
+                      <span className="skeleton-bar" style={{ width }} />
+                      <span className="skeleton-bar" style={{ width: 40 }} />
+                      <span className="skeleton-bar" style={{ width: 80 }} />
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : files.isError ? (
+              // Its words, and Retry (rule 18).
+              <div className="info-bar model-overview__failed" role="alert">
+                <StatusIcon kind="err" />
+                <p>{files.error.message}</p>
+                <button
+                  type="button"
+                  className="btn-sm"
+                  onClick={() => {
+                    void files.refetch();
+                  }}
+                >
+                  Retry
+                </button>
+              </div>
+            ) : (
+              <>
+                <InfoBar>
+                  <p>Every cube and view in the model, by file. Open a row to edit its file.</p>
+                </InfoBar>
+                <FileList
+                  files={all}
+                  unpublished={unpublishedPaths}
+                  onOpen={open}
+                  onNew={makeNew}
+                  onGenerate={startGenerate}
+                />
+              </>
+            )}
+          </div>
+        ) : files.isPending ? (
           // Untitled while it reads: the title comes once, with what it heads.
           <StateLine kind="run">Reading the model…</StateLine>
         ) : files.isError ? (
           <StateLine kind="err">{files.error.message}</StateLine>
-        ) : path === undefined ? (
-          // No file open: what each defines (AC-131), beside the tree.
-          <div className="model-page__overview">
-            <h1 className="workspace-title">Model</h1>
-            <InfoBar>
-              <p>Choose a file in the tree to edit it, or make a new cube or view.</p>
-            </InfoBar>
-            <FileList />
-          </div>
         ) : file === undefined ? (
           <Solo path={path}>
             <StateLine kind="err">There is no model file {path}.</StateLine>

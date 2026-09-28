@@ -739,6 +739,115 @@ test('T481: a cube’s General as design 03 state B — Basics, Refresh, Advance
   );
 });
 
+test('T486: the overview as design 12 — one card, a row per cube or view, + New ▾ in the title row (MW-01)', async ({
+  page,
+}) => {
+  await page.goto('/model');
+  const overview = page.locator('.model-page__overview');
+  // The title row: "Model" left, its one primary + New ▾ right (pin 5).
+  const title = overview.getByRole('heading', { level: 1, name: 'Model' });
+  const create = overview.getByRole('button', { name: 'New' });
+  const [titleBox, createBox] = [await title.boundingBox(), await create.boundingBox()];
+  expect(
+    Math.abs(
+      (titleBox?.y ?? 0) +
+        (titleBox?.height ?? 0) / 2 -
+        ((createBox?.y ?? 0) + (createBox?.height ?? 0) / 2),
+    ),
+  ).toBeLessThanOrEqual(2);
+  await expect(create).toHaveClass(/btn-primary/);
+  // The note and the card, one width (pin 6).
+  const note = overview.locator('.info-bar');
+  await expect(note).toHaveText(
+    'Every cube and view in the model, by file. Open a row to edit its file.',
+  );
+  const card = overview.locator('.model-overview');
+  const [noteBox, cardBox] = [await note.boundingBox(), await card.boundingBox()];
+  expect([Math.round(noteBox?.x ?? 0), Math.round(noteBox?.width ?? 0)]).toEqual([
+    Math.round(cardBox?.x ?? 1),
+    Math.round(cardBox?.width ?? 1),
+  ]);
+
+  // One grid table: a 28 px header, 34 px rows at 12 px, sorted by file (pins 7, 8).
+  const table = card.getByRole('table', { name: 'Cubes and views' });
+  const header = table.locator('thead tr');
+  expect(Math.round((await header.boundingBox())?.height ?? 0)).toBe(28);
+  const rows = table.locator('tbody tr');
+  expect(Math.round((await rows.first().boundingBox())?.height ?? 0)).toBe(34);
+  // The seed's files, sorted; other tests' own cubes may be among them, the
+  // browsers running at once.
+  await expect(table.getByRole('link', { name: 'views/secured_orders.yml' })).toBeVisible();
+  const paths = await rows.locator('td:first-child a').allTextContents();
+  expect(paths).toEqual([...paths].sort());
+  expect(
+    paths.filter((path) =>
+      [
+        'cubes/customers.yml',
+        'cubes/monthly_orders.yml',
+        'cubes/orders.yml',
+        'cubes/product_catalog.yml',
+        'cubes/products.yml',
+        'cubes/templated_example.yml',
+        'views/order_summary.yml',
+        'views/secured_orders.yml',
+      ].includes(path),
+    ),
+  ).toHaveLength(8);
+  const rowOf = (path: string) =>
+    rows.filter({ has: page.getByRole('link', { name: path, exact: true }) });
+  const link = rows.first().getByRole('link');
+  expect(
+    await link.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return [style.textDecorationLine, style.fontSize];
+    }),
+  ).toEqual(['none', '12px']);
+  await expect(table.getByRole('columnheader', { name: /^File/ })).toHaveAttribute(
+    'aria-sort',
+    'ascending',
+  );
+  // Kind in words; a Jinja template as a locked tag, why nothing is listed (pin 9).
+  const orders = rowOf('cubes/orders.yml');
+  await expect(orders.locator('td').nth(1)).toHaveText('Cube');
+  const template = rowOf('cubes/templated_example.yml');
+  await expect(template.locator('.model-overview__code')).toHaveText('Jinja template · read-only');
+  await expect(template.locator('td').last()).toHaveText('Not listed: a template isn’t read here');
+  // A view counts what it includes (pin 11).
+  await expect(rowOf('views/order_summary.yml').locator('td').nth(3)).toHaveText('2 included');
+
+  // Members' tooltip on focus, too (pin 12) — the last row's whole, not cut off
+  // by the card (T486's review).
+  const members = orders.locator('.model-overview__members');
+  await members.focus();
+  await expect(orders.getByRole('tooltip')).toBeVisible();
+  await rows.last().locator('.model-overview__members').focus();
+  await expect(rows.last().getByRole('tooltip')).toBeInViewport({ ratio: 1 });
+
+  // + New ▾: the tree foot's three ways to add, Generate set apart (state A);
+  // Escape gives focus back.
+  await create.click();
+  const menu = page.getByRole('menu', { name: 'New' });
+  await expect(menu.getByRole('menuitem')).toHaveText([
+    /New cube$/,
+    /New view$/,
+    /Generate from a data source…$/,
+  ]);
+  await expect(menu.locator('> *').nth(2)).toHaveAttribute('role', 'separator');
+  await page.keyboard.press('Escape');
+  await expect(create).toBeFocused();
+  // Generate from it, closed: focus back on + New, what opened it (design 11 pin 9).
+  await create.click();
+  await menu.getByRole('menuitem', { name: /Generate from a data source…$/ }).click();
+  const pane = page.getByRole('dialog', { name: 'Generate cubes' });
+  await pane.getByRole('button', { name: 'Close' }).click();
+  await expect(pane).toHaveCount(0);
+  await expect(create).toBeFocused();
+
+  // The whole row opens its file (pin 13), its Members too.
+  await orders.locator('.model-overview__members').click();
+  await expect(page).toHaveURL(/\/model\/files\/cubes%2Forders\.yml$/);
+});
+
 test('T470: a bar over the form is a band across the pane, and a view’s tabs are short too', async ({
   page,
 }) => {

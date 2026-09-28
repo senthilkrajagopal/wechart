@@ -8062,8 +8062,28 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - the YAML in the code face, at full length;
     - "Discard this generation?" when leaving with anything chosen.
   - Depends on: T479
-- [ ] T486 (AC-131, AC-344) The Model overview as design 12's table
-  - Files: `packages/web/src/workspaces/model/{FileList,ModelFilePage}.tsx` (+ tests), `e2e/model-design.spec.ts`
+- [x] T486 (AC-131, AC-344) The Model overview as design 12's table
+  - **Done 2026-09-27.** Tested in:
+    - `FileList.test.tsx`;
+    - `e2e/model-design.spec.ts` (T486's test, in Chrome, Firefox and Safari), `e2e/model.spec.ts` (AC-131's test, now read from the table and its tooltip) and `e2e/no-callbacks.spec.ts`.
+  - AC-131 stays open: its folder models are T342's.
+  - **The title row** (pin 5): "Model", and the page's one primary **＋ New ▾**. It offers New cube and New view, then Generate from a data source… set apart by a rule (state A; `MenuItem.separatorBefore`, new in `MenuButton`). The title row is drawn at once, while the model is read.
+  - **The note and the card** share the pane's width inside its gutters (pin 6).
+  - **One card holding a grid table**: a row per cube or view, a 28 px header and 34 px rows at 12 px (pin 7). A caption beneath says how the rows are sorted.
+    - **File:** a mono link in the accent, no underline. It sorts, by code point as the tree orders files, with `aria-sort`, and is the one sortable column (pin 8). A draft is marked "◷ unpublished", an unreadable file "✕ problems".
+    - **Kind:** in words. A Jinja template, Python or JavaScript file is one locked row: "Jinja template · read-only", with why its cubes aren't listed as its tooltip (pin 9).
+    - **Counts** in the editor's tabs' order, zeros muted (pin 10).
+    - **A view:** "n included · n own" across Dimensions and Measures, with dashes for the rest (pin 11).
+    - **Members:** truncated, in the counts' order. Every member, by kind, is in a tooltip on hover or focus, which the card doesn't clip (pin 12).
+    - **A file defining nothing** has a row that says so.
+    - The whole row opens its file, its link included (pin 13).
+  - **Other states:**
+    - Empty (B): "There are no model files." and the three ways to add, as secondary buttons.
+    - Reading (F): a status line over the table's frame.
+    - Can't read (F): its words and Retry, on the error's ground.
+  - Generate cubes, however opened (the tree's foot, + New ▾, the empty card), gives focus back to what opened it on close (design 11 pin 9).
+  - Files (as built): `packages/web/src/workspaces/model/{FileList,ModelFilePage}.tsx` (+ tests), `packages/web/src/shell/{MenuButton,styles}.ts(x)`, `e2e/{model-design,model,no-callbacks}.spec.ts`
+  - Files (planned): `packages/web/src/workspaces/model/{FileList,ModelFilePage}.tsx` (+ tests), `e2e/model-design.spec.ts`
   - Failing test: `FileList.test.tsx` and `model-design.spec.ts` (MW-01):
     - one card, holding a table with one row per cube or view: file, kind, name, counts, and its members in a tooltip;
     - a "+ New" menu in the title row;

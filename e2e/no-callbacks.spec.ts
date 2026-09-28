@@ -194,7 +194,11 @@ test('the browser asks wechart alone, never Cube or xcube', async ({ page }) => 
   await page.goto('/explore/dashboards/seed-root-dashboard-1');
   await expect(page.locator('[data-tile="tile-status"]').getByTestId('chart-canvas')).toBeVisible();
   await page.goto('/model');
-  await expect(page.getByRole('region', { name: 'cubes/orders.yml' })).toBeVisible();
+  await expect(
+    page.getByRole('table', { name: 'Cubes and views' }).getByRole('link', {
+      name: 'cubes/orders.yml',
+    }),
+  ).toBeVisible();
 
   const origin = new URL(page.url()).origin;
   expect(asked.length).toBeGreaterThan(0);
