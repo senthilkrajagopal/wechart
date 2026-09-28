@@ -173,6 +173,25 @@ const SECOND_OF_PAIR = new Set(Object.values(PAIRS));
 export const SECRETS_SEALED =
   'Secrets are encrypted in your browser before they are sent, and are never shown again.';
 
+/**
+ * The secrets xcube reads a connection's key holder from — a BigQuery key, a
+ * Snowflake OAuth token, a Dremio token — by what the form calls each. xcube
+ * takes each one entered as a new target, even the same one, so the data
+ * source's cubes take new names and their pre-aggregations are rebuilt; a password
+ * or a private key entered again changes nothing there (T506, AC-353;
+ * research `xcube-bc18f82c01.md`, Gotcha 6; `xcube-2d5ac86f24.md`, the
+ * key-holder corner and Gotcha 2).
+ */
+const KEY_HOLDERS: Partial<Record<DriverType, Readonly<Record<string, string>>>> = {
+  bigquery: { credentials: 'key' },
+  snowflake: { oauthToken: 'token' },
+  dremio: { token: 'token' },
+};
+
+/** Said beside a stored key or token being replaced, before it is saved (AC-353). */
+const rebuildsSaid = (noun: string) =>
+  `Replacing the ${noun} rebuilds this data source’s pre-aggregations, even when the new ${noun} is the same.`;
+
 const shapesOf = (driver: DriverType) => SHAPES[driver];
 
 function shapeOf(driver: DriverType, values: ConnectionValues): Shape | undefined {
@@ -366,6 +385,18 @@ export function ConnectionForm({
     );
   };
 
+  /**
+   * What replacing a stored key or token does, for its field: said while one
+   * kept is replaced, or asked for again after its target changed — each a
+   * new one stored in its place (AC-353).
+   */
+  const rebuildsOf = (key: string) => {
+    const noun = KEY_HOLDERS[driver]?.[key];
+    return noun !== undefined && (stored.includes(key) || asked[key] !== undefined)
+      ? rebuildsSaid(noun)
+      : undefined;
+  };
+
   const fieldProps = (field: DriverField) => ({
     driver,
     field,
@@ -490,6 +521,7 @@ export function ConnectionForm({
               onSecret={setSecret}
               asked={asked[field.key]}
               keptFrom={keptFrom}
+              rebuilds={rebuildsOf(field.key)}
             />
           ) : (
             plainField(field)
@@ -721,6 +753,7 @@ function SecretField({
   invalid,
   asked,
   keptFrom,
+  rebuilds,
 }: {
   driver: DriverType;
   field: DriverField;
@@ -733,6 +766,11 @@ function SecretField({
   asked?: string | undefined;
   /** Where a copy's stored one was kept from (design 03 state D). */
   keptFrom?: string | undefined;
+  /**
+   * What replacing a stored key or token rebuilds: said from the moment its
+   * field opens, so before a new one can be saved (AC-353).
+   */
+  rebuilds?: string | undefined;
 }) {
   const id = useId();
   // A pasted key is said by its length once pasted, never shown (design 02).
@@ -755,13 +793,17 @@ function SecretField({
   // A stored one isn't asked for again (AC-164).
   const needed = required && !stored;
   const label = fieldLabel(driver, field);
-  const lower = `${label.charAt(0).toLowerCase()}${label.slice(1)}`;
+  // In a sentence: "the password", but "the OAuth token" (T506).
+  const lower = /^[A-Z]{2}/.test(label)
+    ? label
+    : `${label.charAt(0).toLowerCase()}${label.slice(1)}`;
   const email =
     driver === 'bigquery' && field.key === 'credentials' ? clientEmailOf(value) : undefined;
   const described = [
     stored ? `${id}-stored` : undefined,
     invalid ? `${id}-error` : undefined,
     asked === undefined ? undefined : `${id}-asked`,
+    rebuilds === undefined ? undefined : `${id}-rebuilds`,
   ]
     .filter((each) => each !== undefined)
     .join(' ');
@@ -812,7 +854,7 @@ function SecretField({
               ref={replace}
               type="button"
               className="link-button"
-              aria-label={`Replace the ${label.charAt(0).toLowerCase()}${label.slice(1)}`}
+              aria-label={`Replace the ${lower}`}
               onClick={() => {
                 onSecret(field.key, '');
                 setPasting(true);
@@ -896,6 +938,13 @@ function SecretField({
         <span id={`${id}-asked`} className="field__warning" role="status">
           <StatusIcon kind="warn" />
           {asked}
+        </span>
+      )}
+      {rebuilds === undefined ? null : (
+        // Read with the field, which Replace puts focus on (AC-353).
+        <span id={`${id}-rebuilds`} className="field__warning">
+          <StatusIcon kind="warn" />
+          {rebuilds}
         </span>
       )}
       {driver === 'bigquery' && field.key === 'credentials' ? (

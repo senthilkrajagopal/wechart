@@ -387,3 +387,156 @@ describe('a stored one’s fields, changed', () => {
     expect(input.getAttribute('aria-describedby')).toContain(said.id || 'none');
   });
 });
+
+/**
+ * T506 (AC-353; R42.5): a stored BigQuery key, Snowflake OAuth token or
+ * Dremio token is kept unless the user chooses to replace it. xcube takes
+ * each one entered as a new target, even the same one, and rebuilds the data
+ * source's pre-aggregations (research `xcube-bc18f82c01.md`, Gotcha 6;
+ * `xcube-2d5ac86f24.md`, Gotcha 2), so replacing one says so first. A
+ * password or a private key entered again changes nothing there, and says
+ * nothing of it.
+ */
+describe('a stored key or token (T506, AC-353)', () => {
+  function StoredSecret({
+    driver,
+    authMethod,
+    shape,
+    fields,
+    secret,
+    asked,
+  }: {
+    driver: DriverType;
+    authMethod: string;
+    shape?: string;
+    fields: Record<string, string | number | boolean>;
+    secret: string;
+    asked?: Record<string, string>;
+  }) {
+    const [values, setValues] = useState<ConnectionValues>({
+      authMethod,
+      shape,
+      fields,
+      secrets: {},
+    });
+    return (
+      <>
+        <ConnectionForm
+          driver={driver}
+          values={values}
+          onChange={setValues}
+          stored={asked === undefined ? [secret] : []}
+          was={fields}
+          {...(asked === undefined ? {} : { asked })}
+        />
+        <output data-testid="secrets">{JSON.stringify(values.secrets)}</output>
+      </>
+    );
+  }
+  const rebuilds = (noun: string) =>
+    `Replacing the ${noun} rebuilds this data source’s pre-aggregations, even when the new ${noun} is the same.`;
+  const dremio = { host: 'dremio.internal', port: 9047, ssl: false };
+
+  it('keeps a stored Dremio token, and says once Replace is chosen that replacing it rebuilds the pre-aggregations', async () => {
+    render(
+      <StoredSecret
+        driver="dremio"
+        authMethod="token"
+        shape="software"
+        fields={dremio}
+        secret="token"
+      />,
+    );
+    expect(screen.getByText('Stored · encrypted')).toBeTruthy();
+    expect(screen.queryByText(rebuilds('token'))).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Replace the token' }));
+    const token = screen.getByLabelText(/^Token/);
+    const warning = screen.getByText(rebuilds('token'));
+    expect(warning.classList.contains('field__warning')).toBe(true);
+    // Read with the field, which Replace puts focus on.
+    expect(document.activeElement).toBe(token);
+    expect(token.getAttribute('aria-describedby')).toContain(warning.id || 'none');
+    await userEvent.type(token, 'fixture-token');
+    expect(screen.getByText(rebuilds('token'))).toBeTruthy();
+
+    // Kept after all: nothing is replaced, and nothing to warn of.
+    await userEvent.click(screen.getByRole('button', { name: 'Keep the stored one' }));
+    expect(screen.queryByText(rebuilds('token'))).toBeNull();
+    expect(screen.getByTestId('secrets').textContent).toBe('{"token":""}');
+  });
+
+  it('says it of a Snowflake OAuth token', async () => {
+    render(
+      <StoredSecret
+        driver="snowflake"
+        authMethod="oauth"
+        fields={{ account: 'acme-eu', warehouse: 'reporting', database: 'sales' }}
+        secret="oauthToken"
+      />,
+    );
+    // Its name as its label says it: an initialism keeps its capitals.
+    await userEvent.click(screen.getByRole('button', { name: 'Replace the OAuth token' }));
+    expect(screen.getByText(rebuilds('token'))).toBeTruthy();
+  });
+
+  it('says it of a BigQuery key, and still once the new key is pasted', async () => {
+    render(
+      <StoredSecret
+        driver="bigquery"
+        authMethod="service-account"
+        fields={{ projectId: 'acme-analytics' }}
+        secret="credentials"
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Replace the key (JSON)' }));
+    expect(screen.getByText(rebuilds('key'))).toBeTruthy();
+    const key = screen.getByLabelText(/^Key \(JSON\)/);
+    fireEvent.paste(key);
+    fireEvent.change(key, { target: { value: '{"type":"service_account"}' } });
+    expect(screen.getByText('Pasted · 26 characters')).toBeTruthy();
+    expect(screen.getByText(rebuilds('key'))).toBeTruthy();
+  });
+
+  it('says it of a token asked for again after its target changed', () => {
+    render(
+      <StoredSecret
+        driver="dremio"
+        authMethod="token"
+        shape="software"
+        fields={dremio}
+        secret="token"
+        asked={{ token: 'The host changed, so the token kept no longer applies.' }}
+      />,
+    );
+    expect(screen.getByText(rebuilds('token'))).toBeTruthy();
+  });
+
+  it('says nothing of a rebuild for a password or a private key replaced', async () => {
+    render(
+      <StoredSecret
+        driver="snowflake"
+        authMethod="key-pair"
+        fields={{ account: 'acme-eu', warehouse: 'reporting', database: 'sales', username: 'cube' }}
+        secret="privateKey"
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Replace the private key (PEM)' }));
+    expect(screen.getByRole('button', { name: 'Keep the stored one' })).toBeTruthy();
+    expect(screen.queryByText(/rebuilds this data source/)).toBeNull();
+  });
+
+  it('says nothing of a rebuild for a PostgreSQL password replaced', async () => {
+    render(
+      <StoredSecret
+        driver="postgres"
+        authMethod="password"
+        fields={{ host: 'db-1', port: 5432, database: 'sales', user: 'cube', ssl: false }}
+        secret="password"
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Replace the password' }));
+    expect(screen.getByRole('button', { name: 'Keep the stored one' })).toBeTruthy();
+    expect(screen.queryByText(/rebuilds this data source/)).toBeNull();
+  });
+});

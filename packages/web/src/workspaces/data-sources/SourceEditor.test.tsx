@@ -331,6 +331,80 @@ describe('a rename (state B)', () => {
   });
 });
 
+/**
+ * T506 (AC-353; R42.5): a stored Snowflake OAuth token is kept through a
+ * change that isn't to its target, tested and saved with no new envelope.
+ * Replaced, the page says before Save that replacing it rebuilds the data
+ * source's pre-aggregations, as xcube does even for the same token.
+ */
+describe('a stored key or token (T506, AC-353)', () => {
+  const snowflake = () =>
+    stored({
+      driver: 'snowflake',
+      authMethod: 'oauth',
+      fields: { account: 'acme-eu', warehouse: 'reporting', database: 'sales' },
+      secrets: { oauthToken: { stored: true } },
+    });
+  const rebuilds =
+    'Replacing the token rebuilds this data source’s pre-aggregations, even when the new token is the same.';
+
+  it('keeps it through a change that isn’t to its target, and saves no new envelope', async () => {
+    const sent = serve({
+      'POST /api/data-sources/ds-1/test': [{ body: passed('t-1') }],
+      'PUT /api/data-sources/ds-1': [{ body: { id: 'ds-1' } }],
+    });
+    open(snowflake());
+    const database = screen.getByLabelText(/^Database/);
+    await userEvent.clear(database);
+    await userEvent.type(database, 'sales_eu');
+
+    // Still said stored, never asked for, and nothing to warn of.
+    expect(screen.getByText('Stored · encrypted')).toBeTruthy();
+    expect(within(beside()).queryByText(/needed again/)).toBeNull();
+    expect(screen.queryByText(rebuilds)).toBeNull();
+    expect(testButton()).toHaveProperty('disabled', false);
+    await userEvent.click(testButton());
+    await screen.findByText('Every check passed');
+    await userEvent.click(saveButton());
+    await screen.findByText('Saved 1 change.');
+
+    const fields = { account: 'acme-eu', warehouse: 'reporting', database: 'sales_eu' };
+    expect(sent.map(({ method, body }) => [method, body])).toEqual([
+      ['POST', { authMethod: 'oauth', fields, sealed: {} }],
+      ['PUT', { authMethod: 'oauth', fields, sealed: {}, testId: 't-1' }],
+    ]);
+  });
+
+  it('says before Save that replacing it rebuilds the pre-aggregations, then saves the new one sealed', async () => {
+    const sent = serve({
+      'POST /api/data-sources/ds-1/test': [{ body: passed('t-1') }],
+      'PUT /api/data-sources/ds-1': [{ body: { id: 'ds-1' } }],
+    });
+    open(snowflake());
+    await userEvent.click(screen.getByRole('button', { name: 'Replace the OAuth token' }));
+    expect(screen.getByText(rebuilds)).toBeTruthy();
+    await userEvent.type(screen.getByLabelText(/^OAuth token/), 'fixture-token');
+    await userEvent.click(testButton());
+    await screen.findByText('Every check passed');
+
+    // Said still, as Save is offered.
+    expect(saveButton()).toHaveProperty('disabled', false);
+    expect(screen.getByText(rebuilds)).toBeTruthy();
+    await userEvent.click(saveButton());
+    await screen.findByText('Saved 1 change.');
+    expect(sent.at(-1)).toEqual({
+      url: '/api/data-sources/ds-1',
+      method: 'PUT',
+      body: {
+        authMethod: 'oauth',
+        fields: { account: 'acme-eu', warehouse: 'reporting', database: 'sales' },
+        sealed: { oauthToken: envelope },
+        testId: 't-1',
+      },
+    });
+  });
+});
+
 describe('discarding (T497’s review)', () => {
   it('puts every change back and leaves focus on the foot', async () => {
     open(stored());

@@ -6509,10 +6509,36 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/api/src/jobs/build.ts` (and T376's cancel, T378's schedules), `packages/api/src/access/audit.test.ts`
   - Failing test: `audit.test.ts`: starting a build from Jobs records who, which pre-aggregation, its folder and when; a cancel and a schedule change likewise (AC-294).
   - Depends on: T371; the cancel on T376, schedule changes on T378
-- [ ] T506 (AC-353) Keep a stored BigQuery key or Snowflake or Dremio token unless replaced, and warn that replacing it rebuilds the rollups *(added 2026-09-28, R42.5)*
-  - Files: `packages/web/src/workspaces/data-sources/` (the Connection form), + tests
+- [x] T506 (AC-353) Keep a stored BigQuery key or Snowflake or Dremio token unless replaced, and warn that replacing it rebuilds the rollups *(added 2026-09-28, R42.5)*
+  - Files: `packages/web/src/workspaces/data-sources/ConnectionForm.tsx` (+ `ConnectionForm.test.tsx`), `packages/web/src/workspaces/data-sources/SourceEditor.test.tsx`, `e2e/security/data-sources.spec.ts`
   - Failing test: the form shows the stored key or token as kept; choosing Replace shows the warning before Save; saving without choosing Replace sends no new envelope (AC-353).
   - Depends on: none
+  - **As built (2026-09-28):**
+    - **Kept unless replaced:** T497 already kept a stored secret, said "Stored · encrypted" with Replace (state D), and asked for it again only when a field it is bound to changed (AC-312). This task's tests pin that for a key or token. Those tests passed before any change.
+    - **The warning:** once Replace is chosen for a stored BigQuery key, Snowflake OAuth token or Dremio token, the field says "Replacing the key (or token) rebuilds this data source’s pre-aggregations, even when the new key (or token) is the same." It shows before anything is typed, stays through the test, and is in the field's description. "Keep the stored one" takes it away.
+    - It also shows when one is asked for again after its target changed, since a new one is then stored in its place too.
+    - **Only those three:** they are what xcube reads a connection's key holder from (`credentials`, `oauthToken`, `token`), and each one entered is a new target there. A password, private key or client key entered again changes nothing in xcube, so replacing one says nothing of a rebuild (research `xcube-bc18f82c01.md` Gotcha 6; `xcube-2d5ac86f24.md` Gotcha 2).
+    - **Fixed on the way:** the Replace button of Snowflake's OAuth token was named "Replace the oAuth token". A label that starts with an initialism now keeps its capitals.
+  - **Tests:**
+    - `e2e/security/data-sources.spec.ts`, "as writer, a stored token" (Chrome). A Dremio source with a stored token, in the writer's workspace:
+      - the token is said stored, never drawn, with no warning;
+      - its database changed, the token is still kept, nothing is "needed again", and Test connection is enabled;
+      - Replace puts focus on an empty token field. The warning is shown and read with it, while Save is disabled;
+      - "Keep the stored one" takes the warning away.
+    - `ConnectionForm.test.tsx`, "a stored key or token": the warning for each of the three, for a pasted key, and for one asked for again; none for a password or a private key.
+    - `SourceEditor.test.tsx`, "a stored key or token":
+      - a Snowflake token kept through a change that isn't to its target is tested and saved with `sealed: {}`, so no new envelope;
+      - replaced, the warning is still shown when Save is enabled, and the new token is saved sealed.
+  - **One review round.** It found AC-353 met. Fixed:
+    1. The e2e's source was left in the writer's workspace on every run: the suite's clean-up runs as super, who can't reach it (AC-276). The test now removes it as the writer.
+    2. The e2e now checks that the database change registered ("1 unsaved change") before checking that the token is still kept.
+  - **Left as found (low):**
+    - Once a BigQuery key is pasted, focus is on the pasted box's Replace, which isn't described by the warning. The warning stays visible, and was read with the field as it took focus.
+    - The warning shows as soon as Replace is chosen, even if nothing is typed. Left empty, the stored one is kept and nothing is rebuilt.
+    - Only Dremio is shown end to end. BigQuery and Snowflake are shown in the component tests.
+  - **The e2e's fixture:** no Dremio runs in compose, and a data source is made only from a passing test of it (AC-158). So the fixture's test runs through the API against `127.0.0.1:9047`, where nothing listens in Cube's container, and fails there. It is then marked passed in the suite's own database (`markPassed`, `docker exec wechart-meta psql`), and the source is made through the API from it. Only the fixture goes round the test gate. The warning shows before Save, so no Dremio is needed after that.
+  - **Not covered, a question for the user if wanted:** switching the way a data source signs in to a key or token (say, Snowflake from a key pair to OAuth) stores a key or token where none was. By `xcube-919cff8c6e.md` ("a new host, database, user or key holder aliases a data source's cubes and rebuilds their rollups"), that likely rebuilds too; no test has checked it. AC-353 speaks only of one already stored, so nothing is said there.
+  - AC-353 ticked.
 - [ ] T378 (AC-234) Run a wechart-owned cron schedule through Cube's jobs API
   - Files: `packages/api/package.json` (pg-boss 12.33.2), `packages/api/src/scheduler/{schedules,worker}.ts` (+ tests), `packages/web/src/workspaces/schedules/ScheduleForm.tsx`
   - Failing test: `schedules.test.ts`: the next runs shown match the cron expression and time zone, and with a fake clock a due run starts a build through the jobs API (AC-234).

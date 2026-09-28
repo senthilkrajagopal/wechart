@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 import type { APIRequestContext } from '@playwright/test';
@@ -80,6 +81,39 @@ async function dataSource(request: APIRequestContext, folderId: string, name: st
   const id = ((await answer.json()) as { id: string }).id;
   made.sources.push(id);
   return id;
+}
+
+/**
+ * The suite's own database, as `prepare-stack.mjs` reaches it in compose's
+ * metadata Postgres, and as `playwright.security.config.ts` names it in
+ * `WECHART_DB_URL`.
+ */
+const SUITE_DATABASE = 'wechart_security';
+
+/**
+ * Marks a trial connection test passed, for a fixture of a kind no database
+ * in compose can pass (T506): the test is run and kept by the API as any
+ * other, and only its outcome is changed. The data source is then made
+ * through the API from it, as from any passing test.
+ */
+function markPassed(testId: string) {
+  expect(testId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  const said = execFileSync(
+    'docker',
+    [
+      'exec',
+      'wechart-meta',
+      'psql',
+      '-U',
+      'wechart',
+      '-d',
+      SUITE_DATABASE,
+      '-Atc',
+      `UPDATE connection_tests SET ok = true WHERE id = '${testId}' AND data_source_id IS NULL`,
+    ],
+    { encoding: 'utf8' },
+  );
+  expect(said.trim()).toBe('UPDATE 1');
 }
 
 test.describe.configure({ mode: 'serial' });
@@ -505,6 +539,107 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
         .click();
       await expect(page).toHaveURL(/\/explore\?folder=/);
       expect(asked).toEqual([]);
+    });
+  });
+
+  /**
+   * T506 (AC-353; R42.5): a Dremio data source whose token is stored, made in
+   * the writer's workspace. Its token is kept through a change that isn't to
+   * its target, and choosing Replace says at once, before anything can be
+   * saved, that replacing it rebuilds the data source's pre-aggregations even
+   * when the new token is the same (xcube takes each one entered as a new
+   * target; research `xcube-bc18f82c01.md`, Gotcha 6).
+   *
+   * No Dremio runs in compose, and a data source is made only from a passing
+   * test of it (AC-158). So the fixture's test is run through the API against
+   * a host where nothing listens, fails there, and is marked passed in the
+   * suite's database (`markPassed`); the source is made through the API from
+   * it. The warning shows before Save, so no Dremio need answer after that.
+   */
+  test.describe('as writer, a stored token (T506, AC-353)', () => {
+    test.use({ role: 'writer' });
+
+    test('keeps it through a change that isn’t to its target, and says Replace rebuilds the pre-aggregations before any save', async ({
+      page,
+    }) => {
+      const request = page.request;
+      // Nothing listens there, in Cube's container, so the test goes nowhere else.
+      const fields = { host: '127.0.0.1', port: 9047, ssl: false, database: 'e2e' };
+      const settings = {
+        folderId: 'mine',
+        driver: 'dremio',
+        authMethod: 'token',
+        fields,
+        sealed: { token: await sealSecretV1(KEY, 'dremio', 'token', fields, 'e2e-fixture-token') },
+      };
+      const run = await request.post('/api/data-sources/test', { data: settings, timeout: 90_000 });
+      expect(run.status(), await run.text()).toBe(200);
+      const trial = (await run.json()) as { ok: boolean; testId: string };
+      expect(trial.ok).toBe(false);
+      markPassed(trial.testId);
+      const created = await request.post('/api/data-sources', {
+        data: {
+          ...settings,
+          name: `token_${RUN}`,
+          targetFolderId: made.folder,
+          testId: trial.testId,
+        },
+      });
+      expect(created.status(), await created.text()).toBe(201);
+      const id = ((await created.json()) as { id: string }).id;
+      made.sources.push(id);
+
+      await page.goto(`/explore/data-sources/${id}`);
+      const main = page.getByRole('main');
+      await expect(main.getByRole('heading', { level: 1 })).toHaveText(`token_${RUN}`);
+      const panel = main.getByRole('tabpanel', { name: 'Connection' });
+      const rebuilds =
+        'Replacing the token rebuilds this data source’s pre-aggregations, even when the new token is the same.';
+      const save = main.getByRole('button', { name: /^Save/ });
+
+      // Kept: said stored, never drawn (AC-164), and nothing to warn of.
+      const replace = panel.getByRole('button', { name: 'Replace the token' });
+      await expect(replace).toBeVisible();
+      await expect(panel.getByText('Stored · encrypted')).toBeVisible();
+      await expect(panel.locator('input[type="password"]')).toHaveCount(0);
+      await expect(panel.getByText(rebuilds)).toHaveCount(0);
+
+      // Its database isn't what the token is bound to: changed, the token is still kept,
+      // not asked for again, and the change can be tested as it is.
+      await panel.getByLabel('Database').fill('e2e_other');
+      await expect(main.locator('.source-settings__count')).toHaveText(
+        '1 unsaved change · Save needs a passing test of these settings.',
+      );
+      await expect(panel.getByText('Stored · encrypted')).toBeVisible();
+      await expect(main.getByRole('region', { name: 'Test to save' })).not.toContainText(
+        'needed again',
+      );
+      await expect(main.getByRole('button', { name: 'Test connection' })).toBeEnabled();
+
+      // Replace: said beside the field at once, while nothing can yet be saved.
+      await replace.click();
+      const token = panel.getByLabel(/^Token/);
+      await expect(token).toBeFocused();
+      await expect(panel.getByText(rebuilds)).toBeVisible();
+      await expect(token).toHaveAccessibleDescription(
+        /rebuilds this data source’s pre-aggregations/,
+      );
+      await expect(save).toBeDisabled();
+      await token.fill('e2e-fixture-token');
+      await expect(panel.getByText(rebuilds)).toBeVisible();
+      await expect(save).toBeDisabled();
+
+      // Kept after all: the stored one again, and nothing to warn of.
+      await panel.getByRole('button', { name: 'Keep the stored one' }).click();
+      await expect(panel.getByText(rebuilds)).toHaveCount(0);
+      await expect(panel.getByText('Stored · encrypted')).toBeVisible();
+      await main.getByRole('button', { name: 'Discard changes' }).click();
+      await expect(main.locator('.source-settings__count')).toHaveText('No unsaved changes');
+
+      // Removed by its maker: no one else reaches their workspace (AC-276), so the
+      // suite's clean-up, as super, couldn't (T506's review).
+      expect((await request.delete(`/api/data-sources/${id}`)).status()).toBe(204);
+      made.sources.splice(made.sources.indexOf(id), 1);
     });
   });
 
