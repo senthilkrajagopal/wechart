@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { Canvas, EMPTY_CANVAS_ROWS, type GridTile } from './Canvas';
 import { COLUMNS, GUTTER_PX, ROW_UNIT_PX } from './geometry';
+import { ReviewMarks } from './reviewMarks';
 
 /**
  * T060 / AC-054: WHILE editing, THE SYSTEM SHALL show a 12-column grid on the
@@ -261,5 +262,36 @@ describe('which tiles are tab stops', () => {
       ['c', null],
       ['d', '0'],
     ]);
+  });
+});
+
+describe('a proposal’s changed and new tiles (T356, AC-341)', () => {
+  it('outlines and labels each tile its review marks, and no other', () => {
+    render(
+      <ReviewMarks.Provider value={{ a: 'changed', c: 'new' }}>
+        <Canvas tiles={OFF_GRID} editing={false}>
+          {(tile) => <span>{tile.id}</span>}
+        </Canvas>
+      </ReviewMarks.Provider>,
+    );
+    const marked = screen
+      .getAllByTestId('grid-item')
+      .map((tile) => [
+        tile.getAttribute('data-tile'),
+        tile.getAttribute('data-review'),
+        tile.textContent,
+      ]);
+    expect(marked).toEqual([
+      ['a', 'changed', 'Changeda'],
+      ['b', null, 'b'],
+      ['c', 'new', 'Newc'],
+      ['d', null, 'd'],
+    ]);
+  });
+
+  it('marks nothing outside a review', () => {
+    render_(false);
+    for (const tile of screen.getAllByTestId('grid-item'))
+      expect(tile.getAttribute('data-review')).toBeNull();
   });
 });

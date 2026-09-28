@@ -30,6 +30,7 @@ import { JobsPage } from '../workspaces/jobs/JobsPage';
 import { auditFiltersFrom, auditSearchOf } from '../workspaces/security/AuditTrail';
 import { SecuritySurface } from '../workspaces/security/SecuritySurface';
 import { ReviewsPage, type ReviewsView } from '../workspaces/reviews/ReviewsPage';
+import { ReviewView } from '../workspaces/reviews/ReviewView';
 import { DataSourcesPage } from '../workspaces/data-sources/DataSourcesPage';
 import { SourceSettings } from '../workspaces/data-sources/SourceSettings';
 import { SchedulesPage } from '../workspaces/schedules/SchedulesPage';
@@ -114,6 +115,30 @@ const reviewsRoute = createRoute({
             if (next.selected !== undefined) search.set('selected', next.selected);
             const text = search.toString();
             router.history.push(`/reviews${text === '' ? '' : `?${text}`}`);
+          }}
+        />
+      </AppShell>
+    );
+  },
+});
+
+/**
+ * A proposal's review view (T356; design 05's main screen): the item itself,
+ * with Approve and Reject, only here.
+ */
+const reviewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/reviews/$proposalId',
+  component: function ReviewSurface() {
+    const router = useRouter();
+    const params = useParams({ strict: false }) as { proposalId?: string };
+    return (
+      <AppShell reviews>
+        <ReviewView
+          key={params.proposalId}
+          proposalId={decodeURIComponent(params.proposalId ?? '')}
+          onOpen={(id) => {
+            router.history.push(`/reviews/${encodeURIComponent(id)}`);
           }}
         />
       </AppShell>
@@ -610,6 +635,7 @@ const routeTree = rootRoute.addChildren([
   ...workspaceRoutes,
   securityTabRoute,
   reviewsRoute,
+  reviewRoute,
   dashboardRoute,
   // Before chartRoute: the editor path is more specific than /charts/$objectId.
   chartEditorRoute,

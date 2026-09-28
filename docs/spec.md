@@ -1081,7 +1081,7 @@ Traces to: §P2.6 E, `[P2 input]`, `[R12, R17, R18]`.
       Fails when: the folder shows the old version after an approval that passed the check; the replaced version is missing from history; or an approval that fails the check changes the folder.
 - [ ] AC-289 THE SYSTEM SHALL keep an item's last 10 versions, each with its author, approver, time and description, show them to the folder's read-write members and to Super-Admins only, and SHALL let a read-write member restore one through a proposal (`[R17, R23]`).
       Fails when: an item that has had more than 10 versions keeps other than its last 10, a read-only user can open its history, or a restore lands without an approval.
-- [ ] AC-341 WHEN a proposed dashboard is drawn in its review, THE SYSTEM SHALL outline and label each tile the proposal changes ("Changed") or adds ("New") against the folder's current version (`[R33]`, proposal 4 of the 2026-09-27 designs).
+- [x] AC-341 WHEN a proposed dashboard is drawn in its review, THE SYSTEM SHALL outline and label each tile the proposal changes ("Changed") or adds ("New") against the folder's current version (`[R33]`, proposal 4 of the 2026-09-27 designs).
       Fails when: a tile the proposal changes or adds carries no label, or an unchanged tile carries one.
 - [x] AC-290 WHEN a proposal is rejected, THE SYSTEM SHALL return it unchanged to the author's workspace, with the approver's reason of at most 1,000 characters, and leave the folder as it was (`[R18]`).
       Fails when: the folder changes, the author's workspace loses the work, or the author isn't shown the reason.

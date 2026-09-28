@@ -1,0 +1,442 @@
+import { useQuery } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
+
+import { drawChartBody, ReadOnlyDashboard, specFor } from '../../dashboard/DashboardPage';
+import { dashboardOf, type StoredDocument } from '../../dashboard/model/stored';
+import { chartIdsOf } from '../../dashboard/model/document';
+import { ReviewMarks } from '../../dashboard/grid/reviewMarks';
+import { tileChangesOf } from './tileChanges';
+import { allMembers } from '../../filters/FilterBar';
+import { formatsFrom } from '../../dashboard/chartSpec';
+import { META_QUERY } from '../../query/meta';
+import { StateLine, StatusIcon } from '../../shell/StatusIcon';
+import { ChartTile } from '../../tiles/ChartTile';
+import { TileError } from '../../tiles/TileError';
+import { TileSkeleton } from '../../tiles/TileSkeleton';
+import { DecisionPanel } from './DecisionPanel';
+import {
+  momentText,
+  proposalQuery,
+  shownItems,
+  type ProposalDetail,
+  type ProposalItem,
+} from './review';
+import { folderText, KIND_LABEL, REVIEWS_QUERY } from './reviews';
+import { SettingsDiff } from './SettingsDiff';
+
+/**
+ * A proposal's review view (T356, AC-286, AC-288; design 05's main screen,
+ * states G–L; references.md surface 6; rules 77–79, 85; principle 9): the
+ * reviewer decides on the thing itself.
+ * - The head: back to Reviews, what it is and where it goes, its state, and
+ *   where it is in the queue, with Previous and Next.
+ * - What is in it: the item, and what goes with it, each new or replacing a
+ *   version, with why they go together (a dashboard's own charts are part of
+ *   it).
+ * - The item drawn: a dashboard or chart read-only, Proposed or Current, as
+ *   readers in the folder would see it; a data source's settings beside the
+ *   folder's (a model's YAML diff comes with workspace models, T350).
+ * - The inspector: who, when, what they said, what it replaces where, and
+ *   Approve and Reject, only here.
+ */
+export function ReviewView({
+  proposalId,
+  onOpen,
+  now = new Date(),
+}: {
+  readonly proposalId: string;
+  /** Open another proposal's review: Previous and Next. */
+  readonly onOpen: (id: string) => void;
+  readonly now?: Date;
+}) {
+  const detail = useQuery(proposalQuery(proposalId));
+  const lists = useQuery({ ...REVIEWS_QUERY, retry: false });
+  const [said, setSaid] = useState('');
+  const [chosen, setChosen] = useState<string | undefined>(undefined);
+
+  if (detail.isPending) return <StateLine kind="run">Opening the proposal…</StateLine>;
+  if (detail.isError)
+    return (
+      <StateLine kind="err" testId="review-error">
+        {detail.error.message}
+      </StateLine>
+    );
+  const proposal = detail.data;
+  const items = shownItems(proposal);
+  const item = items.find((each) => `${each.kind}:${each.id}` === chosen) ?? items[0];
+  const queue = lists.data?.toReview.map((row) => row.id) ?? [];
+  const at = queue.indexOf(proposal.id);
+  const folder = folderText(proposal.targetPath);
+  // The version it was based on, and the folder's now, where they differ.
+  const first = items[0];
+  const movedOn =
+    proposal.status === 'open' &&
+    first?.replaces != null &&
+    first.replacesNow != null &&
+    first.replacesNow !== first.replaces.version
+      ? { was: first.replaces.version, now: first.replacesNow }
+      : undefined;
+
+  return (
+    <section className="review-view" aria-labelledby={`review-${proposal.id}`}>
+      <header className="review-view__head">
+        <a
+          className="btn-ghost btn-sm"
+          // Back to its row (pin 1): in To review while it waits for this
+          // user's decision, else in My proposals (T356's review).
+          href={`/reviews?${proposal.status === 'open' && proposal.mayApprove ? '' : 'tab=mine&'}selected=${encodeURIComponent(proposal.id)}`}
+        >
+          ← Reviews
+        </a>
+        <h1 id={`review-${proposal.id}`} className="review-view__title">
+          Review · {proposal.title} → {folder}
+        </h1>
+        <StateOf proposal={proposal} />
+        <span className="review-view__spacer" />
+        {at === -1 ? null : (
+          <span className="review-view__queue" data-testid="review-queue">
+            <span>
+              {at + 1} of {queue.length}
+            </span>
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={at === 0}
+              onClick={() => {
+                onOpen(queue[at - 1]!);
+              }}
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={at === queue.length - 1}
+              onClick={() => {
+                onOpen(queue[at + 1]!);
+              }}
+            >
+              Next
+            </button>
+          </span>
+        )}
+      </header>
+
+      {said === '' ? null : (
+        <StateLine kind="ok" testId="review-said">
+          {said}
+        </StateLine>
+      )}
+
+      <div className="review-view__body">
+        <nav className="review-view__items" aria-labelledby={`review-items-${proposal.id}`}>
+          <h2 id={`review-items-${proposal.id}`}>In this proposal</h2>
+          <ul aria-labelledby={`review-items-${proposal.id}`}>
+            {items.map((each) => (
+              <li key={`${each.kind}:${each.id}`}>
+                <button
+                  type="button"
+                  className="review-view__item"
+                  aria-current={each === item ? 'true' : undefined}
+                  onClick={() => {
+                    setChosen(`${each.kind}:${each.id}`);
+                  }}
+                >
+                  <span className="review-view__item-title">{each.title}</span>
+                  <span className="review-view__item-what">
+                    {KIND_LABEL[each.kind]} · {doesText(each, proposal.targetPath)}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          {items.length > 1 ? (
+            <p className="review-view__bundle" data-testid="review-bundle">
+              These go with the {KIND_LABEL[proposal.kind].toLowerCase()}, which shows them from the
+              author’s workspace. They’re approved or rejected together.
+            </p>
+          ) : null}
+        </nav>
+
+        <div className="review-view__item-pane">
+          {item === undefined ? null : (
+            <ItemPreview key={`${item.kind}:${item.id}`} proposal={proposal} item={item} />
+          )}
+        </div>
+
+        <aside className="review-view__inspector admin-pane" aria-label="About this proposal">
+          <section className="review-view__sect">
+            <h2>Proposed by</h2>
+            <p data-testid="review-author">
+              {proposal.author.name} · {momentText(proposal.proposedAt)}
+            </p>
+          </section>
+          <section className="review-view__sect">
+            <h2>What changed</h2>
+            <p
+              className={`reviews__description${proposal.description === null ? ' is-empty' : ''}`}
+              data-testid="review-description"
+            >
+              {proposal.description ?? 'No description'}
+            </p>
+          </section>
+          <section className="review-view__sect">
+            <h2>In {folder}</h2>
+            <p data-testid="review-replaces">
+              {proposal.replaces === null
+                ? 'New in this folder'
+                : `Replaces version ${String(proposal.replaces.version)}`}
+            </p>
+            {proposal.replaces !== null && !proposal.replaces.copiedFrom ? (
+              <p className="review-view__warning" role="note">
+                It wasn’t copied from that version: it was made new in the author’s workspace.
+              </p>
+            ) : null}
+            {/* The folder moved on since (pin 6): said, never blocking. */}
+            {movedOn === undefined ? null : (
+              <p className="review-view__warning" data-testid="review-moved-on">
+                Based on version {movedOn.was}; the folder now has version {movedOn.now}. Approving
+                replaces version {movedOn.now}, which stays in History.
+              </p>
+            )}
+          </section>
+          {proposal.status === 'open' ? (
+            <DecisionPanel proposal={proposal} onDecided={setSaid} />
+          ) : (
+            <section className="review-view__sect">
+              <p className="reviews__decision" data-testid="review-decision">
+                {decisionText(proposal)}
+              </p>
+              {proposal.status === 'rejected' || proposal.status === 'withdrawn' ? (
+                <blockquote className="reviews__reason">
+                  {proposal.decision?.reason ?? 'No reason given'}
+                </blockquote>
+              ) : null}
+            </section>
+          )}
+        </aside>
+      </div>
+      <span hidden>{now.toISOString()}</span>
+    </section>
+  );
+}
+
+function StateOf({ proposal }: { readonly proposal: ProposalDetail }) {
+  const [kind, text] =
+    proposal.status === 'open'
+      ? (['run', 'Waiting for review'] as const)
+      : proposal.status === 'approved'
+        ? (['ok', 'Approved'] as const)
+        : proposal.status === 'rejected'
+          ? (['err', 'Rejected'] as const)
+          : (['idle', 'Withdrawn'] as const);
+  return (
+    <span className="reviews__status">
+      <StatusIcon kind={kind} />
+      <span>{text}</span>
+    </span>
+  );
+}
+
+const decisionText = (proposal: ProposalDetail) => {
+  const word =
+    proposal.status === 'approved'
+      ? 'Approved'
+      : proposal.status === 'rejected'
+        ? 'Rejected'
+        : 'Withdrawn';
+  return proposal.decision === null
+    ? word
+    : `${word} by ${proposal.decision.by.name} · ${momentText(proposal.decision.at)}`;
+};
+
+const sameFolder = (a: readonly string[], b: readonly string[]) =>
+  a.length === b.length && a.every((part, at) => part === b[at]);
+
+/** "replaces version 7", or "new in Sales": where it lands, when not the target. */
+function doesText(item: ProposalItem, targetPath: readonly string[]): string {
+  const elsewhere = sameFolder(item.landsInPath, targetPath)
+    ? ''
+    : ` in ${folderText(item.landsInPath)}`;
+  return item.replaces === null
+    ? `new${elsewhere === '' ? ' in this folder' : elsewhere}`
+    : `replaces version ${String(item.replaces.version)}${elsewhere}`;
+}
+
+/** The item itself, drawn read-only: Proposed, or the folder's Current. */
+function ItemPreview({
+  proposal,
+  item,
+}: {
+  readonly proposal: ProposalDetail;
+  readonly item: ProposalItem;
+}) {
+  const [showing, setShowing] = useState<'proposed' | 'current'>('proposed');
+  const open = proposal.status === 'open';
+  /**
+   * What the folder has now, set against it while it waits: once decided,
+   * what it replaced may be what it landed as (T356's review), so it is
+   * shown as proposed, alone.
+   */
+  const against =
+    open && item.replaces !== null && item.replacesNow !== null ? item.replaces : null;
+  const nowVersion = item.replacesNow ?? item.replaces?.version ?? 0;
+  const current = useQuery({
+    ...currentDrawnQuery(against?.id ?? ''),
+    enabled: item.kind === 'dashboard' && against !== null,
+  });
+  // The charts it holds, and the folder's for the rest it shows.
+  const held = useMemo(
+    () =>
+      Object.fromEntries(
+        proposal.items
+          .filter((each) => each.kind === 'chart')
+          .map((each) => [each.id, each.snapshot]),
+      ),
+    [proposal.items],
+  );
+  // Each tile it changes or adds, against the folder's version (AC-341).
+  const marks = useMemo(() => {
+    if (item.kind !== 'dashboard' || !open) return {};
+    if (against === null) return tileChangesOf({ body: item.snapshot, charts: held }, undefined);
+    if (current.data === undefined) return {};
+    return tileChangesOf(
+      { body: item.snapshot, charts: { ...current.data.charts, ...held } },
+      current.data,
+    );
+  }, [item.kind, item.snapshot, open, against, held, current.data]);
+
+  if (item.kind === 'data-source') return <SettingsDiff item={item} alone={!open} />;
+  const folder = folderText(item.landsInPath);
+  return (
+    <div className="review-view__preview">
+      <div className="review-view__switch">
+        {against === null ? null : (
+          <div role="group" aria-label="Which version" className="seg">
+            {(
+              [
+                ['proposed', 'Proposed'],
+                ['current', `Current (version ${String(nowVersion)})`],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={showing === value}
+                onClick={() => {
+                  setShowing(value);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        <p className="review-view__read-only">
+          {open
+            ? `Drawn read-only, as readers in ${folder} would see it.`
+            : 'As proposed, read-only.'}
+        </p>
+      </div>
+      {item.kind === 'dashboard' ? (
+        showing === 'current' && against !== null ? (
+          <CurrentDashboard id={against.id} version={nowVersion} />
+        ) : (
+          <ReviewMarks.Provider value={marks}>
+            <ReadOnlyDashboard
+              cacheKey={`proposal:${proposal.id}:${item.id}`}
+              dashboardId={item.id}
+              document={dashboardOf({ body: item.snapshot } as StoredDocument)}
+              heldCharts={held}
+            />
+          </ReviewMarks.Provider>
+        )
+      ) : (
+        <ChartPreview
+          key={showing}
+          cacheKey={
+            showing === 'current' && against !== null
+              ? `current:${against.id}:${String(nowVersion)}`
+              : `proposal:${proposal.id}:${item.id}`
+          }
+          draw={() =>
+            showing === 'current' && against !== null
+              ? specFor(against.id)
+              : drawChartBody(item.snapshot)
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+/** The folder's dashboard now, and the charts it shows, as its readers read them. */
+const currentDrawnQuery = (id: string) => ({
+  queryKey: ['review-current', 'dashboard', id] as const,
+  queryFn: async () => {
+    const response = await fetch(`/api/documents/dashboard/${encodeURIComponent(id)}`);
+    if (!response.ok)
+      throw new Error(`The folder’s dashboard could not be read (${String(response.status)}).`);
+    const stored = (await response.json()) as StoredDocument;
+    const document = dashboardOf(stored);
+    const charts: Record<string, unknown> = {};
+    for (const chartId of chartIdsOf(document)) {
+      const chart = await fetch(`/api/documents/chart/${encodeURIComponent(chartId)}`);
+      if (chart.ok) charts[chartId] = ((await chart.json()) as { body: unknown }).body;
+    }
+    return { document, body: stored.body, charts };
+  },
+});
+
+/** The folder's dashboard as it is now, read as its readers read it. */
+function CurrentDashboard({ id, version }: { readonly id: string; readonly version: number }) {
+  const stored = useQuery(currentDrawnQuery(id));
+  if (stored.isPending) return <StateLine kind="run">Reading the folder’s version…</StateLine>;
+  if (stored.isError) return <StateLine kind="err">{stored.error.message}</StateLine>;
+  return (
+    <ReadOnlyDashboard
+      cacheKey={`current:${id}:${String(version)}`}
+      dashboardId={id}
+      document={stored.data.document}
+    />
+  );
+}
+
+/** One chart drawn, with the model's formats and titles, as its own page draws it. */
+function ChartPreview({
+  cacheKey,
+  draw,
+}: {
+  readonly cacheKey: string;
+  readonly draw: () => ReturnType<typeof drawChartBody>;
+}) {
+  const drawn = useQuery({ queryKey: ['review-chart', cacheKey], queryFn: draw });
+  const meta = useQuery(META_QUERY);
+  const chart = drawn.data?.chart;
+  const spec = chart !== undefined && 'spec' in chart ? chart.spec : undefined;
+  const formatted = useMemo(
+    () =>
+      spec === undefined
+        ? undefined
+        : {
+            ...spec,
+            formats: formatsFrom(meta.data),
+            titles: Object.fromEntries(
+              allMembers(meta.data).map((member) => [member.name, member.title]),
+            ),
+            shortTitles: Object.fromEntries(
+              allMembers(meta.data).map((member) => [member.name, member.shortTitle]),
+            ),
+          },
+    [spec, meta.data],
+  );
+  if (drawn.isPending) return <TileSkeleton chartType="bar" height={360} />;
+  if (drawn.isError) return <TileError error={drawn.error} onRetry={() => void drawn.refetch()} />;
+  if (chart !== undefined && 'error' in chart)
+    return <TileError error={chart.error} onRetry={() => void drawn.refetch()} />;
+  return formatted === undefined ? null : (
+    <div className="chart-page__tile">
+      <ChartTile spec={formatted} height={360} />
+    </div>
+  );
+}

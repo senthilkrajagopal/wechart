@@ -312,6 +312,40 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     return items;
   };
 
+  /**
+   * Each credential a proposed data source holds, against the one it
+   * replaces (T356; design 05, state H; rule 83): "unchanged" where its
+   * envelope is the very one the folder holds (a copy carries it as it is,
+   * under a new revision), "replaced" where it was entered again and sealed
+   * afresh, "new" where it replaces nothing. Envelopes are compared, never
+   * opened, and never answered.
+   */
+  const secretChangesOf = async (
+    snapshot: Record<string, unknown>,
+    replacesId: string | undefined,
+  ): Promise<Record<string, 'unchanged' | 'replaced' | 'new'>> => {
+    const proposed = (snapshot['sealed'] as Record<string, unknown> | undefined) ?? {};
+    const current =
+      replacesId === undefined
+        ? undefined
+        : (await dataSources?.withSealed(replacesId))?.landed.sealed;
+    const same = (a: unknown, b: unknown) =>
+      a !== undefined && b !== undefined && JSON.stringify(a) === JSON.stringify(b);
+    return Object.fromEntries(
+      Object.entries(proposed).map(([field, envelope]) => [
+        field,
+        current === undefined ? 'new' : same(envelope, current[field]) ? 'unchanged' : 'replaced',
+      ]),
+    );
+  };
+
+  /** The version of the item a proposal replaces, as its folder has it now; null when gone. */
+  const versionNowOf = async (kind: ProposalKind, id: string | undefined) => {
+    if (id === undefined) return null;
+    if (kind === 'data-source') return (await dataSources?.get(id))?.version ?? null;
+    return (await read(kind, id))?.version ?? null;
+  };
+
   /** A folder's path from Shared, a name a step: `['Shared', 'Sales', 'EMEA']`. */
   const pathPartsOf = async (id: string) => {
     const names: string[] = [];
@@ -321,6 +355,8 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
       names.unshift(titleOf(folder.body) || at);
       at = folderIdOf(folder.body);
     }
+    // A folder deleted since is named so, never taken for Shared (T356's review).
+    if (names.length === 0 && id !== 'root') return ['Shared', 'A deleted folder'];
     return ['Shared', ...names];
   };
   /** A folder's path below Shared, as the audit trail names it ("Sales / EMEA"). */
@@ -370,12 +406,28 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     if (proposal === null || rights === null || !rights.see)
       return reply.code(404).send({ error: 'There is no such proposal.' });
     const answer = answerOf(proposal);
+    const items = [];
+    for (const [at, item] of answer.items.entries()) {
+      const snapshot = proposal.items[at]!.snapshot;
+      items.push({
+        ...item,
+        snapshot: shownSnapshot(item.kind, snapshot),
+        // Where it lands, for the review view (T356).
+        landsInPath: await pathPartsOf(item.landsIn),
+        // The version the folder has now: it may have moved on since (design
+        // 05, pin 6). An approval replaces that one.
+        replacesNow: await versionNowOf(item.kind, item.replaces?.id),
+        // Set against the folder's while it waits: once decided, what it
+        // replaced may be what it landed as (T356's review).
+        ...(item.kind === 'data-source' && proposal.status === 'open'
+          ? { secretChanges: await secretChangesOf(snapshot, item.replaces?.id) }
+          : {}),
+      });
+    }
     return {
       ...answer,
-      items: answer.items.map((item, at) => ({
-        ...item,
-        snapshot: shownSnapshot(item.kind, proposal.items[at]!.snapshot),
-      })),
+      items,
+      targetPath: await pathPartsOf(proposal.targetFolderId),
       mayApprove: rights.approve,
       mayReject: rights.reject,
       yours: rights.author,

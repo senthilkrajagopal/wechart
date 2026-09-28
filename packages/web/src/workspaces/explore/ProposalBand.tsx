@@ -45,7 +45,8 @@ function whenText(iso: string, now: Date): string {
   const days = Math.round((day(now) - day(then)) / (24 * 3600 * 1000));
   if (days === 0) return clock;
   if (days === 1) return `Yesterday ${clock}`;
-  return `${then.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}, ${clock}`;
+  // The month as "Sep" (design 05): en-GB's short month is "Sept".
+  return `${String(then.getDate())} ${then.toLocaleDateString('en-US', { month: 'short' })}, ${clock}`;
 }
 
 export function ProposalBand({

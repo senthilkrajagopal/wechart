@@ -185,6 +185,72 @@ describe('checking what a proposal would do (T358, AC-284)', () => {
   });
 });
 
+describe('a proposal as its review view reads it (T356’s review)', () => {
+  it('says the version the folder has now, where it moved on since the proposal', async () => {
+    const shared = await doc('chart', {
+      schemaVersion: 1,
+      title: `Moved ${MARK}`,
+      folderId: ids.emea,
+      chart: { source: { cube: 'orders' }, wells: { measures: ['orders.count'] } },
+    });
+    const copy = (
+      await as('writer', {
+        method: 'POST',
+        url: '/api/workspace/copies',
+        payload: { kind: 'chart', id: shared },
+      })
+    ).json<{ id: string }>().id;
+    const proposed = await as('writer', {
+      method: 'POST',
+      url: '/api/proposals',
+      payload: { kind: 'chart', id: copy },
+    });
+    expect(proposed.statusCode, proposed.body).toBe(201);
+    // Changed in its folder since.
+    const stored = (await docs().get('chart', shared))!;
+    await docs().update({
+      kind: 'chart',
+      id: shared,
+      body: { ...stored.body, description: 'Changed in place.' },
+      expectedVersion: stored.version ?? 1,
+    });
+    const answer = await as('writer', {
+      method: 'GET',
+      url: `/api/proposals/${proposed.json<{ id: string }>().id}`,
+    });
+    expect(answer.statusCode, answer.body).toBe(200);
+    const item = answer.json<{
+      items: { replaces: { version: number } | null; replacesNow: number | null }[];
+    }>().items[0]!;
+    expect([item.replaces?.version, item.replacesNow]).toEqual([1, 2]);
+  });
+
+  it('names a target deleted since as such, never as Shared', async () => {
+    const gone = await doc('folder', { title: `Gone ${MARK}`, folderId: ids.sales });
+    const drafted = await as('writer', {
+      method: 'POST',
+      url: '/api/documents',
+      payload: { kind: 'chart', title: `Orphan ${MARK}`, folderId: 'mine', targetFolderId: gone },
+    });
+    const proposed = await as('writer', {
+      method: 'POST',
+      url: '/api/proposals',
+      payload: { kind: 'chart', id: drafted.json<{ id: string }>().id },
+    });
+    expect(proposed.statusCode, proposed.body).toBe(201);
+    await docs().remove('folder', gone);
+    const answer = await as('writer', {
+      method: 'GET',
+      url: `/api/proposals/${proposed.json<{ id: string }>().id}`,
+    });
+    expect(answer.json<{ targetPath: string[] }>().targetPath).toEqual([
+      'Shared',
+      'A deleted folder',
+    ]);
+    await getDb().deleteFrom('proposals').where('target_folder_id', '=', gone).execute();
+  });
+});
+
 describe('an item that went with another’s proposal (T358’s review)', () => {
   it('is found by its own id, with where each item lands, in its lookup and in My proposals', async () => {
     // A shared dashboard in /Sales showing the library chart in /Sales/EMEA,

@@ -101,6 +101,8 @@ export function storedRowsOf(
   driver: DriverType,
   values: ConnectionValues,
   stored: readonly string[],
+  /** How a stored secret is said: "Stored · encrypted", or a review's "Replaced" (T356). */
+  secretText: (key: string) => string = () => 'Stored · encrypted',
 ): (readonly [string, string])[] {
   const spec = DRIVERS[driver];
   const sent = fieldsToSend(driver, values);
@@ -122,7 +124,7 @@ export function storedRowsOf(
   rows.push(['Signs in with', signsInOf(driver, values)]);
   for (const field of method.fields) {
     if (field.secret) {
-      if (stored.includes(field.key)) rows.push([fieldLabel(driver, field), 'Stored · encrypted']);
+      if (stored.includes(field.key)) rows.push([fieldLabel(driver, field), secretText(field.key)]);
     } else if (!WHO.has(field.key) && field.key in sent)
       rows.push([fieldLabel(driver, field), valueOf(field)]);
   }

@@ -1,7 +1,8 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useContext, useRef, useState, type ReactNode } from 'react';
 
 import { COLUMNS, GUTTER_PX, ROW_UNIT_PX, heightOf, type GridTile } from './geometry';
 import { DRAG_INSTRUCTIONS_ID } from './drag';
+import { ReviewMarks } from './reviewMarks';
 import { sentenceOf } from './sentence';
 import {
   MIN_ROWS,
@@ -184,6 +185,7 @@ export function Canvas({
 }: CanvasProps) {
   const canvas = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState<Dragging | null>(null);
+  const reviewMarks = useContext(ReviewMarks);
 
   const resizable = editing && onResize !== undefined;
 
@@ -284,6 +286,8 @@ export function Canvas({
             className="grid-tile"
             data-dragging={drag?.draggingId === tile.id ? 'true' : undefined}
             data-selected={selection?.id === tile.id ? 'true' : undefined}
+            // Outlined in a review, the proposal having changed or added it (AC-341).
+            data-review={reviewMarks[tile.id]}
             onFocus={
               selection === undefined
                 ? undefined
@@ -392,6 +396,11 @@ export function Canvas({
               ...(height === null ? {} : { height: `${String(height)}px` }),
             }}
           >
+            {reviewMarks[tile.id] === undefined ? null : (
+              <span className="grid-tile__review-mark">
+                {reviewMarks[tile.id] === 'new' ? 'New' : 'Changed'}
+              </span>
+            )}
             {drag === undefined || drag.canDrag?.(tile.id) === false ? null : (
               <button
                 type="button"

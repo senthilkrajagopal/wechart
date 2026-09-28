@@ -219,6 +219,92 @@ export function DashboardPage({
 }
 
 /**
+ * A dashboard drawn to be read, never edited or bookmarked (T356; design 05,
+ * pin 3): a proposal's, from the documents it holds, or its folder's current
+ * one. A chart the proposal holds is drawn from its document there, since
+ * its reviewer can't read the author's workspace; any other is read as a
+ * tile reads it.
+ */
+export function ReadOnlyDashboard({
+  cacheKey,
+  dashboardId,
+  document,
+  heldCharts = {},
+}: {
+  /** What the drawn charts are kept under: a proposal's, or a folder's. */
+  readonly cacheKey: string;
+  readonly dashboardId: string;
+  readonly document: DashboardDocument;
+  /** Chart documents' bodies by id, as a proposal holds them. */
+  readonly heldCharts?: Readonly<Record<string, unknown>>;
+}) {
+  const ids = chartIdsOf(document);
+  const charts = useQuery({
+    queryKey: ['read-only-charts', cacheKey, ids] as const,
+    queryFn: async (): Promise<DrawnCharts> => {
+      const entries = await Promise.all(
+        ids.map(
+          async (id) =>
+            [
+              id,
+              id in heldCharts ? await drawChartBody(heldCharts[id]) : await specFor(id),
+            ] as const,
+        ),
+      );
+      const specs: Record<string, RenderSpec> = {};
+      const errors: Record<string, unknown> = {};
+      const documents: Record<string, ChartDocument> = {};
+      const answered: Record<string, AnswerMeta> = {};
+      for (const [id, { chart, document: read, answered: meta }] of entries) {
+        if ('spec' in chart) specs[id] = chart.spec;
+        else errors[id] = chart.error;
+        if (read !== undefined) documents[id] = read;
+        if (meta !== undefined) answered[id] = meta;
+      }
+      return { specs, errors, documents, answered };
+    },
+  });
+  const meta = useQuery(META_QUERY);
+  const formats = useMemo(() => formatsFrom(meta.data), [meta.data]);
+  const reach = useMemo(() => reachFrom(meta.data), [meta.data]);
+  const primaryKey = useMemo(() => {
+    const data = meta.data;
+    return (cube: string) => primaryKeyOf(data, cube);
+  }, [meta.data]);
+  const titles = useMemo(
+    () => Object.fromEntries(allMembers(meta.data).map((member) => [member.name, member.title])),
+    [meta.data],
+  );
+  const shortTitles = useMemo(
+    () =>
+      Object.fromEntries(allMembers(meta.data).map((member) => [member.name, member.shortTitle])),
+    [meta.data],
+  );
+  const memberTitle = useMemo(() => (name: string) => titles[name], [titles]);
+  return (
+    <DashboardView
+      key={cacheKey}
+      dashboardId={dashboardId}
+      document={document}
+      specs={charts.data?.specs ?? {}}
+      documents={charts.data?.documents}
+      reach={reach}
+      model={meta.data}
+      primaryKey={primaryKey}
+      memberTitle={memberTitle}
+      titles={titles}
+      shortTitles={shortTitles}
+      formats={formats}
+      errors={charts.data?.errors ?? {}}
+      loading={charts.isPending}
+      answered={charts.data?.answered}
+      readOnly
+      onSave={() => undefined}
+    />
+  );
+}
+
+/**
  * Separate so the document is in hand before any chart query is keyed on it.
  * `EditChrome` seeds its session when Edit is pressed, and a dashboard that
  * arrived after that would be a session editing nothing.
@@ -674,9 +760,21 @@ export async function specFor(
     };
   }
 
+  return drawChartBody(stored.body, cache, context);
+}
+
+/**
+ * A chart document's body, read strictly and drawn: `specFor`'s second half,
+ * and how a proposal's review view draws a chart it holds (T356).
+ */
+export async function drawChartBody(
+  body: unknown,
+  cache?: 'no-cache',
+  context?: Readonly<Record<string, unknown>>,
+): Promise<{ chart: TileChart; document: ChartDocument | undefined; answered?: AnswerMeta }> {
   let document;
   try {
-    document = readChartDocument(stored.body);
+    document = readChartDocument(body);
   } catch {
     // Stored but unreadable: the chart as it stands cannot be drawn, which is
     // the missing-chart state — a broken dashboard, not a broken query, so

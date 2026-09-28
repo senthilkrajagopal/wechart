@@ -258,6 +258,13 @@ function Summary({
       <p className="reviews__where" data-testid="review-where">
         {whereOf(row)}
       </p>
+      {/* The item itself, and Approve and Reject, are in its review view (T356). */}
+      <a
+        className={`btn btn-sm${row.status === 'open' ? ' btn-primary' : ''}`}
+        href={`/reviews/${encodeURIComponent(row.id)}`}
+      >
+        {row.status === 'open' ? 'Open review' : 'Open'}
+      </a>
       <p className="reviews__by" data-testid="review-by">
         Proposed by {row.author.name} · {proposedText(row.proposedAt, now)}
       </p>

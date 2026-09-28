@@ -3387,6 +3387,123 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
   .reviews { grid-template-columns: minmax(0, 1fr); }
   .reviews__summary.admin-pane { position: static; width: auto; height: auto; }
 }
+.reviews__summary > .btn { justify-self: start; }
+
+/* A proposal's review view (T356; design 05's main screen): its head, then
+   240 / fluid / 360 — what is in it, the item drawn, and the inspector. */
+.review-view { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.review-view__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.review-view__title {
+  margin: 0;
+  font-size: var(--wc-text-md-size);
+  line-height: var(--wc-text-md-line);
+  font-weight: var(--wc-text-md-weight);
+}
+.review-view__spacer { flex: 1; }
+.review-view__queue {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--wc-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.review-view__body {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) 360px;
+  gap: 16px;
+  align-items: start;
+}
+.review-view__items h2,
+.review-view__sect h2 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--wc-text-secondary);
+}
+.review-view__items ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.review-view__item {
+  width: 100%;
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+.review-view__item[aria-current='true'] {
+  border-color: var(--wc-accent);
+  box-shadow: 0 0 0 1px var(--wc-accent);
+}
+.review-view__item-title { font-weight: 600; overflow-wrap: anywhere; }
+.review-view__item-what { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.review-view__bundle { margin: 8px 0 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.review-view__item-pane { min-width: 0; }
+.review-view__preview { display: grid; gap: 8px; min-width: 0; }
+.review-view__switch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.review-view__read-only { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.review-view__inspector.admin-pane {
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 8px;
+}
+.review-view__sect p { margin: 0; }
+.review-view__warning { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.review-decision { display: grid; gap: 10px; }
+.review-decision__note { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.review-decision__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.review-decision__anchor { position: relative; display: inline-flex; }
+/* Approve's question, anchored to it (state I). */
+.review-decision__confirm {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  width: 300px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 18%);
+}
+.review-decision__confirm h3 { margin: 0; font-size: var(--wc-text-sm-size); }
+.review-decision__confirm p { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.review-decision__reason { display: grid; gap: 4px; }
+.review-decision__reason textarea { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; }
+.review-decision__reason textarea[aria-invalid='true'] { border-color: var(--wc-status-error); }
+.review-decision__refused {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--wc-status-error) 9%, var(--wc-bg-surface));
+  color: var(--wc-status-error);
+  font-size: 12px;
+  line-height: 16px;
+}
+.review-decision__refused p { margin: 0; }
+.review-decision__refused ul { margin: 4px 0 0; padding-left: 16px; }
+/* A data source's settings beside the folder's (state H). */
+.review-settings { width: 100%; border-collapse: collapse; font-size: 13px; }
+.review-settings th,
+.review-settings td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.review-settings thead th { font-size: 12px; font-weight: 600; color: var(--wc-text-secondary); }
+.review-settings tbody th { font-weight: 600; }
+.review-settings td.is-same { color: var(--wc-text-muted); }
+@media (max-width: 1023px) {
+  .review-view__body { grid-template-columns: minmax(0, 1fr); }
+}
 /* A screen that needs a Cube API scope wechart lacks (T176, AC-170): said as
    a state, in secondary ink, as an empty tile is — not as a failure. */
 .scope-unavailable { display: grid; gap: 4px; padding: 8px 0; color: var(--wc-text-secondary); }
@@ -5270,6 +5387,22 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
     color-mix(in srgb, var(--wc-accent) 10%, transparent) 0 var(--wc-grid-column),
     transparent var(--wc-grid-column) calc(var(--wc-grid-column) + ${String(GUTTER_PX)}px)
   );
+}
+/* A tile a proposal changes or adds, in its review (T356, AC-341; design 05,
+   pin 4): an accent outline and its label, top right. */
+.grid-tile[data-review] { border-color: var(--wc-accent); box-shadow: 0 0 0 1px var(--wc-accent); }
+.grid-tile__review-mark {
+  position: absolute;
+  top: -9px;
+  right: 12px;
+  z-index: 2;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--wc-accent);
+  color: var(--wc-bg-surface);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
 }
 .grid-tile {
   position: relative;

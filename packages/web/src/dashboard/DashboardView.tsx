@@ -297,6 +297,11 @@ export interface DashboardViewProps {
   readonly preview?: Readonly<Record<string, unknown>> | undefined;
   readonly onExitPreview?: (() => void) | undefined;
   /**
+   * Drawn to be read, never edited or bookmarked: a proposal's dashboard in
+   * its review view (T356; design 05, pin 3), as readers would see it.
+   */
+  readonly readOnly?: boolean | undefined;
+  /**
    * The saved chart documents, by chart id: what names a tile when a filter
    * is scoped to it (AC-077), and what a filter re-queries (AC-078).
    */
@@ -2015,6 +2020,7 @@ export function DashboardView({
   refreshable,
   preview,
   onExitPreview,
+  readOnly = false,
   documents,
   reach,
   model,
@@ -3768,7 +3774,8 @@ export function DashboardView({
       ),
     // A saved chart to copy: not while previewing another context, whose
     // answers are not the chart.
-    ...(preview === undefined
+    // Nor in a review's read-only drawing (T356's review): nothing is taken from it.
+    ...(preview === undefined && !readOnly
       ? {
           onCopyToDashboard: (chartId: string, tileId: string) => {
             if (drawn.documents?.[chartId] !== undefined) setCopyFor({ chartId, tileId });
@@ -4566,7 +4573,7 @@ export function DashboardView({
   if (publishTile !== undefined && publishTile !== publishTaken?.tileId) {
     const element = elementAt(document, publishTile);
     const chartTile = element !== null && isTile(element) && element.chartId !== undefined;
-    if (preview !== undefined || narrow || !chartTile) {
+    if (preview !== undefined || readOnly || narrow || !chartTile) {
       setPublishTaken({ tileId: publishTile, opened: false });
     } else if (sessionEditing) {
       setPublishTaken({ tileId: publishTile, opened: true });
@@ -4827,7 +4834,7 @@ export function DashboardView({
          * `whyUnsaveable` for the wording and why it names Undo, not Discard.
          */
         saveBlocked={(shown) => whyUnsaveable(shown, dashboardId)}
-        readOnly={preview !== undefined || narrow}
+        readOnly={preview !== undefined || readOnly || narrow}
         onStart={onEditStart}
         onDiscard={onDiscard}
         headerActions={(session) => (
@@ -4835,7 +4842,7 @@ export function DashboardView({
             {/* A reader's: what the dashboard shows now, under a name (T127,
                 AC-121). Not while editing, nor in a security context's
                 preview, where nothing is marked and nothing is the reader's. */}
-            {session.editing || preview !== undefined ? null : (
+            {session.editing || preview !== undefined || readOnly ? null : (
               <Bookmarks
                 dashboardId={dashboardId}
                 current={{
@@ -5351,7 +5358,7 @@ export function DashboardView({
             <DashboardPages
               session={session}
               charts={charts}
-              canEdit={preview === undefined && !narrow}
+              canEdit={preview === undefined && !readOnly && !narrow}
               markSaid={markSaid}
               {...(marking ? { markKeys: { onKey: onTileMarkKey, itemsOn: markableItemsOf } } : {})}
               // A duplicate's chart is made from the stored one and what it
@@ -5364,7 +5371,7 @@ export function DashboardView({
               }}
               // Not while previewing a security context: the editor asks as
               // wechart (T172's review), so a preview is read, not edited.
-              onEditChart={preview === undefined && !narrow ? openEditor : undefined}
+              onEditChart={preview === undefined && !readOnly && !narrow ? openEditor : undefined}
               onSaveToFolders={(tileId) => {
                 setSelected(tileId);
                 setAddTarget(null);

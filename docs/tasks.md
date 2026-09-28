@@ -5798,6 +5798,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/api/src/routes/proposals.ts`, ~~`packages/api/src/model/chain.ts`~~ `packages/api/src/xcube/overlays.ts` (2026-09-26), `packages/api/src/routes/proposal-bundle.test.ts`
   - Failing test: `proposal-bundle.test.ts`: a dashboard whose cubes resolve only through the author's workspace models is proposed with them, and approving or rejecting applies to all together, as one changeset (AC-285).
   - Depends on: T349, T347
+  - *2026-09-28, from T356:* the review view's model YAML diff (design 05, state G) comes with this task, once proposals hold models: `packages/web/src/workspaces/reviews/YamlDiff.tsx` (+ test) on `@codemirror/merge` (`docs/research/codemirror-merge.md`), shown for a model item in the review view.
 - [x] T351 (AC-286) Let only the author, the target folder's read-write members and Super-Admins decide a proposal
   - *2026-09-28, from T349's review (a small decision, overturnable):* a proposal can land in more than one folder, where a dashboard shows a library chart bound elsewhere. A read-write member decides it only if they may write every folder it lands in (`proposal_items.lands_in`), so no folder's content changes without one of its own members, its author, or a Super-Admin.
   - Files: `packages/api/src/routes/proposals.ts`, `packages/api/src/routes/proposal-deciders.test.ts`
@@ -5820,7 +5821,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     4. The data source's shown keys are listed, not stripped. Folder rights are read once a request, not once a folder.
     - The GET with sign-in off, and the 401 sweep, are tested.
   - *For T356 (T351's review):* state H's "unchanged" or "replaced" for each credential needs the server to compare each envelope's revision with the replaced source's. Only the names are shown now.
-- [ ] T352 (AC-288, AC-298) Land an approved item in its folder, keeping the replaced version in history *(rewritten 2026-09-26: an approved model lands through xcube's changeset, T426; "the served files of that folder's chains" are gone, `[IP 1, IP 5]`. AC-278's refusal moved to T502, 2026-09-28)*
+- [x] T352 (AC-288, AC-298) Land an approved item in its folder, keeping the replaced version in history *(rewritten 2026-09-26: an approved model lands through xcube's changeset, T426; "the served files of that folder's chains" are gone, `[IP 1, IP 5]`. AC-278's refusal moved to T502, 2026-09-28)*
   - Files: a migration `…_item-versions.cjs`, `packages/api/src/repos/versions.ts` (+ test), `packages/api/src/routes/proposals.ts`
   - Failing test: `versions.test.ts` (the store) and `proposal-approve.test.ts` (the landing):
     - approving replaces the same-kind, same-name item, and stores the replaced version with its author, approver, time and description;
@@ -5865,6 +5866,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - The `409` for in-place edits of shared items (AC-278): moved to T502, since it changes how every shared item is edited.
     - Landing isn't one transaction. An item written before a later one fails stays written, and the proposal is opened again. The user's rule for saves stands (breadth over save edge cases).
   - **AC-288 stays open:** its real surface is the review view's Approve (T356). **AC-298** waits on T368's other records and T362.
+  - *2026-09-28, T356:* the review view's Approve lands on the real surface. T352 is done. AC-288 still waits on its third clause, a refused check, which is T451's.
 - [ ] T502 (AC-278) Refuse in-place changes to a shared dashboard, chart or data source while sign-in is on *(split from T352, 2026-09-28)*
   - **Why.** With approvals landing (T352), a proposal is how a shared item changes. The `409` changes how every shared item is edited, so it is its own task.
   - Files: `packages/api/src/server.ts` (the document routes), `packages/api/src/routes/data-sources.ts`, `packages/api/src/routes/shared-in-place.test.ts`
@@ -5932,11 +5934,46 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - the e2e checks the author, `manager` deciding in another folder, and that "never sees it" isn't an error.
   - **Left:** state D's kind icons in the Item column. The inspector's "Open review" comes with the review view (T356).
   - **Done 2026-09-28, after one review round. AC-287 ticked:** `e2e/security/reviews.spec.ts` (Chrome) shows each decider the proposals they may decide, with item, folder, author and description, the top bar's number equal to the list, and none to a reader or a decider of another folder.
-- [ ] T356 (AC-287) Review a proposal by seeing the item itself, then approve or reject it
-  - Files: `packages/web/package.json` (@codemirror/merge, per its research doc), `packages/web/src/workspaces/reviews/{ReviewView,YamlDiff,SettingsDiff}.tsx` (+ tests), `e2e/security/reviews.spec.ts`
-  - Failing test: `reviews.spec.ts`: a dashboard proposal renders the dashboard read-only with a Proposed / Current switch; a model proposal shows a unified YAML diff with +/− markers; a data-source proposal shows a settings table whose credentials read "unchanged" or "replaced"; Approve asks for confirmation; Reject offers a reason with a "_n_ / 1,000" counter; an author sees "Approve my own proposal" (AC-287; rules 77–79).
+- [x] T356 (AC-287, AC-286, AC-288, AC-341, AC-343) Review a proposal by seeing the item itself, then approve or reject it
+  - Files: `packages/web/src/workspaces/reviews/{ReviewView,DecisionPanel,SettingsDiff}.tsx`, `review.ts`, `tileChanges.ts` (+ tests), `e2e/security/review-view.spec.ts`; ~~`packages/web/package.json` (@codemirror/merge), `YamlDiff.tsx`, `e2e/security/reviews.spec.ts`~~
+  - Failing test: ~~`reviews.spec.ts`~~ `review-view.spec.ts`: a dashboard proposal renders the dashboard read-only with a Proposed / Current switch; ~~a model proposal shows a unified YAML diff with +/− markers;~~ a data-source proposal shows a settings table whose credentials read "unchanged" or "replaced"; Approve asks for confirmation; Reject offers a reason with a "_n_ / 1,000" counter; an author sees "Approve my own proposal" (AC-287; rules 77–79).
   - Depends on: T355, T352, T353, `docs/research/codemirror-merge.md`
-  - *2026-09-28, from T352's review (AC-298):* the e2e approves a data source whose password is a canary sealed in the browser, then greps a `pg_dump` of the security database for the canary in raw, hex, base64 and base64url form, as `data-source-secrets.test.ts` does.
+  - *2026-09-28, from T352's review (AC-298):* ~~the e2e approves a data source whose password is a canary sealed in the browser, then greps a `pg_dump` of the security database for the canary in raw, hex, base64 and base64url form, as `data-source-secrets.test.ts` does.~~ Moved to T368 (AC-298), as T356's review asked: no browser test proposes a data source yet.
+  - *As built (2026-09-28; design 05's main screen, states H, I, J and K):*
+    - **`/reviews/<id>`**, opened by "Open review" in the Reviews summary. It has:
+      - a head: "← Reviews" (back to the row, in My proposals when it isn't the user's to decide), "Review · *item* → *folder*", the state, and "n of m" with Previous and Next;
+      - "In this proposal": each item, new or "replaces version n", with why the rest goes with it (a dashboard's own charts are part of it);
+      - the item drawn read-only;
+      - a 360 px inspector: who and when, what changed, what it replaces, and Approve and Reject.
+    - **A dashboard or chart** is drawn as readers in the folder would see it, Proposed or Current (the folder's version now). The proposal's own charts are drawn from what it holds (`ReadOnlyDashboard`, `drawChartBody`), since the workspace isn't the reviewer's to read.
+      - Each tile it changes or adds is outlined and labelled "Changed" or "New" (AC-341). A tile's chart is set against the folder's, whatever its id and place.
+      - `DashboardView` gains `readOnly`: no Edit, bookmarks, chart editor or "Copy to dashboard".
+    - **A data source** shows its settings beside the folder's, a credential only "unchanged" (the very envelope the folder holds), "Replaced" or "Entered" (`secretChanges`, compared server-side, never opened or sent).
+    - **Decisions:**
+      - Approve asks first, anchored to it: "Publish to *folder*? Readers see it at once. Version n stays in History." n is the folder's version now. Focus is held in it, and Esc cancels.
+      - Reject takes an optional reason with the "n / 1,000" counter.
+      - The author's own reads "Approve my own proposal", said to be recorded, and their reject is "Withdraw…".
+      - A refused approval is said ("Can't approve: …"), and nothing changes.
+    - **Where the folder moved on since:** "Based on version 7; the folder now has version 8. Approving replaces version 8, which stays in History."
+    - **A decided one** is shown as proposed, alone, with its decision.
+    - **API:** `GET /api/proposals/:id` adds the target's path ("A deleted folder" for one gone), each item's `landsInPath` and `replacesNow`, and a waiting data source's `secretChanges`.
+  - **Done 2026-09-28, after one review round (FAIL, fixed). AC-341 ticked:** `e2e/security/review-view.spec.ts` (Chrome) draws the proposed dashboard with its changed chart tile "Changed", its added tile "New", its unchanged tile unmarked, and nothing marked on Current.
+    - **AC-288 stays open.** The e2e shows an approval landing the dashboard and its chart at once, with the replaced versions kept (`item_versions` 2 and 3). The third clause, "an approval that fails the check changes the folder", is T451's.
+    - **AC-286:** the UI offers only what the user may do (`DecisionPanel.test.tsx`), and the API refuses the rest (T351, T352).
+    - **AC-343 stays open for this surface.** Design 05's "Test connection" on the proposed settings (state H), and "Fit / Actual size", are not built.
+  - **Review fixes (one round):**
+    1. AC-341 (approved, R33) was left out. It is built.
+    2. Where the folder had moved on, the view named the version at proposal time. It names the folder's now, and says it moved on.
+    3. The proposal's own charts were drawn in no test. The e2e draws a chart tile and a chart proposal from what they hold.
+    4. A deleted target read "Shared". It reads "A deleted folder".
+    5. A decided proposal set the proposed against what it landed as. It is shown alone.
+    6. The author's note showed where they may only withdraw.
+    7. "Copy to dashboard" was offered in the read-only drawing.
+    8. "← Reviews" lost the row of one not in To review.
+  - *Left:*
+    - **A model's YAML diff** (state G): proposals don't hold models until T347 and T350. It is T350's, with `@codemirror/merge`.
+    - **Test connection** on the proposed settings (state H), and **Fit / Actual size**: AC-343.
+    - **The publish check** section (state L's breaks): T451 and T427.
 - [ ] T357 (AC-289) Show an item's history, compare a version, and propose restoring it
   - Files: `packages/web/src/workspaces/explore/HistoryPanel.tsx` (+ test), `e2e/security/history.spec.ts`
   - Failing test: `history.spec.ts`: the History panel lists at most 10 versions newest first with number, time, author, approver and description, marks Current, compares a model version with the current one, and "Propose restoring…" opens the Propose dialog prefilled; readers see no History (AC-289; rule 80).
@@ -6356,6 +6393,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: a migration `…_audit.cjs`, `packages/api/src/repos/audit.ts` (+ test), the routes that emit each event
   - Failing test: `audit.test.ts`: each of the seven kinds of event is recorded with who, what, which folder and when, and a data-source record shows credentials only as "replaced" (AC-294).
   - Depends on: T316, T314, T349, T352, T353, T354, T335
+  - *2026-09-28, moved from T356 (AC-298):* a browser test proposes and approves a data source whose password is a canary sealed in the browser, then greps a `pg_dump` of the security database for the canary in raw, hex, base64 and base64url form, as `data-source-secrets.test.ts` does.
   - *(2026-09-27, the user: design 08 next)* Built now for what exists: sign-ins, access changes and data-source changes. Proposals, approvals, rejections and restores are recorded by T349, T352, T353 and T354 as each lands, each adding its kind to `access/audit.test.ts`. AC-294 is ticked only then.
   - *As built (2026-09-27, before review):*
     - `audit_records` (a migration) and `repos/audit.ts`: a record is who (key, name, identity), the event, the folder, the item (kind, id, title), a one-line summary and the full record's details. The list is newest first with a page cursor, filtered by users, events, folders and a time range. `actors()` names each person once, for the User filter. `removeBefore` is for T370. Records are only added; nothing edits them.

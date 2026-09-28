@@ -301,6 +301,74 @@ describe('approving a proposal (T352, AC-288)', () => {
     ]);
   });
 
+  it('shows its reviewer where it lands and each credential unchanged or replaced, never sealed (T356)', async () => {
+    // Two shared sources, each copied into the writer's workspace: one
+    // proposed as copied, the other with its password entered again.
+    const shared = async (name: string) =>
+      (
+        await sources().create({
+          folderId: ids.sales,
+          name,
+          driver: 'postgres',
+          authMethod: 'password',
+          fields: { host: 'sales-db', port: 5432, database: 'sales', user: 'cube', ssl: false },
+          sealed: { password: sealed },
+        })
+      ).id;
+    const kept = await shared(`kept_${MARK}`);
+    const replaced = await shared(`replaced_${MARK}`);
+    const copyOf = async (id: string) =>
+      (await as('writer', { method: 'POST', url: `/api/data-sources/${id}/copy` })).json<{
+        id: string;
+      }>().id;
+    const keptCopy = await copyOf(kept);
+    const replacedCopy = await copyOf(replaced);
+    const other: SealedV1 = {
+      ...sealed,
+      ct: Buffer.alloc(272, `other-${MARK}`).toString('base64url'),
+    };
+    await sources().update(replacedCopy, { sealed: { password: other } });
+
+    const shown = async (id: string) => {
+      const proposalId = await propose({ kind: 'data-source', id });
+      const answer = await as('many', { method: 'GET', url: `/api/proposals/${proposalId}` });
+      expect(answer.statusCode, answer.body).toBe(200);
+      expect(answer.body).not.toContain(sealed.ct.slice(0, 16));
+      expect(answer.body).not.toContain(other.ct.slice(0, 16));
+      return {
+        proposalId,
+        ...answer.json<{
+          targetPath: string[];
+          items: { landsInPath: string[]; secretChanges?: Record<string, string> }[];
+        }>(),
+      };
+    };
+    const asCopied = await shown(keptCopy);
+    expect(asCopied.targetPath).toEqual(['Shared', `Sales ${MARK}`]);
+    expect(asCopied.items[0]!.landsInPath).toEqual(['Shared', `Sales ${MARK}`]);
+    expect(asCopied.items[0]!.secretChanges).toEqual({ password: 'unchanged' });
+    const entered = await shown(replacedCopy);
+    expect(entered.items[0]!.secretChanges).toEqual({ password: 'replaced' });
+    // Decided, there is nothing to set it against any more (T356's review):
+    // what it replaced may be what it landed as.
+    expect(
+      (
+        await as('many', {
+          method: 'POST',
+          url: `/api/proposals/${entered.proposalId}/reject`,
+          payload: {},
+        })
+      ).statusCode,
+    ).toBe(200);
+    const decided = await as('many', {
+      method: 'GET',
+      url: `/api/proposals/${entered.proposalId}`,
+    });
+    expect(decided.json<{ items: { secretChanges?: unknown }[] }>().items[0]!.secretChanges).toBe(
+      undefined,
+    );
+  });
+
   it('lands a data source with its envelopes as sealed, never opened (AC-298)', async () => {
     const copied = await as('writer', {
       method: 'POST',

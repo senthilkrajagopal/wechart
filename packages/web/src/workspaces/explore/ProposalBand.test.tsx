@@ -116,6 +116,23 @@ describe('the band on the author’s item (T358, AC-290)', () => {
     );
   });
 
+  it('writes an older day as design 05 does, "20 Sep, 09:15"', async () => {
+    shown(
+      proposal({
+        status: 'rejected',
+        decision: {
+          by: { key: 'ada', name: 'Ada Admin' },
+          at: new Date(2026, 8, 20, 9, 15).toISOString(),
+          reason: null,
+        },
+      }),
+    );
+    const band = await screen.findByRole('status', { name: 'Proposal' });
+    expect(within(band).getByTestId('band-decision').textContent).toBe(
+      'Rejected by Ada Admin · 20 Sep, 09:15',
+    );
+  });
+
   it('says so when a rejection gave no reason', async () => {
     shown(
       proposal({
