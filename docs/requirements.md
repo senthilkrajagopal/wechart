@@ -862,10 +862,10 @@ Questions are Claude's; answers are the user's, verbatim.
   - *From the workspace, each item follows the usual flow. Its target is chosen as New in My workspace chooses one. It reaches a shared folder only by Propose and Approve, whose check says what it replaces and refuses what can't land (AC-278, AC-284, AC-288).*
   - *Before importing, wechart warns, without blocking, of what the drafts may affect when proposed:*
     - *an item of the same kind and name in the target or the workspace;*
-    - *a model defining a cube or view whose name the target already has (AC-249);*
+    - *a model defining a cube or view whose name the target already has (AC-270);*
     - *a data source whose name the target already has (AC-282). Mapping to that one instead is offered beside the warning.*
-  - *Answer 1 stands: a data source is mapped to an existing one, or created in the workspace with its secrets entered and a passing test.*
-  - *With sign-in off there is no workspace. The import lands as new items in a folder the importer picks, never replacing, with the same warnings. This is Claude's default, drawn in design 13 for the user to confirm.*
+  - *Answer 1 stands: a data source is mapped to an existing one, or created in the workspace with its secrets entered and a passing test. Where the target has its name, it is created under another name, as AC-282 already requires.*
+  - *With sign-in off, the import also goes to the single user's workspace, and they approve their own proposals (R19, AC-254). An earlier note here said sign-in off has no workspace; that was Claude's error, caught by the design agent.*
   - *The design agent redraws design 13's Import to this.*
 
 **R43 — exporting and importing a dashboard; and two answers for markings** (2026-09-28, the user)
