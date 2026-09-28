@@ -843,6 +843,18 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R42 — the waiting questions, in two batches** (2026-09-28, the user, after asking why criteria closed slowly)
+- The user chose all four ways to close criteria faster: "Finish chains to close ACs", "Parallel agents in worktrees", "Pin xcube only when needed", "Batch the open questions now".
+- Claude put eight of the backlog's questions to the user in two batches. The user chose the recommended answer to each.
+  1. **A rejected proposal's Dismiss** (design 05, state M): "Until proposed again". *Stored for the user on every device; the band stays gone until the item is proposed again (T358).*
+  2. **Jobs' Trigger column** (AC-229 against design 10): "Both: Trigger + Started by". *"Trigger" stays the refresh key in words (AC-229). "Started by" is added for the builds wechart records (AC-150). The refresh worker's builds show no starter until their history comes, next phase (R41).*
+  3. **AC-234's cache warm-up:** "Pre-aggregations only". *A wechart schedule builds pre-aggregations. Result-cache warm-ups are dropped, since they would need tokens per group set (AC-008).*
+  4. **AC-155's suspension:** "wechart's, after 3, per schedule". *Only wechart-owned schedules suspend. The number of consecutive failures is set per schedule, 3 by default. Cube's refresh keys keep Cube's own retry with backoff.*
+  5. **A BigQuery key, Snowflake OAuth token or Dremio token entered again:** "Warn before replacing". *The form keeps the stored secret unless the user chooses to replace it, and says that replacing it rebuilds the data source's rollups.*
+  6. **Query records for a read-write member:** "Their own queries". *wechart records who ran each query. A read-write member sees their own in Jobs; a Super-Admin sees every one (T371).*
+  7. **Data as of for a reader:** "Freshness only". *A reader sees what served the tile, how fresh it is and its schedule in words. "Open in Jobs" and "Edit schedule" show only to those who may use them. No refresh-key SQL or file reaches a reader (T371's review).*
+  8. **Auditing builds:** "Yes, all three". *A build started from Jobs, a cancel, and a change to a wechart schedule are recorded in the audit trail (AC-294).*
+
 **R41 — the refresh worker's build history, deferred; the rest worked out with xcube** (2026-09-28, the user)
 - The user sent xcube's analysis of Jobs and Schedules (`docs/inputs/2026-09-28-jobs-schedules-analysis.md`): "please review it.. and work with cube for implementing these..".
 - Then: "History of the refresh worker's build.. we can defer this to the next phase.. and anything else blocked by it to next phase".

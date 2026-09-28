@@ -620,9 +620,9 @@ Traces to: `[docs/inputs §7]`, direction.md §7c, rules 22, 34; `[research/cube
       Fails when: a shown run differs from when Cube's refresh key turns over, an expression Cube cannot run is published, or the pre-aggregation is not rebuilt within one of Cube's check periods of a shown run.
 - [ ] AC-154 THE SYSTEM SHALL list every pre-aggregation's refresh schedule in Schedules, label each with its owner, Cube's refresh worker or wechart's scheduler, show Cube-owned schedules read-only there with a link opening the pre-aggregation in the model editor, and say when one is not scheduled (direction.md rule 34; phase 2, `[R16]`).
       Fails when: a `refresh_key` schedule is editable on the Schedules page, is unlabelled, or its link does not open the model editor.
-- [ ] AC-155 IF a scheduled build fails repeatedly, THEN THE SYSTEM SHALL suspend the schedule after the configured number of consecutive failures, say so on the schedule, and offer Resume (phase 2, `[R16]`).
+- [ ] AC-155 IF a ~~scheduled~~ wechart-owned schedule's build fails repeatedly, THEN THE SYSTEM SHALL suspend the schedule after ~~the configured number of~~ as many consecutive failures as that schedule sets, 3 by default, say so on the schedule, and offer Resume (phase 2, `[R16]`; amended 2026-09-28, `[R42]`: a refresh key keeps Cube's own retry).
       Fails when: the schedule keeps running after the limit, or offers no Resume.
-- [ ] AC-234 WHEN the user creates a schedule for a pre-aggregation build or a cache warm-up that a refresh key cannot express, THE SYSTEM SHALL accept a cron expression and time zone, show the next runs it implies, and start each run at its time through Cube's jobs API (phase 2, `[R16]`).
+- [ ] AC-234 WHEN the user creates a schedule for a pre-aggregation build ~~or a cache warm-up~~ that a refresh key cannot express, THE SYSTEM SHALL accept a cron expression and time zone, show the next runs it implies, and start each run at its time through Cube's jobs API (phase 2, `[R16]`; amended 2026-09-28, `[R42]`: result-cache warm-ups dropped, since they would need a token per group set, AC-008).
       Fails when: the next runs shown do not match the expression, or a due run does not start.
 
 - [x] AC-156 THE SYSTEM SHALL show the refresh worker's state and the Cube deployment's health, and mark the deployment as down when Cube's health endpoint does not report healthy.
@@ -682,6 +682,8 @@ Traces to: `[R4]`, `[docs/inputs §7]`, direction.md §7c, rules 23, 35; `[resea
       Fails when: a listed driver is absent, Databricks is offered, or a driver's form omits an authentication method listed here or offers one xcube doesn't take.
 - [ ] AC-161 WHEN an approved change to a data source's settings lands in its folder, THE SYSTEM SHALL ~~say whether Cube needs a restart before it takes effect, and~~ put it into effect without restarting Cube, and show whether every running Cube instance uses the new settings: live only when every instance reporting within the last hour reports the new version, live. Reports older than an hour, from instances that are gone, SHALL not be shown. ~~A change of database type SHALL land as a publish, through the publish check (AC-321)~~ A data source's database type SHALL never change: the change is refused where it is made, in the workspace, saying to make a data source of the new type under another name (phase 2: `[R15, AD 11]`; amended 2026-09-26, `[plan]`; amended again 2026-09-26, `[X6, R31]`: per-instance health, the hour, and no change of type).
       Fails when: the UI claims the change is live while any instance reporting within the hour still uses the previous settings or reports failed; an instance's report older than an hour is shown; the change needs a Cube restart; or a data source's type can be changed, saved or proposed.
+- [ ] AC-353 WHILE the user edits a BigQuery, Snowflake or Dremio data source whose key or token is stored, THE SYSTEM SHALL keep the stored key or token unless the user chooses to replace it, and SHALL say, before a replaced one is saved, that replacing it rebuilds the data source's pre-aggregations, even when the new one is the same (added 2026-09-28, `[R42]`).
+      Fails when: the form asks for the stored key or token again when nothing that is its target changed; or a replaced key or token is saved without that warning shown.
 - [x] AC-163 THE SYSTEM SHALL record the result of each connection test over time and show that history per source.
       Fails when: a test result is missing from the history.
 - [x] AC-164 THE SYSTEM SHALL never show a stored credential in plain text after it is saved, and SHALL never send it to the browser.
@@ -1106,7 +1108,7 @@ Traces to: §P2.6 F, `[R12]`.
 Purpose: Super-Admins can see who did what, where and when.
 Traces to: §P2.4, `[R14, R18]`.
 
-- [ ] AC-294 THE SYSTEM SHALL record every sign-in, permission change, proposal, approval, rejection, restore and data-source change, each with who, what, which folder and when.
+- [ ] AC-294 THE SYSTEM SHALL record every sign-in, permission change, proposal, approval, rejection, restore and data-source change, and every build started from Jobs, cancel, and change to a wechart-owned schedule, each with who, what, which folder and when (the last three added 2026-09-28, `[R42]`).
       Fails when: an event of one of those kinds is missing from the record.
 - [x] AC-295 WHEN a Super-Admin opens the audit trail, THE SYSTEM SHALL list its records newest first, filterable by user, event and folder, and SHALL show it to no one else.
       Fails when: a user who isn't a Super-Admin can open it, or a filter returns a record that doesn't match it.
@@ -1118,8 +1120,8 @@ Traces to: §P2.4, `[R14, R18]`.
 Purpose: read-write members run and schedule their own folders' rollups.
 Traces to: `[R18]`; F17.
 
-- [ ] AC-297 WHILE a user is a read-write member of some folders and not a Super-Admin, THE SYSTEM SHALL show them in Jobs and Schedules only the pre-aggregations, query records, builds and schedules of the models in those folders, and let them build and schedule those. Scheduling there means wechart-owned schedules (AC-234); a Cube-owned schedule is a model's `refresh_key`, changed by a proposal like any model change (amended 2026-09-28, `[R40]`).
-      Fails when: they see, or act on, another folder's rollups, builds, schedules or query records; or a change to a shared folder's `refresh_key` lands without an approved proposal.
+- [ ] AC-297 WHILE a user is a read-write member of some folders and not a Super-Admin, THE SYSTEM SHALL show them in Jobs and Schedules only the pre-aggregations, builds and schedules of the models in those folders, and only the query records of their own queries, and let them build and schedule those. Scheduling there means wechart-owned schedules (AC-234); a Cube-owned schedule is a model's `refresh_key`, changed by a proposal like any model change (amended 2026-09-28, `[R40]`; query records their own, `[R42]`).
+      Fails when: they see, or act on, another folder's rollups, builds or schedules, or another user's query records; or a change to a shared folder's `refresh_key` lands without an approved proposal.
 
 ## F34. Credentials
 
@@ -1343,7 +1345,7 @@ The criteria phase 1 moved to its backlog on 2026-09-25 are back in this spec un
 | §P2.4 Groups in Cube's security context `[R14, AD 12]` | AC-008, AC-326 |
 | §P2.4 Audit trail and its retention `[R14, R18]` | AC-294, AC-295, AC-296 |
 | §P2.2 Jobs and Schedules for a folder's read-write members `[R18]` | AC-297 |
-| §P2.4 Credentials encrypted in the metadata database, to xcube's public key, in the browser; key checks at start `[R14, R15, R21, AD 7, R27]` (AC-311 retired) | AC-298, AC-164, AC-280, AC-312, AC-324, AC-325 |
+| §P2.4 Credentials encrypted in the metadata database, to xcube's public key, in the browser; key checks at start `[R14, R15, R21, AD 7, R27]` (AC-311 retired); a stored key kept unless replaced, with a warning `[R42]` | AC-298, AC-164, AC-280, AC-312, AC-324, AC-325, AC-353 |
 | §P2.6 G Data sources: all of F18, per folder `[R16]` | AC-157 … AC-161, AC-163, AC-164 |
 | §P2.6 H Quick calculations (F6) `[R16]` | AC-047 … AC-052 |
 | §P2.6 H Scheduling and build history (F17) `[R16]` | AC-145, AC-150, AC-151, AC-153 … AC-155, AC-234 |

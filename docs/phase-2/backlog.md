@@ -249,30 +249,27 @@ R37 asks for both UI reviews' designs to be built, with the 2026-09-27 ones winn
   - state B's "Keep as details tile".
 - **2026-09-24 design 03, note 4:** "Hide" rather than "Edit in form anyway". Claude chose it because the form now keeps comments (T482).
 - **Model editor below 1,024 px:** MW-26's overlay, or today's stacking (T396).
-- **2026-09-27 design 05, state M:** the rejected band's Dismiss. Is it kept for the user (on every device, until the item is proposed again) or for the session only? The design doesn't say. T358 draws the band (T353's review, 2026-09-28).
+- ~~**2026-09-27 design 05, state M:** the rejected band's Dismiss. Is it kept for the user (on every device, until the item is proposed again) or for the session only? The design doesn't say. T358 draws the band (T353's review, 2026-09-28).~~ *Answered 2026-09-28 (R42.1): until proposed again, for the user on every device.*
 - **MW-13:** the proposed empty-list line.
 - **2026-09-27 design 01, approve 11:** whether to ask vendors for permission to show their logos (T472 uses monograms).
 - **2026-09-27 design 07, state F:** the Access panel with sign-in off. This contradicts the earlier answer "no Access button with sign-in off" (`docs/handoff.md`, T330).
 - **2026-09-27 design 03, state E:** a "Scheduled health check" row. It is only needed if periodic tests are wanted, which is a spec change.
 - **Explore and the top bar below 1,024 px:** neither review designs them (§3, N16).
 - **2026-09-27 design 04, pin 6:** "Search My workspace" or "Search Sales / EMEA" names the box for its folder, but AC-019's Explore search looks through the whole library, not one folder. Either the search is scoped to the open folder (an AC-019 change), or the box keeps its global label.
-- **Jobs and Schedules, from the 2026-09-28 sync check (R40; `docs/design/reviews/2026-09-28-jobs-schedules/`).** Asked when their work is reached:
-  - "Trigger": the refresh key, as AC-229 says and as built, or who started the last build, as design 10 draws it; or both, as "Trigger" and "Started by".
-  - What AC-234's "cache warm-up" warms: a scheduled build only, chosen dashboards' queries for chosen groups, or nothing (drop the term). Warming results conflicts with AC-008: the service token can't run queries, and results differ per group set. The options (xcube's analysis, R41):
-    - drop result-cache warm-ups, and warm only pre-aggregations, which is a build;
-    - let wechart sign per-group tokens for warm-ups (an AC-008 change);
-    - ask xcube for a service-scoped warm-up route that runs queries as a stated group set.
-  - Whose schedules AC-155 suspends (wechart-owned only, or Cube-owned too by publishing `scheduled_refresh: false`), and what "the configured number" is and who sets it.
+- **Jobs and Schedules, from the 2026-09-28 sync check (R40; `docs/design/reviews/2026-09-28-jobs-schedules/`).** *Trigger, cache warm-up, AC-155, Data as of for readers, auditing builds and query records answered 2026-09-28 (R42.2–R42.4, R42.6–R42.8).* Still open, asked when their work is reached:
+  - ~~"Trigger": the refresh key, as AC-229 says and as built, or who started the last build, as design 10 draws it; or both, as "Trigger" and "Started by".~~
+  - ~~What AC-234's "cache warm-up" warms~~ (R42.3: pre-aggregations only).
+  - ~~Whose schedules AC-155 suspends, and what "the configured number" is~~ (R42.4: wechart's, 3 by default, per schedule).
   - A rollup with both a refresh key and a wechart schedule: whether wechart offers `scheduled_refresh: false`, and how Schedules labels its owner.
   - Next runs across a DST change: at today's offset with a caveat, or up to the change.
   - The refresh worker's indicator: "Refresh worker up", or its last run and error per model (an xcube change).
-  - Data as of for readers, who have no Jobs: what it offers instead of "Open in Jobs" and "Edit schedule".
-  - Whether builds, cancels and schedule changes go in the audit trail.
-  - Whether read-write members see other users' query records in their folders, and whose folder a query spanning folders belongs to.
-- **A key or token entered again, unchanged (T501's review; `xcube-2d5ac86f24.md`, open question 2):** a BigQuery key, Snowflake OAuth token or Dremio token entered again, even the same one, counts as a new target for good. The data source's cubes take an alias and their rollups are rebuilt, the root's included, where R38 keeps names while the target is the same. wechart can't tell it is the same, since it is sealed in the browser anew each time. The options:
+  - ~~Data as of for readers~~ (R42.7: freshness only).
+  - ~~Whether builds, cancels and schedule changes go in the audit trail~~ (R42.8: yes).
+  - ~~Whether read-write members see other users' query records~~ (R42.6: their own only).
+- *Answered 2026-09-28 (R42.5): warn before replacing.* ~~**A key or token entered again, unchanged (T501's review; `xcube-2d5ac86f24.md`, open question 2):** a BigQuery key, Snowflake OAuth token or Dremio token entered again, even the same one, counts as a new target for good. The data source's cubes take an alias and their rollups are rebuilt, the root's included, where R38 keeps names while the target is the same. wechart can't tell it is the same, since it is sealed in the browser anew each time. The options:
   - keep it so (as built);
   - ask xcube to compare such a secret by its opened value when it decides whether a target changed;
-  - have the form keep the stored key unless the user chooses to replace it (it does today), and say that replacing it rebuilds the rollups.
+  - have the form keep the stored key unless the user chooses to replace it (it does today), and say that replacing it rebuilds the rollups.~~
 
 **(b) Waiting on xcube** (R35: needs xcube changed, through the Cube-expert agent)
 - **2026-09-27 design 01, state D:** the test's four checks ticking off one by one. xcube's test route answers once, at the end.

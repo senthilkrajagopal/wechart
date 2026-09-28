@@ -5949,6 +5949,8 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - The counter counts code points, as the API and Postgres do (`PROPOSAL_TEXT_LIMIT`).
   - *2026-09-28, from T353's review (AC-290's real surface):* the author's item also draws state M's rejected band, from `GET /api/proposals?kind=&itemId=`: status-error text with a cross, the decider, the time, the reason in a quote block (or "No reason given"), with Propose again… and Dismiss. Whether Dismiss is kept (for the user, or for the session) is the user's to decide: backlog §6.
   - Depends on: T349, T350, T348
+  - *2026-09-28, R42.1:* Dismiss lasts until the item is proposed again, stored for the user on every device.
+  - *2026-09-28, the user's "Finish chains to close ACs":* built without waiting for T350 (models bundled with a dashboard, which needs T347) or T348's remaining states. The bundle lists the charts that go with a dashboard. Models join it with T350. Propose is offered in Explore's workspace rows. The check route (`POST /api/proposals/check`) is built.
 - [ ] T359 (AC-254) With security off, the single user works through a workspace and approves their own proposals
   - Files: `e2e/workspace-single-user.spec.ts` (the phase-1 configuration)
   - Failing test: `workspace-single-user.spec.ts`: with security off, editing a dashboard goes through "Edit in my workspace", a proposal and "Approve my own proposal", and nothing asks for a sign-in or refuses a permission (AC-254).
@@ -6465,6 +6467,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: as T262 (above)
   - Failing test: as T262: Run history lists builds newest first with the prototype's columns and filters, opens a build's log, and still lists a build older than Cube's 24 hours (AC-150).
   - Depends on: T372
+  - *2026-09-28, R42.2:* Jobs keeps "Trigger" as the refresh key (AC-229) and adds "Started by" from this history; the refresh worker's builds show none until their history comes, next phase (R41).
 - [ ] T375 (AC-145) List a rollup's partitions and rebuild the selected ones
   - Files: as T151 (above), with the partition list read through Cube's system route or, if that needs more than configuration, a fork endpoint added by the Cube-expert agent. *(2026-09-26, `[X4, X6]`: `/cubejs-system/*` isn't served under xcube; the list comes from xcube's `POST …/pre-aggregations/partitions` under the service credential (T420), which answers as Cube's system route did. It can drop a module's "Continue wait" rather than report it (`xcube-slice-6.md` Gotcha 11): ask again, don't show an empty list.)*
   - Failing test: as T151: every partition Cube lists is shown with its period, state and last build time, and a rebuild starts jobs for exactly the selected partitions (AC-145).
@@ -6477,14 +6480,24 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 - [ ] T377 (AC-153, AC-154) Fix what T258's, T159's and T160's reviews found, then tick AC-153 and AC-154 again
   - Files and failing tests: as T264 (above), each finding with a test that fails first
   - Depends on: ~~T339~~ T426 (2026-09-26: schedules are read from the published modules)
+- [ ] T505 (AC-294) Record builds started from Jobs, cancels, and changes to wechart-owned schedules in the audit trail *(added 2026-09-28, R42.8)*
+  - Files: `packages/api/src/jobs/build.ts` (and T376's cancel, T378's schedules), `packages/api/src/access/audit.test.ts`
+  - Failing test: `audit.test.ts`: starting a build from Jobs records who, which pre-aggregation, its folder and when; a cancel and a schedule change likewise (AC-294).
+  - Depends on: T371; the cancel on T376, schedule changes on T378
+- [ ] T506 (AC-353) Keep a stored BigQuery key or Snowflake or Dremio token unless replaced, and warn that replacing it rebuilds the rollups *(added 2026-09-28, R42.5)*
+  - Files: `packages/web/src/workspaces/data-sources/` (the Connection form), + tests
+  - Failing test: the form shows the stored key or token as kept; choosing Replace shows the warning before Save; saving without choosing Replace sends no new envelope (AC-353).
+  - Depends on: none
 - [ ] T378 (AC-234) Run a wechart-owned cron schedule through Cube's jobs API
   - Files: `packages/api/package.json` (pg-boss 12.33.2), `packages/api/src/scheduler/{schedules,worker}.ts` (+ tests), `packages/web/src/workspaces/schedules/ScheduleForm.tsx`
   - Failing test: `schedules.test.ts`: the next runs shown match the cron expression and time zone, and with a fake clock a due run starts a build through the jobs API (AC-234).
   - Depends on: T372
+  - *2026-09-28, R42.3:* pre-aggregation builds only; no result-cache warm-ups.
 - [ ] T379 (AC-155) Suspend a repeatedly failing schedule, say so, and offer Resume
   - Files: `packages/api/src/scheduler/suspend.ts` (+ test), `packages/web/src/workspaces/schedules/SchedulesPage.tsx`
   - Failing test: `suspend.test.ts`: after the configured number of consecutive failures the schedule stops running and says so, and Resume starts it again (AC-155).
   - Depends on: T378
+  - *2026-09-28, R42.4:* wechart-owned schedules only; the number is set per schedule, 3 by default. A refresh key keeps Cube's own retry.
 
 ## P2.11 Quick calculations and calculation requests (F6, returned)
 
@@ -8824,7 +8837,8 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 | AC-284 | T349, T358 | AC-285 | T350 | AC-286 | T351 |
 | AC-287 | T355, T356 | AC-288 | T352, ~~T426~~ T451 | AC-289 | T354, T357 |
 | AC-290 | T353, T358 | AC-291 | T329, ~~T426~~ T451 | AC-292 | T366 |
-| AC-293 | T367 | AC-294 | T368 | AC-295 | T369 |
+| AC-293 | T367 | AC-294 | T368, T505 | AC-295 | T369 |
+| AC-353 | T506 | | | | |
 | AC-296 | T370 | AC-297 | T371, T504 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441 |
 | AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |
 | AC-302 | T394 | AC-303 | T395 | AC-304 | T396 |
