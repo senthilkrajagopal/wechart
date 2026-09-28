@@ -843,6 +843,24 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R46 — design 13 approved; quick calculations on demand; three chart-editor answers** (2026-09-28, the user)
+- **Design 13 (export and import):**
+  - Claude asked design 13's open questions. The user chose:
+    - Q4, the file: "JSON, *.wechart.json". *Named after the dashboard, and renamable before export.*
+    - Q5, dependencies in folders the user may not see: "Show the count". *A count with its reason, naming neither them nor their folders (AC-354).*
+    - Proposals adopted:
+      - P1, "Outline tiles on hover" (AC-360);
+      - P5, "Driver-mismatch warning" (AC-361);
+      - "Import in My workspace › New", under a divider (AC-192);
+      - "⋯ menu in dashboard header", holding Export, as do Explore's row menus (AC-354).
+    - Not adopted: P2 (auditing exports and imports), P3 ("imported from *file*"), P4 (editing settings before the test).
+  - Then: "Approve". *T508 is split into build tasks.*
+- **Quick calculations:** xcube advised generating the companion measures at serve time on the same cube (`to-wechart/2026-09-28-1500-quick-calcs.md`, option c′). The user chose which measures get them: "On demand". *The first request for a measure's calculation recompiles that module once. xcube runs its spike, then builds and publishes an image.*
+  - *Claude disables, with the reason, each calculation xcube's table shows would be wrong or change meaning for a measure type. The list is in `to-xcube/2026-09-28-1600-quick-calcs-decision.md`.*
+- **T467's UX-057:** a second metric is on another scale when "Its format differs". For two or more such metrics, Auto draws "per-metric small multiples", which are to be built.
+- **T468's UX-031:** "Properties panel for filters". *Selecting or adding a filter shows its field, scope and Remove in Properties, with focus in the field picker. The pill's popover keeps the value.*
+- **T453's box plot tooltip:** "Keep n: 120 · Marked: 40".
+
 **R45 — quick calculations: four answers** (2026-09-28, the user; T380 and T381 built, T382 next)
 - Claude asked four questions. The user chose the recommended answer to each:
   1. **What a calculation does to its measure:** "Replace in place". *One calculation per measure; the pill names it, and the chart draws the calculated measure. To see both, add the measure twice.*

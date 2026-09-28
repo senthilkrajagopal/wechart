@@ -1,0 +1,1281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Design 13 · Exporting and importing a dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" />
+<style>
+  :root {
+    --bg-page: #f4f4f2; --bg-surface: #ffffff; --bg-raised: #ffffff; --bg-subtle: #f0efec; --bg-hover: #efeeea;
+    --border-subtle: #e3e2de; --border-strong: #c9c7c1;
+    --text-primary: #1f1f1e; --text-secondary: #5c5b57; --text-muted: #6e6c67; --text-on-accent: #ffffff;
+    --accent: #1f6f86; --accent-soft: #e3f0f4; --accent-ring: rgba(31,111,134,.35);
+    --crossfilter: #7a3fb0; --crossfilter-soft: #f1e9f8;
+    --role-dim: #2d6ab4; --role-dim-soft: #e6eef8;
+    --ok: #1d7a3f; --ok-icon: #0ca30c; --warn: #8a5a00; --warn-icon: #fab219; --err: #c2362f; --err-icon: #d03b3b;
+    --s1: #2a78d6; --s2: #eb6834;
+    --shadow-pop: 0 8px 24px rgba(20,20,18,.14), 0 1px 3px rgba(20,20,18,.1);
+    --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-code: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    --note: #c8176b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #dcdad4; color: var(--text-primary); font: 400 14px/20px var(--font-ui); -webkit-font-smoothing: antialiased; min-width: 1440px; }
+  .doc { width: 1440px; margin: 0 auto; }
+  .doc-head { background: #1f1f1e; color: #f2f2f0; padding: 28px 32px 22px; }
+  .doc-head .k { font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; color: #b4b3ab; }
+  .doc-head h1 { margin: 6px 0; font-size: 24px; line-height: 32px; font-weight: 600; }
+  .doc-head p { margin: 0 0 6px; color: #d6d5cf; max-width: 1160px; }
+  .doc-head .ids { margin-top: 10px; font: 400 12px/16px var(--font-code); color: #b4b3ab; }
+  .doc-head code { color: #f2f2f0; background: #333; padding: 0 4px; border-radius: 3px; font: 400 12px var(--font-code); }
+  .doc-head .bnote { color: #f39ac4; border-color: #f39ac4; }
+  .screen { position: relative; width: 1440px; height: 900px; overflow: hidden; background: var(--bg-page); }
+  .screen-label { background: #2b2b29; color: #e8e7e2; padding: 10px 32px; font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; }
+  .pin { position: absolute; z-index: 300; width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.35); }
+  .notes { background: #fff; padding: 28px 32px 40px; }
+  .notes h2, .states h2 { margin: 0 0 4px; font-size: 20px; line-height: 26px; font-weight: 600; }
+  .notes > p, .states > p { margin: 0 0 18px; color: var(--text-secondary); max-width: 1120px; }
+  .notelist { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 40px; margin: 0; padding: 0; list-style: none; }
+  .notelist li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
+  .notelist .n { width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; }
+  .notelist li > div > b { display: block; font-weight: 600; }
+  .notelist .t { color: var(--text-secondary); }
+  .fix { display: block; margin-top: 2px; font: 600 12px/16px var(--font-code); color: var(--note); }
+  .prop { display: inline-block; margin-top: 4px; padding: 1px 6px; border: 1px dashed var(--note); border-radius: 4px; color: var(--note); font: 600 12px/16px var(--font-ui); }
+  .bnote { display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 6px; border: 1px dashed var(--note); border-radius: 4px; color: var(--note); font: 600 12px/16px var(--font-ui); white-space: nowrap; vertical-align: 1px; }
+  .notes code, .states code, .decision code { font: 400 12px var(--font-code); background: var(--bg-subtle); padding: 0 4px; border-radius: 3px; }
+  .states { background: #f7f6f3; padding: 28px 32px 40px; border-top: 1px solid var(--border-subtle); }
+  .stategrid { display: grid; grid-template-columns: repeat(3, 440px); gap: 28px 24px; align-items: start; }
+  .state { display: grid; gap: 8px; align-content: start; }
+  .state.wide { grid-column: 1 / -1; }
+  .state > h3 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; }
+  .state > p { margin: 0; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .frame { border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; background: var(--bg-page); box-shadow: 0 1px 2px rgba(0,0,0,.06); position: relative; }
+  .cap { font-size: 12px; line-height: 16px; color: var(--text-secondary); margin: 0 0 6px; }
+  .decision { margin: 22px 0 0; padding: 16px 20px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-page); max-width: 1376px; }
+  .decision h3 { margin: 0 0 8px; font-size: 16px; line-height: 22px; font-weight: 600; }
+  .decision > p { margin: 0 0 10px; color: var(--text-secondary); font-size: 13px; line-height: 18px; }
+  .decision table { border-collapse: collapse; width: 100%; font-size: 13px; line-height: 18px; }
+  .decision th, .decision td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--border-subtle); }
+  .decision th { font-size: 12px; color: var(--text-secondary); font-weight: 600; background: var(--bg-subtle); }
+  .decision td.w { white-space: nowrap; font: 600 12px/18px var(--font-code); color: var(--note); }
+
+  /* app */
+  svg.i { width: 16px; height: 16px; flex: none; }
+  svg.s { width: 14px; height: 14px; flex: none; }
+  svg.xs { width: 10px; height: 10px; flex: none; }
+  .topbar { height: 48px; display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-mark { width: 22px; height: 22px; border-radius: 5px; background: var(--accent); color: var(--text-on-accent); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+  .wsnav { display: flex; gap: 2px; height: 100%; }
+  .wsnav span { display: flex; align-items: center; padding: 0 12px; height: 100%; color: var(--text-secondary); border-bottom: 2px solid transparent; }
+  .wsnav span.on { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--accent); }
+  .spacer { flex: 1; }
+  .search { display: flex; align-items: center; gap: 8px; width: 260px; height: 32px; padding: 0 10px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-subtle); color: var(--text-muted); font-size: 13px; }
+  .search kbd { margin-left: auto; font: 600 12px/16px var(--font-ui); border: 1px solid var(--border-strong); border-radius: 4px; padding: 0 4px; }
+  .reviews { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border-radius: 6px; color: var(--text-secondary); }
+  .count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--text-on-accent); font: 600 12px/18px var(--font-ui); text-align: center; font-variant-numeric: tabular-nums; }
+  .iconbtn { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 6px; color: var(--text-secondary); flex: none; }
+  .iconbtn.sm { width: 24px; height: 24px; }
+  .iconbtn.on { background: var(--bg-subtle); color: var(--text-primary); }
+  .acct { display: inline-flex; align-items: center; gap: 8px; font: 600 12px/16px var(--font-ui); }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--role-dim-soft); color: var(--role-dim); display: grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; }
+  .chipwarn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--warn); font-size: 12px; font-weight: 600; background: var(--bg-surface); }
+  .btn { height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-surface); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 14px; color: var(--text-primary); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+  .btn.dis { opacity: .45; }
+  .btn.ghost { border-color: transparent; background: none; }
+  .btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
+  .btn.link { border: 0; background: none; padding: 0; height: auto; color: var(--accent); font-size: 12px; font-weight: 600; }
+  .btn.danger { color: var(--err); border-color: var(--err); }
+  .ring { box-shadow: 0 0 0 3px var(--accent-ring); }
+  .input { height: 32px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg-surface); padding: 0 8px; width: 100%; display: flex; align-items: center; gap: 6px; font-size: 14px; min-width: 0; white-space: nowrap; overflow: hidden; }
+  .input.mono { font: 400 12px var(--font-code); }
+  .input.focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+  .input.bad { border-color: var(--err); }
+  .input.ph { color: var(--text-muted); }
+  .input.changed { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 60%, var(--bg-surface)); }
+  .field { display: grid; gap: 4px; min-width: 0; align-content: start; }
+  .field > label, .lbl { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+  .req { color: var(--text-muted); font-weight: 400; }
+  .help { font-size: 12px; line-height: 16px; color: var(--text-secondary); margin: 0; }
+  .errt { font-size: 12px; line-height: 16px; color: var(--err); display: flex; gap: 4px; align-items: flex-start; }
+  .was { font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .was s { color: var(--text-muted); }
+  .row2 { display: grid; grid-template-columns: 1fr 96px; gap: 12px; }
+  .fname { display: grid; grid-template-columns: 68px 1fr; gap: 8px; align-items: center; }
+  .fname label { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); }
+  .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 4px; overflow: hidden; }
+  .seg span { height: 28px; padding: 0 10px; font-size: 12px; display: flex; align-items: center; gap: 5px; background: var(--bg-surface); border-left: 1px solid var(--border-subtle); white-space: nowrap; }
+  .seg span:first-child { border-left: 0; }
+  .seg span.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .seg.full { display: flex; } .seg.full span { flex: 1; justify-content: center; }
+  .seg.none { border-color: var(--warn-icon); }
+  .radio { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--bg-surface); flex: none; margin-top: 2px; }
+  .radio.on { border: 5px solid var(--accent); }
+  .switch { position: relative; width: 32px; height: 18px; border-radius: 999px; background: var(--border-strong); flex: none; margin-top: 1px; }
+  .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--bg-surface); }
+  .switch.on { background: var(--accent); } .switch.on::after { left: 16px; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; background: var(--bg-subtle); color: var(--text-secondary); white-space: nowrap; }
+  .badge.sm { height: 18px; padding: 0 6px; }
+  .badge.accent { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .badge.line { background: none; border: 1px solid var(--border-strong); }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .status.ok { color: var(--ok); } .status.err { color: var(--err); } .status.warn { color: var(--warn); } .status.run { color: var(--accent); } .status.idle { color: var(--text-secondary); }
+  .status .t { font-weight: 400; color: var(--text-secondary); }
+  .xs { font-size: 12px; line-height: 16px; } .muted { color: var(--text-muted); } .sec { color: var(--text-secondary); } .strong { font-weight: 600; }
+  .mono { font-family: var(--font-code); font-size: 12px; }
+  .m13 { font: 600 13px/20px var(--font-code); }
+  .tnum { font-variant-numeric: tabular-nums; }
+  .notebar { display: flex; gap: 8px; align-items: flex-start; padding: 8px 12px; border-radius: 6px; font-size: 12px; line-height: 16px; background: var(--accent-soft); color: var(--text-primary); border: 1px solid var(--border-subtle); }
+  .notebar.warn { background: color-mix(in srgb, var(--warn-icon) 14%, var(--bg-surface)); }
+  .notebar.err { background: color-mix(in srgb, var(--err-icon) 9%, var(--bg-surface)); }
+  .notebar.ok { background: color-mix(in srgb, var(--ok-icon) 9%, var(--bg-surface)); }
+  .notebar.plain { background: var(--bg-subtle); }
+  .code { font: 400 12px/18px var(--font-code); background: var(--bg-subtle); border: 1px solid var(--border-subtle); border-radius: 4px; padding: 6px 8px; white-space: pre-wrap; word-break: break-word; }
+  .card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; overflow: hidden; }
+  .grid-table { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .grid-table th { background: var(--bg-subtle); text-align: left; font-weight: 600; height: 28px; padding: 0 10px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .grid-table td { height: 44px; padding: 0 10px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .grid-table td.one { height: 34px; }
+  .grid-table tr:last-child td { border-bottom: 0; }
+  .grid-table tr.hl td { background: var(--accent-soft); }
+  .grid-table tr.new td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  .nm { display: flex; gap: 10px; align-items: center; }
+  .nm .strong { font-size: 14px; line-height: 20px; }
+  .origin { font-size: 12px; line-height: 16px; color: var(--text-secondary); display: flex; gap: 4px; align-items: center; }
+  .band { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 24px; background: var(--bg-subtle); border-bottom: 1px solid var(--border-subtle); font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .crumbs { display: flex; gap: 6px; align-items: center; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .head { display: flex; align-items: center; gap: 10px; }
+  .head h1 { margin: 0; font-size: 20px; line-height: 26px; font-weight: 600; }
+
+  /* left tree (design 04) */
+  .tree { background: var(--bg-surface); border-right: 1px solid var(--border-subtle); }
+  .tree-head { display: flex; align-items: center; height: 44px; padding: 0 8px 0 12px; font-size: 16px; font-weight: 600; border-bottom: 1px solid var(--border-subtle); }
+  .trow { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; font-size: 14px; }
+  .trow .c { margin-left: auto; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .trow.sel { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .tdiv { height: 1px; background: var(--border-subtle); margin: 6px 12px; }
+  .ticon { width: 18px; height: 18px; border-radius: 4px; display: inline-grid; place-items: center; font-size: 11px; font-weight: 600; flex: none; background: var(--bg-subtle); color: var(--text-secondary); }
+  .ticon.ws { background: var(--role-dim-soft); color: var(--role-dim); }
+
+  /* items */
+  .itemicon { width: 22px; height: 22px; border-radius: 5px; display: inline-grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; background: var(--bg-subtle); color: var(--text-primary); }
+  .itemicon.dash { background: var(--crossfilter-soft); color: var(--crossfilter); }
+  .itemicon.chart { background: var(--accent-soft); color: var(--accent); }
+  .itemicon.folder { color: var(--text-secondary); }
+
+  /* menus, dialogs, toasts */
+  .menu { position: absolute; z-index: 70; background: var(--bg-raised); border: 1px solid var(--border-subtle); border-radius: 6px; box-shadow: var(--shadow-pop); padding: 4px; }
+  .mi { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 4px; font-size: 14px; white-space: nowrap; }
+  .mi.hl { background: var(--bg-hover); }
+  .mi .k { margin-left: auto; font-size: 12px; color: var(--text-muted); }
+  .mhead { padding: 6px 8px 2px; font-size: 12px; line-height: 16px; color: var(--text-secondary); font-weight: 600; }
+  .msep { height: 1px; background: var(--border-subtle); margin: 4px 0; }
+  .dialog { position: absolute; z-index: 60; background: var(--bg-surface); border-radius: 6px; box-shadow: var(--shadow-pop); display: grid; gap: 12px; padding: 20px; border: 1px solid var(--border-subtle); }
+  .dialog h2 { margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; }
+  .dialog p { margin: 0; color: var(--text-secondary); }
+  .acts { display: flex; justify-content: flex-end; gap: 8px; }
+  .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.28); z-index: 50; }
+  .toast { position: absolute; z-index: 80; display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: var(--text-primary); color: var(--bg-surface); border-radius: 6px; font-size: 14px; line-height: 20px; box-shadow: var(--shadow-pop); }
+  .toast .btn.link { color: #9fd3e4; font-size: 14px; }
+  .empty { display: grid; justify-items: center; gap: 8px; padding: 40px 24px; text-align: center; }
+  .empty h2 { margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; }
+  .empty p { margin: 0; color: var(--text-secondary); max-width: 360px; }
+
+  /* the pane (design 01) */
+  .pane { background: var(--bg-surface); border-left: 1px solid var(--border-subtle); display: flex; flex-direction: column; min-height: 0; position: relative; }
+  .pane-head { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 8px 8px 16px; border-bottom: 1px solid var(--border-subtle); }
+  .pane-head h2 { margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; }
+  .pane-body { flex: 1; min-height: 0; overflow: hidden; }
+  .pane-foot { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border-subtle); background: var(--bg-surface); }
+  .pane-foot.stack { flex-direction: column; align-items: stretch; gap: 10px; }
+  .pane-foot .line { display: flex; align-items: center; gap: 8px; }
+  .why { flex: 1; text-align: right; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .sumline { font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .sumline b { color: var(--text-primary); font-weight: 600; }
+  .sect { padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); display: grid; gap: 8px; }
+  .sect:last-child { border-bottom: 0; }
+  .sect > h3 { margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; display: flex; align-items: center; gap: 8px; }
+  .sect > h3 .btn.link { text-transform: none; letter-spacing: 0; }
+  .steps { display: flex; align-items: center; gap: 3px; padding: 10px 12px; border-bottom: 1px solid var(--border-subtle); }
+  .step { display: flex; align-items: center; gap: 4px; font-size: 12px; line-height: 16px; color: var(--text-muted); white-space: nowrap; }
+  .step i { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border-strong); display: grid; place-items: center; font-style: normal; font-weight: 600; font-size: 12px; color: var(--text-secondary); background: var(--bg-surface); }
+  .step.done { color: var(--text-secondary); } .step.done i { background: var(--accent-soft); border-color: var(--accent-soft); color: var(--accent); }
+  .step.cur { color: var(--text-primary); font-weight: 600; } .step.cur i { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+  .step-sep { flex: 1; height: 1px; background: var(--border-strong); min-width: 4px; }
+  .ctx { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-bottom: 1px solid var(--border-subtle); font-size: 12px; line-height: 16px; background: var(--bg-page); }
+  .ctx .sum { flex: 1; min-width: 0; display: grid; }
+  .ctx .sum span:last-child { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mono-tile { width: 32px; height: 32px; border-radius: 6px; display: grid; place-items: center; background: var(--bg-subtle); border: 1px solid var(--border-subtle); color: var(--text-primary); font: 600 12px/1 var(--font-ui); flex: none; }
+  .kv { display: grid; grid-template-columns: 96px 1fr; gap: 2px 12px; font-size: 12px; line-height: 16px; margin: 0; }
+  .kv dt { color: var(--text-secondary); }
+  .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  .checks { display: grid; }
+  .chk { display: grid; grid-template-columns: 20px 1fr auto; gap: 8px; align-items: center; min-height: 26px; font-size: 13px; border-bottom: 1px solid var(--border-subtle); }
+  .chk:last-child { border-bottom: 0; }
+  .chk .d { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .chk.pending span:nth-child(2) { color: var(--text-secondary); }
+  .chk-detail { grid-column: 2 / -1; padding: 0 0 6px; display: grid; gap: 4px; }
+
+  /* the dependency tree */
+  .cbx { width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--border-strong); background: var(--bg-surface); flex: none; display: inline-grid; place-items: center; margin-top: 2px; color: var(--text-on-accent); }
+  .cbx.on, .cbx.mix { background: var(--accent); border-color: var(--accent); }
+  .cbx.on::after { content: ''; width: 8px; height: 4px; border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-1px) rotate(-45deg); }
+  .cbx.mix::after { content: ''; width: 8px; height: 2px; background: currentColor; }
+  .cbx.lock { background: var(--bg-subtle); border-color: var(--border-subtle); color: var(--text-secondary); }
+  .dtree { display: grid; }
+  .dgrp { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-primary); }
+  .dgrp .cbx { margin-top: 0; margin-right: 2px; }
+  .dgrp .car { color: var(--text-secondary); }
+  .dgrp .n { margin-left: auto; font-weight: 400; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .drow { display: grid; grid-template-columns: 16px 22px 1fr; gap: 8px; align-items: start; padding: 3px 8px 3px 36px; border-radius: 4px; }
+  .drow.one { align-items: center; padding-left: 8px; min-height: 28px; }
+  .drow.one .cbx { margin-top: 0; }
+  .drow.hov { background: var(--bg-hover); }
+  .drow.ring { box-shadow: 0 0 0 3px var(--accent-ring); background: var(--bg-surface); }
+  .drow .t1 { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 14px; line-height: 20px; }
+  .drow .t2 { font-size: 12px; line-height: 16px; color: var(--text-secondary); display: flex; gap: 4px 8px; align-items: center; flex-wrap: wrap; }
+  .drow .fold { margin-left: auto; font-size: 12px; line-height: 16px; color: var(--text-secondary); white-space: nowrap; }
+  .drow .dim { color: var(--text-muted); }
+  .u { text-decoration: underline dotted; text-underline-offset: 2px; }
+  .dshelp { display: flex; gap: 6px; align-items: flex-start; padding: 2px 8px 6px 36px; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .leftout { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0 0; padding: 8px 10px; border-radius: 6px; border: 1px dashed var(--border-strong); background: var(--bg-page); font-size: 12px; line-height: 16px; color: var(--text-primary); }
+  .leftout svg { color: var(--text-secondary); margin-top: 1px; }
+  .details { margin: 2px 8px 6px 60px; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-page); display: grid; gap: 8px; }
+  .details h4 { margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); display: flex; gap: 6px; align-items: center; }
+  .never { display: grid; gap: 4px; font-size: 12px; line-height: 16px; }
+  .never span { display: flex; gap: 6px; align-items: center; }
+  .skel { height: 12px; border-radius: 4px; background: var(--bg-subtle); }
+
+  /* import */
+  .drop { border: 1px dashed var(--border-strong); border-radius: 6px; padding: 24px 16px; display: grid; justify-items: center; gap: 8px; text-align: center; background: var(--bg-page); }
+  .drop .big { width: 40px; height: 40px; color: var(--text-secondary); }
+  .fileline { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; }
+  .holds { display: grid; }
+  .hrow { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: center; min-height: 32px; border-bottom: 1px solid var(--border-subtle); font-size: 14px; }
+  .hrow:last-child { border-bottom: 0; }
+  .hrow .k2 { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+  .clash { padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); display: grid; gap: 8px; }
+  .ch { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: start; }
+  .ch b { display: block; font-weight: 600; font-size: 14px; line-height: 20px; }
+  .ch .xs { display: block; }
+  .conseq { display: flex; gap: 6px; align-items: flex-start; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .conseq svg { margin-top: 1px; color: var(--text-secondary); }
+  .ropts { display: grid; gap: 2px; border: 1px solid var(--border-strong); border-radius: 4px; padding: 4px; }
+  .rgh { padding: 4px 8px 0; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); }
+  .ropt { display: flex; gap: 10px; align-items: flex-start; padding: 5px 8px; border-radius: 4px; font-size: 14px; line-height: 20px; }
+  .ropt.on { background: var(--accent-soft); }
+  .ropt .xs { margin-left: auto; }
+  .dsh { display: flex; align-items: center; gap: 8px; }
+  .sumrow { display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border-subtle); align-items: start; }
+  .sumrow:last-child { border-bottom: 0; }
+  .sumrow b { font-weight: 600; font-size: 14px; line-height: 20px; }
+  .sumrow .o { display: flex; gap: 6px; align-items: center; font-size: 12px; line-height: 16px; color: var(--text-secondary); flex-wrap: wrap; }
+  .irow { display: grid; grid-template-columns: 22px 1fr auto; gap: 4px 8px; align-items: start; padding: 4px 0; border-top: 1px solid var(--border-subtle); }
+  .irow b { font-weight: 600; font-size: 14px; line-height: 20px; }
+  .irow .meta { display: block; font-size: 12px; line-height: 16px; color: var(--text-secondary); }
+  .warnb { grid-column: 2 / -1; display: flex; gap: 6px; align-items: flex-start; padding: 6px 8px; border-radius: 4px; background: color-mix(in srgb, var(--warn-icon) 14%, var(--bg-surface)); font-size: 12px; line-height: 16px; color: var(--text-primary); }
+  .warnb svg { margin-top: 1px; }
+  .warnb b { font-size: 12px; line-height: 16px; }
+  .qnote { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border: 1px dashed var(--note); border-radius: 4px; color: var(--note); font: 600 12px/16px var(--font-ui); white-space: nowrap; }
+  .ptree { display: grid; border: 1px solid var(--border-strong); border-radius: 4px; padding: 4px; }
+  .prow { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 4px; font-size: 14px; }
+  .prow.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+
+  /* the dashboard behind the export pane */
+  .dhead { background: var(--bg-surface); padding: 12px 24px 0; border-bottom: 1px solid var(--border-subtle); display: grid; gap: 6px; }
+  .dhead .hr { display: flex; align-items: center; gap: 8px; }
+  .dhead h1 { margin: 0; font-size: 24px; line-height: 32px; font-weight: 600; }
+  .ptabs { display: flex; gap: 2px; margin: 0 -24px; padding: 0 16px; }
+  .ptabs span { height: 36px; padding: 0 10px; font-size: 13px; font-weight: 600; color: var(--text-secondary); border-bottom: 2px solid transparent; display: flex; align-items: center; }
+  .ptabs span.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .dgrid { padding: 16px 24px; display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; }
+  .dtile { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 12px 16px; min-width: 0; overflow: hidden; }
+  .dtile h4 { margin: 0 0 4px; font-size: 14px; line-height: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .dtile.used { outline: 2px solid var(--accent); outline-offset: 2px; overflow: visible; position: relative; }
+  .kpi { font: 600 32px/40px var(--font-ui); font-variant-numeric: tabular-nums; }
+  .chip-ch { position: absolute; top: -12px; right: 10px; display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 6px; border-radius: 999px; background: var(--accent); color: var(--text-on-accent); font: 600 12px/16px var(--font-code); }
+
+  /* keyboard and legend */
+  kbd.k { font: 600 12px/16px var(--font-ui); border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--bg-surface); color: var(--text-primary); white-space: nowrap; }
+  .legend { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 24px; }
+  .legend div { display: flex; gap: 10px; align-items: center; min-height: 34px; border-bottom: 1px solid var(--border-subtle); font-size: 12px; line-height: 16px; }
+  .legend div > span:last-child { margin-left: auto; color: var(--text-secondary); text-align: right; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.5 10.5l3 3" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 16 16"><path d="M2 9.5l1.6-5.2A1 1 0 0 1 4.6 3.6h6.8a1 1 0 0 1 1 .7L14 9.5v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z M2 9.5h3.5l1 1.5h3l1-1.5H14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-person" viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 13.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-unlock" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 4.9-.7" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--accent)"/><path d="M8 7v4.2M8 4.6v.4" style="stroke:var(--bg-surface)" stroke-width="1.7"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-chevd" viewBox="0 0 16 16"><path d="M3.5 6L8 10.5 12.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-chevu" viewBox="0 0 16 16"><path d="M3.5 10L8 5.5 12.5 10" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 16 16"><path d="M10 3.5L5.5 8 10 12.5" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 16 16"><path d="M1.8 4.2a1 1 0 0 1 1-1h3.4l1.4 1.5h5.6a1 1 0 0 1 1 1v6.6a1 1 0 0 1-1 1H2.8a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="1.3" fill="currentColor"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="12.5" cy="8" r="1.3" fill="currentColor"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 16 16"><path d="M3 8h9M9 4.5L12.5 8 9 11.5" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 16 16"><path d="M10.8 2.7l2.5 2.5-7.6 7.6-3.1.6.6-3.1z" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-hist" viewBox="0 0 16 16"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.3 2.5v2.8h2.8" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3.2l2.2 1.4" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 16 16"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-eyeoff" viewBox="0 0 16 16"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2.5 13.5l11-11" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-link" viewBox="0 0 16 16"><path d="M6.5 9.5l3-3M5 7.5L3.6 8.9a2.3 2.3 0 0 0 3.3 3.3L8.3 10.8M11 8.5l1.4-1.4a2.3 2.3 0 0 0-3.3-3.3L7.7 5.2" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-download" viewBox="0 0 16 16"><path d="M8 2.5v7.5M4.8 7L8 10.2 11.2 7M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 16 16"><path d="M8 10.5V3M4.8 6.2L8 3l3.2 3.2M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-file" viewBox="0 0 16 16"><path d="M4 1.8h5l3 3v9.4H4z M9 1.8v3h3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+  <symbol id="i-bookmark" viewBox="0 0 16 16"><path d="M4.5 2h7v12L8 11.2 4.5 14z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 16 16"><path d="M8 1.8l5 1.9v4c0 3.1-2.1 5.5-5 6.5-2.9-1-5-3.4-5-6.5v-4z" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-replace" viewBox="0 0 16 16"><path d="M2.5 5.5h9M9 3l2.5 2.5L9 8M13.5 10.5h-9M7 8l-2.5 2.5L7 13" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-both" viewBox="0 0 16 16"><rect x="2" y="2" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M6 12.5V14h8V6h-1.5" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-skip" viewBox="0 0 16 16"><path d="M3 3.5L7.5 8 3 12.5M8.5 3.5L13 8l-4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="s-ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--ok-icon)"/><path d="M4.7 8.2l2.2 2.2 4.4-4.7" stroke="#fff" stroke-width="1.8" fill="none"/></symbol>
+  <symbol id="s-err" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--err-icon)"/><path d="M5.4 5.4l5.2 5.2M10.6 5.4l-5.2 5.2" stroke="#fff" stroke-width="1.8"/></symbol>
+  <symbol id="s-warn" viewBox="0 0 16 16"><path d="M8 1.5l7 12.5H1z" style="fill:var(--warn-icon)"/><path d="M8 6v4M8 11.6v.4" stroke="#1f1f1e" stroke-width="1.6"/></symbol>
+  <symbol id="s-idle" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5V8l2.4 1.5" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="s-run" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" style="stroke:var(--border-strong)" stroke-width="2"/><path d="M8 1.8a6.2 6.2 0 0 1 6.2 6.2" fill="none" style="stroke:var(--accent)" stroke-width="2"/></symbol>
+  <symbol id="s-pend" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" style="stroke:var(--border-strong)" stroke-width="1.5" stroke-dasharray="2.5 2.2"/></symbol>
+  <symbol id="s-draft" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2.6 2"/></symbol>
+</svg>
+
+<div class="doc">
+  <header class="doc-head">
+    <div class="k">wechart · UI design 2026-09-28 · Design 13 · for approval</div>
+    <h1>Exporting and importing a dashboard — one file, the dependencies you choose, never a secret</h1>
+    <p>None of this is built. R43 asks for it and F38's criteria define it (AC-354 … AC-359). <b>Export</b> offers what the dashboard depends on: the library charts it shows, the models its charts use, and the data sources those models bind to. Each is named with what uses it, and only those you may see are offered. The dashboard's own charts always go, and bookmarks never do. A data source goes as its driver, settings and description, never a secret, sealed or not. The result is one file.</p>
+    <p><b>Import</b> (redrawn 2026-09-28 to your simplified workflow) always puts what the file holds into your My workspace as <b>new drafts</b>, with a target folder you choose. It never replaces, renames or skips anything shared. From there, each draft follows the usual flow: it reaches a folder only when you propose it and the proposal is approved (designs 04 and 05). Before Import, the pane warns, without blocking, about what the drafts may affect once proposed:</p>
+    <ul style="margin:0 0 6px;padding-left:20px;color:#d6d5cf;max-width:1160px">
+      <li>a same-named item in the target or in your workspace;</li>
+      <li>a cube name the target already has.</li>
+    </ul>
+    <p>You map or create each data source, and a created one is tested before it's saved. A data source whose name the target already holds must be mapped to that one, or created under another name (AC-282); that is the one thing that blocks. With sign-in off, the import still goes to My workspace, and the single user approves their own proposals. A file it can't read, or one holding something this wechart doesn't have, is refused, naming the part and why, and nothing changes. Export is unchanged.</p>
+    <p>Both halves use design 01's docked pane; the table under the first notes says why. <b>Screen 1</b> is Wren Writer exporting <i>Revenue overview</i> from Sales / EMEA. <b>Screen 2</b> imports that file into a second wechart, where:</p>
+    <ul style="margin:0 0 6px;padding-left:20px;color:#d6d5cf;max-width:1160px">
+      <li>Sales / EMEA already has a <i>Revenue overview</i> (version 4), a <code>sales.yml</code> (version 2), and a <code>customers.yml</code> defining cube <code>customers</code>;</li>
+      <li>Sales has <code>sales_dw</code>, but there's no <code>emea_replica</code>;</li>
+      <li>Wren has a draft <i>Top products</i> in My workspace.</li>
+    </ul>
+    <p>Importing models waits on workspace models (T347) and on models going with a dashboard's proposal (T350). Model rows are drawn as the design intends and tagged <span class="bnote">Build: needs T347</span>; state V shows the import with models switched off.</p>
+    <div class="ids">For R43 · AC-354 … AC-359 (Import redrawn 2026-09-28 to AC-356 … AC-358 as amended for the simplified workflow) · with AC-158, AC-159, AC-164, AC-192, AC-263, AC-270, AC-273, AC-277, AC-278, AC-280 … AC-282, AC-284 … AC-290, AC-312, AC-325 · rules 3, 67, 68, 72 … 75, 83, 85 · designs 01, 03, 04, 05 · Driver fields: packages/core/src/data-sources/drivers.ts · Chart types: packages/core/src/render-spec.ts</div>
+  </header>
+
+  <div class="screen-label">Screen 1 · Export, from a shared dashboard's header</div>
+  <div class="screen">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span class="on">Explore</span><span>Data sources</span><span>Jobs</span><span>Schedules</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<kbd>⌘K</kbd></div>
+      <span class="reviews"><svg class="i"><use href="#i-inbox"/></svg>Reviews<span class="count">2</span></span>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="acct"><span class="avatar">WW</span>Wren Writer</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 480px;height:852px">
+      <main style="min-width:0;display:flex;flex-direction:column;overflow:hidden">
+        <div class="dhead">
+          <div class="crumbs">← Explore <span class="muted">/</span> Shared <span class="muted">/</span> Sales <span class="muted">/</span> EMEA</div>
+          <div class="hr"><h1>Revenue overview</h1><span class="spacer"></span><span class="btn"><svg class="s"><use href="#i-hist"/></svg>History</span><span class="btn">Bookmarks<svg class="s"><use href="#i-chevd"/></svg></span><span class="btn primary"><svg class="s"><use href="#i-pencil"/></svg>Edit in my workspace</span><span class="iconbtn on" title="More"><svg class="i"><use href="#i-dots"/></svg></span></div>
+          <div class="xs sec">In Sales / EMEA · version 7 · approved 22 Sep by Ada Admin</div>
+          <div class="ptabs"><span class="on">Overview</span><span>By country</span></div>
+        </div>
+        <div class="dgrid">
+          <div class="dtile used" style="grid-column:span 3;height:96px"><h4>Revenue<span class="chip-ch">sales.yml</span></h4><div class="kpi">$1.27M</div></div>
+          <div class="dtile used" style="grid-column:span 3;height:96px"><h4>Orders<span class="chip-ch">sales.yml</span></h4><div class="kpi">830</div></div>
+          <div class="dtile used" style="grid-column:span 3;height:96px"><h4>Avg order value<span class="chip-ch">sales.yml</span></h4><div class="kpi">$1,525</div></div>
+          <div class="dtile" style="grid-column:span 3;height:96px"><h4>Customers</h4><div class="kpi">89</div></div>
+
+          <div class="dtile used" style="grid-column:span 7;height:250px"><h4>Revenue by month, EMEA<span class="chip-ch">sales.yml</span></h4>
+            <svg viewBox="0 0 520 210" width="100%" height="200" aria-hidden="true">
+              <g stroke="#ecebe7"><line x1="40" y1="20" x2="510" y2="20"/><line x1="40" y1="65" x2="510" y2="65"/><line x1="40" y1="110" x2="510" y2="110"/><line x1="40" y1="155" x2="510" y2="155"/></g>
+              <line x1="40" y1="180" x2="510" y2="180" stroke="#c9c7c1"/>
+              <g font-family="Inter" font-size="12" fill="#5c5b57"><text x="34" y="24" text-anchor="end">$60K</text><text x="34" y="69" text-anchor="end">$45K</text><text x="34" y="114" text-anchor="end">$30K</text><text x="34" y="159" text-anchor="end">$15K</text><text x="56" y="198">Jul 96</text><text x="196" y="198">Mar 97</text><text x="336" y="198">Nov 97</text><text x="466" y="198">May 98</text></g>
+              <polyline fill="none" stroke="#2a78d6" stroke-width="2" points="50,150 80,144 110,136 140,142 170,126 200,120 230,124 260,108 290,100 320,106 350,86 380,80 410,66 440,58 470,48 500,136"/>
+              <polyline fill="none" stroke="#eb6834" stroke-width="2" points="50,166 80,162 110,158 140,160 170,152 200,148 230,150 260,144 290,136 320,138 350,128 380,122 410,116 440,108 470,100 500,158"/>
+              <g font-family="Inter" font-size="12" font-weight="600"><text x="404" y="40" fill="#2a78d6">Germany</text><text x="404" y="98" fill="#eb6834">France</text></g>
+            </svg>
+          </div>
+          <div class="dtile" style="grid-column:span 5;height:250px"><h4>Top products</h4>
+            <svg viewBox="0 0 340 200" width="100%" height="200" aria-hidden="true">
+              <g font-family="Inter" font-size="12" fill="#1f1f1e"><text x="136" y="26" text-anchor="end">Côte de Blaye</text><text x="136" y="62" text-anchor="end">Thüringer Rostbratw.</text><text x="136" y="98" text-anchor="end">Raclette Courdavault</text><text x="136" y="134" text-anchor="end">Tarte au sucre</text><text x="136" y="170" text-anchor="end">Camembert Pierrot</text></g>
+              <g fill="#2a78d6"><rect x="144" y="14" width="150" height="18" rx="3"/><rect x="144" y="50" width="85" height="18" rx="3"/><rect x="144" y="86" width="75" height="18" rx="3"/><rect x="144" y="122" width="50" height="18" rx="3"/><rect x="144" y="158" width="49" height="18" rx="3"/></g>
+              <g font-family="Inter" font-size="12" fill="#5c5b57"><text x="300" y="28">$141K</text><text x="235" y="64">$80K</text><text x="225" y="100">$71K</text><text x="200" y="136">$47K</text><text x="199" y="172">$47K</text></g>
+            </svg>
+          </div>
+
+          <div class="dtile" style="grid-column:span 6;height:250px"><h4>Margin trend</h4>
+            <svg viewBox="0 0 420 200" width="100%" height="200" aria-hidden="true">
+              <g stroke="#ecebe7"><line x1="40" y1="20" x2="410" y2="20"/><line x1="40" y1="70" x2="410" y2="70"/><line x1="40" y1="120" x2="410" y2="120"/></g>
+              <line x1="40" y1="170" x2="410" y2="170" stroke="#c9c7c1"/>
+              <g font-family="Inter" font-size="12" fill="#5c5b57"><text x="34" y="24" text-anchor="end">36%</text><text x="34" y="74" text-anchor="end">32%</text><text x="34" y="124" text-anchor="end">28%</text><text x="34" y="174" text-anchor="end">24%</text><text x="46" y="190">Q3 96</text><text x="206" y="190">Q3 97</text><text x="360" y="190">Q2 98</text></g>
+              <polyline fill="none" stroke="#2a78d6" stroke-width="2" points="50,120 100,110 150,96 200,104 250,84 300,70 350,62 400,50"/>
+            </svg>
+          </div>
+          <div class="dtile used" style="grid-column:span 6;height:250px"><h4>Top categories<span class="chip-ch">sales.yml</span></h4>
+            <svg viewBox="0 0 420 200" width="100%" height="200" aria-hidden="true">
+              <g font-family="Inter" font-size="12" fill="#1f1f1e"><text x="98" y="26" text-anchor="end">Beverages</text><text x="98" y="62" text-anchor="end">Dairy</text><text x="98" y="98" text-anchor="end">Confections</text><text x="98" y="134" text-anchor="end">Meat/Poultry</text><text x="98" y="170" text-anchor="end">Seafood</text></g>
+              <g fill="#2a78d6"><rect x="106" y="14" width="220" height="18" rx="3"/><rect x="106" y="50" width="193" height="18" rx="3"/><rect x="106" y="86" width="137" height="18" rx="3"/><rect x="106" y="122" width="134" height="18" rx="3"/><rect x="106" y="158" width="108" height="18" rx="3"/></g>
+              <g font-family="Inter" font-size="12" fill="#5c5b57"><text x="332" y="28">$268K</text><text x="305" y="64">$235K</text><text x="249" y="100">$167K</text><text x="246" y="136">$163K</text><text x="220" y="172">$131K</text></g>
+            </svg>
+          </div>
+        </div>
+      </main>
+
+      <aside class="pane" aria-label="Export Revenue overview">
+        <div class="pane-head"><h2>Export dashboard</h2><span class="spacer"></span><span class="iconbtn" title="Close"><svg class="i"><use href="#i-x"/></svg></span></div>
+        <div class="ctx"><span class="itemicon dash">▦</span><span class="sum"><span class="strong">Revenue overview</span><span>Sales / EMEA · version 7, as the folder has it</span></span></div>
+        <div class="pane-body">
+          <div class="sect">
+            <h3>Always in the file</h3>
+            <div class="dtree">
+              <div class="drow one"><span class="cbx lock"><svg class="xs"><use href="#i-lock"/></svg></span><span class="itemicon dash">▦</span><div class="t1"><span>Revenue overview</span><span class="fold">the dashboard, as saved</span></div></div>
+              <div class="drow one"><span class="cbx lock"><svg class="xs"><use href="#i-lock"/></svg></span><span class="itemicon chart">◢</span><div class="t1"><span>6 own charts</span><span class="fold">made on this dashboard</span></div></div>
+            </div>
+            <p class="help" style="display:flex;gap:6px;align-items:center"><svg class="s"><use href="#i-bookmark"/></svg>Bookmarks aren't exported, yours or shared.</p>
+          </div>
+          <div class="sect">
+            <h3>Choose what goes with it<span class="spacer"></span><span class="btn link">All</span><span class="xs muted">·</span><span class="btn link">None</span></h3>
+            <div class="dtree">
+              <div class="dgrp"><svg class="s car"><use href="#i-chevd"/></svg><span class="cbx on"></span>Library charts it shows<span class="n">2 of 2</span></div>
+              <div class="drow"><span class="cbx on"></span><span class="itemicon chart">◢</span><div><div class="t1"><span>Top products</span><span class="fold">Sales</span></div><div class="t2">On the tile Top products</div></div></div>
+              <div class="drow"><span class="cbx on"></span><span class="itemicon chart">◢</span><div><div class="t1"><span>Margin trend</span><span class="fold dim">folder not shown</span></div><div class="t2">On the tile Margin trend · kept in a folder you can't see</div></div></div>
+
+              <div class="dgrp"><svg class="s car"><use href="#i-chevd"/></svg><span class="cbx on"></span>Models its charts use<span class="n">2 of 2</span></div>
+              <div class="drow hov"><span class="cbx on"></span><span class="itemicon">◇</span><div><div class="t1"><span class="m13">sales.yml</span><span class="fold">Sales / EMEA</span></div><div class="t2"><span class="u">Used by 5 charts</span></div></div></div>
+              <div class="drow"><span class="cbx on"></span><span class="itemicon">◇</span><div><div class="t1"><span class="m13">orders.yml</span><span class="fold">Sales</span></div><div class="t2">Used by Customers and Top products</div></div></div>
+
+              <div class="dgrp"><svg class="s car"><use href="#i-chevd"/></svg><span class="cbx on"></span>Data sources those models bind to<span class="n">2 of 2</span></div>
+              <div class="dshelp"><svg class="s"><use href="#i-lock"/></svg><span>Settings only. Never a password, key or token, nor an encrypted copy of one.</span></div>
+              <div class="drow"><span class="cbx on"></span><span class="itemicon">◍</span><div><div class="t1"><span class="m13">emea_replica</span><span class="badge sm" style="margin-left:auto"><svg class="xs"><use href="#i-lock"/></svg>Settings only · no secrets</span></div><div class="t2"><span>PostgreSQL in Sales / EMEA · bound by sales.yml</span><span class="btn link" style="margin-left:auto">Details</span></div></div></div>
+              <div class="drow"><span class="cbx on"></span><span class="itemicon">◍</span><div><div class="t1"><span class="m13">sales_dw</span><span class="badge sm" style="margin-left:auto"><svg class="xs"><use href="#i-lock"/></svg>Settings only · no secrets</span></div><div class="t2"><span>Snowflake in Sales · bound by orders.yml</span><span class="btn link" style="margin-left:auto">Details</span></div></div></div>
+            </div>
+            <div class="leftout"><svg class="s"><use href="#i-eyeoff"/></svg><span><b>Not offered:</b> 1 model and 1 data source that Margin trend uses, in a folder you can't see.</span></div>
+          </div>
+        </div>
+        <div class="pane-foot stack">
+          <div class="sumline"><b>In the file:</b> 1 dashboard · 8 charts · 2 models · 2 data sources<br />No secrets · no bookmarks</div>
+          <div class="fname"><label>File name</label><div class="input mono">revenue-overview.wechart.json</div></div>
+          <div class="line"><span class="spacer"></span><span class="btn ghost">Cancel</span><span class="btn primary"><svg class="s"><use href="#i-download"/></svg>Export file</span></div>
+        </div>
+      </aside>
+    </div>
+
+    <span class="pin" style="left:890px;top:62px">1</span>
+    <span class="pin" style="left:940px;top:58px">2</span>
+    <span class="pin" style="left:940px;top:106px">3</span>
+    <span class="pin" style="left:940px;top:184px">4</span>
+    <span class="pin" style="left:940px;top:312px">5</span>
+    <span class="pin" style="left:940px;top:460px">6</span>
+    <span class="pin" style="left:940px;top:386px">7</span>
+    <span class="pin" style="left:940px;top:600px">8</span>
+    <span class="pin" style="left:940px;top:552px">9</span>
+    <span class="pin" style="left:940px;top:688px">10</span>
+    <span class="pin" style="left:940px;top:790px">11</span>
+    <span class="pin" style="left:534px;top:296px">12</span>
+  </div>
+
+  <section class="notes">
+    <h2>Export: what changes, and why</h2>
+    <p>One pane answers the three things an exporter needs: what will go, what each thing is used by, and what will never go. Every choice R43 gives is a checkbox you can see, and everything outside your choice (the dashboard's own charts, bookmarks, secrets, what you can't see) is said in words rather than left out quietly.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>Export… in the dashboard's ⋯ menu, and in Explore's row menu</b><span class="t">The header gains a ⋯ (More) button after its other actions; its menu holds <b>Export…</b>. The same item is in every dashboard row's ⋯ in Explore and My workspace, readers' rows included, since exporting changes nothing in wechart (rule 68; state A). The ⋯ stays pressed while the pane is open, and focus goes back to it on close. It isn't offered while editing: the file holds the saved dashboard.</span><span class="fix">AC-354 · rule 85</span></div></li>
+      <li><span class="n">2</span><div><b>A docked pane, 480 px, beside the dashboard</b><span class="t">Design 01's frame: a pinned head, a body that scrolls, and a pinned foot, at a fixed height. The dashboard stays in view, so a "used by" line points at tiles you can see. In Explore it docks where Access and History dock, replacing either. Why a pane and not a dialog is in the table below.</span><span class="fix">design 01 · direction §2</span></div></li>
+      <li><span class="n">3</span><div><b>What's exported, and which version</b><span class="t">The dashboard as its folder has it: "Sales / EMEA · version 7". Exported from My workspace, it reads "My workspace · your draft → Sales / EMEA", and the draft is what goes.</span><span class="fix">AC-354</span></div></li>
+      <li><span class="n">4</span><div><b>Always in the file, as locked rows</b><span class="t">The dashboard and its own charts, each with a lock in the box and words beside it, never a box you could clear. Bookmarks never go, and the pane says so here rather than leaving it to be guessed.</span><span class="fix">AC-354 · R43</span></div></li>
+      <li><span class="n">5</span><div><b>Three groups in AC-354's words, each with a count</b><span class="t">Library charts it shows · Models its charts use · Data sources those models bind to. Each group's box is tri-state (all, some, none), with "<i>n</i> of <i>m</i>" in words (state C shows "1 of 2"). <b>All</b> and <b>None</b> set every box. Every row starts ticked, as you decided (Q6), so the file works on its own wherever it goes. A data source stays offered when its model is cleared, since a same-named model may already be where the file goes.</span><span class="fix">AC-354</span></div></li>
+      <li><span class="n">6</span><div><b>Every row says what uses it</b><span class="t">"On the tile Top products", "Used by 5 charts" (the charts listed in a tooltip on hover and focus), "Bound by sales.yml". It tells you whether leaving a row out will matter where the file goes.</span><span class="fix">AC-354</span></div></li>
+      <li><span class="n">7</span><div><b>A library chart kept in a folder you can't see</b><span class="t">Margin trend is on this dashboard, so you may see it, and it's offered (AC-263). Its row names no folder, and links none.</span><span class="fix">AC-354 · AC-263</span></div></li>
+      <li><span class="n">8</span><div><b>Data-source rows: driver, what binds it, and "Settings only · no secrets"</b><span class="t">The badge, with a lock, is on every data-source row, so what goes is plain before you export. <b>Details</b> lists the fields that go and, by name, the secret fields that don't, from <code>drivers.ts</code> (state C).</span><span class="fix">AC-355 · rule 83</span></div></li>
+      <li><span class="n">9</span><div><b>The secrets rule, said once where it applies</b><span class="t">Under the data-source group, not under each row: the driver, where it connects, how it signs in and the description go. No password, key or token goes, nor an encrypted copy of one. Whoever imports the file enters them and tests the connection before it's saved (screen 2).</span><span class="fix">AC-355 · AC-164 · AC-325</span></div></li>
+      <li><span class="n">10</span><div><b>What isn't offered, and why</b><span class="t">Margin trend's model and data source are in a folder you can't see, so they aren't offered and aren't in the file. The line counts them and names neither, as design 05 counts breaks in folders you can't see (AC-322). Where the file is imported, Margin trend works only if cubes of the same names are found there. Q5 asks whether even the count should go (rule 67).</span><span class="fix">AC-354 · AC-263 · rule 67</span></div></li>
+      <li><span class="n">11</span><div><b>The foot: what the file holds, its name, Export file</b><span class="t">Counts that follow the boxes, then "No secrets · no bookmarks". The file name is editable, in the code face, and defaults to the dashboard's name; its extension assumes a JSON file (Q4). <b>Export file</b> downloads it, closes the pane, and shows the toast (state E).</span><span class="fix">AC-354</span></div></li>
+      <li><span class="n">12</span><div><b>Hovering or focusing a row outlines the tiles that use it</b><span class="t">Here <code>sales.yml</code> is hovered, and its five tiles are outlined with a chip naming it. It answers "what does this affect?" on the canvas, not in a list.</span><span class="prop">Proposal — needs your approval</span></div></li>
+    </ol>
+
+    <div class="decision">
+      <h3>Dialog or pane? Decided on the evidence: the docked pane, for both halves</h3>
+      <p>The closest approved precedent for Export is a dialog: Edit in my workspace (design 04, state D) chooses a dashboard's models and data sources by checkbox in 520 px. The case for the pane is the stronger one.</p>
+      <table>
+        <thead><tr><th style="width:220px">Question</th><th>520 px dialog (Edit in my workspace, Propose)</th><th>480 px docked pane (this design)</th></tr></thead>
+        <tbody>
+          <tr><td>What's in it</td><td>Edit in my workspace lists a few boxes with no "used by" lines. Export lists every dependency with what uses it, in three groups, plus what isn't offered and the file's summary. That grows with the dashboard, and a 520 px dialog would scroll inside itself, as the old wizard did (UX-201).</td><td>Full height, 852 px. The head and foot are pinned, and only the tree scrolls.</td></tr>
+          <tr><td>Steps</td><td>Fine for one step. Import has four, one of them a data-source form with a connection test: design 01's measured case, where the dialog moved and resized at every step (UX-213).</td><td>The same frame at every step, as in design 01 (approved) and design 11 (approved, R35).</td></tr>
+          <tr><td>Context</td><td>Hides the dashboard, so "Used by 5 charts" is only words.</td><td>Export keeps the dashboard in view (and proposal 12 outlines the tiles). Import keeps My workspace in view, where a same-named draft of your own may be.</td></tr>
+          <tr><td>Where it belongs</td><td>—</td><td>references.md › Phase 2: what belongs to an item opens beside it (Access, History). Export belongs to the dashboard.</td></tr>
+          <tr><td>Losing work</td><td>Export has nothing to lose. Import holds typed secrets and choices.</td><td>Export closes on Esc at once. Import asks "Discard this import?" on Esc, × or Cancel once a file is chosen (state X, rule 85).</td></tr>
+          <tr><td>Narrow windows</td><td>—</td><td>Below 1,024 px the pane becomes a full-screen sheet, as design 01's does (its state K).</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="decision">
+      <h3>What other products do (from <code>docs/research/</code>)</h3>
+      <table>
+        <thead><tr><th style="width:220px">Product · research</th><th>What it does</th><th>What this design takes from it</th></tr></thead>
+        <tbody>
+          <tr><td>Grafana 13.2 · <code>grafana-panel-schema.md</code></td><td>The export dialog's "Share dashboard with another instance" toggle "remove[s] details specific to your Grafana instance": data sources become <code>${DS_…}</code> inputs, and library panels move into <code>__elements</code>. On import, "Grafana lets you map those references to data sources that exist in your environment".</td><td>Library charts go in the same file as the dashboard. Each data source is mapped to an existing one at import, or created (AC-358).</td></tr>
+          <tr><td>Superset 6.1 · <code>superset-chart-serialization.md</code> §7</td><td>A chart's export chains to its dataset and its database, one ZIP of YAML with a versioned envelope. <code>viz_type</code> accepts any string, "including a viz type no plugin implements".</td><td>One file with the dependencies chosen (AC-354). A chart type this wechart can't draw is refused at import, naming the chart, rather than imported to fail later (AC-359, state K).</td></tr>
+          <tr><td>Metabase 0.63 · <code>metabase-card-serialization.md</code> §7</td><td>"Serialization only works if source and target Metabase have the same major version."</td><td>No version gate: the refusal names the part this wechart doesn't have (a kind, a chart type or a driver), so a file from another wechart imports whenever every part is known here.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="states">
+    <h2>Export: where it starts, and the other states</h2>
+    <p>Pane frames are drawn at 440 px so three fit in a row; the pane is 480 px.</p>
+    <div class="stategrid">
+
+      <div class="state wide">
+        <h3>A · Where Export is offered</h3>
+        <p>A menu item named <b>Export…</b> everywhere; the ellipsis says it opens the pane rather than downloading at once. The dashboard header's new ⋯ holds it in view mode. A dashboard row's ⋯ in Explore and My workspace lists it after History. A reader's row gets a ⋯ with Open and Export… only, since neither changes anything (rule 68). Readers may export what they may see (AC-354); state D shows what they're offered.</p>
+        <div style="display:grid;grid-template-columns:700px 1fr 1fr;gap:24px;align-items:start">
+          <div><p class="cap">The dashboard header, view mode</p>
+            <div class="frame" style="height:200px;background:var(--bg-page)">
+              <div class="dhead" style="padding:12px 16px 12px;border-bottom:0">
+                <div class="crumbs">← Explore <span class="muted">/</span> Shared <span class="muted">/</span> Sales <span class="muted">/</span> EMEA</div>
+                <div class="hr"><h1 style="font-size:20px;line-height:26px;white-space:nowrap">Revenue overview</h1><span class="spacer"></span><span class="btn"><svg class="s"><use href="#i-hist"/></svg>History</span><span class="btn">Bookmarks<svg class="s"><use href="#i-chevd"/></svg></span><span class="btn primary"><svg class="s"><use href="#i-pencil"/></svg>Edit in my workspace</span><span class="iconbtn on ring"><svg class="i"><use href="#i-dots"/></svg></span></div>
+              </div>
+              <div class="menu" style="right:16px;top:96px;width:200px"><div class="mhead">Revenue overview</div><div class="mi hl"><svg class="s"><use href="#i-download"/></svg>Export…</div></div>
+            </div>
+          </div>
+          <div><p class="cap">A dashboard row in Explore (read-write member)</p>
+            <div class="frame" style="height:280px;background:var(--bg-surface)">
+              <table class="grid-table"><thead><tr><th>Name</th><th>Type</th><th style="width:36px"></th></tr></thead><tbody>
+                <tr><td class="one"><div class="nm"><span class="itemicon dash">▦</span><span class="strong">Revenue overview</span></div></td><td class="one">Dashboard</td><td class="one"><span class="iconbtn sm on"><svg class="s"><use href="#i-dots"/></svg></span></td></tr>
+              </tbody></table>
+              <div class="menu" style="right:8px;top:66px;width:210px">
+                <div class="mi">Open</div>
+                <div class="mi"><svg class="s"><use href="#i-person"/></svg>Open my copy</div>
+                <div class="mi"><svg class="s"><use href="#i-hist"/></svg>History</div>
+                <div class="mi hl"><svg class="s"><use href="#i-download"/></svg>Export…</div>
+                <div class="msep"></div>
+                <div class="mi">Rename</div>
+                <div class="mi">Move to…</div>
+              </div>
+            </div>
+          </div>
+          <div><p class="cap">A dashboard row for a reader (View only)</p>
+            <div class="frame" style="height:280px;background:var(--bg-surface)">
+              <table class="grid-table"><thead><tr><th>Name</th><th>Type</th><th style="width:36px"></th></tr></thead><tbody>
+                <tr><td class="one"><div class="nm"><span class="itemicon dash">▦</span><span class="strong">Pipeline by stage</span></div></td><td class="one">Dashboard</td><td class="one"><span class="iconbtn sm on"><svg class="s"><use href="#i-dots"/></svg></span></td></tr>
+              </tbody></table>
+              <div class="menu" style="right:8px;top:66px;width:180px">
+                <div class="mi">Open</div>
+                <div class="mi hl"><svg class="s"><use href="#i-download"/></svg>Export…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>B · Nothing optional chosen</h3>
+        <p><b>None</b> clears every box, and the groups fold. The file then holds the dashboard and its own charts. A note says what that means where it's imported: the charts find their cubes only where cubes of the same names are found along the target folder's path (AC-281). Export file stays available: a file with no dependencies is a choice, not an error.</p>
+        <div class="frame"><div class="pane" style="height:600px;border-left:0">
+          <div class="pane-head"><h2>Export dashboard</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="ctx"><span class="itemicon dash">▦</span><span class="sum"><span class="strong">Revenue overview</span><span>Sales / EMEA · version 7, as the folder has it</span></span></div>
+          <div class="pane-body">
+            <div class="sect"><h3>Always in the file</h3>
+              <div class="dtree">
+                <div class="drow one"><span class="cbx lock"><svg class="xs"><use href="#i-lock"/></svg></span><span class="itemicon dash">▦</span><div class="t1"><span>Revenue overview</span><span class="fold">the dashboard, as saved</span></div></div>
+                <div class="drow one"><span class="cbx lock"><svg class="xs"><use href="#i-lock"/></svg></span><span class="itemicon chart">◢</span><div class="t1"><span>6 own charts</span><span class="fold">made on this dashboard</span></div></div>
+              </div>
+            </div>
+            <div class="sect"><h3>Choose what goes with it<span class="spacer"></span><span class="btn link">All</span><span class="xs muted">·</span><span class="btn link">None</span></h3>
+              <div class="dtree">
+                <div class="dgrp"><svg class="s car"><use href="#i-chev"/></svg><span class="cbx"></span>Library charts it shows<span class="n">0 of 2</span></div>
+                <div class="dgrp"><svg class="s car"><use href="#i-chev"/></svg><span class="cbx"></span>Models its charts use<span class="n">0 of 2</span></div>
+                <div class="dgrp"><svg class="s car"><use href="#i-chev"/></svg><span class="cbx"></span>Data sources those models bind to<span class="n">0 of 2</span></div>
+              </div>
+              <div class="leftout"><svg class="s"><use href="#i-eyeoff"/></svg><span><b>Not offered:</b> 1 model and 1 data source that Margin trend uses. They're in a folder you can't see.</span></div>
+              <div class="notebar"><svg class="i"><use href="#i-info"/></svg><span>Only the dashboard and its own charts. Where it's imported, its charts find their cubes only if cubes of the same names are found along its target folder's path.</span></div>
+            </div>
+          </div>
+          <div class="pane-foot stack">
+            <div class="sumline"><b>In the file:</b> 1 dashboard · 6 charts<br />No secrets · no bookmarks</div>
+            <div class="fname"><label>File name</label><div class="input mono">revenue-overview.wechart.json</div></div>
+            <div class="line"><span class="spacer"></span><span class="btn ghost">Cancel</span><span class="btn primary"><svg class="s"><use href="#i-download"/></svg>Export file</span></div>
+          </div>
+        </div></div>
+      </div>
+
+      <div class="state">
+        <h3>C · A data source's Details: exactly what goes</h3>
+        <p><b>Details</b> opens under the row. It lists the fields that go, from the driver's fields in <code>drivers.ts</code>, and names each secret field that doesn't. Here <code>sales_dw</code> signs in to Snowflake with a key pair: the account, region, warehouse, role, database, method and user go, but the private key and its passphrase don't. A PostgreSQL client certificate goes, because <code>drivers.ts</code> doesn't mark it secret; its key doesn't. <code>emea_replica</code> is cleared, so the group reads "1 of 2", with the box showing "some".</p>
+        <div class="frame"><div class="pane" style="height:760px;border-left:0">
+          <div class="pane-head"><h2>Export dashboard</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="ctx"><span class="itemicon dash">▦</span><span class="sum"><span class="strong">Revenue overview</span><span>Sales / EMEA · version 7, as the folder has it</span></span></div>
+          <div class="pane-body">
+            <div class="sect" style="border-bottom:0">
+              <div class="dtree">
+                <div class="dgrp"><svg class="s car"><use href="#i-chevd"/></svg><span class="cbx mix"></span>Data sources those models bind to<span class="n">1 of 2</span></div>
+                <div class="dshelp"><svg class="s"><use href="#i-lock"/></svg><span>Settings only. Never a password, key or token, nor an encrypted copy of one.</span></div>
+                <div class="drow"><span class="cbx"></span><span class="itemicon">◍</span><div><div class="t1"><span class="m13">emea_replica</span><span class="badge sm" style="margin-left:auto"><svg class="xs"><use href="#i-lock"/></svg>Settings only · no secrets</span></div><div class="t2"><span>PostgreSQL in Sales / EMEA · bound by sales.yml</span><span class="btn link" style="margin-left:auto">Details</span></div></div></div>
+                <div class="drow ring"><span class="cbx on"></span><span class="itemicon">◍</span><div><div class="t1"><span class="m13">sales_dw</span><span class="badge sm" style="margin-left:auto"><svg class="xs"><use href="#i-lock"/></svg>Settings only · no secrets</span></div><div class="t2"><span>Snowflake in Sales · bound by orders.yml</span><span class="btn link" style="margin-left:auto">Hide details<svg class="xs"><use href="#i-chevu"/></svg></span></div></div></div>
+                <div class="details">
+                  <h4><svg class="s" style="color:var(--ok-icon)"><use href="#s-ok"/></svg>Goes in the file</h4>
+                  <dl class="kv"><dt>Driver</dt><dd>Snowflake</dd><dt>Account</dt><dd class="mono">acme-emea</dd><dt>Region</dt><dd class="mono">eu-central-1</dd><dt>Warehouse</dt><dd class="mono">REPORTING_WH</dd><dt>Role</dt><dd class="mono">ANALYST</dd><dt>Database</dt><dd class="mono">SALES</dd><dt>Signs in with</dt><dd>Key pair, as <span class="mono">CUBE_SVC</span></dd><dt>Description</dt><dd>Sales warehouse for the Snowflake cubes.</dd></dl>
+                  <h4><svg class="s"><use href="#i-lock"/></svg>Never in the file</h4>
+                  <div class="never"><span><svg class="s muted"><use href="#i-lock"/></svg>Private key (PEM)</span><span><svg class="s muted"><use href="#i-lock"/></svg>Key passphrase</span><span class="sec">Nor an encrypted copy of either. Whoever imports it enters them.</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="pane-foot stack">
+            <div class="sumline"><b>In the file:</b> 1 dashboard · 8 charts · 2 models · 1 data source<br />No secrets · no bookmarks</div>
+            <div class="line"><span class="spacer"></span><span class="btn ghost">Cancel</span><span class="btn primary"><svg class="s"><use href="#i-download"/></svg>Export file</span></div>
+          </div>
+        </div></div>
+      </div>
+
+      <div class="state">
+        <h3>D · Exporting with View only access</h3>
+        <p>Rae Reader is View only everywhere. View only access shows dashboards and the charts on them, but no models or data sources (AC-263). So the library chart on the dashboard is offered; the two other groups aren't drawn, and one line says why. It names the rule, not the items. The file is still useful where same-named cubes exist.</p>
+        <div class="frame"><div class="pane" style="height:520px;border-left:0">
+          <div class="pane-head"><h2>Export dashboard</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="ctx"><span class="itemicon dash">▦</span><span class="sum"><span class="strong">Pipeline by stage</span><span>Sales · version 4, as the folder has it</span></span></div>
+          <div class="pane-body">
+            <div class="sect"><h3>Always in the file</h3>
+              <div class="dtree">
+                <div class="drow one"><span class="cbx lock"><svg class="xs"><use href="#i-lock"/></svg></span><span class="itemicon dash">▦</span><div class="t1"><span>Pipeline by stage</span><span class="fold">the dashboard, as saved</span></div></div>
+                <div class="drow one"><span class="cbx lock"><svg class="xs"><use href="#i-lock"/></svg></span><span class="itemicon chart">◢</span><div class="t1"><span>3 own charts</span><span class="fold">made on this dashboard</span></div></div>
+              </div>
+              <p class="help" style="display:flex;gap:6px;align-items:center"><svg class="s"><use href="#i-bookmark"/></svg>Bookmarks aren't exported, yours or shared.</p>
+            </div>
+            <div class="sect"><h3>Choose what goes with it</h3>
+              <div class="dtree">
+                <div class="dgrp"><svg class="s car"><use href="#i-chevd"/></svg><span class="cbx on"></span>Library charts it shows<span class="n">1 of 1</span></div>
+                <div class="drow"><span class="cbx on"></span><span class="itemicon chart">◢</span><div><div class="t1"><span>Top products</span><span class="fold">Sales</span></div><div class="t2">On the tile Top products</div></div></div>
+              </div>
+              <div class="leftout"><svg class="s"><use href="#i-eyeoff"/></svg><span><b>Models and data sources aren't offered.</b> With View only access you see dashboards and the charts on them, not the models or data sources behind them.</span></div>
+            </div>
+          </div>
+          <div class="pane-foot stack">
+            <div class="sumline"><b>In the file:</b> 1 dashboard · 4 charts<br />No secrets · no bookmarks</div>
+            <div class="line"><span class="spacer"></span><span class="btn ghost">Cancel</span><span class="btn primary"><svg class="s"><use href="#i-download"/></svg>Export file</span></div>
+          </div>
+        </div></div>
+      </div>
+
+      <div class="state">
+        <h3>E · The file downloaded</h3>
+        <p>The pane closes, focus goes back to the ⋯ it came from (ringed), and a toast says what the file holds. The browser's own download list shows where the file went. The toast is announced politely and needs no action.</p>
+        <p><span class="prop">Proposal — needs your approval</span> The export is recorded in the audit trail (P2): who exported which dashboard, and what went, with data sources as "settings only". Nothing on this screen changes for it.</p>
+        <div class="frame" style="height:230px;background:var(--bg-page)">
+          <div class="dhead" style="padding:12px 16px 12px;border-bottom:0">
+            <div class="hr"><h1 style="font-size:20px;line-height:26px">Revenue overview</h1><span class="spacer"></span><span class="btn">Bookmarks<svg class="s"><use href="#i-chevd"/></svg></span><span class="iconbtn ring"><svg class="i"><use href="#i-dots"/></svg></span></div>
+          </div>
+          <div class="toast" style="left:16px;right:16px;bottom:16px"><svg class="s" style="color:var(--ok-icon);margin-top:3px"><use href="#s-ok"/></svg><span>Exported <span class="mono" style="font-size:13px">revenue-overview.wechart.json</span>: 1 dashboard, 8 charts, 2 models and 2 data sources, without their secrets.</span></div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>F · Finding what it uses, and failing to</h3>
+        <p>While the dependencies are listed, the tree is a skeleton and Export file waits. If the list can't be loaded, an error with Retry and Details. Export stays unavailable, since the file must be what AC-354 says.</p>
+        <div class="frame" style="background:var(--bg-surface)">
+          <div class="sect"><span class="status run"><svg class="i"><use href="#s-run"/></svg>Finding what Revenue overview uses…</span>
+            <div style="display:grid;gap:10px;padding:4px 0 4px 36px"><div class="skel" style="width:70%"></div><div class="skel" style="width:55%"></div><div class="skel" style="width:62%"></div><div class="skel" style="width:48%"></div></div>
+          </div>
+          <div class="pane-foot" style="border-top:1px solid var(--border-subtle)"><span class="spacer"></span><span class="btn ghost">Cancel</span><span class="btn primary dis"><svg class="s"><use href="#i-download"/></svg>Export file</span></div>
+        </div>
+        <div class="frame" style="background:var(--bg-surface)">
+          <div class="sect"><div class="notebar err"><svg class="s"><use href="#s-err"/></svg><span><b>Couldn't list what Revenue overview uses.</b> wechart could not be reached. <span class="btn link">Details</span></span></div><span class="btn sm" style="justify-self:start">Retry</span></div>
+          <div class="pane-foot"><span class="why">Export waits for the list</span><span class="btn ghost">Cancel</span><span class="btn primary dis"><svg class="s"><use href="#i-download"/></svg>Export file</span></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <div class="screen-label">Screen 2 · Import, in a second wechart: step 4 of 4, Review, with what the new drafts may affect</div>
+  <div class="screen">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span class="on">Explore</span><span>Data sources</span><span>Jobs</span><span>Schedules</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<kbd>⌘K</kbd></div>
+      <span class="reviews"><svg class="i"><use href="#i-inbox"/></svg>Reviews<span class="count">1</span></span>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="acct"><span class="avatar">WW</span>Wren Writer</span>
+    </div>
+    <div style="display:grid;grid-template-columns:260px 1fr 480px;height:852px">
+      <aside class="tree">
+        <div class="tree-head">Folders<span class="spacer"></span><span class="btn ghost sm">+ Folder</span></div>
+        <div style="padding-top:6px">
+          <div class="trow sel"><span class="ticon ws"><svg class="s"><use href="#i-person"/></svg></span>My workspace<span class="c">4</span></div>
+          <div class="trow" style="padding-left:26px"><span class="ticon">▣</span>Drafts<span class="c">1</span></div>
+          <div class="tdiv"></div>
+          <div class="trow"><span class="ticon">▣</span>Shared<span class="c">17</span></div>
+          <div class="trow" style="padding-left:26px"><span class="ticon">▣</span>Finance<span class="c">3</span></div>
+          <div class="trow" style="padding-left:26px"><span class="ticon">▣</span>Sales<span class="c">11</span></div>
+          <div class="trow" style="padding-left:40px"><span class="ticon">▣</span>EMEA<span class="c">6</span></div>
+        </div>
+      </aside>
+      <main style="min-width:0;display:flex;flex-direction:column">
+        <div class="band"><svg class="s"><use href="#i-person"/></svg>My workspace · only you can see this</div>
+        <div style="padding:14px 24px;display:grid;gap:10px">
+          <div class="crumbs">My workspace</div>
+          <div class="head"><h1>My workspace</h1><span class="spacer"></span><span class="input ph" style="width:200px;height:28px;font-size:12px"><svg class="s"><use href="#i-search"/></svg>Search My workspace</span><span class="btn primary">＋ New<svg class="s"><use href="#i-chevd"/></svg></span></div>
+          <div class="card">
+            <table class="grid-table">
+              <thead><tr><th style="width:56%">Name</th><th>Type</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td><div class="nm"><span class="itemicon folder">▣</span><div><div class="strong">Drafts</div><div class="origin">1 item · folders in My workspace have no target</div></div></div></td><td>Folder</td><td></td></tr>
+                <tr><td><div class="nm"><span class="itemicon chart">◢</span><div><div class="strong">Top products</div><div class="origin"><svg class="s"><use href="#i-arrow"/></svg>Sales / EMEA · new</div></div></div></td><td>Bar, horizontal</td><td><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>Draft</span></td></tr>
+                <tr><td><div class="nm"><span class="itemicon dash">▦</span><div><div class="strong">Churn watch</div><div class="origin"><svg class="s"><use href="#i-arrow"/></svg>Finance · new</div></div></div></td><td>Dashboard</td><td><span class="status err"><svg class="s"><use href="#s-err"/></svg>Rejected</span></td></tr>
+                <tr><td><div class="nm"><span class="itemicon">◍</span><div><div class="strong mono" style="font-size:13px">northwind_replica</div><div class="origin"><svg class="s"><use href="#i-arrow"/></svg>Sales / EMEA · new</div></div></div></td><td>Data source</td><td><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>Draft</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="xs sec" style="margin:0">Items here are private. Each goes to its target folder only when you propose it and it's approved; you may approve your own.</p>
+        </div>
+      </main>
+
+      <aside class="pane" aria-label="Import a dashboard">
+        <div class="pane-head"><h2>Import a dashboard</h2><span class="badge"><svg class="s"><use href="#i-person"/></svg>into My workspace</span><span class="spacer"></span><span class="iconbtn" title="Close"><svg class="i"><use href="#i-x"/></svg></span></div>
+        <div class="steps">
+          <span class="step done"><i>✓</i>File</span><span class="step-sep"></span>
+          <span class="step done"><i>✓</i>Target</span><span class="step-sep"></span>
+          <span class="step done"><i>✓</i>Data sources</span><span class="step-sep"></span>
+          <span class="step cur"><i>4</i>Review</span>
+        </div>
+        <div class="ctx"><span class="mono-tile"><svg class="i"><use href="#i-file"/></svg></span><span class="sum"><span class="strong mono" style="font-size:12px">revenue-overview.wechart.json</span><span>Revenue overview → Sales / EMEA · 6 new drafts · 4 warnings</span></span></div>
+        <div class="pane-body">
+          <div class="sect" style="padding-bottom:4px;border:0"><div class="notebar"><svg class="i"><use href="#i-person"/></svg><span>Everything lands in <b>My workspace</b> as <b>new drafts</b>, with the target <b>Sales / EMEA</b>. Nothing there changes until you propose a draft and it's approved.</span></div></div>
+          <div class="sect" style="gap:0;border:0;padding-top:8px">
+            <h3 style="margin:0 0 6px">What lands, and what it may affect<span class="spacer"></span><span class="status warn" style="text-transform:none;letter-spacing:0"><svg class="s"><use href="#s-warn"/></svg>4 warnings</span></h3>
+            <div class="irow"><span class="itemicon dash">▦</span><div><b>Revenue overview</b><span class="meta">Dashboard and 6 own charts</span></div><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>New draft</span>
+              <div class="warnb"><svg class="s"><use href="#s-warn"/></svg><span><b>Sales / EMEA has a dashboard by this name</b>, version 4. Proposed, this draft replaces it once approved.</span></div></div>
+            <div class="irow"><span class="itemicon chart">◢</span><div><b>Top products</b><span class="meta">Library chart</span></div><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>New draft</span>
+              <div class="warnb"><svg class="s"><use href="#s-warn"/></svg><span><b>Your workspace has a draft by this name</b>, also → Sales / EMEA. Both are kept; the second approved replaces the first. <span class="btn link">Open my draft</span></span></div></div>
+            <div class="irow"><span class="itemicon chart">◢</span><div><b>Margin trend</b><span class="meta">Library chart</span></div><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>New draft</span></div>
+            <div class="irow"><span class="itemicon">◇</span><div><b class="m13">sales.yml</b><span class="meta">Model <span class="bnote">T347</span></span></div><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>New draft</span>
+              <div class="warnb"><svg class="s"><use href="#s-warn"/></svg><span><b>Sales / EMEA has <span class="mono">sales.yml</span></b>, version 2. Proposed, this draft replaces it once approved.</span></div></div>
+            <div class="irow"><span class="itemicon">◇</span><div><b class="m13">orders.yml</b><span class="meta">Model <span class="bnote">T347</span></span></div><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>New draft</span>
+              <div class="warnb"><svg class="s"><use href="#s-warn"/></svg><span><b>Cube <span class="mono">customers</span> is already in Sales / EMEA</b>, in <span class="mono">customers.yml</span>. Proposing this draft is refused until one of them is renamed.</span></div></div>
+            <div class="irow"><span class="itemicon">◍</span><div><b class="m13">emea_replica</b><span class="meta">Data source, created · test passed 14:21</span></div><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>New draft</span></div>
+            <div class="irow"><span class="itemicon">◍</span><div><b class="m13">sales_dw</b><span class="meta">Mapped to <span class="mono">sales_dw</span> in Sales</span></div><span class="status run"><svg class="s"><use href="#i-link"/></svg>Not imported</span></div>
+          </div>
+        </div>
+        <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="why">None stops the import</span><span class="btn primary">Import to My workspace</span></div>
+      </aside>
+    </div>
+
+    <span class="pin" style="left:910px;top:88px">13</span>
+    <span class="pin" style="left:940px;top:58px">14</span>
+    <span class="pin" style="left:940px;top:104px">15</span>
+    <span class="pin" style="left:940px;top:150px">16</span>
+    <span class="pin" style="left:940px;top:206px">17</span>
+    <span class="pin" style="left:940px;top:266px">18</span>
+    <span class="pin" style="left:940px;top:336px">19</span>
+    <span class="pin" style="left:940px;top:436px">20</span>
+    <span class="pin" style="left:940px;top:660px">21</span>
+    <span class="pin" style="left:940px;top:770px">22</span>
+    <span class="pin" style="left:940px;top:858px">23</span>
+    <span class="pin" style="left:560px;top:240px">24</span>
+  </div>
+
+  <section class="notes">
+    <h2>Import: what changes, and why</h2>
+    <p>Redrawn to your simplified workflow of 2026-09-28. An import always lands in My workspace as new drafts, and each draft then follows the usual flow: a target, then Propose, then Approve (designs 04 and 05). The pane no longer asks what to do with each same-named item. Before Import, it warns about what the drafts may affect once they're proposed, and never blocks. Nothing is written until the last step, so leaving at any point, or being refused, changes nothing.</p>
+    <ol class="notelist" start="13">
+      <li><span class="n">13</span><div><b>Import a dashboard… in My workspace's New menu</b><span class="t">Below a divider, after the five kinds (state G). An import lands in the workspace, so it starts there, and creating stays in New (AC-192). Readers have no workspace and no New, so there's no Import for them (state W).</span><span class="fix">AC-356 · AC-192 · AC-277</span></div></li>
+      <li><span class="n">14</span><div><b>"into My workspace", always</b><span class="t">Every import lands in My workspace, as design 01's wizard says of a new data source. That includes sign-in off, where the single user then approves their own proposals (state U).</span><span class="fix">AC-356</span></div></li>
+      <li><span class="n">15</span><div><b>Four steps: File · Target · Data sources · Review</b><span class="t">The review of what the file holds is the second half of File, so a refused file never leaves step 1 (AC-359). Target comes before Data sources, because both what you may map to and the warnings depend on it. The warnings sit on Review, under the items they're about, rather than in a step of their own: none needs an answer, and a separate step would list the same items twice. Review's primary is Import. A step with nothing to ask (no data sources) shows as done and is passed over. Done steps can be clicked to go back.</span><span class="fix">AC-356 … AC-359 · design 01</span></div></li>
+      <li><span class="n">16</span><div><b>The file, the dashboard, the target, the counts</b><span class="t">Kept in view at every step: here, 6 new drafts and 4 warnings.</span><span class="fix">design 01 pin 3</span></div></li>
+      <li><span class="n">17</span><div><b>New drafts, and nothing else</b><span class="t">Nothing is replaced, renamed or skipped at import. Each draft then follows the usual flow. Its target can be changed like any draft's (design 04), and it reaches a folder only by Propose and Approve (design 05), whose checks run again then (state T).</span><span class="fix">AC-356 · AC-357 · AC-278</span></div></li>
+      <li><span class="n">18</span><div><b>Warnings, counted, never blocking</b><span class="t">The heading counts them, and each sits under its item as an icon and a label with its text. Each names the item, where the other one is, and what will happen when the draft is proposed. None stops the import, and none needs an answer.</span><span class="fix">AC-357 · rule 3</span></div></li>
+      <li><span class="n">19</span><div><b>A same-named item in the target</b><span class="t">The warning names the other item and its version, and says what the proposal will do. It replaces that item once approved (AC-288). The Propose dialog then also warns that the draft wasn't copied from it (rule 75, state T). A model file (<code>sales.yml</code>) or a library chart gets the same warning. Only the target and your workspace are checked, and you can see both. A warning about a folder you can't see would count the item without naming it, as design 05 does (rule 67).</span><span class="fix">AC-357 · AC-288 · rule 75</span></div></li>
+      <li><span class="n">20</span><div><b>A same-named draft in your workspace</b><span class="t">Both are kept, and whichever is approved second replaces the other in the folder. <b>Open my draft</b> opens yours in the main area, with the pane still docked.</span><span class="fix">AC-357</span></div></li>
+      <li><span class="n">21</span><div><b>A cube name the target already has</b><span class="t">A cube's name is unique across a folder's models (AC-270). Proposing <code>orders.yml</code> is therefore refused until one of the two is renamed, as design 05's state F refuses it (state T here). A data source whose name the target already holds isn't a warning. It's resolved on its own row in step 3, by mapping it or renaming it (state P, AC-282).</span><span class="fix">AC-270 · AC-282</span></div></li>
+      <li><span class="n">22</span><div><b>Data sources, as step 3 left them</b><span class="t">A created one becomes a draft, and has passed its test of exactly its settings (states N, O). A mapped one isn't imported; the models keep its name, or are rewritten to the name chosen (state M).</span><span class="fix">AC-358</span></div></li>
+      <li><span class="n">23</span><div><b>The foot: the count, and Import</b><span class="t">Back, "None stops the import", and <b>Import to My workspace</b>, which writes everything at once. This is design 11's foot.</span><span class="fix">design 11 · rule 23</span></div></li>
+      <li><span class="n">24</span><div><b>The workspace stays in view</b><span class="t">Your draft Top products, the one warning 20 names, is in the list.</span><span class="fix">AC-357</span></div></li>
+    </ol>
+  </section>
+
+  <section class="states">
+    <h2>Import: every step, and the other outcomes</h2>
+    <p>In order: where it starts; the file, read or refused; the target; the data sources (mapped, created and failing, passing, and a name the target already holds); Review with nothing to warn about; the result; and the next step, Propose. Then sign-in off, models before T347, a reader, and leaving part-way. Pane frames are drawn at 440 px.</p>
+    <div class="stategrid">
+
+      <div class="state">
+        <h3>G · Where Import starts</h3>
+        <p>My workspace's New menu, below a divider: <b>Import a dashboard…</b>, "from an export file". AC-192 lists five kinds for New; Import is a sixth entry, kept apart, so that creating stays in New. It isn't in a shared folder's New, which offers Folder only.</p>
+        <div class="frame" style="height:330px;background:var(--bg-page)">
+          <div style="padding:14px 16px"><div class="head"><h1>My workspace</h1><span class="spacer"></span><span class="btn primary ring">＋ New<svg class="s"><use href="#i-chevd"/></svg></span></div></div>
+          <div class="menu" style="right:16px;top:58px;width:250px">
+            <div class="mhead">New in My workspace</div>
+            <div class="mi"><span class="itemicon dash">▦</span>Dashboard</div>
+            <div class="mi"><span class="itemicon chart">◢</span>Chart</div>
+            <div class="mi"><span class="itemicon">◇</span>Model</div>
+            <div class="mi"><span class="itemicon">◍</span>Data source</div>
+            <div class="msep"></div>
+            <div class="mi"><span class="itemicon folder">▣</span>Folder<span class="k">no target</span></div>
+            <div class="msep"></div>
+            <div class="mi hl"><span class="itemicon"><svg class="s"><use href="#i-upload"/></svg></span>Import a dashboard…<span class="k">from a file</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>H · Step 1: choose the file</h3>
+        <p><b>Choose file…</b> is a button and gets focus first; dropping a file on the zone is a shortcut to the same thing. The pane says at the start that nothing changes until Import.</p>
+        <div class="frame"><div class="pane" style="height:460px;border-left:0">
+          <div class="pane-head"><h2>Import a dashboard</h2><span class="badge"><svg class="s"><use href="#i-person"/></svg>into My workspace</span><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step cur"><i>1</i>File</span><span class="step-sep"></span><span class="step"><i>2</i>Target</span><span class="step-sep"></span><span class="step"><i>3</i>Data sources</span><span class="step-sep"></span><span class="step"><i>4</i>Review</span></div>
+          <div class="pane-body"><div class="sect" style="border:0">
+            <div class="drop"><svg class="big"><use href="#i-upload"/></svg><b>Drop an export file here</b><span class="xs sec">or</span><span class="btn ring">Choose file…</span><span class="xs sec">A <span class="mono">.wechart.json</span> file made by Export, in this wechart or another.</span></div>
+            <div class="notebar"><svg class="i"><use href="#i-info"/></svg><span>Nothing changes until you choose Import at the end. Every part of the file is checked first.</span></div>
+          </div></div>
+          <div class="pane-foot"><span class="why">Choose a file to go on</span><span class="btn ghost">Cancel</span><span class="btn primary dis">Next: Target<svg class="s"><use href="#i-chev"/></svg></span></div>
+        </div></div>
+      </div>
+
+      <div class="state">
+        <h3>I · Step 1: what the file holds</h3>
+        <p>Once read, the step lists everything in the file by kind, the way export grouped it, with "settings only" on each data source and the two things the file never holds. Nothing here is chosen: the choices come in the next two steps.</p>
+        <div class="frame"><div class="pane" style="height:560px;border-left:0">
+          <div class="pane-head"><h2>Import a dashboard</h2><span class="badge"><svg class="s"><use href="#i-person"/></svg>into My workspace</span><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step cur"><i>1</i>File</span><span class="step-sep"></span><span class="step"><i>2</i>Target</span><span class="step-sep"></span><span class="step"><i>3</i>Data sources</span><span class="step-sep"></span><span class="step"><i>4</i>Review</span></div>
+          <div class="pane-body">
+            <div class="sect"><div class="fileline"><svg class="s"><use href="#i-file"/></svg><span class="mono strong">revenue-overview.wechart.json</span><span class="sec">48 KB</span><span class="spacer"></span><span class="btn link">Choose another</span></div><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Read · every part is one this wechart has</span></div>
+            <div class="sect"><h3>What it holds</h3>
+              <div class="holds">
+                <div class="hrow"><span class="itemicon dash">▦</span><span>Revenue overview</span><span class="k2">Dashboard · 6 own charts</span></div>
+                <div class="hrow"><span class="itemicon chart">◢</span><span>Top products</span><span class="k2">Library chart</span></div>
+                <div class="hrow"><span class="itemicon chart">◢</span><span>Margin trend</span><span class="k2">Library chart</span></div>
+                <div class="hrow"><span class="itemicon">◇</span><span class="m13">sales.yml</span><span class="k2">Model <span class="bnote">T347</span></span></div>
+                <div class="hrow"><span class="itemicon">◇</span><span class="m13">orders.yml</span><span class="k2">Model <span class="bnote">T347</span></span></div>
+                <div class="hrow"><span class="itemicon">◍</span><span class="m13">emea_replica</span><span class="k2">PostgreSQL · settings only</span></div>
+                <div class="hrow"><span class="itemicon">◍</span><span class="m13">sales_dw</span><span class="k2">Snowflake · settings only</span></div>
+              </div>
+              <p class="help" style="display:flex;gap:6px"><svg class="s"><use href="#i-lock"/></svg>No secrets: you enter them for any data source you create. No bookmarks.</p>
+            </div>
+          </div>
+          <div class="pane-foot"><span class="spacer"></span><span class="btn ghost">Cancel</span><span class="btn primary">Next: Target<svg class="s"><use href="#i-chev"/></svg></span></div>
+        </div></div>
+      </div>
+
+      <div class="state">
+        <h3>J · Refused: the file can't be read</h3>
+        <p>The refusal says which part (here, the place the file breaks off) and why, then "Nothing was imported." The only way on is another file. It's a live alert, and focus moves to its first line (AC-359).</p>
+        <div class="frame"><div class="pane" style="height:400px;border-left:0">
+          <div class="pane-head"><h2>Import a dashboard</h2><span class="badge"><svg class="s"><use href="#i-person"/></svg>into My workspace</span><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step cur"><i>1</i>File</span><span class="step-sep"></span><span class="step"><i>2</i>Target</span><span class="step-sep"></span><span class="step"><i>3</i>Data sources</span><span class="step-sep"></span><span class="step"><i>4</i>Review</span></div>
+          <div class="pane-body"><div class="sect" style="border:0">
+            <span class="status err"><svg class="i"><use href="#s-err"/></svg>Refused · nothing was imported</span>
+            <div class="notebar err" style="display:grid;gap:6px"><span><b class="mono">revenue-overview (1).wechart.json</b> can't be read as a wechart export.</span><span>It ends part-way through, at line 214, column 9.</span></div>
+            <p class="help">Export the dashboard again, or choose another file.</p>
+          </div></div>
+          <div class="pane-foot"><span class="spacer"></span><span class="btn ghost">Cancel</span><span class="btn primary">Choose another file</span></div>
+        </div></div>
+      </div>
+
+      <div class="state">
+        <h3>K · Refused: parts this wechart doesn't have</h3>
+        <p>Every part is checked before anything is written. Each refused part is a list item that names the item, the kind, chart type or driver, and why. The chart types are <code>render-spec.ts</code>'s, and the drivers AC-160's (Databricks was dropped).</p>
+        <div class="frame"><div class="pane" style="height:520px;border-left:0">
+          <div class="pane-head"><h2>Import a dashboard</h2><span class="badge"><svg class="s"><use href="#i-person"/></svg>into My workspace</span><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step cur"><i>1</i>File</span><span class="step-sep"></span><span class="step"><i>2</i>Target</span><span class="step-sep"></span><span class="step"><i>3</i>Data sources</span><span class="step-sep"></span><span class="step"><i>4</i>Review</span></div>
+          <div class="pane-body"><div class="sect" style="border:0">
+            <span class="status err"><svg class="i"><use href="#s-err"/></svg>Refused · 3 parts this wechart doesn't have</span>
+            <div class="xs sec"><span class="mono">q3-board-pack.wechart.json</span> · nothing was imported</div>
+            <div class="notebar err" style="display:grid;gap:4px"><span><svg class="s" style="vertical-align:-2px"><use href="#s-err"/></svg> <b>Chart "Order flow"</b>, on the dashboard Q3 board pack</span><span>Chart type <span class="mono">sankey</span>: this wechart has no such chart type.</span></div>
+            <div class="notebar err" style="display:grid;gap:4px"><span><svg class="s" style="vertical-align:-2px"><use href="#s-err"/></svg> <b>Data source <span class="mono">lakehouse</span></b></span><span>Driver <span class="mono">databricks</span>: this wechart connects with PostgreSQL, Amazon Redshift, MySQL, Snowflake, BigQuery, SQL Server, Oracle and Dremio.</span></div>
+            <div class="notebar err" style="display:grid;gap:4px"><span><svg class="s" style="vertical-align:-2px"><use href="#s-err"/></svg> <b>Item 12, "Late orders"</b></span><span>Kind <span class="mono">alert</span>: this wechart imports dashboards, charts, models and data sources.</span></div>
+          </div></div>
+          <div class="pane-foot"><span class="spacer"></span><span class="btn ghost">Cancel</span><span class="btn primary">Choose another file</span></div>
+        </div></div>
+      </div>
+
+      <div class="state">
+        <h3>L · Step 2: the target folder</h3>
+        <p>Design 04's picker, as New in My workspace uses it: a tree of full paths, listing only folders where you have read-write access, with a filter once there are more than about ten (design 04, state B). Everything in the file gets this one target, a model from Sales included. After import, each draft's target can be changed like any draft's (design 04).</p>
+        <div class="frame"><div class="pane" style="height:460px;border-left:0">
+          <div class="pane-head"><h2>Import a dashboard</h2><span class="badge"><svg class="s"><use href="#i-person"/></svg>into My workspace</span><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step done"><i>✓</i>File</span><span class="step-sep"></span><span class="step cur"><i>2</i>Target</span><span class="step-sep"></span><span class="step"><i>3</i>Data sources</span><span class="step-sep"></span><span class="step"><i>4</i>Review</span></div>
+          <div class="pane-body"><div class="sect" style="border:0">
+            <div class="field"><label>Target folder <span class="req">· required</span></label>
+              <div class="ptree"><div class="prow"><svg class="s"><use href="#i-folder"/></svg>Sales</div><div class="prow on ring" style="padding-left:28px"><svg class="s"><use href="#i-folder"/></svg>Sales / EMEA</div><div class="prow"><svg class="s"><use href="#i-folder"/></svg>Finance</div></div>
+              <p class="help">Only folders where you have read-write access.</p></div>
+            <div class="notebar"><svg class="i"><use href="#i-info"/></svg><span>Everything in the file lands in My workspace as new drafts with this target. Nothing in <b>Sales / EMEA</b> changes until you propose a draft and the proposal is approved. You may approve your own.</span></div>
+          </div></div>
+          <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="spacer"></span><span class="btn ghost">Cancel</span><span class="btn primary">Next: Data sources<svg class="s"><use href="#i-chev"/></svg></span></div>
+        </div></div>
+      </div>
+
+      <div class="state">
+        <h3>M · Step 3: a data source mapped</h3>
+        <p>Map lists the data sources a model in Sales / EMEA can bind to: its own, then Sales, then Shared (AC-273), of those you may use. A same-named one is marked and listed first in its folder, but isn't chosen for you. Mapped to a different name, the imported model's <code>data_source:</code> is rewritten to it, and the line says so.</p>
+        <p><span class="prop">Proposal — needs your approval</span> Warn when the one chosen has another driver: a model written for Snowflake's SQL may not run on PostgreSQL. It warns and doesn't block.</p>
+        <div class="frame"><div class="pane" style="height:620px;border-left:0">
+          <div class="pane-head"><h2>Import a dashboard</h2><span class="badge"><svg class="s"><use href="#i-person"/></svg>into My workspace</span><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step done"><i>✓</i>File</span><span class="step-sep"></span><span class="step done"><i>✓</i>Target</span><span class="step-sep"></span><span class="step cur"><i>3</i>Data sources</span><span class="step-sep"></span><span class="step"><i>4</i>Review</span></div>
+          <div class="pane-body">
+            <div class="sect">
+              <div class="dsh"><span class="itemicon">◍</span><span class="m13">sales_dw</span><span class="badge line sm">Snowflake</span><span class="status run"><svg class="s"><use href="#i-link"/></svg>Mapped</span></div>
+              <div class="seg full"><span class="on"><svg class="s"><use href="#i-link"/></svg>Map to an existing one</span><span><svg class="s"><use href="#i-plus"/></svg>Create it</span></div>
+              <div class="field"><label>Data sources a model in Sales / EMEA can bind to</label>
+                <div class="ropts">
+                  <div class="rgh">Sales / EMEA</div><div class="ropt xs muted" style="font-size:12px">None here</div>
+                  <div class="rgh">Sales</div><div class="ropt on ring"><span class="radio on"></span><span class="mono" style="font-size:13px">sales_dw</span><span class="badge accent sm">Same name</span><span class="xs sec">Snowflake</span></div>
+                  <div class="rgh">Shared</div><div class="ropt"><span class="radio"></span><span class="mono" style="font-size:13px">default</span><span class="xs sec">PostgreSQL</span></div>
+                </div>
+              </div>
+              <div class="conseq"><svg class="s"><use href="#i-link"/></svg><span><span class="mono">orders.yml</span>'s cubes keep naming <span class="mono">sales_dw</span>.</span></div>
+              <div class="notebar warn" style="border-style:dashed;border-color:var(--note)"><svg class="s"><use href="#s-warn"/></svg><span><b>If <span class="mono">default</span> were chosen:</b> <span class="mono">orders.yml</span> was written for Snowflake, and <span class="mono">default</span> is PostgreSQL. Its SQL may not run there. Its cubes would name <span class="mono">default</span>. <span class="prop" style="margin:0 0 0 4px">Proposal</span></span></div>
+            </div>
+            <div class="sect" style="border:0"><div class="dsh"><span class="itemicon">◍</span><span class="m13">emea_replica</span><span class="badge line sm">PostgreSQL</span><span class="status idle"><svg class="s"><use href="#s-pend"/></svg>To decide</span></div></div>
+          </div>
+          <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="why">Decide emea_replica</span><span class="btn primary dis">Next: Review<svg class="s"><use href="#i-chev"/></svg></span></div>
+        </div></div>
+      </div>
+
+      <div class="state">
+        <h3>N · Step 3: created from the file, and its test failed</h3>
+        <p><b>Create it</b> is chosen. The name is checked against the target, and the help line says what the imported models will name. The settings come from the file and are read-only here (proposal Q). The secret is typed here: a field for each secret the driver's sign-in method takes, as <code>drivers.ts</code> marks them, encrypted in the browser (AC-325). Then comes <b>Test to create</b>, with design 01's checks and no override (AC-158). A failure names the check and gives Cube's text. <b>Change sign-in</b> moves focus to the password; <b>Map to an existing one instead</b> switches the row to Map.</p>
+        <div class="frame"><div class="pane" style="height:760px;border-left:0">
+          <div class="pane-head"><h2>Import a dashboard</h2><span class="badge"><svg class="s"><use href="#i-person"/></svg>into My workspace</span><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step done"><i>✓</i>File</span><span class="step-sep"></span><span class="step done"><i>✓</i>Target</span><span class="step-sep"></span><span class="step cur"><i>3</i>Data sources</span><span class="step-sep"></span><span class="step"><i>4</i>Review</span></div>
+          <div class="pane-body">
+            <div class="sect" style="padding:10px 16px;gap:4px"><div class="dsh"><span class="itemicon">◍</span><span class="m13">sales_dw</span><span class="badge line sm">Snowflake</span><span class="status run"><svg class="s"><use href="#i-link"/></svg>Mapped</span><span class="spacer"></span><span class="btn link">Change</span></div></div>
+            <div class="sect">
+              <div class="dsh"><span class="itemicon">◍</span><span class="m13">emea_replica</span><span class="badge line sm">PostgreSQL</span><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed at Connect <span class="t">· 14:17:02</span></span></div>
+              <div class="seg full"><span><svg class="s"><use href="#i-link"/></svg>Map to an existing one</span><span class="on"><svg class="s"><use href="#i-plus"/></svg>Create it</span></div>
+              <div class="field"><label>Name <span class="req">· required · Sales / EMEA has none by this name</span></label><div class="input mono">emea_replica</div><span class="help"><span class="mono">sales.yml</span>'s cubes name it as <span class="mono">data_source: emea_replica</span>.</span></div>
+              <h3>From the file · settings only</h3>
+              <dl class="kv"><dt>Where</dt><dd class="mono">pg-replica-1.sales.internal:5432 / sales</dd><dt>Signs in with</dt><dd>Password, as <span class="mono">cube_reader</span></dd><dt>TLS</dt><dd>On · verifies the server's certificate</dd><dt>Description</dt><dd>Read replica for EMEA order cubes.</dd></dl>
+              <div class="field"><label><svg class="s"><use href="#i-lock"/></svg>Password <span class="req">· required · not in the file</span></label><div class="input"><svg class="s muted"><use href="#i-lock"/></svg><span style="letter-spacing:2px">•••••••••••</span></div><span class="help">Encrypted in your browser before it's sent, and never shown again.</span></div>
+              <h3>Test to create</h3>
+              <div class="checks">
+                <div class="chk"><svg class="i"><use href="#s-ok"/></svg><span>Open the secrets</span><span class="d">1 ms</span></div>
+                <div class="chk"><svg class="i"><use href="#s-ok"/></svg><span>Build the connection's configuration</span><span class="d">0 ms</span></div>
+                <div class="chk" style="border-bottom:0"><svg class="i"><use href="#s-err"/></svg><span class="strong">Connect</span><span class="d">4 ms</span>
+                  <div class="chk-detail"><div class="code">Unable to connect to the database (postgres#xcube_connection_test): password authentication failed for user "cube_reader"</div><span style="display:flex;gap:14px;flex-wrap:wrap"><span class="btn link">Change sign-in</span><span class="btn link">Map to an existing one instead</span></span></div>
+                </div>
+                <div class="chk pending" style="border-top:1px solid var(--border-subtle)"><svg class="i" style="color:var(--text-secondary)"><use href="#s-idle"/></svg><span>Read the catalog</span><span class="d">Skipped</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="why">Created only after a passing test</span><span class="btn primary">Test again</span></div>
+        </div></div>
+        <p>The failure text is design 03's.</p>
+      </div>
+
+      <div class="state">
+        <h3>O · Step 3: created, and its test passed</h3>
+        <p>After <b>Change sign-in</b> and the right password, every check passes. The pass is of exactly these settings; changing anything clears it, as in design 01 (state L). The data source is saved, as a draft, only at Import. Next: Review is now the primary.</p>
+        <div class="frame"><div class="pane" style="height:620px;border-left:0">
+          <div class="pane-head"><h2>Import a dashboard</h2><span class="badge"><svg class="s"><use href="#i-person"/></svg>into My workspace</span><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step done"><i>✓</i>File</span><span class="step-sep"></span><span class="step done"><i>✓</i>Target</span><span class="step-sep"></span><span class="step cur"><i>3</i>Data sources</span><span class="step-sep"></span><span class="step"><i>4</i>Review</span></div>
+          <div class="pane-body">
+            <div class="sect" style="padding:10px 16px;gap:4px"><div class="dsh"><span class="itemicon">◍</span><span class="m13">sales_dw</span><span class="badge line sm">Snowflake</span><span class="status run"><svg class="s"><use href="#i-link"/></svg>Mapped</span><span class="spacer"></span><span class="btn link">Change</span></div></div>
+            <div class="sect">
+              <div class="dsh"><span class="itemicon">◍</span><span class="m13">emea_replica</span><span class="badge line sm">PostgreSQL</span><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Passed <span class="t">· 14:21:07</span></span></div>
+              <div class="seg full"><span><svg class="s"><use href="#i-link"/></svg>Map to an existing one</span><span class="on"><svg class="s"><use href="#i-plus"/></svg>Create it</span></div>
+              <dl class="kv"><dt>Name</dt><dd class="mono">emea_replica</dd><dt>Where</dt><dd class="mono">pg-replica-1.sales.internal:5432 / sales</dd><dt>Signs in with</dt><dd>Password, as <span class="mono">cube_reader</span></dd><dt>TLS</dt><dd>On · verifies the server's certificate</dd></dl>
+              <div class="field"><label><svg class="s"><use href="#i-lock"/></svg>Password <span class="req">· not in the file</span></label><div class="input"><svg class="s muted"><use href="#i-lock"/></svg><span style="letter-spacing:2px">••••••••••</span></div></div>
+              <span class="status ok"><svg class="i"><use href="#s-ok"/></svg>Every check passed <span class="t">· of exactly these settings · 214 ms</span></span>
+              <div class="checks">
+                <div class="chk"><svg class="i"><use href="#s-ok"/></svg><span>Open the secrets</span><span class="d">1 ms</span></div>
+                <div class="chk"><svg class="i"><use href="#s-ok"/></svg><span>Build the connection's configuration</span><span class="d">0 ms</span></div>
+                <div class="chk"><svg class="i"><use href="#s-ok"/></svg><span>Connect</span><span class="d">39 ms</span></div>
+                <div class="chk"><svg class="i"><use href="#s-ok"/></svg><span>Read the catalog</span><span class="d">174 ms</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="spacer"></span><span class="btn">Test again</span><span class="btn primary">Next: Review<svg class="s"><use href="#i-chev"/></svg></span></div>
+        </div></div>
+        <p>Durations are illustrative.</p>
+      </div>
+
+      <div class="state">
+        <h3>P · Step 3: the target already has a data source by that name</h3>
+        <p>Suppose this wechart's Sales / EMEA had its own <code>emea_replica</code>. A new data source can't take a name its target already holds (AC-282), which is your "Map or create": no Replace. So the row says so and offers two ways on:</p>
+        <p>• <b>Use the existing one instead</b> switches the row to Map, with that data source chosen (state M).<br />• <b>Create under another name</b> moves focus to the name field.</p>
+        <p>It can't be created under the same name. Step 3 is where each data source is resolved, so Next waits until this row is mapped or renamed. This is the one case that blocks. Review's warnings never do.</p>
+        <div class="frame"><div class="pane" style="height:500px;border-left:0">
+          <div class="pane-head"><h2>Import a dashboard</h2><span class="badge"><svg class="s"><use href="#i-person"/></svg>into My workspace</span><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step done"><i>✓</i>File</span><span class="step-sep"></span><span class="step done"><i>✓</i>Target</span><span class="step-sep"></span><span class="step cur"><i>3</i>Data sources</span><span class="step-sep"></span><span class="step"><i>4</i>Review</span></div>
+          <div class="pane-body"><div class="sect" style="border:0">
+            <div class="dsh"><span class="itemicon">◍</span><span class="m13">emea_replica</span><span class="badge line sm">PostgreSQL</span><span class="status err"><svg class="s"><use href="#s-err"/></svg>Name taken</span></div>
+            <div class="seg full"><span><svg class="s"><use href="#i-link"/></svg>Map to an existing one</span><span class="on"><svg class="s"><use href="#i-plus"/></svg>Create it</span></div>
+            <div class="notebar err" style="display:grid;gap:8px"><span style="display:flex;gap:6px"><svg class="s"><use href="#s-err"/></svg><span><b>Sales / EMEA already has a data source named <span class="mono">emea_replica</span>.</b> A new one can't take that name there (AC-282).</span></span><span style="display:flex;gap:8px;flex-wrap:wrap;margin-left:20px"><span class="btn sm ring"><svg class="s"><use href="#i-link"/></svg>Use the existing one instead</span><span class="btn sm"><svg class="s"><use href="#i-pencil"/></svg>Create under another name</span></span></div>
+            <div class="field"><label>Name <span class="req">· required</span></label><div class="input mono bad">emea_replica</div><span class="errt"><svg class="s"><use href="#s-err"/></svg>Taken in Sales / EMEA. Choose another name, or use the existing one.</span></div>
+            <dl class="kv"><dt>Where</dt><dd class="mono">pg-replica-1.sales.internal:5432 / sales</dd><dt>Signs in with</dt><dd>Password, as <span class="mono">cube_reader</span></dd></dl>
+            <div class="field"><label><svg class="s"><use href="#i-lock"/></svg>Password <span class="req">· required · not in the file</span></label><div class="input"><svg class="s muted"><use href="#i-lock"/></svg></div></div>
+          </div></div>
+          <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="why">Map it, or give it another name, to go on</span><span class="btn primary dis">Test connection</span></div>
+        </div></div>
+      </div>
+
+      <div class="state">
+        <h3>Q · Changing a setting from the file before the test</h3>
+        <p><span class="prop">Proposal — needs your approval</span> R43 says a created data source is made "from the exported settings". Here, <b>Change a setting</b> turns the read-only list into design 01's Connection fields, so a host that differs in this wechart can be fixed before the test. A changed field is tinted, with the file's value under it (design 03). The test then covers what you changed. Without this proposal, the settings stay read-only, and a different host means Map, or changing the data source after import (design 03).</p>
+        <div class="frame"><div class="pane" style="height:380px;border-left:0">
+          <div class="pane-head"><h2>Import a dashboard</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="pane-body"><div class="sect" style="border:0">
+            <h3>From the file · changed here</h3>
+            <div class="row2">
+              <div class="field"><label>Host <span class="req">· required</span></label><div class="input mono changed focus">pg-replica.emea.prod.internal</div><span class="was">File: <s class="mono">pg-replica-1.sales.internal</s></span></div>
+              <div class="field"><label>Port</label><div class="input mono">5432</div></div>
+            </div>
+            <div class="field"><label>Database <span class="req">· required</span></label><div class="input mono">sales</div></div>
+            <div class="field"><label><svg class="s"><use href="#i-lock"/></svg>Password <span class="req">· not in the file</span></label><div class="input"><svg class="s muted"><use href="#i-lock"/></svg><span style="letter-spacing:2px">••••••••••</span></div></div>
+          </div></div>
+          <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="why">1 setting changed from the file</span><span class="btn primary">Test connection</span></div>
+        </div></div>
+      </div>
+
+      <div class="state">
+        <h3>R · Step 4: Review, with nothing to warn about</h3>
+        <p>When nothing in the target or in your workspace shares a name with what's imported, Review says so in one line, with the icon and the label, and lists what lands with no warnings under it. Here the same file goes to Finance, where nothing clashes.</p>
+        <div class="frame"><div class="pane" style="height:500px;border-left:0">
+          <div class="pane-head"><h2>Import a dashboard</h2><span class="badge"><svg class="s"><use href="#i-person"/></svg>into My workspace</span><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step done"><i>✓</i>File</span><span class="step-sep"></span><span class="step done"><i>✓</i>Target</span><span class="step-sep"></span><span class="step done"><i>✓</i>Data sources</span><span class="step-sep"></span><span class="step cur"><i>4</i>Review</span></div>
+          <div class="pane-body">
+            <div class="sect" style="padding-bottom:4px;border:0"><div class="notebar"><svg class="i"><use href="#i-person"/></svg><span>Everything lands in <b>My workspace</b> as new drafts, with the target <b>Finance</b>.</span></div></div>
+            <div class="sect" style="gap:0;border:0;padding-top:8px">
+              <h3 style="margin:0 0 6px">What lands, and what it may affect<span class="spacer"></span><span class="status ok" style="text-transform:none;letter-spacing:0"><svg class="s"><use href="#s-ok"/></svg>No warnings</span></h3>
+              <div class="irow"><span class="itemicon dash">▦</span><div><b>Revenue overview</b><span class="meta">Dashboard and 6 own charts</span></div><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>New draft</span></div>
+              <div class="irow"><span class="itemicon chart">◢</span><div><b>Top products, Margin trend</b><span class="meta">Library charts</span></div><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>New drafts</span></div>
+              <div class="irow"><span class="itemicon">◇</span><div><b class="m13">sales.yml, orders.yml</b><span class="meta">Models <span class="bnote">T347</span></span></div><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>New drafts</span></div>
+              <div class="irow"><span class="itemicon">◍</span><div><b class="m13">emea_replica, sales_dw</b><span class="meta">Data sources, created · tests passed</span></div><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>New drafts</span></div>
+            </div>
+          </div>
+          <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="why">No warnings</span><span class="btn primary">Import to My workspace</span></div>
+        </div></div>
+      </div>
+
+      <div class="state wide">
+        <h3>S · The result: the items in My workspace, and the next step</h3>
+        <p>The pane closes. The new drafts are in My workspace with the target Sales / EMEA, beside what was already there: your earlier draft Top products stays, next to the imported one. The dashboard's row has focus and a brief accent rule. Nothing in Sales / EMEA has changed. The toast offers <b>Propose to Sales / EMEA…</b> for the dashboard (state T), and each other draft is proposed from its own row, as design 04 says. <span class="prop">Proposal — needs your approval</span> The origin line reads "imported from <i>file</i>" rather than rule 73's "new", so you can tell where an item came from (P3). <span class="prop">Proposal — needs your approval</span> The import itself is recorded in the audit trail, as the export is (P2).</p>
+        <div class="frame" style="display:grid;grid-template-columns:240px 1fr;height:520px">
+          <div class="tree"><div class="tree-head" style="font-size:14px">Folders</div><div style="padding-top:6px"><div class="trow sel"><span class="ticon ws"><svg class="s"><use href="#i-person"/></svg></span>My workspace<span class="c">10</span></div><div class="trow" style="padding-left:26px"><span class="ticon">▣</span>Drafts<span class="c">1</span></div><div class="tdiv"></div><div class="trow"><span class="ticon">▣</span>Shared<span class="c">17</span></div><div class="trow" style="padding-left:26px"><span class="ticon">▣</span>Sales<span class="c">11</span></div><div class="trow" style="padding-left:40px"><span class="ticon">▣</span>EMEA<span class="c">6</span></div></div></div>
+          <div style="min-width:0;display:flex;flex-direction:column;position:relative">
+            <div class="band"><svg class="s"><use href="#i-person"/></svg>My workspace · only you can see this</div>
+            <div style="padding:12px 24px;display:grid;gap:10px">
+              <div class="head"><h1>My workspace</h1><span class="spacer"></span><span class="btn primary">＋ New<svg class="s"><use href="#i-chevd"/></svg></span></div>
+              <div class="card"><table class="grid-table">
+                <thead><tr><th style="width:62%">Name</th><th>Type</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr class="new hl"><td><div class="nm"><span class="itemicon dash">▦</span><div><div class="strong">Revenue overview</div><div class="origin"><svg class="s"><use href="#i-arrow"/></svg>Sales / EMEA · imported from revenue-overview.wechart.json</div></div></div></td><td>Dashboard</td><td><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>Draft</span></td></tr>
+                  <tr class="new"><td><div class="nm"><span class="itemicon chart">◢</span><div><div class="strong">Top products</div><div class="origin"><svg class="s"><use href="#i-arrow"/></svg>Sales / EMEA · imported from revenue-overview.wechart.json</div></div></div></td><td>Bar, horizontal</td><td><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>Draft</span></td></tr>
+                  <tr><td><div class="nm"><span class="itemicon chart">◢</span><div><div class="strong">Top products</div><div class="origin"><svg class="s"><use href="#i-arrow"/></svg>Sales / EMEA · new · your earlier draft</div></div></div></td><td>Bar, horizontal</td><td><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>Draft</span></td></tr>
+                  <tr class="new"><td><div class="nm"><span class="itemicon chart">◢</span><div><div class="strong">Margin trend</div><div class="origin"><svg class="s"><use href="#i-arrow"/></svg>Sales / EMEA · imported from revenue-overview.wechart.json</div></div></div></td><td>Line</td><td><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>Draft</span></td></tr>
+                  <tr class="new"><td><div class="nm"><span class="itemicon">◍</span><div><div class="strong mono" style="font-size:13px">emea_replica</div><div class="origin"><svg class="s"><use href="#i-arrow"/></svg>Sales / EMEA · imported from revenue-overview.wechart.json</div></div></div></td><td>Data source</td><td><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>Draft</span></td></tr>
+                  <tr><td class="one"><div class="nm"><span class="itemicon">◇</span><span class="xs sec">sales.yml and orders.yml, once workspace models are built</span><span class="bnote">T347</span></div></td><td class="one"></td><td class="one"></td></tr>
+                </tbody>
+              </table></div>
+            </div>
+            <div class="toast" style="left:24px;bottom:16px;right:24px"><svg class="s" style="color:var(--ok-icon);margin-top:3px"><use href="#s-ok"/></svg><span style="flex:1">Imported to My workspace as new drafts: 1 dashboard, 8 charts, 2 models and 1 data source. Nothing in Sales / EMEA changed.</span><span class="btn link">Propose to Sales / EMEA…</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>T · Then the usual flow: Propose</h3>
+        <p>Proposing an imported draft uses design 05's Propose dialog and its own checks, which run again now, whatever the import said. Here the dashboard brings <code>sales.yml</code> and <code>orders.yml</code> with it (AC-285, T350). The dialog refuses, as Review warned, because <code>orders.yml</code> defines cube <code>customers</code>, which Sales / EMEA already has (design 05, state F). It also says the dashboard replaces version 4, which it wasn't copied from (rule 75). Renaming the cube in the draft clears the refusal.</p>
+        <div class="frame" style="height:420px">
+          <div class="scrim"></div>
+          <div class="dialog" style="left:16px;right:16px;top:16px">
+            <h2>Propose to Sales / EMEA</h2>
+            <p style="color:var(--text-primary)"><span class="itemicon dash" style="vertical-align:-6px">▦</span> Dashboard · <b>Revenue overview</b> — replaces version 4</p>
+            <div class="notebar warn"><svg class="s"><use href="#s-warn"/></svg><span>Replaces "Revenue overview" (version 4), which this item wasn't copied from. It was imported from a file.</span></div>
+            <div class="notebar err"><svg class="s"><use href="#s-err"/></svg><span>Can't propose: cube <span class="mono">customers</span> is already defined in <span class="mono">customers.yml</span> in Sales / EMEA. Rename the cube in your <span class="mono">orders.yml</span>, or change <span class="mono">customers.yml</span> instead.</span></div>
+            <span class="bnote" style="justify-self:start">Build: the models go with it by T350</span>
+            <div class="acts"><span class="btn">Close</span><span class="btn primary dis">Propose</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>U · Sign-in off: My workspace too, then self-approve</h3>
+        <p>Sign-in off works the same way (R19, AC-254, design 09). The single user has My workspace, so the import lands there as new drafts, with the same warnings. Proposing then goes to Reviews, where the user approves their own proposal: "Approve my own proposal" (design 05, state K). The only difference is the target picker, which lists every folder, since the single user may write everywhere. The Single-user mode chip stays in the top bar.</p>
+        <div class="frame">
+          <div class="topbar" style="height:44px"><div class="brand"><span class="brand-mark">we</span></div><span class="spacer"></span><span class="reviews"><svg class="i"><use href="#i-inbox"/></svg>Reviews</span><span class="chipwarn"><svg class="s"><use href="#i-unlock"/></svg>Single-user mode</span></div>
+          <div class="pane" style="height:500px;border-left:0">
+            <div class="pane-head"><h2>Import a dashboard</h2><span class="badge"><svg class="s"><use href="#i-person"/></svg>into My workspace</span><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+            <div class="steps"><span class="step done"><i>✓</i>File</span><span class="step-sep"></span><span class="step done"><i>✓</i>Target</span><span class="step-sep"></span><span class="step done"><i>✓</i>Data sources</span><span class="step-sep"></span><span class="step cur"><i>4</i>Review</span></div>
+            <div class="pane-body">
+              <div class="sect" style="padding-bottom:4px;border:0"><div class="notebar warn"><svg class="s"><use href="#i-unlock"/></svg><span>Sign-in is off. Everything still lands in <b>My workspace</b> as new drafts, with the target <b>Sales / EMEA</b>. When you propose a draft, you approve it yourself in Reviews.</span></div></div>
+              <div class="sect" style="gap:0;border:0;padding-top:8px">
+                <div class="irow"><span class="itemicon dash">▦</span><div><b>Revenue overview</b><span class="meta">Dashboard and 6 own charts</span></div><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>New draft</span>
+                  <div class="warnb"><svg class="s"><use href="#s-warn"/></svg><span><b>Sales / EMEA has a dashboard by this name</b>, version 4. Proposed, this draft replaces it once you approve it.</span></div></div>
+                <div class="irow"><span class="itemicon chart">◢</span><div><b>Margin trend</b><span class="meta">Library chart</span></div><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>New draft</span></div>
+                <div class="irow"><span class="itemicon">◍</span><div><b class="m13">emea_replica</b><span class="meta">Data source, created · test passed 14:21</span></div><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>New draft</span></div>
+                <div class="irow"><span class="itemicon">⋯</span><div class="xs sec" style="padding-top:3px">and 4 more, with screen 2's warnings</div><span></span></div>
+              </div>
+            </div>
+            <div class="pane-foot"><span class="btn"><svg class="s"><use href="#i-back"/></svg>Back</span><span class="spacer"></span><span class="btn ghost">Cancel</span><span class="btn primary">Import to My workspace</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>V · Models, until T347 lands</h3>
+        <p><span class="bnote" style="white-space:normal;height:auto;padding:1px 6px">Build: switched on by T347; bundled with the dashboard's proposal by T350</span> Until then, the file's models are listed but not imported, and Review has no warnings about them. The note says what that means for the dashboard, with no task numbers shown to users. Export offers models already, since reading a published model needs neither task.</p>
+        <div class="frame"><div class="pane" style="height:520px;border-left:0">
+          <div class="pane-head"><h2>Import a dashboard</h2><span class="badge"><svg class="s"><use href="#i-person"/></svg>into My workspace</span><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step cur"><i>1</i>File</span><span class="step-sep"></span><span class="step"><i>2</i>Target</span><span class="step-sep"></span><span class="step"><i>3</i>Data sources</span><span class="step-sep"></span><span class="step"><i>4</i>Review</span></div>
+          <div class="pane-body">
+            <div class="sect"><h3>What it holds</h3>
+              <div class="holds">
+                <div class="hrow"><span class="itemicon dash">▦</span><span>Revenue overview</span><span class="k2">Dashboard · 6 own charts</span></div>
+                <div class="hrow"><span class="itemicon chart">◢</span><span>Top products, Margin trend</span><span class="k2">Library charts</span></div>
+                <div class="hrow" style="color:var(--text-secondary)"><span class="itemicon">◇</span><span class="m13" style="font-weight:400">sales.yml</span><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Not imported yet</span></div>
+                <div class="hrow" style="color:var(--text-secondary)"><span class="itemicon">◇</span><span class="m13" style="font-weight:400">orders.yml</span><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Not imported yet</span></div>
+                <div class="hrow"><span class="itemicon">◍</span><span>emea_replica, sales_dw</span><span class="k2">Data sources · settings only</span></div>
+              </div>
+              <div class="notebar"><svg class="i"><use href="#i-info"/></svg><span>This wechart doesn't take models from a file yet, so <span class="mono">sales.yml</span> and <span class="mono">orders.yml</span> stay out. The dashboard's charts will look up their cubes along the target folder's path, as any workspace item's do.</span></div>
+            </div>
+          </div>
+          <div class="pane-foot"><span class="spacer"></span><span class="btn ghost">Cancel</span><span class="btn primary">Next: Target<svg class="s"><use href="#i-chev"/></svg></span></div>
+        </div></div>
+      </div>
+
+      <div class="state">
+        <h3>W · A reader: no workspace, so no Import</h3>
+        <p>Rae Reader has no My workspace and no New (AC-277), so Import appears nowhere, while Export stays in the row's ⋯ (state A). If a reader opens the import page's address, the page explains, names no folder, and offers Explore. The API refuses an import from anyone without a workspace, whatever the page shows (AC-356).</p>
+        <div class="frame" style="display:grid;grid-template-columns:150px 1fr;height:210px">
+          <div class="tree"><div class="tree-head" style="font-size:14px">Folders</div><div style="padding-top:6px"><div class="trow"><span class="ticon">▣</span>Shared</div><div class="trow sel" style="padding-left:20px"><span class="ticon">▣</span>Sales</div></div></div>
+          <div style="padding:12px 14px;display:grid;gap:10px;align-content:start">
+            <div class="head"><h1 style="font-size:16px;line-height:22px">Sales</h1><span class="badge"><svg class="s"><use href="#i-eye"/></svg>View only</span></div>
+            <div class="card"><table class="grid-table"><tbody><tr><td class="one"><div class="nm"><span class="itemicon dash">▦</span>Pipeline by stage</div></td><td class="one" style="width:30px"><span class="iconbtn sm"><svg class="s"><use href="#i-dots"/></svg></span></td></tr></tbody></table></div>
+            <p class="help">No New, no My workspace: nothing to import into.</p>
+          </div>
+        </div>
+        <div class="frame" style="background:var(--bg-surface)">
+          <div class="empty"><svg class="i" style="width:32px;height:32px;color:var(--text-secondary)"><use href="#i-upload"/></svg><h2>Importing needs My workspace</h2><p>An import lands in My workspace, and view-only access comes without one. Ask a read-write member of the folder it's meant for to import it.</p><span class="btn">Open Explore</span></div>
+        </div>
+      </div>
+
+      <div class="state">
+        <h3>X · Esc, Cancel or × part-way</h3>
+        <p>Once a file is chosen, leaving asks first, with focus on the safe answer (rule 85), as design 01's wizard does. Before a file is chosen, the pane just closes. Focus goes back to New.</p>
+        <div class="frame"><div class="pane" style="height:330px;border-left:0">
+          <div class="pane-head"><h2>Import a dashboard</h2><span class="spacer"></span><span class="iconbtn"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="steps"><span class="step done"><i>✓</i>File</span><span class="step-sep"></span><span class="step done"><i>✓</i>Target</span><span class="step-sep"></span><span class="step cur"><i>3</i>Data sources</span><span class="step-sep"></span><span class="step"><i>4</i>Review</span></div>
+          <div class="pane-body"></div>
+          <div class="scrim" style="top:44px"></div>
+          <div class="dialog" style="left:24px;right:24px;top:110px">
+            <h2>Discard this import?</h2>
+            <p>Your choices and the password you typed are lost. Nothing has been imported.</p>
+            <div class="acts"><span class="btn ring">Keep going</span><span class="btn danger">Discard</span></div>
+          </div>
+        </div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <section class="notes">
+    <h2>Keyboard and accessibility</h2>
+    <p>Rule 85 and principle 5, applied to both panes. Every control is a native button, checkbox, radio button or text field, so each takes the same focus ring. Nothing is reachable only by dragging or hovering: the drop zone has its button, and "used by" lists show on focus as well as on hover.</p>
+    <div class="decision" style="margin-top:0">
+      <h3>Export pane</h3>
+      <table>
+        <thead><tr><th style="width:180px">Moment</th><th style="width:240px">Keys</th><th>What happens</th></tr></thead>
+        <tbody>
+          <tr><td>Opening</td><td><kbd class="k">Enter</kbd> or <kbd class="k">Space</kbd> on Export…</td><td>The pane opens, and focus moves to its heading. <kbd class="k">F6</kbd> includes the pane in the pane cycle.</td></tr>
+          <tr><td>Focus order</td><td><kbd class="k">Tab</kbd></td><td>Heading → × → All → None → the tree → each Details → File name → Cancel → Export file.</td></tr>
+          <tr><td>The tree</td><td><kbd class="k">↑</kbd> <kbd class="k">↓</kbd> between rows · <kbd class="k">Space</kbd> ticks · <kbd class="k">←</kbd> <kbd class="k">→</kbd> fold a group</td><td>The APG tree pattern with checkboxes. A group's box is tri-state and is announced as, for example, "Models its charts use, 2 of 2 included". A locked row is announced "always in the file", and the Not offered line is read after its group.</td></tr>
+          <tr><td>Used by</td><td>Focus on the row</td><td>"Used by 5 charts" is the row's description, with the charts named, so a screen reader hears the list that the tooltip shows.</td></tr>
+          <tr><td>Closing</td><td><kbd class="k">Esc</kbd>, ×, Cancel</td><td>Closes at once, since ticked boxes aren't work to lose. Focus goes back to the ⋯ it came from.</td></tr>
+          <tr><td>Exporting</td><td><kbd class="k">Enter</kbd> on Export file</td><td>Downloads the file. The toast is announced politely, and focus goes back to the ⋯.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="decision">
+      <h3>Import pane</h3>
+      <table>
+        <thead><tr><th style="width:180px">Moment</th><th style="width:240px">Keys</th><th>What happens</th></tr></thead>
+        <tbody>
+          <tr><td>Opening</td><td><kbd class="k">Enter</kbd> on Import a dashboard…</td><td>Focus moves to the heading. The first control is <b>Choose file…</b>, a button.</td></tr>
+          <tr><td>Focus order</td><td><kbd class="k">Tab</kbd></td><td>Heading → × → the step rail (done steps are buttons back) → the step's controls → Back → Cancel → the primary. The foot's reason is the primary's description when it's unavailable.</td></tr>
+          <tr><td>A refusal</td><td>—</td><td>An assertive live alert; focus moves to its first line. Each refused part is a list item.</td></tr>
+          <tr><td>Data sources</td><td><kbd class="k">←</kbd> <kbd class="k">→</kbd> for Map / Create · <kbd class="k">↑</kbd> <kbd class="k">↓</kbd> in Map's list</td><td>Both are radio groups. Map's list is grouped by folder, with each folder as the group label. A name the target already holds is an error on the row, and the row's description. <b>Use the existing one instead</b> switches the row to Map and moves focus to the chosen data source. <b>Create under another name</b> moves focus to the name field.</td></tr>
+          <tr><td>The test</td><td><kbd class="k">Enter</kbd> on Test connection</td><td>A polite live region announces the outcome, as built for design 01. Change sign-in moves focus to the password.</td></tr>
+          <tr><td>Review's warnings</td><td><kbd class="k">Tab</kbd> through the list</td><td>The heading gives the count ("4 warnings"). What lands is a list, and each item is read with its warning ("Revenue overview, dashboard, new draft. Warning: Sales / EMEA has a dashboard by this name…"). Open my draft is a button. Nothing needs an answer, so the primary is reachable at once.</td></tr>
+          <tr><td>Closing</td><td><kbd class="k">Esc</kbd>, ×, Cancel</td><td>Before a file is chosen, the pane closes. After, it asks "Discard this import?" with focus on Keep going (state X). Focus then goes back to New.</td></tr>
+          <tr><td>Importing</td><td><kbd class="k">Enter</kbd> on the primary</td><td>The pane closes, the toast is announced, and focus moves to the imported dashboard's row. No approval is bound to a single key (rule 85).</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="decision">
+      <h3>The focus ring, and every state as an icon and a label</h3>
+      <p>The ring is the token <code>--accent-ring</code>, 3 px outside the control (or inside, on tree rows), with a 1 px <code>accent</code> border on fields. It's drawn on the frames above: the ⋯ in state E, the tree row in state C, the chosen data source in state M, Use the existing one instead in state P, and Keep going in state X. Dark theme uses the dark <code>accent-ring</code>. No state below is shown by colour alone (rule 3).</p>
+      <div class="legend">
+        <div><span class="cbx lock"><svg class="xs"><use href="#i-lock"/></svg></span><span>Always in the file</span><span>export, locked row</span></div>
+        <div><span class="cbx on"></span><span>Included</span><span>export row</span></div>
+        <div><span class="cbx"></span><span>Not included</span><span>export row</span></div>
+        <div><span class="cbx mix"></span><span>"1 of 2"</span><span>export group</span></div>
+        <div><svg class="s"><use href="#i-eyeoff"/></svg><span>Not offered · you can't see it</span><span>export</span></div>
+        <div><span class="badge sm"><svg class="xs"><use href="#i-lock"/></svg>Settings only · no secrets</span><span></span><span>data-source row</span></div>
+        <div><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Read</span><span></span><span>file step</span></div>
+        <div><span class="status err"><svg class="s"><use href="#s-err"/></svg>Refused</span><span></span><span>file step</span></div>
+        <div><span class="status warn"><svg class="s"><use href="#s-warn"/></svg>4 warnings</span><span></span><span>Review, never blocking</span></div>
+        <div><span class="status err"><svg class="s"><use href="#s-err"/></svg>Name taken</span><span></span><span>data source, until mapped or renamed</span></div>
+        <div><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>No warnings</span><span></span><span>Review</span></div>
+        <div><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>New draft</span><span></span><span>Review, what lands</span></div>
+        <div><span class="status run"><svg class="s"><use href="#i-link"/></svg>Not imported</span><span></span><span>Review, a mapped data source</span></div>
+        <div><span class="status idle"><svg class="s"><use href="#s-pend"/></svg>To decide</span><span></span><span>data source</span></div>
+        <div><span class="status run"><svg class="s"><use href="#i-link"/></svg>Mapped</span><span></span><span>data source</span></div>
+        <div><span class="status run"><svg class="s"><use href="#s-run"/></svg>Testing…</span><span></span><span>data source</span></div>
+        <div><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Passed</span><span></span><span>data source</span></div>
+        <div><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed at Connect</span><span></span><span>data source</span></div>
+        <div><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Not imported yet</span><span></span><span>models, before T347</span></div>
+        <div><span class="status idle"><svg class="s"><use href="#s-draft"/></svg>Draft</span><span></span><span>the result (design 04)</span></div>
+        <div><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Exported / Imported</span><span></span><span>toasts</span></div>
+        <div><span class="chipwarn" style="height:22px"><svg class="s"><use href="#i-unlock"/></svg>Single-user mode</span><span></span><span>sign-in off (design 09)</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="notes" style="border-top:1px solid var(--border-subtle)">
+    <h2>Proposals, and questions for you</h2>
+    <p>The proposals add something R43 and AC-354 … AC-359 don't ask for; each is marked where it's drawn. The questions are gaps or conflicts in the requirements. Each is drawn one way so the design is complete, and the way drawn is only a default until you decide.</p>
+    <div class="decision" style="margin-top:0">
+      <h3>Proposals — need your approval</h3>
+      <table>
+        <thead><tr><th style="width:36px">#</th><th>Proposal</th><th>Why</th><th style="width:120px">Where</th></tr></thead>
+        <tbody>
+          <tr><td>P1</td><td>Hovering or focusing a dependency outlines the tiles that use it, with a chip naming it.</td><td>"Used by 5 charts" becomes visible on the canvas, which the docked pane leaves in view.</td><td class="w">pin 12</td></tr>
+          <tr><td>P2</td><td>Record each export and each import in the audit trail (Security › Audit trail, design 08): who, which dashboard, and what went, with data sources as "settings only".</td><td>An export carries hosts, accounts and users out of wechart; AC-294 lists no such event. An import's proposals are recorded already, but the import itself isn't.</td><td class="w">states E, S</td></tr>
+          <tr><td>P3</td><td>An imported item's origin line reads "imported from <i>file</i>", in place of rule 73's "new".</td><td>So you can tell an import from something you made, and trace it to the file it came from.</td><td class="w">state S</td></tr>
+          <tr><td>P4</td><td>Change a setting from the file before the test when creating a data source.</td><td>A host or account often differs between two wechart deployments. Without this, you map, or you change the data source after import (design 03).</td><td class="w">state Q</td></tr>
+          <tr><td>P5</td><td>Warn, without blocking, when a data source is mapped to one with another driver.</td><td>A model's SQL is written for its driver's dialect.</td><td class="w">state M</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="decision">
+      <h3>Questions — your decision</h3>
+      <table>
+        <thead><tr><th style="width:36px">#</th><th>Question</th><th>Drawn as</th><th style="width:120px">Where</th></tr></thead>
+        <tbody>
+          <tr><td>Q4</td><td>R43 says one file. What format and extension?</td><td>JSON, named <code>revenue-overview.wechart.json</code> after the dashboard, editable before export.</td><td class="w">pin 11</td></tr>
+          <tr><td>Q5</td><td>Rule 67 says nothing reveals an item you may not see. Is the "Not offered" count acceptable?</td><td>A count with its reason, with no names or folders, as design 05 counts breaks in folders you can't see (AC-322). The alternative is to say nothing, leaving the importer to find out.</td><td class="w">pin 10</td></tr>
+        </tbody>
+      </table>
+      <p style="margin:10px 0 0">Earlier questions, now settled or moot:</p>
+      <ul style="margin:4px 0 0;padding-left:20px;color:var(--text-secondary);font-size:13px;line-height:18px">
+        <li>Q1 is settled by your "Map or create": there's no Replace for a data source. A name the target already holds is mapped to that one or created under another name (AC-282, state P).</li>
+        <li>Q7 is settled: with sign-in off, the import goes to My workspace too, and the single user self-approves (R19, AC-254, design 09; state U).</li>
+        <li>Q6 is answered: dependencies start ticked.</li>
+        <li>Q2 (Skip for a library chart) and Q3 (Replace with sign-in off, and History) are moot, since an import never replaces or skips.</li>
+      </ul>
+    </div>
+  </section>
+</div>
+</body>
+</html>

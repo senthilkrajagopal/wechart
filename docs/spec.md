@@ -771,7 +771,7 @@ Application shell and search:
 
 Explore:
 
-- [ ] AC-192 WHEN the user opens a folder in Explore, THE SYSTEM SHALL show a breadcrumb of its ancestors, the folder's name as the page heading (with Rename beside it for those who may rename it), the Explore search box, and a single "New" menu. In a shared folder the menu offers Folder to the folder's read-write members; in the user's workspace it offers Dashboard, Chart, Model, Data source and Folder (phase 2: `[P2 input, R17]`).
+- [ ] AC-192 WHEN the user opens a folder in Explore, THE SYSTEM SHALL show a breadcrumb of its ancestors, the folder's name as the page heading (with Rename beside it for those who may rename it), the Explore search box, and a single "New" menu. In a shared folder the menu offers Folder to the folder's read-write members; in the user's workspace it offers Dashboard, Chart, Model, Data source and Folder, and, under a divider, Import a dashboard… (AC-356) (phase 2: `[P2 input, R17]`; amended 2026-09-28, `[R46]`).
       Fails when: the folder's name is not the page heading, a breadcrumb ancestor does not open that folder, creating is offered other than through the New menu, or a shared folder's New menu offers anything but Folder.
 - [x] AC-193 THE SYSTEM SHALL list a folder's contents under the columns Name, Type, Built on, Updated and Owner — subfolders first, then dashboards, then charts — showing a dashboard's description beneath its name and its number of page tabs, a chart's chart type and the cube or view it is built on, and a subfolder's item count, and SHALL offer rename and move through a menu on each row.
       Fails when: a column is missing, a chart's type reads only "Chart", a row shows a rename or move control before its menu is opened, or a move offers the item's own folder or, for a folder, itself or a folder inside it.
@@ -1225,8 +1225,8 @@ Traces to: §P2.4 Architecture, `[AD 1, AD 10, AD 11, AD 12, R27]` (added 2026-0
 Purpose: move a dashboard, with the dependencies its exporter chooses, from one wechart to another, or from one folder to another, without its data sources' secrets.
 Traces to: `[R43]`; design `docs/design/reviews/2026-09-28/designs/13-dashboard-export-import.html`.
 
-- [ ] AC-354 WHEN a user exports a dashboard they may see, THE SYSTEM SHALL offer as dependencies to include the library charts it shows, the models its charts use and the data sources those models bind to, each named with what uses it, of those the user may see; and SHALL give one file holding the dashboard, its own charts and the dependencies chosen (`[R43]`).
-      Fails when: a library chart, model or data source the dashboard uses, and the user may see, is not offered; one the user may not see is offered or in the file; one not chosen is in the file; or one of the dashboard's own charts is missing from it.
+- [ ] AC-354 WHEN a user exports a dashboard they may see, from the ⋯ menu in its header or its row's menu in Explore, THE SYSTEM SHALL offer as dependencies to include, each ticked to start, the library charts it shows, the models its charts use and the data sources those models bind to, each named with what uses it, of those the user may see; SHALL say how many it does not offer because they are in folders the user may not see, naming neither them nor their folders; and SHALL give one ~~file~~ JSON file, named after the dashboard as `<name>.wechart.json` and renamable before export, holding the dashboard, its own charts and the dependencies chosen (`[R43]`; amended 2026-09-28, `[R46]`).
+      Fails when: a library chart, model or data source the dashboard uses, and the user may see, is not offered; one the user may not see is offered, named, or in the file; one not chosen is in the file; one of the dashboard's own charts is missing from it; or the file is not valid JSON.
 - [ ] AC-355 THE SYSTEM SHALL export a data source with its driver, settings and description, and never a secret of it, sealed or not (`[R43]`).
       Fails when: an export file holds a data source's password, key, token, sealed envelope or its revision, or lacks one of its settings.
 - [ ] AC-356 WHEN a user with a workspace imports an export file, THE SYSTEM SHALL put what it holds into their workspace as new drafts, with the target folder they choose among those they may write, as New in My workspace does, to reach it by a proposal like any draft; ~~with sign-in off, into the chosen folder~~ with sign-in off too, into the single user's workspace, whose proposals they approve themselves (AC-254). An import SHALL never replace, rename or remove an item already saved (`[R43]`; amended 2026-09-28, `[R44]`).
@@ -1235,6 +1235,10 @@ Traces to: `[R43]`; design `docs/design/reviews/2026-09-28/designs/13-dashboard-
       Fails when: such an item is imported with no warning naming it; a warning blocks the import; or a warning names an item or folder the user may not see.
 - [ ] AC-358 WHEN an import holds a data source, THE SYSTEM SHALL let the importer map it to an existing data source they may use, or create it ~~from~~ in their workspace from the exported settings with its secrets entered, tested before it is saved, under another name where the target folder already has its name (AC-282); and the imported models SHALL bind to the data source chosen (`[R43]`; amended 2026-09-28, `[R44]`).
       Fails when: an imported data source is saved without its secrets entered or without a passing test, or anywhere but the importer's workspace with sign-in on; or an imported model binds to a data source other than the one chosen for it.
+- [ ] AC-360 WHEN the exporter hovers over or focuses a dependency in the Export pane, THE SYSTEM SHALL outline the dashboard's tiles that use it (`[R46]`, design 13's P1).
+      Fails when: hovering over or focusing a dependency outlines no tile that uses it, or outlines one that doesn't.
+- [ ] AC-361 WHEN an importer maps an imported data source to an existing one with a different driver, THE SYSTEM SHALL warn, without blocking, naming both drivers (`[R46]`, design 13's P5).
+      Fails when: such a mapping shows no warning naming both drivers, or the warning blocks the import.
 - [ ] AC-359 IF an export file can't be read, or holds a kind, chart type or driver this wechart doesn't have, THEN THE SYSTEM SHALL refuse to import it, saying which part and why, and change nothing (`[R43]`).
       Fails when: an unreadable or unsupported file changes anything, or its refusal doesn't name the part.
 
@@ -1378,4 +1382,4 @@ The criteria phase 1 moved to its backlog on 2026-09-25 are back in this spec un
 | The Model workspace and Generate cubes to design 03, 11 and 12, as a priority `[R34]` | AC-344 |
 | Designs 11 and 12's proposals, approved `[R36]` | AC-345 … AC-351 |
 | Both UI reviews' designs, the 2026-09-27 ones first where they differ, as a priority `[R37]` | AC-343, AC-344, AC-352 |
-| Exporting and importing a dashboard, with its chosen dependencies and no secrets `[R43]`; an import always into My workspace, with warnings `[R44]` | AC-354 … AC-359 |
+| Exporting and importing a dashboard, with its chosen dependencies and no secrets `[R43]`; an import always into My workspace, with warnings `[R44]`; design 13's answers `[R46]` | AC-354 … AC-361 |

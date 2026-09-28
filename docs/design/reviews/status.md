@@ -18,6 +18,7 @@ The 2026-09-27 inventory of both reviews, item by item, is the source for "left"
 |---|---|---|---|---|---|---|
 | 11 | Generate cubes | **Complete** | T485, T488–T491 | — | Proposal 5, "in My workspace" (T492, waits on T342 and T347) | 8ef30f1, 2026-09-27 |
 | 12 | Model overview | **Complete** | T479, T484, T486, T493, T495 | — | — | 8ef30f1, 2026-09-27 |
+| 13 | Dashboard export and import (2026-09-28, approved R46) | Approved, not built | — | Export (T511); reading the file (T512); Import into My workspace with warnings (T513); its data sources (T514) | Models in an import (T347, T350) | — |
 | 01 | New data source wizard | **Complete** | T471, T472, T490, T496, T462 (the list's names open their page) | — | Checks ticking one by one (xcube); vendor logos (decision) | 55aa7c1, 2026-09-27 |
 | 02 | Driver forms | Partly built | T471, T497 (a target change asks for the secret again; the link icon) | Ask before replacing Access (T473); My workspace first (T498) | — | — |
 | 03 | Data source settings | **Complete** | T462 (the page: head, line, the five tabs read-only, Edit in my workspace, Discard my copy); T497 (changing it: rename, the Connection form, stored secrets never drawn, Test to save, leaving with changes); T499 (Usage's Model column, Description, the bar asking before leaving) | — | History and version line (proposal chain); Propose (T358); the scheduled-check row (decision) | 26b6b82, 2026-09-27 |

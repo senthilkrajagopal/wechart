@@ -6613,7 +6613,13 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - ~~**Ask the user first:** does a running total count from the start of the data (Cube's `trailing: unbounded`, observed) or from the start of the chart's range (research spike, "Open for the user")?~~ Answered 2026-09-24: from the chart's range (`docs/handoff.md` §2).
   - *2026-09-28, R45:* the calculation replaces its measure in place; rank is across all rows; % of total is of the grand total. With the last time field removed, a period calculation stays chosen but paused: the chart draws the plain measure with a note naming the field it needs.
   - *2026-09-28, waiting on xcube (`to-xcube/2026-09-28-1400-quick-calcs.md`):* where the companions live under the items model (query-scoped, an extending item, or a generated section of the cube's item); a Cube shape for a running total starting at the chart's range, and a rolling window with no date range; which calculations are correct per measure type. Who publishes companions, and when, follows that answer.
-  - Depends on: T380, ~~T337~~ T426; xcube's answer
+  - *2026-09-28, xcube's answer and R46:*
+    - xcube generates the companions at serve time, on the same cube, **on demand** (the user's choice). Nothing is published and nothing waits on a proposal.
+    - The query asks with a `calculations` block, and xcube picks the companion for the granularity and names its column. For a running total, xcube adds the second `inDateRange` filter.
+    - wechart disables, with the reason, the calculations the per-type table in `to-xcube/2026-09-28-1600-quick-calcs-decision.md` lists.
+    - The build waits on xcube's spike and a published image.
+    - ~~`packages/api/src/model/chain.ts`~~ The Files become `packages/core/src/quickCalc.ts` (the block and the per-type rules), `packages/web/src/query/loadTile.ts` (sending the block, reading the named column), and `e2e/quick-calcs.spec.ts`.
+  - Depends on: T380, ~~T337~~ T426; xcube's (c′) image
 - [ ] T383 (AC-050) Record a calculation request and show it to the read-write members of the folder whose model defines the cube
   - Files: `packages/api/src/repos/calc-requests.ts` (+ test), `packages/web/src/editor/RequestCalcDialog.tsx`
   - Failing test: `calc-requests.test.ts`: the request holds the chart, the fields and the description, and is listed for that folder's read-write members and no one else (AC-050).
@@ -8974,6 +8980,40 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
   - Importing models waits on T347 and T350 (workspace models).
   - *2026-09-28, R44:* an import always lands in My workspace as new drafts and never replaces anything; it warns of same-named items, cubes and data sources (AC-357 amended), and the usual Propose and Approve takes each draft to its folder. The design agent is redrawing design 13's Import to this.
   - Depends on: the design's approval; T347 for models
+  - *2026-09-28, R46: design 13 approved; split into T511 … T514 below.* This entry stays as their umbrella and is ticked with the last of them.
+- [ ] T509 (AC-353) Warn that switching a data source's sign-in to a key or token rebuilds its rollups *(added 2026-09-28, from T506's review)*
+  - **Why.** T506 warns when a stored BigQuery key, or a Snowflake or Dremio token, is replaced. Switching the sign-in method to one of them also stores a new key holder, so it rebuilds the rollups in the same way. It said nothing.
+  - Files: `packages/web/src/workspaces/data-sources/ConnectionForm.tsx` (+ test)
+  - Failing test: `ConnectionForm.test.tsx`: on a saved source, choosing a sign-in method that uses a key or token shows T506's warning before Save; choosing a password method shows none (AC-353).
+  - Depends on: T506
+- [ ] T511 (AC-354, AC-355, AC-360) Export a dashboard: the pane, its dependencies ticked with what uses each, the hidden count, and one JSON file without secrets
+  - Files: `packages/api/src/routes/export.ts` (+ test), `packages/web/src/dashboard/export/ExportPane.tsx` (+ test), the dashboard header's ⋯ menu, Explore's row menus, `e2e/security/export-import.spec.ts`
+  - Failing test:
+    - `export.test.ts`: the dependencies offered are the library charts shown, the models the charts use and the data sources those bind to, each with what uses it, and a count, unnamed, of those in folders the user may not see. The file is valid JSON and holds what was chosen. A data source in it has its driver, settings and description, and no password, key, token, envelope or revision (AC-354, AC-355).
+    - `ExportPane.test.tsx`: hovering over or focusing a dependency outlines the tiles that use it (AC-360).
+    - The e2e: Export from the header's ⋯ gives `revenue-overview.wechart.json` (AC-354).
+  - Depends on: none (models are offered as they stand; importing them waits on T347)
+- [ ] T512 (AC-359) Read an export file, and refuse one this wechart can't take, naming the part and why
+  - Files: `packages/core/src/exportFile.ts` (+ test)
+  - Failing test: `exportFile.test.ts`: an unreadable file, a kind, chart type or driver this wechart doesn't have, is refused with the part named, and nothing is changed (AC-359).
+  - Depends on: T511
+- [ ] T513 (AC-356, AC-357) Import into My workspace: File, Target and Review with its warnings, landing as new drafts
+  - Files: `packages/api/src/routes/import.ts` (+ test), `packages/web/src/workspaces/explore/import/ImportPane.tsx` (+ test), My workspace's New menu (Import a dashboard…, under a divider), `e2e/security/export-import.spec.ts`
+  - Failing test:
+    - `import.test.ts`: an import lands everything as new drafts in the importer's workspace, with the target chosen, and changes no saved item. With sign-in off, it lands in the single user's workspace too (AC-356).
+    - Review warns, without blocking, of:
+      - a same kind and name in the target or the workspace;
+      - a cube or view name the target has (AC-270);
+      - a data source's name the target has.
+      Each warning names only what the user may see (AC-357).
+    - The e2e: import the exported file from New › Import a dashboard…; the warnings show; the drafts are in My workspace, and their Propose dialog takes them on.
+  - Depends on: T512, T348; models in an import wait on T347 and T350 (design 13, state V)
+- [ ] T514 (AC-358, AC-361) Import's data sources: map to an existing one, or create it in the workspace with its secrets and a passing test, under another name where the target has it
+  - Files: `packages/web/src/workspaces/explore/import/ImportSources.tsx` (+ test), `packages/api/src/routes/import.ts`
+  - Failing test:
+    - `ImportSources.test.tsx`: map or create per data source. Create asks for the secrets and saves only after a passing test (AC-163). A name the target has is refused until it is mapped or renamed (AC-282, design 13 state P). Mapping to a different driver warns with both drivers named, without blocking (AC-361).
+    - The imported models bind to the one chosen (AC-358), once models import (T347).
+  - Depends on: T513
 
 ## Phase 2 coverage: acceptance criterion → task
 
@@ -9008,9 +9048,10 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 | AC-287 | T355, T356 | AC-288 | T352, ~~T426~~ T451 | AC-289 | T354, T357 |
 | AC-290 | T353, T358 | AC-291 | T329, ~~T426~~ T451 | AC-292 | T366 |
 | AC-293 | T367 | AC-294 | T368, T505 | AC-295 | T369 |
-| AC-353 | T506 | AC-096 | T507 | | |
-| AC-354 | T508 | AC-355 | T508 | AC-356 | T508 |
-| AC-357 | T508 | AC-358 | T508 | AC-359 | T508 |
+| AC-353 | T506, T509 | AC-096 | T507 | | |
+| AC-354 | T508, T511 | AC-355 | T508, T511 | AC-356 | T508, T513 |
+| AC-357 | T508, T513 | AC-358 | T508, T514 | AC-359 | T508, T512 |
+| AC-360 | T511 | AC-361 | T514 | | |
 | AC-296 | T370 | AC-297 | T371, T504 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441 |
 | AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |
 | AC-302 | T394 | AC-303 | T395 | AC-304 | T396 |
