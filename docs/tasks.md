@@ -8009,7 +8009,15 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
       - "↵ Wrap" on by default;
       - Problems flush at 150 px, with "Checked with Cube's validator on every change".
   - Depends on: T480
-- [ ] T483 (AC-140, AC-344) A Jinja file in the editor's frame, read-only and saying so
+- [x] T483 (AC-140, AC-344) A Jinja file in the editor's frame, read-only and saying so
+  - **Done 2026-09-27.** Tested in:
+    - `ReadOnlyFile.test.tsx` and `FileList.test.tsx`;
+    - `e2e/model-design.spec.ts` (T483's test) and `e2e/model.spec.ts` (AC-140's test).
+  - **The head**, as every file's (44 px): its path at 13/600 mono, and "🔒 Read-only · Jinja template" (or JavaScript or Python), the lock with the words (rule 3).
+  - **The note** is an InfoBar with its "i": "Jinja template: wechart publishes plain YAML only, so this template is never rendered or served, and its cubes and views aren’t listed. It opens read-only here: the form edits plain YAML only." The overview's tooltip says the same (`codeNoteOf`).
+  - **No "xcube"** (D3): it follows design 01's approved note 10, "Cube" rather than "xcube" in user-facing copy (R33).
+  - **The code** fills the pane flush beneath the note, as the editor's YAML does, with line numbers and wrap. It is reached from the keyboard and takes no edit.
+  - Files (as built): `packages/web/src/workspaces/model/{ReadOnlyFile,FileList,ModelFilePage}.tsx` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/{model-design,model}.spec.ts`
   - Files: `packages/web/src/workspaces/model/{ReadOnlyFile,ModelFilePage}.tsx` (+ tests), `e2e/model-design.spec.ts`
   - Failing test: `model-design.spec.ts` (MW-16):
     - the head reads "Read-only · Jinja template", with its icon;

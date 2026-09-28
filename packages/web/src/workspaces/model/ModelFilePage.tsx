@@ -942,12 +942,9 @@ function FileBody({
 }) {
   const read = useMemo(() => objectsOf(path, content), [path, content]);
   // Code or a template: its text in the code view, read-only, with the reason (T146, AC-140).
+  // Headed as every file is, by its path and its state (T483).
   if (read.code !== undefined)
-    return (
-      <Solo path={path}>
-        <ReadOnlyFile key={path} path={path} content={content} code={read.code} />
-      </Solo>
-    );
+    return <ReadOnlyFile key={path} path={path} content={content} code={read.code} />;
   // A file that does not parse opens too: its problems are listed, to be fixed.
   // Keyed by the file: another file is another text, not this one's state.
   return (

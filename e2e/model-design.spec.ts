@@ -903,6 +903,33 @@ test('T484: New cube as design 03 state C — no made-up table, Name selected to
   ).toBeFocused();
 });
 
+test('T483: a Jinja file in the editor’s frame, read-only and saying so (MW-16)', async ({
+  page,
+}) => {
+  await page.goto('/model/files/cubes%2Ftemplated_example.yml');
+  const head = page.locator('.model-editor__head').first();
+  await expect(head.getByRole('heading', { level: 1 })).toHaveText('cubes/templated_example.yml');
+  // Its state in words with the lock (rule 3), in the 44 px head every file has.
+  await expect(head.locator('.model-editor__state')).toHaveText('Read-only · Jinja template');
+  await expect(head.locator('.model-editor__state .secret-pasted__lock')).toBeVisible();
+  expect(Math.round((await head.boundingBox())?.height ?? 0)).toBe(44);
+  // The note an InfoBar, with its "i", naming no xcube (D3).
+  const note = page.getByRole('note');
+  await expect(note).toHaveClass(/info-bar/);
+  await expect(note.locator('svg[data-icon="info"]')).toBeVisible();
+  await expect(note).not.toContainText('xcube');
+  // The code across the pane, flush, with line numbers and wrap.
+  const code = page.locator('.model-readonly__code .cm-editor');
+  const pane = await page.locator('.model-page__main').boundingBox();
+  const box = await code.boundingBox();
+  expect(Math.round(box?.width ?? 0)).toBe(Math.round(pane?.width ?? 1));
+  expect(Math.round((box?.y ?? 0) + (box?.height ?? 0))).toBe(
+    Math.round((pane?.y ?? 0) + (pane?.height ?? 1)),
+  );
+  await expect(code.locator('.cm-lineNumbers')).toBeVisible();
+  await expect(code.locator('.cm-content')).toHaveClass(/cm-lineWrapping/);
+});
+
 test('T470: a bar over the form is a band across the pane, and a view’s tabs are short too', async ({
   page,
 }) => {

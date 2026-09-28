@@ -37,17 +37,18 @@ const LISTED: readonly [kind: MemberKind, title: string][] = [
 
 /**
  * What a file that is not plain YAML is, and why its objects are not listed:
- * xcube serves plain YAML alone, so such a file stays in wechart and is never
- * sent (T447, AC-335, R29; research xcube-slice-2.md, "Path rules"). Cube once
- * ran, rendered or read such files itself (research/cube/data-modeling.md,
- * "How each file type is compiled"); under xcube it sees none of them.
+ * the model is served as plain YAML alone, so such a file stays in wechart and
+ * is never sent (T447, AC-335, R29; research xcube-slice-2.md, "Path rules").
+ * Cube once ran, rendered or read such files itself (research/cube/
+ * data-modeling.md, "How each file type is compiled"); now it sees none of
+ * them. Said without xcube, the fork's internal name (D3; T483).
  */
 export function codeNoteOf(_path: string, code: NonNullable<FileObjects['code']>): string {
   if (code === 'JavaScript')
-    return 'JavaScript: xcube serves plain YAML alone, so Cube never runs it, and its cubes and views aren’t served or listed.';
+    return 'JavaScript: wechart publishes plain YAML only, so Cube never runs this file, and its cubes and views aren’t served or listed.';
   if (code === 'Jinja')
-    return 'Jinja template: xcube serves plain YAML alone, so Cube never renders it, and its cubes and views aren’t served or listed.';
-  return 'Python: xcube serves plain YAML alone, so Cube never reads it.';
+    return 'Jinja template: wechart publishes plain YAML only, so this template is never rendered or served, and its cubes and views aren’t listed.';
+  return 'Python: wechart publishes plain YAML only, so Cube never reads this file.';
 }
 
 export const MODEL_FILES_QUERY = {

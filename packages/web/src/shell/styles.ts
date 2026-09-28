@@ -716,15 +716,26 @@ main:has(.explore) {
 .model-overview__failed > p { flex: 1; }
 /* The join diagram's note (JoinEditor), kept when the overview's cards went. */
 .model-files__note { margin: 0; color: var(--wc-text-secondary); }
-/* A file that is code or a template (T146): why it is read-only, above its text. */
-.model-readonly { display: grid; gap: 8px; max-width: 960px; }
-.model-readonly__why {
-  margin: 0;
-  padding: 8px 12px;
-  border-radius: 6px;
-  background: var(--wc-bg-subtle);
-  color: var(--wc-text-secondary);
-  font-size: 12px;
+/* A file that is code or a template (T146), in the editor's frame (T483, MW-16):
+   the InfoBar across the pane, then the code flush beneath it, filling the
+   pane as the editor's YAML does — ruled gutter, 40 px numbers, 12/16. */
+.model-readonly__note { padding: 12px 16px; }
+.model-readonly__note > .info-bar { max-width: none; }
+.model-readonly__code {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--wc-border-subtle);
+}
+.model-readonly__code .yaml-editor { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.model-readonly__code .yaml-editor .cm-editor { flex: 1; min-height: 0; max-height: none; border: 0; border-radius: 0; }
+.model-readonly__code .yaml-editor .cm-editor.cm-focused { outline-offset: -2px; }
+.model-readonly__code .yaml-editor .cm-scroller { line-height: 16px; }
+.model-readonly__code .yaml-editor .cm-lineNumbers .cm-gutterElement {
+  min-width: 40px;
+  padding: 0 10px 0 16px;
+  box-sizing: border-box;
 }
 
 /* A model file's forms (T138, AC-132; direction.md §7b): the tabs as the edit

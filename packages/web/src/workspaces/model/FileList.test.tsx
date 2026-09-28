@@ -190,7 +190,7 @@ describe('the model overview (AC-131, design 12)', () => {
       'Not listed: a template isn’t read here',
     ]);
     expect(template.querySelector('.model-overview__code')?.getAttribute('title')).toBe(
-      'Jinja template: xcube serves plain YAML alone, so Cube never renders it, and its cubes and views aren’t served or listed.',
+      'Jinja template: wechart publishes plain YAML only, so this template is never rendered or served, and its cubes and views aren’t listed.',
     );
     expect(cellsOf(rowsOf(table)[5] as HTMLElement).slice(1)).toEqual([
       'Python · read-only',

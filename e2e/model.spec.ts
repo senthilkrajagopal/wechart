@@ -390,9 +390,9 @@ test('a save that edits a member charts use lists them first, and saves only if 
 test('a Jinja template opens read-only in the code view, with the reason', async ({ page }) => {
   await page.goto('/model/files/cubes%2Ftemplated_example.yml');
 
-  // Never served: xcube serves plain YAML alone (T447, AC-335).
+  // Never served: the model is plain YAML alone (T447, AC-335), said without xcube (D3, T483).
   await expect(page.getByRole('note')).toContainText(
-    'Jinja template: xcube serves plain YAML alone, so Cube never renders it',
+    'Jinja template: wechart publishes plain YAML only, so this template is never rendered or served',
   );
   await expect(page.getByRole('note')).toContainText('It opens read-only here');
   const code = page.getByRole('textbox', { name: 'cubes/templated_example.yml, read-only' });
