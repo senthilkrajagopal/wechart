@@ -301,6 +301,12 @@ export interface DashboardViewProps {
    * its review view (T356; design 05, pin 3), as readers would see it.
    */
   readonly readOnly?: boolean | undefined;
+  /** Open or close its History panel (T357); absent, no History is offered. */
+  readonly onHistory?: (() => void) | undefined;
+  /** Whether its History panel is open, so its button shows pressed. */
+  readonly historyOpen?: boolean | undefined;
+  /** Edit mode entered or left (T357's review). */
+  readonly onEditingChange?: ((editing: boolean) => void) | undefined;
   /**
    * The saved chart documents, by chart id: what names a tile when a filter
    * is scoped to it (AC-077), and what a filter re-queries (AC-078).
@@ -2021,6 +2027,9 @@ export function DashboardView({
   preview,
   onExitPreview,
   readOnly = false,
+  onHistory,
+  historyOpen = false,
+  onEditingChange,
   documents,
   reach,
   model,
@@ -2125,6 +2134,11 @@ export function DashboardView({
    * the prototype says so on its filter bar in as many words.
    */
   const [sessionEditing, setSessionEditing] = useState(false);
+  // Said to the page, which closes History as editing begins (T357's review):
+  // a version drawn in its place would end the session.
+  useEffect(() => {
+    onEditingChange?.(sessionEditing);
+  }, [sessionEditing, onEditingChange]);
   /**
    * The cross-filter selections in effect (AC-117): what was clicked, and on
    * which tile. Held here rather than in the document, because clicking a
@@ -4855,11 +4869,34 @@ export function DashboardView({
                 onApply={applyView}
               />
             )}
+            {/* Its versions, beside it (T357, AC-289; design 06, pin 1): for
+                those the API shows them to, never while editing or read-only. */}
+            {onHistory === undefined || session.editing || readOnly ? null : (
+              <button
+                type="button"
+                className="btn btn-sm dashboard__history"
+                data-history-button=""
+                aria-pressed={historyOpen}
+                onClick={onHistory}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none">
+                  <circle cx="8" cy="8" r="6.25" stroke="currentColor" strokeWidth="1.5" />
+                  <path
+                    d="M8 4.5V8l2.5 1.5"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                History
+              </button>
+            )}
             {
               // Not below 1,024 px, where the dashboard is for reading: the
               // settings' Save writes it (T250's review). An edit session already
               // open keeps it, as it keeps its bar.
-              narrow && !session.editing ? null : (
+              // Nor in a read-only drawing, where nothing is edited (T356's).
+              readOnly || (narrow && !session.editing) ? null : (
                 <button
                   ref={gear}
                   type="button"

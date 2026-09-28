@@ -10,6 +10,8 @@ import { META_QUERY } from '../../query/meta';
 import { ME_QUERY } from '../../shell/me';
 import { ProposalBand } from './ProposalBand';
 import { ProposeFlow } from './ProposeFlow';
+import { HistoryPanel, historyQuery } from '../history/HistoryPanel';
+import { RestoreDialogs, useRestore } from '../history/restore';
 import { StateLine } from '../../shell/StatusIcon';
 import { ChartTile } from '../../tiles/ChartTile';
 import { TileError } from '../../tiles/TileError';
@@ -69,6 +71,15 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
   const me = useQuery({ ...ME_QUERY, retry: false });
   /** Where "Propose again…" proposes it to, while its dialog is open. */
   const [proposingAgain, setProposingAgain] = useState<readonly string[] | null>(null);
+  // Its History (T357, AC-289): offered only where the API shows it.
+  const signedIn = me.data?.security === 'oidc';
+  const history = useQuery({ ...historyQuery('chart', chartId), enabled: signedIn });
+  const mayHistory = signedIn && history.data != null;
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const restore = useRestore('chart', chartId);
+  const [restored, setRestored] = useState<{ text: string; proposalId: string } | undefined>(
+    undefined,
+  );
 
   /**
    * The chart itself, read and drawn as a dashboard tile draws it (AC-212):
@@ -330,156 +341,205 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
   );
 
   return (
-    <section className="chart-page">
-      {/* Its author's band: waiting, or rejected with the reason (T358,
+    <div className="with-panel" data-open={historyOpen ? 'true' : undefined}>
+      <div className="with-panel__main">
+        <section className="chart-page">
+          <RestoreDialogs
+            kind="chart"
+            restore={restore}
+            onProposed={(text, proposalId) => {
+              setRestored({ text, proposalId });
+            }}
+          />
+          {restored === undefined ? null : (
+            <StateLine kind="ok" testId="restore-proposed">
+              {restored.text}{' '}
+              <a href={`/reviews/${encodeURIComponent(restored.proposalId)}`}>Review now</a>
+            </StateLine>
+          )}
+          {/* Its author's band: waiting, or rejected with the reason (T358,
           AC-290). None for anyone else; none asked for with sign-in off. */}
-      {me.data?.security === 'oidc' ? (
-        <ProposalBand
-          kind="chart"
-          id={chartId}
-          currentVersion={stored.data?.version}
-          onProposeAgain={(path) => {
-            setProposingAgain(path);
-          }}
-        />
-      ) : null}
-      {proposingAgain !== null ? (
-        <ProposeFlow
-          item={{ kind: 'chart', id: chartId, title: saved?.title ?? 'Chart' }}
-          targetPath={proposingAgain}
-          onClose={() => {
-            setProposingAgain(null);
-          }}
-          onProposed={() => {
-            setProposingAgain(null);
-          }}
-        />
-      ) : null}
-      <header className="chart-page__head">
-        {/* The way back to its folder (AC-195), once the chart is read; to
+          {me.data?.security === 'oidc' ? (
+            <ProposalBand
+              kind="chart"
+              id={chartId}
+              currentVersion={stored.data?.version}
+              onProposeAgain={(path) => {
+                setProposingAgain(path);
+              }}
+            />
+          ) : null}
+          {proposingAgain !== null ? (
+            <ProposeFlow
+              item={{ kind: 'chart', id: chartId, title: saved?.title ?? 'Chart' }}
+              targetPath={proposingAgain}
+              onClose={() => {
+                setProposingAgain(null);
+              }}
+              onProposed={() => {
+                setProposingAgain(null);
+              }}
+            />
+          ) : null}
+          <header className="chart-page__head">
+            {/* The way back to its folder (AC-195), once the chart is read; to
             Explore's top if it cannot be. */}
-        {stored.isSuccess ? <FolderCrumbs folderId={stored.data.body.folderId} /> : null}
-        {stored.isError ? <FolderCrumbs folderId={undefined} /> : null}
-        {/* Its title is the page's heading (AC-212). */}
-        <h1 className="workspace-title">{saved?.title ?? 'Chart'}</h1>
-        {typeText === undefined ? null : (
-          <span className="badge" data-testid="chart-type">
-            {typeText}
-          </span>
-        )}
-        {/* The id the address selected (AC-002), for a reader of the page's
+            {stored.isSuccess ? <FolderCrumbs folderId={stored.data.body.folderId} /> : null}
+            {stored.isError ? <FolderCrumbs folderId={undefined} /> : null}
+            {/* Its title is the page's heading (AC-212). */}
+            <h1 className="workspace-title">{saved?.title ?? 'Chart'}</h1>
+            {typeText === undefined ? null : (
+              <span className="badge" data-testid="chart-type">
+                {typeText}
+              </span>
+            )}
+            {/* The id the address selected (AC-002), for a reader of the page's
             source rather than its text. */}
-        <span hidden data-testid="selected-object">
-          {chartId}
-        </span>
-        {/* Whose it is (T463, AC-126): a local chart lives on one dashboard. */}
-        {home.data === undefined ? null : <ChartHomeLine home={home.data} />}
-        <span className="chart-page__spacer" />
-        {/* A local chart is edited where it is saved — on its dashboard — or
+            <span hidden data-testid="selected-object">
+              {chartId}
+            </span>
+            {/* Whose it is (T463, AC-126): a local chart lives on one dashboard. */}
+            {home.data === undefined ? null : <ChartHomeLine home={home.data} />}
+            <span className="chart-page__spacer" />
+            {/* Its versions, beside it (T357, AC-289; design 06, pin 1): only
+            where the API shows them, to the folder's read-write members. */}
+            {mayHistory ? (
+              <button
+                type="button"
+                className="btn btn-sm dashboard__history"
+                data-history-button=""
+                aria-pressed={historyOpen}
+                onClick={() => {
+                  setHistoryOpen((was) => !was);
+                }}
+              >
+                History
+              </button>
+            ) : null}
+            {/* A local chart is edited where it is saved — on its dashboard — or
             saved to folders first (AC-127); never in an editor that can't
             save it (T463, UX-040). A library chart is edited here. */}
-        {localTo === undefined ? (
-          stored.isPending ? null : (
-            <a className="btn-primary" href={`/explore/charts/${encodeURIComponent(chartId)}/edit`}>
-              <span aria-hidden="true">✎ </span>Edit chart
-            </a>
-          )
-        ) : (
-          <LocalChartActions dashboardId={localTo} home={home} />
-        )}
-      </header>
-
-      <div className="chart-page__body">
-        <div className="chart-page__canvas">
-          {/* The tile's own states, as a dashboard draws them (AC-042). */}
-          {drawn.isPending ? (
-            <TileSkeleton chartType={definition?.chartType ?? 'bar'} height={360} />
-          ) : null}
-          {drawn.isError ? (
-            <TileError error={drawn.error} onRetry={() => void drawn.refetch()} />
-          ) : null}
-          {failure === undefined ? null : failure === NOTHING_CHOSEN ? (
-            // Not a failure: a chart not built yet — what to do next.
-            <StateLine kind="idle" testId="chart-page-empty">
-              {localTo === undefined
-                ? 'This chart has no fields yet. Use Edit chart to finish it.'
-                : `This chart has no fields yet. Use Edit on ${home.data?.title ?? 'its dashboard'} to finish it.`}
-            </StateLine>
-          ) : failure === CHART_MISSING ? (
-            <StateLine kind="idle">{CHART_MISSING}</StateLine>
-          ) : (
-            <TileError error={failure} onRetry={() => void drawn.refetch()} />
-          )}
-          {formatted === undefined ? null : (
-            <div className="chart-page__tile">
-              <ChartTile
-                spec={formatted}
-                height={360}
-                asOf={drawn.data?.answered?.lastRefreshTime}
-                served={drawn.data?.answered}
-                rowsTotal={drawn.data?.answered?.total}
-              />
-            </div>
-          )}
-        </div>
-
-        <aside className="chart-page__details" aria-label="Chart details">
-          <Detail title="Built on">
-            {definition === undefined ? null : source === undefined || source === '' ? (
-              <p className="chart-page__none">Nothing yet</p>
+            {localTo === undefined ? (
+              stored.isPending ? null : (
+                <a
+                  className="btn-primary"
+                  href={`/explore/charts/${encodeURIComponent(chartId)}/edit`}
+                >
+                  <span aria-hidden="true">✎ </span>Edit chart
+                </a>
+              )
             ) : (
-              <p className="chart-page__source">
-                {kindOf(source) === undefined ? source : `${kindOf(source) ?? ''}: ${source}`}
-              </p>
+              <LocalChartActions dashboardId={localTo} home={home} />
             )}
-          </Detail>
-          <Detail title="Metrics">{pills(measures, 'measure')}</Detail>
-          <Detail title="Dimensions">{pills(dimensions, 'dimension')}</Detail>
-          {localTo !== undefined ? (
-            // One dashboard's own (AC-126): the dashboard, and what local
-            // means — never a picker that would put it on a second one.
-            <Detail title="Lives on">
-              {home.data === undefined ? null : (
-                <ul aria-label="The dashboard this chart lives on" className="chart-page__used">
-                  <li>
-                    <a href={`/explore/dashboards/${encodeURIComponent(localTo)}`}>
-                      {home.data.title}
-                    </a>
-                  </li>
-                </ul>
+          </header>
+
+          <div className="chart-page__body">
+            <div className="chart-page__canvas">
+              {/* The tile's own states, as a dashboard draws them (AC-042). */}
+              {drawn.isPending ? (
+                <TileSkeleton chartType={definition?.chartType ?? 'bar'} height={360} />
+              ) : null}
+              {drawn.isError ? (
+                <TileError error={drawn.error} onRetry={() => void drawn.refetch()} />
+              ) : null}
+              {failure === undefined ? null : failure === NOTHING_CHOSEN ? (
+                // Not a failure: a chart not built yet — what to do next.
+                <StateLine kind="idle" testId="chart-page-empty">
+                  {localTo === undefined
+                    ? 'This chart has no fields yet. Use Edit chart to finish it.'
+                    : `This chart has no fields yet. Use Edit on ${home.data?.title ?? 'its dashboard'} to finish it.`}
+                </StateLine>
+              ) : failure === CHART_MISSING ? (
+                <StateLine kind="idle">{CHART_MISSING}</StateLine>
+              ) : (
+                <TileError error={failure} onRetry={() => void drawn.refetch()} />
               )}
-              <p className="chart-page__none">
-                {home.data !== undefined && home.data.tileId === undefined
-                  ? 'No tile on it shows this chart any more, so it cannot be edited there.'
-                  : 'A local chart belongs to one dashboard and is edited there. Save it to folders to reuse it elsewhere.'}
-              </p>
-            </Detail>
-          ) : (
-            <Detail title="Used in">
-              {using.isPending ? <StateLine kind="run">Loading…</StateLine> : null}
-              {using.isSuccess ? (
-                using.data.length === 0 ? (
-                  <p data-testid="used-by-none" className="chart-page__none">
-                    Not on any dashboard yet
-                  </p>
+              {formatted === undefined ? null : (
+                <div className="chart-page__tile">
+                  <ChartTile
+                    spec={formatted}
+                    height={360}
+                    asOf={drawn.data?.answered?.lastRefreshTime}
+                    served={drawn.data?.answered}
+                    rowsTotal={drawn.data?.answered?.total}
+                  />
+                </div>
+              )}
+            </div>
+
+            <aside className="chart-page__details" aria-label="Chart details">
+              <Detail title="Built on">
+                {definition === undefined ? null : source === undefined || source === '' ? (
+                  <p className="chart-page__none">Nothing yet</p>
                 ) : (
-                  <ul aria-label="Dashboards using this chart" className="chart-page__used">
-                    {using.data.map((dashboard) => (
-                      <li key={dashboard.id} data-testid={`using-${dashboard.id}`}>
-                        <a href={`/explore/dashboards/${encodeURIComponent(dashboard.id)}`}>
-                          {dashboard.title}
+                  <p className="chart-page__source">
+                    {kindOf(source) === undefined ? source : `${kindOf(source) ?? ''}: ${source}`}
+                  </p>
+                )}
+              </Detail>
+              <Detail title="Metrics">{pills(measures, 'measure')}</Detail>
+              <Detail title="Dimensions">{pills(dimensions, 'dimension')}</Detail>
+              {localTo !== undefined ? (
+                // One dashboard's own (AC-126): the dashboard, and what local
+                // means — never a picker that would put it on a second one.
+                <Detail title="Lives on">
+                  {home.data === undefined ? null : (
+                    <ul aria-label="The dashboard this chart lives on" className="chart-page__used">
+                      <li>
+                        <a href={`/explore/dashboards/${encodeURIComponent(localTo)}`}>
+                          {home.data.title}
                         </a>
                       </li>
-                    ))}
-                  </ul>
-                )
-              ) : null}
-              {addTo}
-            </Detail>
-          )}
-          <Detail title="Delete">{deleteControls}</Detail>
-        </aside>
+                    </ul>
+                  )}
+                  <p className="chart-page__none">
+                    {home.data !== undefined && home.data.tileId === undefined
+                      ? 'No tile on it shows this chart any more, so it cannot be edited there.'
+                      : 'A local chart belongs to one dashboard and is edited there. Save it to folders to reuse it elsewhere.'}
+                  </p>
+                </Detail>
+              ) : (
+                <Detail title="Used in">
+                  {using.isPending ? <StateLine kind="run">Loading…</StateLine> : null}
+                  {using.isSuccess ? (
+                    using.data.length === 0 ? (
+                      <p data-testid="used-by-none" className="chart-page__none">
+                        Not on any dashboard yet
+                      </p>
+                    ) : (
+                      <ul aria-label="Dashboards using this chart" className="chart-page__used">
+                        {using.data.map((dashboard) => (
+                          <li key={dashboard.id} data-testid={`using-${dashboard.id}`}>
+                            <a href={`/explore/dashboards/${encodeURIComponent(dashboard.id)}`}>
+                              {dashboard.title}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    )
+                  ) : null}
+                  {addTo}
+                </Detail>
+              )}
+              <Detail title="Delete">{deleteControls}</Detail>
+            </aside>
+          </div>
+        </section>
       </div>
-    </section>
+      {historyOpen ? (
+        <HistoryPanel
+          kind="chart"
+          id={chartId}
+          onRestore={restore.start}
+          onClose={() => {
+            setHistoryOpen(false);
+            // Focus back to History, where it was opened from (rule 85).
+            requestAnimationFrame(() => {
+              document.querySelector<HTMLElement>('[data-history-button]')?.focus();
+            });
+          }}
+        />
+      ) : null}
+    </div>
   );
 }

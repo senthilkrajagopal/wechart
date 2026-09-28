@@ -3389,6 +3389,99 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 }
 .reviews__summary > .btn { justify-self: start; }
 
+/* An item's History (T357; design 06): a 360 px panel docked right of the
+   item. Closed, its container is no box at all, so nothing moves. */
+.with-panel,
+.with-panel > .with-panel__main { display: contents; }
+.with-panel[data-open='true'] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 16px;
+  align-items: stretch;
+}
+.with-panel[data-open='true'] > .with-panel__main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.with-panel[data-open='true'] > .history-panel { align-self: start; }
+/* A dashboard keeps the window's height and scrolls in its own canvas, as it
+   does alone (T357's review): every level between gets min-height 0. */
+main:has(.dashboard) > .with-panel[data-open='true'] { flex: 1; min-height: 0; padding-right: 16px; }
+@media (max-width: 1023px) {
+  .with-panel[data-open='true'] { grid-template-columns: minmax(0, 1fr); }
+}
+.history-panel {
+  position: sticky;
+  top: 0;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  max-height: calc(100vh - 96px);
+  overflow: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 8px;
+  background: var(--wc-bg-surface);
+}
+.history-panel__head { display: flex; align-items: baseline; gap: 8px; }
+.history-panel__head h2 { margin: 0; font-size: var(--wc-text-sm-size); font-weight: 600; }
+.history-panel__head > button { margin-left: auto; }
+.history-panel__sub { font-size: 12px; color: var(--wc-text-secondary); }
+.history-panel__list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.history-panel__row {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+}
+.history-panel__row[aria-current='true'] { border-color: var(--wc-accent); box-shadow: 0 0 0 1px var(--wc-accent); }
+.history-panel__row p { margin: 0; }
+.history-panel__version { display: flex; align-items: center; gap: 8px; }
+.history-panel__current {
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-accent);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+}
+.history-panel__by { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.history-panel__description { font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
+.history-panel__description.is-empty { color: var(--wc-text-secondary); }
+.history-panel__description.is-clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* Its actions on hover and focus (pin 6), kept in the tab order. */
+.history-panel__actions { display: flex; gap: 6px; margin-top: 4px; opacity: 0; }
+.history-panel__row:hover .history-panel__actions,
+.history-panel__row:focus-within .history-panel__actions,
+.history-panel__row[aria-current='true'] .history-panel__actions { opacity: 1; }
+.history-panel__limit { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.history-panel__skeleton { height: 64px; border-radius: 6px; background: var(--wc-bg-subtle); }
+.history-panel__error { display: grid; gap: 6px; justify-items: start; }
+.dashboard__history { display: inline-flex; align-items: center; gap: 6px; }
+.dashboard__history[aria-pressed='true'] { border-color: var(--wc-accent); color: var(--wc-accent); }
+/* A kept version in the item's place (state A). */
+.version-view { display: grid; gap: 10px; }
+.version-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--wc-bg-accent-soft);
+  font-size: 13px;
+}
+.version-band > p { flex: 1; min-width: 0; margin: 0; }
+
 /* A proposal's review view (T356; design 05's main screen): its head, then
    240 / fluid / 360 — what is in it, the item drawn, and the inspector. */
 .review-view { display: grid; gap: 12px; align-content: start; min-width: 0; }

@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { readChartDocument, type ChartDocument, type RenderSpec } from '@wechart/core';
 
 import { answerMetaOf, type AnswerMeta } from '../query/answerMeta';
@@ -16,6 +16,13 @@ import { ROOT_FOLDERS } from '../workspaces/explore/roots';
 import { ProposalBand } from '../workspaces/explore/ProposalBand';
 import { ProposeFlow } from '../workspaces/explore/ProposeFlow';
 import { ME_QUERY } from '../shell/me';
+import {
+  approvedText,
+  HistoryPanel,
+  historyQuery,
+  type KeptVersion,
+} from '../workspaces/history/HistoryPanel';
+import { RestoreDialogs, useRestore, type RestoringVersion } from '../workspaces/history/restore';
 import { DashboardView } from './DashboardView';
 import { chartWritesOf, drawnWithDrafts } from './edit/chartDrafts';
 import { saveDashboard } from './edit/save';
@@ -98,6 +105,10 @@ export interface DashboardPageProps {
   readonly preview?: Readonly<Record<string, unknown>> | undefined;
   /** Leave the preview: the dashboard as wechart itself asks. */
   readonly onExitPreview?: (() => void) | undefined;
+  /** The panel the address has open beside it: History (T357). */
+  readonly panel?: 'history' | undefined;
+  /** Open or close a panel, in the address. */
+  readonly onPanel?: ((panel: 'history' | undefined) => void) | undefined;
 }
 
 export function DashboardPage({
@@ -114,6 +125,8 @@ export function DashboardPage({
   onViewTaken,
   preview,
   onExitPreview,
+  panel,
+  onPanel,
 }: DashboardPageProps) {
   const saved = useQuery({
     queryKey: ['dashboard', dashboardId],
@@ -134,6 +147,30 @@ export function DashboardPage({
   const signedIn = me.data?.security === 'oidc';
   /** Where "Propose again…" proposes it to, while its dialog is open. */
   const [proposingAgain, setProposingAgain] = useState<readonly string[] | null>(null);
+  // Its History (T357, AC-289): offered only where the API shows it, to the
+  // folder's read-write members and Super-Admins.
+  const history = useQuery({ ...historyQuery('dashboard', dashboardId), enabled: signedIn });
+  const mayHistory = signedIn && history.data != null;
+  const historyOpen = mayHistory && panel === 'history';
+  /** A kept version drawn in its place (design 06, state A). */
+  const [viewing, setViewing] = useState<number | undefined>(undefined);
+  const restore = useRestore('dashboard', dashboardId);
+  /**
+   * History closes as editing begins (T357's review): a version drawn in the
+   * dashboard's place would end the edit session, and History is for reading.
+   */
+  const closeHistoryWhileEditing = useCallback(
+    (editing: boolean) => {
+      if (!editing || panel !== 'history') return;
+      setViewing(undefined);
+      onPanel?.(undefined);
+    },
+    [panel, onPanel],
+  );
+  /** A restore proposed: what to say, and where to review it (state E). */
+  const [restored, setRestored] = useState<{ text: string; proposalId: string } | undefined>(
+    undefined,
+  );
 
   /**
    * A request to open in edit mode (T245) that can never be met — the
@@ -188,33 +225,153 @@ export function DashboardPage({
           }}
         />
       ) : null}
-      <LoadedDashboard
-        /**
-         * Keyed by the dashboard, as the view below is: what the page holds
-         * for one dashboard — why its save failed, the save itself — must not
-         * be shown over the next one opened (T197). And by the security
-         * context previewed (T172's review): the answers it keeps drawing while
-         * newer ones are asked — a filtered tile's, a filter's values — must
-         * not be one context's under another's banner, or under none.
-         */
-        key={`${dashboardId}:${JSON.stringify(preview ?? null)}`}
-        document={document}
-        dashboardId={dashboardId}
-        version={saved.data?.version ?? 1}
-        editTile={editTile}
-        onEditTile={onEditTile}
-        startEditing={startEditing}
-        onStartedEditing={onStartedEditing}
-        publishTile={publishTile}
-        onPublishTaken={onPublishTaken}
-        urlFilterValues={urlFilterValues}
-        onFilterValues={onFilterValues}
-        urlView={urlView}
-        onViewTaken={onViewTaken}
-        preview={preview}
-        onExitPreview={onExitPreview}
+      <RestoreDialogs
+        kind="dashboard"
+        restore={restore}
+        onProposed={(text, proposalId) => {
+          setRestored({ text, proposalId });
+          setViewing(undefined);
+        }}
       />
+      {restored === undefined ? null : (
+        <StateLine kind="ok" testId="restore-proposed">
+          {restored.text}{' '}
+          <a href={`/reviews/${encodeURIComponent(restored.proposalId)}`}>Review now</a>
+        </StateLine>
+      )}
+      {/* Its History docked beside it (T357; design 06, pin 2). The same
+          elements open or closed, so the dashboard, and an edit session on
+          it, is never drawn anew as the panel opens or closes. */}
+      <div className="with-panel" data-open={historyOpen ? 'true' : undefined}>
+        <div className="with-panel__main">
+          {viewing === undefined ? (
+            <LoadedDashboard
+              /**
+               * Keyed by the dashboard, as the view below is: what the page holds
+               * for one dashboard — why its save failed, the save itself — must not
+               * be shown over the next one opened (T197). And by the security
+               * context previewed (T172's review): the answers it keeps drawing while
+               * newer ones are asked — a filtered tile's, a filter's values — must
+               * not be one context's under another's banner, or under none.
+               */
+              key={`${dashboardId}:${JSON.stringify(preview ?? null)}`}
+              document={document}
+              dashboardId={dashboardId}
+              version={saved.data?.version ?? 1}
+              editTile={editTile}
+              onEditTile={onEditTile}
+              startEditing={startEditing}
+              onStartedEditing={onStartedEditing}
+              publishTile={publishTile}
+              onPublishTaken={onPublishTaken}
+              urlFilterValues={urlFilterValues}
+              onFilterValues={onFilterValues}
+              urlView={urlView}
+              onViewTaken={onViewTaken}
+              preview={preview}
+              onExitPreview={onExitPreview}
+              {...(mayHistory
+                ? {
+                    onHistory: () => {
+                      onPanel?.(historyOpen ? undefined : 'history');
+                    },
+                    historyOpen,
+                  }
+                : {})}
+              onEditingChange={closeHistoryWhileEditing}
+            />
+          ) : (
+            <VersionView
+              dashboardId={dashboardId}
+              version={viewing}
+              onBack={() => {
+                setViewing(undefined);
+              }}
+              onRestore={restore.start}
+            />
+          )}
+        </div>
+        {historyOpen ? (
+          <HistoryPanel
+            kind="dashboard"
+            id={dashboardId}
+            viewing={viewing}
+            onView={setViewing}
+            onRestore={restore.start}
+            onClose={() => {
+              setViewing(undefined);
+              onPanel?.(undefined);
+              // Focus back to History, where it was opened from (pin 2, rule 85).
+              requestAnimationFrame(() => {
+                window.document.querySelector<HTMLElement>('[data-history-button]')?.focus();
+              });
+            }}
+          />
+        ) : null}
+      </div>
     </>
+  );
+}
+
+/**
+ * One kept version drawn read-only in the dashboard's place, under a band
+ * saying which, with Propose restoring… and Back to current (T357; design
+ * 06, state A). Its own charts are drawn as the version kept them.
+ */
+function VersionView({
+  dashboardId,
+  version,
+  onBack,
+  onRestore,
+}: {
+  readonly dashboardId: string;
+  readonly version: number;
+  readonly onBack: () => void;
+  readonly onRestore: (version: RestoringVersion) => void;
+}) {
+  const kept = useQuery({
+    queryKey: ['history-version', 'dashboard', dashboardId, version],
+    queryFn: () =>
+      getJson<
+        KeptVersion & {
+          content: { body: Record<string, unknown>; parts: { id: string; body: unknown }[] };
+        }
+      >(`/api/history/dashboard/${encodeURIComponent(dashboardId)}/versions/${String(version)}`),
+  });
+  if (kept.isPending) return <DashboardLoading />;
+  if (kept.isError) return <StateLine kind="err">Version {version} could not be read.</StateLine>;
+  const drawn = kept.data;
+  return (
+    <div className="version-view">
+      <div role="status" aria-label="Version shown" className="version-band">
+        <p>
+          <strong>
+            Version {drawn.version} of {drawn.title}
+          </strong>{' '}
+          · read-only · {approvedText(drawn)}
+        </p>
+        {drawn.current ? null : (
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => {
+              onRestore({ ...drawn, approvedText: approvedText(drawn) });
+            }}
+          >
+            Propose restoring…
+          </button>
+        )}
+        <button type="button" className="btn btn-sm" onClick={onBack}>
+          Back to current
+        </button>
+      </div>
+      <ReadOnlyDashboard
+        cacheKey={`version:${dashboardId}:${String(drawn.version)}`}
+        dashboardId={dashboardId}
+        document={dashboardOf({ body: drawn.content.body } as StoredDocument)}
+        heldCharts={Object.fromEntries(drawn.content.parts.map((part) => [part.id, part.body]))}
+      />
+    </div>
   );
 }
 
@@ -325,7 +482,14 @@ function LoadedDashboard({
   onViewTaken,
   preview,
   onExitPreview,
+  onHistory,
+  historyOpen,
+  onEditingChange,
 }: {
+  /** Its History button (T357): absent where History isn't offered. */
+  onHistory?: (() => void) | undefined;
+  historyOpen?: boolean | undefined;
+  onEditingChange?: ((editing: boolean) => void) | undefined;
   document: DashboardDocument;
   dashboardId: string;
   version: number;
@@ -682,6 +846,9 @@ function LoadedDashboard({
         refreshable={!charts.isFetching}
         preview={preview}
         onExitPreview={onExitPreview}
+        onHistory={onHistory}
+        historyOpen={historyOpen}
+        onEditingChange={onEditingChange}
         // E and a tile's pencil open the chart editor over the dashboard, in
         // the view itself (T032). They used to navigate here, a full page
         // load that ended the edit session — so there was no dashboard to

@@ -199,7 +199,7 @@ const workspaceRoutes = WORKSPACES.map((workspace) =>
 function DashboardSurface() {
   const params = useParams({ strict: false }) as { objectId?: string };
   const dashboardId = decodeURIComponent(params.objectId ?? '');
-  const { edit, editing, filters, preview, publish, view } = dashboardRoute.useSearch();
+  const { edit, editing, filters, preview, publish, view, panel } = dashboardRoute.useSearch();
   const navigate = dashboardRoute.useNavigate();
   const router = useRouter();
   /**
@@ -312,6 +312,14 @@ function DashboardSurface() {
         urlView={view === undefined ? undefined : viewFromLink({ filters, view })}
         onViewTaken={onViewTaken}
         {...(preview === undefined ? {} : { preview, onExitPreview })}
+        panel={panel}
+        onPanel={(next) => {
+          void navigate({
+            search: (prev) => ({ ...prev, panel: next }),
+            replace: true,
+            resetScroll: false,
+          });
+        }}
       />
     </AppShell>
   );
@@ -335,8 +343,11 @@ const dashboardRoute = createRoute({
     preview?: Record<string, unknown> | undefined;
     publish?: string | undefined;
     view?: Record<string, unknown> | undefined;
+    panel?: 'history' | undefined;
   } => ({
     edit: typeof search['edit'] === 'string' && search['edit'] !== '' ? search['edit'] : undefined,
+    // Its History panel open (T357; design 06, pin 2), so a reload keeps it.
+    panel: search['panel'] === 'history' ? 'history' : undefined,
     // Open in edit mode (T245): a new dashboard from Explore's New, as the
     // prototype opens one. Only `true`; anything else is no request.
     editing: search['editing'] === true ? true : undefined,

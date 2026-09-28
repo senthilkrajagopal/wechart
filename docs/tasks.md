@@ -5993,10 +5993,39 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **A model's YAML diff** (state G): proposals don't hold models until T347 and T350. It is T350's, with `@codemirror/merge`.
     - **Test connection** on the proposed settings (state H), and **Fit / Actual size**: AC-343.
     - **The publish check** section (state L's breaks): T451 and T427.
-- [ ] T357 (AC-289) Show an item's history, compare a version, and propose restoring it
-  - Files: `packages/web/src/workspaces/explore/HistoryPanel.tsx` (+ test), `e2e/security/history.spec.ts`
-  - Failing test: `history.spec.ts`: the History panel lists at most 10 versions newest first with number, time, author, approver and description, marks Current, compares a model version with the current one, and "Propose restoring…" opens the Propose dialog prefilled; readers see no History (AC-289; rule 80).
+- [x] T357 (AC-289) Show an item's history, compare a version, and propose restoring it
+  - Files: `packages/web/src/workspaces/~~explore~~history/HistoryPanel.tsx` (+ test), `e2e/security/history.spec.ts`
+  - Failing test: `history.spec.ts`: the History panel lists at most 10 versions newest first with number, time, author, approver and description, marks Current, ~~compares a model version with the current one,~~ and "Propose restoring…" opens the Propose dialog prefilled; readers see no History (AC-289; rule 80). *A model's "Compare with current" (state B) comes with workspace models, T347.*
   - Depends on: T354, T356
+  - *As built (2026-09-28; design 06, pins 1–8, states A, C, E, F):*
+    - **History, in the header** of a shared dashboard (beside Bookmarks) and of a library chart. It shows only where the API answers, so never to a reader, and it is pressed while its panel is open. It isn't offered while editing, or in a read-only drawing.
+    - **The panel** (`workspaces/history/HistoryPanel.tsx`) is 360 px, docked right, and is `?panel=history` in a dashboard's address, so a reload keeps it. It takes focus as it opens; Esc or × closes it, with focus back on History. It closes as editing begins, since a version drawn in the dashboard's place would end the session.
+      - Each version: "Version n", with "Current" on the item's own; "Today, 15:02 by … · approved by …", "self-approved", or "before proposals" for one kept from before them; and the description, clamped to two lines with More (or "No description").
+      - View and "Propose restoring…" show on hover and focus. "Only the last 10 versions are kept…" is said once. While loading it shows skeleton rows; if it can't be read, a message with Retry and Details.
+    - **View** draws the version in the dashboard's place, read-only, with its own charts as kept, under "Version 7 of *name* · read-only · approved 22 Sep by …", with Propose restoring… and Back to current.
+    - **Propose restoring…** (`workspaces/history/restore.tsx`) asks T354's API for a draft. Where the user has a copy, it asks first ("Replace your copy?"); a refusal is said. The Propose dialog then opens "Propose restoring version 7 to *folder*", "— replaces version 8 with version 7's content", filled in with "Restore version 7 (approved 22 Sep by …)." and "Nothing changes until it's approved." Proposed, it says so, with Review now.
+    - `DashboardView` gains `onHistory`, `historyOpen` and `onEditingChange`. Its settings gear is no longer shown in a read-only drawing (T356's follow-up). `ProposeDialog` and `ProposeFlow` gain `restoring`, and `onProposed` gets the target's path.
+  - **Done 2026-09-28, after one review round (FAIL, fixed). AC-289 ticked:** `e2e/security/history.spec.ts` (Chrome):
+    - the writer's History of an approved dashboard, newest first, with who and who approved it, Current, and the limit;
+    - the panel in the address, kept on reload, and Esc returning focus;
+    - editing closes it;
+    - version 1 viewed read-only;
+    - its restore proposed, prefilled, asked before replacing their copy, the folder unchanged at version 2;
+    - a reader gets no History, no panel from the address, and `404` from the API.
+    - The last 10 kept, and restore only by proposal, are T354's API tests.
+  - **Review fixes:**
+    1. Viewing a version while editing ended the edit session. History now closes as editing begins.
+    2. Closing the panel didn't return focus to History.
+    3. The restore question neither took focus nor closed on Esc; Esc closed the panel behind it.
+    4. With the panel open, the dashboard grew to its content's height and the window scrolled.
+    5. The library chart page lost its gaps.
+    6. The e2e left its restore draft behind.
+    7. The reader's checks could pass before History was asked for.
+  - *Left:*
+    - A library chart's History isn't in the address, and it has no View.
+    - A data source's History and restore are T515's.
+    - A model's Compare is T347's.
+    - Explore rows offer no History; design 06 opens it from the item.
 - [x] T358 (AC-284, AC-290) Propose from the workspace item: the dialog, the counter, the bundle and the waiting band
   - Files: `packages/web/src/workspaces/explore/ProposeDialog.tsx` (+ test), `e2e/security/workspace.spec.ts`
   - Failing test: `ProposeDialog.test.tsx`: the dialog names the target and "new" or "replaces version _n_", lists bundled models without a way to remove them, counts "_n_ / 1,000" and blocks at 1,001 without truncating; after proposing, the item shows "Waiting for review" (AC-284; rule 75).

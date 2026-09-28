@@ -84,6 +84,7 @@ export function ProposeDialog({
   onClose,
   busy = false,
   failure,
+  restoring,
 }: {
   readonly check: ProposalCheck;
   readonly onPropose: (description: string) => void;
@@ -91,12 +92,17 @@ export function ProposeDialog({
   readonly busy?: boolean;
   /** Why the proposal itself was refused, once sent. */
   readonly failure?: string | undefined;
+  /**
+   * A version restored (T357; design 06, state C): the title names it, the
+   * item says whose content replaces what, and the description is filled in.
+   */
+  readonly restoring?: { readonly version: number; readonly description: string } | undefined;
 }) {
   const ids = useId();
   const box = useRef<HTMLDivElement>(null);
   const text = useRef<HTMLTextAreaElement>(null);
   useFocusTrap(box);
-  const [description, setDescription] = useState('');
+  const [description, setDescription] = useState(restoring?.description ?? '');
   const length = [...description].length;
   const over = length > PROPOSAL_TEXT_LIMIT;
   const ready = check.state === 'ready';
@@ -141,7 +147,11 @@ export function ProposeDialog({
         aria-labelledby={`${ids}-heading`}
         className="dialog propose-dialog"
       >
-        <h2 id={`${ids}-heading`}>Propose to {folderText(check.targetPath)}</h2>
+        <h2 id={`${ids}-heading`}>
+          {restoring === undefined
+            ? `Propose to ${folderText(check.targetPath)}`
+            : `Propose restoring version ${String(restoring.version)} to ${folderText(check.targetPath)}`}
+        </h2>
 
         {check.state === 'checking' ? (
           <p role="status" className="propose-dialog__checking">
@@ -158,6 +168,9 @@ export function ProposeDialog({
           <>
             <p className="propose-dialog__item" data-testid="propose-item">
               {KIND_LABEL[first.kind]} · {first.title} — {doesText(first, check.targetPath)}
+              {restoring === undefined
+                ? ''
+                : ` with version ${String(restoring.version)}’s content`}
             </p>
             {unrelated ? (
               <p role="note" className="propose-dialog__warning">
@@ -226,7 +239,9 @@ export function ProposeDialog({
         </div>
 
         <p className="propose-dialog__note">
-          It lands when someone approves it. You may approve your own; the step is never skipped.
+          {restoring === undefined
+            ? 'It lands when someone approves it. You may approve your own; the step is never skipped.'
+            : 'Nothing changes until it’s approved.'}
         </p>
         {failure === undefined ? null : (
           <p role="alert" className="propose-dialog__refused">

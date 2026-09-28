@@ -26,11 +26,18 @@ export function ProposeFlow({
   targetPath,
   onProposed,
   onClose,
+  restoring,
 }: {
   readonly item: Proposable;
+  /** A version restored, to propose (T357; design 06, state C). */
+  readonly restoring?: { readonly version: number; readonly description: string } | undefined;
   /** The target's path from Shared, until the check says it. */
   readonly targetPath: readonly string[];
-  readonly onProposed: (proposal: { id: string; status: string }) => void;
+  /** Proposed: the proposal, and the target's path from Shared as checked. */
+  readonly onProposed: (
+    proposal: { id: string; status: string },
+    targetPath: readonly string[],
+  ) => void;
   readonly onClose: () => void;
 }) {
   const client = useQueryClient();
@@ -76,7 +83,7 @@ export function ProposeFlow({
     onSuccess: async (proposal) => {
       await client.invalidateQueries({ queryKey: ['reviews'] });
       await client.invalidateQueries({ queryKey: ['proposal-of', item.kind, item.id] });
-      onProposed(proposal);
+      onProposed(proposal, checked.data?.targetPath ?? targetPath);
     },
   });
 
@@ -91,6 +98,7 @@ export function ProposeFlow({
       check={check}
       busy={proposing.isPending}
       failure={proposing.isError ? proposing.error.message : undefined}
+      restoring={restoring}
       onPropose={(description) => {
         proposing.mutate(description);
       }}

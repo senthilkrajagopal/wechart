@@ -68,7 +68,12 @@ describe('proposing a workspace item (T358, AC-284)', () => {
     await userEvent.type(within(dialog).getByRole('textbox', { name: /What changed/ }), 'Adds it.');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Propose' }));
     await vi.waitFor(() => {
-      expect(onProposed).toHaveBeenCalledWith({ id: 'p1', status: 'open' });
+      // With the target's path as checked (T357: a restore's "Proposed … to Sales / EMEA").
+      expect(onProposed).toHaveBeenCalledWith({ id: 'p1', status: 'open' }, [
+        'Shared',
+        'Sales',
+        'EMEA',
+      ]);
     });
     const sent = fetchMock.mock.calls.find(
       ([url, init]) => url === '/api/proposals' && init?.method === 'POST',

@@ -168,3 +168,32 @@ describe('the Propose dialog (T358, AC-284)', () => {
     );
   });
 });
+
+describe('proposing a restore (T357, AC-289; design 06, state C)', () => {
+  it('is titled for the version, says whose content replaces what, and is filled in, editable', async () => {
+    const onPropose = vi.fn();
+    render(
+      <ProposeDialog
+        check={READY}
+        onPropose={onPropose}
+        onClose={vi.fn()}
+        restoring={{ version: 5, description: 'Restore version 5 (approved 22 Sep by Ada Admin).' }}
+      />,
+    );
+    const dialog = screen.getByRole('dialog', {
+      name: 'Propose restoring version 5 to Sales / EMEA',
+    });
+    expect(within(dialog).getByTestId('propose-item').textContent).toBe(
+      'Dashboard · Revenue overview — replaces version 7 with version 5’s content',
+    );
+    const text = within(dialog).getByLabelText(/What changed/) as HTMLTextAreaElement;
+    expect(text.value).toBe('Restore version 5 (approved 22 Sep by Ada Admin).');
+    expect(within(dialog).getByTestId('propose-counter').textContent).toBe('49 / 1,000');
+    expect(dialog.textContent).toContain('Nothing changes until it’s approved.');
+    await userEvent.type(text, ' Again.');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Propose' }));
+    expect(onPropose).toHaveBeenCalledWith(
+      'Restore version 5 (approved 22 Sep by Ada Admin). Again.',
+    );
+  });
+});
