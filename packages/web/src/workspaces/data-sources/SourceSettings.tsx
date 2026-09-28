@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { DRIVERS, type DriverType, type FieldValue } from '@wechart/core';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type MouseEvent } from 'react';
 
 import type { Me } from '../../shell/AccountMenu';
 import { shortAgo, shortDay } from '../../shell/relativeAge';
@@ -16,6 +16,13 @@ import { CHECK_LABELS } from './connectionTest';
 import { DriverMark } from './driverMarks';
 import { storedRowsOf, storedValuesOf } from './connectionSummary';
 import { HealthBadge } from './health';
+import {
+  EditableConnection,
+  EditableGeneral,
+  EditFoot,
+  LeaveGuard,
+  useSourceEdit,
+} from './SourceEditor';
 import { DATA_SOURCES_QUERY } from './query';
 
 /**
@@ -134,6 +141,21 @@ function Settings({ source }: { source: StoredSource }) {
     source.origin === null ? undefined : list.data?.find((each) => each.id === source.origin?.id);
   const root = rootOf(source);
   const discardButton = useRef<HTMLButtonElement>(null);
+  /**
+   * Changed here where the user may write it: in their workspace, or in place
+   * with sign-in off, where there are no workspaces (T497). A shared one with
+   * sign-in on is changed through a copy (rule 71).
+   */
+  const editable = source.canWrite && (source.inWorkspace || me.data?.security === 'off');
+  const edit = useSourceEdit(source);
+  /** A plain click on a link of the page's is followed by the router, which the leave guard sees. */
+  const inApp = (event: MouseEvent<HTMLAnchorElement>) => {
+    const link = event.currentTarget;
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+      return;
+    event.preventDefault();
+    router.history.push(link.getAttribute('href') ?? '/explore');
+  };
   /** Changed through a copy in the user's workspace, which sign-in gives (rule 71). */
   const copies =
     !source.inWorkspace &&
@@ -167,20 +189,29 @@ function Settings({ source }: { source: StoredSource }) {
       return;
     }
     void queryClient.invalidateQueries({ queryKey: DATA_SOURCES_QUERY.queryKey });
+    // Gone, with whatever was changed in it: nothing left to ask about (T497's review).
+    edit.release();
     globalThis.location.assign(folderHref(MY_WORKSPACE.id));
   };
 
   return (
     <div className="source-settings">
       {/* Under its folder's breadcrumb, wherever it was opened from (pin 1). */}
+      {/* Followed in the app, so leaving with unsaved changes is asked about (state I, T497). */}
       <nav aria-label="Breadcrumb" className="source-settings__crumbs">
-        <a href="/explore">Explore</a>
+        <a href="/explore" onClick={inApp}>
+          Explore
+        </a>
         <span aria-hidden="true"> / </span>
-        <a href={folderHref(root.id)}>{root.title}</a>
+        <a href={folderHref(root.id)} onClick={inApp}>
+          {root.title}
+        </a>
         {source.folderPath.map((folder) => (
           <span key={folder.id}>
             <span aria-hidden="true"> / </span>
-            <a href={folderHref(folder.id)}>{folder.title}</a>
+            <a href={folderHref(folder.id)} onClick={inApp}>
+              {folder.title}
+            </a>
           </span>
         ))}
         <span aria-hidden="true"> / </span>
@@ -234,7 +265,7 @@ function Settings({ source }: { source: StoredSource }) {
               </span>
             )}
           </>
-        ) : (
+        ) : editable ? null : (
           <span className="badge source-settings__access">
             Read-only · in {pathText(source, source.folderPath)}
           </span>
@@ -275,6 +306,15 @@ function Settings({ source }: { source: StoredSource }) {
               }}
             >
               {label}
+              {/* A tab with unsaved changes carries a dot (pin 6). */}
+              {editable &&
+              ((key === 'general' && edit.nameChanged) ||
+                (key === 'connection' && edit.connects)) ? (
+                <>
+                  <span className="source-settings__dot" aria-hidden="true" />
+                  <span className="visually-hidden">, changed</span>
+                </>
+              ) : null}
             </button>
           ))}
         </div>
@@ -285,14 +325,23 @@ function Settings({ source }: { source: StoredSource }) {
           className="source-settings__panel"
         >
           {tab === 'general' ? (
-            <dl className="source-settings__rows">
-              <dt>Name</dt>
-              <dd className="is-code">{source.name}</dd>
-              <dt>Folder</dt>
-              <dd>{pathText(source, source.folderPath)}</dd>
-              <dt>Version</dt>
-              <dd>{String(source.version)}</dd>
-            </dl>
+            <>
+              {editable ? <EditableGeneral source={source} edit={edit} listed={listed} /> : null}
+              <dl className="source-settings__rows">
+                {editable ? null : (
+                  <>
+                    <dt>Name</dt>
+                    <dd className="is-code">{source.name}</dd>
+                  </>
+                )}
+                <dt>Folder</dt>
+                <dd>{pathText(source, source.folderPath)}</dd>
+                <dt>Version</dt>
+                <dd>{String(source.version)}</dd>
+              </dl>
+            </>
+          ) : tab === 'connection' && editable ? (
+            <EditableConnection source={source} edit={edit} />
           ) : tab === 'connection' ? (
             <dl className="source-settings__rows">
               {storedRowsOf(
@@ -318,6 +367,12 @@ function Settings({ source }: { source: StoredSource }) {
           )}
         </div>
       </div>
+      {editable ? (
+        <>
+          <EditFoot edit={edit} />
+          <LeaveGuard source={source} edit={edit} />
+        </>
+      ) : null}
 
       {asking ? (
         <AskToDiscardCopy

@@ -222,7 +222,9 @@ export function initialValues(driver: DriverType): ConnectionValues {
 function connectionShown(driver: DriverType, values: ConnectionValues): DriverField[] {
   const { connection } = DRIVERS[driver];
   const shape = shapeOf(driver, values);
-  const tlsOff = connection.some((field) => field.key === 'ssl') && values.fields['ssl'] !== true;
+  // Off by its value, or by its default where none is held (T497's review).
+  const ssl = connection.find((field) => field.key === 'ssl');
+  const tlsOff = ssl !== undefined && !isOn(ssl, values.fields);
   return connection
     .filter((field) => shape === undefined || shape.fields.includes(field.key))
     .filter((field) => !(tlsOff && TLS_ONLY.has(field.key)));
@@ -302,6 +304,9 @@ export function ConnectionForm({
   onChange,
   stored = [],
   invalid = [],
+  was,
+  asked = {},
+  keptFrom,
 }: {
   driver: DriverType;
   values: ConnectionValues;
@@ -310,6 +315,16 @@ export function ConnectionForm({
   stored?: readonly string[];
   /** Required fields found empty, marked and said (design 01, state B). */
   invalid?: readonly string[];
+  /**
+   * A stored one's settings, on its page (T497; design 03 pin 6): a field
+   * changed from them is tinted, with its old value under it, and the fields
+   * a secret is bound to wear the link icon (AC-312).
+   */
+  was?: Readonly<Record<string, FieldValue>> | undefined;
+  /** Why a stored secret is asked for again, by its field (design 03 pin 7). */
+  asked?: Readonly<Record<string, string>>;
+  /** Where a copy's stored secrets were kept from, said beside them (design 03 state D). */
+  keptFrom?: string | undefined;
 }) {
   const spec = DRIVERS[driver];
   const shapes = shapesOf(driver);
@@ -381,6 +396,13 @@ export function ConnectionForm({
       short={SECOND_OF_PAIR.has(field.key)}
       value={values.fields[field.key]}
       onField={setField}
+      bound={was !== undefined && field.target === true}
+      // Compared as stored and as typed, a default in neither: a field left
+      // at a default nothing stored is unchanged, and one filled in where
+      // nothing was is changed, as the API sees them (T497's review).
+      {...(was === undefined || textOf(was[field.key]) === textOf(values.fields[field.key])
+        ? {}
+        : { was: { value: was[field.key] } })}
       warning={
         driver === 'dremio' && field.key === 'url' && plainHttp(values.fields['url'])
           ? 'This URL starts with http://, so the token would travel unencrypted. Use https://.'
@@ -466,6 +488,8 @@ export function ConnectionForm({
               value={values.secrets[field.key] ?? ''}
               stored={stored.includes(field.key)}
               onSecret={setSecret}
+              asked={asked[field.key]}
+              keptFrom={keptFrom}
             />
           ) : (
             plainField(field)
@@ -485,7 +509,11 @@ export function ConnectionForm({
               <Switch
                 key={field.key}
                 label={fieldLabel(driver, field)}
-                checked={field.key === 'ssl' && locked ? true : values.fields[field.key] === true}
+                checked={field.key === 'ssl' && locked ? true : isOn(field, values.fields)}
+                bound={was !== undefined && field.target === true}
+                {...(was === undefined || isOn(field, was) === isOn(field, values.fields)
+                  ? {}
+                  : { was: isOn(field, was) })}
                 disabled={field.key === 'ssl' && locked}
                 help={
                   field.key === 'ssl' && locked
@@ -519,17 +547,35 @@ export function ConnectionForm({
   );
 }
 
+/** A value as a field shows it, for comparing a field with what was stored. */
+const textOf = (value: FieldValue | undefined) =>
+  value === undefined || value === null ? '' : String(value);
+
+/**
+ * Whether a switch is on: its value, or its driver's default where none is
+ * held — as xcube reads it. A stored one saved without it still verifies
+ * the server's certificate, and says so (T497's review).
+ */
+const isOn = (field: DriverField, fields: Readonly<Record<string, FieldValue>>) =>
+  (fields[field.key] ?? field.defaultValue) === true;
+
+/** Said with a field a stored secret is bound to (AC-312), beside its link icon. */
+const BOUND_SAID = 'A stored secret is bound to this: changing it asks for the secret again.';
+
 /** A field's label, saying in words whether it is required (design 01, pin 4). */
 function Label({
   htmlFor,
   text,
   required,
   optional,
+  bound = false,
 }: {
   htmlFor: string;
   text: string;
   required: boolean;
   optional: boolean;
+  /** A secret is bound to it: changing it asks for the secret again (AC-312). */
+  bound?: boolean;
 }) {
   return (
     <label htmlFor={htmlFor}>
@@ -539,6 +585,9 @@ function Label({
       ) : optional ? (
         <span className="field__req"> · optional</span>
       ) : null}
+      {/* Drawn only: said in the field's description, so its name stays its
+          label (T497's review). */}
+      {bound ? <span className="field__bound" aria-hidden="true" title={BOUND_SAID} /> : null}
     </label>
   );
 }
@@ -558,6 +607,8 @@ function Field({
   invalid,
   short,
   warning,
+  bound = false,
+  was,
 }: {
   driver: DriverType;
   field: DriverField;
@@ -567,13 +618,19 @@ function Field({
   invalid: boolean;
   short: boolean;
   warning?: string | undefined;
+  bound?: boolean;
+  /** Its stored value, given only when it has changed from it (design 03 pin 6). */
+  was?: { readonly value: FieldValue | undefined } | undefined;
 }) {
   const id = useId();
   const hint = field.note ?? HINTS[driver]?.[field.key];
+  const changed = was !== undefined;
   const described = [
     hint === undefined ? undefined : `${id}-note`,
     invalid ? `${id}-error` : undefined,
     warning === undefined ? undefined : `${id}-warning`,
+    changed ? `${id}-was` : undefined,
+    bound ? `${id}-bound` : undefined,
   ]
     .filter((each) => each !== undefined)
     .join(' ');
@@ -588,12 +645,13 @@ function Field({
     value: value === undefined || value === null ? '' : String(value),
   };
   return (
-    <div className={short ? 'field is-short' : 'field'}>
+    <div className={`field${short ? ' is-short' : ''}${changed ? ' is-changed' : ''}`}>
       <Label
         htmlFor={id}
         text={fieldLabel(driver, field)}
         required={required}
         optional={!required && !short && field.defaultValue === undefined}
+        bound={bound}
       />
       {field.kind === 'multiline' ? (
         <textarea
@@ -633,11 +691,22 @@ function Field({
           {warning}
         </span>
       )}
+      {changed ? (
+        // Its stored value, under the change (design 03 pin 6).
+        <span id={`${id}-was`} className="field__was">
+          Was {textOf(was.value) === '' ? 'empty' : <s className="is-code">{textOf(was.value)}</s>}
+        </span>
+      ) : null}
       {hint === undefined ? null : (
         <span id={`${id}-note`} className="connection-form__note">
           {hint}
         </span>
       )}
+      {bound ? (
+        <span id={`${id}-bound`} className="visually-hidden field__bound-said">
+          {BOUND_SAID}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -650,6 +719,8 @@ function SecretField({
   onSecret,
   required,
   invalid,
+  asked,
+  keptFrom,
 }: {
   driver: DriverType;
   field: DriverField;
@@ -658,29 +729,69 @@ function SecretField({
   onSecret: (key: string, value: string) => void;
   required: boolean;
   invalid: boolean;
+  /** Why a stored one is asked for again (design 03 pin 7). */
+  asked?: string | undefined;
+  /** Where a copy's stored one was kept from (design 03 state D). */
+  keptFrom?: string | undefined;
 }) {
   const id = useId();
   // A pasted key is said by its length once pasted, never shown (design 02).
   const [pasting, setPasting] = useState(false);
+  /** A stored one being replaced: its field open, empty (design 03 state D). */
+  const [replacing, setReplacing] = useState(false);
   const pasted = useRef(false);
   const box = useRef<HTMLTextAreaElement>(null);
+  const input = useRef<HTMLInputElement>(null);
   const replace = useRef<HTMLButtonElement>(null);
+  const replaceKept = useRef<HTMLButtonElement>(null);
   /** Where focus goes once the field has changed shape under it: never dropped to the page. */
-  const focusNext = useRef<'box' | 'replace' | null>(null);
+  const focusNext = useRef<'box' | 'input' | 'replace' | 'kept' | null>(null);
   useEffect(() => {
     const next = focusNext.current;
     if (next === null) return;
     focusNext.current = null;
-    (next === 'box' ? box : replace).current?.focus();
+    ({ box, input, replace, kept: replaceKept })[next].current?.focus();
   });
   // A stored one isn't asked for again (AC-164).
   const needed = required && !stored;
   const label = fieldLabel(driver, field);
+  const lower = `${label.charAt(0).toLowerCase()}${label.slice(1)}`;
   const email =
     driver === 'bigquery' && field.key === 'credentials' ? clientEmailOf(value) : undefined;
-  const described = [stored ? `${id}-stored` : undefined, invalid ? `${id}-error` : undefined]
+  const described = [
+    stored ? `${id}-stored` : undefined,
+    invalid ? `${id}-error` : undefined,
+    asked === undefined ? undefined : `${id}-asked`,
+  ]
     .filter((each) => each !== undefined)
     .join(' ');
+
+  // Stored, it is never drawn — not as text, nor as dots standing for it —
+  // only said kept, with Replace (AC-164, rule 83; design 03 state D).
+  if (stored && !replacing && value === '')
+    return (
+      <div className="field">
+        <span className="field__label">{label}</span>
+        <div className="secret-pasted secret-kept">
+          <span className="secret-pasted__lock" aria-hidden="true" />
+          <span>
+            {keptFrom === undefined ? 'Stored · encrypted' : `Kept from ${keptFrom} · encrypted`}
+          </span>
+          <button
+            ref={replaceKept}
+            type="button"
+            className="link-button"
+            aria-label={`Replace the ${lower}`}
+            onClick={() => {
+              setReplacing(true);
+              focusNext.current = field.kind === 'multiline' ? 'box' : 'input';
+            }}
+          >
+            Replace
+          </button>
+        </div>
+      </div>
+    );
   const shared = {
     id,
     autoComplete: 'off',
@@ -744,6 +855,7 @@ function SecretField({
           <span className="secret-pasted__lock" aria-hidden="true" />
           <input
             {...shared}
+            ref={input}
             type="password"
             autoComplete="new-password"
             value={value}
@@ -760,10 +872,32 @@ function SecretField({
         </span>
       ) : null}
       {stored ? (
-        <span id={`${id}-stored`} className="connection-form__note">
-          Stored · encrypted. Type it again only to replace it.
+        // Being replaced: the stored one stays until a new one is saved, and
+        // can be kept instead (design 03 state D).
+        <span className="secret-replacing">
+          <span id={`${id}-stored`} className="connection-form__note">
+            Encrypted in your browser before it’s sent.
+          </span>
+          <button
+            type="button"
+            className="link-button"
+            onClick={() => {
+              onSecret(field.key, '');
+              setReplacing(false);
+              setPasting(false);
+              focusNext.current = 'kept';
+            }}
+          >
+            Keep the stored one
+          </button>
         </span>
       ) : null}
+      {asked === undefined ? null : (
+        <span id={`${id}-asked`} className="field__warning" role="status">
+          <StatusIcon kind="warn" />
+          {asked}
+        </span>
+      )}
       {driver === 'bigquery' && field.key === 'credentials' ? (
         <span className="connection-form__note">
           A service_account key file’s JSON, holding client_email and private_key.
@@ -786,16 +920,29 @@ function Switch({
   disabled = false,
   help,
   onChange,
+  bound = false,
+  was,
 }: {
   label: string;
   checked: boolean;
   disabled?: boolean;
   help?: string | undefined;
   onChange: (checked: boolean) => void;
+  /** A stored secret is bound to it (AC-312): the link icon, as a field's (design 03 pin 6). */
+  bound?: boolean;
+  /** Whether it was on as stored, given only when it has changed from it. */
+  was?: boolean | undefined;
 }) {
   const id = useId();
+  const described = [
+    help === undefined ? undefined : `${id}-help`,
+    was === undefined ? undefined : `${id}-was`,
+    bound ? `${id}-bound` : undefined,
+  ]
+    .filter((each) => each !== undefined)
+    .join(' ');
   return (
-    <div className="switch-row">
+    <div className={`switch-row${was === undefined ? '' : ' is-changed'}`}>
       <input
         id={id}
         type="checkbox"
@@ -803,17 +950,30 @@ function Switch({
         className="switch"
         checked={checked}
         disabled={disabled}
-        aria-describedby={help === undefined ? undefined : `${id}-help`}
+        aria-describedby={described === '' ? undefined : described}
         onChange={(event) => {
           onChange(event.target.checked);
         }}
       />
-      <label htmlFor={id}>{label}</label>
+      <label htmlFor={id}>
+        {label}
+        {bound ? <span className="field__bound" aria-hidden="true" title={BOUND_SAID} /> : null}
+      </label>
       {help === undefined ? null : (
         <span id={`${id}-help`} className="switch-row__help">
           {help}
         </span>
       )}
+      {was === undefined ? null : (
+        <span id={`${id}-was`} className="switch-row__help field__was">
+          Was {was ? 'on' : 'off'}
+        </span>
+      )}
+      {bound ? (
+        <span id={`${id}-bound`} className="visually-hidden field__bound-said">
+          {BOUND_SAID}
+        </span>
+      ) : null}
     </div>
   );
 }

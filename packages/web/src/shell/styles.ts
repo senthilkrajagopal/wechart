@@ -2417,6 +2417,7 @@ fieldset > .connection-form__legend { float: left; width: 100%; }
 .connection-form .field,
 .source-pane .field { display: grid; gap: 4px; min-width: 0; }
 .connection-form .field > label,
+.connection-form .field > .field__label,
 .source-pane .field > label,
 .source-pane .field__label {
   font-size: var(--wc-text-xs-size);
@@ -2887,6 +2888,101 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
   white-space: pre-wrap;
 }
 .source-settings__checks { display: inline-flex; gap: 2px; }
+/* Changing it (T497; design 03 pins 5–10): the form, "Test to save" beside it,
+   changed fields tinted with their old value, and a bar under the card. */
+.source-settings__edit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+  gap: 0;
+  margin: -16px;
+}
+.source-settings__form { display: grid; gap: 16px; align-content: start; min-width: 0; padding: 16px; }
+.source-settings__test {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 16px;
+  border-left: 1px solid var(--wc-border-subtle);
+  background: var(--wc-bg-subtle);
+}
+@media (max-width: 1023.98px) {
+  .source-settings__edit { grid-template-columns: minmax(0, 1fr); }
+  .source-settings__test { border-left: 0; border-top: 1px solid var(--wc-border-subtle); }
+}
+.source-settings__type { max-width: 420px; }
+.source-settings__type-label { color: var(--wc-text-secondary); font-size: 12px; font-weight: 600; }
+.source-settings__type-value {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 4px;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-secondary);
+}
+.source-settings__changed {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--wc-status-warning-icon) 40%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--wc-status-warning-icon) 12%, var(--wc-bg-surface));
+  font-size: 12px;
+  line-height: 16px;
+}
+.source-settings__changed p { margin: 0; }
+.source-settings__changes { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 12px; }
+.source-settings__checks-title { margin: 6px 0 0; color: var(--wc-text-secondary); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.source-settings__general { max-width: 520px; margin-bottom: 16px; }
+.source-settings__foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 10px 16px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+}
+.source-settings__count { color: var(--wc-text-secondary); font-size: 12px; }
+.source-settings__dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--wc-accent);
+  vertical-align: middle;
+}
+/* A field changed from what is stored: tinted, its old value under it (pin 6). */
+.field.is-changed input,
+.field.is-changed textarea {
+  border-color: var(--wc-accent);
+  background: var(--wc-bg-accent-soft);
+}
+.field__was { color: var(--wc-text-secondary); font-size: 12px; line-height: 16px; }
+.field__was s { color: var(--wc-text-muted); }
+/* A switch changed from what is stored: its track tinted as a changed field's
+   border is, "Was on" or "Was off" under it (pin 6). */
+.switch-row.is-changed input.switch { box-shadow: 0 0 0 2px var(--wc-bg-accent-soft); }
+/* A stored secret, never drawn: said kept, with Replace (state D). */
+.secret-kept { font-family: inherit; font-size: var(--wc-text-sm-size); color: var(--wc-text-secondary); }
+.secret-replacing { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.secret-replacing > .link-button { color: var(--wc-accent); font-size: var(--wc-text-xs-size); }
+/* A field a stored secret is bound to (AC-312): the link icon beside its label. */
+.field__bound {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-left: 6px;
+  vertical-align: -1px;
+  background: var(--wc-text-muted);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M6.5 9.5l3-3'/%3E%3Cpath d='M7 4.5l1-1a2.8 2.8 0 0 1 4 4l-1 1'/%3E%3Cpath d='M9 11.5l-1 1a2.8 2.8 0 0 1-4-4l1-1'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M6.5 9.5l3-3'/%3E%3Cpath d='M7 4.5l1-1a2.8 2.8 0 0 1 4 4l-1 1'/%3E%3Cpath d='M9 11.5l-1 1a2.8 2.8 0 0 1-4-4l1-1'/%3E%3C/svg%3E") center / contain no-repeat;
+}
 .source-settings__usage,
 .source-settings__cube { display: grid; gap: 10px; }
 .source-settings__veil {

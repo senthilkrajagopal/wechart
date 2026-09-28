@@ -260,3 +260,130 @@ describe('what is missing (design 01, state B)', () => {
     ).toEqual(['host', 'token']);
   });
 });
+
+/**
+ * T497 (AC-312; design 03 pins 6 and 7): on a stored one's page, a field
+ * changed from what is stored is marked with its old value, the fields a
+ * secret is bound to wear the link icon, and a secret asked for again says why.
+ */
+describe('a stored one’s fields, changed', () => {
+  const was = { host: 'db-1', port: 5432, database: 'sales', user: 'cube', ssl: false };
+  function Stored({
+    asked,
+    fields = was,
+    keptFrom,
+  }: {
+    asked?: Record<string, string>;
+    fields?: Record<string, string | number | boolean>;
+    keptFrom?: string;
+  }) {
+    const [values, setValues] = useState<ConnectionValues>({
+      ...initialValues('postgres'),
+      fields,
+    });
+    return (
+      <>
+        <ConnectionForm
+          driver="postgres"
+          values={values}
+          onChange={setValues}
+          stored={asked === undefined ? ['password'] : []}
+          was={fields}
+          {...(asked === undefined ? {} : { asked })}
+          {...(keptFrom === undefined ? {} : { keptFrom })}
+        />
+        <output data-testid="secrets">{JSON.stringify(values.secrets)}</output>
+        <output data-testid="fields">{JSON.stringify(values.fields)}</output>
+      </>
+    );
+  }
+
+  it('never tints a field left at a default nothing stored, and tints one filled in (T497’s review)', async () => {
+    // The seeded default stores no port and no verification (AC-310).
+    render(<Stored fields={{ host: 'db-1', database: 'sales', user: 'cube', ssl: true }} />);
+    const port = screen.getByLabelText(/^Port/);
+    expect(port.closest('.field')?.classList.contains('is-changed')).toBe(false);
+    await userEvent.type(port, '5433');
+    expect(port.closest('.field')?.classList.contains('is-changed')).toBe(true);
+    expect(port.closest('.field')?.querySelector('.field__was')?.textContent).toBe('Was empty');
+  });
+
+  it('shows a switch nothing stored at its default, bound, and says what it was once changed', async () => {
+    render(<Stored fields={{ host: 'db-1', database: 'sales', user: 'cube', ssl: true }} />);
+    const verify = screen.getByRole('switch', { name: /Verify the server/ });
+    // Unstored, the certificate is still verified: the driver's default.
+    expect((verify as HTMLInputElement).checked).toBe(true);
+    const row = verify.closest('.switch-row') as HTMLElement;
+    expect(row.querySelector('.field__bound')).not.toBeNull();
+    expect(row.classList.contains('is-changed')).toBe(false);
+    await userEvent.click(verify);
+    expect(row.classList.contains('is-changed')).toBe(true);
+    expect(row.querySelector('.field__was')?.textContent).toBe('Was on');
+    expect(verify.getAttribute('aria-describedby')).toContain(
+      row.querySelector('.field__was')?.id ?? 'none',
+    );
+  });
+
+  it('never draws a stored secret: said kept, with Replace, which opens an empty field (state D)', async () => {
+    render(<Stored keptFrom="Sales / EMEA" />);
+    expect(screen.getByText('Kept from Sales / EMEA · encrypted')).toBeTruthy();
+    expect(document.querySelector('input[type="password"]')).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Replace the password' }));
+    const password = screen.getByLabelText(/^Password/);
+    expect((password as HTMLInputElement).value).toBe('');
+    expect(document.activeElement).toBe(password);
+    await userEvent.type(password, 'new-secret');
+    expect(screen.getByTestId('secrets').textContent).toBe('{"password":"new-secret"}');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Keep the stored one' }));
+    expect(document.querySelector('input[type="password"]')).toBeNull();
+    expect(screen.getByTestId('secrets').textContent).toBe('{"password":""}');
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Replace the password' }),
+    );
+  });
+
+  it('says a stored secret is stored, in place, where it isn’t a copy', () => {
+    render(<Stored />);
+    expect(screen.getByText('Stored · encrypted')).toBeTruthy();
+  });
+
+  it('marks a changed field with its stored value, and the fields a secret is bound to', async () => {
+    render(<Stored />);
+    const host = screen.getByLabelText(/^Host/);
+    expect(host.closest('.field')?.classList.contains('is-changed')).toBe(false);
+    await userEvent.clear(host);
+    await userEvent.type(host, 'db-2');
+    const field = host.closest('.field');
+    expect(field?.classList.contains('is-changed')).toBe(true);
+    expect(field?.querySelector('.field__was')?.textContent).toBe('Was db-1');
+    expect(host.getAttribute('aria-describedby')).toContain(
+      field?.querySelector('.field__was')?.id ?? 'none',
+    );
+    // The host is a target field; the database isn't (AC-312). Said in its
+    // description, so its name stays "Host" (T497's review).
+    const bound = field?.querySelector('.field__bound-said');
+    expect(bound?.textContent).toBe(
+      'A stored secret is bound to this: changing it asks for the secret again.',
+    );
+    expect(host.getAttribute('aria-describedby')).toContain(bound?.id ?? 'none');
+    expect(screen.getByRole('textbox', { name: /^Host\s?· required$/ })).toBe(host);
+    expect(
+      screen
+        .getByLabelText(/^Database/)
+        .closest('.field')
+        ?.querySelector('.field__bound'),
+    ).toBeNull();
+  });
+
+  it('says why a stored secret is asked for again', () => {
+    render(<Stored asked={{ password: 'The host changed, so it’s asked for again.' }} />);
+    const input = screen.getByLabelText(/^Password/);
+    const password = input.closest('.field');
+    const said = within(password as HTMLElement).getByRole('status');
+    expect(said.textContent).toBe('The host changed, so it’s asked for again.');
+    // Read with the field, not only announced (T497's review).
+    expect(input.getAttribute('aria-describedby')).toContain(said.id || 'none');
+  });
+});

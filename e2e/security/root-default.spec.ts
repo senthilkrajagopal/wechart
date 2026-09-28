@@ -41,6 +41,8 @@ type Listed = {
 
 test.describe('the root’s default data source, seeded at install (T443, AC-310)', () => {
   test.use({ role: 'super' });
+  // Opened after it is seeded.
+  test.describe.configure({ mode: 'serial' });
 
   test('is made from the Job’s envelope, lands in xcube, connects, and binds the root’s cubes', async ({
     page,
@@ -92,5 +94,53 @@ test.describe('the root’s default data source, seeded at install (T443, AC-310
     // The seeded root cubes name no data source: bound to it (AC-310).
     const cubes = root!.usedBy?.map((cube) => cube.name) ?? [];
     expect(cubes).toEqual(expect.arrayContaining(['orders']));
+  });
+
+  /**
+   * T497 (AC-310, AC-164; design 03 state D): "stored and managed like any
+   * other" — its page opens it, and it changes as any shared one does, in a
+   * copy: its password kept from Shared and never drawn, replaced, tested,
+   * saved, and nothing typed left behind once saved.
+   */
+  test('opens on its page, and changes like any other in a copy of it', async ({ page }) => {
+    const listed = (await (await page.request.get('/api/data-sources')).json()) as Listed[];
+    const root = listed.find((row) => row.folderId === 'root' && row.name === 'default');
+    expect(root).toBeDefined();
+    await page.goto(`/explore/data-sources/${encodeURIComponent(root!.id)}`);
+    const main = page.getByRole('main');
+    await expect(main.getByRole('heading', { level: 1 })).toHaveText('default');
+    await main.getByRole('button', { name: 'Edit in my workspace' }).click();
+    await expect(main.locator('.source-settings__status')).toHaveText('Draft');
+    const copy = decodeURIComponent(page.url().split('/').pop() ?? '');
+
+    try {
+      const tabs = main.getByRole('tablist', { name: 'Data source' });
+      await tabs.getByRole('tab', { name: 'Connection' }).click();
+      const panel = main.getByRole('tabpanel');
+      await expect(panel.getByText('Kept from Shared · encrypted')).toBeVisible();
+      await expect(panel.locator('input[type="password"]')).toHaveCount(0);
+
+      // Replaced — compose's sample database's development login, as the seeding's.
+      await panel.getByRole('button', { name: 'Replace the password' }).click();
+      await expect(panel.getByLabel(/^Password/)).toBeFocused();
+      await panel.getByLabel(/^Password/).fill(env.WECHART_DEFAULT_DB_PASSWORD);
+      await expect(main.locator('.source-settings__count')).toHaveText(
+        '1 unsaved change · Save needs a passing test of these settings.',
+      );
+      await main.getByRole('button', { name: 'Test connection' }).click();
+      await expect(main.getByRole('region', { name: 'Test to save' })).toContainText(
+        'Every check passed',
+        { timeout: 90_000 },
+      );
+      await main.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(main.locator('.source-settings__foot')).toContainText('Saved 1 change.');
+      await expect(main.locator('.source-settings__count')).toHaveText('No unsaved changes');
+      await expect(main.locator('.source-settings__count')).toBeFocused();
+      // Saved, the password is stored and not drawn again (T497's review).
+      await expect(panel.locator('input[type="password"]')).toHaveCount(0);
+      await expect(panel.getByText(/ · encrypted$/)).toBeVisible();
+    } finally {
+      await page.request.delete(`/api/data-sources/${encodeURIComponent(copy)}`);
+    }
   });
 });

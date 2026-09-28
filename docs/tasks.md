@@ -5992,8 +5992,8 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - AC-161 and AC-310 wait on T497.
   - Files: `packages/web/src/workspaces/data-sources/SourceSettings.tsx`, `packages/web/src/workspaces/data-sources/{connectionSummary.ts,health.tsx,DataSourcesList.tsx,DataSourcesPage.tsx}` (+ tests), `packages/web/src/workspaces/explore/FolderContents.tsx` (+ test), `packages/web/src/router/routes.tsx`, `packages/web/src/shell/styles.ts`, `packages/api/src/routes/data-sources.ts`, `packages/api/src/access/data-sources.test.ts`, `e2e/security/data-sources.spec.ts`
   - Depends on: T461, T365
-- [ ] T497 (AC-161, AC-310, AC-158, AC-164, AC-312) Change a data source on its settings page, saved only after a passing test of the change *(added 2026-09-27, split from T462; design 03 of 2026-09-27)*
-  - Files: `packages/web/src/workspaces/data-sources/SourceSettings.tsx`, `packages/web/src/workspaces/data-sources/ConnectionForm.tsx` (+ tests), `e2e/security/data-sources.spec.ts`
+- [x] T497 (AC-161, AC-310, AC-158, AC-164, AC-312) Change a data source on its settings page, saved only after a passing test of the change *(added 2026-09-27, split from T462; design 03 of 2026-09-27)*
+  - Files: `packages/web/src/workspaces/data-sources/{SourceEditor,SourceSettings,ConnectionForm}.tsx` (+ `SourceEditor.test.tsx`, `ConnectionForm.test.tsx`), `packages/web/src/shell/styles.ts`, `e2e/security/{data-sources,root-default}.spec.ts`, `e2e/data-source.spec.ts`
   - Failing test: `data-sources.spec.ts`:
     - in a workspace copy, or in place with sign-in off, General renames it without a test (state B), and says which published cubes still name it (AC-275);
     - Connection is the form, its type fixed with the way to use another (AC-161, pin 5);
@@ -6004,6 +6004,58 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - leaving with unsaved changes asks first (state I);
     - the root's `default` opens and changes like any other (AC-310).
   - Depends on: T462
+  - *As built (2026-09-27, before review):*
+    - **Where it can be changed:** in the user's workspace, or in place with sign-in off, when they may write it. A shared one with sign-in on stays read-only, with Edit in my workspace (T462).
+    - **The page's edit reuses the wizard's parts** (the user's note: "edit source is a repeat of new data source"):
+      - the same `ConnectionForm`;
+      - the same sealing, checks, guidance and fixes (`connectionTest.tsx`, shared with the wizard since T462);
+      - the same change list (`changesSince`).
+    - **What only a stored one has:**
+      - the type locked, with "To use another database, make a new data source" (pin 5, AC-161);
+      - a changed field tinted with "Was …" under it (pin 6);
+      - the link icon on the fields a stored secret is bound to (AC-312);
+      - a stored secret asked for again, saying why, when one of those changes. It is kept again if the field goes back (pin 7).
+    - **Test to save**, beside the form (pin 8), which Save waits on (pins 9–10):
+      - what changed, and "needed again" for a secret;
+      - the four checks, and Test connection once every required field is filled;
+      - "Every check passed · … · of exactly these settings".
+      - Save is enabled only by a passing test of exactly these settings. A change after the pass clears it, and undoing that change restores it. There is no override (R32).
+      - Save sends exactly what was tested, sealed as it was, naming the test (T461).
+    - **General (state B):**
+      - A copy's name is read-only: "A copy keeps its original's name…" (AC-280, the API's rule).
+      - One made new renames without a test, saying what cubes name it as.
+    - **The bar under the card:** "1 unsaved change · Save needs a passing test of these settings" / "· tested 14:21" / "· no test needed for a name", then Discard changes and Save ("Save 2 changes").
+    - **The tabs:** a changed tab carries a dot (said ", changed").
+    - **Leaving (state I):** the breadcrumb and Back, with unsaved changes, ask "Leave without saving?" (Stay, Leave and discard). The breadcrumb follows its links in the app, so the router's guard sees them. Links the browser follows (the bar's workspaces, the search palette, "Copied from", Usage's folders) and a reload get the browser's own question instead. *(Corrected in review: the first note said the bar's workspaces asked too.)*
+  - **Done 2026-09-27, after one review round.** The review's real bugs, each fixed with a test:
+    1. A secret typed, tested and saved stayed in its field, so the page still counted a change and the leave guard still asked. It is now cleared on save, and the form starts anew for the saved version. The Replace field is put away and the secret is said stored.
+    2. The page decided a target change by its own rule, which differs from the API's. It now uses the API's `targetChanges` on the fields sent. Examples: a port typed where the seeded default stored none now asks for the password, as the API does. A switch nothing stored, turned off and on again, is unchanged.
+    3. An optional stored secret (a key passphrase) wasn't asked for again after a target change. The API asks for every one. It is now named in "needed again" and in "Enter … to test".
+    4. A switch whose field isn't stored showed off. Example: the seeded default's "Verify the server's certificate", which xcube still does. Switches, and whether TLS's fields show, now read the driver's default.
+    5. Discarding a copy with a change in it raised the browser's leave question after the copy was gone. The guard now stands down first.
+    6. The "changed" tint missed a field filled in where nothing was stored, and tinted a default nothing stored. It now compares stored with typed, with a default in neither. TLS switches get the link icon and "Was on/off" (pin 6).
+    7. A pass wechart couldn't keep left Save disabled with no reason. It now says so in the wizard's words.
+    8. Accessibility:
+       - the test's outcome is said in a live line kept mounted;
+       - focus goes to the foot's count after Save or Discard changes;
+       - the leave dialog traps focus and gives it back on Stay;
+       - the foot's lines stay mounted;
+       - the "asked again" note is in the password's description;
+       - the link icon is said in the field's description, not its name.
+    9. "needed again" named secrets by their keys; it now uses their labels.
+  - **Design gaps the review found, built:**
+    - State D: a stored secret is never drawn. It shows "Kept from _folder_ · encrypted" (or "Stored · encrypted" in place) with Replace, then "Keep the stored one".
+    - State B: the wizard's name rule is on the field. A name refused as taken is said on the field. A rename of a source that published cubes still name says so up front (AC-275).
+    - Pin 8: with nothing changed, Test connection tests the stored settings, and the test joins the history.
+  - **Left:** after a replaced secret is saved in a copy, it still says "Kept from …", because the API doesn't say whose secret it is. AC-161 stays open: an approved change landing in its folder is the proposal chain's (T352).
+  - **Seen once, not investigated:** a model published while another data source landed in xcube was refused ("Cube refused the model"). Two browsers' runs of `e2e/data-source.spec.ts` did each at once. That file's tests now run one at a time. If it recurs outside tests, it goes to the Cube-expert agent.
+  - **Tests:**
+    - `e2e/security/data-sources.spec.ts` "as writer, changing one" (Chrome, Firefox and Safari): on a copy it changes the database, sees the host ask for the password again, tests with Cube's own driver, sees a later change clear the pass, is asked about leaving and gets focus back on Stay, saves, finds the test in the history, and discards the copy with a change in it without a second question.
+    - `e2e/security/root-default.spec.ts` "opens on its page, and changes like any other in a copy of it": replaces the root default's password in a copy, tests it, saves it, and nothing typed is left.
+    - `e2e/data-source.spec.ts` "with sign-in off, a data source changes in place": renamed without a test, then its database once tested.
+    - `SourceEditor.test.tsx` covers the review's findings.
+    - `ConnectionForm.test.tsx`, "a stored one's fields, changed".
+  - AC-310 ticked, on `root-default.spec.ts`'s two tests, with T435's binding. AC-158, AC-164 and AC-312 were already ticked; this task adds the edit half of each.
 - [x] T364 (AC-157, AC-233) List every visible data source with its folder, driver and health *(2026-09-27: the cubes using each moved to T459; its AC-001 clause is T331's; its AC-161 showing is T363's)*
   - Files: `packages/web/src/workspaces/data-sources/DataSourcesPage.tsx` (replacing the deferred page), `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources`), `e2e/security/data-sources.spec.ts`; *as built (2026-09-27):* also `DataSourcesList.tsx` (+ test), `router/routes.tsx`, `admin/DeferredPage.tsx` (removed), `shell/styles.ts`, `shell/AccountMenu.tsx` (`Me.readWrite`), `packages/api/src/server.ts` (the listing's rule and paths; `/api/me`'s `readWrite`), `repos/connection-tests.ts` (`latestAsStored`, a test's `settings`), `repos/data-sources.ts` (`settingsPrint`), a migration `…_connection-test-settings.cjs`, `access/data-sources.test.ts`, `e2e/admin.spec.ts`
   - Failing test: `data-sources.spec.ts`: the page shows its title and note, lists every source the user may see with folder path, driver, health from the last test ~~and the cubes using it~~, and none they may not; `/sources` opens it~~; `reader` has no Data sources entry~~ (AC-157, AC-233~~, AC-001~~).

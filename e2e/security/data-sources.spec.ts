@@ -375,6 +375,126 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
   });
 
   /**
+   * T497 (AC-158, AC-161, AC-164, AC-312; design 03 of 2026-09-27, pins 5–10
+   * and states B, C, I): changing a data source on its page, in the user's
+   * copy — saved only from a passing test of exactly the changed settings,
+   * with no way round it; a field the stored password is bound to asking for
+   * it again; leaving with changes asked about.
+   */
+  test.describe('as writer, changing one', () => {
+    test.use({ role: 'writer' });
+
+    test('changes its copy: tested before it saves, a target field asking for the password again, leaving asked about', async ({
+      page,
+    }) => {
+      await page.goto('/data-sources');
+      await page
+        .getByRole('main')
+        .getByRole('table', { name: 'Data sources' })
+        .getByRole('link', { name: `sales_${RUN}`, exact: true })
+        .click();
+      const main = page.getByRole('main');
+      await main.getByRole('button', { name: 'Edit in my workspace' }).click();
+      await expect(main.locator('.source-settings__status')).toHaveText('Draft');
+      made.sources.push(decodeURIComponent(page.url().split('/').pop() ?? ''));
+      const tabs = main.getByRole('tablist', { name: 'Data source' });
+
+      // A copy keeps its original's name (AC-280): read-only, saying why (state B).
+      await tabs.getByRole('tab', { name: 'General' }).click();
+      await expect(main.getByLabel('Name')).toHaveAttribute('readonly', '');
+      await expect(main.getByText('A copy keeps its original’s name')).toBeVisible();
+
+      // Its type fixed, and the way to another (pin 5, AC-161).
+      await tabs.getByRole('tab', { name: 'Connection' }).click();
+      const panel = main.getByRole('tabpanel');
+      await expect(panel).toContainText(
+        'The type is fixed. To use another database, make a new data source.',
+      );
+      const save = main.getByRole('button', { name: 'Save', exact: true });
+      await expect(save).toBeDisabled();
+
+      // A change, tinted with its old value; the tab marked; Save needs a test of it.
+      await panel.getByLabel('Database').fill('postgres');
+      await expect(panel.locator('.field.is-changed')).toContainText('Was sample');
+      await expect(tabs.getByRole('tab', { name: /^Connection\s*, changed$/ })).toBeVisible();
+      await expect(main.locator('.source-settings__count')).toHaveText(
+        '1 unsaved change · Save needs a passing test of these settings.',
+      );
+      await expect(save).toBeDisabled();
+
+      // Its host is a field the password is bound to: changed, the password is asked for
+      // again, and nothing is tested until it's given (pin 7, AC-312).
+      await expect(panel.getByLabel('Host')).toHaveAccessibleDescription(
+        /A stored secret is bound to this/,
+      );
+      await expect(panel.locator('.field__bound').first()).toBeVisible();
+      // Until then the password is never drawn: said kept from the original (state D, AC-164).
+      await expect(
+        panel.getByText(`Kept from Sources parent ${RUN} / Sources ${RUN} · encrypted`),
+      ).toBeVisible();
+      await expect(panel.locator('input[type="password"]')).toHaveCount(0);
+      const test = main.getByRole('button', { name: 'Test connection' });
+      await panel.getByLabel('Host').fill('sample-db-elsewhere');
+      await expect(panel).toContainText(
+        'The host changed, so the password kept from the original no longer applies. It’s asked for again.',
+      );
+      await expect(test).toBeDisabled();
+      // Back to its stored host, the stored password holds again.
+      await panel.getByLabel('Host').fill('sample-db');
+      await expect(panel).not.toContainText('no longer applies');
+
+      // Tested with Cube's own driver: every check passed, of exactly these settings (pin 8).
+      await test.click();
+      const beside = main.getByRole('region', { name: 'Test to save' });
+      await expect(beside).toContainText('Every check passed', { timeout: 90_000 });
+      await expect(save).toBeEnabled();
+      // A change after the pass clears it (pin 10), and undoing it brings it back.
+      await panel.getByLabel('Database').fill('postgres2');
+      await expect(save).toBeDisabled();
+      await panel.getByLabel('Database').fill('postgres');
+      await expect(save).toBeEnabled();
+
+      // Leaving with the change asks first (state I); staying puts focus back.
+      const explore = main
+        .getByRole('navigation', { name: 'Breadcrumb' })
+        .getByRole('link', { name: 'Explore' });
+      // From the keyboard, where focus has somewhere to go back to: Safari
+      // doesn't focus a link it clicks.
+      await explore.focus();
+      await explore.press('Enter');
+      const leave = page.getByRole('alertdialog', { name: 'Leave without saving?' });
+      await expect(leave.getByRole('button', { name: 'Stay' })).toBeFocused();
+      await leave.getByRole('button', { name: 'Stay' }).click();
+      await expect(leave).toHaveCount(0);
+      await expect(explore).toBeFocused();
+
+      // Saved as it was tested.
+      await save.click();
+      await expect(main.locator('.source-settings__foot')).toContainText('Saved 1 change.');
+      await expect(main.locator('.source-settings__count')).toHaveText('No unsaved changes');
+      await expect(panel.getByLabel('Database')).toHaveValue('postgres');
+      await tabs.getByRole('tab', { name: 'Test history' }).click();
+      await expect(main.getByRole('tabpanel', { name: 'Test history' })).toContainText('Passed');
+
+      // Discarding the copy with a change in it asks once, not again as the page goes
+      // (T497's review): a second, the browser's, would be dismissed and keep it here.
+      const asked: string[] = [];
+      page.on('dialog', (dialog) => {
+        asked.push(dialog.type());
+      });
+      await tabs.getByRole('tab', { name: 'Connection' }).click();
+      await panel.getByLabel('Database').fill('postgres3');
+      await main.getByRole('button', { name: 'Discard my copy…' }).click();
+      await page
+        .getByRole('alertdialog', { name: 'Discard your copy?' })
+        .getByRole('button', { name: 'Discard' })
+        .click();
+      await expect(page).toHaveURL(/\/explore\?folder=/);
+      expect(asked).toEqual([]);
+    });
+  });
+
+  /**
    * T459 (AC-157): beside each data source, the cubes xcube bound to it at
    * publish. A cube in the sales folder naming `parent_…` binds its parent's;
    * a nearer `parent_…` added after rebinds nothing (AC-273), so the cube
