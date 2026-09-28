@@ -770,6 +770,35 @@ main:has(.model-page) {
   .model-editor { grid-template-columns: minmax(0, 1fr); }
   .model-tree { max-height: 40vh; border-right: 0; border-bottom: 1px solid var(--wc-border-subtle); }
 }
+/* From 1,024 to 1,279 px, one pane at a time behind "Form | YAML" in the
+   editor's head (T487, MW-26; direction §2), across both panes' width, the
+   sync note giving way. The head stays in both — path, state, the switch,
+   Discard and Save — and, YAML chosen, the code takes the form's place
+   beneath it (T487's review). Generate docked takes the code's place: the
+   form alone, and no switch. Wider, both panes, and no switch. */
+/* Over .seg's own display, which comes later. */
+.seg.model-editor__switch { display: none; }
+@media (min-width: 1024px) and (max-width: 1279.98px) {
+  .seg.model-editor__switch { display: inline-flex; flex: none; }
+  .model-editor { grid-template-columns: minmax(0, 1fr); }
+  .model-editor[data-shown='form'] > .model-editor__yaml { display: none; }
+  .model-page:not(.model-page--generating) .model-editor[data-shown='yaml'] {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .model-page:not(.model-page--generating)
+    .model-editor[data-shown='yaml']
+    > .model-editor__pane:not(.model-editor__yaml)
+    > .model-editor__form { display: none; }
+  .model-page--generating .seg.model-editor__switch { display: none; }
+  .model-editor__sync { display: none; }
+}
+/* From 1,280 px both panes show, the form narrower than design 03's 676: its
+   tabs drawn tighter until then, so all eight stay in view (T487's review). */
+@media (min-width: 1280px) and (max-width: 1439.98px) {
+  .model-workspace .model-form > .model-form__tabs button { padding: 0 4px; }
+}
+/* A segment's label never wraps (MW-26). */
+.model-editor .seg button { white-space: nowrap; }
 .model-page__main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .model-page__main > .state-line { margin: var(--wc-surface-padding); }
 .model-page__overview { flex: 1; min-height: 0; overflow: auto; padding: var(--wc-surface-padding); }

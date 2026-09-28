@@ -253,7 +253,8 @@ async function ringShows(control: Locator) {
 test('focus rings are not cut off by the boxes around them', async ({ page }) => {
   // The model file's YAML / Join toggle, inside a rounded box that clips.
   await page.goto('/model/files/cubes%2Forders.yml');
-  const toggle = page.locator('.seg button').first();
+  // (The head's Form | YAML shows only below 1,280 px, T487.)
+  const toggle = page.locator('.model-editor__view button').first();
   await toggle.focus();
   expect(await ringShows(toggle)).toBe('whole');
 

@@ -930,6 +930,97 @@ test('T483: a Jinja file in the editor’s frame, read-only and saying so (MW-16
   await expect(code.locator('.cm-content')).toHaveClass(/cm-lineWrapping/);
 });
 
+test('T487: below 1,280 px the editor is one pane at a time, behind Form | YAML (MW-26)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto(ORDERS);
+  const formPane = page.getByRole('region', { name: 'Form editor' });
+  const codePane = page.getByRole('region', { name: 'YAML and join diagram' });
+  const head = formPane.locator(':scope > .model-editor__head');
+  // In the editor's head, with the path, the state, Discard and Save.
+  const switcher = head.getByRole('group', { name: 'Show' });
+  const [form, yaml] = [
+    switcher.getByRole('button', { name: 'Form' }),
+    switcher.getByRole('button', { name: 'YAML' }),
+  ];
+  await expect(form).toHaveAttribute('aria-pressed', 'true');
+  const body = formPane.locator('.model-editor__form');
+  await expect(body).toBeVisible();
+  await expect(codePane).toBeHidden();
+  // Every tab in view, in the pane's width.
+  const pane = await formPane.boundingBox();
+  const tabs = await formPane.getByRole('tab').all();
+  expect(tabs).toHaveLength(8);
+  for (const tab of tabs) {
+    const box = await tab.boundingBox();
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(
+      (pane?.x ?? 0) + (pane?.width ?? 0),
+    );
+  }
+  // No segment label wraps: each is one line tall.
+  for (const button of [form, yaml])
+    expect(
+      await button.evaluate((element) => element.scrollHeight <= element.clientHeight + 1),
+    ).toBe(true);
+
+  // YAML: the code in the form's place, beneath the head, which stays (T487's review);
+  // pressed from the keyboard, focus stays on it (Safari focuses no button on a click).
+  await yaml.focus();
+  await page.keyboard.press('Enter');
+  await expect(yaml).toHaveAttribute('aria-pressed', 'true');
+  await expect(yaml).toBeFocused();
+  await expect(body).toBeHidden();
+  await expect(codePane).toBeVisible();
+  await expect(head.getByTestId('selected-object')).toHaveText('cubes/orders.yml');
+  await expect(head.locator('.model-editor__state')).toBeVisible();
+  await expect(head.getByRole('button', { name: 'Save & reload Cube' })).toBeVisible();
+  const [headBox, codeBox] = [await head.boundingBox(), await codePane.boundingBox()];
+  expect(Math.round(codeBox?.y ?? 0)).toBeGreaterThanOrEqual(
+    Math.round((headBox?.y ?? 0) + (headBox?.height ?? 0)),
+  );
+  expect(Math.round(codeBox?.width ?? 0)).toBe(Math.round(pane?.width ?? 1));
+  await expect(codePane.locator('.model-editor__sync')).toBeHidden();
+  const joins = codePane.getByRole('button', { name: 'Join diagram' });
+  expect(await joins.evaluate((element) => element.scrollHeight <= element.clientHeight + 1)).toBe(
+    true,
+  );
+  await form.click();
+  await expect(body).toBeVisible();
+
+  // Show in YAML goes to the YAML (T482's bar), focus to the code it shows.
+  await formPane.getByRole('note').getByRole('button', { name: 'Show in YAML' }).click();
+  await expect(codePane).toBeVisible();
+  await expect(yaml).toHaveAttribute('aria-pressed', 'true');
+  await expect(codePane.locator('.cm-content')).toBeFocused();
+
+  // Generate docked takes the code's place: the form, and no switch.
+  await page
+    .getByRole('navigation', { name: 'Model files' })
+    .getByRole('button', { name: 'Generate from a data source…' })
+    .click();
+  const generate = page.getByRole('dialog', { name: 'Generate cubes' });
+  await expect(generate).toBeVisible();
+  await expect(body).toBeVisible();
+  await expect(page.locator('.model-editor__switch:visible')).toHaveCount(0);
+  await generate.getByRole('button', { name: 'Close' }).click();
+
+  // At 1,279 px still one pane at a time; from 1,280 both, every tab in view, no switch.
+  await page.setViewportSize({ width: 1279, height: 800 });
+  await expect(switcher).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(page.locator('.model-editor__switch:visible')).toHaveCount(0);
+  await expect(body).toBeVisible();
+  await expect(codePane).toBeVisible();
+  const wide = await formPane.boundingBox();
+  for (const tab of await formPane.getByRole('tab').all()) {
+    const box = await tab.boundingBox();
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(
+      (wide?.x ?? 0) + (wide?.width ?? 0),
+    );
+  }
+});
+
 test('T470: a bar over the form is a band across the pane, and a view’s tabs are short too', async ({
   page,
 }) => {

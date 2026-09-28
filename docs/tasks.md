@@ -8103,7 +8103,20 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - the note and the card the same width;
     - every object of every file still listed (AC-131).
   - Depends on: T479, T485
-- [ ] T487 (AC-187, AC-344) The editor below 1,280 px: Form | YAML
+- [x] T487 (AC-187, AC-344) The editor below 1,280 px: Form | YAML
+  - **Done 2026-09-27.** Tested in `e2e/model-design.spec.ts` (T487's test, at 1,024, 1,279, 1,280 and 1,440 px, in Chrome, Firefox and Safari). `e2e/keyboard-coverage.spec.ts` now aims its ring check at the YAML | Join diagram toggle.
+  - **From 1,024 to 1,279 px** (MW-26):
+    - A "Form | YAML" segmented switch in the editor's head shows one pane at a time, across both panes' width.
+    - The head stays in both modes: the path, the state, the switch, Discard and Save.
+    - With YAML chosen, the code takes the form's place beneath it. The sync note gives way, and no segment label wraps.
+  - **The review's fixes:**
+    - An edit that raises the loss warning, a refusal or the references question switches back to Form, where it is said.
+    - Show in YAML switches and puts focus on the code.
+    - A file with no form yet (it doesn't parse) opens on YAML.
+    - With Generate cubes docked, which takes the code's place, only the form shows and the switch hides.
+    - From 1,280 to 1,439 px the form's tabs are drawn tighter (4 px a side), so all eight stay in view in the narrower form.
+  - **Left as it was: below 1,024 px** the panes still stack (T396, AC-304). MW-26 asks for an overlay there, as design 01's pane does; that is for the user to choose.
+  - Files (as built): `packages/web/src/workspaces/model/ModelFilePage.tsx`, `packages/web/src/shell/styles.ts`, `e2e/{model-design,keyboard-coverage}.spec.ts`
   - Files: `packages/web/src/workspaces/model/ModelFilePage.tsx`, `packages/web/src/shell/styles.ts`, `e2e/model-design.spec.ts`
   - Failing test: `model-design.spec.ts` at 1,024 × 768 (MW-26):
     - a "Form | YAML" switch in the head shows one pane at a time;

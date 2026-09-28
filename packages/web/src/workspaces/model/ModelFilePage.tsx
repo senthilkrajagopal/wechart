@@ -268,11 +268,14 @@ function FileEditor({
     } catch (error) {
       // An anchor removed that an alias still uses: there's no file to write.
       setRefused(error instanceof Error ? error.message : String(error));
+      // Said in the form: shown, below 1,280 px, where it can be read (T487's review).
+      setShown('form');
       return 'refused';
     }
     const lost = lossOf(read, written);
     if (lost.length > 0) {
       setPending({ written, lost });
+      setShown('form');
       return 'held';
     }
     apply(written);
@@ -295,6 +298,39 @@ function FileEditor({
   const [view, setView] = useState<'yaml' | 'joins'>('yaml');
   /** Soft wrap, on by default (design 03 note 8). */
   const [wrap, setWrap] = useState(true);
+  /**
+   * Below 1,280 px, one pane at a time (T487, MW-26; direction §2): the form,
+   * or the code. Wider, both show, and this is not asked.
+   */
+  const [shown, setShown] = useState<'form' | 'yaml'>(() => {
+    // A file with no form yet — it doesn't parse — opens on its code (T487's review).
+    const opened = modelOf(content).model;
+    return entriesOf(opened?.cubes).length + entriesOf(opened?.views).length === 0
+      ? 'yaml'
+      : 'form';
+  });
+  const editorRoot = useRef<HTMLDivElement>(null);
+  /**
+   * The switch, in the editor's head, which stays in both: the path, the
+   * state, Discard and Save with it (T487's review). Shown only below 1,280
+   * px, by the stylesheet.
+   */
+  const switcher = (
+    <div className="seg model-editor__switch" role="group" aria-label="Show">
+      {(['form', 'yaml'] as const).map((each) => (
+        <button
+          key={each}
+          type="button"
+          aria-pressed={shown === each}
+          onClick={() => {
+            setShown(each);
+          }}
+        >
+          {each === 'form' ? 'Form' : 'YAML'}
+        </button>
+      ))}
+    </div>
+  );
 
   /**
    * What a form edit could lose, said upfront (T482, design 03 note 4): the
@@ -322,9 +358,18 @@ function FileEditor({
         annotations={annotations}
         onShow={() => {
           setView('yaml');
+          setShown('yaml');
           setNotesShown(true);
           const [firstNote] = annotations;
           if (firstNote !== undefined) setReveal({ line: firstNote.from });
+          // Below 1,280 px the bar goes with the form: focus to the code it shows (T487's review).
+          setTimeout(() => {
+            const pressed = document.activeElement;
+            if (pressed instanceof HTMLElement && pressed.offsetParent === null)
+              editorRoot.current
+                ?.querySelector<HTMLElement>('.model-editor__yaml .cm-content')
+                ?.focus();
+          }, 0);
         }}
         onHide={() => {
           hideNotes(path);
@@ -570,6 +615,7 @@ function FileEditor({
         if (found.charts.length + found.dashboards.length > 0) {
           setPublishing(false);
           setReferences({ found, text: sent });
+          setShown('form');
           return;
         }
       }
@@ -607,7 +653,7 @@ function FileEditor({
   };
 
   return (
-    <div className="model-editor">
+    <div ref={editorRoot} className="model-editor" data-shown={shown}>
       {/*
         Two full-height panes, each with its own header row and scrolling
         (AC-223), as the prototype's (model.js, `mount`): the form, headed by
@@ -646,6 +692,7 @@ function FileEditor({
               {outcome.text}
             </StateLine>
           )}
+          {switcher}
           {/* Both always there, as design 03 draws them; pressed only with a
               change (D2) — a file made here always has one to discard. */}
           <button
@@ -896,6 +943,7 @@ function FileEditor({
           onPick={(problem) => {
             // To the YAML, where the problem is (the prototype's click does too).
             setView('yaml');
+            setShown('yaml');
             setGoTo({ at: problem.from });
           }}
         />
