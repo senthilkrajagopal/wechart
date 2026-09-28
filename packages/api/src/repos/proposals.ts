@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
-import type { Kysely } from 'kysely';
+import { sql, type Kysely, type Selectable } from 'kysely';
 
-import type { Database } from '../db/schema';
+import type { Database, ProposalItemTable, ProposalTable } from '../db/schema';
 
 /**
  * Proposals (T349, AC-284; design 05 of 2026-09-27): a workspace item offered
@@ -108,6 +108,10 @@ export interface ProposalStore {
   reopen(id: string): Promise<void>;
   /** An approval landed: its items may be proposed again (T352's review). */
   settle(id: string): Promise<void>;
+  /** Every open proposal, newest first: the Reviews page's to decide (T355). */
+  open(): Promise<Proposal[]>;
+  /** An author's, in every state, newest first: My proposals (T355). */
+  byAuthor(authorKey: string): Promise<Proposal[]>;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -137,6 +141,59 @@ export function proposalStore(db: Kysely<Database>): ProposalStore {
       .where('proposal_id', '=', id)
       .orderBy('position')
       .execute();
+    return proposalOf(row, items);
+  };
+
+  /**
+   * Proposals as the Reviews lists show them (T355's review), newest first:
+   * two queries in all, and of each item's snapshot only whether it is a
+   * dashboard's own chart and what it was copied from, never what it holds.
+   */
+  const listed = async (
+    filter: { readonly open: true } | { readonly authorKey: string },
+  ): Promise<Proposal[]> => {
+    const rows = await (
+      'open' in filter
+        ? db.selectFrom('proposals').selectAll().where('status', '=', 'open')
+        : db.selectFrom('proposals').selectAll().where('author_key', '=', filter.authorKey)
+    )
+      .orderBy('proposed_at', 'desc')
+      .execute();
+    if (rows.length === 0) return [];
+    const items = await db
+      .selectFrom('proposal_items')
+      .select([
+        'proposal_id',
+        'position',
+        'kind',
+        'item_id',
+        'title',
+        'version',
+        'lands_in',
+        'replaces_id',
+        'replaces_version',
+        sql<Record<string, unknown>>`jsonb_strip_nulls(jsonb_build_object(
+          'localToDashboardId', snapshot -> 'localToDashboardId',
+          'origin', jsonb_build_object('id', snapshot -> 'origin' -> 'id')
+        ))`.as('snapshot'),
+      ])
+      .where(
+        'proposal_id',
+        'in',
+        rows.map((row) => row.id),
+      )
+      .orderBy('position')
+      .execute();
+    const byProposal = new Map<string, (typeof items)[number][]>();
+    for (const item of items)
+      byProposal.set(item.proposal_id, [...(byProposal.get(item.proposal_id) ?? []), item]);
+    return rows.map((row) => proposalOf(row, byProposal.get(row.id) ?? []));
+  };
+
+  const proposalOf = (
+    row: Selectable<ProposalTable>,
+    items: readonly Omit<Selectable<ProposalItemTable>, 'open'>[],
+  ): Proposal => {
     const first = items[0];
     return {
       id: row.id,
@@ -308,6 +365,10 @@ export function proposalStore(db: Kysely<Database>): ProposalStore {
         .where('status', '=', 'approved')
         .execute();
     },
+
+    open: () => listed({ open: true }),
+
+    byAuthor: (authorKey) => listed({ authorKey }),
 
     async settle(id) {
       if (!UUID.test(id)) return;

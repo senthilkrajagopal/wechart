@@ -37,6 +37,10 @@ export interface VersionStore {
   /** An item's versions, newest first. */
   list(kind: VersionKind, itemId: string): Promise<KeptVersion[]>;
   get(kind: VersionKind, itemId: string, version: number): Promise<KeptVersion | null>;
+  /** The versions an approval landed (T355: "Approved as version n"), without their content. */
+  landedBy(
+    proposalId: string,
+  ): Promise<{ readonly kind: VersionKind; readonly itemId: string; readonly version: number }[]>;
 }
 
 export function versionStore(db: Kysely<Database>): VersionStore {
@@ -98,6 +102,19 @@ export function versionStore(db: Kysely<Database>): VersionStore {
         .where('version', '=', version)
         .executeTakeFirst();
       return row === undefined ? null : toVersion(row);
+    },
+
+    async landedBy(proposalId) {
+      const rows = await db
+        .selectFrom('item_versions')
+        .select(['kind', 'item_id', 'version'])
+        .where('proposal_id', '=', proposalId)
+        .execute();
+      return rows.map((row) => ({
+        kind: row.kind as VersionKind,
+        itemId: row.item_id,
+        version: row.version,
+      }));
     },
   };
 }

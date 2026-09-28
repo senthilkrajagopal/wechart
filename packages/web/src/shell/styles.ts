@@ -247,6 +247,38 @@ textarea { height: auto; padding: 6px 8px; }
   .app-bar__menu { display: block; }
 }
 
+/* The top bar's Reviews control (T355; design 05, state C): an icon, its
+   word and the count waiting, after search. Below 1,024 px, the icon and the
+   count alone. */
+.app-reviews {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--wc-text-secondary);
+  font-size: var(--wc-text-xs-size);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.app-reviews:hover { color: var(--wc-text-primary); background: var(--wc-bg-hover); }
+.app-reviews[aria-current='page'] { color: var(--wc-accent); }
+.app-reviews__count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--wc-accent);
+  color: var(--wc-text-on-accent);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 1023.98px) {
+  .app-reviews__label { display: none; }
+}
 /* The top bar's search field (AC-190), the prototype's .search. */
 .app-search {
   display: flex;
@@ -3217,6 +3249,50 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 .audit-trail__tested { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
 @media (max-width: 1023px) {
   .audit-trail--open { grid-template-columns: minmax(0, 1fr); }
+}
+/* The Reviews page (T355; design 05, states D and E): the list beside a
+   360 px summary, as the audit trail's. */
+.reviews { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; }
+.reviews__list { display: grid; gap: 12px; min-width: 0; }
+.reviews__tab-count {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--wc-bg-accent-soft);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.reviews__none { margin: 0; color: var(--wc-text-secondary); }
+.reviews__item { font-weight: 600; text-align: left; }
+.reviews__yours {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--wc-text-secondary);
+}
+.reviews__status, .reviews__decision { display: inline-flex; gap: 6px; align-items: center; }
+.reviews__summary.admin-pane { width: 360px; border: 1px solid var(--wc-border-subtle); border-radius: 8px; }
+.reviews__summary-head { display: flex; justify-content: space-between; align-items: center; }
+.reviews__summary-head h2 { margin: 0; font-size: var(--wc-text-sm-size); }
+.reviews__where, .reviews__by { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
+.reviews__label { margin: 0; font-size: 12px; font-weight: 600; }
+/* As written, its line breaks kept (AC-284). */
+.reviews__description { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.reviews__description.is-empty { color: var(--wc-text-secondary); }
+.reviews__decision { margin: 0; font-size: 12px; }
+.reviews__reason {
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--wc-border-subtle);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1023px) {
+  .reviews { grid-template-columns: minmax(0, 1fr); }
+  .reviews__summary.admin-pane { position: static; width: auto; height: auto; }
 }
 /* A screen that needs a Cube API scope wechart lacks (T176, AC-170): said as
    a state, in secondary ink, as an empty tile is — not as a failure. */

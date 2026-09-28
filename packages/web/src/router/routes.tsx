@@ -29,6 +29,7 @@ import { ExplorePage } from '../workspaces/explore/ExplorePage';
 import { JobsPage } from '../workspaces/jobs/JobsPage';
 import { auditFiltersFrom, auditSearchOf } from '../workspaces/security/AuditTrail';
 import { SecuritySurface } from '../workspaces/security/SecuritySurface';
+import { ReviewsPage, type ReviewsView } from '../workspaces/reviews/ReviewsPage';
 import { DataSourcesPage } from '../workspaces/data-sources/DataSourcesPage';
 import { SourceSettings } from '../workspaces/data-sources/SourceSettings';
 import { SchedulesPage } from '../workspaces/schedules/SchedulesPage';
@@ -84,6 +85,38 @@ const securityTabRoute = createRoute({
           },
         }}
       />
+    );
+  },
+});
+
+/**
+ * The Reviews page (T355, AC-287; design 05, state D): in no workspace, its
+ * control beside search. Its tab and the proposal chosen are in the address.
+ */
+const reviewsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/reviews',
+  component: function ReviewsSurface() {
+    const router = useRouter();
+    const searched = useRouterState({ select: (state) => state.location.searchStr });
+    const params = new URLSearchParams(searched);
+    const view: ReviewsView = {
+      tab: params.get('tab') === 'mine' ? 'mine' : 'to-review',
+      selected: params.get('selected') ?? undefined,
+    };
+    return (
+      <AppShell reviews>
+        <ReviewsPage
+          view={view}
+          onView={(next) => {
+            const search = new URLSearchParams();
+            if (next.tab === 'mine') search.set('tab', 'mine');
+            if (next.selected !== undefined) search.set('selected', next.selected);
+            const text = search.toString();
+            router.history.push(`/reviews${text === '' ? '' : `?${text}`}`);
+          }}
+        />
+      </AppShell>
     );
   },
 });
@@ -576,6 +609,7 @@ const routeTree = rootRoute.addChildren([
   sourcesRoute,
   ...workspaceRoutes,
   securityTabRoute,
+  reviewsRoute,
   dashboardRoute,
   // Before chartRoute: the editor path is more specific than /charts/$objectId.
   chartEditorRoute,

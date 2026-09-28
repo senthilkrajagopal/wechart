@@ -5902,10 +5902,36 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/api/src/repos/versions.ts`, `packages/api/src/routes/history.ts` (+ test)
   - Failing test: `history.test.ts`: after 12 approvals an item keeps its last 10 versions; a read-only user gets 404 on its history; "restore version 9" creates a proposal, and the folder is unchanged until it is approved (AC-289).
   - Depends on: T352
-- [ ] T355 (AC-287) List the proposals each user may decide, with their number in the top bar
+- [x] T355 (AC-287) List the proposals each user may decide, with their number in the top bar
   - Files: `packages/web/src/workspaces/reviews/{ReviewsPage,ReviewsControl}.tsx` (+ tests), `packages/web/src/router/routes.tsx` (`/reviews`), `packages/api/src/routes/proposals.ts` (`GET /api/reviews`), `e2e/security/reviews.spec.ts`
   - Failing test: `reviews.spec.ts`: "To review" lists every open proposal the user may decide, each with item, folder, author and description, and none they may not; the top-bar count equals that list's length and is hidden at 0 (AC-287; rule 76).
   - Depends on: T351, T320
+  - *As built (2026-09-28; design 05, states C, D and E):*
+    - `GET /api/reviews` answers `{ toReview, mine }`, each newest first. `toReview` holds every open proposal the user may decide, by T351's rule: a Super-Admin, or a read-write member of every folder it lands in, the author included. `mine` holds the user's own in every state.
+      - Each row: what it is, where it goes (its path from Shared), the author, when, the description, the status, "yours", what goes with it (a dashboard's own charts being part of it), what it replaces, the decision, and the version it landed as. Never what it holds.
+      - With sign-in off, `404` "Proposals need sign-in", as the other proposal routes answer (T359 brings the single user's).
+    - **The top bar's Reviews control** comes after search. It shows an icon, "Reviews" and the number waiting, hidden at 0, and is named "Reviews, 3 waiting". Only Super-Admins and read-write members see it, with sign-in on. It is asked again every minute. Below 1,024 px, the icon and the count alone.
+    - **`/reviews`:**
+      - A list beside a 360 px summary, as the audit trail's.
+      - Tabs "To review n" and "My proposals", with the surface's columns. Theirs are marked "Yours".
+      - The summary: "Dashboard → Sales / EMEA · replaces version 7 · with +1 chart", who and when, and the description with its line breaks (or "No description"). A decided one adds who decided it and when, and a rejection's reason (or "No reason given").
+      - No Approve or Reject: those are the review view's (T356). Its "Open review" comes with that view.
+      - The tab and the proposal chosen are in the address (`?tab=mine&selected=<id>`).
+    - Also files: `packages/api/src/repos/{proposals,versions}.ts` (`open`, `byAuthor`, `landedBy`), a migration `…_reviews-lookup.cjs`, `packages/api/src/server.ts` (the folders, for paths), `packages/api/src/routes/proposal-reviews.test.ts`, `packages/web/src/workspaces/reviews/reviews.ts` (+ test), `packages/web/src/shell/{AppShell,styles}.ts(x)`.
+  - **Review fixes (one round):**
+    1. Closing the summary dropped focus to the page, and Escape didn't close it. Focus now goes back to its row, and Escape closes it.
+    2. The top bar's count read every open proposal and all the user's, with their contents, every minute. It asks `GET /api/reviews/count` now. The lists read each proposal's items in one query, without their contents, and a landed version without its content.
+    3. A target folder deleted since showed as its id. It reads "A deleted folder".
+    4. Choosing the tab already open cleared the proposal chosen. It doesn't now.
+    - Tests added:
+      - the list and `mayApprove` agree, for a dashboard showing a library chart that lands in a folder a decider doesn't write;
+      - a nested folder's path;
+      - what goes with it (the dashboard's own chart left out);
+      - its contents in no list;
+      - the count equals the list, for every role;
+      - the e2e checks the author, `manager` deciding in another folder, and that "never sees it" isn't an error.
+  - **Left:** state D's kind icons in the Item column. The inspector's "Open review" comes with the review view (T356).
+  - **Done 2026-09-28, after one review round. AC-287 ticked:** `e2e/security/reviews.spec.ts` (Chrome) shows each decider the proposals they may decide, with item, folder, author and description, the top bar's number equal to the list, and none to a reader or a decider of another folder.
 - [ ] T356 (AC-287) Review a proposal by seeing the item itself, then approve or reject it
   - Files: `packages/web/package.json` (@codemirror/merge, per its research doc), `packages/web/src/workspaces/reviews/{ReviewView,YamlDiff,SettingsDiff}.tsx` (+ tests), `e2e/security/reviews.spec.ts`
   - Failing test: `reviews.spec.ts`: a dashboard proposal renders the dashboard read-only with a Proposed / Current switch; a model proposal shows a unified YAML diff with +/− markers; a data-source proposal shows a settings table whose credentials read "unchanged" or "replaced"; Approve asks for confirmation; Reject offers a reason with a "_n_ / 1,000" counter; an author sees "Approve my own proposal" (AC-287; rules 77–79).

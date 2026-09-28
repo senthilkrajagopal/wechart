@@ -508,11 +508,14 @@ describe('proposals with sign-in off', () => {
       });
       expect(answer.statusCode).toBe(404);
       expect(answer.json<{ error: string }>().error).toBe('Proposals need sign-in.');
-      // Nor is a proposal to open (T351's review), reject (T353), or show on an item.
+      // Nor is a proposal to open (T351's review), approve (T352), reject
+      // (T353), show on an item, or list for review (T355).
       for (const [method, url] of [
         ['GET', `/api/proposals/${randomUUID()}`],
+        ['POST', `/api/proposals/${randomUUID()}/approve`],
         ['POST', `/api/proposals/${randomUUID()}/reject`],
         ['GET', `/api/proposals?kind=dashboard&itemId=${ids.board}`],
+        ['GET', '/api/reviews'],
       ] as const) {
         const answer = await off.inject({ method, url });
         expect(answer.statusCode, url).toBe(404);

@@ -89,6 +89,10 @@ export interface ProposalRoutes {
    * out once for the request, then asked per folder (T351's review).
    */
   readonly writable: (request: FastifyRequest) => Promise<(folderId: string) => boolean>;
+  /** The shared folders, for a target's path from Shared (T355). */
+  readonly folders?: () => Promise<
+    readonly { readonly id: string; readonly title: string; readonly parentId: string | null }[]
+  >;
 }
 
 const NOT_THERE = { error: 'There is no such item in your workspace.' };
@@ -371,6 +375,89 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
       mayApprove: rights.approve,
       mayReject: rights.reject,
       yours: rights.author,
+    };
+  });
+
+  /**
+   * The Reviews page's lists and the top bar's count (T355, AC-287; design
+   * 05, states C, D and E). "To review": every open proposal the user may
+   * decide, as T351's `rightsOn` says, their own included. "My proposals":
+   * theirs, in every state. Each says what it is, where it goes, who, when
+   * and why, and never what it holds.
+   */
+  const toDecide = async (request: FastifyRequest) => {
+    const user = userOf(request);
+    const writes = await routes.writable(request);
+    // T351's `rightsOn`, for every open proposal at once.
+    return (await store.open()).filter(
+      (proposal) => user.superAdmin || proposal.items.every((item) => writes(item.landsIn)),
+    );
+  };
+
+  /** The top bar's count alone (T355's review): what "To review" lists, counted. */
+  app.get('/api/reviews/count', USER, async (request, reply) => {
+    if (!routes.enabled) return reply.code(404).send({ error: 'Proposals need sign-in.' });
+    return { waiting: (await toDecide(request)).length };
+  });
+
+  app.get('/api/reviews', USER, async (request, reply) => {
+    if (!routes.enabled) return reply.code(404).send({ error: 'Proposals need sign-in.' });
+    const user = userOf(request);
+    const tree = (await routes.folders?.()) ?? [];
+    const byId = new Map(tree.map((folder) => [folder.id, folder]));
+    const pathOf = (folderId: string) => {
+      const path: string[] = [];
+      const seen = new Set<string>();
+      for (let at = byId.get(folderId); at !== undefined && !seen.has(at.id);) {
+        seen.add(at.id);
+        if (at.id !== 'root') path.unshift(at.title);
+        at = at.parentId === null ? undefined : byId.get(at.parentId);
+      }
+      // A target deleted since, named as such rather than by its id.
+      return [
+        'Shared',
+        ...(path.length === 0 && folderId !== 'root' ? ['A deleted folder'] : path),
+      ];
+    };
+    const rowOf = async (proposal: Proposal) => {
+      const { replaces } = answerOf(proposal);
+      const landed =
+        proposal.status === 'approved'
+          ? ((await routes.versions?.landedBy(proposal.id)) ?? []).find(
+              (version) => version.kind === proposal.kind,
+            )
+          : undefined;
+      return {
+        id: proposal.id,
+        kind: proposal.kind,
+        itemId: proposal.itemId,
+        title: proposal.title,
+        targetFolderId: proposal.targetFolderId,
+        targetPath: pathOf(proposal.targetFolderId),
+        author: proposal.author,
+        description: proposal.description,
+        proposedAt: proposal.proposedAt,
+        status: proposal.status,
+        yours: proposal.author.key === user.key,
+        // What goes with it, a dashboard's own charts being part of it.
+        includes: proposal.items
+          .slice(1)
+          .filter((item) => item.snapshot['localToDashboardId'] !== proposal.itemId)
+          .map((item) => ({ kind: item.kind, title: item.title })),
+        replaces,
+        decision: proposal.decision,
+        landedVersion: landed?.version ?? null,
+      };
+    };
+    // One at a time, so a long list never takes every database connection.
+    const rowsOf = async (proposals: readonly Proposal[]) => {
+      const rows = [];
+      for (const proposal of proposals) rows.push(await rowOf(proposal));
+      return rows;
+    };
+    return {
+      toReview: await rowsOf(await toDecide(request)),
+      mine: await rowsOf(await store.byAuthor(user.key)),
     };
   });
 

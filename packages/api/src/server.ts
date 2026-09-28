@@ -891,6 +891,13 @@ export function buildServer({
         const seen = await visibilityOf(request);
         return (folderId) => seen === undefined || mayWrite(seen, folderId);
       },
+      // A target's path from Shared, on the Reviews page (T355).
+      folders: async () =>
+        (cat ? await cat.folders({ counted: false }) : []) as {
+          id: string;
+          title: string;
+          parentId: string | null;
+        }[],
     });
   }
 

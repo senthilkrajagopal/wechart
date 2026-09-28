@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 
 import { useNarrowWindow } from '../dashboard/useNarrowWindow';
+import { ReviewsControl } from '../workspaces/reviews/ReviewsControl';
 import { AccountMenu } from './AccountMenu';
 import { ME_QUERY } from './me';
 import { openSearch, SearchPalette } from './SearchPalette';
@@ -18,6 +19,8 @@ import { WorkspaceSwitcher, type WorkspaceId } from './WorkspaceSwitcher';
 export interface AppShellProps {
   /** The workspace the page belongs to; none for a page that is in none. */
   readonly workspace?: WorkspaceId;
+  /** The Reviews page, whose control the bar marks current (T355). */
+  readonly reviews?: boolean;
   readonly children?: React.ReactNode;
 }
 
@@ -166,7 +169,7 @@ function NarrowMenu({
   );
 }
 
-export function AppShell({ workspace, children }: AppShellProps) {
+export function AppShell({ workspace, reviews = false, children }: AppShellProps) {
   const hidden = useHiddenWorkspaces();
   return (
     <div className="app-shell">
@@ -181,6 +184,8 @@ export function AppShell({ workspace, children }: AppShellProps) {
         <WorkspaceSwitcher current={workspace} hidden={hidden} />
         <span className="app-bar__spacer" />
         <SearchTrigger />
+        {/* After search, for those who may decide something (T355, rule 76). */}
+        <ReviewsControl current={reviews} />
         <NarrowMenu workspace={workspace} hidden={hidden} />
         <ThemeToggle />
         {/* Who is signed in, at the far right (AC-190, AC-252, AC-254). */}

@@ -1072,7 +1072,7 @@ Traces to: §P2.6 E, `[P2 input]`, `[R12, R17, R18]`.
       Fails when: the dashboard lands without those models, or the models land without the dashboard.
 - [ ] AC-286 THE SYSTEM SHALL let a proposal be approved or rejected only by its author, a read-write member of the target folder or a Super-Admin, and SHALL never let one land without an approval (`[R12, R17, R18]`).
       Fails when: a read-only member, or someone without access, can approve; or a proposal lands unapproved.
-- [ ] AC-287 THE SYSTEM SHALL show each user, in the app, the proposals they may approve, each with its item, folder, author and description, and their number in the top bar. There are no notices outside the app (`[R12]`).
+- [x] AC-287 THE SYSTEM SHALL show each user, in the app, the proposals they may approve, each with its item, folder, author and description, and their number in the top bar. There are no notices outside the app (`[R12]`).
       Fails when: a proposal the user may approve is missing, the number differs from the list, or a proposal is shown to someone who may not approve it.
 - [ ] AC-288 WHEN a proposal is approved and ~~the whole model still compiles~~ every module it affects still compiles with it (AC-321), THE SYSTEM SHALL put its item into the folder, replacing any item of the same kind and name, and keep the replaced version in the item's history, a copy wechart holds (`[R17, AD 6, R27]`; amended 2026-09-25; amended 2026-09-26, `[IP 5]`).
       Fails when: the folder shows the old version after an approval that passed the check; the replaced version is missing from history; or an approval that fails the check changes the folder.
