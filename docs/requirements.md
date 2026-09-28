@@ -843,12 +843,29 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R44 — an import always lands in My workspace, with warnings; and design 13's first answers** (2026-09-28, the user)
+- On design 13, Claude asked four questions. The user chose the recommended answer to each:
+  1. **A data source whose name the target already has:** "Map or create". *No Replace for a data source: map it to the existing one, or create it under another name.*
+  2. **Skip, for a library chart on the imported dashboard:** "Target's same-named chart".
+  3. **Replace with sign-in off:** "Yes, keep it in History".
+  4. **Dependencies in Export:** "Ticked". *They start ticked, so the file works wherever it goes.*
+- Then the user: "lets have imports always going to the users workspace.. and from there it can follow the usual flow when it is moved to a folder. Does that make sense? will it make the implementation easier and less confusing. While imorting.. show warnings on which resources may be impacted.. for example.. duplicate model or duplicate datasource for instance.. if this makes sense update the import workflow. and also update the ui design.. have a seperate agent work on this"
+  - *An import puts everything it holds into the importer's workspace as new drafts. It never replaces, renames or skips a shared item. R43.3's "Ask per item" is superseded, and with it answers 2 and 3 above.*
+  - *From the workspace, each item follows the usual flow. Its target is chosen as New in My workspace chooses one. It reaches a shared folder only by Propose and Approve, whose check says what it replaces and refuses what can't land (AC-278, AC-284, AC-288).*
+  - *Before importing, wechart warns, without blocking, of what the drafts may affect when proposed:*
+    - *an item of the same kind and name in the target or the workspace;*
+    - *a model defining a cube or view whose name the target already has (AC-249);*
+    - *a data source whose name the target already has (AC-282). Mapping to that one instead is offered beside the warning.*
+  - *Answer 1 stands: a data source is mapped to an existing one, or created in the workspace with its secrets entered and a passing test.*
+  - *With sign-in off there is no workspace. The import lands as new items in a folder the importer picks, never replacing, with the same warnings. This is Claude's default, drawn in design 13 for the user to confirm.*
+  - *The design agent redraws design 13's Import to this.*
+
 **R43 — exporting and importing a dashboard; and two answers for markings** (2026-09-28, the user)
 - The user: "can we add requirement for export and import dashboard. while exporting dashboard it should give option to select the dependencies.. for datasource, everything can be exported except for the secrets. have any ui agent create a ui-design for this functionality."
 - Claude asked four questions. The user chose the recommended answer to each, and all three optional dependencies:
   1. **Where an import lands:** "My workspace, then propose". *Imported items go into the importer's workspace, with the target folder they choose, and reach it by a proposal like any change (AC-278). With sign-in off, straight into the chosen folder.*
   2. **The dependencies offered at export:** "Library charts it shows, Models its charts use, Data sources". *The dashboard's own charts always go with it. Bookmarks are not exported.*
-  3. **A same-named item where an import lands:** "Ask per item". *Replace (by proposal where shared), keep both (the import renamed), or skip.*
+  3. **A same-named item where an import lands:** "Ask per item". *Replace (by proposal where shared), keep both (the import renamed), or skip.* *Superseded by R44: an import lands as new drafts in the workspace, with warnings.*
   4. **An exported data source on import:** "Map or create". *Map it to an existing data source the importer may use, or create it from the exported settings with its secrets entered, tested before saving.*
 - *A data source is exported with everything but its secrets: its driver, settings and description; never a secret, sealed or not.*
 - *One file holds the export.*

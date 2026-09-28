@@ -8866,6 +8866,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 - [ ] T508 (AC-354, AC-355, AC-356, AC-357, AC-358, AC-359) Export a dashboard with the dependencies chosen, and import one into My workspace *(added 2026-09-28, R43)*
   - Designed first: `docs/design/reviews/2026-09-28/designs/13-dashboard-export-import.html`. This entry is split into tasks once the user approves the design.
   - Importing models waits on T347 and T350 (workspace models).
+  - *2026-09-28, R44:* an import always lands in My workspace as new drafts and never replaces anything; it warns of same-named items, cubes and data sources (AC-357 amended), and the usual Propose and Approve takes each draft to its folder. The design agent is redrawing design 13's Import to this.
   - Depends on: the design's approval; T347 for models
 
 ## Phase 2 coverage: acceptance criterion → task
