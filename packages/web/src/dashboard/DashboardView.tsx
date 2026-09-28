@@ -40,6 +40,7 @@ import {
   granularitiesOf,
   type MemberFormats,
   type RenderSpec,
+  CHART_TYPE_NAMES,
 } from '@wechart/core';
 import {
   useCallback,
@@ -142,6 +143,7 @@ import { chartTypeText } from '../workspaces/explore/chartTypeLabels';
 import { ImageTile } from './tiles/ImageTile';
 import { LinkTile } from './tiles/LinkTile';
 import { allMembers, FilterBar } from '../filters/FilterBar';
+import { FilterSettings } from '../filters/FilterSettings';
 import {
   FilteredCharts,
   keepLastAnswers,
@@ -754,6 +756,8 @@ function TileBody({
           // A drafted chart's from its draft, whose answer is not otherwise known (T401's review).
           rowsTotal={answered?.total ?? rowsTotal}
           badge={badge}
+          // While editing, its kind where the freshness badge and Table view are (T468, UX-032).
+          kind={editing === true ? `Chart · ${CHART_TYPE_NAMES[spec.chartType]}` : undefined}
           {...(tableView === undefined ? {} : { tableView })}
           {...(onTableViewChange === undefined ? {} : { onTableViewChange })}
           {...(tile.h === undefined ? {} : { height: tile.h * ROW_UNIT_PX })}
@@ -1801,6 +1805,7 @@ function AddSlot({
     selected: string | null;
     addTarget: string | null;
     onAdded: (id: string) => void;
+    onAddedFilter: (id: string) => void;
   };
 }) {
   const { document } = session;
@@ -1831,13 +1836,12 @@ function AddSlot({
       // A filter goes on the filter bar, not the grid (F9, AC-076): one
       // change, which Undo and Discard reach like any other.
       onAddFilter={(widget) => {
+        const id = `filter-${String(Date.now())}-${String(counter++)}`;
         session.change({
           ...document,
-          filters: [
-            ...(document.filters ?? []),
-            newFilter(widget, `filter-${String(Date.now())}-${String(counter++)}`),
-          ],
+          filters: [...(document.filters ?? []), newFilter(widget, id)],
         });
+        where.onAddedFilter(id);
       }}
       onAdd={(id) => {
         const mint = () => `el-${String(Date.now())}-${String(counter++)}`;
@@ -4556,6 +4560,30 @@ export function DashboardView({
    * dashboard, so Undo must not step back through it.
    */
   const [selected, setSelected] = useState<string | null>(null);
+  /**
+   * The filter selected while editing, its field, scope and Remove in
+   * Properties (T468, UX-031); and whether focus is asked for in its field
+   * picker. A filter is not an element of the canvas, so it has a selection
+   * of its own, which choosing an element, aiming elsewhere or leaving edit
+   * mode lets go of.
+   */
+  const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
+  const [focusFilterField, setFocusFilterField] = useState(false);
+  const fieldFocused = useCallback(() => {
+    setFocusFilterField(false);
+  }, []);
+  if (selected !== null && selectedFilter !== null) setSelectedFilter(null);
+  if (!sessionEditing && selectedFilter !== null) setSelectedFilter(null);
+  /**
+   * Selected, a filter's Properties show with focus in its field picker —
+   * on adding it and on selecting it, as the user asked (2026-09-28, UX-031).
+   */
+  const selectFilter = (id: string) => {
+    setSelected(null);
+    setSelectedFilter(id);
+    openSidebarPanel('Properties', { focus: false });
+    setFocusFilterField(true);
+  };
 
   const [addTarget, setAddTarget] = useState<string | null>(null);
   /**
@@ -4719,6 +4747,10 @@ export function DashboardView({
     onAdded: (id: string) => {
       setSelected(id);
       setAddTarget(null);
+    },
+    // A filter added is selected, with focus in its field picker (T468, UX-031).
+    onAddedFilter: (id: string) => {
+      selectFilter(id);
     },
   };
 
@@ -5086,7 +5118,43 @@ export function DashboardView({
               }}
             />
           ),
-          properties: (
+          properties: (session.document.filters ?? []).some(
+            (each) => each.id === selectedFilter,
+          ) ? (
+            // A selected filter's field, scope and Remove (T468, UX-031).
+            <FilterSettings
+              filter={(session.document.filters ?? []).find((each) => each.id === selectedFilter)!}
+              filters={session.document.filters ?? []}
+              dashboard={session.document}
+              chartTitleOf={chartTitleOf}
+              focusField={focusFilterField}
+              onFieldFocused={fieldFocused}
+              onFilters={(next) => {
+                session.change({ ...session.document, filters: next });
+              }}
+              onValue={(key, value) => {
+                setFilterValues((current) => {
+                  const next = { ...current };
+                  if (value === undefined) delete next[key];
+                  else next[key] = value;
+                  return next;
+                });
+              }}
+              onRemoved={(neighbour) => {
+                setSelectedFilter(null);
+                // Focus to the next filter's pill, else the filter bar (T182, AC-176).
+                requestAnimationFrame(() => {
+                  const bar = globalThis.document.querySelector<HTMLElement>('section.filter-bar');
+                  (neighbour === undefined
+                    ? bar
+                    : (bar?.querySelector<HTMLElement>(
+                        `[data-filter-id="${CSS.escape(neighbour)}"] button[aria-expanded]`,
+                      ) ?? bar)
+                  )?.focus();
+                });
+              }}
+            />
+          ) : (
             <>
               <TileProperties
                 dashboardId={dashboardId}
@@ -5373,9 +5441,9 @@ export function DashboardView({
                 });
               }}
               editing={session.editing}
-              onFilters={(next) => {
-                session.change({ ...session.document, filters: next });
-              }}
+              // A pill pressed while editing selects its filter (T468, UX-031).
+              selected={selectedFilter}
+              onSelect={selectFilter}
             />
           </>
         )}
@@ -5423,6 +5491,8 @@ export function DashboardView({
               onAim={(next) => {
                 setSelected(next.selected);
                 setAddTarget(next.addTarget);
+                // Aimed at the canvas — an element, a slot, or nothing: not a filter (T468's review).
+                setSelectedFilter(null);
               }}
               deleted={deleted}
               onDeleted={setDeleted}

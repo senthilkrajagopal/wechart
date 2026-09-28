@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashboardView } from '../dashboard/DashboardView';
 import type { DashboardDocument } from '../dashboard/model/document';
-import { openFilter } from './testing';
+import { openFilter, properties, selectFilter } from './testing';
 
 /**
  * T082 / AC-076, on the dashboard: each of the four filter widgets can be
@@ -84,6 +84,8 @@ function dashboard() {
 }
 
 async function addFilter(label: string) {
+  // Adding one leaves the sidebar on its Properties (T468): back to Add for the next.
+  await userEvent.click(screen.getByRole('tab', { name: 'Add' }));
   await userEvent.click(screen.getByTestId('add-filter'));
   const kinds = screen.getByRole('list', { name: 'Filter widgets' });
   await userEvent.click(within(kinds).getByRole('button', { name: new RegExp(`^${label}`) }));
@@ -109,10 +111,11 @@ describe('adding a filter', () => {
       'checkbox',
     ]);
 
-    // Each asks for its field, offering only the members it can filter on.
+    // Each asks for its field, offering only the members it can filter on:
+    // selected, in Properties (T468, UX-031).
     const pick = async (index: number, member: string) => {
-      await openFilter(filters[index]);
-      const select = within(filters[index] as HTMLElement).getByLabelText('Filter on');
+      await selectFilter(filters[index]);
+      const select = within(properties()).getByLabelText('Filter on');
       await userEvent.selectOptions(select, member);
     };
     await pick(0, 'orders.ordered_at');
@@ -130,21 +133,29 @@ describe('adding a filter', () => {
     expect(await within(bar()).findByRole('checkbox', { name: 'shipped' })).toBeTruthy();
   });
 
-  it('opens the filter just added, ready for its field, and one filter at a time', async () => {
+  /** Since T468 (UX-031): selected, its settings in Properties, one filter's at a time. */
+  it('selects the filter just added, ready for its field, and one filter at a time', async () => {
     dashboard();
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
     await addFilter('Date range');
-    await userEvent.selectOptions(within(bar()).getByLabelText('Filter on'), 'orders.ordered_at');
+    await userEvent.selectOptions(
+      within(properties()).getByLabelText('Filter on'),
+      'orders.ordered_at',
+    );
     await addFilter('Checkbox list');
 
-    const [dates, boxes] = within(bar()).getAllByTestId(/^filter-/) as [HTMLElement, HTMLElement];
-    expect(within(boxes).getByLabelText('Filter on')).toBeTruthy();
-    expect(within(dates).queryByLabelText('Filter on')).toBeNull();
+    const [dates] = within(bar()).getAllByTestId(/^filter-/) as [HTMLElement, HTMLElement];
+    expect(
+      within(properties()).getByRole('region', { name: 'Checkbox list filter 2' }),
+    ).toBeTruthy();
+    expect(within(properties()).queryByRole('region', { name: 'Date range filter 1' })).toBeNull();
 
-    await openFilter(dates);
+    await selectFilter(dates);
 
-    expect(within(dates).getByLabelText('Filter on')).toBeTruthy();
-    expect(within(boxes).queryByLabelText('Filter on')).toBeNull();
+    expect(within(properties()).getByRole('region', { name: 'Date range filter 1' })).toBeTruthy();
+    expect(
+      within(properties()).queryByRole('region', { name: 'Checkbox list filter 2' }),
+    ).toBeNull();
   });
 
   it('offers a date range only time fields, and a numeric range only number fields', async () => {
@@ -154,32 +165,32 @@ describe('adding a filter', () => {
     await addFilter('Numeric range');
 
     const filterAt = (index: number) => within(bar()).getAllByTestId(/^filter-/)[index];
-    const optionsOf = (index: number) =>
-      [
-        ...within(filterAt(index) as HTMLElement)
-          .getByLabelText('Filter on')
-          .querySelectorAll('option'),
-      ]
+    // The selected filter's, in Properties (T468).
+    const optionsOf = () =>
+      [...within(properties()).getByLabelText('Filter on').querySelectorAll('option')]
         .map((option) => option.value)
         .filter((value) => value !== '');
 
-    await openFilter(filterAt(0));
+    await selectFilter(filterAt(0));
     expect(
       await vi.waitFor(() => {
-        const found = optionsOf(0);
+        const found = optionsOf();
         if (found.length === 0) throw new Error('no fields yet');
         return found;
       }),
     ).toEqual(['orders.ordered_at']);
-    await openFilter(filterAt(1));
-    expect(optionsOf(1)).toEqual(['orders.id']);
+    await selectFilter(filterAt(1));
+    expect(optionsOf()).toEqual(['orders.id']);
   });
 
   it('is saved with the dashboard', async () => {
     const onSave = dashboard();
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
     await addFilter('Checkbox list');
-    await userEvent.selectOptions(within(bar()).getByLabelText('Filter on'), 'orders.status');
+    await userEvent.selectOptions(
+      within(properties()).getByLabelText('Filter on'),
+      'orders.status',
+    );
 
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
@@ -235,7 +246,9 @@ describe('the values a list filter offers', () => {
     dashboard();
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
     await addFilter('List with search');
-    await userEvent.selectOptions(within(bar()).getByLabelText('Filter on'), member);
+    await userEvent.selectOptions(within(properties()).getByLabelText('Filter on'), member);
+    // Its values in its pill's popover (T468).
+    await openFilter();
   }
 
   it('are asked of Cube in order, and a search is asked of Cube too', async () => {
@@ -278,8 +291,10 @@ it('a value stays with the field it was chosen on, through Undo', async () => {
   dashboard();
   await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
   await addFilter('Checkbox list');
-  await userEvent.selectOptions(within(bar()).getByLabelText('Filter on'), 'orders.status');
-  await userEvent.selectOptions(within(bar()).getByLabelText('Filter on'), 'orders.region');
+  await userEvent.selectOptions(within(properties()).getByLabelText('Filter on'), 'orders.status');
+  await userEvent.selectOptions(within(properties()).getByLabelText('Filter on'), 'orders.region');
+  // Its values in its pill's popover (T468).
+  await openFilter();
   await userEvent.click(await within(bar()).findByRole('checkbox', { name: 'shipped' }));
   expect(within(bar()).getByRole('checkbox', { name: 'shipped' }).matches(':checked')).toBe(true);
 
@@ -354,7 +369,7 @@ describe('a filter’s fields on a dashboard in a folder (T429)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
     await addFilter('List with search');
 
-    const select = within(bar()).getByLabelText('Filter on');
+    const select = within(properties()).getByLabelText('Filter on');
     await waitFor(() => expect(select.querySelectorAll('optgroup')).toHaveLength(2));
     expect(
       [...select.querySelectorAll('optgroup')].map((group) => ({

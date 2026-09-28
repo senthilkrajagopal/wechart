@@ -208,10 +208,15 @@ test('removing a filter leaves focus on the next one', async ({ page, request })
 
   const summary = pill(page, 'f-status').locator('button[aria-expanded]');
   await summary.focus();
+  // Selected by Enter: focus in its field picker in Properties, then Tab by
+  // Tab to its scope and its Remove (T468, UX-031; its review).
   await page.keyboard.press('Enter');
-  await pill(page, 'f-status')
-    .getByRole('button', { name: /^Remove / })
-    .focus();
+  const settings = page.getByRole('complementary', { name: 'Edit sidebar' });
+  await expect(settings.getByLabel('Filter on')).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(settings.getByLabel('Applies to')).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(settings.getByRole('button', { name: /^Remove / })).toBeFocused();
   await page.keyboard.press('Enter');
 
   await expect(pill(page, 'f-status')).toHaveCount(0);
@@ -525,12 +530,19 @@ test.describe('T182: what the first round left open', () => {
     await page.keyboard.press('Enter');
     for (const filter of ['f-status', 'f-ordered']) {
       await pill(page, filter).locator('button[aria-expanded]').focus();
+      // Selected by Enter: focus in its field picker, then Tab to its scope
+      // and its Remove (T468, UX-031).
       await page.keyboard.press('Enter');
-      await pill(page, filter)
-        .getByRole('button', { name: /^Remove / })
-        .focus();
+      const settings = page.getByRole('complementary', { name: 'Edit sidebar' });
+      await expect(settings.getByLabel('Filter on')).toBeFocused();
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Tab');
+      await expect(settings.getByRole('button', { name: /^Remove / })).toBeFocused();
       await page.keyboard.press('Enter');
       await expect(pill(page, filter)).toHaveCount(0);
+      // The first gone, focus is on the one left (the test above), before it is chosen.
+      if (filter === 'f-status')
+        await expect(pill(page, 'f-ordered').locator('button[aria-expanded]')).toBeFocused();
     }
     // On the frame after the filter goes, so asked until then.
     await expect(async () => {

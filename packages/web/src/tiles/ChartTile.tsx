@@ -104,6 +104,13 @@ export interface ChartTileProps {
    * the tile's first row (T253's review).
    */
   readonly notes?: ReactNode;
+  /**
+   * While editing, the element's kind — "Chart · Area" — in the head, in
+   * place of the freshness badge and Table view, which compete with the grip
+   * and the title while arranging (T468, UX-032). The chart is drawn, not a
+   * table view left on.
+   */
+  readonly kind?: string | undefined;
 }
 
 interface ChartBodyProps {
@@ -194,6 +201,7 @@ export function ChartTile({
   rowMarking,
   badge,
   notes,
+  kind,
 }: ChartTileProps) {
   // Uncontrolled unless the owner says otherwise, so a tile that outlives its
   // data needs no ceremony.
@@ -244,9 +252,26 @@ export function ChartTile({
   };
 
   // A table showing itself as a table is a no-op, and offering the switch
-  // there would be a control that does nothing.
-  const canSwitch = spec.chartType !== 'table';
+  // there would be a control that does nothing. Nor while editing (UX-032).
+  const editing = kind !== undefined;
+  const canSwitch = spec.chartType !== 'table' && !editing;
   const showingTable = asTable && canSwitch;
+  /**
+   * The element's kind, where the freshness badge and the switch are while
+   * reading — and still, being asked again, that it is (T183, AC-177; T468's
+   * review): only the badge and the switch give way.
+   */
+  const kindTag = editing ? (
+    <>
+      {busy === true ? (
+        <span className="tile-busy" data-testid="tile-busy">
+          <StatusIcon kind="run" />
+          Updating…
+        </span>
+      ) : null}
+      <span className="tile-head__kind">{kind}</span>
+    </>
+  ) : null;
 
   const heading =
     title === undefined || title.trim() === '' ? null : (
@@ -296,7 +321,8 @@ export function ChartTile({
       )}
     </>
   );
-  const saysOfData = busy === true || served !== undefined || asOf !== undefined;
+  // Not while editing, where the head names the kind instead (UX-032).
+  const saysOfData = !editing && (busy === true || served !== undefined || asOf !== undefined);
   // Empty when its marking holds nothing, and then not drawn (`:empty`).
   const foot = inFoot ? (
     <div className="tile-foot">
@@ -316,11 +342,11 @@ export function ChartTile({
         aria-busy={busy === true ? true : undefined}
       >
         {/* No head at all when all it would hold is under the chart (T402's review). */}
-        {heading === null && (inFoot || (!saysOfData && badge == null)) ? null : (
+        {heading === null && !editing && (inFoot || (!saysOfData && badge == null)) ? null : (
           <div className="tile-head">
             {heading}
             {inFoot ? null : badge}
-            {inFoot ? null : dataAsOf}
+            {editing ? kindTag : inFoot ? null : dataAsOf}
           </div>
         )}
         {notes}
@@ -342,7 +368,7 @@ export function ChartTile({
       <div className="tile-head">
         {heading}
         {inFoot ? null : badge}
-        {inFoot ? null : dataAsOf}
+        {editing ? kindTag : inFoot ? null : dataAsOf}
         {canSwitch ? (
           <button
             type="button"

@@ -8559,9 +8559,34 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - Auto picks them for two or more metrics on different scales, and never a form that hides a metric;
     - in a form that can't draw a metric, that metric's pill says "not drawn", with a one-line reason, and offers Small multiples and Table (UX-057, design 01-5).
   - Depends on: T467
-- [ ] T468 (AC-187) Edit mode: a new filter is selected with focus in its field picker, and edit heads show the element's kind
+- [x] T468 (AC-187) Edit mode: a new filter is selected with focus in its field picker, and edit heads show the element's kind
   - Failing test: `dashboard-edit.spec.ts`: adding a filter selects it, shows Properties and focuses the field picker (UX-031); an edit-mode head reads "Chart · Area", never the freshness badge or Table view (UX-032).
   - Depends on: none
+  - **As built:** `packages/web/src/filters/{FilterSettings,FilterBar,testing}.tsx|ts` (+ `filterProperties.test.tsx`; `addFilter.test.tsx` and `scopeBar.test.tsx` follow the settings to Properties), `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/tiles/ChartTile.tsx` (+ `editHead.test.tsx`), `packages/web/src/shell/styles.ts`, `e2e/dashboard-edit.spec.ts`, and the specs that used the moved controls: `e2e/{filters,keyboard-coverage,crossfilter,tile-head}.spec.ts`.
+  - **Done 2026-09-28.**
+    - **UX-031, the user's option (a) (2026-09-28).** A filter pressed while editing is selected, and its pill is marked (outlined in the accent, as a selected tile is). The sidebar switches to Properties, which shows that filter's field picker, scope ("Applies to") and Remove, under its name ("List with search filter 2"). Focus goes to its field picker, on adding a filter and on selecting one alike. The pill's popover keeps only its value control, and a filter with no field has none.
+      - **Its value, while editing.** A press on the filter already selected opens its value, as a reader's press does. Escape in its settings goes back to its pill, still selected. So from the keyboard: Enter selects it (focus to its field), Tab reaches its scope and Remove, Escape returns to the pill, and Enter opens its value. *How the value is reached while editing (a second press) isn't said by the user's answer; the user can overturn it.*
+      - Choosing a tile, aiming at the canvas (a "+ Add" slot, or nothing), or leaving edit mode lets go of the filter.
+      - Remove takes the filter off the bar, clears its value, and puts focus on the next pill, else the bar (as before, T182).
+    - **UX-032.** While editing, a chart tile's head reads its title and its kind ("Chart · Bar", by the drawn type's name). The freshness badge and Table view are gone, and the chart is drawn, not a table view left on. "Updating…" is still said while a tile is asked again (AC-177). The head stays the title's: the kind tag gives way first (the user, question 29).
+    - **What the tests show.** `filterProperties.test.tsx`, `editHead.test.tsx`, and in Chrome `dashboard-edit.spec.ts`:
+      - adding a List with search filter selects it and shows Properties, with focus in "Filter on", scope and Remove;
+      - the pill's popover has the search box and none of the settings;
+      - Remove in Properties takes the filter off the bar;
+      - the seed dashboard's "Orders by category and status" reads "Chart · Bar" while editing, with no freshness badge or Table view, and has both in view mode.
+    - **Tests changed to follow the settings' move**, their assertions kept:
+      - `addFilter.test.tsx`, `scopeBar.test.tsx`, `filters.spec.ts`: the field, scope and Remove are found in Properties;
+      - `keyboard-coverage.spec.ts`: the Tab path. Enter on a pill focuses its field picker, then Tab reaches "Applies to" and Remove, and focus still lands on the next pill, or in the bar for the last;
+      - `crossfilter.spec.ts`: "clicking a mark while editing selects the tile instead of cross-filtering" reads what the other tile drew from its chart's SVG, since while editing it has no Table view;
+      - `tile-head.spec.ts`: its edit-mode test checks the head is the title and its kind, with no badge, that no title is cut, and that nothing runs past the head.
+    - **The cold review (FAIL)** found these, all fixed and tested:
+      - Focus stayed on a selected filter's pill when it had a field, departing from the user's words, and keyboard users then couldn't reach its settings (T182's behaviour). Now: focus to its field picker, Escape back, and a second press for its value (`filterProperties.test.tsx`; in Chrome, `dashboard-edit.spec.ts` "selecting a filter with a field…" and the keyboard specs).
+      - "Updating…" was hidden in edit mode (AC-177). It's kept now (`editHead.test.tsx`).
+      - The selected pill wasn't marked visibly. It has the accent outline now, checked by its computed style in Chrome.
+      - The filter selection went stale. It's let go on aiming at the canvas and on leaving edit mode (`filterProperties.test.tsx`).
+      - Nits: a misplaced test comment, a stale comment, dead CSS, and the Remove's width.
+    - **Noted, not changed:**
+      - AC-178's table view is now reachable from a tile in view mode only. While editing, the kind takes its place (UX-032). The criterion's Fails-when ("a chart type offers no table view") isn't triggered.
 - [ ] T469 (AC-149, AC-187) Jobs: a row click selects and never navigates, and the query log names members by title
   - Failing test: `jobs.spec.ts`: a row click selects it and docks its detail pane under the app bar; "Open in Model" deep-links to the file's pre-aggregation (UX-080, UX-081); the query log groups rows by day and names members by title (UX-082).
   - Depends on: none

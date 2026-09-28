@@ -11,15 +11,12 @@ import { SecurityPreview } from '../query/securityPreview';
 import { summaryOf } from './describe';
 import {
   FILTER_WIDGETS,
-  membersFor,
   valueKeyOf,
-  withoutMember,
   type DashboardFilter,
   type FilterValue,
   type FilterValues,
 } from './model';
 import { scopeLabel } from './scope';
-import { ScopeEditor } from './ScopeEditor';
 import { CheckboxList } from './widgets/CheckboxList';
 import { DateRange } from './widgets/DateRange';
 import { ListSearch } from './widgets/ListSearch';
@@ -27,8 +24,9 @@ import { NumericRange } from './widgets/NumericRange';
 
 /**
  * The filter bar (F9; direction.md §2: "Horizontal, under the title"). Each
- * filter is a widget on a field; in edit mode it also offers the field to
- * filter on and a way to remove it.
+ * filter is a widget on a field. In edit mode a filter pressed is selected,
+ * and its field, scope and Remove are in the sidebar's Properties
+ * (`FilterSettings`; T468, UX-031).
  */
 export interface FilterBarProps {
   readonly filters: readonly DashboardFilter[];
@@ -41,8 +39,13 @@ export interface FilterBarProps {
   /** A filter's value changed; `undefined` is no filter. */
   readonly onValue: (key: string, value: FilterValue | undefined) => void;
   readonly editing: boolean;
-  /** Change the filters themselves — their fields, which there are. Edit mode only. */
-  readonly onFilters?: ((next: readonly DashboardFilter[]) => void) | undefined;
+  /**
+   * The filter selected while editing, whose field, scope and Remove the
+   * sidebar's Properties shows (T468, UX-031); and a press on a filter's pill,
+   * which selects it.
+   */
+  readonly selected?: string | null | undefined;
+  readonly onSelect?: ((id: string) => void) | undefined;
   /**
    * The interaction chips, at the end of the bar: the cross-filters in
    * effect (AC-119), or a marking's chips in Markings mode (direction.md §7,
@@ -182,22 +185,17 @@ export function FilterBar(props: FilterBarProps) {
   );
 }
 
-function Filters({
-  filters,
-  dashboard,
-  chartTitleOf,
-  values,
-  onValue,
-  editing,
-  onFilters,
-  chips,
-}: FilterBarProps) {
+/**
+ * What a filter picks its field from: the members of the cubes on the
+ * dashboard's folder path, by cube, each cube with its folder path (T429,
+ * AC-329).
+ */
+export function usePickableFields(
+  dashboard: DashboardDocument,
+): readonly { readonly label: string; readonly members: readonly Member[] }[] {
   const meta = useQuery(META_QUERY);
-  const members = useMemo(() => allMembers(meta.data), [meta.data]);
-  // What a filter picks from: the members of the cubes on the dashboard's
-  // folder path, by cube, each cube with its folder path (T429, AC-329).
   const folders = useQuery({ ...FOLDERS_QUERY, enabled: dashboard.folderId !== undefined });
-  const pickable = useMemo(
+  return useMemo(
     () =>
       cubesOnPath(cubesFrom(meta.data), dashboard.folderId, folders.data ?? []).map((cube) => ({
         label: cube.folderPath === undefined ? cube.title : `${cube.title} · ${cube.folderPath}`,
@@ -205,24 +203,36 @@ function Filters({
       })),
     [meta.data, dashboard.folderId, folders.data],
   );
+}
+
+/** How a filter is named apart from the rest, by its kind and place: "List with search filter 2". */
+export function filterNameOf(filters: readonly DashboardFilter[], id: string): string {
+  const index = filters.findIndex((each) => each.id === id);
+  const kind = FILTER_WIDGETS.find((entry) => entry.widget === filters[index]?.widget);
+  return `${kind?.label ?? 'Filter'} filter ${String(index + 1)}`;
+}
+
+function Filters({
+  filters,
+  dashboard,
+  chartTitleOf,
+  values,
+  onValue,
+  editing,
+  selected,
+  onSelect,
+  chips,
+}: FilterBarProps) {
+  const meta = useQuery(META_QUERY);
+  const members = useMemo(() => allMembers(meta.data), [meta.data]);
 
   /**
-   * Which filter's popover is open. Unset, the newest filter still without a
-   * field is open while editing — it shows nothing until one is chosen; `null`
-   * is every popover closed.
+   * Which filter's popover is open, holding its value control; `null` is
+   * every popover closed. A filter's field, scope and Remove are in the
+   * sidebar's Properties while editing (T468, UX-031), not here.
    */
-  const [chosenOpen, setChosenOpen] = useState<{ id: string | null } | undefined>(undefined);
-  // A filter just added opens, ready for its field.
-  const ids = filters.map((filter) => filter.id).join(' ');
-  const [knownIds, setKnownIds] = useState(ids);
-  if (knownIds !== ids) {
-    setKnownIds(ids);
-    const known = new Set(knownIds.split(' '));
-    const added = filters.findLast((filter) => !known.has(filter.id));
-    if (editing && added !== undefined) setChosenOpen({ id: added.id });
-  }
-  const unset = editing ? filters.findLast((filter) => filter.member === undefined)?.id : undefined;
-  const openId = chosenOpen === undefined ? (unset ?? null) : chosenOpen.id;
+  const [chosenOpen, setChosenOpen] = useState<{ id: string | null }>({ id: null });
+  const openId = chosenOpen.id;
   const bar = useRef<HTMLElement>(null);
 
   // Escape, or a press outside the open pill, closes its popover.
@@ -263,12 +273,13 @@ function Filters({
         if (!editing && member === undefined) return null;
         /**
          * Each filter is a group named by its kind and place, so a reader who
-         * cannot see the bar can tell one "Filter on" menu from the next.
+         * cannot see the bar can tell one filter from the next.
          */
         const name = `${kind?.label ?? 'Filter'} filter ${String(index + 1)}`;
         const key = valueKeyOf(filter);
         const value = values[key];
-        const open = openId === filter.id;
+        // Only a filter with a field has a value to set.
+        const open = openId === filter.id && member !== undefined;
         const popover = `filter-popover-${filter.id}`;
         const summary =
           member === undefined
@@ -278,8 +289,8 @@ function Filters({
         return (
           /**
            * The prototype's filter pill (AC-187): its scope, then the field
-           * and what it holds; its control, and while editing its settings,
-           * in a popover that opens from it.
+           * and what it holds; its value control in a popover that opens
+           * from it.
            */
           <div
             key={filter.id}
@@ -289,6 +300,8 @@ function Filters({
             data-testid={`filter-${filter.id}`}
             data-filter-id={filter.id}
             data-widget={filter.widget}
+            // Selected while editing, its settings in Properties (T468).
+            {...(editing && selected === filter.id ? { 'data-selected': 'true' } : {})}
             /**
              * Focus moved out of the pill — Tab past the popover's last
              * control — closes it, or focus lands on whatever it lies over
@@ -313,7 +326,18 @@ function Filters({
               // Only while there is a popover for it to name.
               {...(open ? { 'aria-controls': popover } : {})}
               onClick={() => {
-                setChosenOpen({ id: open ? null : filter.id });
+                /**
+                 * While editing, a press on a filter not yet selected selects
+                 * it: its field, scope and Remove in Properties, with focus in
+                 * its field picker (T468, UX-031). Pressed again, selected, it
+                 * opens its value, as a reader's press does.
+                 */
+                if (editing && selected !== filter.id) {
+                  setChosenOpen({ id: null });
+                  onSelect?.(filter.id);
+                  return;
+                }
+                if (member !== undefined) setChosenOpen({ id: open ? null : filter.id });
               }}
             >
               {summary}
@@ -344,102 +368,17 @@ function Filters({
                 ×
               </button>
             )}
-            {open ? (
+            {/* Its value control alone (T468, UX-031); none until it has a field. */}
+            {open && member !== undefined ? (
               <div id={popover} className="filter-popover">
-                {editing ? (
-                  <div className="filter-popover__settings">
-                    <select
-                      aria-label="Filter on"
-                      value={filter.member ?? ''}
-                      onChange={(event) => {
-                        const chosen = event.target.value;
-                        // Kept open on this filter: its control comes next.
-                        setChosenOpen({ id: filter.id });
-                        // The value stays with the field it was chosen on
-                        // (`valueKeyOf`), so there is nothing here to clear.
-                        onFilters?.(
-                          filters.map((each) => {
-                            if (each.id !== filter.id) return each;
-                            return chosen === ''
-                              ? withoutMember(each)
-                              : { ...each, member: chosen };
-                          }),
-                        );
-                      }}
-                    >
-                      <option value="">{kind?.label ?? 'Filter'}: choose a field…</option>
-                      {pickable.map(({ label, members: ofCube }) => {
-                        const fitting = membersFor(filter.widget, ofCube);
-                        return fitting.length === 0 ? null : (
-                          <optgroup key={label} label={label}>
-                            {fitting.map((candidate) => (
-                              <option key={candidate.name} value={candidate.name}>
-                                {candidate.title}
-                              </option>
-                            ))}
-                          </optgroup>
-                        );
-                      })}
-                    </select>
-                    <ScopeEditor
-                      filter={filter}
-                      dashboard={dashboard}
-                      chartTitleOf={chartTitleOf}
-                      onScope={(scope) => {
-                        onFilters?.(
-                          filters.map((each) =>
-                            each.id === filter.id ? { ...each, scope } : each,
-                          ),
-                        );
-                      }}
-                    />
-                    <button
-                      type="button"
-                      className="btn-ghost btn-sm filter-popover__remove"
-                      aria-label={`Remove ${name}`}
-                      onClick={() => {
-                        /**
-                         * Focus to the next filter, else the one before, once
-                         * this one has gone (T182, AC-176): with it goes the
-                         * control focus was on.
-                         */
-                        const neighbour = (filters[index + 1] ?? filters[index - 1])?.id;
-                        // The bar's place, which outlives this bar: with its
-                        // last filter gone it is drawn by another component.
-                        const holder = bar.current?.parentElement ?? null;
-                        setChosenOpen({ id: null });
-                        onFilters?.(filters.filter((each) => each.id !== filter.id));
-                        onValue(key, undefined);
-                        requestAnimationFrame(() => {
-                          // The last one gone: the bar itself, not the page
-                          // (T182's second round).
-                          if (neighbour === undefined) {
-                            holder?.querySelector<HTMLElement>(':scope > .filter-bar')?.focus();
-                            return;
-                          }
-                          bar.current
-                            ?.querySelector<HTMLElement>(
-                              `[data-filter-id="${CSS.escape(neighbour)}"] button[aria-expanded]`,
-                            )
-                            ?.focus();
-                        });
-                      }}
-                    >
-                      {/* Its name begins with what it shows (WCAG 2.5.3). */}
-                      Remove
-                    </button>
-                  </div>
-                ) : null}
-                {member === undefined ? null : (
-                  <FilterWidgetFor
-                    filter={filter}
-                    member={member}
-                    value={value}
-                    onValue={(next) => {
-                      onValue(key, next);
-                    }}
-                  />
-                )}
+                <FilterWidgetFor
+                  filter={filter}
+                  member={member}
+                  value={value}
+                  onValue={(next) => {
+                    onValue(key, next);
+                  }}
+                />
               </div>
             ) : null}
           </div>

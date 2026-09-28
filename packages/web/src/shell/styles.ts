@@ -4980,14 +4980,19 @@ button.filter-pill__clear {
   box-shadow: var(--wc-shadow-pop);
   font-size: var(--wc-text-sm-size);
 }
-.filter-popover__settings {
-  display: grid;
-  gap: 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--wc-border-subtle);
-}
-.filter-popover__remove { justify-self: start; }
 .filter-popover input[type='number'] { width: 7em; }
+/* A filter selected while editing (T468, UX-031), marked as a selected tile
+   is: its settings are the ones in Properties. */
+.filter-pill[data-selected='true'] { outline: 2px solid var(--wc-accent); outline-offset: 2px; }
+/* Its settings in Properties: its field, where it applies, and Remove. */
+.filter-settings { display: grid; gap: 6px; }
+.filter-settings__label {
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  font-weight: 600;
+  color: var(--wc-text-secondary);
+}
+.filter-settings__remove { justify-self: start; margin-top: 6px; }
 .filter-widget { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .filter-widget__options {
   display: flex;
@@ -5599,6 +5604,16 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   color: var(--wc-text-muted);
   font-size: var(--wc-text-xs-size);
   line-height: var(--wc-text-xs-line);
+}
+/* A chart's, after its title, where the freshness badge is while reading
+   (T468, UX-032). The head is the title's (the user, question 29): the kind
+   gives way first, cut before the title is. */
+.chart-tile .tile-head__kind {
+  flex: 0 1000 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Resize handles (AC-055, direction.md rule 36). Right edge, bottom edge and

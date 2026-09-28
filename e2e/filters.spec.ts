@@ -165,17 +165,33 @@ const ORDERED_AT = 'Orders Ordered at';
 /** The filter pill of a kind: the bar's only one of that kind. */
 const pill = (page: Page, widget: string) => filterBar(page).locator(`[data-widget="${widget}"]`);
 
-/** Opens a filter pill's popover, where its control is (AC-187); left open if open. */
+/**
+ * Opens a filter pill's popover, where its control is (AC-187); left open if
+ * open. While editing, a filter not yet selected takes two presses: the
+ * first selects it (T468).
+ */
 async function open(filter: Locator) {
   const summary = filter.locator('button[aria-expanded]');
+  if ((await summary.getAttribute('aria-expanded')) === 'true') return;
+  await summary.click();
   if ((await summary.getAttribute('aria-expanded')) !== 'true') await summary.click();
+  await expect(summary).toHaveAttribute('aria-expanded', 'true');
 }
 
+/** The edit sidebar's Properties, where a selected filter's field, scope and Remove are (T468). */
+const properties = (page: Page) =>
+  page.getByRole('complementary', { name: 'Edit sidebar' }).getByRole('tabpanel');
+
 async function addFilter(page: Page, widget: string, member: string) {
+  // Adding one leaves the sidebar on its Properties (T468): back to Add for the next.
+  await page
+    .getByRole('complementary', { name: 'Edit sidebar' })
+    .getByRole('tab', { name: 'Add' })
+    .click();
   await page.getByTestId('add-filter').click();
   await page.getByTestId(`add-filter-${widget}`).click();
-  const added = filterBar(page).locator(`[data-widget="${widget}"]`).last();
-  await added.getByLabel('Filter on').selectOption(member);
+  // Selected, its field picker in Properties (T468, UX-031).
+  await properties(page).getByLabel('Filter on').selectOption(member);
 }
 
 test('each of the four filter widgets can be added to a dashboard, and is kept', async ({
@@ -253,9 +269,10 @@ test('a filter is scoped to the dashboard, a tab or chosen tiles, and shows it',
   const badge = filterBar(page).getByTestId('scope-badge');
   await expect(badge).toHaveText('Dashboard');
 
-  const appliesTo = filterBar(page).getByLabel('Applies to');
+  // Its scope in Properties, the filter selected (T468, UX-031).
+  const appliesTo = properties(page).getByLabel('Applies to');
   await appliesTo.selectOption({ label: 'Chosen tiles' });
-  await filterBar(page)
+  await properties(page)
     .getByRole('checkbox', { name: 'Operations by status (Operations)' })
     .check();
   await expect(badge).toHaveText('Tile: Operations by status');

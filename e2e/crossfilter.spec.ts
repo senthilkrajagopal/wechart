@@ -258,15 +258,27 @@ test('clicking a mark while editing selects the tile instead of cross-filtering'
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();
 
+  // What the other tile drew, read off its chart: while editing, a tile has
+  // no Table view to read it by (T468, UX-032).
   const category = tile(page, 'tile-category');
-  const before = await valuesIn(category);
+  const drawn = () =>
+    category
+      .getByTestId('chart-canvas')
+      .locator('svg path')
+      .evaluateAll((paths) => paths.map((path) => path.getAttribute('d')));
+  // Its bars drawn: a filled path, not the zero-high gridlines drawn first.
+  await expect(
+    category.getByTestId('chart-canvas').locator('svg path:not([fill="none"])').first(),
+  ).toBeVisible();
+  const before = await drawn();
+  expect(before.length).toBeGreaterThan(0);
 
   await clickBar(page, tile(page, 'tile-status'), 'shipped');
 
   // Editing is arranging, not reading: a click picks the tile up.
   await expect(tile(page, 'tile-status')).toHaveAttribute('data-selected', 'true');
   await page.waitForLoadState('networkidle');
-  expect(await valuesIn(category)).toEqual(before);
+  expect(await drawn()).toEqual(before);
 });
 
 /**

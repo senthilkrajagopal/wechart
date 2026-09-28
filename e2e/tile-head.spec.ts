@@ -183,7 +183,11 @@ test('on the KPI row, no title is cut while a badge sits in its head, load after
   expect(new Set(placements).size).toBe(1);
 });
 
-test('in edit mode too, no title is cut while a badge sits in its head', async ({
+/**
+ * In edit mode a chart tile's head holds its title and its kind, and no
+ * freshness badge (T468, UX-032): still the title's, never cut for the kind.
+ */
+test('in edit mode, each head is its title and its kind: no badge, and no title cut', async ({
   page,
   request,
 }) => {
@@ -192,6 +196,14 @@ test('in edit mode too, no title is cut while a badge sits in its head', async (
   await drawn(page);
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();
-  await drawn(page);
-  expectTheHeadIsTheTitles(await headsOf(page), 'edit mode');
+  for (const index of KPIS.keys()) {
+    const tile = page.locator(`[data-tile="kpi-${String(index)}"]`);
+    await expect(tile.locator('.tile-head .tile-head__kind')).toHaveText(/^Chart · /);
+    await expect(tile.getByTestId('tile-freshness')).toHaveCount(0);
+  }
+  for (const head of await headsOf(page)) {
+    expect(head.cut, `edit mode: "${head.title}" ${JSON.stringify(head)}`).toBe(false);
+    // Nothing in the head runs past it, the kind included (T468's review).
+    expect(head.fits, `edit mode: "${head.title}" ${JSON.stringify(head)}`).toBe(true);
+  }
 });
