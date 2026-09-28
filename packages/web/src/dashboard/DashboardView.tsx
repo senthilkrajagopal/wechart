@@ -153,6 +153,9 @@ import {
 import { newFilter, type FilterValues } from '../filters/model';
 import { adoptValues, sameValues, type SearchFilter } from '../filters/url';
 import { StateLine } from '../shell/StatusIcon';
+import { MenuButton } from '../shell/MenuButton';
+import { ExportPane, type Outline as ExportOutline } from './export/ExportPane';
+import { ExportedToast } from './export/ExportedToast';
 import { Canvas, type CanvasProps } from './grid/Canvas';
 import { DRAG_INSTRUCTIONS, DRAG_INSTRUCTIONS_ID, useTileDrag } from './grid/drag';
 import { COLUMNS, ROW_UNIT_PX } from './grid/geometry';
@@ -1037,6 +1040,11 @@ interface Affordances {
   readonly addHere?: CanvasProps['addHere'];
   /** A tile's name, as the reader knows it (AC-209): its title, never its id. */
   readonly nameOf?: ((id: string) => string) | undefined;
+  /**
+   * What outlines a chart's tiles, by the chart: the dependency hovered over
+   * or focused in the Export pane (T511, AC-360). Nothing where none is.
+   */
+  readonly outlinedBy?: ((chartId: string) => string | undefined) | undefined;
   /** Deleting an element from its ⋯ menu, with an undo (AC-060). */
   readonly onDelete?: ((id: string) => void) | undefined;
   /** Duplicating a chart tile from its ⋯ menu, the copy with a chart of its own (AC-062). */
@@ -1129,6 +1137,16 @@ function Elements({
       selection={affordances.selection}
       addHere={affordances.addHere}
       nameOf={affordances.nameOf}
+      outlineOf={
+        affordances.outlinedBy === undefined
+          ? undefined
+          : (id) => {
+              const element = items.find((candidate) => candidate.id === id);
+              return element !== undefined && isTile(element) && element.chartId !== undefined
+                ? affordances.outlinedBy?.(element.chartId)
+                : undefined;
+            }
+      }
     >
       {(item) => {
         const element = items.find((candidate) => candidate.id === item.id);
@@ -2143,6 +2161,27 @@ export function DashboardView({
   useEffect(() => {
     onEditingChange?.(sessionEditing);
   }, [sessionEditing, onEditingChange]);
+  /**
+   * Exporting (T511; AC-354, AC-360; design 13): the pane, opened from the
+   * header's ⋯ in view mode; the tiles its hovered or focused dependency is
+   * used on, outlined; and the toast once the file is downloaded (state E).
+   */
+  const [exporting, setExporting] = useState(false);
+  const [outline, setOutline] = useState<ExportOutline | null>(null);
+  const [exported, setExported] = useState('');
+  const closeExport = () => {
+    setExporting(false);
+    setOutline(null);
+    // Back to the ⋯ it came from (design 13, keyboard table).
+    requestAnimationFrame(() => {
+      window.document.querySelector<HTMLElement>('[data-testid="dashboard-more"]')?.focus();
+    });
+  };
+  // The file holds the saved dashboard: not offered while editing (pin 1).
+  if (exporting && sessionEditing) {
+    setExporting(false);
+    setOutline(null);
+  }
   /**
    * The cross-filter selections in effect (AC-117): what was clicked, and on
    * which tile. Held here rather than in the document, because clicking a
@@ -4974,6 +5013,31 @@ export function DashboardView({
                 </button>
               )
             }
+            {/* More (⋯), after the header's other actions, holding Export…
+                (T511; design 13, pin 1): in view mode only, since the file
+                holds the dashboard as saved; pressed while the pane is open. */}
+            {session.editing || preview !== undefined ? null : (
+              <MenuButton
+                label="More"
+                testId="dashboard-more"
+                className={
+                  exporting
+                    ? 'btn-ghost icon-button dashboard__more is-pressed'
+                    : 'btn-ghost icon-button dashboard__more'
+                }
+                items={[
+                  {
+                    key: 'export',
+                    label: 'Export…',
+                    onSelect: () => {
+                      setExporting(true);
+                    },
+                  },
+                ]}
+              >
+                <span aria-hidden="true">⋯</span>
+              </MenuButton>
+            )}
           </>
         )}
         /**
@@ -5496,10 +5560,35 @@ export function DashboardView({
               }}
               deleted={deleted}
               onDeleted={setDeleted}
+              outlinedBy={
+                outline === null
+                  ? undefined
+                  : (chartId) => (outline.chartIds.includes(chartId) ? outline.label : undefined)
+              }
             />
           </>
         )}
       </EditChrome>
+      {/* Export, docked at the dashboard's edge (T511; design 13, pin 2). */}
+      {exporting ? (
+        <ExportPane
+          dashboardId={dashboardId}
+          title={document.title}
+          className="export-pane--over"
+          onOutline={setOutline}
+          onClose={closeExport}
+          onExported={(message) => {
+            setExported(message);
+            closeExport();
+          }}
+        />
+      ) : null}
+      <ExportedToast
+        message={exported}
+        onDismiss={() => {
+          setExported('');
+        }}
+      />
     </SecurityPreview.Provider>
   );
 }
@@ -5639,9 +5728,12 @@ function DashboardPages({
   markSaid = '',
   markKeys,
   canEdit = true,
+  outlinedBy,
 }: {
   session: EditSession<DashboardDocument>;
   charts: TileCharts;
+  /** What outlines a chart's tiles, from the Export pane (T511, AC-360). */
+  outlinedBy?: ((chartId: string) => string | undefined) | undefined;
   /** The last marking change, for the dashboard's polite live region (AC-101). */
   markSaid?: string;
   /**
@@ -5801,6 +5893,7 @@ function DashboardPages({
     editing,
     charts,
     nameOf: tileName,
+    outlinedBy,
     sections: {
       collapsed: collapsedSections,
       toggle: (id) => {

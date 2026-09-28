@@ -2272,6 +2272,163 @@ main:has(.admin-page--docked) {
 .source-pane__foot-note { font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
 .source-pane__foot-note.is-err { color: var(--wc-status-error); }
 
+/* Exporting a dashboard (T511; AC-354, AC-360; design 13, screen 1): design
+   01's pane, docked beside Explore's list where Access docks, or at the
+   dashboard's edge, the dashboard narrowing beside it so the tiles a
+   dependency is used on stay in view. */
+.explore--export { grid-template-columns: 260px minmax(0, 1fr) 480px; }
+.export-pane--over {
+  position: fixed;
+  top: var(--wc-app-bar-height);
+  right: 0;
+  bottom: 0;
+  width: 480px;
+  height: auto;
+  z-index: 6;
+}
+main:has(.export-pane--over) { padding-right: 480px; }
+.export-pane h2:focus { outline: none; }
+.export-pane h2:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 2px; }
+.export-pane__what .itemicon { width: 18px; height: 18px; }
+.export-pane__body { gap: 16px; }
+.export-pane__section { display: grid; gap: 8px; align-content: start; }
+.export-pane__section + .export-pane__section { padding-top: 16px; border-top: 1px solid var(--wc-border-subtle); }
+.export-pane__section h3 { margin: 0; }
+.export-pane__always { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.export-pane__always li { display: flex; align-items: center; gap: 8px; min-height: 28px; font-size: var(--wc-text-sm-size); }
+.export-pane__always .export-lock {
+  width: 16px;
+  height: 16px;
+  padding: 2px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 3px;
+  background: var(--wc-bg-subtle);
+}
+.export-pane__aside { margin-left: auto; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.export-lock { flex: none; color: var(--wc-text-secondary); }
+.export-pane__note { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.export-pane__choose { display: flex; align-items: center; gap: 8px; }
+.export-pane__choose h3 { margin-right: auto; }
+.export-pane__all { display: inline-flex; align-items: center; gap: 6px; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.export-pane__all .link-button { color: var(--wc-accent); font-weight: 600; }
+.export-group { display: grid; gap: 4px; }
+.export-group__head { display: flex; align-items: center; gap: 6px; min-height: 28px; }
+.export-group__fold {
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--wc-text-secondary);
+  line-height: 1;
+}
+.export-group__label { display: inline-flex; align-items: center; gap: 8px; font-size: var(--wc-text-sm-size); font-weight: 600; }
+.export-group__count { margin-left: auto; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); white-space: nowrap; }
+.export-group__note,
+.export-group__none { display: flex; align-items: flex-start; gap: 6px; margin: 0 0 0 26px; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.export-group__rows { display: grid; gap: 2px; margin: 0 0 0 18px; padding: 0; list-style: none; }
+.export-row { display: grid; gap: 2px; padding: 6px 8px; border-radius: 6px; }
+.export-row:hover,
+.export-row:focus-within { background: var(--wc-bg-subtle); }
+.export-row__line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.export-row__main { display: inline-flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--wc-text-sm-size); }
+.export-row__name { overflow-wrap: anywhere; }
+.export-row__name.is-code { font-weight: 600; }
+.export-row__aside { margin-left: auto; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); white-space: nowrap; }
+.export-row__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  margin-left: auto;
+  padding: 0 6px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 999px;
+  background: var(--wc-bg-surface);
+  font-size: 11px;
+  color: var(--wc-text-secondary);
+  white-space: nowrap;
+}
+.export-row__line--used { padding-left: 48px; }
+.export-row__used { font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.export-row__details { margin-left: auto; font-size: var(--wc-text-xs-size); color: var(--wc-accent); font-weight: 600; }
+.export-details {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 2px 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+}
+.export-details__head { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--wc-text-xs-size); font-weight: 600; }
+.export-details__head svg[data-icon='ok'] { color: var(--wc-status-success); }
+.export-details__list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; font-size: var(--wc-text-xs-size); }
+.export-details__list li { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 8px; }
+.export-details__list li > span:first-child { color: var(--wc-text-secondary); }
+.export-details__list .is-code { overflow-wrap: anywhere; white-space: pre-wrap; }
+.export-details__never { display: grid; gap: 2px; margin: 0; padding: 0 0 0 20px; font-size: var(--wc-text-xs-size); }
+.export-details__note { margin: 0; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.export-pane__hidden {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--wc-border-strong);
+  border-radius: 6px;
+  background: var(--wc-bg-subtle);
+  font-size: var(--wc-text-xs-size);
+  line-height: 18px;
+  color: var(--wc-text-secondary);
+}
+.export-pane__hidden > svg { flex: none; margin-top: 2px; }
+.export-pane__hidden b { color: var(--wc-text-primary); }
+.export-pane__info {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--wc-bg-accent-soft);
+  font-size: var(--wc-text-xs-size);
+  line-height: 18px;
+}
+.export-pane__finding { display: grid; gap: 10px; }
+.export-pane__skeleton { display: block; height: 12px; border-radius: 4px; background: var(--wc-bg-subtle); }
+.export-pane__skeleton:nth-of-type(2) { width: 72%; }
+.export-pane__skeleton:nth-of-type(3) { width: 56%; }
+.export-pane__failed { display: grid; gap: 8px; justify-items: start; }
+.export-pane__foot { flex-direction: column; align-items: stretch; gap: 10px; }
+.export-pane__holds { display: grid; margin: 0; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.export-pane__holds b { color: var(--wc-text-primary); font-weight: 600; }
+.export-pane__file { display: flex; align-items: center; gap: 12px; font-size: var(--wc-text-sm-size); }
+.export-pane__file input { flex: 1; min-width: 0; height: 32px; }
+.export-pane__actions { display: flex; align-items: center; gap: 8px; }
+.export-pane__actions .btn-primary { display: inline-flex; align-items: center; gap: 6px; }
+/* The ⋯ stays pressed while its pane is open (design 13, pin 1). */
+.dashboard__more.is-pressed { border-color: var(--wc-accent); background: var(--wc-bg-accent-soft); color: var(--wc-accent); }
+/* The tiles a hovered or focused dependency is used on, with a chip naming it
+   (T511, AC-360; design 13, pin 12). */
+.grid-tile[data-outlined='true'] { outline: 2px solid var(--wc-accent); outline-offset: 1px; }
+.grid-tile__outline {
+  position: absolute;
+  top: 0;
+  right: 12px;
+  z-index: 2;
+  padding: 1px 8px;
+  border-radius: 0 0 6px 6px;
+  background: var(--wc-accent);
+  color: var(--wc-text-on-accent);
+  font-family: var(--wc-font-code);
+  font-size: 11px;
+  line-height: 16px;
+  pointer-events: none;
+}
+.export-toast { max-width: 440px; }
+
 /* Generate cubes as design 11 (T485, AC-344): design 01's pane, docked as the
    Model page's third column — beside the overview, or in the code's place on
    a file's page, the form widening — its steps in cards of 34 px rows. */
@@ -2818,6 +2975,10 @@ input.switch:focus-visible { outline: 2px solid var(--wc-accent); outline-offset
   .source-pane__head-back { display: inline-block; }
   .admin-page--docked { grid-template-columns: minmax(0, 1fr); }
   .explore--source { grid-template-columns: minmax(0, 1fr); }
+  /* Export too: a sheet over the page, which keeps its width (design 13's table). */
+  .explore--export { grid-template-columns: minmax(0, 1fr); }
+  .export-pane--over { width: auto; }
+  main:has(.export-pane--over) { padding-right: 0; }
   /* Generate cubes covers the page, as design 01's pane does (design 11 pin 1). */
   .model-page.model-page--generating { grid-template-columns: minmax(0, 1fr); }
 }

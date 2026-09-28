@@ -9193,13 +9193,32 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
   - Files: `packages/web/src/workspaces/data-sources/ConnectionForm.tsx` (+ test)
   - Failing test: `ConnectionForm.test.tsx`: on a saved source, choosing a sign-in method that uses a key or token shows T506's warning before Save; choosing a password method shows none (AC-353).
   - Depends on: T506
-- [ ] T511 (AC-354, AC-355, AC-360) Export a dashboard: the pane, its dependencies ticked with what uses each, the hidden count, and one JSON file without secrets
+- [x] T511 (AC-354, AC-355, AC-360) Export a dashboard: the pane, its dependencies ticked with what uses each, the hidden count, and one JSON file without secrets
   - Files: `packages/api/src/routes/export.ts` (+ test), `packages/web/src/dashboard/export/ExportPane.tsx` (+ test), the dashboard header's ⋯ menu, Explore's row menus, `e2e/security/export-import.spec.ts`
   - Failing test:
     - `export.test.ts`: the dependencies offered are the library charts shown, the models the charts use and the data sources those bind to, each with what uses it, and a count, unnamed, of those in folders the user may not see. The file is valid JSON and holds what was chosen. A data source in it has its driver, settings and description, and no password, key, token, envelope or revision (AC-354, AC-355).
     - `ExportPane.test.tsx`: hovering over or focusing a dependency outlines the tiles that use it (AC-360).
     - The e2e: Export from the header's ⋯ gives `revenue-overview.wechart.json` (AC-354).
   - Depends on: none (models are offered as they stand; importing them waits on T347)
+  - *As built (2026-09-28; design 13, screen 1 and states A–F):*
+    - **The file** (`packages/core/src/exportFile.ts`): `{ format: 'wechart-export', version: 1, exportedAt, items }`, each item naming its kind: the dashboard, its own charts (with `dashboardId`), the library charts, models (`path`, `content`) and data sources chosen. Where an item was and whose it was stay behind. A data source keeps only the settings its driver names and doesn't mark secret, with its sign-in method and description.
+    - **The API** (`packages/api/src/routes/export.ts`): `GET /api/export/dashboards/:id` lists what may go; `POST` with `{ libraryCharts, models, dataSources }` answers the file, and refuses (`400`) anything it didn't offer. Anyone who may open the dashboard may export it, a reader too.
+      - A chart's cubes are found as the chart stores them: a full name `f…__name` in its folder; a short one in the root where the chart's folder is published (as xcube bound it), else nearest first. What a model needs goes with it: its joins, a view's cubes, what it extends. The dashboard's own filters and text tokens count too (`byDashboard`).
+      - A cube's data source: the one it names (`data_source` or `dataSource`), nearest first from its model's folder; its parent's, as bound, for a cube that extends one and names none; else `default`.
+      - Offered where the user sees the folder's every kind; otherwise counted with the charts using it, never named. A chart on the dashboard the user may not open is neither offered nor exported, and is counted.
+    - **The pane** (`packages/web/src/dashboard/export/ExportPane.tsx`): design 01's 480 px frame. It docks at the dashboard's edge (the ⋯ in the header, view mode only, pressed while open) and in Explore where Access docks (every dashboard row's ⋯). Hovering over or focusing a row outlines the tiles using it, with a chip (`Canvas`'s `outlineOf`). The file downloads as a Blob through an anchor; the toast follows, and focus goes back to the ⋯.
+    - **Not built:** the design's APG tree keys (↑ ↓ between rows, ← → to fold). The rows are native checkboxes in Tab order, and each group folds by its own button.
+  - **Review (one round, FAIL), fixed:**
+    1. A cube extending another was given the data source its parent names, looked up from the child's folder: it now takes the parent's as bound where the parent is.
+    2. The dashboard's own filter and text-token cubes weren't followed (AC-354's Fails-when says "the dashboard uses").
+    3. Charts were exported without the `mayOpen` check the copy route makes.
+    4. A stored short name was looked up nearest first, where xcube had bound it to the root's.
+    5. `dataSource`, and `<<` merges, weren't read.
+    6. Leaving a hovered row cleared the focused row's outline.
+    7. A workspace draft's target path was named without checking the user still sees it; a dashboard with no title read "Untitled chart".
+    - *Left as they are:* a chart local to another dashboard, shown here, goes as this dashboard's own, since the file has no other place for it (as the copy route does). "In a folder you can't see" also covers a folder the user sees only dashboards of.
+  - **Tests:** `routes/export.test.ts` (10), `ExportPane.test.tsx` (11), `exportFile.test.ts` (4), `Canvas.test.tsx` (outlines), and `e2e/security/export-import.spec.ts` (6, Chrome). Full suites: api 943, web 1875, core 460 (two load flakes, `cube/client.test.ts` and `UnplacedCodes.test.tsx`, pass alone).
+  - **AC-354, AC-355 and AC-360 ticked** on `e2e/security/export-import.spec.ts`: from the header's ⋯ and the Explore row, the pane lists the dependencies ticked with their users and counts the hidden ones without naming them; hovering and focusing outline the real tiles; the downloaded `revenue-overview.wechart.json` is JSON holding exactly what was chosen, its data source with driver, settings and description and none of its envelope.
 - [ ] T512 (AC-359) Read an export file, and refuse one this wechart can't take, naming the part and why
   - Files: `packages/core/src/exportFile.ts` (+ test)
   - Failing test: `exportFile.test.ts`: an unreadable file, a kind, chart type or driver this wechart doesn't have, is refused with the part named, and nothing is changed (AC-359).

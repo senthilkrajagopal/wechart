@@ -17,6 +17,8 @@ import { WorkspaceBand } from './WorkspaceBand';
 import { ProposeFlow } from './ProposeFlow';
 import { REVIEWS_QUERY } from '../reviews/reviews';
 import { statusOfItem } from './proposalStatus';
+import { ExportPane } from '../../dashboard/export/ExportPane';
+import { ExportedToast } from '../../dashboard/export/ExportedToast';
 
 /** A path "Sales / EMEA" as the dialog takes it, from Shared. */
 const pathFromShared = (path: string | undefined): string[] =>
@@ -229,8 +231,11 @@ export function ExplorePage() {
     const asked = folderId;
     try {
       const targets = await getJson<Target[]>('/api/folders/targets');
-      // The two docked panes replace each other (T471): Access closes first.
-      if (kind === 'data-source') setAccessOf(null);
+      // The docked panes replace each other (T471): Access, or Export, closes first.
+      if (kind === 'data-source') {
+        setAccessOf(null);
+        setExportOf(null);
+      }
       setAskingTarget({ kind, targets, folderId: asked });
     } catch (error) {
       setTargetsFailed((error as Error).message);
@@ -281,8 +286,27 @@ export function ExplorePage() {
   const mayEditAccess = signedIn && !searching && known && access.isSuccess;
   const [accessOf, setAccessOf] = useState<string | null>(null);
   const accessButton = useRef<HTMLButtonElement>(null);
-  // The two docked panes replace each other: not both at once (T471).
-  const accessOpen = mayEditAccess && accessOf === folderId && addingSource === null;
+  /**
+   * A dashboard being exported from its row (T511; design 13, state A),
+   * docked where Access docks, replacing it; and the toast once its file is
+   * downloaded.
+   */
+  const [exportOf, setExportOf] = useState<CatalogItem | null>(null);
+  const [exported, setExported] = useState('');
+  const closeExport = (item: CatalogItem) => {
+    setExportOf(null);
+    // Back to the row's ⋯ it came from.
+    requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLElement>(
+          `[data-testid="item-${CSS.escape(item.id)}"] [aria-haspopup="menu"]`,
+        )
+        ?.focus();
+    });
+  };
+  // The docked panes replace each other: not two at once (T471).
+  const accessOpen =
+    mayEditAccess && accessOf === folderId && addingSource === null && exportOf === null;
   const titleOf = (id: string) =>
     rootTitleOf(id) ?? (folders.data ?? []).find((folder) => folder.id === id)?.title ?? id;
 
@@ -323,9 +347,11 @@ export function ExplorePage() {
       className={
         addingSource !== null
           ? 'explore explore--source'
-          : accessOpen
-            ? 'explore explore--access'
-            : 'explore'
+          : exportOf !== null
+            ? 'explore explore--export'
+            : accessOpen
+              ? 'explore explore--access'
+              : 'explore'
       }
     >
       {/* The prototype's docked Folders pane (AC-194), kept in view as the
@@ -423,7 +449,11 @@ export function ExplorePage() {
               aria-controls={accessOpen ? ACCESS_PANEL_ID : undefined}
               // Where the new data source's pane is docked, until it closes.
               disabled={addingSource !== null}
-              onClick={() => setAccessOf(accessOpen ? null : folderId)}
+              onClick={() => {
+                // It replaces an Export pane open there (T511).
+                setExportOf(null);
+                setAccessOf(accessOpen ? null : folderId);
+              }}
             >
               Access
             </button>
@@ -534,6 +564,16 @@ export function ExplorePage() {
               opens={opensFromExplore}
               onRename={(item, title) => relocate.mutate({ item, title })}
               onMove={(item, target) => relocate.mutate({ item, folderId: target })}
+              // Not while a data source is being added in the pane it would
+              // replace, with what was typed there (T471).
+              onExport={
+                addingSource === null
+                  ? (item) => {
+                      setAccessOf(null);
+                      setExportOf(item);
+                    }
+                  : undefined
+              }
               // Once the folders are read: before, every target would read as
               // one the user can't see (T498's review).
               {...(inOwnWorkspace && folders.isSuccess
@@ -603,6 +643,26 @@ export function ExplorePage() {
           }}
         />
       )}
+      {exportOf === null ? null : (
+        <ExportPane
+          key={exportOf.id}
+          dashboardId={exportOf.id}
+          title={exportOf.title}
+          onClose={() => {
+            closeExport(exportOf);
+          }}
+          onExported={(message) => {
+            setExported(message);
+            closeExport(exportOf);
+          }}
+        />
+      )}
+      <ExportedToast
+        message={exported}
+        onDismiss={() => {
+          setExported('');
+        }}
+      />
       {accessOpen ? (
         <AccessPanel
           folderId={folderId}

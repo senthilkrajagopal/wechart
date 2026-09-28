@@ -70,6 +70,7 @@ import { actorOf, recordIn } from './audit/record';
 import { registerFolderAccess } from './routes/access';
 import { registerAudit } from './routes/audit';
 import { registerDataSources } from './routes/data-sources';
+import { registerExport } from './routes/export';
 import { registerProposals } from './routes/proposals';
 import type { ProposalStore } from './repos/proposals';
 import type { VersionStore } from './repos/versions';
@@ -936,6 +937,58 @@ export function buildServer({
         }[],
     });
   }
+
+  /**
+   * Exporting a dashboard (T511; AC-354, AC-355): what may go with it, of
+   * what its user may see, and the file of what was chosen. Anyone who may
+   * open the dashboard may export it, a reader too (rule 68).
+   */
+  registerExport(app, {
+    dashboardFor: async (request, reply, id) => {
+      const found = await itemFor(request, reply, 'dashboard', id, 'open');
+      if (found === undefined) return undefined;
+      const stored = found.stored ?? (await docs?.get?.('dashboard', id)) ?? null;
+      if (stored === null) {
+        await reply.code(404).send(NOT_THERE);
+        return undefined;
+      }
+      return stored;
+    },
+    chart: async (id) => {
+      try {
+        return { found: (await docs?.get?.('chart', id)) ?? null };
+      } catch (failure) {
+        if (failure instanceof ChartDocumentError) return { unreadable: failure.message };
+        throw failure;
+      }
+    },
+    sightOf: async (request) => {
+      const seen = await visibilityOf(request);
+      return seen === undefined ? () => 'all' : (folderId) => seen.rights.get(folderId)?.kinds;
+    },
+    opensOf: async (request) => {
+      const seen = await visibilityOf(request);
+      return async (chart) => seen === undefined || (await mayOpen(seen, 'chart', chart));
+    },
+    viewOnly: async (request) => {
+      const seen = await visibilityOf(request);
+      return seen !== undefined && ![...seen.rights.values()].some((right) => right.kinds === 'all');
+    },
+    folders: async () =>
+      (cat ? await cat.folders({ counted: false }) : []) as {
+        id: string;
+        title: string;
+        parentId: string | null;
+      }[],
+    modelFiles: async () =>
+      modelFiles === undefined
+        ? []
+        : modelFiles.all === undefined
+          ? modelFiles.list()
+          : modelFiles.all(),
+    ...(folders === undefined ? {} : { published: folders }),
+    ...(dataSources === undefined ? {} : { dataSources: () => dataSources.all() }),
+  });
 
   /**
    * The charts and dashboards that use the members an edit changes, listed

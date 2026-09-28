@@ -106,6 +106,11 @@ export interface FolderContentsProps {
   readonly opens?: (item: CatalogItem) => boolean;
   /** Given in the user's workspace: each item's origin and target, and its status (T498). */
   readonly workspace?: InWorkspace | undefined;
+  /**
+   * Exporting a dashboard from its row (T511, AC-354; design 13, state A):
+   * "Export…" in every dashboard row's ⋯, a reader's too.
+   */
+  readonly onExport?: ((item: CatalogItem) => void) | undefined;
 }
 
 /**
@@ -286,6 +291,7 @@ export function FolderContents({
   emptyText = 'This folder is empty.',
   opens = () => true,
   workspace,
+  onExport,
 }: FolderContentsProps) {
   const open = (item: CatalogItem) => {
     if (opens(item)) onOpen?.(item);
@@ -548,6 +554,10 @@ export function FolderContents({
                               onSelect: () => workspace.onPropose?.(item),
                             },
                           ]
+                        : []),
+                      // Into a file, in the Export pane (T511; design 13, state A).
+                      ...(onExport !== undefined && item.kind === 'dashboard'
+                        ? [{ key: 'export', label: 'Export…', onSelect: () => onExport(item) }]
                         : []),
                     ]}
                   >

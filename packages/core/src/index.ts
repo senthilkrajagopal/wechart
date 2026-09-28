@@ -39,6 +39,21 @@ export {
 } from './chart-migrations';
 export { CHART_TYPE_NAMES, chartTypeName } from './chart-type-names';
 export {
+  EXPORT_EXTENSION,
+  EXPORT_FORMAT,
+  EXPORT_VERSION,
+  exportedBodyOf,
+  exportedDataSourceOf,
+  exportFileNameOf,
+  settingKeysOf,
+  type ExportedChart,
+  type ExportedDashboard,
+  type ExportedDataSource,
+  type ExportedModel,
+  type ExportFile,
+  type ExportItem,
+} from './exportFile';
+export {
   nextRefreshes,
   refreshEveryRefusal,
   refreshLagSeconds,

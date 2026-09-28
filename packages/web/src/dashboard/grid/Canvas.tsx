@@ -109,6 +109,12 @@ export interface CanvasProps {
    * view mode as in edit mode — the drag's own name exists only while editing.
    */
   readonly nameOf?: ((id: string) => string) | undefined;
+  /**
+   * What an outlined tile's chip names, or nothing for a tile not outlined:
+   * the tiles a dependency hovered over or focused in the Export pane is
+   * used on (T511, AC-360).
+   */
+  readonly outlineOf?: ((id: string) => string | undefined) | undefined;
   readonly children: (tile: GridTile) => ReactNode;
 }
 
@@ -181,6 +187,7 @@ export function Canvas({
   selection,
   addHere,
   nameOf,
+  outlineOf,
   children,
 }: CanvasProps) {
   const canvas = useRef<HTMLDivElement>(null);
@@ -277,6 +284,7 @@ export function Canvas({
         const { columns, height } = onGrid(live);
         // A tile no key answers on here is no tab stop (T266's review).
         const keys = (takesKeys?.(tile.id) ?? true) ? onTileKeyDown : undefined;
+        const outlined = outlineOf?.(tile.id);
 
         return (
           <div
@@ -284,6 +292,7 @@ export function Canvas({
             data-testid="grid-item"
             data-tile={tile.id}
             className="grid-tile"
+            data-outlined={outlined === undefined ? undefined : 'true'}
             data-dragging={drag?.draggingId === tile.id ? 'true' : undefined}
             data-selected={selection?.id === tile.id ? 'true' : undefined}
             // Outlined in a review, the proposal having changed or added it (AC-341).
@@ -438,6 +447,13 @@ export function Canvas({
               </button>
             )}
             {children(tile)}
+            {/* The chip naming what outlines it (design 13, pin 12): said by the
+                pane's row, which has focus, so hidden from assistive technology. */}
+            {outlined === undefined ? null : (
+              <span className="grid-tile__outline" aria-hidden="true">
+                {outlined}
+              </span>
+            )}
             {resizable && tile.h !== undefined
               ? HANDLES.map((direction) => (
                   <div

@@ -295,3 +295,28 @@ describe('a proposal’s changed and new tiles (T356, AC-341)', () => {
       expect(tile.getAttribute('data-review')).toBeNull();
   });
 });
+
+describe('the tiles a dependency in the Export pane is used on (T511, AC-360)', () => {
+  it('outlines only those, each with a chip naming the dependency', () => {
+    render(
+      <Canvas
+        tiles={OFF_GRID}
+        editing={false}
+        outlineOf={(id) => (id === 'a' || id === 'c' ? 'sales.yml' : undefined)}
+      >
+        {(tile) => <span>{tile.id}</span>}
+      </Canvas>,
+    );
+    const outlined = screen
+      .getAllByTestId('grid-item')
+      .map((tile) => [tile.getAttribute('data-tile'), tile.getAttribute('data-outlined')]);
+    expect(outlined).toEqual([
+      ['a', 'true'],
+      ['b', null],
+      ['c', 'true'],
+      ['d', null],
+    ]);
+    const chips = document.querySelectorAll('.grid-tile__outline');
+    expect([...chips].map((chip) => chip.textContent)).toEqual(['sales.yml', 'sales.yml']);
+  });
+});
