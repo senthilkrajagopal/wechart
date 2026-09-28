@@ -13,7 +13,11 @@ import {
 
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
+import type { ListedSource } from '../data-sources/DataSourcesList';
 import { DriverMark } from '../data-sources/driverMarks';
+import { HealthBadge } from '../data-sources/health';
+import { DATA_SOURCES_QUERY } from '../data-sources/query';
+import { SHARED_ROOT } from '../explore/roots';
 import { objectsOf } from './objects';
 import { publishModel } from './publish';
 import { modelOf } from './sync';
@@ -395,6 +399,17 @@ export function GenerateCubes({
   const [step, setStep] = useKept<number>('step', () => 0);
   const [again, setAgain] = useState({ sources: 0, schemas: 0, tables: 0 });
   const sources = useAsked<{ dataSources: Source[] }>('/api/introspection/sources', again.sources);
+  /**
+   * Each data source's health, as Data sources has it (T490, AC-348): the
+   * shared root's record of that name — the model's data sources are the
+   * root's. No record the user can see — the list unread, or the root's not
+   * theirs to see (the API lists read-write folders' only), or a source Cube
+   * has from its own settings — says nothing, as Data sources shows them
+   * nothing (T490's review).
+   */
+  const listed = useQuery(DATA_SOURCES_QUERY);
+  const healthOfSource = (name: string): Pick<ListedSource, 'lastTest'> | undefined =>
+    listed.data?.find((each) => each.name === name && each.folderId === SHARED_ROOT.id);
   const [chosenSource, setSource] = useKept<string | null>('source', () => null);
   const source =
     chosenSource ??
@@ -931,20 +946,35 @@ export function GenerateCubes({
                   aria-labelledby={`${ids}-source`}
                   className="generate-pane__choices"
                 >
-                  {sources.value.dataSources.map((each) => (
-                    <label key={each.dataSource} className="generate-pane__choice">
-                      <input
-                        type="radio"
-                        name={`${ids}-source`}
-                        checked={each.dataSource === source}
-                        onChange={() => {
-                          chooseSource(each.dataSource);
-                        }}
-                      />
-                      <span className="is-code generate-pane__choice-name">{each.dataSource}</span>{' '}
-                      <span className="generate-pane__choice-note">{driverName(each.dbType)}</span>
-                    </label>
-                  ))}
+                  {sources.value.dataSources.map((each, at) => {
+                    // Named by its name and driver; its health, as Data sources says
+                    // it, describes it (T490, AC-348).
+                    const named = `${ids}-source-${String(at)}`;
+                    const record = healthOfSource(each.dataSource);
+                    return (
+                      <label key={each.dataSource} className="generate-pane__choice">
+                        <input
+                          type="radio"
+                          name={`${ids}-source`}
+                          aria-labelledby={`${named}-name ${named}-driver`}
+                          aria-describedby={record === undefined ? undefined : `${named}-health`}
+                          checked={each.dataSource === source}
+                          onChange={() => {
+                            chooseSource(each.dataSource);
+                          }}
+                        />
+                        <span id={`${named}-name`} className="is-code generate-pane__choice-name">
+                          {each.dataSource}
+                        </span>{' '}
+                        <span id={`${named}-driver`} className="generate-pane__choice-note">
+                          {driverName(each.dbType)}
+                        </span>
+                        {record === undefined ? null : (
+                          <HealthBadge id={`${named}-health`} source={record} />
+                        )}
+                      </label>
+                    );
+                  })}
                 </div>
               ) : null}
             </section>

@@ -8136,7 +8136,15 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - `sql_table` is matched as `schema.table`, unquoted and case-insensitive;
     - a table no cube reads carries no mark.
   - Depends on: T485
-- [ ] T490 [P] (AC-348) Each data source's health on Generate cubes' Source step
+- [x] T490 [P] (AC-348) Each data source's health on Generate cubes' Source step
+  - **Done 2026-09-27.** AC-348 is ticked. Tested in:
+    - `GenerateCubes.test.tsx`: "shows each data source’s health beside it, as Data sources does" and "says no health when the data sources’ list can’t be read";
+    - `DataSourcesList.test.tsx`;
+    - `e2e/generate-cubes.spec.ts` (T490's test).
+  - **One badge, both surfaces** (`data-sources/health.tsx`): its icon and words (`healthOf`, as before), and how long ago, as design 01 writes it ("Passed · 2 h ago"; its note 9, which the Data sources list now follows too), the time itself on hover. `shell/relativeAge.ts` holds `shortAgo` and the acceleration badge's `relativeAge`.
+  - **On the Source step**, beside each data source: the shared root's record of its name, from the same query as Data sources (`DATA_SOURCES_QUERY`). The radio is named by its name and driver and described by its health.
+  - **No record the user can see** says nothing, as Data sources shows them nothing (T490's review). That covers the list unread, a root that isn't theirs to see (the API lists read-write folders' only), and a data source Cube has from its own settings, as compose's `default` is with security off.
+  - Files (as built): `packages/web/src/workspaces/data-sources/{health,query,DataSourcesList,DataSourcesPage}.ts(x)`, `packages/web/src/shell/relativeAge.ts`, `packages/web/src/tiles/AccelerationBadge.tsx`, `packages/web/src/workspaces/model/GenerateCubes.tsx` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/generate-cubes.spec.ts`
   - Files: `packages/web/src/workspaces/model/GenerateCubes.tsx` (+ test), `e2e/generate-cubes.spec.ts`
   - Failing test:
     - `GenerateCubes.test.tsx`: a source whose last test failed shows the failed icon, the label and its age, from `/api/data-sources`, as `DataSourcesList` shows them. One with no test says "Not tested".

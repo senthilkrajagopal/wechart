@@ -5,8 +5,9 @@ import type { Me } from '../../shell/AccountMenu';
 import { InfoBar } from '../../shell/InfoBar';
 import { StateLine } from '../../shell/StatusIcon';
 import type { Target } from '../explore/NewItemDialog';
-import { DataSourcesList, type ListedSource } from './DataSourcesList';
+import { DataSourcesList } from './DataSourcesList';
 import { NewSourceWizard } from './NewSourceWizard';
+import { DATA_SOURCES_QUERY } from './query';
 
 /**
  * Data sources (T364; AC-157, AC-233): its title, a note saying what the
@@ -16,15 +17,7 @@ import { NewSourceWizard } from './NewSourceWizard';
  * `/sources` opens it too (routes.tsx).
  */
 export function DataSourcesPage() {
-  const sources = useQuery({
-    queryKey: ['data-sources'],
-    queryFn: async () => {
-      const response = await fetch('/api/data-sources');
-      if (!response.ok)
-        throw new Error(`The data sources could not be read (${String(response.status)}).`);
-      return (await response.json()) as ListedSource[];
-    },
-  });
+  const sources = useQuery(DATA_SOURCES_QUERY);
   const me = useQuery({
     queryKey: ['me'],
     queryFn: async () => (await (await fetch('/api/me')).json()) as Me,

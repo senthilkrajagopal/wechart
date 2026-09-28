@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { DataSourcesList, type ListedSource } from './DataSourcesList';
 
@@ -63,13 +63,20 @@ describe('the data sources a user may see (T364, AC-157)', () => {
   });
 
   it('says each one’s health from its last test: an icon, its words, and when; a failure with its check', () => {
+    // Two hours after the test, by the clock.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-26T13:00:00.000Z'));
     render(<DataSourcesList sources={[source(), failed, untested]} />);
+    vi.useRealTimers();
 
     const [ok, bad, never] = rows().map((row) => within(row).getByTestId('source-health'));
     expect(ok?.getAttribute('data-state')).toBe('ok');
-    expect(ok?.textContent).toContain('Passed');
     expect(ok?.querySelector('svg')).not.toBeNull();
-    expect(ok?.textContent).toContain(new Date('2026-09-26T11:00:00.000Z').toLocaleString());
+    // When, as design 01 writes it, the time itself on hover (item 9, T490).
+    expect(ok?.textContent).toBe('Passed · 2 h ago');
+    expect(ok?.querySelector('.status__when')?.getAttribute('title')).toBe(
+      new Date('2026-09-26T11:00:00.000Z').toLocaleString(),
+    );
     expect(bad?.getAttribute('data-state')).toBe('err');
     expect(bad?.textContent).toContain('Failed at connect');
     expect(never?.getAttribute('data-state')).toBe('idle');

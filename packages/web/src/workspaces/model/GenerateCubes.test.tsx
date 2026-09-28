@@ -683,6 +683,89 @@ describe('generating cubes from a data source (AC-139)', () => {
     );
   });
 
+  /**
+   * T490 / AC-348: each data source listed with its health as Data sources
+   * shows it — icon, words, how long ago — or that it hasn't been tested.
+   */
+  it('shows each data source’s health beside it, as Data sources does', async () => {
+    api();
+    const fetchStub = vi.mocked(fetch);
+    const answer = fetchStub.getMockImplementation();
+    const listed = (name: string, folderId: string, lastTest: unknown) => ({
+      id: `${folderId}-${name}`,
+      name,
+      folderId,
+      folderPath: [],
+      driver: 'postgres',
+      authMethod: 'password',
+      updatedAt: '2026-09-27T09:00:00.000Z',
+      lastTest,
+      usedBy: [],
+    });
+    fetchStub.mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === '/api/introspection/sources')
+        return new Response(
+          JSON.stringify({
+            dataSources: [
+              { dataSource: 'default', dbType: 'postgres' },
+              { dataSource: 'staging', dbType: 'postgres' },
+              { dataSource: 'cube_env', dbType: 'postgres' },
+            ],
+          }),
+        );
+      if (url === '/api/data-sources')
+        return new Response(
+          JSON.stringify([
+            // Another folder's `default`, listed first, is not the model's.
+            listed('default', 'f1', {
+              ok: true,
+              ranAt: new Date().toISOString(),
+              checks: [],
+              current: true,
+            }),
+            listed('default', 'root', {
+              ok: false,
+              ranAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
+              checks: [{ id: 'connect', status: 'failed' }],
+              current: true,
+            }),
+            listed('staging', 'root', null),
+          ]),
+        );
+      return (await answer?.(input, init)) ?? new Response('{}');
+    });
+    const { dialog } = pane();
+    const source = await within(dialog).findByRole('radio', { name: 'default PostgreSQL' });
+    const health = await vi.waitFor(() => {
+      const found = document.getElementById(source.getAttribute('aria-describedby') ?? '');
+      expect(found?.getAttribute('data-testid')).toBe('source-health');
+      return found as HTMLElement;
+    });
+    expect([health.getAttribute('data-state'), health.textContent]).toEqual([
+      'err',
+      'Failed at connect · 2 h ago',
+    ]);
+    const staging = within(dialog).getByRole('radio', { name: 'staging PostgreSQL' });
+    expect(
+      document.getElementById(staging.getAttribute('aria-describedby') ?? '')?.textContent,
+    ).toBe('Not tested yet');
+    // No record the user can see (Cube's own, or a folder not theirs): nothing said (T490's review).
+    const own = within(dialog).getByRole('radio', { name: 'cube_env PostgreSQL' });
+    expect(own.hasAttribute('aria-describedby')).toBe(false);
+    expect(own.closest('label')?.querySelector('[data-testid="source-health"]')).toBeNull();
+  });
+
+  it('says no health when the data sources’ list can’t be read', async () => {
+    // The stub answers `/api/data-sources` with a 500.
+    api();
+    const { dialog } = pane();
+    const source = await within(dialog).findByRole('radio', { name: 'default PostgreSQL' });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(source.hasAttribute('aria-describedby')).toBe(false);
+    expect(dialog.querySelector('[data-testid="source-health"]')).toBeNull();
+  });
+
   /** T491 / AC-349: the header's checkbox chooses or clears the page shown, and only it. */
   it('chooses every table on the page from the list’s header, mixed when some are', async () => {
     const asked = api();
@@ -840,8 +923,9 @@ describe('generating cubes from a data source (AC-139)', () => {
     let asks = 0;
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => {
-        asks += 1;
+      vi.fn(async (input: RequestInfo | URL) => {
+        // The data sources Cube browses, asked again; not their health's list (T490).
+        if (String(input) === '/api/introspection/sources') asks += 1;
         return new Response(
           JSON.stringify({
             error:

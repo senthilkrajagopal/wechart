@@ -2080,6 +2080,8 @@ main:has(.admin-page--docked) {
 .generate-pane__choice input { accent-color: var(--wc-accent); }
 .generate-pane__choice-name { font-weight: 600; }
 .generate-pane__choice-note { margin-left: auto; color: var(--wc-text-secondary); }
+/* Its health after its driver, as Data sources says it (T490, AC-348). */
+.generate-pane__choice > .status { flex: none; margin-left: 12px; font-size: 12px; }
 .generate-pane__empty { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
 .generate-pane__empty a { color: var(--wc-accent); font-weight: 600; }
 .generate-pane__filters { display: flex; gap: 8px; align-items: center; }

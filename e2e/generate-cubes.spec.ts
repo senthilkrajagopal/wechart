@@ -268,3 +268,54 @@ test('a generated cube the model already has is marked, named, and refused, and 
   ]);
   expect(await storedOrders()).toBe(before);
 });
+
+/**
+ * T490 / AC-348: WHEN Generate cubes lists the data sources to generate from,
+ * THE SYSTEM SHALL show beside each its health as Data sources shows it — its
+ * icon, its label and how long ago it was tested — or that it has not been
+ * tested. The root's `default`, read on both pages.
+ */
+test('the Source step shows the root’s default with the health Data sources gives it', async ({
+  page,
+}) => {
+  const listed = (await (await page.request.get('/api/data-sources')).json()) as {
+    name: string;
+    folderId: string;
+  }[];
+  const inRoot = listed.some((each) => each.name === 'default' && each.folderId === 'root');
+  // Its words and state, as Data sources gives them; the age is each page's own reading.
+  let expected: { state: string; label: string } | undefined;
+  if (inRoot) {
+    await page.goto('/data-sources');
+    const row = page
+      .getByRole('row')
+      .filter({ has: page.getByRole('cell', { name: 'default', exact: true }) })
+      .filter({ has: page.getByRole('link', { name: 'Shared', exact: true }) });
+    const there = row.getByTestId('source-health');
+    expected = {
+      state: (await there.getAttribute('data-state')) ?? '',
+      label: ((await there.textContent()) ?? '').split(' · ')[0] ?? '',
+    };
+  }
+
+  await page.goto('/model');
+  await page
+    .getByRole('navigation', { name: 'Model files' })
+    .getByRole('button', { name: 'Generate from a data source…' })
+    .click();
+  const pane = page.getByRole('dialog', { name: 'Generate cubes' });
+  const radio = pane.getByRole('radio', { name: 'default PostgreSQL' });
+  await expect(radio).toBeVisible();
+  if (expected === undefined) {
+    // No record Data sources shows (compose's Cube has its `default` from its
+    // own settings): nothing said here either (T490's review).
+    await expect(radio).not.toHaveAttribute('aria-describedby', /.+/);
+    await expect(pane.getByTestId('source-health')).toHaveCount(0);
+    return;
+  }
+  await expect(radio).toHaveAttribute('aria-describedby', /.+/);
+  const health = pane.locator(`[id="${(await radio.getAttribute('aria-describedby')) ?? ''}"]`);
+  await expect(health).toHaveAttribute('data-state', expected.state);
+  await expect(health).toHaveText(new RegExp(`^${expected.label}( · |$)`));
+  await expect(health.locator('svg')).toBeVisible();
+});

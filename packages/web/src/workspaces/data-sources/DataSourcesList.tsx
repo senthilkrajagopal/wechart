@@ -2,7 +2,7 @@ import { DRIVERS, type DriverType } from '@wechart/core';
 import { useState } from 'react';
 
 import { InfoBar } from '../../shell/InfoBar';
-import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
+import { healthOf, HealthBadge } from './health';
 import { TableScroll } from '../../shell/TableScroll';
 import { MY_WORKSPACE, SHARED_ROOT } from '../explore/roots';
 
@@ -81,15 +81,6 @@ function UsedBy({ cubes, hidden = 0 }: { cubes: ListedSource['usedBy']; hidden?:
       {hidden === 0 ? null : <li className="sources-muted">{elsewhere(hidden)}</li>}
     </ul>
   );
-}
-
-function healthOf(source: ListedSource): { kind: StateKind; label: string } {
-  const test = source.lastTest;
-  if (test === null) return { kind: 'idle', label: 'Not tested yet' };
-  if (!test.current) return { kind: 'idle', label: 'Not tested since it changed' };
-  if (test.ok) return { kind: 'ok', label: 'Passed' };
-  const failed = test.checks.find((check) => check.status === 'failed');
-  return { kind: 'err', label: failed === undefined ? 'Failed' : `Failed at ${failed.id}` };
 }
 
 export function DataSourcesList({
@@ -201,7 +192,6 @@ export function DataSourcesList({
           </thead>
           <tbody>
             {shown.map((source) => {
-              const { kind, label } = healthOf(source);
               return (
                 <tr key={source.id} data-testid={`source-${source.id}`}>
                   <td>{source.name}</td>
@@ -212,20 +202,8 @@ export function DataSourcesList({
                   </td>
                   <td>{driverLabel(source.driver)}</td>
                   <td>
-                    <span
-                      className={`status status--${kind}`}
-                      data-testid="source-health"
-                      data-state={kind}
-                    >
-                      <StatusIcon kind={kind} />
-                      {label}
-                      {source.lastTest === null || !source.lastTest.current ? null : (
-                        <span className="status__when">
-                          {' · '}
-                          {new Date(source.lastTest.ranAt).toLocaleString()}
-                        </span>
-                      )}
-                    </span>
+                    {/* How long ago, the time on hover (design 01 item 9; T490). */}
+                    <HealthBadge source={source} />
                   </td>
                   <td data-testid="source-used-by">
                     <UsedBy

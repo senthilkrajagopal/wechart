@@ -7,6 +7,7 @@
  * hides that a number is an hour old, and labelling everything "accelerated"
  * claims a freshness guarantee that is not there.
  */
+import { relativeAge } from '../shell/relativeAge';
 
 export interface Acceleration {
   readonly accelerated: boolean;
@@ -105,26 +106,4 @@ function shortAge(then: Date, now: Date): string {
   for (const [size, unit] of units)
     if (seconds >= size) return `${String(Math.round(seconds / size))}${unit}`;
   return `${String(seconds)}s`;
-}
-
-function relativeAge(then: Date, now: Date): string {
-  const seconds = Math.max(0, Math.round((now.getTime() - then.getTime()) / 1000));
-  // Each pair is "once this many of the current unit have passed, divide and
-  // call the result the next unit up": 2,400 seconds is 40 minutes.
-  const units: [number, Intl.RelativeTimeFormatUnit][] = [
-    [60, 'minute'],
-    [60, 'hour'],
-    [24, 'day'],
-    [7, 'week'],
-  ];
-
-  let value = seconds;
-  let unit: Intl.RelativeTimeFormatUnit = 'second';
-  for (const [size, nextUnit] of units) {
-    if (Math.abs(value) < size) break;
-    value = Math.round(value / size);
-    unit = nextUnit;
-  }
-
-  return new Intl.RelativeTimeFormat('en', { numeric: 'always' }).format(-value, unit);
 }
