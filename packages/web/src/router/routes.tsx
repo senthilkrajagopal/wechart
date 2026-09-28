@@ -22,10 +22,11 @@ import type { FilterValues } from '../filters/model';
 import { valuesFromSearch, valuesToSearch, type SearchFilter } from '../filters/url';
 import { previewClaimsOf } from '../query/securityPreview';
 import { AppShell } from '../shell/AppShell';
+import { NotFound } from '../shell/NotFound';
 import { StateLine } from '../shell/StatusIcon';
 import { ExplorePage } from '../workspaces/explore/ExplorePage';
 import { JobsPage } from '../workspaces/jobs/JobsPage';
-import { SecurityPage } from '../workspaces/security/SecurityPage';
+import { SecuritySurface } from '../workspaces/security/SecuritySurface';
 import { DataSourcesPage } from '../workspaces/data-sources/DataSourcesPage';
 import { SourceSettings } from '../workspaces/data-sources/SourceSettings';
 import { SchedulesPage } from '../workspaces/schedules/SchedulesPage';
@@ -54,10 +55,19 @@ const rootRoute = createRootRoute({
   notFoundComponent: () => (
     // In no workspace: marking Explore current told the user they were in it.
     <AppShell>
-      <h1 className="workspace-title">Not found</h1>
-      <p>Nothing here matches that address.</p>
+      <NotFound />
     </AppShell>
   ),
+});
+
+/** A Security tab by its address's last part (T500). */
+const securityTabRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/security/$tab',
+  component: function SecurityTabSurface() {
+    const { tab } = useParams({ strict: false }) as { tab?: string };
+    return <SecuritySurface tab={tab === 'preview' ? 'preview' : undefined} />;
+  },
 });
 
 const indexRoute = createRoute({
@@ -82,8 +92,6 @@ const WORKSPACE_CONTENT: Partial<Record<string, () => React.ReactNode>> = {
   explore: () => <ExplorePage />,
   // The queries wechart has issued (AC-016), which T015 built and never mounted.
   jobs: () => <JobsPage />,
-  // The model's access policies, as declared (T171, AC-165).
-  security: () => <SecurityPage />,
   // Their frames and what they are for; managing either waits (AC-233).
   schedules: () => <SchedulesPage />,
   'data-sources': () => <DataSourcesPage />,
@@ -95,11 +103,15 @@ const workspaceRoutes = WORKSPACES.map((workspace) =>
   createRoute({
     getParentRoute: () => rootRoute,
     path: workspace.path,
-    component: () => (
-      <AppShell workspace={workspace.id as WorkspaceId}>
-        {WORKSPACE_CONTENT[workspace.id]?.()}
-      </AppShell>
-    ),
+    component: () =>
+      // Security decides for itself whom it is shown to (T500).
+      workspace.id === 'security' ? (
+        <SecuritySurface tab="policies" />
+      ) : (
+        <AppShell workspace={workspace.id as WorkspaceId}>
+          {WORKSPACE_CONTENT[workspace.id]?.()}
+        </AppShell>
+      ),
   }),
 );
 
@@ -545,6 +557,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   sourcesRoute,
   ...workspaceRoutes,
+  securityTabRoute,
   dashboardRoute,
   // Before chartRoute: the editor path is more specific than /charts/$objectId.
   chartEditorRoute,

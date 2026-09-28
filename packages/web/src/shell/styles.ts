@@ -3117,6 +3117,22 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
   min-width: 0;
 }
 .security-workspace__head { margin: 8px 0 0; font-size: var(--wc-text-sm-size); line-height: var(--wc-text-sm-line); font-weight: 600; }
+/* Security's tabs as places, design 08's .tabs: 36 px, 12/600, the current
+   one underlined in the accent (T500, pin 1). */
+.security-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--wc-border-subtle); }
+.security-tabs > a {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 10px;
+  font-size: var(--wc-text-xs-size);
+  font-weight: 600;
+  color: var(--wc-text-secondary);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+.security-tabs > a:hover { color: var(--wc-text-primary); }
+.security-tabs > a[aria-current='page'] { color: var(--wc-accent); border-bottom-color: var(--wc-accent); }
 /* A screen that needs a Cube API scope wechart lacks (T176, AC-170): said as
    a state, in secondary ink, as an empty tile is — not as a failure. */
 .scope-unavailable { display: grid; gap: 4px; padding: 8px 0; color: var(--wc-text-secondary); }

@@ -3,7 +3,7 @@ import { useRouter } from '@tanstack/react-router';
 import { DRIVERS, type DriverType, type FieldValue } from '@wechart/core';
 import { useEffect, useId, useRef, useState, type MouseEvent } from 'react';
 
-import type { Me } from '../../shell/AccountMenu';
+import { ME_QUERY } from '../../shell/me';
 import { shortAgo, shortDay } from '../../shell/relativeAge';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
@@ -133,10 +133,7 @@ function Settings({ source }: { source: StoredSource }) {
   const [tab, setTab] = useState<Tab>('connection');
   const [asking, setAsking] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
-  const me = useQuery({
-    queryKey: ['me'],
-    queryFn: async () => (await (await fetch('/api/me')).json()) as Me,
-  });
+  const me = useQuery(ME_QUERY);
   const list = useQuery(DATA_SOURCES_QUERY);
   const listed = list.data?.find((each) => each.id === source.id);
   /** A copy's original, whose cubes the copy stands in for (AC-280): its Usage. */

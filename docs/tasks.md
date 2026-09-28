@@ -6224,6 +6224,33 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - Also files: `packages/api/src/main.ts`, `deploy/helm/wechart/{values.yaml,templates/api.yaml}`.
   - **Done 2026-09-27; the review passed.** AC-296 ticked on `audit/retention.test.ts`: with a fixed clock, a record past 365 days is removed and younger ones kept, then 90. After review, a test also covers a failure, logged and tried again next time, and the empty setting read as unset.
 
+- [x] T500 (AC-001, AC-295, AC-265, AC-343) Security for Super-Admins alone, in tabs at their own addresses, its Policies worded for folder groups *(added 2026-09-27; design 08 of 2026-09-27, pin 1 and states D and F)*
+  - **Done 2026-09-27, after one review round.** No AC is ticked here: AC-001 needs T331's other entries, AC-295 T369's trail, AC-265 the other admin surfaces, and AC-343 every design.
+  - **Review fixes:**
+    1. The tabs had no styles. They are now design 08's: 36 px, 12/600, the current one underlined in the accent.
+    2. Security showed for a moment on every load to those who may not open it. The sign-in gate now gives `/api/me`'s answer to the shared query, so the bar knows at once.
+    3. The gate let everyone in when `/api/me` failed. It now fails closed, to Not found. Every reader shares one `ME_QUERY` (`shell/me.ts`), which checks the answer.
+    4. The Preview tab says when the model is being read or couldn't be.
+    5. With sign-in on, a cube with no policy is "open within its folder's groups", not "to every security context" (state F).
+    6. The page says "Loading…" while who is signed in is asked.
+    - Tests added: the gate (`SecuritySurface.test.tsx`), the narrow menu, a Super-Admin test that waits for the answer, and the e2e's phase-1 sentence and tab styles.
+  - **Small decisions, overturnable:**
+    - With sign-in off, Security stays phase 1's page. Design 08 draws only the signed-in one. AC-228 gets a scope note to match.
+    - Policies is at `/security`, not `/security/policies`.
+    - T331 builds the rest of the switcher by role on `hidden` and `useHiddenWorkspaces` (AC-001's other entries).
+  - Files: `packages/web/src/workspaces/security/SecurityPage.tsx` (+ test), `packages/web/src/router/routes.tsx`, `packages/web/src/shell/{AppShell,WorkspaceSwitcher}.tsx` (+ tests), `e2e/security/security-page.spec.ts`
+  - Failing test:
+    - `security-page.spec.ts`: `writer` sees no Security in the bar, and `/security` and `/security/preview` render the same Not found as a missing page (state D).
+    - `super` sees Security's tabs, Policies and Preview as groups, each at its own address and kept on reload (pin 1, AC-002).
+    - Policies says where access comes from, "Access comes from AD groups set on folders…", with no phase-1 sentence (state F).
+    - `SecurityPage.test.tsx`, `AppShell.test.tsx`, `WorkspaceSwitcher.test.tsx`: the same at unit level, and phase 1's one page with sign-in off.
+  - Depends on: T319
+  - *As built (2026-09-27, before review):*
+    - With sign-in on, Security is headed "Security", with tabs as places: Policies at `/security` and Preview as groups at `/security/preview`. The Audit trail tab joins with T369.
+    - Anyone signed in who isn't a Super-Admin has no Security in the bar or the narrow menu, and its addresses render Not found.
+    - With sign-in off, phase 1's page stays as it was: "Access policies", with the preview beside. Its e2e and AC-228 depend on that.
+    - The preview tab holds today's context preview until T438 rebuilds it as groups (state E).
+
 ## P2.10 Jobs and Schedules (F17 returned, F33)
 
 - [ ] T371 (AC-297) Scope Jobs and Schedules to the models of the user's read-write folders

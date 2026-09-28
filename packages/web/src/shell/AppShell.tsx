@@ -1,7 +1,9 @@
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 
 import { useNarrowWindow } from '../dashboard/useNarrowWindow';
 import { AccountMenu } from './AccountMenu';
+import { ME_QUERY } from './me';
 import { openSearch, SearchPalette } from './SearchPalette';
 import { ThemeToggle } from './ThemeToggle';
 import { WorkspaceSwitcher, type WorkspaceId } from './WorkspaceSwitcher';
@@ -17,6 +19,16 @@ export interface AppShellProps {
   /** The workspace the page belongs to; none for a page that is in none. */
   readonly workspace?: WorkspaceId;
   readonly children?: React.ReactNode;
+}
+
+/**
+ * The workspaces the user may not open (T500; design 08, state D): Security
+ * is the Super-Admins' alone with sign-in on. Until who they are is known,
+ * the bar is as it always was.
+ */
+function useHiddenWorkspaces(): readonly WorkspaceId[] {
+  const me = useQuery({ ...ME_QUERY, retry: false });
+  return me.data?.security === 'oidc' && !me.data.superAdmin ? ['security'] : [];
 }
 
 /** The shortcut as this platform writes it. */
@@ -62,7 +74,13 @@ function SearchTrigger({ returnTo }: { readonly returnTo?: () => Element | null 
  * it, focus or a press leaving it, or the window widening past 1,024 px
  * closes it; Escape hands focus back to the button.
  */
-function NarrowMenu({ workspace }: { readonly workspace: WorkspaceId | undefined }) {
+function NarrowMenu({
+  workspace,
+  hidden,
+}: {
+  readonly workspace: WorkspaceId | undefined;
+  readonly hidden: readonly WorkspaceId[];
+}) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const box = useRef<HTMLDivElement>(null);
@@ -140,7 +158,7 @@ function NarrowMenu({ workspace }: { readonly workspace: WorkspaceId | undefined
         data-testid="narrow-menu"
         hidden={!open}
       >
-        <WorkspaceSwitcher current={workspace} />
+        <WorkspaceSwitcher current={workspace} hidden={hidden} />
         {/* The palette hands focus back to the menu's button, which stays. */}
         <SearchTrigger returnTo={() => button.current} />
       </div>
@@ -149,6 +167,7 @@ function NarrowMenu({ workspace }: { readonly workspace: WorkspaceId | undefined
 }
 
 export function AppShell({ workspace, children }: AppShellProps) {
+  const hidden = useHiddenWorkspaces();
   return (
     <div className="app-shell">
       <header className="app-bar">
@@ -159,10 +178,10 @@ export function AppShell({ workspace, children }: AppShellProps) {
           </span>
           wechart
         </span>
-        <WorkspaceSwitcher current={workspace} />
+        <WorkspaceSwitcher current={workspace} hidden={hidden} />
         <span className="app-bar__spacer" />
         <SearchTrigger />
-        <NarrowMenu workspace={workspace} />
+        <NarrowMenu workspace={workspace} hidden={hidden} />
         <ThemeToggle />
         {/* Who is signed in, at the far right (AC-190, AC-252, AC-254). */}
         <AccountMenu />

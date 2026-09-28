@@ -27,13 +27,15 @@ export type WorkspaceId = (typeof WORKSPACES)[number]['id'];
 export interface WorkspaceSwitcherProps {
   /** None on a page in no workspace, such as Not found. */
   readonly current?: WorkspaceId | undefined;
+  /** Those the user may not open, left out: Security for all but Super-Admins (T500). */
+  readonly hidden?: readonly WorkspaceId[];
 }
 
-export function WorkspaceSwitcher({ current }: WorkspaceSwitcherProps) {
+export function WorkspaceSwitcher({ current, hidden = [] }: WorkspaceSwitcherProps) {
   return (
     <nav aria-label="Workspaces" className="workspace-switcher">
       <ul>
-        {WORKSPACES.map((workspace) => (
+        {WORKSPACES.filter((workspace) => !hidden.includes(workspace.id)).map((workspace) => (
           <li key={workspace.id}>
             <a
               href={workspace.path}

@@ -3,7 +3,7 @@ import { useRouter, useRouterState } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
 
 import { META_QUERY } from '../../query/meta';
-import type { Me } from '../../shell/AccountMenu';
+import { ME_QUERY } from '../../shell/me';
 import { StateLine } from '../../shell/StatusIcon';
 import { AccessPanel, folderAccessQuery, refreshFolderAccess } from './access/AccessPanel';
 import { CreateMenu, DEFAULT_TITLES, type CreatableKind } from './CreateMenu';
@@ -250,7 +250,7 @@ export function ExplorePage() {
    * member, rule 68). With sign-in off there is one user and no groups, and
    * Explore stays as phase 1 had it.
    */
-  const me = useQuery({ queryKey: ['me'], queryFn: () => getJson<Me>('/api/me') });
+  const me = useQuery(ME_QUERY);
   const signedIn = me.data?.security === 'oidc';
   // My workspace only where the API counts one (T343, AC-277); with sign-in
   // on, first in the tree (T498; design 04, pin 1).

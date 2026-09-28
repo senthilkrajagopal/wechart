@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AppShell } from './AppShell';
 import { ThemeProvider } from './ThemeProvider';
@@ -107,5 +107,68 @@ describe('the narrow menu (T396, AC-304)', () => {
     await userEvent.click(screen.getByText('elsewhere'));
     expect(screen.getByTestId('narrow-menu').hidden).toBe(true);
     expect(button.getAttribute('aria-expanded')).toBe('false');
+  });
+});
+
+/**
+ * T500 (AC-295, AC-265; design 08 of 2026-09-27, state D): Security is the
+ * Super-Admins'; anyone else signed in has no Security in the bar.
+ */
+describe('Security in the bar (T500)', () => {
+  const signedIn = (superAdmin: boolean) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url === '/api/me'
+          ? Response.json({ name: 'Wren Writer', groups: [], superAdmin, security: 'oidc' })
+          : new Response(null, { status: 404 }),
+      ),
+    );
+  };
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+  const bar = () =>
+    within(
+      within(screen.getByRole('banner')).getAllByRole('navigation', { name: /workspace/i })[0]!,
+    );
+
+  /** The shell, with its query client at hand: to know when who is signed in is known. */
+  const shell = () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <ThemeProvider initial="light">
+          <AppShell workspace="explore" />
+        </ThemeProvider>
+      </QueryClientProvider>,
+    );
+    return client;
+  };
+  const narrow = () => within(screen.getByTestId('narrow-menu'));
+
+  it('has none for anyone signed in who isn’t a Super-Admin, in the bar or its narrow menu', async () => {
+    signedIn(false);
+    const client = shell();
+
+    await waitFor(() => {
+      expect(client.getQueryData(['me'])).toBeDefined();
+    });
+    expect(bar().queryByRole('link', { name: 'Security' })).toBeNull();
+    expect(bar().getByRole('link', { name: 'Explore' })).toBeTruthy();
+    // The menu below 1,024 px: hidden until opened, the same entries.
+    expect(narrow().queryByRole('link', { name: 'Security', hidden: true })).toBeNull();
+    expect(narrow().getByRole('link', { name: 'Explore', hidden: true })).toBeTruthy();
+  });
+
+  it('has it for a Super-Admin, once who they are is known', async () => {
+    signedIn(true);
+    const client = shell();
+
+    await waitFor(() => {
+      expect(client.getQueryData(['me'])).toBeDefined();
+    });
+    expect(bar().getByRole('link', { name: 'Security' })).toBeTruthy();
+    expect(narrow().getByRole('link', { name: 'Security', hidden: true })).toBeTruthy();
   });
 });

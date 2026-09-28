@@ -62,4 +62,12 @@ describe('workspace switcher (AC-001)', () => {
     // The switcher and the router must not drift apart: both read this.
     expect(WORKSPACES.map((workspace) => workspace.label)).toEqual(EXPECTED);
   });
+
+  it('leaves out a workspace the user may not open (T500; design 08, state D)', () => {
+    render(<WorkspaceSwitcher current="explore" hidden={['security']} />);
+
+    expect(screen.getAllByRole('link').map((entry) => entry.textContent)).toEqual(
+      EXPECTED.filter((label) => label !== 'Security'),
+    );
+  });
 });

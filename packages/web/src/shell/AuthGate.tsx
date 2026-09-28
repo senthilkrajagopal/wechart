@@ -1,4 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { QueryClientContext } from '@tanstack/react-query';
+import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+
+import { isMe, ME_QUERY } from './me';
 
 import { StatusIcon } from './StatusIcon';
 
@@ -51,6 +54,8 @@ export function AuthGate({
   const [asked, setAsked] = useState<Asked>('asking');
   const [ended, setEnded] = useState(false);
   const signIn = useRef<HTMLButtonElement>(null);
+  // The app's query client, where there is one: its own tests render it bare.
+  const client = useContext(QueryClientContext);
 
   // Every API answer, watched for a session that has gone.
   useEffect(() => {
@@ -79,11 +84,17 @@ export function AuthGate({
   useEffect(() => {
     const asking = new AbortController();
     fetch('/api/me', { signal: asking.signal })
-      .then((response) => {
+      .then(async (response) => {
         if (response.status === 401) {
           setAsked('out');
           navigate(signInUrl());
           return;
+        }
+        // Who it is, given to the pages' shared query at once, so the bar
+        // never shows what they may not open, even for a moment (T500's review).
+        if (response.ok) {
+          const me = (await response.json().catch(() => undefined)) as unknown;
+          if (isMe(me)) client?.setQueryData(ME_QUERY.queryKey, me);
         }
         setAsked('in');
       })

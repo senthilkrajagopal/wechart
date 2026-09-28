@@ -46,7 +46,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function page() {
+function page(props: Parameters<typeof SecurityPage>[0] = {}) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
@@ -69,10 +69,63 @@ function page() {
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <SecurityPage />
+      <SecurityPage {...props} />
     </QueryClientProvider>,
   );
 }
+
+/**
+ * T500 (AC-295, AC-002; design 08 of 2026-09-27, pin 1 and state F): with
+ * sign-in on, Security is tabs, each at its own address, and its Policies
+ * say where access comes from now. With sign-in off it stays phase 1's page.
+ */
+describe('Security in tabs, with sign-in on (T500)', () => {
+  it('opens on Policies, saying access comes from folder groups, and links each tab by its address', async () => {
+    page({ signedIn: true });
+
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Security');
+    const tabs = screen.getByRole('navigation', { name: 'Security' });
+    const links = within(tabs).getAllByRole('link');
+    expect(links.map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+      ['Policies', '/security'],
+      ['Preview as groups', '/security/preview'],
+    ]);
+    expect(links[0]?.getAttribute('aria-current')).toBe('page');
+    // Said over the list, once the model's files are read.
+    expect(
+      await screen.findByText(
+        'Access comes from AD groups set on folders: Cube refuses a folder’s cubes to anyone without one of its groups. Within that, the access policies below, written in the model, decide rows and members.',
+      ),
+    ).toBeTruthy();
+    expect(await screen.findByRole('table', { name: 'Access policies' })).toBeTruthy();
+    // A cube with no policy is open within its folder's groups, not to all (state F).
+    expect(screen.getByTestId('policies-open').textContent).toBe(
+      'No policy: open within its folder’s groups: orders.',
+    );
+    // The preview is its own tab, not a pane beside the list.
+    expect(screen.queryByRole('region', { name: 'Preview a security context' })).toBeNull();
+  });
+
+  it('shows the preview on its own tab, without the list', async () => {
+    page({ signedIn: true, tab: 'preview' });
+
+    const tabs = screen.getByRole('navigation', { name: 'Security' });
+    expect(
+      within(tabs).getByRole('link', { name: 'Preview as groups' }).getAttribute('aria-current'),
+    ).toBe('page');
+    expect(await screen.findByRole('region', { name: 'Preview a security context' })).toBeTruthy();
+    expect(screen.queryByRole('table', { name: 'Access policies' })).toBeNull();
+  });
+
+  it('stays phase 1’s one page with sign-in off', async () => {
+    page();
+
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Access policies');
+    expect(screen.queryByRole('navigation', { name: 'Security' })).toBeNull();
+    expect(await screen.findByRole('table', { name: 'Access policies' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Preview a security context' })).toBeTruthy();
+  });
+});
 
 describe('the Security workspace’s policies', () => {
   it('lists each policy with its group, members, rows, conditions, masking and file', async () => {

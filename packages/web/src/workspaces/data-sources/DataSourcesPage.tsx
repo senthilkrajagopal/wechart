@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import type { Me } from '../../shell/AccountMenu';
+import { ME_QUERY } from '../../shell/me';
 import { InfoBar } from '../../shell/InfoBar';
 import { StateLine } from '../../shell/StatusIcon';
 import type { Target } from '../explore/NewItemDialog';
@@ -18,10 +18,7 @@ import { DATA_SOURCES_QUERY } from './query';
  */
 export function DataSourcesPage() {
   const sources = useQuery(DATA_SOURCES_QUERY);
-  const me = useQuery({
-    queryKey: ['me'],
-    queryFn: async () => (await (await fetch('/api/me')).json()) as Me,
-  });
+  const me = useQuery(ME_QUERY);
   const queryClient = useQueryClient();
   /**
    * "+ Data source", as the approved prototype's page has it (T363): made in
