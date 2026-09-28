@@ -1219,6 +1219,24 @@ Traces to: §P2.4 Architecture, `[AD 1, AD 10, AD 11, AD 12, R27]` (added 2026-0
 - *Slice 6, connections:* AC-160 (eight drivers), AC-159 (the checks), AC-161 (per-instance health within the hour; no change of type), AC-273 (extends, no rebinding), AC-310 (the seeding Job), AC-312 (the target's fields, TLS included), AC-324 (the key id checked against xcube's), AC-280 and AC-282 (copies keep their name; only copies replace).
 - *And:* AC-272 (a save refused while xcube is unreachable).
 
+## F38. Exporting and importing a dashboard
+
+Purpose: move a dashboard, with the dependencies its exporter chooses, from one wechart to another, or from one folder to another, without its data sources' secrets.
+Traces to: `[R43]`; design `docs/design/reviews/2026-09-28/designs/13-dashboard-export-import.html`.
+
+- [ ] AC-354 WHEN a user exports a dashboard they may see, THE SYSTEM SHALL offer as dependencies to include the library charts it shows, the models its charts use and the data sources those models bind to, each named with what uses it, of those the user may see; and SHALL give one file holding the dashboard, its own charts and the dependencies chosen (`[R43]`).
+      Fails when: a library chart, model or data source the dashboard uses, and the user may see, is not offered; one the user may not see is offered or in the file; one not chosen is in the file; or one of the dashboard's own charts is missing from it.
+- [ ] AC-355 THE SYSTEM SHALL export a data source with its driver, settings and description, and never a secret of it, sealed or not (`[R43]`).
+      Fails when: an export file holds a data source's password, key, token, sealed envelope or its revision, or lacks one of its settings.
+- [ ] AC-356 WHEN a user with a workspace imports an export file, THE SYSTEM SHALL put what it holds into their workspace, with the target folder they choose among those they may write, to reach it by a proposal; with sign-in off, into the chosen folder (`[R43]`).
+      Fails when: with sign-in on, an import changes a shared folder without an approved proposal, or lands anywhere but the importer's workspace; or a user with no workspace can import.
+- [ ] AC-357 WHEN an imported item has the same kind and name as one where it would land, THE SYSTEM SHALL ask, for each such item, whether to replace it (by a proposal where shared), keep both (the import renamed), or skip it, and SHALL do what was chosen for each (`[R43]`).
+      Fails when: a clashing item is replaced, renamed or skipped without being asked, or what is done differs from the choice.
+- [ ] AC-358 WHEN an import holds a data source, THE SYSTEM SHALL let the importer map it to an existing data source they may use, or create it from the exported settings with its secrets entered, tested before it is saved; and the imported models SHALL bind to the data source chosen (`[R43]`).
+      Fails when: an imported data source is saved without its secrets entered or without a passing test; or an imported model binds to a data source other than the one chosen for it.
+- [ ] AC-359 IF an export file can't be read, or holds a kind, chart type or driver this wechart doesn't have, THEN THE SYSTEM SHALL refuse to import it, saying which part and why, and change nothing (`[R43]`).
+      Fails when: an unreadable or unsupported file changes anything, or its refusal doesn't name the part.
+
 ## Non-goals (phase 1)
 
 Copied from [requirements.md §7](./requirements.md):
@@ -1359,3 +1377,4 @@ The criteria phase 1 moved to its backlog on 2026-09-25 are back in this spec un
 | The Model workspace and Generate cubes to design 03, 11 and 12, as a priority `[R34]` | AC-344 |
 | Designs 11 and 12's proposals, approved `[R36]` | AC-345 … AC-351 |
 | Both UI reviews' designs, the 2026-09-27 ones first where they differ, as a priority `[R37]` | AC-343, AC-344, AC-352 |
+| Exporting and importing a dashboard, with its chosen dependencies and no secrets `[R43]` | AC-354 … AC-359 |

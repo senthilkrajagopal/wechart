@@ -843,6 +843,21 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R43 — exporting and importing a dashboard; and two answers for markings** (2026-09-28, the user)
+- The user: "can we add requirement for export and import dashboard. while exporting dashboard it should give option to select the dependencies.. for datasource, everything can be exported except for the secrets. have any ui agent create a ui-design for this functionality."
+- Claude asked four questions. The user chose the recommended answer to each, and all three optional dependencies:
+  1. **Where an import lands:** "My workspace, then propose". *Imported items go into the importer's workspace, with the target folder they choose, and reach it by a proposal like any change (AC-278). With sign-in off, straight into the chosen folder.*
+  2. **The dependencies offered at export:** "Library charts it shows, Models its charts use, Data sources". *The dashboard's own charts always go with it. Bookmarks are not exported.*
+  3. **A same-named item where an import lands:** "Ask per item". *Replace (by proposal where shared), keep both (the import renamed), or skip.*
+  4. **An exported data source on import:** "Map or create". *Map it to an existing data source the importer may use, or create it from the exported settings with its secrets entered, tested before saving.*
+- *A data source is exported with everything but its secrets: its driver, settings and description; never a secret, sealed or not.*
+- *One file holds the export.*
+- *A UI design comes first: `docs/design/reviews/2026-09-28/designs/13-dashboard-export-import.html`.*
+- *Importing models waits on workspace models (T347, T350). Until then an import holds dashboards, charts and data sources, and the models go by proposal once T347 is built.*
+- *For markings (AC-097, T453), the user answered two questions:*
+  - *a partly marked table row: "Rule and marked value", the prototype's left rule in the secondary colour, and the marked share beside each measure ("10 · Marked: 4");*
+  - *a partly marked scatter point, box plot or map region: "Outlined, hatched, tooltip", as pies and treemaps are drawn. A box plot's box is partly marked when some of its rows are, and each outlier is marked or not.*
+
 **R42 — the waiting questions, in two batches** (2026-09-28, the user, after asking why criteria closed slowly)
 - The user chose all four ways to close criteria faster: "Finish chains to close ACs", "Parallel agents in worktrees", "Pin xcube only when needed", "Batch the open questions now".
 - Claude put eight of the backlog's questions to the user in two batches. The user chose the recommended answer to each.

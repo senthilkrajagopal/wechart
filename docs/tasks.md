@@ -8805,6 +8805,18 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
   - T371: design 10's Jobs and Schedules.
   Each adds AC-343 to its criteria and checks its surface against its design's states.
 
+## P2.19 Found and asked for on 2026-09-28
+
+- [ ] T507 (AC-096) Mark a heatmap's cells and a scatter's points by the rows they draw, not by category index *(added 2026-09-28: found by T453's agent)*
+  - **Why.** `withMarks` matches heatmap cells and scatter points to rows by category index, so a full marking (AC-096) can mark the wrong cells or points. `option.test.ts` passes by coincidence.
+  - Files: `packages/charts/src/marking/*` (+ tests)
+  - Failing test: a heatmap whose rows are not in category order, and a scatter with repeated categories: marking a row marks exactly its own cell or point (AC-096).
+  - Depends on: none
+- [ ] T508 (AC-354, AC-355, AC-356, AC-357, AC-358, AC-359) Export a dashboard with the dependencies chosen, and import one into My workspace *(added 2026-09-28, R43)*
+  - Designed first: `docs/design/reviews/2026-09-28/designs/13-dashboard-export-import.html`. This entry is split into tasks once the user approves the design.
+  - Importing models waits on T347 and T350 (workspace models).
+  - Depends on: the design's approval; T347 for models
+
 ## Phase 2 coverage: acceptance criterion → task
 
 | AC | Tasks | AC | Tasks | AC | Tasks |
@@ -8838,7 +8850,9 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 | AC-287 | T355, T356 | AC-288 | T352, ~~T426~~ T451 | AC-289 | T354, T357 |
 | AC-290 | T353, T358 | AC-291 | T329, ~~T426~~ T451 | AC-292 | T366 |
 | AC-293 | T367 | AC-294 | T368, T505 | AC-295 | T369 |
-| AC-353 | T506 | | | | |
+| AC-353 | T506 | AC-096 | T507 | | |
+| AC-354 | T508 | AC-355 | T508 | AC-356 | T508 |
+| AC-357 | T508 | AC-358 | T508 | AC-359 | T508 |
 | AC-296 | T370 | AC-297 | T371, T504 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441 |
 | AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |
 | AC-302 | T394 | AC-303 | T395 | AC-304 | T396 |
