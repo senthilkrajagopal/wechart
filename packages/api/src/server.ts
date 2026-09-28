@@ -46,6 +46,7 @@ import type { Changeset } from './xcube/changesets';
 import { XcubeError, type XcubeAdmin } from './xcube/client';
 import { ROOT_ONLY, type PublishedFolders } from './xcube/folders';
 import { cubesUsing, extendsIn } from './xcube/used-by';
+import { declaredIn } from './model/split';
 import type { PublicationStore } from './xcube/publications';
 import { registerModelPublishing } from './model/publish';
 import { referencesOf, usersOfCubes, type ReferenceDocument } from './model/references';
@@ -623,25 +624,31 @@ export function buildServer({
                   folders === undefined ? ROOT_ONLY : folders(),
                   dataSources.all(),
                 ]);
-                // wechart's YAML only for a cube that takes its parent's.
+                // wechart's YAML: what a cube extends, and each cube's file
+                // (T499; design 03's Usage names each cube's model).
                 const files =
-                  modelFiles === undefined || !held.some((item) => item.dataSource === null)
+                  modelFiles === undefined
                     ? []
                     : modelFiles.all === undefined
                       ? await modelFiles.list()
                       : await modelFiles.all();
                 const extended = new Map<string, string>();
+                const fileOf = new Map<string, string>();
                 for (const file of files) {
-                  const found = extendsIn(file.content);
                   const xcubeId = published.ids.get(file.folderId ?? ROOT_FOLDER_ID);
-                  if (found !== undefined && xcubeId !== undefined)
-                    extended.set(`${xcubeId}/${found.name}`, found.extends);
+                  if (xcubeId === undefined) continue;
+                  const found = extendsIn(file.content);
+                  if (found !== undefined) extended.set(`${xcubeId}/${found.name}`, found.extends);
+                  for (const declared of declaredIn(file.content))
+                    if (declared.kind === 'cube' && declared.name !== '')
+                      fileOf.set(`${xcubeId}/${declared.name}`, file.path);
                 }
                 return cubesUsing({
                   held,
                   published,
                   sources: all,
                   extendsOf: (xcubeId, name) => extended.get(`${xcubeId}/${name}`),
+                  fileOf: (xcubeId, name) => fileOf.get(`${xcubeId}/${name}`),
                 });
               },
             }),

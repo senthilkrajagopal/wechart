@@ -213,6 +213,7 @@ const source = (over: Partial<DataSource> = {}): DataSource => ({
   settingsPrint: 'print-1',
   targetFolderId: null,
   origin: null,
+  description: null,
   version: 1,
   updatedAt: new Date(0),
   ...over,

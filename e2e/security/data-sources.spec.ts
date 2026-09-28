@@ -472,6 +472,15 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
       await leave.getByRole('button', { name: 'Stay' }).click();
       await expect(leave).toHaveCount(0);
       await expect(explore).toBeFocused();
+      // So does a workspace in the bar, now followed in the app (T499; state I).
+      await page
+        .getByRole('navigation', { name: 'Workspaces' })
+        .getByRole('link', { name: 'Explore' })
+        .click();
+      await expect(leave).toBeVisible();
+      await leave.getByRole('button', { name: 'Stay' }).click();
+      await expect(leave).toHaveCount(0);
+      await expect(page).toHaveURL(/\/explore\/data-sources\//);
 
       // Saved as it was tested.
       await save.click();
@@ -582,6 +591,23 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
         await expect(page.getByRole('main')).toContainText(
           'Showing data sources in the folders where you have read-write access, and in the folders above them (view only).',
         );
+
+        // On its page, Usage names each cube's model file too (T499; design 03, state F).
+        await rowOf(`parent_${RUN}`, `Sources parent ${RUN}`)
+          .getByRole('link', { name: `parent_${RUN}`, exact: true })
+          .click();
+        const main = page.getByRole('main');
+        await main
+          .getByRole('tablist', { name: 'Data source' })
+          .getByRole('tab', { name: 'Usage' })
+          .click();
+        const usage = main.getByRole('table', { name: `Cubes using parent_${RUN}` });
+        await expect(usage.getByRole('columnheader')).toHaveText(['Cube', 'Model', 'Folder']);
+        await expect(usage.getByRole('row').nth(1).getByRole('cell')).toHaveText([
+          `uses_${RUN}`,
+          `uses_${RUN}.yml`,
+          `Sources parent ${RUN} / Sources ${RUN}`,
+        ]);
       });
     });
 

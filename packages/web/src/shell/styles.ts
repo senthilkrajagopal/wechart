@@ -2997,7 +2997,9 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 .source-settings__changed p { margin: 0; }
 .source-settings__changes { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 12px; }
 .source-settings__checks-title { margin: 6px 0 0; color: var(--wc-text-secondary); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
-.source-settings__general { max-width: 520px; margin-bottom: 16px; }
+.source-settings__general { display: grid; gap: 14px; max-width: 520px; margin-bottom: 16px; }
+/* A description keeps the lines it was written in (T499). */
+.source-settings__description { white-space: pre-line; }
 .source-settings__foot {
   display: flex;
   flex-wrap: wrap;

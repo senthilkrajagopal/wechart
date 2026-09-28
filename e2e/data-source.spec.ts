@@ -52,14 +52,18 @@ test('with sign-in off, a data source changes in place: renamed without a test, 
     const tabs = main.getByRole('tablist', { name: 'Data source' });
     const save = main.getByRole('button', { name: 'Save', exact: true });
 
-    // A new name needs no test (state B).
+    // A new name, and what it is for, need no test (state B; T499's description).
     await tabs.getByRole('tab', { name: 'General' }).click();
     await main.getByLabel(/^Name/).fill(`${name}_eu`);
     await expect(main.locator('.source-settings__count')).toHaveText(
       '1 unsaved change · no test needed for a name',
     );
-    await save.click();
-    await expect(main.locator('.source-settings__foot')).toContainText('Saved 1 change.');
+    await main.getByLabel(/^Description/).fill('Read replica for EMEA order cubes.');
+    await expect(main.locator('.source-settings__count')).toHaveText(
+      '2 unsaved changes · no test needed',
+    );
+    await main.getByRole('button', { name: 'Save 2 changes' }).click();
+    await expect(main.locator('.source-settings__foot')).toContainText('Saved 2 changes.');
     await expect(main.getByRole('heading', { level: 1 })).toHaveText(`${name}_eu`);
 
     // Where it connects: saved only once a test of it passes (state C, AC-158).
@@ -79,6 +83,7 @@ test('with sign-in off, a data source changes in place: renamed without a test, 
       await (await request.get(`/api/data-sources/${encodeURIComponent(id)}`)).json(),
     ).toMatchObject({
       name: `${name}_eu`,
+      description: 'Read replica for EMEA order cubes.',
       fields: { database: 'postgres' },
     });
   } finally {

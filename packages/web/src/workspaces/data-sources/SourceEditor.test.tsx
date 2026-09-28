@@ -43,6 +43,7 @@ const stored = (over: Partial<StoredSource> = {}): StoredSource => ({
   folderPath: [],
   canWrite: true,
   inWorkspace: true,
+  description: null,
   ...over,
 });
 
@@ -247,6 +248,39 @@ describe('testing and saving (T497’s review)', () => {
     expect(await screen.findByText(/already has a data source named eu_replica/)).toBeTruthy();
     expect(name.getAttribute('aria-invalid')).toBe('true');
     expect(document.querySelector('.source-settings__foot [role="alert"]')).toBe(failure);
+  });
+});
+
+describe('a description (T499; state B)', () => {
+  it('is a change saved without a test, and only it is sent', async () => {
+    const sent = serve({ 'PUT /api/data-sources/ds-1': [{ body: { id: 'ds-1' } }] });
+    open(stored());
+    await userEvent.type(
+      screen.getByLabelText(/^Description/),
+      'Read replica for EMEA order cubes.',
+    );
+
+    expect(count()?.textContent).toBe('1 unsaved change · no test needed for a description');
+    await userEvent.click(saveButton());
+    await screen.findByText('Saved 1 change.');
+    expect(sent.at(-1)).toEqual({
+      url: '/api/data-sources/ds-1',
+      method: 'PUT',
+      body: { description: 'Read replica for EMEA order cubes.' },
+    });
+  });
+
+  it('shows the stored one, and a name and a description together need no test', async () => {
+    open(stored({ description: 'Read replica.' }));
+    const description = screen.getByLabelText(/^Description/);
+    expect((description as HTMLTextAreaElement).value).toBe('Read replica.');
+    await userEvent.clear(description);
+    const name = screen.getByLabelText(/^Name/);
+    await userEvent.clear(name);
+    await userEvent.type(name, 'eu_replica');
+
+    expect(count()?.textContent).toBe('2 unsaved changes · no test needed');
+    expect(saveButton()).toHaveProperty('disabled', false);
   });
 });
 

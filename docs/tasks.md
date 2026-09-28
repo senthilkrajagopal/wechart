@@ -6082,6 +6082,23 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - `SourceEditor.test.tsx` covers the review's findings.
     - `ConnectionForm.test.tsx`, "a stored one's fields, changed".
   - AC-310 ticked, on `root-default.spec.ts`'s two tests, with T435's binding. AC-158, AC-164 and AC-312 were already ticked; this task adds the edit half of each.
+- [x] T499 (AC-343) Design 03's remainder: Usage's Model column, a data source's description, and the bar's workspaces asking before leaving *(added 2026-09-27; design 03 of 2026-09-27, states B, F and I)*
+  - Files: a migration `…_data-source-descriptions.cjs`, `packages/api/src/db/schema.ts`, `packages/api/src/repos/data-sources.ts`, `packages/api/src/routes/data-sources.ts`, `packages/api/src/xcube/used-by.ts` (+ test), `packages/api/src/xcube/connections.test.ts`, `packages/api/src/server.ts`, `packages/api/src/access/data-sources.test.ts`, `packages/web/src/workspaces/data-sources/{SourceEditor,SourceSettings,DataSourcesList}.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/data-source.spec.ts`, `e2e/security/data-sources.spec.ts`
+  - Failing test:
+    - `access/data-sources.test.ts`: a description saves without a test, is given back, and comes with a copy; a description alone lands nothing in xcube;
+    - `SourceEditor.test.tsx`: General's Description counts as a change and saves without a test (state B);
+    - `used-by.test.ts`: each cube using a source names its model file (state F);
+    - the e2e: Usage lists Cube · Model · Folder; the bar's Explore, with a change unsaved, asks "Leave without saving?" (state I).
+  - Depends on: T497
+  - **Done 2026-09-27, after one review round.** Tested in the files above, the e2e in Chrome, Firefox and Safari.
+  - **Review fixes:**
+    1. The bar's workspaces had been routed in the app so the page's guard would see them. That let them slip past the new data source pane, which guards typed work with the browser's own question (T471). The bar's links are plain again. The settings page's guard now takes a click on one while it has changes, asks, and follows it once left.
+    2. A description-only save landed the connection in xcube, swapping every instance's driver for a text change. It now lands only for a change to the connection or the name.
+    3. The read-only description keeps its lines. Its label is "Description", as the design has it.
+  - **Small decisions, overturnable:**
+    - A description has no length limit, as a dashboard's has none.
+    - Esc isn't one of the ways to leave the page: the page has no Esc action to take. The question itself closes on Esc.
+  - **Left, noted in review:** the listing reads every model file to name each cube's file. That is correct, and it could read only the folders of bound cubes should it grow slow.
 - [x] T364 (AC-157, AC-233) List every visible data source with its folder, driver and health *(2026-09-27: the cubes using each moved to T459; its AC-001 clause is T331's; its AC-161 showing is T363's)*
   - Files: `packages/web/src/workspaces/data-sources/DataSourcesPage.tsx` (replacing the deferred page), `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources`), `e2e/security/data-sources.spec.ts`; *as built (2026-09-27):* also `DataSourcesList.tsx` (+ test), `router/routes.tsx`, `admin/DeferredPage.tsx` (removed), `shell/styles.ts`, `shell/AccountMenu.tsx` (`Me.readWrite`), `packages/api/src/server.ts` (the listing's rule and paths; `/api/me`'s `readWrite`), `repos/connection-tests.ts` (`latestAsStored`, a test's `settings`), `repos/data-sources.ts` (`settingsPrint`), a migration `…_connection-test-settings.cjs`, `access/data-sources.test.ts`, `e2e/admin.spec.ts`
   - Failing test: `data-sources.spec.ts`: the page shows its title and note, lists every source the user may see with folder path, driver, health from the last test ~~and the cubes using it~~, and none they may not; `/sources` opens it~~; `reader` has no Data sources entry~~ (AC-157, AC-233~~, AC-001~~).

@@ -21,6 +21,8 @@ export interface CubeUsing {
   readonly name: string;
   /** Its folder, by wechart's id. */
   readonly folderId: string;
+  /** Its model file's path, where wechart holds it (T499; design 03, state F). */
+  readonly file?: string;
 }
 
 export function cubesUsing({
@@ -28,6 +30,7 @@ export function cubesUsing({
   published,
   sources,
   extendsOf,
+  fileOf = () => undefined,
 }: {
   readonly held: readonly HeldItem[];
   readonly published: PublishedFolders;
@@ -38,6 +41,8 @@ export function cubesUsing({
   }[];
   /** The short name a cube extends, as wechart's YAML writes it, by xcube's folder id. */
   readonly extendsOf: (xcubeFolderId: string, name: string) => string | undefined;
+  /** The model file declaring a cube, by xcube's folder id: a file declares one (AC-337). */
+  readonly fileOf?: (xcubeFolderId: string, name: string) => string | undefined;
 }): Map<string, CubeUsing[]> {
   const byConnection = new Map<string, string>();
   for (const source of sources) {
@@ -64,9 +69,11 @@ export function cubesUsing({
     const sourceId = bound === undefined ? undefined : byConnection.get(bound);
     const folderId = wechartIdOf.get(item.folderId);
     if (sourceId === undefined || folderId === undefined) continue;
+    const file = fileOf(item.folderId, item.name);
+    const one = { name: item.name, folderId, ...(file === undefined ? {} : { file }) };
     const cubes = using.get(sourceId);
-    if (cubes === undefined) using.set(sourceId, [{ name: item.name, folderId }]);
-    else cubes.push({ name: item.name, folderId });
+    if (cubes === undefined) using.set(sourceId, [one]);
+    else cubes.push(one);
   }
   return using;
 }

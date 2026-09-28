@@ -82,6 +82,8 @@ export interface DataSourceTable {
     string | null | undefined,
     string | null
   >;
+  /** What it is for, in its own words (T499); no part of the connection. */
+  description: Generated<string | null>;
   version: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;

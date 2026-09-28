@@ -69,6 +69,8 @@ export function useSourceEdit(source: StoredSource, { seal: given }: { seal?: Se
     [source],
   );
   const [name, setName] = useState(source.name);
+  /** What it is for (T499; state B): no part of the connection, so no test. */
+  const [description, setDescription] = useState(source.description ?? '');
   const [values, setValues] = useState<ConnectionValues>(initial);
   const [tested, setTested] = useState<Tested | null>(null);
   const [busy, setBusy] = useState<'test' | 'save' | null>(null);
@@ -126,8 +128,10 @@ export function useSourceEdit(source: StoredSource, { seal: given }: { seal?: Se
   const nameChanged = typed !== source.name;
   /** As the API takes a name (the wizard's rule; `checkName`). */
   const nameOk = !nameChanged || (SHORT_NAME.test(typed) && typed.length <= 64);
+  const describedAs = description.trim();
+  const descriptionChanged = describedAs !== (source.description ?? '');
   const connects = changes.length > 0;
-  const count = changes.length + (nameChanged ? 1 : 0);
+  const count = changes.length + (nameChanged ? 1 : 0) + (descriptionChanged ? 1 : 0);
   /**
    * What must be entered before a test: the required fields left empty, and
    * every stored secret asked for again, an optional one too, as the API
@@ -210,6 +214,7 @@ export function useSourceEdit(source: StoredSource, { seal: given }: { seal?: Se
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           ...(nameChanged ? { name: typed } : {}),
+          ...(descriptionChanged ? { description: describedAs } : {}),
           // Exactly what was tested, as it was sealed (T461).
           ...(connects && passed !== null
             ? {
@@ -250,6 +255,7 @@ export function useSourceEdit(source: StoredSource, { seal: given }: { seal?: Se
 
   const discard = () => {
     setName(source.name);
+    setDescription(source.description ?? '');
     setValues(initial);
     setTested(null);
     setFailure(null);
@@ -265,6 +271,12 @@ export function useSourceEdit(source: StoredSource, { seal: given }: { seal?: Se
     },
     nameOk,
     nameRefused: nameRefused?.name === typed ? nameRefused.reason : null,
+    description,
+    setDescription: (next: string) => {
+      setDescription(next);
+      setSaved(null);
+    },
+    descriptionChanged,
     values,
     change,
     kept,
@@ -527,6 +539,21 @@ export function EditableGeneral({
           </p>
         )}
       </div>
+      {/* What it is for: no part of the connection, so it needs no test (state B). */}
+      <div className={`field${edit.descriptionChanged ? ' is-changed' : ''}`}>
+        {/* As design 03 state B names it. */}
+        <label htmlFor="source-description">
+          <span>Description</span>
+        </label>
+        <textarea
+          id="source-description"
+          rows={3}
+          value={edit.description}
+          onChange={(event) => {
+            edit.setDescription(event.target.value);
+          }}
+        />
+      </div>
     </div>
   );
 }
@@ -541,7 +568,11 @@ export function EditFoot({ edit }: { edit: SourceEdit }) {
     ? edit.passed === null
       ? 'Save needs a passing test of these settings.'
       : `tested ${edit.passed.at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
-    : 'no test needed for a name';
+    : edit.nameChanged && edit.descriptionChanged
+      ? 'no test needed'
+      : edit.descriptionChanged
+        ? 'no test needed for a description'
+        : 'no test needed for a name';
   return (
     <div className="source-settings__foot">
       {/* Kept mounted, their words changing, so each is announced (T497's review). */}
@@ -573,34 +604,67 @@ export function EditFoot({ edit }: { edit: SourceEdit }) {
 }
 
 /**
- * Leaving with unsaved changes asks first (state I): Back, the breadcrumb and
- * other links the app follows. A link or a reload the browser follows gets
- * the browser's own question instead.
+ * Leaving with unsaved changes asks first (state I): Back, the breadcrumb, and
+ * a workspace in the top bar. The bar's links are the browser's to follow,
+ * as on every page, so this page takes a click on one while it has changes,
+ * asks, and follows it once left (T499's review: routed in the app, they
+ * slipped past the new data source pane's own question). A reload, or a link
+ * opened in a new tab, gets the browser's own question or none.
  */
 export function LeaveGuard({ source, edit }: { source: StoredSource; edit: SourceEdit }) {
   const unsaved = useRef(edit.count > 0);
   useEffect(() => {
     unsaved.current = edit.count > 0;
   }, [edit.count]);
-  const { isArmed } = edit;
+  const { isArmed, release } = edit;
   const shouldBlockFn = useCallback<ShouldBlockFn>(
     ({ current, next }) => isArmed() && unsaved.current && current.pathname !== next.pathname,
     [isArmed],
   );
   const enableBeforeUnload = useCallback(() => isArmed() && unsaved.current, [isArmed]);
   const leaving = useBlocker({ shouldBlockFn, enableBeforeUnload, withResolver: true });
+  /** A workspace in the bar, clicked with changes unsaved: where leaving would go. */
+  const [barTo, setBarTo] = useState<string | null>(null);
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      if (!isArmed() || !unsaved.current) return;
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+        return;
+      const link =
+        event.target instanceof Element
+          ? event.target.closest('nav[aria-label="Workspaces"] a[href]')
+          : null;
+      if (!(link instanceof HTMLAnchorElement)) return;
+      event.preventDefault();
+      setBarTo(link.href);
+    };
+    document.addEventListener('click', onClick, true);
+    return () => {
+      document.removeEventListener('click', onClick, true);
+    };
+  }, [isArmed]);
   const box = useRef<HTMLDivElement>(null);
   useFocusTrap(box);
   const stay = useRef<HTMLButtonElement>(null);
   /** Where focus was as leaving was asked about: back there on Stay (T497's review). */
   const back = useRef<HTMLElement | null>(null);
   const { status, reset } = leaving;
+  const asking = status === 'blocked' || barTo !== null;
   const stayHere = useCallback(() => {
-    reset?.();
+    if (status === 'blocked') reset?.();
+    setBarTo(null);
     back.current?.focus();
-  }, [reset]);
+  }, [reset, status]);
+  const leave = () => {
+    if (barTo === null) {
+      leaving.proceed?.();
+      return;
+    }
+    release();
+    globalThis.location.assign(barTo);
+  };
   useEffect(() => {
-    if (status !== 'blocked') return undefined;
+    if (!asking) return undefined;
     back.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     stay.current?.focus();
     const onKey = (event: KeyboardEvent) => {
@@ -610,8 +674,8 @@ export function LeaveGuard({ source, edit }: { source: StoredSource; edit: Sourc
     return () => {
       window.removeEventListener('keydown', onKey);
     };
-  }, [status, stayHere]);
-  if (status !== 'blocked') return null;
+  }, [asking, stayHere]);
+  if (!asking) return null;
   return (
     <div className="source-settings__veil">
       <div
@@ -632,7 +696,7 @@ export function LeaveGuard({ source, edit }: { source: StoredSource; edit: Sourc
           <button ref={stay} type="button" className="btn" onClick={stayHere}>
             Stay
           </button>
-          <button type="button" className="btn btn-danger" onClick={() => leaving.proceed?.()}>
+          <button type="button" className="btn btn-danger" onClick={leave}>
             Leave and discard
           </button>
         </div>

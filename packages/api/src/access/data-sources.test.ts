@@ -376,6 +376,8 @@ describe('every data source the user may see, in every folder (T364, AC-157)', (
         {
           name: 'child',
           folderId: ids.b,
+          // Its model file, which wechart holds (T499); base's it doesn't.
+          file: 'cubes/child.yml',
           folderPath: [
             { id: ids.a, title: `A ${MARK}` },
             { id: ids.b, title: `B ${MARK}` },
@@ -496,6 +498,16 @@ describe('a save landing in xcube first (T442, AC-327)', () => {
             method: 'PUT',
             url: `/api/data-sources/${id}`,
             payload: { ...change, testId: changeTest.json<{ testId: string }>().testId },
+          })
+        ).statusCode,
+      ).toBe(200);
+      // A description is no part of the connection: saved, nothing landed (T499's review).
+      expect(
+        (
+          await open.inject({
+            method: 'PUT',
+            url: `/api/data-sources/${id}`,
+            payload: { description: 'Read replica.' },
           })
         ).statusCode,
       ).toBe(200);
@@ -1423,6 +1435,27 @@ describe('a change to its connection saved only from its passing test (T461, AC-
     // One test saves one change.
     const again = await save({ fields: other('hr2'), testId });
     expect(again.statusCode).toBe(422);
+  });
+
+  it('needs no test for a description, gives it back, and a copy keeps it (T499; design 03, state B)', async () => {
+    const said = 'Read replica for EMEA order cubes.';
+    const saved = await save({ description: said });
+    expect(saved.statusCode, saved.body).toBe(200);
+    const opened = await gated.inject({
+      method: 'GET',
+      url: `/api/data-sources/${id}`,
+      headers: { cookie: cookieOf['writer']! },
+    });
+    expect(opened.json<{ description: string | null }>().description).toBe(said);
+    const copy = await sources().copy(id, 'ws:t499');
+    try {
+      expect(copy.description).toBe(said);
+    } finally {
+      await sources().remove(copy.id);
+    }
+    // An empty one is none.
+    expect((await save({ description: '' })).statusCode).toBe(200);
+    expect((await stored()).description).toBeNull();
   });
 
   it('needs no test for a rename, and no longer takes a test once the source has changed since', async () => {

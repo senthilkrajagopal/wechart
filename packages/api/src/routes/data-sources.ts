@@ -66,6 +66,7 @@ export function viewOf(source: DataSource) {
     // Where a workspace's is to go, and what a copy was copied from (T345, T346).
     targetFolderId: source.targetFolderId,
     origin: source.origin,
+    description: source.description,
     version: source.version,
     updatedAt: source.updatedAt,
   };
@@ -693,6 +694,10 @@ export function registerDataSources(
       ...(value['sealed'] === undefined
         ? {}
         : { sealed: value['sealed'] as Record<string, SealedV1> }),
+      // What it is for (T499): no part of the connection, so no test.
+      ...(typeof value['description'] === 'string' || value['description'] === null
+        ? { description: value['description'] }
+        : {}),
     };
     // A copy keeps its original's name, under which it stands in for the
     // original in the workspace's previews (AC-280; T346's review).
@@ -752,10 +757,15 @@ export function registerDataSources(
     try {
       // Over the version its test was of, or refused (T461's review): two
       // saves never mix into settings nobody tested.
+      // Landed in xcube only for a change xcube holds: where or how it
+      // connects, or its name. Each landing swaps every instance's driver, so
+      // a description changes wechart alone (T499's review; research
+      // xcube-slice-6.md, "PUT only on a real change").
+      const renamed = change.name !== undefined && change.name !== source.name;
       const updated = await store.update(
         source.id,
         change,
-        workspaced ? {} : await landingIn(source.folderId),
+        workspaced || !(connects || renamed) ? {} : await landingIn(source.folderId),
         source.version,
       );
       // The test it was saved from is its health now (AC-163, AC-157).

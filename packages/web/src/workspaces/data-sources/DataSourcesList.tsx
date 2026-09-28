@@ -49,6 +49,8 @@ interface UsingCube {
   readonly name: string;
   readonly folderId: string;
   readonly folderPath: readonly { readonly id: string; readonly title: string }[];
+  /** Its model file's path, where wechart holds it (T499). */
+  readonly file?: string;
 }
 
 const driverLabel = (driver: string) =>

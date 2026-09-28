@@ -49,6 +49,8 @@ export interface DataSource {
     readonly version: number;
     readonly folderId: string;
   } | null;
+  /** What it is for, in its own words (T499); null for none. */
+  readonly description: string | null;
   readonly version: number;
   readonly updatedAt: Date;
 }
@@ -87,6 +89,8 @@ export interface DataSourceChange {
   readonly fields?: Readonly<Record<string, FieldValue>>;
   /** Secrets sealed anew; the others stay, where the target hasn't changed. */
   readonly sealed?: Readonly<Record<string, SealedV1>>;
+  /** What it is for (T499): no part of the connection. Empty is none. */
+  readonly description?: string | null;
 }
 
 export interface PlannedChange {
@@ -211,6 +215,7 @@ type Row = {
   settings: Record<string, unknown>;
   target_folder_id: string | null;
   origin: DataSource['origin'];
+  description: string | null;
   version: number;
   updated_at: Date;
 };
@@ -281,6 +286,7 @@ export function dataSourceStore(
     ),
     targetFolderId: row.target_folder_id,
     origin: row.origin,
+    description: row.description,
     version: row.version,
     updatedAt: row.updated_at,
   });
@@ -296,6 +302,7 @@ export function dataSourceStore(
         'settings',
         'target_folder_id',
         'origin',
+        'description',
         'version',
         'updated_at',
       ]);
@@ -362,6 +369,7 @@ export function dataSourceStore(
                 version: original.version,
                 folderId: original.folderId,
               }),
+              description: original.description,
             })
             .execute();
           // Each envelope as it was sealed: copied, never opened (AC-298).
@@ -506,6 +514,15 @@ export function dataSourceStore(
               name,
               auth_method: authMethod,
               settings: JSON.stringify(fields),
+              // Said or cleared; kept when not said (T499).
+              ...(change.description === undefined
+                ? {}
+                : {
+                    description:
+                      change.description === null || change.description.trim() === ''
+                        ? null
+                        : change.description.trim(),
+                  }),
               version: eb('version', '+', 1),
               updated_at: new Date(),
             }))

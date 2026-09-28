@@ -61,6 +61,8 @@ export interface StoredSource {
   /** Whether the user may change it in its folder (AC-262). */
   readonly canWrite: boolean;
   readonly inWorkspace: boolean;
+  /** What it is for, in its own words (T499); null for none. */
+  readonly description: string | null;
   readonly originPath?: readonly Folder[];
   readonly targetPath?: readonly Folder[];
 }
@@ -312,7 +314,7 @@ function Settings({ source }: { source: StoredSource }) {
               {label}
               {/* A tab with unsaved changes carries a dot (pin 6). */}
               {editable &&
-              ((key === 'general' && edit.nameChanged) ||
+              ((key === 'general' && (edit.nameChanged || edit.descriptionChanged)) ||
                 (key === 'connection' && edit.connects)) ? (
                 <>
                   <span className="source-settings__dot" aria-hidden="true" />
@@ -336,6 +338,8 @@ function Settings({ source }: { source: StoredSource }) {
                   <>
                     <dt>Name</dt>
                     <dd className="is-code">{source.name}</dd>
+                    <dt>Description</dt>
+                    <dd className="source-settings__description">{source.description ?? '—'}</dd>
                   </>
                 )}
                 <dt>Folder</dt>
@@ -594,6 +598,7 @@ function Usage({ source, listed }: { source: StoredSource; listed: ListedSource 
           <thead>
             <tr>
               <th scope="col">Cube</th>
+              <th scope="col">Model</th>
               <th scope="col">Folder</th>
             </tr>
           </thead>
@@ -601,6 +606,10 @@ function Usage({ source, listed }: { source: StoredSource; listed: ListedSource 
             {listed.usedBy.map((cube) => (
               <tr key={`${cube.folderId}/${cube.name}`}>
                 <td className="is-code">{cube.name}</td>
+                {/* Its model file, by name, the whole path in its tooltip (T499; state F). */}
+                <td className="is-code" title={cube.file}>
+                  {cube.file === undefined ? '—' : (cube.file.split('/').at(-1) ?? cube.file)}
+                </td>
                 <td>
                   <a href={folderHref(cube.folderId)}>
                     {cube.folderPath.length === 0

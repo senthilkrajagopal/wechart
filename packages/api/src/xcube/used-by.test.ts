@@ -112,6 +112,23 @@ describe('the cubes bound to each data source (T459, AC-157)', () => {
     expect(extendsIn('cubes: [\n')).toBeUndefined();
   });
 
+  it('names each cube’s model file, where wechart holds it (T499; design 03, state F)', () => {
+    const using = cubesUsing({
+      held: [cube('fb', 'sales', 'fb__warehouse'), cube('fb', 'returns', 'fb__warehouse')],
+      published,
+      sources,
+      extendsOf: () => undefined,
+      fileOf: (folderId, name) =>
+        folderId === 'fb' && name === 'sales' ? 'cubes/sales.yml' : undefined,
+    });
+
+    expect(using.get('ds-b-warehouse')).toEqual([
+      { name: 'sales', folderId: 'b', file: 'cubes/sales.yml' },
+      // One whose file isn't known is listed without one, never a guess.
+      { name: 'returns', folderId: 'b' },
+    ]);
+  });
+
   it('counts none from an older image, which says no cube’s data source', () => {
     const using = cubesUsing({
       held: [cube('fb', 'sales', undefined)],
