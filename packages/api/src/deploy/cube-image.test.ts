@@ -28,9 +28,16 @@ import { describe, expect, it } from 'vitest';
  * `GET …/items`, a rebound cube's own SQL alias (AC-273), the connection
  * heartbeat (AC-161) and the publish/removal race fixed: the image built
  * last, as R31 asks (research xcube-22132c309c.md, xcube-e53cf2a8b8.md).
+ *
+ * T501, AC-161: `919cff8c6e` serves a data source changed in place from its
+ * new target at once, as a new epoch, never the old one's cache or rollups;
+ * keeps a cube's names while its data source is at the target it was first
+ * served with (R38, AC-328); and answers the folder 403 on GET `/v1/sql` and
+ * `/v1/dry-run` too (research xcube-4754c2c960.md, xcube-bc18f82c01.md,
+ * xcube-2d5ac86f24.md, xcube-919cff8c6e.md).
  */
 const IMAGE =
-  'ghcr.io/senthilkrajagopal/xcube:v1.7.45-e53cf2a8b8@sha256:58e5329448f2962d3b95df9b5542db2b94f9b5783531bd8195d25b8246f1ab58';
+  'ghcr.io/senthilkrajagopal/xcube:v1.7.45-919cff8c6e@sha256:cb04cb9ba8e3b7db58ae8297a986f2deeaaf12497c853ab6d5c25c88797c5596';
 /** Slice 2's image, built locally: only the way back names it. */
 const SLICE_2_IMAGE = 'xcube:v1.7.45-83cb9f0888';
 
@@ -60,7 +67,7 @@ describe('docs/deploy.md pulls the fork’s published image by digest (T449, AC-
 
   it('names the image the release runs, and slice 2’s only for the way back, with how to build it', () => {
     // No other xcube tag, and no build of the package under its old name.
-    expect(deploy).not.toMatch(/xcube:v1\.7\.45-(?!e53cf2a8b8@|83cb9f0888|feat-xcube|\$|<)/);
+    expect(deploy).not.toMatch(/xcube:v1\.7\.45-(?!919cff8c6e@|83cb9f0888|feat-xcube|\$|<)/);
     expect(deploy).not.toContain('cube:v1.7.45-introspection-');
     // Slice 2's image was built locally and never published: the way back says how.
     const back = deploy.slice(deploy.indexOf('### Items mode, and the way back'));
@@ -73,6 +80,12 @@ describe('docs/deploy.md pulls the fork’s published image by digest (T449, AC-
 describe('the docker-desktop Helm release runs it (T414, T417, AC-248)', () => {
   it('names it as Cube’s image, for Cube and its refresh worker', () => {
     const values = fromRoot('deploy/helm/values/docker-desktop.yaml');
+    const cube = /^cube:\n((?: {2}.*\n|\s*\n)+)/m.exec(values)?.[1] ?? '';
+    expect(/^ {2}image: (.+)$/m.exec(cube)?.[1]).toBe(IMAGE);
+  });
+
+  it('is the chart’s own default too (T501’s review)', () => {
+    const values = fromRoot('deploy/helm/wechart/values.yaml');
     const cube = /^cube:\n((?: {2}.*\n|\s*\n)+)/m.exec(values)?.[1] ?? '';
     expect(/^ {2}image: (.+)$/m.exec(cube)?.[1]).toBe(IMAGE);
   });

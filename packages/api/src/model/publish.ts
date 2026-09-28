@@ -236,9 +236,12 @@ export function registerModelPublishing(
    * The model's publishes and deletes one at a time (T460, AC-273): each is
    * checked only once the one before it is committed and sent to xcube. One
    * checked while another's change was in wechart's store and not yet in
-   * xcube found the two apart and sent the whole model, which binds every
-   * cube afresh: published cubes moved to a nearer data source without being
-   * published again.
+   * xcube found the two apart and sent the whole model, which, before xcube
+   * 4754c2c960, bound every cube afresh: published cubes moved to a nearer
+   * data source without being published again. From 4754c2c960 a whole send
+   * keeps what it sends unchanged as it was bound (research
+   * xcube-4754c2c960.md, Gotcha 3); one at a time still keeps each publish
+   * its own changeset, checked against what is in xcube.
    */
   let last: Promise<unknown> = Promise.resolve();
   const oneAtATime = <T>(work: () => Promise<T>): Promise<T> => {

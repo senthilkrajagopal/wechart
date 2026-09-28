@@ -43,10 +43,15 @@ export interface CubeClientOptions {
 /**
  * A Cube instance behind the revision a token names catches up for up to 10 s,
  * then answers one of these 503s with `Retry-After: 2` (research, "Serving"):
- * it is asked again, a few times, and the answer is the caller's.
+ * it is asked again, a few times, and the answer is the caller's. So is a
+ * request pinned to a data source's settings since changed, once the old
+ * revision's grace is over, which answers with no Retry-After (T501; research
+ * xcube-bc18f82c01.md, Gotcha 1), and one on an instance that has heard of
+ * new settings but not yet switched to them, a 503 from xcube dabd7bde6e on
+ * (Gotcha 2; `to-wechart/2026-09-28-0400-bc18f82c01-follow-ups.md`).
  */
 const CATCHING_UP =
-  /is not active on this instance yet|is not loaded on this instance yet|has no revision that compiles on this instance yet/;
+  /is not active on this instance yet|is not loaded on this instance yet|has no revision that compiles on this instance yet|connection settings this request was pinned to changed|changed to new settings on this instance/;
 /**
  * Three asks: each can take xcube's 10 s of catching up, so the last answer
  * comes about 34 s in, inside a proxy's usual 60 s read timeout (T421's review).

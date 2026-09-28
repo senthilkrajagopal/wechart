@@ -130,6 +130,10 @@ export interface HeldItem {
    * research xcube-e53cf2a8b8.md): the connection's full name, `default`, or
    * null for a cube that `extends` another and takes its parent's. Absent on
    * a view, and on any item from an image older than `e53cf2a8b8`: unknown.
+   * From `4754c2c960` a whole send keeps it too, for an item sent unchanged
+   * (research xcube-4754c2c960.md, "`PUT …/snapshot` with items"); from
+   * `bc18f82c01` a change to that connection's settings serves it from the
+   * new target as a new epoch, with no rebinding (xcube-bc18f82c01.md).
    */
   readonly dataSource?: string | null;
 }

@@ -7823,6 +7823,32 @@ Every step leaves both suites working. The slice-4 image takes HS256 tokens unti
     - **The fix:** a model's publishes and deletes run one at a time on each API. Each is checked only once the one before it is committed and sent.
     - **Afterwards:** the full security suite passes in Chrome (59), and the run's revisions show one whole send, at start, and every publish as a changeset (35).
   - **Left to xcube** (`to-xcube/2026-09-27-0530-snapshot-rebinds.md`): the recovery sends at start, after a refusal, or across two API replicas still bind every cube afresh. Asked: keep each item's resolved YAML when its authored YAML is unchanged.
+- [x] T501 (AC-161, AC-328) Pin xcube `919cff8c6e`: a data source changed in place served from its new target at once, never its old cache or rollups; a cube's names kept while its data source is at the target it was first served with *(added 2026-09-28: the user's answer "No and No" of 2026-09-27, asked of xcube in `to-xcube/2026-09-27-0400-changed-in-place.md` and `2026-09-27-2330-sql-dry-run-403.md`, answered in `to-wechart/2026-09-28-0100-changed-in-place.md`; re-pinned from `bc18f82c01` for R38, `to-xcube/2026-09-28-0700-alias-only-after-a-change.md`)*
+  - Files: `docker-compose.yml`, `deploy/helm/wechart/values.yaml`, `deploy/helm/values/docker-desktop.yaml`, `docs/deploy.md` (the upgrade), `packages/api/src/deploy/cube-image.test.ts`, `packages/api/src/cube/{client.ts,model-claims.test.ts}` (the new 503s asked again), `e2e/security/changed-in-place.spec.ts`, `e2e/security/root-default.ts` (the root `default`, seeded by the specs that read the root's names), `e2e/security/{root-default,isolation,data-source-binding}.spec.ts`, `playwright.security.config.ts`; comments brought up to the images in `packages/api/src/xcube/{client,cube-state}.ts`, `packages/api/src/xcube/publish-serial.test.ts`, `packages/api/src/model/publish.ts` and `packages/api/src/routes/data-sources.ts`
+  - The image also answers the folder 403 on GET `/v1/sql` and `/v1/dry-run` (`xcube-bc18f82c01.md`). No wechart test here shows it; it is xcube's.
+  - Failing test:
+    - `cube-image.test.ts`: compose, both Helm values and `docs/deploy.md` pin `919cff8c6e` by digest.
+    - `changed-in-place.spec.ts`: a root data source's database changed in place, once Cube reports it live, never answers from the old database; its rollup answers "not built yet" at most until it is built anew. On `e53cf2a8b8` the old rollup answered. Moved, its rollup is built into a table of another name; moved back, into its first name again (R38).
+    - `isolation.spec.ts`: with the root `default` stored at the target Cube's environment names, the root's rollup table keeps its published name (AC-328, R38). On `bc18f82c01` it took an alias.
+    - `model-claims.test.ts`: xcube's "settings this request was pinned to changed" and "changed to new settings" answers are asked again.
+  - Research: `xcube-919cff8c6e.md`, `xcube-2d5ac86f24.md`, `xcube-bc18f82c01.md`, and `xcube-4754c2c960.md` for the image between.
+  - Depends on: T442, T459
+  - *Small decisions, overturnable (research's open questions):*
+    - The new 503s are asked again by wechart's server, as a catching-up instance's is.
+    - Cube and its refresh worker upgrade together (one image value). Coming from `bc18f82c01` (compose and the docker-desktop release), rollup-served tiles answer "not built yet" until the worker's next run. `docs/deploy.md` says so, with xcube's worker-first advice.
+    - A BigQuery key, Snowflake OAuth token or Dremio token entered again, even the same one, moves its data source off its first target for good, and rebuilds its rollups: wechart mints a revision for each envelope it stores. *(Put to the user, T501's review: `docs/phase-2/backlog.md` §6(a).)*
+    - Each security run's reset removes the root `default` from xcube, and until it is back the root's cubes are served from Cube's environment under aliases (`xcube-919cff8c6e.md`, Gotcha 1). `isolation.spec.ts` seeds it first, as `root-default.spec.ts` does, rather than depend on the order the specs run in.
+  - *Asked of xcube, not waited on:* whether a base could keep its connection's target, so that Cube's environment reaching the same place is at base again (`xcube-919cff8c6e.md`, open question 1).
+  - **Verified 2026-09-28:** compose on `919cff8c6e` (migration 8 ran); the four T501 specs, 12 passed; the whole security suite in Chrome, 81 passed; phase 1 in Chrome, 681 passed, and 2 failed that are known (`docs/handoff.md`).
+  - **Review fixes (one round):**
+    1. `changed-in-place.spec.ts` ran in all three browsers, moving one model's data sources at once. It runs in Chrome only now, as `data-source-binding.spec.ts` does.
+    2. Its "never the old cache" check couldn't fail: with Cube's 10-second default refresh key, the cache renewed during the move anyway. The cube is kept an hour now.
+    3. Nothing checked R38's names. The test now compares the rollup's table across the move and back.
+    4. `docs/deploy.md` gains the research's provisos: a source changed in place under `e53cf2a8b8` keeps its old-target tables until their refresh keys renew, and no target change while a release rolls. The root's names depend on `CUBEJS_DB_*` only where Cube served the root before `default` was stored. A new port counts as a move too.
+    5. The re-entered key or token went to the user (above).
+    - **AC-161 stays open:** its real surface is a change approved through the review view (T356), and the UI's "live", not the API's (T497's note).
+  - *Next (T503):* xcube `465865f3fd` answers wechart's five follow-ups (`to-wechart/2026-09-28-1000-919cff8c6e-follow-ups.md`): a base keeps its target, so Cube's own settings reaching the same place are at base again, and the reset no longer renames the root's cubes. Research it, then pin it.
+  - *Noted, not changed:* `/api/acceleration` passes Cube's 403 through as `403` (the global handler), not a 500; tiles don't ask again on "not built yet" (a 400) after a change of target (research Gotcha 4).
 
 ### Slice 5: previews
 
@@ -8741,7 +8767,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 | AC-150 | T372, T373, T374 | AC-151 | T376 | AC-153 | T377 |
 | AC-154 | T377 | AC-155 | T379 | AC-157 | T364, T459 |
 | AC-158 | T363, T461, T497 | AC-159 | T361, T363 | AC-160 | T360, T454, T363 |
-| AC-161 | T335, T363, T365, T435, T442, T462, T497 | AC-163 | T362, T363, T461, T462 | AC-164 | T335, T497 |
+| AC-161 | T335, T363, T365, T435, T442, T462, T497, T501 | AC-163 | T362, T363, T461, T462 | AC-164 | T335, T497 |
 | AC-176 | T405 | AC-180 | T407 | AC-187 | T406, T466–T470, T476–T478 |
 | AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
 | AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |
@@ -8775,7 +8801,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 | AC-319 | T418, T421, T422, T423, T444 | AC-320 | T436 | AC-321 | ~~T426~~ T451, T436, T456 |
 | AC-322 | T427 | AC-323 | T347, T440 | AC-324 | T333, T455 |
 | AC-325 | T441, T363 | AC-326 | T420, T437 | AC-327 | T431, T442, T458 |
-| AC-328 | T341, T425, T449, T452, T435 | AC-329 | T429, T450, T342, T347 | AC-330 | T419, T447, T425, T449, T436, T442 |
+| AC-328 | T341, T425, T449, T452, T435, T501 | AC-329 | T429, T450, T342, T347 | AC-330 | T419, T447, T425, T449, T436, T442 |
 | ~~AC-331~~ (retired, `[R30]`) | ~~T430~~ | AC-332 | T433 | AC-333 | T419, T447, T449, T425, T420 |
 | AC-334 | T421, T447 | AC-335 | T446, T447 | AC-336 | T430, T449 |
 | AC-337 | T448 | AC-009 (again) | T426 | AC-189, AC-249 (again, folder items) | T450 |

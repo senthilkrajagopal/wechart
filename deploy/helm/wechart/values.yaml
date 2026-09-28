@@ -62,10 +62,15 @@ cube:
   # (T447; infra/cube/cube.js requires it), as items from c0610bb768 (T449),
   # with slices 4-6 from ed08180c37 (T420, R31), and each cube's bound data
   # source in its items and a rebound cube's own SQL alias from e53cf2a8b8
-  # (T459).
+  # (T459), and a data source changed in place served from its new target at
+  # once, its cubes keeping their names while it is at the target it was first
+  # served with, from 919cff8c6e (T501, R38).
+  # The seed Job stores the root `default` from `dataSource` below, the same
+  # host, port, database and user Cube reads, so the root's cubes keep their
+  # names: don't set those four again in `dataSource.env` or `seedFields`.
   # Published by the fork's CI for amd64 and arm64, and pinned by digest
   # (docs/deploy.md); a plain cubejs/cube image won't start with this cube.js.
-  image: ghcr.io/senthilkrajagopal/xcube:v1.7.45-e53cf2a8b8@sha256:58e5329448f2962d3b95df9b5542db2b94f9b5783531bd8195d25b8246f1ab58
+  image: ghcr.io/senthilkrajagopal/xcube:v1.7.45-919cff8c6e@sha256:cb04cb9ba8e3b7db58ae8297a986f2deeaaf12497c853ab6d5c25c88797c5596
   port: 4000
   # How long a Cube process may take to connect to xcube's schema, migrate it
   # and compile every model before it answers: its port stays closed until

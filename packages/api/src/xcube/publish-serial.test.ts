@@ -10,10 +10,12 @@ import { modelSync } from './snapshot';
 /**
  * T460 (AC-273): a model's publishes one at a time. A publish checked while
  * another's change is committed to wechart but not yet in xcube found the
- * two apart and sent the whole model, and a whole send binds every cube
- * afresh: published cubes moved to a nearer data source without being
- * published again. So a publish is checked only once the one before it is in
- * xcube, and each goes as its own changeset.
+ * two apart and sent the whole model, and a whole send, before xcube
+ * 4754c2c960, bound every cube afresh: published cubes moved to a nearer data
+ * source without being published again. So a publish is checked only once
+ * the one before it is in xcube, and each goes as its own changeset. (From
+ * 4754c2c960 a whole send keeps what it sends unchanged as bound: research
+ * xcube-4754c2c960.md, Gotcha 3.)
  */
 const config: Config = {
   port: 0,

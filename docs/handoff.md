@@ -246,6 +246,11 @@
 >       `shell.spec.ts` "the app bar folds navigation and search into a menu" in Safari only: after
 >       widening past 1,024 px and narrowing at once, the menu stays open (its Tab step was fixed
 >       with Option-Tab, 840e9b0; three tries at the rest, then stopped). The rest passed alone.
+    - **Failing in the phase-1 run of 2026-09-28 (Chrome, 681 passed):** `acceleration.spec.ts`
+      "Data as of…" (above), and `shell.spec.ts` "at 390 pixels wide › /model/files/…orders.yml
+      doesn't scroll sideways": `main` overflows by 53 px. It fails alone too. The page is the model
+      form (eight section tabs, the Data source picker), none of it changed by T352, T355 or T501.
+      It belongs with the narrow-shell item in `docs/phase-2/backlog.md` §5 (N16), not yet fixed.
 >   - **Answered by the user on 2026-09-26 (evening):**
 >     - 18: pin the image built last. That is `xcube:v1.7.45-ed08180c37@sha256:bc041aa208df…`
 >       (overlay data sources, slice 8, the TLS binding), for slices 4–6.

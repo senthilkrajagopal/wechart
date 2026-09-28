@@ -217,10 +217,13 @@ test.describe('data sources bound at publish, nearest first (T435, AC-273, AC-31
     ]);
   });
 
-  test('reports the connection a cube queried live on the instance that built it (AC-161)', async ({
+  test('reports the connection a cube queried live on every instance serving it (AC-161)', async ({
     page,
   }) => {
-    // Its report is written as the driver is built, after the query answers.
+    // Written as the driver is built, and, from xcube bc18f82c01, by every
+    // instance that switches to a new connection, the refresh worker's among
+    // them (T501; research xcube-bc18f82c01.md, "Connection health after a
+    // change"): each one reporting says live, and current.
     await expect
       .poll(
         async () => {
@@ -231,15 +234,17 @@ test.describe('data sources bound at publish, nearest first (T435, AC-273, AC-31
           const body = (await health.json()) as {
             instances?: { state: string; current: boolean; error: string | null }[];
           };
-          return (body.instances ?? []).map(({ state, current, error }) => ({
-            state,
-            current,
-            error,
-          }));
+          return [
+            ...new Set(
+              (body.instances ?? []).map(({ state, current, error }) =>
+                JSON.stringify({ state, current, error }),
+              ),
+            ),
+          ];
         },
         { timeout: 30_000 },
       )
-      .toEqual([{ state: 'live', current: true, error: null }]);
+      .toEqual([JSON.stringify({ state: 'live', current: true, error: null })]);
   });
 
   test('rebinds nothing published when a nearer one is added, until the cube is published again', async ({

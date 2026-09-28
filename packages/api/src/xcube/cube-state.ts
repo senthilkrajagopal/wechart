@@ -2,13 +2,18 @@ import type { ConnectionHealth } from './connections';
 
 /**
  * Whether every running Cube instance uses a data source's stored settings
- * (T365, AC-161), from each instance's report to xcube. xcube swaps a changed
- * connection's driver while Cube runs, so nothing here asks for a restart.
+ * (T365, AC-161), from each instance's report to xcube. Nothing here asks
+ * for a restart: while Cube runs, xcube swaps the driver of a connection
+ * given a new password, and serves one given a new target (host, port,
+ * database, user or key holder) as a new epoch, with none of the old
+ * target's cache or rollups (T501; research xcube-bc18f82c01.md).
  *
  * "Every instance" is each one reporting within the hour: an instance writes
- * a report only when it builds the driver, and nothing removes the reports of
- * instances that are gone (research `xcube-slice-6.md`, "When a row is
- * written"), so an older report isn't shown.
+ * a report when it builds the driver, and, from xcube bc18f82c01, when it
+ * switches to a connection's new target (research `xcube-bc18f82c01.md`,
+ * "Connection health after a change"). Nothing removes the reports of
+ * instances that are gone (`xcube-slice-6.md`, "When a row is written"), so
+ * an older report isn't shown.
  */
 export type CubeState =
   /** xcube holds no connection of its name: not landed (a workspace's, say). */

@@ -256,6 +256,10 @@ R37 asks for both UI reviews' designs to be built, with the 2026-09-27 ones winn
 - **2026-09-27 design 03, state E:** a "Scheduled health check" row. It is only needed if periodic tests are wanted, which is a spec change.
 - **Explore and the top bar below 1,024 px:** neither review designs them (§3, N16).
 - **2026-09-27 design 04, pin 6:** "Search My workspace" or "Search Sales / EMEA" names the box for its folder, but AC-019's Explore search looks through the whole library, not one folder. Either the search is scoped to the open folder (an AC-019 change), or the box keeps its global label.
+- **A key or token entered again, unchanged (T501's review; `xcube-2d5ac86f24.md`, open question 2):** a BigQuery key, Snowflake OAuth token or Dremio token entered again, even the same one, counts as a new target for good. The data source's cubes take an alias and their rollups are rebuilt, the root's included, where R38 keeps names while the target is the same. wechart can't tell it is the same, since it is sealed in the browser anew each time. The options:
+  - keep it so (as built);
+  - ask xcube to compare such a secret by its opened value when it decides whether a target changed;
+  - have the form keep the stored key unless the user chooses to replace it (it does today), and say that replacing it rebuilds the rollups.
 
 **(b) Waiting on xcube** (R35: needs xcube changed, through the Cube-expert agent)
 - **2026-09-27 design 01, state D:** the test's four checks ticking off one by one. xcube's test route answers once, at the end.

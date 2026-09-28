@@ -52,18 +52,19 @@ export default defineConfig({
   },
   projects: [
     { name: 'chrome', use: { ...devices['Desktop Chrome'], channel: 'chrome' } },
-    // xcube's binding is shown through the API, in no browser, so once: its
-    // copies in three browsers would publish and remove data sources in one
-    // model at once, and trip each other (T435).
+    // xcube's binding, and a data source changed in place, are shown through
+    // the API, in no browser, so once: their copies in three browsers would
+    // publish, move and remove data sources in one model at once, and trip
+    // each other (T435; T501's review: each move is a new epoch for the model).
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
-      testIgnore: /data-source-binding\.spec\.ts/,
+      testIgnore: /(data-source-binding|changed-in-place)\.spec\.ts/,
     },
     {
       name: 'safari',
       use: { ...devices['Desktop Safari'] },
-      testIgnore: /data-source-binding\.spec\.ts/,
+      testIgnore: /(data-source-binding|changed-in-place)\.spec\.ts/,
     },
   ],
   webServer: [

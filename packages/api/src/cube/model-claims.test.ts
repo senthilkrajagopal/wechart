@@ -206,6 +206,46 @@ describe('a Cube instance still catching up (T421, AC-334)', () => {
     expect(fetchImpl.mock.calls.length).toBeLessThanOrEqual(6);
   });
 
+  /**
+   * T501 (research xcube-bc18f82c01.md, Gotcha 1): a request pinned to
+   * settings a data source has since left, past the old revision's grace,
+   * answers 503 with no Retry-After. Asked again, it runs on the new ones.
+   */
+  it('is asked again when the settings it was pinned to have changed', async () => {
+    const { client, fetchImpl, delays } = cube((call) =>
+      call === 0
+        ? {
+            status: 503,
+            body: {
+              error: 'The connection settings this request was pinned to changed; try again',
+            },
+          }
+        : ok(),
+    );
+    await expect(client.load({ measures: ['orders.count'] })).resolves.toEqual({ cubes: [] });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    // With no Retry-After, the 2 s a catching-up instance asks.
+    expect(delays).toEqual([2]);
+  });
+
+  it('is asked again when the instance hasn’t yet switched to a data source’s new settings', async () => {
+    // As Cube words it on its 400 path, and on its 500 path, which prefixes
+    // `Error: ` (research xcube-2d5ac86f24.md, "The 503 for a connection
+    // that is changing").
+    for (const error of [
+      'Connection "warehouse" changed to new settings on this instance; try again',
+      'Error: Connection "warehouse" changed to new settings on this instance; try again',
+    ]) {
+      // Its Retry-After heeded, not the 2 s taken without one.
+      const { client, fetchImpl, delays } = cube((call) =>
+        call === 0 ? { status: 503, body: { error }, headers: { 'retry-after': '1' } } : ok(),
+      );
+      await expect(client.load({ measures: ['orders.count'] })).resolves.toEqual({ cubes: [] });
+      expect(fetchImpl, error).toHaveBeenCalledTimes(2);
+      expect(delays, error).toEqual([1]);
+    }
+  });
+
   it('answers any other 503 at once, as before', async () => {
     const { client, fetchImpl } = cube(() => ({ status: 503, body: { error: 'Continue wait' } }));
     await expect(client.load({ measures: ['orders.count'] })).rejects.toBeInstanceOf(CubeError);

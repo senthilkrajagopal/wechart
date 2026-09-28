@@ -1,9 +1,7 @@
-import { readFileSync } from 'node:fs';
-
-import { API_PORT, SEED_TOKEN } from '../../playwright.security.config';
 import { seedDefault } from '../../packages/api/src/seed-default';
 import { CUBE, serviceToken } from '../api-process';
 import { expect, test } from './fixtures';
+import { ROOT_DEFAULT_ENV } from './root-default';
 
 /**
  * T443 (AC-310): the shared root's `default` data source, seeded at install
@@ -16,21 +14,7 @@ import { expect, test } from './fixtures';
  * Its settings are compose's sample database, as the Helm chart's are the
  * deployment's (its development login).
  */
-const env = {
-  WECHART_API_URL: `http://localhost:${String(API_PORT)}`,
-  WECHART_SEED_TOKEN: SEED_TOKEN,
-  WECHART_XCUBE_PUBLIC_KEY: readFileSync(
-    new URL('../../infra/xcube/dev-credential-key.pub.jwk', import.meta.url),
-    'utf8',
-  ),
-  WECHART_DEFAULT_DB_TYPE: 'postgres',
-  WECHART_DEFAULT_DB_HOST: 'sample-db',
-  WECHART_DEFAULT_DB_PORT: '5432',
-  WECHART_DEFAULT_DB_DATABASE: 'sample',
-  WECHART_DEFAULT_DB_USER: 'sample',
-  WECHART_DEFAULT_DB_SSL: 'false',
-  WECHART_DEFAULT_DB_PASSWORD: 'sample',
-};
+const env = ROOT_DEFAULT_ENV;
 type Listed = {
   id: string;
   name: string;

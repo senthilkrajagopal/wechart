@@ -430,7 +430,8 @@ export function registerDataSources(
   /**
    * Whether every running Cube instance uses its stored settings (T365,
    * AC-161): from each instance's report to xcube within the hour. xcube
-   * swaps the driver as Cube runs, so there is never a restart to ask for.
+   * takes a change as Cube runs — a new password swapped in, a new target
+   * served as a new epoch (T501) — so there is never a restart to ask for.
    */
   app.get('/api/data-sources/:id/cube-state', USER, async (request, reply) => {
     const source = await reached(request, reply, 'read');
