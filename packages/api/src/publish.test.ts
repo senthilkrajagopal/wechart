@@ -690,6 +690,71 @@ describe('publishing generated cubes (AC-249)', () => {
     expect(store.files).toEqual([edited]);
     await app.close();
   });
+
+  /**
+   * T488 (AC-345, AC-346): Generate's cubes are drafts, published with the
+   * file whose save brings them — an edit to a stored file among them. The
+   * new ones are named, and only those are checked as new.
+   */
+  it('checks as new only the files it is told are, beside an edit to a stored one', async () => {
+    const LINES = { path: 'cubes/lines.js', content: 'cube(`lines`, { sql_table: `lines` });\n' };
+    const store = memory([ORDERS, VIEW, LINES]);
+    const { cube } = cubeReading();
+    // Only Cube's model names the cube of a file wechart doesn't read as YAML.
+    const compiled = Object.create(cube, {
+      metaExtended: {
+        value: async () => ({
+          cubes: [
+            { name: 'orders', type: 'cube', fileName: 'cubes/orders.yml' },
+            { name: 'lines', type: 'cube', fileName: 'cubes/lines.js' },
+          ],
+        }),
+      },
+    }) as CubeClient;
+    const app = serve({ config, modelFiles: store, cube: compiled });
+    const edited = {
+      path: 'cubes/orders.yml',
+      content: 'cubes:\n  - name: orders\n    title: O\n',
+    };
+    const send = (files: readonly ModelFile[], created: readonly string[]) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/model/publish',
+        payload: { files, create: created },
+      });
+
+    // The edit is not refused as a stored file; the new ones are checked as new.
+    const refused = await send(
+      [edited, generated('cubes/lines.yml', 'lines'), generated('views/summary.yml', 'more_lines')],
+      ['cubes/lines.yml', 'views/summary.yml'],
+    );
+    expect([refused.statusCode, refused.json()]).toEqual([
+      422,
+      {
+        errors: [
+          { path: 'cubes/lines.yml', message: '`lines` is already a cube in cubes/lines.js.' },
+          {
+            path: 'views/summary.yml',
+            message: 'views/summary.yml is already in the model store.',
+          },
+        ],
+      },
+    ]);
+    expect(store.files).toEqual([ORDERS, VIEW, LINES]);
+
+    const published = await send(
+      [edited, generated('cubes/customers.yml', 'customers')],
+      ['cubes/customers.yml'],
+    );
+    expect(published.statusCode).toBe(200);
+    expect(store.files).toEqual([
+      generated('cubes/customers.yml', 'customers'),
+      LINES,
+      edited,
+      VIEW,
+    ]);
+    await app.close();
+  });
 });
 
 /**

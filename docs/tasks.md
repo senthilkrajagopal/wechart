@@ -8126,8 +8126,26 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 
 #### Designs 11 and 12's proposals, approved (R36)
 
-- [ ] T488 (AC-345, AC-346, AC-249) Generate cubes adds drafts, and a draft publishes with the drafts it joins
-  - Files: `packages/web/src/workspaces/model/{GenerateCubes,ModelFilePage}.tsx`, `packages/web/src/workspaces/model/draftJoins.ts` (+ tests), `e2e/generate-cubes.spec.ts`, `e2e/model-design.spec.ts`
+- [x] T488 (AC-345, AC-346, AC-249) Generate cubes adds drafts, and a draft publishes with the drafts it joins
+  - **Done 2026-09-27.** Tested in:
+    - `e2e/generate-cubes.spec.ts`: the first two tests, in Chrome, Firefox and Safari. The AC-346 flow is here rather than in `model-design.spec.ts`, since it starts from generated drafts.
+    - `GenerateCubes.test.tsx`, `draftJoins.test.ts` and the API's `publish.test.ts`.
+  - **Adding the cubes (AC-345, R36):**
+    - Review's primary is "Add 2 cubes as drafts" ("Add 1 cube as a draft"). It publishes nothing: the files go into the tree as unpublished drafts, and `/api/meta` is unchanged.
+    - The pane then says "Added 2 cubes as drafts." and lists each file with Open.
+    - A clash still refuses the add, with "Resolve 1 clash first" beside it (AC-249).
+    - Generate's publish refusal is gone with its publish. A save's refusal is shown in the editor, as it always was.
+  - **Saving a draft (AC-346):**
+    - Saving a file also publishes, in the same publish, the drafts that alone define a cube its cubes join, followed through their own joins.
+    - They are named under Save before it is pressed: "Saves with cubes/x.yml, which defines a cube this file joins." Save is described by that line.
+    - A stored file's edit that joins a draft brings that draft too.
+    - Once published they are listed as stored at once, and dropped from the drafts store. Before, a second save before the files were read again sent them as new, and the API refused them (the review's finding).
+  - **The API:** `create` may now name the new files among those sent. Only those files are checked as new (AC-249), so a draft can be published beside an edit to a stored file.
+    - Every save of a New cube or New view draft is now checked as new too.
+    - The editor's join diagram and pickers read the other drafts along with the stored files, so a draft another draft joins isn't drawn as missing.
+  - **Not followed:** a draft that doesn't parse, or one a cube `extends`. Cube refuses such a save and says why. Generate writes neither.
+  - AC-249 stays unticked; it waits on T336.
+  - Files (as built): `packages/web/src/workspaces/model/{GenerateCubes,ModelFilePage}.tsx`, `packages/web/src/workspaces/model/{draftJoins,publish}.ts` (+ tests), `packages/api/src/model/publish.ts`, `packages/api/src/publish.test.ts`, `packages/web/src/shell/styles.ts`, `e2e/generate-cubes.spec.ts`, `e2e/model-design.spec.ts`
   - Failing test:
     - `generate-cubes.spec.ts`: Review's primary is "Add 2 cubes as drafts". Pressed, it adds both to the tree marked unpublished, and `/api/meta` is unchanged. A clash still refuses it (AC-249).
     - `model-design.spec.ts`: opening the visits draft, which joins the stores draft, names `cubes/chrome_stores.yml` beside Save. Saving publishes both in one publish, and both rows are then published.

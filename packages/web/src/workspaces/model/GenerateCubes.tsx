@@ -19,7 +19,6 @@ import { HealthBadge } from '../data-sources/health';
 import { DATA_SOURCES_QUERY } from '../data-sources/query';
 import { SHARED_ROOT } from '../explore/roots';
 import { objectsOf } from './objects';
-import { publishModel } from './publish';
 import { modelOf } from './sync';
 import { YamlEditor } from './YamlEditor';
 
@@ -34,9 +33,10 @@ import { YamlEditor } from './YamlEditor';
  * **Tables**, found by name, narrowed by type, a page at a time, any table's
  * columns opened in place; **Review**, a cube for each table chosen, as Cube's
  * scaffolding writes it, with its status, every column it left out and why,
- * and whatever it clashes with; then all of them published as one model
- * change (AC-136, AC-137), so the joins between them compile with them. Cube
- * writes nothing: the files are wechart's, in its model store.
+ * and whatever it clashes with; then all of them added to the model as
+ * unpublished drafts (R36, AC-345), each published when it is saved, with the
+ * drafts its cubes join so the joins compile (AC-346). Cube writes nothing:
+ * the files are wechart's, in its model store once saved.
  *
  * What the pane holds is kept in the query cache, not the component: opening
  * a clashing file from the overview is another page, and the pane stays
@@ -84,12 +84,8 @@ type Asked<T> =
   | { readonly kind: 'ok'; readonly value: T }
   | { readonly kind: 'err'; readonly message: string };
 
-type Published =
-  | { kind: 'idle' }
-  | { kind: 'run' }
-  | { kind: 'done'; count: number }
-  | { kind: 'refused'; problems: { path?: string; message: string }[] }
-  | { kind: 'err'; message: string };
+/** Whether the generated cubes are the model's drafts yet (T488, AC-345). */
+type Added = { kind: 'idle' } | { kind: 'done'; count: number };
 
 /** What the API answered, or its reason for not answering. */
 async function askApi<T>(url: string, init?: RequestInit): Promise<T> {
@@ -344,6 +340,9 @@ function clashesWith(
 const plural = (count: number, one: string, many = `${one}s`) =>
   `${String(count)} ${count === 1 ? one : many}`;
 const cubes = (count: number) => plural(count, 'cube');
+/** Review's primary, for what it does (R36, AC-345). */
+const asDrafts = (count: number) =>
+  count === 1 ? 'Add 1 cube as a draft' : `Add ${String(count)} cubes as drafts`;
 
 /** What a generated cube holds, in a line: "4 dimensions · 1 measure · 1 join". */
 function countsOf(cube: Generated, path: string): string {
@@ -365,16 +364,16 @@ const STEPS = ['Source', 'Tables', 'Review'] as const;
 export function GenerateCubes({
   existing,
   onClose,
-  onPublished,
+  onAdded,
   onOpen,
   onShow,
 }: {
   /** The model's files, stored and drafted: what a generated cube must not clash with (T276). */
   existing: readonly { readonly path: string; readonly content: string }[];
   onClose: () => void;
-  /** The files published, by path, once they are: the tree reads the store again. */
-  onPublished: (paths: string[]) => void;
-  /** Opens a file published here, closing the pane (design 11 state N). */
+  /** The generated files, to keep as the model's unpublished drafts (T488, AC-345). */
+  onAdded: (files: { path: string; content: string }[]) => void;
+  /** Opens a file added here, closing the pane (design 11 state N). */
   onOpen?: ((path: string) => void) | undefined;
   /** Opens a file the model has beside the pane, which stays (design 11 pin 17). */
   onShow?: ((path: string) => void) | undefined;
@@ -447,7 +446,7 @@ export function GenerateCubes({
   const [generated, setGenerated] = useKept<Asked<Generated[]>>('generated', () => ({
     kind: 'idle',
   }));
-  const [published, setPublished] = useKept<Published>('published', () => ({ kind: 'idle' }));
+  const [added, setAdded] = useKept<Added>('added', () => ({ kind: 'idle' }));
   const [typesOpen, setTypesOpen] = useState(false);
   // A press or focus outside the Type menu closes it, as a menu does (T485's review).
   const typesBox = useRef<HTMLDivElement>(null);
@@ -480,8 +479,8 @@ export function GenerateCubes({
     queryClient.removeQueries({ queryKey: GENERATE_KEY });
     onClose();
   };
-  /** Something chosen or generated and not published: leaving asks first (rule 85). */
-  const holding = published.kind !== 'done' && (chosen.size > 0 || generated.kind === 'ok');
+  /** Something chosen or generated and not added: leaving asks first (rule 85). */
+  const holding = added.kind !== 'done' && (chosen.size > 0 || generated.kind === 'ok');
   // A reload or a closed tab asks too, as the new data source pane does (state P).
   useEffect(() => {
     if (!holding) return undefined;
@@ -508,7 +507,6 @@ export function GenerateCubes({
     )?.focus();
   }, [step]);
   const leave = () => {
-    if (published.kind === 'run') return;
     if (holding) setAsking(true);
     else end();
   };
@@ -590,7 +588,7 @@ export function GenerateCubes({
     const turn = nextTurn('generate');
     const current = () => isTurn('generate', turn);
     setGenerated({ kind: 'run' });
-    setPublished({ kind: 'idle' });
+    setAdded({ kind: 'idle' });
     setStep(2);
     askApi<{ cubes: Generated[] }>(`${sourceUrl}/scaffold`, {
       method: 'POST',
@@ -615,8 +613,8 @@ export function GenerateCubes({
   const pathOf = (cube: Generated) => `cubes/${cube.fileName}`;
   /**
    * Against the model as it is now: a clash put right in a file opened beside
-   * the pane clears at once (T485's review). Once published the cubes are the
-   * model's, and the files are listed, not checked (T276's review).
+   * the pane clears at once (T485's review). Once added the cubes are the
+   * model's drafts, and the files are listed, not checked (T276's review).
    */
   const clashes =
     generated.kind === 'ok'
@@ -666,24 +664,15 @@ export function GenerateCubes({
     heading.current?.focus();
   };
 
-  const publish = () => {
+  /**
+   * The cubes into the model's tree as unpublished drafts, none published
+   * (R36, AC-345): each is, when saved, with the drafts its cubes join (AC-346).
+   */
+  const add = () => {
     if (generated.kind !== 'ok' || clashing > 0) return;
     const files = generated.value.map((cube) => ({ path: pathOf(cube), content: cube.content }));
-    setPublished({ kind: 'run' });
-    void publishModel(files, { create: true }).then((outcome) => {
-      if (outcome.kind === 'published') {
-        setPublished({ kind: 'done', count: files.length });
-        onPublished(files.map((file) => file.path));
-      } else if (outcome.kind === 'refused')
-        setPublished({
-          kind: 'refused',
-          problems: outcome.problems.map((problem) => ({
-            ...(problem.path === undefined ? {} : { path: problem.path }),
-            message: problem.message,
-          })),
-        });
-      else setPublished({ kind: 'err', message: outcome.message });
-    });
+    setAdded({ kind: 'done', count: files.length });
+    onAdded(files);
   };
 
   const goTo = (next: number) => {
@@ -701,11 +690,11 @@ export function GenerateCubes({
     setPeek(null);
     setColumns({ kind: 'idle' });
     setGenerated({ kind: 'idle' });
-    setPublished({ kind: 'idle' });
+    setAdded({ kind: 'idle' });
   };
 
-  const done = published.kind === 'done';
-  const running = generated.kind === 'run' || published.kind === 'run';
+  const done = added.kind === 'done';
+  const running = generated.kind === 'run';
   const shownSchemas =
     schemas.kind === 'ok'
       ? schemas.value.schemas.filter((each) =>
@@ -802,7 +791,7 @@ export function GenerateCubes({
           ? 'Choose at least one table'
           : null
         : reviewing && clashing > 0
-          ? `Resolve ${plural(clashing, 'clash', 'clashes')} to publish`
+          ? `Resolve ${plural(clashing, 'clash', 'clashes')} first`
           : null;
   const primaryLabel =
     step === 0
@@ -813,24 +802,18 @@ export function GenerateCubes({
           : `Generate ${cubes(chosen.size)}`
         : done
           ? 'Close'
-          : published.kind === 'run'
-            ? 'Publishing…'
-            : generated.kind === 'ok'
-              ? `Publish ${cubes(generated.value.length)}`
-              : 'Publish cubes';
+          : generated.kind === 'ok'
+            ? asDrafts(generated.value.length)
+            : 'Add cubes as drafts';
   const primaryDisabled =
-    step === 0
-      ? schema === ''
-      : step === 1
-        ? chosen.size === 0
-        : !done && (generated.kind !== 'ok' || published.kind === 'run');
+    step === 0 ? schema === '' : step === 1 ? chosen.size === 0 : !done && generated.kind !== 'ok';
   /** Pressable, but refused with its reason beside it, while a cube clashes (AC-249). */
   const primaryRefused = reviewing && clashing > 0;
   const onPrimary = () => {
     if (step === 0) goTo(1);
     else if (step === 1) generate();
     else if (done) end();
-    else publish();
+    else add();
   };
   const onRetryGenerate = () => {
     generate();
@@ -858,13 +841,7 @@ export function GenerateCubes({
         <h2 ref={heading} id={`${ids}-title`} tabIndex={-1}>
           Generate cubes
         </h2>
-        <button
-          type="button"
-          className="source-pane__close"
-          aria-label="Close"
-          disabled={published.kind === 'run'}
-          onClick={ask}
-        >
+        <button type="button" className="source-pane__close" aria-label="Close" onClick={ask}>
           ×
         </button>
       </header>
@@ -1321,17 +1298,22 @@ export function GenerateCubes({
               />
             ) : null}
 
-            {generated.kind === 'ok' && published.kind === 'done' ? (
+            {generated.kind === 'ok' && added.kind === 'done' ? (
               <>
                 <div className="generate-pane__note is-ok" role="status">
                   <StatusIcon kind="ok" />
-                  <p>Published {cubes(published.count)}.</p>
+                  <div>
+                    <p>
+                      Added {cubes(added.count)} as {added.count === 1 ? 'a draft' : 'drafts'}.
+                    </p>
+                    <p>
+                      Nothing is published yet. Saving a draft publishes it, with the drafts its
+                      cubes join.
+                    </p>
+                  </div>
                 </div>
                 <h3 className="connection-form__legend">Files</h3>
-                <ul
-                  className="generate-pane__card generate-pane__opened"
-                  aria-label="Published files"
-                >
+                <ul className="generate-pane__card generate-pane__opened" aria-label="Added files">
                   {generated.value.map((cube) => (
                     <li key={cube.fileName}>
                       <span className="is-code">{pathOf(cube)}</span>
@@ -1354,50 +1336,7 @@ export function GenerateCubes({
               </>
             ) : null}
 
-            {/* The refusal and what was refused, read out as one (T485's review). */}
-            {published.kind === 'refused' ? (
-              <div role="alert">
-                <div className="generate-pane__note is-err">
-                  <StatusIcon kind="err" />
-                  <div>
-                    <p>
-                      <b>Nothing was published.</b> The model is unchanged.
-                    </p>
-                    <button
-                      type="button"
-                      className="btn-sm"
-                      onClick={() => {
-                        setPublished({ kind: 'idle' });
-                        goTo(1);
-                      }}
-                    >
-                      <span aria-hidden="true">‹ </span>Back to Tables
-                    </button>
-                  </div>
-                </div>
-                <h3 className="connection-form__legend">Refused</h3>
-                <ul className="generate-pane__card generate-pane__refused" aria-label="Refused">
-                  {published.problems.map((problem, at) => (
-                    <li key={at}>
-                      {problem.path === undefined ? null : (
-                        <span className="is-code">{problem.path}</span>
-                      )}
-                      <span className="is-code generate-pane__refusal">{problem.message}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {published.kind === 'err' ? (
-              <div className="generate-pane__note is-err" role="alert">
-                <StatusIcon kind="err" />
-                <p>{published.message}</p>
-              </div>
-            ) : null}
-
-            {generated.kind === 'ok' &&
-            published.kind !== 'done' &&
-            published.kind !== 'refused' ? (
+            {generated.kind === 'ok' && added.kind !== 'done' ? (
               <>
                 {/* One summary (design 11 pin 12). */}
                 {clashing > 0 ? (
@@ -1409,7 +1348,7 @@ export function GenerateCubes({
                           {String(clashes.size)} of {cubes(generated.value.length)}{' '}
                           {clashes.size === 1 ? 'clashes' : 'clash'} with the model.
                         </b>{' '}
-                        Nothing is published while a cube clashes.
+                        Nothing is added while a cube clashes.
                       </p>
                       <button
                         type="button"
@@ -1430,7 +1369,7 @@ export function GenerateCubes({
                   <div className="generate-pane__note is-warn" role="note">
                     <StatusIcon kind="warn" />
                     <p>
-                      {cubes(generated.value.length)} ready to publish; {String(checking)}{' '}
+                      {cubes(generated.value.length)} ready to add; {String(checking)}{' '}
                       {checking === 1 ? 'needs' : 'need'} a look first.
                     </p>
                   </div>
@@ -1438,8 +1377,8 @@ export function GenerateCubes({
                   <div className="generate-pane__note is-ok" role="note">
                     <StatusIcon kind="ok" />
                     <p>
-                      {cubes(generated.value.length)} ready to publish. Nothing is in the model
-                      until you do.
+                      {cubes(generated.value.length)} ready to add as drafts. Nothing is published
+                      until you save them.
                     </p>
                   </div>
                 )}
@@ -1629,15 +1568,14 @@ export function GenerateCubes({
             type="button"
             className="btn"
             // While generating, Back stops waiting for it (T485's review).
-            disabled={published.kind === 'run'}
             onClick={() => {
               if (step === 2) {
                 nextTurn('generate');
                 if (generated.kind === 'run') setGenerated({ kind: 'idle' });
-                // Published, those cubes are the model's: another round starts afresh.
+                // Added, those cubes are the model's drafts: another round starts afresh.
                 if (done) {
                   setGenerated({ kind: 'idle' });
-                  setPublished({ kind: 'idle' });
+                  setAdded({ kind: 'idle' });
                   setChosen(new Map());
                 }
               }
@@ -1654,12 +1592,7 @@ export function GenerateCubes({
           </span>
         )}
         {done ? null : (
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={published.kind === 'run'}
-            onClick={ask}
-          >
+          <button type="button" className="btn btn-ghost" onClick={ask}>
             Cancel
           </button>
         )}
@@ -1670,14 +1603,7 @@ export function GenerateCubes({
           aria-disabled={primaryRefused ? true : undefined}
           onClick={primaryRefused ? undefined : onPrimary}
         >
-          {published.kind === 'run' ? (
-            <>
-              <StatusIcon kind="run" />
-              {primaryLabel}
-            </>
-          ) : (
-            primaryLabel
-          )}
+          {primaryLabel}
           {step === 0 ? <span aria-hidden="true"> ›</span> : null}
         </button>
       </footer>
@@ -1686,7 +1612,7 @@ export function GenerateCubes({
         <AskToDiscard
           what={
             generated.kind === 'ok'
-              ? `The ${String(generated.value.length)} generated ${generated.value.length === 1 ? 'cube isn’t' : 'cubes aren’t'} published.`
+              ? `The ${String(generated.value.length)} generated ${generated.value.length === 1 ? 'cube isn’t' : 'cubes aren’t'} added.`
               : `The ${plural(chosen.size, 'chosen table')} ${chosen.size === 1 ? 'is' : 'are'} forgotten.`
           }
           onKeep={keepOn}

@@ -123,15 +123,58 @@ test('a data source’s tables become cubes, each column mapped or said to be le
     '_loaded_at | timestamp with time zone | its name starts with an underscore',
   ]);
 
-  // Published together, as any model change is, and opened in the tree.
-  await pane.getByRole('button', { name: 'Publish 2 cubes' }).click();
-  await expect(pane.getByText('Published 2 cubes.')).toBeVisible({ timeout: 30_000 });
-  await pane.getByRole('button', { name: `Open cubes/${stores}.yml` }).click();
-  await expect(page).toHaveURL(new RegExp(`/model/files/cubes%2F${stores}\\.yml$`));
-  await expect(page.getByRole('dialog', { name: 'Generate cubes' })).toHaveCount(0);
+  // Added as drafts, none published (R36, T488, AC-345): both in the tree, marked
+  // unpublished, and neither in Cube's model.
+  await pane.getByRole('button', { name: 'Add 2 cubes as drafts' }).click();
+  await expect(pane.getByText('Added 2 cubes as drafts.')).toBeVisible();
   const tree = page.getByRole('navigation', { name: 'Model files' });
-  await expect(tree.getByRole('link', { name: `${stores}.yml` })).toBeVisible();
-  await expect(tree.getByRole('link', { name: `${visits}.yml` })).toBeVisible();
+  const row = (name: string) => tree.getByRole('link', { name: new RegExp(`^${name}\\.yml`) });
+  await expect(row(stores)).toContainText('unpublished');
+  await expect(row(visits)).toContainText('unpublished');
+  const cubesInMeta = async () =>
+    ((await (await request.get('/api/meta')).json()) as { cubes: { name: string }[] }).cubes.map(
+      (cube) => cube.name,
+    );
+  expect(await cubesInMeta()).not.toContain(visits);
+  expect(await cubesInMeta()).not.toContain(stores);
+
+  // The visits draft joins the stores draft: named beside Save, and published with it (AC-346).
+  await pane.getByRole('button', { name: `Open cubes/${visits}.yml` }).click();
+  await expect(page).toHaveURL(new RegExp(`/model/files/cubes%2F${visits}\\.yml$`));
+  await expect(page.getByRole('dialog', { name: 'Generate cubes' })).toHaveCount(0);
+  const form = page.getByRole('region', { name: 'Form editor' });
+  const head = form.locator('.model-editor__head');
+  const said = `Saves with cubes/${stores}.yml, which defines a cube this file joins.`;
+  const note = form.locator('.model-editor__with');
+  await expect(note).toHaveText(said);
+  // Whole on screen, under Save, not clipped (T488's review).
+  await expect(note).toBeVisible();
+  expect(await note.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+  const save = head.getByRole('button', { name: 'Save & reload Cube' });
+  const [saveBox, noteBox] = await Promise.all([save.boundingBox(), note.boundingBox()]);
+  expect(Math.round(noteBox?.y ?? 0)).toBeGreaterThanOrEqual(
+    Math.round((saveBox?.y ?? 0) + (saveBox?.height ?? 0)),
+  );
+  await expect(save).toHaveAccessibleDescription(said);
+  // One publish of both, each new to the model's clash check (AC-249).
+  const publishing = page.waitForRequest(
+    (request) => request.url().endsWith('/api/model/publish') && request.method() === 'POST',
+  );
+  await save.click();
+  const body = (await publishing).postDataJSON() as {
+    files: { path: string }[];
+    create: string[];
+  };
+  expect([body.files.map((file) => file.path), body.create]).toEqual([
+    [`cubes/${visits}.yml`, `cubes/${stores}.yml`],
+    [`cubes/${visits}.yml`, `cubes/${stores}.yml`],
+  ]);
+  await expect(head).toContainText('Published. Cube is reading the new model.', {
+    timeout: 30_000,
+  });
+  await expect(row(stores)).not.toContainText('unpublished');
+  await expect(row(visits)).not.toContainText('unpublished');
+  await expect(note).toHaveCount(0);
 
   // And Cube answers them, across the join generated between them: 30 visits,
   // 10 to each of the three stores, two of them in Lisbon.
@@ -234,17 +277,17 @@ test('a generated cube the model already has is marked, named, and refused, and 
   await tables.getByRole('checkbox', { name: 'orders', exact: true }).check();
   await pane.getByRole('button', { name: 'Generate 1 cube' }).click();
 
-  // Marked, with its status and a bar naming the cube it clashes with; Publish refused, saying why.
+  // Marked, with its status and a bar naming the cube it clashes with; adding refused, saying why.
   const orders = pane.getByRole('region', { name: 'cubes/orders.yml' });
   await expect(orders.locator('.generate-pane__status')).toHaveText('Clashes');
   await expect(
     orders.locator('.generate-pane__file-body > .generate-pane__note.is-err p'),
   ).toHaveText('orders is already a cube in cubes/orders.yml.');
-  await expect(pane.locator('.source-pane__foot-note')).toHaveText('Resolve 1 clash to publish');
-  const publish = pane.getByRole('button', { name: 'Publish 1 cube' });
-  await expect(publish).toHaveAttribute('aria-disabled', 'true');
-  await publish.click({ force: true });
-  await expect(pane.getByText('Published 1 cube.')).toHaveCount(0);
+  await expect(pane.locator('.source-pane__foot-note')).toHaveText('Resolve 1 clash first');
+  const add = pane.getByRole('button', { name: 'Add 1 cube as a draft' });
+  await expect(add).toHaveAttribute('aria-disabled', 'true');
+  await add.click({ force: true });
+  await expect(pane.getByText('Added 1 cube as a draft.')).toHaveCount(0);
 
   // Whatever the browser sends, the API refuses it, naming the cube it has.
   const scaffold = (await (

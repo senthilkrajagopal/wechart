@@ -5,7 +5,7 @@ import { META_QUERY } from '../../query/meta';
 import { InfoBar } from '../../shell/InfoBar';
 import { MenuButton, type MenuItem } from '../../shell/MenuButton';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { FOLDERS_QUERY } from '../explore/folders';
 import { FileList, MODEL_FILES_QUERY } from './FileList';
@@ -19,6 +19,7 @@ import { lossOf, type Loss } from './lossCheck';
 import { LossWarning } from './LossWarning';
 import { problemsOf, type Problem } from './problems';
 import { ProblemsPanel, type CubeProblem } from './ProblemsPanel';
+import { draftJoinsOf } from './draftJoins';
 import { editedMembersOf } from './editedMembers';
 import { ReadOnlyFile } from './ReadOnlyFile';
 import { ReferencesWarning, type MemberReferences } from './ReferencesWarning';
@@ -128,6 +129,12 @@ interface OpenMember {
 /** A problem that stops the file being read and published; a warning does not (AC-223). */
 const isError = (problem: Problem) => problem.severity !== 'warning';
 
+interface ModelFile {
+  readonly path: string;
+  readonly content: string;
+}
+const NO_DRAFTS: readonly ModelFile[] = [];
+
 const orNone = (found: readonly Problem[]) => (found.length === 0 ? NONE : found);
 
 function FileEditor({
@@ -140,11 +147,17 @@ function FileEditor({
   onText,
   onDiscard,
   fresh = false,
+  drafts = NO_DRAFTS,
+  onPublished,
 }: {
   path: string;
   content: string;
   /** Just made by New view: opens on its Cubes, a new one ready to pick (T493). */
   fresh?: boolean;
+  /** The model's other unpublished files: those this one's cubes join publish with it (T488). */
+  drafts?: readonly ModelFile[];
+  /** The files a save published: this one and the drafts it joins (T488). */
+  onPublished?: ((files: readonly ModelFile[]) => void) | undefined;
   /** A cube's tab to open on (T160). */
   openOn?: OpenOn | undefined;
   /** False for a file made here and not yet published: there is nothing to go back to. */
@@ -422,14 +435,17 @@ function FileEditor({
   });
   /**
    * The model's join graph, with this file as the form has it now (AC-138):
-   * worked out only while the diagram shows, the other files once each.
+   * worked out only while the diagram shows, the other files once each —
+   * the model as the tree shows it, its stored files and its other drafts,
+   * which publish with this one when it joins them (T488's review).
    */
+  const modelFiles = useMemo(
+    () => [...(allFiles.data ?? []), ...drafts].filter((file) => file.path !== path),
+    [allFiles.data, drafts, path],
+  );
   const others = useMemo(
-    () =>
-      view === 'joins'
-        ? joinGraphOf((allFiles.data ?? []).filter((file) => file.path !== path))
-        : undefined,
-    [view, allFiles.data, path],
+    () => (view === 'joins' ? joinGraphOf(modelFiles) : undefined),
+    [view, modelFiles],
   );
   const graph = useMemo(() => {
     if (others === undefined) return undefined;
@@ -447,10 +463,7 @@ function FileEditor({
    * What the form's pickers may name (AC-224): the other files' cubes, each
    * read once, and this file's as the form has it now.
    */
-  const othersIndex = useMemo(
-    () => memberIndexOf((allFiles.data ?? []).filter((file) => file.path !== path)),
-    [allFiles.data, path],
-  );
+  const othersIndex = useMemo(() => memberIndexOf(modelFiles), [modelFiles]);
   const pickers = useMemo(
     () => ({
       index: new Map([...othersIndex, ...memberIndexOf([{ path, content: read }])]),
@@ -495,6 +508,16 @@ function FileEditor({
     pending === null &&
     references === null &&
     !publishing;
+  /**
+   * The unpublished files this one's cubes join, by the text as last read:
+   * published with it in one publish, and named beside Save before it is
+   * pressed (T488, AC-346).
+   */
+  const joined = useMemo(() => {
+    const paths = draftJoinsOf({ path, content: read }, allFiles.data ?? [], drafts);
+    return paths.flatMap((each) => drafts.filter((draft) => draft.path === each));
+  }, [path, read, allFiles.data, drafts]);
+  const withId = useId();
 
   const reportChanged = useRef(onChanged);
   useEffect(() => {
@@ -623,10 +646,16 @@ function FileEditor({
         }
       }
     }
-    const result = await publishModel([{ path, content: sent }]);
+    // With the drafts it joins, in one publish, so the joins compile (AC-346);
+    // each new file refused over a file or a name the model has (AC-249).
+    const result = await publishModel([{ path, content: sent }, ...joined], {
+      created: [...(published ? [] : [path]), ...joined.map((each) => each.path)],
+    });
     setPublishing(false);
     if (result.kind === 'published') {
       setSaved(sent);
+      // Stored now, drafts no longer: said at once, not once the files are read again (T488's review).
+      onPublished?.([{ path, content: sent }, ...joined]);
       setCubeProblems([]);
       setRefusedRollups(keepRefusedRollups([]));
       setOutcome({ ok: true, text: 'Published. Cube is reading the new model.' });
@@ -710,6 +739,7 @@ function FileEditor({
             ref={saveButton}
             type="button"
             className="btn-sm btn-primary"
+            aria-describedby={joined.length === 0 ? undefined : withId}
             disabled={!canPublish}
             onClick={() => {
               void publish();
@@ -726,6 +756,20 @@ function FileEditor({
             )}
           </button>
         </div>
+        {/* What Save publishes besides this file, said under it before it is
+            pressed, whole on its own line (AC-346; T488's review). */}
+        {joined.length === 0 ? null : (
+          <p id={withId} className="model-editor__with">
+            Saves with{' '}
+            {joined.map((each, at) => (
+              <span key={each.path}>
+                {at === 0 ? '' : at === joined.length - 1 ? ' and ' : ', '}
+                <span className="is-code">{each.path}</span>
+              </span>
+            ))}
+            , which {joined.length === 1 ? 'defines a cube' : 'define cubes'} this file joins.
+          </p>
+        )}
         {leaving.status === 'blocked' ? (
           <div
             className="model-editor__warnbar model-editor__leave"
@@ -984,12 +1028,17 @@ function FileBody({
   onText,
   onDiscard,
   fresh = false,
+  drafts,
+  onPublished,
 }: {
   path: string;
   content: string;
   published: boolean;
   /** Just made by New view: its form opens on Cubes, ready to pick one (T493). */
   fresh?: boolean;
+  /** The model's other unpublished files (T488). */
+  drafts: readonly ModelFile[];
+  onPublished: (files: readonly ModelFile[]) => void;
   openOn?: OpenOn | undefined;
   onProblems: (byPath: Readonly<Record<string, number>>) => void;
   onChanged: (changed: boolean) => void;
@@ -1014,6 +1063,8 @@ function FileBody({
       onChanged={onChanged}
       onDiscard={onDiscard}
       fresh={fresh}
+      drafts={drafts}
+      onPublished={onPublished}
       {...(onText === undefined ? {} : { onText })}
     />
   );
@@ -1159,6 +1210,12 @@ export function ModelFilePage({
     .filter(([draft]) => !stored.some((file) => file.path === draft))
     .map(([draftPath, content]) => ({ path: draftPath, content }));
   const all = [...stored, ...unpublished];
+  /**
+   * The open file's fellow drafts, one list while their text is unchanged:
+   * typing in the open draft doesn't read the others again (T488).
+   */
+  const othersKey = JSON.stringify(unpublished.filter((each) => each.path !== path));
+  const otherDrafts = useMemo(() => JSON.parse(othersKey) as ModelFile[], [othersKey]);
   const file = path === undefined ? undefined : all.find((each) => each.path === path);
   const isDraft = file !== undefined && !stored.some((each) => each.path === file.path);
   /** The errors the open file's editor reports, by file, for the tree's marks. */
@@ -1398,6 +1455,24 @@ export function ModelFilePage({
             openOn={openOn}
             // Opened for the first time from New view: on its Cubes, ready to pick one.
             fresh={made !== undefined && made.path === file.path && !named(made) && freshView(made)}
+            drafts={otherDrafts}
+            onPublished={(sent) => {
+              // In the store now: listed so at once, before the files are read again,
+              // and no longer drafts, so a second save doesn't send them as new
+              // (T488's review).
+              queryClient.setQueryData(
+                MODEL_FILES_QUERY.queryKey,
+                (old: readonly ModelFile[] | undefined) => [
+                  ...(old ?? []).filter((each) => !sent.some((one) => one.path === each.path)),
+                  ...sent,
+                ],
+              );
+              const paths = new Set(sent.map((each) => each.path));
+              setDrafts(
+                Object.fromEntries(Object.entries(drafts).filter(([at]) => !paths.has(at))),
+              );
+              if (made !== undefined && paths.has(made.path)) setMade(undefined);
+            }}
             onProblems={(byPath) => {
               setReported({ from: file.path, byPath });
             }}
@@ -1428,9 +1503,12 @@ export function ModelFilePage({
         <GenerateCubes
           existing={all}
           onClose={closeGenerate}
-          onPublished={() => {
-            // The store now has them: read it again, so the tree lists them.
-            void queryClient.invalidateQueries({ queryKey: MODEL_FILES_QUERY.queryKey });
+          onAdded={(added) => {
+            // Drafts in the tree, none published until saved (R36, AC-345).
+            setDrafts({
+              ...drafts,
+              ...Object.fromEntries(added.map((each) => [each.path, each.content])),
+            });
           }}
           onOpen={(opened) => {
             setGenerating(false);

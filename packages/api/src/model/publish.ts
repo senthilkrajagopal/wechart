@@ -405,7 +405,15 @@ export function registerModelPublishing(
       const inFolder = live.filter((file) => (file.folderId ?? ROOT_FOLDER_ID) === folderId);
       // Files generated from a data source are new ones: never over what the
       // folder has, file or name (T276, AC-249), whatever the browser checked.
-      if (body?.create === true) {
+      // All of them (`create: true`), or those named, published beside an
+      // edit to a stored file as Generate's drafts are (T488, AC-346).
+      const created =
+        body?.create === true
+          ? changed
+          : Array.isArray(body?.create)
+            ? changed.filter((file) => (body.create as unknown[]).includes(file.path))
+            : [];
+      if (created.length > 0) {
         // Cube's model names the cubes of files not read here as YAML, which
         // only the root holds; asked as wechart asks it everything, and
         // without it the files alone decide.
@@ -419,7 +427,7 @@ export function registerModelPublishing(
                 return [];
               })
             : [];
-        const clashes = clashesOf(changed, inFolder, compiled).map((clash) =>
+        const clashes = clashesOf(created, inFolder, compiled).map((clash) =>
           // Said as that folder's file, as its rollups' refusals are (T450's review).
           folderId === ROOT_FOLDER_ID ? clash : { ...clash, folderId },
         );

@@ -123,7 +123,7 @@ type Props = Partial<Parameters<typeof GenerateCubes>[0]>;
 function pane(props: Props = {}, cache = withCache()) {
   const handlers = {
     onClose: vi.fn(),
-    onPublished: vi.fn(),
+    onAdded: vi.fn(),
     onOpen: vi.fn(),
     onShow: vi.fn(),
   };
@@ -156,9 +156,9 @@ async function toTables(dialog: HTMLElement, schema = 'generate') {
 }
 
 describe('generating cubes from a data source (AC-139)', () => {
-  it('browses to tables, generates a cube for each chosen, says what it left out, and publishes them', async () => {
+  it('browses to tables, generates a cube for each chosen, says what it left out, and adds them as drafts', async () => {
     const asked = api();
-    const { dialog, onPublished } = pane();
+    const { dialog, onAdded, onOpen } = pane();
 
     // Step 1: the source, its one data source chosen already, by its driver's name; then the schema.
     const source = await within(dialog).findByRole('radio', { name: 'default PostgreSQL' });
@@ -226,29 +226,33 @@ describe('generating cubes from a data source (AC-139)', () => {
       ['_loaded_at', 'timestamp with time zone', 'its name starts with an underscore'],
     ]);
     expect(
-      within(dialog).getByText('2 cubes ready to publish. Nothing is in the model until you do.')
-        .isConnected,
+      within(dialog).getByText(
+        '2 cubes ready to add as drafts. Nothing is published until you save them.',
+      ).isConnected,
     ).toBe(true);
 
-    // Generated: Publish is the one primary.
-    expect(foot(dialog)).toEqual(['‹ Back', 'Cancel', 'Publish 2 cubes *']);
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Publish 2 cubes' }));
-    expect((await within(dialog).findByText('Published 2 cubes.')).isConnected).toBe(true);
-    // Published: nothing to cancel, and Close the one primary.
+    // Generated: adding them as drafts is the one primary (R36, AC-345).
+    expect(foot(dialog)).toEqual(['‹ Back', 'Cancel', 'Add 2 cubes as drafts *']);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add 2 cubes as drafts' }));
+    expect((await within(dialog).findByText('Added 2 cubes as drafts.')).isConnected).toBe(true);
+    // Added: nothing to cancel, and Close the one primary.
     expect(foot(dialog)).toEqual(['‹ Back', 'Close *']);
-    expect(onPublished).toHaveBeenCalledWith([
+    expect(onAdded).toHaveBeenCalledWith([
+      { path: 'cubes/chrome_stores.yml', content: STORES },
+      { path: 'cubes/chrome_visits.yml', content: VISITS },
+    ]);
+    // Nothing published: a draft is, when saved, with the drafts it joins (AC-346).
+    expect(asked.some((each) => each.url === '/api/model/publish')).toBe(false);
+    // Each draft named, to open in the editor (design 11 state N, as drafts).
+    const added = within(dialog).getByRole('list', { name: 'Added files' });
+    expect([...added.querySelectorAll('li .is-code')].map((path) => path.textContent)).toEqual([
       'cubes/chrome_stores.yml',
       'cubes/chrome_visits.yml',
     ]);
-    // One publish of both, so their join compiles with them (AC-136, AC-137);
-    // as new files, which the API refuses over any it has (T276, AC-249).
-    expect(asked.find((each) => each.url === '/api/model/publish')?.body).toEqual({
-      files: [
-        { path: 'cubes/chrome_stores.yml', content: STORES },
-        { path: 'cubes/chrome_visits.yml', content: VISITS },
-      ],
-      create: true,
-    });
+    await userEvent.click(
+      within(added).getByRole('button', { name: 'Open cubes/chrome_visits.yml' }),
+    );
+    expect(onOpen).toHaveBeenCalledWith('cubes/chrome_visits.yml');
     // Asked of the chosen schema, and of the tables chosen, as YAML by the API.
     expect(asked.map((each) => each.url)).toContain(
       '/api/introspection/sources/default/tables?schema=generate&limit=50&offset=0',
@@ -291,9 +295,9 @@ describe('generating cubes from a data source (AC-139)', () => {
     // A warning to look at: Check, and the block opens by itself.
     expect(visits.querySelector('.generate-pane__status')?.textContent).toBe('Check');
     expect(visits.querySelector('details')?.open).toBe(true);
-    expect(
-      within(dialog).getByText('1 cube ready to publish; 1 needs a look first.').isConnected,
-    ).toBe(true);
+    expect(within(dialog).getByText('1 cube ready to add; 1 needs a look first.').isConnected).toBe(
+      true,
+    );
   });
 
   /** T145's review: a key Cube wrote as a time alone, and a file the API could not check. */
@@ -435,9 +439,9 @@ describe('generating cubes from a data source (AC-139)', () => {
    * refuse to save it, name the existing cube or file, and leave the existing
    * one unchanged.
    */
-  it('marks a generated cube whose name or file the model has, naming it, and publishes nothing', async () => {
+  it('marks a generated cube whose name or file the model has, naming it, and adds nothing', async () => {
     const asked = api();
-    const { dialog, onShow } = pane({
+    const { dialog, onShow, onAdded } = pane({
       existing: [
         { path: 'cubes/chrome_stores.yml', content: 'cubes:\n  - name: stores\n' },
         { path: 'views/visits.yml', content: 'views:\n  - name: chrome_visits\n' },
@@ -458,16 +462,17 @@ describe('generating cubes from a data source (AC-139)', () => {
     const visits = within(dialog).getByRole('region', { name: 'cubes/chrome_visits.yml' });
     expect(clashOf(visits)).toBe('chrome_visits is already a view in views/visits.yml.');
     expect(within(dialog).getByRole('note').textContent).toBe(
-      '2 of 2 cubes clash with the model. Nothing is published while a cube clashes.Leave out clashing tables',
+      '2 of 2 cubes clash with the model. Nothing is added while a cube clashes.Leave out clashing tables',
     );
 
-    // Publish refused, with its reason beside it.
-    const publish = within(dialog).getByRole('button', { name: 'Publish 2 cubes' });
-    expect(publish.getAttribute('aria-disabled')).toBe('true');
+    // Adding refused, with its reason beside it.
+    const add = within(dialog).getByRole('button', { name: 'Add 2 cubes as drafts' });
+    expect(add.getAttribute('aria-disabled')).toBe('true');
     expect(dialog.querySelector('.source-pane__foot-note')?.textContent).toBe(
-      'Resolve 2 clashes to publish',
+      'Resolve 2 clashes first',
     );
-    await userEvent.click(publish);
+    await userEvent.click(add);
+    expect(onAdded).not.toHaveBeenCalled();
     expect(asked.some((each) => each.url === '/api/model/publish')).toBe(false);
 
     // Open the file it clashes with, beside the pane.
@@ -482,18 +487,20 @@ describe('generating cubes from a data source (AC-139)', () => {
     });
   });
 
-  /** T276's review: once published, the cubes are the model's — not a clash with it. */
-  it('marks no clash with the files it has just published itself', async () => {
+  /** T276's review: once added, the cubes are the model's drafts — not a clash with it. */
+  it('marks no clash with the drafts it has just added itself', async () => {
     api();
     const { dialog, rerender } = pane();
     const tables = await toTables(dialog);
     await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_stores' }));
     // One table chosen; the stub's scaffold answers with its two cubes all the same.
     await userEvent.click(within(dialog).getByRole('button', { name: 'Generate 1 cube' }));
-    await userEvent.click(await within(dialog).findByRole('button', { name: 'Publish 2 cubes' }));
-    expect((await within(dialog).findByText('Published 2 cubes.')).isConnected).toBe(true);
+    await userEvent.click(
+      await within(dialog).findByRole('button', { name: 'Add 2 cubes as drafts' }),
+    );
+    expect((await within(dialog).findByText('Added 2 cubes as drafts.')).isConnected).toBe(true);
 
-    // The page reads the store again, and hands the pane what it now holds.
+    // The page keeps them as drafts, and hands the pane the model with them.
     rerender({
       existing: [
         { path: 'cubes/chrome_stores.yml', content: STORES },
@@ -501,10 +508,10 @@ describe('generating cubes from a data source (AC-139)', () => {
       ],
     });
     expect(dialog.querySelector('.generate-pane__status.is-clash')).toBeNull();
-    expect(within(dialog).queryByText(/Nothing is published while a cube clashes/)).toBeNull();
+    expect(within(dialog).queryByText(/Nothing is added while a cube clashes/)).toBeNull();
     // Each file to open, closing the pane.
     expect(
-      within(dialog).getByRole('list', { name: 'Published files' }).querySelectorAll('li'),
+      within(dialog).getByRole('list', { name: 'Added files' }).querySelectorAll('li'),
     ).toHaveLength(2);
   });
 
@@ -521,7 +528,9 @@ describe('generating cubes from a data source (AC-139)', () => {
       (await within(dialog).findByText('1 of 2 cubes clashes with the model.')).isConnected,
     ).toBe(true);
     expect(
-      within(dialog).getByRole('button', { name: 'Publish 2 cubes' }).getAttribute('aria-disabled'),
+      within(dialog)
+        .getByRole('button', { name: 'Add 2 cubes as drafts' })
+        .getAttribute('aria-disabled'),
     ).toBe('true');
 
     // The file is renamed in the editor beside the pane: the page hands over the model as it is.
@@ -530,24 +539,29 @@ describe('generating cubes from a data source (AC-139)', () => {
     });
     expect(dialog.querySelector('.generate-pane__status.is-clash')).toBeNull();
     expect(
-      within(dialog).getByText('2 cubes ready to publish. Nothing is in the model until you do.')
-        .isConnected,
+      within(dialog).getByText(
+        '2 cubes ready to add as drafts. Nothing is published until you save them.',
+      ).isConnected,
     ).toBe(true);
     expect(
-      within(dialog).getByRole('button', { name: 'Publish 2 cubes' }).hasAttribute('aria-disabled'),
+      within(dialog)
+        .getByRole('button', { name: 'Add 2 cubes as drafts' })
+        .hasAttribute('aria-disabled'),
     ).toBe(false);
     expect(dialog.querySelector('.source-pane__foot-note')).toBeNull();
   });
 
-  /** T485's review: Back, from a round published, starts another at Tables with nothing chosen. */
-  it('goes back from a published round to Tables, afresh', async () => {
+  /** T485's review: Back, from a round added, starts another at Tables with nothing chosen. */
+  it('goes back from an added round to Tables, afresh', async () => {
     api();
     const { dialog } = pane();
     const tables = await toTables(dialog);
     await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_stores' }));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Generate 1 cube' }));
-    await userEvent.click(await within(dialog).findByRole('button', { name: 'Publish 2 cubes' }));
-    expect((await within(dialog).findByText('Published 2 cubes.')).isConnected).toBe(true);
+    await userEvent.click(
+      await within(dialog).findByRole('button', { name: 'Add 2 cubes as drafts' }),
+    );
+    expect((await within(dialog).findByText('Added 2 cubes as drafts.')).isConnected).toBe(true);
 
     await userEvent.click(within(dialog).getByRole('button', { name: 'Back' }));
     const again = await within(dialog).findByRole('table', { name: 'Tables in generate' });
@@ -880,43 +894,6 @@ describe('generating cubes from a data source (AC-139)', () => {
     await userEvent.click(wrap);
     expect(wrap.getAttribute('aria-pressed')).toBe('false');
     expect(content()?.classList.contains('cm-lineWrapping')).toBe(false);
-  });
-
-  /** T276's review: the API's refusal of a clash the pane could not see is shown as it gives it. */
-  it('shows the API’s refusal of a clash, naming the file', async () => {
-    api();
-    const fetchStub = vi.mocked(fetch);
-    const answer = fetchStub.getMockImplementation();
-    fetchStub.mockImplementation(async (input, init) =>
-      String(input) === '/api/model/publish'
-        ? new Response(
-            JSON.stringify({
-              errors: [
-                {
-                  path: 'cubes/chrome_stores.yml',
-                  message: '`chrome_stores` is already a cube in cubes/stores.js.',
-                },
-              ],
-            }),
-            { status: 422 },
-          )
-        : ((await answer?.(input, init)) ?? new Response('{}')),
-    );
-    const { dialog } = pane();
-    const tables = await toTables(dialog);
-    await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_stores' }));
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Generate 1 cube' }));
-    await userEvent.click(await within(dialog).findByRole('button', { name: 'Publish 2 cubes' }));
-
-    // The refusal and what was refused, read out as one alert (T485's review).
-    const refused = await within(dialog).findByRole('alert');
-    expect(refused.textContent).toBe(
-      'Nothing was published. The model is unchanged.‹ Back to TablesRefusedcubes/chrome_stores.yml`chrome_stores` is already a cube in cubes/stores.js.',
-    );
-    // The API's words as it gives them, backticks and all, by file.
-    expect(within(dialog).getByRole('list', { name: 'Refused' }).textContent).toBe(
-      'cubes/chrome_stores.yml`chrome_stores` is already a cube in cubes/stores.js.',
-    );
   });
 
   it('says why when a source cannot be browsed, and asks again on Retry', async () => {

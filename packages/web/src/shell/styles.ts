@@ -1014,6 +1014,17 @@ main:has(.model-page) {
   white-space: nowrap;
 }
 .model-editor__outcome { flex: 0 0 auto; max-width: 50%; margin: 0; color: var(--wc-text-secondary); font-size: 12px; line-height: 16px; }
+/* The drafts Save publishes with the file (T488, AC-346): under Save, whole, set to its edge. */
+.model-editor__with {
+  margin: 0;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+  color: var(--wc-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
 .model-editor__head .btn-sm { flex: none; white-space: nowrap; }
 /* The file's actions at the head's end, Discard beside Save (design 03 note 2). */
 .model-editor__discard { margin-left: auto; }
@@ -2261,14 +2272,10 @@ main:has(.admin-page--docked) {
 .generate-pane__why { display: block; color: var(--wc-text-secondary); }
 .generate-pane__every,
 .generate-pane__footnote { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
-.generate-pane__opened,
-.generate-pane__refused { display: grid; margin: 0; padding: 0; list-style: none; }
-.generate-pane__opened > li,
-.generate-pane__refused > li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-height: 34px; padding: 4px 12px; font-size: 12px; }
-.generate-pane__opened > li + li,
-.generate-pane__refused > li + li { border-top: 1px solid var(--wc-border-subtle); }
+.generate-pane__opened { display: grid; margin: 0; padding: 0; list-style: none; }
+.generate-pane__opened > li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-height: 34px; padding: 4px 12px; font-size: 12px; }
+.generate-pane__opened > li + li { border-top: 1px solid var(--wc-border-subtle); }
 .generate-pane__opened .btn-sm { margin-left: auto; }
-.generate-pane__refusal { flex-basis: 100%; color: var(--wc-status-error); }
 .source-pane__outcome { font-size: var(--wc-text-sm-size); font-weight: 600; }
 /* Nothing to say yet: mounted, so what it says next is announced, but unseen. */
 .source-pane__outcome.is-empty { min-height: 0; margin: -16px 0 0; }

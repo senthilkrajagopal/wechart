@@ -421,7 +421,7 @@ test('T485: Generate cubes docks 480 px beside the model, and stays docked as a 
   // Leaving with it generated asks first; Discard closes it, focus back on its opener (pin 11).
   await pane.getByRole('button', { name: 'Close' }).click();
   const question = pane.getByRole('alertdialog', { name: 'Discard this generation?' });
-  await expect(question).toContainText('The 1 generated cube isn’t published.');
+  await expect(question).toContainText('The 1 generated cube isn’t added.');
   await question.getByRole('button', { name: 'Discard' }).click();
   await expect(pane).toHaveCount(0);
   await expect(opener).toBeFocused();
