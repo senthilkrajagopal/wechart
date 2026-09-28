@@ -13,6 +13,7 @@ import { documents } from './repos/documents';
 import { folderXcubeIds } from './repos/folder-xcube-ids';
 import { folderAccessStore } from './repos/folder-access';
 import { auditStore } from './repos/audit';
+import { AUDIT_RETENTION_DAYS, startAuditRetention } from './audit/retention';
 import { readModelDir } from './model/read-dir';
 import { startModel } from './model/split';
 import { imageStore } from './repos/images';
@@ -229,11 +230,20 @@ async function main(): Promise<void> {
     })
     .then(() => sync.sync('start'));
 
+  // Audit records past the retention removed, at once and hourly (T370, AC-296).
+  const stopRetention = startAuditRetention(auditStore(db), {
+    days: config.auditRetentionDays ?? AUDIT_RETENTION_DAYS,
+    onError: (error) => {
+      app.log.warn({ err: error }, 'could not remove audit records past the retention');
+    },
+  });
+
   // Stopped, it finishes the requests under way, taking no new ones (Fastify's
   // `close()`), for up to 15 s: past a query's 10 s long-poll on Cube, which
   // 5 s cut off (T423, AC-319; research cube/ha-topology.md §4). The chart's
   // grace period is longer.
   closeWithGrace({ delay: 15_000 }, async () => {
+    stopRetention();
     clearInterval(sweeping);
     if (reconciling !== undefined) clearInterval(reconciling);
     await app.close();

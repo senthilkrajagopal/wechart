@@ -91,6 +91,9 @@ spec:
                 secretKeyRef:
                   name: {{ include "wechart.secretName" . }}
                   key: cube-api-secret
+            # How long the audit trail keeps its records, in days (T370, AC-296).
+            - name: WECHART_AUDIT_RETENTION_DAYS
+              value: {{ .Values.api.auditRetentionDays | quote }}
             # The refresh worker's own /readyz and /livez (T162, AC-156).
             - name: CUBE_WORKER_URL
               value: {{ printf "http://%s:%d" (include "wechart.host" (list . "cube-refresh-worker")) (int .Values.cube.port) | quote }}

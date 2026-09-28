@@ -2,6 +2,7 @@ import { createPrivateKey, type KeyObject } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
+import { AUDIT_RETENTION_DAYS } from './audit/retention';
 import type { SecurityMode } from './auth/user';
 import type { XcubePublicKey } from './secrets/xcube-key';
 
@@ -92,6 +93,22 @@ export interface Config {
    * there is no such route.
    */
   readonly seedToken?: string;
+  /**
+   * `WECHART_AUDIT_RETENTION_DAYS`: how long audit records are kept, in
+   * whole days; a year unless set (T370, AC-296).
+   */
+  readonly auditRetentionDays?: number;
+}
+
+/** `WECHART_AUDIT_RETENTION_DAYS`: a whole number of days from 1, or a year unset. */
+function auditRetentionOf(env: NodeJS.ProcessEnv): number {
+  const said = env['WECHART_AUDIT_RETENTION_DAYS'];
+  if (said === undefined || said === '') return AUDIT_RETENTION_DAYS;
+  if (!/^[1-9]\d*$/.test(said))
+    throw new ConfigError(
+      `WECHART_AUDIT_RETENTION_DAYS is "${said}". It is how many days audit records are kept: a whole number from 1.`,
+    );
+  return Number(said);
 }
 
 /** A seeding token shorter than this could be guessed (T443). */
@@ -195,6 +212,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       : {}),
     ...xcubeOf(env),
     ...seedTokenOf(env),
+    auditRetentionDays: auditRetentionOf(env),
   };
 }
 

@@ -6213,10 +6213,16 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/web/src/workspaces/security/AuditTrail.tsx` (+ test), `packages/api/src/routes/audit.ts` (+ test), `e2e/security/audit.spec.ts`
   - Failing test: `audit.spec.ts`: `super` sees the records newest first; the User, Event, Folder and Time filters combine and every row matches them; `writer` gets Not found for the page and 403 from the API (AC-295; rule 82).
   - Depends on: T368
-- [ ] T370 (AC-296) Remove audit records older than the configured retention, one year by default
+- [x] T370 (AC-296) Remove audit records older than the configured retention, one year by default
   - Files: `packages/api/src/audit/retention.ts` (+ test), `packages/api/src/config.ts` (`WECHART_AUDIT_RETENTION_DAYS`)
   - Failing test: `retention.test.ts`: with a fixed clock, a record older than the retention is removed and a younger one kept, with and without the setting (AC-296).
   - Depends on: T368
+  - *As built (2026-09-27, before review):*
+    - `WECHART_AUDIT_RETENTION_DAYS` is a whole number of days from 1, a year when unset; anything else refuses to start.
+    - The API applies it at start and hourly, on every replica, since removing is idempotent. A failure is logged and tried again next hour.
+    - The chart sets it from `api.auditRetentionDays` (365). T369's page says it (design 08 pin 8).
+    - Also files: `packages/api/src/main.ts`, `deploy/helm/wechart/{values.yaml,templates/api.yaml}`.
+  - **Done 2026-09-27; the review passed.** AC-296 ticked on `audit/retention.test.ts`: with a fixed clock, a record past 365 days is removed and younger ones kept, then 90. After review, a test also covers a failure, logged and tried again next time, and the empty setting read as unset.
 
 ## P2.10 Jobs and Schedules (F17 returned, F33)
 

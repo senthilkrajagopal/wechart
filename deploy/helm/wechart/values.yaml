@@ -43,6 +43,8 @@ api:
   # PodDisruptionBudget keeps one up through a drain.
   replicas: 2
   resources: {}
+  # How many days audit records are kept (T370, AC-296): one year by default.
+  auditRetentionDays: 365
 
 # wechart's metadata database: dashboards, charts, folders and the model.
 meta:
