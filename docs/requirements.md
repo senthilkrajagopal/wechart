@@ -542,7 +542,7 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - **Slice 3 as built** `[X3, X3A, R30]`. xcube's side is done in the fork: 3a (folders, items and names) and 3b (modules) `[X3]`. wechart's side moves the model to **items mode** once, then publishes through changesets.
   - **The switch.** wechart sends one items snapshot of today's published model files, each file one root item `[X3]`. A model in items mode never takes a file set again `[X3; research]`.
     - **One cube or view per file** from the switch on `[R30]`. The switch splits any file declaring several into one file each, and the editor then refuses a file declaring a second. Each file is one item, so xcube's errors land on it directly `[X3A]`.
-    - **Nothing Cube serves changes for the root's items.** Their names, SQL and rollup tables stay as they were, so no rollup is rebuilt. `/v1/meta` gains each cube's `meta.xcube = { folderId, shortName }` `[X3A]`.
+    - **Nothing Cube serves changes for the root's items.** Their names, SQL and rollup tables stay as they were, so no rollup is rebuilt. *(2026-09-28, `[R38]`: until the root's data source is moved to another target, when its cubes take an alias of that connection's identity and their rollups are rebuilt.)* `/v1/meta` gains each cube's `meta.xcube = { folderId, shortName }` `[X3A]`.
     - **The way back** is not in place: the slice-2 image refuses xcube's schema once any 3a or 3b process has started. Since xcube's schema is derived data, the way back is to drop it, re-run the bootstrap, and deploy the slice-2 release, which re-imports its file set as a new generation. This is written into the deployment guide `[X3A, R30]`.
   - **The folder tree** (each folder's xcube id and its parent) is pushed when the API starts and after every folder change. xcube can't give the tree back, so wechart compares the tree's hash with the one the push returns `[X3; research]`.
     - **Workspaces stay out of the tree until slice 5,** which brings overlays. Anything in the tree and published is served `[X3A, R30]`.
@@ -841,6 +841,13 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: How should wechart decide that a dimension holds ISO-3 country codes? A: "Values, plus a model override (Recommended)"
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
+
+**R38 — a root item's names, and a data source changed in place** (2026-09-28, the user, asked when xcube `bc18f82c01` renamed every root cube on the stored `default`)
+- Claude asked: xcube's new image serves a moved data source from its new target by aliasing each cube by its connection's identity. That also renames the root's cubes and rebuilds their rollups once at upgrade, which breaks AC-328 ("root items keep their names, SQL and rollup tables; no rollup rebuilt"). Options: alias only after a change; accept identity aliases; keep AC-328 strictly.
+- The user chose: "Alias only after a change (Recommended)".
+  - *A cube keeps the names it has while its connection still has the identity it was first served with. It takes an identity alias only once that connection's target changes (host, database, user or key holder; a password doesn't count), when its rollups are rebuilt anyway. Moved back, it has its first names again. Nothing is renamed or rebuilt at upgrade.*
+  - *This keeps `[X3A]`'s "Nothing Cube serves changes for the root's items" until the root's data source is moved to another target. It also keeps the 2026-09-27 answer ("No and No"): a moved data source never answers from its old target's cache or rollups.*
+  - *Asked of xcube in `to-xcube/2026-09-28-0700-alias-only-after-a-change.md`. wechart pins the image that carries it, not `bc18f82c01` (T501).*
 
 **R37 — both UI reviews' designs, as a priority** (2026-09-27, the user, while design 03's check ran)
 - The user: "after your current work.. please work on designs in /Users/srajagopal/Work/wechart/docs/design/reviews/2026-09-27/designs and /Users/srajagopal/Work/wechart/docs/design/reviews/2026-09-24/designs if there is a conflict.. designs on 2026-09-27 will take precedence and supersede the ones on 2026-09-24. Make this a priority. If any of them is blocked because of decisions to be made, or because of xcube, or because some of the foundational decisions or apis have not been implemented then put them into backlog and continue with the rest.."
