@@ -398,6 +398,43 @@ describe('items made in the workspace name their target folder (T345, AC-282)', 
     );
   });
 
+  /**
+   * T498 (design 04 pin 3, AC-281, AC-282): My workspace lists under each
+   * item where it is to go, and what it was copied from, at which version.
+   */
+  it('lists each item with its target, and a copy with its origin', async () => {
+    const made = await as('writer', {
+      method: 'POST',
+      url: '/api/documents',
+      payload: {
+        kind: 'dashboard',
+        title: `listed new ${MARK}`,
+        folderId: 'mine',
+        targetFolderId: sales,
+      },
+    });
+    expect(made.statusCode, made.body).toBe(201);
+    const shared = await create('super', 'dashboard', `listed shared ${MARK}`, sales);
+    expect(shared.statusCode, shared.body).toBe(201);
+    const copied = await as('writer', {
+      method: 'POST',
+      url: '/api/workspace/copies',
+      payload: { kind: 'dashboard', id: idOf(shared) },
+    });
+    expect(copied.statusCode, copied.body).toBe(201);
+    const rows = (await (await contents('writer', 'mine')).json()) as {
+      id: string;
+      targetFolderId?: string | null;
+      origin?: { id: string; version: number; folderId?: string } | null;
+    }[];
+    const row = (id: string) => rows.find((each) => each.id === id);
+    expect([row(idOf(made))?.targetFolderId, row(idOf(made))?.origin]).toEqual([sales, null]);
+    expect([row(idOf(copied))?.targetFolderId, row(idOf(copied))?.origin]).toEqual([
+      sales,
+      { kind: 'dashboard', id: idOf(shared), version: 1, folderId: sales },
+    ]);
+  });
+
   it('keeps the target as stored through every save, and gives a chart made on a workspace dashboard its dashboard’s (T345’s review)', async () => {
     const board = idOf(await create('writer', 'dashboard', `kept ${MARK}`, 'mine'));
     const read = async (kind: DocumentKind, id: string) => (await docs().get(kind, id))!;
@@ -458,6 +495,50 @@ describe('items made in the workspace name their target folder (T345, AC-282)', 
     expect((await read('chart', chart)).body['targetFolderId']).toBe(sales);
     expect((await read('dashboard', board)).body['targetFolderId']).toBe(sales);
     expect(stored.body['targetFolderId']).toBe(sales);
+  });
+
+  it('lists a workspace’s data sources with their targets, and a copy with its origin (T498’s review)', async () => {
+    const store = dataSourceStore(getDb());
+    const held = await store.create({ ...source(`listed_${MARK}`, {}), folderId: sales });
+    const kept: string[] = [held.id];
+    try {
+      const made = await as('writer', {
+        method: 'POST',
+        url: '/api/data-sources',
+        payload: await tested(
+          (url, payload) => as('writer', { method: 'POST', url, payload }),
+          source(`listed_new_${MARK}`, { targetFolderId: sales }),
+        ),
+      });
+      expect(made.statusCode, made.body).toBe(201);
+      kept.push(idOf(made));
+      const copied = await as('writer', {
+        method: 'POST',
+        url: `/api/data-sources/${held.id}/copy`,
+      });
+      expect(copied.statusCode, copied.body).toBe(201);
+      kept.push(idOf(copied));
+
+      const rows = (await (await contents('writer', 'mine')).json()) as {
+        id: string;
+        kind: string;
+        targetFolderId?: string | null;
+        origin?: unknown;
+      }[];
+      const row = (id: string) => rows.find((each) => each.id === id);
+      expect(row(idOf(made))).toMatchObject({
+        kind: 'data-source',
+        targetFolderId: sales,
+        origin: null,
+      });
+      expect(row(idOf(copied))).toMatchObject({
+        kind: 'data-source',
+        targetFolderId: sales,
+        origin: { id: held.id, version: held.version, folderId: sales },
+      });
+    } finally {
+      for (const id of kept) await store.remove(id).catch(() => undefined);
+    }
   });
 
   it('makes a data source in the workspace with its target, and never under a name the target holds', async () => {

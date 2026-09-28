@@ -513,6 +513,31 @@ main:has(.explore) {
 .itemicon.ic-folder { background: var(--wc-bg-subtle); color: var(--wc-text-secondary); }
 .itemicon.ic-model { background: var(--wc-bg-subtle); color: var(--wc-text-primary); }
 .itemicon.ic-source { background: var(--wc-bg-subtle); color: var(--wc-text-primary); }
+/* My workspace's chip: a person on the dimension role's tint (design 04, pin 1). */
+.itemicon.ic-person { background: var(--wc-bg-role-dimension-soft); color: var(--wc-role-dimension); }
+.itemicon.ic-person > svg { width: 14px; height: 14px; }
+
+/* The workspace band (design 04, pin 2; rule 72): 32 px on bg-subtle, a
+   person and "My workspace · only you can see this", edge to edge. */
+.workspace-band {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 24px;
+  background: var(--wc-bg-subtle);
+  border-bottom: 1px solid var(--wc-border-subtle);
+  font-size: var(--wc-text-xs-size);
+  line-height: 16px;
+  color: var(--wc-text-secondary);
+}
+.workspace-band > svg { flex: none; }
+/* Across Explore's contents column, from its edges. */
+.explore__contents > .workspace-band { margin: -16px -24px 0; }
+/* Across an item's own page. */
+.source-settings > .workspace-band {
+  margin: calc(-1 * var(--wc-surface-padding)) calc(-1 * var(--wc-surface-padding)) 0;
+}
 
 /* The edit sidebar's Outline (AC-053): the prototype's .dir and .file rows. */
 .outline, .outline ul { margin: 0; padding: 0; list-style: none; }
@@ -1539,6 +1564,8 @@ fieldset.model-field > legend {
   font-size: var(--wc-text-xs-size);
   line-height: var(--wc-text-xs-line);
 }
+/* The workspace's own, in the secondary text colour (design 04, pin 8). */
+.explore__note--workspace { color: var(--wc-text-secondary); }
 
 /* A library chart's page (AC-212), the prototype's chartPage(): a head row
    with the title, its type and Edit chart; the chart; a 300 px details pane
@@ -1692,6 +1719,18 @@ a.btn-primary.btn-sm { min-height: 24px; height: 24px; padding: 0 8px; }
    personal root, ▣ for any other (F7, mismatch 14). The glyph is the
    stylesheet's, so it joins neither the row's name nor its text. */
 .folder-tree__label > .itemicon { width: 18px; height: 18px; }
+/* My workspace heading the tree, a rule under it and its folders before the
+   shared tree (design 04, pin 1: .tdiv, 6 px above and below, 12 px in). */
+.folder-tree__item--parted { position: relative; padding-bottom: 13px; }
+.folder-tree__item--parted::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 6px;
+  height: 1px;
+  background: var(--wc-border-subtle);
+}
 .itemicon[data-icon='folder']::before { content: '▣'; }
 .itemicon[data-icon='personal']::before { content: '◉'; }
 .itemicon[data-icon='dashboard']::before { content: '▦'; }
@@ -2709,6 +2748,28 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 .folder-contents td.is-code { font-family: var(--wc-font-code); }
 .folder-contents__actions { width: 1%; white-space: nowrap; text-align: right; }
 .folder-contents__rename { display: flex; gap: 4px; align-items: center; }
+/* Under a workspace item's name, where it goes (design 04, pin 3). */
+.folder-contents__origin {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--wc-text-xs-size);
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--wc-text-secondary);
+}
+.folder-contents__origin > svg { flex: none; }
+/* Its status, icon and label, 12/600 as design 04's .status (pin 4). */
+.folder-contents__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--wc-text-xs-size);
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--wc-text-secondary);
+}
+.folder-contents__status > svg { flex: none; }
 /* A dashboard's description beneath its name (AC-197): the prototype's
    second line, 12 px muted. */
 .folder-contents__description {

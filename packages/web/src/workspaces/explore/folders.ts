@@ -43,6 +43,22 @@ export function folderChain(folders: readonly FolderNode[], id: string): Crumb[]
   return [{ id: root.id, title: root.title }, ...out];
 }
 
+/**
+ * A shared folder named as where a workspace item goes (T498; design 04, pin
+ * 3): its path below Shared, as the target picker names it, or "Shared" for
+ * the root. Undefined for a folder the user can't see.
+ */
+export function targetPathOf(folders: readonly FolderNode[], id: string): string | undefined {
+  if (id === SHARED_ROOT.id) return SHARED_ROOT.title;
+  if (!folders.some((folder) => folder.id === id)) return undefined;
+  const chain = folderChain(folders, id);
+  if (chain[0]?.id !== SHARED_ROOT.id) return undefined;
+  return chain
+    .slice(1)
+    .map((crumb) => crumb.title)
+    .join(' / ');
+}
+
 /** Explore, open on a folder: the address a breadcrumb leads back to (AC-195). */
 export function exploreHref(folderId: string): string {
   return folderId === SHARED_ROOT.id

@@ -10,6 +10,7 @@ import { TableScroll } from '../../shell/TableScroll';
 import { onTabKey } from '../../shell/tabKeys';
 import { useFocusTrap } from '../../shell/useFocusTrap';
 import { MY_WORKSPACE, SHARED_ROOT } from '../explore/roots';
+import { WorkspaceBand } from '../explore/WorkspaceBand';
 import { CubeState, cubeStateLabel, type CubeStateView } from './CubeState';
 import type { ListedSource } from './DataSourcesList';
 import { CHECK_LABELS } from './connectionTest';
@@ -196,6 +197,9 @@ function Settings({ source }: { source: StoredSource }) {
 
   return (
     <div className="source-settings">
+      {/* In the user's workspace, the page says so across its width (T498;
+          design 04, pin 2; design 03). */}
+      {source.inWorkspace && me.data?.security === 'oidc' ? <WorkspaceBand /> : null}
       {/* Under its folder's breadcrumb, wherever it was opened from (pin 1). */}
       {/* Followed in the app, so leaving with unsaved changes is asked about (state I, T497). */}
       <nav aria-label="Breadcrumb" className="source-settings__crumbs">

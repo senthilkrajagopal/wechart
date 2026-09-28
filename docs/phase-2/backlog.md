@@ -254,6 +254,7 @@ R37 asks for both UI reviews' designs to be built, with the 2026-09-27 ones winn
 - **2026-09-27 design 07, state F:** the Access panel with sign-in off. This contradicts the earlier answer "no Access button with sign-in off" (`docs/handoff.md`, T330).
 - **2026-09-27 design 03, state E:** a "Scheduled health check" row. It is only needed if periodic tests are wanted, which is a spec change.
 - **Explore and the top bar below 1,024 px:** neither review designs them (§3, N16).
+- **2026-09-27 design 04, pin 6:** "Search My workspace" or "Search Sales / EMEA" names the box for its folder, but AC-019's Explore search looks through the whole library, not one folder. Either the search is scoped to the open folder (an AC-019 change), or the box keeps its global label.
 
 **(b) Waiting on xcube** (R35: needs xcube changed, through the Cube-expert agent)
 - **2026-09-27 design 01, state D:** the test's four checks ticking off one by one. xcube's test route answers once, at the end.

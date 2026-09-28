@@ -5723,7 +5723,33 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 - [ ] T348 (AC-278) Show the workspace band, each item's origin and target, and "Edit in my workspace" / "Open my copy"
   - Files: `packages/web/src/workspaces/explore/{WorkspaceBand,OriginLine,EditInWorkspaceDialog}.tsx` (+ tests), `packages/web/src/dashboard/DashboardView.tsx`, `e2e/security/workspace.spec.ts`
   - Failing test: `workspace.spec.ts`: a shared dashboard offers "Edit in my workspace" and no edit; its dialog lists models and data sources unchecked; the copy opens under "My workspace · only you can see this" with "Copied from _path_ · version _n_" and its target; the shared item then offers "Open my copy" (AC-278; rules 71–73).
+  - *(2026-09-27)* The band and each item's origin and target in Explore are T498's (design 04, pins 1–4 and 8). This task keeps design 04's states D, E, F and H: the Edit in my workspace dialog, Open my copy, the item pages' headers, and the copy's toast. It reuses T498's `WorkspaceBand.tsx`; the origin line is `FolderContents.tsx`'s `OriginLine`.
   - Depends on: T344, T345, T320
+- [x] T498 (AC-343) My workspace as design 04 draws it in Explore: first in the tree, its band, each item's origin and target, and its status *(added 2026-09-27, split from T348; design 04 of 2026-09-27, pins 1–4 and 8)*
+  - **Done 2026-09-27, after one review round.** Tested in `e2e/security/{workspaces,data-sources}.spec.ts` (Chrome, Firefox and Safari), `FolderContents.test.tsx`, `FolderTree.test.tsx`, `WorkspaceBand.test.tsx`, `roots.test.ts` and `access/workspaces.test.ts`.
+  - **Review fixes:**
+    1. My workspace came first only in Chromium. The order came from a sort whose comparator said only "mine first", which engines may apply either way round, and Firefox didn't. It is now built in order.
+    2. While the folders were still being read, every target said "a folder you can no longer see". The lines now wait for the folders.
+    3. The data-source half of the listing had no test. It now has one: a new workspace source with its target, and a copy with its origin.
+    4. The design's sizes: the Status label at 12/600, the workspace footnote in secondary text, the rule 6 px above and below, and 14 px icons.
+  - **Small decisions, overturnable:**
+    - With sign-in off, phase 1's tree stays as it was: My workspace last, with ◉. The design draws the signed-in workspace.
+    - A target the user can no longer see reads "Goes to a folder you can no longer see". A folder with no count reads "Folders in My workspace have no target". The design shows neither case.
+    - Every workspace item is "Draft" until proposals exist (T349 onwards). The other statuses wait for those tasks (backlog §6).
+    - A model in the workspace has no origin line yet: model files carry no target or origin until T347.
+  - **Left:** a folder's count covers dashboards and charts only (UX-239, T331's). Rows stay 34 px, not the design's two-line 44 px. The empty-state line is phase 1's.
+  - Files: `packages/api/src/repos/catalog.ts`, `packages/api/src/access/workspaces.test.ts`, `packages/web/src/workspaces/explore/{ExplorePage,FolderTree,FolderContents,WorkspaceBand}.tsx`, `packages/web/src/workspaces/explore/{roots,folders}.ts` (+ tests), `packages/web/src/workspaces/data-sources/SourceSettings.tsx`, `packages/web/src/shell/{StatusIcon.tsx,styles.ts}`, `e2e/security/{workspaces,data-sources}.spec.ts`
+  - Failing test:
+    - `workspaces.spec.ts` "shows My workspace as design 04 draws it", as writer:
+      - My workspace heads the tree under a person, with a rule before Shared (pin 1);
+      - the band "My workspace · only you can see this" spans the contents, 32 px (pin 2);
+      - under each name, "Goes to _path_ · new" or "· copied from version _n_", and a folder's "_n_ items · folders in My workspace have no target" (pin 3);
+      - Status, not Built on or Owner, each item "Draft" (pin 4);
+      - the workspace's own footnote (pin 8);
+      - a shared folder unchanged.
+    - `data-sources.spec.ts`: a copy's page wears the band across the page.
+    - `workspaces.test.ts`: the folder's contents carry each item's target and a copy's origin.
+  - Depends on: T345, T346
 
 ## P2.6 Proposals, approval and history (F30)
 

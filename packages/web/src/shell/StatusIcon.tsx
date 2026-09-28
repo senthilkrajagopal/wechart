@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
  * rule 3): every status, validation and job state shows an icon and words,
  * never colour alone.
  */
-export type StateKind = 'ok' | 'run' | 'idle' | 'warn' | 'err' | 'info';
+export type StateKind = 'ok' | 'run' | 'idle' | 'warn' | 'err' | 'info' | 'draft';
 
 export function StatusIcon({ kind }: { kind: StateKind }) {
   const common = {
@@ -62,6 +62,21 @@ export function StatusIcon({ kind }: { kind: StateKind }) {
         <svg {...common}>
           <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.6" />
           <path d="M8 4.5V8l2.5 1.5" stroke="currentColor" strokeWidth="1.6" fill="none" />
+        </svg>
+      );
+    // Not yet proposed: a dashed circle (design 04, pin 4; rule 79).
+    case 'draft':
+      return (
+        <svg {...common}>
+          <circle
+            cx="8"
+            cy="8"
+            r="6.2"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeDasharray="2.6 2"
+          />
         </svg>
       );
     // A note, not a state: the prototype's "i" (T466, UX-109).

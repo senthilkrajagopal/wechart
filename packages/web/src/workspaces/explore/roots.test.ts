@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { folderChain } from './folders';
+import { folderChain, targetPathOf } from './folders';
 import { isMyWorkspace, MY_WORKSPACE, rootTitleOf, SHARED_ROOT, visibleRoots } from './roots';
 
 /**
@@ -33,5 +33,32 @@ describe('My workspace, however the API names it (T343)', () => {
     expect(visibleRoots({ root: 3 }).map((root) => root.id)).toEqual([SHARED_ROOT.id]);
     // Until the counts come: the shared root alone, not a workspace that may not be theirs.
     expect(visibleRoots(undefined).map((root) => root.id)).toEqual([SHARED_ROOT.id]);
+  });
+
+  it('comes first when asked, as design 04 draws it (T498)', () => {
+    expect(
+      visibleRoots({ root: 3, mine: 1 }, { workspaceFirst: true }).map((root) => root.id),
+    ).toEqual(['mine', 'root']);
+    expect(visibleRoots({ root: 3 }, { workspaceFirst: true }).map((root) => root.id)).toEqual([
+      'root',
+    ]);
+  });
+});
+
+/** T498: a folder named as a target is, its path from under Shared, as the target picker names it. */
+describe('a target folder by its path (T498)', () => {
+  const folders = [
+    { id: 'sales', title: 'Sales', parentId: 'root' },
+    { id: 'emea', title: 'EMEA', parentId: 'sales' },
+  ];
+
+  it('is its path below Shared, or Shared itself', () => {
+    expect(targetPathOf(folders, 'emea')).toBe('Sales / EMEA');
+    expect(targetPathOf(folders, 'sales')).toBe('Sales');
+    expect(targetPathOf(folders, 'root')).toBe('Shared');
+  });
+
+  it('is unknown for a folder the user cannot see', () => {
+    expect(targetPathOf(folders, 'gone')).toBeUndefined();
   });
 });

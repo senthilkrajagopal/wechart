@@ -576,3 +576,123 @@ describe('data sources in a folder (T335, AC-269)', () => {
     expect(onOpen).toHaveBeenLastCalledWith(sources[1]);
   });
 });
+
+/**
+ * T498 (AC-343; design 04 of 2026-09-27, pins 3 and 4): in My workspace each
+ * item says where it goes and where it came from, under its name, and its
+ * status; there is no Owner, since everything there is the user's.
+ */
+describe('My workspace, as design 04 draws it (T498)', () => {
+  const paths = new Map([
+    ['sales-emea', 'Sales / EMEA'],
+    ['finance', 'Finance'],
+    ['root', 'Shared'],
+  ]);
+  const workspace = { pathOf: (id: string) => paths.get(id) };
+  const at = '2026-09-27T10:00:00.000Z';
+  const mine: CatalogItem[] = [
+    { kind: 'folder', id: 'drafts', title: 'Drafts', owner: null, updatedAt: at, itemCount: 1 },
+    {
+      kind: 'dashboard',
+      id: 'd-copy',
+      title: 'Revenue overview',
+      owner: 'wren',
+      updatedAt: at,
+      tabs: 2,
+      targetFolderId: 'sales-emea',
+      origin: { kind: 'dashboard', id: 'd-orig', version: 7, folderId: 'sales-emea' },
+    },
+    {
+      kind: 'dashboard',
+      id: 'd-new',
+      title: 'Churn watch',
+      owner: 'wren',
+      updatedAt: at,
+      targetFolderId: 'finance',
+      origin: null,
+    },
+    {
+      kind: 'data-source',
+      id: 'ds-new',
+      title: 'northwind_replica',
+      owner: null,
+      updatedAt: at,
+      driver: 'postgres',
+      targetFolderId: 'root',
+    },
+    {
+      kind: 'chart',
+      id: 'c-gone',
+      title: 'Top products',
+      owner: 'wren',
+      updatedAt: at,
+      chartType: 'bar',
+      hasFields: true,
+      targetFolderId: 'hidden',
+      origin: null,
+    },
+  ];
+  const lineOf = (id: string) =>
+    screen.getByTestId(`item-${id}`).querySelector('.folder-contents__origin');
+
+  it('says under each name where it goes, and whether it was copied or is new', () => {
+    render(<FolderContents items={mine} workspace={workspace} />);
+
+    expect(lineOf('d-copy')?.textContent).toBe('Goes to Sales / EMEA · copied from version 7');
+    expect(lineOf('d-new')?.textContent).toBe('Goes to Finance · new');
+    expect(lineOf('ds-new')?.textContent).toBe('Goes to Shared · new');
+    // A target the user can no longer see is not named by its id.
+    expect(lineOf('c-gone')?.textContent).toBe('Goes to a folder you can no longer see · new');
+    // The arrow is drawn; "Goes to" is what it reads as.
+    expect(lineOf('d-new')?.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(lineOf('d-new')?.querySelector('.visually-hidden')?.textContent).toBe('Goes to ');
+  });
+
+  it('says a folder has no target, with how many items it holds', () => {
+    render(
+      <FolderContents
+        items={[mine[0]!, { ...mine[0]!, id: 'more', title: 'More', itemCount: 3 }]}
+        workspace={workspace}
+      />,
+    );
+
+    expect(lineOf('drafts')?.textContent).toBe('1 item · folders in My workspace have no target');
+    expect(lineOf('more')?.textContent).toBe('3 items · folders in My workspace have no target');
+  });
+
+  it('shows Status in place of Built on and Owner, each item a draft with its icon', () => {
+    render(<FolderContents items={mine} workspace={workspace} />);
+
+    expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
+      'Name',
+      'Type',
+      'Status',
+      'Updated',
+      'Actions',
+    ]);
+    const cells = (id: string) =>
+      within(screen.getByTestId(`item-${id}`))
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent);
+    expect(cells('d-copy').slice(0, 2)).toEqual(['Dashboard', 'Draft']);
+    expect(cells('ds-new').slice(0, 2)).toEqual(['Data source', 'Draft']);
+    // A folder is not proposed, so it has no status.
+    expect(cells('drafts').slice(0, 2)).toEqual(['Folder', '']);
+    const status = within(screen.getByTestId('item-d-copy')).getByText('Draft');
+    expect(status.parentElement?.querySelector('svg')?.getAttribute('data-icon')).toBe('draft');
+  });
+
+  it('leaves a shared folder as it was: no status, no origin line', () => {
+    render(<FolderContents items={mine} />);
+
+    expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
+      'Name',
+      'Type',
+      'Built on',
+      'Updated',
+      'Owner',
+      'Actions',
+    ]);
+    expect(lineOf('d-copy')).toBeNull();
+  });
+});

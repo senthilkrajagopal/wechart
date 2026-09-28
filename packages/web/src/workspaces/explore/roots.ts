@@ -37,14 +37,26 @@ export function rootTitleOf(id: string): string | undefined {
  * The roots the tree shows (T343, AC-277): the shared root, and My workspace
  * where the API counts one — none for a user with read-only access
  * everywhere, nor before the counts come. Each with its count, where known.
+ *
+ * With sign-in on My workspace comes first, above the shared tree (design 04
+ * of 2026-09-27, pin 1); with one user, phase 1's order stays.
  */
 export function visibleRoots(
   counts: Readonly<Record<string, number>> | undefined,
+  { workspaceFirst = false }: { readonly workspaceFirst?: boolean } = {},
 ): (RootFolder & { readonly itemCount?: number })[] {
-  return ROOT_FOLDERS.filter(
+  const shown = ROOT_FOLDERS.filter(
     (root) => root.id !== MY_WORKSPACE.id || counts?.[MY_WORKSPACE.id] !== undefined,
   ).map((root) => {
     const itemCount = counts?.[root.id];
     return itemCount === undefined ? root : { ...root, itemCount };
   });
+  // Built in order, not sorted: a comparator that says only "mine first" is
+  // one engines may apply either way round (T498's review; Firefox did).
+  return workspaceFirst
+    ? [
+        ...shown.filter((root) => root.id === MY_WORKSPACE.id),
+        ...shown.filter((root) => root.id !== MY_WORKSPACE.id),
+      ]
+    : shown;
 }

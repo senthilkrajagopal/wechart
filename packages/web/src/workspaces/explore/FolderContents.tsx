@@ -2,6 +2,7 @@ import { DRIVERS } from '@wechart/core';
 import { useEffect, useRef, useState } from 'react';
 
 import { MenuButton } from '../../shell/MenuButton';
+import { StatusIcon } from '../../shell/StatusIcon';
 import { chartTypeText } from './chartTypeLabels';
 import { SHARED_ROOT } from './roots';
 
@@ -43,6 +44,28 @@ export interface CatalogItem {
   readonly declares?: { readonly cubes: number; readonly views: number } | null;
   /** A data source's driver, by its type id (T335). */
   readonly driver?: string | null;
+  /** Where a workspace item is to go (T345, AC-282): a shared folder's id. */
+  readonly targetFolderId?: string | null;
+  /**
+   * What a workspace copy was copied from, at which version (T344, AC-278);
+   * a data source's names no kind (T346).
+   */
+  readonly origin?: {
+    readonly kind?: string;
+    readonly id: string;
+    readonly version: number;
+    readonly folderId: string;
+  } | null;
+}
+
+/**
+ * The open folder is the user's workspace or in it (T498; design 04, pins 3
+ * and 4): each item says where it goes and where it came from, and its
+ * status. `pathOf` names a target folder, or nothing for one the user can't
+ * see.
+ */
+export interface InWorkspace {
+  readonly pathOf: (folderId: string) => string | undefined;
 }
 
 export interface FolderMove {
@@ -74,6 +97,52 @@ export interface FolderContentsProps {
    * name as text, not as a control that does nothing (T334).
    */
   readonly opens?: (item: CatalogItem) => boolean;
+  /** Given in the user's workspace: each item's origin and target, and its status (T498). */
+  readonly workspace?: InWorkspace | undefined;
+}
+
+/**
+ * Under a workspace item's name, where it goes, read as "Goes to" and drawn
+ * as an arrow, and whether it was copied or is new; a folder has no target
+ * (design 04, pin 3; rule 73).
+ */
+function OriginLine({ item, workspace }: { item: CatalogItem; workspace: InWorkspace }) {
+  if (item.kind === 'folder') {
+    const count = item.itemCount;
+    return (
+      <span className="folder-contents__origin">
+        {count == null ? '' : `${String(count)} ${count === 1 ? 'item' : 'items'} · `}
+        {count == null ? 'Folders' : 'folders'} in My workspace have no target
+      </span>
+    );
+  }
+  if (item.targetFolderId == null) return null;
+  const target = workspace.pathOf(item.targetFolderId) ?? 'a folder you can no longer see';
+  return (
+    <span className="folder-contents__origin">
+      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+        <path d="M3 8h9M9 4.5L12.5 8 9 11.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      </svg>
+      <span className="visually-hidden">Goes to </span>
+      {target} ·{' '}
+      {item.origin == null ? 'new' : `copied from version ${String(item.origin.version)}`}
+    </span>
+  );
+}
+
+/**
+ * A workspace item's status, icon and label (design 04, pin 4; rule 79).
+ * Until proposals are built, every item there is a draft; a folder is never
+ * proposed, so has none.
+ */
+function WorkspaceStatus({ item }: { item: CatalogItem }) {
+  if (item.kind === 'folder') return null;
+  return (
+    <span className="folder-contents__status">
+      <StatusIcon kind="draft" />
+      <span>Draft</span>
+    </span>
+  );
 }
 
 const TYPE_LABEL: Record<CatalogItem['kind'], string> = {
@@ -208,6 +277,7 @@ export function FolderContents({
   folderNames,
   emptyText = 'This folder is empty.',
   opens = () => true,
+  workspace,
 }: FolderContentsProps) {
   const open = (item: CatalogItem) => {
     if (opens(item)) onOpen?.(item);
@@ -290,12 +360,14 @@ export function FolderContents({
     <table className="folder-contents">
       <caption className="visually-hidden">Contents of this folder</caption>
       <thead>
+        {/* In the workspace, Status takes Built on's and Owner's places:
+            everything there is the user's (design 04, pins 3 and 4). */}
         <tr>
           <th scope="col">Name</th>
           <th scope="col">Type</th>
-          <th scope="col">Built on</th>
+          {workspace === undefined ? <th scope="col">Built on</th> : <th scope="col">Status</th>}
           <th scope="col">Updated</th>
-          <th scope="col">Owner</th>
+          {workspace === undefined ? <th scope="col">Owner</th> : null}
           <th scope="col">
             <span className="visually-hidden">Actions</span>
           </th>
@@ -306,7 +378,7 @@ export function FolderContents({
             (recheck-shell-explore F24, F25). */}
         {items.length === 0 ? (
           <tr className="folder-contents__empty-row">
-            <td colSpan={6} className="folder-contents__empty">
+            <td colSpan={workspace === undefined ? 6 : 5} className="folder-contents__empty">
               {emptyText}
             </td>
           </tr>
@@ -400,8 +472,11 @@ export function FolderContents({
                       ) : (
                         <span className="folder-contents__title">{item.title}</span>
                       )}
-                      {/* The prototype's second line: what the dashboard is for. */}
-                      {item.kind === 'dashboard' && item.description ? (
+                      {/* The prototype's second line: what the dashboard is for;
+                          in the workspace, where it goes (design 04, pin 3). */}
+                      {workspace !== undefined ? (
+                        <OriginLine item={item} workspace={workspace} />
+                      ) : item.kind === 'dashboard' && item.description ? (
                         <span className="folder-contents__description">{item.description}</span>
                       ) : null}
                     </span>
@@ -409,7 +484,13 @@ export function FolderContents({
                 )}
               </th>
               <td className="folder-contents__type">{typeText(item)}</td>
-              <td className={BUILT_ON_CLASS[item.kind]}>{builtOn(item)}</td>
+              {workspace === undefined ? (
+                <td className={BUILT_ON_CLASS[item.kind]}>{builtOn(item)}</td>
+              ) : (
+                <td>
+                  <WorkspaceStatus item={item} />
+                </td>
+              )}
               {/* A folder's too, though browse() leaves them blank (F20):
                   AC-017 fails on a blank column for an item that has the
                   value (T244's review). */}
@@ -418,7 +499,7 @@ export function FolderContents({
                   {shortDate(item.updatedAt)}
                 </time>
               </td>
-              <td>{item.owner ?? '—'}</td>
+              {workspace === undefined ? <td>{item.owner ?? '—'}</td> : null}
               <td
                 className="folder-contents__actions"
                 ref={(element) => {

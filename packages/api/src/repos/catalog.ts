@@ -52,6 +52,18 @@ export interface CatalogItem {
   readonly declares?: { readonly cubes: number; readonly views: number } | null;
   /** A data source's driver, its type id (T335, T454): what Explore's Built on names. */
   readonly driver?: string | null;
+  /**
+   * Where one made in a workspace is to go (T345, AC-282), and what a copy
+   * was copied from (T344, T346; AC-281): said under its name in My
+   * workspace (T498, design 04 pin 3). Null elsewhere.
+   */
+  readonly targetFolderId?: string | null;
+  readonly origin?: {
+    readonly kind?: string;
+    readonly id: string;
+    readonly version: number;
+    readonly folderId?: string;
+  } | null;
 }
 
 export interface FolderNode {
@@ -109,7 +121,10 @@ export function catalog(db: Kysely<Database>) {
         >`case when jsonb_typeof(body -> 'pages') = 'array' then jsonb_array_length(body -> 'pages') end`.as(
           'pages',
         ),
-      );
+      )
+      // Where a workspace's is to go, and what a copy came from (T498).
+      .select(sql<string | null>`body ->> 'targetFolderId'`.as('target_folder_id'))
+      .select(sql<CatalogItem['origin']>`body -> 'origin'`.as('origin'));
 
   /**
    * Each of these folders' dashboards and library charts, counting those in
@@ -238,7 +253,7 @@ export function catalog(db: Kysely<Database>) {
       // what they hold — their secrets are another table's.
       const sources = await db
         .selectFrom('data_sources')
-        .select(['id', 'name', 'type', 'updated_at'])
+        .select(['id', 'name', 'type', 'updated_at', 'target_folder_id', 'origin'])
         .where('folder_id', '=', folderId)
         .orderBy('name')
         .execute();
@@ -286,6 +301,8 @@ export function catalog(db: Kysely<Database>) {
           tabs: null,
           itemCount: null,
           driver: source.type,
+          targetFolderId: source.target_folder_id,
+          origin: source.origin,
         })),
       ];
     },
@@ -401,6 +418,8 @@ interface Row {
   source: string | null;
   has_fields: boolean;
   pages: number | null;
+  target_folder_id?: string | null;
+  origin?: CatalogItem['origin'];
 }
 
 function toItem(row: Row): CatalogItem {
@@ -423,5 +442,7 @@ function toItem(row: Row): CatalogItem {
     // A dashboard opens on one page before any is added (DashboardPage).
     tabs: row.kind === 'dashboard' ? Math.max(1, row.pages ?? 0) : null,
     itemCount: null,
+    targetFolderId: row.target_folder_id ?? null,
+    origin: row.origin ?? null,
   };
 }

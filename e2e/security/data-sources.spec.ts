@@ -398,6 +398,11 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
       await expect(main.locator('.source-settings__status')).toHaveText('Draft');
       made.sources.push(decodeURIComponent(page.url().split('/').pop() ?? ''));
       const tabs = main.getByRole('tablist', { name: 'Data source' });
+      // In the workspace, the page says so across its width (T498; design 04, pin 2).
+      const band = main.getByRole('note').filter({ hasText: 'only you can see this' });
+      await expect(band).toHaveText('My workspace · only you can see this');
+      const [bandBox, mainBox] = await Promise.all([band.boundingBox(), main.boundingBox()]);
+      expect([bandBox?.x, bandBox?.width]).toEqual([mainBox?.x, mainBox?.width]);
 
       // A copy keeps its original's name (AC-280): read-only, saying why (state B).
       await tabs.getByRole('tab', { name: 'General' }).click();

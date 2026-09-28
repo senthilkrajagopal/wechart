@@ -11,8 +11,9 @@ import { NewSourceWizard } from '../data-sources/NewSourceWizard';
 import { NewItemDialog, type Target } from './NewItemDialog';
 import { FolderContents, opensFromExplore, type CatalogItem } from './FolderContents';
 import { FolderTree } from './FolderTree';
-import { exploreHref, folderChain, FOLDERS_QUERY } from './folders';
+import { exploreHref, folderChain, FOLDERS_QUERY, targetPathOf } from './folders';
 import { isMyWorkspace, ROOT_FOLDERS, SHARED_ROOT, rootTitleOf, visibleRoots } from './roots';
+import { WorkspaceBand } from './WorkspaceBand';
 
 /**
  * Explore: the folder tree and the open folder (AC-017), laid out as the
@@ -243,9 +244,6 @@ export function ExplorePage() {
     queryKey: ['folder-roots'],
     queryFn: () => getJson<Record<string, number>>('/api/folder-roots'),
   });
-  // My workspace only where the API counts one (T343, AC-277).
-  const roots = visibleRoots(rootCounts.data);
-
   /**
    * The open folder's Access panel (T330, AC-259, AC-260): with sign-in on,
    * for whoever the folder's access answers (a Super-Admin or a read-write
@@ -254,6 +252,16 @@ export function ExplorePage() {
    */
   const me = useQuery({ queryKey: ['me'], queryFn: () => getJson<Me>('/api/me') });
   const signedIn = me.data?.security === 'oidc';
+  // My workspace only where the API counts one (T343, AC-277); with sign-in
+  // on, first in the tree (T498; design 04, pin 1).
+  const roots = visibleRoots(rootCounts.data, { workspaceFirst: signedIn });
+  /**
+   * In a signed-in user's workspace, each item says where it goes and where
+   * it came from, and its status (T498; design 04, pins 2–4 and 8). With
+   * sign-in off, phase 1's one user's workspace goes nowhere.
+   */
+  const inOwnWorkspace =
+    signedIn && inMyWorkspace && !searching && roots.some((root) => isMyWorkspace(root.id));
   const access = useQuery({
     ...folderAccessQuery(folderId),
     enabled: signedIn && !searching && !isMyWorkspace(folderId),
@@ -332,6 +340,7 @@ export function ExplorePage() {
         </div>
       </aside>
       <section className="explore__contents" data-testid="explore-contents">
+        {inOwnWorkspace ? <WorkspaceBand /> : null}
         <nav className="crumbs" aria-label="Breadcrumb">
           {searching ? (
             <span>Search results for “{query.trim()}”</span>
@@ -514,12 +523,25 @@ export function ExplorePage() {
               opens={opensFromExplore}
               onRename={(item, title) => relocate.mutate({ item, title })}
               onMove={(item, target) => relocate.mutate({ item, folderId: target })}
+              // Once the folders are read: before, every target would read as
+              // one the user can't see (T498's review).
+              {...(inOwnWorkspace && folders.isSuccess
+                ? { workspace: { pathOf: (id: string) => targetPathOf(folders.data, id) } }
+                : {})}
             />
-            {/* The prototype's footnote under the list (F22). */}
-            <p className="explore__note">
-              Charts are shared: a chart used on several dashboards is edited once, and every
-              dashboard shows the change.
-            </p>
+            {/* The prototype's footnote under the list (F22); in the
+                workspace, the workspace's own (design 04, pin 8). */}
+            {inOwnWorkspace ? (
+              <p className="explore__note explore__note--workspace">
+                Items here are private. Each goes to its target folder only when you propose it and
+                it’s approved; you may approve your own.
+              </p>
+            ) : (
+              <p className="explore__note">
+                Charts are shared: a chart used on several dashboards is edited once, and every
+                dashboard shows the change.
+              </p>
+            )}
           </div>
         ) : null}
       </section>

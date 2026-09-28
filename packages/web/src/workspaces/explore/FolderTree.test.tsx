@@ -104,3 +104,49 @@ describe('the roots and counts (AC-194)', () => {
     expect(described(screen.getByRole('button', { name: 'My workspace' }))).toBe('1 item');
   });
 });
+
+/**
+ * T498 (AC-343; design 04 of 2026-09-27, pin 1): with sign-in on, My
+ * workspace comes first, under a person icon, and a rule parts it from the
+ * shared tree.
+ */
+describe('My workspace first (T498)', () => {
+  const roots = [
+    { id: 'mine', title: 'My workspace', itemCount: 1 },
+    { id: 'root', title: 'Shared', itemCount: 12 },
+  ];
+
+  it('heads the tree with a person icon, and a rule under it before Shared', () => {
+    render(<FolderTree folders={folders} roots={roots} selectedId="mine" onSelect={vi.fn()} />);
+
+    const top = screen
+      .getAllByRole('treeitem')
+      .filter((item) => item.getAttribute('aria-level') === '1');
+    expect(top.map((item) => item.getAttribute('aria-label'))).toEqual(['My workspace', 'Shared']);
+    const mine = screen.getByRole('button', { name: 'My workspace' });
+    expect(mine.querySelector('.itemicon')?.getAttribute('data-icon')).toBe('person');
+    expect(mine.querySelector('.itemicon svg')).not.toBeNull();
+    expect(top[0]?.classList.contains('folder-tree__item--parted')).toBe(true);
+    expect(top[1]?.classList.contains('folder-tree__item--parted')).toBe(false);
+  });
+
+  it('draws no rule where My workspace comes last, as with sign-in off', () => {
+    render(
+      <FolderTree
+        folders={folders}
+        roots={[...roots].reverse()}
+        selectedId="root"
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(document.querySelector('.folder-tree__item--parted')).toBeNull();
+    // Phase 1's glyph, as it was.
+    expect(
+      screen
+        .getByRole('button', { name: 'My workspace' })
+        .querySelector('.itemicon')
+        ?.getAttribute('data-icon'),
+    ).toBe('personal');
+  });
+});

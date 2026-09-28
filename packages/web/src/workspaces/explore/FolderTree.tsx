@@ -1,6 +1,7 @@
 import { useId } from 'react';
 
 import { MY_WORKSPACE, ROOT_FOLDERS, type RootFolder } from './roots';
+import { PersonIcon } from './WorkspaceBand';
 
 /**
  * The folder tree beside the contents (AC-017): the shared root and "My
@@ -37,12 +38,19 @@ export function FolderTree({
   const base = useId();
   const childrenOf = (parentId: string) => folders.filter((folder) => folder.parentId === parentId);
 
+  /**
+   * My workspace heading the tree, as it does with sign-in on, is parted
+   * from the shared tree by a rule (design 04, pin 1).
+   */
+  const parted = roots[0]?.id === MY_WORKSPACE.id && roots.length > 1;
   const node = (folder: RootFolder & { readonly itemCount?: number }, level: number) => {
     const countId = `${base}-${folder.id}-count`;
     const children = childrenOf(folder.id);
+    const workspace = folder.id === MY_WORKSPACE.id;
     return (
       <li
         key={folder.id}
+        className={parted && workspace && level === 1 ? 'folder-tree__item--parted' : undefined}
         role="treeitem"
         // Named explicitly: a treeitem's computed name otherwise absorbs
         // every descendant's text, so a parent would be announced as the
@@ -60,12 +68,20 @@ export function FolderTree({
           // The prototype's tree() indent: 12 px, and 14 more for each level.
           style={{ paddingLeft: 12 + (level - 1) * 14 }}
         >
-          {/* ◉ for the personal root, ▣ for any other folder (F7). */}
-          <span
-            className="itemicon ic-folder"
-            data-icon={folder.id === MY_WORKSPACE.id ? 'personal' : 'folder'}
-            aria-hidden="true"
-          />
+          {/* A person for My workspace heading the tree (design 04, pin 1);
+              with sign-in off, phase 1's ◉ where it comes last; ▣ for any
+              other folder (F7). */}
+          {workspace && parted ? (
+            <span className="itemicon ic-person" data-icon="person" aria-hidden="true">
+              <PersonIcon />
+            </span>
+          ) : (
+            <span
+              className="itemicon ic-folder"
+              data-icon={workspace ? 'personal' : 'folder'}
+              aria-hidden="true"
+            />
+          )}
           <span className="folder-tree__title">{folder.title}</span>
           {folder.itemCount === undefined ? null : (
             <span className="folder-tree__count" aria-hidden="true">
