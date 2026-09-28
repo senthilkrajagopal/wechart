@@ -193,6 +193,8 @@ function Control({
         value={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}
         options={optionsFor(field.scope, scope, owner)}
         onChange={onChange}
+        describedBy={describedBy}
+        required={field.required === true}
       />
     );
   if (field.scope !== undefined && field.kind === 'references')
@@ -1097,6 +1099,8 @@ export function MemberList({
   onChange,
   describe,
   onOpenMember,
+  emptyNote,
+  addOnOpen = false,
 }: {
   schema: ObjectSchema;
   items: readonly Value[];
@@ -1111,9 +1115,27 @@ export function MemberList({
    * tint its lines (T482, design 03 note 9).
    */
   onOpenMember?: ((index: number | null) => void) | undefined;
+  /** Said while the list is empty: what an empty list means (a view's cubes, MW-19). */
+  emptyNote?: string | undefined;
+  /**
+   * Opens with a new member ready, its first field focused, and written only
+   * once something is set in it: nothing is chosen for the user (T493, MW-19).
+   */
+  addOnOpen?: boolean;
 }) {
   const { title } = schema;
   const noun = title.charAt(0).toLowerCase() + title.slice(1);
+  const [pending, setPending] = useState<Value | null>(() => (addOnOpen ? {} : null));
+  const pendingBox = useRef<HTMLDivElement>(null);
+  // The new member's first field takes focus as the list opens with it.
+  useEffect(() => {
+    if (!addOnOpen) return;
+    pendingBox.current
+      ?.querySelector<HTMLElement>('[data-key] select, [data-key] input, [data-key] textarea')
+      ?.focus();
+    // Once, as the list opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   /**
    * An add or a remove, then what it leaves once the owner has put it in the
    * list — which it may not: an edit held to ask about a comment (T480's
@@ -1145,6 +1167,24 @@ export function MemberList({
       name?.select();
     });
   };
+  /**
+   * The new member's first key set: it is written, opened in the list, and
+   * the field just set keeps the focus — its first control, a chip too.
+   */
+  const commit = (next: Value) => {
+    const key = Object.keys(next).find((each) => pending?.[each] !== next[each]);
+    setPending(null);
+    change([...items, next], (list) => {
+      const details = list.lastElementChild?.querySelector('details');
+      if (details === null || details === undefined) return;
+      details.open = true;
+      const field = details.querySelector(`[data-key="${key ?? ''}"]`);
+      (
+        field?.querySelector<HTMLElement>('select, input, textarea, button') ??
+        details.querySelector<HTMLElement>(':scope > summary')
+      )?.focus();
+    });
+  };
   const remove = (index: number) => {
     const rest = items.filter((_, at) => at !== index);
     change(rest.length === 0 ? undefined : rest, (list) => {
@@ -1159,6 +1199,9 @@ export function MemberList({
   };
   return (
     <div className="model-members-block">
+      {items.length === 0 && emptyNote !== undefined ? (
+        <p className="model-members__note">{emptyNote}</p>
+      ) : null}
       <ul ref={rows} className="model-members" aria-label={pluralOf(schema)}>
         {items.map((entry, index) => {
           // A `-` with nothing after it yet is a member with no keys, not a crash.
@@ -1234,6 +1277,36 @@ export function MemberList({
           );
         })}
       </ul>
+      {/* A new member, not yet written: open, as a member being edited is. */}
+      {pending === null ? null : (
+        <div
+          ref={pendingBox}
+          role="group"
+          aria-label={`New ${noun}`}
+          className="model-member model-member--new"
+        >
+          <p className="model-member__new-title">New {noun}</p>
+          <ObjectForm
+            schema={schema}
+            value={pending}
+            onChange={(next) => {
+              if (Object.keys(next).length > 0) commit(next);
+            }}
+          />
+          <div className="model-member__foot">
+            <button
+              type="button"
+              className="btn-sm"
+              onClick={() => {
+                setPending(null);
+                addButton.current?.focus();
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       {/* The prototype's "+ measure" (model.js, `data-addroot`), and how many (design 03 note 7). */}
       <div className="model-members__foot">
         <button

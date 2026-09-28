@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { CubeForm } from './CubeForm';
 import { DataSourcesContext } from './dataSources';
 import { MEASURE_TYPES, SCHEMA } from './schema';
+import { memberIndexOf, PickerScopeContext } from './scopes';
 
 /**
  * T138 / AC-132: THE SYSTEM SHALL offer a form for every key Cube's validator
@@ -446,6 +447,89 @@ describe('a cube’s General tab, grouped', () => {
     // Not known here: typed, as before.
     rerender(<CubeForm kind="cube" value={ORDERS} onChange={vi.fn()} />);
     expect(picker().tagName).toBe('INPUT');
+  });
+});
+
+/**
+ * T493 / AC-351 (MW-19): a view made by New view opens on its Cubes with a
+ * new entry ready — its join path picked, focused — written only once one is
+ * picked; an empty Cubes says what that means.
+ */
+describe('a new view’s Cubes', () => {
+  it('opens with an entry ready, written only once its join path is picked', async () => {
+    const onChange = vi.fn();
+    render(
+      <PickerScopeContext.Provider
+        value={{
+          index: memberIndexOf([
+            {
+              path: 'cubes/orders.yml',
+              content:
+                'cubes:\n  - name: orders\n    joins:\n      - name: customers\n        sql: x\n        relationship: many_to_one\n',
+            },
+            { path: 'cubes/customers.yml', content: 'cubes:\n  - name: customers\n' },
+          ]),
+          cube: undefined,
+        }}
+      >
+        <CubeForm kind="view" value={{ name: 'fresh' }} onChange={onChange} addingOn="cubes" />
+      </PickerScopeContext.Provider>,
+    );
+    expect(screen.getByRole('tab', { name: /^Cubes/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByText('A view shows nothing until it includes a cube.').isConnected).toBe(
+      true,
+    );
+    const entry = screen.getByRole('group', { name: 'New cube in the view' });
+    const joinPath = within(entry).getByLabelText('Join path', { exact: true });
+    expect(document.activeElement).toBe(joinPath);
+    expect([...joinPath.querySelectorAll('option')].map((option) => option.value)).toEqual([
+      '',
+      'orders',
+      'orders.customers',
+      'customers',
+    ]);
+    // Nothing written yet: no cubes chosen for the user.
+    expect(onChange).not.toHaveBeenCalled();
+    await userEvent.selectOptions(joinPath, 'orders.customers');
+    expect(onChange).toHaveBeenLastCalledWith({
+      name: 'fresh',
+      cubes: [{ join_path: 'orders.customers' }],
+    });
+  });
+
+  it('lets the ready entry go, writing nothing, and offers it once only', async () => {
+    const onChange = vi.fn();
+    render(<CubeForm kind="view" value={{ name: 'fresh' }} onChange={onChange} addingOn="cubes" />);
+    await userEvent.click(
+      within(screen.getByRole('group', { name: 'New cube in the view' })).getByRole('button', {
+        name: 'Cancel',
+      }),
+    );
+    expect(screen.queryByRole('group', { name: 'New cube in the view' })).toBeNull();
+    // Away and back: the list as it is.
+    await userEvent.click(screen.getByRole('tab', { name: /^General/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /^Cubes/ }));
+    expect(screen.queryByRole('group', { name: 'New cube in the view' })).toBeNull();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('keeps the focus on the field first set, when that is a chip', async () => {
+    function Fresh() {
+      const [value, setValue] = useState<Record<string, unknown>>({ name: 'fresh' });
+      return <CubeForm kind="view" value={value} onChange={setValue} addingOn="cubes" />;
+    }
+    render(<Fresh />);
+    await userEvent.click(
+      within(screen.getByRole('group', { name: 'New cube in the view' })).getByRole('button', {
+        name: 'All (*)',
+      }),
+    );
+    expect(screen.queryByRole('group', { name: 'New cube in the view' })).toBeNull();
+    // The written entry, open, its All (*) chip pressed and focused.
+    const focused = document.activeElement;
+    expect(focused?.textContent).toBe('All (*)');
+    expect(focused?.getAttribute('aria-pressed')).toBe('true');
+    expect(focused?.closest('details.model-member')?.hasAttribute('open')).toBe(true);
   });
 });
 

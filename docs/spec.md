@@ -864,7 +864,7 @@ Model workspace:
       Fails when: pressing it leaves a table on the page unchosen or chooses one on another page, or it shows checked while a table on the page is not chosen.
 - [ ] AC-350 WHILE security is enabled, THE SYSTEM SHALL head Generate cubes with "in My workspace" and the person icon, as the new data source pane's head does, and add the cubes to the user's workspace model (`[R36]`, proposal 5 of design 11; direction.md rule 74).
       Fails when: with security on, the pane's head does not say "in My workspace", or a generated cube is added to a shared folder's model.
-- [ ] AC-351 WHEN the user creates a view with New view, THE SYSTEM SHALL write it with no `cubes`, open it on its Cubes tab ready to add a cube with the join-path picker focused, and say in the empty tab "A view shows nothing until it includes a cube." (`[R36]`, MW-19 of design 12).
+- [x] AC-351 WHEN the user creates a view with New view, THE SYSTEM SHALL write it with no `cubes`, open it on its Cubes tab ready to add a cube with the join-path picker focused, and say in the empty tab "A view shows nothing until it includes a cube." (`[R36]`, MW-19 of design 12).
       Fails when: the new view's YAML names a cube or members the user didn't choose, it opens on another tab, or focus is not on the join-path picker.
 
 Jobs, Security, Schedules and Data sources:

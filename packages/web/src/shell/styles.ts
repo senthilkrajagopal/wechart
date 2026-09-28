@@ -1310,6 +1310,11 @@ fieldset.model-field > legend {
 .model-member > .model-member__foot { background: var(--wc-bg-subtle); }
 .model-member > .model-form__fields { padding: 4px 12px 8px 40px; }
 .model-member > .model-member__foot { display: flex; justify-content: flex-end; padding: 0 12px 12px 40px; }
+/* A new member not yet written (T493): open, as one being edited is, titled;
+   and an empty list's note (MW-19), 12 px muted. */
+.model-member--new { border-bottom: 1px solid var(--wc-border-subtle); background: var(--wc-bg-subtle); }
+.model-member__new-title { margin: 0; padding: 8px 12px 0 40px; font-size: 12px; font-weight: 600; color: var(--wc-text-secondary); }
+.model-members__note { margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--wc-border-subtle); font-size: 12px; color: var(--wc-text-muted); }
 .model-workspace .model-member__remove { border-color: transparent; background: none; color: var(--wc-status-error); }
 .model-workspace .model-member__remove:hover:not(:disabled) { background: var(--wc-bg-hover); }
 /* The rarer groups under Advanced, named by their keys (MW-12). */

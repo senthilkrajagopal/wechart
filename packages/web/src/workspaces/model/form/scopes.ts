@@ -27,7 +27,12 @@ export type MemberScope =
    * A view's cube entry's members, from the last cube of its `join_path`,
    * by bare name (Y.10a: measures, dimensions, segments and hierarchies).
    */
-  | 'path';
+  | 'path'
+  /**
+   * A view's cube entry's `join_path`: a cube, or a path from it that follows
+   * its directed joins, `root.cube2.cube3` (Y.10a; T493).
+   */
+  | 'join-paths';
 
 export interface CubeMembers {
   readonly dimensions: readonly string[];
@@ -36,6 +41,8 @@ export interface CubeMembers {
   readonly segments: readonly string[];
   readonly hierarchies: readonly string[];
   readonly preAggregations: readonly string[];
+  /** The cubes it joins to, by the join's name, its target (Y.5). */
+  readonly joins: readonly string[];
 }
 
 export type MemberIndex = ReadonlyMap<string, CubeMembers>;
@@ -84,6 +91,7 @@ export function memberIndexOf(
         segments: namesOf(cube['segments']),
         hierarchies: namesOf(cube['hierarchies']),
         preAggregations: namesOf(cube['pre_aggregations']),
+        joins: namesOf(cube['joins']),
       });
       if (typeof cube['extends'] === 'string') bases.set(name, cube['extends']);
     }
@@ -105,6 +113,7 @@ export function memberIndexOf(
       segments: merge('segments'),
       hierarchies: merge('hierarchies'),
       preAggregations: merge('preAggregations'),
+      joins: merge('joins'),
     };
   };
   for (const name of own.keys()) {
@@ -137,6 +146,74 @@ export const PickerScopeContext = createContext<PickerScope>({
 });
 
 type Lists = (members: CubeMembers) => readonly string[];
+
+/**
+ * Past this many paths — a dense join graph — each cube lists only its
+ * shortest path to each cube it reaches. wechart's bound on the picker's
+ * length, not a Cube rule: every cube a root reaches is still offered (T493).
+ */
+const PATH_LIMIT = 2000;
+
+type JoinGraph = ReadonlyMap<string, readonly string[]>;
+
+/** Every path along declared joins, a cube once per path; undefined past the limit. */
+function everyPathOf(graph: JoinGraph): string[] | undefined {
+  const paths: string[] = [];
+  const walk = (path: readonly string[]): boolean => {
+    paths.push(path.join('.'));
+    if (paths.length > PATH_LIMIT) return false;
+    for (const next of graph.get(path[path.length - 1] ?? '') ?? [])
+      if (!path.includes(next) && !walk([...path, next])) return false;
+    return true;
+  };
+  for (const cube of graph.keys()) if (!walk([cube])) return undefined;
+  return paths;
+}
+
+/** Each cube, then its shortest path along declared joins to each cube it reaches. */
+function shortestPathsOf(graph: JoinGraph): string[] {
+  return [...graph.keys()].flatMap((root) => {
+    const found = [[root]];
+    const seen = new Set([root]);
+    for (let at = 0; at < found.length; at += 1) {
+      const path = found[at] ?? [];
+      for (const next of graph.get(path[path.length - 1] ?? '') ?? []) {
+        if (seen.has(next)) continue;
+        seen.add(next);
+        found.push([...path, next]);
+      }
+    }
+    return found.map((path) => path.join('.'));
+  });
+}
+
+/** The last model's paths: the index is read again on each keystroke, its joins rarely change. */
+let lastPaths: { readonly key: string; readonly paths: string[] } | undefined;
+
+/**
+ * Every join path a view may start from: each cube, then each path from it
+ * that follows its directed joins to a cube the model has, a cube at most
+ * once per path (research/cube/data-modeling.md, Y.10a: "Follows directed
+ * joins from the root"). Cube also takes a hop the joins reach only through
+ * other cubes (rollup-join-paths.md, `buildJoinTreeForRoot`); those are left
+ * out, as every cube they end on is listed along its joins, and a path
+ * already written is kept as it is.
+ */
+function joinPathsOf(index: MemberIndex): string[] {
+  const edges = [...index].map(
+    ([cube, members]) =>
+      [
+        cube,
+        [...new Set(members.joins)].filter((next) => next !== cube && index.has(next)),
+      ] as const,
+  );
+  const key = JSON.stringify(edges);
+  if (lastPaths?.key === key) return lastPaths.paths;
+  const graph = new Map(edges);
+  const paths = everyPathOf(graph) ?? shortestPathsOf(graph);
+  lastPaths = { key, paths };
+  return paths;
+}
 
 /** The cube's own, bare, then every other cube's, qualified. */
 function ownThenOthers(scope: PickerScope, lists: Lists): string[] {
@@ -174,6 +251,8 @@ export function optionsFor(
       );
     case 'cubes':
       return [...scope.index.keys()].filter((name) => name !== scope.cube);
+    case 'join-paths':
+      return joinPathsOf(scope.index);
     case 'path': {
       const path = owner['join_path'];
       const last = typeof path === 'string' ? path.split('.').pop() : undefined;

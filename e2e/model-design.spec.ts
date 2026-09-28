@@ -930,6 +930,36 @@ test('T483: a Jinja file in the editor’s frame, read-only and saying so (MW-16
   await expect(code.locator('.cm-content')).toHaveClass(/cm-lineWrapping/);
 });
 
+test('T493: New view chooses no cube for the user — it opens on Cubes, its join path to pick (MW-19)', async ({
+  page,
+}) => {
+  await page.goto('/model');
+  await page
+    .getByRole('navigation', { name: 'Model files' })
+    .getByRole('button', { name: 'New view' })
+    .click();
+  await expect(page).toHaveURL(/\/model\/files\/views%2Fnew_view_1\.yml$/);
+  const yaml = page.getByRole('textbox', { name: 'views/new_view_1.yml, as YAML' });
+  await expect(yaml).toContainText('name: new_view_1');
+  // No cube, and no members, the user didn't choose.
+  await expect(yaml).not.toContainText('cubes:');
+  await expect(yaml).not.toContainText('join_path');
+  const form = page.getByRole('region', { name: 'View new_view_1' });
+  await expect(form.getByRole('tab', { name: /^Cubes/ })).toHaveAttribute('aria-selected', 'true');
+  const panel = form.getByRole('tabpanel');
+  await expect(panel.locator('.model-members__note')).toHaveText(
+    'A view shows nothing until it includes a cube.',
+  );
+  // A new entry, open, its join path picked from the model's cubes and their joins.
+  const joinPath = panel.getByLabel('Join path', { exact: true });
+  await expect(joinPath).toBeFocused();
+  await expect(joinPath.locator('option')).toContainText(['orders', 'orders.customers']);
+  // Picked, it is written; the note goes.
+  await joinPath.selectOption('orders.customers');
+  await expect(yaml).toContainText('join_path: orders.customers');
+  await expect(panel.locator('.model-members__note')).toHaveCount(0);
+});
+
 test('T487: below 1,280 px the editor is one pane at a time, behind Form | YAML (MW-26)', async ({
   page,
 }) => {

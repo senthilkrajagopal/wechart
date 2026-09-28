@@ -48,8 +48,14 @@ export function CubeForm({
   initialTab,
   onOpenMember,
   banner,
+  addingOn,
 }: {
   kind: 'cube' | 'view';
+  /**
+   * A list tab that opens with a new member ready and not yet written — a
+   * new view's Cubes (T493, MW-19). Its `initialTab` too.
+   */
+  addingOn?: string | undefined;
   /** A bar about the whole file, under the tabs, as design 03 note 4 places it (T482). */
   banner?: ReactNode;
   /** The tab to open on, one of its own: Schedules opens a cube on its pre-aggregations (T160). */
@@ -81,9 +87,12 @@ export function CubeForm({
     ...TABS[kind],
   ];
   const listed = new Set(TABS[kind].map(([key]) => key));
-  const [open, setOpen] = useState(() =>
-    initialTab !== undefined && tabs.some(([key]) => key === initialTab) ? initialTab : 'general',
-  );
+  const [open, setOpen] = useState(() => {
+    const first = addingOn ?? initialTab;
+    return first !== undefined && tabs.some(([key]) => key === first) ? first : 'general';
+  });
+  /** The new member offered once only: back on the tab later, the list as it is. */
+  const [offered, setOffered] = useState(addingOn !== undefined);
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const base = useId();
   const name = typeof value['name'] === 'string' ? value['name'] : kind;
@@ -122,6 +131,7 @@ export function CubeForm({
             onClick={() => {
               // Another tab: no member of this one is open in view.
               if (key !== open) onOpenMember?.(key, null);
+              if (key !== open) setOffered(false);
               setOpen(key);
             }}
             onKeyDown={(event) => {
@@ -131,6 +141,7 @@ export function CubeForm({
               event.preventDefault();
               const next = (index + step + tabs.length) % tabs.length;
               onOpenMember?.(tabs[next]?.[0] ?? 'general', null);
+              setOffered(false);
               setOpen(tabs[next]?.[0] ?? 'general');
               refs.current[next]?.focus();
             }}
@@ -180,6 +191,14 @@ export function CubeForm({
                 // A list of its own per tab: a member open on one is not open on the next
                 // (its `details` are the DOM's, T482's review).
                 key={open}
+                // Opened with a new member ready, once, as it first shows (T493).
+                addOnOpen={offered && open === addingOn}
+                // A view's cubes, none yet: what that means (MW-19).
+                emptyNote={
+                  kind === 'view' && open === 'cubes'
+                    ? 'A view shows nothing until it includes a cube.'
+                    : undefined
+                }
                 schema={schemaOf(
                   fieldOf(open) ?? { key: open, label: open, kind: 'list', of: 'Y.6' },
                 )}

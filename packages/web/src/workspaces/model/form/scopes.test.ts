@@ -73,6 +73,8 @@ describe('what a member picker lists (AC-224)', () => {
       segments: ['shipped'],
       hierarchies: ['by_status'],
       preAggregations: ['main'],
+      // Its joins' targets, for a view's join paths (T493): none here.
+      joins: [],
     });
   });
 
@@ -157,5 +159,76 @@ describe('what a member picker lists (AC-224)', () => {
     ]);
     expect(optionsFor('path', scope, { join_path: 'nowhere' })).toEqual([]);
     expect(optionsFor('path', scope, {})).toEqual([]);
+  });
+
+  /**
+   * T493 (AC-351): a view's join path is picked — each cube, and each path
+   * from it that follows its directed joins, a cube once per path (Y.10a).
+   */
+  it('lists a view’s join paths: each cube, then the paths along its joins', () => {
+    const joined = memberIndexOf([
+      {
+        path: 'cubes/a.yml',
+        content:
+          'cubes:\n  - name: a\n    joins:\n      - name: b\n        sql: x\n        relationship: many_to_one\n      - name: gone\n        sql: x\n        relationship: many_to_one\n',
+      },
+      {
+        path: 'cubes/b.yml',
+        content:
+          'cubes:\n  - name: b\n    joins:\n      - name: c\n        sql: x\n        relationship: many_to_one\n      - name: a\n        sql: x\n        relationship: one_to_many\n',
+      },
+      { path: 'cubes/c.yml', content: 'cubes:\n  - name: c\n' },
+    ]);
+    // Directed: c joins nothing; a join to a cube the model lacks goes nowhere; no cycle.
+    expect(optionsFor('join-paths', { index: joined, cube: undefined })).toEqual([
+      'a',
+      'a.b',
+      'a.b.c',
+      'b',
+      'b.c',
+      'b.a',
+      'c',
+    ]);
+  });
+
+  /** A cube joining the next, `c0` to `c5`, and a cube extending `c0`. */
+  const chain = memberIndexOf([
+    ...Array.from({ length: 6 }, (_, at) => ({
+      path: `cubes/c${String(at)}.yml`,
+      content: `cubes:\n  - name: c${String(at)}\n${
+        at < 5
+          ? `    joins:\n      - name: c${String(at + 1)}\n        sql: x\n        relationship: many_to_one\n`
+          : ''
+      }`,
+    })),
+    { path: 'cubes/x.yml', content: 'cubes:\n  - name: x\n    extends: c0\n' },
+  ]);
+
+  it('follows joins at any length, and the joins a cube inherits', () => {
+    const paths = optionsFor('join-paths', { index: chain, cube: undefined });
+    expect(paths).toContain('c0.c1.c2.c3.c4.c5');
+    expect(paths).toContain('x.c1.c2.c3.c4.c5');
+    expect(paths.filter((path) => path.startsWith('c0'))).toHaveLength(6);
+  });
+
+  it('lists each cube’s shortest path to every cube it reaches when the joins are dense', () => {
+    // Twelve cubes, each joined to every other: far too many paths to list.
+    const names = Array.from({ length: 12 }, (_, at) => `d${String(at)}`);
+    const dense = memberIndexOf(
+      names.map((name) => ({
+        path: `cubes/${name}.yml`,
+        content: `cubes:\n  - name: ${name}\n    joins:\n${names
+          .filter((other) => other !== name)
+          .map(
+            (other) =>
+              `      - name: ${other}\n        sql: x\n        relationship: many_to_one\n`,
+          )
+          .join('')}`,
+      })),
+    );
+    const paths = optionsFor('join-paths', { index: dense, cube: undefined });
+    expect(paths).toHaveLength(12 * 12);
+    expect(paths.slice(0, 3)).toEqual(['d0', 'd0.d1', 'd0.d2']);
+    expect(paths).toContain('d11.d0');
   });
 });

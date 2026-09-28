@@ -608,7 +608,13 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
     title: 'Cube in the view',
     plural: 'Cubes in the view',
     fields: [
-      f('join_path', 'text'),
+      // Picked, as references are (direction §7b; T493, MW-19): a cube, or a
+      // path through its joins (Y.10a).
+      f('join_path', 'reference', {
+        scope: 'join-paths',
+        required: true,
+        help: 'Follows directed joins from its first cube',
+      }),
       // `"*"` or the path cube's members; a list with member objects (Y.10b)
       // is not names, and is edited as YAML.
       f('includes', 'references', { scope: 'path', star: true }),

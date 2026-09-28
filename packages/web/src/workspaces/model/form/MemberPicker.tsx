@@ -15,15 +15,22 @@ export function MemberSelect({
   value,
   options,
   onChange,
+  describedBy,
+  required = false,
 }: {
   id: string;
   value: string | undefined;
   options: readonly string[];
   onChange: (next: string | undefined) => void;
+  /** Its field's help line (T493). */
+  describedBy?: string | undefined;
+  required?: boolean;
 }) {
   return (
     <select
       id={id}
+      aria-describedby={describedBy}
+      aria-required={required ? true : undefined}
       className="model-picker__select"
       value={value ?? ''}
       onChange={(event) => {

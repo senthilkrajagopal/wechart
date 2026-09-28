@@ -8029,7 +8029,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
   - **No made-up table** (MW-17): a new cube is written without `sql_table`. "Reads from" shows `schema.table` as its placeholder. Problems says `"sql_table" or "sql" is required.` until one is given, so the tree row reads "unpublished" and "problems" meanwhile (AC-222's mark). Save stays pressable: Cube's own check refuses what it refuses (AC-136).
   - **Name, focused and selected** (MW-18): the first time a file made by New cube or New view (tree foot or + New ▾) opens. Opened again, its tree row keeps the focus. A draft discarded and made again at the same path is a new file, whose Name is focused again (T484's review).
   - The head reads "◷ New file · not published" (T479).
-  - New view's text is T493's.
+  - New view's text is T493's. Since T493, a new view opens on its Cubes with the join path focused, not its Name.
   - Files: `packages/web/src/workspaces/model/{ModelFilePage,validate}.ts(x)` (+ tests), `e2e/model-design.spec.ts`
   - Failing test: `model-design.spec.ts` (MW-17, MW-18):
     - a new cube writes no made-up table: "Reads from" shows `schema.table` as its placeholder, and Problems names what is missing until one is given;
@@ -8181,8 +8181,21 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - the pane's head reads "in My workspace", with the person icon;
     - the added drafts are in the user's workspace model, and no shared folder's changes.
   - Depends on: T488, T342, T345
-- [ ] T493 (AC-351, AC-344) New view with no cube chosen for the user, opened on Cubes
-  - Files: `packages/web/src/workspaces/model/ModelFilePage.tsx` (`newFileOf`), `packages/web/src/workspaces/model/form/{CubeForm,ObjectForm}.tsx` (+ tests), `e2e/model-design.spec.ts`
+- [x] T493 (AC-351, AC-344) New view with no cube chosen for the user, opened on Cubes
+  - **Done 2026-09-27.** Tested in `e2e/model-design.spec.ts` (T493's test, in Chrome, Firefox and Safari), `CubeForm.test.tsx` ("a new view’s Cubes") and `scopes.test.ts` (the join paths).
+  - **The new view:**
+    - New view writes `views:\n  - name: new_view_n` and nothing else, so no cube is chosen for the user.
+    - It opens on Cubes. The empty tab says "A view shows nothing until it includes a cube.".
+    - A "New cube in the view" entry stands open with its Join path picker focused. It is written on its first change, and the field just set keeps the focus (a chip too).
+    - Cancel writes nothing.
+    - All of this is offered the first time the file opens only, and only once its form is drawn, not while the model still reads (the review's fix).
+  - **Join path is picked, not typed** (Y.10a, required):
+    - The picker offers each cube, then every path from it along its declared joins (inherited through `extends` too), at any length, with a cube once per path.
+    - Cube also accepts a hop its joins reach only through other cubes (`rollup-join-paths.md`, `buildJoinTreeForRoot`). Those hops are not listed, because every cube they end on is listed along its joins. A path already written is kept as it is.
+    - Past 2,000 paths (a dense join graph), each cube lists only its shortest path to each cube it reaches. That is wechart's bound on the list, not Cube's.
+    - The list is kept while the model's joins are unchanged.
+  - A new cube still has its Name focused (T484). A new view no longer does.
+  - Files (as built): `packages/web/src/workspaces/model/ModelFilePage.tsx`, `packages/web/src/workspaces/model/form/{CubeForm,ObjectForm,MemberPicker}.tsx`, `packages/web/src/workspaces/model/form/{schema,scopes}.ts` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/model-design.spec.ts`
   - Failing test: `model-design.spec.ts`:
     - New view's YAML has no `cubes`;
     - it opens on the Cubes tab with a new cube entry open and its join-path picker focused;

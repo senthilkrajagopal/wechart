@@ -139,9 +139,12 @@ function FileEditor({
   onChanged,
   onText,
   onDiscard,
+  fresh = false,
 }: {
   path: string;
   content: string;
+  /** Just made by New view: opens on its Cubes, a new one ready to pick (T493). */
+  fresh?: boolean;
   /** A cube's tab to open on (T160). */
   openOn?: OpenOn | undefined;
   /** False for a file made here and not yet published: there is nothing to go back to. */
@@ -844,6 +847,8 @@ function FileEditor({
                   kind="view"
                   value={value}
                   readOnly={readOnly}
+                  // New, it opens on its Cubes with one ready to pick (T493, MW-19).
+                  addingOn={fresh && place === 0 ? 'cubes' : undefined}
                   banner={place === 0 && cubes.length === 0 ? notesBar : null}
                   onOpenMember={openIn('views', at)}
                   onChange={(next) => {
@@ -978,10 +983,13 @@ function FileBody({
   onChanged,
   onText,
   onDiscard,
+  fresh = false,
 }: {
   path: string;
   content: string;
   published: boolean;
+  /** Just made by New view: its form opens on Cubes, ready to pick one (T493). */
+  fresh?: boolean;
   openOn?: OpenOn | undefined;
   onProblems: (byPath: Readonly<Record<string, number>>) => void;
   onChanged: (changed: boolean) => void;
@@ -1005,6 +1013,7 @@ function FileBody({
       onProblems={onProblems}
       onChanged={onChanged}
       onDiscard={onDiscard}
+      fresh={fresh}
       {...(onText === undefined ? {} : { onText })}
     />
   );
@@ -1030,6 +1039,8 @@ const DRAFTS_STORAGE = 'wechart.model.drafts';
  */
 const NAMED = new WeakSet<object>();
 const named = (made: object) => NAMED.has(made);
+/** A view New view has just made, not yet opened: it opens on its Cubes (T493). */
+const freshView = (made: { readonly path: string }) => made.path.startsWith('views/');
 function markNamed(made: object) {
   NAMED.add(made);
 }
@@ -1061,7 +1072,6 @@ function keepDrafts(drafts: Readonly<Record<string, string>>) {
 export function newFileOf(
   kind: 'cube' | 'view',
   taken: ReadonlySet<string>,
-  firstCube: string | undefined,
 ): { path: string; content: string } {
   const folder = kind === 'cube' ? 'cubes' : 'views';
   let n = 1;
@@ -1074,7 +1084,9 @@ export function newFileOf(
       // Problems says what is missing until one is given.
       kind === 'cube'
         ? `cubes:\n  - name: ${name}\n    dimensions:\n      - name: id\n        sql: id\n        type: number\n        primary_key: true\n    measures:\n      - name: count\n        type: count\n`
-        : `views:\n  - name: ${name}\n    cubes:\n      - join_path: ${firstCube ?? 'orders'}\n        includes: "*"\n`,
+        : // No cube, and no members, chosen for the user (T493, MW-19): its Cubes
+          // tab opens to pick one. A view's `cubes` is optional (Y.10).
+          `views:\n  - name: ${name}\n`,
   };
 }
 
@@ -1191,10 +1203,7 @@ export function ModelFilePage({
     }, 0);
   };
   const makeNew = (kind: 'cube' | 'view') => {
-    const firstCube = stored
-      .flatMap((each) => objectsOf(each.path, each.content).objects)
-      .find((object) => object.kind === 'cube')?.name;
-    const next = newFileOf(kind, new Set(all.map((each) => each.path)), firstCube);
+    const next = newFileOf(kind, new Set(all.map((each) => each.path)));
     setMade(next);
     open(next.path);
   };
@@ -1285,6 +1294,12 @@ export function ModelFilePage({
    */
   useEffect(() => {
     if (path === undefined || made === undefined || made.path !== path || named(made)) return;
+    // A new view's form puts focus on its Cubes' join path itself (T493): not taken
+    // from it. Offered once its form is drawn, not while the model still reads.
+    if (freshView(made)) {
+      if (page.current?.querySelector('.model-form__panel') != null) markNamed(made);
+      return;
+    }
     const name = page.current?.querySelector<HTMLInputElement>(
       '.model-form__panel [data-key="name"] input',
     );
@@ -1380,6 +1395,8 @@ export function ModelFilePage({
             content={file.content}
             published={!isDraft}
             openOn={openOn}
+            // Opened for the first time from New view: on its Cubes, ready to pick one.
+            fresh={made !== undefined && made.path === file.path && !named(made) && freshView(made)}
             onProblems={(byPath) => {
               setReported({ from: file.path, byPath });
             }}
