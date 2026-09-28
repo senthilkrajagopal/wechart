@@ -120,15 +120,21 @@ export function AxisPanel({ axis, label, settings, onChange, values = true }: Ax
         </label>
       ) : null}
 
+      {/*
+        Unset, a category axis's labels turn to fit before any is hidden
+        (T467, UX-117): that is "Auto", said as that. 0° is a choice of its
+        own, stored as 0, so the labels stay level (AC-040; T467's review).
+      */}
       <label htmlFor={id('rotation')}>Label rotation</label>
       <select
         id={id('rotation')}
-        value={String(settings.tickRotation ?? 0)}
+        value={settings.tickRotation === undefined ? 'auto' : String(settings.tickRotation)}
         onChange={(event) => {
-          const value = Number(event.target.value);
-          set({ tickRotation: value === 0 ? undefined : value });
+          const value = event.target.value;
+          set({ tickRotation: value === 'auto' ? undefined : Number(value) });
         }}
       >
+        <option value="auto">Auto</option>
         {ROTATIONS.map((degrees) => (
           <option key={degrees} value={degrees}>
             {degrees}°

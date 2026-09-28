@@ -135,6 +135,34 @@ describe('each well’s "+" picker (AC-026)', () => {
     const none = screen.getByRole('menuitem', { name: 'Nothing more to add from this cube' });
     expect(none.getAttribute('aria-disabled')).toBe('true');
   });
+
+  /** T467, UX-063: until a cube or view is chosen there is nothing to add, and the wells say why. */
+  it('is disabled until a cube or view is chosen, saying so', () => {
+    const { rerender } = render(
+      <Wells spec={emptySpec('')} available={[]} onAdd={vi.fn()} onRemove={vi.fn()} />,
+    );
+    const adds = ['Add to Metrics', 'Add to Dimensions', 'Add to Time', 'Add a filter'].map(
+      (name) => screen.getByRole('button', { name }),
+    );
+
+    for (const add of adds) {
+      expect((add as HTMLButtonElement).disabled).toBe(true);
+      // Described by the note, so a screen reader hears why.
+      const note = document.getElementById(add.getAttribute('aria-describedby') ?? '');
+      expect(note?.textContent).toBe('Choose a cube or view first.');
+    }
+    expect(screen.getAllByText('Choose a cube or view first.')).toHaveLength(1);
+
+    rerender(
+      <Wells spec={emptySpec('orders')} available={[measure]} onAdd={vi.fn()} onRemove={vi.fn()} />,
+    );
+    for (const name of ['Add to Metrics', 'Add to Dimensions', 'Add to Time', 'Add a filter']) {
+      const add = screen.getByRole('button', { name }) as HTMLButtonElement;
+      expect(add.disabled).toBe(false);
+      expect(add.getAttribute('aria-describedby')).toBeNull();
+    }
+    expect(screen.queryByText('Choose a cube or view first.')).toBeNull();
+  });
 });
 
 describe('rejectionReason', () => {

@@ -269,6 +269,29 @@ export function distinctValues(rows: readonly Record<string, unknown>[], member:
   return seen;
 }
 
+/** A time as Cube writes one: `2026-01-01T00:00:00.000`, or a date. */
+const CUBE_TIME = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)?$/;
+
+/**
+ * The members of a series split, in their own order where they have one
+ * (T467, UX-116): numbers — years among them — ascending, and times in time.
+ * Anything else, or a mix, stays in the order Cube answered, which the
+ * chart's query set; a series order set in Customize is applied over this
+ * (AC-300).
+ */
+export function inValueOrder(members: readonly string[]): string[] {
+  if (
+    members.length > 1 &&
+    members.every((one) => one.trim() !== '' && Number.isFinite(Number(one)))
+  ) {
+    return [...members].sort((a, b) => Number(a) - Number(b));
+  }
+  if (members.length > 1 && members.every((one) => CUBE_TIME.test(one))) {
+    return [...members].sort((a, b) => Date.parse(a) - Date.parse(b));
+  }
+  return [...members];
+}
+
 /** One drawable series: its name, and one value per category. */
 export interface SeriesData {
   readonly name: string;
@@ -315,7 +338,7 @@ export function seriesOf(spec: RenderSpec): {
 
     return {
       categories,
-      series: distinctValues(rows, splitBy).map((member) => ({
+      series: inValueOrder(distinctValues(rows, splitBy)).map((member) => ({
         name: member,
         values: categories.map((name) =>
           valueAt(measure, (row) => inCategory(name)(row) && String(row[splitBy] ?? '') === member),

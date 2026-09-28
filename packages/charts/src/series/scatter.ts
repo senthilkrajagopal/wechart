@@ -6,7 +6,7 @@
  * categories and series, and a scatter has neither. Each row is one point, and
  * both axes carry values.
  */
-import { distinctValues, memberOn, type RenderSpec } from '@wechart/core';
+import { distinctValues, inValueOrder, memberOn, type RenderSpec } from '@wechart/core';
 
 import { colourFor } from '../colours';
 import { titleOf } from '../modelWriter';
@@ -49,7 +49,8 @@ export function scatterSeriesOf(
     rows.filter((row) => pointOf(row, x, y) !== null);
   return splitBy === undefined
     ? [{ name: y, rows: drawn(spec.rows) }]
-    : distinctValues(spec.rows, splitBy).map((member) => ({
+    : // Years and times in their own order, as a bar's series are (T467, UX-116).
+      inValueOrder(distinctValues(spec.rows, splitBy)).map((member) => ({
         name: member,
         rows: drawn(spec.rows.filter((row) => String(row[splitBy] ?? '') === member)),
       }));

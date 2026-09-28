@@ -102,6 +102,36 @@ describe('series in the order set in Customize (T392, AC-300)', () => {
   });
 
   /**
+   * T467, UX-116: years split a chart into series, and Cube answered them by
+   * the measure, largest first — the legend read "1997, 1998, 1996". Drawn and
+   * listed in year order; an order set in Customize still wins.
+   */
+  it('draws and lists year series in year order, unless Customize orders them', () => {
+    const YEAR = 'orders.year';
+    const byYear = ['1997', '1998', '1996'].map((year, at) => ({
+      [STATUS]: 'paid',
+      [YEAR]: year,
+      [COUNT]: 30 - at,
+    }));
+    const years = (seriesOrder?: readonly string[]): RenderSpec => ({
+      chartType: 'groupedBar',
+      encoding: { x: [STATUS], y: [COUNT], color: [YEAR] },
+      rows: byYear,
+      palette: ['#123456', '#abcdef', '#0f9d58'],
+      ...(seriesOrder === undefined ? {} : { options: { seriesOrder } }),
+    });
+    const listed = (spec: RenderSpec) =>
+      labelsOf(svgOf(spec))
+        .filter((label) => /^\d{4}$/.test(label.text))
+        .sort((a, b) => a.x - b.x)
+        .map((label) => label.text);
+
+    expect(namesOf(years())).toEqual(['1996', '1997', '1998']);
+    expect(listed(years())).toEqual(['1996', '1997', '1998']);
+    expect(namesOf(years(['1998', '1996', '1997']))).toEqual(['1998', '1996', '1997']);
+  });
+
+  /**
    * T392's review: the rounded end of a stack (direction.md: rounded
    * data-ends) is on its outermost segment in the order drawn, not the
    * data's.

@@ -6,14 +6,23 @@ import type { RenderSpec } from '../render-spec';
 /**
  * The columns a tile's table heads (AC-178, T177): every key its rows carry,
  * in the order they carry them — encoded members and the rest alike, a second
- * dimension or a time member's bucket among them. One definition for the
+ * dimension or a time member's bucket among them — but a time member's bare
+ * key where its bucket is there too (T467, UX-023). One definition for the
  * table and its CSV, so the two cannot head different columns.
  */
 export function tableColumnsOf(
   rows: readonly Record<string, unknown>[],
   fields: readonly string[] = [],
 ): string[] {
-  const keys = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+  const all = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+  /**
+   * A time member asked at a grain comes back twice, as `member.month` and as
+   * the bare `member`, both holding the bucket (T467, UX-023): the bucket is
+   * the column, and the bare key only its repeat. A member name is
+   * `cube.member`, so a key under another is its grain. Alone — ungrouped
+   * rows' raw time — the bare key stays.
+   */
+  const keys = all.filter((key) => !all.some((other) => other.startsWith(`${key}.`)));
   /**
    * In the wells' order (T393, AC-301): each key by the field it is — a time
    * dimension's `member.granularity` by its member — and a key no field names

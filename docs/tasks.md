@@ -8525,15 +8525,40 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
   - Files: `packages/web/src/shell/SearchPalette.tsx`, `packages/web/src/workspaces/jobs/…` (+ tests), `e2e/consistency.spec.ts`
   - Failing test: `consistency.spec.ts`: the palette's field results and the query log name members by title, never by id (UX-102's parts AC-220 covers, UX-013, UX-082).
   - Depends on: T466
-- [ ] T467 (AC-036, AC-039, AC-042, AC-187) Fix the chart bugs the re-check found
+- [x] T467 (AC-036, AC-039, AC-042, AC-187) Fix the chart bugs the re-check found
   - Files: `packages/charts/src/…`, `packages/web/src/editor/…` (+ tests)
   - Failing test:
-    - a second metric on another scale is never drawn invisibly: its pill says "not drawn", with the reason, the value axis keeps its format, and Auto never picks a form that hides a metric (UX-057's bug);
+    - ~~a second metric on another scale is never drawn invisibly: its pill says "not drawn", with the reason, the value axis keeps its format, and Auto never picks a form that hides a metric (UX-057's bug);~~ *(moved to T510, 2026-09-28, with the user's two answers)*
     - Table view and the drawer drop the ungranular time column when the granular one is shown (UX-023);
     - year-like series are ordered by value (UX-116);
     - category labels rotate or wrap before they are hidden (UX-117);
     - the wells are disabled, saying "Choose a cube or view first", until one is chosen (UX-063).
   - Depends on: none
+  - **As built (UX-057 is T510's):** `packages/core/src/{render-spec,export/csv,index}.ts` (+ tests), `packages/charts/src/layout/categoryLabels.ts`, `packages/charts/src/{optionFor,series/scatter}.ts` (+ `axisLabels.test.ts`, `seriesOrder.test.ts`, `scatter.test.ts`), `packages/web/src/editor/{Wells,AxisPanel}.tsx` (+ `Wells.test.tsx`, `CustomizeTab.test.tsx`), `packages/web/src/shell/MenuButton.tsx`, `packages/web/src/shell/styles.ts`, `packages/web/src/editor/ResultsDrawer.test.tsx`, `e2e/{chart-editor,table-columns,dashboard}.spec.ts`, and `docs/research/echarts-category-labels.md`.
+  - **Done 2026-09-28.**
+    - **UX-023, one time column.** Cube answers a time member asked at a grain under two keys, `member.month` and the bare `member`, both holding the bucket. `tableColumnsOf`, the one definition behind the tile's table, its CSV and the editor's drawer, now drops the bare key wherever its bucket is there. The bare key stays when it is alone, as in the ungrouped rows of Underlying rows. Tests: `csv.test.ts`, `ResultsDrawer.test.tsx`, and in Chrome `table-columns.spec.ts` (the chart's table heads "Orders Ordered at (month)" once, and so does the drawer) and `dashboard.spec.ts`'s time column.
+    - **UX-116, year-like series in order.** The members of a series split are drawn and listed in their own order where they have one: numbers (years among them) ascending, and Cube's times in time. Anything else, or a mix, stays in the order Cube answered. A series order set in Customize still wins (AC-300). This holds for every chart whose series come from `seriesOf` (bar, line, area, combo) and for a scatter's split. Tests: `render-spec.test.ts`, `scatter.test.ts`, and `seriesOrder.test.ts` (SVG: the legend reads 1996, 1997, 1998, and Customize's order is kept).
+    - **UX-117, labels turned before they are hidden.** ECharts hides category labels once a label's padded width reaches its category's span. `fitCategoryLabels` measures the labels as ECharts does (`format.getTextRect`) and applies ECharts' own test (`research/echarts-category-labels.md`, from the 6.1.0 source). Labels that fit are left level; otherwise they turn 45°, or 90° where 45° would still hide some. Where not even 90° keeps every one (24 months in a narrow tile), they turn 90°, which keeps the most, and ECharts thins the rest. It applies to charts with a category x axis, not to the horizontal bar, whose categories run down. Tests (`axisLabels.test.ts`, SVG): 11 product names, "Other (67)" among them, are all drawn whole at 360 × 260 and at 640 × 320, where 2 were drawn before. Four short names stay level. 24 months are turned 90°, and more are drawn than level.
+    - **The axis editor's rotation (AC-040, from the review).** Unset now means "turn to fit", so the Label rotation select reads **Auto** while none is set. 0°, 45° and 90° are choices stored as themselves, 0° included, so 0° keeps labels level. Before, 0° was stored as unset and had no effect. Tests: `CustomizeTab.test.tsx`. *direction.md §6 lists rotations 0, 45 or 90; the Auto entry, like Number format's "auto", is the unset state named. The user can overturn it.*
+    - **UX-063, wells wait for a source.** With no cube or view chosen, the four "+"s (Metrics, Dimensions, Time, filter) are disabled and described by one note, "Choose a cube or view first." `MenuButton` takes `disabled` and `describedBy`. Tests: `Wells.test.tsx`, and `chart-editor.spec.ts` in Chrome (disabled with the note, then enabled once Orders is chosen).
+    - **UX-057 moved to T510,** with the user's answers (2026-09-28): a metric whose Cube format differs from the first's is on another scale; Auto draws per-metric small multiples.
+    - **The cold review (FAIL)** found one real bug: the axis editor's 0° had no effect once unset meant "turn to fit" (AC-040). This is fixed above. From the same round:
+      - the 90° fallback is pinned by a test and described in the code;
+      - a scatter's split takes the same order;
+      - two stale comments are corrected.
+    - **Left for the user:** the re-check's second half of UX-117, "offer the horizontal bar as the type card's runner-up when more than half would be hidden", isn't in this task's failing test and no task tracks it.
+    - **The full Chrome suite:** 690 passed. The time column test in `dashboard.spec.ts` (the bare column it read is gone) is updated here. The other three failures fail the same way on `feat/xcube` without this change, in a clean copy:
+      - `acceleration.spec.ts:248`, "Data as of" off the viewport;
+      - `folder-models.spec.ts:72`, Schedules' folder rollup;
+      - `shell.spec.ts`, the model file at 390 px.
+- [ ] T510 (AC-036, AC-187) Never draw a metric invisibly: per-metric small multiples, and "not drawn" on a metric a form can't draw *(split from T467, 2026-09-28: UX-057 with the user's answers)*
+  - Files: `packages/charts/src/layout/trellis.ts` (a panel per metric), `packages/core/src/compile.ts`, `packages/recommender/src/{recommend,legality}.ts`, `packages/web/src/editor/{Wells,ChartEditor}.tsx` (+ tests), `e2e/chart-editor.spec.ts`
+  - Failing test:
+    - a second metric whose Cube format differs from the first's (currency, percent or number) is "on another scale" (the user, option A: no magnitude threshold);
+    - small multiples split by metric draw one panel per metric, each value axis in its own metric's format (the user, option a);
+    - Auto picks them for two or more metrics on different scales, and never a form that hides a metric;
+    - in a form that can't draw a metric, that metric's pill says "not drawn", with a one-line reason, and offers Small multiples and Table (UX-057, design 01-5).
+  - Depends on: T467
 - [ ] T468 (AC-187) Edit mode: a new filter is selected with focus in its field picker, and edit heads show the element's kind
   - Failing test: `dashboard-edit.spec.ts`: adding a filter selects it, shows Properties and focuses the field picker (UX-031); an edit-mode head reads "Chart · Area", never the freshness badge or Table view (UX-032).
   - Depends on: none

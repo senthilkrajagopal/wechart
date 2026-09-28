@@ -49,6 +49,7 @@ export {
   CHANNELS,
   CHART_TYPES,
   distinctValues,
+  inValueOrder,
   memberOn,
   membersOn,
   seriesOf,

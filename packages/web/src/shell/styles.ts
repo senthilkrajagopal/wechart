@@ -6545,6 +6545,14 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
 
 .wells { display: grid; gap: 8px; }
 .wells ul { margin: 0; padding: 0; list-style: none; }
+/* What to do before the wells take anything (T467, UX-063), in the pane's
+   12 px secondary, as the prototype's hints are. */
+.wells__note {
+  margin: 0;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  color: var(--wc-text-secondary);
+}
 
 /* Legality is an outline plus a written reason, never colour alone
    (direction.md rule 3, AC-027); a legal well also takes the prototype's

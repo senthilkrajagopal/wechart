@@ -40,6 +40,10 @@ export interface MenuButtonProps {
   readonly align?: 'start' | 'end';
   /** For a test to find the button. */
   readonly testId?: string;
+  /** Nothing to offer yet: the button can't be pressed (T467, UX-063). */
+  readonly disabled?: boolean;
+  /** The id of what says why, for a disabled button. */
+  readonly describedBy?: string;
 }
 
 export function MenuButton({
@@ -49,6 +53,8 @@ export function MenuButton({
   className = 'btn-primary',
   align = 'end',
   testId,
+  disabled = false,
+  describedBy,
 }: MenuButtonProps) {
   const [open, setOpen] = useState(false);
   const menuId = useId();
@@ -128,6 +134,8 @@ export function MenuButton({
         className={className}
         data-testid={testId}
         aria-label={label}
+        disabled={disabled}
+        aria-describedby={describedBy}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}

@@ -70,6 +70,56 @@ describe('one series per member of a splitting dimension', () => {
     ]);
   });
 
+  /**
+   * T467, UX-116 (the phase-1 re-check): a legend read "1997, 1998, 1996",
+   * the order Cube answered in — by the measure, largest first. Members that
+   * are numbers, years among them, or times are in an order of their own, and
+   * the series take it.
+   */
+  it('orders members that are numbers or times by their value, and others as they came', () => {
+    const years = [1997, 1998, 1996].map((year, at) => ({
+      [STATUS]: 'paid',
+      'orders.year': String(year),
+      [COUNT]: 30 - at,
+    }));
+    const names = (rows: Record<string, unknown>[], member = 'orders.year') =>
+      seriesOf(spec({ encoding: { x: [STATUS], color: [member], y: [COUNT] }, rows })).series.map(
+        (one) => one.name,
+      );
+
+    expect(names(years)).toEqual(['1996', '1997', '1998']);
+    // As numbers, not as text: 9 before 10.
+    expect(
+      names(
+        ['10', '9', '100'].map((n) => ({ [STATUS]: 'paid', 'orders.n': n, [COUNT]: 1 })),
+        'orders.n',
+      ),
+    ).toEqual(['9', '10', '100']);
+    // Times, in time.
+    expect(
+      names(
+        ['2026-03-01T00:00:00.000', '2026-01-01T00:00:00.000'].map((at) => ({
+          [STATUS]: 'paid',
+          'orders.month': at,
+          [COUNT]: 1,
+        })),
+        'orders.month',
+      ),
+    ).toEqual(['2026-01-01T00:00:00.000', '2026-03-01T00:00:00.000']);
+    // Anything else keeps Cube's order, and so does a mix.
+    expect(
+      names(
+        ['west', 'east'].map((r) => ({ [STATUS]: 'paid', [REGION]: r, [COUNT]: 1 })),
+        REGION,
+      ),
+    ).toEqual(['west', 'east']);
+    expect(
+      names(
+        ['1997', 'n/a', '1996'].map((y) => ({ [STATUS]: 'paid', 'orders.year': y, [COUNT]: 1 })),
+      ),
+    ).toEqual(['1997', 'n/a', '1996']);
+  });
+
   it('leaves a gap where a member has no row, rather than a zero', () => {
     const { series } = seriesOf(
       spec({

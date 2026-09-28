@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { RenderSpec } from '@wechart/core';
 
 import { optionFor } from './optionFor';
-import { labelsOf, renderToSvg } from './testing/renderToSvg';
+import { hasRotatedText, labelsOf, renderToSvg } from './testing/renderToSvg';
 import { themed } from './themed';
 
 /**
@@ -111,6 +111,89 @@ describe('value-axis labels never overlap (T391, AC-299)', () => {
           ys[at]! - ys[at - 1]!,
           `the column at ${String(x)}: ${ys.map((y) => y.toFixed(1)).join(', ')}`,
         ).toBeGreaterThanOrEqual(FONT_PX - 0.1);
+  });
+
+  /**
+   * T467, UX-117 (the phase-1 re-check): "Top 10 Products by Revenue" drew 11
+   * bars and labelled 3, ECharts hiding the names that met at 0°. They are
+   * turned before any is hidden, only as far as they need, and not at all
+   * where they fit; a rotation set in the axis editor stays the user's.
+   */
+  describe('category labels are turned before they are hidden (T467, UX-117)', () => {
+    const PRODUCT = 'orders.product';
+    const products = [
+      'Côte de Blaye',
+      'Thüringer Rostbratwurst',
+      'Raclette Courdavault',
+      'Tarte au sucre',
+      'Camembert Pierrot',
+      'Gnocchi di nonna Alice',
+      'Manjimup Dried Apples',
+      'Alice Mutton',
+      'Carnarvon Tigers',
+      'Rössle Sauerkraut',
+      'Other (67)',
+    ];
+    const top = (names: readonly string[], options?: Record<string, unknown>): RenderSpec => ({
+      chartType: 'bar',
+      encoding: { x: [PRODUCT], y: [AMOUNT] },
+      rows: names.map((name, at) => ({ [PRODUCT]: name, [AMOUNT]: 1000 - at * 50 })),
+      palette: ['#123456'],
+      ...(options === undefined ? {} : { options }),
+    });
+    const drawnNames = (svg: string, names: readonly string[]) =>
+      labelsOf(svg)
+        .map((label) => label.text)
+        .filter((text) => names.includes(text));
+
+    it('labels every bar of a top 10, whole, at a tile’s widths', () => {
+      for (const size of [
+        { width: 360, height: 260 },
+        { width: 640, height: 320 },
+      ]) {
+        const svg = renderToSvg(optionFor(top(products), size), size);
+        expect(drawnNames(svg, products), `${String(size.width)} px`).toEqual(products);
+        expect(hasRotatedText(svg)).toBe(true);
+      }
+    });
+
+    it('leaves labels that fit as they are', () => {
+      const few = ['North', 'South', 'East', 'West'];
+      const size = { width: 640, height: 320 };
+      const svg = renderToSvg(optionFor(top(few), size), size);
+      expect(drawnNames(svg, few)).toEqual(few);
+      expect(hasRotatedText(svg)).toBe(false);
+    });
+
+    /**
+     * T467's review: where even 90° can't keep every label — 24 months in a
+     * narrow tile — they are turned 90°, which keeps more than level would,
+     * and ECharts thins the rest.
+     */
+    it('turns labels 90° where not even that keeps every one, keeping more than level', () => {
+      const months = Array.from(
+        { length: 24 },
+        (_, at) =>
+          `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'][at % 6]!} ${String(2024 + Math.floor(at / 6))}`,
+      );
+      const size = { width: 360, height: 260 };
+      const turned = renderToSvg(optionFor(top(months), size), size);
+      const level = renderToSvg(
+        optionFor(top(months, { axes: { x: { tickRotation: 0 } } }), size),
+        size,
+      );
+      expect(
+        (optionFor(top(months), size).xAxis as { axisLabel?: { rotate?: number } }).axisLabel
+          ?.rotate,
+      ).toBe(90);
+      expect(drawnNames(turned, months).length).toBeGreaterThan(drawnNames(level, months).length);
+    });
+
+    it('keeps a rotation set in the axis editor', () => {
+      const size = { width: 360, height: 260 };
+      const option = optionFor(top(products, { axes: { x: { tickRotation: 0 } } }), size);
+      expect((option.xAxis as { axisLabel?: { rotate?: number } }).axisLabel?.rotate).toBe(0);
+    });
   });
 
   it('only on value axes, and alongside the axis editor’s settings', () => {

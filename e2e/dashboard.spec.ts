@@ -1596,10 +1596,14 @@ test('a time axis and a time column are written by their granularity, never as a
 
   await tile.getByTestId('toggle-table-view').click();
   await expect(tile.getByTestId('table-row').first()).toBeVisible();
-  // The time's column, found by its header — its title (AC-220) — rather
-  // than by its place.
+  // The time's column, found by its header — its title (AC-220), with its
+  // grain — rather than by its place. One column: the bucket, not the bucket
+  // and its repeat under the bare member (T467, UX-023).
   const headers = await tile.locator('thead th').allTextContents();
-  const at = headers.findIndex((header) => header === 'Orders Ordered at');
+  expect(headers.filter((header) => header.startsWith('Orders Ordered at'))).toEqual([
+    'Orders Ordered at (day)',
+  ]);
+  const at = headers.findIndex((header) => header === 'Orders Ordered at (day)');
   expect(at).toBeGreaterThanOrEqual(0);
   const times = await tile
     .getByTestId('table-row')

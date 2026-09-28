@@ -72,3 +72,31 @@ test('a table’s columns follow the wells: time, its dimension, then its measur
     expect(kinds, said).toEqual([...Array<string>(times).fill('time'), 'status', ...measures]);
   }
 });
+
+/**
+ * T467, UX-023 (the phase-1 re-check): Cube answers a time member asked at a
+ * grain under two keys, the bucket and the bare member, and the table showed
+ * both ("Order date (month)" and "Order date", each "Jul 1996"). One column,
+ * the bucket's, on the chart's own table and in the editor's drawer.
+ */
+test('a table and the drawer show a time member asked at a grain once, as its bucket', async ({
+  page,
+  request,
+}) => {
+  const id = await table(request, ['orders.count']);
+  await page.goto(`/explore/charts/${id}`);
+  const headers = page.locator('.chart-page__tile').getByRole('columnheader');
+  await expect(headers).not.toHaveCount(0);
+  expect(await headers.allTextContents()).toEqual([
+    'Orders Ordered at (month)',
+    'Orders Status',
+    'Orders Count',
+  ]);
+
+  await page.goto(`/explore/charts/${id}/edit`);
+  await page.getByRole('tab', { name: 'Results', exact: true }).click();
+  const drawer = page.getByTestId('drawer-result-rows');
+  await expect(drawer.getByRole('columnheader')).not.toHaveCount(0);
+  const drawn = await drawer.getByRole('columnheader').allTextContents();
+  expect(drawn.filter((head) => /ordered at/i.test(head))).toEqual(['Orders Ordered at (month)']);
+});

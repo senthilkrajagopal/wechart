@@ -107,6 +107,23 @@ describe('a scatter split by a dimension', () => {
   it('still draws every row, not one point per member', () => {
     expect(pointsOf(draw(split), PALETTE)).toHaveLength(3);
   });
+
+  /** T467's review (UX-116): split by years, its series are in year order, as a bar's are. */
+  it('lists year members in year order', () => {
+    const byYear: RenderSpec = {
+      ...split,
+      encoding: { x: [COUNT], y: [AMOUNT], color: ['orders.year'] },
+      rows: ['1997', '1998', '1996'].map((year, at) => ({
+        [COUNT]: 10 + at,
+        [AMOUNT]: 100 + at,
+        'orders.year': year,
+      })),
+    };
+    const names = ((scatterOption(byYear).series ?? []) as { name?: string }[]).map(
+      (one) => one.name,
+    );
+    expect(names).toEqual(['1996', '1997', '1998']);
+  });
 });
 
 /**

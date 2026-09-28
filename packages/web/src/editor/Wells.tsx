@@ -234,9 +234,21 @@ export function Wells({
         )}
       />
     );
+  /**
+   * No cube or view chosen yet (T467, UX-063): nothing can be added, so the
+   * "+"s are disabled, and one note says what to do first.
+   */
+  const noSource = spec.cube === '';
+  const noSourceId = `${ids}-no-source`;
+  const addState = noSource ? { disabled: true, describedBy: noSourceId } : {};
 
   return (
     <div className="wells">
+      {noSource ? (
+        <p className="wells__note" id={noSourceId} data-testid="wells-no-source">
+          Choose a cube or view first.
+        </p>
+      ) : null}
       {WELLS.map((well) => {
         const candidates = available.filter((member) => member.kind === well.accepts);
         const held = spec[well.name];
@@ -330,6 +342,7 @@ export function Wells({
                 className="addbtn"
                 align="start"
                 testId={`add-${well.name}`}
+                {...addState}
                 items={pickerItems(
                   candidates.filter((member) => !held.includes(member.name)),
                   (member) => onAdd(well.name, member.name),
@@ -387,6 +400,7 @@ export function Wells({
             className="addbtn"
             align="start"
             testId="add-filters"
+            {...addState}
             items={pickerItems(
               filterable.filter((member) => !filters.some((each) => each.member === member.name)),
               (member) =>

@@ -64,6 +64,32 @@ describe('the Customize tab (AC-219)', () => {
     ).toBeNull();
   });
 
+  /**
+   * T467's review (AC-040): unset, a category axis's labels turn to fit
+   * (UX-117), so unset is "Auto", said as that, and 0° is a choice stored as
+   * 0 — stored as unset, it was turned back to fit and had no effect.
+   */
+  it('reads unset rotation as Auto, and keeps 0° as a choice of its own', async () => {
+    const onOptions = tab();
+    const rotation = within(screen.getByRole('group', { name: 'X axis' })).getByLabelText(
+      'Label rotation',
+    ) as HTMLSelectElement;
+    expect(rotation.selectedOptions[0]?.textContent).toBe('Auto');
+
+    await userEvent.selectOptions(rotation, '0°');
+    expect(onOptions).toHaveBeenLastCalledWith({ axes: { x: { tickRotation: 0 } } });
+  });
+
+  it('puts rotation back to Auto', async () => {
+    const onOptions = tab({ axes: { x: { tickRotation: 45 } } });
+    const rotation = within(screen.getByRole('group', { name: 'X axis' })).getByLabelText(
+      'Label rotation',
+    );
+    await userEvent.selectOptions(rotation, 'Auto');
+    // Sparse, as every setting put back is: nothing left, no axes stored.
+    expect(onOptions).toHaveBeenLastCalledWith({ axes: undefined });
+  });
+
   it('turns off "include zero" on the value axis', async () => {
     const onOptions = tab();
     await userEvent.click(screen.getByLabelText('Include zero'));

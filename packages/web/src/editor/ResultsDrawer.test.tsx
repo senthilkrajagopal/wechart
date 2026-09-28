@@ -114,12 +114,13 @@ describe('its values (AC-046)', () => {
    * T206 / AC-188: a time value in a table is written by its granularity,
    * never as Cube's raw timestamp. The result rows carry it twice, as Cube
    * sends it — under the member and under `member.granularity`
-   * (research/cube/data-apis.md) — and the underlying rows carry each row's
-   * own time, ungrouped, which is written with the time of day.
+   * (research/cube/data-apis.md) — and shown once, as its bucket (T467,
+   * UX-023). The underlying rows carry each row's own time, ungrouped, which
+   * is written with the time of day.
    */
   const AT = 'orders.ordered_at';
 
-  it('writes a time value by its granularity (AC-188)', () => {
+  it('writes a time value by its granularity, in one column (AC-188, UX-023)', () => {
     drawer({
       rows: [{ [AT]: '2026-01-02T00:00:00.000', [`${AT}.day`]: '2026-01-02T00:00:00.000' }],
       granularities: { [AT]: 'day' },
@@ -128,7 +129,7 @@ describe('its values (AC-046)', () => {
     const cells = [...screen.getByTestId('drawer-result-rows').querySelectorAll('td')].map(
       (cell) => cell.textContent,
     );
-    expect(cells).toEqual(['Jan 2, 2026', 'Jan 2, 2026']);
+    expect(cells).toEqual(['Jan 2, 2026']);
   });
 
   it('writes an ungrouped time value with its time of day (AC-188)', async () => {

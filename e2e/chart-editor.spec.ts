@@ -33,6 +33,29 @@ test('adds a field with the well picker and runs the query', async ({ page }) =>
   await expect(page.getByTestId('drawer-result-rows')).toContainText('240');
 });
 
+/**
+ * T467, UX-063 (the phase-1 re-check): with no cube or view chosen there is
+ * nothing to add, so the wells' "+"s are disabled and say what to do first.
+ */
+test('the wells wait for a cube or view, saying so, then take fields', async ({ page }) => {
+  await page.goto('/explore/charts/seed-chart-empty/edit');
+  const note = page.getByTestId('wells-no-source');
+  await expect(note).toHaveText('Choose a cube or view first.');
+  for (const name of ['Add to Metrics', 'Add to Dimensions', 'Add to Time', 'Add a filter']) {
+    const add = page.getByRole('button', { name });
+    await expect(add).toBeDisabled();
+    await expect(add).toHaveAccessibleDescription('Choose a cube or view first.');
+  }
+
+  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  await expect(note).toHaveCount(0);
+  for (const name of ['Add to Metrics', 'Add to Dimensions', 'Add to Time', 'Add a filter']) {
+    await expect(page.getByRole('button', { name })).toBeEnabled();
+  }
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await expect(page.getByTestId('in-measures-orders.count')).toBeVisible();
+});
+
 test('adds a field by dragging it onto a well', async ({ page }) => {
   await openEditorOnOrders(page);
 

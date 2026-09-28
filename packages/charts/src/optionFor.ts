@@ -18,6 +18,7 @@ import { withKeyboardFocus } from './marking/focus';
 import { withMarks } from './marking/option';
 import { withMarkedShareLines } from './marking/partialOption';
 import { applyAxes, thinValueLabels } from './axis';
+import { fitCategoryLabels } from './layout/categoryLabels';
 import { applyCustomize } from './customize';
 import { isTrellisType, trellisOption } from './layout/trellis';
 import { legendFor } from './legend';
@@ -96,9 +97,15 @@ export function optionFor(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EC
     ...withMarkedShareLines(
       applyCustomize(
         thinValueLabels(
-          applyAxes(
-            withLegend(withKeyboardFocus(withMarks(withHighlight(option, spec), spec), spec)),
+          // Category labels turned before any is hidden, unless the axis
+          // editor set a rotation (T467, UX-117).
+          fitCategoryLabels(
+            applyAxes(
+              withLegend(withKeyboardFocus(withMarks(withHighlight(option, spec), spec), spec)),
+              spec,
+            ),
             spec,
+            canvas,
           ),
         ),
         spec,

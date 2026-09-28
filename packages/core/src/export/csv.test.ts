@@ -29,13 +29,35 @@ const SPEC: RenderSpec = {
 const lines = (csv: string) => csv.split('\r\n');
 
 describe('the columns a tile’s table heads', () => {
-  it('are every key its rows carry, in the order they carry them — encoded or not', () => {
+  it('are the keys its rows carry, in the order they carry them — encoded or not', () => {
     expect(
       tableColumnsOf([
-        { 'orders.status': 'shipped', 'orders.ordered_at.day': 'x', 'orders.ordered_at': 'x' },
+        { 'orders.status': 'shipped', 'orders.ordered_at.day': 'x', 'orders.region': 'x' },
         { 'orders.status': 'x', 'orders.id': '7' },
       ]),
-    ).toEqual(['orders.status', 'orders.ordered_at.day', 'orders.ordered_at', 'orders.id']);
+    ).toEqual(['orders.status', 'orders.ordered_at.day', 'orders.region', 'orders.id']);
+  });
+
+  /**
+   * T467, UX-023: Cube answers a time dimension asked at a grain under two
+   * keys, `member.month` and the bare `member`, both holding the bucket. The
+   * table showed both, "Order date (month)" and "Order date", each reading
+   * "Jul 1996". The bucket is the column; the bare key is its repeat.
+   */
+  it('drop a time member’s bare key where its bucket is there, and keep it where it is alone', () => {
+    expect(
+      tableColumnsOf([
+        {
+          'orders.ordered_at.month': '1996-07-01T00:00:00.000',
+          'orders.ordered_at': '1996-07-01T00:00:00.000',
+          'orders.count': '3',
+        },
+      ]),
+    ).toEqual(['orders.ordered_at.month', 'orders.count']);
+    // Ungrouped rows carry the raw time alone: it stays.
+    expect(
+      tableColumnsOf([{ 'orders.ordered_at': '1996-07-04T10:00:00.000', 'orders.count': '1' }]),
+    ).toEqual(['orders.ordered_at', 'orders.count']);
   });
 
   /**
@@ -68,7 +90,6 @@ describe('the columns a tile’s table heads', () => {
 
     expect(tableColumnsOf(rows, fields)).toEqual([
       'orders.ordered_at.month',
-      'orders.ordered_at',
       'orders.region',
       'orders.status',
       'orders.count',
