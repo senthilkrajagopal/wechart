@@ -92,8 +92,9 @@ export interface ProposalStore {
   latestFor(kind: ProposalKind, itemId: string): Promise<Proposal | null>;
   /**
    * Decides an open proposal (T352, T353): its status, who, when and why.
-   * Its items may then be proposed again. None if it isn't open: another's
-   * decision came first, or there is no such proposal.
+   * A rejected or withdrawn one's items may then be proposed again; an
+   * approved one's once it has landed (`settle`). None if it isn't open:
+   * another's decision came first, or there is no such proposal.
    */
   decide(
     id: string,
@@ -103,6 +104,10 @@ export interface ProposalStore {
       readonly reason: string | null;
     },
   ): Promise<Proposal | null>;
+  /** An approval that couldn't land, undone: open again, as it was (T352). */
+  reopen(id: string): Promise<void>;
+  /** An approval landed: its items may be proposed again (T352's review). */
+  settle(id: string): Promise<void>;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -275,14 +280,42 @@ export function proposalStore(db: Kysely<Database>): ProposalStore {
           .returning('id')
           .executeTakeFirst();
         if (row === undefined) return false;
-        await tx
-          .updateTable('proposal_items')
-          .set({ open: false })
-          .where('proposal_id', '=', id)
-          .execute();
+        // An approval holds its items until it has landed (`settle`).
+        if (status !== 'approved')
+          await tx
+            .updateTable('proposal_items')
+            .set({ open: false })
+            .where('proposal_id', '=', id)
+            .execute();
         return true;
       });
       return decided ? read(id) : null;
+    },
+
+    async reopen(id) {
+      if (!UUID.test(id)) return;
+      // Its items were held all along, so nothing took them meanwhile.
+      await db
+        .updateTable('proposals')
+        .set({
+          status: 'open',
+          decided_by_key: null,
+          decided_by_name: null,
+          decided_at: null,
+          reason: null,
+        })
+        .where('id', '=', id)
+        .where('status', '=', 'approved')
+        .execute();
+    },
+
+    async settle(id) {
+      if (!UUID.test(id)) return;
+      await db
+        .updateTable('proposal_items')
+        .set({ open: false })
+        .where('proposal_id', '=', id)
+        .execute();
     },
   };
 }

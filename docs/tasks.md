@@ -5820,9 +5820,9 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     4. The data source's shown keys are listed, not stripped. Folder rights are read once a request, not once a folder.
     - The GET with sign-in off, and the 401 sweep, are tested.
   - *For T356 (T351's review):* state H's "unchanged" or "replaced" for each credential needs the server to compare each envelope's revision with the replaced source's. Only the names are shown now.
-- [ ] T352 (AC-288, AC-298, AC-278) Land an approved item in its folder, keeping the replaced version in history *(rewritten 2026-09-26: an approved model lands through xcube's changeset, T426; "the served files of that folder's chains" are gone, `[IP 1, IP 5]`)*
+- [ ] T352 (AC-288, AC-298) Land an approved item in its folder, keeping the replaced version in history *(rewritten 2026-09-26: an approved model lands through xcube's changeset, T426; "the served files of that folder's chains" are gone, `[IP 1, IP 5]`. AC-278's refusal moved to T502, 2026-09-28)*
   - Files: a migration `…_item-versions.cjs`, `packages/api/src/repos/versions.ts` (+ test), `packages/api/src/routes/proposals.ts`
-  - Failing test: `versions.test.ts`:
+  - Failing test: `versions.test.ts` (the store) and `proposal-approve.test.ts` (the landing):
     - approving replaces the same-kind, same-name item, and stores the replaced version with its author, approver, time and description;
     - an approved model lands only when the stub xcube accepts its changeset, and a refused one leaves the folder and its history as they were (AC-288);
     - a data source's version keeps its ciphertext unopened (AC-298).
@@ -5834,6 +5834,43 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - Each item lands in its own `landsIn` folder (T349's review): a library chart a dashboard shows goes to its own target, which may not be the dashboard's.
     - An approval clears `proposal_items.open`, so the items may be proposed again.
   - Depends on: T351, T426, T442
+  - *As built (2026-09-28; design 05, state I's API):*
+    - `POST /api/proposals/:id/approve` answers the decided proposal with `landed: [{ kind, id, version }]`.
+      - Who may approve is T351's `rightsOn`. Anyone who may not see it gets `404`. A member who may see it but not write every folder it lands in gets `403`. A decided one gets `409`, naming who decided it.
+      - It is decided first, so of two approvals at once one lands. Its items stay held until it has landed (`settle`). If landing fails, it is opened again, to decide anew. A refused data source answers its refusal's status and problems, as a save would: for example `409` when its folder took a data source of its name meanwhile.
+      - Before deciding, it checks nothing changed in the folder since it was proposed: each item it replaces is still in the folder it lands in, and the folder's item of its name is still that one (none for a new one). Otherwise `409`, "“Moved” changed in its folder since it was proposed. Propose it again."
+      - Answers `503` where the versions or the document writers aren't there: nothing lands without its history.
+    - **Dashboards and charts:**
+      - Each lands over the item it replaces, keeping its id, or as a new item in its own `landsIn`.
+      - Charts land first, then the dashboard, which shows the folder's charts (`withChartsRenamed`), never the workspace's.
+      - A landed item has no target and no origin. Its owner is the replaced item's, or the author for a new one.
+      - A replaced dashboard's own charts that it no longer shows are removed; its kept version holds them.
+    - **A data source** lands through the store's `update` or `create`, with its landing into xcube (T442), its envelopes as sealed and never opened (AC-298).
+    - **Versions:** `item_versions` keeps the replaced version (no author or approver when it predates proposals) and the new one, with author, approver, time, description and proposal. A dashboard's version holds its own charts (`parts`). A data source's version holds its envelopes as sealed.
+    - Each workspace item stays, its origin now the version it landed as, "in folder as version n" (design 04). A data source's too (`setOrigin`), so "Edit in my workspace" finds it. Once everything has landed, this is best-effort: one the author is saving meanwhile keeps its old origin, and the approval stands.
+    - Recorded as an approval in its target folder: "Approved “Revenue” as version 3, with 2 charts". The record holds no envelope.
+    - Also files: `packages/api/src/repos/{documents,proposals,data-sources}.ts` (`localTo`, `reopen`, `settle`, `setOrigin`; + tests), `packages/api/src/db/schema.ts`, `packages/api/src/server.ts` (the document writers and `dataSourceLanding`), `packages/api/src/main.ts` (the version store), `packages/api/src/routes/proposal-approve.test.ts`.
+  - **Review fixes (one round):**
+    1. The running app had no version store, so an approval kept no history. It is wired in `main.ts` now, and the route refuses without one.
+    2. What an item replaced was fixed when proposed. An approval could then pull an item back from a folder it had moved to, which the approver may not write, or leave two of a name. It is checked again at approval (above).
+    3. An approved data source's workspace copy kept no origin, so "Edit in my workspace" on the landed one answered `409`. It is set now.
+    4. A failure after everything had landed reopened the proposal, and approving it again duplicated its new items. The origins are best-effort now.
+    5. Reopening could collide with the item proposed again meanwhile. The items stay held until it lands.
+    6. A refused data-source replacement still kept the replaced version. It is kept only once replaced.
+    - Tests added: the library chart's versions, the moved and taken-name refusals, the data source's origin, the store's held items.
+    - *Moved:* the `pg_dump` canary for approvals (T332's note) goes to T356's e2e, which approves a source sealed with a canary in the browser. The API never holds a plaintext secret to leak.
+  - *Not in it:*
+    - An approved model: proposals don't hold models until the workspace does (T347, T350). Its changeset at approval is T451's.
+    - The workspace's overlay deleted once decided: T347 and T440.
+    - The `409` for in-place edits of shared items (AC-278): moved to T502, since it changes how every shared item is edited.
+    - Landing isn't one transaction. An item written before a later one fails stays written, and the proposal is opened again. The user's rule for saves stands (breadth over save edge cases).
+  - **AC-288 stays open:** its real surface is the review view's Approve (T356). **AC-298** waits on T368's other records and T362.
+- [ ] T502 (AC-278) Refuse in-place changes to a shared dashboard, chart or data source while sign-in is on *(split from T352, 2026-09-28)*
+  - **Why.** With approvals landing (T352), a proposal is how a shared item changes. The `409` changes how every shared item is edited, so it is its own task.
+  - Files: `packages/api/src/server.ts` (the document routes), `packages/api/src/routes/data-sources.ts`, `packages/api/src/routes/shared-in-place.test.ts`
+  - Failing test: `shared-in-place.test.ts`: with sign-in on, a `PUT` or `PATCH` of content on a shared folder's dashboard, chart or data source answers `409`, "Edit in my workspace", and leaves it unchanged; the same in a workspace saves; moving, renaming and folder settings are unchanged (AC-278). With sign-in off (T359), nothing changes.
+  - Models follow once the workspace holds them (T347).
+  - Depends on: T352, T356, T358 (so a shared item can still change, through the Propose dialog and Approve)
 - [x] T353 (AC-290) Return a rejected proposal to its author with the approver's reason
   - Files: `packages/api/src/routes/proposals.ts`, `packages/api/src/routes/proposal-reject.test.ts`
   - *As built (2026-09-28; design 05, states J, K and M's API):*
@@ -5873,6 +5910,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/web/package.json` (@codemirror/merge, per its research doc), `packages/web/src/workspaces/reviews/{ReviewView,YamlDiff,SettingsDiff}.tsx` (+ tests), `e2e/security/reviews.spec.ts`
   - Failing test: `reviews.spec.ts`: a dashboard proposal renders the dashboard read-only with a Proposed / Current switch; a model proposal shows a unified YAML diff with +/− markers; a data-source proposal shows a settings table whose credentials read "unchanged" or "replaced"; Approve asks for confirmation; Reject offers a reason with a "_n_ / 1,000" counter; an author sees "Approve my own proposal" (AC-287; rules 77–79).
   - Depends on: T355, T352, T353, `docs/research/codemirror-merge.md`
+  - *2026-09-28, from T352's review (AC-298):* the e2e approves a data source whose password is a canary sealed in the browser, then greps a `pg_dump` of the security database for the canary in raw, hex, base64 and base64url form, as `data-source-secrets.test.ts` does.
 - [ ] T357 (AC-289) Show an item's history, compare a version, and propose restoring it
   - Files: `packages/web/src/workspaces/explore/HistoryPanel.tsx` (+ test), `e2e/security/history.spec.ts`
   - Failing test: `history.spec.ts`: the History panel lists at most 10 versions newest first with number, time, author, approver and description, marks Current, compares a model version with the current one, and "Propose restoring…" opens the Propose dialog prefilled; readers see no History (AC-289; rule 80).
@@ -8717,7 +8755,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 | AC-269 | T334, T335, T462 | AC-270 | T336 | AC-271 | T336, T452 |
 | AC-272 | ~~T337, T339, T340~~ T429, T457 | AC-273 | ~~T338~~ T435 | AC-274 | T341 |
 | AC-275 | ~~T337, T352~~ T428 | AC-276 | T343 | AC-277 | T343 |
-| AC-278 | T344, T348, T352 | AC-279 | T344 | AC-280 | T346, T347 |
+| AC-278 | T344, T348, T502 | AC-279 | T344 | AC-280 | T346, T347 |
 | AC-281 | T347 | AC-282 | T345, T347, T363 | AC-283 | T347 |
 | AC-284 | T349, T358 | AC-285 | T350 | AC-286 | T351 |
 | AC-287 | T355, T356 | AC-288 | T352, ~~T426~~ T451 | AC-289 | T354, T357 |

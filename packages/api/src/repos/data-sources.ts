@@ -153,6 +153,12 @@ export interface DataSourceStore {
   copy(id: string, into: string): Promise<DataSource>;
   /** The copy of `originId` in `into`, if there is one (T346). */
   copyIn(originId: string, into: string): Promise<DataSource | undefined>;
+  /**
+   * Names what a workspace one is now a copy of: the data source its approval
+   * landed as (T352's review), so "Edit in my workspace" finds it. Its
+   * version is left, so the author's open edit still saves.
+   */
+  setOrigin(id: string, origin: NonNullable<DataSource['origin']>): Promise<void>;
   inFolder(folderId: string): Promise<DataSource[]>;
   all(): Promise<DataSource[]>;
   get(id: string): Promise<DataSource | undefined>;
@@ -408,6 +414,14 @@ export function dataSourceStore(
         .where(sql<boolean>`origin ->> 'id' = ${originId}`)
         .executeTakeFirst()) as Row | undefined;
       return row === undefined ? undefined : (await withSecrets([row]))[0];
+    },
+
+    async setOrigin(id, origin) {
+      await db
+        .updateTable('data_sources')
+        .set({ origin: JSON.stringify(origin) })
+        .where('id', '=', id)
+        .execute();
     },
 
     async inFolder(folderId) {

@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { ChartDocumentError } from '@wechart/core';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
@@ -5,7 +7,7 @@ import { actorOf, recordIn } from '../audit/record';
 import { USER } from '../auth/guard';
 import { userOf } from '../auth/user';
 import type { AuditStore } from '../repos/audit';
-import type { DataSourceStore } from '../repos/data-sources';
+import { DataSourceRefused, type DataSourceStore } from '../repos/data-sources';
 import {
   OpenProposalError,
   PROPOSAL_KINDS,
@@ -16,6 +18,8 @@ import {
   type ProposedItem,
   type Replaces,
 } from '../repos/proposals';
+import type { VersionStore } from '../repos/versions';
+import { withChartsRenamed } from './workspace-copy';
 
 /**
  * Proposing (T349, AC-284; design 05 of 2026-09-27, state A): the user offers
@@ -46,8 +50,36 @@ export interface ProposalRoutes {
   readonly documents: {
     get(kind: 'dashboard' | 'chart' | 'folder', id: string): Promise<Stored | null>;
     named(kind: 'dashboard' | 'chart', folderId: string, title: string): Promise<Stored | null>;
+    /** What an approval lands through (T352): absent, nothing can be approved. */
+    update?(input: {
+      kind: 'dashboard' | 'chart';
+      id: string;
+      body: Record<string, unknown>;
+      expectedVersion: number;
+    }): Promise<Stored>;
+    create?(input: {
+      kind: 'dashboard' | 'chart';
+      id: string;
+      body: Record<string, unknown>;
+    }): Promise<Stored>;
+    remove?(kind: 'dashboard' | 'chart', id: string): Promise<boolean>;
+    /** The charts local to a dashboard. */
+    localTo?(dashboardId: string): Promise<Stored[]>;
   };
-  readonly dataSources?: Pick<DataSourceStore, 'get' | 'inFolder' | 'withSealed'>;
+  /** The versions wechart keeps of what it lands (T352, AC-288). */
+  readonly versions?: VersionStore;
+  /**
+   * A data source landed in its folder (T352): replacing the one it names,
+   * or made new, its envelopes as sealed (AC-298), and landed in xcube
+   * before it is stored (T442). And the one it replaces as it is now.
+   */
+  readonly dataSourceLanding?: {
+    land(item: ProposedItem): Promise<{ id: string; version: number }>;
+    current(
+      id: string,
+    ): Promise<{ version: number; body: Record<string, unknown>; folderId: string } | undefined>;
+  };
+  readonly dataSources?: Pick<DataSourceStore, 'get' | 'inFolder' | 'withSealed' | 'setOrigin'>;
   /** The request's user's own workspace root; none for one who has none (AC-277). */
   readonly ownWorkspace: (request: FastifyRequest) => Promise<string | null>;
   /** The workspace a folder is in, at any depth; null for a shared one. */
@@ -427,6 +459,351 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
       request.log,
     );
     return answerOf(decided);
+  });
+
+  /** A body as it lands in a folder: no target, no origin; where it is, whose. */
+  const landedBody = (
+    snapshot: Record<string, unknown>,
+    place: { folderId?: string; localTo?: string },
+    owner: unknown,
+  ) => {
+    const {
+      targetFolderId: _target,
+      origin: _origin,
+      folderId: _folder,
+      localToDashboardId: _local,
+      owner: _owner,
+      ...rest
+    } = snapshot;
+    void [_target, _origin, _folder, _local, _owner];
+    return {
+      ...rest,
+      ...(place.folderId === undefined ? {} : { folderId: place.folderId }),
+      ...(place.localTo === undefined ? {} : { localToDashboardId: place.localTo }),
+      ...(typeof owner === 'string' ? { owner } : {}),
+    };
+  };
+
+  /**
+   * Lands an approved proposal's items (T352, AC-288): each in its folder,
+   * over the item it names or as a new one; a dashboard showing the folder's
+   * charts, never the workspace's. The version each replaces, and the new
+   * one, are kept (AC-289's history). Answers what landed, by item.
+   */
+  const land = async (proposal: Proposal, approver: { key: string; name: string }) => {
+    const docs = documents as Required<ProposalRoutes['documents']>;
+    const landed: { kind: ProposalKind; id: string; version: number; from: ProposedItem }[] = [];
+    const keep = async (
+      kind: ProposalKind,
+      itemId: string,
+      version: number,
+      content: Record<string, unknown>,
+      folderId: string,
+      title: string,
+      authored: { author: Proposal['author']; approver: typeof approver } | null,
+    ) =>
+      routes.versions?.keep({
+        kind,
+        itemId,
+        version,
+        content,
+        folderId,
+        title,
+        author: authored?.author ?? null,
+        approver: authored?.approver ?? null,
+        description: authored === null ? null : proposal.description,
+        proposalId: authored === null ? null : proposal.id,
+      });
+
+    // A data source: landed as it is, envelopes and all (AC-298).
+    const source = proposal.items.find((item) => item.kind === 'data-source');
+    if (source !== undefined) {
+      const lander = routes.dataSourceLanding;
+      if (lander === undefined) throw new Refused(503, 'Data sources can’t be landed here.');
+      const current =
+        source.replaces === null ? undefined : await lander.current(source.replaces.id);
+      const at = await lander.land(source);
+      // The one it replaced, kept once it is replaced: a refusal keeps nothing.
+      if (current !== undefined)
+        await keep(
+          'data-source',
+          source.replaces!.id,
+          current.version,
+          { body: current.body },
+          current.folderId,
+          source.title,
+          null,
+        );
+      await keep(
+        'data-source',
+        at.id,
+        at.version,
+        { body: source.snapshot },
+        source.landsIn,
+        source.title,
+        { author: proposal.author, approver },
+      );
+      landed.push({ kind: 'data-source', id: at.id, version: at.version, from: source });
+      return landed;
+    }
+
+    // Dashboards and charts: every landed id first, so each shows the folder's.
+    const board = proposal.items.find((item) => item.kind === 'dashboard');
+    const idOf = new Map(
+      proposal.items.map((item) => [item.id, item.replaces?.id ?? randomUUID()] as const),
+    );
+    const boardId = board === undefined ? undefined : idOf.get(board.id)!;
+    const isLocal = (item: ProposedItem) =>
+      board !== undefined && item.snapshot['localToDashboardId'] === board.id;
+
+    // The versions replaced, as they are now: a dashboard with its own charts.
+    const partsOf = async (dashboardId: string) =>
+      (await docs.localTo(dashboardId)).map((chart) => ({ id: chart.id, body: chart.body }));
+    for (const item of proposal.items) {
+      if (item.replaces === null || isLocal(item)) continue;
+      const kind = item.kind as 'dashboard' | 'chart';
+      const current = await docs.get(kind, item.replaces.id);
+      if (current === null) continue;
+      await keep(
+        kind,
+        current.id,
+        current.version,
+        { body: current.body, parts: kind === 'dashboard' ? await partsOf(current.id) : [] },
+        item.landsIn,
+        titleOf(current.body),
+        null,
+      );
+    }
+
+    // Charts first, then the dashboard that shows them.
+    const renamed = new Map([...idOf].filter(([from]) => from !== board?.id));
+    const write = async (item: ProposedItem, body: Record<string, unknown>) => {
+      const kind = item.kind as 'dashboard' | 'chart';
+      const id = idOf.get(item.id)!;
+      const current = item.replaces === null ? null : await docs.get(kind, id);
+      const written =
+        current === null
+          ? await docs.create({ kind, id, body })
+          : await docs.update({ kind, id, body, expectedVersion: current.version });
+      landed.push({ kind, id, version: written.version, from: item });
+      return { current, written };
+    };
+    const ordered = [
+      ...proposal.items.filter((item) => item.kind === 'chart'),
+      ...(board === undefined ? [] : [board]),
+    ];
+    for (const item of ordered) {
+      const replacedOwner =
+        item.replaces === null
+          ? proposal.author.key
+          : (await docs.get(item.kind as 'dashboard' | 'chart', item.replaces.id))?.body['owner'];
+      const body =
+        item === board
+          ? landedBody(
+              withChartsRenamed(item.snapshot, renamed) as Record<string, unknown>,
+              { folderId: item.landsIn },
+              replacedOwner,
+            )
+          : isLocal(item)
+            ? landedBody(item.snapshot, { localTo: boardId! }, replacedOwner)
+            : landedBody(item.snapshot, { folderId: item.landsIn }, replacedOwner);
+      await write(item, body);
+    }
+    // The replaced dashboard's own charts it no longer shows go: its kept
+    // version holds them.
+    if (boardId !== undefined) {
+      const shown = new Set(proposal.items.filter(isLocal).map((item) => idOf.get(item.id)!));
+      for (const chart of await docs.localTo(boardId))
+        if (!shown.has(chart.id)) await docs.remove('chart', chart.id);
+    }
+
+    // The new versions, kept: a dashboard with its charts as they landed.
+    for (const at of landed) {
+      if (at.kind === 'chart' && isLocal(at.from)) continue;
+      const kind = at.kind as 'dashboard' | 'chart';
+      const stored = (await docs.get(kind, at.id))!;
+      await keep(
+        kind,
+        at.id,
+        at.version,
+        { body: stored.body, parts: kind === 'dashboard' ? await partsOf(at.id) : [] },
+        at.from.landsIn,
+        titleOf(stored.body),
+        { author: proposal.author, approver },
+      );
+    }
+
+    return landed;
+  };
+
+  /**
+   * The workspace items stay, each now in its folder as the version it
+   * landed as (design 04): a copy of it, so "Edit in my workspace" finds it
+   * (T352's review). Once everything has landed, never a reason to decide
+   * again: one the author is saving meanwhile keeps its old origin.
+   */
+  const markOrigins = async (
+    landed: Awaited<ReturnType<typeof land>>,
+    log: FastifyRequest['log'],
+  ) => {
+    const docs = documents as Required<ProposalRoutes['documents']>;
+    const board = landed.find((at) => at.kind === 'dashboard');
+    for (const at of landed) {
+      try {
+        if (at.kind === 'data-source') {
+          await routes.dataSources?.setOrigin(at.from.id, {
+            id: at.id,
+            version: at.version,
+            folderId: at.from.landsIn,
+          });
+          continue;
+        }
+        const kind = at.kind as 'dashboard' | 'chart';
+        const own = await docs.get(kind, at.from.id);
+        if (own === null) continue;
+        const local =
+          board !== undefined && at.from.snapshot['localToDashboardId'] === board.from.id;
+        await docs.update({
+          kind,
+          id: own.id,
+          body: {
+            ...own.body,
+            origin: {
+              kind,
+              id: at.id,
+              version: at.version,
+              ...(local ? {} : { folderId: at.from.landsIn }),
+            },
+          },
+          expectedVersion: own.version,
+        });
+      } catch (failure) {
+        log.warn({ err: failure, item: at.from.id }, 'an approved item’s origin was not updated');
+      }
+    }
+  };
+
+  /**
+   * What it replaces is still what it would replace (T352's review): each
+   * item replaced still in the folder it lands in, and the folder's item of
+   * its name still that one, or none for a new one. Otherwise an approval
+   * would pull an item back from a folder the approver may not write, or
+   * leave two of a name.
+   */
+  const changedSince = async (proposal: Proposal): Promise<ProposedItem | undefined> => {
+    const board = proposal.items.find((item) => item.kind === 'dashboard');
+    for (const item of proposal.items) {
+      if (board !== undefined && item.snapshot['localToDashboardId'] === board.id) continue;
+      if (item.kind === 'data-source') {
+        if (item.replaces === null) continue;
+        const current = await routes.dataSources?.get(item.replaces.id);
+        if (current?.folderId !== item.landsIn) return item;
+        continue;
+      }
+      const kind = item.kind as 'dashboard' | 'chart';
+      if (item.replaces !== null) {
+        const current = await documents.get(kind, item.replaces.id);
+        if (current === null || folderIdOf(current.body) !== item.landsIn) return item;
+      }
+      const named = await documents.named(kind, item.landsIn, item.title);
+      if ((named?.id ?? null) !== (item.replaces?.id ?? null)) return item;
+    }
+    return undefined;
+  };
+
+  /**
+   * Approving a proposal (T352, AC-288; design 05, state I): its items land
+   * in their folders and its versions are kept. A decider who may write every
+   * folder it lands in, or a Super-Admin (T351); anyone else finds no such
+   * proposal, and its author who may no longer write there is refused.
+   */
+  app.post('/api/proposals/:id/approve', USER, async (request, reply) => {
+    if (!routes.enabled) return reply.code(404).send({ error: 'Proposals need sign-in.' });
+    const { id } = request.params as { id: string };
+    const proposal = await store.get(id);
+    const rights = proposal === null ? null : await rightsOn(request, proposal);
+    if (proposal === null || rights === null || !rights.see)
+      return reply.code(404).send({ error: 'There is no such proposal.' });
+    if (proposal.decision !== null)
+      return reply
+        .code(409)
+        .send({ error: `It was decided already, by ${proposal.decision.by.name}.` });
+    if (!rights.approve)
+      return reply.code(403).send({
+        error:
+          'You can’t approve it: only a read-write member of every folder it lands in, or a Super-Admin, can.',
+      });
+    // Nothing lands without its history (T352's review).
+    if (
+      documents.update === undefined ||
+      documents.create === undefined ||
+      documents.localTo === undefined ||
+      documents.remove === undefined ||
+      routes.versions === undefined
+    )
+      return reply.code(503).send({ error: 'Approvals can’t be landed here.' });
+    const changed = await changedSince(proposal);
+    if (changed !== undefined)
+      return reply.code(409).send({
+        error: `“${changed.title}” changed in its folder since it was proposed. Propose it again.`,
+      });
+    const user = userOf(request);
+    const approver = { key: user.key, name: user.name };
+    // Taken first, so of two approvals at once one lands (T353's `decide`).
+    const decided = await store.decide(proposal.id, {
+      status: 'approved',
+      by: approver,
+      reason: null,
+    });
+    if (decided === null) {
+      const first = (await store.get(proposal.id))?.decision;
+      return reply.code(409).send({
+        error: `It was decided already${first == null ? '' : `, by ${first.by.name}`}.`,
+      });
+    }
+    let landed: Awaited<ReturnType<typeof land>>;
+    try {
+      landed = await land(decided, approver);
+    } catch (failure) {
+      // Nothing it couldn't land is left approved: open again, to decide anew.
+      await store.reopen(decided.id);
+      if (failure instanceof Refused)
+        return reply.code(failure.status).send({ error: failure.message });
+      // Its folder, or xcube, refused the data source as it would a save.
+      if (failure instanceof DataSourceRefused)
+        return reply
+          .code(failure.status)
+          .send({ error: failure.message, problems: failure.problems });
+      throw failure;
+    }
+    await store.settle(decided.id);
+    await markOrigins(landed, request.log);
+    const first = landed.find((at) => at.from.id === decided.itemId);
+    const charts = landed.filter((at) => at !== first).length;
+    await recordIn(
+      routes.audit,
+      {
+        actor: actorOf(user),
+        event: 'approval',
+        folderId: decided.targetFolderId,
+        item: { kind: decided.kind, id: decided.itemId, title: decided.title },
+        summary:
+          `Approved “${decided.title}”` +
+          (first === undefined ? '' : ` as version ${String(first.version)}`) +
+          (charts === 0 ? '' : `, with ${String(charts)} ${charts === 1 ? 'chart' : 'charts'}`),
+        details: {
+          proposalId: decided.id,
+          author: decided.author,
+          selfApproved: decided.author.key === user.key,
+          landed: landed.map((at) => ({ kind: at.kind, id: at.id, version: at.version })),
+        },
+      },
+      request.log,
+    );
+    return {
+      ...answerOf(decided),
+      landed: landed.map((at) => ({ kind: at.kind, id: at.id, version: at.version })),
+    };
   });
 
   app.post('/api/proposals', USER, async (request, reply) => {

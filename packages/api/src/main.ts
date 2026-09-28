@@ -27,6 +27,7 @@ import { modelSync } from './xcube/snapshot';
 import { seedDevData } from './seed';
 import { seedDefault } from './seed-default';
 import { proposalStore } from './repos/proposals';
+import { versionStore } from './repos/versions';
 import { buildServer } from './server';
 
 /**
@@ -160,6 +161,8 @@ async function main(): Promise<void> {
     audit: auditStore(db),
     // Workspace items proposed to their target folders (T349, AC-284).
     proposals: proposalStore(db),
+    // The versions of what approvals land, kept (T352, AC-288).
+    versions: versionStore(db),
     // Data sources as folder items, their secrets sealed (T335).
     dataSources,
     ...(landing === undefined

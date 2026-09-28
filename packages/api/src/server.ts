@@ -9,7 +9,9 @@ import {
   objectsOf,
   type AccessFolder,
   type ChartDefinition,
+  type FieldValue,
   type FolderRight,
+  type SealedV1,
 } from '@wechart/core';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 
@@ -68,6 +70,7 @@ import { registerAudit } from './routes/audit';
 import { registerDataSources } from './routes/data-sources';
 import { registerProposals } from './routes/proposals';
 import type { ProposalStore } from './repos/proposals';
+import type { VersionStore } from './repos/versions';
 import { chartCopy, dashboardCopies, type ShownCopy } from './routes/workspace-copy';
 import type { QueryLogEntry, QueryLogPageAsk } from './repos/query-log';
 
@@ -131,6 +134,8 @@ export interface BuildOptions {
   readonly audit?: AuditStore;
   /** Workspace items proposed to their target folders (T349, AC-284). */
   readonly proposals?: ProposalStore;
+  /** The versions of what approvals land, kept (T352, AC-288). */
+  readonly versions?: VersionStore;
   /** Data sources as folder items, their secrets sealed (T335, AC-269). */
   readonly dataSources?: DataSourceStore;
   /**
@@ -238,6 +243,10 @@ export interface DocumentWriter {
     originId: string,
     inFolders?: readonly string[],
   ): Promise<readonly { id: string; body: Record<string, unknown> }[]>;
+  /** The charts local to a dashboard: what its version holds with it (T352). */
+  localTo?(
+    dashboardId: string,
+  ): Promise<readonly { id: string; body: Record<string, unknown>; version: number }[]>;
   /** A folder's own item of a kind with this title, as a proposal would replace (T349). */
   named?(
     kind: 'dashboard' | 'chart',
@@ -309,6 +318,7 @@ export function buildServer({
   sessions,
   audit,
   proposals,
+  versions,
 }: BuildOptions): FastifyInstance {
   const app = Fastify({
     logger,
@@ -786,8 +796,90 @@ export function buildServer({
           return found === null ? null : { ...found, version: found.version ?? 1 };
         },
         named,
+        // What an approval lands through (T352).
+        ...(docs.update === undefined || docs.remove === undefined || docs.localTo === undefined
+          ? {}
+          : {
+              update: async (input) => {
+                const written = (await docs.update!(input)) as { version?: number };
+                return { id: input.id, body: input.body, version: written.version ?? 1 };
+              },
+              create: async (input) => {
+                await docs.create(input);
+                return { id: input.id, body: input.body, version: 1 };
+              },
+              remove: (kind, id) => docs.remove!(kind, id),
+              localTo: async (dashboardId) => [...(await docs.localTo!(dashboardId))],
+            }),
       },
-      ...(dataSources === undefined ? {} : { dataSources }),
+      ...(versions === undefined ? {} : { versions }),
+      ...(dataSources === undefined
+        ? {}
+        : {
+            dataSources,
+            // A data source landed as proposed: its envelopes as sealed, into
+            // xcube before it is stored (T352; T442, AC-298).
+            dataSourceLanding: {
+              land: async (item) => {
+                const shape = item.snapshot as {
+                  name: string;
+                  driver: string;
+                  authMethod: string;
+                  fields: Record<string, FieldValue>;
+                  description?: string | null;
+                  sealed: Record<string, SealedV1>;
+                };
+                const landing =
+                  dataSourceLanding === undefined
+                    ? {}
+                    : await dataSourceLanding.prepare(item.landsIn);
+                const change = {
+                  authMethod: shape.authMethod,
+                  fields: shape.fields,
+                  sealed: shape.sealed,
+                  description: shape.description ?? null,
+                };
+                if (item.replaces !== null) {
+                  const updated = await dataSources.update(item.replaces.id, change, landing);
+                  return { id: updated.id, version: updated.version };
+                }
+                const created = await dataSources.create(
+                  {
+                    folderId: item.landsIn,
+                    name: shape.name,
+                    driver: shape.driver,
+                    authMethod: shape.authMethod,
+                    fields: shape.fields,
+                    sealed: shape.sealed,
+                  },
+                  landing,
+                );
+                const described =
+                  change.description === null
+                    ? created
+                    : await dataSources.update(created.id, { description: change.description });
+                return { id: described.id, version: described.version };
+              },
+              current: async (id) => {
+                const found = await dataSources.withSealed(id);
+                if (found === undefined) return undefined;
+                const { source, landed } = found;
+                return {
+                  version: source.version,
+                  folderId: source.folderId,
+                  body: {
+                    name: source.name,
+                    driver: source.driver,
+                    authMethod: source.authMethod,
+                    fields: source.fields,
+                    description: source.description,
+                    sealed: landed.sealed,
+                    revisions: landed.revisions,
+                  },
+                };
+              },
+            },
+          }),
       ownWorkspace: async (request) => {
         const seen = await visibilityOf(request);
         const own = workspaceIdOf(userOf(request).key);

@@ -270,6 +270,18 @@ export function documents(db: Kysely<Database>) {
       return row === undefined ? null : toDocument(row);
     },
 
+    /** The charts local to a dashboard (T352: what its version holds with it), by id. */
+    async localTo(dashboardId: string): Promise<StoredDocument[]> {
+      const rows = await db
+        .selectFrom('documents')
+        .selectAll()
+        .where('kind', '=', 'chart')
+        .where('local_to_dashboard_id', '=', dashboardId)
+        .orderBy('id')
+        .execute();
+      return rows.map(toDocument);
+    },
+
     /** Remove an object. Returns false when there was nothing to remove. */
     async remove(kind: DocumentKind, id: string): Promise<boolean> {
       const result = await db

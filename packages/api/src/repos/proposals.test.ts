@@ -142,6 +142,24 @@ describe('the proposals store (T349, AC-284)', () => {
     expect(await store().latestFor('dashboard', `board-${run}-never`)).toBeNull();
   });
 
+  it('holds an approval’s items until it has landed, so one that can’t land opens again (T352’s review)', async () => {
+    const id = `board-${run}-held`;
+    const first = await store().create(dashboard(id));
+    const ada = { key: `ada-${run}`, name: 'Ada Admin' };
+    await store().decide(first.id, { status: 'approved', by: ada, reason: null });
+    // Still held while it lands: none of its items may be proposed again yet.
+    await expect(store().create(dashboard(id))).rejects.toBeInstanceOf(OpenProposalError);
+    // It couldn't land: open again, as it was.
+    await store().reopen(first.id);
+    expect((await store().get(first.id))!.status).toBe('open');
+    expect((await store().openFor('chart', `c1-${id}`))?.id).toBe(first.id);
+    // Landed: its items are free.
+    await store().decide(first.id, { status: 'approved', by: ada, reason: null });
+    await store().settle(first.id);
+    expect(await store().openFor('chart', `c1-${id}`)).toBeNull();
+    expect((await store().create(dashboard(id))).itemId).toBe(id);
+  });
+
   it('finds an item’s latest where it went with another’s, the open one first (T353’s review)', async () => {
     const ada = { key: `ada-${run}`, name: 'Ada Admin' };
     const chart = `chart-${run}-8`;

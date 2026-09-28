@@ -140,6 +140,24 @@ export interface Database {
   audit_records: AuditRecordTable;
   proposals: ProposalTable;
   proposal_items: ProposalItemTable;
+  item_versions: ItemVersionTable;
+}
+
+/** A version of a shared item wechart landed (T352, AC-288), a copy it holds. */
+export interface ItemVersionTable {
+  kind: string;
+  item_id: string;
+  version: number;
+  content: JSONColumnType<Record<string, unknown>>;
+  folder_id: string;
+  title: string;
+  author_key: string | null;
+  author_name: string | null;
+  approver_key: string | null;
+  approver_name: string | null;
+  at: Generated<Date>;
+  description: string | null;
+  proposal_id: string | null;
 }
 
 /** A workspace item proposed to its target folder (T349, AC-284), and its decision. */
