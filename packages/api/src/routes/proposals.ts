@@ -52,8 +52,11 @@ export interface ProposalRoutes {
   readonly ownWorkspace: (request: FastifyRequest) => Promise<string | null>;
   /** The workspace a folder is in, at any depth; null for a shared one. */
   readonly workspaceOf: (folderId: string | null) => Promise<string | null>;
-  /** Whether the request's user may change what is in a shared folder. */
-  readonly mayWrite: (request: FastifyRequest, folderId: string) => Promise<boolean>;
+  /**
+   * Which shared folders the request's user may change what is in: worked
+   * out once for the request, then asked per folder (T351's review).
+   */
+  readonly writable: (request: FastifyRequest) => Promise<(folderId: string) => boolean>;
 }
 
 const NOT_THERE = { error: 'There is no such item in your workspace.' };
@@ -113,6 +116,26 @@ const answerOf = (proposal: Proposal) => {
   return { ...proposal, replaces: items[0]?.replaces ?? null, items };
 };
 
+/**
+ * What an item holds, as a reviewer is shown it (T351; design 05's review
+ * view): a data source's settings, with each credential only named as
+ * stored, never its envelope (AC-298, rule 83).
+ */
+const shownSnapshot = (kind: string, snapshot: Record<string, unknown>) => {
+  if (kind !== 'data-source') return snapshot;
+  // Only what may be shown, named, so a key added later stays hidden until
+  // it is named here (T351's review).
+  const shown = Object.fromEntries(
+    ['name', 'driver', 'authMethod', 'fields', 'description', 'origin']
+      .filter((key) => key in snapshot)
+      .map((key) => [key, snapshot[key]]),
+  );
+  return {
+    ...shown,
+    secrets: Object.keys((snapshot['sealed'] as Record<string, unknown> | null | undefined) ?? {}),
+  };
+};
+
 /** Why it can't be proposed, answered; the route stops there. */
 class Refused extends Error {
   constructor(
@@ -164,7 +187,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
   };
 
   /** A shared folder the user may write in, where something is to land. */
-  const landing = async (request: FastifyRequest, folderId: string, what: string) => {
+  const landing = async (writes: (folderId: string) => boolean, folderId: string, what: string) => {
     if (folderId !== 'root' && (await read('folder', folderId)) === null)
       throw new Refused(
         404,
@@ -172,7 +195,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
       );
     if ((await routes.workspaceOf(folderId)) !== null)
       throw new Refused(400, `${what} is to go to a workspace folder. Choose a shared one.`);
-    if (!(await routes.mayWrite(request, folderId)))
+    if (!writes(folderId))
       throw new Refused(
         403,
         `${what} is to go to a folder you can’t propose into: only its read-write members can. Choose another target.`,
@@ -181,7 +204,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
 
   /** The items proposing a dashboard or chart lands, the item first. */
   const documentItems = async (
-    request: FastifyRequest,
+    writes: (folderId: string) => boolean,
     kind: 'dashboard' | 'chart',
     item: Stored,
     own: string,
@@ -239,7 +262,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
         );
       // Each folder it lands in must be one its author may propose into
       // (T349's review): a chart bound elsewhere doesn't ride in unchecked.
-      await landing(request, chartTarget, `“${title}”, which it shows,`);
+      await landing(writes, chartTarget, `“${title}”, which it shows,`);
       items.push({
         kind: 'chart',
         id: chart.id,
@@ -265,6 +288,59 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     }
     return names.join(' / ') || id;
   };
+
+  /**
+   * What the request's user may do with a proposal (T351, AC-286; a small
+   * decision of 2026-09-28, overturnable):
+   * - `approve`: a Super-Admin, or a read-write member of every folder it
+   *   lands in — the author too, who approves their own as a member, never
+   *   into a folder they may no longer write; a library chart a dashboard
+   *   shows may land in its own, and no folder's content changes without one
+   *   of its members (T349's review).
+   * - `reject`: whoever may approve, and its author, whose rejection
+   *   withdraws it (design 05, state K) and lands nothing.
+   * - `see`: either.
+   * A decided proposal is decided: neither is offered (T351's review).
+   */
+  const rightsOn = async (request: FastifyRequest, proposal: Proposal) => {
+    const user = userOf(request);
+    const writes = await routes.writable(request);
+    const member = user.superAdmin || proposal.items.every((item) => writes(item.landsIn));
+    const author = proposal.author.key === user.key;
+    const open = proposal.status === 'open';
+    return {
+      see: member || author,
+      approve: open && member,
+      reject: open && (member || author),
+      author,
+    };
+  };
+
+  /**
+   * A proposal, as its deciders and its author open it (T351; design 05's
+   * review view): what each item holds, what they may do with it, and
+   * whether it is theirs. No one else finds it: 404, as for one that isn't
+   * there.
+   */
+  app.get('/api/proposals/:id', USER, async (request, reply) => {
+    if (!routes.enabled) return reply.code(404).send({ error: 'Proposals need sign-in.' });
+    const { id } = request.params as { id: string };
+    const proposal = await store.get(id);
+    const rights = proposal === null ? null : await rightsOn(request, proposal);
+    if (proposal === null || rights === null || !rights.see)
+      return reply.code(404).send({ error: 'There is no such proposal.' });
+    const answer = answerOf(proposal);
+    return {
+      ...answer,
+      items: answer.items.map((item, at) => ({
+        ...item,
+        snapshot: shownSnapshot(item.kind, proposal.items[at]!.snapshot),
+      })),
+      mayApprove: rights.approve,
+      mayReject: rights.reject,
+      yours: rights.author,
+    };
+  });
 
   app.post('/api/proposals', USER, async (request, reply) => {
     if (!routes.enabled) return reply.code(404).send({ error: 'Proposals need sign-in.' });
@@ -303,6 +379,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
 
     // As the copy route says it to one who has none (AC-277).
     const own = await routes.ownWorkspace(request);
+    const writes = await routes.writable(request);
     if (own === null)
       throw new Refused(
         403,
@@ -336,7 +413,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     if (workspace === null)
       // A shared item is changed through a copy (AC-278); one in a folder
       // they can't write is none of theirs to propose.
-      throw home !== null && (await routes.mayWrite(request, home))
+      throw home !== null && writes(home)
         ? new Refused(400, 'It is in a shared folder: edit it in your workspace, and propose that.')
         : new Refused(404, NOT_THERE.error);
     if (workspace !== own) throw new Refused(404, NOT_THERE.error);
@@ -345,7 +422,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
         400,
         `This ${KIND_WORD[proposing]} names no folder to go to, so it can’t be proposed.`,
       );
-    await landing(request, target, `This ${KIND_WORD[proposing]}`);
+    await landing(writes, target, `This ${KIND_WORD[proposing]}`);
 
     // What it would land, as it is now.
     let items: ProposedItem[];
@@ -375,7 +452,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
         },
       ];
     } else
-      items = await documentItems(request, proposing as 'dashboard' | 'chart', stored, own, target);
+      items = await documentItems(writes, proposing as 'dashboard' | 'chart', stored, own, target);
 
     const user = userOf(request);
     let proposal: Proposal;

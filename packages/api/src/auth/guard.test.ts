@@ -2,8 +2,11 @@ import type { FastifyInstance, InjectOptions } from 'fastify';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { closeDb, getDb } from '../db/client';
+import { auditStore } from '../repos/audit';
 import { dataSourceStore } from '../repos/data-sources';
+import { documents } from '../repos/documents';
 import { folderAccessStore } from '../repos/folder-access';
+import { proposalStore } from '../repos/proposals';
 import { buildServer } from '../server';
 import { routesOf } from './guard';
 import { pgSessionStore } from './session-store';
@@ -71,6 +74,10 @@ function everyRoute(): FastifyInstance {
     sessions: pgSessionStore(getDb()),
     folderAccess: folderAccessStore(getDb()),
     dataSources: dataSourceStore(getDb()),
+    // The audit trail's (T369) and proposals' (T349, T351) routes.
+    documents: documents(getDb()),
+    audit: auditStore(getDb()),
+    proposals: proposalStore(getDb()),
   });
   servers.push(app);
   return app;

@@ -403,13 +403,30 @@ describe('proposing a workspace item (T349, AC-284)', () => {
       fields: original.fields,
       sealed: { password: sealed },
     });
+    // Opened by a decider (T351), its settings show, and each credential only
+    // as stored (rule 83).
+    const opened = await as('writer', {
+      method: 'GET',
+      url: `/api/proposals/${answer.json<Answer>().id}`,
+    });
+    expect(opened.statusCode, opened.body).toBe(200);
+    const shown = opened.json<{ items: { snapshot: Record<string, unknown> }[] }>().items[0]!;
+    expect(shown.snapshot['secrets']).toEqual(['password']);
+    expect([shown.snapshot['name'], shown.snapshot['driver'], shown.snapshot['fields']]).toEqual([
+      `warehouse_${MARK}`,
+      'postgres',
+      original.fields,
+    ]);
+    expect(Object.keys(shown.snapshot)).not.toContain('sealed');
+    expect(Object.keys(shown.snapshot)).not.toContain('revisions');
+
     // Never sent back to the browser, nor kept in the audit trail.
     const records = await auditStore(getDb()).list({
       events: ['proposal'],
       folderIds: [ids.sales],
     });
     const record = JSON.stringify(records.records.find((each) => each.item?.id === id));
-    for (const text of [answer.body, record])
+    for (const text of [answer.body, opened.body, record])
       for (const part of [sealed.ct.slice(0, 16), sealed.enc.slice(0, 16), '"kid-1"'])
         expect(text).not.toContain(part);
   });
@@ -491,6 +508,10 @@ describe('proposals with sign-in off', () => {
       });
       expect(answer.statusCode).toBe(404);
       expect(answer.json<{ error: string }>().error).toBe('Proposals need sign-in.');
+      // Nor is a proposal to open (T351's review).
+      const opened = await off.inject({ method: 'GET', url: `/api/proposals/${randomUUID()}` });
+      expect(opened.statusCode).toBe(404);
+      expect(opened.json<{ error: string }>().error).toBe('Proposals need sign-in.');
     } finally {
       await off.close();
     }

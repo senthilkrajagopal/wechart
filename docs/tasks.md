@@ -5798,11 +5798,28 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/api/src/routes/proposals.ts`, ~~`packages/api/src/model/chain.ts`~~ `packages/api/src/xcube/overlays.ts` (2026-09-26), `packages/api/src/routes/proposal-bundle.test.ts`
   - Failing test: `proposal-bundle.test.ts`: a dashboard whose cubes resolve only through the author's workspace models is proposed with them, and approving or rejecting applies to all together, as one changeset (AC-285).
   - Depends on: T349, T347
-- [ ] T351 (AC-286) Let only the author, the target folder's read-write members and Super-Admins decide a proposal
+- [x] T351 (AC-286) Let only the author, the target folder's read-write members and Super-Admins decide a proposal
   - *2026-09-28, from T349's review (a small decision, overturnable):* a proposal can land in more than one folder, where a dashboard shows a library chart bound elsewhere. A read-write member decides it only if they may write every folder it lands in (`proposal_items.lands_in`), so no folder's content changes without one of its own members, its author, or a Super-Admin.
   - Files: `packages/api/src/routes/proposals.ts`, `packages/api/src/routes/proposal-deciders.test.ts`
   - Failing test: `proposal-deciders.test.ts`: the author (with security on and off), a read-write member of the target and a Super-Admin may approve or reject; a read-only member and an outsider get 403; nothing reaches the folder except through an approval (AC-286, AC-254).
   - Depends on: T349
+  - *As built (2026-09-28; design 05's review view, states D and K):*
+    - The rule, `rightsOn` in `routes/proposals.ts`, for T352 and T353 to use:
+      - **approve**: a Super-Admin, or a read-write member of every folder the proposal lands in. The author too approves their own as such a member, never into a folder they may no longer write.
+      - **reject**: whoever may approve, and the author, whose rejection withdraws it (state K) and lands nothing.
+      - **see**: either. A decided proposal offers neither approve nor reject.
+    - `GET /api/proposals/:id` answers the proposal, what each item holds, `mayApprove`, `mayReject` and `yours`. A data source's settings show, with each credential named only, from a list of what may be shown, so a key added later stays hidden (AC-298, rule 83).
+    - Anyone else gets `404`, as for a proposal that isn't there, and so does everyone with sign-in off (T359). T352 and T353 answer their decisions the same way, so no one can learn a proposal exists. That replaces this entry's "403".
+    - Also files: `packages/api/src/server.ts` (`writable`: the user's folder rights, read once a request), `packages/api/src/auth/guard.test.ts` (the 401 sweep now includes the proposals and audit routes), `packages/api/src/routes/proposals.test.ts`.
+  - **Small decision, overturnable (T351's review):** an author who has since lost write access may still open and withdraw their own proposal, but not approve it. The requirements say the author approves their own "and so may another read-write member" (§P2.6 E), which reads as the author being a member.
+  - **Done 2026-09-28, after one review round. AC-286 stays open:** approving and rejecting are T352's and T353's, and its real surface is T356's.
+  - **Review fixes:**
+    1. An author who had lost access could still decide. Now they may withdraw only.
+    2. A decided proposal still offered deciding. It doesn't now.
+    3. The author and every-folder rules had no test that could fail. There are now tests for a member of both folders, one of only one, an author who isn't a member, and a decided proposal.
+    4. The data source's shown keys are listed, not stripped. Folder rights are read once a request, not once a folder.
+    - The GET with sign-in off, and the 401 sweep, are tested.
+  - *For T356 (T351's review):* state H's "unchanged" or "replaced" for each credential needs the server to compare each envelope's revision with the replaced source's. Only the names are shown now.
 - [ ] T352 (AC-288, AC-298, AC-278) Land an approved item in its folder, keeping the replaced version in history *(rewritten 2026-09-26: an approved model lands through xcube's changeset, T426; "the served files of that folder's chains" are gone, `[IP 1, IP 5]`)*
   - Files: a migration `…_item-versions.cjs`, `packages/api/src/repos/versions.ts` (+ test), `packages/api/src/routes/proposals.ts`
   - Failing test: `versions.test.ts`:

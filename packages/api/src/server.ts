@@ -775,9 +775,10 @@ export function buildServer({
         return seen?.rights.has(own) === true ? own : null;
       },
       workspaceOf: (folderId) => workspaceRootOf(folderId),
-      mayWrite: async (request, folderId) => {
+      // Read once a request, then asked per folder (T351's review).
+      writable: async (request) => {
         const seen = await visibilityOf(request);
-        return seen === undefined || mayWrite(seen, folderId);
+        return (folderId) => seen === undefined || mayWrite(seen, folderId);
       },
     });
   }
