@@ -181,6 +181,12 @@ export interface DataSourceStore {
     unlanding?: { readonly unland?: (source: DataSource) => Promise<void> },
   ): Promise<boolean>;
   sealedOf(id: string): Promise<Landed>;
+  /**
+   * Its settings and its envelopes as of one moment (T349's review): a save
+   * between two reads would pair one target's fields with another's
+   * envelopes, which would never open.
+   */
+  withSealed(id: string): Promise<{ source: DataSource; landed: Landed } | undefined>;
 }
 
 const MAX_NAME = 64;
@@ -564,6 +570,16 @@ export function dataSourceStore(
 
     async sealedOf(id) {
       return sealedOn(id, db);
+    },
+
+    async withSealed(id) {
+      return db
+        .transaction()
+        .setIsolationLevel('repeatable read')
+        .execute(async (tx) => {
+          const source = await getOn(id, tx);
+          return source === undefined ? undefined : { source, landed: await sealedOn(id, tx) };
+        });
     },
   };
   return store;

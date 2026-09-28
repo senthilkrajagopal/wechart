@@ -138,6 +138,43 @@ export interface Database {
   model_publications: ModelPublicationTable;
   folder_xcube_ids: FolderXcubeIdTable;
   audit_records: AuditRecordTable;
+  proposals: ProposalTable;
+  proposal_items: ProposalItemTable;
+}
+
+/** A workspace item proposed to its target folder (T349, AC-284), and its decision. */
+export interface ProposalTable {
+  id: string;
+  kind: string;
+  item_id: string;
+  title: string;
+  target_folder_id: string;
+  author_key: string;
+  author_name: string;
+  description: string | null;
+  proposed_at: Generated<Date>;
+  status: Generated<string>;
+  decided_by_key: string | null;
+  decided_by_name: string | null;
+  decided_at: Date | null;
+  reason: string | null;
+}
+
+/** Each item a proposal would land, as it was when proposed, the item itself first. */
+export interface ProposalItemTable {
+  proposal_id: string;
+  position: number;
+  kind: string;
+  item_id: string;
+  title: string;
+  version: number;
+  snapshot: JSONColumnType<Record<string, unknown>>;
+  /** The folder it lands in. */
+  lands_in: string;
+  replaces_id: string | null;
+  replaces_version: number | null;
+  /** While its proposal is open. */
+  open: Generated<boolean>;
 }
 
 /** One audit record (T368, AC-294): who, what, which folder and when. Only ever added. */

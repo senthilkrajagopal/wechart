@@ -26,6 +26,7 @@ import { publicationStore } from './xcube/publications';
 import { modelSync } from './xcube/snapshot';
 import { seedDevData } from './seed';
 import { seedDefault } from './seed-default';
+import { proposalStore } from './repos/proposals';
 import { buildServer } from './server';
 
 /**
@@ -157,6 +158,8 @@ async function main(): Promise<void> {
     folderAccess: folderAccessStore(db),
     // The audit trail (T368, AC-294).
     audit: auditStore(db),
+    // Workspace items proposed to their target folders (T349, AC-284).
+    proposals: proposalStore(db),
     // Data sources as folder items, their secrets sealed (T335).
     dataSources,
     ...(landing === undefined

@@ -1,0 +1,225 @@
+import { randomUUID } from 'node:crypto';
+
+import type { Kysely } from 'kysely';
+
+import type { Database } from '../db/schema';
+
+/**
+ * Proposals (T349, AC-284; design 05 of 2026-09-27): a workspace item offered
+ * to its target folder, holding what it would land as it was when proposed —
+ * the item first, then what goes with it, such as a dashboard's charts — with
+ * the folder, the author, the time and an optional description. The folder
+ * keeps serving what it had until an approval (AC-286, AC-288).
+ */
+export const PROPOSAL_KINDS = ['dashboard', 'chart', 'data-source'] as const;
+export type ProposalKind = (typeof PROPOSAL_KINDS)[number];
+export type ProposalStatus = 'open' | 'approved' | 'rejected' | 'withdrawn';
+
+/**
+ * A description's and a reason's limit, in characters: Unicode code points,
+ * as Postgres's `char_length` counts them and the dialog's counter must too
+ * (T358). An emoji made of several code points counts as several.
+ */
+export const PROPOSAL_TEXT_LIMIT = 1000;
+
+/** The item one would replace in the folder, at its version then; none for a new one. */
+export interface Replaces {
+  readonly id: string;
+  readonly version: number;
+}
+
+export interface ProposedItem {
+  readonly kind: ProposalKind;
+  readonly id: string;
+  readonly title: string;
+  /** The workspace item's version proposed. */
+  readonly version: number;
+  /** The item as it was when proposed: a data source's credentials still sealed. */
+  readonly snapshot: Record<string, unknown>;
+  /** The folder it lands in: the proposal's target, or a library chart's own. */
+  readonly landsIn: string;
+  readonly replaces: Replaces | null;
+}
+
+export interface NewProposal {
+  readonly author: { readonly key: string; readonly name: string };
+  readonly targetFolderId: string;
+  readonly description: string | null;
+  /** The item proposed first, then what goes with it. */
+  readonly items: readonly ProposedItem[];
+}
+
+export interface Proposal {
+  readonly id: string;
+  readonly kind: ProposalKind;
+  readonly itemId: string;
+  readonly title: string;
+  readonly targetFolderId: string;
+  readonly author: { readonly key: string; readonly name: string };
+  readonly description: string | null;
+  readonly proposedAt: Date;
+  readonly status: ProposalStatus;
+  readonly replaces: Replaces | null;
+  readonly items: readonly ProposedItem[];
+  readonly decision: {
+    readonly by: { readonly key: string; readonly name: string };
+    readonly at: Date;
+    readonly reason: string | null;
+  } | null;
+}
+
+/** The item waits in an open proposal already. */
+export class OpenProposalError extends Error {
+  constructor(
+    readonly kind: ProposalKind,
+    readonly itemId: string,
+  ) {
+    super('It is waiting for review already.');
+    this.name = 'OpenProposalError';
+  }
+}
+
+export interface ProposalStore {
+  create(proposal: NewProposal): Promise<Proposal>;
+  get(id: string): Promise<Proposal | null>;
+  /** The open proposal an item waits in, as its item or going with another's, if any. */
+  openFor(kind: ProposalKind, itemId: string): Promise<Proposal | null>;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function proposalStore(db: Kysely<Database>): ProposalStore {
+  /** The open proposal holding an item, as its item or going with another's. */
+  const openHolding = async (kind: string, itemId: string) =>
+    (
+      await db
+        .selectFrom('proposal_items')
+        .select('proposal_id')
+        .where('kind', '=', kind)
+        .where('item_id', '=', itemId)
+        .where('open', '=', true)
+        .executeTakeFirst()
+    )?.proposal_id;
+  const read = async (id: string): Promise<Proposal | null> => {
+    const row = await db
+      .selectFrom('proposals')
+      .selectAll()
+      .where('id', '=', id)
+      .executeTakeFirst();
+    if (row === undefined) return null;
+    const items = await db
+      .selectFrom('proposal_items')
+      .selectAll()
+      .where('proposal_id', '=', id)
+      .orderBy('position')
+      .execute();
+    const first = items[0];
+    return {
+      id: row.id,
+      kind: row.kind as ProposalKind,
+      itemId: row.item_id,
+      title: row.title,
+      targetFolderId: row.target_folder_id,
+      author: { key: row.author_key, name: row.author_name },
+      description: row.description,
+      proposedAt: row.proposed_at,
+      status: row.status as ProposalStatus,
+      replaces:
+        first?.replaces_id == null || first.replaces_version === null
+          ? null
+          : { id: first.replaces_id, version: first.replaces_version },
+      items: items.map((item) => ({
+        kind: item.kind as ProposalKind,
+        id: item.item_id,
+        title: item.title,
+        version: item.version,
+        snapshot: item.snapshot,
+        landsIn: item.lands_in,
+        replaces:
+          item.replaces_id === null || item.replaces_version === null
+            ? null
+            : { id: item.replaces_id, version: item.replaces_version },
+      })),
+      decision:
+        row.decided_by_key === null || row.decided_at === null
+          ? null
+          : {
+              by: { key: row.decided_by_key, name: row.decided_by_name ?? row.decided_by_key },
+              at: row.decided_at,
+              reason: row.reason,
+            },
+    };
+  };
+
+  return {
+    async create(proposal) {
+      const item = proposal.items[0];
+      if (item === undefined) throw new Error('A proposal holds at least its item.');
+      const id = randomUUID();
+      try {
+        await db.transaction().execute(async (tx) => {
+          await tx
+            .insertInto('proposals')
+            .values({
+              id,
+              kind: item.kind,
+              item_id: item.id,
+              title: item.title,
+              target_folder_id: proposal.targetFolderId,
+              author_key: proposal.author.key,
+              author_name: proposal.author.name,
+              description: proposal.description,
+              // Stamped here, to the millisecond a JavaScript date holds.
+              proposed_at: new Date(),
+              decided_by_key: null,
+              decided_by_name: null,
+              decided_at: null,
+              reason: null,
+            })
+            .execute();
+          await tx
+            .insertInto('proposal_items')
+            .values(
+              proposal.items.map((each, position) => ({
+                proposal_id: id,
+                position,
+                kind: each.kind,
+                item_id: each.id,
+                title: each.title,
+                version: each.version,
+                snapshot: JSON.stringify(each.snapshot),
+                lands_in: each.landsIn,
+                replaces_id: each.replaces?.id ?? null,
+                replaces_version: each.replaces?.version ?? null,
+              })),
+            )
+            .execute();
+        });
+      } catch (failure) {
+        const { code, constraint } = failure as { code?: string; constraint?: string };
+        if (
+          code === '23505' &&
+          (constraint === 'proposals_one_open_per_item' ||
+            constraint === 'proposal_items_one_open_per_item')
+        ) {
+          // Which of its items waits already: the item itself, or one going with it.
+          for (const each of proposal.items)
+            if ((await openHolding(each.kind, each.id)) !== undefined)
+              throw new OpenProposalError(each.kind, each.id);
+          throw new OpenProposalError(item.kind, item.id);
+        }
+        throw failure;
+      }
+      return (await read(id))!;
+    },
+
+    async get(id) {
+      return UUID.test(id) ? read(id) : null;
+    },
+
+    async openFor(kind, itemId) {
+      const id = await openHolding(kind, itemId);
+      return id === undefined ? null : read(id);
+    },
+  };
+}

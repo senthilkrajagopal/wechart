@@ -247,6 +247,29 @@ export function documents(db: Kysely<Database>) {
       return rows.map(toDocument);
     },
 
+    /**
+     * The folder's own item of a kind with this title (T349; AC-288, rule 75):
+     * what a proposal of that kind and name would replace there. A chart on
+     * a dashboard is its dashboard's, so never one. The first by id, if bad
+     * data holds two.
+     */
+    async named(
+      kind: DocumentKind,
+      folderId: string,
+      title: string,
+    ): Promise<StoredDocument | null> {
+      const row = await db
+        .selectFrom('documents')
+        .selectAll()
+        .where('kind', '=', kind)
+        .where('folder_id', '=', folderId)
+        .where('title', '=', title)
+        .where('local_to_dashboard_id', 'is', null)
+        .orderBy('id')
+        .executeTakeFirst();
+      return row === undefined ? null : toDocument(row);
+    },
+
     /** Remove an object. Returns false when there was nothing to remove. */
     async remove(kind: DocumentKind, id: string): Promise<boolean> {
       const result = await db

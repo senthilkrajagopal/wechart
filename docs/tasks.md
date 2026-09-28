@@ -5631,14 +5631,14 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - **Tests:**
     - api 801 (`workspaces.test.ts` 9, `workspace-alias.test.ts` 2), web 1559 (`roots.test.ts` 3);
     - Chrome: the security suite (59) and Explore, design conformance, dashboard, settings and editor (137).
-- [x] T344 (AC-278, AC-279) Copy a dashboard into the workspace with its charts, never editing shared items in place *(2026-09-27: the copy; the refusal of in-place edits moved to T349)*
+- [x] T344 (AC-278, AC-279) Copy a dashboard into the workspace with its charts, never editing shared items in place *(2026-09-27: the copy; the refusal of in-place edits moved to T349, and on 2026-09-28 to T352)*
   - Files: `packages/api/src/routes/workspace-copy.ts` (+ test), `packages/api/src/server.ts` (a write to a shared item answers 409 "Edit in my workspace"), `packages/api/src/repos/documents.ts`
   - Failing test: `workspace-copy.test.ts`: copying a dashboard brings its local charts and the library charts it shows, and a model or data source only when chosen; a second copy opens the first; any `PUT`, `PATCH` of content on a shared dashboard, chart, model or data source is refused (AC-278, AC-279).
   - Depends on: T343
   - *Sequenced 2026-09-27:*
     - The copy is built now: `POST /api/workspace/copies` for a dashboard or chart. A dashboard's copy brings copies of its local charts and the library charts it shows, pointing at the copies. Each copy records its origin (kind, id, version, folder) and targets its origin's folder. A second copy opens the first. Models and data sources come with T347 and T346, which make their copies.
     - Copying needs read-write access to the item's folder, since only such a member can propose it back (AC-284). This is a small decision under the standing instruction, and can be overturned.
-    - The refusal of in-place edits to shared items lands with proposals (T349). Until then, a shared item changed in place is the only way it changes, as with AC-192's shared-folder half (T331).
+    - The refusal of in-place edits to shared items lands with ~~proposals (T349)~~ approvals (T352, moved 2026-09-28). Until then, a shared item changed in place is the only way it changes, as with AC-192's shared-folder half (T331).
     - The "Edit in my workspace" button is built to the phase-2 design review (T348).
   - *As built (2026-09-27):*
     - `POST /api/workspace/copies` (`server.ts`), with the copies drawn up in `routes/workspace-copy.ts`, made in one transaction (`documents.createTogether`), and found by origin in the copier's workspace (`documents.withOrigin`).
@@ -5650,7 +5650,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - another dashboard's local chart, or a library chart from a folder they can't write, becomes the copy's own local chart. It names its origin's folder only where they can see it.
     - A save keeps a copy's `origin` as stored, as it keeps its target.
     - Tests: `routes/workspace-copy.test.ts` (11).
-    - AC-278 and AC-279 stay unticked. The button is T348's, the refusal of in-place edits is T349's, and models and data sources are T347's and T346's.
+    - AC-278 and AC-279 stay unticked. The button is T348's, the refusal of in-place edits is ~~T349's~~ T352's (2026-09-28), and models and data sources are T347's and T346's.
     - The review also noted a double-submit race (two concurrent copies both made). It is left under the standing instruction on save edge cases; T348's button disables itself while a copy is made.
 - [x] T345 (AC-282, AC-192) Create items in the workspace with a target folder
   - Files: `packages/api/src/server.ts` (`POST /api/documents` in a workspace requires `targetFolderId`), `packages/web/src/workspaces/explore/{CreateMenu,NewItemDialog,TargetPicker}.tsx` (+ tests)
@@ -5719,6 +5719,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Also tested: a workspace copy of the root's `default`, pointed at another database with its target unchanged, answers the workspace's previews from that database while the published dashboard still answers from the original (AC-280); the copy's type can't change.
   - ~~Files: `packages/api/src/model/chain.ts` (`ws:<user>` chains), `packages/api/src/model/workspace-chain.test.ts`~~
   - *(2026-09-27, from T345)* the workspace's New menu offers Model, which asks for its target folder as `NewItemDialog` does and stores it on the model, so a new model's overlay resolves along its target's path (AC-282's model half; with T363's data source, AC-282 can then be ticked).
+  - *2026-09-28, from T349's review:* once the workspace holds models, a `PUT` of a shared folder's model file is refused with `409`, "Edit in my workspace", as T352 refuses dashboards, charts and data sources (AC-278).
   - Depends on: T344, T346, T426, T437
 - [ ] T348 (AC-278) Show the workspace band, each item's origin and target, and "Edit in my workspace" / "Open my copy"
   - Files: `packages/web/src/workspaces/explore/{WorkspaceBand,OriginLine,EditInWorkspaceDialog}.tsx` (+ tests), `packages/web/src/dashboard/DashboardView.tsx`, `e2e/security/workspace.spec.ts`
@@ -5753,21 +5754,56 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 ## P2.6 Proposals, approval and history (F30)
 
-- [ ] T349 (AC-284) Propose a workspace item into its target folder, with an optional description of up to 1,000 characters
+- [x] T349 (AC-284) Propose a workspace item into its target folder, with an optional description of up to 1,000 characters
   - Files: a migration `…_proposals.cjs` (`proposals`, `proposal_items` with the item snapshot), `packages/api/src/repos/proposals.ts` (+ test), `packages/api/src/routes/proposals.ts` (+ test)
   - Failing test: `proposals.test.ts`: a proposal records the item snapshot, the folder, the author, the time and the description; 1,001 characters answer 400; the folder serves its current version until approval (AC-284).
-    - *(2026-09-27, moved from T344)* with proposals in place, any `PUT` or `PATCH` of content on a shared dashboard, chart, model or data source is refused with 409, "Edit in my workspace" (AC-278). Until then a change in place is the only way a shared item changes.
-    - *(2026-09-27, from T346's review)* a workspace data source approved into its target is stored there with no target and no origin, since a shared folder's are one of a name (the unique key is folder, target, name).
+    - ~~*(2026-09-27, moved from T344)* with proposals in place, any `PUT` or `PATCH` of content on a shared dashboard, chart, model or data source is refused with 409, "Edit in my workspace" (AC-278). Until then a change in place is the only way a shared item changes.~~ Moved to T352 (2026-09-28).
+    - ~~*(2026-09-27, from T346's review)* a workspace data source approved into its target is stored there with no target and no origin~~ Moved to T352 (2026-09-28), which lands approvals.
   - Depends on: T344
+  - *As built (2026-09-28; design 05 of 2026-09-27, state A's API):*
+    - `POST /api/proposals` takes `{ kind, id, description? }`. `kind` is a dashboard, a library chart or a data source in the user's own workspace. It answers `201` with the proposal.
+    - The proposal holds what it would land as it is now, the item first:
+      - a dashboard, with the charts it shows from the workspace (its own, and the library charts there, copied or new); shared charts it shows stay as they are;
+      - a data source with its fields and its credentials still sealed, the envelopes byte for byte (AC-298), never sent back to the browser.
+    - Each item names the folder it lands in (`landsIn`): the target, or a library chart's own target when it goes with a dashboard.
+    - Each item names what it would replace there, at that item's version then (design 05's "replaces version _n_"), and whether it was copied from it (`copiedFrom`, for rule 75's warning):
+      - the item of the same kind and name (AC-288), whatever it was copied from; a renamed copy replaces none of its origin;
+      - a dashboard's own chart, its origin when that is the replaced dashboard's own.
+    - The folders keep serving what they had. A later save to the workspace item isn't in the proposal (design 05, state M).
+    - The description is at most 1,000 characters, counted in code points, as Postgres counts them. 1,001 answers `400` and records nothing; blank is none.
+    - An item waits in one open proposal at a time, as its item or going with another's (`proposal_items.open`, unique while open). A second answers `409` with the open one's id.
+    - Refused:
+      - a shared item: `400`, edit it in your workspace;
+      - a chart on a dashboard: `400`, it goes with its dashboard;
+      - anything not in the user's own workspace: `404`;
+      - a user with no workspace: `403`, as the copy route says it;
+      - a target, or a shown chart's target, that they may no longer write: `403`; one no longer there: `404`; a workspace folder: `400`;
+      - a workspace chart the dashboard shows that names no target, or another workspace dashboard's own chart: `409`;
+      - a chart this version can't read: `422`, as the copy route says it.
+    - Recorded in the audit trail as a proposal (T368's note), by path: "Proposed to Sales / EMEA, replacing version 7, with 2 charts". The record holds what each item is and where it lands, never an envelope.
+    - With sign-in off it is not there (`404`), as workspaces aren't. T359 brings the single user's.
+    - Also files: `packages/api/src/db/schema.ts`, `packages/api/src/repos/documents.ts` (`named`), `packages/api/src/repos/data-sources.ts` (`withSealed`), `packages/api/src/server.ts`, `packages/api/src/main.ts`, `packages/api/src/repos/proposals.test.ts`.
+  - **Done 2026-09-28, after one review round.** AC-284 stays open: it's the Propose dialog's (T358) to show on the real surface.
+  - **Review fixes:**
+    1. The running API had no proposals: `main.ts` now passes the store.
+    2. A chart going with a dashboard could wait in a second proposal. Every item a proposal holds is now unique while it's open.
+    3. A chart the dashboard shows could go to a folder its author may not write, decided by the target's members. Each item's folder is now recorded and checked. T351 decides who may decide such a proposal.
+    4. What an item replaces was decided by its origin first. AC-288 says the item of the same kind and name, so it now is, with `copiedFrom` saying whether that was its origin.
+    5. A data source's fields and envelopes were read apart; they're now read in one repeatable-read transaction (`withSealed`).
+    6. An unreadable chart gave a 500, now 422; another workspace dashboard's own chart was skipped, now refused. The target is checked to be a shared folder that's still there.
+    - Tests added: a renamed copy, a chart already waiting with a dashboard, a chart bound to a folder the author can't write, a target gone, a non-string or blank description, the audit summary word for word with no envelope in it, the folders' GETs unchanged, and each test standing alone.
+    - The Propose dialog's check before sending is T358's (a check route; noted there).
+  - *Moved to T352 (2026-09-28):* the `409` for in-place edits of shared items (AC-278). Until an approval can land, a change in place is still the only way a shared item changes. Refusing it here would leave shared items unchangeable until then.
 - [ ] T350 (AC-285) Put the workspace-only models a proposed dashboard needs into the same proposal
   - Files: `packages/api/src/routes/proposals.ts`, ~~`packages/api/src/model/chain.ts`~~ `packages/api/src/xcube/overlays.ts` (2026-09-26), `packages/api/src/routes/proposal-bundle.test.ts`
   - Failing test: `proposal-bundle.test.ts`: a dashboard whose cubes resolve only through the author's workspace models is proposed with them, and approving or rejecting applies to all together, as one changeset (AC-285).
   - Depends on: T349, T347
 - [ ] T351 (AC-286) Let only the author, the target folder's read-write members and Super-Admins decide a proposal
+  - *2026-09-28, from T349's review (a small decision, overturnable):* a proposal can land in more than one folder, where a dashboard shows a library chart bound elsewhere. A read-write member decides it only if they may write every folder it lands in (`proposal_items.lands_in`), so no folder's content changes without one of its own members, its author, or a Super-Admin.
   - Files: `packages/api/src/routes/proposals.ts`, `packages/api/src/routes/proposal-deciders.test.ts`
   - Failing test: `proposal-deciders.test.ts`: the author (with security on and off), a read-write member of the target and a Super-Admin may approve or reject; a read-only member and an outsider get 403; nothing reaches the folder except through an approval (AC-286, AC-254).
   - Depends on: T349
-- [ ] T352 (AC-288, AC-298) Land an approved item in its folder, keeping the replaced version in history *(rewritten 2026-09-26: an approved model lands through xcube's changeset, T426; "the served files of that folder's chains" are gone, `[IP 1, IP 5]`)*
+- [ ] T352 (AC-288, AC-298, AC-278) Land an approved item in its folder, keeping the replaced version in history *(rewritten 2026-09-26: an approved model lands through xcube's changeset, T426; "the served files of that folder's chains" are gone, `[IP 1, IP 5]`)*
   - Files: a migration `…_item-versions.cjs`, `packages/api/src/repos/versions.ts` (+ test), `packages/api/src/routes/proposals.ts`
   - Failing test: `versions.test.ts`:
     - approving replaces the same-kind, same-name item, and stores the replaced version with its author, approver, time and description;
@@ -5775,6 +5811,11 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - a data source's version keeps its ciphertext unopened (AC-298).
   - ~~an approved model changes the served files of that folder's chains (AC-288, AC-275).~~
   - *2026-09-26, `[X6]`:* an approved data source lands in xcube through T442 (`PUT …/connections/{name}`, before the items that bind it), and the workspace's overlay is then deleted (T347).
+  - *2026-09-28, moved from T349:*
+    - With approvals landing, any `PUT` or `PATCH` of content on a shared dashboard, chart or data source is refused with `409`, "Edit in my workspace" (AC-278). Models follow once the workspace holds them (T347).
+    - A workspace data source approved into its target is stored there with no target and no origin, since a shared folder's are one of a name (the unique key is folder, target, name; T346's review).
+    - Each item lands in its own `landsIn` folder (T349's review): a library chart a dashboard shows goes to its own target, which may not be the dashboard's.
+    - An approval clears `proposal_items.open`, so the items may be proposed again.
   - Depends on: T351, T426, T442
 - [ ] T353 (AC-290) Return a rejected proposal to its author with the approver's reason
   - Files: `packages/api/src/routes/proposals.ts`, `packages/api/src/routes/proposal-reject.test.ts`
@@ -5799,6 +5840,9 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 - [ ] T358 (AC-284) Propose from the workspace item: the dialog, the counter, the bundle and the waiting band
   - Files: `packages/web/src/workspaces/explore/ProposeDialog.tsx` (+ test), `e2e/security/workspace.spec.ts`
   - Failing test: `ProposeDialog.test.tsx`: the dialog names the target and "new" or "replaces version _n_", lists bundled models without a way to remove them, counts "_n_ / 1,000" and blocks at 1,001 without truncating; after proposing, the item shows "Waiting for review" (AC-284; rule 75).
+  - *2026-09-28, from T349's review:*
+    - The dialog shows what proposing would do before it is sent: the target, what each item replaces and whether it was copied from it, what goes with it, and a refusal (state F's check "when the dialog opens"). That needs a check route in `packages/api/src/routes/proposals.ts` answering what `POST /api/proposals` would record, without recording it.
+    - The counter counts code points, as the API and Postgres do (`PROPOSAL_TEXT_LIMIT`).
   - Depends on: T349, T350, T348
 - [ ] T359 (AC-254) With security off, the single user works through a workspace and approves their own proposals
   - Files: `e2e/workspace-single-user.spec.ts` (the phase-1 configuration)
@@ -7617,6 +7661,7 @@ Every step leaves both suites working. The slice-4 image takes HS256 tokens unti
 
     Research: `xcube-slice-4.md`, "Keys and tokens".
   - Depends on: T420
+- [ ] T438 (AC-166) Preview a dashboard as the chosen groups, with a token carrying exactly those *(header restored 2026-09-28: 6f46537 dropped the line and left its body under T437)*
   - Files: `packages/api/src/server.ts` (the preview), `packages/web/src/workspaces/security/PreviewAs.tsx`, `e2e/security/preview-as.spec.ts`
   - Failing test: `preview-as.spec.ts`:
     - a Super-Admin previews a dashboard as two groups, and every query it makes carries exactly those groups and nothing else;
@@ -8605,7 +8650,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 | AC-269 | T334, T335, T462 | AC-270 | T336 | AC-271 | T336, T452 |
 | AC-272 | ~~T337, T339, T340~~ T429, T457 | AC-273 | ~~T338~~ T435 | AC-274 | T341 |
 | AC-275 | ~~T337, T352~~ T428 | AC-276 | T343 | AC-277 | T343 |
-| AC-278 | T344, T348 | AC-279 | T344 | AC-280 | T346, T347 |
+| AC-278 | T344, T348, T352 | AC-279 | T344 | AC-280 | T346, T347 |
 | AC-281 | T347 | AC-282 | T345, T347, T363 | AC-283 | T347 |
 | AC-284 | T349, T358 | AC-285 | T350 | AC-286 | T351 |
 | AC-287 | T355, T356 | AC-288 | T352, ~~T426~~ T451 | AC-289 | T354, T357 |

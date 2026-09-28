@@ -66,6 +66,8 @@ import type { AuditStore } from './repos/audit';
 import { registerFolderAccess } from './routes/access';
 import { registerAudit } from './routes/audit';
 import { registerDataSources } from './routes/data-sources';
+import { registerProposals } from './routes/proposals';
+import type { ProposalStore } from './repos/proposals';
 import { chartCopy, dashboardCopies, type ShownCopy } from './routes/workspace-copy';
 import type { QueryLogEntry, QueryLogPageAsk } from './repos/query-log';
 
@@ -127,6 +129,8 @@ export interface BuildOptions {
   readonly folderAccess?: FolderAccessStore;
   /** The audit trail (T368, AC-294): where sign-ins and changes are recorded. */
   readonly audit?: AuditStore;
+  /** Workspace items proposed to their target folders (T349, AC-284). */
+  readonly proposals?: ProposalStore;
   /** Data sources as folder items, their secrets sealed (T335, AC-269). */
   readonly dataSources?: DataSourceStore;
   /**
@@ -234,6 +238,12 @@ export interface DocumentWriter {
     originId: string,
     inFolders?: readonly string[],
   ): Promise<readonly { id: string; body: Record<string, unknown> }[]>;
+  /** A folder's own item of a kind with this title, as a proposal would replace (T349). */
+  named?(
+    kind: 'dashboard' | 'chart',
+    folderId: string,
+    title: string,
+  ): Promise<{ id: string; body: Record<string, unknown>; version: number } | null>;
 }
 
 /** The slice of the catalog repository the server exposes. */
@@ -298,6 +308,7 @@ export function buildServer({
   introspectionRetryMs,
   sessions,
   audit,
+  proposals,
 }: BuildOptions): FastifyInstance {
   const app = Fastify({
     logger,
@@ -740,6 +751,36 @@ export function buildServer({
         return right.kinds === 'all' ? undefined : notThere;
       },
     });
+
+  // Workspace items proposed to their target folders (T349, AC-284).
+  if (proposals !== undefined && docs?.get !== undefined && docs.named !== undefined) {
+    const get = docs.get.bind(docs);
+    const named = docs.named.bind(docs);
+    registerProposals(app, {
+      store: proposals,
+      ...(audit === undefined ? {} : { audit }),
+      // Workspaces are signed-in users' (T343); T359 brings the single user's.
+      enabled: security !== 'off',
+      documents: {
+        get: async (kind, id) => {
+          const found = await get(kind, id);
+          return found === null ? null : { ...found, version: found.version ?? 1 };
+        },
+        named,
+      },
+      ...(dataSources === undefined ? {} : { dataSources }),
+      ownWorkspace: async (request) => {
+        const seen = await visibilityOf(request);
+        const own = workspaceIdOf(userOf(request).key);
+        return seen?.rights.has(own) === true ? own : null;
+      },
+      workspaceOf: (folderId) => workspaceRootOf(folderId),
+      mayWrite: async (request, folderId) => {
+        const seen = await visibilityOf(request);
+        return seen === undefined || mayWrite(seen, folderId);
+      },
+    });
+  }
 
   /**
    * The charts and dashboards that use the members an edit changes, listed
