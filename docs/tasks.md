@@ -8560,6 +8560,11 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - Auto picks them for two or more metrics on different scales, and never a form that hides a metric;
     - in a form that can't draw a metric, that metric's pill says "not drawn", with a one-line reason, and offers Small multiples and Table (UX-057, design 01-5).
   - Depends on: T467
+- [ ] T516 (AC-036, AC-187) Offer the horizontal bar as the runner-up when most category labels would be hidden *(added 2026-09-28: UX-117's second half, from T467)*
+  - **Why.** UX-117 (`docs/design/reviews/2026-09-27/phase-1-recheck.md`) recommends two things. T467 built the first: labels rotate before any is hidden. The second is that when more than half would be hidden even then, the type card offers the horizontal bar as its runner-up.
+  - Files: `packages/recommender/src/recommend.ts`, `packages/charts/src/layout/categoryLabels.ts` (+ tests)
+  - Failing test: `recommend.test.ts`: a bar whose category labels would be more than half hidden at the tile's width ranks the horizontal bar second, and one whose labels fit doesn't.
+  - Depends on: T467
 - [x] T468 (AC-187) Edit mode: a new filter is selected with focus in its field picker, and edit heads show the element's kind
   - Failing test: `dashboard-edit.spec.ts`: adding a filter selects it, shows Properties and focuses the field picker (UX-031); an edit-mode head reads "Chart · Area", never the freshness badge or Table view (UX-032).
   - Depends on: none
