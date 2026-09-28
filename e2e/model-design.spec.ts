@@ -949,6 +949,42 @@ test('T494: side by side with design 03 — controls in a row line up, and a tre
   expect(memberName).toBe(memberType);
 });
 
+test('T495: the tree as design 12 — a locked Jinja tag, and its reading and empty states (MW-03)', async ({
+  page,
+}) => {
+  await page.goto('/model');
+  const tree = page.getByRole('navigation', { name: 'Model files' });
+  const jinja = tree.getByRole('link', { name: /^templated_example\.yml/ });
+  await expect(jinja.locator('.model-tree__kind .secret-pasted__lock')).toBeVisible();
+  await expect(jinja.locator('.model-tree__name')).toHaveAttribute(
+    'title',
+    'templated_example.yml',
+  );
+
+  // While the files are read: the line the overview says, and no state in the head.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/model/files', async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.reload();
+  await expect(tree.getByRole('status')).toHaveText('Reading the model…');
+  await expect(tree.locator('.model-tree__state')).toHaveCount(0);
+  release();
+  await expect(tree.locator('.model-tree__state')).toHaveText('All published');
+
+  // A model with no files: said, still no state, and the three ways to start.
+  await page.unroute('**/api/model/files');
+  await page.route('**/api/model/files', (route) => route.fulfill({ json: { files: [] } }));
+  await page.reload();
+  await expect(tree.locator('.model-tree__empty')).toHaveText('No files yet.');
+  await expect(tree.locator('.model-tree__state')).toHaveCount(0);
+  await expect(tree.locator('.model-tree__actions button')).toHaveCount(3);
+});
+
 test('T483: a Jinja file in the editor’s frame, read-only and saying so (MW-16)', async ({
   page,
 }) => {

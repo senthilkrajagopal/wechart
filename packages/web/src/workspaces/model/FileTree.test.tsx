@@ -186,6 +186,15 @@ describe('the model’s file tree (AC-222)', () => {
       expect(tag?.textContent).toBe('Jinja, read-only');
       expect(tag?.querySelector('.visually-hidden')?.textContent).toBe(', read-only');
       expect(tag?.getAttribute('title')).toBe('Jinja template · read-only here');
+      // With the lock design 12 draws it with (pin 3, MW-03), out of its name.
+      const lock = tag?.querySelector('.secret-pasted__lock');
+      expect(lock?.getAttribute('aria-hidden')).toBe('true');
+      expect(
+        within(nav)
+          .getByRole('link', { name: /^templated\.yml/ })
+          .querySelector('.model-tree__name')
+          ?.getAttribute('title'),
+      ).toBe('templated.yml');
       expect(
         within(nav)
           .getByRole('link', { name: /^globals\.py/ })
@@ -217,6 +226,26 @@ describe('the model’s file tree (AC-222)', () => {
       await userEvent.click(generate);
       expect(onGenerate).toHaveBeenCalledTimes(1);
       expect(onNew).not.toHaveBeenCalled();
+    });
+
+    /** T495: design 12's states B and F in the tree. */
+    it('says there are no files yet, with no state in its head and its foot as ever', () => {
+      const { nav } = tree({ files: [], current: undefined });
+      expect(nav.querySelector('.model-tree__body > .model-tree__empty')?.textContent).toBe(
+        'No files yet.',
+      );
+      expect(nav.querySelector('.model-tree__folder')).toBeNull();
+      expect(nav.querySelector('.model-tree__state')).toBeNull();
+      expect(within(nav).getByRole('button', { name: 'New cube' })).toBeTruthy();
+    });
+
+    it('says it is reading the model while it does, with no state in its head', () => {
+      const { nav } = tree({ files: [], current: undefined, reading: true });
+      const line = nav.querySelector('.model-tree__body [role="status"]');
+      expect(line?.textContent).toBe('Reading the model…');
+      expect(line?.querySelector('svg')?.getAttribute('data-icon')).toBe('run');
+      expect(nav.querySelector('.model-tree__state')).toBeNull();
+      expect(within(nav).queryByText('No files yet.')).toBeNull();
     });
 
     it('draws Generate pressed while its pane is open (design 11 pin 9)', () => {

@@ -847,13 +847,19 @@ main:has(.model-page) {
 /* A file the form can't open: its kind, as design 03's tag, at 12 px (D5). */
 .model-tree__kind {
   flex: none;
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
   margin-left: auto;
-  padding: 0 4px;
+  padding: 0 5px;
   border: 1px solid var(--wc-border-strong);
   border-radius: 3px;
-  color: var(--wc-text-muted);
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-secondary);
   font: 600 12px/16px Inter, system-ui, sans-serif;
 }
+/* An empty model, or one still read (design 12 states B and F): a line where the files go. */
+.model-tree__empty { margin: 0; padding: 10px 12px; color: var(--wc-text-muted); font-size: 12px; line-height: 16px; }
 .model-tree__actions { display: grid; gap: 6px; margin-top: 8px; padding: 12px; border-top: 1px solid var(--wc-border-subtle); }
 /* A flex box drops the space after "+": the gap keeps it (T479). */
 .model-tree__actions .btn-sm { display: flex; gap: 4px; align-items: center; justify-content: flex-start; text-align: left; }

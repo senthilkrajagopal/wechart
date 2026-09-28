@@ -1323,6 +1323,7 @@ export function ModelFilePage({
         onNew={makeNew}
         generating={generating}
         onGenerate={startGenerate}
+        reading={files.isPending}
       />
       <div className="model-page__main">
         {path === undefined ? (

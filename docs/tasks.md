@@ -8209,6 +8209,15 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - Description has no placeholder. Design 03's "Shown in tooltips and the field list" isn't true of wechart's field list.
     - Refresh also holds `sql` and `immutable`, since every key stays reachable (checklist 26). `immutable` has no default, so it stays a select.
   - Files: `packages/web/src/shell/styles.ts`, `e2e/model-design.spec.ts`
+- [x] T495 (AC-344) The tree as design 12: a locked Jinja tag, and its reading and empty states
+  - **Done 2026-09-27.** Tested in `e2e/model-design.spec.ts` (T495's test, in Chrome, Firefox and Safari) and `FileTree.test.tsx`.
+  - **Pin 3 (MW-03):**
+    - The tag of a file the form can't open wears a lock. It is design 12's 12 px tag, on the surface, in the secondary text colour.
+    - A name cut short keeps its whole in its tooltip.
+  - **States F and B:**
+    - While the model's files are read, the tree says "Reading the model…" with the running icon, as the overview does, and its head shows no state.
+    - A model with no files says "No files yet." Its head shows no state, since there is nothing to publish, and its foot is unchanged.
+  - Files: `packages/web/src/workspaces/model/{FileTree,ModelFilePage}.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/model-design.spec.ts`
   - Failing test: `model-design.spec.ts`:
     - New view's YAML has no `cubes`;
     - it opens on the Cubes tab with a new cube entry open and its join-path picker focused;

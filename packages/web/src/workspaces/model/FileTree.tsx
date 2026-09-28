@@ -1,6 +1,6 @@
 import { useId, useMemo, useState } from 'react';
 
-import { StatusIcon } from '../../shell/StatusIcon';
+import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { objectsOf, type FileObjects } from './objects';
 import { validationProblems } from './validate';
 
@@ -49,6 +49,8 @@ export interface FileTreeProps {
   readonly onGenerate?: (() => void) | undefined;
   /** Whether Generate cubes is open: its button is shown pressed (design 11 pin 9). */
   readonly generating?: boolean | undefined;
+  /** Whether the model's files are still being read (design 12 state F). */
+  readonly reading?: boolean | undefined;
 }
 
 export function fileHref(path: string): string {
@@ -64,6 +66,7 @@ export function FileTree({
   onNew,
   onGenerate,
   generating = false,
+  reading = false,
 }: FileTreeProps) {
   // Each file read once for whether it parses, whether Cube would take what
   // it says (AC-227), and whether it is code the form can't open (AC-140) —
@@ -115,13 +118,23 @@ export function FileTree({
     <nav className="model-tree" aria-label="Model files">
       <div className="model-tree__head">
         <h2>Model</h2>
-        {/* The model's state, with its icon and in words (direction.md rule 3). */}
-        <span className={`model-tree__state${waiting === 0 ? ' model-tree__state--ok' : ''}`}>
-          <StatusIcon kind={waiting === 0 ? 'ok' : 'idle'} />
-          {waiting === 0 ? 'All published' : `${String(waiting)} unpublished`}
-        </span>
+        {/* The model's state, with its icon and in words (direction.md rule 3):
+            none while it reads, or with nothing in it to publish (design 12). */}
+        {reading || files.length === 0 ? null : (
+          <span className={`model-tree__state${waiting === 0 ? ' model-tree__state--ok' : ''}`}>
+            <StatusIcon kind={waiting === 0 ? 'ok' : 'idle'} />
+            {waiting === 0 ? 'All published' : `${String(waiting)} unpublished`}
+          </span>
+        )}
       </div>
       <div className="model-tree__body">
+        {reading ? (
+          <StateLine kind="run" className="model-tree__empty">
+            Reading the model…
+          </StateLine>
+        ) : files.length === 0 ? (
+          <p className="model-tree__empty">No files yet.</p>
+        ) : null}
         {[...folders.entries()].map(([folder, inside], index) => {
           const label = `model/${folder}`;
           const open = !folded.has(folder);
@@ -169,9 +182,14 @@ export function FileTree({
                             onOpen(file.path);
                           }}
                         >
-                          <span className="model-tree__name">{file.path.slice(folder.length)}</span>
+                          {/* Cut short to make room for its marks, whole in its tooltip (design 12 pin 3). */}
+                          <span className="model-tree__name" title={file.path.slice(folder.length)}>
+                            {file.path.slice(folder.length)}
+                          </span>
                           {kind === undefined ? null : (
                             <span className="model-tree__kind" title={KIND_TITLES[kind]}>
+                              {/* Locked: it opens read-only (design 12 pin 3, MW-03). */}
+                              <span className="secret-pasted__lock" aria-hidden="true" />
                               {kind}
                               {/* Said, not only shown on a hover (T479's review). */}
                               <span className="visually-hidden">, read-only</span>
