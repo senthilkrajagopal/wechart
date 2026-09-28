@@ -857,7 +857,10 @@ main:has(.model-page) {
 .model-tree__actions { display: grid; gap: 6px; margin-top: 8px; padding: 12px; border-top: 1px solid var(--wc-border-subtle); }
 /* A flex box drops the space after "+": the gap keeps it (T479). */
 .model-tree__actions .btn-sm { display: flex; gap: 4px; align-items: center; justify-content: flex-start; text-align: left; }
-.model-tree__name { min-width: 0; overflow-wrap: anywhere; }
+/* A name is never broken inside a word (design 12's ".fn"): marks that don't
+   fit beside it go under it, and a name longer than the row is cut short. */
+.model-tree__file { flex-wrap: wrap; }
+.model-tree__name { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-tree__tag,
 .model-tree__mark {
   display: inline-flex;
@@ -1235,6 +1238,9 @@ button.model-problems__row { cursor: pointer; }
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px 12px;
 }
+/* A field beside a taller one (help beneath it) keeps its control under its
+   label, so the two controls line up (design 03's Name and Type). */
+.model-form__fields > .model-field { align-content: start; }
 .model-form__fields > .model-field:has(.model-field__sql),
 .model-form__fields > .model-field:has(.model-field__yaml),
 .model-form__fields > .model-field:has(.model-picker),

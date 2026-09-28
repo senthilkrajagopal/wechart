@@ -8196,6 +8196,19 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - The list is kept while the model's joins are unchanged.
   - A new cube still has its Name focused (T484). A new view no longer does.
   - Files (as built): `packages/web/src/workspaces/model/ModelFilePage.tsx`, `packages/web/src/workspaces/model/form/{CubeForm,ObjectForm,MemberPicker}.tsx`, `packages/web/src/workspaces/model/form/{schema,scopes}.ts` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/model-design.spec.ts`
+- [x] T494 (AC-187, AC-344) The Model editor side by side with design 03: what still differed
+  - **Done 2026-09-27.** Tested in `e2e/model-design.spec.ts` (T494's test, in Chrome, Firefox and Safari).
+  - **Checked against:** the running editor at 1,440 × 900, in design 03's main screen, state B (General), state C (New cube) and the Jinja row. Design 12 and the critique supersede design 03 where they differ (the tree's foot, the head's state, Hide, the time zone wording, the code at 12/16).
+  - **Fixed:**
+    - Two controls in a row now line up. A field's label no longer stretches when the field beside it has a longer help line, so the Name, Type and Data source controls sit at one height.
+    - A tree name is never broken inside a word. Before, a draft with problems read "new_ / cube / _1.y / ml". Now the name keeps one line, as design 12's `.fn` does. Marks that don't fit beside it go beneath it, and a name longer than the row is cut short.
+  - **Left as built, with the reason:**
+    - The head's path is the file's path in the store (`cubes/orders.yml`), without the tree's `model/` prefix. It is the object the URL names (`routing.spec.ts`).
+    - Title's placeholder is "from the name", not the derived title. Cube's rule for it is only observed so far ("Signed Up at" in `/v1/meta`), not researched.
+    - Format is a text field, not a select, because Cube also takes d3 specifiers (`data-modeling.md`, Formats).
+    - Description has no placeholder. Design 03's "Shown in tooltips and the field list" isn't true of wechart's field list.
+    - Refresh also holds `sql` and `immutable`, since every key stays reachable (checklist 26). `immutable` has no default, so it stays a select.
+  - Files: `packages/web/src/shell/styles.ts`, `e2e/model-design.spec.ts`
   - Failing test: `model-design.spec.ts`:
     - New view's YAML has no `cubes`;
     - it opens on the Cubes tab with a new cube entry open and its join-path picker focused;
@@ -8337,7 +8350,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 | AC-337 | T448 | AC-009 (again) | T426 | AC-189, AC-249 (again, folder items) | T450 |
 | AC-338 | T472 | AC-339 | T471 | AC-340 | T471 |
 | AC-341 | T356 | AC-342 | T475 | AC-343 | T471, T473, T474, T475, T462, T331, T348, T356, T357, T358, T367, T369, T371 |
-| AC-344 | T470, T479–T487, T493 | AC-345 | T488 | AC-346 | T488 |
+| AC-344 | T470, T479–T487, T493, T494 | AC-345 | T488 | AC-346 | T488 |
 | AC-347 | T489 | AC-348 | T490 | AC-349 | T491 |
 | AC-350 | T492 | AC-351 | T493 | AC-249 (again, drafts) | T488 |
 

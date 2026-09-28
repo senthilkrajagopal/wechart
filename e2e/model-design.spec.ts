@@ -903,6 +903,52 @@ test('T484: New cube as design 03 state C — no made-up table, Name selected to
   ).toBeFocused();
 });
 
+test('T494: side by side with design 03 — controls in a row line up, and a tree name is never broken', async ({
+  page,
+}) => {
+  await page.goto('/model');
+  const tree = page.getByRole('navigation', { name: 'Model files' });
+  await tree.getByRole('button', { name: 'New cube' }).click();
+  await expect(page).toHaveURL(/new_cube_1\.yml$/);
+  // A draft with problems carries both marks; its name stays on one line, whole.
+  const row = tree.getByRole('link', { name: /^new_cube_1\.yml/ });
+  await expect(row).toContainText('unpublished');
+  await expect(row).toContainText('problems');
+  expect(
+    await row
+      .locator('.model-tree__name')
+      .evaluate((node) => [
+        node.getBoundingClientRect().height === parseFloat(getComputedStyle(node).lineHeight),
+        node.scrollWidth <= node.clientWidth,
+      ]),
+  ).toEqual([true, true]);
+
+  // Name beside Data source, whose help runs longer: the two controls at one height.
+  const general = page.getByRole('region', { name: 'Cube new_cube_1' }).getByRole('tabpanel');
+  const tops = async (...controls: import('@playwright/test').Locator[]) =>
+    Promise.all(controls.map(async (control) => Math.round((await control.boundingBox())?.y ?? 0)));
+  const [name, source] = await tops(
+    general.getByLabel('Name', { exact: true }),
+    general.getByLabel('Data source', { exact: true }),
+  );
+  expect(name).toBe(source);
+  await page.locator('.model-editor__head').getByRole('button', { name: 'Discard' }).click();
+
+  // A dimension's Name, with its help, beside its Type (design 03's main screen).
+  await page.goto(ORDERS);
+  const form = page.getByRole('region', { name: 'Cube orders' });
+  await form.getByRole('tab', { name: /^Dimensions/ }).click();
+  const status = form.locator('details.model-member').filter({
+    has: page.locator('.model-member__name', { hasText: /^status$/ }),
+  });
+  await status.locator(':scope > summary').click();
+  const [memberName, memberType] = await tops(
+    status.getByLabel('Name', { exact: true }),
+    status.getByLabel('Type', { exact: true }),
+  );
+  expect(memberName).toBe(memberType);
+});
+
 test('T483: a Jinja file in the editor’s frame, read-only and saying so (MW-16)', async ({
   page,
 }) => {
