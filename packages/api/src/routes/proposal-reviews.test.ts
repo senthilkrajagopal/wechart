@@ -325,6 +325,49 @@ describe('the Reviews lists (T355, AC-287)', () => {
       );
   });
 
+  it('lets the author dismiss a rejection’s band until the item is proposed again (T358, R42.1)', async () => {
+    const itemOf = async (id: string) =>
+      (await as('writer', { method: 'GET', url: `/api/proposals/${id}` })).json<{
+        itemId: string;
+      }>().itemId;
+    const rejectedItem = await itemOf(ids.rejected);
+    // Only its author, and only a rejection.
+    expect(
+      (await as('many', { method: 'POST', url: `/api/proposals/${ids.rejected}/dismiss` }))
+        .statusCode,
+    ).toBe(404);
+    expect(
+      (await as('writer', { method: 'POST', url: `/api/proposals/${ids.waiting}/dismiss` }))
+        .statusCode,
+    ).toBe(409);
+    const dismissed = await as('writer', {
+      method: 'POST',
+      url: `/api/proposals/${ids.rejected}/dismiss`,
+    });
+    expect(dismissed.statusCode, dismissed.body).toBe(200);
+    const latest = await as('writer', {
+      method: 'GET',
+      url: `/api/proposals?kind=chart&itemId=${rejectedItem}`,
+    });
+    expect(latest.json<{ id: string; dismissedAt: string | null }>().id).toBe(ids.rejected);
+    expect(latest.json<{ dismissedAt: string | null }>().dismissedAt).not.toBeNull();
+    // Proposed again: the new one's band shows, undismissed.
+    const again = await as('writer', {
+      method: 'POST',
+      url: '/api/proposals',
+      payload: { kind: 'chart', id: rejectedItem },
+    });
+    expect(again.statusCode, again.body).toBe(201);
+    const now = await as('writer', {
+      method: 'GET',
+      url: `/api/proposals?kind=chart&itemId=${rejectedItem}`,
+    });
+    expect(now.json<{ status: string; dismissedAt: string | null }>()).toMatchObject({
+      status: 'open',
+      dismissedAt: null,
+    });
+  });
+
   it('counts for the top bar what To review lists', async () => {
     for (const who of ['super', 'writer', 'many', 'manager', 'reader']) {
       const listed = (await as(who, { method: 'GET', url: '/api/reviews' })).json<{

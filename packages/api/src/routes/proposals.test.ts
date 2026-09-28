@@ -516,6 +516,8 @@ describe('proposals with sign-in off', () => {
         ['POST', `/api/proposals/${randomUUID()}/reject`],
         ['GET', `/api/proposals?kind=dashboard&itemId=${ids.board}`],
         ['GET', '/api/reviews'],
+        ['GET', '/api/reviews/count'],
+        ['POST', '/api/proposals/check'],
       ] as const) {
         const answer = await off.inject({ method, url });
         expect(answer.statusCode, url).toBe(404);

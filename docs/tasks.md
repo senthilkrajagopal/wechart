@@ -5941,7 +5941,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/web/src/workspaces/explore/HistoryPanel.tsx` (+ test), `e2e/security/history.spec.ts`
   - Failing test: `history.spec.ts`: the History panel lists at most 10 versions newest first with number, time, author, approver and description, marks Current, compares a model version with the current one, and "Propose restoring…" opens the Propose dialog prefilled; readers see no History (AC-289; rule 80).
   - Depends on: T354, T356
-- [ ] T358 (AC-284) Propose from the workspace item: the dialog, the counter, the bundle and the waiting band
+- [x] T358 (AC-284, AC-290) Propose from the workspace item: the dialog, the counter, the bundle and the waiting band
   - Files: `packages/web/src/workspaces/explore/ProposeDialog.tsx` (+ test), `e2e/security/workspace.spec.ts`
   - Failing test: `ProposeDialog.test.tsx`: the dialog names the target and "new" or "replaces version _n_", lists bundled models without a way to remove them, counts "_n_ / 1,000" and blocks at 1,001 without truncating; after proposing, the item shows "Waiting for review" (AC-284; rule 75).
   - *2026-09-28, from T349's review:*
@@ -5951,6 +5951,27 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Depends on: T349, T350, T348
   - *2026-09-28, R42.1:* Dismiss lasts until the item is proposed again, stored for the user on every device.
   - *2026-09-28, the user's "Finish chains to close ACs":* built without waiting for T350 (models bundled with a dashboard, which needs T347) or T348's remaining states. The bundle lists the charts that go with a dashboard. Models join it with T350. Propose is offered in Explore's workspace rows. The check route (`POST /api/proposals/check`) is built.
+  - *As built (2026-09-28; design 05, states A, B, F and M):*
+    - API (`packages/api/src/routes/proposals.ts`, `repos/proposals.ts`, migration `…_proposal-dismissed.cjs`):
+      - `POST /api/proposals/check` answers the target by its path and, per item, where it lands and what it replaces (copied from it or not), or the refusal `POST /api/proposals` would give. It records nothing and sends no snapshot.
+      - `POST /api/proposals/:id/dismiss`: its author's, a rejected one only (else `404` or `409`); `dismissed_at` is kept until the item is proposed again.
+      - `GET /api/proposals?kind=&itemId=` adds the target's path and each item's `landsInPath`. `GET /api/reviews` rows name every item in the proposal.
+    - Web (`packages/web/src/workspaces/explore/`):
+      - `ProposeDialog`: 520 px; the item and "new in this folder" or "replaces version _n_"; the wrong-origin warning; "Goes with it"; a code-point counter that turns to error text past 1,000 with "Shorten to 1,000 characters." and Propose disabled, never cutting; ⌘/Ctrl+Enter.
+      - `ProposeFlow` checks, then proposes.
+      - `ProposalBand` on the author's dashboard, library chart and data-source pages (sign-in on): "Waiting for review since … · proposed to …" with View proposal and the changed-since note; or "Rejected by … · …", the reason quoted (or "No reason given"), Propose again… and Dismiss. It reads its own item in a proposal it went into with another, and asks again each time the page opens.
+      - Explore's workspace rows gain "Propose…" and a status (`proposalStatus.ts`): Waiting for review, Rejected, or In folder as version _n_. The styles are in `shell/styles.ts`.
+    - Tests:
+      - `proposal-check.test.ts`, `proposal-reviews.test.ts` (dismiss), `proposals.test.ts` (sign-in off);
+      - `ProposeDialog.test.tsx`, `ProposeFlow.test.tsx`, `ProposalBand.test.tsx`, `proposalStatus.test.ts`;
+      - `e2e/security/propose.spec.ts`, the real surface: propose from the Explore row, 1,001 characters refused, the folder unchanged, "Waiting for review" on the row and the page, a rejection's decider and reason on the page, and Dismiss surviving a reload.
+  - **Done 2026-09-28, after one review round (PASS). AC-284 and AC-290 ticked on `e2e/security/propose.spec.ts`.**
+  - **Review fixes:**
+    1. The band compared its own version with the proposal's first item, and named the first item's folder, when the item went with another's proposal. It now reads its own item.
+    2. "Propose again…" named "Shared" while the check was pending or refused. It now proposes to where the item lands.
+    3. An Explore row missed a proposal its item went into with another item.
+    4. The e2e's Dismiss-after-reload check could pass before the band had loaded. It now waits for the lookup's answer.
+    5. The band kept a cached "Waiting" for up to 5 minutes after a rejection. It now asks each time its page opens.
 - [ ] T359 (AC-254) With security off, the single user works through a workspace and approves their own proposals
   - Files: `e2e/workspace-single-user.spec.ts` (the phase-1 configuration)
   - Failing test: `workspace-single-user.spec.ts`: with security off, editing a dashboard goes through "Edit in my workspace", a proposal and "Approve my own proposal", and nothing asks for a sign-in or refuses a permission (AC-254).

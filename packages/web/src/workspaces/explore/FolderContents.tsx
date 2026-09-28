@@ -2,7 +2,7 @@ import { DRIVERS } from '@wechart/core';
 import { useEffect, useRef, useState } from 'react';
 
 import { MenuButton } from '../../shell/MenuButton';
-import { StatusIcon } from '../../shell/StatusIcon';
+import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
 import { chartTypeText } from './chartTypeLabels';
 import { SHARED_ROOT } from './roots';
 
@@ -66,6 +66,13 @@ export interface CatalogItem {
  */
 export interface InWorkspace {
   readonly pathOf: (folderId: string) => string | undefined;
+  /** Proposing an item to its target (T358, AC-284): its row's "Propose…". */
+  readonly onPropose?: (item: CatalogItem) => void;
+  /**
+   * Its status past Draft (T358; design 04 and 05, state M), from its latest
+   * proposal: waiting for review, rejected or approved. None is Draft.
+   */
+  readonly statusOf?: (item: CatalogItem) => { kind: StateKind; text: string } | undefined;
 }
 
 export interface FolderMove {
@@ -135,12 +142,13 @@ function OriginLine({ item, workspace }: { item: CatalogItem; workspace: InWorks
  * Until proposals are built, every item there is a draft; a folder is never
  * proposed, so has none.
  */
-function WorkspaceStatus({ item }: { item: CatalogItem }) {
+function WorkspaceStatus({ item, workspace }: { item: CatalogItem; workspace: InWorkspace }) {
   if (item.kind === 'folder') return null;
+  const status = workspace.statusOf?.(item) ?? { kind: 'draft' as const, text: 'Draft' };
   return (
     <span className="folder-contents__status">
-      <StatusIcon kind="draft" />
-      <span>Draft</span>
+      <StatusIcon kind={status.kind} />
+      <span>{status.text}</span>
     </span>
   );
 }
@@ -488,7 +496,7 @@ export function FolderContents({
                 <td className={BUILT_ON_CLASS[item.kind]}>{builtOn(item)}</td>
               ) : (
                 <td>
-                  <WorkspaceStatus item={item} />
+                  <WorkspaceStatus item={item} workspace={workspace} />
                 </td>
               )}
               {/* A folder's too, though browse() leaves them blank (F20):
@@ -509,21 +517,37 @@ export function FolderContents({
               >
                 {/* A model's name is its file's, changed in the model editor
                     (T334): it has no rename or move here. */}
-                {item.kind === 'model' || item.kind === 'data-source' ? null : (
+                {item.kind === 'model' ||
+                (item.kind === 'data-source' && workspace?.onPropose === undefined) ? null : (
                   <MenuButton
                     label={`Actions for ${item.title}`}
                     className="btn-ghost btn-sm folder-contents__menu"
                     items={[
-                      {
-                        key: 'rename',
-                        label: 'Rename',
-                        onSelect: () => {
-                          setRenaming(item.id);
-                          setDraft(item.title);
-                        },
-                      },
-                      ...(onMove && targets.length > 0
+                      // A data source is renamed on its own page (T497).
+                      ...(item.kind === 'data-source'
+                        ? []
+                        : [
+                            {
+                              key: 'rename',
+                              label: 'Rename',
+                              onSelect: () => {
+                                setRenaming(item.id);
+                                setDraft(item.title);
+                              },
+                            },
+                          ]),
+                      ...(onMove && targets.length > 0 && item.kind !== 'data-source'
                         ? [{ key: 'move', label: 'Move to…', onSelect: () => setMoving(item.id) }]
+                        : []),
+                      // To its target, by a proposal (T358, AC-284; design 05, state A).
+                      ...(workspace?.onPropose !== undefined && item.kind !== 'folder'
+                        ? [
+                            {
+                              key: 'propose',
+                              label: 'Propose…',
+                              onSelect: () => workspace.onPropose?.(item),
+                            },
+                          ]
                         : []),
                     ]}
                   >

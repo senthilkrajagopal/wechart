@@ -11,6 +11,8 @@ import { onTabKey } from '../../shell/tabKeys';
 import { useFocusTrap } from '../../shell/useFocusTrap';
 import { MY_WORKSPACE, SHARED_ROOT } from '../explore/roots';
 import { WorkspaceBand } from '../explore/WorkspaceBand';
+import { ProposalBand } from '../explore/ProposalBand';
+import { ProposeFlow } from '../explore/ProposeFlow';
 import { CubeState, cubeStateLabel, type CubeStateView } from './CubeState';
 import type { ListedSource } from './DataSourcesList';
 import { CHECK_LABELS } from './connectionTest';
@@ -131,6 +133,9 @@ function Settings({ source }: { source: StoredSource }) {
   const queryClient = useQueryClient();
   const router = useRouter();
   const [tab, setTab] = useState<Tab>('connection');
+  /** Proposing it again from its rejected band (T358). */
+  /** Where "Propose again…" proposes it to, while its dialog is open. */
+  const [proposingAgain, setProposingAgain] = useState<readonly string[] | null>(null);
   const [asking, setAsking] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   const me = useQuery(ME_QUERY);
@@ -199,6 +204,29 @@ function Settings({ source }: { source: StoredSource }) {
       {/* In the user's workspace, the page says so across its width (T498;
           design 04, pin 2; design 03). */}
       {source.inWorkspace && me.data?.security === 'oidc' ? <WorkspaceBand /> : null}
+      {/* Its proposal's band: waiting, or rejected with the reason (T358, AC-290). */}
+      {source.inWorkspace && me.data?.security === 'oidc' ? (
+        <ProposalBand
+          kind="data-source"
+          id={source.id}
+          currentVersion={source.version}
+          onProposeAgain={(path) => {
+            setProposingAgain(path);
+          }}
+        />
+      ) : null}
+      {proposingAgain !== null ? (
+        <ProposeFlow
+          item={{ kind: 'data-source', id: source.id, title: source.name }}
+          targetPath={proposingAgain}
+          onClose={() => {
+            setProposingAgain(null);
+          }}
+          onProposed={() => {
+            setProposingAgain(null);
+          }}
+        />
+      ) : null}
       {/* Under its folder's breadcrumb, wherever it was opened from (pin 1). */}
       {/* Followed in the app, so leaving with unsaved changes is asked about (state I, T497). */}
       <nav aria-label="Breadcrumb" className="source-settings__crumbs">

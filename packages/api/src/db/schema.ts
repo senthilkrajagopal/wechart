@@ -178,6 +178,8 @@ export interface ProposalTable {
   decided_by_name: string | null;
   decided_at: Date | null;
   reason: string | null;
+  /** A rejection's band dismissed by its author (T358, R42.1). */
+  dismissed_at: Generated<Date | null>;
 }
 
 /** Each item a proposal would land, as it was when proposed, the item itself first. */

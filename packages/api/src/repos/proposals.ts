@@ -66,6 +66,8 @@ export interface Proposal {
     readonly at: Date;
     readonly reason: string | null;
   } | null;
+  /** When its author dismissed a rejection's band (T358, R42.1); none until then. */
+  readonly dismissedAt: Date | null;
 }
 
 /** The item waits in an open proposal already. */
@@ -108,6 +110,11 @@ export interface ProposalStore {
   reopen(id: string): Promise<void>;
   /** An approval landed: its items may be proposed again (T352's review). */
   settle(id: string): Promise<void>;
+  /**
+   * Its author dismisses a rejection's band (T358, R42.1): the dismissed
+   * proposal, or none if it isn't a rejection of theirs.
+   */
+  dismiss(id: string, authorKey: string): Promise<Proposal | null>;
   /** Every open proposal, newest first: the Reviews page's to decide (T355). */
   open(): Promise<Proposal[]>;
   /** An author's, in every state, newest first: My proposals (T355). */
@@ -229,6 +236,7 @@ export function proposalStore(db: Kysely<Database>): ProposalStore {
               at: row.decided_at,
               reason: row.reason,
             },
+      dismissedAt: row.dismissed_at ?? null,
     };
   };
 
@@ -369,6 +377,19 @@ export function proposalStore(db: Kysely<Database>): ProposalStore {
     open: () => listed({ open: true }),
 
     byAuthor: (authorKey) => listed({ authorKey }),
+
+    async dismiss(id, authorKey) {
+      if (!UUID.test(id)) return null;
+      const row = await db
+        .updateTable('proposals')
+        .set({ dismissed_at: new Date() })
+        .where('id', '=', id)
+        .where('author_key', '=', authorKey)
+        .where('status', '=', 'rejected')
+        .returning('id')
+        .executeTakeFirst();
+      return row === undefined ? null : read(id);
+    },
 
     async settle(id) {
       if (!UUID.test(id)) return;

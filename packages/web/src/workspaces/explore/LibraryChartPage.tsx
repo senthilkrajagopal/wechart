@@ -7,6 +7,9 @@ import { NOTHING_CHOSEN } from '../../dashboard/edit/templates';
 import { specFor } from '../../dashboard/DashboardPage';
 import { allMembers } from '../../filters/FilterBar';
 import { META_QUERY } from '../../query/meta';
+import { ME_QUERY } from '../../shell/me';
+import { ProposalBand } from './ProposalBand';
+import { ProposeFlow } from './ProposeFlow';
 import { StateLine } from '../../shell/StatusIcon';
 import { ChartTile } from '../../tiles/ChartTile';
 import { TileError } from '../../tiles/TileError';
@@ -58,10 +61,14 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
   const stored = useQuery({
     queryKey: ['chart-folder', chartId],
     queryFn: () =>
-      getJson<{ body: { folderId?: string } }>(
+      getJson<{ body: { folderId?: string }; version?: number }>(
         `/api/documents/chart/${encodeURIComponent(chartId)}`,
       ),
   });
+  // As the shell asks it, so this reads what the shell already has.
+  const me = useQuery({ ...ME_QUERY, retry: false });
+  /** Where "Propose again…" proposes it to, while its dialog is open. */
+  const [proposingAgain, setProposingAgain] = useState<readonly string[] | null>(null);
 
   /**
    * The chart itself, read and drawn as a dashboard tile draws it (AC-212):
@@ -324,6 +331,30 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
 
   return (
     <section className="chart-page">
+      {/* Its author's band: waiting, or rejected with the reason (T358,
+          AC-290). None for anyone else; none asked for with sign-in off. */}
+      {me.data?.security === 'oidc' ? (
+        <ProposalBand
+          kind="chart"
+          id={chartId}
+          currentVersion={stored.data?.version}
+          onProposeAgain={(path) => {
+            setProposingAgain(path);
+          }}
+        />
+      ) : null}
+      {proposingAgain !== null ? (
+        <ProposeFlow
+          item={{ kind: 'chart', id: chartId, title: saved?.title ?? 'Chart' }}
+          targetPath={proposingAgain}
+          onClose={() => {
+            setProposingAgain(null);
+          }}
+          onProposed={() => {
+            setProposingAgain(null);
+          }}
+        />
+      ) : null}
       <header className="chart-page__head">
         {/* The way back to its folder (AC-195), once the chart is read; to
             Explore's top if it cannot be. */}

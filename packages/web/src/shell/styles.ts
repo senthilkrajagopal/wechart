@@ -571,6 +571,97 @@ main:has(.explore) {
   margin: calc(-1 * var(--wc-surface-padding)) calc(-1 * var(--wc-surface-padding)) 0;
 }
 
+/* The author's proposal band (T358; design 05, state M): 12 px across the
+   item's page — waiting on bg-subtle; rejected in error ink on its tint,
+   the reason quoted. Under the workspace band, or first on the page. */
+.proposal-band {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px var(--wc-surface-padding);
+  background: var(--wc-bg-subtle);
+  border-bottom: 1px solid var(--wc-border-subtle);
+  font-size: var(--wc-text-xs-size);
+  line-height: 16px;
+  color: var(--wc-text-primary);
+}
+.proposal-band > svg { flex: none; margin-top: 1px; }
+.proposal-band > p { flex: 1; min-width: 0; margin: 0; }
+.proposal-band--rejected {
+  color: var(--wc-status-error);
+  background: color-mix(in srgb, var(--wc-status-error) 7%, var(--wc-bg-surface));
+}
+.proposal-band__body { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.proposal-band__decision { margin: 0; font-weight: 600; }
+.proposal-band__reason {
+  margin: 0;
+  padding: 2px 0 2px 10px;
+  border-left: 3px solid var(--wc-border-strong);
+  color: var(--wc-text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.proposal-band__error { margin: 0; }
+.proposal-band__actions { display: flex; gap: 8px; }
+.source-settings > .proposal-band { margin: 0 calc(-1 * var(--wc-surface-padding)); }
+.source-settings > .workspace-band + .proposal-band { margin-top: -10px; }
+main > .proposal-band:first-child,
+.chart-page > .proposal-band:first-child {
+  margin: calc(-1 * var(--wc-surface-padding)) calc(-1 * var(--wc-surface-padding)) 0;
+}
+
+/* The Propose dialog (T358; design 05, states A and B): 520 px; the item and
+   what it does there, what goes with it, and the description's counter,
+   error ink past 1,000. */
+.dialog.propose-dialog { width: min(520px, calc(100vw - 32px)); max-width: none; gap: 12px; }
+.dialog p.propose-dialog__item { margin: 0; color: var(--wc-text-primary); }
+.dialog p.propose-dialog__warning,
+.propose-dialog__goes {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--wc-text-primary);
+}
+.dialog p.propose-dialog__warning {
+  background: color-mix(in srgb, var(--wc-status-warning-icon) 14%, var(--wc-bg-surface));
+}
+.propose-dialog__goes { background: var(--wc-bg-accent-soft); }
+.propose-dialog__goes h3 { margin: 0 0 4px; font-size: 12px; line-height: 16px; font-weight: 600; }
+.dialog .propose-dialog__goes p { margin: 0 0 4px; color: var(--wc-text-primary); }
+.propose-dialog__goes ul { margin: 0; padding-left: 16px; }
+.propose-dialog__label-row { display: flex; align-items: baseline; gap: 8px; }
+.propose-dialog__label-row > label {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--wc-text-secondary);
+}
+.propose-dialog__optional { font-weight: 400; }
+.propose-dialog__counter {
+  margin-left: auto;
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--wc-text-secondary);
+}
+.propose-dialog__counter.is-over { color: var(--wc-status-error); font-weight: 600; }
+.propose-dialog__description textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 96px;
+  resize: vertical;
+  font: inherit;
+}
+.propose-dialog__description textarea[aria-invalid='true'] { border-color: var(--wc-status-error); }
+.dialog p.propose-dialog__over { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-status-error); }
+.dialog p.propose-dialog__note { margin: 0; font-size: 12px; line-height: 16px; }
+.dialog p.propose-dialog__checking { margin: 0; }
+.dialog p.propose-dialog__refused { margin: 0; color: var(--wc-status-error); }
+
 /* The edit sidebar's Outline (AC-053): the prototype's .dir and .file rows. */
 .outline, .outline ul { margin: 0; padding: 0; list-style: none; }
 .outline { padding: 8px 0; }

@@ -13,6 +13,9 @@ import { CHART_MISSING, formatsFrom, tileChartOf, type TileChart } from './chart
 import { StateLine } from '../shell/StatusIcon';
 import { DashboardLoading } from './DashboardLoading';
 import { ROOT_FOLDERS } from '../workspaces/explore/roots';
+import { ProposalBand } from '../workspaces/explore/ProposalBand';
+import { ProposeFlow } from '../workspaces/explore/ProposeFlow';
+import { ME_QUERY } from '../shell/me';
 import { DashboardView } from './DashboardView';
 import { chartWritesOf, drawnWithDrafts } from './edit/chartDrafts';
 import { saveDashboard } from './edit/save';
@@ -126,6 +129,11 @@ export function DashboardPage({
   });
 
   const document = saved.data?.document;
+  // As the shell asks it, so this reads what the shell already has.
+  const me = useQuery({ ...ME_QUERY, retry: false });
+  const signedIn = me.data?.security === 'oidc';
+  /** Where "Propose again…" proposes it to, while its dialog is open. */
+  const [proposingAgain, setProposingAgain] = useState<readonly string[] | null>(null);
 
   /**
    * A request to open in edit mode (T245) that can never be met — the
@@ -155,32 +163,58 @@ export function DashboardPage({
     );
 
   return (
-    <LoadedDashboard
-      /**
-       * Keyed by the dashboard, as the view below is: what the page holds
-       * for one dashboard — why its save failed, the save itself — must not
-       * be shown over the next one opened (T197). And by the security
-       * context previewed (T172's review): the answers it keeps drawing while
-       * newer ones are asked — a filtered tile's, a filter's values — must
-       * not be one context's under another's banner, or under none.
-       */
-      key={`${dashboardId}:${JSON.stringify(preview ?? null)}`}
-      document={document}
-      dashboardId={dashboardId}
-      version={saved.data?.version ?? 1}
-      editTile={editTile}
-      onEditTile={onEditTile}
-      startEditing={startEditing}
-      onStartedEditing={onStartedEditing}
-      publishTile={publishTile}
-      onPublishTaken={onPublishTaken}
-      urlFilterValues={urlFilterValues}
-      onFilterValues={onFilterValues}
-      urlView={urlView}
-      onViewTaken={onViewTaken}
-      preview={preview}
-      onExitPreview={onExitPreview}
-    />
+    <>
+      {/* Its author's band: waiting, or rejected with the reason (T358,
+          AC-290). None for anyone else; none asked for with sign-in off. */}
+      {signedIn ? (
+        <ProposalBand
+          kind="dashboard"
+          id={dashboardId}
+          currentVersion={saved.data?.version}
+          onProposeAgain={(path) => {
+            setProposingAgain(path);
+          }}
+        />
+      ) : null}
+      {proposingAgain !== null ? (
+        <ProposeFlow
+          item={{ kind: 'dashboard', id: dashboardId, title: document.title }}
+          targetPath={proposingAgain}
+          onClose={() => {
+            setProposingAgain(null);
+          }}
+          onProposed={() => {
+            setProposingAgain(null);
+          }}
+        />
+      ) : null}
+      <LoadedDashboard
+        /**
+         * Keyed by the dashboard, as the view below is: what the page holds
+         * for one dashboard — why its save failed, the save itself — must not
+         * be shown over the next one opened (T197). And by the security
+         * context previewed (T172's review): the answers it keeps drawing while
+         * newer ones are asked — a filtered tile's, a filter's values — must
+         * not be one context's under another's banner, or under none.
+         */
+        key={`${dashboardId}:${JSON.stringify(preview ?? null)}`}
+        document={document}
+        dashboardId={dashboardId}
+        version={saved.data?.version ?? 1}
+        editTile={editTile}
+        onEditTile={onEditTile}
+        startEditing={startEditing}
+        onStartedEditing={onStartedEditing}
+        publishTile={publishTile}
+        onPublishTaken={onPublishTaken}
+        urlFilterValues={urlFilterValues}
+        onFilterValues={onFilterValues}
+        urlView={urlView}
+        onViewTaken={onViewTaken}
+        preview={preview}
+        onExitPreview={onExitPreview}
+      />
+    </>
   );
 }
 

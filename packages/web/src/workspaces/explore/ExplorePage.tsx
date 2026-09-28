@@ -14,6 +14,13 @@ import { FolderTree } from './FolderTree';
 import { exploreHref, folderChain, FOLDERS_QUERY, targetPathOf } from './folders';
 import { isMyWorkspace, ROOT_FOLDERS, SHARED_ROOT, rootTitleOf, visibleRoots } from './roots';
 import { WorkspaceBand } from './WorkspaceBand';
+import { ProposeFlow } from './ProposeFlow';
+import { REVIEWS_QUERY } from '../reviews/reviews';
+import { statusOfItem } from './proposalStatus';
+
+/** A path "Sales / EMEA" as the dialog takes it, from Shared. */
+const pathFromShared = (path: string | undefined): string[] =>
+  path === undefined || path === SHARED_ROOT.title ? ['Shared'] : ['Shared', ...path.split(' / ')];
 
 /**
  * Explore: the folder tree and the open folder (AC-017), laid out as the
@@ -262,6 +269,10 @@ export function ExplorePage() {
    */
   const inOwnWorkspace =
     signedIn && inMyWorkspace && !searching && roots.some((root) => isMyWorkspace(root.id));
+  // What is being proposed (T358), and each item's latest proposal, for its
+  // status past Draft (design 04; design 05, state M).
+  const [proposing, setProposing] = useState<CatalogItem | null>(null);
+  const myProposals = useQuery({ ...REVIEWS_QUERY, enabled: inOwnWorkspace, retry: false });
   const access = useQuery({
     ...folderAccessQuery(folderId),
     enabled: signedIn && !searching && !isMyWorkspace(folderId),
@@ -526,9 +537,37 @@ export function ExplorePage() {
               // Once the folders are read: before, every target would read as
               // one the user can't see (T498's review).
               {...(inOwnWorkspace && folders.isSuccess
-                ? { workspace: { pathOf: (id: string) => targetPathOf(folders.data, id) } }
+                ? {
+                    workspace: {
+                      pathOf: (id: string) => targetPathOf(folders.data, id),
+                      // To its target, by a proposal (T358, AC-284).
+                      onPropose: (item: CatalogItem) => {
+                        setProposing(item);
+                      },
+                      statusOf: (item: CatalogItem) => statusOfItem(myProposals.data?.mine, item),
+                    },
+                  }
                 : {})}
             />
+            {proposing === null ||
+            (proposing.kind !== 'dashboard' &&
+              proposing.kind !== 'chart' &&
+              proposing.kind !== 'data-source') ? null : (
+              <ProposeFlow
+                item={{ kind: proposing.kind, id: proposing.id, title: proposing.title }}
+                targetPath={pathFromShared(
+                  proposing.targetFolderId == null
+                    ? undefined
+                    : targetPathOf(folders.data ?? [], proposing.targetFolderId),
+                )}
+                onClose={() => {
+                  setProposing(null);
+                }}
+                onProposed={() => {
+                  setProposing(null);
+                }}
+              />
+            )}
             {/* The prototype's footnote under the list (F22); in the
                 workspace, the workspace's own (design 04, pin 8). */}
             {inOwnWorkspace ? (

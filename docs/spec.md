@@ -1068,7 +1068,7 @@ Traces to: §P2.2, §P2.6 E, `[P2 input]`, `[R12, R17, R18]`.
 Purpose: work reaches a shared folder only through a proposal someone approves, and the folder keeps its recent history.
 Traces to: §P2.6 E, `[P2 input]`, `[R12, R17, R18]`.
 
-- [ ] AC-284 WHEN the user proposes a workspace item into its target folder, THE SYSTEM SHALL record a proposal holding the item, the folder, the author, the time, and an optional description of at most 1,000 characters. The folder SHALL keep showing its current version (`[R12]`).
+- [x] AC-284 WHEN the user proposes a workspace item into its target folder, THE SYSTEM SHALL record a proposal holding the item, the folder, the author, the time, and an optional description of at most 1,000 characters. The folder SHALL keep showing its current version (`[R12]`).
       Fails when: the folder changes before approval, or a description over 1,000 characters is accepted.
 - [ ] AC-285 IF a proposed dashboard's cubes resolve only through models in the author's workspace, THEN THE SYSTEM SHALL put those models in the same proposal, approved or rejected together with the dashboard (`[R18]`).
       Fails when: the dashboard lands without those models, or the models land without the dashboard.
@@ -1082,7 +1082,7 @@ Traces to: §P2.6 E, `[P2 input]`, `[R12, R17, R18]`.
       Fails when: an item that has had more than 10 versions keeps other than its last 10, a read-only user can open its history, or a restore lands without an approval.
 - [ ] AC-341 WHEN a proposed dashboard is drawn in its review, THE SYSTEM SHALL outline and label each tile the proposal changes ("Changed") or adds ("New") against the folder's current version (`[R33]`, proposal 4 of the 2026-09-27 designs).
       Fails when: a tile the proposal changes or adds carries no label, or an unchanged tile carries one.
-- [ ] AC-290 WHEN a proposal is rejected, THE SYSTEM SHALL return it unchanged to the author's workspace, with the approver's reason of at most 1,000 characters, and leave the folder as it was (`[R18]`).
+- [x] AC-290 WHEN a proposal is rejected, THE SYSTEM SHALL return it unchanged to the author's workspace, with the approver's reason of at most 1,000 characters, and leave the folder as it was (`[R18]`).
       Fails when: the folder changes, the author's workspace loses the work, or the author isn't shown the reason.
 - [ ] AC-291 WHEN a read-write member creates a subfolder, sets permissions, or renames, moves or deletes an item in a folder they may write, THE SYSTEM SHALL apply it at once, without a proposal. A move SHALL need read-write access to both folders. A rename, move or delete touching a model, a data source or a folder holding them SHALL apply only if ~~the whole model still compiles~~ every module it affects still compiles (AC-321) (`[R17]`; amended 2026-09-25, `[AD 6, R27]`; amended 2026-09-26, `[IP 5]`).
       Fails when: one of these waits for an approval; is allowed without read-write access to the folders involved; or a change touching models or data sources applies although a module it affects then fails to compile.

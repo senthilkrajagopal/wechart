@@ -33,6 +33,8 @@ export interface ReviewRow {
   } | null;
   /** The version it landed as, once approved. */
   readonly landedVersion: number | null;
+  /** Every item in it, its own first (T358). */
+  readonly items?: readonly { readonly kind: ReviewKind; readonly id: string }[];
 }
 
 export interface Reviews {

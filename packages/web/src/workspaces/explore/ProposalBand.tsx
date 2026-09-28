@@ -1,0 +1,166 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { StatusIcon } from '../../shell/StatusIcon';
+
+/**
+ * The band on the author's workspace item (T358, AC-290, AC-284; design 05,
+ * state M; rule 79), from the item's latest proposal:
+ * - waiting: since when and where to, with a link to it, and a note when the
+ *   item has changed since, since those changes aren't in it (decision 2);
+ * - rejected: who and when, the reason as a quote (or "No reason given"),
+ *   with Propose again… and Dismiss, which lasts until the item is proposed
+ *   again (R42.1).
+ * Nothing when it was never proposed, withdrawn, approved, or dismissed.
+ */
+interface Latest {
+  readonly id: string;
+  readonly status: 'open' | 'approved' | 'rejected' | 'withdrawn';
+  readonly proposedAt: string;
+  readonly targetPath: readonly string[];
+  readonly items: readonly {
+    readonly kind: string;
+    readonly id: string;
+    readonly version: number;
+    /** Where it lands: the target, or a library chart's own folder. */
+    readonly landsInPath?: readonly string[];
+  }[];
+  readonly decision: {
+    readonly by: { readonly name: string };
+    readonly at: string;
+    readonly reason: string | null;
+  } | null;
+  readonly dismissedAt: string | null;
+}
+
+const folderText = (path: readonly string[]) => {
+  const below = path[0] === 'Shared' ? path.slice(1) : path;
+  return below.length === 0 ? 'Shared' : below.join(' / ');
+};
+
+/** "14:05" today, "Yesterday 16:40", else "26 Sep, 16:40". */
+function whenText(iso: string, now: Date): string {
+  const then = new Date(iso);
+  const clock = then.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const day = (at: Date) => new Date(at.getFullYear(), at.getMonth(), at.getDate()).getTime();
+  const days = Math.round((day(now) - day(then)) / (24 * 3600 * 1000));
+  if (days === 0) return clock;
+  if (days === 1) return `Yesterday ${clock}`;
+  return `${then.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}, ${clock}`;
+}
+
+export function ProposalBand({
+  kind,
+  id,
+  currentVersion,
+  onProposeAgain,
+  now = new Date(),
+}: {
+  readonly kind: 'dashboard' | 'chart' | 'data-source';
+  readonly id: string;
+  /** The item's version now: a later one than proposed is said (decision 2). */
+  readonly currentVersion?: number | undefined;
+  /** Propose it again, to where it lands (from Shared down). */
+  readonly onProposeAgain: (targetPath: readonly string[]) => void;
+  readonly now?: Date;
+}) {
+  const client = useQueryClient();
+  const latest = useQuery({
+    queryKey: ['proposal-of', kind, id],
+    // Asked each time the item is opened: a decision made since is shown,
+    // not a cached "Waiting" (T358's review; AC-290).
+    staleTime: 0,
+    queryFn: async ({ signal }): Promise<Latest | null> => {
+      const response = await fetch(
+        `/api/proposals?kind=${encodeURIComponent(kind)}&itemId=${encodeURIComponent(id)}`,
+        { signal },
+      );
+      // Never proposed, or proposals are off (sign-in off): no band.
+      if (response.status === 404) return null;
+      if (!response.ok)
+        throw new Error(`Its proposal could not be read (${String(response.status)}).`);
+      return (await response.json()) as Latest;
+    },
+  });
+  const dismiss = useMutation({
+    mutationFn: async (proposalId: string) => {
+      const response = await fetch(`/api/proposals/${encodeURIComponent(proposalId)}/dismiss`, {
+        method: 'POST',
+      });
+      if (!response.ok) throw new Error('It could not be dismissed.');
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: ['proposal-of', kind, id] }),
+  });
+
+  const proposal = latest.data;
+  if (proposal === undefined || proposal === null) return null;
+
+  // This item's own entry: it may have gone with another item's proposal,
+  // into its own folder (T358's review).
+  const own =
+    proposal.items.find((item) => item.kind === kind && item.id === id) ?? proposal.items[0];
+  const landsIn = own?.landsInPath ?? proposal.targetPath;
+
+  if (proposal.status === 'open') {
+    const changed =
+      currentVersion !== undefined && own !== undefined && currentVersion > own.version;
+    return (
+      <div role="status" aria-label="Proposal" className="proposal-band">
+        <StatusIcon kind="run" />
+        <p>
+          Waiting for review since {whenText(proposal.proposedAt, now)} · proposed to{' '}
+          {folderText(landsIn)}.
+          {changed
+            ? ' You’ve changed it since proposing; those changes aren’t in the proposal.'
+            : ''}
+        </p>
+        <a
+          className="btn btn-sm"
+          href={`/reviews?tab=mine&selected=${encodeURIComponent(proposal.id)}`}
+        >
+          View proposal
+        </a>
+      </div>
+    );
+  }
+
+  if (proposal.status === 'rejected' && proposal.dismissedAt === null) {
+    const decision = proposal.decision;
+    return (
+      <div role="status" aria-label="Proposal" className="proposal-band proposal-band--rejected">
+        <StatusIcon kind="err" />
+        <div className="proposal-band__body">
+          <p className="proposal-band__decision" data-testid="band-decision">
+            Rejected
+            {decision === null ? '' : ` by ${decision.by.name} · ${whenText(decision.at, now)}`}
+          </p>
+          <blockquote className="proposal-band__reason">
+            {decision?.reason ?? 'No reason given'}
+          </blockquote>
+          {dismiss.isError ? <p className="proposal-band__error">{dismiss.error.message}</p> : null}
+        </div>
+        <div className="proposal-band__actions">
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => {
+              onProposeAgain(landsIn);
+            }}
+          >
+            Propose again…
+          </button>
+          <button
+            type="button"
+            className="btn-ghost btn-sm"
+            disabled={dismiss.isPending}
+            onClick={() => {
+              dismiss.mutate(proposal.id);
+            }}
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return null;
+}

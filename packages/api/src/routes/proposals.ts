@@ -312,9 +312,8 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     return items;
   };
 
-  /** A folder's path below Shared, as the audit trail names it ("Sales / EMEA"). */
-  const pathOf = async (id: string) => {
-    if (id === 'root') return 'Shared';
+  /** A folder's path from Shared, a name a step: `['Shared', 'Sales', 'EMEA']`. */
+  const pathPartsOf = async (id: string) => {
     const names: string[] = [];
     for (let at: string | null = id; at !== null && at !== 'root' && names.length < 64;) {
       const folder = await read('folder', at);
@@ -322,7 +321,12 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
       names.unshift(titleOf(folder.body) || at);
       at = folderIdOf(folder.body);
     }
-    return names.join(' / ') || id;
+    return ['Shared', ...names];
+  };
+  /** A folder's path below Shared, as the audit trail names it ("Sales / EMEA"). */
+  const pathOf = async (id: string) => {
+    if (id === 'root') return 'Shared';
+    return (await pathPartsOf(id)).slice(1).join(' / ') || id;
   };
 
   /**
@@ -444,6 +448,8 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
           .slice(1)
           .filter((item) => item.snapshot['localToDashboardId'] !== proposal.itemId)
           .map((item) => ({ kind: item.kind, title: item.title })),
+        // Every item in it, so an item that went with another's is found (T358).
+        items: proposal.items.map((item) => ({ kind: item.kind, id: item.id })),
         replaces,
         decision: proposal.decision,
         landedVersion: landed?.version ?? null,
@@ -481,7 +487,33 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     const latest = await store.latestFor(kind as ProposalKind, itemId);
     if (latest === null || latest.author.key !== userOf(request).key)
       return reply.code(404).send({ error: 'It has not been proposed.' });
-    return answerOf(latest);
+    // With its target's path, and where each item lands, for the band on the
+    // item: one that went with another's proposal lands in its own (T358).
+    const answer = answerOf(latest);
+    const items = [];
+    for (const item of answer.items)
+      items.push({ ...item, landsInPath: await pathPartsOf(item.landsIn) });
+    return { ...answer, items, targetPath: await pathPartsOf(latest.targetFolderId) };
+  });
+
+  /**
+   * Its author dismisses a rejection's band on their item (T358; design 05,
+   * state M; R42.1): gone on every device until the item is proposed again.
+   * Anyone else finds no such proposal; one not rejected answers 409.
+   */
+  app.post('/api/proposals/:id/dismiss', USER, async (request, reply) => {
+    if (!routes.enabled) return reply.code(404).send({ error: 'Proposals need sign-in.' });
+    const { id } = request.params as { id: string };
+    const user = userOf(request);
+    const proposal = await store.get(id);
+    if (proposal === null || proposal.author.key !== user.key)
+      return reply.code(404).send({ error: 'There is no such proposal.' });
+    if (proposal.status !== 'rejected')
+      return reply.code(409).send({ error: 'Only a rejection’s band is dismissed.' });
+    const dismissed = await store.dismiss(id, user.key);
+    return dismissed === null
+      ? reply.code(409).send({ error: 'Only a rejection’s band is dismissed.' })
+      : answerOf(dismissed);
   });
 
   /**
@@ -904,7 +936,12 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     }
   });
 
-  async function propose(request: FastifyRequest, reply: FastifyReply) {
+  /**
+   * What proposing would record, refused as proposing would refuse it (T349),
+   * recording nothing: for the route, and for the Propose dialog's check as
+   * it opens (T358; design 05, state F).
+   */
+  async function plan(request: FastifyRequest) {
     const body = request.body as
       { kind?: unknown; id?: unknown; description?: unknown } | undefined;
     const kind = body?.kind;
@@ -1005,7 +1042,73 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
       ];
     } else
       items = await documentItems(writes, proposing as 'dashboard' | 'chart', stored, own, target);
+    return { proposing, id, description, target, items };
+  }
 
+  /** The message for an item already waiting, in its proposal or as another's. */
+  const waitingMessage = (items: readonly ProposedItem[], kind: string, itemId: string) => {
+    const waiting = items.find((each) => each.kind === kind && each.id === itemId);
+    return waiting === undefined || waiting === items[0]
+      ? 'It is waiting for review already: its proposal must be decided first.'
+      : `It shows “${waiting.title}”, which is waiting for review in another proposal. That one must be decided first.`;
+  };
+
+  /**
+   * The Propose dialog's check as it opens (T358; design 05, states A, B and
+   * F): what proposing would record, or the refusal it would give, an item
+   * already waiting included. Each item by where it lands and what it
+   * replaces, never what it holds; nothing is recorded.
+   */
+  app.post('/api/proposals/check', USER, async (request, reply) => {
+    if (!routes.enabled) return reply.code(404).send({ error: 'Proposals need sign-in.' });
+    try {
+      const { target, items } = await plan(request);
+      for (const item of items) {
+        const open = await store.openFor(item.kind, item.id);
+        if (open !== null)
+          throw new Refused(409, waitingMessage(items, item.kind, item.id), {
+            proposalId: open.id,
+          });
+      }
+      const pathParts = pathPartsOf;
+      const answered = answerOf({
+        id: '',
+        kind: items[0]!.kind,
+        itemId: items[0]!.id,
+        title: items[0]!.title,
+        targetFolderId: target,
+        author: { key: '', name: '' },
+        description: null,
+        proposedAt: new Date(0),
+        status: 'open',
+        replaces: items[0]!.replaces,
+        items,
+        decision: null,
+        dismissedAt: null,
+      });
+      return {
+        targetFolderId: target,
+        targetPath: await pathParts(target),
+        items: await Promise.all(
+          answered.items.map(async (item) => ({
+            kind: item.kind,
+            id: item.id,
+            title: item.title,
+            landsIn: item.landsIn,
+            landsInPath: await pathParts(item.landsIn),
+            replaces: item.replaces,
+          })),
+        ),
+      };
+    } catch (failure) {
+      if (failure instanceof Refused)
+        return reply.code(failure.status).send({ error: failure.message, ...failure.extra });
+      throw failure;
+    }
+  });
+
+  async function propose(request: FastifyRequest, reply: FastifyReply) {
+    const { proposing, id, description, target, items } = await plan(request);
     const user = userOf(request);
     let proposal: Proposal;
     try {
@@ -1018,14 +1121,9 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     } catch (failure) {
       if (!(failure instanceof OpenProposalError)) throw failure;
       const open = await store.openFor(failure.kind, failure.itemId);
-      const waiting = items.find(
-        (each) => each.kind === failure.kind && each.id === failure.itemId,
-      );
       throw new Refused(
         409,
-        waiting === undefined || waiting === items[0]
-          ? 'It is waiting for review already: its proposal must be decided first.'
-          : `It shows “${waiting.title}”, which is waiting for review in another proposal. That one must be decided first.`,
+        waitingMessage(items, failure.kind, failure.itemId),
         open === null ? {} : { proposalId: open.id },
       );
     }
