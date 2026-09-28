@@ -978,6 +978,17 @@ const MADE_KEY = ['model-made'] as const;
 const GENERATING_KEY = ['generate-cubes-open'] as const;
 const DRAFTS_STORAGE = 'wechart.model.drafts';
 
+/**
+ * The files New cube or New view made whose Name has had its first focus
+ * (T484) — each made file, not its path: a discarded draft's path is the next
+ * one's (T484's review).
+ */
+const NAMED = new WeakSet<object>();
+const named = (made: object) => NAMED.has(made);
+function markNamed(made: object) {
+  NAMED.add(made);
+}
+
 function readDrafts(): Record<string, string> {
   try {
     const kept: unknown = JSON.parse(sessionStorage.getItem(DRAFTS_STORAGE) ?? '{}');
@@ -1014,8 +1025,10 @@ export function newFileOf(
   return {
     path: `${folder}/${name}.yml`,
     content:
+      // No made-up table (T484, MW-17): Reads from shows the shape, and
+      // Problems says what is missing until one is given.
       kind === 'cube'
-        ? `cubes:\n  - name: ${name}\n    sql_table: public.table_name\n    dimensions:\n      - name: id\n        sql: id\n        type: number\n        primary_key: true\n    measures:\n      - name: count\n        type: count\n`
+        ? `cubes:\n  - name: ${name}\n    dimensions:\n      - name: id\n        sql: id\n        type: number\n        primary_key: true\n    measures:\n      - name: count\n        type: count\n`
         : `views:\n  - name: ${name}\n    cubes:\n      - join_path: ${firstCube ?? 'orders'}\n        includes: "*"\n`,
   };
 }
@@ -1220,6 +1233,21 @@ export function ModelFilePage({
     if (path === undefined || document.activeElement !== document.body) return;
     page.current?.querySelector<HTMLElement>('.model-tree__file[aria-current="page"]')?.focus();
   }, [path, files.isSuccess]);
+  /**
+   * A file New cube or New view has just made opens on General with its Name
+   * focused and selected, to type over (design 03 state C, MW-18; T484) — the
+   * first time only, not each time it is opened again. After the tree's.
+   */
+  useEffect(() => {
+    if (path === undefined || made === undefined || made.path !== path || named(made)) return;
+    const name = page.current?.querySelector<HTMLInputElement>(
+      '.model-form__panel [data-key="name"] input',
+    );
+    if (name === null || name === undefined) return;
+    markNamed(made);
+    name.focus();
+    name.select();
+  }, [path, made, files.isSuccess]);
 
   return (
     <div

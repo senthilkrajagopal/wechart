@@ -848,6 +848,61 @@ test('T486: the overview as design 12 — one card, a row per cube or view, + Ne
   await expect(page).toHaveURL(/\/model\/files\/cubes%2Forders\.yml$/);
 });
 
+test('T484: New cube as design 03 state C — no made-up table, Name selected to type over (MW-17, MW-18)', async ({
+  page,
+}) => {
+  await page.goto('/model');
+  await page
+    .getByRole('navigation', { name: 'Model files' })
+    .getByRole('button', { name: 'New cube' })
+    .click();
+  await expect(page).toHaveURL(/\/model\/files\/cubes%2Fnew_cube_1\.yml$/);
+  const form = page.getByRole('region', { name: 'Cube new_cube_1' });
+  // Name focused, its text selected for typing over (MW-18).
+  const name = form.getByRole('tabpanel').getByLabel('Name', { exact: true });
+  await expect(name).toBeFocused();
+  expect(
+    await name.evaluate((input) => {
+      const field = input as HTMLInputElement;
+      return [field.selectionStart, field.selectionEnd, field.value.length];
+    }),
+  ).toEqual([0, 10, 10]);
+  await expect(page.locator('.model-editor__state')).toHaveText('New file · not published');
+  // No made-up table: Reads from empty, its placeholder the shape (MW-17).
+  const yaml = page.getByRole('textbox', { name: 'cubes/new_cube_1.yml, as YAML' });
+  await expect(yaml).toContainText('name: new_cube_1');
+  await expect(yaml).not.toContainText('sql_table');
+  const reads = form.getByRole('group', { name: 'Reads from' });
+  await expect(reads.getByLabel('SQL table')).toHaveValue('');
+  await expect(reads.getByLabel('SQL table')).toHaveAttribute('placeholder', 'schema.table');
+  // Problems names what is missing until one is given.
+  const problems = page.getByRole('region', { name: 'Problems' });
+  await expect(problems.getByRole('listitem')).toContainText([
+    'Cube new_cube_1: "sql_table" or "sql" is required.',
+  ]);
+  await reads.getByLabel('SQL table').fill('public.orders');
+  await expect(problems).toContainText('No problems in cubes/new_cube_1.yml');
+
+  // The first time only: opened again from the tree, its row keeps the focus (design 12 pin 13).
+  const tree = page.getByRole('navigation', { name: 'Model files' });
+  await tree.getByRole('link', { name: /^orders\.yml/ }).click();
+  await expect(page).toHaveURL(/cubes%2Forders\.yml$/);
+  const draft = tree.getByRole('link', { name: /^new_cube_1\.yml/ });
+  await draft.click();
+  await expect(page).toHaveURL(/new_cube_1\.yml$/);
+  await expect(draft).toBeFocused();
+  // Discarded, then a new cube at the same path: a new file, its Name focused (T484's review).
+  await page.locator('.model-editor__head').getByRole('button', { name: 'Discard' }).click();
+  await expect(page).toHaveURL(/\/model$/);
+  await tree.getByRole('button', { name: 'New cube' }).click();
+  await expect(page).toHaveURL(/new_cube_1\.yml$/);
+  await expect(
+    page.getByRole('region', { name: 'Cube new_cube_1' }).getByRole('tabpanel').getByLabel('Name', {
+      exact: true,
+    }),
+  ).toBeFocused();
+});
+
 test('T470: a bar over the form is a band across the pane, and a view’s tabs are short too', async ({
   page,
 }) => {

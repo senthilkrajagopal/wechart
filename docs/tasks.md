@@ -8016,7 +8016,12 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - the note is an InfoBar that doesn't name xcube;
     - the code fills the pane, with line numbers and wrap.
   - Depends on: T479, T482
-- [ ] T484 (AC-222, AC-344) New cube and New view as design 03's state C
+- [x] T484 (AC-222, AC-344) New cube and New view as design 03's state C
+  - **Done 2026-09-27.** Tested in `e2e/model-design.spec.ts` (T484's test), `e2e/model.spec.ts` and `e2e/model-unpublished.spec.ts` (the new-file flows).
+  - **No made-up table** (MW-17): a new cube is written without `sql_table`. "Reads from" shows `schema.table` as its placeholder. Problems says `"sql_table" or "sql" is required.` until one is given, so the tree row reads "unpublished" and "problems" meanwhile (AC-222's mark). Save stays pressable: Cube's own check refuses what it refuses (AC-136).
+  - **Name, focused and selected** (MW-18): the first time a file made by New cube or New view (tree foot or + New ▾) opens. Opened again, its tree row keeps the focus. A draft discarded and made again at the same path is a new file, whose Name is focused again (T484's review).
+  - The head reads "◷ New file · not published" (T479).
+  - New view's text is T493's.
   - Files: `packages/web/src/workspaces/model/{ModelFilePage,validate}.ts(x)` (+ tests), `e2e/model-design.spec.ts`
   - Failing test: `model-design.spec.ts` (MW-17, MW-18):
     - a new cube writes no made-up table: "Reads from" shows `schema.table` as its placeholder, and Problems names what is missing until one is given;
