@@ -23,7 +23,12 @@ export function readContext(text: string): Read {
   // that runs.
   const reserved = wechartClaimIn(context);
   if (reserved !== undefined)
-    return { problem: `wechart sets ${reserved} itself when it signs the token: remove it.` };
+    return {
+      problem: reserved.startsWith('xcube')
+        ? // Its own, which xcube honours in a context (T438's review).
+          `xcube sets ${reserved} itself: remove it.`
+        : `wechart sets ${reserved} itself when it signs the token: remove it.`,
+    };
   // Cube is handed `groups` only when it is a list of names (infra/cube/
   // cube.js, `contextToGroups`); anything else would silently be no groups.
   const groups = context['groups'];
@@ -49,7 +54,7 @@ interface Found {
 }
 
 /** How many dashboards the preview offers at once (AC-232): a bounded list. */
-const DASHBOARD_LIMIT = 8;
+export const DASHBOARD_LIMIT = 8;
 
 /** Where the edited context is kept for the session (AC-232). */
 const CONTEXT_KEY = 'wechart.security.context';
@@ -77,7 +82,7 @@ function keepContext(text: string) {
  * known rather than guessed — and whether the search has been answered, or
  * failed.
  */
-function useDashboards(text: string): {
+export function useDashboards(text: string): {
   readonly items: readonly Found[];
   readonly answered: boolean;
   readonly failed?: string;
@@ -118,7 +123,7 @@ function useDashboards(text: string): {
   };
 }
 
-const VERDICTS: Record<Access['access'], { icon: 'ok' | 'warn' | 'err'; said: string }> = {
+export const VERDICTS: Record<Access['access'], { icon: 'ok' | 'warn' | 'err'; said: string }> = {
   full: { icon: 'ok', said: 'Everything' },
   limited: { icon: 'warn', said: 'Some members or rows' },
   denied: { icon: 'err', said: 'Nothing' },

@@ -17,9 +17,17 @@ export const SecurityPreview = createContext<Readonly<Record<string, unknown>> |
  */
 const TOKEN_CLAIMS = new Set(['iat', 'exp', 'nbf', 'iss', 'aud']);
 
-/** The first claim in a context that wechart sets itself, if any. */
+/**
+ * A claim no previewed context may carry: wechart's own, xcube's own — a
+ * module to serve from, a service role, which xcube honours (T438; research
+ * xcube-slice-3b.md, Gotcha 4) — and the token's.
+ */
+const reserved = (key: string) =>
+  key.startsWith('wechart') || key.startsWith('xcube') || TOKEN_CLAIMS.has(key);
+
+/** The first claim in a context that wechart or xcube sets itself, if any. */
 export function wechartClaimIn(context: Readonly<Record<string, unknown>>): string | undefined {
-  return Object.keys(context).find((key) => key.startsWith('wechart') || TOKEN_CLAIMS.has(key));
+  return Object.keys(context).find(reserved);
 }
 
 /**
@@ -31,8 +39,6 @@ export function wechartClaimIn(context: Readonly<Record<string, unknown>>): stri
 export function previewClaimsOf(value: unknown): Record<string, unknown> | undefined {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
   return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).filter(
-      ([key]) => !key.startsWith('wechart') && !TOKEN_CLAIMS.has(key),
-    ),
+    Object.entries(value as Record<string, unknown>).filter(([key]) => !reserved(key)),
   );
 }

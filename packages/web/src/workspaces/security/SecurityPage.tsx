@@ -7,6 +7,7 @@ import { MODEL_FILES_QUERY } from '../model/FileList';
 import { AuditTrail, NO_FILTERS, type AuditFilters } from './AuditTrail';
 import { AuthWarning } from './AuthWarning';
 import { ContextPreview, modelHref } from './ContextPreview';
+import { GroupsPreview } from './GroupsPreview';
 import { Scopes } from './Scopes';
 import {
   conditionsText,
@@ -126,7 +127,12 @@ export function SecurityPage({
             ) : files.isError ? (
               <StateLine kind="err">{files.error.message}</StateLine>
             ) : null}
-            {preview}
+            {/* As groups, with sign-in on (T438; design 08, state E). */}
+            <GroupsPreview
+              model={{ declared: rows, open: openObjects, reaches }}
+              unread={unread}
+              policyGroups={groups}
+            />
           </>
         ) : (
           policies

@@ -195,6 +195,27 @@ describe('the admin routes (T323, AC-256, AC-265)', () => {
     expect(claims.map((each) => each['groups'])).toEqual([['managers'], ['managers']]);
   });
 
+  /** T438's review: with sign-in on, a preview is as groups, its token carrying those alone. */
+  it('refuse a preview naming anything but groups, with sign-in on', async () => {
+    const { cube, claims } = recordingCube();
+    const app = serve({ config: secured, cube, sessions: pgSessionStore(getDb()) });
+    const cookie = await signIn(app, USERS['super']!);
+    for (const context of [
+      { groups: ['managers'], region: 'EMEA' },
+      { region: 'EMEA' },
+      { groups: 'x' },
+    ]) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/load',
+        headers: { cookie },
+        payload: { query: { measures: ['orders.count'] }, context },
+      });
+      expect(response.statusCode, JSON.stringify(context)).toBe(400);
+    }
+    expect(claims).toEqual([]);
+  });
+
   it('are open with security off: the single user is a Super-Admin', async () => {
     const app = serve({ config: base, healthFetch: cubeAnswering });
     for (const url of ['/api/cube-auth']) {

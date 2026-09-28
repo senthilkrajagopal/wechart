@@ -470,6 +470,18 @@ export function buildServer({
     }
     const context = previewClaimsOf(value);
     if (context === null) throw new BadRequest('A preview context is a JSON object.');
+    // With sign-in on, a preview is as groups, and its token carries those
+    // alone (AC-166 as amended; requirements "tokens carry groups only";
+    // T438's review).
+    if (security === 'oidc') {
+      const groups = context['groups'];
+      if (
+        Object.keys(context).some((key) => key !== 'groups') ||
+        !Array.isArray(groups) ||
+        !groups.every((group) => typeof group === 'string')
+      )
+        throw new BadRequest('With sign-in on, a preview is as groups: send { groups: [...] }.');
+    }
     return context;
   };
 
@@ -631,6 +643,13 @@ export function buildServer({
               return typeof title === 'string' ? title : undefined;
             },
           },
+      // Each folder's name, for a preview's reach by path (T438).
+      async () =>
+        new Map(
+          (
+            (cat ? await cat.folders({ counted: false }) : []) as { id: string; title: string }[]
+          ).map((folder) => [folder.id, folder.title]),
+        ),
     );
   /**
    * Data sources (T335): seen by those who see a folder's every kind — never

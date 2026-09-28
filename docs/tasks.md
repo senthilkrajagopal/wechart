@@ -7702,13 +7702,39 @@ Every step leaves both suites working. The slice-4 image takes HS256 tokens unti
 
     Research: `xcube-slice-4.md`, "Keys and tokens".
   - Depends on: T420
-- [ ] T438 (AC-166) Preview a dashboard as the chosen groups, with a token carrying exactly those *(header restored 2026-09-28: 6f46537 dropped the line and left its body under T437)*
+- [x] T438 (AC-166) Preview a dashboard as the chosen groups, with a token carrying exactly those *(header restored 2026-09-28: 6f46537 dropped the line and left its body under T437)*
   - Files: `packages/api/src/server.ts` (the preview), `packages/web/src/workspaces/security/PreviewAs.tsx`, `e2e/security/preview-as.spec.ts`
   - Failing test: `preview-as.spec.ts`:
     - a Super-Admin previews a dashboard as two groups, and every query it makes carries exactly those groups and nothing else;
     - a banner names them (AC-166).
   - **Also (2026-09-26, `xcube-slice-3b.md` Gotcha 4):** xcube honours an `xcubeModule` key in a security context, so a previewed context must also lose every `xcube…` key, as it already loses `wechart…` ones (`previewClaimsOf` in `packages/api/src/cube/client.ts`).
   - Depends on: T437
+  - *As built (2026-09-28; design 08 of 2026-09-27, state E), on today's tokens:* with sign-in on, the Security page's "Preview as groups" tab replaces the JSON editor and "Find a dashboard", which sign-in off keeps.
+    - **Groups** are chips, chosen with the Access panel's "AD group" picker (suggesting the groups set on folders), and kept for the session (AC-232).
+    - **What these groups reach**: `GET /api/access/reach?groups=` (Super-Admins alone) answers every folder the folder check lets them see, by its path from Shared, and how: read-write, view only, or "its dashboards, view only" for a folder above one they reach. It is `folderRights`, the rule the API itself uses.
+    - **What the model gives them**: the policies' verdict per cube and view, as the JSON preview gave it.
+    - **Dashboard to preview**: a search. Its link opens the dashboard as `{ groups }`, and every query it makes carries exactly those groups.
+    - **The banner**, with sign-in on and a preview as groups, says "Previewing as sales-ro and emea-viewers" with "Stop preview". Any other context, and sign-in off, keep phase 1's words and the context itself.
+    - A previewed context loses every `xcube…` key (`xcubeRole`, `xcubeModule`), on the API and in the browser, which names one as reserved. Before this a Super-Admin's preview could carry them.
+    - Also files: `packages/api/src/routes/access.ts`, `packages/api/src/access/group-reach.test.ts`, `packages/api/src/cube/model-claims.test.ts`, `packages/web/src/workspaces/security/{GroupsPreview,ContextPreview,SecurityPage}.tsx` (+ tests), `packages/web/src/dashboard/PreviewBanner.tsx` (+ test), `packages/web/src/query/securityPreview.ts` (+ test), `e2e/security/security-page.spec.ts`.
+    - *Why not on T437:* the preview's token already carries exactly the chosen groups (HS256 today). T437 changes how every token is signed, not what a preview carries.
+  - **Done 2026-09-28, after one review round. AC-166 ticked** on `preview-as.spec.ts` in Chrome, Firefox and Safari: a Super-Admin previews a dashboard as two groups; every query it makes carries exactly `{ groups }`; a banner names them. The token's claims are `auth/admin.test.ts`'s, and the stripped keys `model-claims.test.ts`'s.
+  - **Review fixes:**
+    1. A folder above a read-write grant was said to show "its dashboards" only. It now says "view only" (AC-262), since above a read-only grant it is its dashboards alone.
+    2. The groups the policies name were no longer offered (AC-232). They are presets again, and suggestions.
+    3. With sign-in on, the API took a preview naming more than groups. It now answers `400`: a preview is as groups, and its token carries those alone ("tokens carry groups only").
+    4. The reach list's order and a comma in a group's name. Folders are now in tree order, and each group is its own parameter.
+    5. The banner's names ran together. Each is now in the code face.
+    6. A dashboard could be previewed as no groups; not now.
+    7. Focus was lost when a chip was removed, and what the groups reach was never announced.
+    - Also: Enter adds a group in Safari, whose datalist input doesn't submit its form.
+    - Tests added:
+      - the groups come back after a preview;
+      - the presets;
+      - a folder above a read-write grant, Shared's own row, the tree order and a comma;
+      - three groups in the banner;
+      - a preview naming more than groups, refused.
+  - **Held back (backlog §6, with T437 → T436):** state E's tiles "Not available to these groups: it uses finance.churn, in a folder they don't reach". While wechart doesn't push folders' groups to xcube, xcube's folder check is off, so no tile is refused for its folder. The reach list is wechart's own reckoning of the same rule.
 - [ ] T457 (AC-272) Show a chart's second cube bound through its source cube's bindings, and a save refused while xcube is unreachable, against xcube *(added 2026-09-26: T429 showed both against the stub xcube only)*
   - Files: `e2e/security/picker.spec.ts`, `packages/api/src/model/bind.ts` (the refusal's wording, if it doesn't say xcube can't be reached)
   - Failing test: `picker.spec.ts`, against compose's xcube:

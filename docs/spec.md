@@ -703,7 +703,7 @@ Traces to: `[R4]`, `[docs/inputs §7]`, direction.md §7c, rule 21; `[research/c
 
 - [x] AC-165 THE SYSTEM SHALL list every access policy in the model with its role, member-level rules, row-level filters, conditions and masking, as declared.
       Fails when: a declared policy or rule is missing from the listing.
-- [ ] AC-166 WHEN the user ~~edits a security context~~ chooses one or more groups and previews a dashboard, THE SYSTEM SHALL run that dashboard's queries as a token carrying exactly those groups, and show a persistent banner naming them (direction.md rule 21; phase 2: tokens carry groups only, `[AD 12, R27]`; amended 2026-09-25 and unticked until retested).
+- [x] AC-166 WHEN the user ~~edits a security context~~ chooses one or more groups and previews a dashboard, THE SYSTEM SHALL run that dashboard's queries as a token carrying exactly those groups, and show a persistent banner naming them (direction.md rule 21; phase 2: tokens carry groups only, `[AD 12, R27]`; amended 2026-09-25 and unticked until retested).
       Fails when: the queries use the default context or carry anything but the chosen groups, or no banner is shown.
 - [x] AC-167 WHEN a preview context hides a member a chart uses, THE SYSTEM SHALL show that tile as unavailable to the context rather than as an error.
       Fails when: the tile shows a raw Cube error.

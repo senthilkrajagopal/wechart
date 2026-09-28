@@ -115,7 +115,10 @@ describe('Security in tabs, with sign-in on (T500)', () => {
     expect(
       within(tabs).getByRole('link', { name: 'Preview as groups' }).getAttribute('aria-current'),
     ).toBe('page');
-    expect(await screen.findByRole('region', { name: 'Preview a security context' })).toBeTruthy();
+    // As groups (T438; design 08, state E), in place of the JSON editor.
+    expect(await screen.findByRole('region', { name: 'Preview as groups' })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Preview a security context' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Security context (JSON)' })).toBeNull();
     expect(screen.queryByRole('table', { name: 'Access policies' })).toBeNull();
   });
 

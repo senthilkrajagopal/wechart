@@ -84,7 +84,75 @@ export function registerFolderAccess(
     /** A folder's name, for its record: the root's is Shared. */
     readonly titleOf: (folderId: string) => Promise<string | undefined>;
   },
+  /** Every folder's name, for the paths a preview's reach names (T438). */
+  titles?: () => Promise<ReadonlyMap<string, string>>,
 ): void {
+  /**
+   * What a set of groups reaches (T438, AC-166; design 08, state E): every
+   * shared folder the folder check lets them see, by its path from Shared,
+   * with what they may do there, for a Super-Admin previewing as them.
+   */
+  app.get('/api/access/reach', USER, async (request, reply) => {
+    if (!userOf(request).superAdmin)
+      throw new Forbidden('Only a Super-Admin can preview what groups reach.');
+    // Each group its own parameter, `?groups=a&groups=b`: a comma is part of
+    // a name, never between two (T438's review).
+    const asked = (request.query as { groups?: unknown }).groups;
+    const groups = [
+      ...new Set(
+        (Array.isArray(asked) ? asked : [asked])
+          .filter((group): group is string => typeof group === 'string')
+          .map((group) => group.trim())
+          .filter(Boolean),
+      ),
+    ];
+    const tree = await store.tree();
+    const names = (await titles?.()) ?? new Map<string, string>();
+    const parents = new Map(tree.map((folder) => [folder.id, folder.parentId]));
+    const pathOf = (id: string) => {
+      const path: string[] = [];
+      for (let at: string | null = id; at !== null && path.length <= tree.length;) {
+        path.unshift(at === 'root' ? 'Shared' : (names.get(at) ?? at));
+        at = parents.get(at) ?? null;
+      }
+      return path[0] === 'Shared' ? path : ['Shared', ...path];
+    };
+    // How each is reached, as design 08 says it: a grant on it or above it,
+    // read-write or view only; or only as the folder above one they reach,
+    // for its dashboards.
+    const byId = new Map(tree.map((folder) => [folder.id, folder]));
+    const named = new Set(groups);
+    const grantOn = (id: string): 'write' | 'view' | undefined => {
+      let level: 'write' | 'view' | undefined;
+      const seen = new Set<string>();
+      for (let at = byId.get(id); at !== undefined && !seen.has(at.id);) {
+        seen.add(at.id);
+        if ((at.access?.readWrite ?? []).some((group) => named.has(group))) return 'write';
+        if ((at.access?.readOnly ?? []).some((group) => named.has(group))) level = 'view';
+        at = at.parentId === null ? undefined : byId.get(at.parentId);
+      }
+      return level;
+    };
+    const folders = [...folderRights(tree, { groups, superAdmin: false })]
+      .map(([id, right]) => ({
+        id,
+        path: pathOf(id),
+        reach: grantOn(id) ?? 'above',
+        write: right.write,
+        kinds: right.kinds,
+      }))
+      // In tree order: segment by segment, so a folder's own come before a
+      // sibling of a longer name (T438's review).
+      .toSorted((a, b) => {
+        for (let at = 0; at < Math.min(a.path.length, b.path.length); at += 1) {
+          const order = a.path[at]!.localeCompare(b.path[at]!);
+          if (order !== 0) return order;
+        }
+        return a.path.length - b.path.length;
+      });
+    return reply.send({ groups, folders });
+  });
+
   /** What this user may do in the folder: undefined when they can't see it. */
   const lookUp = async (request: FastifyRequest) => {
     const { folderId } = request.params as { folderId: string };

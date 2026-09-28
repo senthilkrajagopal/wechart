@@ -444,13 +444,15 @@ const isWechartClaim = (key: string) => key.startsWith('wechart');
 
 /**
  * A previewed security context's claims (T172, AC-166): an object's, less
- * wechart's own and the token's. Null when it is not an object.
+ * wechart's own, xcube's own — a module to serve from, a service role, which
+ * xcube honours in a context (T438; research xcube-slice-3b.md, Gotcha 4) —
+ * and the token's. Null when it is not an object.
  */
 export function previewClaimsOf(value: unknown): Record<string, unknown> | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>).filter(
-      ([key]) => !isWechartClaim(key) && !TOKEN_CLAIMS.has(key),
+      ([key]) => !isWechartClaim(key) && !key.startsWith('xcube') && !TOKEN_CLAIMS.has(key),
     ),
   );
 }

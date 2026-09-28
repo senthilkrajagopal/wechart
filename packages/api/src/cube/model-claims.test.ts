@@ -137,6 +137,22 @@ describe('every token names the model and the revision (T421, AC-334)', () => {
     });
     expect(tokens[0]).toMatchObject({ wechartModel: 'dev', wechartRevision: 7 });
   });
+
+  /**
+   * T438 (research xcube-slice-3b.md, Gotcha 4): xcube honours its own keys
+   * in a security context — a module to serve from, a service role — so a
+   * previewed context loses every `xcube…` key, as it loses wechart's.
+   */
+  it('can’t carry xcube’s own keys either', async () => {
+    const { client, tokens } = cube(ok);
+    await client.load({ measures: ['orders.count'] }, undefined, {
+      groups: ['sales-ro'],
+      xcubeRole: 'service',
+      xcubeModule: 'm0',
+    });
+    expect(tokens[0]!['groups']).toEqual(['sales-ro']);
+    expect(Object.keys(tokens[0]!).filter((key) => key.startsWith('xcube'))).toEqual([]);
+  });
 });
 
 describe('a Cube instance still catching up (T421, AC-334)', () => {

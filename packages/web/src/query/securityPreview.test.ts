@@ -35,4 +35,14 @@ describe('a previewed context as it runs', () => {
     expect(wechartClaimIn({ groups: [], exp: 1 })).toBe('exp');
     expect(wechartClaimIn({ groups: [], sub: 'rep-7' })).toBeUndefined();
   });
+
+  /** T438: xcube's own keys, which xcube honours in a context, go as wechart's do. */
+  it('drops and names xcube’s own keys too', () => {
+    expect(previewClaimsOf({ groups: ['sales'], xcubeRole: 'service', xcubeModule: 'm0' })).toEqual(
+      {
+        groups: ['sales'],
+      },
+    );
+    expect(wechartClaimIn({ groups: [], xcubeRole: 'service' })).toBe('xcubeRole');
+  });
 });

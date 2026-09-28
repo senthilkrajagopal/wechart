@@ -74,7 +74,8 @@ test.describe('Security, as a Super-Admin sees it', () => {
         name: 'Preview as groups',
       }),
     ).toHaveAttribute('aria-current', 'page');
-    await expect(main.getByRole('region', { name: 'Preview a security context' })).toBeVisible();
+    // As groups (T438; design 08, state E).
+    await expect(main.getByRole('region', { name: 'Preview as groups' })).toBeVisible();
     await expect(main.getByRole('table', { name: 'Access policies' })).toHaveCount(0);
   });
 });
