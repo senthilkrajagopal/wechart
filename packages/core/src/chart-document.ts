@@ -22,6 +22,7 @@
 
 import { emptySpec, type ChartFilter, type ChartSpec } from './chart-spec';
 import { GRANULARITY_NAMES, type TimeGranularity } from './format';
+import { readQuickCalcs, type QuickCalc } from './quickCalc';
 import type { Channel, ChartType } from './render-spec';
 
 /**
@@ -84,6 +85,8 @@ export interface ChartDefinition {
   readonly granularities?: Readonly<Record<string, TimeGranularity>>;
   /** The chart's own filters (AC-216). */
   readonly filters?: readonly ChartFilter[];
+  /** The quick calculation on each measure that has one (AC-047). */
+  readonly calculations?: Readonly<Record<string, QuickCalc>>;
 }
 
 export interface ChartDocument {
@@ -210,8 +213,20 @@ export function readChartDocument(body: unknown): ChartDocument {
         ? {}
         : { granularities: grainsOf(definition['granularities']) }),
       ...(definition['filters'] === undefined ? {} : { filters: filtersOf(definition['filters']) }),
+      ...(definition['calculations'] === undefined
+        ? {}
+        : { calculations: calculationsOf(definition['calculations']) }),
     },
   };
+}
+
+/** A chart's quick calculations (AC-047), each one wechart offers, or a refusal. */
+function calculationsOf(value: unknown): Readonly<Record<string, QuickCalc>> {
+  try {
+    return readQuickCalcs(value);
+  } catch (error) {
+    throw new ChartDocumentError((error as Error).message);
+  }
 }
 
 /** A box plot's "Each point is": one member's name (T400), or a refusal. */
@@ -290,6 +305,7 @@ export function chartDocumentOf(input: {
       ...(input.options === undefined ? {} : { options: input.options }),
       ...(spec.granularities === undefined ? {} : { granularities: { ...spec.granularities } }),
       ...(spec.filters === undefined ? {} : { filters: [...spec.filters] }),
+      ...(spec.calculations === undefined ? {} : { calculations: { ...spec.calculations } }),
     },
   };
 }
@@ -307,5 +323,6 @@ export function toChartSpec(document: ChartDocument): ChartSpec {
     ...(chart.granularities === undefined ? {} : { granularities: { ...chart.granularities } }),
     ...(chart.filters === undefined ? {} : { filters: [...chart.filters] }),
     ...(chart.wells.eachPointIs === undefined ? {} : { eachPointIs: chart.wells.eachPointIs }),
+    ...(chart.calculations === undefined ? {} : { calculations: { ...chart.calculations } }),
   };
 }

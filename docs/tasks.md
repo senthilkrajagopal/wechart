@@ -6573,9 +6573,24 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 ## P2.11 Quick calculations and calculation requests (F6, returned)
 
-- [ ] T380 [P] (AC-047) Offer the six quick calculations on a measure
+- [x] T380 [P] (AC-047) Offer the six quick calculations on a measure
   - Files and failing test: as T053 (above) (AC-047).
   - Depends on: none
+  - **As built:** `packages/web/src/editor/QuickCalcMenu.tsx` (+ test), `packages/web/src/editor/{Wells,ChartEditor,openChart}.tsx` (+ Wells and openChart tests), `packages/core/src/quickCalc.ts` (+ test), `packages/core/src/{chart-spec,chart-document,index}.ts` (+ chart-document test), `packages/web/src/shell/styles.ts`, `e2e/quick-calcs.spec.ts`, `e2e/design-conformance.spec.ts` (the measure pill's tag found as the menu's button).
+  - **Done 2026-09-28.**
+    - **Where the menu is.** On each measure's pill in Metrics: the pill's aggregation tag is the menu's button ("count ▾"), as direction.md §8's WellPill has it ("name, aggregation or granularity menu, sort, and ×"). With a calculation applied, the tag names it ("Rank ▾"), and the menu adds "No calculation" to take it off.
+    - **What it offers.** % of total, difference from previous period, % difference from previous period, running total, rank, and moving average. The moving average is offered over 3, 6 or 12 periods, 3 first, as three items: the user's 2026-09-24 answer ("3 periods by default, changeable in the menu (offer 3/6/12)", `handoff.md` §2).
+    - **What choosing does.** The choice is held on the chart, by measure, as engine-neutral data (`calculations: { "orders.count": { kind: "rank" } }`). It is written by the editor's save (`chartDocumentWith`, both the chart page's and the dashboard overlay's) and read back into the editor. It is not stored as Cube members, which AC-048 derives. The same calculation chosen again is no change. Removing the measure drops its calculation too.
+    - **One calculation per measure, in its place.** A calculation transforms the measure it is chosen on (the pill names it), rather than adding a second series beside it: AC-048's "label the measure with the calculation applied". Neither the spec nor the design says which, so it is the user's to overturn before T382.
+    - **Not yet computed.** Until T382, a chosen calculation is recorded and named on the pill, but the chart still draws the plain measure.
+    - **What the tests show.**
+      - `quickCalc.test.ts`: the six, in the criterion's order; the three windows; applying, replacing, taking off, and dropping with the measure; a stored calculation that isn't one of these is refused.
+      - `chart-document.test.ts`: calculations are read and written with the document.
+      - `openChart.test.ts`: the editor's save writes them, reopens with them, counts a change to one alone as a change, and writes none once taken off or once the measure is removed.
+      - `QuickCalcMenu.test.tsx` and `Wells.test.tsx`: the menu offers the six, applies the one chosen to its measure, and names it.
+      - `e2e/quick-calcs.spec.ts` (Chrome): in the chart editor on Orders, the menu on Count offers the six; choosing Rank names it on the pill; and a new chart saved with Rank reopens with it. **AC-047 ticked.**
+    - **The cold review (FAIL)** found one real bug: the editor's save (`chartDocumentWith`) didn't write the calculations, so a chosen one was lost on save, and one taken off came back. Fixed, and tested through that path (`openChart.test.ts`, and the save-and-reopen e2e test). The review's proxy-test finding is answered by the same tests.
+    - **Left as is:** a stored document can hold a calculation for a measure its wells don't have, since reading doesn't cross-check them. The editor never writes one: removing a measure drops its calculation.
 - [ ] T381 (AC-049) Disable a period calculation without a time dimension, and say which field is missing
   - Files and failing test: as T054 (above) (AC-049).
   - Depends on: T380

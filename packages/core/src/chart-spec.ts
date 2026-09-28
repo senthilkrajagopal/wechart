@@ -5,6 +5,7 @@
  */
 
 import type { MemberGranularities, TimeGranularity } from './format';
+import type { QuickCalc } from './quickCalc';
 import type { ChartType } from './render-spec';
 
 export type WellName = 'measures' | 'dimensions' | 'timeDimensions';
@@ -29,6 +30,11 @@ export interface ChartSpec {
    * Unset, each row is a point.
    */
   readonly eachPointIs?: string;
+  /**
+   * The quick calculation applied to a measure (AC-047), by the measure: at
+   * most one each, chosen from the menu on its pill.
+   */
+  readonly calculations?: Readonly<Record<string, QuickCalc>>;
 }
 
 /**
@@ -72,15 +78,20 @@ export function addToWell(spec: ChartSpec, well: WellName, member: string): Char
 
 export function removeFromWell(spec: ChartSpec, well: WellName, member: string): ChartSpec {
   const removed = { ...spec, [well]: spec[well].filter((existing) => existing !== member) };
-  // Its chosen grain goes with it, so none lingers in what is saved (T229's
-  // review) and the field comes back at the day if added again.
-  if (spec.granularities?.[member] === undefined) return removed;
-  const granularities = Object.fromEntries(
-    Object.entries(spec.granularities).filter(([name]) => name !== member),
-  );
-  if (Object.keys(granularities).length > 0) return { ...removed, granularities };
+  // Its chosen grain and its calculation (AC-047) go with it, so neither
+  // lingers in what is saved (T229's review) and the field comes back plain
+  // if added again.
+  return forget(forget(removed, 'granularities', member), 'calculations', member);
+}
+
+/** `spec` with `member`'s entry in one of its per-member maps dropped, and the map with its last. */
+function forget(spec: ChartSpec, map: 'granularities' | 'calculations', member: string): ChartSpec {
+  const entries = spec[map];
+  if (entries?.[member] === undefined) return spec;
+  const kept = Object.fromEntries(Object.entries(entries).filter(([name]) => name !== member));
+  if (Object.keys(kept).length > 0) return { ...spec, [map]: kept };
   return Object.fromEntries(
-    Object.entries(removed).filter(([key]) => key !== 'granularities'),
+    Object.entries(spec).filter(([key]) => key !== map),
   ) as unknown as ChartSpec;
 }
 

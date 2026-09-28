@@ -2923,14 +2923,27 @@ test.describe('T257: the chart editor', () => {
       'background-color': await token(page, 'bg-role-dimension-soft', 'background-color'),
     });
     // .pill .agg { font-weight: 400 } — at full strength: the prototype's
-    // opacity .85 takes the measure's ink under AA on its tint (rule 2).
-    expect(await style(pill.locator('.pill__tag'), 'font-weight', 'opacity')).toEqual({
+    // opacity .85 takes the measure's ink under AA on its tint (rule 2). A
+    // measure's aggregation tag is the menu of its quick calculations (T380).
+    expect(
+      await style(
+        pill.getByRole('button', { name: 'Calculations on Count' }),
+        'font-weight',
+        'opacity',
+      ),
+    ).toEqual({
       'font-weight': '400',
       opacity: '1',
     });
     // .pill button { width: 18px; height: 18px; border-radius: 3px; color: inherit }
     expect(
-      await style(pill.getByRole('button'), 'width', 'height', 'border-radius', 'color'),
+      await style(
+        pill.getByRole('button', { name: 'Remove Count from Metrics' }),
+        'width',
+        'height',
+        'border-radius',
+        'color',
+      ),
     ).toEqual({
       width: '18px',
       height: '18px',

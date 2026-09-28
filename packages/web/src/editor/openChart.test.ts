@@ -1,9 +1,11 @@
 import {
+  applyQuickCalc,
   CHART_DOCUMENT_VERSION,
   chartDocumentOf,
   emptySpec,
   migrateChartDocument,
   readChartDocument,
+  removeFromWell,
   type ChartDocument,
 } from '@wechart/core';
 import { describe, expect, it } from 'vitest';
@@ -445,6 +447,40 @@ describe('writing the editor’s state back onto the chart', () => {
       dimensions: ['orders.status'],
       timeDimensions: [],
     });
+  });
+
+  /** T380 / AC-047: a quick calculation chosen on a measure is what is saved. */
+  it('writes the quick calculations as the editor has them, and none once taken off', () => {
+    const opened = editorStateOf(everything);
+    const ranked = {
+      ...opened,
+      spec: applyQuickCalc(opened.spec, 'orders.count', { kind: 'rank' as const }),
+    };
+
+    // Chosen, it is written, and reads back into the editor.
+    const written = chartDocumentWith(everything, ranked);
+    expect(written.chart.calculations).toEqual({ 'orders.count': { kind: 'rank' } });
+    expect(
+      editorStateOf(readChartDocument(JSON.parse(JSON.stringify(written)))).spec.calculations,
+    ).toEqual({ 'orders.count': { kind: 'rank' } });
+    // A change to a calculation alone is a change (T032).
+    expect(changesChart(everything, opened, ranked)).toBe(true);
+
+    // Taken off, it isn't brought back from the stored chart.
+    const stored = chartDocumentWith(everything, ranked);
+    const reopened = editorStateOf(stored);
+    const takenOff = {
+      ...reopened,
+      spec: applyQuickCalc(reopened.spec, 'orders.count', undefined),
+    };
+    expect('calculations' in chartDocumentWith(stored, takenOff).chart).toBe(false);
+
+    // Its measure removed, it goes too.
+    const removed = {
+      ...reopened,
+      spec: removeFromWell(reopened.spec, 'measures', 'orders.count'),
+    };
+    expect('calculations' in chartDocumentWith(stored, removed).chart).toBe(false);
   });
 });
 

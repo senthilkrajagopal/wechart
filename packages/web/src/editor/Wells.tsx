@@ -1,4 +1,4 @@
-import type { ChartFilter, ChartSpec, TimeGranularity, WellName } from '@wechart/core';
+import type { ChartFilter, ChartSpec, QuickCalc, TimeGranularity, WellName } from '@wechart/core';
 import { useQuery } from '@tanstack/react-query';
 import { QUERY_GRANULARITY } from '@wechart/core';
 import { Fragment, useId, useState, type ReactNode } from 'react';
@@ -8,6 +8,7 @@ import { MenuButton, type MenuItem } from '../shell/MenuButton';
 import { StateLine, StatusIcon } from '../shell/StatusIcon';
 import { FieldIcon } from './FieldList';
 import type { Member } from './fields';
+import { QuickCalcMenu } from './QuickCalcMenu';
 
 /**
  * How many of a member's values a filter pill offers (a decision, T229):
@@ -128,6 +129,11 @@ export interface WellsProps {
   readonly dragging?: Member | null;
   /** A time field's grain, chosen from its pill (AC-216). */
   readonly onGranularity?: (member: string, grain: TimeGranularity) => void;
+  /**
+   * A measure's quick calculation, chosen from the menu on its pill (AC-047),
+   * or taken off. Given, each measure in Metrics carries the menu.
+   */
+  readonly onCalculation?: (member: string, calc: QuickCalc | undefined) => void;
   /** The chart's own filters, changed in the Filters well (AC-216). */
   readonly onFilters?: (filters: readonly ChartFilter[]) => void;
   /** How many categories are kept before the rest fold into Other (AC-216, AC-041). */
@@ -163,6 +169,7 @@ export function Wells({
   onRemove,
   dragging = null,
   onGranularity,
+  onCalculation,
   onFilters,
   topN,
   onTopN,
@@ -276,6 +283,15 @@ export function Wells({
                             </option>
                           ))}
                         </select>
+                      ) : well.name === 'measures' && onCalculation !== undefined ? (
+                        // Its aggregation tag as the menu of quick calculations (AC-047).
+                        <QuickCalcMenu
+                          title={title}
+                          tag={known?.aggType}
+                          applied={spec.calculations?.[member]}
+                          onApply={(calc) => onCalculation(member, calc)}
+                          testId={`calcs-${member}`}
+                        />
                       ) : known?.aggType === undefined ? null : (
                         <span className="pill__tag">{known.aggType}</span>
                       )}

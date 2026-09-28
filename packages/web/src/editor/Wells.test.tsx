@@ -440,6 +440,87 @@ describe('the wells’ pills, Filters and Top N (AC-216)', () => {
 });
 
 /**
+ * AC-047: WHEN the user opens the menu on a measure in the chart editor, THE
+ * SYSTEM SHALL offer % of total, difference from previous period, % difference
+ * from previous period, running total, rank and moving average.
+ * Fails when: any of the six is missing from the menu.
+ *
+ * The menu is the measure pill's: here, that each measure in Metrics carries
+ * it, applies what is chosen to that measure, and names what is applied.
+ */
+describe('the menu on a measure pill (AC-047)', () => {
+  const amount: Member = {
+    name: 'orders.total_amount',
+    title: 'Orders Total amount',
+    shortTitle: 'Total amount',
+    kind: 'measure',
+    type: 'number',
+    cube: 'orders',
+    aggType: 'sum',
+  };
+  const spec = { ...emptySpec('orders'), measures: ['orders.count', 'orders.total_amount'] };
+
+  it('is on each measure in Metrics, by the measure’s title', () => {
+    render(
+      <Wells
+        spec={spec}
+        available={[measure, amount]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        onCalculation={vi.fn()}
+      />,
+    );
+
+    expect(
+      within(screen.getByTestId('in-measures-orders.count')).getByRole('button', {
+        name: 'Calculations on Count',
+      }),
+    ).toBeTruthy();
+    expect(
+      within(screen.getByTestId('in-measures-orders.total_amount')).getByRole('button', {
+        name: 'Calculations on Total amount',
+      }),
+    ).toBeTruthy();
+  });
+
+  it('applies the one chosen to that measure', async () => {
+    const onCalculation = vi.fn();
+    render(
+      <Wells
+        spec={spec}
+        available={[measure, amount]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        onCalculation={onCalculation}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Calculations on Total amount' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: '% of total' }));
+
+    expect(onCalculation).toHaveBeenCalledWith('orders.total_amount', { kind: 'percentOfTotal' });
+  });
+
+  it('names the calculation applied on its measure’s pill, and only there', () => {
+    render(
+      <Wells
+        spec={{ ...spec, calculations: { 'orders.count': { kind: 'runningTotal' } } }}
+        available={[measure, amount]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        onCalculation={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('in-measures-orders.count').textContent).toContain('Running total');
+    expect(screen.getByTestId('in-measures-orders.total_amount').textContent).not.toContain(
+      'Running total',
+    );
+    expect(screen.getByTestId('in-measures-orders.total_amount').textContent).toContain('sum');
+  });
+});
+
+/**
  * T400 (AC-314): WHEN the user sets a box plot's "Each point is" field (for
  * example Order ID), THE SYSTEM SHALL compute the measure once per value of
  * that field within each category, and draw the boxes from those values.

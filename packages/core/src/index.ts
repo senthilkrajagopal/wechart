@@ -63,6 +63,17 @@ export {
 
 export { compile, defaultEncoding, type CompileOptions } from './compile';
 
+export {
+  MOVING_AVERAGE_PERIODS,
+  QUICK_CALCS,
+  QUICK_CALC_NAMES,
+  applyQuickCalc,
+  quickCalcName,
+  type MovingAveragePeriods,
+  type QuickCalc,
+  type QuickCalcKind,
+} from './quickCalc';
+
 export { pivot, type PivotResult } from './pivot';
 
 export { applyRowLimit, applyTopN, OTHER_LABEL } from './topN';

@@ -6488,6 +6488,24 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
   font-size: 12px;
   font-weight: 400;
 }
+/* A measure's aggregation tag as the menu of quick calculations (T380,
+   AC-047): drawn as the tag, in the pill's ink, with a caret. */
+.pill__calc {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 20px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+/* Its menu, in the menu's own type rather than the pill's 600, one line an item. */
+.pill .menu-button__menu { font-weight: 400; white-space: nowrap; }
 .pill__remove {
   display: grid;
   place-items: center;

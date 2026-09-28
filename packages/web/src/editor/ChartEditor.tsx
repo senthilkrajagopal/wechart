@@ -1,5 +1,6 @@
 import {
   addToWell,
+  applyQuickCalc,
   CHART_TYPE_NAMES,
   chartDocumentOf,
   compile,
@@ -804,6 +805,10 @@ export function ChartEditor({
                     ...current,
                     granularities: { ...current.granularities, [member]: grain },
                   }))
+                }
+                // A measure's quick calculation, from the menu on its pill (AC-047).
+                onCalculation={(member, calc) =>
+                  setSpec((current) => applyQuickCalc(current, member, calc))
                 }
                 // The last filter removed leaves none stored, as there were.
                 onFilters={(filters) =>

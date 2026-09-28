@@ -239,6 +239,9 @@ export function chartDocumentWith(loaded: ChartDocument, state: EditorState): Ch
   else chart['granularities'] = { ...state.spec.granularities };
   if (state.spec.filters === undefined) delete chart['filters'];
   else chart['filters'] = [...state.spec.filters];
+  // The quick calculations chosen on measures (AC-047), likewise.
+  if (state.spec.calculations === undefined) delete chart['calculations'];
+  else chart['calculations'] = { ...state.spec.calculations };
 
   // The editor holds "no settings" as {}; a chart that had none keeps none,
   // so writing an unchanged chart back really does give the same document.

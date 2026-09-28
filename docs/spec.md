@@ -224,7 +224,7 @@ Traces to: `[R7]`, `[R2]`, `[research/cube/data-modeling.md]`.
 > AC-052 now name the folder and the workspace, since the Model workspace is
 > gone (`[P2 input]`).
 
-- [ ] AC-047 WHEN the user opens the menu on a measure in the chart editor, THE SYSTEM SHALL offer % of total, difference from previous period, % difference from previous period, running total, rank and moving average.
+- [x] AC-047 WHEN the user opens the menu on a measure in the chart editor, THE SYSTEM SHALL offer % of total, difference from previous period, % difference from previous period, running total, rank and moving average.
       Fails when: any of the six is missing from the menu.
 - [ ] AC-048 WHEN a quick calculation is applied, THE SYSTEM SHALL compute it in Cube as a multi-stage measure rather than in the browser, and the tile SHALL label the measure with the calculation applied.
       Fails when: the value is computed from the already-fetched rows, or the label does not name the calculation.

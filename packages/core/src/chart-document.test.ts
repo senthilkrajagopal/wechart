@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CHART_DOCUMENT_VERSION,
+  ChartDocumentError,
   chartDocumentOf,
   readChartDocument,
   toChartSpec,
@@ -159,6 +160,30 @@ describe('the document and the authoring shape agree', () => {
       chart: { ...full.chart, wells: { ...full.chart.wells, eachPointIs: 7 } },
     };
     expect(() => readChartDocument(odd)).toThrow(/Each point is/);
+  });
+
+  /** T380 / AC-047: a quick calculation chosen on a measure is saved with the chart. */
+  it('round-trips the quick calculations on its measures, through storage too', () => {
+    const spec = {
+      ...addToWell(
+        addToWell(emptySpec('orders'), 'measures', 'orders.count'),
+        'measures',
+        'orders.total_amount',
+      ),
+      calculations: {
+        'orders.count': { kind: 'rank' as const },
+        'orders.total_amount': { kind: 'movingAverage' as const, periods: 6 as const },
+      },
+    };
+    const document = chartDocumentOf({ title: 'x', spec });
+
+    expect(toChartSpec(document)).toEqual(spec);
+    expect(roundTrip(document)).toEqual(document);
+    const odd = {
+      ...full,
+      chart: { ...full.chart, calculations: { 'orders.count': { kind: 'median' } } },
+    };
+    expect(() => readChartDocument(odd)).toThrow(ChartDocumentError);
   });
 
   it('refuses a grain Cube does not have, and a filter that is not one', () => {
