@@ -8079,8 +8079,13 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - `GenerateCubes.test.tsx`: a source whose last test failed shows the failed icon, the label and its age, from `/api/data-sources`, as `DataSourcesList` shows them. One with no test says "Not tested".
     - `generate-cubes.spec.ts`: the root's `default` shows the same health as its row in Data sources.
   - Depends on: T485
-- [ ] T491 [P] (AC-349) Choose every table on the page from the table list's header
-  - Files: `packages/web/src/workspaces/model/GenerateCubes.tsx` (+ test)
+- [x] T491 [P] (AC-349) Choose every table on the page from the table list's header
+  - **Done 2026-09-27.** Tested in `GenerateCubes.test.tsx`, "chooses every table on the page from the list’s header, mixed when some are" (AC-349 ticked); `e2e/generate-cubes.spec.ts` counts the rows' checkboxes apart from it.
+  - A checkbox before "Table" in the list's header, named "Choose every table on this page":
+    - checked when all of the page's tables are chosen, mixed (the `indeterminate` property, set before paint) when some are;
+    - pressed, it chooses the page's tables, or clears them when all are;
+    - choices on other pages, or outside the search, are left as they are.
+  - Files: `packages/web/src/workspaces/model/GenerateCubes.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/generate-cubes.spec.ts`
   - Failing test: `GenerateCubes.test.tsx`:
     - the header checkbox chooses all of the page's tables and leaves the other pages' as they were;
     - it is mixed when some are chosen and checked when all are;

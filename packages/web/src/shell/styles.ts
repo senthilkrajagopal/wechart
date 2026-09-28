@@ -2032,6 +2032,7 @@ main:has(.admin-page--docked) {
 .generate-pane__tables > tbody > tr > td:last-child { width: 24px; padding-right: 8px; text-align: right; }
 .generate-pane__tables > tbody > tr.is-open > td { border-bottom: 0; background: var(--wc-bg-subtle); }
 .generate-pane__tables label { display: flex; gap: 10px; align-items: center; cursor: pointer; }
+.generate-pane__all { display: flex; gap: 10px; align-items: center; }
 .generate-pane__tables input[type='checkbox'] { accent-color: var(--wc-accent); }
 .model-workspace .generate-pane__peek {
   width: 24px;

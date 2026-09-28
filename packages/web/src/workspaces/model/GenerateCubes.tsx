@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -1058,7 +1059,16 @@ export function GenerateCubes({
                     <table className="generate-pane__tables" aria-label={`Tables in ${schema}`}>
                       <thead>
                         <tr>
-                          <th scope="col">Table</th>
+                          <th scope="col">
+                            <span className="generate-pane__all">
+                              <PageBox
+                                page={tables.value.tables}
+                                chosen={chosen}
+                                onChange={setChosen}
+                              />
+                              Table
+                            </span>
+                          </th>
                           <th scope="col">Type</th>
                           <th scope="col">
                             <span className="visually-hidden">Columns</span>
@@ -1567,6 +1577,46 @@ export function GenerateCubes({
         />
       ) : null}
     </aside>
+  );
+}
+
+/**
+ * The table list's header checkbox (T491, AC-349): chooses every table on the
+ * page shown, or clears them if all are; mixed while some are. The other
+ * pages' choices are left as they are.
+ */
+function PageBox({
+  page,
+  chosen,
+  onChange,
+}: {
+  page: readonly TableRow[];
+  chosen: ReadonlyMap<string, TableRow>;
+  onChange: (next: ReadonlyMap<string, TableRow>) => void;
+}) {
+  const on = page.filter((table) => chosen.has(keyOf(table))).length;
+  const all = page.length > 0 && on === page.length;
+  const some = on > 0 && !all;
+  const box = useRef<HTMLInputElement>(null);
+  // `indeterminate` is a property only, never an attribute: set before paint.
+  useLayoutEffect(() => {
+    if (box.current !== null) box.current.indeterminate = some;
+  }, [some]);
+  return (
+    <input
+      ref={box}
+      type="checkbox"
+      aria-label="Choose every table on this page"
+      checked={all}
+      disabled={page.length === 0}
+      onChange={() => {
+        const next = new Map(chosen);
+        for (const table of page)
+          if (all) next.delete(keyOf(table));
+          else next.set(keyOf(table), table);
+        onChange(next);
+      }}
+    />
   );
 }
 

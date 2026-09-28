@@ -71,7 +71,11 @@ test('a data source’s tables become cubes, each column mapped or said to be le
   });
 
   const { pane, tables } = await toTables(page, 'generate', `${project}_`);
-  await expect(tables.getByRole('checkbox')).toHaveCount(2);
+  // A row each: the header's "every table on this page" is not a table's (T491).
+  await expect(tables.locator(':scope > tbody').getByRole('checkbox')).toHaveCount(2);
+  await expect(
+    tables.getByRole('checkbox', { name: 'Choose every table on this page' }),
+  ).not.toBeChecked();
 
   // A look at the visits' columns, in place: its key, and the foreign key to the stores.
   await tables.getByRole('button', { name: `Columns of ${visits}` }).click();

@@ -610,6 +610,75 @@ describe('generating cubes from a data source (AC-139)', () => {
     expect(foot(dialog)).toEqual(['‹ Back', 'Cancel', 'Generate 1 cube *']);
   });
 
+  /** T491 / AC-349: the header's checkbox chooses or clears the page shown, and only it. */
+  it('chooses every table on the page from the list’s header, mixed when some are', async () => {
+    const asked = api();
+    const fetchStub = vi.mocked(fetch);
+    const answer = fetchStub.getMockImplementation();
+    // Two pages: the first with chrome_stores and chrome_visits, the second with chrome_zones.
+    fetchStub.mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (!url.includes('/tables?')) return (await answer?.(input, init)) ?? new Response('{}');
+      asked.push({ url });
+      const second = url.includes('offset=50');
+      const table = (name: string) => ({
+        schema: 'generate',
+        name,
+        type: 'table',
+        rawType: 'BASE TABLE',
+      });
+      return new Response(
+        JSON.stringify({
+          tables: second
+            ? [table('chrome_zones')]
+            : [table('chrome_stores'), table('chrome_visits')],
+          total: 51,
+        }),
+      );
+    });
+    const { dialog } = pane();
+    const tables = await toTables(dialog);
+    const all = within(tables).getByRole('checkbox', { name: 'Choose every table on this page' });
+    const box = (name: string) =>
+      within(dialog).getByRole('checkbox', { name }) as HTMLInputElement;
+    expect((all as HTMLInputElement).checked).toBe(false);
+    expect((all as HTMLInputElement).indeterminate).toBe(false);
+
+    // One of the two: mixed.
+    await userEvent.click(box('chrome_stores'));
+    expect([(all as HTMLInputElement).checked, (all as HTMLInputElement).indeterminate]).toEqual([
+      false,
+      true,
+    ]);
+    // Pressed: the page's all chosen, and it is checked.
+    await userEvent.click(all);
+    expect([box('chrome_stores').checked, box('chrome_visits').checked]).toEqual([true, true]);
+    expect([(all as HTMLInputElement).checked, (all as HTMLInputElement).indeterminate]).toEqual([
+      true,
+      false,
+    ]);
+    expect(within(dialog).getByText('51 tables · 2 chosen · 1–50 of 51').isConnected).toBe(true);
+
+    // The next page's is its own: none of it chosen.
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Next page' }));
+    await within(dialog).findByRole('checkbox', { name: 'chrome_zones' });
+    const next = within(dialog).getByRole('checkbox', {
+      name: 'Choose every table on this page',
+    }) as HTMLInputElement;
+    expect([box('chrome_zones').checked, next.checked]).toEqual([false, false]);
+    await userEvent.click(next);
+    expect(within(dialog).getByText('51 tables · 3 chosen · 51–51 of 51').isConnected).toBe(true);
+
+    // Back on the first, pressed again: it clears that page only.
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Previous page' }));
+    await within(dialog).findByRole('checkbox', { name: 'chrome_stores' });
+    await userEvent.click(
+      within(dialog).getByRole('checkbox', { name: 'Choose every table on this page' }),
+    );
+    expect([box('chrome_stores').checked, box('chrome_visits').checked]).toEqual([false, false]);
+    expect(within(dialog).getByText('51 tables · 1 chosen · 1–50 of 51').isConnected).toBe(true);
+  });
+
   /** T485's review: the Type menu closes as a menu does, and never the pane with it. */
   it('closes the Type menu on Escape, from its pill too, and on a press outside it', async () => {
     api();

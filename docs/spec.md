@@ -860,7 +860,7 @@ Model workspace:
       Fails when: the seed's `public.orders`, which the `orders` cube reads, is listed without "In model" or without naming `orders`, or a table no cube reads is marked.
 - [ ] AC-348 WHEN Generate cubes lists the data sources to generate from, THE SYSTEM SHALL show beside each its health as Data sources shows it — its icon, its label and how long ago it was tested — or that it has not been tested (`[R36]`, proposal 3 of design 11).
       Fails when: a data source whose last test failed is listed without that state, or a listed health differs from the same data source's in Data sources.
-- [ ] AC-349 THE SYSTEM SHALL offer, in the header of Generate cubes' table list, a checkbox that chooses or clears every table on the page shown, checked when all of them are chosen and mixed when only some are (`[R36]`, proposal 4 of design 11).
+- [x] AC-349 THE SYSTEM SHALL offer, in the header of Generate cubes' table list, a checkbox that chooses or clears every table on the page shown, checked when all of them are chosen and mixed when only some are (`[R36]`, proposal 4 of design 11).
       Fails when: pressing it leaves a table on the page unchosen or chooses one on another page, or it shows checked while a table on the page is not chosen.
 - [ ] AC-350 WHILE security is enabled, THE SYSTEM SHALL head Generate cubes with "in My workspace" and the person icon, as the new data source pane's head does, and add the cubes to the user's workspace model (`[R36]`, proposal 5 of design 11; direction.md rule 74).
       Fails when: with security on, the pane's head does not say "in My workspace", or a generated cube is added to a shared folder's model.
