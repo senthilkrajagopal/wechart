@@ -17,6 +17,8 @@ export interface QueryLogEntry {
   readonly accelerated: boolean;
   readonly preAggregation?: string | null;
   readonly error?: string | null;
+  /** Who ran it (R42.6, T371): their Jobs shows a read-write member their own. */
+  readonly userKey?: string | null;
 }
 
 export interface QueryLogRecord extends QueryLogEntry {
@@ -36,6 +38,8 @@ export interface QueryLogPageAsk {
   readonly descending?: boolean;
   readonly offset?: number;
   readonly limit?: number;
+  /** Only this user's (R42.6); absent, everyone's. */
+  readonly userKey?: string;
 }
 
 export interface QueryLogPage {
@@ -56,6 +60,7 @@ export function queryLog(db: Kysely<Database>) {
           accelerated: entry.accelerated,
           pre_aggregation: entry.preAggregation ?? null,
           error: entry.error ?? null,
+          user_key: entry.userKey ?? null,
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -64,16 +69,12 @@ export function queryLog(db: Kysely<Database>) {
     },
 
     /** Newest first: the Jobs workspace is read from the top. */
-    async recent(limit = 100): Promise<QueryLogRecord[]> {
-      const rows = await db
-        .selectFrom('query_log')
-        .selectAll()
-        .orderBy('created_at', 'desc')
-        .orderBy('id', 'desc')
-        .limit(limit)
-        .execute();
-
-      return rows.map(toRecord);
+    async recent(limit = 100, userKey?: string): Promise<QueryLogRecord[]> {
+      let rows = db.selectFrom('query_log').selectAll();
+      if (userKey !== undefined) rows = rows.where('user_key', '=', userKey);
+      return (
+        await rows.orderBy('created_at', 'desc').orderBy('id', 'desc').limit(limit).execute()
+      ).map(toRecord);
     },
 
     /**
@@ -84,6 +85,7 @@ export function queryLog(db: Kysely<Database>) {
      */
     async page(ask: QueryLogPageAsk = {}): Promise<QueryLogPage> {
       let matching = db.selectFrom('query_log');
+      if (ask.userKey !== undefined) matching = matching.where('user_key', '=', ask.userKey);
       if (ask.outcome !== undefined)
         matching = matching.where('error', ask.outcome === 'failed' ? 'is not' : 'is', null);
       if (ask.source !== undefined)

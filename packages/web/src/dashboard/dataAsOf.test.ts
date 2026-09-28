@@ -229,6 +229,45 @@ describe('what Data as of says, as reviewed', () => {
   });
 });
 
+describe('Data as of for one who may not use Jobs (T371; R42.7)', () => {
+  it('says the freshness of a folder’s rollup by its short name, and offers no way into Jobs or Model', () => {
+    const said = dataAsOf(
+      {
+        answered: {
+          lastRefreshTime: '2026-09-25T09:15:00.000Z',
+          usedPreAggregations: {
+            'prod.fa1__sales_main': {
+              preAggregationId: 'fa1__sales.main',
+              lastUpdatedAt: at('2026-09-25T09:15:00Z').getTime(),
+              type: 'rollup',
+            },
+          },
+        },
+        // As `/api/schedules?seen=1` answers a reader: no file, key or SQL.
+        schedules: [
+          {
+            id: 'fa1__sales.main',
+            cube: 'fa1__sales',
+            shortName: 'sales',
+            when: 'Every 1 hour',
+            mayOpen: false,
+          },
+        ],
+        onRefresh: undefined,
+        onWhyNot: () => undefined,
+        onOpen: () => undefined,
+      },
+      NOW,
+      (date) => clockTimeOf(date, NOW),
+    )!;
+    const shown = words(said.entries);
+    expect(shown[0]).toBe('Pre-aggregation sales.main');
+    expect(shown).not.toContain('Open in Jobs');
+    expect(shown).not.toContain('Edit schedule in Model');
+    expect(shown.join(' ')).not.toContain('fa1__');
+  });
+});
+
 describe('a time as the menu says it', () => {
   it('is the clock alone today, and the day beside it otherwise', () => {
     const now = new Date(2026, 8, 25, 23, 30);

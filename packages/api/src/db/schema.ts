@@ -40,6 +40,8 @@ export interface QueryLogTable {
   accelerated: boolean;
   pre_aggregation: string | null;
   error: string | null;
+  /** Who ran it (R42.6); none with sign-in off, or from before. */
+  user_key: string | null;
   created_at: Generated<Date>;
 }
 

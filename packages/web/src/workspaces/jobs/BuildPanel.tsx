@@ -13,13 +13,34 @@ import { StateBadge, stateOf, Status } from './StateBadge';
  * and each token is followed until it reports a state it will not leave.
  */
 interface Buildable {
+  /** Its published name, `cube.preAggregation`, which a build names. */
   readonly id: string;
+  /** Its cube's folder and short name (T371): what people see (§P2.6 D). */
+  readonly folderId?: string | null;
+  readonly shortName?: string;
+  readonly folderPath?: readonly string[];
   readonly type: string;
   readonly partitionGranularity?: string;
   /** What rebuilds it, in words: its refresh key (AC-229). */
   readonly trigger?: string;
   /** The model file its cube is defined in (AC-229). */
   readonly fileName?: string;
+}
+
+/**
+ * How a pre-aggregation is shown (T371; §P2.6 D): a folder's cube by its
+ * short name, `sales.main`, with its folder, never its prefixed name; the
+ * root's as it always was.
+ */
+export function shownOf(row: {
+  readonly id: string;
+  readonly shortName?: string;
+  readonly folderPath?: readonly string[];
+}): { name: string; folder?: string } {
+  const own = row.id.slice(row.id.lastIndexOf('.') + 1);
+  const name = row.shortName === undefined ? row.id : `${row.shortName}.${own}`;
+  const below = row.folderPath?.[0] === 'Shared' ? row.folderPath.slice(1) : [];
+  return below.length === 0 ? { name } : { name, folder: below.join(' / ') };
 }
 
 /** Where a pre-aggregation is defined, in the Model workspace (AC-229). */
@@ -123,19 +144,22 @@ function BuildJobs({
   id,
   tokens,
   pollMs,
+  name = id,
 }: {
   id: string;
   tokens: readonly string[];
   pollMs: number;
+  /** How it is shown: a folder's by its short name, never its prefixed one (T371). */
+  name?: string;
 }) {
   const jobs = useBuildStatus(tokens, pollMs);
   const byToken = new Map((jobs.data ?? []).map((job) => [job.token, job]));
   return (
     <li className="build-jobs">
-      <span className="build-jobs__id">{id}</span>
+      <span className="build-jobs__id">{name}</span>
       {tokens.length === 0 ? (
         <StateLine kind="warn" testId="build-empty">
-          Cube started no job: no partition of {id} was built.
+          Cube started no job: no partition of {name} was built.
         </StateLine>
       ) : null}
       {!jobs.isError ? null : missingScopeOf(jobs.error) === undefined ? (
@@ -147,7 +171,7 @@ function BuildJobs({
           what="Following this build"
         />
       )}
-      <ul className="build-jobs__list" aria-label={`Jobs building ${id}`}>
+      <ul className="build-jobs__list" aria-label={`Jobs building ${name}`}>
         {tokens.map((token) => {
           const job = byToken.get(token);
           return (
@@ -255,51 +279,70 @@ export function BuildPanel({
                 </tr>
               </thead>
               <tbody>
-                {buildable.data.map(({ id, partitionGranularity, trigger, fileName }) => (
-                  <tr
-                    key={id}
-                    // Selecting a row shows it in the pane (AC-228): by pointer
-                    // anywhere in it, or Enter or Space on the row itself.
-                    aria-selected={selected === id}
-                    tabIndex={0}
-                    className="build-panel__row"
-                    onClick={() => {
-                      setSelected(id);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.target !== event.currentTarget) return;
-                      if (event.key !== 'Enter' && event.key !== ' ') return;
-                      event.preventDefault();
-                      setSelected(id);
-                    }}
-                  >
-                    <td className="query-log__query">
-                      {/* Its definition, in Model (AC-229). */}
-                      {fileName === undefined ? id : <a href={modelHref(fileName)}>{id}</a>}
-                    </td>
-                    <td>
-                      {/* Its latest build's state here, in its own row (rule 22). */}
-                      <BuildState build={latestOf(id)} pollMs={pollMs} testId="row-state" />
-                    </td>
-                    <td>{trigger ?? '—'}</td>
-                    <td>{partitionGranularity ?? 'none'}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn-sm"
-                        aria-label={`Build ${id}`}
-                        // One start at a time, so each start's answer — a refusal
-                        // included — is the one shown (T155's review).
-                        disabled={start.isPending}
-                        onClick={() => {
-                          start.mutate(id);
-                        }}
-                      >
-                        Build
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {buildable.data.map((row) => {
+                  const { id, partitionGranularity, trigger, fileName } = row;
+                  const shownAs = shownOf(row);
+                  const said =
+                    shownAs.folder === undefined
+                      ? shownAs.name
+                      : `${shownAs.name} in ${shownAs.folder}`;
+                  return (
+                    <tr
+                      key={id}
+                      // Selecting a row shows it in the pane (AC-228): by pointer
+                      // anywhere in it, or Enter or Space on the row itself.
+                      aria-selected={selected === id}
+                      tabIndex={0}
+                      className="build-panel__row"
+                      onClick={() => {
+                        setSelected(id);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.target !== event.currentTarget) return;
+                        if (event.key !== 'Enter' && event.key !== ' ') return;
+                        event.preventDefault();
+                        setSelected(id);
+                      }}
+                    >
+                      <td className="query-log__query">
+                        {/* Its definition, in Model (AC-229). */}
+                        {fileName === undefined ? (
+                          <span data-testid="preagg-name">{shownAs.name}</span>
+                        ) : (
+                          <a href={modelHref(fileName)} data-testid="preagg-name">
+                            {shownAs.name}
+                          </a>
+                        )}
+                        {shownAs.folder === undefined ? null : (
+                          <span className="build-panel__folder" data-testid="preagg-folder">
+                            {shownAs.folder}
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        {/* Its latest build's state here, in its own row (rule 22). */}
+                        <BuildState build={latestOf(id)} pollMs={pollMs} testId="row-state" />
+                      </td>
+                      <td>{trigger ?? '—'}</td>
+                      <td>{partitionGranularity ?? 'none'}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="btn-sm"
+                          aria-label={`Build ${said}`}
+                          // One start at a time, so each start's answer — a refusal
+                          // included — is the one shown (T155's review).
+                          disabled={start.isPending}
+                          onClick={() => {
+                            start.mutate(id);
+                          }}
+                        >
+                          Build
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </TableScroll>
@@ -333,7 +376,13 @@ export function BuildPanel({
           </p>
         ) : (
           <>
-            <h2 className="admin-pane__title">{shown.id}</h2>
+            <h2 className="admin-pane__title">{shownOf(shown).name}</h2>
+            {/* Its folder, so /A's and /A/B's `sales.main` are told apart (T371's review). */}
+            {shownOf(shown).folder === undefined ? null : (
+              <p className="build-panel__folder" data-testid="pane-folder">
+                {shownOf(shown).folder}
+              </p>
+            )}
             <dl className="admin-pane__facts">
               <dt>State</dt>
               <dd>
@@ -366,7 +415,13 @@ export function BuildPanel({
                 <h3 className="build-panel__head">Builds</h3>
                 <ul className="build-panel__builds">
                   {shownBuilds.map((build) => (
-                    <BuildJobs key={build.n} id={build.id} tokens={build.tokens} pollMs={pollMs} />
+                    <BuildJobs
+                      key={build.n}
+                      id={build.id}
+                      name={shownOf(shown).name}
+                      tokens={build.tokens}
+                      pollMs={pollMs}
+                    />
                   ))}
                 </ul>
                 {/* research/cube/refresh-jobs-caching.md, gotcha 3. */}

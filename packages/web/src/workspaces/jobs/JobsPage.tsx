@@ -26,8 +26,16 @@ function Queries() {
     queryKey: ['jobs', 'queries', ask],
     queryFn: async ({ signal }): Promise<{ records: QueryRecord[]; total: number }> => {
       const response = await fetch(`/api/jobs/queries/page?${queryStringOf(ask)}`, { signal });
-      if (!response.ok)
-        throw new Error(`The query log could not be read (${String(response.status)}).`);
+      if (!response.ok) {
+        // The API's own words where it gives them (T371's review).
+        const said = ((await response.json().catch(() => null)) as { error?: unknown } | null)
+          ?.error;
+        throw new Error(
+          typeof said === 'string'
+            ? said
+            : `The query log could not be read (${String(response.status)}).`,
+        );
+      }
       return (await response.json()) as { records: QueryRecord[]; total: number };
     },
     placeholderData: keepPreviousData,

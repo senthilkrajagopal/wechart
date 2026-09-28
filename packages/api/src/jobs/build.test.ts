@@ -202,16 +202,23 @@ describe('what can be built (AC-149)', () => {
 
     const response = await app.inject({ method: 'GET', url: '/api/preaggregations' });
 
-    // Each with its trigger too (AC-229): none declared here, so Cube's default.
+    // Each with its trigger too (AC-229): none declared here, so Cube's
+    // default. And its folder (T371): a cube with no `meta.xcube` is the root's.
     expect(response.json()).toEqual([
       {
         id: 'monthly_orders.by_status_month',
+        folderId: 'root',
+        shortName: 'monthly_orders',
+        folderPath: ['Shared'],
         type: 'rollup',
         partitionGranularity: 'year',
         trigger: 'Every 1 hour (Cube’s default)',
       },
       {
         id: 'monthly_orders.cached',
+        folderId: 'root',
+        shortName: 'monthly_orders',
+        folderPath: ['Shared'],
         type: 'originalSql',
         trigger: 'Every 1 hour (Cube’s default)',
       },

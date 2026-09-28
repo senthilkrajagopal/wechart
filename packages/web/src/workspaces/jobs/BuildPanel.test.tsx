@@ -88,6 +88,45 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('a folder’s pre-aggregation (T371, AC-297; §P2.6 D)', () => {
+  it('shows it by its short name with its folder, and builds it by its published name', async () => {
+    const sent: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === '/api/preaggregations')
+          return Response.json([
+            {
+              id: 'fa1__sales.main',
+              folderId: 'a1',
+              shortName: 'sales',
+              folderPath: ['Shared', 'Sales', 'EMEA'],
+              type: 'rollup',
+            },
+          ]);
+        if (url === '/api/cube-scopes') return Response.json({ jobs: 'granted' });
+        if (url === '/api/builds') {
+          sent.push(JSON.parse(String(init?.body)));
+          return Response.json({ tokens: ['t1'] });
+        }
+        return Response.json([]);
+      }),
+    );
+    render(
+      <QueryClientProvider client={client()}>
+        <BuildPanel pollMs={10} />
+      </QueryClientProvider>,
+    );
+    const name = await screen.findByTestId('preagg-name');
+    expect(name.textContent).toBe('sales.main');
+    expect(screen.getByTestId('preagg-folder').textContent).toBe('Sales / EMEA');
+    expect(screen.queryByText('fa1__sales.main')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Build sales.main in Sales / EMEA' }));
+    expect(sent).toEqual([{ preAggregation: 'fa1__sales.main' }]);
+  });
+});
+
 describe('building a pre-aggregation', () => {
   it('lists what can be built, starts a build, shows its token and follows it to done', async () => {
     const { statusAsks } = serving(['scheduled', 'processing', 'done']);

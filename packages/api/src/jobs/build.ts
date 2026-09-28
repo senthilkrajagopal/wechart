@@ -1,9 +1,10 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { USER } from '../auth/guard';
 import type { CubeClient } from '../cube/client';
 import { fileOf, pathsByName } from '../model/split';
 import type { ModelFile, ModelFileStore } from '../server';
+import { EVERYTHING, NO_JOBS, placements, reaches, type JobsAccess, type Placement } from './scope';
 
 /**
  * Pre-aggregation builds (T155, AC-149), through Cube's documented jobs API:
@@ -51,6 +52,10 @@ const PRE_AGGREGATION = /^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/;
 export interface Buildable {
   /** `cube.name`, as the jobs API's selector names it. */
   readonly id: string;
+  /** Its cube's folder, short name and path (T371): what people see. */
+  readonly folderId?: string | null;
+  readonly shortName?: string;
+  readonly folderPath?: readonly string[];
   readonly type: string;
   readonly partitionGranularity?: string;
   /** What rebuilds it, in words: its refresh key (AC-229). */
@@ -99,7 +104,12 @@ export function triggerOf(each: Record<string, unknown>): string {
  * outside dev mode (research/cube/access-control.md) — its rollups are built
  * by the refresh worker, and cannot be started from here.
  */
-export function buildablesFrom(meta: unknown, files: readonly ModelFile[] = []): Buildable[] {
+export function buildablesFrom(
+  meta: unknown,
+  files: readonly ModelFile[] = [],
+  /** Where each cube is published (T371); none, and rows name no folder. */
+  placed?: (cube: Record<string, unknown>) => Placement,
+): Buildable[] {
   const cubes = (meta as { cubes?: unknown } | null)?.cubes;
   if (!Array.isArray(cubes)) return [];
   // The stored file declaring each cube, over Cube's `fileName` (T449).
@@ -117,6 +127,7 @@ export function buildablesFrom(meta: unknown, files: readonly ModelFile[] = []):
             )
             .map((each) => ({
               id: `${String(cube.name)}.${String(each['name'])}`,
+              ...(placed === undefined ? {} : placed(cube as Record<string, unknown>)),
               type: typeof each['type'] === 'string' ? each['type'] : 'rollup',
               ...(typeof each['partitionGranularity'] === 'string'
                 ? { partitionGranularity: each['partitionGranularity'] }
@@ -132,16 +143,43 @@ export function registerBuilds(
   app: FastifyInstance,
   client: CubeClient,
   modelFiles?: ModelFileStore,
+  /** Who may build what (T371, AC-297); none, and everything is everyone's (sign-in off). */
+  access?: JobsAccess,
 ): void {
-  app.get('/api/preaggregations', USER, async () =>
-    buildablesFrom(await client.metaExtended(), modelFiles ? await modelFiles.list() : []),
-  );
+  const scopeOf = (request: FastifyRequest) =>
+    access === undefined ? Promise.resolve(EVERYTHING) : access.scope(request);
+  const listed = async () =>
+    buildablesFrom(
+      await client.metaExtended(),
+      modelFiles ? await modelFiles.list() : [],
+      access === undefined ? undefined : await placements(access),
+    );
+
+  // A read-write member's own folders' only (T371).
+  app.get('/api/preaggregations', USER, async (request, reply) => {
+    const scope = await scopeOf(request);
+    if (!scope.all && !scope.writesAny) return reply.status(403).send(NO_JOBS);
+    return (await listed()).filter((row) => reaches(scope, row.folderId ?? null));
+  });
 
   app.post('/api/builds', USER, async (request, reply) => {
     const preAggregation = (request.body as { preAggregation?: unknown } | undefined)
       ?.preAggregation;
     if (typeof preAggregation !== 'string' || !PRE_AGGREGATION.test(preAggregation))
       return reply.status(400).send({ error: 'Name the pre-aggregation as cube.name.' });
+    // Another folder's is refused before Cube is asked (T371, AC-297).
+    const scope = await scopeOf(request);
+    if (!scope.all) {
+      if (!scope.writesAny) return reply.status(403).send(NO_JOBS);
+      const row = (await listed()).find((each) => each.id === preAggregation);
+      if (row === undefined)
+        return reply.status(404).send({ error: 'There is no such pre-aggregation.' });
+      if (!reaches(scope, row.folderId ?? null))
+        return reply.status(403).send({
+          error:
+            'You can build only the pre-aggregations of folders you have read-write access to.',
+        });
+    }
     const tokens = await client.buildPreAggregations([preAggregation]);
     return {
       tokens: Array.isArray(tokens) ? tokens.filter((each) => typeof each === 'string') : [],
@@ -149,6 +187,8 @@ export function registerBuilds(
   });
 
   app.post('/api/builds/status', USER, async (request, reply) => {
+    const scope = await scopeOf(request);
+    if (!scope.all && !scope.writesAny) return reply.status(403).send(NO_JOBS);
     const tokens = (request.body as { tokens?: unknown } | undefined)?.tokens;
     if (
       !Array.isArray(tokens) ||
@@ -156,7 +196,28 @@ export function registerBuilds(
       !tokens.every((token) => typeof token === 'string' && token !== '')
     )
       return reply.status(400).send({ error: 'Name the jobs by their tokens.' });
-    const answered = await client.jobStatuses(tokens as string[]);
+    const everything = await client.jobStatuses(tokens as string[]);
+    // A member's own folders' builds only, by the pre-aggregation Cube kept
+    // for each token (T371's review).
+    const writable = scope.all
+      ? undefined
+      : new Set(
+          (await listed())
+            .filter((row) => reaches(scope, row.folderId ?? null))
+            .map((row) => row.id),
+        );
+    const answered =
+      writable === undefined || !Array.isArray(everything)
+        ? everything
+        : (everything as Record<string, unknown>[]).filter((each) => {
+            const named = (each['selector'] as { preAggregations?: unknown } | undefined)
+              ?.preAggregations;
+            return (
+              Array.isArray(named) &&
+              named.length > 0 &&
+              named.every((id) => typeof id === 'string' && writable.has(id))
+            );
+          });
     // Each token's state, whether it has finished, and its table — not the
     // selector, which echoes the security context the build ran for. An
     // answer naming no token or no state is left out, not made up: its token

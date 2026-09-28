@@ -6436,7 +6436,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 ## P2.10 Jobs and Schedules (F17 returned, F33)
 
-- [ ] T371 (AC-297) Scope Jobs and Schedules to the models of the user's read-write folders
+- [x] T371 (AC-297) Scope Jobs and Schedules to the models of the user's read-write folders
   - Files: `packages/api/src/jobs/{build,schedules}.ts`, `packages/api/src/server.ts` (query log), `packages/web/src/workspaces/jobs/JobsPage.tsx`, `packages/api/src/jobs/scope.test.ts`
   - Failing test: `scope.test.ts`: a read-write member of /A who isn't a Super-Admin sees only ~~/A's chains'~~ the pre-aggregations of cubes published in /A, and their builds, schedules and query records. They may build only those, and get 403 for another folder's (AC-297). *(2026-09-26: a pre-aggregation's folder is read from its prefixed cube name, `[IP 3]`.)*
   - Depends on: ~~T339~~ T425 (2026-09-26), T340
@@ -6446,6 +6446,31 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - Data as of keeps a narrow answer for readers: the schedule of each rollup a tile they may see uses, and nothing else.
     - *Small decision, overturnable:* until T340 makes each query name its item, a read-write member's query records are their own. A Super-Admin's are everyone's.
     - A cube or rollup is built only as its own model's. The service token's model check is xcube's; the folder check is wechart's.
+  - *As built (2026-09-28):*
+    - `jobs/scope.ts`: a request's scope. It is everything for a Super-Admin or with sign-in off; for a read-write member, the folders they write; for anyone else, nothing.
+    - A cube's folder is its `meta.xcube.folderId`, mapped back through the published folders' xcube ids. A cube without one is the root's; a folder wechart no longer knows reaches only a Super-Admin.
+    - Each row carries `folderId`, `shortName` and `folderPath`.
+    - `GET /api/preaggregations` and `/api/schedules` answer a read-write member's folders only, and `403` to anyone with none.
+    - `POST /api/builds` looks the name up among the model's pre-aggregations first: `404` for none, `403` for another folder's, before Cube is asked. `/api/builds/status` answers `403` to anyone with no Jobs.
+    - `GET /api/schedules?seen=1`, for Data as of, answers the folders the viewer may see, a reader included. Of a folder they may not write it gives only freshness: the schedule in words, never the model's file, key or SQL, with `mayOpen: false` (R42.7).
+    - Query records carry who ran them (a migration `…_query-log-user.cjs`). A Super-Admin sees everyone's; a read-write member their own (R42.6); anyone else gets `403`. `…/find` stays each page's own, by the request ids it sent.
+    - `/api/cube-scopes` answers `403` to anyone with no Jobs.
+    - `/api/builds/status` answers a member only the tokens whose pre-aggregation Cube kept is in their folders.
+    - Data as of says a folder's rollup by its short name, and offers "Open in Jobs" and "Edit schedule" only to those who may use them.
+    - Jobs and Schedules show a folder's rollup as `sales.main`, with its folder under it; the root's as before. Its Build button is named "Build sales.main in Sales / EMEA". A refusal is said in the API's words.
+    - Also files: `packages/web/src/dashboard/DashboardView.tsx` (`?seen=1`), `packages/web/src/shell/styles.ts`, `e2e/security/jobs-scope.spec.ts`.
+  - **Review fixes (one round), with the user's answers R42.6 and R42.7:**
+    1. `?seen=1` gave readers every schedule of every folder they reach, with the refresh key's SQL and the model file. It now gives freshness only (above).
+    2. Members' query records were refused, where the task said "their own". The user chose their own (R42.6), which is built; the Queries tab says the API's words on a refusal.
+    3. `/api/cube-scopes` was still open to readers. It isn't now.
+    4. The build pane printed the prefixed name in three places. It prints the short name, with the folder under the title.
+    5. A member could poll another folder's token. The answer now keeps only their folders'.
+    - Tests added: a nested folder, a folder wechart no longer knows, `?seen=1`'s freshness, token scoping, Cube scopes, members' own query records, Data as of for a reader, and the Schedules row's exact text in the e2e.
+  - **AC-297 stays open:** wechart-owned scheduling (AC-234, T378) and the design's surfaces (T504) are still to come.
+  - *Not in it:*
+    - the switcher hiding Jobs and Schedules from readers (AC-001, T331);
+    - moving the field list to xcube's admin `…/meta?revision=` (R41, before security goes on);
+    - the design's Folder column and filter (T504).
 - [ ] T504 (AC-145, AC-150, AC-151, AC-155, AC-234, AC-297) Design the Jobs and Schedules surfaces no design draws, and reconcile designs 10 and 07 *(added 2026-09-28, R40: "Draw new designs first")*
   - Through the ui-design skill: partitions and Rebuild selected (AC-145); Run history and a build's log (AC-150); the queue with cancel (AC-151); suspended and Resume (AC-155); the wechart schedule form and its rows (AC-234); every state (loading, error, empty, refused, revoked, out of scope, sign-in off, below 1,024 px); a read-write member's and a Super-Admin's views (AC-297). Design 10 pin 6 reworded (R40.2).
   - Its open questions are backlog §6's Jobs and Schedules list.

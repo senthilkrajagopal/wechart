@@ -2646,7 +2646,9 @@ export function DashboardView({
   useEffect(() => {
     if (!anyRollup || schedules !== undefined) return undefined;
     const aborted = new AbortController();
-    void fetch('/api/schedules', { signal: aborted.signal })
+    // Of the folders this viewer may see, a reader included, who has no
+    // Schedules of their own (T371, R40).
+    void fetch('/api/schedules?seen=1', { signal: aborted.signal })
       .then(async (response) => {
         setSchedules(response.ok ? ((await response.json()) as ScheduleSaid[]) : 'failed');
       })

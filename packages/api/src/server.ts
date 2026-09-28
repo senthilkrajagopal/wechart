@@ -35,6 +35,7 @@ import { registerSignIn, signInOptionsOf } from './auth/routes';
 import { Forbidden, registerUser, Unauthenticated, userOf } from './auth/user';
 import { registerBuilds } from './jobs/build';
 import { registerSchedules } from './jobs/schedules';
+import { NO_JOBS, type JobsAccess } from './jobs/scope';
 import {
   bindChart,
   bindNames,
@@ -279,7 +280,8 @@ export interface CatalogReader {
 /** The slice of the query-log repository the server uses. */
 export interface QueryLogWriter {
   record(entry: QueryLogEntry): Promise<unknown>;
-  recent(limit?: number): Promise<unknown[]>;
+  /** Newest first; one user's only, when named (R42.6). */
+  recent(limit?: number, userKey?: string): Promise<unknown[]>;
   /** The records of these request ids (T180). */
   byRequestIds?(requestIds: readonly string[]): Promise<unknown[]>;
   /** A page of the log, narrowed and sorted over all of it (T240). */
@@ -495,6 +497,10 @@ export function buildServer({
     return context;
   };
 
+  /** Who ran a query, for the query log (R42.6): none with sign-in off. */
+  const ranBy = (request: FastifyRequest): string | null =>
+    security === 'off' ? null : userOf(request).key;
+
   /** Recording must never be what breaks a chart that loaded fine. */
   const record = async (entry: QueryLogEntry) => {
     try {
@@ -535,8 +541,13 @@ export function buildServer({
    * with its token by the cheapest request past the scope's assertion
    * (`cube/scopes.ts`; research/cube/api-scope-probes.md).
    */
-  // Not admin (T323): Jobs' build panel asks it too, for read-write members.
-  app.get('/api/cube-scopes', USER, async () => scopesOf((path, init) => client.ask(path, init)));
+  // Not admin (T323): Jobs' build panel asks it too, for read-write members;
+  // and for no one without Jobs (T371's review).
+  app.get('/api/cube-scopes', USER, async (request, reply) => {
+    const scope = await jobsAccess.scope(request);
+    if (!scope.all && !scope.writesAny) return reply.status(403).send(NO_JOBS);
+    return scopesOf((path, init) => client.ask(path, init));
+  });
 
   /**
    * A folder's model files, the shared root's where none is named, each with
@@ -611,11 +622,35 @@ export function buildServer({
       };
     },
   });
+  /**
+   * Who may use Jobs and Schedules, over which folders (T371, AC-297; R40):
+   * a Super-Admin, and anyone with sign-in off, every folder; a read-write
+   * member, the folders they write; no one else.
+   */
+  const jobsAccess: JobsAccess = {
+    scope: async (request) => {
+      const seen = await visibilityOf(request);
+      if (seen === undefined || userOf(request).superAdmin) return { all: true };
+      return {
+        all: false,
+        writes: (folderId) => mayWrite(seen, folderId),
+        sees: (folderId) => seen.rights.has(folderId),
+        writesAny: [...seen.rights.values()].some((right) => right.write),
+      };
+    },
+    ...(folders === undefined ? {} : { folders }),
+    tree: async () =>
+      (cat ? await cat.folders({ counted: false }) : []) as {
+        id: string;
+        title: string;
+        parentId: string | null;
+      }[],
+  };
   // With the model's files: each rollup's link names its stored file (T449).
-  registerBuilds(app, client, modelFiles);
+  registerBuilds(app, client, modelFiles, jobsAccess);
   // With the model's files: a key's SQL is read there (T273's review).
   // And each folder's, under its prefixed names (T450's review).
-  registerSchedules(app, client, modelFiles, folders);
+  registerSchedules(app, client, modelFiles, folders, jobsAccess);
   // A data source's catalog, through Cube's introspection API (T145, AC-139).
   registerIntrospection(
     app,
@@ -966,6 +1001,7 @@ export function buildServer({
         durationMs: performance.now() - startedAt,
         accelerated,
         preAggregation,
+        userKey: ranBy(request),
       });
       return result;
     } catch (error) {
@@ -975,6 +1011,7 @@ export function buildServer({
         durationMs: performance.now() - startedAt,
         accelerated: false,
         error: error instanceof Error ? error.message : String(error),
+        userKey: ranBy(request),
       });
       throw error;
     }
@@ -2543,9 +2580,23 @@ export function buildServer({
     return cat.search(q ?? '', most, kind, seen === undefined ? undefined : searchable(seen));
   });
 
-  app.get('/api/jobs/queries', USER, async (request) => {
+  /**
+   * Query records name users' filter values (R42.6, T371): with sign-in on,
+   * a Super-Admin sees everyone's, a read-write member their own, and no one
+   * else any.
+   */
+  const queryLogScope = async (request: FastifyRequest): Promise<'all' | 'none' | string> => {
+    if (security === 'off' || userOf(request).superAdmin) return 'all';
+    const scope = await jobsAccess.scope(request);
+    if (scope.all) return 'all';
+    return scope.writesAny ? userOf(request).key : 'none';
+  };
+
+  app.get('/api/jobs/queries', USER, async (request, reply) => {
+    const whose = await queryLogScope(request);
+    if (whose === 'none') return reply.status(403).send(NO_JOBS);
     const { limit } = request.query as { limit?: string };
-    return log ? log.recent(Number(limit) || 100) : [];
+    return log ? log.recent(Number(limit) || 100, whose === 'all' ? undefined : whose) : [];
   });
 
   /**
@@ -2553,7 +2604,9 @@ export function buildServer({
    * database does it, so "Failed" finds a failure however many queries came
    * after it, and the count is the log's rather than a window's.
    */
-  app.get('/api/jobs/queries/page', USER, async (request) => {
+  app.get('/api/jobs/queries/page', USER, async (request, reply) => {
+    const whose = await queryLogScope(request);
+    if (whose === 'none') return reply.status(403).send(NO_JOBS);
     const q = request.query as Record<string, string | undefined>;
     const oneOf = <T extends string>(key: string, allowed: readonly T[]): T | undefined => {
       const value = q[key];
@@ -2583,7 +2636,9 @@ export function buildServer({
       // A page is what the Jobs workspace shows; a hundred is past any page.
       limit: whole('limit', 25, 1, 100),
     };
-    return log?.page ? log.page(ask) : { records: [], total: 0 };
+    return log?.page
+      ? log.page({ ...ask, ...(whose === 'all' ? {} : { userKey: whose }) })
+      : { records: [], total: 0 };
   });
 
   /**

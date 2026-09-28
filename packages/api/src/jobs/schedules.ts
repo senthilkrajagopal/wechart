@@ -7,6 +7,7 @@ import { fileOf, pathsByName } from '../model/split';
 import { ROOT_FOLDER_ID } from '../repos/catalog';
 import type { ModelFile } from '../server';
 import type { PublishedFolders } from '../xcube/folders';
+import { EVERYTHING, NO_JOBS, placements, reaches, type JobsAccess, type Placement } from './scope';
 
 /**
  * Every pre-aggregation's refresh schedule, for the Schedules workspace (T160,
@@ -21,6 +22,10 @@ import type { PublishedFolders } from '../xcube/folders';
 export interface Schedule {
   /** `cube.name`. */
   readonly id: string;
+  /** Its cube's folder, short name and path (T371): what people see. */
+  readonly folderId?: string | null;
+  readonly shortName?: string;
+  readonly folderPath?: readonly string[];
   readonly cube: string;
   readonly name: string;
   readonly type: string;
@@ -124,6 +129,8 @@ export function schedulesFrom(
   files: readonly ModelFile[] = [],
   /** Each published folder's xcube id, by wechart's folder id: its cubes' prefix (T450's review). */
   folders: ReadonlyMap<string, string> = new Map(),
+  /** Where each cube is published (T371); none, and rows name no folder. */
+  placed?: (cube: Record<string, unknown>) => Placement,
 ): Schedule[] {
   const cubes = asValue(meta)?.['cubes'];
   if (!Array.isArray(cubes)) return [];
@@ -137,10 +144,12 @@ export function schedulesFrom(
     const value = asValue(cube);
     const all = value?.['preAggregations'];
     if (value === undefined || !Array.isArray(all)) return [];
+    const where = placed === undefined ? {} : placed(value);
     return all.flatMap((each: unknown) => {
       const found = asValue(each);
-      const schedule = found === undefined ? undefined : scheduleOf(value, found, stored);
-      if (schedule === undefined) return [];
+      const unplaced = found === undefined ? undefined : scheduleOf(value, found, stored);
+      if (unplaced === undefined) return [];
+      const schedule = { ...unplaced, ...where };
       const sql = sqlOf.get(schedule.id);
       if (sql === undefined || !schedule.scheduled) return [schedule];
       return [
@@ -166,13 +175,46 @@ export function registerSchedules(
   },
   /** Where each folder is published, when folders are (T452). */
   folders?: () => Promise<PublishedFolders>,
+  /** Who may see which folders' schedules (T371, AC-297); none, and everyone sees all. */
+  access?: JobsAccess,
 ): void {
-  app.get('/api/schedules', USER, async () =>
-    schedulesFrom(
+  /**
+   * The Schedules workspace's: a read-write member's own folders' (T371).
+   * With `?seen=1`, a dashboard's Data as of's: the folders its viewer may
+   * see, whoever they are (R40).
+   */
+  app.get('/api/schedules', USER, async (request, reply) => {
+    const scope = access === undefined ? EVERYTHING : await access.scope(request);
+    const forDataAsOf = (request.query as { seen?: unknown }).seen === '1';
+    if (!scope.all && !forDataAsOf && !scope.writesAny) return reply.status(403).send(NO_JOBS);
+    const rows = schedulesFrom(
       await client.metaExtended(),
       // Every folder's files where the store has them: a folder's rollups too.
       modelFiles === undefined ? [] : await (modelFiles.all?.() ?? modelFiles.list()),
       folders === undefined ? new Map() : (await folders()).ids,
-    ),
-  );
+      access === undefined ? undefined : await placements(access),
+    );
+    if (!forDataAsOf) return rows.filter((row) => reaches(scope, row.folderId ?? null));
+    // Data as of: of a folder the viewer may see but not write, only its
+    // freshness, the schedule in words; never the model's file, key or SQL,
+    // and no way into Jobs (R42.7; T371's review).
+    return rows
+      .filter((row) => reaches(scope, row.folderId ?? null, 'sees'))
+      .map((row) => {
+        if (reaches(scope, row.folderId ?? null)) return { ...row, mayOpen: true };
+        return {
+          id: row.id,
+          ...(row.folderId === undefined ? {} : { folderId: row.folderId }),
+          ...(row.shortName === undefined ? {} : { shortName: row.shortName }),
+          ...(row.folderPath === undefined ? {} : { folderPath: row.folderPath }),
+          cube: row.cube,
+          name: row.name,
+          type: row.type,
+          owner: row.owner,
+          scheduled: row.scheduled,
+          when: row.when,
+          mayOpen: false,
+        };
+      });
+  });
 }

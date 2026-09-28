@@ -24,6 +24,10 @@ import type { MenuEntry } from '../shell/Menu';
 export interface ScheduleSaid {
   readonly id: string;
   readonly cube: string;
+  /** A folder's cube's short name (T371): the rollup is said by it. */
+  readonly shortName?: string;
+  /** False for one who may not open it in Jobs (T371; R42.7): a reader. */
+  readonly mayOpen?: boolean;
   readonly fileName?: string;
   readonly when: string;
   readonly every?: string;
@@ -104,10 +108,15 @@ export function dataAsOf(
       ? undefined
       : `/model/files/${encodeURIComponent(schedule.fileName)}?cube=${encodeURIComponent(schedule.cube)}&tab=pre_aggregations`;
   const text = (key: string, words: string): MenuEntry => ({ kind: 'text', key, text: words });
+  // A folder's rollup by its short name, never its prefixed one (§P2.6 D).
+  const name =
+    schedule?.shortName === undefined
+      ? used.id
+      : `${schedule.shortName}.${used.id.slice(used.id.lastIndexOf('.') + 1)}`;
   return {
     label,
     entries: [
-      text('name', `Pre-aggregation ${used.id}`),
+      text('name', `Pre-aggregation ${name}`),
       ...(used.builtAt === undefined ? [] : [text('built', `Last built ${timeOf(used.builtAt)}`)]),
       ...(schedule === undefined
         ? [
@@ -123,14 +132,19 @@ export function dataAsOf(
           )),
       { kind: 'separator', key: 'actions' },
       ...refresh,
-      {
-        kind: 'item',
-        key: 'jobs',
-        label: 'Open in Jobs',
-        onSelect: () => {
-          onOpen(`/jobs?preagg=${encodeURIComponent(used.id)}`);
-        },
-      },
+      // Only for one who may use Jobs: a reader sees freshness alone (R42.7).
+      ...(schedule?.mayOpen === false
+        ? []
+        : [
+            {
+              kind: 'item' as const,
+              key: 'jobs',
+              label: 'Open in Jobs',
+              onSelect: () => {
+                onOpen(`/jobs?preagg=${encodeURIComponent(used.id)}`);
+              },
+            },
+          ]),
       ...(edit === undefined
         ? []
         : [

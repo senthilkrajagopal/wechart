@@ -2829,6 +2829,8 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 }
 .build-panel__list { display: grid; gap: 12px; min-width: 0; }
 .build-panel__row { cursor: pointer; }
+/* A folder's rollup, under its short name: its folder (T371; §P2.6 D). */
+.build-panel__folder, .schedules__folder { display: block; font-size: 12px; color: var(--wc-text-secondary); }
 .build-panel__row[aria-selected='true'] { background: var(--wc-bg-accent-soft); }
 .admin-pane {
   position: sticky;

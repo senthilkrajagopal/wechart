@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { InfoBar } from '../../shell/InfoBar';
 import { StateLine } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
+import { shownOf } from '../jobs/BuildPanel';
 
 /**
  * Schedules (T160, AC-154): every pre-aggregation's refresh schedule, labelled
@@ -14,6 +15,9 @@ import { TableScroll } from '../../shell/TableScroll';
  */
 interface Schedule {
   readonly id: string;
+  /** Its cube's short name and folder (T371): what people see (§P2.6 D). */
+  readonly shortName?: string;
+  readonly folderPath?: readonly string[];
   readonly cube: string;
   readonly name: string;
   readonly fileName?: string;
@@ -37,8 +41,16 @@ export function SchedulesPage() {
     queryKey: ['schedules'],
     queryFn: async () => {
       const response = await fetch('/api/schedules');
-      if (!response.ok)
-        throw new Error(`The schedules could not be read (${String(response.status)}).`);
+      if (!response.ok) {
+        // The API's own words where it gives them: who Schedules is for (T371).
+        const said = ((await response.json().catch(() => null)) as { error?: unknown } | null)
+          ?.error;
+        throw new Error(
+          typeof said === 'string'
+            ? said
+            : `The schedules could not be read (${String(response.status)}).`,
+        );
+      }
       return (await response.json()) as Schedule[];
     },
   });
@@ -77,9 +89,15 @@ export function SchedulesPage() {
             <tbody>
               {schedules.data.map((schedule) => {
                 const href = modelHref(schedule);
+                const shownAs = shownOf(schedule);
                 return (
                   <tr key={schedule.id}>
-                    <td className="query-log__query">{schedule.id}</td>
+                    <td className="query-log__query">
+                      {shownAs.name}
+                      {shownAs.folder === undefined ? null : (
+                        <span className="schedules__folder">{shownAs.folder}</span>
+                      )}
+                    </td>
                     <td>
                       {schedule.scheduled ? (
                         schedule.when
@@ -91,7 +109,7 @@ export function SchedulesPage() {
                     <td>{OWNERS[schedule.owner]}</td>
                     <td>
                       {href === undefined ? null : (
-                        <a href={href} aria-label={`Edit ${schedule.id} in Model`}>
+                        <a href={href} aria-label={`Edit ${shownAs.name} in Model`}>
                           Edit in Model
                         </a>
                       )}
