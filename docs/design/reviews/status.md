@@ -16,9 +16,9 @@ The 2026-09-27 inventory of both reviews, item by item, is the source for "left"
 
 | # | Design | State | Built by | Left to build | Held back (backlog §6) | Deployed |
 |---|---|---|---|---|---|---|
-| 11 | Generate cubes | In progress | T485, T489–T491 | T488, drafts (awaiting review) | Proposal 5, "in My workspace" (T492, waits on T342 and T347) | — |
-| 12 | Model overview | Partly built | T479, T484, T486, T493 | The Jinja tag's lock in the tree; the tree's "No files yet." and reading states | — | — |
-| 01 | New data source wizard | Partly built | T471, T472, T490 | Used by as a count; list filter buttons and code-face names; the view-only footnote; "Cube", not "xcube", in the list; Updated as relative time (T477); the 390 px sheet's Cancel | Checks ticking one by one (xcube); vendor logos (decision) | — |
+| 11 | Generate cubes | **Complete** | T485, T488–T491 | — | Proposal 5, "in My workspace" (T492, waits on T342 and T347) | 8ef30f1, 2026-09-27 |
+| 12 | Model overview | **Complete** | T479, T484, T486, T493, T495 | — | — | 8ef30f1, 2026-09-27 |
+| 01 | New data source wizard | **Complete** | T471, T472, T490, T496 | — (the list's "open it and choose Edit in my workspace" comes with T462) | Checks ticking one by one (xcube); vendor logos (decision) | pending |
 | 02 | Driver forms | Partly built | T471 | Ask before replacing Access (T473); My workspace first (T348); a target change clears the secret, and the link icon (T462) | — | — |
 | 03 | Data source settings | Not built | — | The settings page (T462) | History and version line (proposal chain); the scheduled-check row (decision) | — |
 | 07 | Access panel | Partly built | T330 | T473 | The audit note (T368); the panel with sign-in off (decision) | — |

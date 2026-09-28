@@ -1,7 +1,8 @@
 import { DRIVERS, type DriverType } from '@wechart/core';
-import { useState } from 'react';
+import { useId, useRef, useState } from 'react';
 
 import { InfoBar } from '../../shell/InfoBar';
+import { shortDay } from '../../shell/relativeAge';
 import { healthOf, HealthBadge } from './health';
 import { TableScroll } from '../../shell/TableScroll';
 import { MY_WORKSPACE, SHARED_ROOT } from '../explore/roots';
@@ -66,20 +67,71 @@ const elsewhere = (count: number) =>
     ? '1 cube in a folder you can’t see'
     : `${String(count)} cubes in folders you can’t see`;
 
+/**
+ * How many cubes use it, as a count (design 01 item 10, T496): which, and in
+ * which folders, one step away in a tooltip that hovering or focusing opens —
+ * each cube once, not a line per cube with its folder repeated.
+ */
 function UsedBy({ cubes, hidden = 0 }: { cubes: ListedSource['usedBy']; hidden?: number }) {
-  if (cubes === null) return <span className="sources-muted">Not known: xcube didn’t answer</span>;
+  const tip = useId();
+  const anchor = useRef<HTMLSpanElement>(null);
+  /**
+   * Where the list opens: under the count, fixed to the window, so no
+   * scrolling table cuts it off (T496's review). Closed, it is hidden, and
+   * still the count's description.
+   */
+  const [at, setAt] = useState<{ top: number; right: number } | null>(null);
+  const open = () => {
+    const box = anchor.current?.getBoundingClientRect();
+    if (box !== undefined) setAt({ top: box.bottom, right: window.innerWidth - box.right });
+  };
+  const close = () => {
+    setAt(null);
+  };
+  if (cubes === null) return <span className="sources-muted">Not known: Cube didn’t answer</span>;
   if (cubes.length === 0 && hidden === 0) return <span className="sources-muted">No cube</span>;
-  if (cubes.length === 0) return <span className="sources-muted">{elsewhere(hidden)}</span>;
+  const count = cubes.length + hidden;
   return (
-    <ul className="sources-used-by">
-      {cubes.map((cube) => (
-        <li key={`${cube.folderId}/${cube.name}`}>
-          {cube.name}
-          <span className="sources-muted"> · {pathLabel(cube)}</span>
-        </li>
-      ))}
-      {hidden === 0 ? null : <li className="sources-muted">{elsewhere(hidden)}</li>}
-    </ul>
+    <span className="sources-used-by" onMouseEnter={open} onMouseLeave={close}>
+      {/* Focusable, so the list opens from the keyboard too, and Escape closes it
+          without moving on (WCAG 1.4.13): it is the count's description. */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+      <span
+        ref={anchor}
+        className="sources-used-by__count"
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- the tooltip's anchor
+        tabIndex={0}
+        aria-describedby={tip}
+        onFocus={open}
+        onBlur={close}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') close();
+        }}
+      >
+        {count === 1 ? '1 cube' : `${String(count)} cubes`}
+      </span>
+      <span
+        id={tip}
+        role="tooltip"
+        className="sources-used-by__tip"
+        hidden={at === null}
+        style={at === null ? undefined : { top: at.top, right: at.right }}
+      >
+        {cubes.length === 0 ? (
+          elsewhere(hidden)
+        ) : (
+          <ul>
+            {cubes.map((cube) => (
+              <li key={`${cube.folderId}/${cube.name}`}>
+                <span className="is-code">{cube.name}</span>
+                <span className="sources-muted"> · {pathLabel(cube)}</span>
+              </li>
+            ))}
+            {hidden === 0 ? null : <li className="sources-muted">{elsewhere(hidden)}</li>}
+          </ul>
+        )}
+      </span>
+    </span>
   );
 }
 
@@ -126,6 +178,7 @@ export function DataSourcesList({
       </div>
     );
 
+  const now = new Date();
   const folders = [...new Map(sources.map((source) => [source.folderId, pathLabel(source)]))];
   const drivers = [...new Set(sources.map((source) => source.driver))];
   const shown = sources.filter(
@@ -138,11 +191,13 @@ export function DataSourcesList({
 
   return (
     <>
-      <div className="query-log__filters">
-        <label>
-          Folder
+      {/* Design 01's filter pills: each says what it filters and what it holds,
+          "Folder All", a native select within (T496). */}
+      <div className="sources-filters">
+        <label className="select-pill">
+          <span>Folder</span>
           <select value={folder} onChange={(event) => setFolder(event.target.value)}>
-            <option value="">All folders</option>
+            <option value="">All</option>
             {folders.map(([id, label]) => (
               <option key={id} value={id}>
                 {label}
@@ -150,10 +205,10 @@ export function DataSourcesList({
             ))}
           </select>
         </label>
-        <label>
-          Driver
+        <label className="select-pill">
+          <span>Driver</span>
           <select value={driver} onChange={(event) => setDriver(event.target.value)}>
-            <option value="">All drivers</option>
+            <option value="">All</option>
             {drivers.map((each) => (
               <option key={each} value={each}>
                 {driverLabel(each)}
@@ -161,10 +216,10 @@ export function DataSourcesList({
             ))}
           </select>
         </label>
-        <label>
-          Health
+        <label className="select-pill">
+          <span>Health</span>
           <select value={health} onChange={(event) => setHealth(event.target.value)}>
-            <option value="">Any health</option>
+            <option value="">Any</option>
             <option value="ok">Passed</option>
             <option value="err">Failed</option>
             <option value="idle">Not tested</option>
@@ -172,6 +227,7 @@ export function DataSourcesList({
         </label>
         <input
           type="search"
+          className="sources-filters__search"
           aria-label="Search data sources"
           placeholder="Search by name"
           value={search}
@@ -186,7 +242,9 @@ export function DataSourcesList({
               <th scope="col">Folder</th>
               <th scope="col">Driver</th>
               <th scope="col">Health</th>
-              <th scope="col">Used by</th>
+              <th scope="col" className="sources-num">
+                Used by
+              </th>
               <th scope="col">Updated</th>
             </tr>
           </thead>
@@ -194,7 +252,8 @@ export function DataSourcesList({
             {shown.map((source) => {
               return (
                 <tr key={source.id} data-testid={`source-${source.id}`}>
-                  <td>{source.name}</td>
+                  {/* A name as Cube's model writes it, in the code face (design 01). */}
+                  <td className="is-code sources-name">{source.name}</td>
                   <td>
                     <a href={`/explore?folder=${encodeURIComponent(source.folderId)}`}>
                       {pathLabel(source)}
@@ -205,7 +264,7 @@ export function DataSourcesList({
                     {/* How long ago, the time on hover (design 01 item 9; T490). */}
                     <HealthBadge source={source} />
                   </td>
-                  <td data-testid="source-used-by">
+                  <td data-testid="source-used-by" className="sources-num">
                     <UsedBy
                       cubes={source.usedBy}
                       {...(source.usedElsewhere === undefined
@@ -213,13 +272,28 @@ export function DataSourcesList({
                         : { hidden: source.usedElsewhere })}
                     />
                   </td>
-                  <td>{new Date(source.updatedAt).toLocaleString()}</td>
+                  <td className="sources-muted">
+                    {/* The day, the time on hover (design 01 item 9). */}
+                    <time
+                      dateTime={source.updatedAt}
+                      title={new Date(source.updatedAt).toLocaleString()}
+                    >
+                      {shortDay(new Date(source.updatedAt), now)}
+                    </time>
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </TableScroll>
+      {/* What a read-write member is shown, and that some of it is only to look at. */}
+      {readWrite && !seesEveryFolder ? (
+        <p className="sources-footnote">
+          Showing data sources in the folders where you have read-write access, and in the folders
+          above them (view only).
+        </p>
+      ) : null}
     </>
   );
 }

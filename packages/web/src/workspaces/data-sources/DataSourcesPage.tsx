@@ -55,7 +55,12 @@ export function DataSourcesPage() {
               className="btn btn-primary"
               // One at a time: open, it is where the new one is made.
               disabled={adding !== null}
-              onClick={() => void add()}
+              onClick={(event) => {
+                // Safari doesn't focus a button it clicks: focused here, it is
+                // the opener the wizard gives focus back to (T496).
+                event.currentTarget.focus();
+                void add();
+              }}
             >
               + Data source
             </button>
@@ -63,9 +68,10 @@ export function DataSourcesPage() {
         </div>
         {addFailed === null ? null : <StateLine kind="err">{addFailed}</StateLine>}
         <InfoBar>
+          {/* Design 01's note (T496); how to change one comes with its page (T462). */}
           <p>
-            Every data source you can see, in every folder, with its health from its last connection
-            test.
+            Every data source you can see, in every folder. Health is the newest test of its stored
+            settings.
           </p>
         </InfoBar>
         {sources.isPending || me.isPending ? (

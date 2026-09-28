@@ -298,5 +298,33 @@ test.describe('a data source added in the workspace (T363)', () => {
       // Nothing of the key left the browser.
       for (const body of bodies) expect(body).not.toContain(CANARY);
     });
+
+    /** T496: design 01 state K, the pane as a sheet at 390 px. */
+    test('covers a 390 px window as a sheet, its rail in a line, closed with × and not Cancel', async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto('/data-sources');
+      await page.getByRole('button', { name: '+ Data source' }).click();
+      const wizard = page.getByRole('dialog', { name: 'New data source' });
+      const box = await wizard.boundingBox();
+      expect([Math.round(box?.x ?? -1), Math.round(box?.width ?? 0)]).toEqual([0, 390]);
+      // Its actions pinned at the window's foot, in view (state K).
+      const bottom = await wizard.locator('.source-pane__foot').boundingBox();
+      expect(Math.round((bottom?.y ?? 0) + (bottom?.height ?? 0))).toBe(844);
+      await expect(wizard.locator('.source-pane__rail-short')).toContainText('Step 1 of 4');
+      // The head's × closes it; the foot is Back and the primary only.
+      const foot = wizard.locator('.source-pane__foot');
+      await expect(foot.getByRole('button', { name: 'Cancel' })).toBeHidden();
+      await expect(foot.locator('.btn-primary')).toBeVisible();
+      // A step on, the head steps back too, before its title.
+      await wizard.getByRole('radio', { name: /^PostgreSQL/ }).click();
+      await foot.locator('.btn-primary').click();
+      await expect(wizard.locator('.source-pane__rail-short')).toContainText('Step 2 of 4');
+      await wizard.getByRole('button', { name: 'Previous step' }).click();
+      await expect(wizard.locator('.source-pane__rail-short')).toContainText('Step 1 of 4');
+      await wizard.getByRole('button', { name: 'Close' }).click();
+      await expect(wizard).toHaveCount(0);
+    });
   });
 });

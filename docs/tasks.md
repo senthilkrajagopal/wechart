@@ -8214,6 +8214,11 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - The list is kept while the model's joins are unchanged.
   - A new cube still has its Name focused (T484). A new view no longer does.
   - Files (as built): `packages/web/src/workspaces/model/ModelFilePage.tsx`, `packages/web/src/workspaces/model/form/{CubeForm,ObjectForm,MemberPicker}.tsx`, `packages/web/src/workspaces/model/form/{schema,scopes}.ts` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/model-design.spec.ts`
+  - Failing test: `model-design.spec.ts`:
+    - New view's YAML has no `cubes`;
+    - it opens on the Cubes tab with a new cube entry open and its join-path picker focused;
+    - the empty tab says "A view shows nothing until it includes a cube.".
+  - Depends on: T484
 - [x] T494 (AC-187, AC-344) The Model editor side by side with design 03: what still differed
   - **Done 2026-09-27.** Tested in `e2e/model-design.spec.ts` (T494's test, in Chrome, Firefox and Safari).
   - **Checked against:** the running editor at 1,440 × 900, in design 03's main screen, state B (General), state C (New cube) and the Jinja row. Design 12 and the critique supersede design 03 where they differ (the tree's foot, the head's state, Hide, the time zone wording, the code at 12/16).
@@ -8236,11 +8241,33 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - While the model's files are read, the tree says "Reading the model…" with the running icon, as the overview does, and its head shows no state.
     - A model with no files says "No files yet." Its head shows no state, since there is nothing to publish, and its foot is unchanged.
   - Files: `packages/web/src/workspaces/model/{FileTree,ModelFilePage}.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/model-design.spec.ts`
-  - Failing test: `model-design.spec.ts`:
-    - New view's YAML has no `cubes`;
-    - it opens on the Cubes tab with a new cube entry open and its join-path picker focused;
-    - the empty tab says "A view shows nothing until it includes a cube.".
-  - Depends on: T484
+- [x] T496 (AC-157, AC-343) The Data sources list and the narrow sheet as design 01 (2026-09-27) draws them
+  - **Done 2026-09-27.** Tested in `e2e/security/{data-sources,new-data-source}.spec.ts` (Chrome, Firefox and Safari), `DataSourcesList.test.tsx` and `relativeAge.test.ts`.
+  - **The list:**
+    - Used by is a count, right-aligned. Hovering or focusing it opens the cubes with their folders, and the ones in folders the user can't see are counted. The list is fixed to the window, so the scrolling table can't cut it off. Escape closes it and leaves focus where it was (WCAG 1.4.13).
+    - Names are bold in the code face.
+    - Updated shows the day ("Sep 26", with the year only when it isn't this one), its time in the tooltip. This is design 01's column. T477's one format for dates elsewhere is to keep it.
+    - The filters are 28 px pills, "Folder **All**", each a native select that keeps the app's focus ring.
+    - A read-write member is told the folders above theirs are view only.
+    - "Not known: Cube didn't answer" (UX-208: "Cube", not "xcube").
+    - The note says "Health is the newest test of its stored settings." Its "open it and choose Edit in my workspace" waits for T462's page.
+  - **The sheet (state K):**
+    - Below 1,024 px its foot has no Cancel; × closes it.
+    - The head's ‹ steps back.
+    - Its foot is pinned in view. It had been 48 px below the window, because the docked pane's `height: 100%` overrode the sheet's insets (found by the new test).
+  - **Safari:** "+ Data source" is focused when pressed, so the wizard gives focus back to it. Safari doesn't focus a button it clicks.
+  - **Left, as noted in the review:** the search box's magnifier; "+ Data source" disabled while the pane is open (T471's behaviour).
+  - Files: `packages/web/src/workspaces/data-sources/{DataSourcesList,DataSourcesPage,NewSourceWizard}.tsx` (+ test), `packages/web/src/shell/relativeAge.ts` (+ test), `packages/web/src/shell/styles.ts`, `e2e/security/{data-sources,new-data-source}.spec.ts`
+  - Failing test:
+    - `DataSourcesList.test.tsx` and `e2e/security/data-sources.spec.ts`:
+      - Used by is a count ("1 cube"), and hovering or focusing it lists the cubes with their folders (item 10);
+      - names are in the code face;
+      - Updated shows the day, with its time in the tooltip;
+      - the filters are pills ("Folder All", "Driver All", "Health Any");
+      - a read-write member is told the folders above are view only;
+      - "Cube", not "xcube" (note 10).
+    - `new-data-source.spec.ts`: at 390 px the pane is a sheet whose foot has no Cancel; × closes it (state K).
+  - Depends on: T471, T490
 
 ### Phase 2's surfaces, to their approved designs (AC-343)
 

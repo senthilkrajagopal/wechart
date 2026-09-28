@@ -16,6 +16,18 @@ export function shortAgo(then: Date, now: Date): string {
 }
 
 /**
+ * A day, as design 01's Updated column writes it: "Sep 26", with the year
+ * only when it isn't this one's (T496). The exact time goes in its title.
+ */
+export function shortDay(then: Date, now: Date): string {
+  return then.toLocaleDateString('en', {
+    month: 'short',
+    day: 'numeric',
+    ...(then.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
+  });
+}
+
+/**
  * How long ago, in words: "40 minutes ago", "3 hours ago" — the acceleration
  * badge's (T158). The absolute time goes beside it, or in its title, so
  * nothing is only relative.

@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
+import { shortDay } from '../../shell/relativeAge';
 import { DataSourcesList, type ListedSource } from './DataSourcesList';
 
 /**
@@ -128,13 +129,19 @@ describe('the data sources a user may see (T364, AC-157)', () => {
     );
 
     const [used, none, unknown] = rows().map((row) => within(row).getByTestId('source-used-by'));
+    // A count, the cubes and their folders one step away (design 01 item 10, T496).
+    const count = within(used!).getByText('2 cubes');
+    const tip = within(used!).getByRole('tooltip', { hidden: true });
+    expect(count.getAttribute('tabindex')).toBe('0');
+    expect(count.getAttribute('aria-describedby')).toBe(tip.id);
     expect(
-      within(used!)
-        .getAllByRole('listitem')
+      within(tip)
+        .getAllByRole('listitem', { hidden: true })
         .map((item) => item.textContent),
     ).toEqual(['sales · Finance / Sales', 'orders · Shared']);
     expect(none?.textContent).toBe('No cube');
-    expect(unknown?.textContent).toBe('Not known: xcube didn’t answer');
+    // "Cube", not "xcube", in what the user reads (design 01 note 10).
+    expect(unknown?.textContent).toBe('Not known: Cube didn’t answer');
     expect(screen.getByRole('columnheader', { name: 'Used by' })).toBeDefined();
   });
 
@@ -152,12 +159,57 @@ describe('the data sources a user may see (T364, AC-157)', () => {
     );
 
     const [some, hidden] = rows().map((row) => within(row).getByTestId('source-used-by'));
+    // Counted in the cell with the ones it can name; the rest counted in its tooltip.
+    expect(within(some!).getByText('2 cubes').isConnected).toBe(true);
     expect(
-      within(some!)
-        .getAllByRole('listitem')
+      within(within(some!).getByRole('tooltip', { hidden: true }))
+        .getAllByRole('listitem', { hidden: true })
         .map((item) => item.textContent),
     ).toEqual(['sales · Shared', '1 cube in a folder you can’t see']);
-    expect(hidden?.textContent).toBe('2 cubes in folders you can’t see');
+    expect(within(hidden!).getByText('2 cubes').isConnected).toBe(true);
+    expect(within(hidden!).getByRole('tooltip', { hidden: true }).textContent).toBe(
+      '2 cubes in folders you can’t see',
+    );
+  });
+
+  /** T496: the list as design 01 draws it (2026-09-27, AC-157, AC-343). */
+  it('sets names in the code face and Updated as the day, its time in the tooltip', () => {
+    render(<DataSourcesList sources={[source()]} />);
+
+    const cells = cellsOf(rows()[0]!);
+    expect(cells[0]?.classList.contains('is-code')).toBe(true);
+    const then = new Date('2026-09-26T10:00:00.000Z');
+    expect(cells[5]?.textContent).toBe(shortDay(then, new Date()));
+    expect(cells[5]?.querySelector('time')?.getAttribute('title')).toBe(then.toLocaleString());
+    expect(cells[5]?.querySelector('time')?.getAttribute('datetime')).toBe(
+      '2026-09-26T10:00:00.000Z',
+    );
+  });
+
+  it('draws its filters as pills, each named with what it holds', () => {
+    render(<DataSourcesList sources={[source(), failed]} />);
+
+    const pills = [...document.querySelectorAll('.select-pill')];
+    expect(
+      pills.map((pill) => [
+        pill.firstChild?.textContent,
+        (pill.querySelector('select') as HTMLSelectElement).selectedOptions[0]?.textContent,
+      ]),
+    ).toEqual([
+      ['Folder', 'All'],
+      ['Driver', 'All'],
+      ['Health', 'Any'],
+    ]);
+  });
+
+  it('says what a read-write member is shown, and that the folders above are view only', () => {
+    const { rerender } = render(<DataSourcesList sources={[source()]} readWrite />);
+    expect(screen.getByText(/^Showing data sources in the folders where/).textContent).toBe(
+      'Showing data sources in the folders where you have read-write access, and in the folders above them (view only).',
+    );
+    // Not to one who sees every folder.
+    rerender(<DataSourcesList sources={[source()]} readWrite seesEveryFolder />);
+    expect(screen.queryByText(/^Showing data sources in the folders where/)).toBeNull();
   });
 
   it('names a workspace’s own as Explore does, never as the shared root (T364’s review)', () => {

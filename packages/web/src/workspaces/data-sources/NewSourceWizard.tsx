@@ -513,6 +513,20 @@ export function NewSourceWizard({
   return (
     <aside ref={pane} role="dialog" aria-labelledby={heading} className="source-pane">
       <header className="source-pane__head">
+        {/* As a sheet, below 1,024 px, the head takes a step back too (state K, T496). */}
+        {step === 0 ? null : (
+          <button
+            type="button"
+            className="source-pane__head-back"
+            aria-label="Previous step"
+            disabled={busy !== null}
+            onClick={() => {
+              goTo(step - 1);
+            }}
+          >
+            ‹
+          </button>
+        )}
         <h2 id={heading}>New data source</h2>
         {inWorkspace ? (
           <span className="source-pane__where">
@@ -898,9 +912,10 @@ export function NewSourceWizard({
           </>
         ) : (
           <>
+            {/* As a sheet, below 1,024 px, its head's × closes it instead (state K, T496). */}
             <button
               type="button"
-              className="btn btn-ghost"
+              className="btn btn-ghost source-pane__cancel"
               disabled={busy === 'create'}
               onClick={leave}
             >

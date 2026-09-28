@@ -1990,7 +1990,8 @@ main:has(.admin-page--docked) {
   font-size: var(--wc-text-xs-size);
 }
 .source-pane__person::before { content: '◉'; font-size: 10px; }
-.source-pane__close {
+.source-pane__close,
+.source-pane__head-back {
   margin-left: auto;
   width: 28px;
   height: 28px;
@@ -2001,6 +2002,8 @@ main:has(.admin-page--docked) {
   font-size: 20px;
   line-height: 1;
 }
+/* The sheet's own way back, before its title (state K): docked, the foot's Back is enough. */
+.source-pane__head-back { display: none; margin-left: -6px; }
 /* The steps: numbered, a line between each, done ones ticked and a way
    back, the current one filled in the accent (UX-209). */
 .source-pane__rail { padding: 10px 16px; border-bottom: 1px solid var(--wc-border-subtle); }
@@ -2629,11 +2632,17 @@ input.switch:focus-visible { outline: 2px solid var(--wc-accent); outline-offset
   .source-pane {
     position: fixed;
     inset: var(--wc-app-bar-height) 0 0 0;
+    /* Its insets set its height: the docked pane's 100% would be the window's,
+       starting under the app bar, and push its foot out of view (T496). */
+    height: auto;
     z-index: 40;
     border-left: 0;
   }
   .source-pane__rail ol { display: none; }
   .source-pane__rail-short { display: flex; }
+  /* The sheet's actions are Back and the primary; × in its head closes it, and ‹ steps back (state K). */
+  .source-pane__cancel { display: none; }
+  .source-pane__head-back { display: inline-block; }
   .admin-page--docked { grid-template-columns: minmax(0, 1fr); }
   .explore--source { grid-template-columns: minmax(0, 1fr); }
   /* Generate cubes covers the page, as design 01's pane does (design 11 pin 1). */
@@ -2756,9 +2765,62 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
    page with none to list, its note and the way to Explore under it. */
 .status__when { font-weight: 400; color: var(--wc-text-secondary); }
 .sources-empty { display: grid; gap: 8px; justify-items: start; }
-/* The cubes each uses (T459): one a line, its folder after it, quieter. */
-.sources-used-by { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
 .sources-muted { color: var(--wc-text-secondary); }
+/* The list as design 01 (2026-09-27) draws it (T496): filter pills, names in
+   the code face, Used by as a count with its cubes one step away. */
+.sources-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+/* 28 px, as the pills beside it, over the global 32 px input (T496's review). */
+.sources-filters input.sources-filters__search:not([type='checkbox']):not([type='radio']):not([type='file']) {
+  width: 220px;
+  height: 28px;
+  font-size: 12px;
+}
+.select-pill {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  height: 28px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  font-size: 12px;
+}
+/* Its value bold at 12 px, as "Folder All" is drawn; focus keeps the app's own ring. */
+.select-pill select {
+  height: 26px;
+  border: 0;
+  background: transparent;
+  color: var(--wc-text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+.query-log td.sources-name { font-weight: 600; }
+.query-log :is(th, td).sources-num { text-align: right; }
+.sources-used-by { display: inline-block; }
+.sources-used-by__count { font-variant-numeric: tabular-nums; }
+/* Fixed to the window under its count, placed as it opens, so no scrolling table cuts it off. */
+.sources-used-by__tip {
+  position: fixed;
+  z-index: 60;
+  display: block;
+  width: max-content;
+  max-width: 360px;
+  padding: 8px 10px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-raised, var(--wc-bg-surface));
+  box-shadow: var(--wc-shadow-pop, 0 4px 12px rgba(0, 0, 0, 0.15));
+  font-size: 12px;
+  line-height: 16px;
+  text-align: left;
+  white-space: normal;
+}
+.sources-used-by__tip[hidden] { display: none; }
+.sources-used-by__tip ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.sources-footnote { margin: 0; color: var(--wc-text-secondary); font-size: 12px; line-height: 16px; }
 .query-log--sticky thead th {
   position: sticky;
   top: var(--wc-app-bar-height);

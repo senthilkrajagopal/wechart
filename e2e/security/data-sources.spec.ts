@@ -168,6 +168,38 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
       await expect(parent.getByTestId('source-health')).toHaveAttribute('data-state', 'ok');
       await expect(parent.getByTestId('source-health')).toHaveText(/^Passed · /);
 
+      // As design 01 draws it (T496): names bold in the code face, the day it
+      // changed, Used by at the right, and 28 px pills whose value is bold.
+      expect(
+        await row
+          .getByRole('cell')
+          .first()
+          .evaluate((cell) => {
+            const style = getComputedStyle(cell);
+            return [style.fontFamily.split(',')[0]?.replace(/"/g, ''), style.fontWeight];
+          }),
+      ).toEqual(['IBM Plex Mono', '600']);
+      await expect(row.getByRole('cell').nth(5)).toHaveText(/^[A-Z][a-z]{2} \d{1,2}(, \d{4})?$/);
+      expect(
+        await row
+          .getByTestId('source-used-by')
+          .evaluate((cell) => getComputedStyle(cell).textAlign),
+      ).toBe('right');
+      const pill = main.locator('.select-pill').first();
+      expect(Math.round((await pill.boundingBox())?.height ?? 0)).toBe(28);
+      expect(
+        await pill.locator('select').evaluate((select) => {
+          const style = getComputedStyle(select);
+          return [style.fontSize, style.fontWeight];
+        }),
+      ).toEqual(['12px', '600']);
+      expect(
+        Math.round(
+          (await main.getByRole('searchbox', { name: 'Search data sources' }).boundingBox())
+            ?.height ?? 0,
+        ),
+      ).toBe(28);
+
       // A folder's filter narrows it to that folder's.
       await main
         .getByLabel('Folder')
@@ -215,13 +247,26 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
 
         await page.goto('/data-sources');
         const table = page.getByRole('main').getByRole('table', { name: 'Data sources' });
-        // Super sees every folder, managers' cube included.
-        await expect(
-          table
-            .getByRole('row')
-            .filter({ hasText: `root_${RUN}` })
-            .getByTestId('source-used-by'),
-        ).toHaveText(`secret_${RUN} · Sources hidden ${RUN}`);
+        // Super sees every folder, managers' cube included: counted in the cell,
+        // named with its folder in the tooltip hovering opens (design 01 item 10, T496).
+        const usedBy = table
+          .getByRole('row')
+          .filter({ hasText: `root_${RUN}` })
+          .getByTestId('source-used-by');
+        await expect(usedBy.locator('.sources-used-by__count')).toHaveText('1 cube');
+        const tip = usedBy.getByRole('tooltip');
+        await expect(tip).toBeHidden();
+        await usedBy.locator('.sources-used-by__count').hover();
+        await expect(tip).toBeVisible();
+        await expect(tip).toHaveText(`secret_${RUN} · Sources hidden ${RUN}`);
+        await page.mouse.move(0, 0);
+        await expect(tip).toBeHidden();
+        // From the keyboard too, and Escape closes it where it is (WCAG 1.4.13).
+        await usedBy.locator('.sources-used-by__count').focus();
+        await expect(tip).toBeVisible();
+        await page.keyboard.press('Escape');
+        await expect(tip).toBeHidden();
+        await expect(usedBy.locator('.sources-used-by__count')).toBeFocused();
       });
     });
 
@@ -239,19 +284,30 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
             .filter({ hasText: name })
             .filter({ has: page.getByRole('link', { name: folder, exact: true }) });
 
-        await expect(
-          rowOf(`parent_${RUN}`, `Sources parent ${RUN}`).getByTestId('source-used-by'),
-        ).toHaveText(`uses_${RUN} · Sources parent ${RUN} / Sources ${RUN}`);
+        // Counted in the cell, each named with its folder in the tooltip (T496).
+        const parent = rowOf(`parent_${RUN}`, `Sources parent ${RUN}`).getByTestId(
+          'source-used-by',
+        );
+        await expect(parent.locator('.sources-used-by__count')).toHaveText('1 cube');
+        await expect(parent.locator('.sources-used-by__tip')).toHaveText(
+          `uses_${RUN} · Sources parent ${RUN} / Sources ${RUN}`,
+        );
         await expect(
           rowOf(`parent_${RUN}`, `Sources parent ${RUN} / Sources ${RUN}`).getByTestId(
             'source-used-by',
           ),
         ).toHaveText('No cube');
         // Managers' cube counted, never named (as AC-322 counts what can't be seen).
-        await expect(rowOf(`root_${RUN}`, 'Shared').getByTestId('source-used-by')).toHaveText(
+        const root = rowOf(`root_${RUN}`, 'Shared').getByTestId('source-used-by');
+        await expect(root.locator('.sources-used-by__count')).toHaveText('1 cube');
+        await expect(root.locator('.sources-used-by__tip')).toHaveText(
           '1 cube in a folder you can’t see',
         );
         await expect(page.getByRole('main')).not.toContainText(`secret_${RUN}`);
+        // What a read-write member is shown, said under the list (design 01).
+        await expect(page.getByRole('main')).toContainText(
+          'Showing data sources in the folders where you have read-write access, and in the folders above them (view only).',
+        );
       });
     });
 
@@ -278,9 +334,9 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
             .filter({ has: page.getByRole('link', { name: folder, exact: true }) })
             .getByTestId('source-used-by');
 
-        await expect(usedBy(`Sources parent ${RUN} / Sources ${RUN}`)).toHaveText(
-          `uses_${RUN} · Sources parent ${RUN} / Sources ${RUN}`,
-        );
+        await expect(
+          usedBy(`Sources parent ${RUN} / Sources ${RUN}`).locator('.sources-used-by__tip'),
+        ).toHaveText(`uses_${RUN} · Sources parent ${RUN} / Sources ${RUN}`);
         await expect(usedBy(`Sources parent ${RUN}`)).toHaveText('No cube');
       });
     });
