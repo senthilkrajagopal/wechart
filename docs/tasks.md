@@ -6610,8 +6610,10 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 - [ ] T382 (AC-048) Compute quick calculations in Cube as generated multi-stage measures, and label the measure
   - Files: `packages/core/src/quickCalc.ts` (+ test), ~~`packages/api/src/model/chain.ts` (only the companions charts use, added to the served files)~~ the companions charts use, published to xcube as generated YAML items of the cube's folder through a changeset (2026-09-26: nothing is served from wechart, `[IP 1]`), `e2e/quick-calcs.spec.ts`
   - Failing test: `quickCalc.test.ts` and `quick-calcs.spec.ts`: each calculation queries a generated companion measure (the spike's shapes) rather than post-processing rows, and the tile labels the measure with the calculation (AC-048).
-  - **Ask the user first:** does a running total count from the start of the data (Cube's `trailing: unbounded`, observed) or from the start of the chart's range (research spike, "Open for the user")?
-  - Depends on: T380, ~~T337~~ T426
+  - ~~**Ask the user first:** does a running total count from the start of the data (Cube's `trailing: unbounded`, observed) or from the start of the chart's range (research spike, "Open for the user")?~~ Answered 2026-09-24: from the chart's range (`docs/handoff.md` §2).
+  - *2026-09-28, R45:* the calculation replaces its measure in place; rank is across all rows; % of total is of the grand total. With the last time field removed, a period calculation stays chosen but paused: the chart draws the plain measure with a note naming the field it needs.
+  - *2026-09-28, waiting on xcube (`to-xcube/2026-09-28-1400-quick-calcs.md`):* where the companions live under the items model (query-scoped, an extending item, or a generated section of the cube's item); a Cube shape for a running total starting at the chart's range, and a rolling window with no date range; which calculations are correct per measure type. Who publishes companions, and when, follows that answer.
+  - Depends on: T380, ~~T337~~ T426; xcube's answer
 - [ ] T383 (AC-050) Record a calculation request and show it to the read-write members of the folder whose model defines the cube
   - Files: `packages/api/src/repos/calc-requests.ts` (+ test), `packages/web/src/editor/RequestCalcDialog.tsx`
   - Failing test: `calc-requests.test.ts`: the request holds the chart, the fields and the description, and is listed for that folder's read-write members and no one else (AC-050).

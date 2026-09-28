@@ -843,6 +843,14 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R45 — quick calculations: four answers** (2026-09-28, the user; T380 and T381 built, T382 next)
+- Claude asked four questions. The user chose the recommended answer to each:
+  1. **What a calculation does to its measure:** "Replace in place". *One calculation per measure; the pill names it, and the chart draws the calculated measure. To see both, add the measure twice.*
+  2. **Rank's scope:** "Across all rows". *One ranking over every row the chart shows (Cube's `grain: {keep_only: []}`), with competition ranking for ties (2026-09-24).*
+  3. **% of total with two dimensions:** "Of the grand total". *Each cell's share of everything shown, which is the filtered total (2026-09-24).*
+  4. **The chart's last time field removed while a period calculation is applied:** "Keep it, draw plain + note". *The calculation stays chosen but paused. The chart draws the plain measure with a note naming the field it needs, and resumes when a time field returns.*
+- *Still open, asked of xcube first (`to-xcube/2026-09-28-1400-quick-calcs.md`): where the companion measures live under the items model; a running total starting at the chart's range (the user's 2026-09-24 answer); which calculations are correct per measure type. Who publishes companions, and when, follows xcube's answer.*
+
 **R44 — an import always lands in My workspace, with warnings; and design 13's first answers** (2026-09-28, the user)
 - On design 13, Claude asked four questions. The user chose the recommended answer to each:
   1. **A data source whose name the target already has:** "Map or create". *No Replace for a data source: map it to the existing one, or create it under another name.*

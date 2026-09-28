@@ -11,7 +11,7 @@
 >   - Names resolve bottom-up from the viewer's folder.
 >   - Development uses one fixed encryption key in the repo, and the API refuses to start without a usable key.
 > - **Still for the user, when its task comes:**
->   - running totals from the start of the data or of the chart's range (T382);
+>   - ~~running totals from the start of the data or of the chart's range (T382)~~ answered 2026-09-24: from the chart's range (§2);
 >   - an Entra ID tenant or AD broker for the end-of-phase check (T411).
 > - **The user's R13:** test phase 2 with security on (`playwright.security.config.ts`); run
 >   phase 1's suite with security off only at the end (T410).
