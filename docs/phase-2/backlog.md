@@ -236,3 +236,50 @@ It was merged into main as 7140626: T182's review round, T300–T306, T309, T310
   - T246's header items;
   - AC-231's settings-page ruling;
   - the filter bar as a sheet in direction.md.
+
+## 6. Design items held back (R37, 2026-09-27)
+
+R37 asks for both UI reviews' designs to be built, with the 2026-09-27 ones winning where they differ. Items blocked by a decision, by xcube, or by wechart work not yet built go here. `docs/design/reviews/status.md` tracks each design.
+
+**(a) Waiting on the user's decision**
+- **2026-09-24 design 02, state B / approve 5:** underlying rows by the measure's drill members. It is a proposal the user never decided, and it changes AC-036.
+- **2026-09-24 design 04, approve 5:** a coarser default time grain (a proposal).
+- **2026-09-24 design 08:**
+  - .xlsx export (research and approval, spec.md F23);
+  - state B's "Keep as details tile".
+- **2026-09-24 design 03, note 4:** "Hide" rather than "Edit in form anyway". Claude chose it because the form now keeps comments (T482).
+- **Model editor below 1,024 px:** MW-26's overlay, or today's stacking (T396).
+- **MW-13:** the proposed empty-list line.
+- **2026-09-27 design 01, approve 11:** whether to ask vendors for permission to show their logos (T472 uses monograms).
+- **2026-09-27 design 07, state F:** the Access panel with sign-in off. This contradicts the earlier answer "no Access button with sign-in off" (`docs/handoff.md`, T330).
+- **2026-09-27 design 03, state E:** a "Scheduled health check" row. It is only needed if periodic tests are wanted, which is a spec change.
+- **Explore and the top bar below 1,024 px:** neither review designs them (§3, N16).
+
+**(b) Waiting on xcube** (R35: needs xcube changed, through the Cube-expert agent)
+- **2026-09-27 design 01, state D:** the test's four checks ticking off one by one. xcube's test route answers once, at the end.
+- **2026-09-27 design 10, main screen:** builds run by Cube's refresh worker in Recent builds. T373 needs an xcube route for build events, which xcube's contract doesn't have.
+
+**(c) Waiting on wechart work not yet built**
+- **Proposals, approval and history** (T349 → T351 → T352, T353 → T354 → T355 → T356 → T357):
+  - all of 2026-09-27 designs 05 and 06;
+  - design 04's statuses, "Propose to…" and History;
+  - design 03's Propose, History and version line;
+  - design 09's Reviews control.
+- **Model copies in the workspace** (T437, paused in a stash by R33's order, then T347 → T350 → T358; T440; T456):
+  - design 04's Model in New and model copies;
+  - design 05's bundle and bundled previews;
+  - design 10 state D's workspace group;
+  - design 11 proposal 5 (T492).
+- **The audit trail** (T368 → T369, T370, T427):
+  - 2026-09-27 design 08's Audit tab;
+  - design 07's audit note;
+  - design 05 pin 7.
+- **Preview as groups, enforced by Cube** (T437 → T436 → T438): design 08 state E's folder reach, and state F's folder-refusal sentence.
+- **Build history** (AC-150: T340 → T371 → T372 → T374):
+  - 2026-09-27 design 10's Folder column and filter, and Recent builds;
+  - 2026-09-24 design 07's Last build;
+  - wechart-owned schedules (AC-234, T378).
+- **Models opened in their folder** (T342):
+  - design 10 state D's cube picker (T475, AC-342);
+  - design 10 pin 5's model link;
+  - the "Open in Model" links of 2026-09-24 designs 02, 07 and 08.

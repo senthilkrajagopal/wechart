@@ -842,6 +842,15 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R37 — both UI reviews' designs, as a priority** (2026-09-27, the user, while design 03's check ran)
+- The user: "after your current work.. please work on designs in /Users/srajagopal/Work/wechart/docs/design/reviews/2026-09-27/designs and /Users/srajagopal/Work/wechart/docs/design/reviews/2026-09-24/designs if there is a conflict.. designs on 2026-09-27 will take precedence and supersede the ones on 2026-09-24. Make this a priority. If any of them is blocked because of decisions to be made, or because of xcube, or because some of the foundational decisions or apis have not been implemented then put them into backlog and continue with the rest.."
+- Then: "after completing 03.. deploy to kubernetes.. and the same with all the other pages.. some of them should already be implemented.. keep track of which designs are completed to completion"
+  - *The 2026-09-24 designs are to be built as drawn. This supersedes R33's "Bugs and consistency only" for designs 01, 02 and 04–07. Design 03 was approved by R34 and design 08 on 2026-09-25 (F23).*
+  - *Where a 2026-09-24 design and a 2026-09-27 design differ, the 2026-09-27 one is built.*
+  - *A design's items marked "proposal — needs the user's approval" that the user never decided stay undecided. The same goes for other open questions (a design against an earlier answer, say). All of these go to the backlog, with what is to be decided.*
+  - *An item that waits on xcube, or on wechart work not yet built (the proposal chain, the audit trail, build history), goes to the backlog with what it waits on. The rest is built.*
+  - *Each design is finished in turn and then deployed to docker-desktop. `docs/design/reviews/status.md` tracks each design's state.*
+
 **R36 — the proposals of designs 11 and 12, and the markings flake** (2026-09-27, the user, after Claude listed the open proposals)
 - The user: "okay for both Your OK to fix the flaky markings test's expected count. - The open proposals in 11 and 12 and MW-19... first let me know what is the open proposal for designs 11 and 12 and MW19.. for flaky markings test put in backlog.. we will do it after we complete other things"
   - *The markings test's expectation is to be corrected, later: it is in `docs/phase-2/backlog.md` §2.*

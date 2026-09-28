@@ -1174,6 +1174,8 @@ Traces to: §P2.3, `[R13, R19]`.
       Fails when: a phase-1 end-to-end test fails.
 - [ ] AC-343 THE SYSTEM SHALL draw each phase-2 surface as its approved design in `docs/design/reviews/2026-09-27/designs/` (01–10), with the structure, placement, controls, wording and states the design and its notes give, in the tokens of direction.md §3–5 (`[R33]`: the user, 2026-09-27, "Approve all with proposals").
       Fails when: a surface a design covers differs from it in its layout or placement, its controls or their order, its wording, or a state the design draws. Each surface's task names the design it checks against.
+- [ ] AC-352 THE SYSTEM SHALL draw the chart editor's inspector and results drawer, the dashboard view, the dashboard settings page, the chart page and Schedules as the 2026-09-24 designs 01, 02 and 04–07 draw them (`docs/design/reviews/2026-09-24/designs/`), with the structure, placement, controls, wording and states their notes give, in the tokens of direction.md §3–5 — except where a 2026-09-27 design draws the same surface differently, which it follows, and leaving out the items those designs mark as proposals, which the user has not decided (`[R37]`).
+      Fails when: one of those surfaces differs from its design in its layout or placement, its controls or their order, its wording, or a state the design draws, and no 2026-09-27 design, recorded decision or backlog entry gives the reason. Each surface's task names the design it checks against.
 
 ## F37. The semantic service: Cube and xcube
 
@@ -1352,3 +1354,4 @@ The criteria phase 1 moved to its backlog on 2026-09-25 are back in this spec un
 | The 2026-09-27 UI reviews: phase 2's ten designs approved, with their proposals `[R33]` | AC-338 … AC-343 |
 | The Model workspace and Generate cubes to design 03, 11 and 12, as a priority `[R34]` | AC-344 |
 | Designs 11 and 12's proposals, approved `[R36]` | AC-345 … AC-351 |
+| Both UI reviews' designs, the 2026-09-27 ones first where they differ, as a priority `[R37]` | AC-343, AC-344, AC-352 |
