@@ -118,6 +118,49 @@ describe('the proposals store (T349, AC-284)', () => {
     expect(await store().openFor('dashboard', `board-${run}-none`)).toBeNull();
   });
 
+  it('decides an open proposal once, and frees its items to be proposed again (T353)', async () => {
+    const id = `board-${run}-7`;
+    const first = await store().create(dashboard(id));
+    const ada = { key: `ada-${run}`, name: 'Ada Admin' };
+    const decided = await store().decide(first.id, {
+      status: 'rejected',
+      by: ada,
+      reason: 'Keep the median.',
+    });
+    expect(decided?.status).toBe('rejected');
+    expect(decided?.decision).toMatchObject({ by: ada, reason: 'Keep the median.' });
+    // The second decision finds it decided.
+    expect(
+      await store().decide(first.id, { status: 'approved', by: ada, reason: null }),
+    ).toBeNull();
+    expect((await store().get(first.id))!.status).toBe('rejected');
+    // Its items wait in nothing now, and may be proposed again.
+    expect(await store().openFor('chart', `c1-${id}`)).toBeNull();
+    const again = await store().create(dashboard(id));
+    // The item's latest is the new one.
+    expect((await store().latestFor('dashboard', id))?.id).toBe(again.id);
+    expect(await store().latestFor('dashboard', `board-${run}-never`)).toBeNull();
+  });
+
+  it('finds an item’s latest where it went with another’s, the open one first (T353’s review)', async () => {
+    const ada = { key: `ada-${run}`, name: 'Ada Admin' };
+    const chart = `chart-${run}-8`;
+    // The chart proposed alone, and rejected.
+    const alone = await store().create({
+      ...dashboard(`board-${run}-8`),
+      items: [{ ...dashboard(`board-${run}-8`).items[1]!, id: chart, replaces: null }],
+    });
+    await store().decide(alone.id, { status: 'rejected', by: ada, reason: null });
+    expect((await store().latestFor('chart', chart))?.id).toBe(alone.id);
+    // Then going with a dashboard that shows it: that one is its latest.
+    const board = `board-${run}-9`;
+    const withIt = await store().create({
+      ...dashboard(board),
+      items: [dashboard(board).items[0]!, { ...dashboard(board).items[1]!, id: chart }],
+    });
+    expect((await store().latestFor('chart', chart))?.id).toBe(withIt.id);
+  });
+
   it('answers none for a proposal that isn’t there', async () => {
     expect(await store().get(randomUUID())).toBeNull();
     expect(await store().get('not-a-uuid')).toBeNull();

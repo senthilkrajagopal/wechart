@@ -84,6 +84,25 @@ export interface ProposalStore {
   get(id: string): Promise<Proposal | null>;
   /** The open proposal an item waits in, as its item or going with another's, if any. */
   openFor(kind: ProposalKind, itemId: string): Promise<Proposal | null>;
+  /**
+   * An item's latest proposal, as its item or going with another's: the open
+   * one it waits in, else the one it was last in (T353; the band on the
+   * author's item, design 05 state M); none if it was never proposed.
+   */
+  latestFor(kind: ProposalKind, itemId: string): Promise<Proposal | null>;
+  /**
+   * Decides an open proposal (T352, T353): its status, who, when and why.
+   * Its items may then be proposed again. None if it isn't open: another's
+   * decision came first, or there is no such proposal.
+   */
+  decide(
+    id: string,
+    decision: {
+      readonly status: Exclude<ProposalStatus, 'open'>;
+      readonly by: { readonly key: string; readonly name: string };
+      readonly reason: string | null;
+    },
+  ): Promise<Proposal | null>;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -220,6 +239,50 @@ export function proposalStore(db: Kysely<Database>): ProposalStore {
     async openFor(kind, itemId) {
       const id = await openHolding(kind, itemId);
       return id === undefined ? null : read(id);
+    },
+
+    async latestFor(kind, itemId) {
+      // As its item or going with another's (T353's review): the open one it
+      // waits in first, else the one it was last in.
+      const row = await db
+        .selectFrom('proposal_items')
+        .innerJoin('proposals', 'proposals.id', 'proposal_items.proposal_id')
+        .select('proposals.id')
+        .where('proposal_items.kind', '=', kind)
+        .where('proposal_items.item_id', '=', itemId)
+        .orderBy('proposal_items.open', 'desc')
+        .orderBy('proposals.proposed_at', 'desc')
+        .executeTakeFirst();
+      return row === undefined ? null : read(row.id);
+    },
+
+    async decide(id, { status, by, reason }) {
+      if (!UUID.test(id)) return null;
+      const decided = await db.transaction().execute(async (tx) => {
+        // Only an open one: of two decisions at once, the first stands.
+        const row = await tx
+          .updateTable('proposals')
+          .set({
+            status,
+            decided_by_key: by.key,
+            decided_by_name: by.name,
+            // Stamped here, to the millisecond a JavaScript date holds.
+            decided_at: new Date(),
+            reason,
+          })
+          .where('id', '=', id)
+          .where('status', '=', 'open')
+          .returning('id')
+          .executeTakeFirst();
+        if (row === undefined) return false;
+        await tx
+          .updateTable('proposal_items')
+          .set({ open: false })
+          .where('proposal_id', '=', id)
+          .execute();
+        return true;
+      });
+      return decided ? read(id) : null;
     },
   };
 }

@@ -5834,8 +5834,31 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - Each item lands in its own `landsIn` folder (T349's review): a library chart a dashboard shows goes to its own target, which may not be the dashboard's.
     - An approval clears `proposal_items.open`, so the items may be proposed again.
   - Depends on: T351, T426, T442
-- [ ] T353 (AC-290) Return a rejected proposal to its author with the approver's reason
+- [x] T353 (AC-290) Return a rejected proposal to its author with the approver's reason
   - Files: `packages/api/src/routes/proposals.ts`, `packages/api/src/routes/proposal-reject.test.ts`
+  - *As built (2026-09-28; design 05, states J, K and M's API):*
+    - `POST /api/proposals/:id/reject` takes `{ reason? }` and answers the decided proposal.
+      - The reason is at most 1,000 code points, with no NUL; 1,001 answers `400` and decides nothing. A blank reason is none.
+      - The folder and the author's workspace item stay as they were. The items may be proposed again.
+    - Who may reject is T351's `rightsOn`:
+      - its deciders reject it;
+      - its author's own rejection withdraws it (`withdrawn`, state K);
+      - anyone else gets `404`;
+      - a decided one answers `409`, naming who decided it. Of two decisions at once, one stands and is recorded once.
+    - `GET /api/proposals?kind=&itemId=` answers an item's latest proposal, for its author's band (state M): the open one it waits in, as its item or going with another's, else the one it was last in. Anyone else gets `404`.
+    - Recorded in the audit trail as a rejection, in its target folder: "Rejected “Margin”: <reason>", or "Withdrew “Churn”".
+    - Also files: `packages/api/src/repos/proposals.ts` (`decide`, `latestFor`; + test), a migration `…_proposal-item-lookup.cjs`, `packages/api/src/routes/proposals.test.ts` (sign-in off).
+  - **Done 2026-09-28, after one review round. AC-290 stays open:** "the reason shown on the item" is the band T358 draws.
+  - **Review fixes:**
+    1. An item's latest proposal missed the ones it went into with another item, so the band could say "rejected" while it waited. Fixed.
+    2. A NUL in a reason or a description answered 500. It is now refused `400`.
+    3. The lookup had no index once proposals were decided; it has one now.
+    - Tests added:
+      - who decided, in the answer, the band's read and the audit trail;
+      - two decisions at once;
+      - exactly 1,000 code points, astral ones included;
+      - the item's latest where it went with a dashboard;
+      - the routes with sign-in off.
   - Failing test: `proposal-reject.test.ts`: rejecting leaves the folder unchanged and the work in the author's workspace, with the reason (at most 1,000 characters; 1,001 answer 400) shown on the item (AC-290).
   - Depends on: T351
 - [ ] T354 (AC-289) Keep each item's last 10 versions for read-write members and Super-Admins, and restore one only through a proposal
@@ -5860,6 +5883,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - *2026-09-28, from T349's review:*
     - The dialog shows what proposing would do before it is sent: the target, what each item replaces and whether it was copied from it, what goes with it, and a refusal (state F's check "when the dialog opens"). That needs a check route in `packages/api/src/routes/proposals.ts` answering what `POST /api/proposals` would record, without recording it.
     - The counter counts code points, as the API and Postgres do (`PROPOSAL_TEXT_LIMIT`).
+  - *2026-09-28, from T353's review (AC-290's real surface):* the author's item also draws state M's rejected band, from `GET /api/proposals?kind=&itemId=`: status-error text with a cross, the decider, the time, the reason in a quote block (or "No reason given"), with Propose again… and Dismiss. Whether Dismiss is kept (for the user, or for the session) is the user's to decide: backlog §6.
   - Depends on: T349, T350, T348
 - [ ] T359 (AC-254) With security off, the single user works through a workspace and approves their own proposals
   - Files: `e2e/workspace-single-user.spec.ts` (the phase-1 configuration)
@@ -8671,7 +8695,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 | AC-281 | T347 | AC-282 | T345, T347, T363 | AC-283 | T347 |
 | AC-284 | T349, T358 | AC-285 | T350 | AC-286 | T351 |
 | AC-287 | T355, T356 | AC-288 | T352, ~~T426~~ T451 | AC-289 | T354, T357 |
-| AC-290 | T353 | AC-291 | T329, ~~T426~~ T451 | AC-292 | T366 |
+| AC-290 | T353, T358 | AC-291 | T329, ~~T426~~ T451 | AC-292 | T366 |
 | AC-293 | T367 | AC-294 | T368 | AC-295 | T369 |
 | AC-296 | T370 | AC-297 | T371 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441 |
 | AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |

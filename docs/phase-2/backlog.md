@@ -249,6 +249,7 @@ R37 asks for both UI reviews' designs to be built, with the 2026-09-27 ones winn
   - state B's "Keep as details tile".
 - **2026-09-24 design 03, note 4:** "Hide" rather than "Edit in form anyway". Claude chose it because the form now keeps comments (T482).
 - **Model editor below 1,024 px:** MW-26's overlay, or today's stacking (T396).
+- **2026-09-27 design 05, state M:** the rejected band's Dismiss. Is it kept for the user (on every device, until the item is proposed again) or for the session only? The design doesn't say. T358 draws the band (T353's review, 2026-09-28).
 - **MW-13:** the proposed empty-list line.
 - **2026-09-27 design 01, approve 11:** whether to ask vendors for permission to show their logos (T472 uses monograms).
 - **2026-09-27 design 07, state F:** the Access panel with sign-in off. This contradicts the earlier answer "no Access button with sign-in off" (`docs/handoff.md`, T330).

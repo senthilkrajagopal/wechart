@@ -342,6 +342,93 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     };
   });
 
+  /**
+   * An item's latest proposal, for the band on its author's item (T353,
+   * AC-290; design 05, state M): waiting, or decided with who, when and the
+   * reason. The item is its author's, so the answer is too: anyone else
+   * finds none.
+   */
+  app.get('/api/proposals', USER, async (request, reply) => {
+    if (!routes.enabled) return reply.code(404).send({ error: 'Proposals need sign-in.' });
+    const { kind, itemId } = request.query as { kind?: unknown; itemId?: unknown };
+    if (
+      !(PROPOSAL_KINDS as readonly unknown[]).includes(kind) ||
+      typeof itemId !== 'string' ||
+      itemId === ''
+    )
+      return reply
+        .code(400)
+        .send({ error: 'Name the item whose proposal to show: ?kind=&itemId=.' });
+    const latest = await store.latestFor(kind as ProposalKind, itemId);
+    if (latest === null || latest.author.key !== userOf(request).key)
+      return reply.code(404).send({ error: 'It has not been proposed.' });
+    return answerOf(latest);
+  });
+
+  /**
+   * Rejecting a proposal (T353, AC-290; design 05, states J and K): its
+   * folder stays as it was and the work in its author's workspace, with the
+   * decider's reason of at most 1,000 characters. Its author's own rejection
+   * withdraws it. Its deciders' alone (T351); anyone else finds no such
+   * proposal. A decided one is decided.
+   */
+  app.post('/api/proposals/:id/reject', USER, async (request, reply) => {
+    if (!routes.enabled) return reply.code(404).send({ error: 'Proposals need sign-in.' });
+    const { id } = request.params as { id: string };
+    const sent = (request.body as { reason?: unknown } | undefined)?.reason;
+    // Text Postgres can hold: no NUL character (T353's review).
+    if ((sent !== undefined && sent !== null && typeof sent !== 'string') || /\0/.test(`${sent}`))
+      return reply.code(400).send({ error: 'A reason is text.' });
+    const reason = typeof sent === 'string' && sent.trim() !== '' ? sent : null;
+    // Code points, as the description's are counted; never cut.
+    const length = reason === null ? 0 : [...reason].length;
+    if (length > PROPOSAL_TEXT_LIMIT)
+      return reply.code(400).send({
+        error: `A reason is at most 1,000 characters: this one has ${length.toLocaleString('en-GB')}.`,
+      });
+    const proposal = await store.get(id);
+    const rights = proposal === null ? null : await rightsOn(request, proposal);
+    if (proposal === null || rights === null || !rights.see)
+      return reply.code(404).send({ error: 'There is no such proposal.' });
+    if (!rights.reject)
+      return reply.code(409).send({
+        error:
+          proposal.decision === null
+            ? 'You can’t reject this proposal.'
+            : `It was decided already, by ${proposal.decision.by.name}.`,
+      });
+    const user = userOf(request);
+    // An author rejecting their own withdraws it (state K).
+    const withdrawn = rights.author;
+    const decided = await store.decide(proposal.id, {
+      status: withdrawn ? 'withdrawn' : 'rejected',
+      by: { key: user.key, name: user.name },
+      reason,
+    });
+    if (decided === null) {
+      // Another decision came first, between the read and this one.
+      const first = (await store.get(proposal.id))?.decision;
+      return reply.code(409).send({
+        error: `It was decided already${first == null ? '' : `, by ${first.by.name}`}.`,
+      });
+    }
+    await recordIn(
+      routes.audit,
+      {
+        actor: actorOf(user),
+        event: 'rejection',
+        folderId: decided.targetFolderId,
+        item: { kind: decided.kind, id: decided.itemId, title: decided.title },
+        summary: withdrawn
+          ? `Withdrew “${decided.title}”`
+          : `Rejected “${decided.title}”${reason === null ? '' : `: ${reason}`}`,
+        details: { proposalId: decided.id, reason, author: decided.author },
+      },
+      request.log,
+    );
+    return answerOf(decided);
+  });
+
   app.post('/api/proposals', USER, async (request, reply) => {
     if (!routes.enabled) return reply.code(404).send({ error: 'Proposals need sign-in.' });
     try {
@@ -366,7 +453,8 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
       throw new Refused(400, 'Name the dashboard, chart or data source to propose: { kind, id }.');
     const proposing = kind as ProposalKind;
     const sent = body?.description;
-    if (sent !== undefined && sent !== null && typeof sent !== 'string')
+    // Text Postgres can hold: no NUL character (T353's review).
+    if ((sent !== undefined && sent !== null && typeof sent !== 'string') || /\0/.test(`${sent}`))
       throw new Refused(400, 'A description is text.');
     const description = typeof sent === 'string' && sent.trim() !== '' ? sent : null;
     // Code points, as Postgres counts them and the dialog's counter must; never cut.
