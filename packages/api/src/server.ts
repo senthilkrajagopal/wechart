@@ -66,6 +66,7 @@ import type { DataSourceLanding } from './routes/data-sources';
 import type { ConnectionHealth, TestAnswer, TestedConnection } from './xcube/connections';
 import type { FolderAccessStore } from './repos/folder-access';
 import type { AuditStore } from './repos/audit';
+import { actorOf, recordIn } from './audit/record';
 import { registerFolderAccess } from './routes/access';
 import { registerAudit } from './routes/audit';
 import { registerDataSources } from './routes/data-sources';
@@ -1703,6 +1704,225 @@ export function buildServer({
     } else copies = [chartCopy(stored, own, owner, () => randomUUID())];
     await docs.createTogether(copies);
     return reply.code(201).send({ kind, id: copies[0]!.id, created: true });
+  });
+
+  /**
+   * A shared item's history (T354, AC-289; design 06; rule 80): its last 10
+   * versions, newest first, each with its number, time, author, approver and
+   * description, for its folder's read-write members and Super-Admins alone.
+   * Anyone else finds none, as for an item that isn't there. One version's
+   * content is asked for alone, to be viewed.
+   */
+  const HISTORY_KINDS = ['dashboard', 'chart', 'data-source'] as const;
+  type HistoryKind = (typeof HISTORY_KINDS)[number];
+  const NO_HISTORY = { error: 'There is no such item, or its history isn’t yours to see.' };
+  const historyItem = async (request: FastifyRequest, kind: HistoryKind, id: string) => {
+    const seen = await visibilityOf(request);
+    // With sign-in off there are no approvals, so no history (T359 brings the single user's).
+    if (seen === undefined || versions === undefined) return undefined;
+    let folderId: string | null;
+    let current: number;
+    let title: unknown;
+    if (kind === 'data-source') {
+      const source = await dataSources?.get(id);
+      if (source == null) return undefined;
+      folderId = source.folderId;
+      current = source.version;
+      title = source.name;
+    } else {
+      const stored = await docs?.get?.(kind, id).catch(() => null);
+      if (stored == null) return undefined;
+      // A dashboard's own chart has its dashboard's history.
+      if (kind === 'chart' && typeof stored.body['localToDashboardId'] === 'string')
+        return undefined;
+      folderId = folderIdOf(stored.body);
+      current = stored.version ?? 1;
+      title = stored.body['title'];
+    }
+    // A shared item's alone: a workspace's has no history (AC-289).
+    if (folderId === null || (await workspaceRootOf(folderId)) !== null) return undefined;
+    if (!userOf(request).superAdmin && !mayWrite(seen, folderId)) return undefined;
+    return { seen, folderId, current, title };
+  };
+  const historyKindOf = (kind: string): HistoryKind | undefined =>
+    (HISTORY_KINDS as readonly string[]).includes(kind) ? (kind as HistoryKind) : undefined;
+
+  app.get('/api/history/:kind/:id', USER, async (request, reply) => {
+    const { kind: asked, id } = request.params as { kind: string; id: string };
+    const kind = historyKindOf(asked);
+    const item = kind === undefined ? undefined : await historyItem(request, kind, id);
+    if (kind === undefined || item === undefined) return reply.code(404).send(NO_HISTORY);
+    const kept = await versions!.list(kind, id);
+    return {
+      current: item.current,
+      versions: kept.map((each) => ({
+        version: each.version,
+        at: each.at,
+        title: each.title,
+        author: each.author,
+        approver: each.approver,
+        description: each.description,
+        proposalId: each.proposalId,
+        // The item's own version; or, where a rename or move has moved it on
+        // since without a version (AC-291), the newest kept (T354's review).
+        current:
+          each.version === item.current ||
+          (each === kept[0] && !kept.some((one) => one.version === item.current)),
+      })),
+    };
+  });
+
+  app.get('/api/history/:kind/:id/versions/:version', USER, async (request, reply) => {
+    const {
+      kind: asked,
+      id,
+      version,
+    } = request.params as {
+      kind: string;
+      id: string;
+      version: string;
+    };
+    const kind = historyKindOf(asked);
+    const item = kind === undefined ? undefined : await historyItem(request, kind, id);
+    if (kind === undefined || item === undefined) return reply.code(404).send(NO_HISTORY);
+    const kept = /^\d{1,9}$/.test(version) ? await versions!.get(kind, id, Number(version)) : null;
+    if (kept === null) return reply.code(404).send({ error: 'There is no such version kept.' });
+    const content = kept.content as { body?: Record<string, unknown>; parts?: unknown };
+    return {
+      version: kept.version,
+      at: kept.at,
+      title: kept.title,
+      author: kept.author,
+      approver: kept.approver,
+      description: kept.description,
+      current: kept.version === item.current,
+      // A data source's settings, each credential only named (rule 83).
+      content:
+        kind === 'data-source'
+          ? {
+              body: {
+                ...Object.fromEntries(
+                  ['name', 'driver', 'authMethod', 'fields', 'description']
+                    .filter((key) => content.body !== undefined && key in content.body)
+                    .map((key) => [key, content.body![key]]),
+                ),
+                secrets: Object.keys(
+                  (content.body?.['sealed'] as Record<string, unknown> | undefined) ?? {},
+                ),
+              },
+            }
+          : { body: content.body ?? {}, parts: content.parts ?? [] },
+    };
+  });
+
+  /**
+   * Restoring a version (T354, AC-289; design 06, state C): a draft of it in
+   * the user's workspace, copied from the item as it is now, so the usual
+   * proposal replaces the item with it. Nothing in the folder changes until
+   * that proposal is approved. A dashboard's own charts come back as they
+   * were; a library chart it showed is the folder's, as it is now.
+   */
+  app.post('/api/history/:kind/:id/restore', USER, async (request, reply) => {
+    const { kind: asked, id } = request.params as { kind: string; id: string };
+    const kind = historyKindOf(asked);
+    const item = kind === undefined ? undefined : await historyItem(request, kind, id);
+    if (kind === undefined || item === undefined) return reply.code(404).send(NO_HISTORY);
+    const number = (request.body as { version?: unknown } | undefined)?.version;
+    if (typeof number !== 'number' || !Number.isInteger(number) || number < 1)
+      throw new BadRequest('Name the version to restore: { version }.');
+    if (kind === 'data-source')
+      throw new BadRequest(
+        'A data source’s connection is restored by entering it again in your workspace, where it is tested.',
+      );
+    const kept = await versions!.get(kind, id, number);
+    if (kept === null) return reply.code(404).send({ error: 'There is no such version kept.' });
+    if (!docs?.get || !docs.createTogether || !docs.withOrigin)
+      return reply.code(404).send(NO_HISTORY);
+    const own = workspaceIdOf(userOf(request).key);
+    if (!item.seen.rights.has(own))
+      return reply.code(403).send({
+        error: 'You have no workspace: only read-write members and Super-Admins have one.',
+      });
+    const mine = [own, ...(await foldersBeneath(own)).map((folder) => folder.id)];
+    const content = kept.content as {
+      body: Record<string, unknown>;
+      parts?: readonly { readonly id: string; readonly body: Record<string, unknown> }[];
+    };
+    // That version's content, copied from the item as it is now, under its
+    // name now: a name changes at once, never by proposal (AC-291), and the
+    // proposal replaces the item of its name (AC-288).
+    const asNow = {
+      id,
+      body: { ...content.body, folderId: item.folderId, title: item.title },
+      version: item.current,
+    };
+    const owner = userOf(request).key;
+    let copies;
+    if (kind === 'dashboard') {
+      const parts = new Map((content.parts ?? []).map((part) => [part.id, part.body]));
+      const shown: ShownCopy[] = [];
+      for (const chartId of chartIdsOf(content.body)) {
+        const part = parts.get(chartId);
+        if (part !== undefined) {
+          shown.push({ as: 'local', chart: { id: chartId, body: part }, folderSeen: true });
+          continue;
+        }
+        // A library chart: the folder's as it is now, or the user's copy of
+        // it; one they can't open refuses the restore, as a copy is refused
+        // (T354's review), so no draft shows what isn't theirs to see.
+        const found = await docs.get('chart', chartId).catch(() => null);
+        if (found == null) continue;
+        if (!(await mayOpen(item.seen, 'chart', found)))
+          return reply.code(409).send({
+            error:
+              'That version shows a chart you can’t open, so it can’t be restored into your workspace.',
+          });
+        const reused = (await docs.withOrigin('chart', found.id, mine))[0];
+        if (reused !== undefined) shown.push({ as: 'reuse', chart: found, copyId: reused.id });
+      }
+      copies = dashboardCopies(asNow, shown, own, owner, () => randomUUID());
+    } else copies = [chartCopy(asNow, own, owner, () => randomUUID())];
+
+    // The user's copy of it, which the draft replaces (T354's review): only
+    // when asked, since what it holds goes, and never while it waits for
+    // review.
+    const existing = (await docs.withOrigin(kind, id, mine))[0];
+    if (existing !== undefined) {
+      if ((await proposals?.openFor(kind, existing.id)) != null)
+        return reply.code(409).send({
+          error:
+            'Your copy of it is waiting for review: decide or withdraw that proposal before restoring another version.',
+          id: existing.id,
+          replaceable: false,
+        });
+      if ((request.body as { replaceCopy?: unknown }).replaceCopy !== true)
+        return reply.code(409).send({
+          error:
+            'You have a copy of it in your workspace. Restoring this version replaces what that copy holds.',
+          id: existing.id,
+          replaceable: true,
+        });
+      if (!docs.remove) return reply.code(404).send(NO_HISTORY);
+      // A dashboard's own charts go with it.
+      if (kind === 'dashboard' && docs.localTo)
+        for (const chart of await docs.localTo(existing.id)) await docs.remove('chart', chart.id);
+      await docs.remove(kind, existing.id);
+    }
+    await docs.createTogether(copies);
+    // In the audit trail, in its folder (AC-294): what is restored, to which version.
+    await recordIn(
+      audit,
+      {
+        actor: actorOf(userOf(request)),
+        event: 'restore',
+        folderId: item.folderId,
+        item: { kind, id, title: typeof item.title === 'string' ? item.title : '' },
+        summary: `Restoring “${typeof item.title === 'string' ? item.title : ''}” to version ${String(number)}, as a draft to propose`,
+        details: { version: number, draftId: copies[0]!.id },
+      },
+      request.log,
+    );
+    return reply.code(201).send({ kind, id: copies[0]!.id });
   });
 
   /**

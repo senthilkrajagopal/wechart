@@ -11,6 +11,9 @@ import type { Database } from '../db/schema';
  */
 export type VersionKind = 'dashboard' | 'chart' | 'data-source';
 
+/** How many of an item's versions are kept, newest first (AC-289). */
+export const KEPT_VERSIONS = 10;
+
 type Person = { readonly key: string; readonly name: string };
 
 export interface ItemVersion {
@@ -84,6 +87,23 @@ export function versionStore(db: Kysely<Database>): VersionStore {
         })
         .onConflict((conflict) => conflict.columns(['kind', 'item_id', 'version']).doNothing())
         .execute();
+      // Only the last 10 are kept (T354, AC-289): the oldest go.
+      const tenth = await db
+        .selectFrom('item_versions')
+        .select('version')
+        .where('kind', '=', version.kind)
+        .where('item_id', '=', version.itemId)
+        .orderBy('version', 'desc')
+        .offset(KEPT_VERSIONS - 1)
+        .limit(1)
+        .executeTakeFirst();
+      if (tenth !== undefined)
+        await db
+          .deleteFrom('item_versions')
+          .where('kind', '=', version.kind)
+          .where('item_id', '=', version.itemId)
+          .where('version', '<', tenth.version)
+          .execute();
     },
 
     async list(kind, itemId) {

@@ -86,4 +86,27 @@ describe('the versions store (T352, AC-288)', () => {
     await store().keep({ ...entry, title: 'Second' });
     expect((await store().list('chart', one)).map((each) => each.title)).toEqual(['First']);
   });
+
+  it('keeps an item’s last 10 versions, and no older ones (T354, AC-289)', async () => {
+    const many = `many-${run}`;
+    for (let version = 1; version <= 12; version += 1)
+      await store().keep({
+        kind: 'dashboard',
+        itemId: many,
+        version,
+        content: { body: { title: `v${String(version)}` }, parts: [] },
+        folderId: 'sales',
+        title: `v${String(version)}`,
+        author: wren,
+        approver: ada,
+        description: null,
+        proposalId: null,
+      });
+    expect((await store().list('dashboard', many)).map((each) => each.version)).toEqual([
+      12, 11, 10, 9, 8, 7, 6, 5, 4, 3,
+    ]);
+    expect(await store().get('dashboard', many, 2)).toBeNull();
+    // Another item's are its own.
+    expect((await store().list('dashboard', item)).length).toBeGreaterThan(0);
+  });
 });

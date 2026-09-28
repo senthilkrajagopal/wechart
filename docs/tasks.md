@@ -5900,10 +5900,29 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - the routes with sign-in off.
   - Failing test: `proposal-reject.test.ts`: rejecting leaves the folder unchanged and the work in the author's workspace, with the reason (at most 1,000 characters; 1,001 answer 400) shown on the item (AC-290).
   - Depends on: T351
-- [ ] T354 (AC-289) Keep each item's last 10 versions for read-write members and Super-Admins, and restore one only through a proposal
+- [x] T354 (AC-289) Keep each item's last 10 versions for read-write members and Super-Admins, and restore one only through a proposal
   - Files: `packages/api/src/repos/versions.ts`, `packages/api/src/routes/history.ts` (+ test)
   - Failing test: `history.test.ts`: after 12 approvals an item keeps its last 10 versions; a read-only user gets 404 on its history; "restore version 9" creates a proposal, and the folder is unchanged until it is approved (AC-289).
   - Depends on: T352
+  - *As built (2026-09-28; design 06's API):*
+    - **Kept versions:** `versions.keep` keeps an item's last 10 (`KEPT_VERSIONS`) and drops the older ones.
+    - **The routes are in `packages/api/src/server.ts`,** beside the workspace copies they reuse, not in `routes/history.ts`:
+      - `GET /api/history/:kind/:id`: the versions newest first, each with its number, time, title, author, approver, description, and whether it is current. Where a direct rename or move (AC-291) has moved the item on without a version, the newest kept is current.
+      - `GET …/versions/:n`: one version's content. A dashboard's comes with its own charts. A data source's gives its settings, with each credential only named.
+      - Both are for the folder's read-write members and Super-Admins of a shared item. Anyone else, a workspace item, a dashboard's own chart, or sign-in off gets `404`.
+    - **`POST …/restore { version, replaceCopy? }`** makes a draft of that version in the user's workspace, to propose like any change (the folder is unchanged until approved):
+      - The draft is copied from the item as it is now, at its current version, under its current name. The proposal therefore replaces the item (AC-288 replaces by name, and renames apply directly, AC-291).
+      - A dashboard's own charts come back as they were. A library chart it showed is the folder's as it is now, or the user's copy. One the user can't open refuses the restore with `409`.
+      - The user's existing copy of it: while it waits for review, `409` with `replaceable: false`. Otherwise `409` with `replaceable: true`, until the restore is asked with `replaceCopy`. The copy is then replaced, with its own charts.
+      - The restore is recorded in the audit trail: "Restoring “Revenue” to version 7, as a draft to propose" (AC-294).
+      - **A data source's version is not restored here (`400`).** Restoring its connection is a connection change, tested before it is proposed (design 06, state D; AC-158). That is T515's.
+    - Also files: `packages/api/src/repos/versions.test.ts`, `packages/api/src/routes/history.test.ts`.
+  - **Done 2026-09-28, after one review round (FAIL, fixed). AC-289 is ticked with T357's panel,** its real surface.
+  - **Review fixes:**
+    1. A restore could put a chart the user can't open into their draft. It now refuses, as a copy does.
+    2. A user who had a copy (for one, after its approval) could never restore. They now may replace the copy, being asked first, unless it waits for review.
+    3. Refusing a data source's restore was a quiet departure from design 06 (state D). It is now its own task, T515.
+    4. Tests added: a data source's version holds no envelope; a chart's restore; sign-in off; the newest current after a rename. The refusal test no longer depends on the one before it.
 - [x] T355 (AC-287) List the proposals each user may decide, with their number in the top bar
   - Files: `packages/web/src/workspaces/reviews/{ReviewsPage,ReviewsControl}.tsx` (+ tests), `packages/web/src/router/routes.tsx` (`/reviews`), `packages/api/src/routes/proposals.ts` (`GET /api/reviews`), `e2e/security/reviews.spec.ts`
   - Failing test: `reviews.spec.ts`: "To review" lists every open proposal the user may decide, each with item, folder, author and description, and none they may not; the top-bar count equals that list's length and is hidden at 0 (AC-287; rule 76).
@@ -9090,6 +9109,11 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - `ImportSources.test.tsx`: map or create per data source. Create asks for the secrets and saves only after a passing test (AC-163). A name the target has is refused until it is mapped or renamed (AC-282, design 13 state P). Mapping to a different driver warns with both drivers named, without blocking (AC-361).
     - The imported models bind to the one chosen (AC-358), once models import (T347).
   - Depends on: T513
+- [ ] T515 (AC-289, AC-158) Restore a data source's version through a proposal, its connection tested first *(added 2026-09-28, from T354's review; design 06, state D)*
+  - **Why.** Design 06 draws restoring an old version's connection as a connection change, whose proposal carries a test (AC-158). T354 restores dashboards and charts, and refuses a data source with `400`.
+  - Files: `packages/api/src/server.ts` (`…/restore` for `data-source`), `packages/api/src/routes/history.test.ts`, the History panel (T357)
+  - Failing test: `history.test.ts`: restoring a data source's version makes a draft of it in the workspace, its settings as that version had them and its credentials as sealed, which can be proposed only after a passing test (AC-158); the folder is unchanged until it is approved (AC-289).
+  - Depends on: T354, T357
 
 ## Phase 2 coverage: acceptance criterion → task
 
@@ -9121,7 +9145,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 | AC-278 | T344, T348, T502 | AC-279 | T344 | AC-280 | T346, T347 |
 | AC-281 | T347 | AC-282 | T345, T347, T363 | AC-283 | T347 |
 | AC-284 | T349, T358 | AC-285 | T350 | AC-286 | T351 |
-| AC-287 | T355, T356 | AC-288 | T352, ~~T426~~ T451 | AC-289 | T354, T357 |
+| AC-287 | T355, T356 | AC-288 | T352, ~~T426~~ T451 | AC-289 | T354, T357, T515 |
 | AC-290 | T353, T358 | AC-291 | T329, ~~T426~~ T451 | AC-292 | T366 |
 | AC-293 | T367 | AC-294 | T368, T505 | AC-295 | T369 |
 | AC-353 | T506, T509 | AC-096 | T507 | | |
