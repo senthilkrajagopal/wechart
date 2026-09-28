@@ -7009,7 +7009,7 @@ The IDs T424, T434 and T439 are unused; no task carries them.
 
 Most tests here run against a **stub xcube** (`packages/api/src/xcube/fake.ts`), a server that records every call and answers as the contract says. Each slice's end-to-end test runs against compose's Cube once it runs xcube's slice.
 
-Slice 7 is optional in the plan and has no criterion, so it has no task. It would use Cube's own answers in place of the rules wechart re-implements. The plan's runbook (slice 8) has no criterion either; either can be proposed as a spec change when the user wants it.
+Slice 7 is optional in the plan and has no criterion, so it has no task. It would use Cube's own answers in place of the rules wechart re-implements. *(2026-09-28, R39: deferred past phase 2, with aliasing a file-set model's JavaScript, Jinja and Python cubes on a changed target; `docs/phase-2/backlog.md` §7.)* The plan's runbook (slice 8) has no criterion either; either can be proposed as a spec change when the user wants it.
 
 ### Slice 2: foundation
 

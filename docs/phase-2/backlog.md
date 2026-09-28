@@ -285,3 +285,12 @@ R37 asks for both UI reviews' designs to be built, with the 2026-09-27 ones winn
   - design 10 state D's cube picker (T475, AC-342);
   - design 10 pin 5's model link;
   - the "Open in Model" links of 2026-09-24 designs 02, 07 and 08.
+
+## 7. Deferred past phase 2 (R39, 2026-09-28)
+
+The user: these "will be deferred and not done in this phase". No task builds them, and requirements §P2.7 lists them as non-goals.
+
+- **xcube's slice 7.** The plan's optional slice: Cube's own answers in place of the rules wechart re-implements (`docs/tasks.md`, "Slice 7").
+- **JavaScript, Jinja and Python cubes on a changed target.** When a data source's target changes, xcube aliases only YAML cubes. A JavaScript, Jinja or Python cube in a file-set model keeps its alias, so its rollups renew only on their refresh keys. Its results are still its epoch's own (`~/Work/xcube-exchange/to-wechart/2026-09-28-0100-changed-in-place.md`).
+  - wechart isn't affected today: its models are items, and it publishes only YAML (AC-332, AC-335).
+  - It matters once dynamic models are brought in (requirements R6, deferred).

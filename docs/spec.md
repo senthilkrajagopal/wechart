@@ -1251,6 +1251,7 @@ Copied from [requirements.md §P2.7](./requirements.md):
 - ~~Sharding the model: designed for 100–200 model-bearing folders; sharding is a later add-on `[AD 9]`.~~ Superseded 2026-09-26 `[IP 4]`: modules split the compile, and nothing further is planned for scale.
 - Cube Store beyond one node `[AD 11]`.
 - Anything but wechart's server calling Cube or xcube, for now `[AD 10]`.
+- xcube's slice 7, and aliasing a file-set model's JavaScript, Jinja and Python cubes when their data source's target changes `[R39]`.
 
 Phase 1's non-goals still stand, except these, which phase 2 brings in:
 - users, groups, roles and SSO (F25–F26);

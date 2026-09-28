@@ -725,6 +725,7 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - ~~**Sharding the model.** Designed for 100–200 model-bearing folders; sharding is a later add-on `[AD 9]`.~~ **Superseded** `[IP 4]`: modules split the compile. Nothing further is planned for scale.
 - **Cube Store beyond one node** `[AD 11]`.
 - **Anything but wechart's server calling Cube or xcube**, for now `[AD 10]`.
+- **xcube's slice 7**, and **aliasing a file-set model's JavaScript, Jinja and Python cubes when their data source's target changes** `[R39]`.
 
 Phase 1's non-goals still stand, except two that phase 2 brings into scope:
 - **Users, groups, roles and SSO** (§P2.6 A–B).
@@ -841,6 +842,13 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: How should wechart decide that a dimension holds ISO-3 country codes? A: "Values, plus a model override (Recommended)"
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
+
+**R39 — xcube's slice 7, and JavaScript, Jinja and Python cubes on a changed target, deferred** (2026-09-28, the user, after Claude reported them still open)
+- The user: "requirements and functionality relating to "Lets defer this "Still open: Slice 7 stays deferred, and the file-set gap from before is unchanged: JavaScript, Jinja and Python cubes still aren't renamed when their target changes." it will not be done in this phase." will be deferred and not done in this phase"
+  - *Not done in phase 2, and no task builds them:*
+    - *xcube's slice 7, the plan's optional slice: Cube's own answers in place of the rules wechart re-implements.*
+    - *Aliasing a file-set model's JavaScript, Jinja and Python cubes when their data source's target changes (`to-wechart/2026-09-28-0100-changed-in-place.md`: such a cube keeps its alias, so its rollups renew only on their refresh keys).*
+  - *Neither touches what wechart serves: its models are items, and it publishes only YAML (AC-332, AC-335). Both are in `docs/phase-2/backlog.md` §7.*
 
 **R38 — a root item's names, and a data source changed in place** (2026-09-28, the user, asked when xcube `bc18f82c01` renamed every root cube on the stored `default`)
 - Claude asked: xcube's new image serves a moved data source from its new target by aliasing each cube by its connection's identity. That also renames the root's cubes and rebuilds their rollups once at upgrade, which breaks AC-328 ("root items keep their names, SQL and rollup tables; no rollup rebuilt"). Options: alias only after a change; accept identity aliases; keep AC-328 strictly.
