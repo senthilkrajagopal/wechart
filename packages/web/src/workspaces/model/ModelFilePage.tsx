@@ -871,7 +871,7 @@ function FileEditor({
                   onOpenMember={openIn('cubes', at)}
                   // Opened from Schedules on this cube's pre-aggregations (T160).
                   {...(openOn !== undefined && openOn.cube === value['name']
-                    ? { initialTab: openOn.tab }
+                    ? { initialTab: openOn.tab, initialMember: openOn.member }
                     : {})}
                   // Its rollups a publish was refused for, on their rows (T207, AC-189).
                   rollupProblems={refusedRollups.filter(
@@ -1151,6 +1151,8 @@ export function newFileOf(
 interface OpenOn {
   readonly cube: string;
   readonly tab: string;
+  /** A member of that tab to open, by name: Jobs' "Open in Model" (T469, UX-080). */
+  readonly member?: string | undefined;
 }
 
 export function ModelFilePage({

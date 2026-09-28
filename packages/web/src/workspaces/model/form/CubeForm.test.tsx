@@ -716,6 +716,57 @@ describe('editing a cube’s members', () => {
   });
 });
 
+/**
+ * T469, UX-080: Jobs' "Open in Model" opens a cube on its Pre-aggs tab with
+ * the pre-aggregation it came from open, not the General tab.
+ */
+describe('a cube opened on one of its members', () => {
+  it('opens on the tab asked, with that member open and the others closed', () => {
+    render(
+      <CubeForm
+        kind="cube"
+        value={{
+          ...ORDERS,
+          pre_aggregations: [
+            { name: 'main', type: 'rollup' },
+            { name: 'by_status_month', type: 'rollup' },
+          ],
+        }}
+        onChange={vi.fn()}
+        initialTab="pre_aggregations"
+        initialMember="by_status_month"
+      />,
+    );
+
+    const rows = screen.getAllByRole('group').filter((each) => each.tagName === 'DETAILS');
+    const open = rows.filter((each) => each.hasAttribute('open'));
+    expect(open).toHaveLength(1);
+    expect(open[0]?.querySelector('summary')?.textContent).toContain('by_status_month');
+  });
+
+  /** T469's review: once, as it first shows — not again on each return to the tab. */
+  it('opens it once: closed, and the tab left and come back to, it stays closed', async () => {
+    render(
+      <CubeForm
+        kind="cube"
+        value={{ ...ORDERS, pre_aggregations: [{ name: 'by_status_month', type: 'rollup' }] }}
+        onChange={vi.fn()}
+        initialTab="pre_aggregations"
+        initialMember="by_status_month"
+      />,
+    );
+    const member = () =>
+      screen.getAllByRole('group').find((each) => each.tagName === 'DETAILS') as HTMLElement;
+    await userEvent.click(member().querySelector('summary') as HTMLElement);
+    expect(member().hasAttribute('open')).toBe(false);
+
+    await userEvent.click(screen.getByRole('tab', { name: /^General/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /^Pre-aggs/ }));
+
+    expect(member().hasAttribute('open')).toBe(false);
+  });
+});
+
 describe('a view’s form', () => {
   it('has a labelled control for every key on a view', () => {
     render(<CubeForm kind="view" value={{ name: 'summary' }} onChange={vi.fn()} />);

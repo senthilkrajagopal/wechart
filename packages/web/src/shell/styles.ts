@@ -2058,9 +2058,9 @@ a.btn-primary.btn-sm { min-height: 24px; height: 24px; padding: 0 8px; }
 .folder-contents thead tr:first-child > :last-child,
 .query-log thead tr:first-child > :last-child { border-top-right-radius: 5px; }
 .folder-contents tbody tr:last-child > :first-child,
-.query-log tbody tr:last-child > :first-child { border-bottom-left-radius: 5px; }
+.query-log tbody:last-of-type tr:last-child > :first-child { border-bottom-left-radius: 5px; }
 .folder-contents tbody tr:last-child > :last-child,
-.query-log tbody tr:last-child > :last-child { border-bottom-right-radius: 5px; }
+.query-log tbody:last-of-type tr:last-child > :last-child { border-bottom-right-radius: 5px; }
 .folder-contents tbody td,
 .folder-contents tbody th,
 .query-log tbody td,
@@ -2068,7 +2068,17 @@ a.btn-primary.btn-sm { min-height: 24px; height: 24px; padding: 0 8px; }
 .query-log tbody td,
 .query-log tbody th { height: 34px; }
 .folder-contents tbody tr:last-child > *,
-.query-log tbody tr:last-child > * { border-bottom: 0; }
+.query-log tbody:last-of-type tr:last-child > * { border-bottom: 0; }
+/* The query log by day (T469, UX-082): each day's heading a band across the
+   table, as its header is, and its caption at the table's start. */
+.query-log caption { caption-side: top; text-align: left; padding: 0 0 6px; }
+.query-log tbody tr.query-log__day > th {
+  height: 28px;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-secondary);
+  font-weight: var(--wc-text-xs-strong-weight);
+}
+.query-log summary code { font-family: var(--wc-font-code); }
 
 .folder-contents th,
 .folder-contents td,
@@ -2909,15 +2919,10 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 /* Its header: the title, then Cube's health and the refresh worker's (T162). */
 .jobs-workspace__head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
 .jobs-health { display: flex; flex-wrap: wrap; gap: 12px; }
-/* The list beside the prototype's docked 400 px pane (AC-228): the pane runs
-   the window's height below the app bar, stays put while the list scrolls,
-   and scrolls on its own. */
-.build-panel {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 400px;
-  gap: 16px;
-  align-items: start;
-}
+/* The list beside the prototype's docked 400 px pane (AC-228), which is
+   placed below (T469, UX-081): it runs the window's height under the app bar,
+   stays put while the list scrolls, and scrolls on its own. */
+.build-panel { display: grid; gap: 16px; align-items: start; }
 .build-panel__list { display: grid; gap: 12px; min-width: 0; }
 .build-panel__row { cursor: pointer; }
 /* A folder's rollup, under its short name: its folder (T371; §P2.6 D). */
@@ -2942,6 +2947,30 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
   background: var(--wc-bg-surface);
 }
 .admin-pane__empty { margin: 0; color: var(--wc-text-secondary); }
+/* Jobs' pane docked as the prototype's (T469, UX-081): under the app bar at
+   the window's right edge, its full height, 400 px, with the list beside it
+   rather than under it; its 44 px head holds the pre-aggregation's name. */
+.build-panel { grid-template-columns: minmax(0, 1fr); }
+.jobs-workspace:has(> [role='tabpanel']:not([hidden]) .build-panel) { margin-right: 400px; }
+.build-panel > .admin-pane {
+  position: fixed;
+  top: var(--wc-app-bar-height);
+  right: 0;
+  bottom: 0;
+  width: 400px;
+  height: auto;
+  padding: 0 16px 16px;
+}
+.build-panel > .admin-pane > .admin-pane__empty { padding-top: 12px; }
+.admin-pane__head {
+  display: flex;
+  align-items: center;
+  /* At least, as the prototype's: a long name wraps, and the head grows. */
+  min-height: 44px;
+  margin: 0 -16px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
 /* The query log (AC-230): the prototype's filter row of small selects, a
    header kept in view under the app bar while the rows scroll, and a pager. */
 /* One column as wide as the page leaves it, not as its table (T396, AC-304). */
@@ -3221,6 +3250,9 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 @media (max-width: 1000px) {
   .build-panel { grid-template-columns: minmax(0, 1fr); }
   .admin-pane { position: static; height: auto; border-left: 0; }
+  /* Narrow, Jobs' pane is under its list, not docked beside it. */
+  .jobs-workspace:has(> [role='tabpanel']:not([hidden]) .build-panel) { margin-right: 0; }
+  .build-panel > .admin-pane { position: static; width: auto; }
 }
 .build-panel__head { margin: 0; font-size: var(--wc-text-sm-size); line-height: var(--wc-text-sm-line); font-weight: 600; }
 .build-panel__builds,

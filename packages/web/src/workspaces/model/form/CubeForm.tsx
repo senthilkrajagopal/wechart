@@ -46,10 +46,16 @@ export function CubeForm({
   readOnly = false,
   rollupProblems = [],
   initialTab,
+  initialMember,
   onOpenMember,
   banner,
   addingOn,
 }: {
+  /**
+   * With `initialTab`, the member of that tab to open, by name: Jobs' "Open
+   * in Model" opens the pre-aggregation it came from (T469, UX-080).
+   */
+  initialMember?: string | undefined;
   kind: 'cube' | 'view';
   /**
    * A list tab that opens with a new member ready and not yet written — a
@@ -93,6 +99,8 @@ export function CubeForm({
   });
   /** The new member offered once only: back on the tab later, the list as it is. */
   const [offered, setOffered] = useState(addingOn !== undefined);
+  /** The member asked for opened once only, likewise (T469's review). */
+  const [memberPending, setMemberPending] = useState(initialMember !== undefined);
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const base = useId();
   const name = typeof value['name'] === 'string' ? value['name'] : kind;
@@ -132,6 +140,7 @@ export function CubeForm({
               // Another tab: no member of this one is open in view.
               if (key !== open) onOpenMember?.(key, null);
               if (key !== open) setOffered(false);
+              if (key !== open) setMemberPending(false);
               setOpen(key);
             }}
             onKeyDown={(event) => {
@@ -142,6 +151,7 @@ export function CubeForm({
               const next = (index + step + tabs.length) % tabs.length;
               onOpenMember?.(tabs[next]?.[0] ?? 'general', null);
               setOffered(false);
+              setMemberPending(false);
               setOpen(tabs[next]?.[0] ?? 'general');
               refs.current[next]?.focus();
             }}
@@ -193,6 +203,8 @@ export function CubeForm({
                 key={open}
                 // Opened with a new member ready, once, as it first shows (T493).
                 addOnOpen={offered && open === addingOn}
+                // Opened on a member, on the tab it was asked on, once (T469).
+                openFirst={memberPending && open === initialTab ? initialMember : undefined}
                 // A view's cubes, none yet: what that means (MW-19).
                 emptyNote={
                   kind === 'view' && open === 'cubes'

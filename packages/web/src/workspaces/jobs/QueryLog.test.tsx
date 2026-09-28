@@ -27,7 +27,8 @@ describe('query log in Jobs (AC-016)', () => {
   it('shows the duration and the acceleration of each record', () => {
     render(<QueryLog records={[record()]} />);
 
-    const row = screen.getAllByRole('row')[1]!;
+    // The record's row, under its day's heading (T469).
+    const row = screen.getByTestId('query-row');
     expect(within(row).getByTestId('duration-1').textContent).toBe('412 ms');
     expect(row.textContent).toContain('orders.main');
   });
@@ -35,7 +36,7 @@ describe('query log in Jobs (AC-016)', () => {
   it('shows a non-accelerated query as live', () => {
     render(<QueryLog records={[record({ accelerated: false, preAggregation: null })]} />);
 
-    expect(screen.getAllByRole('row')[1]?.textContent).toContain('Live');
+    expect(screen.getByTestId('query-row').textContent).toContain('Live');
   });
 
   it('reveals the query that was issued', () => {
@@ -47,7 +48,7 @@ describe('query log in Jobs (AC-016)', () => {
   it('lists a failed query with its message', () => {
     render(<QueryLog records={[record({ error: "Can't find join path", durationMs: 4300 })]} />);
 
-    const row = screen.getAllByRole('row')[1]!;
+    const row = screen.getByTestId('query-row');
     expect(row.textContent).toContain("Can't find join path");
     expect(within(row).getByTestId('duration-1').textContent).toBe('4.3 s');
   });
@@ -84,8 +85,73 @@ describe('query log in Jobs (AC-016)', () => {
   it('renders one row per record', () => {
     render(<QueryLog records={[record({ id: 1 }), record({ id: 2 }), record({ id: 3 })]} />);
 
-    // Header row plus three.
-    expect(screen.getAllByRole('row')).toHaveLength(4);
+    // Three, under their day's heading (T469).
+    expect(screen.getAllByTestId('query-row')).toHaveLength(3);
+  });
+});
+
+/**
+ * T469, UX-082 (the phase-1 re-check): every row read "9/27/2026, 3:59:16
+ * AM", the caption was centred, and members were internal ids. Rows are
+ * grouped by day, each at its time; members are named by their titles.
+ */
+describe('the query log by day, its members by title (T469, UX-082)', () => {
+  const now = new Date(2026, 8, 28, 12, 0, 0);
+  const at = (day: number, hours: number, minutes: number, seconds: number) =>
+    new Date(2026, 8, day, hours, minutes, seconds).toISOString();
+  const byDay = [
+    record({ id: 1, createdAt: at(28, 3, 59, 16) }),
+    record({ id: 2, createdAt: at(28, 1, 2, 3) }),
+    record({ id: 3, createdAt: at(27, 23, 0, 0) }),
+    record({ id: 4, createdAt: at(24, 9, 30, 5) }),
+  ];
+
+  it('groups the rows under a heading for each day, each row at its time', () => {
+    render(<QueryLog records={byDay} now={now} />);
+
+    const days = screen.getAllByRole('rowgroup').filter((group) => group.tagName === 'TBODY');
+    expect(days.map((group) => within(group).getAllByRole('rowheader')[0]?.textContent)).toEqual([
+      'Today',
+      'Yesterday',
+      'Sep 24, 2026',
+    ]);
+    expect(within(days[0]!).getAllByTestId('query-row')).toHaveLength(2);
+    expect(
+      screen.getAllByTestId('query-row').map((row) => row.querySelector('time')?.textContent),
+    ).toEqual(['03:59:16', '01:02:03', '23:00:00', '09:30:05']);
+    // The exact moment, for a machine and as a tooltip.
+    const first = screen.getAllByTestId('query-row')[0]?.querySelector('time');
+    expect(first?.getAttribute('dateTime')).toBe(byDay[0]?.createdAt);
+    expect(first?.getAttribute('title')).toBe(new Date(byDay[0]!.createdAt).toString());
+  });
+
+  it('says each row’s day with its time when sorted by duration, days then being mixed', () => {
+    render(
+      <QueryLog
+        records={byDay}
+        now={now}
+        ask={{ ...FIRST_ASK, sort: 'duration', descending: true }}
+      />,
+    );
+
+    expect(screen.queryAllByRole('rowheader')).toHaveLength(0);
+    expect(
+      screen.getAllByTestId('query-row').map((row) => row.querySelector('time')?.textContent),
+    ).toEqual(['Today 03:59:16', 'Today 01:02:03', 'Yesterday 23:00:00', 'Sep 24, 2026 09:30:05']);
+  });
+
+  it('names members by their titles, and one without a title by its name, as code', () => {
+    render(
+      <QueryLog
+        records={[record({ query: { measures: ['orders.count'], dimensions: ['orders.gone'] } })]}
+        now={now}
+        titleOf={(member) => (member === 'orders.count' ? 'Orders Count' : undefined)}
+      />,
+    );
+
+    const summary = screen.getByTestId('query-row').querySelector('summary')!;
+    expect(summary.textContent).toBe('Orders Count, orders.gone');
+    expect(summary.querySelector('code')?.textContent).toBe('orders.gone');
   });
 });
 
@@ -101,7 +167,8 @@ describe('narrowing, sorting and paging the query log (AC-230)', () => {
   const secondPage = Array.from({ length: QUERY_LOG_PAGE }, (_, index) =>
     record({ id: 26 + index, durationMs: 100 + index }),
   );
-  const bodyRows = () => screen.getAllByRole('row').slice(1);
+  // The records' rows, not the days' headings (T469).
+  const bodyRows = () => screen.getAllByTestId('query-row');
 
   it('renders the page it is given, and says which of how many in the whole log', () => {
     render(<QueryLog records={secondPage} total={60} ask={{ ...FIRST_ASK, page: 1 }} />);

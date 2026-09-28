@@ -35,6 +35,8 @@ function api(states: string[], tokens: string[], leftOut: string[] = []) {
       // A page of the query log, as the API answers one (T240).
       if (url.startsWith('/api/jobs/queries/page'))
         return new Response(JSON.stringify({ records: [], total: 0 }));
+      // The query log's titles (T469), answered and not counted.
+      if (url === '/api/meta') return Response.json({ cubes: [] });
       // The Jobs header's own ask (T162), answered and not counted.
       if (url === '/api/cube-health')
         return new Response(JSON.stringify({ cube: 'healthy', worker: 'healthy' }));
@@ -186,6 +188,65 @@ describe('building a pre-aggregation', () => {
     const row = (await screen.findByRole('cell', { name: 'monthly_orders.by_status_month' }))
       .parentElement as HTMLElement;
     expect(row.getAttribute('aria-selected')).toBe('true');
+  });
+
+  /**
+   * T469, UX-080/UX-081 (the phase-1 re-check): the pane is headed by its
+   * name, its actions are small, and "Open in Model" opens the file on its
+   * Pre-aggs tab with this pre-aggregation open — by the cube's name as its
+   * file declares it, a folder's by its short name.
+   */
+  it('heads the pane with its name; Open in Model deep-links to it in its file', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === '/api/preaggregations')
+          return Response.json([
+            {
+              id: 'monthly_orders.by_status_month',
+              type: 'rollup',
+              fileName: 'cubes/monthly_orders.yml',
+            },
+            {
+              id: 'fa1__sales.main',
+              folderId: 'a1',
+              shortName: 'sales',
+              folderPath: ['Shared', 'Sales'],
+              type: 'rollup',
+              fileName: 'cubes/sales.yml',
+            },
+          ]);
+        if (url === '/api/cube-scopes') return Response.json({ jobs: 'granted' });
+        return Response.json([]);
+      }),
+    );
+    render(
+      <QueryClientProvider client={client()}>
+        <BuildPanel pollMs={10} selectedFirst="monthly_orders.by_status_month" />
+      </QueryClientProvider>,
+    );
+    const pane = await screen.findByRole('complementary', { name: 'Pre-aggregation details' });
+    const head = await within(pane).findByTestId('pane-head');
+    expect(within(head).getByRole('heading', { level: 2 }).textContent).toBe(
+      'monthly_orders.by_status_month',
+    );
+    expect(within(pane).getByRole('link', { name: 'Open in Model' }).getAttribute('href')).toBe(
+      '/model/files/cubes%2Fmonthly_orders.yml?cube=monthly_orders&tab=pre_aggregations&member=by_status_month',
+    );
+    expect(within(pane).getByRole('button', { name: 'Build now' }).className).toContain('btn-sm');
+    // A button, not an underlined link, as the prototype's btn sm (T469's review).
+    expect(within(pane).getByRole('link', { name: 'Open in Model' }).className).toBe('btn btn-sm');
+    // Its name in the list goes to the same place (AC-229, and T469's review).
+    expect(screen.getAllByTestId('preagg-name').map((name) => name.getAttribute('href'))).toEqual([
+      '/model/files/cubes%2Fmonthly_orders.yml?cube=monthly_orders&tab=pre_aggregations&member=by_status_month',
+      '/model/files/cubes%2Fsales.yml?cube=sales&tab=pre_aggregations&member=main',
+    ]);
+
+    await userEvent.click(screen.getByTestId('preagg-folder').closest('tr') as HTMLElement);
+    expect(within(pane).getByRole('link', { name: 'Open in Model' }).getAttribute('href')).toBe(
+      '/model/files/cubes%2Fsales.yml?cube=sales&tab=pre_aggregations&member=main',
+    );
   });
 
   it('shows every token of a build, one per partition', async () => {

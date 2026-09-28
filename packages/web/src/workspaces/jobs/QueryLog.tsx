@@ -1,4 +1,4 @@
-import { useId, useRef } from 'react';
+import { Fragment, useId, useRef, type ReactNode } from 'react';
 
 import { Status } from './StateBadge';
 
@@ -75,13 +75,37 @@ export interface QueryLogProps {
   readonly total?: number;
   readonly ask?: QueryLogAsk;
   readonly onAsk?: (ask: QueryLogAsk) => void;
+  /** A member's title from the model (T469, UX-082; AC-220), where it has one. */
+  readonly titleOf?: ((member: string) => string | undefined) | undefined;
+  /** What "today" is measured from: the clock, but for a test. */
+  readonly now?: Date;
 }
+
+/** The start of a time's day, in the reader's own time zone. */
+const dayOf = (at: Date) => new Date(at.getFullYear(), at.getMonth(), at.getDate()).getTime();
+
+/**
+ * A day as the log heads it (T469, UX-082): "Today", "Yesterday", else its
+ * date, "Sep 24, 2026".
+ */
+function dayLabel(at: Date, now: Date): string {
+  const days = Math.round((dayOf(now) - dayOf(at)) / 86_400_000);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  return at.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+/** A time of day on one 24-hour clock, "03:59:16". */
+const clockOf = (at: Date) =>
+  at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
 export function QueryLog({
   records,
   total = records.length,
   ask = FIRST_ASK,
   onAsk = () => undefined,
+  titleOf = () => undefined,
+  now = new Date(),
 }: QueryLogProps) {
   const base = useId();
   const view = useRef<HTMLDivElement | null>(null);
@@ -177,49 +201,70 @@ export function QueryLog({
               <th scope="col">Outcome</th>
             </tr>
           </thead>
-          <tbody>
-            {records.map((record) => (
-              <tr key={record.id}>
-                <td>
-                  <time dateTime={record.createdAt}>
-                    {new Date(record.createdAt).toLocaleString()}
-                  </time>
-                </td>
-                <td>
-                  <details>
-                    <summary>{summarise(record.query)}</summary>
-                    <pre>{JSON.stringify(record.query, null, 2)}</pre>
-                  </details>
-                </td>
-                <td data-testid={`duration-${String(record.id)}`}>
-                  {formatDuration(record.durationMs)}
-                </td>
-                <td>
-                  {/* Icon plus label, never colour alone (direction.md rule 3). */}
-                  <span data-icon={record.accelerated ? 'accelerated' : 'live'} aria-hidden="true">
-                    {record.accelerated ? '⚡' : '●'}
-                  </span>{' '}
-                  {record.accelerated ? (record.preAggregation ?? 'Accelerated') : 'Live'}
-                </td>
-                <td className="query-log__outcome">
-                  {/* An icon and words either way (T158, AC-152). */}
-                  {record.error ? (
-                    <Status
-                      kind="err"
-                      label={`Failed: ${record.error}`}
-                      testId={`query-outcome-${String(record.id)}`}
-                    />
-                  ) : (
-                    <Status
-                      kind="ok"
-                      label="Succeeded"
-                      testId={`query-outcome-${String(record.id)}`}
-                    />
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
+          {/*
+            By day, newest or oldest first, under a heading for each (T469,
+            UX-082); sorted by duration, days mix, and each row says its own.
+          */}
+          {groupsOf(records, ask.sort === 'when', now).map(({ day, rows }) => (
+            <tbody key={day ?? 'all'}>
+              {day === undefined ? null : (
+                <tr className="query-log__day">
+                  <th scope="rowgroup" colSpan={5}>
+                    {day}
+                  </th>
+                </tr>
+              )}
+              {rows.map((record) => {
+                const when = new Date(record.createdAt);
+                return (
+                  <tr key={record.id} data-testid="query-row">
+                    <td>
+                      <time dateTime={record.createdAt} title={when.toString()}>
+                        {day === undefined
+                          ? `${dayLabel(when, now)} ${clockOf(when)}`
+                          : clockOf(when)}
+                      </time>
+                    </td>
+                    <td>
+                      <details>
+                        <summary>{summarise(record.query, titleOf)}</summary>
+                        <pre>{JSON.stringify(record.query, null, 2)}</pre>
+                      </details>
+                    </td>
+                    <td data-testid={`duration-${String(record.id)}`}>
+                      {formatDuration(record.durationMs)}
+                    </td>
+                    <td>
+                      {/* Icon plus label, never colour alone (direction.md rule 3). */}
+                      <span
+                        data-icon={record.accelerated ? 'accelerated' : 'live'}
+                        aria-hidden="true"
+                      >
+                        {record.accelerated ? '⚡' : '●'}
+                      </span>{' '}
+                      {record.accelerated ? (record.preAggregation ?? 'Accelerated') : 'Live'}
+                    </td>
+                    <td className="query-log__outcome">
+                      {/* An icon and words either way (T158, AC-152). */}
+                      {record.error ? (
+                        <Status
+                          kind="err"
+                          label={`Failed: ${record.error}`}
+                          testId={`query-outcome-${String(record.id)}`}
+                        />
+                      ) : (
+                        <Status
+                          kind="ok"
+                          label="Succeeded"
+                          testId={`query-outcome-${String(record.id)}`}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          ))}
         </table>
       )}
 
@@ -263,11 +308,45 @@ function arrowOf(ask: QueryLogAsk, key: SortKey): string {
   return ask.descending ? ' ↓' : ' ↑';
 }
 
-function summarise(query: Record<string, unknown>): string {
-  const measures = asNames(query['measures']);
-  const dimensions = asNames(query['dimensions']);
-  const parts = [...measures, ...dimensions];
-  return parts.length > 0 ? parts.join(', ') : 'Query';
+/**
+ * The records in day groups, each headed by its day, in the order given
+ * (T469, UX-082) — or, `byDay` off, one group with no heading.
+ */
+function groupsOf(
+  records: readonly QueryRecord[],
+  byDay: boolean,
+  now: Date,
+): { day: string | undefined; rows: QueryRecord[] }[] {
+  if (!byDay) return [{ day: undefined, rows: [...records] }];
+  const groups: { day: string | undefined; rows: QueryRecord[] }[] = [];
+  for (const record of records) {
+    const day = dayLabel(new Date(record.createdAt), now);
+    const last = groups.at(-1);
+    if (last?.day === day) last.rows.push(record);
+    else groups.push({ day, rows: [record] });
+  }
+  return groups;
+}
+
+/**
+ * What a query asked for, its members by their titles (T469, UX-082; AC-220);
+ * one the model gives no title, by its name, as code.
+ */
+function summarise(
+  query: Record<string, unknown>,
+  titleOf: (member: string) => string | undefined,
+): ReactNode {
+  const members = [...asNames(query['measures']), ...asNames(query['dimensions'])];
+  if (members.length === 0) return 'Query';
+  return members.map((member, at) => {
+    const title = titleOf(member);
+    return (
+      <Fragment key={member}>
+        {at === 0 ? null : ', '}
+        {title === undefined ? <code>{member}</code> : title}
+      </Fragment>
+    );
+  });
 }
 
 function asNames(value: unknown): string[] {

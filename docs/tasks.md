@@ -8525,6 +8525,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
   - Files: `packages/web/src/shell/SearchPalette.tsx`, `packages/web/src/workspaces/jobs/…` (+ tests), `e2e/consistency.spec.ts`
   - Failing test: `consistency.spec.ts`: the palette's field results and the query log name members by title, never by id (UX-102's parts AC-220 covers, UX-013, UX-082).
   - Depends on: T466
+  - *2026-09-28:* the query log's half is built with T469 (its members by title, an unknown one as code). The palette is still to do.
 - [x] T467 (AC-036, AC-039, AC-042, AC-187) Fix the chart bugs the re-check found
   - Files: `packages/charts/src/…`, `packages/web/src/editor/…` (+ tests)
   - Failing test:
@@ -8587,9 +8588,41 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
       - Nits: a misplaced test comment, a stale comment, dead CSS, and the Remove's width.
     - **Noted, not changed:**
       - AC-178's table view is now reachable from a tile in view mode only. While editing, the kind takes its place (UX-032). The criterion's Fails-when ("a chart type offers no table view") isn't triggered.
-- [ ] T469 (AC-149, AC-187) Jobs: a row click selects and never navigates, and the query log names members by title
+- [x] T469 (AC-149, AC-187) Jobs: a row click selects and never navigates, and the query log names members by title
   - Failing test: `jobs.spec.ts`: a row click selects it and docks its detail pane under the app bar; "Open in Model" deep-links to the file's pre-aggregation (UX-080, UX-081); the query log groups rows by day and names members by title (UX-082).
   - Depends on: none
+  - **As built:**
+    - `packages/web/src/workspaces/jobs/{BuildPanel,QueryLog,JobsPage}.tsx` (+ `BuildPanel.test.tsx`, `QueryLog.test.tsx`);
+    - `packages/web/src/workspaces/model/{ModelFilePage.tsx,form/CubeForm.tsx,form/ObjectForm.tsx}` (+ `CubeForm.test.tsx`);
+    - `packages/web/src/router/routes.tsx` and `packages/web/src/shell/styles.ts`;
+    - `e2e/jobs.spec.ts`, plus `e2e/shell.spec.ts`, whose row count follows the day headings.
+  - **Done 2026-09-28, but for one part of UX-080 (below).**
+    - **UX-081, the pane docked.** The detail pane is docked under the app bar at the window's right edge: 400 px wide, running to the window's foot, with the list beside it rather than under it. The prototype's pane head, at least 44 px, holds the pre-aggregation's name. Its actions are 24 px `btn btn-sm` buttons, "Open in Model" included, not an underlined link. Narrower than 1,000 px it sits under the list, as before.
+    - **UX-080, the deep link.** "Open in Model" opens the file on its cube's Pre-aggs tab with this pre-aggregation open and in view: `?cube=…&tab=pre_aggregations&member=…`. The cube is named as its file declares it, a folder's by its short name. The member is opened once, as the tab first shows; closed, it stays closed when the user comes back to the tab. A click anywhere on a row but its name selects it and stays in Jobs.
+    - **The name's link now lands there too,** not on the General tab ("opens the file with no tab"), so it still opens its definition in Model (AC-229).
+    - **UX-080's "the name is not a link" waits on the user.** It conflicts with AC-229 (ticked): "its name linking to its definition in Model", which fails when "the name does not open Model". The choice put to the user: (a) amend AC-229, so the way into Model is the pane's "Open in Model" (AC-228's "a way to open it in Model"), or (b) keep the link. Until then the name keeps its link, and a click on it goes to Model. So this task's title, "a row click … never navigates", holds for all of a row but its name.
+    - **UX-082, the query log.**
+      - Sorted by time, its rows are grouped under a heading for each day ("Today", "Yesterday", "Sep 24, 2026"), each at its time on one 24-hour clock ("03:59:16"), with the exact moment as the time's tooltip.
+      - Sorted by duration, days mix, so each row says its day with its time ("Yesterday 23:00:00").
+      - Each query's members are named by their titles from the model. One the model no longer has is shown by its name, as code.
+      - The caption sits at the table's start, left-aligned.
+    - **What the tests show.**
+      - `QueryLog.test.tsx`: the day headings, the times, the sort by duration, and titles with the code fallback.
+      - `BuildPanel.test.tsx`: the pane's head, the deep link for a root cube and a folder's, and `btn-sm`.
+      - `CubeForm.test.tsx`: opened on a tab and a member, that member alone is open.
+      - In Chrome, `jobs.spec.ts`:
+        - the pane is at y 48 and the window's right edge, 400 px wide and beside the list; its head is 44 px and "Build now" 24 px;
+        - a row click selects and stays on /jobs, and "Open in Model" lands on Pre-aggs with `by_status_month` open;
+        - the log shows day headings ("Today"), 24-hour times, titles ("Orders Count, Orders Status") and a left-aligned caption.
+    - **Tests changed to follow the day headings:** `QueryLog.test.tsx`, `jobs.spec.ts` (AC-230's page of 25) and `shell.spec.ts` (the log at 390 px) count the records' rows, not every `tbody tr`.
+    - **Not in this task:** the query log's times are its own. T477 is the one date and time format across the app.
+    - **Built here for T478:** the query log's members by title. T478's other half, the search palette, is still T478's.
+    - **The cold review (FAIL)** found these, all fixed and tested:
+      - "Open in Model" was still an underlined link. It is `btn btn-sm` now, 24 px with no underline, checked in Chrome.
+      - The name's link still opened the file on General. It uses the same deep link now, which `jobs.spec.ts`'s AC-229 test checks.
+      - The member re-opened on every return to Pre-aggs. It opens once (`CubeForm.test.tsx`).
+      - The pane head was a fixed 44 px, so a long name overflowed it. It is `min-height` now.
+      - Dead CSS, and the time's tooltip was untested (`QueryLog.test.tsx`).
 - [x] T470 (AC-187, AC-344) The Model editor's tab strip fits its pane
   - Failing test: `model-editor.spec.ts`: "Pre-aggs" and "Access" short labels and muted zero counts keep every tab in view at 1,440 px (UX-074).
   - Depends on: none

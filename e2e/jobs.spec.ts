@@ -172,9 +172,17 @@ test('each pre-aggregation’s row has its state, its trigger, and its name lead
   await expect(state).toHaveText('Done');
   await expect(state.locator('svg[data-icon="ok"]')).toHaveCount(1);
 
-  // Its name opens its definition in Model.
+  // Its name opens its definition in Model: the file, on this pre-aggregation
+  // (T469's review; UX-080's "opens the file with no tab").
   await row.getByRole('link', { name: ROLLUP }).click();
-  await expect(page).toHaveURL(/\/model\/files\/cubes%2Fmonthly_orders\.yml$/);
+  await expect(page).toHaveURL(
+    /\/model\/files\/cubes%2Fmonthly_orders\.yml\?cube=monthly_orders&tab=pre_aggregations&member=by_status_month$/,
+  );
+  await expect(
+    page
+      .getByRole('region', { name: 'Cube monthly_orders' })
+      .getByRole('tab', { name: /^Pre-aggs/ }),
+  ).toHaveAttribute('aria-selected', 'true');
 });
 
 test('selecting a pre-aggregation fills the full-height pane with its state, trigger, Build and Model link', async ({
@@ -195,9 +203,10 @@ test('selecting a pre-aggregation fills the full-height pane with its state, tri
   await expect(pane.getByRole('heading', { level: 2 })).toHaveText(ROLLUP);
   await expect(pane.getByTestId('pane-state')).toHaveText('Not built here');
   await expect(pane.locator('dd').nth(1)).toHaveText('Every 1 hour');
+  // Deep into Model: its file, on its cube's Pre-aggs tab, this one open (T469, UX-080).
   await expect(pane.getByRole('link', { name: 'Open in Model' })).toHaveAttribute(
     'href',
-    '/model/files/cubes%2Fmonthly_orders.yml',
+    '/model/files/cubes%2Fmonthly_orders.yml?cube=monthly_orders&tab=pre_aggregations&member=by_status_month',
   );
   // Full height: below the app bar, and down to the window's bottom — not past it.
   const box = await pane.boundingBox();
@@ -205,6 +214,21 @@ test('selecting a pre-aggregation fills the full-height pane with its state, tri
   const bottom = (box?.y ?? 0) + (box?.height ?? 0);
   expect(bottom).toBeGreaterThan(900 - 24);
   expect(bottom).toBeLessThanOrEqual(900);
+  // Docked (T469, UX-081): right under the app bar, at the window's right
+  // edge, 400 px, beside the list rather than over it, its head 44 px.
+  expect(box?.y).toBe(48);
+  expect((box?.x ?? 0) + (box?.width ?? 0)).toBe(1440);
+  expect(box?.width).toBe(400);
+  const list = await page.getByRole('table', { name: 'Pre-aggregations' }).boundingBox();
+  expect((list?.x ?? 0) + (list?.width ?? 0)).toBeLessThanOrEqual(box?.x ?? 0);
+  expect((await pane.getByTestId('pane-head').boundingBox())?.height).toBe(44);
+  // Its actions 24 px, the prototype's btn sm: "Open in Model" a button too,
+  // not an underlined link (T469's review).
+  expect((await pane.getByRole('button', { name: 'Build now' }).boundingBox())?.height).toBe(24);
+  const open = pane.getByRole('link', { name: 'Open in Model' });
+  expect((await open.boundingBox())?.height).toBe(24);
+  await expect(open).toHaveCSS('text-decoration-line', 'none');
+  await expect(open).toHaveCSS('border-top-style', 'solid');
 
   // Build now starts a build of it, followed in the pane (answered here, as above).
   await page.route('**/api/builds', (route) => route.fulfill({ json: { tokens: ['t-pane'] } }));
@@ -214,6 +238,73 @@ test('selecting a pre-aggregation fills the full-height pane with its state, tri
   await pane.getByRole('button', { name: 'Build now' }).click();
   await expect(pane.getByTestId('pane-state')).toHaveText('Done');
   await expect(pane.getByRole('list', { name: `Jobs building ${ROLLUP}` })).toContainText('t-pane');
+});
+
+/**
+ * T469, UX-080 (the phase-1 re-check): a click on a row, anywhere but its
+ * name, selects it and stays in Jobs; "Open in Model" opens its file on the
+ * cube's Pre-aggs tab with this pre-aggregation open. (The name keeps its
+ * link to Model while AC-229 says so; UX-080's plain name waits on the user.)
+ */
+test('a row click selects and stays; Open in Model lands on the pre-aggregation, open', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/jobs');
+  const row = page
+    .getByRole('table', { name: 'Pre-aggregations' })
+    .getByRole('row')
+    .filter({ hasText: ROLLUP });
+  await row.getByRole('cell').nth(2).click();
+  await expect(row).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL(/\/jobs$/);
+
+  const pane = page.getByRole('complementary', { name: 'Pre-aggregation details' });
+  await pane.getByRole('link', { name: 'Open in Model' }).click();
+  await expect(page).toHaveURL(/\/model\/files\/cubes%2Fmonthly_orders\.yml\?/);
+  const form = page.getByRole('region', { name: 'Cube monthly_orders' });
+  await expect(form.getByRole('tab', { name: /^Pre-aggs/ })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  const member = form
+    .locator('details.model-member')
+    .filter({ has: page.locator('summary', { hasText: 'by_status_month' }) });
+  await expect(member).toHaveAttribute('open', '');
+});
+
+/**
+ * T469, UX-082 (the phase-1 re-check): the query log's rows under a heading
+ * for each day, each at its time on one 24-hour clock, its caption at the
+ * table's start, and the members of each query by their titles.
+ */
+test('the query log is grouped by day, its members by title', async ({ page }) => {
+  const now = new Date();
+  const earlier = new Date(now.getTime() - 26 * 3_600_000);
+  const records = [now, earlier].map((at, index) => ({
+    id: index + 1,
+    requestId: `r-${String(index)}`,
+    query: { measures: ['orders.count'], dimensions: ['orders.status'] },
+    durationMs: 120,
+    accelerated: false,
+    preAggregation: null,
+    error: null,
+    createdAt: at.toISOString(),
+  }));
+  await page.route('**/api/jobs/queries/page*', (route) =>
+    route.fulfill({ json: { records, total: records.length } }),
+  );
+  await page.goto('/jobs?tab=queries');
+  const log = page.locator('table.query-log--sticky');
+  await expect(log.getByRole('rowheader').first()).toHaveText('Today');
+  await expect(log.getByRole('rowheader')).toHaveCount(2);
+  await expect(log.getByTestId('query-row').first().locator('time')).toHaveText(
+    /^\d{2}:\d{2}:\d{2}$/,
+  );
+  await expect(log.getByTestId('query-row').first().locator('summary')).toHaveText(
+    'Orders Count, Orders Status',
+  );
+  await expect(log.locator('caption')).toHaveCSS('text-align', 'left');
 });
 
 /**
@@ -264,7 +355,8 @@ test('the query log narrows, sorts and pages, its headers in view as it scrolls'
   await page.setViewportSize({ width: 1280, height: 600 });
   await page.goto('/jobs?tab=queries');
   const log = page.getByRole('table', { name: /Queries wechart has issued/ });
-  const rows = log.locator('tbody tr');
+  // The records' rows, not the days' headings among them (T469).
+  const rows = log.getByTestId('query-row');
   const range = page.getByTestId('query-log-range');
 
   // One page at a time, and the next.

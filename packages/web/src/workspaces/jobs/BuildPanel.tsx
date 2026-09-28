@@ -46,6 +46,19 @@ export function shownOf(row: {
 /** Where a pre-aggregation is defined, in the Model workspace (AC-229). */
 const modelHref = (fileName: string) => `/model/files/${encodeURIComponent(fileName)}`;
 
+/**
+ * The same file open on its cube's Pre-aggs tab with this pre-aggregation
+ * open (T469, UX-080): the cube by the name its file declares — a folder's by
+ * its short name, not its prefixed published one — and the member by its own.
+ */
+function memberHref(row: Buildable & { readonly fileName: string }): string {
+  const dot = row.id.lastIndexOf('.');
+  const cube = row.shortName ?? row.id.slice(0, dot);
+  const member = row.id.slice(dot + 1);
+  const search = new URLSearchParams({ cube, tab: 'pre_aggregations', member });
+  return `${modelHref(row.fileName)}?${search.toString()}`;
+}
+
 interface JobStatus {
   readonly token: string;
   readonly status: string;
@@ -305,11 +318,11 @@ export function BuildPanel({
                       }}
                     >
                       <td className="query-log__query">
-                        {/* Its definition, in Model (AC-229). */}
+                        {/* Its definition, in Model (AC-229), open on it (T469's review). */}
                         {fileName === undefined ? (
                           <span data-testid="preagg-name">{shownAs.name}</span>
                         ) : (
-                          <a href={modelHref(fileName)} data-testid="preagg-name">
+                          <a href={memberHref({ ...row, fileName })} data-testid="preagg-name">
                             {shownAs.name}
                           </a>
                         )}
@@ -352,31 +365,22 @@ export function BuildPanel({
         {start.isError ? <StateLine kind="err">{start.error.message}</StateLine> : null}
       </div>
 
-      {/* The prototype's docked pane (AC-228): the selected pre-aggregation. */}
-      <aside
-        className="admin-pane"
-        aria-label="Pre-aggregation details"
-        /**
-         * Held where it starts, and as tall as the window below that
-         * (T239's review): sized from the app bar alone, it ran past the
-         * window's bottom by the height of the title and tabs above it.
-         */
-        ref={(node) => {
-          if (node === null) return;
-          const box = node.getBoundingClientRect();
-          // Hidden behind the Queries tab it measures nothing: the default holds.
-          if (box.height === 0) return;
-          const top = box.top + window.scrollY;
-          node.style.setProperty('--pane-top', `${String(Math.round(top))}px`);
-        }}
-      >
+      {/*
+        The prototype's docked pane (AC-228): the selected pre-aggregation,
+        docked under the app bar at the window's right, its full height (T469,
+        UX-081; styles.ts).
+      */}
+      <aside className="admin-pane" aria-label="Pre-aggregation details">
         {shown === undefined ? (
           <p className="admin-pane__empty">
             Select a pre-aggregation to see its state, what rebuilds it, and to build it.
           </p>
         ) : (
           <>
-            <h2 className="admin-pane__title">{shownOf(shown).name}</h2>
+            {/* The prototype's 44 px pane head (T469, UX-081). */}
+            <div className="admin-pane__head" data-testid="pane-head">
+              <h2 className="admin-pane__title">{shownOf(shown).name}</h2>
+            </div>
             {/* Its folder, so /A's and /A/B's `sales.main` are told apart (T371's review). */}
             {shownOf(shown).folder === undefined ? null : (
               <p className="build-panel__folder" data-testid="pane-folder">
@@ -396,9 +400,10 @@ export function BuildPanel({
               <dd>{shown.partitionGranularity ?? 'none'}</dd>
             </dl>
             <div className="admin-pane__actions">
+              {/* 24 px actions, the prototype's btn sm (T469, UX-081). */}
               <button
                 type="button"
-                className="btn-primary"
+                className="btn-primary btn-sm"
                 disabled={start.isPending}
                 onClick={() => {
                   start.mutate(shown.id);
@@ -407,7 +412,9 @@ export function BuildPanel({
                 Build now
               </button>
               {shown.fileName === undefined ? null : (
-                <a href={modelHref(shown.fileName)}>Open in Model</a>
+                <a className="btn btn-sm" href={memberHref({ ...shown, fileName: shown.fileName })}>
+                  Open in Model
+                </a>
               )}
             </div>
             {shownBuilds.length === 0 ? null : (

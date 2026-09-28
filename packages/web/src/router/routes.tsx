@@ -603,19 +603,24 @@ const modelFileRoute = createRoute({
    */
   validateSearch: (
     search: Record<string, unknown>,
-  ): { cube?: string | undefined; tab?: string | undefined } => ({
+  ): { cube?: string | undefined; tab?: string | undefined; member?: string | undefined } => ({
     cube: typeof search['cube'] === 'string' && search['cube'] !== '' ? search['cube'] : undefined,
     tab: typeof search['tab'] === 'string' && search['tab'] !== '' ? search['tab'] : undefined,
+    // A member of that tab to open: Jobs' "Open in Model" (T469, UX-080).
+    member:
+      typeof search['member'] === 'string' && search['member'] !== ''
+        ? search['member']
+        : undefined,
   }),
   // A model file, open on its forms (T138, AC-132).
   component: function ModelFileSurface() {
     const params = useParams({ strict: false }) as { objectId?: string };
-    const { cube, tab } = modelFileRoute.useSearch();
+    const { cube, tab, member } = modelFileRoute.useSearch();
     return (
       <AppShell workspace="model">
         <ModelFilePage
           path={decodeURIComponent(params.objectId ?? '')}
-          {...(cube === undefined || tab === undefined ? {} : { openOn: { cube, tab } })}
+          {...(cube === undefined || tab === undefined ? {} : { openOn: { cube, tab, member } })}
         />
       </AppShell>
     );

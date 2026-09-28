@@ -162,7 +162,8 @@ test('at 390 pixels the query log fits the page, its header in view as the page 
   await page.setViewportSize({ width: 390, height: 600 });
   await page.goto('/jobs?tab=queries');
   const log = page.getByRole('table', { name: /Queries wechart has issued/ });
-  await expect(log.locator('tbody tr')).toHaveCount(25);
+  // The records' rows, not the days' headings among them (T469).
+  await expect(log.getByTestId('query-row')).toHaveCount(25);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));

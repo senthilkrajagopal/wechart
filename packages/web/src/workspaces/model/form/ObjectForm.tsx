@@ -1101,7 +1101,13 @@ export function MemberList({
   onOpenMember,
   emptyNote,
   addOnOpen = false,
+  openFirst,
 }: {
+  /**
+   * The member, by name, to open as the list first shows, brought into view:
+   * the one Jobs' "Open in Model" came from (T469, UX-080).
+   */
+  openFirst?: string | undefined;
   schema: ObjectSchema;
   items: readonly Value[];
   onChange: (next: Value[] | undefined) => void;
@@ -1147,6 +1153,17 @@ export function MemberList({
    */
   const rows = useRef<HTMLUListElement>(null);
   const addButton = useRef<HTMLButtonElement>(null);
+  // Once, as the list first shows: the member asked for, open and in view.
+  useEffect(() => {
+    if (openFirst === undefined) return;
+    const at = items.findIndex((item) => isPlain(item) && item['name'] === openFirst);
+    const details = rows.current?.children[at]?.querySelector('details');
+    if (details === null || details === undefined) return;
+    details.open = true;
+    details.scrollIntoView?.({ block: 'nearest' });
+    // Once, as the list opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const change = (next: Value[] | undefined, then: (list: HTMLUListElement) => void) => {
     const expected = next?.length ?? 0;
     flushSync(() => {

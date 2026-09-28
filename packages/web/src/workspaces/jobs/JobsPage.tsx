@@ -1,6 +1,8 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useId, useRef, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 
+import { titlesOf } from '../../editor/fields';
+import { META_QUERY } from '../../query/meta';
 import { StateLine } from '../../shell/StatusIcon';
 import { BuildPanel } from './BuildPanel';
 import { Health } from './Health';
@@ -19,6 +21,9 @@ type Tab = (typeof TABS)[number][0];
 
 function Queries() {
   const [ask, setAsk] = useState<QueryLogAsk>(FIRST_ASK);
+  // Members by their titles (T469, UX-082; AC-220).
+  const meta = useQuery(META_QUERY);
+  const titles = useMemo(() => titlesOf(meta.data), [meta.data]);
   // Refetched when opened again, so the queries a dashboard just issued are
   // there. A page, narrowed and sorted by the API over the whole log (AC-230);
   // the one before stays in view while the next is read.
@@ -44,7 +49,13 @@ function Queries() {
   if (found.isPending) return <StateLine kind="run">Reading the query log…</StateLine>;
   if (found.isError) return <StateLine kind="err">{found.error.message}</StateLine>;
   return (
-    <QueryLog records={found.data.records} total={found.data.total} ask={ask} onAsk={setAsk} />
+    <QueryLog
+      records={found.data.records}
+      total={found.data.total}
+      ask={ask}
+      onAsk={setAsk}
+      titleOf={(member) => (Object.hasOwn(titles, member) ? titles[member] : undefined)}
+    />
   );
 }
 
