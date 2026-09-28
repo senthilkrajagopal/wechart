@@ -8107,8 +8107,17 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - `model-design.spec.ts`: opening the visits draft, which joins the stores draft, names `cubes/chrome_stores.yml` beside Save. Saving publishes both in one publish, and both rows are then published.
     - `draftJoins.test.ts`: the unpublished files a file's cubes join, followed through the joins, and none for a join to a published cube.
   - Depends on: T485
-- [ ] T489 [P] (AC-347) "In model" on Generate cubes' Tables step
-  - Files: `packages/web/src/workspaces/model/GenerateCubes.tsx` (+ test), `e2e/generate-cubes.spec.ts`
+- [x] T489 [P] (AC-347) "In model" on Generate cubes' Tables step
+  - **Done 2026-09-27.** AC-347 is ticked. Tested in:
+    - `GenerateCubes.test.tsx`: "marks a table a cube already reads from as in the model, naming the cube" and "marks a table only for the cubes reading it in the chosen data source";
+    - `e2e/generate-cubes.spec.ts`: the seed's `public.orders` reads "In model · …" naming `orders` and `monthly_orders`, before generating.
+  - Under a table's name: "In model · orders, monthly_orders". The table's checkbox is described by it; its name stays the table's.
+  - **How a cube counts as reading a table** (`readersOf`):
+    - Only a cube's `sql_table` written `schema.table` counts. A cube defined by `sql`, an unqualified or three-part name, and a template's cubes (as `objectsOf` reads it) aren't read.
+    - It reads the table in its own data source: its `data_source`, or `default` without one. The mark is for the chosen source only (T489's review).
+    - An unquoted part matches whatever its case; a quoted one exactly (SQL's folding; T489's review, where the task said "unquoted and case-insensitive").
+  - Files (as built): `packages/web/src/workspaces/model/GenerateCubes.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/generate-cubes.spec.ts`
+  - Files (planned): `packages/web/src/workspaces/model/GenerateCubes.tsx` (+ test), `e2e/generate-cubes.spec.ts`
   - Failing test: `GenerateCubes.test.tsx` and `generate-cubes.spec.ts`:
     - `public.orders` shows "In model · orders";
     - `sql_table` is matched as `schema.table`, unquoted and case-insensitive;

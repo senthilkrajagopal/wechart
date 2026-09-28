@@ -223,6 +223,14 @@ test('a generated cube the model already has is marked, named, and refused, and 
   expect(before).toContain('name: orders');
 
   const { pane, tables } = await toTables(page, 'public', 'orders');
+  // Said before generating: the seed's `orders` cube reads this table (T489, AC-347).
+  const row = tables
+    .getByRole('row')
+    .filter({ has: page.getByRole('checkbox', { name: 'orders', exact: true }) });
+  // The seed's `monthly_orders` reads it too; other browsers' own cubes may.
+  await expect(row.locator('.generate-pane__in-model')).toHaveText(
+    /^In model · (?=.*\bmonthly_orders\b)(?=(?:.*, )?orders\b)/,
+  );
   await tables.getByRole('checkbox', { name: 'orders', exact: true }).check();
   await pane.getByRole('button', { name: 'Generate 1 cube' }).click();
 

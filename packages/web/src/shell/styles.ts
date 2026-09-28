@@ -2123,6 +2123,8 @@ main:has(.admin-page--docked) {
 .generate-pane__tables > tbody > tr.is-open > td { border-bottom: 0; background: var(--wc-bg-subtle); }
 .generate-pane__tables label { display: flex; gap: 10px; align-items: center; cursor: pointer; }
 .generate-pane__all { display: flex; gap: 10px; align-items: center; }
+/* "In model · orders" under a table's name (T489, AC-347): muted, 12 px. */
+.generate-pane__in-model { display: block; margin: 2px 0 0 24px; color: var(--wc-text-secondary); font-size: 12px; }
 .generate-pane__tables input[type='checkbox'] { accent-color: var(--wc-accent); }
 .model-workspace .generate-pane__peek {
   width: 24px;

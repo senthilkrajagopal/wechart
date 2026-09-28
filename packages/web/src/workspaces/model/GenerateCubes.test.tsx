@@ -610,6 +610,79 @@ describe('generating cubes from a data source (AC-139)', () => {
     expect(foot(dialog)).toEqual(['‹ Back', 'Cancel', 'Generate 1 cube *']);
   });
 
+  /**
+   * T489 / AC-347: a table a cube in the model already reads from, as its
+   * `sql_table`, is marked "In model" with that cube, before generating —
+   * matched as `schema.table`, unquoted and whatever its case.
+   */
+  it('marks a table a cube already reads from as in the model, naming the cube', async () => {
+    api();
+    const { dialog } = pane({
+      existing: [
+        {
+          // Unquoted, whatever its case; quoted, exactly.
+          path: 'cubes/stores.yml',
+          content: 'cubes:\n  - name: stores\n    sql_table: \'"generate".Chrome_Stores\'\n',
+        },
+        {
+          path: 'cubes/more.yml',
+          content:
+            'cubes:\n  - name: branches\n    sql_table: " GENERATE . chrome_stores "\n  - name: visits_sql\n    sql: SELECT * FROM generate.chrome_visits\n',
+        },
+        { path: 'views/v.yml', content: 'views:\n  - name: v\n' },
+      ],
+    });
+    const tables = await toTables(dialog);
+    const rowOf = (name: string) =>
+      within(tables).getByRole('checkbox', { name }).closest('tr') as HTMLElement;
+    const mark = rowOf('chrome_stores').querySelector('.generate-pane__in-model');
+    expect(mark?.textContent).toBe('In model · stores, branches');
+    // Said with its box, whose name stays the table's.
+    expect(
+      within(tables)
+        .getByRole('checkbox', { name: 'chrome_stores' })
+        .getAttribute('aria-describedby'),
+    ).toBe(mark?.id);
+    // A cube defined by its SQL isn't read for its table: only `sql_table` is.
+    expect(rowOf('chrome_visits').querySelector('.generate-pane__in-model')).toBeNull();
+  });
+
+  /** T489's review: a cube reads its table in its own data source, not in every one. */
+  it('marks a table only for the cubes reading it in the chosen data source', async () => {
+    api();
+    const { dialog } = pane({
+      existing: [
+        {
+          path: 'cubes/other.yml',
+          content:
+            'cubes:\n  - name: elsewhere\n    data_source: staging\n    sql_table: generate.chrome_stores\n',
+        },
+        {
+          // Quoted, a name is exact: another table than chrome_visits.
+          path: 'cubes/quoted.yml',
+          content: 'cubes:\n  - name: upper\n    sql_table: generate."Chrome_Visits"\n',
+        },
+        {
+          // A template's cubes are Cube's to render: not read here.
+          path: 'cubes/templated.yml',
+          content: 'cubes:\n  - name: t_{{ n }}\n    sql_table: generate.chrome_visits\n',
+        },
+        {
+          path: 'cubes/here.yml',
+          content:
+            'cubes:\n  - name: here\n    data_source: default\n    sql_table: generate.chrome_visits\n',
+        },
+      ],
+    });
+    const tables = await toTables(dialog);
+    const rowOf = (name: string) =>
+      within(tables).getByRole('checkbox', { name }).closest('tr') as HTMLElement;
+    expect(rowOf('chrome_stores').querySelector('.generate-pane__in-model')).toBeNull();
+    expect(rowOf('chrome_visits').querySelector('.generate-pane__in-model')?.textContent).toBe(
+      'In model · here',
+    );
+  });
+
   /** T491 / AC-349: the header's checkbox chooses or clears the page shown, and only it. */
   it('chooses every table on the page from the list’s header, mixed when some are', async () => {
     const asked = api();

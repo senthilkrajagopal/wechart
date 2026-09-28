@@ -856,7 +856,7 @@ Model workspace:
       Fails when: Cube's model changes as the cubes are added, or a generated file is missing from the tree or its row is not marked unpublished.
 - [ ] AC-346 WHEN the user saves an unpublished file whose cubes join a cube that only another unpublished file defines, THE SYSTEM SHALL publish those files with it in one publish, and name them beside Save before it is pressed (`[R36]`).
       Fails when: the file is sent alone and Cube refuses the join ("Cube … doesn't exist"), or a file published with it was not named beside Save.
-- [ ] AC-347 WHEN Generate cubes lists a table that a cube in the model already reads from as its `sql_table`, THE SYSTEM SHALL mark the table's row "In model", naming that cube, before anything is generated (`[R36]`, proposal 2 of design 11).
+- [x] AC-347 WHEN Generate cubes lists a table that a cube in the model already reads from as its `sql_table`, THE SYSTEM SHALL mark the table's row "In model", naming that cube, before anything is generated (`[R36]`, proposal 2 of design 11).
       Fails when: the seed's `public.orders`, which the `orders` cube reads, is listed without "In model" or without naming `orders`, or a table no cube reads is marked.
 - [ ] AC-348 WHEN Generate cubes lists the data sources to generate from, THE SYSTEM SHALL show beside each its health as Data sources shows it — its icon, its label and how long ago it was tested — or that it has not been tested (`[R36]`, proposal 3 of design 11).
       Fails when: a data source whose last test failed is listed without that state, or a listed health differs from the same data source's in Data sources.

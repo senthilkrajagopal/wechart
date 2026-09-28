@@ -5,6 +5,7 @@ import {
   useEffect,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -15,6 +16,7 @@ import { useFocusTrap } from '../../shell/useFocusTrap';
 import { DriverMark } from '../data-sources/driverMarks';
 import { objectsOf } from './objects';
 import { publishModel } from './publish';
+import { modelOf } from './sync';
 import { YamlEditor } from './YamlEditor';
 
 /**
@@ -231,6 +233,76 @@ interface Clash {
   readonly name?: string;
   readonly kind?: 'cube' | 'view';
 }
+
+/** A part of a table's name as `sql_table` writes it: quoted, it is exact; else not by case. */
+interface NamePart {
+  readonly text: string;
+  readonly quoted: boolean;
+}
+/** A cube that reads a table, from the data source it reads it in. */
+interface Reader {
+  readonly cube: string;
+  readonly source: string;
+  readonly schema: NamePart;
+  readonly table: NamePart;
+}
+
+const partOf = (raw: string): NamePart => {
+  const quoted = /^(["`])(.*)\1$/.exec(raw.trim());
+  return quoted === null
+    ? { text: raw.trim(), quoted: false }
+    : { text: quoted[2] ?? '', quoted: true };
+};
+/** A quoted part is the name exactly; an unquoted one, whatever its case (SQL's folding). */
+const names = (part: NamePart, listed: string) =>
+  part.quoted ? part.text === listed : part.text.toLowerCase() === listed.toLowerCase();
+
+/**
+ * The model's cubes and the tables they read (T489, AC-347; R36): only a
+ * cube's `sql_table` names one — a cube defined by its SQL isn't read for it —
+ * and only one written `schema.table`; in the data source it reads, its
+ * `data_source`, or `default` without one (research/cube/data-sources.md;
+ * T489's review). A template's cubes aren't read, as Cube renders them first
+ * (`objectsOf`). Not a predicted cube name: Cube's scaffolder names a cube by
+ * its whole batch (research/cube/introspection-api.md, "Cube names depend on
+ * the batch").
+ */
+function readersOf(
+  files: readonly { readonly path: string; readonly content: string }[],
+): Reader[] {
+  return files.flatMap((file) => {
+    if (objectsOf(file.path, file.content).code !== undefined) return [];
+    const cubes = modelOf(file.content).model?.cubes;
+    if (!Array.isArray(cubes)) return [];
+    return (cubes as unknown[]).flatMap((cube) => {
+      if (cube === null || typeof cube !== 'object') return [];
+      const { name, sql_table: table, data_source: source } = cube as Record<string, unknown>;
+      if (typeof name !== 'string' || typeof table !== 'string') return [];
+      const parts = table.split('.');
+      const [schema, own] = parts;
+      if (parts.length !== 2 || schema === undefined || own === undefined) return [];
+      return [
+        {
+          cube: name,
+          source: typeof source === 'string' ? source : 'default',
+          schema: partOf(schema),
+          table: partOf(own),
+        },
+      ];
+    });
+  });
+}
+
+/** The cubes that read a listed table of the chosen source. */
+const readersFor = (readers: readonly Reader[], source: string | null, table: TableRow) =>
+  readers
+    .filter(
+      (reader) =>
+        reader.source === source &&
+        names(reader.schema, table.schema) &&
+        names(reader.table, table.name),
+    )
+    .map((reader) => reader.cube);
 
 /**
  * Where generated files clash with the model's, by generated path (T276,
@@ -539,6 +611,11 @@ export function GenerateCubes({
         )
       : new Map<string, Clash[]>();
   const clashing = [...clashes.values()].reduce((sum, each) => sum + each.length, 0);
+  /**
+   * The model's cubes by the table each reads, before anything is generated
+   * (T489, AC-347): read once per model, not at each keystroke in the pane.
+   */
+  const readers = useMemo(() => readersOf(existing), [existing]);
   /** A generated file's status (design 11 pin 13). */
   const statusOf = (cube: Generated): 'ready' | 'clash' | 'check' =>
     (clashes.get(pathOf(cube)) ?? []).length > 0
@@ -1076,8 +1153,11 @@ export function GenerateCubes({
                         </tr>
                       </thead>
                       <tbody>
-                        {tables.value.tables.flatMap((table) => {
+                        {tables.value.tables.flatMap((table, at) => {
                           const open = peek !== null && keyOf(peek) === keyOf(table);
+                          // The cubes that read it, in this source (T489, AC-347), said with its box.
+                          const readBy = readersFor(readers, source, table);
+                          const readById = `${ids}-read-${String(at)}`;
                           const row = (
                             <tr key={keyOf(table)} className={open ? 'is-open' : undefined}>
                               <td>
@@ -1085,6 +1165,7 @@ export function GenerateCubes({
                                   <input
                                     type="checkbox"
                                     checked={chosen.has(keyOf(table))}
+                                    aria-describedby={readBy.length === 0 ? undefined : readById}
                                     onChange={(event) => {
                                       const next = new Map(chosen);
                                       if (event.target.checked) next.set(keyOf(table), table);
@@ -1094,6 +1175,12 @@ export function GenerateCubes({
                                   />
                                   <span className="is-code">{table.name}</span>
                                 </label>
+                                {/* A cube already reads it: said before generating (T489, AC-347). */}
+                                {readBy.length === 0 ? null : (
+                                  <span id={readById} className="generate-pane__in-model">
+                                    In model · {readBy.join(', ')}
+                                  </span>
+                                )}
                               </td>
                               <td>{typeName(table.type)}</td>
                               <td>
