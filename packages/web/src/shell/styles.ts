@@ -6506,6 +6506,19 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
 }
 /* Its menu, in the menu's own type rather than the pill's 600, one line an item. */
 .pill .menu-button__menu { font-weight: 400; white-space: nowrap; }
+/* A quick calculation that can't be applied (T381, AC-049): its name muted,
+   and why beneath it. At full strength rather than a disabled item's half
+   opacity, so the reason is read at AA contrast (AC-005). */
+.menu-button__item:has(.quick-calc__why) {
+  height: auto;
+  min-height: 28px;
+  padding-block: 4px;
+  opacity: 1;
+}
+.quick-calc__item { display: flex; flex-direction: column; gap: 2px; }
+.quick-calc__item > :first-child { color: var(--wc-text-muted); }
+/* Wrapped within the well's 240 px menu, never cut off (T381's review). */
+.quick-calc__why { color: var(--wc-text-secondary); white-space: normal; }
 .pill__remove {
   display: grid;
   place-items: center;

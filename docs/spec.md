@@ -222,13 +222,14 @@ Traces to: `[R7]`, `[R2]`, `[research/cube/data-modeling.md]`.
 
 > **Phase 2** (`[R16]`): these six return from the backlog. AC-050, AC-051 and
 > AC-052 now name the folder and the workspace, since the Model workspace is
-> gone (`[P2 input]`).
+> gone (`[P2 input]`). The status note above is phase 1's: AC-047 (T380) and
+> AC-049 (T381) are built and ticked, 2026-09-28.
 
 - [x] AC-047 WHEN the user opens the menu on a measure in the chart editor, THE SYSTEM SHALL offer % of total, difference from previous period, % difference from previous period, running total, rank and moving average.
       Fails when: any of the six is missing from the menu.
 - [ ] AC-048 WHEN a quick calculation is applied, THE SYSTEM SHALL compute it in Cube as a multi-stage measure rather than in the browser, and the tile SHALL label the measure with the calculation applied.
       Fails when: the value is computed from the already-fetched rows, or the label does not name the calculation.
-- [ ] AC-049 WHEN a quick calculation needs a time dimension and the chart has none, THE SYSTEM SHALL disable it and say which field is missing.
+- [x] AC-049 WHEN a quick calculation needs a time dimension and the chart has none, THE SYSTEM SHALL disable it and say which field is missing.
       Fails when: the calculation is offered and produces an error, or gives no reason when disabled.
 - [ ] AC-050 WHEN the user requests a calculation the menu cannot express, THE SYSTEM SHALL record a request carrying the chart, the fields in use and the user's description, and show it to the read-write members of the folder whose model defines the chart's cube.
       Fails when: the request is stored without the chart reference, or is not shown to that folder's read-write members.

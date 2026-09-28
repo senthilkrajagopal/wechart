@@ -518,6 +518,62 @@ describe('the menu on a measure pill (AC-047)', () => {
     );
     expect(screen.getByTestId('in-measures-orders.total_amount').textContent).toContain('sum');
   });
+
+  /**
+   * AC-049: WHEN a quick calculation needs a time dimension and the chart has
+   * none, THE SYSTEM SHALL disable it and say which field is missing.
+   * Fails when: the calculation is offered and produces an error, or gives no
+   * reason when disabled.
+   */
+  it('disables the calculations over time on a chart with no time field, naming the one to add (AC-049)', async () => {
+    const onCalculation = vi.fn();
+    render(
+      <Wells
+        spec={spec}
+        available={[measure, amount, timeDimension]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        onCalculation={onCalculation}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Calculations on Count' }));
+    for (const name of [
+      'Difference from previous period',
+      '% difference from previous period',
+      'Running total',
+      'Moving average, 3 periods',
+    ]) {
+      const item = screen.getByRole('menuitem', {
+        name,
+        description: 'Needs a time field in Time: add Ordered at.',
+      });
+      expect(item.getAttribute('aria-disabled')).toBe('true');
+      expect(item.textContent).toContain('Needs a time field in Time: add Ordered at.');
+    }
+    expect(
+      screen.getByRole('menuitem', { name: '% of total' }).getAttribute('aria-disabled'),
+    ).toBeNull();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Running total' }));
+    expect(onCalculation).not.toHaveBeenCalled();
+  });
+
+  it('offers them once the chart has a time field', async () => {
+    render(
+      <Wells
+        spec={{ ...spec, timeDimensions: ['orders.ordered_at'] }}
+        available={[measure, amount, timeDimension]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        onCalculation={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Calculations on Count' }));
+    expect(
+      screen.getByRole('menuitem', { name: 'Running total' }).getAttribute('aria-disabled'),
+    ).toBeNull();
+  });
 });
 
 /**

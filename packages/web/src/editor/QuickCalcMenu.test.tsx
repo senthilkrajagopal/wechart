@@ -105,6 +105,33 @@ describe('the menu on a measure (AC-047)', () => {
     expect(within(menu).queryByRole('menuitem', { name: 'No calculation' })).toBeNull();
   });
 
+  /** AC-049: disabled, with the reason said where it can be read. */
+  it('disables a calculation that can’t be applied, saying why, and applies nothing', async () => {
+    const onApply = vi.fn();
+    render(
+      <QuickCalcMenu
+        title="Count"
+        tag="count"
+        onApply={onApply}
+        whyNot={(kind) => (kind === 'runningTotal' ? 'Needs a time field in Time.' : undefined)}
+      />,
+    );
+    const menu = await open();
+    const item = within(menu).getByRole('menuitem', {
+      name: 'Running total',
+      description: 'Needs a time field in Time.',
+    });
+
+    expect(item.getAttribute('aria-disabled')).toBe('true');
+    expect(item.textContent).toContain('Needs a time field in Time.');
+    expect(item.getAttribute('title')).toBe('Needs a time field in Time.');
+    await userEvent.click(item);
+    expect(onApply).not.toHaveBeenCalled();
+
+    const rank = within(menu).getByRole('menuitem', { name: 'Rank' });
+    expect(rank.getAttribute('aria-disabled')).toBeNull();
+  });
+
   it('changes nothing when the one applied is chosen again', async () => {
     const onApply = menuFor({ kind: 'rank' });
     const menu = await open();

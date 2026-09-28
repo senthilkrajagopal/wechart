@@ -1,4 +1,11 @@
-import type { ChartFilter, ChartSpec, QuickCalc, TimeGranularity, WellName } from '@wechart/core';
+import type {
+  ChartFilter,
+  ChartSpec,
+  QuickCalc,
+  QuickCalcKind,
+  TimeGranularity,
+  WellName,
+} from '@wechart/core';
 import { useQuery } from '@tanstack/react-query';
 import { QUERY_GRANULARITY } from '@wechart/core';
 import { Fragment, useId, useState, type ReactNode } from 'react';
@@ -9,6 +16,7 @@ import { StateLine, StatusIcon } from '../shell/StatusIcon';
 import { FieldIcon } from './FieldList';
 import type { Member } from './fields';
 import { QuickCalcMenu } from './QuickCalcMenu';
+import { quickCalcUnavailable } from './quickCalcAvailability';
 
 /**
  * How many of a member's values a filter pill offers (a decision, T229):
@@ -206,6 +214,14 @@ export function Wells({
     fullTitleOf(name);
   const filters = spec.filters ?? [];
   const filterable = available.filter((member) => member.kind === 'dimension');
+  /**
+   * Why a quick calculation can't be applied here (AC-049): one over time, on
+   * a chart with no time field, names the time fields it could take.
+   */
+  const timeFields = available
+    .filter((member) => member.kind === 'timeDimension')
+    .map((member) => titleOf(member.name));
+  const whyNot = (kind: QuickCalcKind) => quickCalcUnavailable(kind, spec, timeFields);
   // Any dimension but the category the boxes are drawn by (T400).
   const pointWell =
     eachPointIs === undefined ? null : (
@@ -290,6 +306,7 @@ export function Wells({
                           tag={known?.aggType}
                           applied={spec.calculations?.[member]}
                           onApply={(calc) => onCalculation(member, calc)}
+                          whyNot={whyNot}
                           testId={`calcs-${member}`}
                         />
                       ) : known?.aggType === undefined ? null : (

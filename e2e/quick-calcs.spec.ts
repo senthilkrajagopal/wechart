@@ -5,8 +5,8 @@ import { wellPicker } from './wells';
 /**
  * Quick calculations (F6), in the chart editor as it is served.
  *
- * Every test opens the empty seed chart and never saves it, so the browsers
- * running at once share nothing they change.
+ * A test either opens the empty seed chart and never saves it, or saves a
+ * chart of its own, so the browsers running at once share nothing they change.
  */
 async function openEditorWithCount(page: Page) {
   await page.goto('/explore/charts/seed-chart-empty/edit');
@@ -84,5 +84,85 @@ test.describe('the menu on a measure (AC-047)', () => {
         .getByTestId('in-measures-orders.count')
         .getByRole('button', { name: 'Calculations on Count' }),
     ).toContainText('Rank');
+  });
+});
+
+/**
+ * AC-049: WHEN a quick calculation needs a time dimension and the chart has
+ * none, THE SYSTEM SHALL disable it and say which field is missing.
+ * Fails when: the calculation is offered and produces an error, or gives no
+ * reason when disabled.
+ */
+test.describe('a calculation over time on a chart with no time field (AC-049)', () => {
+  test('is disabled, naming the field to add, until one is added', async ({ page }) => {
+    await openEditorWithCount(page);
+    const pill = page.getByTestId('in-measures-orders.count');
+    const button = pill.getByRole('button', { name: 'Calculations on Count' });
+
+    await button.click();
+    const menu = page.getByRole('menu', { name: 'Calculations on Count' });
+    for (const name of [
+      'Difference from previous period',
+      '% difference from previous period',
+      'Running total',
+      'Moving average, 3 periods',
+      'Moving average, 6 periods',
+      'Moving average, 12 periods',
+    ]) {
+      const item = menu.getByRole('menuitem', { name, exact: true });
+      await expect(item).toHaveAttribute('aria-disabled', 'true');
+      // Said where it can be read, naming Orders' time field, and as its description.
+      await expect(item).toContainText('Needs a time field in Time: add Ordered at.');
+      await expect(item).toHaveAccessibleDescription('Needs a time field in Time: add Ordered at.');
+    }
+    for (const name of ['% of total', 'Rank']) {
+      await expect(menu.getByRole('menuitem', { name, exact: true })).not.toHaveAttribute(
+        'aria-disabled',
+      );
+    }
+    // Clicked anyway (past Playwright's own refusal to click a disabled
+    // item), it isn't applied.
+    await menu.getByRole('menuitem', { name: 'Running total', exact: true }).click({ force: true });
+    await expect(button).toContainText('count');
+    await expect(button).not.toContainText('Running total');
+
+    // With the time field in Time, it is offered, and applies.
+    await page.keyboard.press('Escape');
+    await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
+    await expect(page.getByTestId('in-timeDimensions-orders.ordered_at')).toBeVisible();
+    await button.click();
+    const running = menu.getByRole('menuitem', { name: 'Running total', exact: true });
+    await expect(running).not.toHaveAttribute('aria-disabled');
+    await running.click();
+    await expect(button).toContainText('Running total');
+  });
+
+  test('says so in full, inside the menu, when the cube has no time field (T381’s review)', async ({
+    page,
+  }) => {
+    await page.goto('/explore/charts/seed-chart-empty/edit');
+    await page.getByLabel('Cube or view').selectOption({ label: 'Products' });
+    await wellPicker(page, 'measures').selectOption('products.count');
+    await page
+      .getByTestId('in-measures-products.count')
+      .getByRole('button', { name: 'Calculations on Count' })
+      .click();
+    const menu = page.getByRole('menu', { name: 'Calculations on Count' });
+    const item = menu.getByRole('menuitem', { name: 'Running total', exact: true });
+    const reason = 'Needs a time field in Time, and this cube or view has none.';
+
+    await expect(item).toContainText(reason);
+    // Read to its end: the menu doesn't cut it off or scroll sideways to show it.
+    const fits = await menu.evaluate((element, text) => {
+      const why = [...element.querySelectorAll('.quick-calc__why')].find(
+        (each) => each.textContent === text,
+      );
+      if (why === undefined) return 'no reason drawn';
+      const box = element.getBoundingClientRect();
+      const line = why.getBoundingClientRect();
+      if (element.scrollWidth > element.clientWidth) return 'the menu scrolls sideways';
+      return line.right <= box.right && line.left >= box.left ? 'fits' : 'cut off';
+    }, reason);
+    expect(fits).toBe('fits');
   });
 });
