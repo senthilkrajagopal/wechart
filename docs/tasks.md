@@ -9219,10 +9219,38 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - *Left as they are:* a chart local to another dashboard, shown here, goes as this dashboard's own, since the file has no other place for it (as the copy route does). "In a folder you can't see" also covers a folder the user sees only dashboards of.
   - **Tests:** `routes/export.test.ts` (10), `ExportPane.test.tsx` (11), `exportFile.test.ts` (4), `Canvas.test.tsx` (outlines), and `e2e/security/export-import.spec.ts` (6, Chrome). Full suites: api 943, web 1875, core 460 (two load flakes, `cube/client.test.ts` and `UnplacedCodes.test.tsx`, pass alone).
   - **AC-354, AC-355 and AC-360 ticked** on `e2e/security/export-import.spec.ts`: from the header's ⋯ and the Explore row, the pane lists the dependencies ticked with their users and counts the hidden ones without naming them; hovering and focusing outline the real tiles; the downloaded `revenue-overview.wechart.json` is JSON holding exactly what was chosen, its data source with driver, settings and description and none of its envelope.
-- [ ] T512 (AC-359) Read an export file, and refuse one this wechart can't take, naming the part and why
+- [x] T512 (AC-359) Read an export file, and refuse one this wechart can't take, naming the part and why
   - Files: `packages/core/src/exportFile.ts` (+ test)
   - Failing test: `exportFile.test.ts`: an unreadable file, a kind, chart type or driver this wechart doesn't have, is refused with the part named, and nothing is changed (AC-359).
   - Depends on: T511
+  - *As built (2026-09-28; design 13, states I, J and K):*
+    - `readExportFile(text)` and `readExport(value)` in core, used by the Import pane before anything is sent, and by the API before anything is written (T513).
+    - **Unreadable (state J):** a small RFC 8259 scanner finds where the text stops being JSON, the same in every engine: "It ends part-way through, at line _l_, column _c_." or "It isn't JSON: it stops being JSON at line _l_, column _c_." Also refused whole: an empty file, one that doesn't say it is a wechart export, one with no list of items, and a newer export version.
+    - **Parts (state K):** every item is checked before any is taken, and each refusal names the part and why, as the design words it:
+      - a kind other than dashboard, chart, model or data source;
+      - a chart type, or a tile's intended chart type, not in `render-spec.ts`;
+      - a driver or sign-in method this wechart lacks;
+      - a chart this wechart can't read, upgraded first where it is older;
+      - a data source holding any of its driver's secrets, a setting its driver has no field for, or a name a data source can't take;
+      - a model path xcube wouldn't take;
+      - not exactly one dashboard, an own chart of a dashboard the file doesn't hold, a second chart of an id, a second data source of a name, a second model of a path.
+    - What it returns leaves behind where each item was and whose (`exportedBodyOf`), whatever a hand-edited file says.
+    - **Small decisions, overturnable:**
+      - A newer export *version* is refused whole. It marks a format change, which design 13's "no version gate" (between wechart releases) doesn't reach.
+      - A dashboard's or chart's body nesting deeper than 100 levels is refused, so nothing that walks it later can overflow.
+  - **Review (one round, FAIL), fixed:**
+    1. A dashboard with no pages, as the seed makes, was refused. It is now read as the dashboard opens (`dashboardOf`): no pages is an empty one, and a page without a list of items is refused.
+    2. A deeply nested body threw instead of refusing. The tile walk has its own stack, a body past 100 levels is refused, and the scanner gives up quietly in any engine.
+    3. Where an item was, and whose, passed through a hand-edited file.
+    4. Most refusal branches had no test; each has one now.
+    5. Two refused tiles read alike: each is named by its id.
+    6. A trailing non-JSON space read as "ends part-way".
+    7. Another sign-in method's secret was refused as an unknown setting; it is now refused as a secret.
+    8. Model paths weren't checked.
+    - *Left:* an unknown *tile* kind isn't refused. AC-359's kinds are the file's items, and the tile kinds are the web's alone (`TILE_KINDS`).
+  - **Tests:** `exportFile.test.ts` (18). The core suite: 474.
+  - **AC-359 stays open:** its "nothing is changed" and its real surface are the Import pane's (T513).
+  - *Also in this commit:* a type-only fix to T511's `export.test.ts` (`byDashboard` on the test's `Offered`).
 - [ ] T513 (AC-356, AC-357) Import into My workspace: File, Target and Review with its warnings, landing as new drafts
   - Files: `packages/api/src/routes/import.ts` (+ test), `packages/web/src/workspaces/explore/import/ImportPane.tsx` (+ test), My workspace's New menu (Import a dashboard…, under a divider), `e2e/security/export-import.spec.ts`
   - Failing test:

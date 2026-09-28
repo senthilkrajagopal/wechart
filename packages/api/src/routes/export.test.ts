@@ -322,7 +322,13 @@ interface Offered {
   fileName: string;
   ownCharts: { id: string; title: string }[];
   libraryCharts: { id: string; title: string; path: string[] | null; chartIds: string[] }[];
-  models: { id: string; path: string; folderPath: string[]; chartIds: string[] }[];
+  models: {
+    id: string;
+    path: string;
+    folderPath: string[];
+    chartIds: string[];
+    byDashboard: boolean;
+  }[];
   dataSources: {
     id: string;
     name: string;
@@ -430,7 +436,7 @@ describe('what a dashboard’s export offers (T511, AC-354)', () => {
       url: `/api/export/dashboards/${ids.board2}`,
     });
     expect(answer.statusCode, answer.body).toBe(200);
-    const body = answer.json<Offered & { models: { byDashboard: boolean }[] }>();
+    const body = answer.json<Offered>();
     const models = new Map(body.models.map((model) => [model.path, model]));
     expect([...models.keys()].sort()).toEqual(
       [paths.base, paths.customers, paths.extended].sort(),
