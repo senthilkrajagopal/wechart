@@ -62,6 +62,7 @@ import type { DataSource, DataSourceStore } from './repos/data-sources';
 import type { DataSourceLanding } from './routes/data-sources';
 import type { ConnectionHealth, TestAnswer, TestedConnection } from './xcube/connections';
 import type { FolderAccessStore } from './repos/folder-access';
+import type { AuditStore } from './repos/audit';
 import { registerFolderAccess } from './routes/access';
 import { registerDataSources } from './routes/data-sources';
 import { chartCopy, dashboardCopies, type ShownCopy } from './routes/workspace-copy';
@@ -123,6 +124,8 @@ export interface BuildOptions {
   readonly sessions?: SessionStore;
   /** Each folder's AD groups (T314, AC-259, AC-260). */
   readonly folderAccess?: FolderAccessStore;
+  /** The audit trail (T368, AC-294): where sign-ins and changes are recorded. */
+  readonly audit?: AuditStore;
   /** Data sources as folder items, their secrets sealed (T335, AC-269). */
   readonly dataSources?: DataSourceStore;
   /**
@@ -293,6 +296,7 @@ export function buildServer({
   logger = false,
   introspectionRetryMs,
   sessions,
+  audit,
 }: BuildOptions): FastifyInstance {
   const app = Fastify({
     logger,
@@ -325,7 +329,11 @@ export function buildServer({
   const security = config.security ?? 'off';
   // Before any route: every route declares who may call it (T318, AC-251).
   registerRouteAccess(app);
-  if (security === 'oidc') registerSignIn(app, signInOptionsOf(config, sessions));
+  if (security === 'oidc')
+    registerSignIn(app, {
+      ...signInOptionsOf(config, sessions),
+      ...(audit === undefined ? {} : { audit }),
+    });
   registerUser(app, security, config.superAdminGroup);
   registerGuard(app, security, config.publicUrl);
   /**
@@ -581,7 +589,23 @@ export function buildServer({
     introspectionRetryMs === undefined ? {} : { retryMs: introspectionRetryMs },
   );
   // Each folder's AD groups and its effective access (T314, AC-259, AC-260).
-  if (folderAccess !== undefined) registerFolderAccess(app, folderAccess);
+  if (folderAccess !== undefined)
+    registerFolderAccess(
+      app,
+      folderAccess,
+      audit === undefined
+        ? undefined
+        : {
+            store: audit,
+            // A folder's name for its record (T368): the root is Shared.
+            titleOf: async (folderId) => {
+              if (folderId === ROOT_FOLDER_ID) return 'Shared';
+              const folder = await docs?.get?.('folder', folderId);
+              const title = folder?.body['title'];
+              return typeof title === 'string' ? title : undefined;
+            },
+          },
+    );
   /**
    * Data sources (T335): seen by those who see a folder's every kind — never
    * a read-only user (AC-263) — and changed only by its read-write members
@@ -590,6 +614,8 @@ export function buildServer({
   if (dataSources !== undefined)
     registerDataSources(app, {
       store: dataSources,
+      // Each change recorded (T368, AC-294).
+      ...(audit === undefined ? {} : { audit }),
       ...(config.seedToken === undefined ? {} : { seedToken: config.seedToken }),
       // Workspaces are signed-in users' (T343): with security off, as the
       // documents' routes, a data source has none (T345's review).

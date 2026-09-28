@@ -12,6 +12,7 @@ import { dataSourceStore } from './repos/data-sources';
 import { documents } from './repos/documents';
 import { folderXcubeIds } from './repos/folder-xcube-ids';
 import { folderAccessStore } from './repos/folder-access';
+import { auditStore } from './repos/audit';
 import { readModelDir } from './model/read-dir';
 import { startModel } from './model/split';
 import { imageStore } from './repos/images';
@@ -153,6 +154,8 @@ async function main(): Promise<void> {
     publications,
     // Each folder's AD groups (T314).
     folderAccess: folderAccessStore(db),
+    // The audit trail (T368, AC-294).
+    audit: auditStore(db),
     // Data sources as folder items, their secrets sealed (T335).
     dataSources,
     ...(landing === undefined

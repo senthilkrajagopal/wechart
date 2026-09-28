@@ -137,6 +137,23 @@ export interface Database {
   connection_tests: ConnectionTestTable;
   model_publications: ModelPublicationTable;
   folder_xcube_ids: FolderXcubeIdTable;
+  audit_records: AuditRecordTable;
+}
+
+/** One audit record (T368, AC-294): who, what, which folder and when. Only ever added. */
+export interface AuditRecordTable {
+  id: string;
+  at: Generated<Date>;
+  actor_key: string | null;
+  actor_name: string | null;
+  actor_identity: string | null;
+  event: string;
+  folder_id: string | null;
+  item_kind: string | null;
+  item_id: string | null;
+  item_title: string | null;
+  summary: string;
+  details: JSONColumnType<Record<string, unknown> | null, string | null, string | null>;
 }
 
 /** Each folder's id in xcube, stored and never reused (T425, AC-328). */

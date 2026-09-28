@@ -7,8 +7,10 @@ import {
 } from '@wechart/core';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
+import { accessChangeSummary, actorOf, recordIn } from '../audit/record';
 import { USER } from '../auth/guard';
 import { Forbidden, userOf } from '../auth/user';
+import type { AuditStore } from '../repos/audit';
 import { DocumentNotFoundError, StaleDocumentError } from '../repos/documents';
 import type { FolderAccessStore } from '../repos/folder-access';
 
@@ -74,7 +76,15 @@ function grantedBeneath(tree: readonly AccessFolder[], folderId: string): boolea
   return false;
 }
 
-export function registerFolderAccess(app: FastifyInstance, store: FolderAccessStore): void {
+export function registerFolderAccess(
+  app: FastifyInstance,
+  store: FolderAccessStore,
+  audit?: {
+    readonly store: Pick<AuditStore, 'record'>;
+    /** A folder's name, for its record: the root's is Shared. */
+    readonly titleOf: (folderId: string) => Promise<string | undefined>;
+  },
+): void {
   /** What this user may do in the folder: undefined when they can't see it. */
   const lookUp = async (request: FastifyRequest) => {
     const { folderId } = request.params as { folderId: string };
@@ -83,7 +93,7 @@ export function registerFolderAccess(app: FastifyInstance, store: FolderAccessSt
     const right = folderRights(tree, { groups: user.groups, superAdmin: user.superAdmin }).get(
       folderId,
     );
-    return { folderId, right };
+    return { folderId, right, tree };
   };
 
   const answer = async (reply: FastifyReply, folderId: string) => {
@@ -153,7 +163,7 @@ export function registerFolderAccess(app: FastifyInstance, store: FolderAccessSt
   });
 
   app.put('/api/folders/:folderId/access', USER, async (request, reply) => {
-    const { folderId, right } = await lookUp(request);
+    const { folderId, right, tree } = await lookUp(request);
     if (right === undefined) return notFound(reply);
     if (!right.write) {
       throw new Forbidden(
@@ -177,6 +187,37 @@ export function registerFolderAccess(app: FastifyInstance, store: FolderAccessSt
       if (error instanceof DocumentNotFoundError) return notFound(reply);
       throw error;
     }
+    // In the audit trail, with its groups before and after (T368, AC-294).
+    if (audit !== undefined) {
+      const before = settingOf(tree.find((folder) => folder.id === folderId)?.access);
+      await recordIn(
+        audit.store,
+        {
+          actor: actorOf(request.wechartUser),
+          event: 'access-change',
+          folderId,
+          item: {
+            kind: 'folder',
+            id: folderId,
+            title: (await audit.titleOf(folderId).catch(() => undefined)) ?? folderId,
+          },
+          summary: accessChangeSummary(before, setting),
+          details: {
+            // Their role then, which their groups may no longer say (design 08's inspector).
+            role: request.wechartUser?.superAdmin === true ? 'Super-Admin' : 'Read-write member',
+            readOnly: { before: before.readOnly, after: setting.readOnly },
+            readWrite: { before: before.readWrite, after: setting.readWrite },
+          },
+        },
+        request.log,
+      );
+    }
     return answer(reply, folderId);
   });
 }
+
+/** A folder's stored setting, unset where it has none. */
+const settingOf = (access: FolderAccessSetting | undefined): FolderAccessSetting => ({
+  readOnly: access?.readOnly ?? null,
+  readWrite: access?.readWrite ?? null,
+});

@@ -5,7 +5,9 @@ import fastifySession, { type SessionStore } from '@fastify/session';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import * as oidc from 'openid-client';
 
+import { recordIn } from '../audit/record';
 import type { Config, OidcSettings } from '../config';
+import type { AuditStore } from '../repos/audit';
 import { PUBLIC } from './guard';
 import { displayNameFrom, groupsFrom, identityFrom, oidcConfig } from './oidc';
 
@@ -103,6 +105,8 @@ export interface SignInOptions {
   readonly oidc: OidcSettings;
   /** The session store: wechart's metadata database outside tests' fakes. */
   readonly store?: SessionStore;
+  /** Where each sign-in is recorded (T368, AC-294). */
+  readonly audit?: Pick<AuditStore, 'record'>;
 }
 
 export function signInOptionsOf(config: Config, store?: SessionStore): SignInOptions {
@@ -270,6 +274,19 @@ export function registerSignIn(app: FastifyInstance, options: SignInOptions): vo
       groups,
     };
     if (tokens.id_token !== undefined) request.session.idToken = tokens.id_token;
+    // In the audit trail (T368, AC-294): who, and when.
+    const { key, name, identity } = request.session.user;
+    await recordIn(
+      options.audit,
+      {
+        actor: { key, name, ...(identity === undefined ? {} : { identity }) },
+        event: 'sign-in',
+        folderId: null,
+        item: null,
+        summary: 'Signed in',
+      },
+      request.log,
+    );
     return reply.redirect(attempt.returnTo);
   });
 

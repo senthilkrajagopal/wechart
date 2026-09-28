@@ -6184,6 +6184,31 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: a migration `…_audit.cjs`, `packages/api/src/repos/audit.ts` (+ test), the routes that emit each event
   - Failing test: `audit.test.ts`: each of the seven kinds of event is recorded with who, what, which folder and when, and a data-source record shows credentials only as "replaced" (AC-294).
   - Depends on: T316, T314, T349, T352, T353, T354, T335
+  - *(2026-09-27, the user: design 08 next)* Built now for what exists: sign-ins, access changes and data-source changes. Proposals, approvals, rejections and restores are recorded by T349, T352, T353 and T354 as each lands, each adding its kind to `access/audit.test.ts`. AC-294 is ticked only then.
+  - *As built (2026-09-27, before review):*
+    - `audit_records` (a migration) and `repos/audit.ts`: a record is who (key, name, identity), the event, the folder, the item (kind, id, title), a one-line summary and the full record's details. The list is newest first with a page cursor, filtered by users, events, folders and a time range. `actors()` names each person once, for the User filter. `removeBefore` is for T370. Records are only added; nothing edits them.
+    - `audit/record.ts`:
+      - a sign-in says "Signed in";
+      - an access change says each group added or removed ("Added read-write group emea-analysts"), with both lists before and after in its details;
+      - a data-source change lists each setting's before and after, a secret only "replaced" ("Host changed; password replaced"), a rename and a description too;
+      - a data source made reads "Made, from a passing test", and one removed "Removed".
+    - A record that can't be kept is logged as a warning and doesn't undo what was done.
+    - Tests: `repos/audit.test.ts`, `audit/record.test.ts` and `access/audit.test.ts`.
+  - **Done 2026-09-27 for the kinds that exist, after one review round. AC-294 and AC-298 stay open** (proposals, approvals, rejections and restores come with T349–T354).
+  - **Review fixes:**
+    1. A page's cursor lost the database's microseconds, so paging could skip records. Records are now stamped to the millisecond as they're kept (the column is `timestamptz(3)`). The page condition is a row comparison, tested over records kept at once.
+    2. The install Job's seeding recorded nothing. It is now "Seeded at install", by the Install Job.
+    3. A copy into a workspace recorded nothing. It is now recorded where the original is: "Copied into a workspace, from version _n_".
+    4. A change of inheritance is said as one: "Set read-only groups here, no longer inherited: a", or "…inherited again, instead of b".
+    5. The summary can't fail after the change is saved. A delete that removed nothing (another's first) answers 404 and records nothing.
+    6. For design 08's inspector, an access change keeps the actor's role then, and a data-source change the passing test it was saved from.
+  - **Tests, as built:**
+    - the summaries (`audit/record.test.ts`);
+    - paging over records kept at once;
+    - a refused save records nothing;
+    - no record holds an envelope's key id, or any 16-character stretch of its ciphertext or key (`access/audit.test.ts`).
+    - The install Job's record is shown by T369's e2e, where the root's default is seeded.
+  - **Open question, not decided here:** a folder moved elsewhere inherits other groups. Nothing records that as a permission change.
 - [ ] T369 (AC-295) Show the audit trail to Super-Admins only, newest first, filtered by user, event and folder
   - Files: `packages/web/src/workspaces/security/AuditTrail.tsx` (+ test), `packages/api/src/routes/audit.ts` (+ test), `e2e/security/audit.spec.ts`
   - Failing test: `audit.spec.ts`: `super` sees the records newest first; the User, Event, Folder and Time filters combine and every row matches them; `writer` gets Not found for the page and 403 from the API (AC-295; rule 82).

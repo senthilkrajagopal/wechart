@@ -3,7 +3,9 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { createHash, timingSafeEqual } from 'node:crypto';
 
+import { actorOf, dataSourceChange, recordIn } from '../audit/record';
 import { INSTALL, USER } from '../auth/guard';
+import type { AuditStore } from '../repos/audit';
 import { ROOT_FOLDER_ID } from '../repos/catalog';
 import {
   DataSourceRefused,
@@ -77,6 +79,8 @@ const NO_SUCH_FOLDER = 'There’s no such folder, or it isn’t yours to see.';
 
 /** The shared root's default data source, which the install Job seeds (T443, AC-310). */
 const DEFAULT_SOURCE = 'default';
+/** Who the audit trail says seeded it (T368): the install Job, not a person. */
+const INSTALL_JOB = { key: 'wechart-install-job', name: 'Install Job' };
 
 /** Whether a header carries the secret, compared in constant time over their digests. */
 const sameSecret = (given: string | undefined, secret: string) =>
@@ -182,7 +186,10 @@ export function registerDataSources(
     tests,
     health,
     listing,
+    audit,
   }: {
+    /** Where each change is recorded (T368, AC-294): a secret only said replaced. */
+    readonly audit?: Pick<AuditStore, 'record'>;
     /**
      * For the Data sources page (T364, AC-157): which folders the request's
      * user sees every item of, and each folder's path from the root. Always
@@ -230,6 +237,27 @@ export function registerDataSources(
         })
       : { kid: key.kid, x: key.x },
   );
+
+  /** A change to one, in the audit trail (T368, AC-294): never a secret's value (AC-298). */
+  const recordChange = (
+    request: FastifyRequest,
+    source: Pick<DataSource, 'id' | 'name' | 'folderId'>,
+    summary: string,
+    details?: Record<string, unknown>,
+    actor = actorOf(request.wechartUser),
+  ) =>
+    recordIn(
+      audit,
+      {
+        actor,
+        event: 'data-source-change',
+        folderId: source.folderId,
+        item: { kind: 'data-source', id: source.id, title: source.name },
+        summary,
+        ...(details === undefined ? {} : { details }),
+      },
+      request.log,
+    );
 
   // Landed in xcube before it is committed, where xcube is there (T442): made
   // ready for the folder before the store opens its transaction.
@@ -565,7 +593,7 @@ export function registerDataSources(
         const held = await store.inFolder(ROOT_FOLDER_ID);
         if (held.some((source) => source.name === DEFAULT_SOURCE)) return reply.status(409).send();
         try {
-          await store.create(
+          const seeded = await store.create(
             {
               folderId: ROOT_FOLDER_ID,
               name: DEFAULT_SOURCE,
@@ -576,6 +604,8 @@ export function registerDataSources(
             },
             await landingIn(ROOT_FOLDER_ID),
           );
+          // By the install Job, which no one signs in as (T368's review).
+          await recordChange(request, seeded, 'Seeded at install', undefined, INSTALL_JOB);
           return reply.status(204).send();
         } catch (failure) {
           if (!(failure instanceof DataSourceRefused)) throw failure;
@@ -671,6 +701,7 @@ export function registerDataSources(
         .catch((error: unknown) => {
           request.log.warn({ err: error }, 'could not keep its connection tests in its history');
         });
+      await recordChange(request, made, 'Made, from a passing test');
       return reply.status(201).send(viewOf(made));
     } catch (failure) {
       // Refused: its test is its maker's again, for the create that follows.
@@ -775,6 +806,17 @@ export function registerDataSources(
           .catch((error: unknown) => {
             request.log.warn({ err: error }, 'could not keep its test as its health');
           });
+      const said = dataSourceChange(
+        source.driver,
+        source,
+        updated,
+        Object.keys(change.sealed ?? {}),
+      );
+      // With the test it was saved from, which the trail's record names (design 08 state A).
+      await recordChange(request, updated, said.summary, {
+        changes: said.changes,
+        ...(taken === undefined ? {} : { testId: taken.testId }),
+      });
       return viewOf(updated);
     } catch (failure) {
       if (taken !== undefined)
@@ -808,6 +850,12 @@ export function registerDataSources(
     if (existing !== undefined) return { ...viewOf(existing), created: false };
     try {
       const copied = await store.copy(source.id, own);
+      // Recorded where the original is, which the copy goes back to (T368's review).
+      await recordChange(
+        request,
+        { id: copied.id, name: copied.name, folderId: source.folderId },
+        `Copied into a workspace, from version ${String(source.version)}`,
+      );
       return reply.status(201).send({ ...viewOf(copied), created: true });
     } catch (failure) {
       // Two copies at once: the one made first opens (T346's review).
@@ -821,13 +869,16 @@ export function registerDataSources(
     const source = await reached(request, reply, 'write');
     if (source === undefined) return reply;
     try {
-      await store.remove(
+      const removed = await store.remove(
         source.id,
         landing === undefined || (await inAWorkspace(source)) ? {} : { unland: landing.unland },
       );
+      // Gone already, another's removal first: nothing done, nothing recorded.
+      if (!removed) return reply.status(404).send(NOT_THERE);
     } catch (failure) {
       return refused(reply, failure);
     }
+    await recordChange(request, source, 'Removed');
     return reply.status(204).send();
   });
 }
