@@ -70,10 +70,15 @@ export function ProblemsPanel({
   const errors = problems.length - warnings + cubeProblems.length;
   return (
     <section className="model-problems" aria-label="Problems">
-      <h2 className="model-problems__head">
-        Problems · {errors} {errors === 1 ? 'error' : 'errors'} · {warnings}{' '}
-        {warnings === 1 ? 'warning' : 'warnings'}
-      </h2>
+      <div className="model-problems__bar">
+        <h2 className="model-problems__head">
+          Problems · {errors} {errors === 1 ? 'error' : 'errors'} · {warnings}{' '}
+          {warnings === 1 ? 'warning' : 'warnings'}
+        </h2>
+        {/* How it is checked (design 03): wechart's reading of Cube's rules
+            after each pause in typing; Cube's own word comes with Save (AC-136). */}
+        <span className="model-problems__how">Checked against Cube’s rules as you type</span>
+      </div>
       {errors + warnings === 0 ? (
         <p className="model-problems__row">
           <OkGlyph />

@@ -253,8 +253,18 @@ if (n >= 1 && n <= doc.lines)
 - **Safe alongside a doc change.** The target is mapped through the transaction's changes and clipped to the document length (`view.js:1348-1357`), so it can ride with a `value` change.
 - **The default margin.** `yMargin` defaults to 5 px (`view.js:8680-8683`). Pass `0` for a flush top. `x` stays `'nearest'`, and the gutter's width is already counted as a scroll margin (`view.js:11549-11557`, `3455-3459`).
 
+### 5. Hanging indent while wrapped (added with T482)
+
+Design 03 note 8 draws a wrapped line's later rows under the line's text (`padding-left: Nch; text-indent: -Nch`). This builds only from APIs cited above:
+- `Decoration.line` takes `attributes` as well as `class` ("can add DOM attributes to the line starting at the given position", [decoration.ts](https://code.haverbeke.berlin/codemirror/view/raw/branch/main/src/decoration.ts); `view.d.ts:182-197`). A `style` attribute sets the hang per line.
+- The lines' texts are read from the view, so the zebra example's ViewPlugin shape fits: it rebuilds over `view.visibleRanges` on a doc or viewport change ([zebra example](https://codemirror.net/examples/zebra/)). A line decoration from a plugin is allowed, since it is not a block widget or a replace across line breaks (see "StateField or ViewPlugin?" above).
+- It sits in the same compartment as `lineWrapping`, so turning wrap off removes both together.
+- The base theme's `.cm-line` padding is `0 2px 0 6px`. An inline `padding-left` replaces it, so the style adds the 6 px back: `calc(Nch + 6px)`.
+- Checked in a browser by the T482 e2e.
+
 ### Open questions / unverified
 
+- Observed in the T482 e2e: for "Show in YAML" on a line that `.cm-scroller` cannot bring to its top (`cubes/orders.yml`, line 19 of 41), the scroller stops at its end and the line is in view. The Model pane does not scroll, so nothing spills over.
 - UNVERIFIED as an observed behaviour: the ancestor-scroll spill for `y: 'start'` near the end of the document. It is inferred from reading `scrollRectIntoView` (`view.js:540-631`) and has not been seen in a browser. The T482 e2e should cover "Show in YAML" on the file's last lines.
 - **Frontmatter:** no new packages. `@codemirror/view`, `@codemirror/state` and `@codemirror/lint` are already in `packages:`. The pinned versions above match `packages/web/package.json`. The reference manual and example URLs could be added to `sources:`.
 

@@ -214,6 +214,29 @@ describe('a cube’s form', () => {
  * form read-only until it parses.
  * Fails when: the form stays editable on unparseable YAML.
  */
+/**
+ * T482's review: a list tab opens with its members closed, whichever member
+ * the tab before had open, as the YAML's tint says (design 03 note 9).
+ */
+describe('switching list tabs', () => {
+  it('opens the next tab with none of its members open, and says so', async () => {
+    const onOpenMember = vi.fn();
+    render(<CubeForm kind="cube" value={ORDERS} onChange={vi.fn()} onOpenMember={onOpenMember} />);
+    await userEvent.click(screen.getByRole('tab', { name: /^Dimensions/ }));
+    await userEvent.click(screen.getByText('status', { selector: '.model-member__name' }));
+    await vi.waitFor(() => {
+      expect(onOpenMember).toHaveBeenLastCalledWith('dimensions', 0);
+    });
+
+    await userEvent.click(screen.getByRole('tab', { name: /^Measures/ }));
+    const count = screen
+      .getByText('count', { selector: '.model-member__name' })
+      .closest('details') as HTMLDetailsElement;
+    expect(count.open).toBe(false);
+    expect(onOpenMember).toHaveBeenLastCalledWith('measures', null);
+  });
+});
+
 describe('a form held read-only', () => {
   const controlsOf = (panel: HTMLElement) => [
     ...panel.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(

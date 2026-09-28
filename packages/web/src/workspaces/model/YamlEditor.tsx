@@ -20,7 +20,9 @@ import {
   gutterLineClass,
   keymap,
   lineNumbers,
+  ViewPlugin,
   type DecorationSet,
+  type ViewUpdate,
 } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import { useEffect, useRef } from 'react';
@@ -99,22 +101,117 @@ function lineStarts(doc: Text, lines: readonly number[]): number[] {
     .map((n) => doc.line(n).from);
 }
 
-const setTinted = StateEffect.define<readonly number[]>();
-const TINT = Decoration.line({ class: 'yaml-editor__tint' });
-const tintField = StateField.define<DecorationSet>({
-  create: () => Decoration.none,
-  update(tints, transaction) {
-    let next = tints.map(transaction.changes);
-    for (const effect of transaction.effects)
-      if (effect.is(setTinted)) {
-        const built = new RangeSetBuilder<Decoration>();
-        for (const at of lineStarts(transaction.newDoc, effect.value)) built.add(at, at, TINT);
-        next = built.finish();
-      }
-    return next;
+/** A class on a line's gutter elements, drawn in CSS: no DOM of its own. */
+class LineClass extends GutterMarker {
+  constructor(override readonly elementClass: string) {
+    super();
+  }
+}
+
+/**
+ * A class on a set of lines, and on their numbers: an effect sets them, and
+ * edits map them. The numbers' class goes through `gutterLineClass`, as the
+ * flags do (research/code-editor.md, "Flagging lines in the gutter").
+ */
+function lineTint(className: string) {
+  const set = StateEffect.define<readonly number[]>();
+  const mark = Decoration.line({ class: className });
+  const number = new LineClass(`${className}-number`);
+  const field = StateField.define<{ lines: DecorationSet; numbers: RangeSet<GutterMarker> }>({
+    create: () => ({ lines: Decoration.none, numbers: RangeSet.empty }),
+    update(tints, transaction) {
+      let next = {
+        lines: tints.lines.map(transaction.changes),
+        numbers: tints.numbers.map(transaction.changes),
+      };
+      for (const effect of transaction.effects)
+        if (effect.is(set)) {
+          const starts = lineStarts(transaction.newDoc, effect.value);
+          const built = new RangeSetBuilder<Decoration>();
+          for (const at of starts) built.add(at, at, mark);
+          next = {
+            lines: built.finish(),
+            numbers: RangeSet.of(starts.map((at) => number.range(at))),
+          };
+        }
+      return next;
+    },
+    provide: (tints) => [
+      EditorView.decorations.from(tints, (now) => now.lines),
+      gutterLineClass.from(tints, (now) => now.numbers),
+    ],
+  });
+  return { set, field };
+}
+/** The open member's lines, in the accent, their numbers too (note 9). */
+const TINT = lineTint('yaml-editor__tint');
+/** A note's lines — a comment, an anchor, an alias — as a warning (note 9). */
+const NOTE = lineTint('yaml-editor__noted');
+
+/** Past this, a hang leaves the wrapped part no room: it hangs here instead. */
+const HANG_MAX = 24;
+
+/**
+ * Where a wrapped line's later rows start, in columns (design 03 note 8):
+ * under a list item's key, after its "- "; under a comment's words; under a
+ * key's value; else under its indent.
+ */
+export function hangOf(line: string): number {
+  const lead = /^ */.exec(line)?.[0].length ?? 0;
+  const rest = line.slice(lead);
+  const hang =
+    /^- /.exec(rest)?.[0].length ??
+    /^# ?/.exec(rest)?.[0].length ??
+    // A plain key, its colon and the space: only when a value follows.
+    (/^[^\s#'"][^:#]*: (?=\S)/.exec(rest)?.[0].length || 0);
+  return Math.min(lead + hang, HANG_MAX);
+}
+
+/**
+ * The hang, as each line's style (research/code-editor.md, "Addendum
+ * 2026-09-27": `Decoration.line` attributes, over the lines in view as the
+ * zebra example's ViewPlugin does). CodeMirror's own 6 px line padding kept.
+ */
+const hangs = new Map<number, Decoration>();
+const hangMark = (columns: number) => {
+  let mark = hangs.get(columns);
+  if (mark === undefined) {
+    mark = Decoration.line({
+      attributes: {
+        style: `padding-left: calc(${String(columns)}ch + 6px); text-indent: -${String(columns)}ch;`,
+      },
+    });
+    hangs.set(columns, mark);
+  }
+  return mark;
+};
+function hangsIn(view: EditorView): DecorationSet {
+  const built = new RangeSetBuilder<Decoration>();
+  let last = -1;
+  for (const { from, to } of view.visibleRanges)
+    for (let at = from; at <= to;) {
+      const line = view.state.doc.lineAt(at);
+      const columns = hangOf(line.text);
+      if (line.from > last && columns > 0) built.add(line.from, line.from, hangMark(columns));
+      last = line.from;
+      at = line.to + 1;
+    }
+  return built.finish();
+}
+const hanging = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(view: EditorView) {
+      this.decorations = hangsIn(view);
+    }
+    update(update: ViewUpdate) {
+      if (update.docChanged || update.viewportChanged) this.decorations = hangsIn(update.view);
+    }
   },
-  provide: (field) => EditorView.decorations.from(field),
-});
+  { decorations: (plugin) => plugin.decorations },
+);
+/** Wrapped, and hung (design 03 note 8). */
+const WRAPPED = [EditorView.lineWrapping, hanging];
 
 /** A flag is a class on the line's gutter elements, drawn in CSS: no DOM of its own. */
 class Flag extends GutterMarker {
@@ -154,6 +251,7 @@ export function YamlEditor({
   language = 'yaml',
   wrap = false,
   tinted = NO_LINES,
+  noted = NO_LINES,
   flagged = NO_LINES,
   reveal,
 }: {
@@ -176,6 +274,8 @@ export function YamlEditor({
   wrap?: boolean;
   /** 1-based lines tinted: the open member's, or those a note points at (note 9). */
   tinted?: readonly number[];
+  /** 1-based lines tinted as a warning: the notes a form edit could drop, shown (note 9). */
+  noted?: readonly number[];
   /** 1-based lines flagged in the gutter: comments a form edit could drop (note 9). */
   flagged?: readonly number[];
   /** A line to bring to the top of the view: a new object each time it is asked for. */
@@ -206,8 +306,9 @@ export function YamlEditor({
           language === 'yaml' ? yaml() : language === 'sql' ? sql() : [],
           syntaxHighlighting(TOKEN_HIGHLIGHT),
           TOKEN_THEME,
-          wrapping.current.of(wrap ? EditorView.lineWrapping : []),
-          tintField,
+          wrapping.current.of(wrap ? WRAPPED : []),
+          TINT.field,
+          NOTE.field,
           flagField,
           readOnly ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : [],
           EditorView.contentAttributes.of({
@@ -281,21 +382,30 @@ export function YamlEditor({
 
   useEffect(() => {
     view.current?.dispatch({
-      effects: wrapping.current.reconfigure(wrap ? EditorView.lineWrapping : []),
+      effects: wrapping.current.reconfigure(wrap ? WRAPPED : []),
     });
   }, [wrap]);
 
-  // By their numbers, so a new array of the same lines dispatches nothing.
+  // By their numbers, so a new array of the same lines dispatches nothing; and
+  // again with each text, after it is in: a mark maps off a line whose start
+  // is deleted, as a line moved up deletes it, though the lines asked for are
+  // the same (T482's review; research/code-editor.md, "How mapping moves
+  // tints"). Declared after the `value` effect, so they run after it.
   const tints = tinted.join(',');
   useEffect(() => {
-    view.current?.dispatch({ effects: setTinted.of(tinted) });
+    view.current?.dispatch({ effects: TINT.set.of(tinted) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tints]);
+  }, [tints, value]);
+  const notes = noted.join(',');
+  useEffect(() => {
+    view.current?.dispatch({ effects: NOTE.set.of(noted) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notes, value]);
   const flags = flagged.join(',');
   useEffect(() => {
     view.current?.dispatch({ effects: setFlagged.of(flagged) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flags]);
+  }, [flags, value]);
 
   /** A line brought to the top of the view (research, "Scrolling a line to the top"). */
   useEffect(() => {

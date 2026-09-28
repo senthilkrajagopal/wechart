@@ -1,7 +1,7 @@
 import { render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { YamlEditor } from './YamlEditor';
+import { hangOf, YamlEditor } from './YamlEditor';
 
 /**
  * T482 / AC-134, design 03 notes 8 and 9: the YAML soft-wraps, on by default
@@ -33,6 +33,31 @@ describe('the YAML’s wrap, tints and flags', () => {
     );
   });
 
+  it('hangs a wrapped line under its text: a comment’s words, a key’s value, a list item’s key', () => {
+    // As design 03 draws them (note 8): the columns the wrapped part starts at.
+    expect(hangOf('        # Cube hides primary keys')).toBe(10);
+    expect(hangOf('    description: One row per order line')).toBe(17);
+    expect(hangOf('  - name: orders')).toBe(4);
+    expect(hangOf("        sql: '{CUBE}.customer_id = {customers}.id'")).toBe(13);
+    // A key alone, a bare value and a blank line hang under their indent.
+    expect(hangOf('    dimensions:')).toBe(4);
+    expect(hangOf('      - status')).toBe(8);
+    expect(hangOf('')).toBe(0);
+    // Never so far the wrapped part has no room.
+    expect(hangOf(`    ${'a'.repeat(40)}: value`)).toBe(24);
+  });
+
+  it('hangs the lines only while it wraps', () => {
+    const { container, rerender } = render(editor({ wrap: true }));
+    const styleOf = (text: string) =>
+      [...container.querySelectorAll('.cm-content > .cm-line')]
+        .find((line) => line.textContent === text)
+        ?.getAttribute('style');
+    expect(styleOf('    # a note')).toBe('padding-left: calc(6ch + 6px); text-indent: -6ch;');
+    rerender(editor({ wrap: false }));
+    expect(styleOf('    # a note')).toBe(null);
+  });
+
   it('tints the lines asked for, and only those, until asked for others', () => {
     const { container, rerender } = render(editor({ tinted: [2, 3] }));
     expect(lineClasses(container, 'yaml-editor__tint')).toEqual([false, true, true, false, false]);
@@ -46,6 +71,55 @@ describe('the YAML’s wrap, tints and flags', () => {
       false,
       false,
     ]);
+  });
+
+  it('marks a tinted line’s number too, as design 03 draws it', () => {
+    const { container } = render(editor({ tinted: [2, 3] }));
+    expect(
+      [
+        ...container.querySelectorAll('.cm-lineNumbers .cm-gutterElement.yaml-editor__tint-number'),
+      ].map((element) => element.textContent),
+    ).toEqual(['2', '3']);
+  });
+
+  it('tints the lines of a note as a warning, apart from the open member’s', () => {
+    const { container, rerender } = render(editor({ tinted: [2], noted: [3] }));
+    expect(lineClasses(container, 'yaml-editor__noted')).toEqual([
+      false,
+      false,
+      true,
+      false,
+      false,
+    ]);
+    expect(lineClasses(container, 'yaml-editor__tint')).toEqual([false, true, false, false, false]);
+    rerender(editor({ tinted: [2], noted: [] }));
+    expect(lineClasses(container, 'yaml-editor__noted')).toEqual([
+      false,
+      false,
+      false,
+      false,
+      false,
+    ]);
+    expect(lineClasses(container, 'yaml-editor__tint')).toEqual([false, true, false, false, false]);
+  });
+
+  /**
+   * T482's review: a mark can map off its line as the text changes (a line
+   * moved up drops it), so the lines asked for are set again with each text.
+   */
+  it('keeps each mark on the lines asked for as the text changes under it', () => {
+    const lines = ['cubes:', '  - name: orders', '    # a note', '    sql_table: t', ''];
+    const marks = { tinted: [3, 4], noted: [3, 4], flagged: [4] };
+    const { container, rerender } = render(editor(marks));
+    // Line 4 moved up a line, as Alt-ArrowUp does: the member is still lines 3 and 4.
+    const moved = [lines[0], lines[1], lines[3], lines[2], lines[4]].join('\n');
+    rerender(editor({ value: moved, ...marks }));
+    expect(lineClasses(container, 'yaml-editor__tint')).toEqual([false, false, true, true, false]);
+    expect(lineClasses(container, 'yaml-editor__noted')).toEqual([false, false, true, true, false]);
+    const flags = [...container.querySelectorAll('.cm-lineNumbers .cm-gutterElement')]
+      .filter((element) => element.classList.contains('yaml-editor__flag'))
+      .map((element) => element.textContent);
+    expect(flags).toEqual(['4']);
   });
 
   it('flags a line in the line numbers’ gutter', () => {

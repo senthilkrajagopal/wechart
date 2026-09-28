@@ -799,6 +799,7 @@ export function MemberList({
   items,
   onChange,
   describe,
+  onOpenMember,
 }: {
   schema: ObjectSchema;
   items: readonly Value[];
@@ -808,6 +809,11 @@ export function MemberList({
    * a pre-aggregation's attributes (T148, AC-142).
    */
   describe?: ((item: Value) => ReactNode) | undefined;
+  /**
+   * Which member is open — the one opened last, or none — for the YAML to
+   * tint its lines (T482, design 03 note 9).
+   */
+  onOpenMember?: ((index: number | null) => void) | undefined;
 }) {
   const { title } = schema;
   const noun = title.charAt(0).toLowerCase() + title.slice(1);
@@ -868,7 +874,22 @@ export function MemberList({
           return (
             // Positions, not names: a member's name is one of the fields it edits.
             <li key={index} className="model-members__item">
-              <details className="model-member">
+              <details
+                className="model-member"
+                onToggle={(event) => {
+                  if (onOpenMember === undefined) return;
+                  if (event.currentTarget.open) {
+                    onOpenMember(index);
+                    return;
+                  }
+                  // Closed: the one still open, last in the list, else none.
+                  const members = [...(rows.current?.children ?? [])].map(
+                    (row) => row.querySelector(':scope > details')?.hasAttribute('open') === true,
+                  );
+                  const still = members.lastIndexOf(true);
+                  onOpenMember(still === -1 ? null : still);
+                }}
+              >
                 {/* Collapsed, still read (AC-225), as design 03's rows read like
                     the YAML: the name and its badges, the type on the right, the
                     SQL on its own line under the name. */}

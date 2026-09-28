@@ -1,4 +1,4 @@
-import { useContext, useId, useMemo, useRef, useState } from 'react';
+import { useContext, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import type { CubeProblem } from '../ProblemsPanel';
 import { RollupFacts, stillUnknown } from '../preagg/RollupList';
@@ -46,8 +46,12 @@ export function CubeForm({
   readOnly = false,
   rollupProblems = [],
   initialTab,
+  onOpenMember,
+  banner,
 }: {
   kind: 'cube' | 'view';
+  /** A bar about the whole file, under the tabs, as design 03 note 4 places it (T482). */
+  banner?: ReactNode;
   /** The tab to open on, one of its own: Schedules opens a cube on its pre-aggregations (T160). */
   initialTab?: string | undefined;
   value: Value;
@@ -59,6 +63,8 @@ export function CubeForm({
   readOnly?: boolean;
   /** This cube's rollups a publish was refused for (T207, AC-189), shown on their rows. */
   rollupProblems?: readonly CubeProblem[];
+  /** The member open in a list tab, by its list and place, or none (T482, design 03 note 9). */
+  onOpenMember?: ((list: string, index: number | null) => void) | undefined;
 }) {
   const unknownIn = (rollup: Value) =>
     rollupProblems.find((problem) => problem.preAggregation?.name === rollup['name'])
@@ -114,6 +120,8 @@ export function CubeForm({
             aria-controls={`${base}-${key}-panel`}
             tabIndex={open === key ? 0 : -1}
             onClick={() => {
+              // Another tab: no member of this one is open in view.
+              if (key !== open) onOpenMember?.(key, null);
               setOpen(key);
             }}
             onKeyDown={(event) => {
@@ -122,6 +130,7 @@ export function CubeForm({
               if (step === 0) return;
               event.preventDefault();
               const next = (index + step + tabs.length) % tabs.length;
+              onOpenMember?.(tabs[next]?.[0] ?? 'general', null);
               setOpen(tabs[next]?.[0] ?? 'general');
               refs.current[next]?.focus();
             }}
@@ -146,6 +155,7 @@ export function CubeForm({
           </button>
         ))}
       </div>
+      {banner}
       <div
         role="tabpanel"
         id={`${base}-${open}-panel`}
@@ -166,11 +176,15 @@ export function CubeForm({
               />
             ) : (
               <MemberList
+                // A list of its own per tab: a member open on one is not open on the next
+                // (its `details` are the DOM's, T482's review).
+                key={open}
                 schema={schemaOf(
                   fieldOf(open) ?? { key: open, label: open, kind: 'list', of: 'Y.6' },
                 )}
                 items={Array.isArray(value[open]) ? (value[open] as Value[]) : []}
                 // Each rollup listed with what it declares (T148, AC-142).
+                onOpenMember={(index) => onOpenMember?.(open, index)}
                 describe={
                   open === 'pre_aggregations'
                     ? (rollup: Value) => {

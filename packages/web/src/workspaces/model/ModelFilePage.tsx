@@ -26,6 +26,9 @@ import { modelOf, withObject } from './sync';
 import { memberIndexOf, PickerScopeContext } from './form/scopes';
 import { validationProblems } from './validate';
 import { YamlEditor } from './YamlEditor';
+import { annotationsOf } from './annotations';
+import { AnnotationsBar } from './AnnotationsBar';
+import { memberLines } from './memberLines';
 
 /**
  * A model file, opened (T138, T139; direction.md §7b): a form for each cube
@@ -84,6 +87,40 @@ function keepRefusedRollups(problems: readonly CubeProblem[]): readonly CubeProb
     // Kept on this page only.
   }
   return problems;
+}
+
+/**
+ * The files whose notes bar was hidden (T482): hidden for the tab, as the
+ * refused rollups are kept, so it doesn't come back on each opening. Storage
+ * may be refused; it is then hidden on this page only.
+ */
+const NOTES_HIDDEN = 'wechart.model.notesHidden';
+
+function notesHidden(path: string): boolean {
+  try {
+    const kept: unknown = JSON.parse(sessionStorage.getItem(NOTES_HIDDEN) ?? '[]');
+    return Array.isArray(kept) && kept.includes(path);
+  } catch {
+    return false;
+  }
+}
+
+function hideNotes(path: string) {
+  try {
+    const kept: unknown = JSON.parse(sessionStorage.getItem(NOTES_HIDDEN) ?? '[]');
+    const paths = Array.isArray(kept) ? kept.filter((each) => typeof each === 'string') : [];
+    sessionStorage.setItem(NOTES_HIDDEN, JSON.stringify([...new Set([...paths, path])]));
+  } catch {
+    // Hidden on this page only.
+  }
+}
+
+/** The member a form has open, by its place in the file, for the YAML to tint (T482). */
+interface OpenMember {
+  readonly list: 'cubes' | 'views';
+  readonly at: number;
+  readonly key: string;
+  readonly index: number;
 }
 
 /** A problem that stops the file being read and published; a warning does not (AC-223). */
@@ -254,6 +291,65 @@ function FileEditor({
 
   /** The right pane: the YAML, or the join diagram (T144). */
   const [view, setView] = useState<'yaml' | 'joins'>('yaml');
+  /** Soft wrap, on by default (design 03 note 8). */
+  const [wrap, setWrap] = useState(true);
+
+  /**
+   * What a form edit could lose, said upfront (T482, design 03 note 4): the
+   * file's comments, anchors and aliases, as the YAML has them now. Each is
+   * flagged in the gutter; "Show in YAML" tints them and brings the first
+   * into view (note 9).
+   */
+  const annotations = useMemo(() => annotationsOf(text), [text]);
+  const [notesShut, setNotesShut] = useState(() => notesHidden(path));
+  const [notesShown, setNotesShown] = useState(false);
+  const [reveal, setReveal] = useState<{ line: number }>();
+  const flagged = useMemo(() => annotations.map((each) => each.from), [annotations]);
+  const noted = useMemo(
+    () =>
+      notesShown
+        ? annotations.flatMap((each) =>
+            Array.from({ length: each.to - each.from + 1 }, (_, n) => each.from + n),
+          )
+        : [],
+    [annotations, notesShown],
+  );
+  const notesBar =
+    notesShut || annotations.length === 0 ? null : (
+      <AnnotationsBar
+        annotations={annotations}
+        onShow={() => {
+          setView('yaml');
+          setNotesShown(true);
+          const [firstNote] = annotations;
+          if (firstNote !== undefined) setReveal({ line: firstNote.from });
+        }}
+        onHide={() => {
+          hideNotes(path);
+          setNotesShut(true);
+          setNotesShown(false);
+        }}
+      />
+    );
+  /** The member a form has open, its lines tinted in the YAML (note 9). */
+  const [openMember, setOpenMember] = useState<OpenMember | null>(null);
+  const tinted = useMemo(
+    () =>
+      openMember === null
+        ? []
+        : memberLines(text, openMember.list, openMember.at, openMember.key, openMember.index),
+    [text, openMember],
+  );
+  /** A form's member opened or closed: closing clears the tint only when it is that form's. */
+  const openIn = (list: 'cubes' | 'views', at: number) => (key: string, index: number | null) => {
+    setOpenMember((now) =>
+      index !== null
+        ? { list, at, key, index }
+        : now !== null && now.list === list && now.at === at
+          ? null
+          : now,
+    );
+  };
   const allFiles = useQuery(MODEL_FILES_QUERY);
   // To name the folder of a refusal about another folder's file (T450's review).
   const folders = useQuery(FOLDERS_QUERY);
@@ -645,15 +741,20 @@ function FileEditor({
               </span>
             </p>
           )}
+          {/* No form to put it under yet: the file's notes are said all the same. */}
+          {cubes.length + views.length === 0 ? notesBar : null}
           {/* Its pickers list what the model has (AC-224). */}
           <PickerScopeContext.Provider value={pickers}>
-            {cubes.map(({ at, value }) => (
+            {cubes.map(({ at, value }, place) => (
               <CubeForm
                 // The cube's place in the file: its name is a field it edits.
                 key={`cube ${String(at)}`}
                 kind="cube"
                 value={value}
                 readOnly={readOnly}
+                // The file's notes, under the first form's tabs (design 03 note 4).
+                banner={place === 0 ? notesBar : null}
+                onOpenMember={openIn('cubes', at)}
                 // Opened from Schedules on this cube's pre-aggregations (T160).
                 {...(openOn !== undefined && openOn.cube === value['name']
                   ? { initialTab: openOn.tab }
@@ -670,12 +771,14 @@ function FileEditor({
                 }}
               />
             ))}
-            {views.map(({ at, value }) => (
+            {views.map(({ at, value }, place) => (
               <CubeForm
                 key={`view ${String(at)}`}
                 kind="view"
                 value={value}
                 readOnly={readOnly}
+                banner={place === 0 && cubes.length === 0 ? notesBar : null}
+                onOpenMember={openIn('views', at)}
                 onChange={(next) => {
                   edit('views', at, next);
                 }}
@@ -708,6 +811,19 @@ function FileEditor({
             </button>
           </div>
           <span className="model-editor__sync">Edits in either side stay in sync</span>
+          {/* Soft wrap, so long descriptions and comments stay in the pane (note 8). */}
+          {view === 'yaml' ? (
+            <button
+              type="button"
+              className="btn-sm btn-ghost model-editor__wrap"
+              aria-pressed={wrap}
+              onClick={() => {
+                setWrap(!wrap);
+              }}
+            >
+              <span aria-hidden="true">↵ </span>Wrap
+            </button>
+          ) : null}
         </div>
         <div className="model-editor__code">
           {view === 'joins' && graph !== undefined ? (
@@ -742,6 +858,11 @@ function FileEditor({
               label={`${path}, as YAML`}
               problems={listed}
               goTo={goTo}
+              wrap={wrap}
+              tinted={tinted}
+              noted={noted}
+              flagged={flagged}
+              reveal={reveal}
             />
           </div>
         </div>

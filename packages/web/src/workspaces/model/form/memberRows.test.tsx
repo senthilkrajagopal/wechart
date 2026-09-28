@@ -474,6 +474,39 @@ describe('a member’s row (AC-225)', () => {
     });
   });
 
+  it('says which member is open, for the YAML to tint its lines (T482, design 03 note 9)', async () => {
+    const onOpenMember = vi.fn();
+    render(
+      <MemberList
+        schema={SCHEMA['Y.6']}
+        items={DIMENSIONS}
+        onChange={vi.fn()}
+        onOpenMember={onOpenMember}
+      />,
+    );
+    await userEvent.click(
+      within(row('status')).getByText('status', { selector: '.model-member__name' }),
+    );
+    await vi.waitFor(() => {
+      expect(onOpenMember).toHaveBeenLastCalledWith(2);
+    });
+    await userEvent.click(within(row('at')).getByText('at', { selector: '.model-member__name' }));
+    await vi.waitFor(() => {
+      expect(onOpenMember).toHaveBeenLastCalledWith(3);
+    });
+    // Closed, the one still open is said; then none.
+    await userEvent.click(within(row('at')).getByText('at', { selector: '.model-member__name' }));
+    await vi.waitFor(() => {
+      expect(onOpenMember).toHaveBeenLastCalledWith(2);
+    });
+    await userEvent.click(
+      within(row('status')).getByText('status', { selector: '.model-member__name' }),
+    );
+    await vi.waitFor(() => {
+      expect(onOpenMember).toHaveBeenLastCalledWith(null);
+    });
+  });
+
   it('never hides a key the file writes, whatever its type', async () => {
     render(
       <MemberList

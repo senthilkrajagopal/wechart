@@ -7957,8 +7957,29 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - A view's General is grouped the same way.
     - Every key stays reachable (AC-132, rule 26).
   - Depends on: T480
-- [ ] T482 (AC-134, AC-344) Say upfront what the form would drop, and show it in the YAML
-  - Files: `packages/web/src/workspaces/model/{ModelFilePage,YamlEditor,lossCheck}.ts(x)` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/model-design.spec.ts`
+- [x] T482 (AC-134, AC-344) Say upfront what the form would drop, and show it in the YAML
+  - **Done 2026-09-27.** Tested in:
+    - `annotations.test.ts`, `AnnotationsBar.test.tsx`, `memberLines.test.ts`, `YamlEditor.marks.test.tsx`, `form/memberRows.test.tsx` and `form/CubeForm.test.tsx`;
+    - `e2e/model-design.spec.ts`: T482's two tests, `cubes/orders.yml` and a draft of two cubes and a view, in Chrome, Firefox and Safari.
+  - **The bar** (note 4, MW-07):
+    - Under the first form's tabs, once per file. With no form yet, it is above the form area.
+    - It names the file's comments, anchors and aliases: counted, each by its YAML lines, the first by its words ("This file has 1 comment (YAML lines 19–22, “Cube hides primary keys from metadata unless told …”)").
+    - It is read from the text (`annotations.ts`): outside quotes (a quoted value may run over lines), outside a block scalar's lines, and with `&`/`*` only where a node starts.
+  - **Decided wording, not design 03's:** the form edits the parsed file in place (`sync.ts`) and asks before the one edit that would take a note away (the just-in-time guard, unchanged). So the bar says "The form keeps it, and asks first before an edit that would take away the key it is written on; the YAML keeps everything." Its actions are Show in YAML and Hide ("Edit in form anyway" would promise a loss the form doesn't make). Hide lasts for the tab, in sessionStorage.
+  - **The YAML** (notes 8 and 9, MW-12, MW-14, MW-15):
+    - **Flags:** each note's first line is flagged in its number's 40 px cell, with the warning glyph at 3 px.
+    - **Show in YAML** switches to the YAML, tints the notes' lines as warnings, and scrolls the first to the top, or as near as the code scrolls.
+    - **The open member's lines** are tinted in `accent-soft`, with their numbers in the accent at 600. This works for a cube's member and a view's, whichever form was used last (`memberLines.ts`, from the parsed node's range). A list tab opens with its members closed.
+    - **Marks stay put:** they are set again with each text, so a line moved (Alt-ArrowUp) keeps its mark.
+    - **"↵ Wrap"** sits in the pane's head, on by default. Wrapped rows hang under the line's text: a comment's words, a key's value, a list item's key.
+    - **Flush:** the code has no frame, at 12/16.
+    - **Problems** is flush beneath it, 150 px tall, with "Checked against Cube’s rules as you type". That is decided wording: `validate.ts` is wechart's reading of Cube's rules, run after each pause in typing, and Cube's own word comes with Save (AC-136). Design 03 says "Checked with Cube's validator on every change".
+  - **The review's other fixes:**
+    - one form no longer clears another's tint;
+    - the lint gutter no longer carries the flag.
+  - **Research:** `YamlEditor` gained `noted`, the numbers' class and the hang (research/code-editor.md addendum §5).
+  - Files (as built): `packages/web/src/workspaces/model/{ModelFilePage,YamlEditor,ProblemsPanel,annotations,AnnotationsBar,memberLines}.ts(x)`, `packages/web/src/workspaces/model/form/{CubeForm,ObjectForm}.tsx` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/model-design.spec.ts`
+  - Files (planned): `packages/web/src/workspaces/model/{ModelFilePage,YamlEditor,lossCheck}.ts(x)` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/model-design.spec.ts`
   - Failing test: `model-design.spec.ts` (design 03 notes 4, 8 and 9; MW-07, MW-12's tint, MW-14, MW-15):
     - **The warn bar:** a file with comments, anchors or aliases opens under a bar naming each one by its first line and YAML lines, with "Show in YAML" and "Edit in form anyway". "Show in YAML" scrolls to them and tints them. The just-in-time guard still asks.
     - **The YAML pane:**

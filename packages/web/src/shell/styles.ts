@@ -953,6 +953,63 @@ main:has(.model-page) {
   border-radius: 4px;
   background: var(--wc-bg-surface);
 }
+/* Under a file's YAML, design 03's: flush across the pane, 150 px, ruled above (T482). */
+.model-editor__yaml > .model-problems {
+  height: 150px;
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--wc-border-subtle);
+  border-radius: 0;
+}
+.model-problems__bar { display: flex; align-items: center; gap: 8px; padding-right: 12px; }
+.model-problems__how { margin-left: auto; color: var(--wc-text-muted); font-size: 12px; text-align: right; }
+/* The YAML's marks (T482; design 03 notes 8 and 9): the open member's lines on
+   the accent's soft ground; a note's lines, shown, on a warning ground; each
+   note's first line flagged with the warning glyph in the marks' gutter,
+   beside the line numbers (research/code-editor.md: a class on every gutter
+   element of the line, so the lint gutter draws one there). */
+.yaml-editor .cm-line.yaml-editor__tint { background: var(--wc-bg-accent-soft); }
+.yaml-editor .cm-line.yaml-editor__noted {
+  background: color-mix(in srgb, var(--wc-status-warning-icon) 10%, var(--wc-bg-surface));
+}
+.yaml-editor .cm-lineNumbers .cm-gutterElement.yaml-editor__tint-number {
+  color: var(--wc-accent);
+  font-weight: 600;
+}
+.yaml-editor .cm-lineNumbers .cm-gutterElement.yaml-editor__flag { position: relative; }
+/* The warning glyph, "!" in its triangle, in the number's cell at 3 px (design 03). */
+.yaml-editor .cm-lineNumbers .cm-gutterElement.yaml-editor__flag::before {
+  content: '!';
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  margin-top: -6px;
+  background: var(--wc-status-warning-icon);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  color: #1f1f1e;
+  font: 700 8px/13px var(--wc-font-ui, sans-serif);
+  text-align: center;
+}
+/* A file's code, design 03's (MW-15): flush in its pane, no frame, the gutter
+   ruled on bg-subtle, the numbers in a 40 px cell with room for a flag, and
+   the code at direction §3's 12/16. */
+.model-editor__yaml .model-editor__code { padding: 0; }
+.model-editor__yaml .model-editor__code .yaml-editor .cm-editor { border: 0; border-radius: 0; }
+.model-editor__yaml .model-editor__code .yaml-editor .cm-editor.cm-focused { outline-offset: -2px; }
+.model-editor__yaml .model-editor__code .yaml-editor .cm-scroller { line-height: 16px; }
+.model-editor__yaml .model-editor__code .yaml-editor .cm-lineNumbers .cm-gutterElement {
+  min-width: 40px;
+  padding: 0 10px 0 16px;
+  box-sizing: border-box;
+}
+/* The file's notes, under the first form's tabs (design 03 note 4): the text,
+   then its actions beneath it. */
+.model-annotations { flex: none; }
+.model-annotations p { display: inline; margin: 0; }
+.model-annotations__actions { display: flex; gap: 6px; margin-top: 6px; }
+.model-editor__wrap[aria-pressed='true'] { color: var(--wc-accent); font-weight: 600; }
 .model-problems__head {
   display: inline-flex;
   align-items: center;

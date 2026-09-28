@@ -424,6 +424,249 @@ test('T485: Generate cubes docks 480 px beside the model, and stays docked as a 
   await expect(page.getByRole('region', { name: 'YAML and join diagram' })).toBeVisible();
 });
 
+test('T482: a file’s comment said upfront and shown in the YAML, the open member tinted, Wrap on, Problems flush (design 03 notes 4, 8, 9)', async ({
+  page,
+}) => {
+  await page.goto(ORDERS);
+  const form = page.getByRole('region', { name: 'Cube orders' });
+  const yaml = page.getByRole('textbox', { name: 'cubes/orders.yml, as YAML' });
+  const editor = page.locator('.model-editor__yaml .yaml-editor');
+  await expect(yaml).toContainText('name: orders');
+
+  // Said before any edit, under the tabs, naming it by its lines and first words (note 4).
+  const bar = form.getByRole('note').filter({ hasText: 'This file has' });
+  await expect(bar).toHaveText(
+    'This file has 1 comment (YAML lines 19–22, “Cube hides primary keys from metadata unless told …”). ' +
+      'The form keeps it, and asks first before an edit that would take away the key it is written on; ' +
+      'the YAML keeps everything.Show in YAMLHide',
+  );
+  const tabsBottom = await form
+    .getByRole('tablist')
+    .boundingBox()
+    .then((box) => (box?.y ?? 0) + (box?.height ?? 0));
+  expect(Math.round((await bar.boundingBox())?.y ?? 0)).toBe(Math.round(tabsBottom));
+  // Flagged in the gutter, by its first line (note 9).
+  const flagged = editor.locator('.cm-lineNumbers .cm-gutterElement.yaml-editor__flag');
+  await expect(flagged).toHaveText(['19']);
+  // The warning glyph in the number's cell, left of the number, "!" in its triangle.
+  expect(
+    await flagged.evaluate((cell) => {
+      const glyph = getComputedStyle(cell, '::before');
+      return [glyph.content, glyph.left, Math.round(cell.getBoundingClientRect().width)];
+    }),
+  ).toEqual(['"!"', '3px', 40]);
+  await expect(editor.locator('.cm-line.yaml-editor__noted')).toHaveCount(0);
+  // The code flush in its pane, unframed, at 12/16 (MW-15).
+  expect(
+    await editor.locator('.cm-editor').evaluate((element) => {
+      const style = getComputedStyle(element);
+      const line = getComputedStyle(element.querySelector('.cm-line') as Element);
+      return [style.borderTopWidth, style.borderRadius, line.fontSize, line.lineHeight];
+    }),
+  ).toEqual(['0px', '0px', '12px', '16px']);
+  const code = await editor.boundingBox();
+  const head = await page
+    .getByRole('region', { name: 'YAML and join diagram' })
+    .locator(':scope > .model-editor__head')
+    .boundingBox();
+  expect([Math.round(code?.x ?? 0), Math.round(code?.width ?? 0)]).toEqual([
+    Math.round(head?.x ?? 0),
+    Math.round(head?.width ?? 0),
+  ]);
+
+  // Soft wrap on (note 8): the long comment stays in the pane; off, it runs past it.
+  const wrap = page
+    .getByRole('region', { name: 'YAML and join diagram' })
+    .getByRole('button', { name: 'Wrap' });
+  await expect(wrap).toHaveAttribute('aria-pressed', 'true');
+  const scroller = editor.locator('.cm-scroller');
+  const overflows = () =>
+    scroller.evaluate((element) => element.scrollWidth > element.clientWidth + 1);
+  expect(await overflows()).toBe(false);
+  // A wrapped comment hangs under its words, not at the margin: its next row
+  // starts where "Cube" does.
+  const hang = await editor
+    .locator('.cm-line', { hasText: '# Cube hides primary keys' })
+    .evaluate((line) => {
+      const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+      const boxes: DOMRect[] = [];
+      for (let node = walker.nextNode(); node !== null; node = walker.nextNode())
+        for (let at = 0; at < (node.textContent ?? '').length; at += 1) {
+          const range = document.createRange();
+          range.setStart(node, at);
+          range.setEnd(node, at + 1);
+          boxes.push(range.getBoundingClientRect());
+        }
+      const text = line.textContent ?? '';
+      const words = boxes[text.indexOf('Cube')];
+      // The next row by its top: a glyph's box can be taller than the 16 px row.
+      const next = boxes.find((box) => box.width > 0 && box.top > (boxes[0]?.top ?? 0) + 8);
+      return words === undefined || next === undefined ? null : next.left - words.left;
+    });
+  expect(Math.abs(hang ?? 99)).toBeLessThanOrEqual(1);
+  await wrap.click();
+  await expect(wrap).toHaveAttribute('aria-pressed', 'false');
+  expect(await overflows()).toBe(true);
+  await wrap.click();
+
+  // Show in YAML: the comment's lines tinted, the first brought to the top.
+  await page
+    .locator('.cm-scroller')
+    .first()
+    .evaluate((element) => {
+      element.scrollTop = 0;
+    });
+  await bar.getByRole('button', { name: 'Show in YAML' }).click();
+  const noted = editor.locator('.cm-line.yaml-editor__noted');
+  await expect(noted).toHaveCount(4);
+  await expect(noted.first()).toContainText('# Cube hides primary keys');
+  // At the top, or as near it as the code scrolls: a short file stops at its end.
+  await expect(async () => {
+    const top = (await scroller.boundingBox())?.y ?? 0;
+    const line = (await noted.first().boundingBox())?.y ?? 0;
+    const end = await scroller.evaluate(
+      (element) =>
+        element.scrollTop > 0 &&
+        element.scrollTop >= element.scrollHeight - element.clientHeight - 1,
+    );
+    expect(Math.abs(line - top) <= 8 || end).toBe(true);
+  }).toPass();
+  await expect(noted.first()).toBeInViewport();
+
+  // The open member's lines tinted (note 9); closed, none.
+  await form.getByRole('tab', { name: /^Dimensions/ }).click();
+  const status = form.locator('.model-member__name', { hasText: /^status$/ });
+  await status.click();
+  await expect(editor.locator('.cm-line.yaml-editor__tint')).toHaveText([
+    '      - name: status',
+    '        sql: status',
+    '        type: string',
+  ]);
+  // Their numbers in the accent, as design 03's.
+  await expect(editor.locator('.cm-lineNumbers .yaml-editor__tint-number')).toHaveText([
+    '24',
+    '25',
+    '26',
+  ]);
+  await status.click();
+  await expect(editor.locator('.cm-line.yaml-editor__tint')).toHaveCount(0);
+
+  // Problems flush beneath the code, 150 px, saying how it checks.
+  // Across the pane inside its rule, as its head row is.
+  const pane = await page
+    .getByRole('region', { name: 'YAML and join diagram' })
+    .locator(':scope > .model-editor__head')
+    .boundingBox();
+  const problems = page.getByRole('region', { name: 'Problems' });
+  const box = await problems.boundingBox();
+  expect([
+    Math.round(box?.x ?? 0),
+    Math.round(box?.width ?? 0),
+    Math.round(box?.height ?? 0),
+  ]).toEqual([Math.round(pane?.x ?? 0), Math.round(pane?.width ?? 0), 150]);
+  await expect(problems).toContainText('Checked against Cube’s rules as you type');
+
+  // Hidden, it stays hidden for the tab; the gutter's flag stays.
+  await bar.getByRole('button', { name: 'Hide' }).click();
+  await expect(bar).toHaveCount(0);
+  await expect(editor.locator('.cm-line.yaml-editor__noted')).toHaveCount(0);
+  await page.reload();
+  await expect(yaml).toContainText('name: orders');
+  await expect(form.getByRole('note').filter({ hasText: 'This file has' })).toHaveCount(0);
+  await expect(flagged).toHaveText(['19']);
+});
+
+/**
+ * T482's review: a file of several forms — two cubes and a view — as a draft
+ * kept for the tab, so nothing is published. The bar is said once; each
+ * form's open member is tinted, whichever form is used after; a list tab
+ * opens with its members closed; the tint follows a line moved in the code.
+ */
+const PAIR = [
+  'cubes:', //                        1
+  '  - name: pair_a', //              2
+  '    sql_table: public.orders', //  3
+  "    # About pair_a's keys.", //     4
+  '    dimensions:', //               5
+  '      - name: id', //              6
+  '        sql: id', //               7
+  '        type: number', //          8
+  '        primary_key: true', //     9
+  '      - name: status', //          10
+  '        sql: status', //           11
+  '        type: string', //          12
+  '  - name: pair_b', //              13
+  '    sql_table: public.products', //14
+  '    dimensions:', //               15
+  '      - name: id', //              16
+  '        sql: id', //               17
+  '        type: number', //          18
+  '        primary_key: true', //     19
+  'views:', //                        20
+  '  - name: pair_view', //           21
+  '    cubes:', //                    22
+  '      - join_path: pair_a', //     23
+  '        includes: "*"', //         24
+  '',
+].join('\n');
+
+test('T482: in a file of two cubes and a view, the bar is said once and each form’s open member tinted', async ({
+  page,
+}) => {
+  await page.addInitScript((content) => {
+    sessionStorage.setItem('wechart.model.drafts', JSON.stringify({ 'cubes/pair.yml': content }));
+  }, PAIR);
+  await page.goto('/model/files/cubes%2Fpair.yml');
+  const a = page.getByRole('region', { name: 'Cube pair_a' });
+  const b = page.getByRole('region', { name: 'Cube pair_b' });
+  const view = page.getByRole('region', { name: 'View pair_view' });
+  const editor = page.locator('.model-editor__yaml .yaml-editor');
+  const tinted = editor.locator('.cm-line.yaml-editor__tint');
+  await expect(editor).toContainText('pair_view');
+
+  // Said once, under the first form's tabs.
+  await expect(page.getByRole('note').filter({ hasText: 'This file has' })).toHaveCount(1);
+  await expect(
+    a.getByRole('note').filter({ hasText: 'This file has 1 comment (YAML lines 4,' }),
+  ).toHaveCount(1);
+
+  // A's member, tinted; B's tabs leave it so.
+  await a.getByRole('tab', { name: /^Dimensions/ }).click();
+  await a.locator('.model-member__name', { hasText: /^status$/ }).click();
+  await expect(tinted).toHaveText([
+    '      - name: status',
+    '        sql: status',
+    '        type: string',
+  ]);
+  await b.getByRole('tab', { name: /^Measures/ }).click();
+  await b.getByRole('tab', { name: /^Dimensions/ }).click();
+  await expect(tinted).toHaveCount(3);
+
+  // A's next list tab: its members closed, and nothing tinted.
+  await a.getByRole('tab', { name: /^Measures/ }).click();
+  await expect(tinted).toHaveCount(0);
+  await a.getByRole('tab', { name: /^Dimensions/ }).click();
+  await expect(a.locator('details.model-member[open]')).toHaveCount(0);
+
+  // A view's member, tinted as a cube's is.
+  await view.getByRole('tab', { name: /^Cubes/ }).click();
+  await view.locator('details.model-member > summary').first().click();
+  await expect(tinted).toHaveText(['      - join_path: pair_a', '        includes: "*"']);
+
+  // A line moved up in the code, as Alt-ArrowUp moves it: the member is still
+  // its three lines, and all three stay tinted.
+  await a.locator('.model-member__name', { hasText: /^status$/ }).click();
+  await expect(tinted).toHaveCount(3);
+  await editor.locator('.cm-line', { hasText: 'type: string' }).click();
+  await page.keyboard.press('Alt+ArrowUp');
+  await expect(editor.locator('.cm-line').nth(10)).toHaveText('        type: string');
+  await expect(tinted).toHaveText([
+    '      - name: status',
+    '        type: string',
+    '        sql: status',
+  ]);
+});
+
 test('T470: a bar over the form is a band across the pane, and a view’s tabs are short too', async ({
   page,
 }) => {
