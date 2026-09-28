@@ -73,10 +73,14 @@ function scatterTooltip(spec: RenderSpec): EChartsOption {
 
   const render = (params: Params) => {
     const [across, down] = Array.isArray(params.value) ? params.value : [];
+    // A partly marked point's marked values, each beside its whole (T453).
+    const markedBy = shareOf(params)?.markedBy ?? {};
+    const marked = (member: string, format: (value: unknown) => string) =>
+      markedBy[member] === undefined ? '' : ` · Marked: ${format(markedBy[member])}`;
     return [
       escapeHtml(seriesName(params.seriesName)),
-      `${escapeHtml(xTitle)}: ${escapeHtml(fx(across))}`,
-      `${escapeHtml(yTitle)}: ${escapeHtml(fy(down))}`,
+      `${escapeHtml(xTitle)}: ${escapeHtml(fx(across) + marked(x, fx))}`,
+      `${escapeHtml(yTitle)}: ${escapeHtml(fy(down) + marked(y, fy))}`,
     ]
       .filter((line) => line !== '')
       .join('<br/>');
@@ -106,9 +110,13 @@ function heatmapTooltip(spec: RenderSpec): EChartsOption {
     const heading = `${column(columns[Number(at)])} · ${row(rows[Number(down)])}`;
     // The measure by its title (AC-220).
     const named = titleOf(spec, measure);
-    return [escapeHtml(heading), `${escapeHtml(named)}: ${escapeHtml(format(value))}`].join(
-      '<br/>',
-    );
+    // A partly marked cell's marked value beside its whole (T453).
+    const share = shareOf(params);
+    const marked = share?.marked === undefined ? '' : ` · Marked: ${format(share.marked)}`;
+    return [
+      escapeHtml(heading),
+      `${escapeHtml(named)}: ${escapeHtml(format(value) + marked)}`,
+    ].join('<br/>');
   };
 
   return { tooltip: { trigger: 'item', formatter: render } };
@@ -141,9 +149,13 @@ function boxplotTooltip(spec: RenderSpec): EChartsOption {
     const box = boxes[params.dataIndex ?? -1];
     if (box === undefined) return '';
     const { stats } = box;
+    // A partly marked box: how many of its points hold marked rows (T453).
+    const marked = shareOf(params)?.marked;
     return [
       escapeHtml(category(box.name)),
-      `n: ${stats.n.toLocaleString('en-US')}`,
+      `n: ${stats.n.toLocaleString('en-US')}${
+        marked === undefined ? '' : ` · Marked: ${marked.toLocaleString('en-US')}`
+      }`,
       `Minimum: ${escapeHtml(format(stats.min))}`,
       `Q1: ${escapeHtml(format(stats.q1))}`,
       `Median: ${escapeHtml(format(stats.median))}`,

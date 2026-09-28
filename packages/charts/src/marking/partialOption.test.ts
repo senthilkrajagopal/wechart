@@ -1,9 +1,12 @@
 import { EMPTY_PREDICATE, withItem, type RenderSpec } from '@wechart/core';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
+import countries from '../geo/countries-50m.geo.json';
+import { registerCountries } from '../geo/countryMap';
 import { optionFor } from '../optionFor';
 import { marksOf, renderToSvg } from '../testing/renderToSvg';
 import { focusedItemOf } from './focus';
+import { HATCHED_POINT } from './partialOption';
 import { MARKED_OUTLINE_PX, UNMARKED_OPACITY } from './render';
 
 /**
@@ -331,5 +334,557 @@ describe('a partly marked pie slice', () => {
     expect(byName['Games']?.itemStyle?.['opacity']).toBe(UNMARKED_OPACITY);
     expect(byName['Toys']?.itemStyle?.['borderColor']).toBe(MARKING);
     expect(byName['Toys']?.itemStyle?.['decal']).toBeUndefined();
+  });
+
+  /**
+   * T453: a pie's slice is a row, grouped by every member its rows carry
+   * (AC-221) — a third one too, which no channel names. Its share is the
+   * share's rows of that slice alone, not of every slice with its category
+   * and split.
+   */
+  it('matches its share on every member it is grouped by, a third one too', () => {
+    const TIER = 'customers.tier';
+    const encoding = { x: ['products.category'], y: ['orders.amount'], color: ['orders.region'] };
+    const rows = [
+      {
+        'products.category': 'Books',
+        'orders.region': 'East',
+        [TIER]: 'gold',
+        'orders.amount': 10,
+      },
+      {
+        'products.category': 'Books',
+        'orders.region': 'East',
+        [TIER]: 'silver',
+        'orders.amount': 6,
+      },
+    ];
+    // Only the gold slice's rows are marked, and all of them.
+    const share = [
+      {
+        'products.category': 'Books',
+        'orders.region': 'East',
+        [TIER]: 'gold',
+        'orders.amount': 10,
+      },
+    ];
+    const [slices] = seriesOf(
+      optionFor({ ...bySpec('pie', 'sum', rows, share, encoding), measures: ['orders.amount'] }),
+    );
+    const [gold, silver] = slices?.data ?? [];
+
+    // Gold is marked in full: outlined, whole, not hatched. Silver has none.
+    expect(gold?.itemStyle?.['borderColor']).toBe(MARKING);
+    expect(gold?.itemStyle?.['decal']).toBeUndefined();
+    expect(gold?.share).toEqual({ marked: 10, total: 10 });
+    expect(silver?.itemStyle?.['opacity']).toBe(UNMARKED_OPACITY);
+    expect(silver?.share).toEqual({ total: 6 });
+  });
+});
+
+/**
+ * T453: the chart types T387 left fading every item (direction.md §7a).
+ */
+describe('a partly marked heatmap cell', () => {
+  const encoding = {
+    x: ['products.category'],
+    y: ['orders.region'],
+    color: ['orders.amount'],
+  };
+  const rows = [
+    { 'products.category': 'Books', 'orders.region': 'East', 'orders.amount': 10 },
+    { 'products.category': 'Books', 'orders.region': 'West', 'orders.amount': 6 },
+    { 'products.category': 'Games', 'orders.region': 'East', 'orders.amount': 5 },
+  ];
+  // Books·East partly marked, Books·West not at all, Games·East in full.
+  const share = [
+    { 'products.category': 'Books', 'orders.region': 'East', 'orders.amount': 4 },
+    { 'products.category': 'Games', 'orders.region': 'East', 'orders.amount': 5 },
+  ];
+  type Cell = { value: unknown[]; itemStyle?: Record<string, unknown>; share?: unknown };
+  const cellsIn = (spec: RenderSpec) => seriesOf(optionFor(spec))[0]?.data as unknown as Cell[];
+
+  it('is outlined dashed in the marking’s colour, the unmarked faded and the marked solid', () => {
+    const [partly, none, whole] = cellsIn(bySpec('heatmap', 'sum', rows, share, encoding));
+
+    // Every cell where it was: its column, its row and its whole value.
+    expect([partly, none, whole].map((cell) => cell?.value)).toEqual([
+      [0, 0, 10],
+      [0, 1, 6],
+      [1, 0, 5],
+    ]);
+    expect(partly?.itemStyle).toMatchObject({
+      opacity: 1,
+      borderColor: MARKING,
+      borderWidth: MARKED_OUTLINE_PX,
+      borderType: 'dashed',
+    });
+    expect(none?.itemStyle?.['opacity']).toBe(UNMARKED_OPACITY);
+    expect(whole?.itemStyle).toMatchObject({ opacity: 1, borderColor: MARKING });
+    expect(whole?.itemStyle?.['borderType']).not.toBe('dashed');
+    // Its colour is the scale's: a cell's own would stand in for its value.
+    expect(partly?.itemStyle?.['color']).toBeUndefined();
+  });
+
+  it('is hatched as well where its measure is not additive (AC-097)', () => {
+    const [partly, , whole] = cellsIn(bySpec('heatmap', 'avg', rows, share, encoding));
+
+    expect(partly?.itemStyle).toMatchObject({ borderType: 'dashed', decal: HATCH });
+    // An average marked "5 of 5" is not marked in full (T387's review).
+    expect(whole?.itemStyle).toMatchObject({ borderType: 'dashed', decal: HATCH });
+  });
+
+  it('says its marked value beside its whole in its tooltip', () => {
+    const option = optionFor(bySpec('heatmap', 'sum', rows, share, encoding));
+    const [partly, none] = seriesOf(option)[0]?.data as unknown as Cell[];
+    const formatter = (option['tooltip'] as { formatter: (params: unknown) => string }).formatter;
+
+    expect(formatter({ value: partly?.value, data: partly })).toBe(
+      'Books · East<br/>orders.amount: 10 · Marked: 4',
+    );
+    expect(formatter({ value: none?.value, data: none })).toBe('Books · West<br/>orders.amount: 6');
+  });
+
+  it('is drawn with a dashed outline', () => {
+    const svg = renderToSvg(optionFor(bySpec('heatmap', 'sum', rows, share, encoding)));
+
+    expect(svg).toMatch(/<path\b[^>]*stroke="#151107"[^>]*stroke-dasharray="[^"]+"/);
+  });
+
+  it('keeps the keyboard’s focus on its column, drawn marked', () => {
+    const spec = { ...bySpec('heatmap', 'sum', rows, share, encoding), keyboardFocus: 'Games' };
+
+    // Games·East is the third cell: its column, not its place, says so.
+    expect(focusedItemOf(optionFor(spec), spec)).toEqual({ seriesIndex: 0, dataIndex: 2 });
+  });
+
+  it('is drawn with a pattern where its measure is not additive', () => {
+    expect(renderToSvg(optionFor(bySpec('heatmap', 'avg', rows, share, encoding)))).toMatch(
+      /<pattern\b/,
+    );
+  });
+});
+
+describe('a partly marked combo', () => {
+  const encoding = { x: ['products.category'], y: ['orders.amount', 'orders.count'] };
+  const rows = [
+    { 'products.category': 'Books', 'orders.amount': 10, 'orders.count': 3 },
+    { 'products.category': 'Games', 'orders.amount': 20, 'orders.count': 4 },
+  ];
+  const share = [{ 'products.category': 'Books', 'orders.amount': 4, 'orders.count': 1 }];
+  const combo = (): RenderSpec => ({
+    ...bySpec('combo', 'sum', rows, share, encoding),
+    marking: {
+      predicate: marked,
+      colour: MARKING,
+      share,
+      aggTypes: { 'orders.amount': 'sum', 'orders.count': 'count' },
+    },
+  });
+  type Drawn = Series & { type?: string; lineStyle?: { opacity?: number } };
+
+  it('splits its bars as a bar chart’s, and draws its line’s marked share over it faded', () => {
+    const drawn = seriesOf(optionFor(combo())) as Drawn[];
+
+    expect(drawn.map((one) => [one.type, one.name, one.data.map((item) => item.value)])).toEqual([
+      ['bar', 'orders.amount', [4, null]],
+      ['bar', 'orders.amount', [6, 20]],
+      ['line', 'orders.count', [3, 4]],
+      ['line', 'orders.count', [1, null]],
+    ]);
+    const [foot, rest, total, line] = drawn;
+    expect(foot?.stack).toBe(rest?.stack);
+    expect(foot?.data[0]?.itemStyle).toMatchObject({ opacity: 1, borderColor: MARKING });
+    expect(rest?.data[0]?.itemStyle?.['opacity']).toBe(UNMARKED_OPACITY);
+    expect(total?.lineStyle?.opacity).toBe(UNMARKED_OPACITY);
+    expect(line?.lineStyle?.opacity).toBe(1);
+  });
+
+  it('says each item once in its crosshair tooltip, with its marked share', () => {
+    const option = optionFor(combo());
+    const drawn = seriesOf(option);
+    const formatter = (option['tooltip'] as { formatter: (params: unknown) => string }).formatter;
+    const at = (index: number) =>
+      drawn.map((one, seriesIndex) => ({
+        name: 'Books',
+        seriesName: one.name,
+        seriesIndex,
+        value: one.data[index]?.value,
+        data: one.data[index],
+      }));
+
+    expect(formatter(at(0))).toBe(
+      'Books<br/>orders.amount: 10 · Marked: 4<br/>orders.count: 3 · Marked: 1',
+    );
+  });
+});
+
+describe('a partly marked trellis panel', () => {
+  const encoding = { x: ['products.category'], y: ['orders.amount'], facet: ['orders.region'] };
+  const rows = [
+    { 'orders.region': 'East', 'products.category': 'Books', 'orders.amount': 10 },
+    { 'orders.region': 'East', 'products.category': 'Games', 'orders.amount': 8 },
+    { 'orders.region': 'West', 'products.category': 'Books', 'orders.amount': 6 },
+    { 'orders.region': 'West', 'products.category': 'Games', 'orders.amount': 2 },
+  ];
+  // Books in East partly, Games in West in full; nothing else.
+  const share = [
+    { 'orders.region': 'East', 'products.category': 'Books', 'orders.amount': 4 },
+    { 'orders.region': 'West', 'products.category': 'Games', 'orders.amount': 2 },
+  ];
+  type Panel = Series & { xAxisIndex?: number; yAxisIndex?: number };
+
+  /**
+   * Its panels' marks are bars, so a sum's marked share is drawn from the
+   * baseline as a bar's is (AC-097), in each panel on its own.
+   */
+  it('splits each panel’s bars by that panel’s share, in a stack of its own', () => {
+    const drawn = seriesOf(optionFor(bySpec('trellis', 'sum', rows, share, encoding))) as Panel[];
+
+    expect(
+      drawn.map((one) => [one.name, one.xAxisIndex, one.data.map((item) => item.value)]),
+    ).toEqual([
+      ['East', 0, [4, null]],
+      ['East', 0, [6, 8]],
+      ['West', 1, [null, 2]],
+      ['West', 1, [6, null]],
+    ]);
+    const [eastMarked, eastRest, westMarked, westRest] = drawn;
+    expect(eastMarked?.stack).toBe(eastRest?.stack);
+    expect(westMarked?.stack).toBe(westRest?.stack);
+    expect(eastMarked?.stack).not.toBe(westMarked?.stack);
+    expect(eastMarked?.data[0]?.itemStyle).toMatchObject({
+      opacity: 1,
+      borderColor: MARKING,
+      borderWidth: MARKED_OUTLINE_PX,
+    });
+    expect(eastRest?.data[1]?.itemStyle?.['opacity']).toBe(UNMARKED_OPACITY);
+  });
+
+  it('hatches a partly marked average whole, never shorter', () => {
+    const [marked, rest] = seriesOf(optionFor(bySpec('trellis', 'avg', rows, share, encoding)));
+
+    expect(marked?.data.map((item) => item.value)).toEqual([null, null]);
+    expect(rest?.data.map((item) => item.value)).toEqual([10, 8]);
+    expect(rest?.data[0]?.itemStyle?.['decal']).toEqual(HATCH);
+  });
+
+  it('says its marked share in its tooltip', () => {
+    const option = optionFor(bySpec('trellis', 'sum', rows, share, encoding));
+    const [marked] = seriesOf(option);
+    const formatter = (option['tooltip'] as { formatter: (params: unknown) => string }).formatter;
+
+    expect(
+      formatter({
+        name: 'Books',
+        seriesName: 'East',
+        seriesIndex: 0,
+        value: 4,
+        data: marked?.data[0],
+      }),
+    ).toBe('Books<br/>East: 10 · Marked: 4');
+  });
+});
+
+/**
+ * T453, the user's answer of 2026-09-28 (R43): a scatter's point, a box plot's
+ * box and a map's country are partly marked as a pie's slice is — outlined
+ * and hatched, never faded, "· Marked: X" in the tooltip. A box is partly
+ * marked when some of its rows are; each outlier is marked or not.
+ */
+describe('a partly marked scatter point', () => {
+  const encoding = { x: ['orders.count'], y: ['orders.amount'], color: ['orders.region'] };
+  const rows = [
+    {
+      'products.category': 'Books',
+      'orders.region': 'East',
+      'orders.count': 3,
+      'orders.amount': 10,
+    },
+    {
+      'products.category': 'Games',
+      'orders.region': 'East',
+      'orders.count': 4,
+      'orders.amount': 20,
+    },
+    { 'products.category': 'Toys', 'orders.region': 'West', 'orders.count': 1, 'orders.amount': 5 },
+  ];
+  // Books partly marked, Games not at all, Toys in full.
+  const share = [
+    {
+      'products.category': 'Books',
+      'orders.region': 'East',
+      'orders.count': 1,
+      'orders.amount': 4,
+    },
+    { 'products.category': 'Toys', 'orders.region': 'West', 'orders.count': 1, 'orders.amount': 5 },
+  ];
+  const scatter = (aggType: string): RenderSpec => ({
+    ...bySpec('scatter', aggType, rows, share, encoding),
+    measures: ['orders.count', 'orders.amount'],
+    marking: {
+      predicate: marked,
+      colour: MARKING,
+      share,
+      aggTypes: { 'orders.count': 'count', 'orders.amount': aggType },
+    },
+  });
+  type Point = { value: unknown; itemStyle?: Record<string, unknown>; share?: unknown };
+  const pointsOf = (option: Record<string, unknown>) =>
+    seriesOf(option).map((one) => one.data as unknown as Point[]);
+
+  it('is outlined and hatched, where the others are faded and the marked outlined', () => {
+    const [[books, games] = [], [toys] = []] = pointsOf(optionFor(scatter('sum')));
+
+    // Each where it was, at its whole values.
+    expect([books?.value, games?.value, toys?.value]).toEqual([
+      [3, 10],
+      [4, 20],
+      [1, 5],
+    ]);
+    expect(books?.itemStyle).toMatchObject({
+      opacity: 1,
+      borderColor: MARKING,
+      borderWidth: MARKED_OUTLINE_PX,
+    });
+    // ECharts draws no decal on a symbol (research/echarts-symbol-hatch.md):
+    // its hatch is the point's own shape, crossed by strokes.
+    expect((books as { symbol?: unknown } | undefined)?.symbol).toBe(HATCHED_POINT);
+    expect(games?.itemStyle?.['opacity']).toBe(UNMARKED_OPACITY);
+    expect(toys?.itemStyle).toMatchObject({ opacity: 1, borderColor: MARKING });
+    expect((toys as { symbol?: unknown } | undefined)?.symbol).toBeUndefined();
+  });
+
+  it('says each measure’s marked value in its tooltip', () => {
+    const option = optionFor(scatter('sum'));
+    const [[books, games] = []] = pointsOf(option);
+    const formatter = (option['tooltip'] as { formatter: (params: unknown) => string }).formatter;
+
+    expect(formatter({ seriesName: 'East', value: books?.value, data: books })).toBe(
+      'East<br/>orders.count: 3 · Marked: 1<br/>orders.amount: 10 · Marked: 4',
+    );
+    expect(formatter({ seriesName: 'East', value: games?.value, data: games })).toBe(
+      'East<br/>orders.count: 4<br/>orders.amount: 20',
+    );
+  });
+
+  it('is drawn as a disc crossed by strokes in the marking’s colour', () => {
+    const svg = renderToSvg(optionFor(scatter('avg')));
+    // Its outline and two strokes across it: three shapes in one path.
+    const hatched = [...svg.matchAll(/<path\b([^>]*)>/g)]
+      .map((match) => match[1] ?? '')
+      .filter((attributes) => attributes.includes(`stroke="${MARKING}"`))
+      .map((attributes) => (/\bd="([^"]*)"/.exec(attributes)?.[1] ?? '').match(/M/gi)?.length);
+
+    expect(hatched).toContain(3);
+  });
+});
+
+describe('a partly marked box plot', () => {
+  const encoding = { x: ['orders.status'], y: ['orders.amount'] };
+  const EACH = 'customers.id';
+  // Each point a customer: paid has an outlier (100), refunded has none.
+  const rows = [
+    ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 100].map((amount, index) => ({
+      'orders.status': 'paid',
+      [EACH]: `c${String(index)}`,
+      'orders.amount': amount,
+    })),
+    ...[5, 6, 7].map((amount, index) => ({
+      'orders.status': 'refunded',
+      [EACH]: `r${String(index)}`,
+      'orders.amount': amount,
+    })),
+  ];
+  const boxplot = (share: RenderSpec['rows']): RenderSpec => ({
+    ...bySpec('boxplot', 'sum', rows, share, encoding),
+    measures: ['orders.amount'],
+  });
+  type Drawn = { value?: unknown; itemStyle?: Record<string, unknown>; share?: unknown };
+  const drawnOf = (spec: RenderSpec) => {
+    const [boxes, outliers] = seriesOf(optionFor(spec)) as unknown as { data: Drawn[] }[];
+    return { boxes: boxes?.data ?? [], outliers: outliers?.data ?? [] };
+  };
+
+  it('outlines and hatches a box some of whose rows are marked, and fades one with none', () => {
+    // Two of paid's customers are partly marked; refunded has nothing marked.
+    const { boxes } = drawnOf(
+      boxplot([
+        { 'orders.status': 'paid', [EACH]: 'c0', 'orders.amount': 1 },
+        { 'orders.status': 'paid', [EACH]: 'c3', 'orders.amount': 2 },
+      ]),
+    );
+    const [paid, refunded] = boxes;
+
+    // Drawn where it was: its whiskers, quartiles and median.
+    expect(paid?.value).toEqual([1, 3.25, 5.5, 7.75, 9]);
+    expect(paid?.itemStyle).toMatchObject({
+      opacity: 1,
+      borderColor: MARKING,
+      borderWidth: MARKED_OUTLINE_PX,
+      decal: HATCH,
+    });
+    expect(refunded?.itemStyle?.['opacity']).toBe(UNMARKED_OPACITY);
+  });
+
+  it('outlines a box whose every row is marked in full, unhatched', () => {
+    const { boxes } = drawnOf(
+      boxplot(
+        [5, 6, 7].map((amount, index) => ({
+          'orders.status': 'refunded',
+          [EACH]: `r${String(index)}`,
+          'orders.amount': amount,
+        })),
+      ),
+    );
+
+    expect(boxes[1]?.itemStyle).toMatchObject({ opacity: 1, borderColor: MARKING });
+    expect(boxes[1]?.itemStyle?.['decal']).toBeUndefined();
+  });
+
+  it('marks an outlier whose row is marked, and fades one whose row is not', () => {
+    const marked100 = drawnOf(
+      boxplot([{ 'orders.status': 'paid', [EACH]: 'c9', 'orders.amount': 30 }]),
+    ).outliers;
+    const markedElsewhere = drawnOf(
+      boxplot([{ 'orders.status': 'paid', [EACH]: 'c0', 'orders.amount': 1 }]),
+    ).outliers;
+
+    expect(marked100[0]?.itemStyle).toMatchObject({
+      opacity: 1,
+      borderColor: MARKING,
+      borderWidth: MARKED_OUTLINE_PX,
+    });
+    // Marked or not: never hatched.
+    expect(marked100[0]?.itemStyle?.['decal']).toBeUndefined();
+    expect(markedElsewhere[0]?.itemStyle?.['opacity']).toBe(UNMARKED_OPACITY);
+  });
+
+  it('says how many of a box’s points are marked in its tooltip', () => {
+    const spec = boxplot([
+      { 'orders.status': 'paid', [EACH]: 'c0', 'orders.amount': 1 },
+      { 'orders.status': 'paid', [EACH]: 'c3', 'orders.amount': 2 },
+    ]);
+    const option = optionFor(spec);
+    const { boxes } = drawnOf(spec);
+    const formatter = (option['tooltip'] as { formatter: (params: unknown) => string }).formatter;
+
+    expect(
+      formatter({ seriesType: 'boxplot', dataIndex: 0, value: boxes[0]?.value, data: boxes[0] }),
+    ).toContain('n: 10 · Marked: 2<br/>');
+  });
+
+  it('is drawn with a pattern', () => {
+    const svg = renderToSvg(
+      optionFor(boxplot([{ 'orders.status': 'paid', [EACH]: 'c0', 'orders.amount': 1 }])),
+    );
+    expect(svg).toMatch(/<pattern\b/);
+  });
+
+  /**
+   * T453's review: without "Each point is" a box plot's rows are ungrouped
+   * (T399), each point one row of the data with nothing but its category and
+   * value, and its share is the marked ones among them. A point is marked or
+   * not, found by its value among its category's marked rows — never every
+   * point of a category with any row marked.
+   */
+  describe('each point a row', () => {
+    const ungrouped = (share: RenderSpec['rows']): RenderSpec => ({
+      ...bySpec(
+        'boxplot',
+        'sum',
+        rows.map((row) => ({
+          'orders.status': row['orders.status'],
+          'orders.amount': row['orders.amount'],
+        })),
+        share,
+        encoding,
+      ),
+      measures: ['orders.amount'],
+    });
+
+    it('marks only the points whose rows are marked, and counts them', () => {
+      const spec = ungrouped([
+        { 'orders.status': 'paid', 'orders.amount': 1 },
+        { 'orders.status': 'paid', 'orders.amount': 2 },
+      ]);
+      const { boxes, outliers } = drawnOf(spec);
+      const formatter = (optionFor(spec)['tooltip'] as { formatter: (params: unknown) => string })
+        .formatter;
+
+      expect(boxes[0]?.itemStyle).toMatchObject({ borderColor: MARKING, decal: HATCH });
+      expect(
+        formatter({ seriesType: 'boxplot', dataIndex: 0, value: boxes[0]?.value, data: boxes[0] }),
+      ).toContain('n: 10 · Marked: 2<br/>');
+      // The outlier, 100, is none of the marked rows.
+      expect(outliers[0]?.itemStyle?.['opacity']).toBe(UNMARKED_OPACITY);
+    });
+
+    it('marks an outlier whose own row is marked', () => {
+      const { outliers } = drawnOf(ungrouped([{ 'orders.status': 'paid', 'orders.amount': 100 }]));
+
+      expect(outliers[0]?.itemStyle).toMatchObject({ opacity: 1, borderColor: MARKING });
+    });
+
+    it('outlines a box whose every row is marked, unhatched', () => {
+      const { boxes } = drawnOf(
+        ungrouped(
+          [5, 6, 7].map((amount) => ({ 'orders.status': 'refunded', 'orders.amount': amount })),
+        ),
+      );
+
+      expect(boxes[1]?.itemStyle).toMatchObject({ opacity: 1, borderColor: MARKING });
+      expect(boxes[1]?.itemStyle?.['decal']).toBeUndefined();
+    });
+  });
+});
+
+describe('a partly marked country', () => {
+  beforeAll(() => {
+    registerCountries(countries);
+  });
+  const encoding = { x: ['customers.country'], y: ['orders.amount'] };
+  const rows = [
+    { 'customers.country': 'FRA', 'orders.amount': 10 },
+    { 'customers.country': 'NOR', 'orders.amount': 20 },
+    { 'customers.country': 'USA', 'orders.amount': 5 },
+  ];
+  // France partly marked, Norway not at all, the USA in full.
+  const share = [
+    { 'customers.country': 'FRA', 'orders.amount': 4 },
+    { 'customers.country': 'USA', 'orders.amount': 5 },
+  ];
+  type Region = { name?: string; itemStyle?: Record<string, unknown>; share?: unknown };
+  const regionsIn = (option: Record<string, unknown>) =>
+    seriesOf(option)[0]?.data as unknown as Region[];
+
+  it('is outlined and hatched, never filled, where the others are faded and the marked outlined', () => {
+    const [france, norway, usa] = regionsIn(optionFor(bySpec('map', 'sum', rows, share, encoding)));
+
+    expect(france?.itemStyle).toMatchObject({
+      opacity: 1,
+      borderColor: MARKING,
+      borderWidth: MARKED_OUTLINE_PX,
+      decal: HATCH,
+    });
+    // Its fill is the scale's (direction.md, "Country map").
+    expect(france?.itemStyle?.['color']).toBeUndefined();
+    expect(norway?.itemStyle?.['opacity']).toBe(UNMARKED_OPACITY);
+    expect(usa?.itemStyle).toMatchObject({ opacity: 1, borderColor: MARKING });
+    expect(usa?.itemStyle?.['decal']).toBeUndefined();
+  });
+
+  it('says its marked value beside its whole in its tooltip', () => {
+    const option = optionFor(bySpec('map', 'sum', rows, share, encoding));
+    const [france] = regionsIn(option);
+    const formatter = (option['tooltip'] as { formatter: (params: unknown) => string }).formatter;
+
+    expect(formatter({ name: 'FRA', value: 10, data: france })).toBe('France<br/>10 · Marked: 4');
+  });
+
+  it('is drawn with a pattern over its scale’s fill', () => {
+    expect(renderToSvg(optionFor(bySpec('map', 'sum', rows, share, encoding)))).toMatch(
+      /<pattern\b/,
+    );
   });
 });

@@ -235,3 +235,76 @@ describe('a pivot of two measures (AC-220)', () => {
     expect(headers).not.toContain(COUNT);
   });
 });
+
+/**
+ * T453 / AC-097: a pivot's cell partly marked is drawn as a table's row is,
+ * in the user's answer of 2026-09-28 (R43) — the left rule in the secondary
+ * colour and "1 · Marked: 4" in the cell — and its totals stay unmarked.
+ * Extending the table answer to a pivot is T453's decision, not the user's,
+ * and is open to change.
+ */
+describe('a pivot under a marking', () => {
+  const marked = spec({
+    marking: {
+      predicate: { items: [[{ member: 'orders.channel', value: 'web' }]], ranges: [] },
+      colour: '#151107',
+      // east·refunded partly, west·refunded in full, the rest not at all.
+      share: [
+        { [REGION]: 'east', [STATUS]: 'refunded', [COUNT]: 1 },
+        { [REGION]: 'west', [STATUS]: 'refunded', [COUNT]: 8 },
+      ],
+      aggTypes: { [COUNT]: 'count' },
+    },
+  });
+  const cellsIn = (row: HTMLElement) => [...row.querySelectorAll('td')];
+
+  it('rules a partly marked cell and says its marked share in it', () => {
+    render(<PivotTable spec={marked} />);
+    const [east, west] = screen.getAllByTestId('pivot-row');
+    const [eastPaid, eastRefunded] = cellsIn(east!);
+    const [westPaid, westRefunded] = cellsIn(west!);
+
+    expect(eastRefunded?.textContent).toBe('2 · Marked: 1');
+    expect(eastRefunded?.getAttribute('data-marked')).toBe('partly');
+    expect(eastPaid?.textContent).toBe('1');
+    expect(eastPaid?.getAttribute('data-marked')).toBeNull();
+    // Marked in full: its share said, no rule.
+    expect(westRefunded?.textContent).toBe('8 · Marked: 8');
+    expect(westRefunded?.getAttribute('data-marked')).toBeNull();
+    expect(westPaid?.textContent).toBe('4');
+  });
+
+  // T453's review: a measure over the marked rows with no value is none, never 0.
+  it('says no marked value where the marked rows give a cell none', () => {
+    render(
+      <PivotTable
+        spec={spec({
+          marking: {
+            predicate: { items: [[{ member: 'orders.channel', value: 'web' }]], ranges: [] },
+            colour: '#151107',
+            share: [{ [REGION]: 'east', [STATUS]: 'refunded', [COUNT]: null }],
+            aggTypes: { [COUNT]: 'avg' },
+          },
+        })}
+      />,
+    );
+    const [east] = screen.getAllByTestId('pivot-row');
+    const [, eastRefunded] = cellsIn(east!);
+
+    expect(eastRefunded?.textContent).toBe('2');
+    expect(eastRefunded?.getAttribute('data-marked')).toBeNull();
+  });
+
+  it('leaves its totals unmarked', () => {
+    render(<PivotTable spec={marked} />);
+
+    for (const total of [
+      ...screen.getAllByTestId('pivot-row-total'),
+      ...screen.getAllByTestId('pivot-column-total'),
+      ...screen.getAllByTestId('pivot-grand-total'),
+    ]) {
+      expect(total.textContent).not.toContain('Marked');
+      expect(total.getAttribute('data-marked')).toBeNull();
+    }
+  });
+});

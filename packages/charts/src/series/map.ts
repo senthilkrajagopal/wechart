@@ -152,14 +152,21 @@ export function mapOption(spec: RenderSpec, map: CountryMap): EChartsOption {
         ],
       },
     ],
-    // The country by its name, then the measure, or "No data" (direction.md).
+    // The country by its name, then the measure, or "No data" (direction.md);
+    // a partly marked one's marked value beside it (T453).
     tooltip: {
       trigger: 'item',
-      formatter: (params: { name?: string; value?: unknown }) => {
+      formatter: (params: { name?: string; value?: unknown; data?: unknown }) => {
         const code = params.name ?? '';
         const value = typeof params.value === 'number' ? params.value : Number.NaN;
+        const marked = (params.data as { share?: { marked?: number } } | null | undefined)?.share
+          ?.marked;
         return `${escapeHtml(map.names.get(code) ?? code)}<br/>${
-          Number.isFinite(value) ? escapeHtml(format(value)) : 'No data'
+          Number.isFinite(value)
+            ? escapeHtml(
+                format(value) + (marked === undefined ? '' : ` · Marked: ${format(marked)}`),
+              )
+            : 'No data'
         }`;
       },
     },

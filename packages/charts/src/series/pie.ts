@@ -29,6 +29,12 @@ export interface Slice {
   readonly category: string;
   /** The second dimension's value as it came, where the pie is split. */
   readonly split?: string;
+  /**
+   * The values of any other member it is grouped by, as they came, where it
+   * is grouped by more than its category and split: its marked share is its
+   * own row's (T453), not every slice's with its category and split.
+   */
+  readonly grouped?: Readonly<Record<string, string>>;
 }
 
 const LAYOUT = {
@@ -92,7 +98,17 @@ export function slicesOf(spec: RenderSpec): Slice[] {
   if (category === undefined || measure === undefined) return [];
   const split = pieSplitOf(spec);
   const grouping = groupingOf(spec).map((member) => ({ member, write: nameWriter(spec, member) }));
+  const others = grouping
+    .map(({ member }) => member)
+    .filter((member) => member !== category && member !== split);
   const blank = (value: unknown) => value === null || value === undefined || value === '';
+  /** A row's other groupings; none that it lacks, as Top N's "Other" lacks them. */
+  const groupedOf = (row: Record<string, unknown>) =>
+    Object.fromEntries(
+      others
+        .filter((member) => row[member] !== undefined)
+        .map((member) => [member, blank(row[member]) ? '' : String(row[member])]),
+    );
 
   return (
     spec.rows
@@ -110,12 +126,14 @@ export function slicesOf(spec: RenderSpec): Slice[] {
           .filter(({ member }, index) => index === 0 || !blank(row[member]))
           .map(({ member, write }) => (blank(row[member]) ? NO_VALUE : write(row[member])))
           .join(' · ');
+        const grouped = groupedOf(row);
         return {
           name,
           value,
           // Blank as it came, so a click on it selects nothing (AC-117).
           category: blank(row[category]) ? '' : String(row[category]),
           ...(split === undefined || blank(row[split]) ? {} : { split: String(row[split]) }),
+          ...(Object.keys(grouped).length === 0 ? {} : { grouped }),
         };
       })
       // A category with no measurement is left out rather than drawn as a

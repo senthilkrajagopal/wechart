@@ -1,3 +1,4 @@
+import { rowSharesOf } from '@wechart/charts';
 import {
   columnTitleOf,
   formatValue,
@@ -10,7 +11,7 @@ import {
   type RenderSpec,
 } from '@wechart/core';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 /**
  * The table (AC-037), and the table view every chart can switch to (AC-178).
@@ -117,6 +118,20 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
     },
   });
 
+  /**
+   * A row's marked share, where the marking's was answered apart (T453,
+   * AC-097; the user's answer of 2026-09-28, R43): its measures' marked
+   * values beside theirs, and the prototype's left rule where it is marked
+   * in part. Read once per answer, not once per scroll.
+   */
+  const sharesOf = useMemo(() => {
+    const measured = new Set(spec.measures ?? membersOn(spec.encoding, 'y'));
+    return rowSharesOf(
+      spec,
+      tableColumnsOf(spec.rows, spec.fields).filter((column) => measured.has(column)),
+    );
+  }, [spec]);
+
   if (rows.length === 0) {
     return (
       <div className="data-table" data-testid="data-table">
@@ -131,6 +146,8 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
   // A measure's figures are set right, as the prototype's `td.num` (T304).
   const measures = new Set(spec.measures ?? membersOn(spec.encoding, 'y'));
   const align = (column: string) => (measures.has(column) ? 'num' : undefined);
+  const shareOf = (row: Record<string, unknown> | undefined) =>
+    row === undefined ? undefined : sharesOf(row);
   const drawn = virtualizer.getVirtualItems();
   const first = drawn.at(0);
   const last = drawn.at(-1);
@@ -174,11 +191,13 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
 
           {drawn.map((item) => {
             const row = rows[item.index];
+            const share = shareOf(row);
             return (
               <tr
                 key={item.key}
                 data-testid="table-row"
                 aria-rowindex={item.index + 2}
+                {...(share?.partly === true ? { 'data-marked': 'partly' } : {})}
                 /**
                  * `aria-selected` only where rows can actually be marked: on a
                  * table without a primary key it would announce a state the
@@ -200,11 +219,19 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
                   ...(markable ? { cursor: 'pointer' } : {}),
                 }}
               >
-                {columns.map((column) => (
-                  <td key={column} className={align(column)}>
-                    {formatValue(row?.[column], column, spec.formats ?? {}, spec.granularities)}
-                  </td>
-                ))}
+                {columns.map((column) => {
+                  const marked = share?.marked[column];
+                  return (
+                    <td key={column} className={align(column)}>
+                      {formatValue(row?.[column], column, spec.formats ?? {}, spec.granularities)}
+                      {marked === undefined ? null : (
+                        <span className="data-table__marked">
+                          {` · Marked: ${formatValue(marked, column, spec.formats ?? {})}`}
+                        </span>
+                      )}
+                    </td>
+                  );
+                })}
               </tr>
             );
           })}

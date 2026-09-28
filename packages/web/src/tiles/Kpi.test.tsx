@@ -82,6 +82,97 @@ describe('a KPI with a value', () => {
   });
 });
 
+/**
+ * T453 / AC-097, direction.md §7a: "KPI tiles: a 'Marked $X · p%' badge (no %
+ * for non-additive measures)" — the default marking's marked share, which
+ * T388 answers apart. The percentage rounded, as the prototype's is
+ * (`dashboard.js`, renderMarked).
+ */
+describe('a KPI under a marking', () => {
+  const AVERAGE = 'orders.average_amount';
+  const marked = (
+    share: RenderSpec['rows'],
+    aggTypes: Record<string, string>,
+    over: Partial<RenderSpec> = {},
+  ) =>
+    spec({
+      rows: [{ [COUNT]: 1234 }],
+      marking: {
+        predicate: { items: [[{ member: 'orders.status', value: 'shipped' }]], ranges: [] },
+        colour: '#151107',
+        share,
+        aggTypes,
+      },
+      ...over,
+    });
+
+  it('shows the marked share of an additive measure, and its part of the whole', () => {
+    render(<Kpi spec={marked([{ [COUNT]: '400' }], { [COUNT]: 'count' })} />);
+
+    expect(screen.getByTestId('kpi-marked').textContent).toBe('Marked 400 · 32%');
+    // In the marking's colour, which the words don't depend on.
+    expect(screen.getByTestId('kpi-marked-swatch').style.background).toBe('rgb(21, 17, 7)');
+  });
+
+  it('shows a non-additive measure’s marked value, and no part of the whole', () => {
+    render(
+      <Kpi
+        spec={marked(
+          [{ [AVERAGE]: '16.25' }],
+          { [AVERAGE]: 'avg' },
+          {
+            encoding: { y: [AVERAGE] },
+            rows: [{ [AVERAGE]: '40' }],
+            formats: { [AVERAGE]: 'currency' },
+          },
+        )}
+      />,
+    );
+
+    expect(screen.getByTestId('kpi-marked').textContent).toBe('Marked $16.25');
+  });
+
+  it('shows none of an additive measure marked as nothing, not as no value', () => {
+    // A sum with no marked value: none of the whole is marked.
+    render(<Kpi spec={marked([{ [COUNT]: null }], { [COUNT]: 'sum' })} />);
+
+    expect(screen.getByTestId('kpi-marked').textContent).toBe('Marked 0 · 0%');
+  });
+
+  it('shows nothing of a non-additive measure with no marked value', () => {
+    render(
+      <Kpi
+        spec={marked(
+          [{ [AVERAGE]: null }],
+          { [AVERAGE]: 'avg' },
+          {
+            encoding: { y: [AVERAGE] },
+            rows: [{ [AVERAGE]: '40' }],
+          },
+        )}
+      />,
+    );
+
+    expect(screen.queryByTestId('kpi-marked')).toBeNull();
+  });
+
+  it('shows nothing until the marked share is answered', () => {
+    render(
+      <Kpi
+        spec={spec({
+          marking: {
+            predicate: { items: [[{ member: 'orders.status', value: 'shipped' }]], ranges: [] },
+            colour: '#151107',
+          },
+        })}
+      />,
+    );
+
+    expect(screen.queryByTestId('kpi-marked')).toBeNull();
+    expect(screen.getByTestId('kpi-value').textContent).toBe('1,234');
+  });
+});
+
 describe('a KPI with nothing to show', () => {
   it('says so when the query returned no rows', () => {
     render(<Kpi spec={spec({ rows: [] })} />);

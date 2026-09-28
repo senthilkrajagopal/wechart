@@ -6685,8 +6685,8 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - Both now expect the hatch. Nothing about the values says an average is marked in full (the user is told).
     - Tests: `partialOption.test.ts` (15), `partial.test.ts`; e2e `marked-share.spec.ts` "a partly marked count shows its marked share…" checks the marked part sits at the foot of its faded remainder in one column, and that every column of the average tile spans one height.
     - Left for T453: the other chart types, and a pie grouped by a third member summing its share across it.
-- [ ] T453 [P] (AC-097) Draw partly marked items on the remaining chart types *(added 2026-09-26 from T387's review: they fade every item, "no marked share")*
-  - Files: `packages/charts/src/marking/partialOption.ts`, `packages/charts/src/series/{heatmap,combo,scatter,boxplot,map}.ts`, `packages/charts/src/layout/trellis.ts`, `packages/web/src/tiles/{KpiTile,TableTile}.tsx` (+ tests), `e2e/marked-share.spec.ts`
+- [x] T453 [P] (AC-097) Draw partly marked items on the remaining chart types *(added 2026-09-26 from T387's review: they fade every item, "no marked share")*
+  - Files: ~~`packages/charts/src/series/{heatmap,combo,boxplot}.ts`, `packages/charts/src/layout/trellis.ts`, `packages/web/src/tiles/{KpiTile,TableTile}.tsx`~~ `packages/charts/src/marking/{partialOption,partial,focus}.ts` (+ `partialOption.test.ts`), `packages/charts/src/series/{scatter,pie,map}.ts`, `packages/charts/src/{tooltip,optionFor,index}.ts`, `packages/web/src/tiles/{Kpi,DataTable,PivotTable}.tsx` (+ tests), `packages/web/src/shell/styles.ts`, `docs/research/echarts-symbol-hatch.md`, `e2e/marked-share.spec.ts`
   - Failing test: `partialOption.test.ts` and `marked-share.spec.ts`, per direction.md §7a:
     - a heatmap's partly marked cell is outlined dashed, the rest faded;
     - a combo's bars and line split as T387's do;
@@ -6696,6 +6696,61 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - a pie grouped by a third member matches its share rows on every grouping.
     - Scatter, box plot and map items are one row each and are marked as rows are: they must not fade a partly marked one.
   - Depends on: T387
+  - **Done 2026-09-28, with the user's two answers of that day (R43).** Every chart type now draws a partly marked item; none fades it.
+    - **Heatmap.** A partly marked cell keeps the scale's colour and is outlined dashed in the marking's colour (direction.md §7a). A cell marked in full is outlined solid, and one with nothing marked fades.
+      - Where its measure isn't additive, the cell is hatched as well: AC-097's pattern.
+      - Its tooltip says "· Marked: X".
+      - The keyboard's focus finds a cell drawn marked by its column (`focus.ts`).
+    - **Combo.** Its bars split as a bar chart's do, and its line fades under a full-strength line of its marked share (`withMarkedShareLines` now takes a combo's line series).
+    - **Trellis.** Its panels are bars, not lines as this entry supposed. So each panel's bars split as T387's bars do, in a stack of their own on the panel's axes. The share is matched by panel and category.
+      - direction.md §7a's "Lines and trellis: the faded total line plus a full-strength line" supposes line panels. For bar panels, AC-097's own rule applies: the marked share from the baseline.
+      - The trellis draws no whole marking (AC-096) even now; see "Left" below.
+    - **Scatter, box plot, map: outlined and hatched, "· Marked: X" in the tooltip (R43).**
+      - Each item is matched to the share's rows on every member it is grouped by (`shareMatcher`, indexed once per answer).
+      - **A scatter's point.** ECharts draws no decal on a symbol, so its hatch is its own shape (`HATCHED_POINT`): its disc crossed by two strokes, outlined in the marking's colour (research `echarts-symbol-hatch.md`). Its tooltip says each measure's marked value. It is marked in full only when both its measures are.
+      - **A box.** Partly marked when some of its points hold marked rows; outlined, not hatched, when every point is marked in full.
+        - With "Each point is", a point is the measure over its rows, matched on what it is grouped by.
+        - Without it, the rows are ungrouped (T399): a point is one row, and it is marked or not, found by its value among its category's marked rows, each marked row once.
+      - **A box's tooltip** says "n: N · Marked: k", k being its points that hold marked rows. *This reading of R43's "Marked: X" for a box is T453's, not the user's, and goes to the user with the next questions.*
+      - **An outlier** is marked (outlined, at full strength) or not (faded), never hatched.
+      - **A country** is outlined and hatched over the scale's fill, never filled.
+    - **KPI.** "Marked $X · p%" under its value, beside the marking's swatch.
+      - p is rounded to a whole percent, as the prototype's `renderMarked` has it. There is no % for a measure that isn't additive.
+      - An additive measure with no marked value reads "Marked 0 · 0%", as the prototype's `rsum` over no marked rows is 0.
+      - One that isn't additive, with no marked value, shows nothing.
+    - **No marked value is no measurement.** Where the marked rows give a measure no value, nothing is said: never "Marked: 0" for an average over marked rows that has none.
+    - **Table (R43, "Rule and marked value").** A row with a marked share says it beside each measure ("10 · Marked: 4").
+      - A row marked in part also has the prototype's left rule in the secondary colour. A row marked in full has no rule: its style (bold, left rule) is AC-096's and is not built.
+      - Top N's "Other (n)" row takes the marked rows of the categories it folds, as a bar's does.
+      - A table's view of any chart (AC-178) shows the same.
+    - **Pivot.** Each cell is drawn as a table's row: the rule where marked in part, and "10 · Marked: 4" in the cell. Its totals stay unmarked. *Extending the user's table answer to a pivot is T453's decision, approved by this session and not by the user, and open to change.*
+    - **Pie grouped by a third member.** A slice carries the values of the members it is grouped by past its category and split (`Slice.grouped`), and its share is matched on all of them.
+    - **The cold review (FAIL) found, and this fixes:**
+      - a box plot without "Each point is" matched every point of a category to all its marked rows: wrong count, wrong outliers, a box marked in full hatched;
+      - the scatter, box plot and map scanned the share once per point, which is quadratic on a 50,000-row box plot: indexed once now;
+      - the map's e2e took a colour scale's gradient for a hatch: a hatch now has to be a `<pattern>`;
+      - an average over marked rows with no value was said as "Marked: 0";
+      - a table's "Other (n)" row showed no marked share;
+      - the wording of the two decisions above, and an unsourced claim about Cube.
+    - **What the tests show.**
+      - `partialOption.test.ts` (+26) covers each type's drawing and tooltip, the ungrouped box plot, and the heatmap's keyboard focus. It renders the dashed outline, the heatmap's, the box's and the country's patterns, and the scatter's three-part hatch.
+      - `Kpi.test.tsx` (+5), `DataTable.test.tsx` (+5) and `PivotTable.test.tsx` (+3).
+      - e2e `marked-share.spec.ts` (Chrome), on the seeded model with the shipped orders marked:
+        - a heatmap's cells are outlined dashed, never faded, and its tooltip says the marked value;
+        - a combo's and a trellis's bars split, and the combo's line is faded under its marked line;
+        - a scatter's points are hatched;
+        - a box plot's boxes are outlined and hatched, with and without "Each point is", and the ungrouped one's tooltip reads "n: 120 · Marked: 40";
+        - a KPI reads "Marked 80 · 33%", and the average's has no %;
+        - a table row reads "120 · Marked: 40" with its rule, and a pivot cell "60 · Marked: 20";
+        - a country of a cube of the test's own is hatched with a pattern, and its tooltip reads "120 · Marked: 100";
+        - T387's types on the real surface too: a stacked bar's segments split (the stacked bar UX-025 saw fading), a line under its marked line, and a pie's slices and a treemap's leaves hatched.
+      - The spec and the specs of the surfaces it touches (`markings`, `tiles`, `table-view`, `country-map`, `boxplot`, `crossfilter`) pass in Chrome: 102 tests.
+    - **Left, for the user or later:**
+      - The trellis draws no whole marking (AC-096): a trellis marked on its own members shows nothing marked. It is the same family as T507.
+      - A box plot's whole marking reads a box by its category's first row, and its outliers by index. That is also T507's.
+      - Tables draw no whole marking (AC-096: bold with a left rule, the others dimmed).
+      - The box's tooltip count (above) is for the user to confirm.
+    - AC-097 is ticked.
 - [x] T388 [P] (AC-104) Obtain the marked share with one extra query per tile, keeping the base result cached
   - Files and failing test: as T110 (above) (AC-104).
   - Depends on: none

@@ -207,3 +207,135 @@ describe('virtualisation', () => {
     expect(spacerHeight).toBeGreaterThan((1000 - drawn - 1) * 20);
   });
 });
+
+/**
+ * T453 / AC-097, as the user answered on 2026-09-28 (R43): a partly marked
+ * row of a table — one of a tile that doesn't group by what its marking names,
+ * whose marked share T388 answers apart — wears the prototype's left rule in
+ * the secondary colour, and shows its marked share beside each measure:
+ * "10 · Marked: 4".
+ */
+describe('a table under a marking', () => {
+  const AVERAGE = 'orders.average_amount';
+  const CATEGORY = 'products.category';
+  const rows = [
+    { [CATEGORY]: 'Books', [COUNT]: 10, [AVERAGE]: 40 },
+    { [CATEGORY]: 'Games', [COUNT]: 20, [AVERAGE]: 30 },
+    { [CATEGORY]: 'Toys', [COUNT]: 5, [AVERAGE]: 20 },
+  ];
+  const marked = (share: RenderSpec['rows'], y: string[] = [COUNT]): RenderSpec =>
+    spec({
+      encoding: { x: [CATEGORY], y },
+      measures: [COUNT, AVERAGE],
+      rows,
+      marking: {
+        predicate: { items: [[{ member: STATUS, value: 'shipped' }]], ranges: [] },
+        colour: '#151107',
+        share,
+        aggTypes: { [COUNT]: 'count', [AVERAGE]: 'avg' },
+      },
+    });
+  const cellsOf = (row: HTMLElement) =>
+    [...row.querySelectorAll('td')].map((cell) => cell.textContent);
+
+  it('rules a partly marked row and says its marked share beside each measure', () => {
+    render(
+      <DataTable
+        spec={marked([
+          { [CATEGORY]: 'Books', [COUNT]: 4, [AVERAGE]: 45 },
+          { [CATEGORY]: 'Toys', [COUNT]: 5, [AVERAGE]: 20 },
+        ])}
+      />,
+    );
+    const [books, games, toys] = screen.getAllByTestId('table-row');
+
+    expect(cellsOf(books!)).toEqual(['Books', '10 · Marked: 4', '40 · Marked: 45']);
+    expect(books!.getAttribute('data-marked')).toBe('partly');
+    // Nothing of Games is marked: no marked share, no rule.
+    expect(cellsOf(games!)).toEqual(['Games', '20', '30']);
+    expect(games!.getAttribute('data-marked')).toBeNull();
+    // Toys is marked in all its rows, but an average says nothing of that:
+    // partly marked, as a chart hatches it (T387's review).
+    expect(cellsOf(toys!)).toEqual(['Toys', '5 · Marked: 5', '20 · Marked: 20']);
+    expect(toys!.getAttribute('data-marked')).toBe('partly');
+  });
+
+  it('does not rule a row an additive measure shows marked in full', () => {
+    render(
+      <DataTable
+        spec={spec({
+          encoding: { x: [CATEGORY], y: [COUNT] },
+          measures: [COUNT],
+          rows: rows.map((row) => ({ [CATEGORY]: row[CATEGORY], [COUNT]: row[COUNT] })),
+          marking: {
+            predicate: { items: [[{ member: STATUS, value: 'shipped' }]], ranges: [] },
+            colour: '#151107',
+            share: [{ [CATEGORY]: 'Toys', [COUNT]: 5 }],
+            aggTypes: { [COUNT]: 'count' },
+          },
+        })}
+      />,
+    );
+    const toys = screen.getAllByTestId('table-row')[2]!;
+
+    expect(cellsOf(toys)).toEqual(['Toys', '5 · Marked: 5']);
+    expect(toys.getAttribute('data-marked')).toBeNull();
+  });
+
+  // T453's review: a measure over the marked rows with no value is none, never 0.
+  it('says no marked value where the marked rows give a measure none', () => {
+    render(<DataTable spec={marked([{ [CATEGORY]: 'Books', [COUNT]: 4, [AVERAGE]: null }])} />);
+    const [books] = screen.getAllByTestId('table-row');
+
+    expect(cellsOf(books!)).toEqual(['Books', '10 · Marked: 4', '40']);
+  });
+
+  // T453's review: Top N's "Other (n)" holds the rows of the categories it folds (AC-041).
+  it('gives Top N’s “Other” the marked share of the categories it folds', () => {
+    render(
+      <DataTable
+        spec={spec({
+          encoding: { x: [CATEGORY], y: [COUNT] },
+          measures: [COUNT],
+          rows: [
+            { [CATEGORY]: 'Books', [COUNT]: 10 },
+            { [CATEGORY]: 'Other (2)', [COUNT]: 25 },
+          ],
+          marking: {
+            predicate: { items: [[{ member: STATUS, value: 'shipped' }]], ranges: [] },
+            colour: '#151107',
+            share: [
+              { [CATEGORY]: 'Books', [COUNT]: 4 },
+              { [CATEGORY]: 'Games', [COUNT]: 3 },
+              { [CATEGORY]: 'Toys', [COUNT]: 5 },
+            ],
+            aggTypes: { [COUNT]: 'count' },
+          },
+        })}
+      />,
+    );
+    const [, other] = screen.getAllByTestId('table-row');
+
+    expect(cellsOf(other!)).toEqual(['Other (2)', '25 · Marked: 8']);
+    expect(other!.getAttribute('data-marked')).toBe('partly');
+  });
+
+  it('shows no marked share until one is answered', () => {
+    render(
+      <DataTable
+        spec={spec({
+          encoding: { x: [CATEGORY], y: [COUNT] },
+          rows: [{ [CATEGORY]: 'Books', [COUNT]: 10 }],
+          marking: {
+            predicate: { items: [[{ member: STATUS, value: 'shipped' }]], ranges: [] },
+            colour: '#151107',
+          },
+        })}
+      />,
+    );
+    const [books] = screen.getAllByTestId('table-row');
+
+    expect(cellsOf(books!)).toEqual(['Books', '10']);
+    expect(books!.getAttribute('data-marked')).toBeNull();
+  });
+});

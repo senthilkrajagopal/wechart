@@ -70,6 +70,16 @@ export type PartialMark =
       readonly tooltip: string;
     };
 
+/**
+ * How much of an item is marked, where no part of it can be drawn — a table's
+ * row, a pivot's cell (T453): none of it, all of it, or part of it, as
+ * `partialMark` reads the same values.
+ */
+export function markedState(item: PartlyMarked): 'none' | 'whole' | 'partly' {
+  const kind = partialMark(item, { own: '', marking: '' }).kind;
+  return kind === 'none' || kind === 'whole' ? kind : 'partly';
+}
+
 /** How to draw one item, given how much of it is marked. */
 export function partialMark(item: PartlyMarked, colours: MarkColours): PartialMark {
   const { marked, total, aggType } = item;

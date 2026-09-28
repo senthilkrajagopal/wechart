@@ -32,6 +32,29 @@ function pointOf(row: Record<string, unknown>, x: string, y: string): [number, n
   return first === null || second === null ? null : [first, second];
 }
 
+/**
+ * A scatter's series, each with the rows its points are drawn from, one point
+ * a row, in the order they are drawn — for its points and for finding the
+ * row behind a point (T453).
+ */
+export function scatterSeriesOf(
+  spec: RenderSpec,
+): { readonly name: string; readonly rows: readonly Record<string, unknown>[] }[] {
+  const x = memberOn(spec.encoding, 'x');
+  const y = memberOn(spec.encoding, 'y');
+  const splitBy = memberOn(spec.encoding, 'color');
+  if (x === undefined || y === undefined) return [];
+
+  const drawn = (rows: readonly Record<string, unknown>[]) =>
+    rows.filter((row) => pointOf(row, x, y) !== null);
+  return splitBy === undefined
+    ? [{ name: y, rows: drawn(spec.rows) }]
+    : distinctValues(spec.rows, splitBy).map((member) => ({
+        name: member,
+        rows: drawn(spec.rows.filter((row) => String(row[splitBy] ?? '') === member)),
+      }));
+}
+
 export function scatterOption(spec: RenderSpec): EChartsOption {
   if (!isScatterType(spec.chartType)) {
     throw new Error(`${spec.chartType} is not a scatter chart`);
@@ -39,7 +62,6 @@ export function scatterOption(spec: RenderSpec): EChartsOption {
 
   const x = memberOn(spec.encoding, 'x');
   const y = memberOn(spec.encoding, 'y');
-  const splitBy = memberOn(spec.encoding, 'color');
 
   if (x === undefined || y === undefined) {
     // Both axes are measures, so neither can be defaulted the way a category
@@ -50,13 +72,7 @@ export function scatterOption(spec: RenderSpec): EChartsOption {
   const pointsFor = (rows: readonly Record<string, unknown>[]) =>
     rows.map((row) => pointOf(row, x, y)).filter((point) => point !== null);
 
-  const series =
-    splitBy === undefined
-      ? [{ name: y, rows: spec.rows }]
-      : distinctValues(spec.rows, splitBy).map((member) => ({
-          name: member,
-          rows: spec.rows.filter((row) => String(row[splitBy] ?? '') === member),
-        }));
+  const series = scatterSeriesOf(spec);
 
   return {
     animation: false,

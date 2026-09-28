@@ -69,8 +69,10 @@ export {
 } from './marking/render';
 export {
   isAdditive,
+  markedState,
   partialMark,
   type MarkColours,
   type PartialMark,
   type PartlyMarked,
 } from './marking/partial';
+export { rowSharesOf } from './marking/partialOption';

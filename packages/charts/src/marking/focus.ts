@@ -44,8 +44,10 @@ const isEmpty = (item: unknown) => {
 function categoryReader(spec: RenderSpec) {
   const { categories } = seriesOf(spec);
   return (one: Series, item: unknown, index: number): string | undefined => {
-    // A heatmap cell is [column, row, value]; its column is the category.
-    if (one.type === 'heatmap' && Array.isArray(item)) return categories[Number(item[0])];
+    // A heatmap cell is [column, row, value], an object's `value` where it is
+    // drawn marked (T453); its column is the category.
+    const cell = Array.isArray(item) ? item : asObject(item)['value'];
+    if (one.type === 'heatmap' && Array.isArray(cell)) return categories[Number(cell[0])];
     if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
       const object = item as Record<string, unknown>;
       // A slice carries its category apart from its written name (AC-221).

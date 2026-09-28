@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Page, type Request } from '@playwright/test';
 
+import { ownCubeFile, PUBLISHED } from './model-files';
+
 /**
  * T388 / AC-104: WHEN a tile needs the marked share and the marking's members
  * are not among its own groupings, THE SYSTEM SHALL obtain it with one
@@ -267,4 +269,523 @@ test('a partly marked count shows its marked share, and a partly marked average 
   const hatched = average.locator('path[fill^="url("]').first();
   await hatched.hover();
   await expect(page.locator('[data-tile="tile-average"]')).toContainText(/· Marked: \$/);
+});
+
+/**
+ * T453 / AC-097, on the chart types T387 left fading every item (direction.md
+ * §7a; the user's answers of 2026-09-28, R43). On the seeded model, each tile
+ * groups by category (and country) but not by status, so marking the shipped
+ * orders — a third of each group's — leaves every item partly marked.
+ */
+const MARKING = '#151107';
+
+type Tile = {
+  readonly id: string;
+  readonly title: string;
+  readonly chartType: string;
+  readonly measures: readonly string[];
+  readonly dimensions: readonly string[];
+  readonly cube?: string;
+  readonly eachPointIs?: string;
+};
+
+/** A Markings-mode dashboard of these tiles, each a chart of its own, two to a row. */
+async function dashboardOf(request: APIRequestContext, tiles: readonly Tile[]) {
+  const title = `Marked share ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const dashboard = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, folderId: 'root' },
+    })
+  ).json()) as { id: string };
+  const items = [];
+  for (const tile of tiles) {
+    const chart = (await (
+      await request.post(`${API}/documents`, {
+        data: { kind: 'chart', title: tile.title, folderId: 'root' },
+      })
+    ).json()) as { id: string };
+    const saved = await request.put(`${API}/documents/chart/${chart.id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title: tile.title,
+          owner: 'admin',
+          localToDashboardId: dashboard.id,
+          chart: {
+            source: { cube: tile.cube ?? 'orders' },
+            wells: {
+              measures: tile.measures,
+              dimensions: tile.dimensions,
+              timeDimensions: [],
+              ...(tile.eachPointIs === undefined ? {} : { eachPointIs: tile.eachPointIs }),
+            },
+            chartType: tile.chartType,
+          },
+        },
+      },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    items.push({ id: tile.id, kind: 'chart', w: 6, h: 40, chartId: chart.id });
+  }
+  const placed = await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        folderId: 'root',
+        owner: 'admin',
+        settings: { width: 'fixed', interactions: { mode: 'markings' } },
+        markings: [{ id: 'm1', name: 'Marking', slot: 'mk1', isDefault: true }],
+        pages: [{ id: 'only', title: 'Only', items }],
+      },
+    },
+  });
+  expect(placed.ok(), await placed.text()).toBe(true);
+  return { id: dashboard.id, title };
+}
+
+/** Clicks the bar over a category's axis label on a tile. */
+async function clickBarOn(page: Page, tile: string, label: string) {
+  const text = page.locator(`[data-tile="${tile}"] svg text`, { hasText: label }).first();
+  await expect(text).toBeVisible();
+  let last = '';
+  let box = { x: 0, y: 0, width: 0 };
+  await expect
+    .poll(async () => {
+      box = await text.evaluate((node) => {
+        const rect = node.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width };
+      });
+      const now = JSON.stringify(box);
+      const settled = box.width > 0 && now === last;
+      last = now;
+      return settled;
+    })
+    .toBe(true);
+  await page.mouse.click(box.x + box.width / 2, box.y - 10);
+}
+
+/** A tile's filled marks, by their centres, with their fill, opacity and outline. */
+const marksIn = (page: Page, tile: string) =>
+  page
+    .locator(`[data-tile="${tile}"] svg`)
+    .first()
+    .locator('path')
+    .evaluateAll((paths) =>
+      paths.map((path) => {
+        const box = (path as SVGGraphicsElement).getBBox();
+        return {
+          left: Math.round(box.x + box.width / 2),
+          top: box.y,
+          bottom: box.y + box.height,
+          width: box.width,
+          height: box.height,
+          fill: path.getAttribute('fill') ?? '',
+          opacity: Number(path.getAttribute('fill-opacity') ?? 1),
+          strokeOpacity: Number(path.getAttribute('stroke-opacity') ?? 1),
+          stroke: path.getAttribute('stroke'),
+          dashed: (path.getAttribute('stroke-dasharray') ?? 'none') !== 'none',
+          subpaths: (path.getAttribute('d') ?? '').match(/M/gi)?.length ?? 0,
+          // Filled with a hatch: a `<pattern>`, not a gradient, which a
+          // map's colour scale also fills with (T453's review).
+          hatched:
+            document
+              .getElementById(
+                /url\(['"]?#([^'")]+)['"]?\)/.exec(path.getAttribute('fill') ?? '')?.[1] ?? '',
+              )
+              ?.tagName.toLowerCase() === 'pattern',
+        };
+      }),
+    );
+
+/** A bar in two parts: a full-strength part outlined in the marking's colour, on the baseline, under its faded rest. */
+async function hasSplitBar(page: Page, tile: string): Promise<boolean> {
+  const bars = (await marksIn(page, tile)).filter(
+    (bar) => bar.fill !== 'none' && bar.width > 2 && bar.height > 2 && bar.width < 400,
+  );
+  return bars.some(
+    (foot) =>
+      foot.opacity === 1 &&
+      foot.stroke === MARKING &&
+      bars.some(
+        (rest) =>
+          rest.left === foot.left &&
+          rest.opacity < 0.5 &&
+          Math.abs(foot.top - rest.bottom) < 2 &&
+          foot.bottom > rest.bottom,
+      ),
+  );
+}
+
+/** A line faded under a full-strength line of its own colour: its marked share. */
+async function hasMarkedLine(page: Page, tile: string): Promise<boolean> {
+  const lines = (await marksIn(page, tile)).filter(
+    (mark) => mark.fill === 'none' && mark.stroke !== null && mark.stroke !== MARKING,
+  );
+  const faded = lines.find((line) => line.strokeOpacity < 0.5);
+  return (
+    faded !== undefined &&
+    lines.some((line) => line.stroke === faded.stroke && line.strokeOpacity === 1)
+  );
+}
+
+/**
+ * Some item outlined in the marking's colour, and some hatched. A treemap
+ * draws a leaf's border as a rectangle behind it, filled in the border's
+ * colour (research/echarts-symbol-hatch.md), where the others stroke it.
+ */
+async function hasHatchedItem(page: Page, tile: string): Promise<boolean> {
+  const marks = await marksIn(page, tile);
+  return (
+    marks.some((mark) => mark.stroke === MARKING || mark.fill === MARKING) &&
+    marks.some((mark) => mark.hatched)
+  );
+}
+
+/**
+ * T387's types on the real surface too, where its own test drew a bar: a
+ * stacked bar's segments each split in their place (the stacked bar the
+ * 2026-09-27 review saw fading, UX-025), a line under its marked line, and a
+ * pie's slice and a treemap's leaf outlined and hatched.
+ */
+test('a stacked bar, a line, a pie and a treemap draw their marked share', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await dashboardOf(request, [
+    {
+      id: 'tile-status',
+      title: 'By status',
+      chartType: 'bar',
+      measures: ['orders.count'],
+      dimensions: ['orders.status'],
+    },
+    {
+      id: 'tile-stacked',
+      title: 'Stacked',
+      chartType: 'stackedBar',
+      measures: ['orders.count'],
+      dimensions: ['products.category', 'customers.country'],
+    },
+    {
+      id: 'tile-line',
+      title: 'Line',
+      chartType: 'line',
+      measures: ['orders.count'],
+      dimensions: ['products.category'],
+    },
+    {
+      id: 'tile-pie',
+      title: 'Pie',
+      chartType: 'pie',
+      measures: ['orders.count'],
+      dimensions: ['products.category'],
+    },
+    {
+      id: 'tile-treemap',
+      title: 'Treemap',
+      chartType: 'treemap',
+      measures: ['orders.count'],
+      dimensions: ['products.category'],
+    },
+  ]);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  for (const tile of ['tile-stacked', 'tile-line', 'tile-pie', 'tile-treemap'])
+    await expect(page.locator(`[data-tile="${tile}"] svg`).first()).toBeVisible();
+
+  await clickBarOn(page, 'tile-status', 'shipped');
+  await expect(page.getByTestId('mark-chip')).toContainText('shipped');
+
+  await expect.poll(() => hasSplitBar(page, 'tile-stacked')).toBe(true);
+  await expect.poll(() => hasMarkedLine(page, 'tile-line')).toBe(true);
+  await expect.poll(() => hasHatchedItem(page, 'tile-pie')).toBe(true);
+  await expect.poll(() => hasHatchedItem(page, 'tile-treemap')).toBe(true);
+});
+
+test('a partly marked heatmap cell is outlined dashed, and a combo, a trellis, a scatter and a box plot draw their marked share', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await dashboardOf(request, [
+    {
+      id: 'tile-status',
+      title: 'By status',
+      chartType: 'bar',
+      measures: ['orders.count'],
+      dimensions: ['orders.status'],
+    },
+    {
+      id: 'tile-heatmap',
+      title: 'Heatmap',
+      chartType: 'heatmap',
+      measures: ['orders.count'],
+      dimensions: ['products.category', 'customers.country'],
+    },
+    {
+      id: 'tile-combo',
+      title: 'Combo',
+      chartType: 'combo',
+      measures: ['orders.total_amount', 'orders.count'],
+      dimensions: ['products.category'],
+    },
+    {
+      id: 'tile-trellis',
+      title: 'Trellis',
+      chartType: 'trellis',
+      measures: ['orders.count'],
+      dimensions: ['products.category', 'customers.country'],
+    },
+    {
+      id: 'tile-scatter',
+      title: 'Scatter',
+      chartType: 'scatter',
+      measures: ['orders.count', 'orders.total_amount'],
+      dimensions: ['products.category'],
+    },
+    {
+      id: 'tile-boxplot',
+      title: 'Box plot',
+      chartType: 'boxplot',
+      measures: ['orders.total_amount'],
+      dimensions: ['products.category'],
+      eachPointIs: 'customers.name',
+    },
+    // Each point a row of the data: no "Each point is" (T453's review).
+    {
+      id: 'tile-boxplot-rows',
+      title: 'Box plot of orders',
+      chartType: 'boxplot',
+      measures: ['orders.total_amount'],
+      dimensions: ['products.category'],
+    },
+  ]);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  for (const tile of [
+    'tile-heatmap',
+    'tile-combo',
+    'tile-trellis',
+    'tile-scatter',
+    'tile-boxplot',
+    'tile-boxplot-rows',
+  ])
+    await expect(page.locator(`[data-tile="${tile}"] svg`).first()).toBeVisible();
+
+  await clickBarOn(page, 'tile-status', 'shipped');
+  await expect(page.getByTestId('mark-chip')).toContainText('shipped');
+
+  // The heatmap: each cell is a third shipped, so outlined dashed in the
+  // marking's colour, never faded; and its tooltip says its marked value.
+  await expect
+    .poll(async () =>
+      (await marksIn(page, 'tile-heatmap')).some((cell) => cell.stroke === MARKING && cell.dashed),
+    )
+    .toBe(true);
+  const cells = (await marksIn(page, 'tile-heatmap')).filter(
+    (cell) => cell.fill.startsWith('rgb') && cell.width > 2,
+  );
+  expect(cells.length).toBeGreaterThan(0);
+  expect(cells.filter((cell) => cell.opacity < 0.5)).toEqual([]);
+  const dashedCell = page
+    .locator('[data-tile="tile-heatmap"] svg')
+    .first()
+    .locator(`path[stroke="${MARKING}"][stroke-dasharray]`)
+    .first();
+  await dashedCell.hover();
+  await expect(page.locator('[data-tile="tile-heatmap"]')).toContainText(/· Marked: \d/);
+
+  // The combo: its bars split as a bar chart's, and its line faded under a
+  // full-strength line of its marked share.
+  await expect.poll(() => hasSplitBar(page, 'tile-combo')).toBe(true);
+  await expect.poll(() => hasMarkedLine(page, 'tile-combo')).toBe(true);
+
+  // A trellis panel's bars split in each panel.
+  await expect.poll(() => hasSplitBar(page, 'tile-trellis')).toBe(true);
+
+  // A scatter's points: outlined in the marking's colour and crossed by its
+  // hatch, never faded.
+  await expect
+    .poll(async () =>
+      (await marksIn(page, 'tile-scatter')).some(
+        (point) => point.stroke === MARKING && point.subpaths === 3,
+      ),
+    )
+    .toBe(true);
+
+  // A box plot's boxes: some of each box's customers' orders are shipped, so
+  // each is outlined and hatched.
+  await expect.poll(() => hasHatchedItem(page, 'tile-boxplot')).toBe(true);
+
+  // Each point an order: a third of each category's 120 are shipped, so its
+  // box is hatched, and its tooltip counts the 40 marked, not every one.
+  await expect.poll(() => hasHatchedItem(page, 'tile-boxplot-rows')).toBe(true);
+  await page
+    .locator('[data-tile="tile-boxplot-rows"] svg')
+    .first()
+    .locator('path[fill^="url("]')
+    .first()
+    .hover();
+  await expect(page.locator('[data-tile="tile-boxplot-rows"]')).toContainText(
+    'n: 120 · Marked: 40',
+  );
+});
+
+test('a KPI, a table and a pivot under a marking say its marked share', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await dashboardOf(request, [
+    {
+      id: 'tile-status',
+      title: 'By status',
+      chartType: 'bar',
+      measures: ['orders.count'],
+      dimensions: ['orders.status'],
+    },
+    {
+      id: 'tile-kpi',
+      title: 'Orders',
+      chartType: 'kpi',
+      measures: ['orders.count'],
+      dimensions: [],
+    },
+    {
+      id: 'tile-kpi-average',
+      title: 'Average',
+      chartType: 'kpi',
+      measures: ['orders.average_amount'],
+      dimensions: [],
+    },
+    {
+      id: 'tile-table',
+      title: 'Table',
+      chartType: 'table',
+      measures: ['orders.count'],
+      dimensions: ['products.category'],
+    },
+    {
+      id: 'tile-pivot',
+      title: 'Pivot',
+      chartType: 'pivot',
+      measures: ['orders.count'],
+      dimensions: ['products.category', 'customers.country'],
+    },
+  ]);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await expect(
+    page.locator('[data-tile="tile-table"]').getByTestId('table-row').first(),
+  ).toBeVisible();
+
+  await clickBarOn(page, 'tile-status', 'shipped');
+
+  // The KPIs: 80 of the 240 orders are shipped; an average has no part of a whole.
+  await expect(page.locator('[data-tile="tile-kpi"]').getByTestId('kpi-marked')).toHaveText(
+    'Marked 80 · 33%',
+  );
+  await expect(page.locator('[data-tile="tile-kpi-average"]').getByTestId('kpi-marked')).toHaveText(
+    /^Marked \$[\d,]+(\.\d+)?$/,
+  );
+
+  // The table: each category's row a third shipped, its marked count beside
+  // its count, and the rule down its left.
+  const row = page.locator('[data-tile="tile-table"]').getByTestId('table-row').first();
+  await expect(row).toContainText(/120 · Marked: 40/);
+  await expect(row).toHaveAttribute('data-marked', 'partly');
+  expect(
+    await row
+      .locator('td')
+      .first()
+      .evaluate((cell) => getComputedStyle(cell).boxShadow),
+  ).toMatch(/inset/);
+
+  // The pivot: each cell of a category and a country, the same.
+  const cell = page.locator('[data-tile="tile-pivot"] td[data-marked="partly"]').first();
+  await expect(cell).toContainText(/60 · Marked: 20/);
+  expect(await cell.evaluate((each) => getComputedStyle(each).boxShadow)).toMatch(/inset/);
+  await expect(
+    page.locator('[data-tile="tile-pivot"]').getByTestId('pivot-grand-total'),
+  ).not.toContainText('Marked');
+});
+
+test('a partly marked country is outlined and hatched, and its tooltip says its marked value', async ({
+  page,
+  request,
+}, testInfo) => {
+  // Sales by country and channel, of this browser's own: the sample model's
+  // countries are names, and a map needs ISO-3 codes (`countries.ts`).
+  const cube = `channel_sales_${testInfo.project.name}`;
+  await ownCubeFile(
+    request,
+    cube,
+    [
+      'cubes:',
+      `  - name: ${cube}`,
+      '    sql: >',
+      '      SELECT * FROM (VALUES',
+      "        ('FRA', 'web', 100), ('FRA', 'store', 20), ('NOR', 'web', 80), ('USA', 'store', 300)",
+      '      ) AS t(iso3, channel, amount)',
+      '    dimensions:',
+      '      - name: iso3',
+      '        sql: iso3',
+      '        type: string',
+      '      - name: channel',
+      '        sql: channel',
+      '        type: string',
+      '    measures:',
+      '      - name: total',
+      '        sql: amount',
+      '        type: sum',
+      '',
+    ].join('\n'),
+  );
+  await expect
+    .poll(
+      async () =>
+        (
+          (await (await request.get('/api/meta')).json()) as { cubes: { name: string }[] }
+        ).cubes.map((each) => each.name),
+      PUBLISHED,
+    )
+    .toContain(cube);
+  const { id, title } = await dashboardOf(request, [
+    {
+      id: 'tile-channel',
+      title: 'By channel',
+      chartType: 'bar',
+      measures: [`${cube}.total`],
+      dimensions: [`${cube}.channel`],
+      cube,
+    },
+    {
+      id: 'tile-map',
+      title: 'By country',
+      chartType: 'map',
+      measures: [`${cube}.total`],
+      dimensions: [`${cube}.iso3`],
+      cube,
+    },
+  ]);
+  await page.goto(`/explore/dashboards/${id}`);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await expect(page.locator('[data-tile="tile-map"] svg').first()).toBeVisible();
+
+  // Web: France in part, Norway in full, the USA not at all.
+  await clickBarOn(page, 'tile-channel', 'web');
+  await expect.poll(() => hasHatchedItem(page, 'tile-map')).toBe(true);
+  // Its tooltip, shown for the item the keyboard is on (T306): France's,
+  // whatever place Cube's order gives it. A country's shape is too scattered
+  // to hover at its box's centre.
+  const map = page.locator('[data-tile="tile-map"]');
+  await map.focus();
+  await expect(map).toBeFocused();
+  for (let moves = 0; moves < 3 && !((await map.textContent()) ?? '').includes('France'); moves++) {
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(200);
+  }
+  await expect(map).toContainText('France');
+  await expect(map).toContainText(/120 · Marked: 100/);
 });

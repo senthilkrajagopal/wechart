@@ -1,4 +1,4 @@
-import { labelOf } from '@wechart/charts';
+import { isAdditive, labelOf } from '@wechart/charts';
 import { formatValue, memberOn, type RenderSpec } from '@wechart/core';
 
 /**
@@ -20,6 +20,39 @@ export interface KpiProps {
  */
 const FORMAT = new Intl.NumberFormat('en-US');
 
+const numberOf = (raw: unknown): number | undefined => {
+  if (raw === null || raw === undefined || raw === '') return undefined;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : undefined;
+};
+
+/**
+ * The marked share of the KPI's measure, where the marking's was answered
+ * (T453, AC-097; direction.md §7a: "KPI tiles: a 'Marked $X · p%' badge (no %
+ * for non-additive measures)"). The share is the KPI's own question asked
+ * with the marking (T388), so its one row is the measure over the marked
+ * rows. An additive measure's with no value is none of it, 0, as the
+ * prototype's `rsum` over no marked rows is; its part of the whole is said,
+ * rounded as the prototype's is. Any other measure's is said only where it
+ * has a value, since a part of an average is no part of it.
+ */
+function markedShareOf(
+  spec: RenderSpec,
+  measure: string,
+  whole: number,
+): { readonly text: string; readonly colour: string } | undefined {
+  const marking = spec.marking;
+  if (marking?.share === undefined || marking.whole === true) return undefined;
+  const additive = isAdditive(marking.aggTypes?.[measure]);
+  const marked = numberOf(marking.share[0]?.[measure]) ?? (additive ? 0 : undefined);
+  if (marked === undefined) return undefined;
+  const part = additive && whole !== 0 ? ` · ${String(Math.round((marked / whole) * 100))}%` : '';
+  return {
+    text: `Marked ${formatValue(marked, measure, spec.formats ?? {})}${part}`,
+    colour: marking.colour,
+  };
+}
+
 export function Kpi({ spec }: KpiProps) {
   const measure = memberOn(spec.encoding, 'y');
   const row = spec.rows[0];
@@ -40,7 +73,10 @@ export function Kpi({ spec }: KpiProps) {
     );
   }
 
-  // Its name above its value, as the prototype's kpiHtml has them (T300).
+  const marked = measure === undefined ? undefined : markedShareOf(spec, measure, value);
+
+  // Its name above its value, as the prototype's kpiHtml has them (T300),
+  // and under it the marked share, as its renderMarked has it (T453).
   return (
     <div className="kpi" data-testid="kpi">
       <p className="kpi__label" data-testid="kpi-label">
@@ -53,6 +89,20 @@ export function Kpi({ spec }: KpiProps) {
           ? FORMAT.format(value)
           : formatValue(value, measure, spec.formats ?? {})}
       </p>
+      {marked === undefined ? null : (
+        <p className="kpi__marked">
+          {/* The swatch is decorative; the words carry the meaning (AC-098). */}
+          <span className="mark-badge" data-testid="kpi-marked">
+            <span
+              className="mark-badge__swatch"
+              data-testid="kpi-marked-swatch"
+              aria-hidden="true"
+              style={{ background: marked.colour }}
+            />
+            {marked.text}
+          </span>
+        </p>
+      )}
     </div>
   );
 }

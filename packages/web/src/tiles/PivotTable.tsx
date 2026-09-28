@@ -1,3 +1,4 @@
+import { markedState } from '@wechart/charts';
 import {
   columnTitleOf,
   formatValue,
@@ -25,6 +26,53 @@ export interface PivotTableProps {
 }
 
 const DEFAULT_HEIGHT = 320;
+
+const numberOf = (raw: unknown): number | undefined => {
+  if (raw === null || raw === undefined || raw === '') return undefined;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : undefined;
+};
+
+/**
+ * Each cell's marked share, where the marking's was answered apart (T453,
+ * AC-097): drawn as a table's row is in the user's answer of 2026-09-28
+ * (R43) — its marked value in it, the left rule where it is marked in part.
+ * Extending that answer to a pivot's cells, with its totals unmarked, is a
+ * decision of T453's, not the user's, and is open to change. The share's rows are the
+ * pivot's own question asked with the marking (T388), keyed as its cells are
+ * by their row and column values, the last one a key's as a cell's is. Its
+ * totals are left unmarked.
+ */
+function cellShares(spec: RenderSpec) {
+  const marking = spec.marking;
+  const rowMembers = membersOn(spec.encoding, 'row');
+  const columnMembers = membersOn(spec.encoding, 'column');
+  const keyOf = (rowValues: readonly string[], columnValues: readonly string[]) =>
+    `${rowValues.join('\u0000')}\u0001${columnValues.join('\u0000')}`;
+  const shared = new Map<string, Record<string, unknown>>();
+  if (marking?.share !== undefined && marking.whole !== true) {
+    for (const row of marking.share) {
+      const values = (members: readonly string[]) =>
+        members.map((member) => String(row[member] ?? ''));
+      shared.set(keyOf(values(rowMembers), values(columnMembers)), row);
+    }
+  }
+  return (
+    rowHeader: readonly string[],
+    columnHeader: readonly string[],
+    measure: string,
+    total: number | null,
+  ): { readonly marked: number; readonly partly: boolean } | undefined => {
+    const row = shared.get(keyOf(rowHeader, columnHeader));
+    if (row === undefined || total === null) return undefined;
+    // A share's row with no value for the measure is no measurement, never
+    // 0 (T453's review).
+    const marked = numberOf(row[measure]);
+    if (marked === undefined) return undefined;
+    const state = markedState({ marked, total, aggType: marking?.aggTypes?.[measure] });
+    return state === 'none' ? undefined : { marked, partly: state === 'partly' };
+  };
+}
 
 /**
  * Where a header row sticks: under the ones above it. Every column head of a
@@ -88,6 +136,7 @@ export function PivotTable({ spec, height = DEFAULT_HEIGHT }: PivotTableProps) {
       : value;
   const rowMembers = membersOn(spec.encoding, 'row');
   const columnMembers = membersOn(spec.encoding, 'column');
+  const shareAt = cellShares(spec);
 
   return (
     <div
@@ -153,12 +202,23 @@ export function PivotTable({ spec, height = DEFAULT_HEIGHT }: PivotTableProps) {
                   {headerText(rowMembers[level], value)}
                 </th>
               ))}
-              {columnHeaders.map((_, c) =>
-                measures.map((measure, m) => (
-                  <td key={`${String(c)}-${measure}`} className="num">
-                    {show(cells[r]?.[c]?.[m] ?? null, m)}
-                  </td>
-                )),
+              {columnHeaders.map((column, c) =>
+                measures.map((measure, m) => {
+                  const value = cells[r]?.[c]?.[m] ?? null;
+                  const share = shareAt(header, column, measure, value);
+                  return (
+                    <td
+                      key={`${String(c)}-${measure}`}
+                      className="num"
+                      {...(share?.partly === true ? { 'data-marked': 'partly' } : {})}
+                    >
+                      {show(value, m)}
+                      {share === undefined ? null : (
+                        <span className="data-table__marked">{` · Marked: ${show(share.marked, m)}`}</span>
+                      )}
+                    </td>
+                  );
+                }),
               )}
               {measures.map((measure, m) => (
                 <td

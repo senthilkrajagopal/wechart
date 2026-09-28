@@ -4458,6 +4458,14 @@ main:has(.dashboard) {
 .grid-table.comfy tfoot th { height: 34px; }
 .grid-table tbody tr:hover th { background: var(--wc-bg-hover); }
 .grid-table__total { font-weight: 600; }
+/* A table's row or a pivot's cell marked in part (T453, R43): the
+   prototype's .mk-part, a 3 px rule down its left in the secondary colour,
+   and its marked share said beside each measure. */
+.data-table tr[data-marked='partly'] > td:first-child,
+.pivot-table td[data-marked='partly'] {
+  box-shadow: inset 3px 0 0 var(--wc-text-secondary);
+}
+.data-table__marked { color: var(--wc-text-secondary); }
 /* The prototype's .select.sm, at this table's own 24 px row height rather
    than its 28 px, so a select does not stretch the row it sits in. */
 .select-sm {
