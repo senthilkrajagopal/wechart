@@ -24,7 +24,10 @@ test('a cube assigned to a data source has it in its model file, published', asy
   await expect(yaml).toContainText(`name: ${cube}`);
   await expect(yaml).not.toContainText('data_source');
 
-  await form.getByLabel('Data source', { exact: true }).fill('default');
+  // Picked from the data sources Cube has (T481), once they are read.
+  const source = form.getByLabel('Data source', { exact: true });
+  await expect(source).toHaveJSProperty('tagName', 'SELECT');
+  await source.selectOption('default');
   await expect(yaml).toContainText('data_source: default');
 
   await page.getByRole('button', { name: 'Save & reload Cube' }).click();

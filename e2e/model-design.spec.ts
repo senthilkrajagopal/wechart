@@ -60,8 +60,12 @@ test('T470: the form is flat in its pane, 676 : 524 beside the code, and every t
   ).toBeGreaterThanOrEqual(29);
 
   // Only the panel scrolls: the tabs stay put, and no scrollbar takes their width.
+  // A panel longer than the pane: every dimension open (General, grouped since
+  // T481, fits).
   const panel = form.getByRole('tabpanel');
-  await form.getByRole('tab', { name: /^General/ }).click();
+  await form.getByRole('tab', { name: /^Dimensions/ }).click();
+  for (const summary of await panel.locator('details.model-member > summary').all())
+    await summary.click();
   expect(await panel.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
   await panel.evaluate((node) => {
     node.scrollTop = 200;
@@ -665,6 +669,74 @@ test('T482: in a file of two cubes and a view, the bar is said once and each for
     '        type: string',
     '        sql: status',
   ]);
+});
+
+test('T481: a cube’s General as design 03 state B — Basics, Refresh, Advanced — with help from the research (MW-08)', async ({
+  page,
+}) => {
+  await page.goto(ORDERS);
+  const form = page.getByRole('region', { name: 'Cube orders' });
+  const general = form.getByRole('tabpanel');
+  // The legacy keys under Advanced's caret, as MW-08 asks (T481's review).
+  await expect(general.locator('.model-form__group-title, summary')).toHaveText([
+    'Basics',
+    'Refresh refresh_key',
+    'Advanced extends, sql_alias, calendar, meta, shown, rewrite_queries',
+    'Legacy and undocumented',
+  ]);
+  const basics = general.getByRole('group', { name: 'Basics' });
+  // Name | Data source, then Reads from across, as design 03 pairs them.
+  const name = await basics.locator('[data-key="name"]').boundingBox();
+  const source = await basics.locator('[data-key="data_source"]').boundingBox();
+  expect(Math.round(source?.y ?? 0)).toBe(Math.round(name?.y ?? 1));
+  await expect(basics.getByLabel('Name', { exact: true })).toHaveAttribute('aria-required', 'true');
+  // The mark drawn after the label, in the error colour, and left out of its name.
+  const mark = await basics.locator('[data-key="name"] > label').evaluate((label) => {
+    const after = getComputedStyle(label, '::after');
+    return [after.content, after.color];
+  });
+  expect(mark[0]).toContain('*');
+  expect(mark[1]).not.toBe(
+    await basics
+      .locator('[data-key="name"] > label')
+      .evaluate((label) => getComputedStyle(label).color),
+  );
+  await expect(basics.getByLabel('Name', { exact: true })).toBeVisible();
+  await expect(basics.locator('[data-key="name"] .model-field__help')).toHaveText(
+    'Unique across cubes and views',
+  );
+  // The data source picked from the ones Cube has.
+  const picker = basics.getByLabel('Data source', { exact: true });
+  await expect(picker).toHaveJSProperty('tagName', 'SELECT');
+  await expect(picker.locator('option')).toContainText(['(not set · default)', 'default']);
+  // Reads from: Cube's either/or, SQL table chosen, in the code face.
+  const reads = basics.getByRole('group', { name: 'Reads from' });
+  await expect(reads.getByRole('button', { name: 'SQL table' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(reads.getByLabel('SQL table')).toHaveValue('public.orders');
+  await expect(reads.locator('.model-field__help')).toHaveText(
+    'Cube accepts exactly one of sql_table or sql',
+  );
+  // Refresh's own fields in view, Advanced folded.
+  await expect(general.getByLabel('Every', { exact: true })).toHaveAttribute(
+    'placeholder',
+    'not set · Cube’s default applies',
+  );
+  await expect(general.locator('.model-form__advanced')).not.toHaveAttribute('open', '');
+
+  // An open member's Basics: Name and Type marked required, SQL with its help.
+  await form.getByRole('tab', { name: /^Dimensions/ }).click();
+  await form.locator('.model-member__name', { hasText: /^status$/ }).click();
+  const status = form
+    .getByRole('listitem')
+    .filter({ has: page.locator('.model-member__name', { hasText: /^status$/ }) });
+  await expect(status.getByLabel('Name', { exact: true })).toHaveAttribute('aria-required', 'true');
+  await expect(status.getByLabel('Type', { exact: true })).toHaveAttribute('aria-required', 'true');
+  await expect(status.locator('[data-key="sql"] .model-field__help')).toHaveText(
+    'A Cube SQL template: {CUBE} refers to this cube',
+  );
 });
 
 test('T470: a bar over the form is a band across the pane, and a view’s tabs are short too', async ({

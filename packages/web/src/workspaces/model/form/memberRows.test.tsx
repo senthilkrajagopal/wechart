@@ -46,6 +46,8 @@ const ownKeys = (item: HTMLElement) =>
         ':scope > .model-member > .model-form__fields > [data-key]',
         ':scope > .model-member > .model-form__fields > .model-form__group > .model-form__fields > [data-key]',
         ':scope > .model-member > .model-form__fields > .model-form__advanced > .model-form__group > .model-form__fields > [data-key]',
+        // Advanced holding one group alone draws its rows untitled (T481).
+        ':scope > .model-member > .model-form__fields > .model-form__advanced > .model-form__fields > [data-key]',
         ':scope > .model-member > .model-form__fields > details > [data-key]',
       ].join(', '),
     ),

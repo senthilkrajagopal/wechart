@@ -44,7 +44,11 @@ export type FieldKind =
    */
   | 'refresh-schedule'
   /** Anything else — lists of strings or filters, `meta` — edited as YAML. */
-  | 'yaml';
+  | 'yaml'
+  /** A data source, picked from the ones Cube has where they are known (T481). */
+  | 'data-source'
+  /** An IANA time zone, picked from the ones the browser knows (T481's review). */
+  | 'timezone';
 
 export interface Field {
   readonly key: string;
@@ -95,6 +99,30 @@ export interface Field {
    * research gives one.
    */
   readonly default?: boolean | ((owner: Readonly<Record<string, unknown>>) => boolean);
+  /**
+   * Its one line of help, from `docs/research/cube/data-modeling.md`'s row
+   * for the key — the rule, not a guess (design 03 state B and note 6, T481).
+   */
+  readonly help?: string;
+  /**
+   * What an empty field shows: Cube's default, when the research gives one,
+   * or what the field takes, as the design writes it (`schema.table`).
+   */
+  readonly placeholder?: string;
+  /** Required by the validator: marked, and said to be (T481). */
+  readonly required?: boolean;
+  /**
+   * With another key of which Cube takes exactly one (`sql_table` or `sql`):
+   * one row, titled, choosing which, the other key written through it
+   * ("Reads from"; design 03 state B, T481).
+   */
+  readonly oneOf?: {
+    readonly key: string;
+    readonly label: string;
+    readonly title: string;
+  };
+  /** An object drawn as its own fields in its group, not boxed (the refresh key, T481). */
+  readonly flat?: boolean;
 }
 
 export type SectionId =
@@ -240,20 +268,39 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
   },
   'Y.3': {
     title: 'Cube',
+    // Design 03 state B (T481, MW-08): Basics, Refresh in view, the rest under
+    // Advanced; each field's help from its row in Y.3.
     fields: [
-      f('name', 'identifier'),
-      f('sql_table', 'sql'),
-      f('sql', 'sql'),
-      f('extends', 'reference'),
-      f('data_source', 'text'),
-      f('sql_alias', 'text'),
-      f('title', 'text'),
-      f('description', 'text'),
-      f('public', 'flag'),
+      f('name', 'identifier', {
+        group: 'Basics',
+        required: true,
+        help: 'Unique across cubes and views',
+      }),
+      f('data_source', 'data-source', {
+        group: 'Basics',
+        help: 'The connection Cube reads this cube from; default when not set',
+      }),
+      f('sql_table', 'sql', {
+        group: 'Basics',
+        label: 'SQL table',
+        oneOf: { key: 'sql', label: 'SQL query', title: 'Reads from' },
+        placeholder: 'schema.table',
+        help: 'Cube accepts exactly one of sql_table or sql',
+      }),
+      f('sql', 'sql', { group: 'Basics' }),
+      f('title', 'text', { group: 'Basics', placeholder: 'from the name' }),
+      f('public', 'flag', { group: 'Basics', default: true }),
+      f('description', 'text', { group: 'Basics' }),
+      f('refresh_key', 'object', { of: 'Y.4', group: 'Refresh', flat: true }),
+      f('extends', 'reference', { group: 'More', help: 'Inherits another cube’s members' }),
+      f('sql_alias', 'text', { group: 'More', help: 'Also renames its pre-aggregation tables' }),
+      f('calendar', 'boolean', {
+        group: 'More',
+        default: false,
+        help: 'Needs exactly one primary key dimension of type time',
+      }),
+      f('meta', 'yaml', { group: 'More' }),
       legacy('shown', 'flag'),
-      f('meta', 'yaml'),
-      f('calendar', 'boolean'),
-      f('refresh_key', 'object', { of: 'Y.4' }),
       f('joins', 'list', { of: 'Y.5' }),
       f('dimensions', 'list', { of: 'Y.6' }),
       f('measures', 'list', { of: 'Y.7' }),
@@ -266,7 +313,20 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
   },
   'Y.4': {
     title: 'Refresh key',
-    fields: [f('every', 'text'), f('sql', 'sql'), f('timezone', 'text'), f('immutable', 'boolean')],
+    // Design 03 state B's Every and Time zone first (T481), with Y.4's defaults.
+    fields: [
+      f('every', 'text', {
+        placeholder: 'not set · Cube’s default applies',
+        help: 'An interval, such as 1 hour, or a cron',
+      }),
+      f('timezone', 'timezone', {
+        label: 'Time zone',
+        placeholder: 'not set · the query’s time zone',
+        help: 'An IANA time zone, with a cron or an interval and no sql',
+      }),
+      f('sql', 'sql'),
+      f('immutable', 'boolean'),
+    ],
   },
   'Y.5': {
     title: 'Join',
@@ -301,13 +361,19 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
     // way, a CASE for one without SQL, a point for `geo`, only values for
     // `switch`, granularities for `time`.
     fields: exceptOnSwitch([
-      f('name', 'identifier', { group: 'Basics' }),
+      // Help and marks from Y.6's rows (T481, design 03 note 6).
+      f('name', 'identifier', { group: 'Basics', required: true, help: 'Unique within the cube' }),
       f('type', 'enum', {
         options: ['string', 'number', 'boolean', 'time', 'geo', 'switch'],
         group: 'Basics',
+        required: true,
       }),
-      f('sql', 'sql', { group: 'Basics', applies: (d) => dimensionShape(d) === 'sql' }),
-      f('title', 'text', { group: 'Basics' }),
+      f('sql', 'sql', {
+        group: 'Basics',
+        applies: (d) => dimensionShape(d) === 'sql',
+        help: 'A Cube SQL template: {CUBE} refers to this cube',
+      }),
+      f('title', 'text', { group: 'Basics', placeholder: 'from the name' }),
       // Design 03 note 6's Basics: the format with the title (T480).
       f('format', 'format', { group: 'Basics' }),
       f('description', 'text', { group: 'Basics' }),
@@ -394,7 +460,8 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
   'Y.7': {
     title: 'Measure',
     fields: [
-      f('name', 'identifier', { group: 'Basics' }),
+      // Help and marks from Y.7's rows (T481, design 03 note 6).
+      f('name', 'identifier', { group: 'Basics', required: true, help: 'Unique within the cube' }),
       f('type', 'enum', {
         options: MEASURE_TYPES,
         // §Y.17: Joi takes these two only with `multi_stage: true`.
@@ -403,9 +470,13 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
           rank: { key: 'multi_stage', value: true },
         },
         group: 'Basics',
+        required: true,
       }),
-      f('sql', 'sql', { group: 'Basics' }),
-      f('title', 'text', { group: 'Basics' }),
+      f('sql', 'sql', {
+        group: 'Basics',
+        help: 'Required, except for count and multi-stage measures',
+      }),
+      f('title', 'text', { group: 'Basics', placeholder: 'from the name' }),
       f('format', 'format', { group: 'Basics' }),
       f('description', 'text', { group: 'Basics' }),
       // Y.7: `public` defaults to true.
@@ -499,21 +570,27 @@ export const SCHEMA: Readonly<Record<SectionId, ObjectSchema>> = {
   },
   'Y.10': {
     title: 'View',
+    // Grouped as a cube's General is (T481, MW-08): Basics, the rest under Advanced.
     fields: [
-      f('name', 'identifier'),
+      f('name', 'identifier', {
+        group: 'Basics',
+        required: true,
+        help: 'Unique across cubes and views',
+      }),
       f('cubes', 'list', { of: 'Y.10a' }),
-      f('extends', 'reference'),
-      f('title', 'text'),
-      f('description', 'text'),
-      f('public', 'flag'),
-      f('meta', 'yaml'),
+      f('title', 'text', { group: 'Basics', placeholder: 'from the name' }),
+      f('public', 'flag', { group: 'Basics', default: true }),
+      f('description', 'text', { group: 'Basics' }),
+      f('extends', 'reference', { group: 'More' }),
+      f('meta', 'yaml', { group: 'More' }),
       f('measures', 'list', { of: 'Y.7' }),
       f('dimensions', 'list', { of: 'Y.6' }),
       f('folders', 'list', { of: 'Y.11' }),
       f('default_filters', 'list', { of: 'Y.10c' }),
       f('access_policy', 'list', { of: 'Y.14' }),
-      f('view_group', 'reference'),
-      f('view_groups', 'references'),
+      // A view group by its name (MW-08's placeholder); the model's root lists them.
+      f('view_group', 'reference', { group: 'More', placeholder: 'a view group’s name' }),
+      f('view_groups', 'references', { group: 'More', placeholder: 'view group, view group' }),
       // Accepted through the shared base schema, undocumented for views; the
       // lists and the object hold what a cube's do.
       f('joins', 'list', { of: 'Y.5', legacy: true }),

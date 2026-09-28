@@ -23,6 +23,7 @@ import { ReadOnlyFile } from './ReadOnlyFile';
 import { ReferencesWarning, type MemberReferences } from './ReferencesWarning';
 import { publishModel, referencesTo } from './publish';
 import { modelOf, withObject } from './sync';
+import { DataSourcesContext } from './form/dataSources';
 import { memberIndexOf, PickerScopeContext } from './form/scopes';
 import { validationProblems } from './validate';
 import { YamlEditor } from './YamlEditor';
@@ -353,6 +354,23 @@ function FileEditor({
   const allFiles = useQuery(MODEL_FILES_QUERY);
   // To name the folder of a refusal about another folder's file (T450's review).
   const folders = useQuery(FOLDERS_QUERY);
+  /**
+   * The data sources Cube has, for a cube's Data source to be picked from
+   * (T481, design 03 state B) — as Generate cubes lists them. Not readable
+   * (a user without the route, Cube down): the field is typed.
+   */
+  const sources = useQuery({
+    queryKey: ['introspection-sources'],
+    queryFn: async (): Promise<string[]> => {
+      const response = await fetch('/api/introspection/sources');
+      if (!response.ok)
+        throw new Error(`The data sources could not be read (${String(response.status)}).`);
+      const body = (await response.json()) as { dataSources?: { dataSource: string }[] };
+      return (body.dataSources ?? []).map((each) => each.dataSource);
+    },
+    retry: false,
+    staleTime: 60_000,
+  });
   /**
    * The model's join graph, with this file as the form has it now (AC-138):
    * worked out only while the diagram shows, the other files once each.
@@ -744,47 +762,49 @@ function FileEditor({
           {/* No form to put it under yet: the file's notes are said all the same. */}
           {cubes.length + views.length === 0 ? notesBar : null}
           {/* Its pickers list what the model has (AC-224). */}
-          <PickerScopeContext.Provider value={pickers}>
-            {cubes.map(({ at, value }, place) => (
-              <CubeForm
-                // The cube's place in the file: its name is a field it edits.
-                key={`cube ${String(at)}`}
-                kind="cube"
-                value={value}
-                readOnly={readOnly}
-                // The file's notes, under the first form's tabs (design 03 note 4).
-                banner={place === 0 ? notesBar : null}
-                onOpenMember={openIn('cubes', at)}
-                // Opened from Schedules on this cube's pre-aggregations (T160).
-                {...(openOn !== undefined && openOn.cube === value['name']
-                  ? { initialTab: openOn.tab }
-                  : {})}
-                // Its rollups a publish was refused for, on their rows (T207, AC-189).
-                rollupProblems={refusedRollups.filter(
-                  (problem) =>
-                    problem.folderId === undefined &&
-                    problem.path === path &&
-                    problem.preAggregation?.cube === value['name'],
-                )}
-                onChange={(next) => {
-                  edit('cubes', at, next);
-                }}
-              />
-            ))}
-            {views.map(({ at, value }, place) => (
-              <CubeForm
-                key={`view ${String(at)}`}
-                kind="view"
-                value={value}
-                readOnly={readOnly}
-                banner={place === 0 && cubes.length === 0 ? notesBar : null}
-                onOpenMember={openIn('views', at)}
-                onChange={(next) => {
-                  edit('views', at, next);
-                }}
-              />
-            ))}
-          </PickerScopeContext.Provider>
+          <DataSourcesContext.Provider value={sources.data}>
+            <PickerScopeContext.Provider value={pickers}>
+              {cubes.map(({ at, value }, place) => (
+                <CubeForm
+                  // The cube's place in the file: its name is a field it edits.
+                  key={`cube ${String(at)}`}
+                  kind="cube"
+                  value={value}
+                  readOnly={readOnly}
+                  // The file's notes, under the first form's tabs (design 03 note 4).
+                  banner={place === 0 ? notesBar : null}
+                  onOpenMember={openIn('cubes', at)}
+                  // Opened from Schedules on this cube's pre-aggregations (T160).
+                  {...(openOn !== undefined && openOn.cube === value['name']
+                    ? { initialTab: openOn.tab }
+                    : {})}
+                  // Its rollups a publish was refused for, on their rows (T207, AC-189).
+                  rollupProblems={refusedRollups.filter(
+                    (problem) =>
+                      problem.folderId === undefined &&
+                      problem.path === path &&
+                      problem.preAggregation?.cube === value['name'],
+                  )}
+                  onChange={(next) => {
+                    edit('cubes', at, next);
+                  }}
+                />
+              ))}
+              {views.map(({ at, value }, place) => (
+                <CubeForm
+                  key={`view ${String(at)}`}
+                  kind="view"
+                  value={value}
+                  readOnly={readOnly}
+                  banner={place === 0 && cubes.length === 0 ? notesBar : null}
+                  onOpenMember={openIn('views', at)}
+                  onChange={(next) => {
+                    edit('views', at, next);
+                  }}
+                />
+              ))}
+            </PickerScopeContext.Provider>
+          </DataSourcesContext.Provider>
         </div>
       </section>
       <section className="model-editor__pane model-editor__yaml" aria-label="YAML and join diagram">

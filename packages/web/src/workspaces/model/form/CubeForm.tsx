@@ -173,6 +173,7 @@ export function CubeForm({
                 value={value}
                 onChange={onChange}
                 only={(field) => !listed.has(field.key)}
+                legacyInAdvanced
               />
             ) : (
               <MemberList

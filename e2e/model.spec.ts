@@ -531,7 +531,10 @@ test('a model file opens on a form for its cube, its enumerations the validatorâ
 
   const form = page.getByRole('region', { name: 'Cube orders' });
   await expect(form.getByLabel('SQL table', { exact: true })).toHaveValue('public.orders');
-  await expect(form.getByRole('group', { name: 'Refresh key' })).toBeVisible();
+  // The refresh key's own fields, in General's Refresh group (T481, design 03 state B).
+  await expect(
+    form.getByRole('group', { name: 'Refresh' }).getByLabel('Every', { exact: true }),
+  ).toBeVisible();
 
   await form.getByRole('tab', { name: /^Measures/ }).click();
   await form.locator('.model-member__name', { hasText: /^total_amount$/ }).click();
@@ -639,8 +642,12 @@ test('Model is one workspace: a tree beside full-height form and code panes, Pro
     Math.floor((codeBox?.y ?? 0) + (codeBox?.height ?? 0)),
   );
   // Each pane scrolls on its own: the form is longer than its pane. A file of
-  // one cube scrolls its panel, under tabs that stay put (T470's review).
+  // one cube scrolls its panel, under tabs that stay put (T470's review) â€”
+  // every dimension open, since General, grouped (T481), fits.
   const formBody = form.locator('.model-form__panel');
+  await form.getByRole('tab', { name: /^Dimensions/ }).click();
+  for (const summary of await formBody.locator('details.model-member > summary').all())
+    await summary.click();
   await formBody.evaluate((node) => {
     node.scrollTop = 200;
   });

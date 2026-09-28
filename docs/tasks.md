@@ -7940,8 +7940,29 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - Every control is 28/12 (MW-09).
     - Every key the file writes stays shown (AC-225).
   - Depends on: T470
-- [ ] T481 (AC-132, AC-344) General as design 03's state B: Basics, Refresh and Advanced
-  - Files: `packages/web/src/workspaces/model/form/{CubeForm,ObjectForm,schema}.ts(x)` (+ tests), `e2e/model-design.spec.ts`
+- [x] T481 (AC-132, AC-344) General as design 03's state B: Basics, Refresh and Advanced
+  - **Done 2026-09-27.** Tested in:
+    - `form/CubeForm.test.tsx`: "a cube’s General tab, grouped" and "a view’s General tab, grouped", plus the every-key tests, still whole;
+    - `form/memberRows.test.tsx`;
+    - `e2e/model-design.spec.ts` (T481's test, in Chrome, Firefox and Safari), `e2e/model.spec.ts` and `e2e/data-source.spec.ts`.
+  - **A cube's General:**
+    - **Basics:**
+      - Name, marked required, with help;
+      - Data source, picked from the data sources Cube has (`/api/introspection/sources`, through `DataSourcesContext`). It is typed when they can't be read or there are none; a value Cube doesn't list is kept, and said to be.
+      - "Reads from": SQL table | SQL query, with one input. Switching moves what is written between `sql_table` and `sql`. A file that writes both shows both, for Problems to name. A value that isn't text is edited as YAML, on a row of its own.
+      - Title | Public ("default on");
+      - Description.
+    - **Refresh (`refresh_key`):** in view, its own fields unboxed. They are Every, Time zone (picked from the browser's zones), SQL and Immutable.
+    - **Advanced (collapsed):** extends, sql_alias, calendar (a switch, "default off") and meta, with the legacy keys under the same caret.
+  - **A view's General** is grouped the same way: Name, Title, Public and Description, then Advanced. View groups carry a view-group placeholder.
+  - **Help lines** come from data-modeling.md's rows: Y.3, Y.4, Y.6, Y.7 and Y.10. An open member's Name and Type are marked required. The required mark is drawn after its label and left out of the label's name. `aria-required` and `aria-describedby` are on each control, the YAML fallback's too.
+  - **Decided, not design 03's:**
+    - Refresh is a titled group, not a ▾ disclosure.
+    - Time zone's empty choice says "the query’s time zone" (Y.4), where design 03 says "UTC".
+    - Title's placeholder is "from the name".
+  - **Not done:** `view_group` is still typed. A picker of the model's view groups needs them indexed as the member pickers are; that is left to AC-224's pickers.
+  - Files (as built): `packages/web/src/workspaces/model/form/{CubeForm,ObjectForm,schema,dataSources}.ts(x)`, `packages/web/src/workspaces/model/preagg/RefreshSchedule.tsx` (its zones shared), `packages/web/src/workspaces/model/ModelFilePage.tsx` (the data sources, provided), `packages/web/src/shell/styles.ts` (+ tests), `e2e/{model-design,model,data-source}.spec.ts`
+  - Files (planned): `packages/web/src/workspaces/model/form/{CubeForm,ObjectForm,schema}.ts(x)` (+ tests), `e2e/model-design.spec.ts`
   - Failing test: `CubeForm.test.tsx` and `model-design.spec.ts` (MW-08):
     - A cube's General reads:
       - **Basics:**

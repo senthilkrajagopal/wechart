@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CubeForm } from './CubeForm';
+import { DataSourcesContext } from './dataSources';
 import { MEASURE_TYPES, SCHEMA } from './schema';
 
 /**
@@ -24,6 +25,18 @@ const ORDERS = {
   dimensions: [{ name: 'status', sql: 'status', type: 'string' }],
 };
 
+/**
+ * A key's own row in a General tab: the first `[data-key]` naming it that is
+ * not inside another key's row. Reads from (T481) holds `sql_table` and `sql`.
+ */
+function ownRowOf(panel: HTMLElement, key: string): HTMLElement | undefined {
+  return [...panel.querySelectorAll<HTMLElement>('[data-key]')].find(
+    (row) =>
+      row.getAttribute('data-key')?.split(' ').includes(key) === true &&
+      row.parentElement?.closest('[data-key]') === null,
+  );
+}
+
 const optionsOf = (select: HTMLElement) =>
   [...select.querySelectorAll('option')].map((option) => option.value).filter((v) => v !== '');
 
@@ -36,11 +49,14 @@ const ownRow = (key: string, inside = '') =>
     `.model-member > .model-form__fields > [data-key="${key}"]${inside}`,
     `.model-member > .model-form__fields > .model-form__group > .model-form__fields > [data-key="${key}"]${inside}`,
     `.model-member > .model-form__fields > .model-form__advanced > .model-form__group > .model-form__fields > [data-key="${key}"]${inside}`,
+    // Advanced holding one group alone draws its rows untitled (T481).
+    `.model-member > .model-form__fields > .model-form__advanced > .model-form__fields > [data-key="${key}"]${inside}`,
   ].join(', ');
 
 describe('a cube’s form', () => {
   it('has a labelled control for every key on a cube, lists on their own tabs', async () => {
-    render(<CubeForm kind="cube" value={ORDERS} onChange={vi.fn()} />);
+    // Held: a key reached through Reads from takes its choice (T481).
+    render(<Held initial={ORDERS} onChange={vi.fn()} />);
     const form = screen.getByRole('region', { name: 'Cube orders' });
 
     // General: every key that is not a list of members, the legacy ones in their group.
@@ -69,18 +85,27 @@ describe('a cube’s form', () => {
       'pre_aggregations',
       'access_policy',
     ];
-    // Each key's own row: a nested object (refresh_key) has its own `sql`.
+    // Each key's own row, in its group or a fold; a nested object's rows
+    // (refresh_key has its own `sql`) sit inside its own `data-key`.
     const general = within(form).getByRole('tabpanel');
     for (const field of SCHEMA['Y.3'].fields.filter((each) => !lists.includes(each.key))) {
-      const row = general.querySelector(
-        // Under the panel's lock (T141), which holds everything the panel shows.
-        `:scope > .model-form__lock > .model-form__fields > [data-key="${field.key}"], :scope > .model-form__lock > .model-form__fields > details > [data-key="${field.key}"]`,
-      );
-      const found =
-        field.kind === 'object'
-          ? within(form).getByRole('group', { name: field.label })
-          : within(row as HTMLElement).getByLabelText(field.label, { exact: true });
-      expect(found).toBeTruthy();
+      const row = ownRowOf(general, field.key);
+      expect(row?.isConnected).toBe(true);
+      // `sql` is Reads from's other choice (T481): pressed, its own field.
+      if (field.key === 'sql') {
+        await userEvent.click(
+          within(row as HTMLElement).getByRole('button', { name: 'SQL query' }),
+        );
+        expect(
+          within(row as HTMLElement).getByLabelText('SQL query', { exact: true }).tagName,
+        ).toBe('TEXTAREA');
+        continue;
+      }
+      if (field.kind === 'object') expect(row?.getAttribute('data-key')).toBe(field.key);
+      else
+        expect(
+          within(row as HTMLElement).getByLabelText(field.label, { exact: true }).isConnected,
+        ).toBe(true);
     }
   });
 
@@ -215,6 +240,249 @@ describe('a cube’s form', () => {
  * Fails when: the form stays editable on unparseable YAML.
  */
 /**
+ * T481 / AC-132, design 03 state B (MW-08): General grouped as Basics,
+ * ▾ Refresh and ▸ Advanced, each field with its one-line help from
+ * research/cube/data-modeling.md, "Reads from" as Cube's either/or, and the
+ * data source picked from the ones Cube has. Every key stays reachable.
+ */
+describe('a cube’s General tab, grouped', () => {
+  /** A group's rows, by their keys: its own, not a nested object's. */
+  const rowsIn = (group: HTMLElement) =>
+    [...group.querySelectorAll<HTMLElement>(':scope > .model-form__fields > [data-key]')].map(
+      (row) => row.getAttribute('data-key'),
+    );
+  const groupNamed = (panel: HTMLElement, name: string) =>
+    within(panel).getByRole('group', { name }) as HTMLElement;
+
+  it('reads Basics, then Refresh, then Advanced folded with the legacy keys under it', () => {
+    render(<CubeForm kind="cube" value={ORDERS} onChange={vi.fn()} />);
+    const panel = screen.getByRole('tabpanel');
+    expect(
+      [...panel.querySelectorAll('.model-form__group-title, summary')].map((each) =>
+        each.textContent?.trim(),
+      ),
+    ).toEqual([
+      'Basics',
+      'Refresh refresh_key',
+      'Advanced extends, sql_alias, calendar, meta, shown, rewrite_queries',
+      'Legacy and undocumented',
+    ]);
+    // Under the same caret (MW-08): no fold of their own.
+    expect(panel.querySelector('.model-form__legacy')).toBeNull();
+    expect(
+      panel
+        .querySelector('.model-form__advanced')
+        ?.contains(within(panel).getByRole('group', { name: 'Legacy and undocumented' })),
+    ).toBe(true);
+    expect(rowsIn(groupNamed(panel, 'Basics'))).toEqual([
+      'name',
+      'data_source',
+      'sql_table sql',
+      'title',
+      'public',
+      'description',
+    ]);
+    // Refresh: the refresh key's own fields, in view, not a box within a box.
+    const refresh = groupNamed(panel, 'Refresh');
+    expect(refresh.querySelector('fieldset')).toBeNull();
+    expect(
+      [...refresh.querySelectorAll('[data-key="refresh_key"] [data-key]')].map((row) =>
+        row.getAttribute('data-key'),
+      ),
+    ).toEqual(['every', 'timezone', 'sql', 'immutable']);
+    expect((panel.querySelector('.model-form__advanced') as HTMLDetailsElement).open).toBe(false);
+  });
+
+  it('gives each field its help from the research, and marks the name required', () => {
+    render(<CubeForm kind="cube" value={ORDERS} onChange={vi.fn()} />);
+    const panel = screen.getByRole('tabpanel');
+    const name = within(panel).getByLabelText('Name', { exact: true });
+    expect(name.getAttribute('aria-required')).toBe('true');
+    expect(helpOf(name)).toBe('Unique across cubes and views');
+    expect(helpOf(within(panel).getByLabelText('SQL table', { exact: true }))).toBe(
+      'Cube accepts exactly one of sql_table or sql',
+    );
+    expect(helpOf(within(panel).getByLabelText('Data source', { exact: true }))).toBe(
+      'The connection Cube reads this cube from; default when not set',
+    );
+    expect(
+      (within(panel).getByLabelText('Title', { exact: true }) as HTMLInputElement).placeholder,
+    ).toBe('from the name');
+    expect(
+      (within(panel).getByLabelText('Every', { exact: true }) as HTMLInputElement).placeholder,
+    ).toBe('not set · Cube’s default applies');
+    // Picked from the zones there are, not typed; unset, Y.4's default.
+    const zone = within(panel).getByLabelText('Time zone', { exact: true }) as HTMLSelectElement;
+    expect([zone.tagName, zone.options[0]?.textContent, zone.options[1]?.value]).toEqual([
+      'SELECT',
+      'not set · the query’s time zone',
+      'UTC',
+    ]);
+    // Public as design 03's switch, with Cube's default.
+    expect(panel.querySelector('[data-key="public"] .model-field__default')?.textContent).toBe(
+      '· default on',
+    );
+  });
+
+  it('reads from a SQL table or a SQL query, and moves what is written between them', async () => {
+    const onChange = vi.fn();
+    render(<Held initial={ORDERS} onChange={onChange} />);
+    const reads = screen.getByRole('group', { name: 'Reads from' });
+    const table = within(reads).getByRole('button', { name: 'SQL table' });
+    const query = within(reads).getByRole('button', { name: 'SQL query' });
+    expect([table.getAttribute('aria-pressed'), query.getAttribute('aria-pressed')]).toEqual([
+      'true',
+      'false',
+    ]);
+    expect((within(reads).getByLabelText('SQL table') as HTMLInputElement).value).toBe(
+      'public.orders',
+    );
+
+    await userEvent.click(query);
+    const written = onChange.mock.lastCall?.[0] as Record<string, unknown>;
+    expect([written['sql_table'], written['sql']]).toEqual([undefined, 'public.orders']);
+    expect(
+      (within(reads).getByLabelText('SQL query', { exact: true }) as HTMLTextAreaElement).value,
+    ).toBe('public.orders');
+    expect(query.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('opens on SQL query when the file writes one, and back to a table takes it along', async () => {
+    const onChange = vi.fn();
+    render(
+      <Held initial={{ ...without('sql_table'), sql: 'orders_archive' }} onChange={onChange} />,
+    );
+    const reads = screen.getByRole('group', { name: 'Reads from' });
+    expect(
+      within(reads).getByRole('button', { name: 'SQL query' }).getAttribute('aria-pressed'),
+    ).toBe('true');
+    await userEvent.click(within(reads).getByRole('button', { name: 'SQL table' }));
+    const written = onChange.mock.lastCall?.[0] as Record<string, unknown>;
+    expect([written['sql_table'], written['sql']]).toEqual(['orders_archive', undefined]);
+  });
+
+  it('writes what is typed to the choice made, with nothing written yet', async () => {
+    const onChange = vi.fn();
+    render(<Held initial={without('sql_table')} onChange={onChange} />);
+    const reads = screen.getByRole('group', { name: 'Reads from' });
+    await userEvent.click(within(reads).getByRole('button', { name: 'SQL query' }));
+    await userEvent.type(within(reads).getByLabelText('SQL query', { exact: true }), 'SELECT 1');
+    const written = onChange.mock.lastCall?.[0] as Record<string, unknown>;
+    expect([written['sql_table'], written['sql']]).toEqual([undefined, 'SELECT 1']);
+  });
+
+  it('keeps SQL that runs over lines on its lines, and a value of another shape as YAML', () => {
+    const { rerender } = render(
+      <CubeForm
+        kind="cube"
+        value={{ ...ORDERS, sql_table: 'public.\norders' }}
+        onChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText('SQL table', { exact: true }).tagName).toBe('TEXTAREA');
+    rerender(<CubeForm kind="cube" value={{ ...ORDERS, sql_table: ['a'] }} onChange={vi.fn()} />);
+    // Not text: each key its own row, as any value of another shape is (T481's review).
+    expect(screen.queryByRole('group', { name: 'Reads from' })).toBeNull();
+    expect(
+      (screen.getByLabelText('SQL table', { exact: true }) as HTMLTextAreaElement).className,
+    ).toBe('model-field__yaml');
+  });
+
+  it('says calendar’s rule under its switch, and marks a measure’s and a view’s names', async () => {
+    render(<CubeForm kind="cube" value={ORDERS} onChange={vi.fn()} />);
+    const calendar = screen.getByRole('switch', { name: 'Calendar' });
+    expect(helpOf(calendar)).toBe('Needs exactly one primary key dimension of type time');
+    await userEvent.click(screen.getByRole('tab', { name: /^Measures/ }));
+    await userEvent.click(screen.getByText('count', { selector: '.model-member__name' }));
+    const name = screen.getByLabelText('Name', { exact: true });
+    expect([name.getAttribute('aria-required'), helpOf(name)]).toEqual([
+      'true',
+      'Unique within the cube',
+    ]);
+    expect(helpOf(screen.getByLabelText('SQL', { exact: true }))).toBe(
+      'Required, except for count and multi-stage measures',
+    );
+  });
+
+  it('shows both when the file writes both, for Problems to name', () => {
+    render(
+      <CubeForm
+        kind="cube"
+        value={{ ...ORDERS, sql: 'SELECT * FROM orders' }}
+        onChange={vi.fn()}
+      />,
+    );
+    const reads = screen.getByRole('group', { name: 'Reads from' });
+    expect((within(reads).getByLabelText('SQL table') as HTMLInputElement).value).toBe(
+      'public.orders',
+    );
+    expect((within(reads).getByLabelText('SQL query') as HTMLTextAreaElement).value).toBe(
+      'SELECT * FROM orders',
+    );
+  });
+
+  it('picks the data source from the ones Cube has, and keeps one it doesn’t', () => {
+    const { rerender } = render(
+      <DataSourcesContext.Provider value={['default', 'warehouse']}>
+        <CubeForm kind="cube" value={ORDERS} onChange={vi.fn()} />
+      </DataSourcesContext.Provider>,
+    );
+    const picker = () => screen.getByLabelText('Data source', { exact: true });
+    expect(picker().tagName).toBe('SELECT');
+    expect([...picker().querySelectorAll('option')].map((option) => option.textContent)).toEqual([
+      '(not set · default)',
+      'default',
+      'warehouse',
+    ]);
+    rerender(
+      <DataSourcesContext.Provider value={['default']}>
+        <CubeForm kind="cube" value={{ ...ORDERS, data_source: 'legacy' }} onChange={vi.fn()} />
+      </DataSourcesContext.Provider>,
+    );
+    expect((picker() as HTMLSelectElement).value).toBe('legacy');
+    expect(picker().querySelector('option[value="legacy"]')?.textContent).toBe(
+      'legacy (not a data source Cube has)',
+    );
+    // Not known here: typed, as before.
+    rerender(<CubeForm kind="cube" value={ORDERS} onChange={vi.fn()} />);
+    expect(picker().tagName).toBe('INPUT');
+  });
+});
+
+describe('a view’s General tab, grouped', () => {
+  it('reads Basics — name, title, public, description — with the rest folded', () => {
+    render(<CubeForm kind="view" value={{ name: 'summary' }} onChange={vi.fn()} />);
+    const panel = screen.getByRole('tabpanel');
+    const basics = within(panel).getByRole('group', { name: 'Basics' });
+    expect(
+      [...basics.querySelectorAll(':scope > .model-form__fields > [data-key]')].map((row) =>
+        row.getAttribute('data-key'),
+      ),
+    ).toEqual(['name', 'title', 'public', 'description']);
+    expect(
+      within(basics).getByLabelText('Name', { exact: true }).getAttribute('aria-required'),
+    ).toBe('true');
+    expect(panel.querySelector('.model-form__advanced > summary')?.textContent).toBe(
+      'Advanced extends, meta, view_group, view_groups, joins, segments, hierarchies, pre_aggregations, refresh_key, data_source, sql_alias, rewrite_queries, shown',
+    );
+    // A view's groups by name, with MW-08's placeholder.
+    expect(
+      (within(panel).getByLabelText('View groups', { exact: true }) as HTMLInputElement)
+        .placeholder,
+    ).toBe('view group, view group');
+  });
+});
+
+/** The help line a control is described by. */
+function helpOf(control: HTMLElement): string | undefined {
+  const ids = control.getAttribute('aria-describedby')?.split(' ') ?? [];
+  return ids
+    .map((id) => document.getElementById(id))
+    .find((element) => element?.classList.contains('model-field__help'))
+    ?.textContent?.trim();
+}
+
+/**
  * T482's review: a list tab opens with its members closed, whichever member
  * the tab before had open, as the YAML's tint says (design 03 note 9).
  */
@@ -276,6 +544,10 @@ describe('a form held read-only', () => {
 });
 
 /** The form with its value held, as the page holds it: each edit shows. */
+/** ORDERS without a key. */
+const without = (key: string) =>
+  Object.fromEntries(Object.entries(ORDERS).filter(([each]) => each !== key));
+
 function Held({
   initial,
   onChange,

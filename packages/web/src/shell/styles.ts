@@ -1146,6 +1146,28 @@ button.model-problems__row { cursor: pointer; }
 }
 /* A description runs the full width, as design 03 draws it (T480's review). */
 .model-form__fields > .model-field[data-key='description'] { grid-column: 1 / -1; }
+/* General as design 03 state B (T481): "Reads from" and the refresh key's own
+   fields across the row; a field's help beneath it, 12 px muted; a required
+   field's label marked, the mark left out of its name. */
+.model-form__fields > .model-field--one-of,
+.model-form__fields > .model-field--flat { grid-column: 1 / -1; }
+.model-field--flat > .model-form__fields { padding: 0; }
+.model-field__title { font-size: 12px; font-weight: 600; color: var(--wc-text-secondary); }
+.model-field__one-of { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.model-field__one-of > .seg { flex: none; }
+.model-field__one-of > input { flex: 1; min-width: 12em; font-family: var(--wc-font-code); }
+.model-field__one-of > textarea { flex: 1 1 100%; }
+.model-field__help { font-size: 12px; line-height: 16px; color: var(--wc-text-muted); }
+/* A switch's help under its row (T481's review), and Advanced's untitled rows
+   spaced from its summary as its groups are. */
+.field.model-field--switch { flex-wrap: wrap; }
+.field.model-field--switch > .model-field__help { flex-basis: 100%; }
+.model-form__advanced[open] > .model-form__fields { margin-top: 8px; }
+.model-field.is-required > label::after {
+  content: ' *';
+  content: ' *' / '';
+  color: var(--wc-status-error);
+}
 .model-field__flag { display: flex; gap: 6px; }
 fieldset.model-field {
   margin: 0;

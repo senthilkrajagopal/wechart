@@ -44,8 +44,8 @@ export function isSchedule(value: unknown): boolean {
   );
 }
 
-/** Every zone this browser knows, UTC first. */
-function zones(): string[] {
+/** Every zone this browser knows, UTC first; a cube's refresh key picks from them too (T481). */
+export function zones(): string[] {
   const known = (Intl as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf;
   const all = known === undefined ? [] : known('timeZone');
   return ['UTC', ...all.filter((zone) => zone !== 'UTC')];

@@ -6,7 +6,8 @@ import { parse, stringify } from 'yaml';
 import { StatusIcon } from '../../../shell/StatusIcon';
 import { CUBE_PARSE } from '../objects';
 import { IndexColumns } from '../preagg/IndexEditor';
-import { isSchedule, RefreshSchedule } from '../preagg/RefreshSchedule';
+import { isSchedule, RefreshSchedule, zones } from '../preagg/RefreshSchedule';
+import { DataSourcesContext } from './dataSources';
 import { MemberChips, MemberSelect } from './MemberPicker';
 import { SCHEMA, type Field, type ObjectSchema } from './schema';
 import { canonicalOf, optionsFor, PickerScopeContext } from './scopes';
@@ -76,6 +77,8 @@ function fits(field: Field, value: unknown): boolean {
       return typeof value === 'string' || typeof value === 'number';
     case 'sql':
     case 'enum':
+    case 'data-source':
+    case 'timezone':
       return typeof value === 'string';
     case 'boolean':
       return typeof value === 'boolean';
@@ -116,10 +119,13 @@ function ReferencesControl({
   id,
   value,
   onChange,
+  placeholder = 'member, member',
 }: {
   id: string;
   value: unknown;
   onChange: (next: unknown) => void;
+  /** What it names, when not members: a view's groups (T481's review). */
+  placeholder?: string | undefined;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const names = Array.isArray(value)
@@ -135,7 +141,7 @@ function ReferencesControl({
     <input
       id={id}
       type="text"
-      placeholder="member, member"
+      placeholder={placeholder}
       value={shown}
       onChange={(event) => {
         setDraft(event.target.value);
@@ -156,6 +162,7 @@ function Control({
   onChange,
   id,
   labelId,
+  describedBy,
 }: {
   field: Field;
   value: unknown;
@@ -165,8 +172,16 @@ function Control({
   id: string;
   /** The field's label: it names a picker's group, which a `for` can't. */
   labelId: string;
+  /** Its help line's id, if it has one (T481). */
+  describedBy?: string | undefined;
 }) {
   const scope = useContext(PickerScopeContext);
+  const sources = useContext(DataSourcesContext);
+  /** What every plain control of the field carries: its help, and whether it is required. */
+  const said = {
+    'aria-describedby': describedBy,
+    'aria-required': field.required === true ? true : undefined,
+  };
   const text = (next: string) => {
     onChange(next === '' ? undefined : next);
   };
@@ -202,6 +217,32 @@ function Control({
         }}
       />
     );
+  // Picked from the data sources Cube has (T481): one it doesn't is kept, and said.
+  // None listed is as good as unknown: typed, rather than a picker of nothing (T481's review).
+  if (field.kind === 'data-source' && sources !== undefined && sources.length > 0) {
+    const current = typeof value === 'string' ? value : '';
+    return (
+      <select
+        id={id}
+        className="is-code"
+        {...said}
+        value={current}
+        onChange={(event) => {
+          text(event.target.value);
+        }}
+      >
+        <option value="">(not set · default)</option>
+        {sources.map((source) => (
+          <option key={source} value={source}>
+            {source}
+          </option>
+        ))}
+        {current !== '' && !sources.includes(current) ? (
+          <option value={current}>{`${current} (not a data source Cube has)`}</option>
+        ) : null}
+      </select>
+    );
+  }
   switch (field.kind) {
     case 'sql':
       return (
@@ -209,6 +250,8 @@ function Control({
           id={id}
           className="model-field__sql"
           rows={2}
+          {...said}
+          placeholder={field.placeholder}
           value={typeof value === 'string' ? value : ''}
           onChange={(event) => {
             text(event.target.value);
@@ -227,6 +270,7 @@ function Control({
       return (
         <select
           id={id}
+          {...said}
           value={current}
           onChange={(event) => {
             text(event.target.value);
@@ -318,7 +362,39 @@ function Control({
       );
     }
     case 'references':
-      return <ReferencesControl id={id} value={value} onChange={onChange} />;
+      return (
+        <ReferencesControl
+          id={id}
+          value={value}
+          onChange={onChange}
+          placeholder={field.placeholder}
+        />
+      );
+    case 'timezone': {
+      // Picked, as a pre-aggregation's zone is (T481's review; design 03 state B's select).
+      const current = typeof value === 'string' ? value : '';
+      const known = zones();
+      return (
+        <select
+          id={id}
+          {...said}
+          value={current}
+          onChange={(event) => {
+            text(event.target.value);
+          }}
+        >
+          <option value="">{field.placeholder ?? '(not set)'}</option>
+          {known.map((zone) => (
+            <option key={zone} value={zone}>
+              {zone}
+            </option>
+          ))}
+          {current !== '' && !known.includes(current) ? (
+            <option value={current}>{`${current} (as written)`}</option>
+          ) : null}
+        </select>
+      );
+    }
     case 'ordered-references':
       return <IndexColumns id={id} value={value} onChange={onChange} />;
     case 'number':
@@ -342,10 +418,13 @@ function Control({
     case 'text':
     case 'reference':
     case 'format':
+    case 'data-source':
       return (
         <input
           id={id}
           type="text"
+          {...said}
+          placeholder={field.placeholder}
           value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''}
           onChange={(event) => {
             text(event.target.value);
@@ -365,14 +444,22 @@ function YamlControl({
   id,
   value,
   onChange,
+  describedBy,
+  required = false,
 }: {
   id: string;
   value: unknown;
   onChange: (next: unknown) => void;
+  /** The field's help line, when it has one (T481's review). */
+  describedBy?: string | undefined;
+  required?: boolean;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const problemId = useId();
+  const described = [describedBy, problem === null ? undefined : problemId]
+    .filter((each) => each !== undefined)
+    .join(' ');
   return (
     <>
       <textarea
@@ -381,7 +468,8 @@ function YamlControl({
         rows={2}
         value={draft ?? yamlOf(value)}
         aria-invalid={problem === null ? undefined : true}
-        aria-describedby={problem === null ? undefined : problemId}
+        aria-required={required ? true : undefined}
+        aria-describedby={described === '' ? undefined : described}
         onChange={(event) => {
           setDraft(event.target.value);
         }}
@@ -431,6 +519,8 @@ function SwitchRow({
   const id = useId();
   const fallback = defaultOf(field, owner) ?? false;
   const on = typeof value === 'boolean' ? value : fallback;
+  // Its help too, as every field's (T481's review: calendar's was never drawn).
+  const help = field.help === undefined ? undefined : `${id}-help`;
   return (
     <div className="field model-field model-field--switch" data-key={field.key}>
       <label htmlFor={id}>{field.label}</label>
@@ -467,12 +557,17 @@ function SwitchRow({
         role="switch"
         className="switch"
         checked={on}
-        aria-describedby={`${id}-default`}
+        aria-describedby={help === undefined ? `${id}-default` : `${id}-default ${help}`}
         onChange={(event) => {
           const next = event.target.checked;
           onChange(next === fallback ? undefined : next);
         }}
       />
+      {help === undefined ? null : (
+        <span id={help} className="model-field__help">
+          {field.help}
+        </span>
+      )}
     </div>
   );
 }
@@ -505,6 +600,19 @@ function FieldRow({
   // A list or object the schema describes is its own set of fields.
   if (shaped && field.kind === 'object' && field.of !== undefined) {
     const inner = (own ?? {}) as Value;
+    // Its own fields in its group, which names it (the refresh key, T481).
+    if (field.flat === true)
+      return (
+        <div className="model-field--flat" data-key={field.key}>
+          <ObjectForm
+            schema={schemaOf(field)}
+            value={inner}
+            onChange={(next) => {
+              change(Object.keys(next).length === 0 ? undefined : next);
+            }}
+          />
+        </div>
+      );
     return (
       <fieldset className="model-field model-field--object" data-key={field.key}>
         <legend>{field.label}</legend>
@@ -531,8 +639,12 @@ function FieldRow({
     );
   }
 
+  const help = field.help === undefined ? undefined : `${id}-help`;
   return (
-    <div className="field model-field" data-key={field.key}>
+    <div
+      className={`field model-field${field.required === true ? ' is-required' : ''}`}
+      data-key={field.key}
+    >
       <label id={`${id}-label`} htmlFor={id}>
         {field.label}
       </label>
@@ -544,10 +656,134 @@ function FieldRow({
           onChange={change}
           id={id}
           labelId={`${id}-label`}
+          describedBy={help}
         />
       ) : (
-        <YamlControl id={id} value={own} onChange={change} />
+        <YamlControl
+          id={id}
+          value={own}
+          onChange={change}
+          describedBy={help}
+          required={field.required === true}
+        />
       )}
+      {help === undefined ? null : (
+        <span id={help} className="model-field__help">
+          {field.help}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Two keys of which Cube takes exactly one, as one row: which, as a segmented
+ * control, and its value (design 03 state B's "Reads from", T481). Switching
+ * moves what is written to the other key, for the user to change; a file that
+ * writes both shows both, for Problems to name.
+ */
+function OneOfRow({
+  field,
+  other,
+  value,
+  onChange,
+}: {
+  field: Field & { readonly oneOf: NonNullable<Field['oneOf']> };
+  other: Field;
+  value: Value;
+  onChange: (next: Value) => void;
+}) {
+  const id = useId();
+  const first = read(value, field.key);
+  const second = read(value, other.key);
+  const [chosen, setChosen] = useState<'first' | 'second'>('first');
+  // The file says which, when it writes one; else the last one chosen.
+  const shown =
+    first !== undefined && second === undefined
+      ? 'first'
+      : second !== undefined && first === undefined
+        ? 'second'
+        : chosen;
+  const both = first !== undefined && second !== undefined;
+  const help = `${id}-help`;
+  const choose = (next: 'first' | 'second') => {
+    setChosen(next);
+    if (next === shown || both) return;
+    const [from, to] = next === 'second' ? [field, other] : [other, field];
+    const moved = read(value, from.key);
+    if (moved === undefined) return;
+    onChange(write(write(value, from.key, undefined), to.key, moved));
+  };
+  const input = (which: Field, label: string, multiline: boolean) => {
+    const own = read(value, which.key);
+    const set = (next: string) => {
+      onChange(write(value, which.key, next === '' ? undefined : next));
+    };
+    // Text over lines keeps its lines: a one-line input would drop them (T481's review).
+    return multiline || (typeof own === 'string' && own.includes('\n')) ? (
+      <textarea
+        className="model-field__sql"
+        rows={2}
+        aria-label={label}
+        aria-describedby={help}
+        value={typeof own === 'string' ? own : ''}
+        onChange={(event) => {
+          set(event.target.value);
+        }}
+      />
+    ) : (
+      <input
+        type="text"
+        className="is-code"
+        aria-label={label}
+        aria-describedby={help}
+        placeholder={field.placeholder}
+        value={typeof own === 'string' ? own : ''}
+        onChange={(event) => {
+          set(event.target.value);
+        }}
+      />
+    );
+  };
+  return (
+    <div
+      className="field model-field model-field--one-of"
+      data-key={`${field.key} ${other.key}`}
+      role="group"
+      aria-labelledby={`${id}-title`}
+    >
+      <span id={`${id}-title`} className="model-field__title">
+        {field.oneOf.title}
+      </span>
+      <div className="model-field__one-of">
+        {both ? null : (
+          <span className="seg">
+            <button
+              type="button"
+              aria-pressed={shown === 'first'}
+              onClick={() => {
+                choose('first');
+              }}
+            >
+              {field.label}
+            </button>
+            <button
+              type="button"
+              aria-pressed={shown === 'second'}
+              onClick={() => {
+                choose('second');
+              }}
+            >
+              {field.oneOf.label}
+            </button>
+          </span>
+        )}
+        {both || shown === 'first' ? input(field, field.label, false) : null}
+        {both || shown === 'second' ? input(other, field.oneOf.label, true) : null}
+      </div>
+      <span id={help} className="model-field__help">
+        {field.help}
+      </span>
     </div>
   );
 }
@@ -624,12 +860,18 @@ export function ObjectForm({
   value,
   onChange,
   only,
+  legacyInAdvanced = false,
 }: {
   schema: ObjectSchema;
   value: Value;
   onChange: (next: Value) => void;
   /** Which fields to show; all by default. */
   only?: (field: Field) => boolean;
+  /**
+   * The legacy keys under Advanced's caret, not a fold of their own: a cube's
+   * or a view's General, as design 03 state B and MW-08 ask (T481's review).
+   */
+  legacyInAdvanced?: boolean;
 }) {
   // Only what applies to this member (AC-225) — and whatever the file writes.
   const applies = (field: Field) =>
@@ -657,6 +899,8 @@ export function ObjectForm({
    */
   const open = (name: string) =>
     name === 'Basics' ||
+    // A cube's refresh, in view on General (design 03 state B, T481).
+    name === 'Refresh' ||
     // A CASE is in view only on a dimension it defines; offered, it waits under Advanced.
     (name === 'CASE / WHEN' && value['case'] !== undefined) ||
     name === 'Switch' ||
@@ -664,42 +908,88 @@ export function ObjectForm({
   const inView = shown.filter(([name]) => open(name));
   const folded = shown.filter(([name]) => !open(name));
   const foldsCountryCode = countryCode && folded.some(([name]) => name === 'Geography');
+  const legacyFolded = legacyInAdvanced && legacy.length > 0;
   const foldedKeys = [
     ...folded.flatMap(([, inside]) => inside.map((field) => field.key)),
     // wechart's own setting, named with the keys it sits among (T480's review).
     ...(foldsCountryCode ? ['country code'] : []),
+    ...(legacyFolded ? legacy.map((field) => field.key) : []),
   ];
+  const legacyWritten = legacy.some((field) => read(value, field.key) !== undefined);
   // Opened by itself when the file writes one of its keys: nothing written is hidden (AC-225).
   const written =
     folded.some(([, inside]) => inside.some((field) => read(value, field.key) !== undefined)) ||
-    (foldsCountryCode && countryCodeMarkingOf(value['meta']) !== undefined);
-  const legacyWritten = legacy.some((field) => read(value, field.key) !== undefined);
+    (foldsCountryCode && countryCodeMarkingOf(value['meta']) !== undefined) ||
+    (legacyFolded && legacyWritten);
   const id = useId();
   /** A group's title's id: its name has spaces and slashes, which an id can't (T480's review). */
   const titleId = (name: string) => `${id}-${name.replace(/[^A-Za-z0-9]+/g, '-')}`;
-  const group = ([name, inside]: readonly [string, readonly Field[]]) => (
-    // Named by its title, said once; not a heading, in a pane headed by the file.
-    <section key={name} role="group" aria-labelledby={titleId(name)} className="model-form__group">
-      <p id={titleId(name)} className="model-form__group-title">
-        {name}
-      </p>
-      <div className="model-form__fields">
-        {inside.map((field) => (
-          <FieldRow key={field.key} field={field} value={value} onChange={onChange} />
-        ))}
-        {name === 'Geography' && countryCode ? (
-          <CountryCodeRow value={value} onChange={onChange} />
-        ) : null}
-      </div>
-    </section>
-  );
+  /**
+   * A field's row. Of two keys Cube takes one of (`oneOf`), the first draws
+   * both as one row and the second none of its own (T481).
+   */
+  /**
+   * Both of a pair are text, or unwritten; else each is its own row, edited
+   * as YAML if it must be, as any value of another shape is (T481's review).
+   */
+  const textual = (field: Field) =>
+    [field.key, field.oneOf?.key ?? field.key].every((key) => {
+      const own = read(value, key);
+      return own === undefined || typeof own === 'string';
+    });
+  const rowOf = (field: Field) => {
+    const pair = fields.find((each) => each.oneOf?.key === field.key);
+    if (pair !== undefined && textual(pair)) return null;
+    const { oneOf } = field;
+    const other = oneOf === undefined ? undefined : fields.find((each) => each.key === oneOf.key);
+    if (oneOf !== undefined && other !== undefined && textual(field))
+      return (
+        <OneOfRow
+          key={field.key}
+          field={{ ...field, oneOf }}
+          other={other}
+          value={value}
+          onChange={onChange}
+        />
+      );
+    return <FieldRow key={field.key} field={field} value={value} onChange={onChange} />;
+  };
+  const group = ([name, inside]: readonly [string, readonly Field[]]) => {
+    // A group of an object drawn flat says which key it is (design 03: "Refresh refresh_key").
+    const keys = inside.every((field) => field.flat === true)
+      ? inside.map((field) => field.key).join(', ')
+      : '';
+    return (
+      // Named by its title, said once; not a heading, in a pane headed by the file.
+      <section
+        key={name}
+        role="group"
+        aria-labelledby={titleId(name)}
+        className="model-form__group"
+      >
+        <p className="model-form__group-title">
+          <span id={titleId(name)}>{name}</span>
+          {keys === '' ? null : (
+            <>
+              {' '}
+              <span className="model-form__advanced-keys">{keys}</span>
+            </>
+          )}
+        </p>
+        <div className="model-form__fields">
+          {inside.map(rowOf)}
+          {name === 'Geography' && countryCode ? (
+            <CountryCodeRow value={value} onChange={onChange} />
+          ) : null}
+        </div>
+      </section>
+    );
+  };
   return (
     <div className="model-form__fields">
-      {ungrouped.map((field) => (
-        <FieldRow key={field.key} field={field} value={value} onChange={onChange} />
-      ))}
+      {ungrouped.map(rowOf)}
       {inView.map(group)}
-      {folded.length === 0 ? null : (
+      {folded.length === 0 && !legacyFolded ? null : (
         <Fold
           className="model-form__advanced"
           opened={written}
@@ -709,10 +999,17 @@ export function ObjectForm({
             </>
           }
         >
-          {folded.map(group)}
+          {/* One group alone needs no title of its own: Advanced names it (T481). */}
+          {folded.length === 1 && !foldsCountryCode ? (
+            <div className="model-form__fields">{folded[0]?.[1].map(rowOf)}</div>
+          ) : (
+            folded.map(group)
+          )}
+          {/* General's legacy keys under the same caret (MW-08), titled as a group. */}
+          {legacyFolded ? group(['Legacy and undocumented', legacy]) : null}
         </Fold>
       )}
-      {legacy.length === 0 ? null : (
+      {legacy.length === 0 || legacyFolded ? null : (
         <Fold
           className="model-form__legacy"
           opened={legacyWritten}
