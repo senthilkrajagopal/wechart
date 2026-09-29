@@ -293,7 +293,7 @@ export function BuildPanel({
               </thead>
               <tbody>
                 {buildable.data.map((row) => {
-                  const { id, partitionGranularity, trigger, fileName } = row;
+                  const { id, partitionGranularity, trigger } = row;
                   const shownAs = shownOf(row);
                   const said =
                     shownAs.folder === undefined
@@ -318,14 +318,10 @@ export function BuildPanel({
                       }}
                     >
                       <td className="query-log__query">
-                        {/* Its definition, in Model (AC-229), open on it (T469's review). */}
-                        {fileName === undefined ? (
-                          <span data-testid="preagg-name">{shownAs.name}</span>
-                        ) : (
-                          <a href={memberHref({ ...row, fileName })} data-testid="preagg-name">
-                            {shownAs.name}
-                          </a>
-                        )}
+                        {/* Plain text: a row click selects it, and its pane's
+                            Open in Model is the way to its definition (the
+                            user, 2026-09-28: UX-080; AC-229 amended, R47). */}
+                        <span data-testid="preagg-name">{shownAs.name}</span>
                         {shownAs.folder === undefined ? null : (
                           <span className="build-panel__folder" data-testid="preagg-folder">
                             {shownAs.folder}

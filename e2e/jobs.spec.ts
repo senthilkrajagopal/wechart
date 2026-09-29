@@ -172,9 +172,15 @@ test('each pre-aggregation’s row has its state, its trigger, and its name lead
   await expect(state).toHaveText('Done');
   await expect(state.locator('svg[data-icon="ok"]')).toHaveCount(1);
 
-  // Its name opens its definition in Model: the file, on this pre-aggregation
-  // (T469's review; UX-080's "opens the file with no tab").
-  await row.getByRole('link', { name: ROLLUP }).click();
+  // Its name is plain text, and the row selects it; its pane's Open in Model
+  // opens its definition, on this pre-aggregation (the user, 2026-09-28:
+  // UX-080, AC-229 amended, R47).
+  await expect(row.getByRole('link', { name: ROLLUP })).toHaveCount(0);
+  await row.getByTestId('preagg-name').click();
+  await page
+    .getByRole('complementary', { name: 'Pre-aggregation details' })
+    .getByRole('link', { name: 'Open in Model' })
+    .click();
   await expect(page).toHaveURL(
     /\/model\/files\/cubes%2Fmonthly_orders\.yml\?cube=monthly_orders&tab=pre_aggregations&member=by_status_month$/,
   );

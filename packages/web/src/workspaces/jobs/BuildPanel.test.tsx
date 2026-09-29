@@ -237,10 +237,13 @@ describe('building a pre-aggregation', () => {
     expect(within(pane).getByRole('button', { name: 'Build now' }).className).toContain('btn-sm');
     // A button, not an underlined link, as the prototype's btn sm (T469's review).
     expect(within(pane).getByRole('link', { name: 'Open in Model' }).className).toBe('btn btn-sm');
-    // Its name in the list goes to the same place (AC-229, and T469's review).
-    expect(screen.getAllByTestId('preagg-name').map((name) => name.getAttribute('href'))).toEqual([
-      '/model/files/cubes%2Fmonthly_orders.yml?cube=monthly_orders&tab=pre_aggregations&member=by_status_month',
-      '/model/files/cubes%2Fsales.yml?cube=sales&tab=pre_aggregations&member=main',
+    // Its name in the list is plain text; the pane's Open in Model is the way
+    // there (the user, 2026-09-28: UX-080, AC-229 amended, R47).
+    expect(
+      screen.getAllByTestId('preagg-name').map((name) => [name.tagName, name.getAttribute('href')]),
+    ).toEqual([
+      ['SPAN', null],
+      ['SPAN', null],
     ]);
 
     await userEvent.click(screen.getByTestId('preagg-folder').closest('tr') as HTMLElement);

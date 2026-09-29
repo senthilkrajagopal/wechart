@@ -843,6 +843,9 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R47 — Jobs: the pre-aggregation's name as plain text** (2026-09-28, the user)
+- UX-080 against AC-229: "Plain text, amend AC-229". *A row click only selects. The docked pane's "Open in Model", deep-linking to the pre-aggregation, is the way to its definition. AC-229's "name linking to its definition in Model" is amended to "a way from its row" (T469's follow-up).*
+
 **R46 — design 13 approved; quick calculations on demand; three chart-editor answers** (2026-09-28, the user)
 - **Design 13 (export and import):**
   - Claude asked design 13's open questions. The user chose:
