@@ -103,7 +103,8 @@ test.describe('each author’s own workspace (T343, AC-276, AC-277)', () => {
         .click();
       await page
         .getByRole('menu', { name: 'New' })
-        .getByRole('menuitem', { name: 'Dashboard' })
+        // Exactly: "Import a dashboard…" is in New too (T513).
+        .getByRole('menuitem', { name: 'Dashboard', exact: true })
         .click();
 
       const dialog = page.getByRole('dialog', { name: 'New dashboard in My workspace' });

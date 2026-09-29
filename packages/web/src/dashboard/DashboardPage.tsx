@@ -23,7 +23,11 @@ import {
   type KeptVersion,
 } from '../workspaces/history/HistoryPanel';
 import { RestoreDialogs, useRestore, type RestoringVersion } from '../workspaces/history/restore';
-import { DashboardView } from './DashboardView';
+import { EditInWorkspaceDialog } from '../workspaces/explore/EditInWorkspaceDialog';
+import { FOLDERS_QUERY, targetPathOf } from '../workspaces/explore/folders';
+import { placeOf, type ItemWorkspace } from '../workspaces/explore/placeOf';
+import { WorkspaceBand } from '../workspaces/explore/WorkspaceBand';
+import { DashboardView, type DashboardViewProps } from './DashboardView';
 import { chartWritesOf, drawnWithDrafts } from './edit/chartDrafts';
 import { saveDashboard } from './edit/save';
 import { chartIdsOf, type DashboardDocument } from './model/document';
@@ -137,7 +141,16 @@ export function DashboardPage({
       const stored = await getJson<StoredDocument>(
         `/api/documents/dashboard/${encodeURIComponent(dashboardId)}`,
       );
-      return { document: dashboardOf(stored), version: stored.version ?? 1 };
+      const { body, workspace } = stored as StoredDocument & { workspace?: ItemWorkspace };
+      return {
+        document: dashboardOf(stored),
+        version: stored.version ?? 1,
+        // Where it lives, with sign-in on (T348): shared, or the user's workspace's.
+        workspace,
+        origin: body['origin'] as { id: string; version: number; folderId?: string } | undefined,
+        targetFolderId:
+          typeof body['targetFolderId'] === 'string' ? body['targetFolderId'] : undefined,
+      };
     },
   });
 
@@ -167,6 +180,54 @@ export function DashboardPage({
     },
     [panel, onPanel],
   );
+  // Where it lives and how it's changed, with sign-in on (T348, AC-278).
+  const folders = useQuery({ ...FOLDERS_QUERY, enabled: signedIn });
+  const [copying, setCopying] = useState(false);
+  const current = history.data?.versions.find((each) => each.current);
+  const place =
+    saved.data === undefined
+      ? undefined
+      : placeOf({
+          title: saved.data.document.title,
+          folderId: saved.data.document.folderId,
+          version: saved.data.version,
+          ...(saved.data.origin === undefined ? {} : { origin: saved.data.origin }),
+          targetFolderId: saved.data.targetFolderId,
+          workspace: saved.data.workspace,
+          folders: folders.data,
+          approved: current?.approver == null ? undefined : approvedText(current),
+        });
+  const placeActions =
+    place === undefined
+      ? undefined
+      : {
+          line: place.line,
+          editsElsewhere: place.kind === 'shared',
+          copy:
+            place.kind === 'shared' && place.copy !== undefined
+              ? {
+                  label: place.copy.label,
+                  onClick: () => {
+                    // Their copy opens to be edited, as a new one does (AC-278).
+                    const copyId = place.copy?.copyId ?? null;
+                    if (copyId !== null)
+                      globalThis.location.assign(
+                        `/explore/dashboards/${encodeURIComponent(copyId)}?editing=true`,
+                      );
+                    else setCopying(true);
+                  },
+                }
+              : undefined,
+          proposeTo:
+            place.kind === 'workspace' && place.proposeTo !== undefined
+              ? {
+                  label: place.proposeTo.label,
+                  onClick: () => {
+                    setProposingAgain(place.proposeTo!.targetPath);
+                  },
+                }
+              : undefined,
+        };
   /** A restore proposed: what to say, and where to review it (state E). */
   const [restored, setRestored] = useState<{ text: string; proposalId: string } | undefined>(
     undefined,
@@ -201,6 +262,9 @@ export function DashboardPage({
 
   return (
     <>
+      {/* In My workspace, the place says it is theirs alone (T348; design
+          04, pin 2 and state F). */}
+      {saved.data?.workspace?.inWorkspace === true ? <WorkspaceBand /> : null}
       {/* Its author's band: waiting, or rejected with the reason (T358,
           AC-290). None for anyone else; none asked for with sign-in off. */}
       {signedIn ? (
@@ -222,6 +286,27 @@ export function DashboardPage({
           }}
           onProposed={() => {
             setProposingAgain(null);
+          }}
+        />
+      ) : null}
+      {copying ? (
+        <EditInWorkspaceDialog
+          dashboardId={dashboardId}
+          title={document.title}
+          // Back to the folder it lives in now.
+          targetPath={
+            (document.folderId === undefined
+              ? undefined
+              : targetPathOf(folders.data ?? [], document.folderId)) ?? 'its folder'
+          }
+          onClose={() => {
+            setCopying(false);
+          }}
+          onCopied={(copyId) => {
+            // The copy, to be edited (design 04, state D's "Copy and edit").
+            globalThis.location.assign(
+              `/explore/dashboards/${encodeURIComponent(copyId)}?editing=true`,
+            );
           }}
         />
       ) : null}
@@ -279,6 +364,7 @@ export function DashboardPage({
                   }
                 : {})}
               onEditingChange={closeHistoryWhileEditing}
+              place={placeActions}
             />
           ) : (
             <VersionView
@@ -485,11 +571,14 @@ function LoadedDashboard({
   onHistory,
   historyOpen,
   onEditingChange,
+  place,
 }: {
   /** Its History button (T357): absent where History isn't offered. */
   onHistory?: (() => void) | undefined;
   historyOpen?: boolean | undefined;
   onEditingChange?: ((editing: boolean) => void) | undefined;
+  /** Where it lives, and how it's changed (T348). */
+  place?: DashboardViewProps['place'];
   document: DashboardDocument;
   dashboardId: string;
   version: number;
@@ -849,6 +938,7 @@ function LoadedDashboard({
         onHistory={onHistory}
         historyOpen={historyOpen}
         onEditingChange={onEditingChange}
+        place={place}
         // E and a tile's pencil open the chart editor over the dashboard, in
         // the view itself (T032). They used to navigate here, a full page
         // load that ended the edit session — so there was no dashboard to

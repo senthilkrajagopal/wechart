@@ -145,13 +145,11 @@ test.describe('an item’s history, and restoring a version (T357, AC-289)', () 
       await page.keyboard.press('Escape');
       await expect(page.getByRole('complementary', { name: 'History' })).toHaveCount(0);
       await expect(history).toBeFocused();
-      // Editing closes it: History is for reading, and a version drawn in
-      // the dashboard's place would end the edit session.
+      // No edit in place beside it: a shared dashboard is edited in a copy
+      // (T348, AC-278), so a version drawn here can never end an edit session.
       await history.click();
-      await page.getByRole('button', { name: 'Edit', exact: true }).click();
-      await expect(page.getByRole('complementary', { name: 'History' })).toHaveCount(0);
-      await page.getByRole('button', { name: 'Discard' }).click();
-      await history.click();
+      await expect(page.getByRole('complementary', { name: 'History' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
 
       // Version 1 drawn read-only in its place (state A), without the new tab.
       await page

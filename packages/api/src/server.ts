@@ -973,7 +973,9 @@ export function buildServer({
     },
     viewOnly: async (request) => {
       const seen = await visibilityOf(request);
-      return seen !== undefined && ![...seen.rights.values()].some((right) => right.kinds === 'all');
+      return (
+        seen !== undefined && ![...seen.rights.values()].some((right) => right.kinds === 'all')
+      );
     },
     folders: async () =>
       (cat ? await cat.folders({ counted: false }) : []) as {
@@ -1069,12 +1071,13 @@ export function buildServer({
         const drafts = cat
           ? (
               await Promise.all(
-                mine.map(async (folderId) =>
-                  (await cat.contents(folderId, { counted: false })) as {
-                    kind: string;
-                    title: string;
-                    targetFolderId?: string | null;
-                  }[],
+                mine.map(
+                  async (folderId) =>
+                    (await cat.contents(folderId, { counted: false })) as {
+                      kind: string;
+                      title: string;
+                      targetFolderId?: string | null;
+                    }[],
                 ),
               )
             ).flat()
@@ -2289,6 +2292,29 @@ export function buildServer({
       const { access: _groups, ...body } = found.body;
       void _groups;
       return { ...found, body };
+    }
+    /**
+     * Where a dashboard or library chart is edited, for its header (T348,
+     * AC-278; design 04, states E and F): in the workspace it is in, or, for
+     * a shared one, in a copy there — the user's copy, once they have one.
+     * A chart's only when its page asks (`?place`): a tile's read, one per
+     * chart on a dashboard, needs none of it (T348's review). A chart local to
+     * a dashboard is where its dashboard is.
+     */
+    const { place } = request.query as { place?: string };
+    if (seen !== undefined && (kind === 'dashboard' || (kind === 'chart' && place !== undefined))) {
+      const home = await governingFolder(kind, { id, body: found.body });
+      const own = workspaceIdOf(userOf(request).key);
+      const inWorkspace = (await workspaceRootOf(home)) !== null;
+      const local = kind === 'chart' && typeof found.body['localToDashboardId'] === 'string';
+      const mayCopy =
+        !inWorkspace && !local && home !== null && seen.rights.has(own) && mayWrite(seen, home);
+      const mine = mayCopy ? [own, ...(await foldersBeneath(own)).map((folder) => folder.id)] : [];
+      const copyId =
+        mayCopy && docs?.withOrigin
+          ? ((await docs.withOrigin(kind, id, mine))[0]?.id ?? null)
+          : null;
+      return { ...found, workspace: { inWorkspace, mayCopy, copyId } };
     }
     return found;
   });

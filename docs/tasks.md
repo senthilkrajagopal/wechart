@@ -5721,10 +5721,33 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - *(2026-09-27, from T345)* the workspace's New menu offers Model, which asks for its target folder as `NewItemDialog` does and stores it on the model, so a new model's overlay resolves along its target's path (AC-282's model half; with T363's data source, AC-282 can then be ticked).
   - *2026-09-28, from T349's review:* once the workspace holds models, a `PUT` of a shared folder's model file is refused with `409`, "Edit in my workspace", as T352 refuses dashboards, charts and data sources (AC-278).
   - Depends on: T344, T346, T426, T437
-- [ ] T348 (AC-278) Show the workspace band, each item's origin and target, and "Edit in my workspace" / "Open my copy"
+- [x] T348 (AC-278) Show the workspace band, each item's origin and target, and "Edit in my workspace" / "Open my copy"
   - Files: `packages/web/src/workspaces/explore/{WorkspaceBand,OriginLine,EditInWorkspaceDialog}.tsx` (+ tests), `packages/web/src/dashboard/DashboardView.tsx`, `e2e/security/workspace.spec.ts`
   - Failing test: `workspace.spec.ts`: a shared dashboard offers "Edit in my workspace" and no edit; its dialog lists models and data sources unchecked; the copy opens under "My workspace · only you can see this" with "Copied from _path_ · version _n_" and its target; the shared item then offers "Open my copy" (AC-278; rules 71–73).
   - *(2026-09-27)* The band and each item's origin and target in Explore are T498's (design 04, pins 1–4 and 8). This task keeps design 04's states D, E, F and H: the Edit in my workspace dialog, Open my copy, the item pages' headers, and the copy's toast. It reuses T498's `WorkspaceBand.tsx`; the origin line is `FolderContents.tsx`'s `OriginLine`.
+  - **Done 2026-09-28, after one review round.** Tested in:
+    - `e2e/security/workspace-edit.spec.ts` (Chrome): the dashboard, the library chart, and a reader;
+    - `placeOf.test.ts`, `EditInWorkspaceDialog.test.tsx`;
+    - `workspace-copy.test.ts` ("what an item says of its workspace").
+  - *As built:*
+    - `GET /api/documents/:kind/:id` answers, with sign-in on, `workspace: { inWorkspace, mayCopy, copyId }`: always for a dashboard, and for a chart only with `?place`, so a tile's read carries none of it. A chart local to a dashboard is where its dashboard is. `mayCopy` needs a workspace and write access to the item's folder; `copyId` is the user's own copy only.
+    - `placeOf` (`workspaces/explore/placeOf.ts`) gives the header's line and actions:
+      - a shared item: "In *path* · version *n* · approved …", then "Edit in my workspace" with the pencil, or "Open my copy";
+      - a workspace item: "Copied from *path* › *title* · version *n* · Target: *path*", "New in My workspace · Target: …" or "In My workspace · no target yet", with "Propose to *path*…" as the primary and Edit plain (state F).
+      - Until the folders are read there is no line, but a shared item still has no Edit.
+    - A shared dashboard shows no Edit, settings gear, tile ✎ or "Start editing", for writers and readers alike. Bookmarks, History and Copy to dashboard stay. A chart local to a shared dashboard offers no "Edit on …" or "Save to folders…".
+    - Both item pages show the workspace band (pin 2) in My workspace.
+    - "Open my copy" opens the copy for editing (`?editing=true`; the chart's editor), as AC-278 says.
+    - `EditInWorkspaceDialog` (state D) takes the counts and data sources from the export offer (T511):
+      - a data source in a folder the user only reads is shown "view only here", unticked and not offered;
+      - it copies the ticked data sources and then the dashboard, and opens the copy in edit mode;
+      - Escape closes it;
+      - a refusal gives the server's reason.
+  - *Not built, on purpose:*
+    - State H's toast. A data source's "Edit in my workspace" (T346) opens the copy, whose header already says "Target: …", as a dashboard's "Copy and edit" opens its copy.
+    - Models in the dialog: T347.
+    - The origin as a link, and the original's own title, in the copy's line: the line uses the copy's title.
+  - AC-278 stays unticked: the server's refusal is T502, and models are T347. AC-279 stays unticked until models can be chosen (T347).
   - Depends on: T344, T345, T320
 - [x] T498 (AC-343) My workspace as design 04 draws it in Explore: first in the tree, its band, each item's origin and target, and its status *(added 2026-09-27, split from T348; design 04 of 2026-09-27, pins 1–4 and 8)*
   - **Done 2026-09-27, after one review round.** Tested in `e2e/security/{workspaces,data-sources}.spec.ts` (Chrome, Firefox and Safari), `FolderContents.test.tsx`, `FolderTree.test.tsx`, `WorkspaceBand.test.tsx`, `roots.test.ts` and `access/workspaces.test.ts`.

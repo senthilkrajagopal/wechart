@@ -3,6 +3,7 @@ import { readChartDocument } from '@wechart/core';
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { CHART_MISSING, formatsFrom } from '../../dashboard/chartSpec';
+import { PencilIcon } from '../../dashboard/edit/EditChrome';
 import { NOTHING_CHOSEN } from '../../dashboard/edit/templates';
 import { specFor } from '../../dashboard/DashboardPage';
 import { allMembers } from '../../filters/FilterBar';
@@ -10,7 +11,10 @@ import { META_QUERY } from '../../query/meta';
 import { ME_QUERY } from '../../shell/me';
 import { ProposalBand } from './ProposalBand';
 import { ProposeFlow } from './ProposeFlow';
-import { HistoryPanel, historyQuery } from '../history/HistoryPanel';
+import { approvedText, HistoryPanel, historyQuery } from '../history/HistoryPanel';
+import { FOLDERS_QUERY } from './folders';
+import { placeOf, type ItemWorkspace } from './placeOf';
+import { WorkspaceBand } from './WorkspaceBand';
 import { RestoreDialogs, useRestore } from '../history/restore';
 import { StateLine } from '../../shell/StatusIcon';
 import { ChartTile } from '../../tiles/ChartTile';
@@ -63,9 +67,18 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
   const stored = useQuery({
     queryKey: ['chart-folder', chartId],
     queryFn: () =>
-      getJson<{ body: { folderId?: string }; version?: number }>(
-        `/api/documents/chart/${encodeURIComponent(chartId)}`,
-      ),
+      getJson<{
+        body: {
+          folderId?: string;
+          targetFolderId?: string;
+          title?: string;
+          origin?: { id: string; version: number; folderId?: string };
+        };
+        version?: number;
+        /** Where it lives, with sign-in on (T348). */
+        workspace?: ItemWorkspace;
+        // Where it lives, asked for here only, never by a tile (T348's review).
+      }>(`/api/documents/chart/${encodeURIComponent(chartId)}?place`),
   });
   // As the shell asks it, so this reads what the shell already has.
   const me = useQuery({ ...ME_QUERY, retry: false });
@@ -77,6 +90,39 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
   const mayHistory = signedIn && history.data != null;
   const [historyOpen, setHistoryOpen] = useState(false);
   const restore = useRestore('chart', chartId);
+  // Where it lives and how it's changed, with sign-in on (T348, AC-278).
+  const folders = useQuery({ ...FOLDERS_QUERY, enabled: signedIn });
+  const currentVersion = history.data?.versions.find((each) => each.current);
+  const place =
+    stored.data === undefined
+      ? undefined
+      : placeOf({
+          title: stored.data.body.title ?? 'Chart',
+          folderId: stored.data.body.folderId,
+          version: stored.data.version ?? 1,
+          ...(stored.data.body.origin === undefined ? {} : { origin: stored.data.body.origin }),
+          targetFolderId: stored.data.body.targetFolderId,
+          workspace: stored.data.workspace,
+          folders: folders.data,
+          approved: currentVersion?.approver == null ? undefined : approvedText(currentVersion),
+        });
+  /** A shared chart copied into My workspace, and its copy opened in the editor. */
+  const copyChart = useMutation({
+    mutationFn: async () => {
+      const response = await fetch('/api/workspace/copies', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: 'chart', id: chartId }),
+      });
+      const answer = (await response.json().catch(() => null)) as { id?: string } | null;
+      if (!response.ok || answer?.id === undefined)
+        throw new Error(`It could not be copied (${String(response.status)}).`);
+      return answer.id;
+    },
+    onSuccess: (copyId) => {
+      globalThis.location.assign(`/explore/charts/${encodeURIComponent(copyId)}/edit`);
+    },
+  });
   const [restored, setRestored] = useState<{ text: string; proposalId: string } | undefined>(
     undefined,
   );
@@ -344,6 +390,9 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
     <div className="with-panel" data-open={historyOpen ? 'true' : undefined}>
       <div className="with-panel__main">
         <section className="chart-page">
+          {/* In My workspace, the place says it is theirs alone (T348; design
+              04, pin 2 and state F). */}
+          {place?.kind === 'workspace' ? <WorkspaceBand /> : null}
           <RestoreDialogs
             kind="chart"
             restore={restore}
@@ -420,17 +469,67 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
             saved to folders first (AC-127); never in an editor that can't
             save it (T463, UX-040). A library chart is edited here. */}
             {localTo === undefined ? (
-              stored.isPending ? null : (
-                <a
-                  className="btn-primary"
-                  href={`/explore/charts/${encodeURIComponent(chartId)}/edit`}
-                >
-                  <span aria-hidden="true">✎ </span>Edit chart
-                </a>
+              stored.isPending ? null : place?.kind === 'shared' ? (
+                // A shared one is changed in a copy, never in place (T348,
+                // AC-278): the user's copy opens, or one is made and opened.
+                place.copy === undefined ? null : (
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={copyChart.isPending}
+                    onClick={() => {
+                      if (place.copy?.copyId != null)
+                        globalThis.location.assign(
+                          `/explore/charts/${encodeURIComponent(place.copy.copyId)}/edit`,
+                        );
+                      else copyChart.mutate();
+                    }}
+                  >
+                    <PencilIcon />
+                    {place.copy.label}
+                  </button>
+                )
+              ) : (
+                <>
+                  {/* A workspace one's way back is its primary (design 04,
+                      state F), Edit beside it. */}
+                  <a
+                    className={
+                      place?.kind === 'workspace' && place.proposeTo !== undefined
+                        ? 'btn btn-sm'
+                        : 'btn-primary'
+                    }
+                    href={`/explore/charts/${encodeURIComponent(chartId)}/edit`}
+                  >
+                    <span aria-hidden="true">✎ </span>Edit chart
+                  </a>
+                  {place?.kind === 'workspace' && place.proposeTo !== undefined ? (
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={() => {
+                        setProposingAgain(place.proposeTo!.targetPath);
+                      }}
+                    >
+                      {place.proposeTo.label}
+                    </button>
+                  ) : null}
+                </>
               )
-            ) : (
+            ) : place?.kind === 'shared' ? null : (
+              // On a shared dashboard it is edited only in a copy of that
+              // dashboard (T348's review, AC-278): nothing to do here.
               <LocalChartActions dashboardId={localTo} home={home} />
             )}
+            {/* Where it lives (T348; design 04, states E and F). */}
+            {place?.line === undefined || localTo !== undefined ? null : (
+              <p className="dashboard__ownership">{place.line}</p>
+            )}
+            {copyChart.isError ? (
+              <p role="alert" className="propose-dialog__refused">
+                {copyChart.error.message}
+              </p>
+            ) : null}
           </header>
 
           <div className="chart-page__body">

@@ -3712,6 +3712,31 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 }
 .reviews__summary > .btn { justify-self: start; }
 
+/* Where an item lives, under its title (T348; design 04, states E and F). */
+.dashboard__ownership {
+  flex-basis: 100%;
+  margin: -6px 0 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--wc-text-secondary);
+}
+/* Edit in my workspace, for a dashboard (T348; design 04, state D). */
+.dialog.edit-in-workspace { width: min(520px, calc(100vw - 32px)); max-width: none; gap: 10px; }
+.dialog .edit-in-workspace__always { color: var(--wc-text-primary); }
+.edit-in-workspace__also {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+}
+.edit-in-workspace__also legend { padding: 0 4px; font-size: 12px; font-weight: 600; color: var(--wc-text-secondary); }
+.edit-in-workspace__option { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; align-items: baseline; }
+.edit-in-workspace__name { font-weight: 600; }
+.edit-in-workspace__where { grid-column: 2; font-size: 12px; color: var(--wc-text-secondary); }
+.dialog p.edit-in-workspace__note { margin: 0; font-size: 12px; }
+
 /* An item's History (T357; design 06): a 360 px panel docked right of the
    item. Closed, its container is no box at all, so nothing moves. */
 .with-panel,

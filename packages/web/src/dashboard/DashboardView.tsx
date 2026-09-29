@@ -83,7 +83,7 @@ import {
 } from './edit/deletion';
 import { DeleteSectionDialog } from './edit/DeleteSectionDialog';
 import { UndoToast } from './edit/UndoToast';
-import { EditChrome, type EditSession } from './edit/EditChrome';
+import { EditChrome, PencilIcon, type EditSession } from './edit/EditChrome';
 import { Outline, tileNameOf } from './edit/Outline';
 import { openSidebarPanel } from './edit/EditSidebar';
 import { MoveToMenu } from './edit/MoveToMenu';
@@ -312,6 +312,20 @@ export interface DashboardViewProps {
   readonly historyOpen?: boolean | undefined;
   /** Edit mode entered or left (T357's review). */
   readonly onEditingChange?: ((editing: boolean) => void) | undefined;
+  /**
+   * Where it lives, with sign-in on (T348, AC-278; design 04, states E and
+   * F): the line under its title; a shared one edited only in a copy; a
+   * workspace one proposed back.
+   */
+  readonly place?:
+    | {
+        /** None until its folders are read. */
+        readonly line: string | undefined;
+        readonly editsElsewhere: boolean;
+        readonly copy?: { readonly label: string; readonly onClick: () => void } | undefined;
+        readonly proposeTo?: { readonly label: string; readonly onClick: () => void } | undefined;
+      }
+    | undefined;
   /**
    * The saved chart documents, by chart id: what names a tile when a filter
    * is scoped to it (AC-077), and what a filter re-queries (AC-078).
@@ -2052,6 +2066,7 @@ export function DashboardView({
   onHistory,
   historyOpen = false,
   onEditingChange,
+  place,
   documents,
   reach,
   model,
@@ -2074,6 +2089,12 @@ export function DashboardView({
   onViewTaken,
   onSave,
 }: DashboardViewProps) {
+  /**
+   * A shared one is edited in a copy in My workspace, never in place (T348,
+   * AC-278): no Edit, no gear, no tile's ✎ and no "Start editing". Unlike
+   * `readOnly`, it keeps what a reader does: bookmarks, History, copying out.
+   */
+  const editsElsewhere = place?.editsElsewhere === true;
   /**
    * Charts edited from a tile and held in the edit session (T032), mirrored
    * up from it by `SessionMirror` — because the colours are assigned here,
@@ -4654,7 +4675,7 @@ export function DashboardView({
   if (publishTile !== undefined && publishTile !== publishTaken?.tileId) {
     const element = elementAt(document, publishTile);
     const chartTile = element !== null && isTile(element) && element.chartId !== undefined;
-    if (preview !== undefined || readOnly || narrow || !chartTile) {
+    if (preview !== undefined || readOnly || editsElsewhere || narrow || !chartTile) {
       setPublishTaken({ tileId: publishTile, opened: false });
     } else if (sessionEditing) {
       setPublishTaken({ tileId: publishTile, opened: true });
@@ -4919,7 +4940,10 @@ export function DashboardView({
          * `whyUnsaveable` for the wording and why it names Undo, not Discard.
          */
         saveBlocked={(shown) => whyUnsaveable(shown, dashboardId)}
-        readOnly={preview !== undefined || readOnly || narrow}
+        // A shared one is edited in a copy, never in place (AC-278).
+        readOnly={preview !== undefined || readOnly || narrow || editsElsewhere}
+        subtitle={place?.line}
+        quietEdit={place?.proposeTo !== undefined}
         onStart={onEditStart}
         onDiscard={onDiscard}
         headerActions={(session) => (
@@ -4962,12 +4986,28 @@ export function DashboardView({
                 History
               </button>
             )}
+            {/* A shared one's way to change it: a copy in My workspace
+                (T348, AC-278; design 04, state E). A workspace one's way
+                back: its proposal (state F). */}
+            {session.editing || readOnly || place === undefined ? null : place.copy !==
+              undefined ? (
+              <button type="button" className="btn-primary" onClick={place.copy.onClick}>
+                <PencilIcon />
+                {place.copy.label}
+              </button>
+            ) : place.proposeTo !== undefined ? (
+              // The copy's primary: its way back (state F).
+              <button type="button" className="btn-primary" onClick={place.proposeTo.onClick}>
+                {place.proposeTo.label}
+              </button>
+            ) : null}
             {
               // Not below 1,024 px, where the dashboard is for reading: the
               // settings' Save writes it (T250's review). An edit session already
               // open keeps it, as it keeps its bar.
-              // Nor in a read-only drawing, where nothing is edited (T356's).
-              readOnly || (narrow && !session.editing) ? null : (
+              // Nor in a read-only drawing, where nothing is edited (T356's),
+              // nor on a shared one, edited in a copy (T348's review).
+              readOnly || editsElsewhere || (narrow && !session.editing) ? null : (
                 <button
                   ref={gear}
                   type="button"
@@ -5527,7 +5567,7 @@ export function DashboardView({
             <DashboardPages
               session={session}
               charts={charts}
-              canEdit={preview === undefined && !readOnly && !narrow}
+              canEdit={preview === undefined && !readOnly && !editsElsewhere && !narrow}
               markSaid={markSaid}
               {...(marking ? { markKeys: { onKey: onTileMarkKey, itemsOn: markableItemsOf } } : {})}
               // A duplicate's chart is made from the stored one and what it
@@ -5540,7 +5580,11 @@ export function DashboardView({
               }}
               // Not while previewing a security context: the editor asks as
               // wechart (T172's review), so a preview is read, not edited.
-              onEditChart={preview === undefined && !readOnly && !narrow ? openEditor : undefined}
+              onEditChart={
+                preview === undefined && !readOnly && !editsElsewhere && !narrow
+                  ? openEditor
+                  : undefined
+              }
               onSaveToFolders={(tileId) => {
                 setSelected(tileId);
                 setAddTarget(null);

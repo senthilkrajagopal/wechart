@@ -131,6 +131,13 @@ export interface EditChromeProps<T> {
    * makes inert, so a control there has to hold itself back while saving.
    */
   readonly headerActions?: ReactNode | ((session: EditSession<T>) => ReactNode);
+  /** A line under the title: where it lives (T348). */
+  readonly subtitle?: ReactNode | undefined;
+  /**
+   * Edit as a plain button, where another action is the page's primary: a
+   * workspace copy's "Propose to …" (design 04, state F).
+   */
+  readonly quietEdit?: boolean | undefined;
   /**
    * Why the document cannot be saved as it stands, or undefined when it can.
    * While there is a reason, Save is held back with the reason beside it,
@@ -169,6 +176,21 @@ export interface EditChromeProps<T> {
   readonly children: (session: EditSession<T>) => ReactNode;
 }
 
+/** The prototype's pencil, on Edit and on "Edit in my workspace" (AC-187; design 04, state E). */
+export function PencilIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M11.5 2.5l2 2L6 12l-2.8.8L4 10z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function EditChrome<T>({
   document: opened,
   title,
@@ -177,6 +199,8 @@ export function EditChrome<T>({
   panels,
   overlay,
   headerActions,
+  subtitle,
+  quietEdit = false,
   saveBlocked,
   onStart,
   onDiscard,
@@ -398,21 +422,20 @@ export function EditChrome<T>({
             />
           ) : readOnly ? null : (
             // The prototype's primary Edit, with its pencil (AC-187).
-            <button ref={editButton} type="button" className="btn-primary" onClick={start}>
-              <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-                <path
-                  d="M11.5 2.5l2 2L6 12l-2.8.8L4 10z"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinejoin="round"
-                />
-              </svg>
+            <button
+              ref={editButton}
+              type="button"
+              className={quietEdit ? 'btn btn-sm' : 'btn-primary'}
+              onClick={start}
+            >
+              <PencilIcon />
               Edit
             </button>
           )}
           {/* Last, as the prototype has the settings gear. */}
           {typeof headerActions === 'function' ? headerActions(session) : headerActions}
+          {/* Where it lives, on its own line (T348; design 04, states E and F). */}
+          {subtitle === undefined ? null : <p className="dashboard__ownership">{subtitle}</p>}
         </header>
 
         {band === undefined ? null : (

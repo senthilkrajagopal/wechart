@@ -245,6 +245,117 @@ describe('Edit in my workspace (T344, AC-278, AC-279)', () => {
   });
 });
 
+describe('what an item says of its workspace, for its header (T348, AC-278; design 04, states E and F)', () => {
+  const read = async (who: string, kind: string, id: string) => {
+    const answer = await as(who, { method: 'GET', url: `/api/documents/${kind}/${id}?place` });
+    expect(answer.statusCode, answer.body).toBe(200);
+    return answer.json<{ workspace?: unknown }>().workspace;
+  };
+
+  it('says a chart’s only when its page asks: a tile’s read carries none of it (T348’s review)', async () => {
+    const answer = await as('writer', {
+      method: 'GET',
+      url: `/api/documents/chart/${ids.library}`,
+    });
+    expect(answer.statusCode, answer.body).toBe(200);
+    expect(Object.keys(answer.json<Record<string, unknown>>())).not.toContain('workspace');
+  });
+
+  it('offers no copy of a chart local to a dashboard, which goes with its dashboard, nor to one who only reads its folder', async () => {
+    expect(await read('writer', 'chart', ids.local)).toEqual({
+      inWorkspace: false,
+      mayCopy: false,
+      copyId: null,
+    });
+    // writer has a workspace, but only reads this folder.
+    const readOnly = await doc('folder', {
+      title: `Read here ${MARK}`,
+      folderId: 'root',
+      access: { readOnly: ['sales-rw'], readWrite: ['managers'] },
+    });
+    const board = await doc('dashboard', {
+      schemaVersion: 1,
+      title: `Read board ${MARK}`,
+      folderId: readOnly,
+      pages: [],
+    });
+    expect(await read('writer', 'dashboard', board)).toEqual({
+      inWorkspace: false,
+      mayCopy: false,
+      copyId: null,
+    });
+  });
+
+  it('names only the user’s own copy, never another writer’s', async () => {
+    const both = await doc('folder', {
+      title: `Both ${MARK}`,
+      folderId: 'root',
+      access: { readOnly: null, readWrite: ['sales-rw', 'managers'] },
+    });
+    const board = await doc('dashboard', {
+      schemaVersion: 1,
+      title: `Both board ${MARK}`,
+      folderId: both,
+      pages: [],
+    });
+    const copied = (await copy('writer', 'dashboard', board)).json<{ id: string }>().id;
+    expect(((await read('writer', 'dashboard', board)) as { copyId: unknown }).copyId).toBe(copied);
+    cookies['manager'] = await signIn(app, USERS['manager']!);
+    expect(await read('manager', 'dashboard', board)).toEqual({
+      inWorkspace: false,
+      mayCopy: true,
+      copyId: null,
+    });
+  });
+
+  it('says a local chart of a workspace dashboard is in the workspace, as its dashboard is', async () => {
+    const copied = (await copy('writer', 'dashboard', ids.board)).json<{ id: string }>().id;
+    const stored = (await docs().get('dashboard', copied))!;
+    // The library chart's copy, then the local one's, as the original shows them.
+    const localCopy = chartIdsIn(stored.body['pages'])[1]!;
+    expect((await docs().get('chart', localCopy))?.body['localToDashboardId']).toBe(copied);
+    expect(await read('writer', 'chart', localCopy)).toEqual({
+      inWorkspace: true,
+      mayCopy: false,
+      copyId: null,
+    });
+  });
+
+  it('says a shared item is copied to edit, and names the user’s copy once there is one', async () => {
+    const lone = await doc('chart', {
+      schemaVersion: 1,
+      title: `Header ${MARK}`,
+      folderId: ids.sales,
+      chart: { source: { cube: 'orders' }, wells: { measures: ['orders.count'] } },
+    });
+    expect(await read('writer', 'chart', lone)).toEqual({
+      inWorkspace: false,
+      mayCopy: true,
+      copyId: null,
+    });
+    const copied = (await copy('writer', 'chart', lone)).json<{ id: string }>().id;
+    expect(await read('writer', 'chart', lone)).toEqual({
+      inWorkspace: false,
+      mayCopy: true,
+      copyId: copied,
+    });
+    // Its copy is in the workspace, edited there.
+    expect(await read('writer', 'chart', copied)).toEqual({
+      inWorkspace: true,
+      mayCopy: false,
+      copyId: null,
+    });
+    // A reader may not copy the dashboard they read: no workspace, and a
+    // folder they only read. (A lone library chart isn't a reader's to open,
+    // rule 68.)
+    expect(await read('reader', 'dashboard', ids.board)).toEqual({
+      inWorkspace: false,
+      mayCopy: false,
+      copyId: null,
+    });
+  });
+});
+
 /** T344's review: what a dashboard shows, beyond its own local and library charts. */
 describe('the charts a copied dashboard shows (T344’s review, AC-279)', () => {
   const extra = { readOnly: '', otherBoard: '', otherLocal: '' };
