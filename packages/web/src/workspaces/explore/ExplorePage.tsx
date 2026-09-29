@@ -5,8 +5,15 @@ import { useEffect, useRef, useState } from 'react';
 import { META_QUERY } from '../../query/meta';
 import { ME_QUERY } from '../../shell/me';
 import { StateLine } from '../../shell/StatusIcon';
-import { AccessPanel, folderAccessQuery, refreshFolderAccess } from './access/AccessPanel';
+import {
+  AccessPanel,
+  AccessRefused,
+  folderAccessQuery,
+  refreshFolderAccess,
+} from './access/AccessPanel';
+import { AccessChip, OnlySuperAdminsChip } from './AccessChip';
 import { CreateMenu, DEFAULT_TITLES, type CreatableKind } from './CreateMenu';
+import { folderRoleOf, rightFrom } from './folderRole';
 import { NewSourceWizard } from '../data-sources/NewSourceWizard';
 import { NewItemDialog, type Target } from './NewItemDialog';
 import { FolderContents, opensFromExplore, type CatalogItem } from './FolderContents';
@@ -274,8 +281,21 @@ export function ExplorePage() {
   const me = useQuery(ME_QUERY);
   const signedIn = me.data?.security === 'oidc';
   // My workspace only where the API counts one (T343, AC-277); with sign-in
-  // on, first in the tree (T498; design 04, pin 1).
+  // on, first in the tree (T498; design 04, pin 1). The shared root only
+  // where a grant lets them see it (T331, AC-194).
   const roots = visibleRoots(rootCounts.data, { workspaceFirst: signedIn });
+  /**
+   * Signed in with access to no folder at all (T331; design 09, state G;
+   * rule 61): no tree root, no New, no "+ Folder", and a note that names no
+   * folder and says where access comes from.
+   */
+  const noAccess = signedIn && rootCounts.isSuccess && roots.length === 0;
+  /**
+   * Signed in, until the roots are counted, which say which the user has:
+   * nothing of the shared root is shown, not even for a moment, to someone
+   * who may not see it (rule 67, T331's review).
+   */
+  const rootsPending = signedIn && rootCounts.isPending;
   /**
    * In a signed-in user's workspace, each item says where it goes and where
    * it came from, and its status (T498; design 04, pins 2–4 and 8). With
@@ -287,12 +307,42 @@ export function ExplorePage() {
   // status past Draft (design 04; design 05, state M).
   const [proposing, setProposing] = useState<CatalogItem | null>(null);
   const myProposals = useQuery({ ...REVIEWS_QUERY, enabled: inOwnWorkspace, retry: false });
+  // Asked of a shared folder while it is searched too: what it offers (New,
+  // below) stays what the user may do there.
   const access = useQuery({
     ...folderAccessQuery(folderId),
-    enabled: signedIn && !searching && !isMyWorkspace(folderId),
+    enabled: signedIn && !inMyWorkspace,
     retry: false,
   });
   const mayEditAccess = signedIn && !searching && known && access.isSuccess;
+  /** A shared folder open with sign-in on: its New and footnote are the role's (T331). */
+  const inSharedSignedIn = signedIn && !searching && !inMyWorkspace;
+  /**
+   * What the open folder offers the user, by their role there (T331; AC-192,
+   * AC-194, rule 69): its access answers a Super-Admin or a read-write
+   * member, and refuses one who only sees it.
+   */
+  const role = folderRoleOf({
+    signedIn: me.data === undefined ? undefined : signedIn,
+    superAdmin: me.data?.superAdmin === true,
+    inMyWorkspace,
+    // Only where the API counts one: not a reader at `?folder=mine` (AC-277).
+    hasWorkspace: roots.some((root) => isMyWorkspace(root.id)),
+    right: rightFrom({
+      answered: access.isSuccess,
+      refusedWith: access.error instanceof AccessRefused ? access.error.status : undefined,
+    }),
+  });
+  /**
+   * Rows' Rename and Move (AC-193), only where the user may change what is
+   * listed (rule 68, T331): the open folder's role; in a search's results,
+   * which come from every folder, for one who may write somewhere. The API
+   * refuses the rest (T326).
+   */
+  const mayChangeRows = searching
+    ? me.data !== undefined &&
+      (me.data.security === 'off' || me.data.superAdmin || me.data.readWrite === true)
+    : role.mayRename;
   const [accessOf, setAccessOf] = useState<string | null>(null);
   const accessButton = useRef<HTMLButtonElement>(null);
   /**
@@ -379,6 +429,76 @@ export function ExplorePage() {
       .map((cube) => [cube.name, cube.type === 'view' ? ('view' as const) : ('cube' as const)]),
   );
 
+  /**
+   * The prototype's docked Folders pane (AC-194), kept in view as the
+   * contents scroll. "+ Folder" makes one in the open folder, for those who
+   * may (T331). With no root to hold, no tree, rather than an empty one
+   * (design 09, state G).
+   */
+  const treePane = (
+    <aside className="explore__tree" aria-labelledby="explore-folders-heading">
+      <div className="explore__pane-head">
+        <h2 id="explore-folders-heading">Folders</h2>
+        {role.mayAddFolder && !noAccess && !rootsPending ? (
+          <button
+            type="button"
+            className="btn-ghost btn-sm"
+            onClick={() => create.mutate({ kind: 'folder' })}
+          >
+            + Folder
+          </button>
+        ) : null}
+      </div>
+      <div className="explore__pane-body">
+        {noAccess || rootsPending ? null : (
+          <FolderTree
+            folders={folders.data ?? []}
+            roots={roots}
+            selectedId={searching ? '' : folderId}
+            onSelect={openFolder}
+          />
+        )}
+      </div>
+    </aside>
+  );
+
+  // Signed in with access to no folder: the tree's pane, and a note that
+  // names no folder and says where access comes from (rule 61; design 09,
+  // state G). Until the roots are counted, only that they are being read.
+  if (noAccess || rootsPending)
+    return (
+      <div className="explore">
+        {treePane}
+        <section className="explore__contents" data-testid="explore-contents">
+          {noAccess ? (
+            <div className="explore__no-access">
+              <svg
+                width="32"
+                height="32"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                aria-hidden="true"
+                data-icon="people"
+              >
+                <circle cx="6" cy="6" r="2.2" />
+                <circle cx="11" cy="6.5" r="1.8" />
+                <path d="M1.8 13c.5-2.2 2.1-3.4 4.2-3.4s3.7 1.2 4.2 3.4M10.2 9.8c1.9 0 3.3 1 3.8 3" />
+              </svg>
+              <h1>You don’t have access to any folders yet.</h1>
+              <p>
+                wechart gives access through AD groups; ask whoever manages the folder you need to
+                add one of your groups.
+              </p>
+            </div>
+          ) : (
+            <StateLine kind="run">Loading…</StateLine>
+          )}
+        </section>
+      </div>
+    );
+
   return (
     <div
       className={
@@ -393,28 +513,7 @@ export function ExplorePage() {
                 : 'explore'
       }
     >
-      {/* The prototype's docked Folders pane (AC-194), kept in view as the
-          contents scroll. */}
-      <aside className="explore__tree" aria-labelledby="explore-folders-heading">
-        <div className="explore__pane-head">
-          <h2 id="explore-folders-heading">Folders</h2>
-          <button
-            type="button"
-            className="btn-ghost btn-sm"
-            onClick={() => create.mutate({ kind: 'folder' })}
-          >
-            + Folder
-          </button>
-        </div>
-        <div className="explore__pane-body">
-          <FolderTree
-            folders={folders.data ?? []}
-            roots={roots}
-            selectedId={searching ? '' : folderId}
-            onSelect={openFolder}
-          />
-        </div>
-      </aside>
+      {treePane}
       <section className="explore__contents" data-testid="explore-contents">
         {inOwnWorkspace ? <WorkspaceBand /> : null}
         <nav className="crumbs" aria-label="Breadcrumb">
@@ -466,8 +565,15 @@ export function ExplorePage() {
           ) : (
             <h1 className="explore__title">{searching ? 'Search' : folderTitle}</h1>
           )}
-          {/* A root is not a folder anyone named, so it has no Rename. */}
-          {!searching && renaming === null && !isRoot && known ? (
+          {/* The user's access here (rule 69; T331), and when no group
+              reaches the folder, that only Super-Admins see it (rule 63). */}
+          {!searching && known && role.access !== undefined ? (
+            <AccessChip access={role.access} />
+          ) : null}
+          {mayEditAccess && access.data?.onlySuperAdmins ? <OnlySuperAdminsChip /> : null}
+          {/* A root is not a folder anyone named, so it has no Rename; nor
+              has a folder the user may not change (AC-192, T331). */}
+          {!searching && renaming === null && !isRoot && known && role.mayRename ? (
             <button
               type="button"
               className="btn-ghost btn-sm"
@@ -475,9 +581,6 @@ export function ExplorePage() {
             >
               Rename
             </button>
-          ) : null}
-          {mayEditAccess && access.data?.onlySuperAdmins ? (
-            <span className="explore__alone">Only Super-Admins can see this folder</span>
           ) : null}
           {mayEditAccess ? (
             <button
@@ -507,6 +610,10 @@ export function ExplorePage() {
             onChange={(event) => setQuery(event.target.value)}
           />
           <CreateMenu
+            // What the user may make here (T331, AC-192): a shared folder's
+            // read-write members a folder alone, the workspace every kind, a
+            // reader nothing, and so no New.
+            offers={role.creates}
             // Not until the open folder is known: until then, whether it is
             // in the workspace isn't (T345's review).
             // Nor while a data source is being added in its pane: something
@@ -515,8 +622,8 @@ export function ExplorePage() {
               create.isPending || !known || me.isPending || addingSource !== null || importing
             }
             // Where an import lands: My workspace, with sign-in off too (T513,
-            // AC-356; design 13, state G).
-            {...(inMyWorkspace && !searching
+            // AC-356; design 13, state G); only the user's own (T331).
+            {...(role.inOwnWorkspace && !searching
               ? {
                   onImport: () => {
                     setAccessOf(null);
@@ -529,10 +636,10 @@ export function ExplorePage() {
               // In a signed-in user's workspace, a dashboard or chart names the
               // shared folder it is to go to first (T345, AC-282). With sign-in
               // off, phase 1's one user's is theirs alone: nothing goes anywhere.
-              if (kind !== 'folder' && signedIn && inMyWorkspace) void askTarget(kind);
+              if (kind !== 'folder' && signedIn && role.inOwnWorkspace) void askTarget(kind);
               else create.mutate({ kind });
             }}
-            {...(signedIn && inMyWorkspace
+            {...(signedIn && role.inOwnWorkspace
               ? { onNewSource: () => void askTarget('data-source') }
               : {})}
           />
@@ -598,7 +705,11 @@ export function ExplorePage() {
               emptyText={
                 searching
                   ? 'Nothing matches.'
-                  : 'This folder is empty. Use ＋ New to add a dashboard or chart.'
+                  : // New makes no dashboard or chart in a shared folder (T331):
+                    // the footnote says where they are made.
+                    inSharedSignedIn
+                    ? 'This folder is empty.'
+                    : 'This folder is empty. Use ＋ New to add a dashboard or chart.'
               }
               onOpen={(item) => {
                 // A folder has no page of its own: opening it means selecting it.
@@ -614,8 +725,15 @@ export function ExplorePage() {
                 globalThis.location.assign(`/explore/${item.kind}s/${encodeURIComponent(item.id)}`);
               }}
               opens={opensFromExplore}
-              onRename={(item, title) => relocate.mutate({ item, title })}
-              onMove={(item, target) => relocate.mutate({ item, folderId: target })}
+              // Only where the user may change what is listed (rule 68, T331).
+              {...(mayChangeRows
+                ? {
+                    onRename: (item: CatalogItem, title: string) =>
+                      relocate.mutate({ item, title }),
+                    onMove: (item: CatalogItem, target: string) =>
+                      relocate.mutate({ item, folderId: target }),
+                  }
+                : {})}
               // Not while a data source is being added in the pane it would
               // replace, with what was typed there (T471).
               onExport={
@@ -661,12 +779,21 @@ export function ExplorePage() {
               />
             )}
             {/* The prototype's footnote under the list (F22); in the
-                workspace, the workspace's own (design 04, pin 8). */}
+                workspace, the workspace's own (design 04, pin 8); in a shared
+                folder, to those who may make a folder there, where the rest
+                is made (design 04, state C; T331). */}
             {inOwnWorkspace ? (
               <p className="explore__note explore__note--workspace">
                 Items here are private. Each goes to its target folder only when you propose it and
                 it’s approved; you may approve your own.
               </p>
+            ) : inSharedSignedIn ? (
+              role.creates.length > 0 ? (
+                <p className="explore__note">
+                  To add a dashboard, chart, model or data source here, create it in My workspace
+                  with this folder as its target.
+                </p>
+              ) : null
             ) : (
               <p className="explore__note">
                 Charts are shared: a chart used on several dashboards is edited once, and every

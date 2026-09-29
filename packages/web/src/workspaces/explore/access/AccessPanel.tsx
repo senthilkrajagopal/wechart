@@ -67,14 +67,28 @@ const LEVELS: readonly { level: AccessLevel; heading: string }[] = [
 
 const accessUrl = (folderId: string) => `/api/folders/${encodeURIComponent(folderId)}/access`;
 
+/**
+ * A folder's access, not given: its status says why. 403 is a user who sees
+ * the folder but may not change it, a reader (rule 68), which Explore's
+ * access chip says as View only (T331, rule 69); 404 one who can't see it.
+ */
+export class AccessRefused extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
 async function answered(response: Response): Promise<AccessAnswer> {
   const body = (await response.json().catch(() => null)) as
     (AccessAnswer & { error?: unknown }) | null;
   if (!response.ok) {
-    throw new Error(
+    throw new AccessRefused(
       typeof body?.error === 'string'
         ? body.error
         : `Could not read this folder's access (${String(response.status)}).`,
+      response.status,
     );
   }
   return body as AccessAnswer;

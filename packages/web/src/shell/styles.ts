@@ -1902,11 +1902,48 @@ a.btn-primary.btn-sm { min-height: 24px; height: 24px; padding: 0 8px; }
   main:has(.explore--access) { height: auto; }
   .explore--access { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; }
 }
-.explore__alone {
+/* The folder header's access chip (T331; rule 69; designs 04, 07 and 09,
+   pin 7): 22 px, a 14 px icon and 12 px label on bg-subtle, in the accent
+   for Super-Admin and Read-write. The lock chip beside it, when only
+   Super-Admins see the folder (rule 63), is the neutral one. */
+.access-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-secondary);
   font-size: var(--wc-text-xs-size);
   line-height: var(--wc-text-xs-line);
-  color: var(--wc-text-muted);
+  white-space: nowrap;
 }
+.access-chip > svg { flex: none; }
+.access-chip--accent {
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-accent);
+  font-weight: var(--wc-text-xs-strong-weight);
+}
+/* Signed in with access to no folder (T331; design 09, state G; rule 61):
+   one sentence and where access comes from, centred, naming no folder. */
+.explore__no-access {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  max-width: 420px;
+  margin: 40px auto 0;
+  padding: 24px;
+  text-align: center;
+}
+.explore__no-access h1 {
+  margin: 0;
+  font-size: var(--wc-text-md-size);
+  line-height: var(--wc-text-md-line);
+  font-weight: var(--wc-text-md-weight);
+}
+.explore__no-access p { margin: 0; color: var(--wc-text-secondary); }
+.explore__no-access > svg { color: var(--wc-text-muted); }
 .access-panel {
   display: flex;
   flex-direction: column;

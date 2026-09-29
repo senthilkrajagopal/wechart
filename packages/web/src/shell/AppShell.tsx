@@ -7,7 +7,7 @@ import { AccountMenu } from './AccountMenu';
 import { ME_QUERY } from './me';
 import { openSearch, SearchPalette } from './SearchPalette';
 import { ThemeToggle } from './ThemeToggle';
-import { WorkspaceSwitcher, type WorkspaceId } from './WorkspaceSwitcher';
+import { hiddenWorkspacesFor, WorkspaceSwitcher, type WorkspaceId } from './WorkspaceSwitcher';
 
 /**
  * The top bar and the surface beneath it (AC-001, direction.md §2).
@@ -25,13 +25,13 @@ export interface AppShellProps {
 }
 
 /**
- * The workspaces the user may not open (T500; design 08, state D): Security
- * is the Super-Admins' alone with sign-in on. Until who they are is known,
- * the bar is as it always was.
+ * The workspaces the user may not open (AC-001; T500, T331; designs 08 and
+ * 09): by role, from who `/api/me` says is signed in, which the sign-in gate
+ * has asked before the bar renders.
  */
 function useHiddenWorkspaces(): readonly WorkspaceId[] {
   const me = useQuery({ ...ME_QUERY, retry: false });
-  return me.data?.security === 'oidc' && !me.data.superAdmin ? ['security'] : [];
+  return hiddenWorkspacesFor(me.data);
 }
 
 /** The shortcut as this platform writes it. */

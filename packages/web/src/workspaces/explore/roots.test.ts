@@ -35,6 +35,14 @@ describe('My workspace, however the API names it (T343)', () => {
     expect(visibleRoots(undefined).map((root) => root.id)).toEqual([SHARED_ROOT.id]);
   });
 
+  it('shows the shared root only where the API counts it: none to someone no grant reaches (T331)', () => {
+    // Design 09, state G: signed in with access to nothing, no tree root.
+    expect(visibleRoots({})).toEqual([]);
+    expect(visibleRoots({ mine: 2 }, { workspaceFirst: true }).map((root) => root.id)).toEqual([
+      'mine',
+    ]);
+  });
+
   it('comes first when asked, as design 04 draws it (T498)', () => {
     expect(
       visibleRoots({ root: 3, mine: 1 }, { workspaceFirst: true }).map((root) => root.id),

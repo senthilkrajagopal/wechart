@@ -1,7 +1,7 @@
 import { DRIVERS } from '@wechart/core';
 import { useEffect, useRef, useState } from 'react';
 
-import { MenuButton } from '../../shell/MenuButton';
+import { MenuButton, type MenuItem } from '../../shell/MenuButton';
 import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
 import { chartTypeText } from './chartTypeLabels';
 import { SHARED_ROOT } from './roots';
@@ -38,7 +38,7 @@ export interface CatalogItem {
   readonly hasFields?: boolean;
   /** A dashboard's page tabs. */
   readonly tabs?: number | null;
-  /** A folder's dashboards and charts, including its subfolders'. */
+  /** A folder's items the user may see, including its subfolders' (AC-194, T331). */
   readonly itemCount?: number | null;
   /** A model's cubes and views (T334, AC-269). */
   readonly declares?: { readonly cubes: number; readonly views: number } | null;
@@ -325,6 +325,44 @@ export function FolderContents({
   });
 
   /**
+   * What a row's ⋯ offers: Rename and Move only where Explore gives them,
+   * never where the user may change nothing (rule 68, T331); Propose… in the
+   * workspace; Export… for a dashboard.
+   */
+  const menuOf = (item: CatalogItem, targets: readonly FolderMove[]): MenuItem[] => [
+    // A data source is renamed on its own page (T497).
+    ...(onRename !== undefined && item.kind !== 'data-source'
+      ? [
+          {
+            key: 'rename',
+            label: 'Rename',
+            onSelect: () => {
+              setRenaming(item.id);
+              setDraft(item.title);
+            },
+          },
+        ]
+      : []),
+    ...(onMove && targets.length > 0 && item.kind !== 'data-source'
+      ? [{ key: 'move', label: 'Move to…', onSelect: () => setMoving(item.id) }]
+      : []),
+    // To its target, by a proposal (T358, AC-284; design 05, state A).
+    ...(workspace?.onPropose !== undefined && item.kind !== 'folder'
+      ? [
+          {
+            key: 'propose',
+            label: 'Propose…',
+            onSelect: () => workspace.onPropose?.(item),
+          },
+        ]
+      : []),
+    // Into a file, in the Export pane (T511; design 13, state A).
+    ...(onExport !== undefined && item.kind === 'dashboard'
+      ? [{ key: 'export', label: 'Export…', onSelect: () => onExport(item) }]
+      : []),
+  ];
+
+  /**
    * AC-024: arrow keys move the selection, Enter opens it.
    *
    * A roving tabindex, so the list is one stop in the page's tab order rather
@@ -522,44 +560,13 @@ export function FolderContents({
                 }}
               >
                 {/* A model's name is its file's, changed in the model editor
-                    (T334): it has no rename or move here. */}
-                {item.kind === 'model' ||
-                (item.kind === 'data-source' && workspace?.onPropose === undefined) ? null : (
+                    (T334): it has no rename or move here. A row with nothing
+                    to offer, a reader's folder's (rule 68, T331), has no ⋯. */}
+                {item.kind === 'model' || menuOf(item, targets).length === 0 ? null : (
                   <MenuButton
                     label={`Actions for ${item.title}`}
                     className="btn-ghost btn-sm folder-contents__menu"
-                    items={[
-                      // A data source is renamed on its own page (T497).
-                      ...(item.kind === 'data-source'
-                        ? []
-                        : [
-                            {
-                              key: 'rename',
-                              label: 'Rename',
-                              onSelect: () => {
-                                setRenaming(item.id);
-                                setDraft(item.title);
-                              },
-                            },
-                          ]),
-                      ...(onMove && targets.length > 0 && item.kind !== 'data-source'
-                        ? [{ key: 'move', label: 'Move to…', onSelect: () => setMoving(item.id) }]
-                        : []),
-                      // To its target, by a proposal (T358, AC-284; design 05, state A).
-                      ...(workspace?.onPropose !== undefined && item.kind !== 'folder'
-                        ? [
-                            {
-                              key: 'propose',
-                              label: 'Propose…',
-                              onSelect: () => workspace.onPropose?.(item),
-                            },
-                          ]
-                        : []),
-                      // Into a file, in the Export pane (T511; design 13, state A).
-                      ...(onExport !== undefined && item.kind === 'dashboard'
-                        ? [{ key: 'export', label: 'Export…', onSelect: () => onExport(item) }]
-                        : []),
-                    ]}
+                    items={menuOf(item, targets)}
                   >
                     <span aria-hidden="true">⋯</span>
                   </MenuButton>

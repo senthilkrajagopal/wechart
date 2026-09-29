@@ -1,5 +1,7 @@
 import type { AccessFolder, FolderRight } from '@wechart/core';
 
+import type { OwnCounts } from '../repos/catalog';
+
 /**
  * What a user may see of the shared tree, with security on (T325, AC-264,
  * AC-194): each folder they may see, with its right (`folderRights`), and the
@@ -11,15 +13,20 @@ export interface Visibility {
   readonly rights: ReadonlyMap<string, FolderRight>;
 }
 
-/** A folder's own dashboards and library charts (`catalog.libraryCounts`). */
-export type LibraryCounts = ReadonlyMap<string, { dashboards: number; charts: number }>;
+/** Each folder's own items by kind (`catalog.ownCounts`). */
+export type FolderCounts = ReadonlyMap<string, OwnCounts>;
 
-/** What the user may see of one folder's own items: its dashboards, and its library charts where every kind is theirs. */
-function ownVisible(folderId: string, visibility: Visibility, counts: LibraryCounts): number {
+/**
+ * What the user may see of one folder's own items: its dashboards, and where
+ * every kind is theirs, its library charts, models and data sources too, as
+ * its listing shows them (AC-263, T331).
+ */
+function ownVisible(folderId: string, visibility: Visibility, counts: FolderCounts): number {
   const right = visibility.rights.get(folderId);
   if (right === undefined) return 0;
-  const own = counts.get(folderId) ?? { dashboards: 0, charts: 0 };
-  return own.dashboards + (right.kinds === 'all' ? own.charts : 0);
+  const own = counts.get(folderId);
+  if (own === undefined) return 0;
+  return own.dashboards + (right.kinds === 'all' ? own.charts + own.models + own.dataSources : 0);
 }
 
 /**
@@ -31,7 +38,7 @@ function ownVisible(folderId: string, visibility: Visibility, counts: LibraryCou
  */
 export function visibleCounts(
   visibility: Visibility,
-  counts: LibraryCounts,
+  counts: FolderCounts,
   only?: readonly string[],
 ): Map<string, number> {
   const children = new Map<string, string[]>();

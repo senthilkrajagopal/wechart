@@ -42,7 +42,7 @@ export interface CatalogItem {
   readonly hasFields: boolean;
   /** A dashboard's page tabs: one before any is added, as it opens on one. */
   readonly tabs: number | null;
-  /** A folder's dashboards and charts, including those in its subfolders. */
+  /** A folder's items, including those in its subfolders (AC-194, T331). */
   readonly itemCount: number | null;
   /**
    * A model's cubes and views, what Explore's Built on says of it (T334,
@@ -66,11 +66,23 @@ export interface CatalogItem {
   } | null;
 }
 
+/** A folder's own items by kind, not its subfolders' (T325, T331; AC-194). */
+export interface OwnCounts {
+  readonly dashboards: number;
+  /** Its library charts. */
+  readonly charts: number;
+  readonly models: number;
+  readonly dataSources: number;
+}
+
 export interface FolderNode {
   readonly id: string;
   readonly title: string;
   readonly parentId: string | null;
-  /** Its dashboards and charts, including those in its subfolders (AC-194). */
+  /**
+   * Its dashboards, library charts, models and data sources, including those
+   * in its subfolders (AC-194, T331).
+   */
   readonly itemCount: number;
   /** Its id in xcube (T425), which names its items; none until it has one (T429, AC-329). */
   readonly xcubeId: string | null;
@@ -127,9 +139,11 @@ export function catalog(db: Kysely<Database>) {
       .select(sql<CatalogItem['origin']>`body -> 'origin'`.as('origin'));
 
   /**
-   * Each of these folders' dashboards and library charts, counting those in
-   * every folder beneath it (AC-193, AC-194). Dashboard-local charts are not
-   * catalog objects (AC-126), so they are not counted.
+   * Each of these folders' items, counting those in every folder beneath it
+   * (AC-193, AC-194): its dashboards and library charts, and its models and
+   * data sources, which are folder items too (T334, T335; T331). Dashboard-
+   * local charts are not catalog objects (AC-126), so they are not counted;
+   * nor are folders, whose own items are.
    *
    * The recursion follows `folder_id` from each folder down; a cycle in
    * stored data would repeat a row, and `union` (not `union all`) drops the
@@ -144,12 +158,17 @@ export function catalog(db: Kysely<Database>) {
         union
         select tree.root, d.id from documents d join tree on d.folder_id = tree.id
         where d.kind = 'folder'
+      ),
+      items(folder_id) as (
+        select folder_id from documents
+        where kind in ('dashboard', 'chart') and local_to_dashboard_id is null
+        union all
+        select folder_id from model_files
+        union all
+        select folder_id from data_sources
       )
-      select tree.root, count(i.id) as count
-      from tree left join documents i
-        on i.folder_id = tree.id
-        and i.kind in ('dashboard', 'chart')
-        and i.local_to_dashboard_id is null
+      select tree.root, count(i.folder_id) as count
+      from tree left join items i on i.folder_id = tree.id
       group by tree.root`.execute(db);
     return new Map(result.rows.map((row) => [row.root, Number(row.count)]));
   };
@@ -187,27 +206,35 @@ export function catalog(db: Kysely<Database>) {
     },
 
     /**
-     * Each folder's own dashboards and library charts, not its subfolders':
-     * what a count of only the folders a user may see adds up (T325, AC-194).
-     * Dashboard-local charts are no catalog objects, and not counted (AC-126).
+     * Each folder's own items by kind, not its subfolders': what a count of
+     * only what a user may see adds up (T325, AC-194). Its dashboards and
+     * library charts, and its models and data sources (T331). Dashboard-local
+     * charts are no catalog objects, and not counted (AC-126).
      */
-    async libraryCounts(): Promise<Map<string, { dashboards: number; charts: number }>> {
-      const rows = await db
-        .selectFrom('documents')
-        .select(['folder_id', 'kind'])
-        .select((eb) => eb.fn.countAll<string>().as('count'))
-        .where('kind', 'in', ['dashboard', 'chart'])
-        .where('local_to_dashboard_id', 'is', null)
-        .where('folder_id', 'is not', null)
-        .groupBy(['folder_id', 'kind'])
-        .execute();
-      const counts = new Map<string, { dashboards: number; charts: number }>();
-      for (const row of rows) {
-        const folder = row.folder_id as string;
-        const each = counts.get(folder) ?? { dashboards: 0, charts: 0 };
-        if (row.kind === 'dashboard') each.dashboards = Number(row.count);
-        else each.charts = Number(row.count);
-        counts.set(folder, each);
+    async ownCounts(): Promise<Map<string, OwnCounts>> {
+      const rows = await sql<{ folder_id: string; kind: keyof OwnCounts; count: string }>`
+        select folder_id, kind, count(*) as count from (
+          select folder_id,
+            case kind when 'dashboard' then 'dashboards' else 'charts' end as kind
+          from documents
+          where kind in ('dashboard', 'chart')
+            and local_to_dashboard_id is null
+            and folder_id is not null
+          union all
+          select folder_id, 'models' from model_files
+          union all
+          select folder_id, 'dataSources' from data_sources
+        ) as items
+        group by folder_id, kind`.execute(db);
+      const counts = new Map<string, OwnCounts>();
+      for (const row of rows.rows) {
+        const each = counts.get(row.folder_id) ?? {
+          dashboards: 0,
+          charts: 0,
+          models: 0,
+          dataSources: 0,
+        };
+        counts.set(row.folder_id, { ...each, [row.kind]: Number(row.count) });
       }
       return counts;
     },

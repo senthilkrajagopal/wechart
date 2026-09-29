@@ -722,6 +722,62 @@ describe('the tree’s counts and roots (AC-194)', () => {
       MY_WORKSPACE_ID,
     );
   });
+
+  /**
+   * T331 (AC-194; UX-239): models and data sources are folder items (T334,
+   * T335), so a folder's count holds them too, its subfolders' included. A
+   * folder holding only models read "0 items".
+   */
+  it('counts a folder’s models and data sources as items, its subfolders’ included (T331)', async () => {
+    const top = await folder('Counted with models');
+    const below = await folder('Counted with models below', top);
+    const only = await folder('Only models');
+    await repo().create({
+      kind: 'dashboard',
+      id: randomUUID(),
+      body: { title: 'd', folderId: top },
+    });
+    const sources: string[] = [];
+    const paths: { folder: string; path: string }[] = [];
+    const model = async (folderId: string, path: string) => {
+      await getDb()
+        .insertInto('model_files')
+        .values({ folder_id: folderId, path, content: 'cubes: []\n' })
+        .execute();
+      paths.push({ folder: folderId, path });
+    };
+    const source = async (folderId: string, name: string) => {
+      const id = randomUUID();
+      await getDb()
+        .insertInto('data_sources')
+        .values({ id, folder_id: folderId, name, type: 'postgres', settings: '{}' })
+        .execute();
+      sources.push(id);
+    };
+    try {
+      await model(top, 'counted/top.yml');
+      await model(below, 'counted/below.yml');
+      await source(below, 'counted_below');
+      await model(only, 'counted/only.yml');
+      await model(only, 'counted/only-too.yml');
+
+      const folders = await cat().folders();
+      expect(folders.find((node) => node.id === top)?.itemCount).toBe(4);
+      expect(folders.find((node) => node.id === below)?.itemCount).toBe(2);
+      expect(folders.find((node) => node.id === only)?.itemCount).toBe(2);
+      // And a subfolder's count in its folder's listing (AC-193).
+      expect((await cat().contents(top)).find((item) => item.id === below)?.itemCount).toBe(2);
+    } finally {
+      for (const { folder: folderId, path } of paths)
+        await getDb()
+          .deleteFrom('model_files')
+          .where('folder_id', '=', folderId)
+          .where('path', '=', path)
+          .execute();
+      if (sources.length > 0)
+        await getDb().deleteFrom('data_sources').where('id', 'in', sources).execute();
+    }
+  });
 });
 
 // T429, AC-329: the picker names a cube's folder from `meta.xcube`, by the

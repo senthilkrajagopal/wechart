@@ -34,9 +34,11 @@ export function rootTitleOf(id: string): string | undefined {
 }
 
 /**
- * The roots the tree shows (T343, AC-277): the shared root, and My workspace
- * where the API counts one — none for a user with read-only access
- * everywhere, nor before the counts come. Each with its count, where known.
+ * The roots the tree shows (T343, AC-277; T331, AC-194): each where the API
+ * counts one. My workspace is none for a user with read-only access
+ * everywhere, nor before the counts come; the shared root is none for
+ * someone no grant reaches (design 09, state G), and until the counts come,
+ * shown alone. Each with its count, where known.
  *
  * With sign-in on My workspace comes first, above the shared tree (design 04
  * of 2026-09-27, pin 1); with one user, phase 1's order stays.
@@ -45,8 +47,8 @@ export function visibleRoots(
   counts: Readonly<Record<string, number>> | undefined,
   { workspaceFirst = false }: { readonly workspaceFirst?: boolean } = {},
 ): (RootFolder & { readonly itemCount?: number })[] {
-  const shown = ROOT_FOLDERS.filter(
-    (root) => root.id !== MY_WORKSPACE.id || counts?.[MY_WORKSPACE.id] !== undefined,
+  const shown = ROOT_FOLDERS.filter((root) =>
+    counts === undefined ? root.id !== MY_WORKSPACE.id : counts[root.id] !== undefined,
   ).map((root) => {
     const itemCount = counts?.[root.id];
     return itemCount === undefined ? root : { ...root, itemCount };

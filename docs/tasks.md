@@ -5397,7 +5397,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       6. Undo had no test, and was offered after self-removal.
     - **Decided here, small:** with sign-in off, Explore has no Access button, since there is one user and no groups, and phase 1 stays as it was.
     - AC-259 and AC-260 are ticked. The subfolder half of AC-259 is T329's API test plus the writer e2e here. AC-265 stays open: Super-Admins on every admin surface is T369's and T371's.
-- [ ] T331 (AC-001, AC-192, AC-194) Shape Explore and the top bar by role
+- [x] T331 (AC-001, AC-192, AC-194) Shape Explore and the top bar by role
   - Files: `packages/web/src/shell/WorkspaceSwitcher.tsx`, `packages/web/src/workspaces/explore/{ExplorePage,CreateMenu,FolderTree,AccessChip}.tsx` (+ tests), `e2e/security/explore-roles.spec.ts`
   - Failing test: `explore-roles.spec.ts`, for each role:
     - the switcher lists Explore to all; Data sources, Jobs and Schedules to Super-Admins and read-write members; Security to Super-Admins; and never Model (AC-001);
@@ -5405,6 +5405,68 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - the tree is headed "Folders", holds "My workspace" only for users who have one, and counts only visible items (AC-194).
   - *2026-09-26, from T334's review:* models are folder items now, but a folder's count (`catalog.ts` `itemCounts`, `libraryCounts`, and so `visibleCounts`) still counts only dashboards and library charts. So a folder holding only models reads "0 items". Counting them, for those who may see them, belongs to AC-194 here, with data sources after T335.
   - Depends on: T325, T326, T345
+  - **Done 2026-09-28, after one review round. AC-001 and AC-194 ticked; AC-192 is not (its Model entry is T347's).**
+    - **AC-001** on `e2e/security/explore-roles.spec.ts` (Chrome), in the bar and its narrow menu:
+      - `super`: Explore, Data sources, Jobs, Schedules, Security;
+      - `writer`: Explore, Data sources, Jobs, Schedules;
+      - `reader` and `nobody`: Explore alone;
+      - Model and Dashboards for no one; `/model` still opens by its address.
+      - With sign-in off (the single user, every entry but Model) and before `/api/me` answers: `WorkspaceSwitcher.test.tsx` and `AppShell.test.tsx`.
+    - **AC-194** on the same spec:
+      - the pane headed "Folders";
+      - "+ Folder" for `super`, and for `writer` in Roles and My workspace; none for `writer` at the view-only root, `reader` or `nobody`;
+      - Hidden and Alone never shown to `writer` or `reader`;
+      - My workspace for `super` and `writer` only; no Shared root for `nobody`;
+      - counts with Inner's items included: 4 and 2 for `super` and `writer` (a model and a data source among them), 2 and 1 for `reader`, who sees dashboards alone;
+      - the tree still in view, full height, after the contents scroll to the end.
+      - API: `repos/catalog-access.test.ts` and `repos/catalog.test.ts` (T331 cases).
+    - **AC-192 is left open for its Model entry only.** My workspace's New shows Dashboard, Chart, Data source and Folder, then Import a dashboard… under a divider (T513). Model between Chart and Data source is T347's (AC-282's model half; T345's note). The rest is shown on the spec:
+      - a shared folder's New offers Folder alone to `super` and `writer`, and there is no New for `reader`;
+      - Rename is shown only where the user may rename;
+      - a breadcrumb ancestor opens its folder;
+      - a Folder made from New lands in the open folder.
+  - **As built:**
+    - **API.**
+      - A folder's count covers its dashboards, library charts, models and data sources, its subfolders' included:
+        - security off: `catalog.itemCounts`;
+        - security on: `catalog.ownCounts` (was `libraryCounts`) with `access/visible.ts`, where models and data sources count only where the user sees every kind, as the listing shows them (AC-263).
+      - `/api/folder-roots` leaves out `root` for someone no grant lets see it (design 09, state G).
+    - **The switcher.**
+      - `WORKSPACES` keeps Model as a route but marks it `listed: false`.
+      - `hiddenWorkspacesFor(me)` hides by role. Until `/api/me` answers, it shows Explore alone (fails closed).
+    - **Explore by role.**
+      - `folderRole.ts` decides what the open folder offers: `folderRoleOf` gives the chip, New's kinds, Rename, "+ Folder" and whether it is the user's own workspace; `rightFrom` reads the right from how `GET /api/folders/:id/access` answered (200 write, 403 read).
+      - `CreateMenu` takes `offers`, and renders nothing when there is nothing to offer.
+      - `AccessChip.tsx` draws the chip: Super-Admin (shield), Read-write (pencil) or View only (eye), 22 px, in the accent for the first two (rule 69). The lock chip "Only Super-Admins can see this folder" replaces the old muted text (rule 63).
+      - A shared folder's writers get the footnote "To add a dashboard, chart, model or data source here, create it in My workspace with this folder as its target." (design 04, state C). An empty shared folder says "This folder is empty."
+      - Signed in with no root: design 09 state G's icon, "You don’t have access to any folders yet." and its sentence, with no tree, New or "+ Folder" (rule 61). Until the roots are counted, Explore says "Loading…", so the shared root never shows for a moment.
+  - **The cold review (FAIL) found, and this fixed:**
+    1. New, "+ Folder", Import and Data source were offered at `?folder=mine` to someone with no workspace. A workspace is now the user's only where the API counts one; a reader test at that address shows nothing is offered.
+    2. Rows offered Rename and Move where the user may change nothing (rule 68; design 04, state G). They now come only with the open folder's write right, or in search to someone who writes somewhere. A row with nothing to offer has no ⋯; a reader's dashboard keeps Export… (T511).
+    3. The shared root showed briefly before the counts came.
+    4. The no-access state's icon.
+  - **Small decisions, accepted by the coordinator (2026-09-28):**
+    - With sign-in off, Explore stays phase 1's: New offers every kind anywhere, and there is no chip. Working through the workspace with sign-in off is T359's.
+    - Subfolders aren't counted as items (design 04 state G's numbers).
+    - The switcher fails closed; the footnote; the no-access state.
+  - **Changed, not weakened:**
+    - `phase1-content.test.ts` and `catalog-access.test.ts` expected `{ root: 0 }` from `/api/folder-roots` for someone no grant reaches; it is now `{}`.
+    - `AppShell.test.tsx` and `WorkspaceSwitcher.test.tsx` asserted the old six entries.
+    - `workspaces.spec.ts`'s "Dashboard" menu item is matched exactly, since T513's "Import a dashboard…" also matched.
+  - **Phase-1 e2e (security off) relying on the Model switcher entry**, to update at T410:
+    - `e2e/smoke.spec.ts:25` (six links);
+    - `e2e/shell.spec.ts:133` (the narrow menu's Model);
+    - `e2e/design-conformance.spec.ts:98` (Model as the "other" link).
+    With sign-in off, models are reached from Explore's model rows and search.
+  - **Left, from the review, for other tasks or the user:**
+    - Owner by display name (UX-237; design 09 pin 8) has no task.
+    - Access with its lock icon is design 07's (T473).
+    - The Model page's New cube and Generate cubes for a reader at `/model` belong to T342, the model read-only in its folder.
+  - **Flake to know:** `export-import.spec.ts` "imports the file from My workspace’s New" counts the rows of `writer`'s workspace. `workspaces.spec.ts`'s writer test, which now reaches its create, adds one there for a moment. Run together they can collide; each passes on its own run.
+  - **Tests:**
+    - Units: api 974; web 1975, all passing on their own runs (`UnplacedCodes.test.tsx` failed once under load and passed on rerun).
+    - Chrome: `explore-roles.spec.ts` 17. It failed first against a build of b54c912 for the Model entry, the counts (2 for 4), `writer`'s chip and `nobody`'s state.
+    - Chrome, the touched security specs: workspaces, access, security-page, data-sources, new-data-source, export-import, folder-data-sources, propose and history.
 
 ## P2.3 Credentials (F34)
 

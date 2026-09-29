@@ -19,19 +19,46 @@ const renderShell = (ui: React.ReactElement) => {
   );
 };
 
+/** Who `/api/me` says is signed in; anything else is not there. */
+const answering = (me: Record<string, unknown>) => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) =>
+      url === '/api/me' ? Response.json(me) : new Response(null, { status: 404 }),
+    ),
+  );
+};
+/** Sign-in off: the one user, with every permission (AC-254). */
+const SINGLE_USER = {
+  name: 'admin',
+  groups: [],
+  superAdmin: true,
+  readWrite: true,
+  security: 'off',
+};
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 /**
  * AC-001: WHEN the application loads, THE SYSTEM SHALL show a top bar whose
- * workspace switcher lists exactly Explore, Model, Data sources, Jobs,
- * Schedules and Security.
+ * workspace switcher lists Explore to every user; Data sources, Jobs and
+ * Schedules to Super-Admins and read-write members; and Security to
+ * Super-Admins. It SHALL list no Model workspace.
  */
 describe('app shell (AC-001)', () => {
-  it('shows a top bar carrying the workspace switcher', () => {
+  it('shows a top bar carrying the workspace switcher, with no Model entry', async () => {
+    answering(SINGLE_USER);
     renderShell(<AppShell workspace="explore" />);
 
     const bar = screen.getByRole('banner');
     const switcher = within(bar).getByRole('navigation', { name: /workspace/i });
 
-    expect(within(switcher).getAllByRole('link')).toHaveLength(6);
+    // The single user holds every permission: every entry but Model (T331).
+    await waitFor(() => {
+      expect(within(switcher).getAllByRole('link')).toHaveLength(5);
+    });
+    expect(within(switcher).queryByRole('link', { name: 'Model' })).toBeNull();
   });
 
   it('renders the workspace content in a main landmark', () => {
@@ -54,7 +81,14 @@ describe('app shell (AC-001)', () => {
  */
 describe('the narrow menu (T396, AC-304)', () => {
   it('opens on its button to the workspaces and search, and closes on a choice', async () => {
+    answering(SINGLE_USER);
     renderShell(<AppShell workspace="jobs" />);
+    // Once who is signed in is known, the menu holds what they may open.
+    await waitFor(() => {
+      expect(
+        within(screen.getByTestId('narrow-menu')).getAllByRole('link', { hidden: true }),
+      ).toHaveLength(5);
+    });
     const button = within(screen.getByRole('banner')).getByRole('button', { name: 'Menu' });
     expect(button.getAttribute('aria-expanded')).toBe('false');
     expect(screen.getByTestId('narrow-menu').hidden).toBe(true);
@@ -71,7 +105,6 @@ describe('the narrow menu (T396, AC-304)', () => {
     const links = within(panel).getAllByRole('link');
     expect(links.map((link) => link.textContent)).toEqual([
       'Explore',
-      'Model',
       'Data sources',
       'Jobs',
       'Schedules',
@@ -170,5 +203,59 @@ describe('Security in the bar (T500)', () => {
     });
     expect(bar().getByRole('link', { name: 'Security' })).toBeTruthy();
     expect(narrow().getByRole('link', { name: 'Security', hidden: true })).toBeTruthy();
+  });
+});
+
+/**
+ * T331 (AC-001; design 09, state A): the bar, and its narrow menu, list what
+ * each role may use, and never Model.
+ */
+describe('the bar by role (T331, AC-001)', () => {
+  const entries = (where: HTMLElement) =>
+    within(where)
+      .getAllByRole('link', { hidden: true })
+      .map((link) => link.textContent);
+  const bar = () =>
+    within(screen.getByRole('banner')).getAllByRole('navigation', { name: /workspace/i })[0]!;
+
+  it('gives a read-write member Explore, Data sources, Jobs and Schedules', async () => {
+    answering({
+      name: 'Wren Writer',
+      groups: ['sales-rw'],
+      superAdmin: false,
+      readWrite: true,
+      security: 'oidc',
+    });
+    renderShell(<AppShell workspace="explore" />);
+
+    const expected = ['Explore', 'Data sources', 'Jobs', 'Schedules'];
+    await waitFor(() => {
+      expect(entries(bar())).toEqual(expected);
+    });
+    expect(entries(screen.getByTestId('narrow-menu'))).toEqual(expected);
+  });
+
+  it('gives a read-only user Explore alone', async () => {
+    answering({
+      name: 'Rae Reader',
+      groups: ['sales-ro'],
+      superAdmin: false,
+      readWrite: false,
+      security: 'oidc',
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <ThemeProvider initial="light">
+          <AppShell workspace="explore" />
+        </ThemeProvider>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(client.getQueryData(['me'])).toBeDefined();
+    });
+    expect(entries(bar())).toEqual(['Explore']);
+    expect(entries(screen.getByTestId('narrow-menu'))).toEqual(['Explore']);
   });
 });

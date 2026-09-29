@@ -19,6 +19,13 @@ export const DEFAULT_TITLES: Record<CreatableKind, string> = {
 };
 
 export interface CreateMenuProps {
+  /**
+   * The kinds it makes here, by the user's role (T331, AC-192): a shared
+   * folder's read-write members Folder alone, the workspace every kind, a
+   * reader none. Every kind when left out, as phase 1 made them anywhere.
+   * With nothing to offer, there is no New at all.
+   */
+  readonly offers?: readonly CreatableKind[];
   readonly onCreate: (kind: CreatableKind) => void;
   /**
    * A data source, offered in My workspace (AC-192, AC-158; T363): through
@@ -41,8 +48,16 @@ const OPTIONS: readonly { kind: CreatableKind; label: string; icon: string; chip
   { kind: 'folder', label: 'Folder', icon: '▣', chip: 'itemicon ic-folder' },
 ];
 
-export function CreateMenu({ onCreate, onNewSource, onImport, busy = false }: CreateMenuProps) {
-  const items: MenuItem[] = OPTIONS.map((option) => ({
+export function CreateMenu({
+  offers,
+  onCreate,
+  onNewSource,
+  onImport,
+  busy = false,
+}: CreateMenuProps) {
+  const items: MenuItem[] = OPTIONS.filter(
+    (option) => offers === undefined || offers.includes(option.kind),
+  ).map((option) => ({
     key: option.kind as string,
     label: (
       <>
@@ -88,6 +103,8 @@ export function CreateMenu({ onCreate, onNewSource, onImport, busy = false }: Cr
       disabled: busy,
       onSelect: onImport,
     });
+  // Nothing the user may make here: no New, rather than an empty menu (rule 68).
+  if (items.length === 0) return null;
   return (
     <MenuButton label="New" items={items} testId="explore-new">
       ＋ New ▾

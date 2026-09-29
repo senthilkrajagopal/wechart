@@ -101,9 +101,9 @@ test.describe('each author’s own workspace (T343, AC-276, AC-277)', () => {
         .getByTestId('explore-contents')
         .getByRole('button', { name: 'New', exact: true })
         .click();
+      // Exactly: "Import a dashboard…" (T513) holds the word too.
       await page
         .getByRole('menu', { name: 'New' })
-        // Exactly: "Import a dashboard…" is in New too (T513).
         .getByRole('menuitem', { name: 'Dashboard', exact: true })
         .click();
 

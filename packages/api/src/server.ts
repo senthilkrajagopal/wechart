@@ -57,7 +57,13 @@ import { referencesOf, usersOfCubes, type ReferenceDocument } from './model/refe
 import { searchable, visibleCounts, type Visibility } from './access/visible';
 import { aliasIn, aliasOut } from './access/workspace-alias';
 import type { BookmarkStore } from './repos/bookmarks';
-import { isWorkspaceId, MY_WORKSPACE_ID, ROOT_FOLDER_ID, workspaceIdOf } from './repos/catalog';
+import {
+  isWorkspaceId,
+  MY_WORKSPACE_ID,
+  ROOT_FOLDER_ID,
+  workspaceIdOf,
+  type OwnCounts,
+} from './repos/catalog';
 
 /** Its owner's right to their own workspace (T343): every item, theirs to change. */
 const OWN_WORKSPACE: FolderRight = Object.freeze({ see: true, write: true, kinds: 'all' });
@@ -275,8 +281,8 @@ export interface CatalogReader {
     /** With security on, the folders whose dashboards and library charts the user may find (T325). */
     within?: { readonly dashboards: readonly string[]; readonly charts: readonly string[] },
   ): Promise<unknown[]>;
-  /** Each folder's own dashboards and library charts, for counts of what a user may see (T325). */
-  libraryCounts?(): Promise<ReadonlyMap<string, { dashboards: number; charts: number }>>;
+  /** Each folder's own items by kind, for counts of what a user may see (T325, T331). */
+  ownCounts?(): Promise<ReadonlyMap<string, OwnCounts>>;
   dashboardsUsing?(chartId: string): Promise<unknown[]>;
   /** Every chart and dashboard, with its body: what uses a member (T147). */
   referenceDocuments?(): Promise<readonly ReferenceDocument[]>;
@@ -1751,7 +1757,7 @@ export function buildServer({
 
   /** These visible folders' counts of what the user may see in and beneath them (AC-194). */
   const countsOf = async (seen: Visibility, only: readonly string[]) =>
-    visibleCounts(seen, cat?.libraryCounts ? await cat.libraryCounts() : new Map(), only);
+    visibleCounts(seen, cat?.ownCounts ? await cat.ownCounts() : new Map(), only);
 
   app.get('/api/folders', USER, async (request) => {
     if (!cat) return [];
@@ -1808,16 +1814,20 @@ export function buildServer({
         .sort((a, b) => a.path.join('/').localeCompare(b.path.join('/'))),
     ];
   });
-  // The two roots' counts, which are no folder's (AC-194).
+  // The roots the user has, with their counts, which are no folder's (AC-194).
   app.get('/api/folder-roots', USER, async (request) => {
     const seen = await visibilityOf(request);
     if (seen === undefined) return cat?.rootCounts ? cat.rootCounts() : {};
+    // The shared root only where a grant lets them see it (T331, AC-194;
+    // design 09, state G): someone no grant reaches has no root to be shown.
     // My workspace is each user's own (T343, AC-276), and none of a user with
     // read-only access everywhere (AC-277).
     const own = workspaceIdOf(userOf(request).key);
     const counts = await countsOf(seen, [ROOT_FOLDER_ID, own]);
     return {
-      [ROOT_FOLDER_ID]: counts.get(ROOT_FOLDER_ID) ?? 0,
+      ...(seen.rights.has(ROOT_FOLDER_ID)
+        ? { [ROOT_FOLDER_ID]: counts.get(ROOT_FOLDER_ID) ?? 0 }
+        : {}),
       ...(seen.rights.has(own) ? { [MY_WORKSPACE_ID]: counts.get(own) ?? 0 } : {}),
     };
   });

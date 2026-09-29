@@ -182,10 +182,18 @@ describe('the tree lists and counts only what the user may see (T325, AC-264, AC
     expect(await treeOf('reader')).toEqual({ A: 2, B: 1 });
   });
 
-  it('gives someone in no group none of them, and a root with nothing to count', async () => {
+  it('gives someone in no group none of them, and no root at all', async () => {
     expect(await treeOf('nobody')).toEqual({});
-    // No My workspace either: in no group, they write nowhere (T343, AC-277).
-    expect((await ask('/api/folder-roots', 'nobody')).json()).toEqual({ root: 0 });
+    // Not the shared root, which no grant lets them see (T331, AC-194; design
+    // 09, state G), and no My workspace: in no group, they write nowhere
+    // (T343, AC-277).
+    expect((await ask('/api/folder-roots', 'nobody')).json()).toEqual({});
+    // The root a grant beneath it lets them see, view-only, is theirs (AC-262, AC-263).
+    expect(Object.keys((await ask('/api/folder-roots', 'reader')).json())).toEqual(['root']);
+    expect(Object.keys((await ask('/api/folder-roots', 'writer')).json()).sort()).toEqual([
+      'mine',
+      'root',
+    ]);
   });
 });
 
@@ -249,5 +257,83 @@ describe('with security off (T325)', () => {
     const single = serving(off);
     expect(await treeOf('super', single)).toEqual({ A: 6, B: 2, C: 1, D: 2 });
     expect(await searchOf('super', single)).toEqual(EVERYTHING);
+  });
+});
+
+/**
+ * T331 (AC-194; UX-239): models and data sources are folder items (T334,
+ * T335), so a folder's count holds those the user may see too: every kind
+ * for a read-write member, and for a read-only one, dashboards alone (AC-263).
+ *
+ * E (read-write `sales-rw`) holds a model and a data source, and F (read-only
+ * `sales-ro`) inside it a dashboard, a model and a data source. Last in the
+ * file: the listings and searches above expect none of it.
+ */
+describe('counts hold the models and data sources the user may see (T331, AC-194)', () => {
+  const more = { e: '', f: '' };
+  const paths: { folder: string; path: string }[] = [];
+  const sources: string[] = [];
+  const model = async (folderId: string, path: string) => {
+    await getDb()
+      .insertInto('model_files')
+      .values({ folder_id: folderId, path, content: 'cubes: []\n' })
+      .execute();
+    paths.push({ folder: folderId, path });
+  };
+  const source = async (folderId: string, name: string) => {
+    const id = randomUUID();
+    await getDb()
+      .insertInto('data_sources')
+      .values({ id, folder_id: folderId, name, type: 'postgres', settings: '{}' })
+      .execute();
+    sources.push(id);
+  };
+
+  beforeAll(async () => {
+    more.e = await make('folder', 'E', 'root', { readOnly: null, readWrite: ['sales-rw'] });
+    more.f = await make('folder', 'F', more.e, { readOnly: ['sales-ro'], readWrite: null });
+    await model(more.e, `${TOKEN}/e.yml`);
+    await source(more.e, `${TOKEN}_e`);
+    await make('dashboard', 'F dashboard', more.f);
+    await model(more.f, `${TOKEN}/f.yml`);
+    await source(more.f, `${TOKEN}_f`);
+  });
+
+  afterAll(async () => {
+    for (const { folder, path } of paths)
+      await getDb()
+        .deleteFrom('model_files')
+        .where('folder_id', '=', folder)
+        .where('path', '=', path)
+        .execute();
+    if (sources.length > 0)
+      await getDb().deleteFrom('data_sources').where('id', 'in', sources).execute();
+  });
+
+  const counted = async (who: string, on: FastifyInstance = app) => {
+    const folders = (await ask('/api/folders', who, on)).json<
+      { id: string; itemCount: number }[]
+    >();
+    const count = (id: string) => folders.find((folder) => folder.id === id)?.itemCount;
+    return { E: count(more.e), F: count(more.f) };
+  };
+
+  it('counts every kind for a Super-Admin and a read-write member, subfolders included', async () => {
+    expect(await counted('super')).toEqual({ E: 5, F: 3 });
+    expect(await counted('writer')).toEqual({ E: 5, F: 3 });
+    // And a subfolder's count in its folder's listing (AC-193).
+    const listed = (await ask(`/api/folders/${more.e}/contents`, 'writer')).json<
+      { id: string; itemCount: number | null }[]
+    >();
+    expect(listed.find((item) => item.id === more.f)?.itemCount).toBe(3);
+  });
+
+  it('counts only the dashboards for a read-only member, never a model or data source', async () => {
+    expect(await counted('reader')).toEqual({ E: 1, F: 1 });
+    expect(await counted('nobody')).toEqual({ E: undefined, F: undefined });
+  });
+
+  it('counts every kind with security off, as the one user sees them', async () => {
+    expect(await counted('super', serving(off))).toEqual({ E: 5, F: 3 });
   });
 });

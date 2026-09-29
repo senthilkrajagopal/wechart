@@ -15,7 +15,10 @@ export interface FolderNode {
   readonly id: string;
   readonly title: string;
   readonly parentId: string | null;
-  /** Its dashboards and charts, including its subfolders' (AC-194). */
+  /**
+   * What it holds that the user may see, its subfolders' included: its
+   * dashboards, library charts, models and data sources (AC-194, T331).
+   */
   readonly itemCount?: number;
   /** Its id in xcube, which names its items (T429, AC-328); none until it has one. */
   readonly xcubeId?: string | null;

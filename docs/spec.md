@@ -77,7 +77,7 @@ Acceptance criteria are global and sequential. A criterion is checked only when 
 Purpose: one workbench for authoring and administration, addressable by URL.
 Traces to: `[R2]`, `[docs/inputs §8]`, direction.md §2.
 
-- [ ] AC-001 WHEN the application loads, THE SYSTEM SHALL show a top bar whose workspace switcher lists Explore to every user; Data sources, Jobs and Schedules to Super-Admins and read-write members; and Security to Super-Admins. It SHALL list no Model workspace (phase 2: `[P2 input, R18, R19, R23]`).
+- [x] AC-001 WHEN the application loads, THE SYSTEM SHALL show a top bar whose workspace switcher lists Explore to every user; Data sources, Jobs and Schedules to Super-Admins and read-write members; and Security to Super-Admins. It SHALL list no Model workspace (phase 2: `[P2 input, R18, R19, R23]`).
       Fails when: the switcher shows a "Dashboards" or "Model" entry, omits an entry the user's role may use, or shows one it may not.
 - [x] AC-002 WHEN the user opens a workspace, a dashboard, a chart or a model file, THE SYSTEM SHALL change the URL so that reloading it restores the same surface and the same selected object.
       Fails when: after reload the application shows a different workspace, dashboard, chart or file than the URL names.
@@ -775,7 +775,7 @@ Explore:
       Fails when: the folder's name is not the page heading, a breadcrumb ancestor does not open that folder, creating is offered other than through the New menu, or a shared folder's New menu offers anything but Folder.
 - [x] AC-193 THE SYSTEM SHALL list a folder's contents under the columns Name, Type, Built on, Updated and Owner — subfolders first, then dashboards, then charts — showing a dashboard's description beneath its name and its number of page tabs, a chart's chart type and the cube or view it is built on, and a subfolder's item count, and SHALL offer rename and move through a menu on each row.
       Fails when: a column is missing, a chart's type reads only "Chart", a row shows a rename or move control before its menu is opened, or a move offers the item's own folder or, for a folder, itself or a folder inside it.
-- [ ] AC-194 THE SYSTEM SHALL show the folder tree as a full-height pane headed "Folders", with a "+ Folder" action for those who may create one. It holds the shared root, showing only the folders the user may see, and "My workspace" for users who have a workspace. Each folder shows how many items it and its subfolders hold, counting only items the user may see (`[R9]`; phase 2: `[P2 input, R12]`).
+- [x] AC-194 THE SYSTEM SHALL show the folder tree as a full-height pane headed "Folders", with a "+ Folder" action for those who may create one. It holds the shared root, showing only the folders the user may see, and "My workspace" for users who have a workspace. Each folder shows how many items it and its subfolders hold, counting only items the user may see (`[R9]`; phase 2: `[P2 input, R12]`).
       Fails when: a folder the user may not see appears; "My workspace" is missing for a user who has a workspace, or shown to one who doesn't; a count includes items the user may not see, or leaves out items in subfolders; or the tree scrolls away with the contents.
 - [x] AC-195 WHEN the user opens a dashboard or a library chart from Explore, THE SYSTEM SHALL show a breadcrumb back to its folder, and returning by it, or reloading Explore, SHALL show that folder.
       Fails when: the breadcrumb is missing, or returning or reloading lands on a folder other than the item's.

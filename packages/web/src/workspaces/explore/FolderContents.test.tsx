@@ -271,6 +271,27 @@ describe('keyboard navigation (AC-024)', () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  /**
+   * T331 (rule 68; design 04, state G): where the user may change nothing,
+   * no row offers a change. Explore gives no rename or move there; a
+   * dashboard's ⋯ keeps Export…, which a reader may do (T511), and a row with
+   * nothing to offer has no ⋯ at all.
+   */
+  it('offers no rename or move where none is given, and no ⋯ with nothing in it (T331)', async () => {
+    render(<FolderContents items={items} onExport={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: 'Actions for Revenue by region' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Actions for Archive' })).toBeNull();
+    await userEvent.click(
+      within(rowFor('d1')).getByRole('button', { name: 'Actions for Revenue' }),
+    );
+    expect(
+      within(screen.getByRole('menu'))
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Export…']);
+  });
+
   it('leaves the empty folder message alone', () => {
     render(<FolderContents items={[]} />);
 
