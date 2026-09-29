@@ -93,6 +93,21 @@ export interface ProposalRoutes {
   readonly folders?: () => Promise<
     readonly { readonly id: string; readonly title: string; readonly parentId: string | null }[]
   >;
+  /**
+   * Binds a chart's or dashboard's cubes in the folder it lands in, nearest
+   * first, as a save there did (T429, AC-272, AC-275). With sign-in on an
+   * approval is how a shared item is published, since it is never saved in
+   * place (T502, AC-278). Unset, it lands as it is.
+   */
+  readonly bind?: (
+    kind: 'chart' | 'dashboard',
+    folderId: string,
+    body: Record<string, unknown>,
+  ) => Promise<
+    | { readonly kind: 'ok'; readonly body: Record<string, unknown> }
+    | { readonly kind: 'refused'; readonly names: readonly string[] }
+    | { readonly kind: 'unreachable' }
+  >;
 }
 
 const NOT_THERE = { error: 'There is no such item in your workspace.' };
@@ -730,21 +745,24 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     // The versions replaced, as they are now: a dashboard with its own charts.
     const partsOf = async (dashboardId: string) =>
       (await docs.localTo(dashboardId)).map((chart) => ({ id: chart.id, body: chart.body }));
-    for (const item of proposal.items) {
-      if (item.replaces === null || isLocal(item)) continue;
-      const kind = item.kind as 'dashboard' | 'chart';
-      const current = await docs.get(kind, item.replaces.id);
-      if (current === null) continue;
-      await keep(
-        kind,
-        current.id,
-        current.version,
-        { body: current.body, parts: kind === 'dashboard' ? await partsOf(current.id) : [] },
-        item.landsIn,
-        titleOf(current.body),
-        null,
-      );
-    }
+    // Kept once it is certain to land: a refused binding keeps nothing (T502's review).
+    const keepReplaced = async () => {
+      for (const item of proposal.items) {
+        if (item.replaces === null || isLocal(item)) continue;
+        const kind = item.kind as 'dashboard' | 'chart';
+        const current = await docs.get(kind, item.replaces.id);
+        if (current === null) continue;
+        await keep(
+          kind,
+          current.id,
+          current.version,
+          { body: current.body, parts: kind === 'dashboard' ? await partsOf(current.id) : [] },
+          item.landsIn,
+          titleOf(current.body),
+          null,
+        );
+      }
+    };
 
     // Charts first, then the dashboard that shows them.
     const renamed = new Map([...idOf].filter(([from]) => from !== board?.id));
@@ -763,6 +781,9 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
       ...proposal.items.filter((item) => item.kind === 'chart'),
       ...(board === undefined ? [] : [board]),
     ];
+    // Each bound in its folder first (T502): a name its path doesn't hold
+    // refuses the approval before anything is written.
+    const bodies: { item: ProposedItem; body: Record<string, unknown> }[] = [];
     for (const item of ordered) {
       const replacedOwner =
         item.replaces === null
@@ -778,8 +799,26 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
           : isLocal(item)
             ? landedBody(item.snapshot, { localTo: boardId! }, replacedOwner)
             : landedBody(item.snapshot, { folderId: item.landsIn }, replacedOwner);
-      await write(item, body);
+      const folder = isLocal(item) ? board!.landsIn : item.landsIn;
+      const bound =
+        routes.bind === undefined
+          ? ({ kind: 'ok', body } as const)
+          : await routes.bind(item.kind as 'dashboard' | 'chart', folder, body);
+      if (bound.kind === 'refused')
+        throw new Refused(
+          422,
+          `No folder on the path of “${item.title}” holds ${bound.names.map((name) => `“${name}”`).join(', ')}, so nothing was approved.`,
+          { names: bound.names },
+        );
+      if (bound.kind === 'unreachable')
+        throw new Refused(
+          502,
+          `xcube could not be asked where the cubes of “${item.title}” are, so nothing was approved.`,
+        );
+      bodies.push({ item, body: bound.body });
     }
+    await keepReplaced();
+    for (const { item, body } of bodies) await write(item, body);
     // The replaced dashboard's own charts it no longer shows go: its kept
     // version holds them.
     if (boardId !== undefined) {
@@ -939,7 +978,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
       // Nothing it couldn't land is left approved: open again, to decide anew.
       await store.reopen(decided.id);
       if (failure instanceof Refused)
-        return reply.code(failure.status).send({ error: failure.message });
+        return reply.code(failure.status).send({ error: failure.message, ...failure.extra });
       // Its folder, or xcube, refused the data source as it would a save.
       if (failure instanceof DataSourceRefused)
         return reply

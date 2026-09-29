@@ -1,6 +1,7 @@
 import type { APIRequestContext } from '@playwright/test';
 
 import { expect, test } from './fixtures';
+import { changeShared } from './shared-change';
 
 /**
  * T428, AC-275: WHEN a change to a model lands in a folder, THE SYSTEM SHALL
@@ -12,7 +13,8 @@ import { expect, test } from './fixtures';
  * Against compose's xcube, through the API as `super`, each run with its own
  * folders: /A publishes `binding_orders` and `binding_lines`, which joins it;
  * a chart is published in /A/B/C; then /A/B publishes its own
- * `binding_orders`.
+ * `binding_orders`. A shared chart is published by an approval of its copy,
+ * never saved in place (T502, AC-278).
  */
 const RUN = Math.random().toString(36).slice(2, 8);
 const ids = { a: '', b: '', c: '', chart: '' };
@@ -69,21 +71,18 @@ async function publish(
   expect(published.status(), await published.text()).toBe(200);
 }
 
-const saveChart = (request: APIRequestContext, cube: string, version: number) =>
-  request.put(`/api/documents/chart/${ids.chart}`, {
-    data: {
-      version,
-      body: {
-        schemaVersion: 1,
-        title: `Bound ${RUN}`,
-        folderId: ids.c,
-        chart: {
-          source: { cube },
-          wells: { measures: [`${cube}.count`], dimensions: [], timeDimensions: [] },
-        },
-      },
+/**
+ * The chart published with `cube`: a shared one is changed in a copy, and
+ * published when that is approved, which binds it (T502, AC-278, AC-272).
+ */
+const saveChart = (request: APIRequestContext, cube: string) =>
+  changeShared(request, 'chart', ids.chart, (body) => ({
+    ...body,
+    chart: {
+      source: { cube },
+      wells: { measures: [`${cube}.count`], dimensions: [], timeDimensions: [] },
     },
-  });
+  }));
 
 const storedCube = async (request: APIRequestContext) =>
   (await (await request.get(`/api/documents/chart/${ids.chart}`)).json()) as {
@@ -126,7 +125,9 @@ test.describe('published items stay bound until published again (T428, AC-275)',
       data: { kind: 'chart', title: `Bound ${RUN}`, folderId: ids.c },
     });
     ids.chart = ((await made.json()) as { id: string }).id;
-    expect((await saveChart(request, 'binding_orders', 1)).status()).toBe(200);
+    expect(await saveChart(request, 'binding_orders')).toEqual([
+      { kind: 'chart', id: ids.chart, version: 2 },
+    ]);
     expect((await storedCube(request)).body.chart.wells.measures).toEqual([
       `${full(ids.a, 'binding_orders')}.count`,
     ]);
@@ -150,12 +151,16 @@ test.describe('published items stay bound until published again (T428, AC-275)',
       hidden: 0,
     });
 
-    // Published again — its stored body, as the editor sends it — it takes
-    // /A/B's, and answers from it.
-    const republished = await request.put(`/api/documents/chart/${ids.chart}`, {
+    // Not bound anew in place: its stored body saved again is refused (T502).
+    const inPlace = await request.put(`/api/documents/chart/${ids.chart}`, {
       data: { version: kept.version, body: kept.body },
     });
-    expect(republished.status(), await republished.text()).toBe(200);
+    expect(inPlace.status(), await inPlace.text()).toBe(409);
+    expect(((await inPlace.json()) as { code: string }).code).toBe('shared_in_place');
+    // Published again — as it is, through its copy and an approval — it takes
+    // /A/B's, and answers from it.
+    const republished = await changeShared(request, 'chart', ids.chart, (body) => body);
+    expect(republished).toEqual([{ kind: 'chart', id: ids.chart, version: kept.version + 1 }]);
     expect((await storedCube(request)).body.chart.wells.measures).toEqual([
       `${full(ids.b, 'binding_orders')}.count`,
     ]);

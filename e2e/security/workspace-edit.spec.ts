@@ -144,6 +144,11 @@ test.describe('editing a shared dashboard in my workspace (T348, AC-278)', () =>
       const head = page.locator('.chart-page__head');
       await expect(head.getByText(`In ${FOLDER} · version 1`)).toBeVisible();
       await expect(head.getByRole('link', { name: /Edit chart/ })).toHaveCount(0);
+      // Added only to a dashboard in My workspace: the dashboard's copy, never
+      // the shared dashboard, which gains a tile only by a proposal (T502).
+      const onto = page.getByRole('combobox', { name: 'Dashboard' });
+      await expect(onto.locator(`option[value="${made.copy}"]`)).toHaveCount(1);
+      await expect(onto.locator(`option[value="${made.board}"]`)).toHaveCount(0);
       await head.getByRole('button', { name: 'Edit in my workspace' }).click();
 
       // The copy, opened in the editor.

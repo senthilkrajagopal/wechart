@@ -178,8 +178,10 @@ describe('what the audit trail records (T368, AC-294)', () => {
 
   it('records a data source made, changed and removed, a secret only said replaced', async () => {
     const name = `${MARK}_replica`;
+    // Made in writer's workspace, to go to the audited folder: a shared one's
+    // settings change only through a proposal (T502, AC-278).
     const settings = {
-      folderId,
+      folderId: 'mine',
       driver: 'postgres',
       authMethod: 'password',
       fields: FIELDS,
@@ -193,10 +195,17 @@ describe('what the audit trail records (T368, AC-294)', () => {
     const made = await as('writer', {
       method: 'POST',
       url: '/api/data-sources',
-      payload: { ...settings, name, testId: trial.json<{ testId: string }>().testId },
+      payload: {
+        ...settings,
+        name,
+        targetFolderId: folderId,
+        testId: trial.json<{ testId: string }>().testId,
+      },
     });
     expect(made.statusCode, made.body).toBe(201);
     const id = made.json<{ id: string }>().id;
+    const home = (await dataSourceStore(getDb()).get(id))!.folderId;
+    expect(home).toMatch(/^ws:/);
 
     const change = { fields: { ...FIELDS, host: 'db2' }, sealed: { password: sealed('second') } };
     // Refused, as untested: nothing done, so nothing recorded.
@@ -232,7 +241,7 @@ describe('what the audit trail records (T368, AC-294)', () => {
     ]);
     expect(records[1]).toMatchObject({
       actor: { identity: USERS['writer']!.email },
-      folderId,
+      folderId: home,
       item: { kind: 'data-source', id, title: name },
       details: {
         changes: [
@@ -249,7 +258,8 @@ describe('what the audit trail records (T368, AC-294)', () => {
     // its ciphertext or key, in any record this file made.
     const kept = JSON.stringify(
       (await audit().list({ since: started, limit: 500 })).records.filter(
-        (record) => record.folderId === folderId || record.event === 'sign-in',
+        (record) =>
+          record.folderId === folderId || record.folderId === home || record.event === 'sign-in',
       ),
     );
     expect(kept).not.toContain('kid-1');

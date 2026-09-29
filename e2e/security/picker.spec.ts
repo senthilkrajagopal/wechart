@@ -1,6 +1,7 @@
 import type { APIRequestContext } from '@playwright/test';
 
 import { expect, test } from './fixtures';
+import { changeShared, proposeShared } from './shared-change';
 
 /**
  * T429, AC-329: WHEN the user picks a cube for a chart or dashboard, THE
@@ -77,31 +78,26 @@ test.describe('cubes bound and picked on a folder’s path (T429)', () => {
   }) => {
     const request = page.request;
     const id = await chartIn(request, ids.b, `Bound chart ${RUN}`);
-    const save = (cube: string) =>
-      request.put(`/api/documents/chart/${id}`, {
-        data: {
-          version: 1,
-          body: {
-            schemaVersion: 1,
-            title: `Bound chart ${RUN}`,
-            folderId: ids.b,
-            chart: {
-              source: { cube },
-              wells: { measures: [`${cube}.count`], dimensions: [], timeDimensions: [] },
-            },
-          },
-        },
-      });
-
-    const refused = await save('picker_widgets');
-    expect(refused.status()).toBe(422);
-    expect(await refused.json()).toEqual({
-      error: 'No folder on this chart’s path holds “picker_widgets”.',
-      names: ['picker_widgets'],
+    // Published by an approval of its copy, never saved in place (T502,
+    // AC-278): the approval binds it, or is refused.
+    const withCube = (cube: string) => (body: Record<string, unknown>) => ({
+      ...body,
+      chart: {
+        source: { cube },
+        wells: { measures: [`${cube}.count`], dimensions: [], timeDimensions: [] },
+      },
     });
 
-    const saved = await save('picker_sales');
-    expect(saved.status(), await saved.text()).toBe(200);
+    const refused = await proposeShared(request, 'chart', id, withCube('picker_widgets'));
+    expect(refused.approved.status()).toBe(422);
+    expect(await refused.approved.json()).toEqual({
+      error: `No folder on the path of “Bound chart ${RUN}” holds “picker_widgets”, so nothing was approved.`,
+      names: ['picker_widgets'],
+    });
+    await refused.cleanUp();
+
+    const saved = await changeShared(request, 'chart', id, withCube('picker_sales'));
+    expect(saved).toEqual([{ kind: 'chart', id, version: 2 }]);
     const stored = (await (await request.get(`/api/documents/chart/${id}`)).json()) as {
       body: { chart: { source: { cube: string }; wells: { measures: string[] } } };
     };

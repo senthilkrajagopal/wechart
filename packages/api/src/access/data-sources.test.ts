@@ -1000,9 +1000,21 @@ describe('a read-write member’s changes (AC-312, AC-161)', () => {
   });
 
   it('asks for the secret again when where it connects changes, and refuses a change of type', async () => {
+    // One in their workspace, to go to /A/B: a shared one's settings change
+    // only through a proposal (T502, AC-278).
+    const made = await as('writer', {
+      method: 'POST',
+      url: '/api/data-sources',
+      payload: {
+        ...(await testedBy((options) => as('writer', options), postgres('mine', `${MARK}_moved`))),
+        targetFolderId: ids.b,
+      },
+    });
+    expect(made.statusCode, made.body).toBe(201);
+    const mine = made.json<{ id: string }>().id;
     const moved = await as('writer', {
       method: 'PUT',
-      url: `/api/data-sources/${held.b}`,
+      url: `/api/data-sources/${mine}`,
       payload: {
         fields: { host: 'elsewhere', port: 5432, database: 'sales', user: 'cube', ssl: true },
       },
@@ -1014,7 +1026,7 @@ describe('a read-write member’s changes (AC-312, AC-161)', () => {
 
     const retyped = await as('writer', {
       method: 'PUT',
-      url: `/api/data-sources/${held.b}`,
+      url: `/api/data-sources/${mine}`,
       payload: { driver: 'mysql' },
     });
     expect(retyped.statusCode).toBe(409);
@@ -1259,8 +1271,21 @@ describe('a change to its connection saved only from its passing test (T461, AC-
       connectionTest: async () => answer as never,
     });
     for (const who of ['writer', 'super']) cookieOf[who] = await signIn(gated, USERS[who]!);
-    id = (await sources().create(postgres(ids.b, `${MARK}_edited`))).id;
-    twin = (await sources().create(postgres(ids.b, `${MARK}_twin`))).id;
+    // In writer's workspace, to go to /A/B: a shared one's connection changes
+    // only through a proposal (T502, AC-278).
+    const send: Sent = (options) =>
+      gated.inject({ ...options, headers: { ...options.headers, cookie: cookieOf['writer']! } });
+    const made = async (name: string) => {
+      const answer = await send({
+        method: 'POST',
+        url: '/api/data-sources',
+        payload: { ...(await testedBy(send, postgres('mine', name))), targetFolderId: ids.b },
+      });
+      expect(answer.statusCode, answer.body).toBe(201);
+      return answer.json<{ id: string }>().id;
+    };
+    id = await made(`${MARK}_edited`);
+    twin = await made(`${MARK}_twin`);
   });
   afterAll(async () => {
     await gated.close();
@@ -1304,7 +1329,9 @@ describe('a change to its connection saved only from its passing test (T461, AC-
     const change = { fields: other('hr') };
     const failed = await testOf(change, failing);
     const ofAnother = await testOf({ fields: other('finance') });
-    const supers = await testOf(change, passing, { who: 'super' });
+    // Another user's test of it can't be run now it is writer's own, in their
+    // workspace (T502); that another's is never claimed is shown below, by
+    // `claimChange` with a key not the runner's.
     const twins = await testOf(change, passing, { on: twin });
     const method = {
       authMethod: 'client-certificate',
@@ -1317,7 +1344,6 @@ describe('a change to its connection saved only from its passing test (T461, AC-
       ['a test of another change', { ...change, testId: ofAnother }],
       ['a test that isn’t there', { ...change, testId: randomUUID() }],
       ['an override', { ...change, override: true }],
-      ['another user’s test', { ...change, testId: supers }],
       ['another source’s test of the same change', { ...change, testId: twins }],
       ['a new secret, untested', { sealed: { password: sealed('untested') } }],
       ['a new way to sign in, untested', method],

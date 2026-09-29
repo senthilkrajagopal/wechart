@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { changeShared } from './shared-change';
 
 /**
  * T438 (AC-166; design 08 of 2026-09-27, state E): a Super-Admin previews a
@@ -30,35 +31,21 @@ test.describe('Preview as groups (T438, AC-166)', () => {
     const board = await made({ kind: 'dashboard', title: `Preview board ${RUN}`, folderId: top });
     // One tile, so the preview asks Cube something: a chart on the seeded `orders`.
     const chart = await made({ kind: 'chart', title: `Orders ${RUN}`, folderId: top });
-    const saved = await request.put(`/api/documents/chart/${chart}`, {
-      data: {
-        version: 1,
-        body: {
-          schemaVersion: 1,
-          title: `Orders ${RUN}`,
-          folderId: top,
-          chart: {
-            source: { cube: 'orders' },
-            wells: { measures: ['orders.count'], dimensions: [], timeDimensions: [] },
-          },
-        },
+    // Given their content as a shared one's is given: by approving a copy
+    // (T502, AC-278).
+    const saved = await changeShared(request, 'chart', chart, (body) => ({
+      ...body,
+      chart: {
+        source: { cube: 'orders' },
+        wells: { measures: ['orders.count'], dimensions: [], timeDimensions: [] },
       },
-    });
-    expect(saved.status(), await saved.text()).toBe(200);
-    const shown = await request.put(`/api/documents/dashboard/${board}`, {
-      data: {
-        version: 1,
-        body: {
-          schemaVersion: 1,
-          title: `Preview board ${RUN}`,
-          folderId: top,
-          pages: [
-            { id: 'p1', title: 'Page 1', items: [{ id: 't1', kind: 'chart', chartId: chart }] },
-          ],
-        },
-      },
-    });
-    expect(shown.status(), await shown.text()).toBe(200);
+    }));
+    expect(saved).toEqual([{ kind: 'chart', id: chart, version: 2 }]);
+    const shown = await changeShared(request, 'dashboard', board, (body) => ({
+      ...body,
+      pages: [{ id: 'p1', title: 'Page 1', items: [{ id: 't1', kind: 'chart', chartId: chart }] }],
+    }));
+    expect(shown).toEqual([{ kind: 'dashboard', id: board, version: 2 }]);
     try {
       for (const [id, access] of [
         [top, { readOnly: ['sales-ro'], readWrite: null }],

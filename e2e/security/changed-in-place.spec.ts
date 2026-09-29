@@ -4,6 +4,7 @@ import type { APIRequestContext } from '@playwright/test';
 import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
 import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtures';
+import { changeSharedSource } from './shared-change';
 
 /**
  * T501 (AC-161; the user's answer of 2026-09-27, "No and No"; research
@@ -161,18 +162,33 @@ async function answers(request: APIRequestContext) {
   return seen.filter((each) => !each.startsWith('error: '));
 }
 
-/** Changed in place, from a passing test of exactly that change, and awaited until Cube reports it live. */
+/**
+ * Changed as a shared one is (T502, AC-278): its copy in My workspace, changed
+ * there from a passing test of exactly that change, proposed and approved,
+ * which lands it in its folder. Awaited until Cube reports it live.
+ */
 async function moveTo(request: APIRequestContext, database: string) {
   const fields = fieldsOf(database);
-  const tried = await request.post(`/api/data-sources/${sourceId}/test`, {
-    data: { fields },
-    timeout: 90_000,
-  });
-  expect(tried.status(), await tried.text()).toBe(200);
-  const { ok, testId } = (await tried.json()) as { ok: boolean; testId: string };
-  expect(ok).toBe(true);
-  const saved = await request.put(`/api/data-sources/${sourceId}`, { data: { fields, testId } });
-  expect(saved.status(), await saved.text()).toBe(200);
+  await changeSharedSource(
+    request,
+    sourceId,
+    async (copyId) => {
+      const tried = await request.post(`/api/data-sources/${copyId}/test`, {
+        data: { fields },
+        timeout: 90_000,
+      });
+      expect(tried.status(), await tried.text()).toBe(200);
+      const { ok, testId } = (await tried.json()) as { ok: boolean; testId: string };
+      expect(ok).toBe(true);
+      return { fields, testId };
+    },
+    `Reads ${database} (${RUN}).`,
+  );
+  // Landed in its folder by the approval: the shared one reads it now.
+  const landed = (await (await request.get(`/api/data-sources/${sourceId}`)).json()) as {
+    fields: { database: string };
+  };
+  expect(landed.fields.database).toBe(database);
   await expect
     .poll(
       async () =>

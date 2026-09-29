@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 
 import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
+import { changeShared } from './shared-change';
 
 /**
  * T356 (AC-288, AC-286, AC-290; design 05's review view, states I, J and K):
@@ -122,39 +123,31 @@ test.describe('deciding a proposal in its review view (T356, AC-288)', () => {
         expect(answer.status(), await answer.text()).toBe(201);
         return ((await answer.json()) as { id: string }).id;
       };
+      // Given their content as a shared one's is given: by approving a copy
+      // (T502, AC-278).
       made.library = await created('chart', ORDERS);
       expect(
-        (
-          await page.request.put(`/api/documents/chart/${made.library}`, {
-            data: { version: 1, body: ordersChart(made.folder) },
-          })
-        ).status(),
-      ).toBe(200);
+        await changeShared(page.request, 'chart', made.library, (body) => ({
+          ...body,
+          chart: ordersChart(made.folder).chart,
+        })),
+      ).toEqual([{ kind: 'chart', id: made.library, version: 2 }]);
       made.board = await created('dashboard', BOARD);
       expect(
-        (
-          await page.request.put(`/api/documents/dashboard/${made.board}`, {
-            data: {
-              version: 1,
-              body: {
-                schemaVersion: 1,
-                title: BOARD,
-                folderId: made.folder,
-                pages: [
-                  {
-                    id: 'p1',
-                    title: 'Page 1',
-                    items: [
-                      { id: 't-chart', kind: 'chart', chartId: made.library },
-                      { id: 't-text', kind: 'text', text: `Hello ${RUN}` },
-                    ],
-                  },
-                ],
-              },
+        await changeShared(page.request, 'dashboard', made.board, (body) => ({
+          ...body,
+          pages: [
+            {
+              id: 'p1',
+              title: 'Page 1',
+              items: [
+                { id: 't-chart', kind: 'chart', chartId: made.library },
+                { id: 't-text', kind: 'text', text: `Hello ${RUN}` },
+              ],
             },
-          })
-        ).status(),
-      ).toBe(200);
+          ],
+        })),
+      ).toEqual([{ kind: 'dashboard', id: made.board, version: 2 }]);
     });
   });
 
@@ -261,7 +254,7 @@ test.describe('deciding a proposal in its review view (T356, AC-288)', () => {
       await expect(
         page.getByRole('list', { name: 'In this proposal' }).getByRole('listitem'),
       ).toHaveText([
-        // Version 2: made, then given its tiles.
+        // Version 2: made, then given its tiles by an approval (T502).
         `${BOARD}Dashboard · replaces version 2`,
         `${ORDERS}Chart · replaces version 2`,
       ]);
@@ -319,7 +312,9 @@ test.describe('deciding a proposal in its review view (T356, AC-288)', () => {
         'Page 1',
         `Notes ${RUN}`,
       ]);
-      expect(versionsOf(made.board)).toEqual([`2:${BOARD}`, `3:${BOARD}`]);
+      // Version 1 kept too: given its tiles by an approval (T502), which keeps
+      // the version it replaces.
+      expect(versionsOf(made.board)).toEqual([`1:${BOARD}`, `2:${BOARD}`, `3:${BOARD}`]);
       // Its chart too, what it says with it.
       const library = (await (
         await page.request.get(`/api/documents/chart/${made.library}`)
@@ -328,7 +323,7 @@ test.describe('deciding a proposal in its review view (T356, AC-288)', () => {
         3,
         `Counts every order (${RUN}).`,
       ]);
-      expect(versionsOf(made.library)).toEqual([`2:${ORDERS}`, `3:${ORDERS}`]);
+      expect(versionsOf(made.library)).toEqual([`1:${ORDERS}`, `2:${ORDERS}`, `3:${ORDERS}`]);
     });
 
     test('rejects the chart with a reason; the folder is as it was', async ({ page }) => {

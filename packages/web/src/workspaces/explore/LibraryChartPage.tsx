@@ -236,10 +236,17 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
       getJson<UsingDashboard[]>(`/api/charts/${encodeURIComponent(chartId)}/dashboards`),
   });
 
+  /**
+   * The dashboards it may be added to. With sign-in on, only My workspace's:
+   * a shared dashboard gains a tile only by a proposal (T502, AC-278).
+   */
   const candidates = useQuery({
-    queryKey: ['search', 'dashboards'],
+    queryKey: ['search', 'dashboards', signedIn],
+    enabled: !me.isPending,
     queryFn: () =>
-      getJson<{ id: string; title: string; kind: string }[]>('/api/folders/root/contents'),
+      getJson<{ id: string; title: string; kind: string }[]>(
+        `/api/folders/${signedIn ? 'mine' : 'root'}/contents`,
+      ),
   });
 
   const addToDashboard = useMutation({
@@ -249,7 +256,10 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ chartId }),
       });
-      if (!response.ok) throw new Error(`Could not add: ${String(response.status)}`);
+      if (!response.ok) {
+        const said = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(said?.error ?? `Could not add: ${String(response.status)}`);
+      }
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['chart-dashboards', chartId] });
@@ -620,7 +630,11 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
                   {addTo}
                 </Detail>
               )}
-              <Detail title="Delete">{deleteControls}</Detail>
+              {/* A shared dashboard's own chart is part of it: it goes only as
+                  the dashboard changes, by a proposal (T502, AC-278). */}
+              {place?.kind === 'shared' && localTo !== undefined ? null : (
+                <Detail title="Delete">{deleteControls}</Detail>
+              )}
             </aside>
           </div>
         </section>

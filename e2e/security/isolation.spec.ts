@@ -3,6 +3,7 @@ import type { APIRequestContext } from '@playwright/test';
 import { serviceToken } from '../api-process';
 import { expect, test } from './fixtures';
 import { seedRootDefault } from './root-default';
+import { changeShared } from './shared-change';
 
 /**
  * T341:
@@ -72,21 +73,15 @@ async function chartIn(request: APIRequestContext, folderId: string, title: stri
   });
   expect(made.status()).toBe(201);
   const { id } = (await made.json()) as { id: string };
-  const saved = await request.put(`/api/documents/chart/${id}`, {
-    data: {
-      version: 1,
-      body: {
-        schemaVersion: 1,
-        title,
-        folderId,
-        chart: {
-          source: { cube: 'iso_sales' },
-          wells: { measures: ['iso_sales.count'], dimensions: [], timeDimensions: [] },
-        },
-      },
+  // Published by an approval of its copy, never saved in place (T502, AC-278).
+  const landed = await changeShared(request, 'chart', id, (body) => ({
+    ...body,
+    chart: {
+      source: { cube: 'iso_sales' },
+      wells: { measures: ['iso_sales.count'], dimensions: [], timeDimensions: [] },
     },
-  });
-  expect(saved.status(), await saved.text()).toBe(200);
+  }));
+  expect(landed).toEqual([{ kind: 'chart', id, version: 2 }]);
   return id;
 }
 

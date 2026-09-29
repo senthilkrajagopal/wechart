@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 
 import {
   ChartDocumentError,
@@ -71,6 +72,7 @@ import { registerFolderAccess } from './routes/access';
 import { registerAudit } from './routes/audit';
 import { registerDataSources } from './routes/data-sources';
 import { registerExport } from './routes/export';
+import { sharedInPlace } from './routes/shared-in-place';
 import { registerImport } from './routes/import';
 import { registerProposals } from './routes/proposals';
 import type { ProposalStore } from './repos/proposals';
@@ -828,6 +830,9 @@ export function buildServer({
       ...(audit === undefined ? {} : { audit }),
       // Workspaces are signed-in users' (T343); T359 brings the single user's.
       enabled: security !== 'off',
+      // An approval publishes: each item bound in its folder, as a save there
+      // was before a shared one could no longer be saved (T502, AC-272).
+      bind: (kind, folderId, body) => boundIn(kind, folderId, body),
       documents: {
         get: async (kind, id) => {
           const found = await get(kind, id);
@@ -1582,6 +1587,14 @@ export function buildServer({
     error:
       'This moves between your workspace and the shared folders: shared work is changed in a copy in your workspace, and reaches a shared folder through a proposal.',
   };
+  /** Whether the folder governing an item is a shared one, in no workspace (T502). */
+  const isShared = async (kind: string, item: Stored) =>
+    (await workspaceRootOf(await governingFolder(kind, item))) === null;
+  /** What a dashboard or chart holds, apart from where it is and what it is called (T502). */
+  const contentOf = (body: Record<string, unknown>) =>
+    Object.fromEntries(
+      Object.entries(body).filter(([key]) => key !== 'title' && key !== 'folderId'),
+    );
   /** How many model files a folder holds, in it or beneath it (T428). */
   const modelsBeneath = async (folderId: string): Promise<number> => {
     if (modelFiles?.all === undefined) return 0;
@@ -1664,10 +1677,16 @@ export function buildServer({
     before: unknown,
     after: unknown,
     dashboardFolder: string | null,
+    /**
+     * Charts made by the same save (version 0), not stored yet: its own, which
+     * the save checks as it makes them, and whose ids, if stored already, the
+     * save's transaction refuses (T502's e2e).
+     */
+    making: ReadonlySet<string> = new Set(),
   ) => {
     const had = chartIdsOf(before);
     for (const id of chartIdsOf(after)) {
-      if (had.has(id)) continue;
+      if (had.has(id) || making.has(id)) continue;
       const chart = await docs?.get?.('chart', id);
       if (!chart || !(await mayOpen(seen, 'chart', chart))) return false;
       if (!(await staysInItsWorkspace(chart, dashboardFolder))) return false;
@@ -2383,6 +2402,15 @@ export function buildServer({
       ) {
         return reply.code(403).send({ error: 'This dashboard can show only charts you may open.' });
       }
+      // A shared one's content changes through a proposal, never here (T502,
+      // AC-278); moving or renaming it is no change to its content. Asked
+      // after what they may not do at all, which says more.
+      if (
+        kind !== 'folder' &&
+        (await isShared(kind, stored)) &&
+        !isDeepStrictEqual(contentOf(body.body), contentOf(stored.body))
+      )
+        return reply.code(409).send(sharedInPlace(kind));
     }
 
     // A folder's AD groups are the access route's alone (T314's review): kept
@@ -2410,6 +2438,15 @@ export function buildServer({
       );
       if (bound.kind !== 'ok') return bindingRefused(reply, kind, bound);
       written = bound.body;
+      // Nor bound anew in place: a shared one is published again only by an
+      // approval (T502, AC-278, AC-275), which binds it (`bind` in proposals).
+      if (
+        found.seen !== undefined &&
+        found.stored !== null &&
+        (await isShared(kind, found.stored)) &&
+        !isDeepStrictEqual(contentOf(written), contentOf(found.stored.body))
+      )
+        return reply.code(409).send(sharedInPlace(kind));
     }
 
     try {
@@ -2492,7 +2529,15 @@ export function buildServer({
         (await crossesWorkspace(folderIdOf(stored.body), into))
       )
         return reply.code(409).send(ACROSS_WORKSPACE);
-      if (!(await addsOnlyOpenable(seen, stored.body, dashboard.body, into))) {
+      const making = new Set(
+        (Array.isArray(payload?.charts)
+          ? (payload.charts as { id?: unknown; version?: unknown }[])
+          : []
+        )
+          .filter((chart) => chart.version === 0 && typeof chart.id === 'string')
+          .map((chart) => chart.id as string),
+      );
+      if (!(await addsOnlyOpenable(seen, stored.body, dashboard.body, into, making))) {
         return reply.code(403).send({ error: 'This dashboard can show only charts you may open.' });
       }
     }
@@ -2610,6 +2655,28 @@ export function buildServer({
       if (![...into, ...libraryFolders].every((folder) => mayWrite(seen, folder))) {
         return reply.code(403).send({ error: READ_ONLY });
       }
+      // A chart saved with it, made or moved, stays on its side of the
+      // workspace's edge: none reaches a shared folder but by a proposal
+      // (T502's review, AC-278).
+      // (One left where it is, a shared library chart, is refused below as shared.)
+      const dashboardHome = folderIdOf(dashboard.body as Record<string, unknown>);
+      for (const chart of checked) {
+        if (chart.body['localToDashboardId'] !== undefined) continue;
+        const to = folderIdOf(chart.body);
+        const was = storedCharts.get(chart.id);
+        if (was !== undefined && was['localToDashboardId'] === undefined && folderIdOf(was) === to)
+          continue;
+        if (await crossesWorkspace(dashboardHome, to))
+          return reply.code(409).send(ACROSS_WORKSPACE);
+      }
+      // A shared dashboard, and a shared folder's library chart even from a
+      // workspace dashboard that shows it, change only as copies (T502,
+      // AC-278). Asked after what they may not do at all, which says more.
+      if (found.stored !== null && (await isShared('dashboard', found.stored)))
+        return reply.code(409).send(sharedInPlace('dashboard'));
+      for (const folder of libraryFolders)
+        if ((await workspaceRootOf(folder)) === null)
+          return reply.code(409).send(sharedInPlace('chart'));
     }
 
     // Published into their folders: each cube a chart names bound in its own
@@ -2852,6 +2919,16 @@ export function buildServer({
     ) {
       return reply.code(403).send({ error: READ_ONLY });
     }
+    // A shared dashboard's own chart is part of it: it goes only as its
+    // dashboard changes, by a proposal (T502's review, AC-278).
+    if (
+      kind === 'chart' &&
+      found.seen !== undefined &&
+      found.stored !== null &&
+      typeof found.stored.body['localToDashboardId'] === 'string' &&
+      (await isShared('chart', found.stored))
+    )
+      return reply.code(409).send(sharedInPlace('dashboard'));
 
     if (kind === 'chart' && confirm !== 'true' && cat?.dashboardsUsing) {
       // Named only where they may see them (T326's review).
@@ -2918,6 +2995,14 @@ export function buildServer({
         error:
           'This chart is in your workspace: it goes on a shared dashboard through a proposal, not in place.',
       });
+    // Any chart: a shared dashboard gains a tile only through a proposal
+    // (T502, AC-278).
+    if (
+      board.seen !== undefined &&
+      board.stored !== null &&
+      (await isShared('dashboard', board.stored))
+    )
+      return reply.code(409).send(sharedInPlace('dashboard'));
 
     await docs.attachChart(dashboardId, body.chartId);
     return reply.status(204).send();

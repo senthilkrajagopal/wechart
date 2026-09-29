@@ -27,6 +27,8 @@ import {
 import { cubeStateOf } from '../xcube/cube-state';
 import type { CubeUsing } from '../xcube/used-by';
 
+import { sharedInPlace } from './shared-in-place';
+
 /**
  * A data source's own routes (T335; AC-269, AC-164, AC-312, AC-161, AC-262,
  * AC-263): opened in its settings, made in a folder, changed and removed.
@@ -731,6 +733,19 @@ export function registerDataSources(
         ? { description: value['description'] }
         : {}),
     };
+    // With sign-in on, a shared folder's is changed only as a copy, proposed
+    // back (T502, AC-278). A rename is no change to what it connects to.
+    if (
+      workspaceOf !== undefined &&
+      !(await inAWorkspace(source)) &&
+      ((change.driver !== undefined && change.driver !== source.driver) ||
+        (change.authMethod !== undefined && change.authMethod !== source.authMethod) ||
+        (change.fields !== undefined && !sameFields(change.fields, source.fields)) ||
+        (change.sealed !== undefined && Object.keys(change.sealed).length > 0) ||
+        (change.description !== undefined &&
+          (change.description ?? null) !== (source.description ?? null)))
+    )
+      return reply.status(409).send(sharedInPlace('data source'));
     // A copy keeps its original's name, under which it stands in for the
     // original in the workspace's previews (AC-280; T346's review).
     if (source.origin !== null && change.name !== undefined && change.name !== source.name)

@@ -4,6 +4,7 @@ import type { APIRequestContext, APIResponse, Page } from '@playwright/test';
 import { sealSecretV1, type SealedV1, type XcubeKey } from '@wechart/core';
 
 import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtures';
+import { changeShared, changeSharedSource } from './shared-change';
 
 /**
  * F38: exporting a dashboard, and importing the file (T511 …).
@@ -31,7 +32,12 @@ const KEY = JSON.parse(
 const FIELDS = { host: 'sample-db', port: 5432, database: 'sample', user: 'sample', ssl: false };
 const TITLE = 'Revenue overview';
 const FILE = 'revenue-overview.wechart.json';
-const names = { sales: `${RUN}_sales`, margin: `${RUN}_margin`, emea: `${RUN}_emea`, hid: `${RUN}_hid` };
+const names = {
+  sales: `${RUN}_sales`,
+  margin: `${RUN}_margin`,
+  emea: `${RUN}_emea`,
+  hid: `${RUN}_hid`,
+};
 const modelPath = (name: string) => `cubes/${name}.yml`;
 const ids = {
   sales: '',
@@ -95,11 +101,15 @@ async function dataSource(request: APIRequestContext, folderId: string, name: st
     }),
   );
   sources.push(id);
-  // What it is for, which goes with it (AC-355).
-  const described = await request.put(`/api/data-sources/${id}`, {
-    data: { description: `Sample rows for ${name}.` },
-  });
-  expect(described.status(), await described.text()).toBe(200);
+  // What it is for, which goes with it (AC-355): given as a shared one's
+  // settings are, by approving a copy (T502, AC-278).
+  await changeSharedSource(request, id, async () => ({
+    description: `Sample rows for ${name}.`,
+  }));
+  const described = (await (await request.get(`/api/data-sources/${id}`)).json()) as {
+    description: string | null;
+  };
+  expect(described.description).toBe(`Sample rows for ${name}.`);
   return id;
 }
 
@@ -111,33 +121,26 @@ async function publish(request: APIRequestContext, folderId: string, name: strin
   published.push({ folderId, name });
 }
 
-/** A chart, made in its folder and then given its definition (and, if local, its dashboard). */
-async function chart(
-  request: APIRequestContext,
-  title: string,
-  folderId: string,
-  cube: string,
-  localTo?: string,
-) {
+/** A chart's definition, on `cube`. */
+const definitionOf = (cube: string) => ({
+  source: { cube },
+  wells: { measures: [`${cube}.count`], dimensions: [`${cube}.region`], timeDimensions: [] },
+  chartType: 'bar',
+});
+
+/**
+ * A library chart, made in its folder and then given its definition, as a
+ * shared one's is given: by approving a copy (T502, AC-278).
+ */
+async function chart(request: APIRequestContext, title: string, folderId: string, cube: string) {
   const id = await made(
     await request.post('/api/documents', { data: { kind: 'chart', title, folderId } }),
   );
-  const saved = await request.put(`/api/documents/chart/${id}`, {
-    data: {
-      version: 1,
-      body: {
-        schemaVersion: 1,
-        title,
-        ...(localTo === undefined ? { folderId } : { localToDashboardId: localTo }),
-        chart: {
-          source: { cube },
-          wells: { measures: [`${cube}.count`], dimensions: [`${cube}.region`], timeDimensions: [] },
-          chartType: 'bar',
-        },
-      },
-    },
-  });
-  expect(saved.status(), await saved.text()).toBe(200);
+  const landed = await changeShared(request, 'chart', id, (body) => ({
+    ...body,
+    chart: definitionOf(cube),
+  }));
+  expect(landed).toEqual([{ kind: 'chart', id, version: 2 }]);
   return id;
 }
 
@@ -157,37 +160,50 @@ async function setUp(request: APIRequestContext) {
       data: { kind: 'dashboard', title: TITLE, folderId: ids.sales },
     }),
   );
-  ids.revenue = await chart(request, 'Revenue', ids.sales, names.sales, ids.board);
-  ids.orders = await chart(request, 'Orders', ids.sales, names.sales, ids.board);
   ids.top = await chart(request, 'Top products', ids.sales, names.sales);
   ids.margin = await chart(request, 'Margin trend', ids.hidden, names.margin);
-  const board = (await (await request.get(`/api/documents/dashboard/${ids.board}`)).json()) as {
-    body: Record<string, unknown>;
-    version: number;
-  };
   const tile = (id: string, chartId: string) => ({ id, kind: 'chart', chartId, w: 6, h: 30 });
-  const saved = await request.put(`/api/documents/dashboard/${ids.board}`, {
-    data: {
-      version: board.version,
-      body: {
-        ...board.body,
-        pages: [
-          {
-            id: 'overview',
-            title: 'Overview',
-            items: [
-              tile('t-revenue', ids.revenue),
-              tile('t-orders', ids.orders),
-              tile('t-top', ids.top),
-              tile('t-margin', ids.margin),
-            ],
-          },
-        ],
-        charts: [ids.revenue, ids.orders],
-      },
+  // Its two own charts made on its copy, and its tiles, landed by an approval (T502).
+  const landed = await changeShared(
+    request,
+    'dashboard',
+    ids.board,
+    (body, [revenue, orders]) => ({
+      ...body,
+      pages: [
+        {
+          id: 'overview',
+          title: 'Overview',
+          items: [
+            tile('t-revenue', revenue!),
+            tile('t-orders', orders!),
+            tile('t-top', ids.top),
+            tile('t-margin', ids.margin),
+          ],
+        },
+      ],
+      charts: [revenue, orders],
+    }),
+    {
+      ownCharts: ['Revenue', 'Orders'].map((title) => ({
+        body: { schemaVersion: 1, title, chart: definitionOf(names.sales) },
+      })),
     },
-  });
-  expect(saved.status(), await saved.text()).toBe(200);
+  );
+  expect(landed.map((each) => [each.kind, each.version])).toEqual([
+    ['chart', 1],
+    ['chart', 1],
+    ['dashboard', 2],
+  ]);
+  // Its own charts' ids as they landed, by title.
+  for (const { kind, id } of landed.filter((each) => each.kind === 'chart')) {
+    const { body } = (await (await request.get(`/api/documents/${kind}/${id}`)).json()) as {
+      body: { title: string };
+    };
+    if (body.title === 'Revenue') ids.revenue = id;
+    if (body.title === 'Orders') ids.orders = id;
+  }
+  expect([ids.revenue, ids.orders]).not.toContain('');
 }
 
 /** The Export pane, opened from the ⋯ in the dashboard's header. */
@@ -259,7 +275,10 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
         if (chart.status() !== 200) continue;
         const body = ((await chart.json()) as { body: Record<string, unknown> }).body;
         if (body['localToDashboardId'] === id)
-          await removed(`chart ${chartId}`, writer.request.delete(`/api/documents/chart/${chartId}?confirm=true`));
+          await removed(
+            `chart ${chartId}`,
+            writer.request.delete(`/api/documents/chart/${chartId}?confirm=true`),
+          );
       }
     }
     for (const { kind, id } of [...drafts].sort((a) => (a.kind === 'chart' ? -1 : 1)))
@@ -316,7 +335,10 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
       await expect(pane.getByText(`Sales ${RUN} · version 2, as the folder has it`)).toBeVisible();
       await expect(
         pane.getByRole('list', { name: 'Always in the file' }).getByRole('listitem'),
-      ).toHaveText(['Revenue overviewthe dashboard, as saved', '2 own chartsmade on this dashboard']);
+      ).toHaveText([
+        'Revenue overviewthe dashboard, as saved',
+        '2 own chartsmade on this dashboard',
+      ]);
 
       const library = pane.getByRole('group', { name: 'Library charts it shows' });
       await expect(library.getByRole('checkbox', { name: 'Top products' })).toBeChecked();
@@ -426,7 +448,9 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
       );
     });
 
-    test('exports only what stays ticked, from the dashboard’s row in Explore', async ({ page }) => {
+    test('exports only what stays ticked, from the dashboard’s row in Explore', async ({
+      page,
+    }) => {
       await page.goto(`/explore?folder=${ids.sales}`);
       await page
         .getByTestId(`item-${ids.board}`)
@@ -435,7 +459,9 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
       await page.getByRole('menuitem', { name: 'Export…' }).click();
       const pane = page.getByRole('dialog', { name: 'Export dashboard' });
       await pane.getByRole('button', { name: 'None' }).click();
-      await expect(pane.getByTestId('export-counts')).toHaveText('In the file: 1 dashboard · 2 charts');
+      await expect(pane.getByTestId('export-counts')).toHaveText(
+        'In the file: 1 dashboard · 2 charts',
+      );
       const downloading = page.waitForEvent('download');
       await pane.getByRole('button', { name: 'Export file' }).click();
       const file = JSON.parse(readFileSync(await (await downloading).path(), 'utf8')) as {
@@ -470,7 +496,9 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
         buffer: Buffer.from(exported.text),
       });
       await expect(pane.getByText('Read · every part is one this wechart has')).toBeVisible();
-      await expect(pane.getByRole('list', { name: 'What it holds' }).getByRole('listitem')).toHaveText([
+      await expect(
+        pane.getByRole('list', { name: 'What it holds' }).getByRole('listitem'),
+      ).toHaveText([
         `${TITLE}Dashboard · 2 own charts`,
         'Top productsLibrary chart',
         'Margin trendLibrary chart',
@@ -539,7 +567,9 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
       drafts.push(...landed.map((item) => ({ kind: item.kind, id: item.id })));
       const contents = page.getByTestId('explore-contents');
       await expect(contents.locator(ITEM_ROWS)).toHaveCount(rowsBefore + 4);
-      expect(landed.map((item) => [item.kind, item.title, item.targetFolderId, item.origin]).sort()).toEqual(
+      expect(
+        landed.map((item) => [item.kind, item.title, item.targetFolderId, item.origin]).sort(),
+      ).toEqual(
         [
           ['chart', 'Margin trend', ids.sales, null],
           ['chart', 'Top products', ids.sales, null],
@@ -609,7 +639,9 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
       });
       // Sales's own; never the hidden folder's.
       await expect(choices).not.toContainText(names.hid);
-      await choices.getByRole('radio', { name: `${names.emea}, PostgreSQL, in Sales ${RUN}` }).check();
+      await choices
+        .getByRole('radio', { name: `${names.emea}, PostgreSQL, in Sales ${RUN}` })
+        .check();
       await expect(source.getByTestId('driver-mismatch')).toHaveText(
         `${lake} is MySQL in the file, and ${names.emea} is PostgreSQL: a model written for MySQL’s SQL may not run on PostgreSQL.`,
       );
@@ -689,10 +721,15 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
 
       // Leaving asks first, and nothing was imported.
       await pane.getByRole('button', { name: 'Cancel' }).click();
-      await pane.getByRole('alertdialog', { name: 'Discard this import?' }).getByRole('button', { name: 'Discard' }).click();
+      await pane
+        .getByRole('alertdialog', { name: 'Discard this import?' })
+        .getByRole('button', { name: 'Discard' })
+        .click();
       await expect(pane).toHaveCount(0);
       const after = await page.request.get('/api/folders/mine/contents');
-      expect(((await after.json()) as { id: string }[]).map((item) => item.id).sort()).toEqual(titles);
+      expect(((await after.json()) as { id: string }[]).map((item) => item.id).sort()).toEqual(
+        titles,
+      );
     });
   });
 

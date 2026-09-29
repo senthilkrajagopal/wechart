@@ -5890,11 +5890,38 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - Landing isn't one transaction. An item written before a later one fails stays written, and the proposal is opened again. The user's rule for saves stands (breadth over save edge cases).
   - **AC-288 stays open:** its real surface is the review view's Approve (T356). **AC-298** waits on T368's other records and T362.
   - *2026-09-28, T356:* the review view's Approve lands on the real surface. T352 is done. AC-288 still waits on its third clause, a refused check, which is T451's.
-- [ ] T502 (AC-278) Refuse in-place changes to a shared dashboard, chart or data source while sign-in is on *(split from T352, 2026-09-28)*
+- [x] T502 (AC-278) Refuse in-place changes to a shared dashboard, chart or data source while sign-in is on *(split from T352, 2026-09-28)*
   - **Why.** With approvals landing (T352), a proposal is how a shared item changes. The `409` changes how every shared item is edited, so it is its own task.
   - Files: `packages/api/src/server.ts` (the document routes), `packages/api/src/routes/data-sources.ts`, `packages/api/src/routes/shared-in-place.test.ts`
   - Failing test: `shared-in-place.test.ts`: with sign-in on, a `PUT` or `PATCH` of content on a shared folder's dashboard, chart or data source answers `409`, "Edit in my workspace", and leaves it unchanged; the same in a workspace saves; moving, renaming and folder settings are unchanged (AC-278). With sign-in off (T359), nothing changes.
   - Models follow once the workspace holds them (T347).
+  - **Done 2026-09-28, after one review round.** Tested in:
+    - `shared-in-place.test.ts`, `proposal-bind.test.ts`;
+    - the security e2e on Chrome: 109 passed. One failed: export-import's import tests, which collide with other specs' drafts in writer's workspace (see the flake below).
+  - *As built:*
+    - **The refusal.** `409 { error, code: 'shared_in_place' }` (`routes/shared-in-place.ts`), for anyone, a Super-Admin too, and only with sign-in on. It is asked after the 403s, which say more. It covers:
+      - `PUT /api/documents/:kind/:id`: any change to a shared dashboard's or chart's content (all but its title and folder), and a save that would bind it anew;
+      - `PUT /api/dashboards/:id`: a shared dashboard, and a shared library chart saved with a workspace dashboard that shows it;
+      - `POST /api/dashboards/:id/charts`: adding a tile to a shared dashboard;
+      - `DELETE` of a shared dashboard's own chart;
+      - `PUT /api/data-sources/:id`: a shared one's type, sign-in method, fields, secrets or description.
+    - Still allowed: renaming or moving a shared item (`PATCH`), renaming a shared data source, and saving a folder's settings.
+    - **Approval now publishes.** An approval binds each chart and dashboard in the folder it lands in, nearest first (`bind` in `routes/proposals.ts`, the server's `boundIn`), as a save there did (AC-272, AC-275).
+      - Every item is bound before anything is written or kept. A name its path doesn't hold answers `422` with `names`, and nothing lands; the proposal is open again.
+      - Without this, items would land unbound once shared ones are no longer saved in place.
+    - **Two holes closed, from the review:**
+      - A workspace dashboard's save can't make or move a chart into a shared folder (`409`, across the workspace's edge).
+      - A save's own new charts (version 0) no longer count as charts the user may not open. That had refused every new chart on a dashboard with sign-in on.
+    - **The web.** The chart page offers "Add to dashboard" only for My workspace's dashboards, and no Delete for a shared dashboard's own chart.
+    - **Tests moved.**
+      - `audit.test.ts` and `data-sources.test.ts`'s T461 tests change workspace data sources now.
+      - T461's "another user's test" case can't be reached over HTTP any more: a workspace source is its owner's alone. It stays covered at the store level (`claimChange` with another key).
+      - Seven security specs change shared content as a user must, through `e2e/security/shared-change.ts`: a copy, changed, proposed and approved. The specs are binding, changed-in-place, export-import, isolation, picker, preview-as and review-view.
+  - *Left open:*
+    - **Audit.** An approved data-source change records the `approval` event, not a `data-source-change` with the settings before and after (AC-294, T368).
+    - **Refusal wording.** A `PUT` that only renames a shared item can answer the proposal refusal: through `/api/dashboards`, or when binding it anew would move it to a nearer cube. The web renames by `PATCH`, which isn't refused.
+    - **Known flake.** Export-import's import tests count what is new in writer's My workspace. Specs running beside them (history, review-view, workspaces) make drafts there too, so a full run can fail them; alone they pass.
+  - AC-278 stays unticked: models are T347's.
   - Depends on: T352, T356, T358 (so a shared item can still change, through the Propose dialog and Approve)
 - [x] T353 (AC-290) Return a rejected proposal to its author with the approver's reason
   - Files: `packages/api/src/routes/proposals.ts`, `packages/api/src/routes/proposal-reject.test.ts`
