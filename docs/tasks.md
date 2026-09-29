@@ -6754,6 +6754,12 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - The query asks with a `calculations` block, and xcube picks the companion for the granularity and names its column. For a running total, xcube adds the second `inDateRange` filter.
     - wechart disables, with the reason, the calculations the per-type table in `to-xcube/2026-09-28-1600-quick-calcs-decision.md` lists.
     - The build waits on xcube's spike and a published image.
+    - *xcube's spike (`to-wechart/2026-09-28-1700-quick-calcs-spike.md`):*
+      - On demand recompiles a 300-cube module in about 0.7 s. The full catalog would have added about 1 GB.
+      - A running total with the range sent twice gives March 31, raw and from a rollup.
+      - Moving average and running total over a sum are served from the rollup with the raw values.
+      - % of total over `avg` and `count_distinct` stays disabled.
+      - **A running total of `count_distinct` is correct** in xcube's plain rolling form, so wechart enables it.
     - ~~`packages/api/src/model/chain.ts`~~ The Files become `packages/core/src/quickCalc.ts` (the block and the per-type rules), `packages/web/src/query/loadTile.ts` (sending the block, reading the named column), and `e2e/quick-calcs.spec.ts`.
   - Depends on: T380, ~~T337~~ T426; xcube's (c′) image
 - [ ] T383 (AC-050) Record a calculation request and show it to the read-write members of the folder whose model defines the cube
