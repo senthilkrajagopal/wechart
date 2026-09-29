@@ -88,6 +88,9 @@ const ids = {
   draft: '',
   secret: '',
   shared: '',
+  /** Sales's data source of the file's one's name, and one in /Hidden. */
+  source: '',
+  secretSource: '',
 };
 let app: FastifyInstance;
 let single: FastifyInstance;
@@ -216,6 +219,18 @@ beforeAll(async () => {
     sealed: { password: sealed(SOURCE) },
   });
   held.push(id);
+  ids.source = id;
+  ids.secretSource = (
+    await sources().create({
+      folderId: ids.hidden,
+      name: `${MARK}_hidden`,
+      driver: 'postgres',
+      authMethod: 'password',
+      fields: { host: 'db', port: 5432, database: 'sales', user: 'cube', ssl: true },
+      sealed: { password: sealed(`${MARK}_hidden`) },
+    })
+  ).id;
+  held.push(ids.secretSource);
   await files().seed([
     {
       folderId: ids.sales,
@@ -286,10 +301,25 @@ afterAll(async () => {
 
 const as = (who: string, options: InjectOptions) =>
   app.inject({ ...options, headers: { ...options.headers, cookie: cookies[who]! } });
-const review = (who: string, file: unknown, targetFolderId: unknown = ids.sales) =>
-  as(who, { method: 'POST', url: REVIEWS, payload: { file, targetFolderId } });
-const importing = (who: string, file: unknown, targetFolderId: unknown = ids.sales) =>
-  as(who, { method: 'POST', url: IMPORTS, payload: { file, targetFolderId } });
+const review = (
+  who: string,
+  file: unknown,
+  targetFolderId: unknown = ids.sales,
+  dataSources?: unknown,
+) =>
+  as(who, {
+    method: 'POST',
+    url: REVIEWS,
+    payload: { file, targetFolderId, ...(dataSources === undefined ? {} : { dataSources }) },
+  });
+/** An import, its data source mapped to Sales's of its name unless said otherwise (T514). */
+const importing = (
+  who: string,
+  file: unknown,
+  targetFolderId: unknown = ids.sales,
+  dataSources: unknown = [{ name: SOURCE, to: ids.source }],
+) =>
+  as(who, { method: 'POST', url: IMPORTS, payload: { file, targetFolderId, dataSources } });
 
 /** Every document's kind, id and version, to show nothing saved changed. */
 const everything = async () =>
@@ -473,7 +503,11 @@ describe('importing into My workspace (T513, AC-356)', () => {
     const answer = await single.inject({
       method: 'POST',
       url: IMPORTS,
-      payload: { file: exportFile(), targetFolderId: ids.sales },
+      payload: {
+        file: exportFile(),
+        targetFolderId: ids.sales,
+        dataSources: [{ name: SOURCE, to: ids.source }],
+      },
     });
     expect(answer.statusCode, answer.body).toBe(201);
     const board = (await docs().get(
@@ -532,5 +566,128 @@ describe('importing into My workspace (T513, AC-356)', () => {
     expect((await importing('writer', exportFile(), ids.view)).statusCode).toBe(403);
     expect((await importing('writer', exportFile(), ids.hidden)).statusCode).toBe(404);
     expect(await everything()).toEqual(before);
+  });
+});
+
+describe('an import’s data sources (T514, AC-358)', () => {
+  it('reviews each as it was decided: mapped, not imported; created, a new draft under its name', async () => {
+    const mapped = await review('writer', exportFile(), ids.sales, [
+      { name: SOURCE, map: ids.source },
+    ]);
+    expect(mapped.statusCode, mapped.body).toBe(200);
+    expect(mapped.json<Reviewed>().items.find((item) => item.kind === 'data-source')).toEqual({
+      kind: 'data-source',
+      key: SOURCE,
+      title: SOURCE,
+      driver: 'postgres',
+      lands: 'not-imported',
+      mappedTo: { name: SOURCE, path: [`Sales ${MARK}`] },
+      warnings: [],
+    });
+    const created = await review('writer', exportFile(), ids.sales, [
+      { name: SOURCE, create: `${MARK}_emea_2` },
+    ]);
+    expect(created.statusCode, created.body).toBe(200);
+    expect(created.json<Reviewed>().items.find((item) => item.kind === 'data-source')).toEqual({
+      kind: 'data-source',
+      key: SOURCE,
+      title: `${MARK}_emea_2`,
+      driver: 'postgres',
+      lands: 'draft',
+      warnings: [],
+    });
+  });
+
+  it('maps only to one a model in the target can bind to that the importer may use, naming no other', async () => {
+    for (const to of [ids.secretSource, randomUUID()]) {
+      const answer = await importing('writer', exportFile(), ids.sales, [{ name: SOURCE, to }]);
+      expect(answer.statusCode, answer.body).toBe(404);
+      expect(answer.body).not.toContain(`${MARK}_hidden`);
+    }
+    const unmapped = await importing('writer', exportFile(), ids.sales, []);
+    expect(unmapped.statusCode).toBe(400);
+    expect(unmapped.json<{ error: string }>().error).toBe(
+      `Map each data source to one a model in Sales ${MARK} can bind to, or create it: ${SOURCE}.`,
+    );
+    const reviewed = await review('writer', exportFile(), ids.sales, [
+      { name: SOURCE, map: ids.secretSource },
+    ]);
+    expect(reviewed.statusCode).toBe(404);
+  });
+
+  it('maps to one in the target or above it, not one beside or below it, nor a draft going elsewhere (T514’s review)', async () => {
+    const emea = await doc('folder', { title: `EMEA ${MARK}`, folderId: ids.sales });
+    const settings = {
+      driver: 'postgres',
+      authMethod: 'password',
+      fields: { host: 'db', port: 5432, database: 'sales', user: 'cube', ssl: true },
+    } as const;
+    const beside = await sources().create({
+      ...settings,
+      folderId: ids.view,
+      name: `${MARK}_beside`,
+      sealed: { password: sealed(`${MARK}_beside`) },
+    });
+    const below = await sources().create({
+      ...settings,
+      folderId: emea,
+      name: `${MARK}_below`,
+      sealed: { password: sealed(`${MARK}_below`) },
+    });
+    const own = String((await docs().get('chart', ids.draft))!.body['folderId']);
+    const elsewhere = await sources().create({
+      ...settings,
+      folderId: own,
+      name: `${MARK}_elsewhere`,
+      sealed: { password: sealed(`${MARK}_elsewhere`) },
+      targetFolderId: ids.view,
+    });
+    held.push(beside.id, below.id, elsewhere.id);
+    const before = await everything();
+    for (const to of [beside.id, below.id, elsewhere.id]) {
+      const answer = await importing('writer', exportFile(), ids.sales, [{ name: SOURCE, to }]);
+      expect(answer.statusCode, `${to}: ${answer.body}`).toBe(404);
+      const reviewed = await review('writer', exportFile(), ids.sales, [{ name: SOURCE, map: to }]);
+      expect(reviewed.statusCode, `${to}: ${reviewed.body}`).toBe(404);
+    }
+    expect(await everything()).toEqual(before);
+    // Sales's own binds a model in EMEA, below it.
+    const reviewed = await review('writer', exportFile(), emea, [{ name: SOURCE, map: ids.source }]);
+    expect(reviewed.statusCode, reviewed.body).toBe(200);
+    expect(reviewed.json<Reviewed>().items.find((item) => item.kind === 'data-source')).toEqual({
+      kind: 'data-source',
+      key: SOURCE,
+      title: SOURCE,
+      driver: 'postgres',
+      lands: 'not-imported',
+      mappedTo: { name: SOURCE, path: [`Sales ${MARK}`] },
+      warnings: [],
+    });
+    const answer = await importing('writer', exportFile(), emea, [{ name: SOURCE, to: ids.source }]);
+    expect(answer.statusCode, answer.body).toBe(201);
+  });
+
+  it('takes one created in the importer’s workspace, going to the target, as the one chosen', async () => {
+    const own = String((await docs().get('chart', ids.draft))!.body['folderId']);
+    const made = await sources().create({
+      folderId: own,
+      name: `${MARK}_made`,
+      driver: 'postgres',
+      authMethod: 'password',
+      fields: { host: 'db', port: 5432, database: 'sales', user: 'cube', ssl: true },
+      sealed: { password: sealed(`${MARK}_made`) },
+      targetFolderId: ids.sales,
+    });
+    held.push(made.id);
+    const answer = await importing('writer', exportFile(), ids.sales, [
+      { name: SOURCE, to: made.id },
+    ]);
+    expect(answer.statusCode, answer.body).toBe(201);
+    expect(answer.json<{ created: Record<string, number> }>().created).toEqual({
+      dashboards: 1,
+      charts: 3,
+      models: 0,
+      dataSources: 1,
+    });
   });
 });

@@ -2523,6 +2523,40 @@ main:has(.export-pane--over) { padding-right: 480px; }
   line-height: 18px;
 }
 .import-pane__warning > svg { flex: none; margin-top: 2px; }
+/* An import's data sources (T514; design 13, states M–P): each mapped or created. */
+.import-sources { display: grid; gap: 12px; }
+.import-source { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--wc-border-subtle); border-radius: 8px; }
+.import-source__head { display: flex; align-items: center; gap: 8px; font-size: var(--wc-text-sm-size); }
+.import-source__head .is-code { font-family: var(--wc-font-code); }
+.import-source__driver,
+.import-source__same {
+  padding: 0 6px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--wc-text-secondary);
+}
+.import-source__same { border-color: var(--wc-accent); color: var(--wc-accent); font-weight: 600; }
+.import-source__status { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font-size: var(--wc-text-xs-size); font-weight: 600; }
+.import-source__modes { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--wc-border-subtle); border-radius: 6px; overflow: hidden; }
+.import-source__modes label { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; font-size: var(--wc-text-xs-size); cursor: pointer; }
+.import-source__modes label:has(input:checked) { background: var(--wc-bg-accent-soft); color: var(--wc-accent); font-weight: 600; }
+.import-source__map,
+.import-source__create { display: grid; gap: 10px; }
+.import-source__choices { display: grid; gap: 4px; padding: 8px; border: 1px solid var(--wc-border-subtle); border-radius: 6px; }
+.import-source__folder { display: grid; gap: 2px; }
+.import-source__folder-name { font-size: var(--wc-text-xs-size); font-weight: 600; color: var(--wc-text-secondary); }
+.import-source__none { padding-left: 8px; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.import-source__choice { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 8px; border-radius: 4px; font-size: var(--wc-text-sm-size); cursor: pointer; }
+.import-source__choice:has(input:checked) { background: var(--wc-bg-accent-soft); }
+.import-source__choice .is-code { font-family: var(--wc-font-code); }
+.import-source__choice-driver { margin-left: auto; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.import-source__mismatch { margin: 0; }
+.import-source__taken { align-items: flex-start; }
+.import-source__taken p { margin: 0 0 8px; }
+.import-source__ways { display: flex; flex-wrap: wrap; gap: 8px; }
+.import-source__test { display: grid; gap: 8px; justify-items: start; }
+.import-source__test h4 { margin: 0; }
 
 /* Generate cubes as design 11 (T485, AC-344): design 01's pane, docked as the
    Model page's third column — beside the overview, or in the code's place on

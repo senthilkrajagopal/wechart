@@ -112,10 +112,33 @@ function shown(serve: (url: string, init?: RequestInit) => Promise<Response>, si
   );
   return { fetchMock, onImported, onClose };
 }
+/** The data sources the user sees, and the folders (T514's Data sources step). */
+const HELD = [
+  {
+    id: 's-emea',
+    name: 'emea_replica',
+    driver: 'postgres',
+    authMethod: 'password',
+    folderId: 'sales',
+    folderPath: [{ id: 'sales', title: 'Sales' }],
+    updatedAt: '2026-09-28T10:00:00Z',
+    lastTest: null,
+    usedBy: null,
+    usedElsewhere: 0,
+  },
+];
+const FOLDERS = [
+  { id: 'sales', title: 'Sales', parentId: 'root' },
+  { id: 'emea', title: 'EMEA', parentId: 'sales' },
+];
 const serving = (url: string, init?: RequestInit) =>
   url === '/api/folders/targets'
     ? answer(200, TARGETS)
-    : url === '/api/import/review'
+    : url === '/api/data-sources' && init?.method !== 'POST'
+      ? answer(200, HELD)
+      : url === '/api/folders'
+        ? answer(200, FOLDERS)
+        : url === '/api/import/review'
       ? answer(200, REVIEWED)
       : url === `/api/import` && init?.method === 'POST'
         ? answer(201, {
@@ -124,6 +147,16 @@ const serving = (url: string, init?: RequestInit) =>
             target: { id: 'emea', path: ['Sales', 'EMEA'] },
           })
         : answer(404, {});
+
+/** The Data sources step (T514): the file's one mapped to Sales's of its name, then on to Review. */
+async function mapReplica(pane: HTMLElement) {
+  const next = within(pane).getByRole('button', { name: /Next: Review/ });
+  expect((next as HTMLButtonElement).disabled).toBe(true);
+  const row = within(pane).getByRole('group', { name: /^emea_replica/ });
+  await userEvent.click(within(row).getByRole('radio', { name: 'Map to an existing one' }));
+  await userEvent.click(await within(row).findByRole('radio', { name: /^emea_replica, Same name/ }));
+  await userEvent.click(next);
+}
 
 /** Chooses a file, as the button's file picker gives one. */
 async function choose(pane: HTMLElement, text: string, name = 'revenue-overview.wechart.json') {
@@ -207,7 +240,8 @@ describe('the Import pane: Target and Review (T513, AC-356, AC-357)', () => {
         /Everything in the file lands in My workspace as new drafts with this target\. Nothing in Sales \/ EMEA changes until you propose a draft/,
       ),
     ).toBeTruthy();
-    await userEvent.click(within(pane).getByRole('button', { name: /^Next/ }));
+    await userEvent.click(within(pane).getByRole('button', { name: /Next: Data sources/ }));
+    await mapReplica(pane);
 
     // Review: what lands, with its warnings, counted, and none blocking.
     await within(pane).findByText('2 warnings');
@@ -225,7 +259,11 @@ describe('the Import pane: Target and Review (T513, AC-356, AC-357)', () => {
     );
     expect(within(pane).getByTestId('lands-model-sales.yml').textContent).toContain('Not imported yet');
     const reviewed = fetchMock.mock.calls.find(([url]) => url === '/api/import/review')!;
-    expect(JSON.parse(String(reviewed[1]!.body))).toEqual({ file: FILE, targetFolderId: 'emea' });
+    expect(JSON.parse(String(reviewed[1]!.body))).toEqual({
+      file: FILE,
+      targetFolderId: 'emea',
+      dataSources: [{ name: 'emea_replica', map: 's-emea' }],
+    });
 
     await userEvent.click(within(pane).getByRole('button', { name: 'Import to My workspace' }));
     await vi.waitFor(() => {
@@ -236,7 +274,11 @@ describe('the Import pane: Target and Review (T513, AC-356, AC-357)', () => {
       });
     });
     const sent = fetchMock.mock.calls.find(([url, init]) => url === `/api/import` && init?.method === 'POST')!;
-    expect(JSON.parse(String(sent[1]!.body))).toEqual({ file: FILE, targetFolderId: 'emea' });
+    expect(JSON.parse(String(sent[1]!.body))).toEqual({
+      file: FILE,
+      targetFolderId: 'emea',
+      dataSources: [{ name: 'emea_replica', to: 's-emea' }],
+    });
   });
 
   it('says so with sign-in off: everything still lands in My workspace', async () => {
@@ -245,10 +287,123 @@ describe('the Import pane: Target and Review (T513, AC-356, AC-357)', () => {
     await choose(pane, JSON.stringify(FILE));
     await userEvent.click(within(pane).getByRole('button', { name: /Next: Target/ }));
     await userEvent.click(await within(pane).findByRole('treeitem', { name: 'EMEA' }));
-    await userEvent.click(within(pane).getByRole('button', { name: /^Next/ }));
+    await userEvent.click(within(pane).getByRole('button', { name: /Next: Data sources/ }));
+    await mapReplica(pane);
     expect(
       (await within(pane).findByTestId('import-where')).textContent,
     ).toBe('Sign-in is off. Everything still lands in My workspace as new drafts, with the target Sales / EMEA.');
+  });
+});
+
+describe('a data source created by the import (T514, AC-358)', () => {
+  it('is made in My workspace at Import, from its passing test, going to the target, and given as the one chosen', async () => {
+    const envelope = { v: 1 as const, kid: 'kid-1', enc: 'enc', ct: 'ct' };
+    // Its first test fails and its second passes; the first Import is refused.
+    let tests = 0;
+    let imports = 0;
+    const fetchMock = vi.fn((url: string, init?: RequestInit) =>
+      url === '/api/data-sources/test'
+        ? ((tests += 1),
+          tests === 1
+            ? answer(200, {
+                ok: false,
+                testId: 't-0',
+                checks: [{ id: 'connect', status: 'failed', error: 'password authentication failed' }],
+              })
+            : answer(200, { ok: true, testId: 't-1', checks: [{ id: 'connect', status: 'passed' }] }))
+        : url === `/api/import` && init?.method === 'POST' && (imports += 1) === 1
+          ? answer(503, { error: 'wechart could not be reached.' })
+          : url === '/api/data-sources' && init?.method === 'POST'
+          ? answer(201, { id: 's-new', name: 'emea_replica_2' })
+          : url === '/api/data-sources/s-new' && init?.method === 'PUT'
+            ? answer(200, { id: 's-new', description: 'Read replica.' })
+            : url === '/api/import/review'
+            ? answer(200, {
+                ...REVIEWED,
+                items: REVIEWED.items.map((item) =>
+                  item.kind === 'data-source'
+                    ? { ...item, title: 'emea_replica_2', lands: 'draft' }
+                    : item,
+                ),
+              })
+            : serving(url, init),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const onImported = vi.fn();
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <ImportPane
+          signedIn
+          onImported={onImported}
+          onClose={vi.fn()}
+          seal={async () => envelope}
+        />
+      </QueryClientProvider>,
+    );
+    const pane = screen.getByRole('dialog', { name: 'Import a dashboard' });
+    const described = {
+      ...FILE,
+      items: FILE.items.map((item) =>
+        item.kind === 'data-source' ? { ...item, description: 'Read replica.' } : item,
+      ),
+    };
+    await choose(pane, JSON.stringify(described));
+    await userEvent.click(within(pane).getByRole('button', { name: /Next: Target/ }));
+    await userEvent.click(await within(pane).findByRole('treeitem', { name: 'EMEA' }));
+    await userEvent.click(within(pane).getByRole('button', { name: /Next: Data sources/ }));
+    const row = within(pane).getByRole('group', { name: /^emea_replica/ });
+    await userEvent.click(within(row).getByRole('radio', { name: 'Create it' }));
+    // Sales has one by the name, but the target, EMEA, doesn't: the name is free there.
+    const name = within(row).getByLabelText(/^Name/);
+    await userEvent.clear(name);
+    await userEvent.type(name, 'emea_replica_2');
+    await userEvent.type(within(row).getByLabelText(/^Password/), 'wrong');
+    await userEvent.click(within(row).getByRole('button', { name: 'Test connection' }));
+    await within(row).findByText('password authentication failed');
+    const password = within(row).getByLabelText(/^Password/);
+    await userEvent.clear(password);
+    await userEvent.type(password, 'secret');
+    await userEvent.click(within(row).getByRole('button', { name: 'Test again' }));
+    await within(row).findByText(/Every check passed/);
+    await userEvent.click(within(pane).getByRole('button', { name: /Next: Review/ }));
+    expect((await within(pane).findByTestId('lands-data-source-emea_replica')).textContent).toMatch(
+      /emea_replica_2Data source, created · test passed \d\d:\d\d:\d\dNew draft/,
+    );
+    await userEvent.click(within(pane).getByRole('button', { name: 'Import to My workspace' }));
+    // The first Import is refused after the data source is made: trying again doesn't make it twice.
+    expect((await within(pane).findByRole('alert')).textContent).toContain('wechart could not be reached.');
+    expect(onImported).not.toHaveBeenCalled();
+    await userEvent.click(within(pane).getByRole('button', { name: 'Import to My workspace' }));
+    await vi.waitFor(() => {
+      expect(onImported).toHaveBeenCalledTimes(1);
+    });
+
+    const posted = (url: string, method = 'POST') =>
+      fetchMock.mock.calls
+        .filter(([at, init]) => at === url && init?.method === method)
+        .map(([, init]) => JSON.parse(String(init!.body)) as unknown);
+    expect(posted('/api/data-sources')).toEqual([
+      {
+        folderId: 'mine',
+        name: 'emea_replica_2',
+        driver: 'postgres',
+        authMethod: 'password',
+        fields: FILE.items[4]!.kind === 'data-source' ? (FILE.items[4] as { fields: unknown }).fields : {},
+        sealed: { password: envelope },
+        targetFolderId: 'emea',
+        testId: 't-1',
+        trials: ['t-0'],
+      },
+    ]);
+    expect(posted('/api/data-sources/s-new', 'PUT')).toEqual([{ description: 'Read replica.' }]);
+    const importBody = {
+      file: described,
+      targetFolderId: 'emea',
+      dataSources: [{ name: 'emea_replica', to: 's-new' }],
+    };
+    expect(posted(`/api/import`)).toEqual([importBody, importBody]);
   });
 });
 

@@ -219,6 +219,13 @@ async function folderItems(page: Page) {
     .sort();
 }
 
+/** What the signed-in user's workspace holds now, by id: the drafts made next are those it lacks. */
+async function workspaceIds(page: Page) {
+  const answer = await page.request.get('/api/folders/mine/contents');
+  expect(answer.status()).toBe(200);
+  return ((await answer.json()) as { id: string }[]).map((item) => item.id);
+}
+
 /** A dependency's row in the pane, by its box's name. */
 const rowOf = (pane: ReturnType<Page['getByRole']>, name: string) =>
   pane
@@ -258,7 +265,11 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
     for (const { kind, id } of [...drafts].sort((a) => (a.kind === 'chart' ? -1 : 1)))
       await removed(
         `${kind} ${id}`,
-        writer.request.delete(`/api/documents/${kind}/${id}${kind === 'chart' ? '?confirm=true' : ''}`),
+        kind === 'data-source'
+          ? writer.request.delete(`/api/data-sources/${id}`)
+          : writer.request.delete(
+              `/api/documents/${kind}/${id}${kind === 'chart' ? '?confirm=true' : ''}`,
+            ),
       );
     await writer.close();
 
@@ -445,7 +456,10 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
       expect(exported.text).not.toBe('');
       const salesBefore = await folderItems(page);
       await myWorkspace(page);
-      const rowsBefore = await page.getByTestId('explore-contents').locator('tbody tr').count();
+      // Its items' rows: an empty workspace's one row says so, and is none of them.
+      const ITEM_ROWS = 'tbody tr:not(.folder-contents__empty-row)';
+      const rowsBefore = await page.getByTestId('explore-contents').locator(ITEM_ROWS).count();
+      const idsBefore = await workspaceIds(page);
       await page.getByRole('button', { name: 'New', exact: true }).click();
       await page.getByRole('menuitem', { name: /Import a dashboard…/ }).click();
       const pane = page.getByRole('dialog', { name: 'Import a dashboard' });
@@ -465,6 +479,29 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
       ]);
       await pane.getByRole('button', { name: /Next: Target/ }).click();
       await pane.getByRole('treeitem', { name: `Sales ${RUN}` }).click();
+      await pane.getByRole('button', { name: /Next: Data sources/ }).click();
+
+      // Its data source, created: Sales has its name, so it can't take it there
+      // until renamed (AC-282, state P); then its secret, and a passing test (T514, AC-358).
+      const source = pane.getByRole('group', { name: new RegExp(`^${names.emea}`) });
+      await source.getByRole('radio', { name: 'Create it' }).check();
+      await expect(source.getByText('Name taken')).toBeVisible();
+      await expect(source.getByRole('alert')).toContainText(
+        `Sales ${RUN} already has a data source named ${names.emea}. A new one can’t take that name there.`,
+      );
+      await expect(pane.getByRole('button', { name: /Next: Review/ })).toBeDisabled();
+      await source.getByRole('button', { name: 'Create under another name' }).click();
+      await expect(source.getByLabel(/^Name/)).toBeFocused();
+      await source.getByLabel(/^Name/).fill(`${names.emea}_2`);
+      await expect(source.getByText(`Sales ${RUN} has none by this name.`)).toBeVisible();
+      // The file's settings, as they are: shown, and not to be changed here (P4 not adopted).
+      await expect(source.getByText('sample-db:5432 / sample')).toBeVisible();
+      await expect(source.getByRole('textbox', { name: /^Host/ })).toHaveCount(0);
+      await source.getByLabel(/^Password/).fill('sample');
+      await source.getByRole('button', { name: 'Test connection' }).click();
+      await expect(source.getByRole('status')).toContainText('Every check passed', {
+        timeout: 60_000,
+      });
       await pane.getByRole('button', { name: /Next: Review/ }).click();
 
       // What the drafts may affect once proposed; none of it blocks.
@@ -475,24 +512,22 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
         `Sales ${RUN} has a library chart by this name, version 2. Proposed, this draft replaces it once approved.`,
       );
       await expect(pane.getByTestId(`lands-data-source-${names.emea}`)).toContainText(
-        `Sales ${RUN} already has a data source named ${names.emea}.`,
+        `${names.emea}_2Data source, created · test passed`,
       );
       await expect(pane.getByTestId(`lands-model-${modelPath(names.sales)}`)).toContainText(
         'Not imported yet',
       );
       await expect(pane.getByTestId('import-summary')).toHaveText(
-        `${TITLE} → Sales ${RUN} · 3 new drafts · 3 warnings`,
+        `${TITLE} → Sales ${RUN} · 4 new drafts · 2 warnings`,
       );
       await pane.getByRole('button', { name: 'Import to My workspace' }).click();
       await expect(pane).toHaveCount(0);
       const toast = page.getByRole('status').filter({ hasText: 'Imported to My workspace' });
       await expect(toast).toContainText(
-        `Imported to My workspace as new drafts: 1 dashboard and 4 charts. Nothing in Sales ${RUN} changed.`,
+        `Imported to My workspace as new drafts: 1 dashboard, 4 charts and 1 data source. Nothing in Sales ${RUN} changed.`,
       );
 
       // New drafts in My workspace, each going to Sales; Sales as it was.
-      const contents = page.getByTestId('explore-contents');
-      await expect(contents.locator('tbody tr')).toHaveCount(rowsBefore + 3);
       const listed = (await (await page.request.get('/api/folders/mine/contents')).json()) as {
         kind: string;
         id: string;
@@ -500,17 +535,32 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
         targetFolderId: string | null;
         origin: unknown;
       }[];
-      const landed = listed.filter((item) =>
-        [TITLE, 'Top products', 'Margin trend'].includes(item.title),
-      );
+      const landed = listed.filter((item) => !idsBefore.includes(item.id));
       drafts.push(...landed.map((item) => ({ kind: item.kind, id: item.id })));
+      const contents = page.getByTestId('explore-contents');
+      await expect(contents.locator(ITEM_ROWS)).toHaveCount(rowsBefore + 4);
       expect(landed.map((item) => [item.kind, item.title, item.targetFolderId, item.origin]).sort()).toEqual(
         [
           ['chart', 'Margin trend', ids.sales, null],
           ['chart', 'Top products', ids.sales, null],
           ['dashboard', TITLE, ids.sales, null],
+          ['data-source', `${names.emea}_2`, ids.sales, null],
         ].sort(),
       );
+      // Made from the file's settings and description, its secret sealed, never shown.
+      const made = landed.find((item) => item.kind === 'data-source')!;
+      const view = (await (await page.request.get(`/api/data-sources/${made.id}`)).json()) as {
+        fields: unknown;
+        description: string | null;
+        secrets: unknown;
+        inWorkspace: boolean;
+      };
+      expect(view).toMatchObject({
+        fields: FIELDS,
+        description: `Sample rows for ${names.emea}.`,
+        secrets: { password: { stored: true } },
+        inWorkspace: true,
+      });
       const board = landed.find((item) => item.kind === 'dashboard')!;
       await expect(contents.getByTestId(`item-${board.id}`)).toContainText(`Sales ${RUN} · new`);
       await expect(contents.getByTestId(`item-${board.id}`)).toBeFocused();
@@ -524,6 +574,73 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
       );
       await dialog.getByRole('button', { name: 'Cancel' }).click();
       await expect(dialog).toHaveCount(0);
+    });
+
+    test('maps a data source to one a model in the target binds to, warning of another driver without blocking (T514, AC-358, AC-361)', async ({
+      page,
+    }) => {
+      await myWorkspace(page);
+      const idsBefore = await workspaceIds(page);
+      await page.getByRole('button', { name: 'New', exact: true }).click();
+      await page.getByRole('menuitem', { name: /Import a dashboard…/ }).click();
+      const pane = page.getByRole('dialog', { name: 'Import a dashboard' });
+      // The same file, its data source a MySQL one of another name.
+      const file = JSON.parse(exported.text) as { items: Record<string, unknown>[] };
+      const lake = `${RUN}_lake`;
+      await pane.locator('input[type="file"]').setInputFiles({
+        name: FILE,
+        mimeType: 'application/json',
+        buffer: Buffer.from(
+          JSON.stringify({
+            ...file,
+            items: file.items.map((item) =>
+              item['kind'] === 'data-source' ? { ...item, name: lake, driver: 'mysql' } : item,
+            ),
+          }),
+        ),
+      });
+      await pane.getByRole('button', { name: /Next: Target/ }).click();
+      await pane.getByRole('treeitem', { name: `Sales ${RUN}` }).click();
+      await pane.getByRole('button', { name: /Next: Data sources/ }).click();
+      const source = pane.getByRole('group', { name: new RegExp(`^${lake}`) });
+      await source.getByRole('radio', { name: 'Map to an existing one' }).check();
+      const choices = source.getByRole('radiogroup', {
+        name: `Data sources a model in Sales ${RUN} can bind to`,
+      });
+      // Sales's own; never the hidden folder's.
+      await expect(choices).not.toContainText(names.hid);
+      await choices.getByRole('radio', { name: `${names.emea}, PostgreSQL, in Sales ${RUN}` }).check();
+      await expect(source.getByTestId('driver-mismatch')).toHaveText(
+        `${lake} is MySQL in the file, and ${names.emea} is PostgreSQL: a model written for MySQL’s SQL may not run on PostgreSQL.`,
+      );
+      await expect(source.getByText('Mapped', { exact: true })).toBeVisible();
+      // A warning only: on it goes.
+      await pane.getByRole('button', { name: /Next: Review/ }).click();
+      await expect(pane.getByTestId(`lands-data-source-${lake}`)).toContainText(
+        `Mapped to ${names.emea} in Sales ${RUN}`,
+      );
+      await expect(pane.getByTestId(`lands-data-source-${lake}`)).toContainText('Not imported');
+      await pane.getByRole('button', { name: 'Import to My workspace' }).click();
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Imported to My workspace' }),
+      ).toContainText(
+        `Imported to My workspace as new drafts: 1 dashboard and 4 charts. Nothing in Sales ${RUN} changed.`,
+      );
+      const listed = (await (await page.request.get('/api/folders/mine/contents')).json()) as {
+        kind: string;
+        id: string;
+        title: string;
+      }[];
+      const landed = listed.filter((item) => !idsBefore.includes(item.id));
+      drafts.push(...landed.map((item) => ({ kind: item.kind, id: item.id })));
+      // Nothing made for it: mapped, it isn't imported.
+      expect(landed.map((item) => [item.kind, item.title]).sort()).toEqual(
+        [
+          ['chart', 'Margin trend'],
+          ['chart', 'Top products'],
+          ['dashboard', TITLE],
+        ].sort(),
+      );
     });
 
     test('refuses a file it can’t take, naming each part and why, and imports nothing (AC-359)', async ({

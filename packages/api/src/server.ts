@@ -1119,6 +1119,38 @@ export function buildServer({
       },
       owner: (request) => userOf(request).key,
       create: (creates) => createTogether(creates),
+      mappable: async (request, id, own, target) => {
+        const source = await dataSources?.get(id);
+        if (source === undefined) return undefined;
+        const seen = await visibilityOf(request);
+        if (seen !== undefined && seen.rights.get(source.folderId)?.kinds !== 'all')
+          return undefined;
+        const home = await workspaceRootOf(source.folderId);
+        const about = { id: source.id, name: source.name, driver: source.driver };
+        // One made in their workspace for this import: going to its target.
+        if (home !== null)
+          return home === own && source.targetFolderId === target
+            ? { ...about, path: ['My workspace'], created: true }
+            : undefined;
+        // Else one a model in the target binds to: its own, or above it (AC-273).
+        const parents = new Map(
+          (
+            (cat ? await cat.folders({ counted: false }) : []) as {
+              id: string;
+              parentId: string | null;
+            }[]
+          ).map((folder) => [folder.id, folder.parentId]),
+        );
+        const above: string[] = [];
+        for (
+          let at: string | null | undefined = target;
+          at != null && !above.includes(at);
+          at = at === ROOT_FOLDER_ID ? null : (parents.get(at) ?? ROOT_FOLDER_ID)
+        )
+          above.push(at);
+        if (!above.includes(source.folderId)) return undefined;
+        return { ...about, path: (await pathsOf(request))(source.folderId) ?? [], created: false };
+      },
     });
   }
 

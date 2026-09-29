@@ -9295,12 +9295,51 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
   - **Tests:** `routes/import.test.ts` (9), `ImportPane.test.tsx` (9), and `e2e/security/export-import.spec.ts`: New › Import a dashboard… takes the exported file, Review warns of the target's dashboard and chart and the data source's name, Import lands three drafts going to Sales with Sales unchanged, the toast's Propose opens design 05's dialog ("replaces version 2"); a refused file names each part and imports nothing (Chrome, 8 of 8). Full suites: api 952, web 1884.
   - **AC-357 and AC-359 ticked** on `e2e/security/export-import.spec.ts` (Review's warnings, never blocking; the refusals naming each part, nothing imported) and `routes/import.test.ts` (the workspace warning and a folder the user can't see; `422` writing nothing). AC-357's model clause holds vacuously while models don't import (state V).
   - **AC-356 stays open:** its sign-in-on half is shown (drafts only in the importer's workspace, nothing saved changed, no import without a workspace). Its sign-in-off half waits on T359: an import lands in `mine` (the API test), but proposals with sign-in off, and a data source created in `mine` (T514), are T359's (the coordinator's answer, 2026-09-28).
-- [ ] T514 (AC-358, AC-361) Import's data sources: map to an existing one, or create it in the workspace with its secrets and a passing test, under another name where the target has it
+- [x] T514 (AC-358, AC-361) Import's data sources: map to an existing one, or create it in the workspace with its secrets and a passing test, under another name where the target has it
   - Files: `packages/web/src/workspaces/explore/import/ImportSources.tsx` (+ test), `packages/api/src/routes/import.ts`
   - Failing test:
     - `ImportSources.test.tsx`: map or create per data source. Create asks for the secrets and saves only after a passing test (AC-163). A name the target has is refused until it is mapped or renamed (AC-282, design 13 state P). Mapping to a different driver warns with both drivers named, without blocking (AC-361).
     - The imported models bind to the one chosen (AC-358), once models import (T347).
   - Depends on: T513
+  - *As built (2026-09-28; design 13, screen 2's Data sources step and states M–P, X):*
+    - **Files, as touched:** `ImportSources.tsx` (+ test), `ImportPane.tsx` (+ test), `packages/api/src/routes/import.ts` (+ test), `server.ts`, `workspaces/data-sources/connectionTest.tsx`, `shell/styles.ts`, `e2e/security/export-import.spec.ts`.
+    - **The step** (`ImportSources.tsx`), one group per data source in the file, named by it; the pane passes over it for a file with none.
+      - *Map to an existing one:* a radio list of the data sources a model in the target can bind to, the target's own and those above it (AC-273), each named with its driver and folder, "Same name" first.
+      - *Different driver:* mapping to one warns, as a note naming both drivers, and Next stays enabled (AC-361, P5).
+      - *Create it:* the file's settings, read-only (P4 not adopted), and the sign-in method's secrets, each "required · not in the file". Test connection seals each typed secret in the browser (AC-325) and runs the four checks in place, as the new data source wizard does. A failed test offers Change sign-in, and "Map to an existing one instead".
+      - *Name taken:* a name the target already has is refused (AC-282, state P), with "Use the existing one instead" (Map, the one by that name checked and focused) and "Create under another name" (focus to Name). Next waits until every data source is decided.
+    - **Review:** a mapped data source says "Mapped to *name* in *path* · Not imported". A created one says its new name, "created · test passed" with the test's time, and New draft.
+    - **Import:** each created data source is made first, through `POST /api/data-sources`:
+      - in `mine`, going to the target;
+      - from its passing test's `testId`, with the failed tests before it as `trials` (AC-163);
+      - its description saved after.
+      Then `POST /api/import` takes `dataSources: [{ name, to }]`. A retry after a failed Import reuses what it made; it is keyed by the passing test.
+    - **The API:** Review takes each decision (`map` or `create`). Import refuses:
+      - a data source left undecided (`400`, naming them);
+      - one mapped to a data source the importer may not use, or that no model in the target can bind to (`404`, naming nothing).
+      A workspace data source counts only if it is the importer's own and going to the same target. The toast's count includes those created.
+    - **With sign-in off** (the coordinator's answer, 2026-09-28): Create fails with the API's message, because `mine` isn't a data source workspace until T359. Map works.
+  - **Review (one round, FAIL), fixed:**
+    1. The reuse after a failed Import was keyed by the file's name. A rename or another file could send the old data source. It is now keyed by the passing test.
+    2. The discard dialog said nothing had been imported after an Import had made a data source. It now names what was made and stays in My workspace.
+    3. A test finishing after the secret was edited could count. The secrets, the name and the mode are now disabled while a test runs.
+    4. After "Use the existing one instead", focus now goes to the checked data source.
+    5. "Change where it connects" was offered where the settings can't change. `ConnectionChecks` now takes the fixes to offer: here, Change sign-in and Map instead.
+    6. A failed description save was ignored. It now fails the Import, and a retry saves it.
+    7. Tests added:
+       - the chain check: a data source beside or below the target, or a workspace one going elsewhere, is refused, and one above it is taken;
+       - the pane passes failed tests as `trials`, and doesn't create twice on a retry.
+    - *Left as they are:*
+      - Data sources are made before the Import request, so a failed Import leaves them in My workspace as drafts. The discard dialog says so.
+      - The toast counts the data sources created from the API's answer. Mapping to one already in the workspace (made by an earlier Import) counts it again.
+      - A name My workspace already has is refused only at Import, after the test.
+    - *Also in this commit:* the e2e counts only item rows, since an empty workspace's "This folder is empty." row isn't one. It takes what the import made by the ids the workspace lacked before, so an earlier run's leftovers can't match.
+  - **Tests:** `ImportSources.test.tsx` (4), `ImportPane.test.tsx` (10), `routes/import.test.ts` (13). `e2e/security/export-import.spec.ts` (Chrome, 9 of 9):
+    - the import renames the data source past "Name taken", enters its secret, passes its test, and lands it as a draft going to Sales, its settings and description from the file and its secret stored;
+    - a MySQL data source mapped to Sales's PostgreSQL one warns and imports, making no data source.
+    Full suites: api 956, web 1889.
+  - **AC-361 ticked** on `e2e/security/export-import.spec.ts` (the mapping test) and `ImportSources.test.tsx`.
+  - **AC-358 stays open.** With sign-in on, its map and create are shown. Two parts wait: its models binding to the one chosen waits on T347 (models don't import, state V), and its sign-in-off part waits on T359. AC-356's sign-in-off part waits on T359 too. T508 stays open with them.
 - [ ] T515 (AC-289, AC-158) Restore a data source's version through a proposal, its connection tested first *(added 2026-09-28, from T354's review; design 06, state D)*
   - **Why.** Design 06 draws restoring an old version's connection as a connection change, whose proposal carries a test (AC-158). T354 restores dashboards and charts, and refuses a data source with `400`.
   - Files: `packages/api/src/server.ts` (`…/restore` for `data-source`), `packages/api/src/routes/history.test.ts`, the History panel (T357)

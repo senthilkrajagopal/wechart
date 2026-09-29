@@ -91,11 +91,14 @@ export function ConnectionChecks({
   checks,
   running,
   onFix,
+  fixes = ['sign-in', 'where'],
 }: {
   checks: readonly Check[] | undefined;
   running: boolean;
   /** Where each fix goes: the sign-in fields or where it connects. */
   onFix: (group: 'sign-in' | 'where') => void;
+  /** The fixes offered: settings taken from an export file are as they are, so its sign-in only (T514). */
+  fixes?: readonly ('sign-in' | 'where')[];
 }) {
   return (
     <ul className="connection-checks" aria-label="Checks">
@@ -132,24 +135,28 @@ export function ConnectionChecks({
                 <p>{GUIDANCE[each.id]}</p>
                 {check?.error === undefined ? null : <pre>{check.error}</pre>}
                 <div className="connection-checks__fixes">
-                  <button
-                    type="button"
-                    className="link-button"
-                    onClick={() => {
-                      onFix('sign-in');
-                    }}
-                  >
-                    Change sign-in
-                  </button>
-                  <button
-                    type="button"
-                    className="link-button"
-                    onClick={() => {
-                      onFix('where');
-                    }}
-                  >
-                    Change where it connects
-                  </button>
+                  {fixes.includes('sign-in') ? (
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => {
+                        onFix('sign-in');
+                      }}
+                    >
+                      Change sign-in
+                    </button>
+                  ) : null}
+                  {fixes.includes('where') ? (
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => {
+                        onFix('where');
+                      }}
+                    >
+                      Change where it connects
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ) : null}

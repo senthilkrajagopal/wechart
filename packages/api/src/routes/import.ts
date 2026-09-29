@@ -116,8 +116,24 @@ export interface ReviewItem {
   readonly ownCharts?: number;
   /** A data source's driver. */
   readonly driver?: string;
+  /** A data source mapped to an existing one (T514): its name and folder. */
+  readonly mappedTo?: { readonly name: string; readonly path: readonly string[] };
   readonly lands: 'draft' | 'not-imported-yet' | 'not-imported';
   readonly warnings: readonly Warning[];
+}
+
+/**
+ * A data source an imported one may be given (T514, AC-358): one a model in
+ * the target can bind to — in the target or a folder above it (AC-273) — or
+ * one the importer has just created in their workspace, going to the target.
+ */
+export interface Mappable {
+  readonly id: string;
+  readonly name: string;
+  readonly driver: string;
+  readonly path: readonly string[];
+  /** Made in the importer's workspace: a new draft. */
+  readonly created: boolean;
 }
 
 /** One stored document to make. */
@@ -158,7 +174,45 @@ export interface ImportAccess {
   readonly owner: (request: FastifyRequest) => string;
   /** Made together, or none (the documents' `createTogether`). */
   readonly create: (creates: readonly Create[]) => Promise<unknown>;
+  /**
+   * A data source an imported one may be mapped to (`Mappable`), or none
+   * where there is no such one the importer may use, which says nothing of
+   * one they can't see.
+   */
+  readonly mappable: (
+    request: FastifyRequest,
+    id: string,
+    own: string,
+    target: string,
+  ) => Promise<Mappable | undefined>;
 }
+
+/** Each imported data source's name, and what was decided for it. */
+type Decided = ReadonlyMap<string, { readonly map?: string; readonly create?: string; readonly to?: string }>;
+
+/** The decisions a body sends, one per name: `{ name, map | create | to }` (T514). */
+function decisionsIn(value: unknown): Decided | undefined {
+  if (value === undefined) return new Map();
+  if (!Array.isArray(value)) return undefined;
+  const decided = new Map<string, { map?: string; create?: string; to?: string }>();
+  for (const each of value as unknown[]) {
+    if (each === null || typeof each !== 'object') return undefined;
+    const { name, map, create, to } = each as Record<string, unknown>;
+    if (typeof name !== 'string') return undefined;
+    const one = {
+      ...(typeof map === 'string' ? { map } : {}),
+      ...(typeof create === 'string' ? { create } : {}),
+      ...(typeof to === 'string' ? { to } : {}),
+    };
+    if (Object.keys(one).length !== 1) return undefined;
+    decided.set(name, one);
+  }
+  return decided;
+}
+
+const NO_SUCH_SOURCE = {
+  error: 'There’s no such data source for a model in the target to bind to, or it isn’t yours to use.',
+};
 
 /** A refusal of the file, in the pane's words (design 13, states J and K). */
 const REFUSED = 'Refused: nothing was imported.';
@@ -240,6 +294,19 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
         ? [{ kind: item.kind, title: item.title }]
         : [],
     );
+    const decided = decisionsIn((request.body as { dataSources?: unknown }).dataSources);
+    if (decided === undefined)
+      return reply.code(400).send({
+        error: 'Send each data source’s decision as { name, map } or { name, create }.',
+      });
+    // Each mapped one, where the importer may use it: else as none there is (T514).
+    const mapped = new Map<string, Mappable>();
+    for (const [name, decision] of decided)
+      if (decision.map !== undefined) {
+        const found = await access.mappable(request, decision.map, own, target.id);
+        if (found === undefined) return reply.code(404).send(NO_SUCH_SOURCE);
+        mapped.set(name, found);
+      }
     const holdings = await access.holdings(request, own, target.id, titles);
     const items = file.items.flatMap((item): ReviewItem[] => {
       if (item.kind === 'dashboard')
@@ -283,14 +350,30 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
               : [],
           },
         ];
+      // A data source as decided (T514): mapped, not imported; created, a
+      // new draft under the name it takes; undecided, not imported.
+      const to = mapped.get(item.name);
+      if (to !== undefined)
+        return [
+          {
+            kind: item.kind,
+            key: item.name,
+            title: item.name,
+            driver: item.driver,
+            lands: 'not-imported',
+            mappedTo: { name: to.name, path: to.path },
+            warnings: [],
+          },
+        ];
+      const as = decided.get(item.name)?.create;
       return [
         {
           kind: item.kind,
           key: item.name,
-          title: item.name,
+          title: as ?? item.name,
           driver: item.driver,
-          lands: 'not-imported',
-          warnings: warningsOf({ kind: item.kind, name: item.name, ...holdings }),
+          lands: as === undefined ? 'not-imported' : 'draft',
+          warnings: warningsOf({ kind: item.kind, name: as ?? item.name, ...holdings }),
         },
       ];
     });
@@ -304,6 +387,31 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
     const owner = access.owner(request);
     const dashboard = file.items.find((item) => item.kind === 'dashboard')!;
     const charts = file.items.filter((item): item is ExportedChart => item.kind === 'chart');
+
+    /**
+     * Each data source in the file given the one chosen for it (T514,
+     * AC-358): an existing one a model in the target can bind to, or one the
+     * importer created in their workspace from its settings, tested before it
+     * was saved (`POST /api/data-sources`). The models that bind to it come
+     * with T347.
+     */
+    const decided = decisionsIn((request.body as { dataSources?: unknown }).dataSources);
+    if (decided === undefined)
+      return reply.code(400).send({ error: 'Send each data source’s decision as { name, to }.' });
+    const undecided = file.items.flatMap((item) =>
+      item.kind === 'data-source' && decided.get(item.name)?.to === undefined ? [item.name] : [],
+    );
+    if (undecided.length > 0)
+      return reply.code(400).send({
+        error: `Map each data source to one a model in ${target.path.length === 0 ? 'Shared' : target.path.join(' / ')} can bind to, or create it: ${undecided.join(', ')}.`,
+      });
+    let createdSources = 0;
+    for (const item of file.items)
+      if (item.kind === 'data-source') {
+        const found = await access.mappable(request, decided.get(item.name)!.to!, own, target.id);
+        if (found === undefined) return reply.code(404).send(NO_SUCH_SOURCE);
+        if (found.created) createdSources += 1;
+      }
 
     // New ids for everything: nothing saved is written over (AC-356).
     const boardId = randomUUID();
@@ -367,7 +475,7 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
     await access.create(creates);
     return reply.code(201).send({
       dashboard: { id: boardId, title: dashboard.title },
-      created: { dashboards: 1, charts: charts.length, models: 0, dataSources: 0 },
+      created: { dashboards: 1, charts: charts.length, models: 0, dataSources: createdSources },
       target,
     });
   });

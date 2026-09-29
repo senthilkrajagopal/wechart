@@ -1,10 +1,18 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { DRIVERS, readExportFile, type ExportFile, type ReadExport } from '@wechart/core';
+import {
+  DRIVERS,
+  readExportFile,
+  type ExportedDataSource,
+  type ExportFile,
+  type ReadExport,
+} from '@wechart/core';
 import { useEffect, useId, useRef, useState, type DragEvent } from 'react';
 
 import { StatusIcon } from '../../../shell/StatusIcon';
 import { useFocusTrap } from '../../../shell/useFocusTrap';
 import { TargetTree } from '../../data-sources/TargetTree';
+import type { Seal } from '../../data-sources/connectionTest';
+import { ImportSources, type SourceDecision } from './ImportSources';
 import type { Target } from '../NewItemDialog';
 
 /**
@@ -51,6 +59,7 @@ interface Reviewed {
     readonly title: string;
     readonly ownCharts?: number;
     readonly driver?: string;
+    readonly mappedTo?: { readonly name: string; readonly path: readonly string[] };
     readonly lands: 'draft' | 'not-imported-yet' | 'not-imported';
     readonly warnings: readonly Warning[];
   }[];
@@ -136,11 +145,14 @@ export function ImportPane({
   signedIn,
   onImported,
   onClose,
+  seal,
 }: {
   /** With sign-in off, the single user's workspace: said so (state U). */
   readonly signedIn: boolean;
   readonly onImported: (imported: Imported) => void;
   readonly onClose: () => void;
+  /** How a typed secret is sealed (T514); to xcube's key unless a test says. */
+  readonly seal?: Seal;
 }) {
   const ids = useId();
   const heading = useRef<HTMLHeadingElement>(null);
@@ -150,6 +162,22 @@ export function ImportPane({
   const [target, setTarget] = useState('');
   const [asking, setAsking] = useState(false);
   const file: ExportFile | undefined = chosen?.read.ok === true ? chosen.read.file : undefined;
+  /** The file's data sources, each mapped or created in the Data sources step (T514). */
+  const sources = (file?.items ?? []).filter(
+    (item): item is ExportedDataSource => item.kind === 'data-source',
+  );
+  const [decisions, setDecisions] = useState<Readonly<Record<string, SourceDecision | undefined>>>(
+    {},
+  );
+  const undecided = sources.filter((source) => decisions[source.name] === undefined);
+  /**
+   * Those made at Import, by the test each was made from — a test is claimed
+   * by one create alone — so a second try makes none twice, and a new choice
+   * is never given an old one.
+   */
+  const made = useRef(new Map<string, { id: string; name: string; described: boolean }>());
+  /** Their names, which discarding leaves in My workspace (T514's review). */
+  const [leftBehind, setLeftBehind] = useState<readonly string[]>([]);
 
   useEffect(() => {
     heading.current?.focus();
@@ -170,12 +198,27 @@ export function ImportPane({
   const targetId = target === '' ? only : target;
 
   const review = useQuery({
-    queryKey: ['import-review', chosen?.pick, targetId],
+    queryKey: ['import-review', chosen?.pick, targetId, JSON.stringify(decisions)],
     queryFn: async ({ signal }) => {
       const response = await fetch('/api/import/review', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ file, targetFolderId: targetId }),
+        body: JSON.stringify({
+          file,
+          targetFolderId: targetId,
+          ...(sources.length === 0
+            ? {}
+            : {
+                dataSources: sources.flatMap((source): { name: string; map?: string; create?: string }[] => {
+                  const decision = decisions[source.name];
+                  return decision === undefined
+                    ? []
+                    : decision.kind === 'map'
+                      ? [{ name: source.name, map: decision.to.id }]
+                      : [{ name: source.name, create: decision.name }];
+                }),
+              }),
+        }),
         signal,
       });
       if (!response.ok)
@@ -191,10 +234,72 @@ export function ImportPane({
 
   const importing = useMutation({
     mutationFn: async () => {
+      /**
+       * Each data source to create is made first, in My workspace, going to
+       * the target, from the test that passed (AC-358, AC-163): the data
+       * sources' own route, so a name the target holds, an untested setting
+       * and its record are refused and kept as for any other. Then the rest,
+       * each data source given the one chosen for it.
+       */
+      const to = new Map<string, string>();
+      for (const source of sources) {
+        const decision = decisions[source.name];
+        if (decision === undefined) throw new Error(`Decide ${source.name} first.`);
+        if (decision.kind === 'map') {
+          to.set(source.name, decision.to.id);
+          continue;
+        }
+        // Made already by an earlier try, from this very test: that one (T514's review).
+        let already = made.current.get(decision.testId);
+        if (already === undefined) {
+          const created = await fetch('/api/data-sources', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              folderId: 'mine',
+              name: decision.name,
+              driver: decision.driver,
+              authMethod: decision.authMethod,
+              fields: decision.fields,
+              sealed: decision.sealed,
+              targetFolderId: targetId,
+              testId: decision.testId,
+              ...(decision.trials.length === 0 ? {} : { trials: decision.trials }),
+            }),
+          });
+          if (!created.ok)
+            throw new Error(
+              `${decision.name} couldn’t be created: ${await saidBy(created, `error ${String(created.status)}`)}`,
+            );
+          already = { id: ((await created.json()) as { id: string }).id, name: decision.name, described: false };
+          made.current.set(decision.testId, already);
+          setLeftBehind([...made.current.values()].map((each) => each.name));
+        }
+        to.set(source.name, already.id);
+        // What it is for, as the file has it: no part of the connection, so no test.
+        if (!already.described && decision.description !== null && decision.description !== '') {
+          const described = await fetch(`/api/data-sources/${encodeURIComponent(already.id)}`, {
+            method: 'PUT',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ description: decision.description }),
+          });
+          if (!described.ok)
+            throw new Error(
+              `${decision.name} was made, but its description couldn’t be saved: ${await saidBy(described, `error ${String(described.status)}`)}`,
+            );
+        }
+        already.described = true;
+      }
       const response = await fetch(IMPORTS, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ file, targetFolderId: targetId }),
+        body: JSON.stringify({
+          file,
+          targetFolderId: targetId,
+          ...(sources.length === 0
+            ? {}
+            : { dataSources: sources.map((source) => ({ name: source.name, to: to.get(source.name) })) }),
+        }),
       });
       if (!response.ok)
         throw new Error(
@@ -271,9 +376,9 @@ export function ImportPane({
       ? pathText(targets.data?.find((each) => each.id === targetId)?.path ?? [])
       : pathText(review.data.target.path);
 
-  /** A step's number to go to: Data sources, with nothing to ask yet, is passed over (T514 asks it). */
+  /** A step's number to go to: Data sources, with none in the file, is passed over (pin 15). */
   const goTo = (next: number) => {
-    setStep(next === 2 ? (step < 2 ? 3 : 1) : next);
+    setStep(next === 2 && sources.length === 0 ? (step < 2 ? 3 : 1) : next);
   };
 
   return (
@@ -309,7 +414,7 @@ export function ImportPane({
               key={label}
               className={at < step ? 'is-done' : at === step ? 'is-current' : undefined}
             >
-              {at < step && at !== 2 ? (
+              {at < step && (at !== 2 || sources.length > 0) ? (
                 <button
                   type="button"
                   aria-label={`${label}, done`}
@@ -570,6 +675,23 @@ export function ImportPane({
           )
         ) : null}
 
+        {/* Kept while other steps show, so what was typed and tested stays;
+            anew for another file or target, which what may be chosen follows. */}
+        {file === undefined || targetId === '' || sources.length === 0 ? null : (
+          <div hidden={step !== 2}>
+            <ImportSources
+              key={`${String(chosen?.pick)}:${targetId}`}
+              sources={sources}
+              target={{
+                id: targetId,
+                path: targets.data?.find((each) => each.id === targetId)?.path ?? [],
+              }}
+              onDecisions={setDecisions}
+              {...(seal === undefined ? {} : { seal })}
+            />
+          </div>
+        )}
+
         {step === 3 ? (
           review.isPending ? (
             <p className="import-pane__note">Checking what it may affect…</p>
@@ -628,7 +750,16 @@ export function ImportPane({
                               ? 'Library chart'
                               : item.kind === 'model'
                                 ? 'Model'
-                                : `Data source · ${driverLabel(item.driver ?? '')}`}
+                                : item.mappedTo !== undefined
+                                  ? `Mapped to ${item.mappedTo.name} in ${pathText(item.mappedTo.path)}`
+                                  : item.lands === 'draft'
+                                    ? `Data source, created · test passed ${
+                                        (() => {
+                                          const decision = decisions[item.key];
+                                          return decision?.kind === 'create' ? decision.at : '';
+                                        })()
+                                      }`
+                                    : `Data source · ${driverLabel(item.driver ?? '')}`}
                         </span>
                       </span>
                       <span className="import-pane__lands-as">
@@ -677,6 +808,11 @@ export function ImportPane({
         {step === 0 && chosen === null ? (
           <span className="source-pane__foot-note">Choose a file to go on</span>
         ) : null}
+        {step === 2 && undecided.length > 0 ? (
+          <span id={`${ids}-undecided`} className="source-pane__foot-note">
+            {`Decide ${listed(undecided.map((source) => source.name))} to go on`}
+          </span>
+        ) : null}
         {step === 3 && review.data !== undefined ? (
           <span className="source-pane__foot-note">
             {warnings === 0 ? 'No warnings' : NONE_BLOCKS}
@@ -722,6 +858,19 @@ export function ImportPane({
               goTo(2);
             }}
           >
+            {sources.length === 0 ? 'Next: Review' : 'Next: Data sources'}{' '}
+            <span aria-hidden="true">›</span>
+          </button>
+        ) : step === 2 ? (
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={undecided.length > 0}
+            aria-describedby={undecided.length > 0 ? `${ids}-undecided` : undefined}
+            onClick={() => {
+              goTo(3);
+            }}
+          >
             Next: Review <span aria-hidden="true">›</span>
           </button>
         ) : (
@@ -740,6 +889,8 @@ export function ImportPane({
 
       {asking ? (
         <AskToDiscard
+          secrets={sources.length > 0}
+          left={leftBehind}
           onKeep={() => {
             setAsking(false);
           }}
@@ -751,7 +902,19 @@ export function ImportPane({
 }
 
 /** Discard this import? (state X, rule 85): focus on the answer that loses nothing. */
-function AskToDiscard({ onKeep, onDiscard }: { onKeep: () => void; onDiscard: () => void }) {
+function AskToDiscard({
+  secrets,
+  left,
+  onKeep,
+  onDiscard,
+}: {
+  /** Whether secrets may have been typed, which are lost too. */
+  secrets: boolean;
+  /** Data sources an Import that then failed already made: they stay, as drafts. */
+  left: readonly string[];
+  onKeep: () => void;
+  onDiscard: () => void;
+}) {
   const ids = useId();
   const box = useRef<HTMLDivElement>(null);
   const keep = useRef<HTMLButtonElement>(null);
@@ -770,7 +933,13 @@ function AskToDiscard({ onKeep, onDiscard }: { onKeep: () => void; onDiscard: ()
         className="source-pane__ask"
       >
         <h3 id={`${ids}-discard`}>Discard this import?</h3>
-        <p id={`${ids}-discard-body`}>Your choices are lost. Nothing has been imported.</p>
+        <p id={`${ids}-discard-body`}>
+          {`${secrets ? 'Your choices and any secret you typed are lost.' : 'Your choices are lost.'} ${
+            left.length === 0
+              ? 'Nothing has been imported.'
+              : `${listed(left)} ${left.length === 1 ? 'was' : 'were'} made already and ${left.length === 1 ? 'stays' : 'stay'} in My workspace as ${left.length === 1 ? 'a draft' : 'drafts'}; nothing else has been imported.`
+          }`}
+        </p>
         <div className="source-pane__ask-actions">
           <button ref={keep} type="button" className="btn" onClick={onKeep}>
             Keep going

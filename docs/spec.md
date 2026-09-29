@@ -1237,7 +1237,7 @@ Traces to: `[R43]`; design `docs/design/reviews/2026-09-28/designs/13-dashboard-
       Fails when: an imported data source is saved without its secrets entered or without a passing test, or anywhere but the importer's workspace with sign-in on; or an imported model binds to a data source other than the one chosen for it.
 - [x] AC-360 WHEN the exporter hovers over or focuses a dependency in the Export pane, THE SYSTEM SHALL outline the dashboard's tiles that use it (`[R46]`, design 13's P1).
       Fails when: hovering over or focusing a dependency outlines no tile that uses it, or outlines one that doesn't.
-- [ ] AC-361 WHEN an importer maps an imported data source to an existing one with a different driver, THE SYSTEM SHALL warn, without blocking, naming both drivers (`[R46]`, design 13's P5).
+- [x] AC-361 WHEN an importer maps an imported data source to an existing one with a different driver, THE SYSTEM SHALL warn, without blocking, naming both drivers (`[R46]`, design 13's P5).
       Fails when: such a mapping shows no warning naming both drivers, or the warning blocks the import.
 - [x] AC-359 IF an export file can't be read, or holds a kind, chart type or driver this wechart doesn't have, THEN THE SYSTEM SHALL refuse to import it, saying which part and why, and change nothing (`[R43]`).
       Fails when: an unreadable or unsupported file changes anything, or its refusal doesn't name the part.
