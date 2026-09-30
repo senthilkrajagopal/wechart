@@ -10,6 +10,9 @@ import { TableScroll } from '../../shell/TableScroll';
 import { onTabKey } from '../../shell/tabKeys';
 import { useFocusTrap } from '../../shell/useFocusTrap';
 import { MY_WORKSPACE, SHARED_ROOT } from '../explore/roots';
+import { approvedText, HistoryPanel, historyQuery } from '../history/HistoryPanel';
+import { RestoreDialogs, useRestore } from '../history/restore';
+import { SourceVersion } from './SourceVersion';
 import { WorkspaceBand } from '../explore/WorkspaceBand';
 import { ProposalBand } from '../explore/ProposalBand';
 import { ProposeFlow } from '../explore/ProposeFlow';
@@ -139,6 +142,23 @@ function Settings({ source }: { source: StoredSource }) {
   const [asking, setAsking] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   const me = useQuery(ME_QUERY);
+  /**
+   * Its versions, beside it (T515, AC-289; design 06, states A and D): for a
+   * shared one, where the API shows them, to its folder's read-write members
+   * and Super-Admins. A version is set against the settings now; restoring
+   * one drafts it in My workspace, which opens to be tested and proposed.
+   */
+  const signedIn = me.data?.security === 'oidc';
+  const history = useQuery({
+    ...historyQuery('data-source', source.id),
+    enabled: signedIn && !source.inWorkspace,
+  });
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyButton = useRef<HTMLButtonElement>(null);
+  const [viewing, setViewing] = useState<number | undefined>(undefined);
+  const restore = useRestore('data-source', source.id);
+  /** A draft restored from a version: what to do next (T515). */
+  const restoredFrom = new URLSearchParams(globalThis.location.search).get('restored');
   const list = useQuery(DATA_SOURCES_QUERY);
   const listed = list.data?.find((each) => each.id === source.id);
   /** A copy's original, whose cubes the copy stands in for (AC-280): its Usage. */
@@ -199,7 +219,7 @@ function Settings({ source }: { source: StoredSource }) {
     globalThis.location.assign(folderHref(MY_WORKSPACE.id));
   };
 
-  return (
+  const page = (
     <div className="source-settings">
       {/* In the user's workspace, the page says so across its width (T498;
           design 04, pin 2; design 03). */}
@@ -269,13 +289,49 @@ function Settings({ source }: { source: StoredSource }) {
             Discard my copy…
           </button>
         ) : null}
-        {copies ? (
+        {history.data == null ? null : (
+          <button
+            ref={historyButton}
+            type="button"
+            className="btn btn-sm dashboard__history"
+            data-history-button=""
+            aria-pressed={historyOpen}
+            onClick={() => {
+              setHistoryOpen((was) => !was);
+              setViewing(undefined);
+            }}
+          >
+            History
+          </button>
+        )}
+        {/* Not while an old version shows (design 06, state A). */}
+        {copies && viewing === undefined ? (
           <button type="button" className="btn btn-primary" onClick={() => void editInWorkspace()}>
             Edit in my workspace
           </button>
         ) : null}
       </div>
       {failed === null ? null : <StateLine kind="err">{failed}</StateLine>}
+      {restoredFrom !== null && source.inWorkspace ? (
+        <StateLine kind="idle" testId="restored-draft">
+          Restored from version {restoredFrom}. Test its connection, then propose it: a change to
+          where or how it connects is proposed only once a test of it passes.
+        </StateLine>
+      ) : null}
+      {viewing === undefined ? null : (
+        <SourceVersion
+          source={source}
+          version={viewing}
+          onClose={() => {
+            setViewing(undefined);
+          }}
+          onRestore={() => {
+            const kept = history.data?.versions.find((each) => each.version === viewing);
+            if (kept !== undefined) restore.start({ ...kept, approvedText: approvedText(kept) });
+          }}
+          lastTest={listed === undefined ? undefined : <HealthBadge source={listed} phrased />}
+        />
+      )}
 
       {/* Where it is, where it came from and is to go, its health and Cube's use (pin 4). */}
       <div className="source-settings__line">
@@ -416,6 +472,37 @@ function Settings({ source }: { source: StoredSource }) {
             discardButton.current?.focus();
           }}
           onDiscard={() => void discardCopy()}
+        />
+      ) : null}
+      <RestoreDialogs
+        kind="data-source"
+        restore={restore}
+        onProposed={() => undefined}
+        onDrafted={(draftId, version) => {
+          restore.close();
+          router.history.push(
+            `/explore/data-sources/${encodeURIComponent(draftId)}?restored=${String(version)}`,
+          );
+        }}
+      />
+    </div>
+  );
+  return (
+    <div className="with-panel" data-open={historyOpen ? 'true' : undefined}>
+      <div className="with-panel__main">{page}</div>
+      {historyOpen ? (
+        <HistoryPanel
+          kind="data-source"
+          id={source.id}
+          viewing={viewing}
+          onView={setViewing}
+          onRestore={restore.start}
+          onClose={() => {
+            setHistoryOpen(false);
+            setViewing(undefined);
+            // Back on what opened it (rule 85).
+            historyButton.current?.focus();
+          }}
         />
       ) : null}
     </div>

@@ -9476,11 +9476,36 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     Full suites: api 956, web 1889.
   - **AC-361 ticked** on `e2e/security/export-import.spec.ts` (the mapping test) and `ImportSources.test.tsx`.
   - **AC-358 stays open.** With sign-in on, its map and create are shown. Two parts wait: its models binding to the one chosen waits on T347 (models don't import, state V), and its sign-in-off part waits on T359. AC-356's sign-in-off part waits on T359 too. T508 stays open with them.
-- [ ] T515 (AC-289, AC-158) Restore a data source's version through a proposal, its connection tested first *(added 2026-09-28, from T354's review; design 06, state D)*
+- [x] T515 (AC-289, AC-158) Restore a data source's version through a proposal, its connection tested first *(added 2026-09-28, from T354's review; design 06, state D)*
   - **Why.** Design 06 draws restoring an old version's connection as a connection change, whose proposal carries a test (AC-158). T354 restores dashboards and charts, and refuses a data source with `400`.
   - Files: `packages/api/src/server.ts` (`…/restore` for `data-source`), `packages/api/src/routes/history.test.ts`, the History panel (T357)
   - Failing test: `history.test.ts`: restoring a data source's version makes a draft of it in the workspace, its settings as that version had them and its credentials as sealed, which can be proposed only after a passing test (AC-158); the folder is unchanged until it is approved (AC-289).
   - Depends on: T354, T357
+  - **Done 2026-09-30, after one review round.**
+  - *The API:*
+    - A data source's restore makes a draft in My workspace. It has that version's sign-in method, fields and envelopes exactly (none the version didn't have), its name as now, its target the source's folder, and names the source as its origin.
+    - It follows the dashboard's rules: the user's copy is replaced only when asked; never one waiting for review; and a version of another database type is refused (AC-161). The restore is recorded in the audit trail as `restore`.
+    - Everything that could refuse is asked before the user's copy goes: the version's shape and key through `plan`, and a name My workspace's root already has.
+    - A version's view (`…/versions/:n`) says each credential "unchanged" or "replaced" against now, compared sealed, never opened.
+  - *Proposing* (`untested` in `routes/proposals.ts`, wired in `server.ts`): a workspace data source is proposed only if one of these holds:
+    - its type, sign-in method, fields and envelopes equal its origin's;
+    - its latest test of its stored settings passed and is still current.
+
+    Otherwise the answer is `409`, "Test its connection first". Copies as made, and new ones made from their test, pass; a restored draft is tested first. AC-158 is amended so, as the user chose (R49).
+  - *The web:* the data source page (sign-in on, a shared source) gets History, its panel docked, and "Compare with current" on each version. The version's band reads "Version n of *name* · read-only…", with Propose restoring… and Back to current. Below it:
+    - the settings diff, the version first and then Current, a credential only as "Stored · encrypted" against "Replaced" or "unchanged";
+    - the current settings' last test.
+
+    Edit in my workspace is hidden while a version shows, and focus goes back to History when the panel closes. The restored draft opens with a note to test, then propose.
+  - Tested in `history.test.ts` (the draft, a replaced credential, a failed or stale test refused, the waiting, replace and other-type answers), `proposals.test.ts` and `proposal-approve.test.ts` (their fixtures now record a passing test for a changed draft), `SourceVersion.test.tsx` and `restore.test.tsx`.
+  - **Review fixes:**
+    1. A refused restore could delete the user's copy first.
+    2. The draft kept secrets the version never had.
+    3. The version's credential was the current one, so "replaced" was never tested.
+    4. The column order, the band's restore, the last test, and focus.
+  - Left:
+    - an e2e of the page's restore, through the real xcube test, with T526's data-source page work;
+    - the `?restored=` note stays while the address has it.
 
 ## P2.20 Deleting, clearing and finding (F39, added 2026-09-30, `[R48]`)
 

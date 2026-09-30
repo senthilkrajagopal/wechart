@@ -209,12 +209,17 @@ export function HistoryPanel({
                     <button
                       type="button"
                       className="btn btn-sm"
-                      aria-label={`View version ${String(version.version)}`}
+                      aria-label={
+                        kind === 'data-source'
+                          ? `Compare version ${String(version.version)} with current`
+                          : `View version ${String(version.version)}`
+                      }
                       onClick={() => {
                         onView(version.version);
                       }}
                     >
-                      View
+                      {/* A data source's settings are set against now (design 06, pin 6). */}
+                      {kind === 'data-source' ? 'Compare with current' : 'View'}
                     </button>
                   )}
                   {/* Never "Restore": restoring is proposed and approved (pin 7). */}

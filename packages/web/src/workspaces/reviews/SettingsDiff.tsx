@@ -18,10 +18,16 @@ const SECRET_WORDS = { unchanged: 'unchanged', replaced: 'Replaced', new: 'Enter
 export function SettingsDiff({
   item,
   alone = false,
+  otherLabel = 'Proposed',
+  otherFirst = false,
 }: {
   readonly item: ProposalItem;
   /** As proposed, set against nothing: a decided proposal's (T356's review). */
   readonly alone?: boolean;
+  /** What the other side is: a proposal's, or a kept version's (T515). */
+  readonly otherLabel?: string;
+  /** The other side's column before Current: a kept version's (design 06, state D). */
+  readonly otherFirst?: boolean;
 }) {
   const snapshot = item.snapshot as {
     driver?: DriverType;
@@ -86,12 +92,16 @@ export function SettingsDiff({
       {current.isError ? (
         <StateLine kind="err">{(current.error as Error).message}</StateLine>
       ) : null}
-      <table className="review-settings" aria-label="Settings, current and proposed">
+      <table
+        className="review-settings"
+        aria-label={`Settings, current and ${otherLabel.toLowerCase()}`}
+      >
         <thead>
           <tr>
             <th scope="col">Setting</th>
+            {otherFirst ? <th scope="col">{otherLabel}</th> : null}
             <th scope="col">Current (version {item.replaces.version})</th>
-            <th scope="col">Proposed</th>
+            {otherFirst ? null : <th scope="col">{otherLabel}</th>}
           </tr>
         </thead>
         <tbody>
@@ -99,10 +109,23 @@ export function SettingsDiff({
             const before = was.get(label);
             const after = now.get(label);
             const same = !secretRow(label) && before !== undefined && before === after;
+            const currentCell = before ?? (current.isPending ? '…' : '—');
+            // A kept version first (design 06, state D): each value as it was,
+            // and a credential said against now, under Current (rule 83).
+            if (otherFirst)
+              return (
+                <tr key={label} className={same ? undefined : 'is-changed'}>
+                  <th scope="row">{label}</th>
+                  <td>{secretRow(label) ? 'Stored · encrypted' : (after ?? '—')}</td>
+                  <td className={same || after === 'unchanged' ? 'is-same' : undefined}>
+                    {secretRow(label) ? after : currentCell}
+                  </td>
+                </tr>
+              );
             return (
               <tr key={label} className={same ? undefined : 'is-changed'}>
                 <th scope="row">{label}</th>
-                <td>{before ?? (current.isPending ? '…' : '—')}</td>
+                <td>{currentCell}</td>
                 <td className={same || after === 'unchanged' ? 'is-same' : undefined}>
                   {same ? 'unchanged' : (after ?? '—')}
                 </td>

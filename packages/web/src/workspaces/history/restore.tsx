@@ -25,7 +25,7 @@ class Refused extends Error {
   }
 }
 
-export function useRestore(kind: 'dashboard' | 'chart', itemId: string) {
+export function useRestore(kind: 'dashboard' | 'chart' | 'data-source', itemId: string) {
   const [asked, setAsked] = useState<RestoringVersion | undefined>(undefined);
   const mutation = useMutation({
     mutationFn: async ({
@@ -77,11 +77,18 @@ export function RestoreDialogs({
   kind,
   restore,
   onProposed,
+  onDrafted,
 }: {
-  readonly kind: 'dashboard' | 'chart';
+  readonly kind: 'dashboard' | 'chart' | 'data-source';
   readonly restore: ReturnType<typeof useRestore>;
   /** Proposed: what to say, and the proposal. */
   readonly onProposed: (said: string, proposalId: string) => void;
+  /**
+   * A data source's version drafted in the workspace (T515; design 06, state
+   * D): its connection is tested before it is proposed (AC-158), so the draft
+   * opens instead of the Propose dialog.
+   */
+  readonly onDrafted?: ((draftId: string, version: number) => void) | undefined;
 }) {
   const box = useRef<HTMLDivElement>(null);
   useFocusTrap(box);
@@ -106,11 +113,18 @@ export function RestoreDialogs({
     };
   }, [asking]);
   const version = restore.asked;
+  const drafted = restore.draftId;
+  useEffect(() => {
+    if (kind === 'data-source' && drafted !== undefined && version !== undefined)
+      onDrafted?.(drafted, version.version);
+  }, [kind, drafted, version, onDrafted]);
   if (version === undefined) return null;
+  // A data source's draft opens, to be tested (`onDrafted`), not proposed here.
+  if (kind === 'data-source' && restore.draftId !== undefined) return null;
   if (restore.draftId !== undefined)
     return (
       <ProposeFlow
-        item={{ kind, id: restore.draftId, title: version.title }}
+        item={{ kind: kind as 'dashboard' | 'chart', id: restore.draftId, title: version.title }}
         targetPath={['Shared']}
         restoring={{
           version: version.version,

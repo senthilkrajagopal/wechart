@@ -68,7 +68,7 @@ import {
 /** Its owner's right to their own workspace (T343): every item, theirs to change. */
 const OWN_WORKSPACE: FolderRight = Object.freeze({ see: true, write: true, kinds: 'all' });
 import type { ConnectionTestStore } from './repos/connection-tests';
-import type { DataSource, DataSourceStore } from './repos/data-sources';
+import { DataSourceRefused, type DataSource, type DataSourceStore } from './repos/data-sources';
 import type { DataSourceLanding } from './routes/data-sources';
 import type { ConnectionHealth, TestAnswer, TestedConnection } from './xcube/connections';
 import type { FolderAccessStore } from './repos/folder-access';
@@ -885,6 +885,39 @@ export function buildServer({
       // An approval publishes: each item bound in its folder, as a save there
       // was before a shared one could no longer be saved (T502, AC-272).
       bind: (kind, folderId, body) => boundIn(kind, folderId, body),
+      // A data source's changed settings, proposed only once tested (T515, AC-158).
+      ...(dataSources === undefined || connectionTests === undefined
+        ? {}
+        : {
+            untested: async (source: DataSource) => {
+              // As its origin is, where it came from: nothing changed to test.
+              // Compared sealed, never opened; a copy's revisions are its own.
+              if (source.origin !== null) {
+                const [mine, theirs] = await Promise.all([
+                  dataSources.withSealed(source.id),
+                  dataSources.withSealed(source.origin.id),
+                ]);
+                if (
+                  mine !== undefined &&
+                  theirs !== undefined &&
+                  mine.source.driver === theirs.source.driver &&
+                  mine.source.authMethod === theirs.source.authMethod &&
+                  isDeepStrictEqual(mine.source.fields, theirs.source.fields) &&
+                  isDeepStrictEqual(mine.landed.sealed, theirs.landed.sealed)
+                )
+                  return undefined;
+              }
+              const test = (
+                await connectionTests.latestAsStored(
+                  [source.id],
+                  new Map([[source.id, source.settingsPrint]]),
+                )
+              ).get(source.id);
+              return test?.ok === true && test.settings === source.settingsPrint
+                ? undefined
+                : 'Test its connection first: a data source’s changed settings are proposed only once a test of them passed.';
+            },
+          }),
       documents: {
         get: async (kind, id) => {
           const found = await get(kind, id);
@@ -2142,6 +2175,22 @@ export function buildServer({
                   (content.body?.['sealed'] as Record<string, unknown> | undefined) ?? {},
                 ),
               },
+              // Each credential against the one stored now, compared sealed,
+              // never opened: "unchanged" or "replaced" (T515; design 06, state D).
+              secretChanges: await (async () => {
+                const now = (await dataSources?.withSealed(id))?.landed.sealed ?? {};
+                const then =
+                  (content.body?.['sealed'] as Record<string, unknown> | undefined) ?? {};
+                return Object.fromEntries(
+                  Object.entries(then).map(([field, envelope]) => [
+                    field,
+                    JSON.stringify(envelope) ===
+                    JSON.stringify((now as Record<string, unknown>)[field])
+                      ? 'unchanged'
+                      : 'replaced',
+                  ]),
+                );
+              })(),
             }
           : { body: content.body ?? {}, parts: content.parts ?? [] },
     };
@@ -2162,12 +2211,121 @@ export function buildServer({
     const number = (request.body as { version?: unknown } | undefined)?.version;
     if (typeof number !== 'number' || !Number.isInteger(number) || number < 1)
       throw new BadRequest('Name the version to restore: { version }.');
-    if (kind === 'data-source')
-      throw new BadRequest(
-        'A data source’s connection is restored by entering it again in your workspace, where it is tested.',
-      );
     const kept = await versions!.get(kind, id, number);
     if (kept === null) return reply.code(404).send({ error: 'There is no such version kept.' });
+    /**
+     * A data source's version (T515, AC-289, AC-158; design 06, state D): a
+     * draft in the workspace, a copy of it as it is now, holding that
+     * version's settings and its credentials as sealed, never opened. It is
+     * proposed only once a test of those settings passes (`untested` in the
+     * proposals), and the folder's stays as it is until approved.
+     */
+    if (kind === 'data-source') {
+      if (dataSources === undefined) return reply.code(404).send(NO_HISTORY);
+      const own = workspaceIdOf(userOf(request).key);
+      if (!item.seen.rights.has(own))
+        return reply.code(403).send({
+          error: 'You have no workspace: only read-write members and Super-Admins have one.',
+        });
+      const current = await dataSources.get(id);
+      if (current === undefined) return reply.code(404).send(NO_HISTORY);
+      const then = (kept.content as { body?: Record<string, unknown> }).body ?? {};
+      // Its type never changes (AC-161): a version of another is none to restore.
+      if (then['driver'] !== current.driver)
+        return reply.code(409).send({
+          error:
+            'That version is of another type of database, and a data source’s type never changes.',
+        });
+      const mine = new Set([own, ...(await foldersBeneath(own)).map((folder) => folder.id)]);
+      const existing = (await dataSources.all()).find(
+        (source) => source.origin?.id === id && mine.has(source.folderId),
+      );
+      if (existing !== undefined) {
+        if ((await proposals?.openFor('data-source', existing.id)) != null)
+          return reply.code(409).send({
+            error:
+              'Your copy of it is waiting for review: decide or withdraw that proposal before restoring another version.',
+            id: existing.id,
+            replaceable: false,
+          });
+        if ((request.body as { replaceCopy?: unknown }).replaceCopy !== true)
+          return reply.code(409).send({
+            error:
+              'You have a copy of it in your workspace. Restoring this version replaces what that copy holds.',
+            id: existing.id,
+            replaceable: true,
+          });
+      }
+      // That version's settings and its credentials, exactly: none the
+      // version didn't have (T515's review).
+      const shape = {
+        driver: current.driver,
+        authMethod: typeof then['authMethod'] === 'string' ? then['authMethod'] : '',
+        fields: (then['fields'] ?? {}) as Record<string, FieldValue>,
+        sealed: (then['sealed'] ?? {}) as Record<string, SealedV1>,
+      };
+      /**
+       * Everything that can refuse it asked first, so a refusal leaves the
+       * user's copy as it was (T515's review): the version's settings and its
+       * envelopes' key, as a save of them would be, and a name My
+       * workspace's root holds already.
+       */
+      try {
+        dataSources.checkShape(shape);
+        await dataSources.plan(id, {
+          authMethod: shape.authMethod,
+          fields: shape.fields,
+          sealed: shape.sealed,
+        });
+      } catch (failure) {
+        if (failure instanceof DataSourceRefused)
+          return reply.code(failure.status).send({
+            error: `That version can’t be restored as it was kept: ${failure.message}`,
+          });
+        throw failure;
+      }
+      const named = (await dataSources.inFolder(own)).find(
+        (source) => source.name === current.name && source.id !== existing?.id,
+      );
+      if (named !== undefined)
+        return reply.code(409).send({
+          error: `My workspace already has a data source named ${current.name}: rename or discard it first.`,
+        });
+      if (existing !== undefined) await dataSources.remove(existing.id);
+      let draft;
+      try {
+        draft = await dataSources.create({
+          folderId: own,
+          name: current.name,
+          ...shape,
+          targetFolderId: current.folderId,
+        });
+        await dataSources.setOrigin(draft.id, {
+          id: current.id,
+          version: current.version,
+          folderId: current.folderId,
+        });
+        if (typeof then['description'] === 'string' && then['description'] !== '')
+          draft = await dataSources.update(draft.id, { description: then['description'] });
+      } catch (failure) {
+        if (failure instanceof DataSourceRefused)
+          return reply.code(failure.status).send({ error: failure.message });
+        throw failure;
+      }
+      await recordIn(
+        audit,
+        {
+          actor: actorOf(userOf(request)),
+          event: 'restore',
+          folderId: item.folderId,
+          item: { kind, id, title: current.name },
+          summary: `Restoring “${current.name}” to version ${String(number)}, as a draft to propose`,
+          details: { version: number, draftId: draft.id },
+        },
+        request.log,
+      );
+      return reply.code(201).send({ kind, id: draft.id });
+    }
     if (!docs?.get || !docs.createTogether || !docs.withOrigin)
       return reply.code(404).send(NO_HISTORY);
     const own = workspaceIdOf(userOf(request).key);

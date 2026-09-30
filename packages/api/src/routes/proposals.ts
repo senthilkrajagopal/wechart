@@ -7,7 +7,7 @@ import { actorOf, recordIn } from '../audit/record';
 import { USER } from '../auth/guard';
 import { userOf } from '../auth/user';
 import type { AuditStore } from '../repos/audit';
-import { DataSourceRefused, type DataSourceStore } from '../repos/data-sources';
+import { DataSourceRefused, type DataSource, type DataSourceStore } from '../repos/data-sources';
 import {
   OpenProposalError,
   PROPOSAL_KINDS,
@@ -93,6 +93,12 @@ export interface ProposalRoutes {
   readonly folders?: () => Promise<
     readonly { readonly id: string; readonly title: string; readonly parentId: string | null }[]
   >;
+  /**
+   * Why a workspace data source can't be proposed yet, if it can't (T515,
+   * AC-158): settings other than its origin's, with no passing test of them
+   * still current. A restored version's draft is one. Unset, none is asked.
+   */
+  readonly untested?: (source: DataSource) => Promise<string | undefined>;
   /**
    * Binds a chart's or dashboard's cubes in the folder it lands in, nearest
    * first, as a save there did (T429, AC-272, AC-275). With sign-in on an
@@ -1103,6 +1109,11 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
         `This ${KIND_WORD[proposing]} names no folder to go to, so it can’t be proposed.`,
       );
     await landing(writes, target, `This ${KIND_WORD[proposing]}`);
+    // A data source's changed settings only once a test of them passed (T515, AC-158).
+    if (sealedSource !== undefined && routes.untested !== undefined) {
+      const why = await routes.untested(sealedSource.source);
+      if (why !== undefined) throw new Refused(409, why);
+    }
 
     // What it would land, as it is now.
     let items: ProposedItem[];

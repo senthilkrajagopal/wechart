@@ -8,6 +8,7 @@ import { PUBLIC_URL, signIn, USERS } from '../auth/sign-in.fixture';
 import { closeDb, getDb } from '../db/client';
 import { auditStore } from '../repos/audit';
 import { catalog } from '../repos/catalog';
+import { connectionTestStore } from '../repos/connection-tests';
 import { dataSourceStore } from '../repos/data-sources';
 import { documents, type DocumentKind } from '../repos/documents';
 import { folderAccessStore } from '../repos/folder-access';
@@ -159,6 +160,7 @@ beforeAll(async () => {
     proposals: proposalStore(getDb()),
     versions: versions(),
     dataSources: sources(),
+    connectionTests: connectionTestStore(getDb()),
   });
   for (const who of ['writer', 'many', 'reader', 'super'])
     cookies[who] = await signIn(app, USERS[who]!);
@@ -171,6 +173,9 @@ afterAll(async () => {
   await db.deleteFrom('audit_records').where('folder_id', '=', ids.sales).execute();
   await db.deleteFrom('item_versions').where('folder_id', '=', ids.sales).execute();
   await db.deleteFrom('data_sources').where('folder_id', '=', ids.sales).execute();
+  // A data source's version restored as writer's draft (T515): out of their workspace.
+  if (writerKey !== '')
+    await db.deleteFrom('data_sources').where('folder_id', '=', `ws:${writerKey}`).execute();
   if (writerKey !== '') {
     await db
       .deleteFrom('documents')
@@ -479,7 +484,7 @@ describe('an item’s history (T354, AC-289)', () => {
     );
   });
 
-  it('gives a data source’s version with each credential only named, and restores none (T515)', async () => {
+  it('gives a data source’s version with each credential only named (T515)', async () => {
     const sealed = {
       v: 1,
       kid: 'kid-1',
@@ -494,13 +499,15 @@ describe('an item’s history (T354, AC-289)', () => {
       fields: { host: 'db', port: 5432, database: 'sales', user: 'cube', ssl: false },
       sealed: { password: sealed as never },
     });
+    // Then: another host, and a password sealed to it.
+    const sealedThen = { ...sealed, ct: Buffer.alloc(272, `then-${MARK}`).toString('base64url') };
     await keep('data-source', source.id, 1, {
       body: {
         name: `ledger_${MARK}`,
         driver: 'postgres',
         authMethod: 'password',
         fields: { host: 'db-then', port: 5432, database: 'sales', user: 'cube', ssl: false },
-        sealed: { password: sealed },
+        sealed: { password: sealedThen },
         revisions: { password: 'r1' },
       },
     });
@@ -510,6 +517,7 @@ describe('an item’s history (T354, AC-289)', () => {
     });
     expect(answer.statusCode, answer.body).toBe(200);
     expect(answer.body).not.toContain(sealed.ct.slice(0, 16));
+    expect(answer.body).not.toContain(sealedThen.ct.slice(0, 16));
     expect(answer.json<{ content: { body: unknown } }>().content.body).toEqual({
       name: `ledger_${MARK}`,
       driver: 'postgres',
@@ -517,9 +525,120 @@ describe('an item’s history (T354, AC-289)', () => {
       fields: { host: 'db-then', port: 5432, database: 'sales', user: 'cube', ssl: false },
       secrets: ['password'],
     });
-    expect((await restore('writer', 'data-source', source.id, { version: 1 })).statusCode).toBe(
-      400,
+    // Its credential against the one stored now, compared sealed (design 06, state D).
+    expect(answer.json<{ content: { secretChanges: unknown } }>().content.secretChanges).toEqual({
+      password: 'replaced',
+    });
+
+    // Restored as a draft in the workspace: that version's settings, its
+    // credentials as sealed, the folder's unchanged until it is approved.
+    const restored = await restore('writer', 'data-source', source.id, { version: 1 });
+    expect(restored.statusCode, restored.body).toBe(201);
+    const draftId = restored.json<{ kind: string; id: string }>().id;
+    const draft = (await sources().withSealed(draftId))!;
+    expect(draft.source.folderId).toMatch(/^ws:/);
+    expect([draft.source.name, draft.source.fields['host'], draft.source.origin?.id]).toEqual([
+      `ledger_${MARK}`,
+      'db-then',
+      source.id,
+    ]);
+    expect(draft.source.targetFolderId).toBe(ids.sales);
+    expect(draft.landed.sealed).toEqual({ password: sealedThen });
+    expect((await sources().get(source.id))?.fields['host']).toBe('db');
+
+    // Proposed only once a test of those settings passed (AC-158).
+    const propose = () =>
+      as('writer', {
+        method: 'POST',
+        url: '/api/proposals',
+        payload: { kind: 'data-source', id: draftId, description: `Back to db-then (${MARK})` },
+      });
+    const untested = await propose();
+    expect(untested.statusCode, untested.body).toBe(409);
+    expect(untested.json<{ error: string }>().error).toBe(
+      'Test its connection first: a data source’s changed settings are proposed only once a test of them passed.',
     );
+    const tested = (ok: boolean, settings: string) =>
+      connectionTestStore(getDb()).record(draftId, {
+        ok,
+        checks: [{ id: 'connect', status: ok ? 'passed' : 'failed', durationMs: 1 }],
+        fields: draft.source.fields,
+        asStored: true,
+        settings,
+        by: { key: writerKey, name: 'Wren Writer' },
+      });
+    // A failed test, and a passing one of other settings, are no test of these.
+    await tested(false, draft.source.settingsPrint);
+    expect((await propose()).statusCode).toBe(409);
+    await tested(true, 'another-print');
+    expect((await propose()).statusCode).toBe(409);
+    await tested(true, draft.source.settingsPrint);
+    const proposed = await propose();
+    expect(proposed.statusCode, proposed.body).toBe(201);
+    expect((await sources().get(source.id))?.fields['host']).toBe('db');
+
+    // Its draft waits for review: no other version restored over it meanwhile.
+    const waiting = await restore('writer', 'data-source', source.id, {
+      version: 1,
+      replaceCopy: true,
+    });
+    expect(waiting.statusCode, waiting.body).toBe(409);
+    expect(waiting.json()).toMatchObject({ id: draftId, replaceable: false });
+    expect((await sources().get(draftId))?.id).toBe(draftId);
+  });
+
+  it('replaces the user’s copy of a data source only when asked, and refuses a version of another type (T515’s review)', async () => {
+    const sealed = {
+      v: 1,
+      kid: 'kid-1',
+      enc: Buffer.alloc(32, `enc2-${MARK}`).toString('base64url'),
+      ct: Buffer.alloc(272, `ct2-${MARK}`).toString('base64url'),
+    };
+    const source = await sources().create({
+      folderId: ids.sales,
+      name: `journal_${MARK}`,
+      driver: 'postgres',
+      authMethod: 'password',
+      fields: { host: 'db', port: 5432, database: 'sales', user: 'cube', ssl: false },
+      sealed: { password: sealed as never },
+    });
+    const body = (host: string, driver = 'postgres') => ({
+      body: {
+        name: `journal_${MARK}`,
+        driver,
+        authMethod: 'password',
+        fields: { host, port: 5432, database: 'sales', user: 'cube', ssl: false },
+        sealed: { password: sealed },
+      },
+    });
+    await keep('data-source', source.id, 1, body('db-one'));
+    await keep('data-source', source.id, 2, body('db-two', 'mysql'));
+
+    const other = await restore('writer', 'data-source', source.id, { version: 2 });
+    expect(other.statusCode, other.body).toBe(409);
+    expect(other.json<{ error: string }>().error).toBe(
+      'That version is of another type of database, and a data source’s type never changes.',
+    );
+
+    // Their copy, already there: asked about, kept, then replaced.
+    const copied = await as('writer', {
+      method: 'POST',
+      url: `/api/data-sources/${source.id}/copy`,
+    });
+    expect(copied.statusCode, copied.body).toBe(201);
+    const copyId = copied.json<{ id: string }>().id;
+    const asked = await restore('writer', 'data-source', source.id, { version: 1 });
+    expect(asked.statusCode, asked.body).toBe(409);
+    expect(asked.json()).toMatchObject({ id: copyId, replaceable: true });
+    expect((await sources().get(copyId))?.fields['host']).toBe('db');
+    const replaced = await restore('writer', 'data-source', source.id, {
+      version: 1,
+      replaceCopy: true,
+    });
+    expect(replaced.statusCode, replaced.body).toBe(201);
+    expect(await sources().get(copyId)).toBeUndefined();
+    const draft = (await sources().get(replaced.json<{ id: string }>().id))!;
+    expect([draft.fields['host'], draft.origin?.id]).toEqual(['db-one', source.id]);
   });
 
   it('tags the newest version current when a rename has moved the item on since (T354’s review)', async () => {

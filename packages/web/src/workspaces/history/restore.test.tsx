@@ -130,3 +130,51 @@ describe('restoring a version (T357)', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
+
+describe('restoring a data source’s version (T515; design 06, state D)', () => {
+  function SourceHarness({ onDrafted }: { onDrafted: (id: string, version: number) => void }) {
+    const restore = useRestore('data-source', 's1');
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => {
+            restore.start(version);
+          }}
+        >
+          Restore 7
+        </button>
+        <RestoreDialogs
+          kind="data-source"
+          restore={restore}
+          onProposed={vi.fn()}
+          onDrafted={onDrafted}
+        />
+      </>
+    );
+  }
+
+  it('drafts it in the workspace and opens the draft to be tested, never the Propose dialog', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        url === '/api/history/data-source/s1/restore'
+          ? answer(201, { kind: 'data-source', id: 'draft-source' })
+          : answer(404, {}),
+      ),
+    );
+    const onDrafted = vi.fn();
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <SourceHarness onDrafted={onDrafted} />
+      </QueryClientProvider>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Restore 7' }));
+    await vi.waitFor(() => {
+      expect(onDrafted).toHaveBeenCalledWith('draft-source', 7);
+    });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});

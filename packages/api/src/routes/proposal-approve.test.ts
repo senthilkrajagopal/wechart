@@ -175,6 +175,18 @@ const propose = async (body: Record<string, unknown>) => {
 };
 const approve = (who: string, id: string) =>
   as(who, { method: 'POST', url: `/api/proposals/${id}/approve`, payload: {} });
+/** A passing test of a workspace data source's settings as stored, by writer (T515). */
+const passed = async (id: string) => {
+  const source = (await sources().get(id))!;
+  await connectionTestStore(getDb()).record(id, {
+    ok: true,
+    checks: [{ id: 'connect', status: 'passed', durationMs: 1 }],
+    fields: source.fields,
+    asStored: true,
+    settings: source.settingsPrint,
+    by: { key: writerKey, name: 'Wren Writer' },
+  });
+};
 
 describe('approving a proposal (T352, AC-288)', () => {
   it('lands a dashboard with its charts over the folder’s, keeping the replaced version and the new', async () => {
@@ -328,6 +340,8 @@ describe('approving a proposal (T352, AC-288)', () => {
       ct: Buffer.alloc(272, `other-${MARK}`).toString('base64url'),
     };
     await sources().update(replacedCopy, { sealed: { password: other } });
+    // Its new secret, tested as a change to one is before it is proposed (T515, AC-158).
+    await passed(replacedCopy);
 
     const shown = async (id: string) => {
       const proposalId = await propose({ kind: 'data-source', id });
@@ -419,6 +433,8 @@ describe('approving a proposal (T352, AC-288)', () => {
       fields: { host: 'ledger-db', port: 5432, database: 'ledger', user: 'cube', ssl: false },
       sealed: { password: sealed },
     });
+    // Made from a passing test, as one made new always is (T363, AC-158).
+    await passed(drafted.id);
     const proposalId = await propose({ kind: 'data-source', id: drafted.id });
     const meanwhile = await sources().create({
       folderId: ids.sales,
