@@ -250,6 +250,52 @@ describe('the audit trail’s API (T369, AC-295)', () => {
     }
   });
 
+  it('says where each break of a refused publish is, as it says a record’s folder (T427, AC-322)', async () => {
+    const at = new Date(Date.UTC(2026, 8, 28, 12, 0, 0));
+    await audit().record({
+      at,
+      actor: cy,
+      event: 'publish-refused',
+      folderId: ids.emea,
+      item: { kind: 'model', id: 'sales.yml', title: 'sales.yml' },
+      summary: '3 breaks: 1 named to its user, 2 counted',
+      details: {
+        breaks: [
+          { path: 'sales.yml', folderId: ids.emea, message: 'unknown member', line: 34, column: 9 },
+          { path: 'churn.yml', folderId: 'root', message: 'cube sales not found' },
+          { path: 'mine.yml', folderId: `ws:${cy.key}`, message: 'bad' },
+        ],
+        shown: { named: 1, counted: 2 },
+        files: ['sales.yml'],
+      },
+    });
+    const [record] = (await trail(`users=${cy.key}&events=publish-refused`)).records as unknown as {
+      details: { breaks: unknown[]; shown: unknown };
+    }[];
+    expect(record?.details.breaks).toEqual([
+      {
+        path: 'sales.yml',
+        folderId: ids.emea,
+        message: 'unknown member',
+        line: 34,
+        column: 9,
+        folderPath: [
+          { id: ids.sales, title: `Sales ${MARK}` },
+          { id: ids.emea, title: 'EMEA' },
+        ],
+      },
+      { path: 'churn.yml', folderId: 'root', message: 'cube sales not found', folderPath: [] },
+      {
+        path: 'mine.yml',
+        folderId: `ws:${cy.key}`,
+        message: 'bad',
+        folderPath: null,
+        inWorkspace: true,
+      },
+    ]);
+    expect(record?.details.shown).toEqual({ named: 1, counted: 2 });
+  });
+
   it('names everyone the records name, for the User filter', async () => {
     const answer = await as('super', { method: 'GET', url: '/api/audit/people' });
     expect(answer.statusCode).toBe(200);

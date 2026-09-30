@@ -129,6 +129,9 @@ export function registerAudit(
       records: page.records.map((record) => ({
         ...record,
         ...(record.folderId === null ? { folderPath: null } : pathOf(record.folderId)),
+        ...(record.event === 'publish-refused' && record.details !== null
+          ? { details: withBreakPaths(record.details, pathOf) }
+          : {}),
       })),
       ...(page.next === undefined ? {} : { next: page.next }),
       total,
@@ -141,6 +144,29 @@ export function registerAudit(
     superAdminOnly(request);
     return store.actors();
   });
+}
+
+/**
+ * A refused publish's breaks, each with its folder's path as a record's own
+ * is said (T427, AC-322; design 08, state B): a workspace's only "in a
+ * workspace", and one no longer there with none.
+ */
+function withBreakPaths(
+  details: Readonly<Record<string, unknown>>,
+  pathOf: ReturnType<typeof paths>,
+): Record<string, unknown> {
+  const breaks = details['breaks'];
+  if (!Array.isArray(breaks)) return { ...details };
+  return {
+    ...details,
+    breaks: breaks.map((each: unknown) =>
+      typeof each === 'object' &&
+      each !== null &&
+      typeof (each as { folderId?: unknown }).folderId === 'string'
+        ? { ...each, ...pathOf((each as { folderId: string }).folderId) }
+        : each,
+    ),
+  };
 }
 
 /** Every folder beneath this one, at any depth. */

@@ -40,7 +40,7 @@ import { draftJoinsOf } from './draftJoins';
 import { editedMembersOf, placesOf } from './editedMembers';
 import { ReadOnlyFile } from './ReadOnlyFile';
 import { ReferencesWarning, type MemberReferences } from './ReferencesWarning';
-import { publishModel, referencesTo } from './publish';
+import { publishModel, referencesTo, refusedText } from './publish';
 import { modelOf, withObject } from './sync';
 import { DataSourcesContext } from './form/dataSources';
 import { memberIndexOf, PickerScopeContext } from './form/scopes';
@@ -791,12 +791,9 @@ function FileEditor({
       setOutcome({
         ok: false,
         // wechart's refusal, not Cube's, when every problem is a rollup's unknown names
-        // (AC-189); a rollup whose cubes Cube can't join is said as that (AC-235).
-        text: result.problems.every((problem) => problem.preAggregation?.unknown !== undefined)
-          ? 'A pre-aggregation names members the model doesn’t have, so nothing was published.'
-          : result.problems.every((problem) => problem.preAggregation !== undefined)
-            ? 'A pre-aggregation’s cubes can’t be joined, so nothing was published.'
-            : 'Cube refused the model, so nothing was published.',
+        // (AC-189); a rollup whose cubes Cube can't join is said as that (AC-235); and
+        // the breaks in folders the user can't see, counted (T427, AC-322).
+        text: refusedText(result.problems, result.hidden),
       });
     } else {
       setOutcome({ ok: false, text: result.message });

@@ -1431,6 +1431,40 @@ describe('publishing into a folder (T452)', () => {
     await app.close();
   });
 
+  // T427's review: an error placed on no item, and a bad cron, are on the
+  // files published into /Sales, so they say /Sales, as a placed error does,
+  // never leaving it to be taken for the root's.
+  it('says the folder of a file an error names no item for, and of a bad cron', async () => {
+    const store = inFolders([ROOT_ORDERS]);
+    const stub = await xcubeWithSales();
+    stub.refuse([{ folderId: null, name: null, kind: 'compile', message: 'something broke' }]);
+    const app = serve({ config, modelFiles: store, folders }, stub);
+
+    const unplaced = await publishIn(app, 'sales', [salesOrders('cubes/sales_orders.yml')]);
+    expect(unplaced.statusCode).toBe(422);
+    expect(unplaced.json()).toEqual({
+      errors: [{ path: 'cubes/sales_orders.yml', folderId: 'sales', message: 'something broke' }],
+    });
+
+    const cron = {
+      path: 'cubes/cron.yml',
+      content: [
+        'cubes:',
+        '  - name: cron',
+        '    sql_table: public.cron',
+        '    refresh_key:',
+        '      every: "not a cron"',
+        '',
+      ].join('\n'),
+    };
+    const crons = await publishIn(app, 'sales', [cron]);
+    expect(crons.statusCode).toBe(422);
+    expect(crons.json<{ errors: unknown[] }>().errors).toEqual([
+      expect.objectContaining({ path: 'cubes/cron.yml', folderId: 'sales' }),
+    ]);
+    await app.close();
+  });
+
   /** The root's `orders`, with a `total` a rollup elsewhere names. */
   const ordersWithTotal = (withTotal: boolean): ModelFile => ({
     path: 'cubes/orders.yml',

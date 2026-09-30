@@ -709,6 +709,13 @@ export function buildServer({
     ...(xcube === undefined ? {} : { xcube }),
     ...(folders === undefined ? {} : { folders }),
     ...(beforeFolderPublish === undefined ? {} : { beforeFolderPublish }),
+    // A refused publish's breaks named where the user sees the folder's
+    // models, counted elsewhere, and all of them recorded (T427, AC-322).
+    seesModelsIn: async (request) => {
+      const seen = await visibilityOf(request);
+      return (folderId) => seen === undefined || seen.rights.get(folderId)?.kinds === 'all';
+    },
+    ...(audit === undefined ? {} : { audit }),
     // What a delete or rename would leave bound to nothing (T428, AC-275):
     // named where the user may see it, and only counted where not (AC-322).
     referencedBy: async (request, cubes) => {

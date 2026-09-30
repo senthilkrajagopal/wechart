@@ -1,14 +1,17 @@
 import { createHash } from 'node:crypto';
 
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
+import { actorOf, recordIn } from '../audit/record';
 import { USER } from '../auth/guard';
+import type { AuditStore } from '../repos/audit';
+import { refusalOf } from '../xcube/refusal';
 import type { CubeClient } from '../cube/client';
 import type { MetaCache } from '../cube/meta-cache';
 import type { Config } from '../config';
 import { ROOT_FOLDER_ID } from '../repos/catalog';
 import type { ModelFile, ModelFileStore } from '../server';
-import { checkWithXcube } from '../xcube/check';
+import { checkWithXcube, folderOfFile } from '../xcube/check';
 import type { XcubeAdmin } from '../xcube/client';
 import { clashesOf, compiledIn } from './clashes';
 import { refreshKeyProblemsOf } from './refreshKeys';
@@ -165,7 +168,17 @@ export function registerModelPublishing(
     beforeFolderPublish,
     referencedBy,
     dependentsOf,
+    seesModelsIn,
+    audit,
   }: {
+    /**
+     * Whether this user may see a folder's models (T427, AC-322): a refused
+     * publish names the breaks there and counts the rest. Every folder where
+     * not given (sign-in off).
+     */
+    seesModelsIn?: (request: FastifyRequest) => Promise<(folderId: string) => boolean>;
+    /** Where every break of a refused publish is recorded (T427, AC-322). */
+    audit?: Pick<AuditStore, 'record'>;
     config: Config;
     client: CubeClient;
     /** What a publish makes stale: every cache of Cube's metadata (T322). */
@@ -230,6 +243,45 @@ export function registerModelPublishing(
     }>;
   },
 ): void {
+  /**
+   * The publish check's refusal (T427, AC-322): its breaks in folders whose
+   * models the user may see named, the rest counted, and every one recorded
+   * in the audit trail with what the user was shown.
+   */
+  const refused = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    errors: readonly CompileError[],
+    what: {
+      readonly folderId: string;
+      readonly files: readonly string[];
+      /** A delete's refusal says so, in its line and its record (T427's review). */
+      readonly deleting?: true;
+    },
+  ) => {
+    const sees = (await seesModelsIn?.(request)) ?? (() => true);
+    const refusal = refusalOf(errors, sees);
+    await recordIn(
+      audit,
+      {
+        actor: actorOf(request.wechartUser ?? null),
+        event: 'publish-refused',
+        folderId: what.folderId,
+        item: { kind: 'model', id: what.files[0] ?? '', title: what.files.join(', ') },
+        summary:
+          what.deleting === true
+            ? `Deleting ${what.files.join(', ')}: ${refusal.summary}`
+            : refusal.summary,
+        details: {
+          ...(what.deleting === true ? { change: 'delete' } : {}),
+          ...refusal.recorded,
+          files: what.files,
+        },
+      },
+      request.log,
+    );
+    return reply.status(422).send(refusal.answer);
+  };
   /**
    * Refused while a chart or dashboard names any of these short names in a
    * folder, by its xcube id: the refusal, naming them; else nothing (T428,
@@ -376,10 +428,11 @@ export function registerModelPublishing(
         },
       });
       if (checked.kind === 'unreachable') return reply.status(502).send({ error: checked.error });
-      if (checked.kind === 'invalid') return reply.status(422).send({ errors: checked.errors });
+      const removing = { folderId, files: [path], deleting: true as const };
+      if (checked.kind === 'invalid') return refused(request, reply, checked.errors, removing);
       const rollups = checked.rollups();
       if (rollups.kind === 'unasked') return reply.status(502).send({ error: rollups.error });
-      if (rollups.kind === 'unjoinable') return reply.status(422).send({ errors: rollups.errors });
+      if (rollups.kind === 'unjoinable') return refused(request, reply, rollups.errors, removing);
 
       await modelFiles.remove(folderId, path);
       // Committed first, then sent: xcube is never ahead of wechart (T419).
@@ -571,15 +624,22 @@ export function registerModelPublishing(
         },
       });
       if (checked.kind === 'unreachable') return reply.status(502).send({ error: checked.error });
-      if (checked.kind === 'invalid') return reply.status(422).send({ errors: checked.errors });
+      // Every break in any folder named where the user may see it, and
+      // counted where not (T427, AC-322).
+      const publishing = { folderId, files: changed.map((file) => file.path) };
+      if (checked.kind === 'invalid') return refused(request, reply, checked.errors, publishing);
       const unknown = unknownInRollups(draft, served);
-      if (unknown.length > 0) return reply.status(422).send({ errors: unknown });
-      // Crons Cube's refresh worker can't run, in the files being changed (T258, AC-153).
-      const crons = refreshKeyProblemsOf(changed);
-      if (crons.length > 0) return reply.status(422).send({ errors: crons });
+      if (unknown.length > 0) return refused(request, reply, unknown, publishing);
+      // Crons Cube's refresh worker can't run, in the files being changed (T258,
+      // AC-153): so in their folder, which each says (T427's review).
+      const crons = refreshKeyProblemsOf(changed).map((problem) => ({
+        ...problem,
+        ...folderOfFile(changed.find((file) => file.path === problem.path)),
+      }));
+      if (crons.length > 0) return refused(request, reply, crons, publishing);
       const rollups = checked.rollups();
       if (rollups.kind === 'unasked') return reply.status(502).send({ error: rollups.error });
-      if (rollups.kind === 'unjoinable') return reply.status(422).send({ errors: rollups.errors });
+      if (rollups.kind === 'unjoinable') return refused(request, reply, rollups.errors, publishing);
       return commit(checked.changeset);
     }),
   );

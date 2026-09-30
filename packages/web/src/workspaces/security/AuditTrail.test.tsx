@@ -356,6 +356,81 @@ describe('the audit trail (T369, AC-295)', () => {
     expect(inspector.textContent).toContain('Saved after a passing test');
   });
 
+  it('shows a refused publish’s every break, named, and what its user was shown (T427, AC-322; state B)', async () => {
+    serve({
+      first: {
+        records: [
+          {
+            id: 'r9',
+            at: today(10, 2, 18),
+            actor: { key: 'mo', name: 'Mo', identity: 'mo@corp.example' },
+            event: 'publish-refused',
+            folderId: 'emea',
+            folderPath: EMEA,
+            item: { kind: 'model', id: 'sales.yml', title: 'sales.yml' },
+            summary: '3 breaks: 1 named to its user, 2 counted',
+            details: {
+              breaks: [
+                {
+                  path: 'sales.yml',
+                  folderId: 'emea',
+                  folderPath: EMEA,
+                  message: 'unknown member orders.amount_net',
+                  line: 34,
+                  column: 9,
+                },
+                {
+                  path: 'churn.yml',
+                  folderId: 'root',
+                  folderPath: [],
+                  message: 'cube sales not found',
+                },
+                {
+                  path: 'mine.yml',
+                  folderId: 'ws:mo',
+                  folderPath: null,
+                  inWorkspace: true,
+                  message: 'bad',
+                },
+              ],
+              shown: { named: 1, counted: 2 },
+              files: ['sales.yml'],
+            },
+          },
+        ],
+        total: 1,
+        retentionDays: 365,
+      },
+    });
+    open();
+    await screen.findByRole('table', { name: 'Audit trail' });
+
+    // Pickable as a kind of its own, with its icon and label.
+    const row = within(table()).getAllByRole('row')[1]!;
+    expect(within(row).getByText('Publish refused').previousElementSibling?.tagName).toBe('svg');
+    await userEvent.click(screen.getByRole('button', { name: /^Event/ }));
+    expect(screen.getByRole('checkbox', { name: 'Publish refused' })).toBeTruthy();
+    await userEvent.keyboard('{Escape}');
+
+    await userEvent.click(
+      within(table()).getByRole('button', { name: '3 breaks: 1 named to its user, 2 counted' }),
+    );
+    const inspector = screen.getByRole('region', { name: /^Publish refused/ });
+    // Every break named, even those its user saw only counted.
+    expect(
+      within(within(inspector).getByRole('list', { name: 'Breaks' }))
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual([
+      'sales.yml (Sales / EMEA) line 34:9, unknown member orders.amount_net',
+      'churn.yml (Shared) cube sales not found',
+      'mine.yml (A workspace) bad',
+    ]);
+    expect(within(inspector).getByText('Shown to Mo').nextElementSibling?.textContent).toBe(
+      '1 break named, 2 counted',
+    );
+  });
+
   it('pages to older records and back (pin 9)', async () => {
     const asked = serve({
       first: { records: RECORDS.slice(0, 2), next: 'c1', total: 3, retentionDays: 365 },

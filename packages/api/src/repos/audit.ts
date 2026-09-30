@@ -6,8 +6,9 @@ import type { Database } from '../db/schema';
 
 /**
  * The audit trail (T368, AC-294; design 08 of 2026-09-27): the seven kinds
- * of event AC-294 names, each recorded with who, what, which folder and when,
- * with a one-line summary and the full record's details. Records are only
+ * of event AC-294 names, and a publish the check refused (AC-322), each
+ * recorded with who, what, which folder and when, with a one-line summary
+ * and the full record's details. Records are only
  * ever added, and removed by the retention period alone (T370, AC-296). None
  * holds a credential: a secret is said "replaced" (AC-298, rule 83).
  */
@@ -19,6 +20,8 @@ export const AUDIT_EVENTS = [
   'rejection',
   'restore',
   'data-source-change',
+  // A publish the check refused, every break in it (T427, AC-322).
+  'publish-refused',
 ] as const;
 export type AuditEvent = (typeof AUDIT_EVENTS)[number];
 

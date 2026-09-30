@@ -51,6 +51,16 @@ export type RollupsVerdict =
 /** The most probes xcube takes in one check (research: `probes` ≤ 1000). */
 const PROBES_PER_CHECK = 1000;
 
+/**
+ * A changed file's folder, where it isn't the root's (T452): an error placed
+ * on it by what it names says it, as one xcube places does, so nothing takes
+ * it for the root's file of that path (T427's review).
+ */
+export const folderOfFile = (file: ModelFile | undefined): { folderId?: string } =>
+  file?.folderId === undefined || file.folderId === ROOT_FOLDER_ID
+    ? {}
+    : { folderId: file.folderId };
+
 export async function checkWithXcube({
   xcube,
   draft,
@@ -183,6 +193,7 @@ export async function checkWithXcube({
           ? [{ path, ...where, ...at, message: error.message }]
           : placeOf(error.message, changed).map((file) => ({
               path: file.path,
+              ...folderOfFile(file),
               message: error.message,
             }));
       });
@@ -191,7 +202,12 @@ export async function checkWithXcube({
         errors:
           errors.length > 0
             ? errors
-            : compileErrorsOf(first.cubeMessage ?? 'xcube refused the model.', changed),
+            : compileErrorsOf(first.cubeMessage ?? 'xcube refused the model.', changed).map(
+                (error) => ({
+                  ...error,
+                  ...folderOfFile(changed.find((file) => file.path === error.path)),
+                }),
+              ),
       };
     }
     const byId = new Map(

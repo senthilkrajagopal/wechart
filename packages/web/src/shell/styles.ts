@@ -3725,6 +3725,8 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 .audit-trail__before-after ins { text-decoration: none; color: var(--wc-status-success); font-family: var(--wc-font-code); }
 .audit-trail__before-after del { color: var(--wc-status-error); font-family: var(--wc-font-code); }
 .audit-trail__tested { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
+.audit-trail__breaks { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.audit-trail__breaks code { font-family: var(--wc-font-code); }
 @media (max-width: 1023px) {
   .audit-trail--open { grid-template-columns: minmax(0, 1fr); }
 }

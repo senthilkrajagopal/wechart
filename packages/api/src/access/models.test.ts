@@ -12,8 +12,10 @@ import { folderAccessStore, ROOT_ACCESS_ID } from '../repos/folder-access';
 import { folderXcubeIds } from '../repos/folder-xcube-ids';
 import { modelFileStore } from '../repos/model-files';
 import { buildServer, type ModelFile } from '../server';
+import { auditStore } from '../repos/audit';
 import { xcubeAdmin } from '../xcube/client';
 import { fakeXcube, FAKE_ADMIN_TOKEN } from '../xcube/fake';
+import { itemsOf } from '../xcube/items';
 
 /**
  * T334: models are folder items.
@@ -399,6 +401,237 @@ describe('deleting a model (T428)', () => {
       );
     } finally {
       await withXcube.close();
+    }
+  });
+});
+
+/**
+ * T427 (AC-322): WHEN the publish check refuses a change, THE SYSTEM SHALL
+ * name each break in the folders the user may see, with its error and its
+ * item, and give only a count of the rest; a Super-Admin sees every break
+ * named, and the audit trail records every one. `writer` (read-write on
+ * /A/B) publishes there; xcube's check breaks /A/B's item and /C's, which
+ * `writer` can't see (`managers`' alone).
+ */
+describe('a refused publish, said as its user may see it (T427, AC-322)', () => {
+  /** A server whose xcube holds the folder tree and the model's items, as after a publish. */
+  async function refusingServer() {
+    const stub = fakeXcube();
+    const published = await folderXcubeIds(getDb()).published();
+    await xcubeAdmin({
+      cubeApiUrl: secured.cubeApiUrl,
+      model: 'dev',
+      token: FAKE_ADMIN_TOKEN,
+      fetch: stub.fetch,
+    }).folders(await folderXcubeIds(getDb()).tree());
+    stub.holdItems('dev', itemsOf(await files().all(), published.ids));
+    const audit = auditStore(getDb());
+    const server = buildServer({
+      config: secured,
+      sessions: pgSessionStore(getDb()),
+      documents: docs(),
+      catalog: catalog(getDb()),
+      folderAccess: folderAccessStore(getDb()),
+      modelFiles: files(),
+      folders: () => folderXcubeIds(getDb()).published(),
+      xcube: xcubeAdmin({
+        cubeApiUrl: secured.cubeApiUrl,
+        model: 'dev',
+        token: FAKE_ADMIN_TOKEN,
+        fetch: stub.fetch,
+      }),
+      audit,
+    });
+    const signedIn = new Map<string, string>();
+    const as_ = async (who: string, options: InjectOptions) => {
+      if (!signedIn.has(who)) signedIn.set(who, await signIn(server, USERS[who]!));
+      return server.inject({ ...options, headers: { cookie: signedIn.get(who)! } });
+    };
+    return {
+      stub,
+      audit,
+      as: as_,
+      xcubeOf: (id: string) => published.ids.get(id)!,
+      publishAs: (who: string) =>
+        as_(who, {
+          method: 'POST',
+          url: '/api/model/publish',
+          payload: {
+            folderId: ids.b,
+            files: [{ path: paths.b, content: ORDERS.replace('type: count', 'type: sum') }],
+          },
+        }),
+      /** The records of refusals in /A/B and /C, newest first; removed as the test ends. */
+      records: async () =>
+        (await audit.list({ events: ['publish-refused'], folderIds: [ids.b, ids.c] })).records,
+      close: async () => {
+        await server.close();
+        await getDb()
+          .deleteFrom('audit_records')
+          .where('event', '=', 'publish-refused')
+          .where('folder_id', 'in', [ids.b, ids.c])
+          .execute();
+      },
+    };
+  }
+
+  it('names the breaks in folders its user may see, counts the rest, and records them all', async () => {
+    const { stub, xcubeOf, publishAs, records: recorded, close } = await refusingServer();
+    const broke = () =>
+      stub.refuse([
+        {
+          folderId: xcubeOf(ids.b),
+          name: `${MARK}_orders`,
+          kind: 'yaml',
+          line: 4,
+          column: 7,
+          message: 'B broke',
+        },
+        { folderId: xcubeOf(ids.c), name: `${MARK}_orders`, kind: 'compile', message: 'C broke' },
+      ]);
+    try {
+      broke();
+      const asWriter = await publishAs('writer');
+      expect(asWriter.statusCode, asWriter.body).toBe(422);
+      expect(asWriter.json()).toEqual({
+        errors: [{ path: paths.b, folderId: ids.b, line: 4, column: 7, message: 'B broke' }],
+        hidden: 1,
+        error: '1 item in folders you can’t see would break.',
+      });
+      expect(asWriter.body).not.toContain('C broke');
+      expect(asWriter.body).not.toContain(ids.c);
+
+      broke();
+      const asSuper = await publishAs('super');
+      expect(asSuper.statusCode).toBe(422);
+      expect(asSuper.json()).toEqual({
+        errors: [
+          { path: paths.b, folderId: ids.b, line: 4, column: 7, message: 'B broke' },
+          { path: paths.c, folderId: ids.c, message: 'C broke' },
+        ],
+      });
+      // Nothing hidden: no count, the body as before T427.
+      expect(Object.keys(asSuper.json<object>())).toEqual(['errors']);
+
+      const records = await recorded();
+      expect(records).toHaveLength(2);
+      const every = [
+        { path: paths.b, folderId: ids.b, line: 4, column: 7, message: 'B broke' },
+        { path: paths.c, folderId: ids.c, message: 'C broke' },
+      ];
+      const writers = records.find((record) => record.actor?.name.includes('Writer'));
+      expect(writers?.summary).toBe('2 breaks: 1 named to its user, 1 counted');
+      expect(writers?.folderId).toBe(ids.b);
+      expect(writers?.item).toEqual({ kind: 'model', id: paths.b, title: paths.b });
+      expect(writers?.details).toEqual({
+        breaks: every,
+        shown: { named: 1, counted: 1 },
+        files: [paths.b],
+      });
+      const supers = records.find((record) => record !== writers);
+      expect(supers?.summary).toBe('2 breaks: 2 named to its user, 0 counted');
+      expect(supers?.details).toEqual({
+        breaks: every,
+        shown: { named: 2, counted: 0 },
+        files: [paths.b],
+      });
+      // Nothing published.
+      expect((await files().list(ids.b)).map((file) => file.content)).toEqual([ORDERS]);
+    } finally {
+      await close();
+    }
+  });
+
+  /**
+   * T427's review: wechart's own check of every folder's rollups (T207, R29)
+   * refuses a publish for a rollup broken in a folder its user can't see:
+   * only counted, every break recorded.
+   */
+  it('counts a rollup broken in a folder its user can’t see, and records it', async () => {
+    const broken = {
+      folderId: ids.c,
+      path: `model/${MARK}/c_broken.yml`,
+      content: [
+        'cubes:',
+        `  - name: ${MARK}_broken`,
+        '    sql_table: public.broken',
+        '    measures:',
+        '      - name: count',
+        '        type: count',
+        '    pre_aggregations:',
+        '      - name: hidden_rollup',
+        '        measures: [count, no_such_measure]',
+        '',
+      ].join('\n'),
+    };
+    await files().seed([broken]);
+    const { publishAs, records, close } = await refusingServer();
+    try {
+      const asWriter = await publishAs('writer');
+      expect(asWriter.statusCode, asWriter.body).toBe(422);
+      expect(asWriter.json()).toEqual({
+        errors: [],
+        hidden: 1,
+        error: '1 item in folders you can’t see would break.',
+      });
+      expect(asWriter.body).not.toContain('hidden_rollup');
+      const [record] = await records();
+      expect(record?.details).toMatchObject({
+        breaks: [
+          expect.objectContaining({
+            path: broken.path,
+            folderId: ids.c,
+            message: expect.stringContaining('hidden_rollup'),
+          }),
+        ],
+        shown: { named: 0, counted: 1 },
+      });
+    } finally {
+      await close();
+      await getDb().deleteFrom('model_files').where('path', '=', broken.path).execute();
+    }
+  });
+
+  /** T427's review: a delete the check refuses is said and recorded as a publish's is, as a delete. */
+  it('says and records a refused delete as it does a publish, saying it was a delete', async () => {
+    const extra = {
+      folderId: ids.b,
+      path: `model/${MARK}/b_extra.yml`,
+      content: `cubes:\n  - name: ${MARK}_extra\n    sql_table: public.extra\n`,
+    };
+    await files().seed([extra]);
+    const { stub, xcubeOf, as: asUser, records, close } = await refusingServer();
+    stub.refuse([
+      { folderId: xcubeOf(ids.c), name: `${MARK}_orders`, kind: 'compile', message: 'C broke' },
+    ]);
+    try {
+      const answer = await asUser('writer', {
+        method: 'DELETE',
+        url: `/api/model/files?folder=${ids.b}&path=${encodeURIComponent(extra.path)}`,
+      });
+      expect(answer.statusCode, answer.body).toBe(422);
+      expect(answer.json()).toEqual({
+        errors: [],
+        hidden: 1,
+        error: '1 item in folders you can’t see would break.',
+      });
+      const [record] = await records();
+      expect(record).toMatchObject({
+        folderId: ids.b,
+        item: { kind: 'model', id: extra.path },
+        summary: `Deleting ${extra.path}: 1 break: 0 named to its user, 1 counted`,
+        details: {
+          change: 'delete',
+          breaks: [{ path: paths.c, folderId: ids.c, message: 'C broke' }],
+          shown: { named: 0, counted: 1 },
+          files: [extra.path],
+        },
+      });
+      // Nothing deleted.
+      expect((await files().list(ids.b)).map((file) => file.path)).toContain(extra.path);
+    } finally {
+      await close();
+      await getDb().deleteFrom('model_files').where('path', '=', extra.path).execute();
     }
   });
 });

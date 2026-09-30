@@ -29,8 +29,36 @@ export async function referencesTo(
  */
 export type PublishOutcome =
   | { readonly kind: 'published'; readonly version: string }
-  | { readonly kind: 'refused'; readonly problems: readonly CubeProblem[] }
+  | {
+      readonly kind: 'refused';
+      readonly problems: readonly CubeProblem[];
+      /**
+       * The breaks in folders the user can't see, only counted, in the API's
+       * words (T427, AC-322); none where every break is named.
+       */
+      readonly hidden?: { readonly count: number; readonly said: string };
+    }
   | { readonly kind: 'failed'; readonly message: string };
+
+/**
+ * Why a publish was refused, in a line: wechart's own words for rollups
+ * naming what the model lacks (AC-189) or whose cubes can't be joined
+ * (AC-235), else Cube's refusal; and the breaks in folders the user can't
+ * see, counted in the API's words (T427, AC-322).
+ */
+export function refusedText(
+  problems: readonly CubeProblem[],
+  hidden?: { readonly count: number; readonly said: string },
+): string {
+  if (problems.length === 0 && hidden !== undefined)
+    return `Nothing was published: ${hidden.said}`;
+  const why = problems.every((problem) => problem.preAggregation?.unknown !== undefined)
+    ? 'A pre-aggregation names members the model doesn’t have, so nothing was published.'
+    : problems.every((problem) => problem.preAggregation !== undefined)
+      ? 'A pre-aggregation’s cubes can’t be joined, so nothing was published.'
+      : 'Cube refused the model, so nothing was published.';
+  return hidden === undefined ? why : `${why} ${hidden.said}`;
+}
 
 export async function publishModel(
   files: readonly { path: string; content: string }[],
@@ -65,11 +93,18 @@ export async function publishModel(
     version?: string;
     errors?: CubeProblem[];
     error?: string;
+    hidden?: number;
   };
   if (response.ok && typeof body.version === 'string')
     return { kind: 'published', version: body.version };
   if (response.status === 422 && Array.isArray(body.errors))
-    return { kind: 'refused', problems: body.errors };
+    return {
+      kind: 'refused',
+      problems: body.errors,
+      ...(typeof body.hidden === 'number' && body.hidden > 0
+        ? { hidden: { count: body.hidden, said: body.error ?? '' } }
+        : {}),
+    };
   return {
     kind: 'failed',
     message: body.error ?? `The model could not be published (${String(response.status)}).`,

@@ -8038,7 +8038,7 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - **AC-136, AC-009 and AC-137 stay ticked, retested on items mode:**
       - `check.test.ts` (20), `snapshot.test.ts` (25), `client.test.ts`, `changesets.test.ts` and `publish.test.ts`;
       - in Chrome on compose's Cube on the image: the model specs (50), including `model.spec.ts`'s error on its file with no line, `publish-model.spec.ts`'s new member in the chart builder, and the cut-over spec's D2, where the revision holding the publish says `via: 'changeset'` and the other API and Cube instance list it at once.
-- [ ] T451 (AC-321, AC-288, AC-291) Check a proposal with a changeset's dry run when it is made, and apply that changeset at approval *(split from T426, 2026-09-26)*
+- [ ] T451 (AC-321, AC-288, AC-291, AC-322) Check a proposal with a changeset's dry run when it is made, and apply that changeset at approval *(split from T426, 2026-09-26)*
   - Files: `packages/api/src/routes/proposals.ts`, `packages/api/src/xcube/changesets.ts`, `e2e/security/publish-check.spec.ts`
   - Failing test: `publish-check.spec.ts`, against xcube's image:
     - a proposal is checked (`dryRun`) when made, and applied at approval;
@@ -8046,7 +8046,8 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - a stale base revision (`409`) is checked again (AC-321, AC-288, AC-291).
   - *2026-09-26, from T428's review:* an approval is AC-275's "approved" trigger. It must refuse a delete or rename of a name a chart or dashboard still uses, as a direct publish does (`inUse` in `model/publish.ts`, and the visibility rule with it). A test here should show it, so AC-275 stays demonstrated.
   - Depends on: T426, T349, T352
-- [ ] T427 (AC-322) Word a refused publish: breaks named in the folders the user may see, a count for the rest, all in the audit trail
+  - *2026-09-30, from T427:* an approval the check refuses is AC-322's other trigger. Answer it with `refusalOf` (`xcube/refusal.ts`), as the direct publish does, and record it in the audit trail. The review view's refusal (design 05, state L; `reviews/Refusal.tsx`) is built here, since nothing refuses an approval before this task. AC-322 stays open until a test here shows it.
+- [x] T427 (AC-322) Word a refused publish: breaks named in the folders the user may see, a count for the rest, all in the audit trail
   - Files: `packages/api/src/xcube/refusal.ts` (+ test), `packages/web/src/workspaces/reviews/Refusal.tsx` (+ test)
   - Failing test: `refusal.test.ts`:
     - each break xcube reports is mapped to its item;
@@ -8055,6 +8056,31 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - a Super-Admin sees all of them named;
     - the audit trail records every one (AC-322).
   - Depends on: T426, T368
+  - **Done 2026-09-30, for a direct publish.** AC-322 stays open: an approval refused by the check is T451's (see the note there).
+    - Files, as built: `packages/api/src/xcube/refusal.ts` (+ test), `model/publish.ts`, `xcube/check.ts`, `repos/audit.ts`, `routes/audit.ts`, `server.ts`; `packages/web/src/workspaces/model/publish.ts` (+ test), `ModelFilePage.tsx`, `security/AuditTrail.tsx` (+ test), `shell/styles.ts`. `reviews/Refusal.tsx` is T451's (below).
+    - **The refusal.** `refusalOf(errors, sees)` splits the check's breaks by their folder. xcube's check already puts each one on its item's file and folder (T445, T452).
+      - It answers the check's 422s: xcube's refusal, a rollup's unknown members, a cron Cube can't run, an unjoinable rollup, of a publish and of a model file's delete. The refusals of a file's own shape (several items in one file, unreadable, misnamed, a clash, a name declared twice) are about the files being published, so they are neither counted nor recorded.
+      - Every break says its folder, except the root's (T427's review). An error xcube places on no item, which is placed on a published file by what it names, and a bad cron, now say the published file's folder, as a placed error does.
+      - "May see" is seeing every item of the folder, as `/api/model/references` counts (T428). A Super-Admin, and the one user with sign-in off, see every folder.
+      - Where every break is named, the body is `{ errors }`, as before. Otherwise it is `{ errors, hidden, error }`, and `error` says "_n_ items in folders you can’t see would break." The model editor adds that sentence to its refusal line (`refusedText`).
+    - **The audit trail.** Each refusal is recorded as a new event kind, `publish-refused` ("Publish refused"), beside AC-294's seven. That is a small decision, and it can be overturned: design 08's state B draws a refused *proposal*, which T451 records.
+      - The record's details hold every break with its folder, what the user was shown (`shown: { named, counted }`), and the files published. A refused delete says so: `change: 'delete'`, and its line begins "Deleting _path_:".
+      - `/api/audit` gives each break its folder's path, as it does for a record's own folder.
+      - The inspector lists the breaks (file, folder, line and column, error) and "Shown to _name_: _n_ break(s) named, _m_ counted", as state B does.
+    - **Not built here:** `reviews/Refusal.tsx`. No approval runs the check yet, so it moves to T451.
+      - Nor a page-level test of the model editor's count. In this branch the editor publishes the root's files alone, which every publisher sees whole, so its count can't show there yet; T451's (or T342's folder editor's) is the surface for it.
+    - The count is of breaks, as the Fails-when says ("a count other than the hidden breaks'"). Two errors in one hidden item count 2, where the quoted sentence says "items": a question for the user.
+    - Tests:
+      - `xcube/refusal.test.ts`;
+      - `access/models.test.ts`:
+        - a writer on /A/B gets /A/B's break named and /C's counted, and a Super-Admin gets both named; both refusals are recorded with every break;
+        - a rollup broken in /C (wechart's own check, R29) is only counted to the writer, and recorded;
+        - a refused delete is said and recorded the same way, as a delete;
+      - `publish.test.ts`: an error placed on no item, and a bad cron, in a publish into /Sales, say /Sales;
+      - `access/audit-trail.test.ts`: each break's folder path;
+      - `web/.../model/publish.test.ts`;
+      - `AuditTrail.test.tsx`: state B.
+    - Also run: the full API suite (1054) and the full web suite (1993); `model`, `preaggregations` and `status-labels` e2e in Chrome (55); `security/audit.spec.ts` in Chrome.
 - [x] T428 (AC-275) Keep published items bound until they are published again, and refuse to delete or rename a name still referenced
   - Files: `packages/api/src/xcube/changesets.ts`, `packages/api/src/model/references.ts` (+ test), `e2e/security/binding.spec.ts`
   - Failing test: `binding.spec.ts`, against xcube's slice 3:
@@ -9877,7 +9903,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-136 | T445, T447, T426 | AC-137 | T447, ~~T432~~ T426 | AC-166 | T438 |
 | AC-332 (again) | T426 | AC-235 (again) | T445, T447 | AC-140 (again) | T446 |
 | AC-319 | T418, T421, T422, T423, T444 | AC-320 | T436 | AC-321 | ~~T426~~ T451, T436, T456 |
-| AC-322 | T427 | AC-323 | T347, T440 | AC-324 | T333, T455 |
+| AC-322 | T427, T451 | AC-323 | T347, T440 | AC-324 | T333, T455 |
 | AC-325 | T441, T363 | AC-326 | T420, T437 | AC-327 | T431, T442, T458 |
 | AC-328 | T341, T425, T449, T452, T435, T501 | AC-329 | T429, T450, T342, T347 | AC-330 | T419, T447, T425, T449, T436, T442 |
 | ~~AC-331~~ (retired, `[R30]`) | ~~T430~~ | AC-332 | T433 | AC-333 | T419, T447, T449, T425, T420 |

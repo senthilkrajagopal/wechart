@@ -21,6 +21,8 @@ export const EVENTS = [
   ['rejection', 'Rejection'],
   ['restore', 'Restore'],
   ['data-source-change', 'Data-source change'],
+  // A publish the check refused, with every break (T427, AC-322; state B).
+  ['publish-refused', 'Publish refused'],
 ] as const;
 export type AuditEvent = (typeof EVENTS)[number][0];
 const EVENT_LABEL = Object.fromEntries(EVENTS) as Record<AuditEvent, string>;
@@ -216,6 +218,7 @@ function EventIcon({ event }: { event: AuditEvent }) {
     restore: 'M3 8a5 5 0 1 0 1.5-3.5M3 2.5V5h2.5',
     'data-source-change':
       'M3 4c0-1.1 2.2-2 5-2s5 .9 5 2v8c0 1.1-2.2 2-5 2s-5-.9-5-2zM3 4c0 1.1 2.2 2 5 2s5-.9 5-2',
+    'publish-refused': 'M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2zM3.8 3.8l8.4 8.4',
   };
   return (
     <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -617,7 +620,10 @@ export function AuditTrail({
 }
 
 /** Where a record happened: its path below Shared, or with it for the inspector. */
-function folderText(record: Record_, withShared: boolean): string {
+function folderText(
+  record: Pick<Record_, 'folderId' | 'folderPath' | 'inWorkspace'>,
+  withShared: boolean,
+): string {
   if (record.folderId === null) return '—';
   if (record.folderPath === null)
     return record.inWorkspace === true || record.folderId.startsWith('ws:')
@@ -765,6 +771,8 @@ function Inspector({ id, record, onClose }: { id: string; record: Record_; onClo
         </>
       ) : record.event === 'data-source-change' && Array.isArray(details['changes']) ? (
         <Settings changes={details['changes']} tested={typeof details['testId'] === 'string'} />
+      ) : record.event === 'publish-refused' && Array.isArray(details['breaks']) ? (
+        <Breaks breaks={details['breaks']} shown={details['shown']} actor={record.actor} />
       ) : (
         <p>{record.summary}</p>
       )}
@@ -825,6 +833,80 @@ function Groups({ name, change }: { name: string; change: unknown }) {
         </span>
       </div>
     </div>
+  );
+}
+
+/**
+ * A refused publish's every break, named even where its user saw only a
+ * count, each with its file, its folder, the line and column where given and
+ * its error; then what its user was shown (T427, AC-322; design 08, state B).
+ */
+function Breaks({
+  breaks,
+  shown,
+  actor,
+}: {
+  breaks: readonly unknown[];
+  shown: unknown;
+  actor: Person | null;
+}) {
+  const rows = breaks.filter(
+    (
+      each,
+    ): each is {
+      path: string;
+      message: string;
+      folderId: string;
+      folderPath?: Record_['folderPath'];
+      inWorkspace?: true;
+      line?: number;
+      column?: number;
+    } =>
+      typeof each === 'object' &&
+      each !== null &&
+      typeof (each as { path?: unknown }).path === 'string' &&
+      typeof (each as { message?: unknown }).message === 'string' &&
+      typeof (each as { folderId?: unknown }).folderId === 'string',
+  );
+  // "1 break named, 1 counted", as state B says it.
+  const { named, counted } = (shown ?? {}) as { named?: unknown; counted?: unknown };
+  const said =
+    typeof named === 'number' && typeof counted === 'number'
+      ? `${String(named)} ${named === 1 ? 'break' : 'breaks'} named, ${String(counted)} counted`
+      : '';
+  return (
+    <dl className="source-settings__rows">
+      <dt>Breaks</dt>
+      <dd>
+        <ul aria-label="Breaks" className="audit-trail__breaks">
+          {rows.map((row, at) => {
+            const where = folderText(
+              {
+                folderId: row.folderId,
+                folderPath: row.folderPath ?? null,
+                ...(row.inWorkspace === true ? { inWorkspace: true as const } : {}),
+              },
+              false,
+            );
+            const place =
+              typeof row.line === 'number'
+                ? ` line ${String(row.line)}${typeof row.column === 'number' ? `:${String(row.column)}` : ''},`
+                : '';
+            return (
+              <li key={`${row.path}-${String(at)}`}>
+                <code>{row.path}</code> ({where}){place} {row.message}
+              </li>
+            );
+          })}
+        </ul>
+      </dd>
+      {said === '' ? null : (
+        <>
+          <dt>Shown to {actor?.name ?? 'its user'}</dt>
+          <dd>{said}</dd>
+        </>
+      )}
+    </dl>
   );
 }
 
