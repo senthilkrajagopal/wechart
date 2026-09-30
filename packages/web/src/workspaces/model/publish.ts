@@ -50,8 +50,7 @@ export function refusedText(
   problems: readonly CubeProblem[],
   hidden?: { readonly count: number; readonly said: string },
 ): string {
-  if (problems.length === 0 && hidden !== undefined)
-    return `Nothing was published: ${hidden.said}`;
+  if (problems.length === 0 && hidden !== undefined) return `Nothing was published: ${hidden.said}`;
   const why = problems.every((problem) => problem.preAggregation?.unknown !== undefined)
     ? 'A pre-aggregation names members the model doesn’t have, so nothing was published.'
     : problems.every((problem) => problem.preAggregation !== undefined)

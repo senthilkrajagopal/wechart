@@ -52,9 +52,9 @@ describe('a refused publish (T427, AC-322)', () => {
       'Cube refused the model, so nothing was published. 1 item in folders you can’t see would break.',
     );
     // Every break hidden: what is said is the count alone.
-    expect(refusedText([], { count: 2, said: '2 items in folders you can’t see would break.' })).toBe(
-      'Nothing was published: 2 items in folders you can’t see would break.',
-    );
+    expect(
+      refusedText([], { count: 2, said: '2 items in folders you can’t see would break.' }),
+    ).toBe('Nothing was published: 2 items in folders you can’t see would break.');
   });
 
   it('carries no count when every break is named', async () => {
