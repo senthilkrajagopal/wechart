@@ -273,15 +273,11 @@ test.describe('Cube refuses what wechart refuses (T436, AC-320)', () => {
     page,
   }) => {
     const request = page.request;
-    // A rollup in /A whose measure is a joined cube's: planned through the join.
+    // A rollup in /A of its own count by a joined cube's dimension, as
+    // `preaggregations.spec.ts` builds one: planned through the join.
     const base = `refuses_base_${RUN}`;
     const summary = `refuses_sum_${RUN}`;
-    await publish(
-      request,
-      ids.a,
-      base,
-      cubeYaml(base, ['      - name: total', '        sql: amount', '        type: sum']),
-    );
+    await publish(request, ids.a, base, cubeYaml(base));
     const joined = (joins: boolean) =>
       cubeYaml(summary, [
         ...(joins
@@ -293,8 +289,9 @@ test.describe('Cube refuses what wechart refuses (T436, AC-320)', () => {
             ]
           : []),
         '    pre_aggregations:',
-        '      - name: spend',
-        `        measures: [${base}.total]`,
+        '      - name: by_status',
+        '        measures: [count]',
+        `        dimensions: [${base}.status]`,
       ]);
     await publish(request, ids.a, summary, joined(true));
 
@@ -305,7 +302,10 @@ test.describe('Cube refuses what wechart refuses (T436, AC-320)', () => {
       data: { folderId: ids.a, files: [{ path: `cubes/${summary}.yml`, content: joined(false) }] },
     });
     expect(broken.status(), await broken.text()).toBe(422);
-    expect(await broken.text()).toContain('Pre-aggregation spend can’t be built'.replace('’', "'"));
+    const { errors } = (await broken.json()) as { errors?: { message: string }[] };
+    expect(errors?.[0]?.message).toMatch(
+      /^Pre-aggregation by_status can't be built: Cube cannot join its cubes\. Can't find join path/,
+    );
   });
 });
 
@@ -316,7 +316,7 @@ test.describe('as a read-only member (T436, AC-263)', () => {
     const loaded = page.waitForResponse(
       (response) => response.url().endsWith('/api/load') && response.request().method() === 'POST',
     );
-    await page.goto(`/dashboards/${ids.board}`);
+    await page.goto(`/explore/dashboards/${ids.board}`);
     const answer = await loaded;
     expect(answer.status(), await answer.text()).toBe(200);
     const data = ((await answer.json()) as { data?: Record<string, unknown>[] }).data ?? [];

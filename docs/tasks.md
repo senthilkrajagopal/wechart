@@ -8144,7 +8144,7 @@ Every step leaves both suites working. The slice-4 image takes HS256 tokens unti
 
 ### Slice 4: permissions and tokens
 
-- [ ] T436 (AC-320, AC-263, AC-321) Push each folder's allowed groups, and security, to xcube, so Cube refuses what wechart refuses *(rewritten 2026-09-26 to slice 4 as built, `[X4]`)*
+- [x] T436 (AC-320, AC-263, AC-321) Push each folder's allowed groups, and security, to xcube, so Cube refuses what wechart refuses *(rewritten 2026-09-26 to slice 4 as built, `[X4]`)*
   - Files: `packages/core/src/access/allowed.ts` (+ test), `packages/api/src/xcube/folders.ts` (+ test), `packages/api/src/xcube/changesets.ts` (the probes' context), `e2e/security/cube-refuses.spec.ts`
   - Failing test:
     - `allowed.test.ts`: a folder's allowed groups are those granted on it, on an ancestor or on a descendant, plus the Super-Admin group; a folder no group reaches carries the Super-Admin group alone.
@@ -8172,6 +8172,21 @@ Every step leaves both suites working. The slice-4 image takes HS256 tokens unti
   - **Known, not fixed:** the xcube tree and the folders' groups are two reads, so a move between them can send a child set wider than its parent. xcube then refuses it (`400 invalid_permissions`) until the next push. `modelMeta` doesn't compare `x-xcube-revision` with the revision asked (it answers the head when asked beyond it, `xcube-meta-revision-and-bindings.md` Gotcha 2).
   - **For the user (from the review), AC-263:** a library chart kept in a folder a read-only user can't see, shown on a dashboard they may see, is bound along its own folder's path. When it uses that folder's own cube, the folder's allowed set doesn't hold the user's group, so Cube refuses the tile. AC-263 says the chart opens for them (`access/readonly.test.ts` has the case, through wechart's check). Either allowed sets also take the groups of every folder showing such a chart on a dashboard, or AC-263 is narrowed. Not ticked on this.
   - **AC-321** keeps T451's and T456's parts, and stays open.
+  - **Done 2026-09-30** (9cbce1a, and the e2e's fixes after it). **The whole security suite in Chrome, with the gate on for `e2e-security`: 138 passed.**
+    - The one failure was `cube-refuses.spec.ts`'s AC-321 case, whose first break (a rollup of the joined cube's measure alone, planned without the join) Cube never refuses. It now takes the join away from a rollup of its own count by the joined cube's status, as `preaggregations.spec.ts` does. The three tests serial after it didn't run.
+    - The reader's dashboard link then used a path the app doesn't route. With both fixed, `cube-refuses.spec.ts` and `cube-groups.spec.ts` pass together, 15 of 15:
+      - a token none of whose groups a folder allows gets the gate's 403;
+      - `ab-<run>`, granted on /A/B, gets /A's cube;
+      - an authored row-level policy filters it and not the Super-Admins;
+      - a grant and a revocation each reach Cube within 60 s;
+      - a folder no group reaches admits the Super-Admins alone;
+      - a reader's dashboard answers;
+      - with security on, a publish that takes a rollup's join away is refused;
+      - with security off (the phase-1 model), a token with no groups is answered.
+  - **ACs not ticked:**
+    - AC-320's "a permission change recompiles a module" is shown only by xcube's own test (`xcube-slice-4.md`, [t-sec] L300-315). Here the model's revision is shared with the suite's other specs, so no test of wechart's can show it.
+    - AC-263 waits on the user's question above.
+    - AC-321 waits on T451 and T456.
 - [ ] T437 (AC-326, AC-008) Sign every query token RS256, carrying only the groups some policy or folder names, and push the keys to xcube *(rewritten 2026-09-26 to slice 4 as built, `[X4]`)*
   - Files: `packages/api/src/cube/signing.ts` (+ test), `packages/api/src/cube/client.ts`, `packages/api/src/xcube/keys.ts` (+ test), `infra/cube/cube.js` (`contextToGroups` goes; xcube reads `groups`; the `wechartIntrospection` branch goes, T420's hand-on), the signing key in `docker-compose.yml` and a chart Secret generated once (`lookup`), and the e2e helpers that sign HS256 query tokens themselves (`items-switch.spec.ts`, `xcube-cutover.spec.ts`, `deploy/helm/verify.sh`). (`jose` came with T420.)
   - Failing test:
