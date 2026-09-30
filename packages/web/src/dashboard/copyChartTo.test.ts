@@ -93,7 +93,14 @@ describe('copying a tile’s chart to another dashboard', () => {
   it('says the dashboard changed meanwhile, that nothing was written, and to copy again (T271’s review)', async () => {
     const fetchImpl = async (_input: RequestInfo | URL, init?: RequestInit) =>
       init?.method === 'PUT'
-        ? new Response(JSON.stringify({ error: 'stale' }), { status: 409 })
+        ? // The server's stale-save answer, as PUT /api/dashboards/:id sends it.
+          new Response(
+            JSON.stringify({
+              message: 'This dashboard changed since you opened it.',
+              document: { kind: 'dashboard', id: 'target' },
+            }),
+            { status: 409 },
+          )
         : new Response(
             JSON.stringify({
               id: 'target',
