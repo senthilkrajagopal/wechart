@@ -1,9 +1,10 @@
 import { execFileSync } from 'node:child_process';
-import { createHash, createHmac } from 'node:crypto';
+import { createHash } from 'node:crypto';
 
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
-import { CUBE, SECRET, serviceToken, startApi, stopApi, type ApiProcess } from './api-process';
+import { CUBE, serviceToken, startApi, stopApi, type ApiProcess } from './api-process';
+import { queryToken } from './tokens';
 import { ownCubeFile } from './model-files';
 
 /**
@@ -35,12 +36,16 @@ const MODEL = 'e2e';
 const docker = (...args: string[]) =>
   execFileSync('docker', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 
-/** A token as wechart's API signs one: HS256 with Cube's secret (research, "Query tokens"). */
-function tokenFor(claims: Record<string, unknown>): string {
-  const now = Math.floor(Date.now() / 1000);
-  const part = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
-  const unsigned = `${part({ alg: 'HS256', typ: 'JWT' })}.${part({ ...claims, iat: now, exp: now + 300 })}`;
-  return `${unsigned}.${createHmac('sha256', SECRET).update(unsigned).digest('base64url')}`;
+/**
+ * A token as wechart's API signs one (research, "Query tokens"): RS256 under
+ * the pushed development key (T437, `e2e/tokens.ts`).
+ */
+function tokenFor(claims: {
+  wechartModel?: string;
+  wechartRevision?: number;
+  groups?: string[];
+}): string {
+  return queryToken(claims);
 }
 
 /**

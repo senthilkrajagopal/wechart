@@ -1,5 +1,4 @@
 import { execFileSync } from 'node:child_process';
-import { createHmac } from 'node:crypto';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,7 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { migrateChartDocument, readChartDocument, toChartSpec, toCubeQuery } from '@wechart/core';
 import { expect, test } from '@playwright/test';
 
-import { CUBE, SECRET, serviceToken, startApi, stopApi, type ApiProcess } from './api-process';
+import { CUBE, serviceToken, startApi, stopApi, type ApiProcess } from './api-process';
+import { pushDevSigningKey, queryToken } from './tokens';
 
 /**
  * T430 / AC-336: WHEN wechart first moves its model to xcube's items mode
@@ -55,16 +55,12 @@ const psql = (database: string, sql: string) =>
   ).trim();
 
 /**
- * A token as wechart's API signs one: HS256 with Cube's secret, naming the
- * model and the revision it must be answered from (T421; research
- * `xcube-slice-2.md`, "Query tokens").
+ * A token as wechart's API signs one, naming the model and the revision it
+ * must be answered from (T421; research `xcube-slice-2.md`, "Query tokens"):
+ * RS256 under the pushed development key (T437, `e2e/tokens.ts`).
  */
 function tokenFor(model: string, revision: number): string {
-  const now = Math.floor(Date.now() / 1000);
-  const part = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
-  const claims = { wechartModel: model, wechartRevision: revision, iat: now, exp: now + 300 };
-  const unsigned = `${part({ alg: 'HS256', typ: 'JWT' })}.${part(claims)}`;
-  return `${unsigned}.${createHmac('sha256', SECRET).update(unsigned).digest('base64url')}`;
+  return queryToken({ wechartModel: model, wechartRevision: revision });
 }
 
 /** The plain YAML model files the store seeds from, as slice 2 sent them. */
@@ -220,6 +216,8 @@ test.describe.serial('the move to items mode (T430, AC-336)', () => {
       body: JSON.stringify({ baseRevision: null, files: seedFiles(), source: { reason: 'T430' } }),
     });
     expect(put.status).toBe(201);
+    // Its query tokens are RS256 (T437): the key an API serving it would push.
+    await pushDevSigningKey(model);
   });
 
   test.afterAll(async () => {
@@ -240,6 +238,7 @@ test.describe.serial('the move to items mode (T430, AC-336)', () => {
         WECHART_SEED: '1',
         WECHART_XCUBE_MODEL: '',
         WECHART_SERVICE_KEY_FILE: '',
+        WECHART_SIGNING_KEY_FILE: '',
       },
     });
     const files = await head(model);

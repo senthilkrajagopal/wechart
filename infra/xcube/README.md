@@ -42,3 +42,21 @@ AC-326; `docs/research/xcube-slice-4.md`, "The service token").
 
 The Helm chart generates its own pair at install (`genSelfSignedCert`), and
 keeps it across upgrades.
+
+# wechart's development query signing key
+
+Every query token wechart signs for Cube is RS256 under a key of its own,
+whose public half the API pushes to xcube at start (T437, AC-326;
+`docs/research/xcube-slice-4.md`, "PUT …/keys"). xcube is given nothing by
+configuration: the push is the only way it learns the key.
+
+- `dev-signing-key.pem`: the private half, RSA 2048-bit in PKCS#8 PEM. The API
+  reads it from `WECHART_SIGNING_KEY_FILE`, and the e2e helpers that sign a
+  token themselves read it too. For development only.
+
+Once any model in compose's xcube holds keys, xcube refuses HS256 tokens that
+name no model, and a model with keys never takes HS256 again (research,
+"HS256 during and after the cutover").
+
+The Helm chart generates its own signing key at install (`genPrivateKey`), and
+keeps it across upgrades.

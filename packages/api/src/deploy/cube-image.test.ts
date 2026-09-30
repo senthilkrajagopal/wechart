@@ -128,6 +128,38 @@ describe('the docker-desktop Helm release runs it (T414, T417, AC-248)', () => {
   });
 
   /**
+   * T437, AC-326: the query signing key is generated once and kept, as the
+   * chart's other secrets are (`lookup`), and only the API has it: xcube
+   * learns its public half from the API's push, never by configuration
+   * (research `cube/tokens-and-service-credential.md`, "Kubernetes":
+   * `genPrivateKey "rsa"`).
+   */
+  it('gives the query signing key to the API alone, generated once', () => {
+    const secrets = fromRoot('deploy/helm/wechart/templates/secrets.yaml');
+    // Made only when the Secret holds none: an upgrade keeps it.
+    expect(secrets).toMatch(
+      /\$signingKey := get \$data "signing-key\.pem" \| b64dec \| default \(genPrivateKey "rsa"\)/,
+    );
+    expect(secrets).toMatch(/^ {2}signing-key\.pem: /m);
+
+    const api = fromRoot('deploy/helm/wechart/templates/api.yaml');
+    expect(api).toMatch(/- name: WECHART_SIGNING_KEY\n[^-]*key: signing-key\.pem/);
+    for (const other of [
+      'cube.yaml',
+      'cubestore.yaml',
+      'dex.yaml',
+      'meta.yaml',
+      'seed-default.yaml',
+      'web.yaml',
+      'xcube-bootstrap.yaml',
+      'xcube-credential-key.yaml',
+    ])
+      expect(fromRoot(`deploy/helm/wechart/templates/${other}`), other).not.toContain(
+        'signing-key.pem',
+      );
+  });
+
+  /**
    * T361's review: nginx gives up on a request silent for 60 s by default
    * (research nginx.md, "Longest single API request"). A connection test
    * waits on two 30 s steps, and a publish on xcube's 120 s compile wait.

@@ -70,11 +70,10 @@ describe('Cube’s configuration, xcube’s (T447)', () => {
       'updateCompilerCacheKeepAlive',
     ])
       expect(config, key).not.toHaveProperty(key);
-    expect(Object.keys(config).sort()).toEqual([
-      'contextToApiScopes',
-      'contextToGroups',
-      'orchestratorOptions',
-    ]);
+    // Nor the groups policies match: xcube's own `contextToGroups` reads the
+    // context's `groups`, strings only, less its reserved group (T437;
+    // research xcube-slice-4.md, "cube.js").
+    expect(Object.keys(config).sort()).toEqual(['contextToApiScopes', 'orchestratorOptions']);
   });
 
   /**
@@ -93,41 +92,38 @@ describe('Cube’s configuration, xcube’s (T447)', () => {
     });
   });
 
-  it('matches access policies on the context’s own groups, each a string', () => {
-    const { config } = load();
-
-    expect(config.contextToGroups({ securityContext: { groups: ['sales', 7, 'ops'] } })).toEqual([
-      'sales',
-      'ops',
-    ]);
-    expect(config.contextToGroups({ securityContext: {} })).toEqual([]);
-    expect(config.contextToGroups({})).toEqual([]);
-  });
-
   /**
-   * T275 / AC-250: THE SYSTEM SHALL grant Cube's `introspection` scope only to
-   * the short-lived tokens its API signs to browse a data source and generate
-   * cubes, never to any other request's token.
+   * AC-250 (amended 2026-09-25): THE SYSTEM SHALL grant Cube's `introspection`
+   * scope only to wechart's service credential, never to a user's token. xcube
+   * grants a verified service token `jobs` and `introspection` whatever
+   * cube.js says (research xcube-slice-4.md, "Scopes by role"), so cube.js
+   * grants it to no context: T420's HS256 introspection claim is retired with
+   * HS256 (T437).
    */
-  it('grants introspection to the API’s introspection token alone', async () => {
+  it('grants introspection to no context: only xcube’s service credential has it', async () => {
     const { config } = load();
     const defaults = ['graphql', 'meta', 'data'];
 
-    // Introspection and nothing else: the token reads no model and loads no
-    // data (research/cube/introspection-api.md, "Two further hardening steps").
-    expect(await config.contextToApiScopes({ wechartIntrospection: true }, defaults)).toEqual([
-      'introspection',
-    ]);
+    // The retired claim grants nothing: scoped as any other token.
+    for (const context of [
+      { wechartIntrospection: true },
+      { wechartModel: 'dev', wechartRevision: 3, wechartIntrospection: true },
+      { wechartIntrospection: 'true' },
+    ])
+      expect(await config.contextToApiScopes(context, defaults), JSON.stringify(context)).toEqual([
+        ...defaults,
+        'jobs',
+      ]);
     // Nor do the defaults carry it, should CUBEJS_DEFAULT_API_SCOPES name it.
     const named = [...defaults, 'introspection'];
     expect(await config.contextToApiScopes(undefined, named)).toEqual([...defaults, 'jobs']);
-    // A draft's claim means nothing since drafts went (T431, R29): scoped as
-    // any other token.
+    // A draft's claim means nothing since drafts went (T431, R29).
     expect(await config.contextToApiScopes({ wechartDraft: 'd1' }, named)).toEqual([
       ...defaults,
       'jobs',
     ]);
-    // Every other token wechart signs: jobs as before, never introspection.
+    // Every other token: jobs as before (a model without keys yet takes
+    // HS256 builds), never introspection.
     expect(
       await config.contextToApiScopes({ tenant: 'acme', groups: ['sales'] }, defaults),
     ).toEqual([...defaults, 'jobs']);
@@ -135,16 +131,5 @@ describe('Cube’s configuration, xcube’s (T447)', () => {
       await config.contextToApiScopes({ wechartModel: 'dev', wechartRevision: 3 }, defaults),
     ).toEqual([...defaults, 'jobs']);
     expect(await config.contextToApiScopes(undefined, defaults)).toEqual([...defaults, 'jobs']);
-    // Nor does a model's claim widen it past introspection.
-    expect(
-      await config.contextToApiScopes(
-        { wechartModel: 'dev', wechartRevision: 3, wechartIntrospection: true },
-        defaults,
-      ),
-    ).toEqual(['introspection']);
-    // Only the claim as the API sets it: `true`, not a string that says so.
-    expect(
-      await config.contextToApiScopes({ wechartIntrospection: 'true' }, defaults),
-    ).not.toContain('introspection');
   });
 });

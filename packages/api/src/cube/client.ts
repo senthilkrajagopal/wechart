@@ -1,5 +1,7 @@
 import { createHmac } from 'node:crypto';
 
+import type { QuerySigner } from './signing';
+
 /**
  * The only place in wechart that holds the Cube API secret (AC-007), and the
  * only place that talks to Cube (AC-008).
@@ -38,7 +40,20 @@ export interface CubeClientOptions {
    * here. Absent, those calls are signed here as before slice 4.
    */
   readonly service?: () => Promise<string>;
+  /**
+   * The query signer (T437, AC-326; `signing.ts`), once its key is pushed to
+   * xcube: every query token is then RS256 under it, carrying only the groups,
+   * the model and the revision. Until it gives one, tokens are HS256 as before
+   * slice 4, which a model with no keys still takes.
+   */
+  readonly signer?: () => QuerySigner | undefined;
 }
+
+/**
+ * The groups some access policy or folder's allowed set names (T437; AC-008,
+ * AC-326; `named-groups.ts`), read as each token is signed.
+ */
+export type NamedGroups = () => Promise<ReadonlySet<string>>;
 
 /**
  * A Cube instance behind the revision a token names catches up for up to 10 s,
@@ -108,6 +123,10 @@ export class CubeClient {
   readonly #fetch: typeof fetch;
   readonly #options: CubeClientOptions;
   readonly #catchUpDelayMs: (retryAfterSeconds: number) => number;
+  /** A signed-in user's groups, when this client asks as one (`as`). */
+  #userGroups: readonly string[] | undefined;
+  /** The groups their tokens may carry, when `as` was given them. */
+  #named: NamedGroups | undefined;
 
   constructor(options: CubeClientOptions) {
     this.#options = options;
@@ -122,14 +141,19 @@ export class CubeClient {
   /**
    * This client for one signed-in user (T322, AC-008): the configured context
    * with the user's AD groups beside it, in place of any the configuration
-   * names, so the model's access policies apply by group (infra/cube/cube.js,
-   * `contextToGroups`; research/cube/access-control.md).
+   * names, so the model's access policies and xcube's folder gate apply by
+   * group (xcube's `contextToGroups`; research xcube-slice-4.md, "cube.js").
+   * Given `named`, each token carries only those of their groups it names
+   * (T437, AC-008).
    */
-  as(user: { readonly groups: readonly string[] }): CubeClient {
-    return new CubeClient({
+  as(user: { readonly groups: readonly string[] }, named?: NamedGroups): CubeClient {
+    const client = new CubeClient({
       ...this.#options,
       securityContext: { ...this.#securityContext, groups: [...user.groups] },
     });
+    client.#userGroups = [...user.groups];
+    client.#named = named;
+    return client;
   }
 
   /** `/v1/meta`: the cubes, views and members the model exposes. */
@@ -249,13 +273,17 @@ export class CubeClient {
 
   /**
    * The user's Cube fork's data-source introspection (T275, AC-250;
-   * research/cube/introspection-api.md): its routes alone, each with a token of
-   * its own that carries `wechartIntrospection: true` — the claim
-   * `infra/cube/cube.js` grants the `introspection` scope for — and lives a
-   * minute. The scope reads the warehouse's whole catalog, so no other token
-   * wechart signs has it, and none reaches the browser. Answered as Cube
-   * answers — status and body, refusals included — for the API to say in its
-   * own words.
+   * research/cube/introspection-api.md): its routes alone, with the service
+   * credential, the only credential xcube grants `introspection` (T420; research
+   * xcube-slice-4.md, "Scopes by role"). The scope reads the warehouse's whole
+   * catalog, so no query token wechart signs has it, and none reaches the
+   * browser. Answered as Cube answers — status and body, refusals included —
+   * for the API to say in its own words.
+   *
+   * Without a service credential (no xcube configured) it still signs T275's
+   * minute-long token with `wechartIntrospection: true`, which cube.js no
+   * longer grants anything for since T437: Cube refuses it as a missing scope,
+   * and the API says so.
    */
   async introspect(
     path: string,
@@ -264,7 +292,7 @@ export class CubeClient {
     if (!/^\/v1\/introspection\/data-sources(?:[/?]|$)/.test(path))
       throw new Error('Only Cube’s introspection routes are asked with an introspection token.');
     // The service credential, which xcube grants `introspection` (T420); else
-    // a minute's token with the claim cube.js grants it for, as before slice 4.
+    // T275's minute-long token, which no scope is granted for any more (T437).
     const service = this.#options.service;
     const { response, text } = await this.#send(path, async () => ({
       method: init.method ?? 'GET',
@@ -272,7 +300,7 @@ export class CubeClient {
         ...(init.body === undefined ? {} : { 'content-type': 'application/json' }),
         authorization: `Bearer ${
           service === undefined
-            ? this.#token(
+            ? await this.#token(
                 { wechartIntrospection: true },
                 undefined,
                 INTROSPECTION_TTL_SECONDS,
@@ -294,12 +322,19 @@ export class CubeClient {
   async ask(
     path: string,
     init: { method?: string; body?: string; headers?: Record<string, string> },
+    /** With the service credential, where there is one (T437): as wechart builds. */
+    asService = false,
   ): Promise<{ status: number; body: unknown }> {
+    const service = asService ? this.#options.service : undefined;
     const { response, text } = await this.#send(path, async () => ({
       ...init,
       headers: {
         ...init.headers,
-        authorization: `Bearer ${this.#token(undefined, undefined, this.#ttl, await this.#modelClaims())}`,
+        authorization: `Bearer ${
+          service === undefined
+            ? await this.#token(undefined, undefined, this.#ttl, await this.#modelClaims())
+            : await service()
+        }`,
       },
       redirect: 'manual',
       // A hung Cube is not an answer: the probe reads it as unknown.
@@ -401,13 +436,53 @@ export class CubeClient {
    * with a JWT library: it is three base64url segments and an HMAC, and this
    * keeps the secret from travelling through another dependency.
    */
-  #token(
+  async #token(
     context?: Record<string, unknown>,
     preview?: Record<string, unknown>,
     ttl: number = this.#ttl,
     /** The model and its revision (T421), set last, so nothing names them for wechart. */
     model: Record<string, unknown> = {},
-  ): string {
+  ): Promise<string> {
+    /**
+     * A signed-in user's own context carries only their groups that some
+     * policy or folder names (T437, AC-008). A preview carries exactly the
+     * groups chosen for it (AC-166), and the configured context its own.
+     */
+    const named =
+      preview === undefined && this.#userGroups !== undefined ? await this.#named?.() : undefined;
+    const own = {
+      ...this.#securityContext,
+      ...context,
+      ...(named === undefined
+        ? {}
+        : { groups: (this.#userGroups ?? []).filter((group) => named.has(group)) }),
+    };
+    /**
+     * RS256 under the pushed key (T437, AC-326): the groups, from a preview
+     * (T172, AC-166) or the user's context, and the model and revision,
+     * nothing else. xcube reads no other claim, and wechart sends none.
+     */
+    const signer = this.#options.signer?.();
+    if (signer !== undefined) {
+      const source = preview ?? own;
+      const groups = Array.isArray(source['groups'])
+        ? (source['groups'] as unknown[]).filter(
+            (group): group is string => typeof group === 'string',
+          )
+        : [];
+      return signer.sign(
+        {
+          groups,
+          ...(typeof model['wechartModel'] === 'string'
+            ? { wechartModel: model['wechartModel'] }
+            : {}),
+          ...(typeof model['wechartRevision'] === 'number'
+            ? { wechartRevision: model['wechartRevision'] }
+            : {}),
+        },
+        ttl,
+      );
+    }
     const issuedAt = Math.floor(Date.now() / 1000);
     const header = { alg: 'HS256', typ: 'JWT' };
     const payload = {
@@ -418,7 +493,7 @@ export class CubeClient {
        * Cube compiles (`wechart…`), set after it so it cannot be named.
        */
       ...(preview === undefined
-        ? { ...this.#securityContext, ...context }
+        ? own
         : { ...previewClaimsOf(preview), ...wechartClaimsOf(this.#securityContext) }),
       ...model,
       iat: issuedAt,

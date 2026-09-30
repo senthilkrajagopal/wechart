@@ -1,4 +1,4 @@
-import { createPrivateKey, type KeyObject } from 'node:crypto';
+import { createPrivateKey, createPublicKey, type KeyObject } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -85,7 +85,18 @@ export interface Config {
    * or neither. Without them wechart sends xcube nothing, as before the
    * cut-over (T447).
    */
-  readonly xcube?: { readonly model: string; readonly serviceKey: string };
+  readonly xcube?: {
+    readonly model: string;
+    readonly serviceKey: string;
+    /**
+     * The private key every query token is signed RS256 with (T437, AC-326):
+     * `WECHART_SIGNING_KEY` or `_FILE`, required with the model. Its public
+     * half is pushed to xcube at start.
+     */
+    readonly signingKey: string;
+    /** The key to rotate to, `WECHART_SIGNING_NEXT_KEY` or `_FILE`: pushed with it, then signed with. */
+    readonly nextSigningKey?: string;
+  };
   /**
    * The install Job's token, `WECHART_SEED_TOKEN` or the file
    * `WECHART_SEED_TOKEN_FILE` names (T443, AC-310, AC-251): the one thing its
@@ -221,11 +232,16 @@ const MODEL_ID = /^[a-z0-9][a-z0-9_-]{0,62}$/;
 /** The smallest RSA key xcube takes (research `xcube-slice-4.md`, "Keys and tokens"). */
 const MIN_SERVICE_KEY_BITS = 2048;
 
-/** The deployment's model and wechart's service key, both or neither (T419, T420). */
+/**
+ * The deployment's model, wechart's service key and its query signing key,
+ * all or none (T419, T420, T437), and the signing key to rotate to.
+ */
 function xcubeOf(env: NodeJS.ProcessEnv): Pick<Config, 'xcube'> {
   const model = env['WECHART_XCUBE_MODEL'] ?? '';
-  const serviceKey = serviceKeyOf(env);
-  if (model === '' && serviceKey === '') return {};
+  const serviceKey = keyOf(env, 'WECHART_SERVICE_KEY');
+  const signingKey = keyOf(env, 'WECHART_SIGNING_KEY');
+  const nextSigningKey = keyOf(env, 'WECHART_SIGNING_NEXT_KEY');
+  if (model === '' && serviceKey === '' && signingKey === '') return {};
   if (model === '')
     throw new ConfigError(
       'WECHART_XCUBE_MODEL is required with WECHART_SERVICE_KEY: it names this deployment’s model in xcube.',
@@ -238,29 +254,52 @@ function xcubeOf(env: NodeJS.ProcessEnv): Pick<Config, 'xcube'> {
     throw new ConfigError(
       `WECHART_XCUBE_MODEL "${model}" isn’t a model id xcube takes: 1–63 lower-case letters, digits, "_" and "-", starting with a letter or digit.`,
     );
-  // The key itself is never repeated.
+  rsaKeyOf('WECHART_SERVICE_KEY', serviceKey);
+  if (signingKey === '')
+    throw new ConfigError(
+      'WECHART_SIGNING_KEY (or WECHART_SIGNING_KEY_FILE) is required with WECHART_XCUBE_MODEL: every query token is signed RS256 with it (AC-326).',
+    );
+  rsaKeyOf('WECHART_SIGNING_KEY', signingKey);
+  const publicDer = (pem: string) => createPublicKey(pem).export({ type: 'pkcs1', format: 'der' });
+  if (publicDer(signingKey).equals(publicDer(serviceKey)))
+    throw new ConfigError(
+      'WECHART_SIGNING_KEY is the service key: xcube takes no pushed key that it holds as a service key.',
+    );
+  if (nextSigningKey !== '') rsaKeyOf('WECHART_SIGNING_NEXT_KEY', nextSigningKey);
+  return {
+    xcube: {
+      model,
+      serviceKey,
+      signingKey,
+      ...(nextSigningKey === '' ? {} : { nextSigningKey }),
+    },
+  };
+}
+
+/** A private RSA key of the size xcube takes, or why not: the key itself never repeated. */
+function rsaKeyOf(setting: string, pem: string): KeyObject {
   let key: KeyObject;
   try {
-    key = createPrivateKey(serviceKey);
+    key = createPrivateKey(pem);
   } catch {
-    throw new ConfigError('WECHART_SERVICE_KEY isn’t a private key in PEM.');
+    throw new ConfigError(`${setting} isn’t a private key in PEM.`);
   }
   const bits = key.asymmetricKeyDetails?.modulusLength ?? 0;
   if (key.asymmetricKeyType !== 'rsa' || bits < MIN_SERVICE_KEY_BITS)
     throw new ConfigError(
-      `WECHART_SERVICE_KEY isn’t a key xcube takes: an RSA key of ${String(MIN_SERVICE_KEY_BITS)} bits or more.`,
+      `${setting} isn’t a key xcube takes: an RSA key of ${String(MIN_SERVICE_KEY_BITS)} bits or more.`,
     );
-  return { xcube: { model, serviceKey } };
+  return key;
 }
 
-/** `WECHART_SERVICE_KEY`, or the file `WECHART_SERVICE_KEY_FILE` names: a mounted Secret. */
-function serviceKeyOf(env: NodeJS.ProcessEnv): string {
-  const file = env['WECHART_SERVICE_KEY_FILE'] ?? '';
-  if (file === '') return env['WECHART_SERVICE_KEY'] ?? '';
+/** A key setting, or the file its `_FILE` names: a mounted Secret. */
+function keyOf(env: NodeJS.ProcessEnv, setting: string): string {
+  const file = env[`${setting}_FILE`] ?? '';
+  if (file === '') return env[setting] ?? '';
   try {
     return readFileSync(file, 'utf8');
   } catch {
-    throw new ConfigError(`WECHART_SERVICE_KEY_FILE names ${file}, which can’t be read.`);
+    throw new ConfigError(`${setting}_FILE names ${file}, which can’t be read.`);
   }
 }
 

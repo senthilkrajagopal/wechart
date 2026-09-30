@@ -270,6 +270,114 @@ describe('the service credential, on wechart’s own calls (AC-326, AC-250)', ()
   });
 });
 
+/**
+ * T437 (AC-326, AC-008): with a query signer, every token for a query is
+ * RS256 under its key, security on or off, and carries only the groups, the
+ * model and the revision: nothing else of the configured context or the user.
+ */
+describe('RS256 query tokens (T437, AC-326)', () => {
+  const signing = async () => {
+    const { generateKeyPairSync } = await import('node:crypto');
+    const { querySigner } = await import('./signing');
+    const signer = await querySigner({
+      privateKeyPem: generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({
+        type: 'pkcs8',
+        format: 'pem',
+      }) as string,
+      issuer: 'wechart',
+    });
+    received = [];
+    respond = () => ({ status: 200, body: JSON.stringify({ cubes: [] }) });
+    const cube = new CubeClient({
+      apiUrl: baseUrl,
+      apiSecret: 'test-secret-do-not-leak',
+      securityContext: { tenant: 'acme', groups: ['configured'] },
+      model: { id: 'e2e', revision: async () => 7 },
+      service: async () => 'the-service-token',
+      signer: () => signer,
+    });
+    return { cube, signer };
+  };
+  /** The groups some access policy or folder names (AC-008, AC-326). */
+  const named = async () => new Set(['g-sales', 'g-ops']);
+  const headerOf = (request: RecordedRequest) =>
+    JSON.parse(
+      Buffer.from(bearerOf(request).split('.')[0]!, 'base64url').toString('utf8'),
+    ) as Record<string, unknown>;
+
+  it('signs a user’s query RS256 with the key’s kid, carrying their groups, the model and revision, and nothing else', async () => {
+    const { cube, signer } = await signing();
+    await cube.as({ groups: ['g-sales', 'g-ops'] }).load({ measures: ['orders.count'] });
+    await cube.meta();
+
+    expect(headerOf(received[0]!)).toEqual({ alg: 'RS256', kid: signer.kid, typ: 'JWT' });
+    const { iat, exp, ...rest } = payloadOf(received[0]!);
+    expect(rest).toEqual({
+      aud: 'xcube',
+      iss: 'wechart',
+      role: 'user',
+      groups: ['g-sales', 'g-ops'],
+      wechartModel: 'e2e',
+      wechartRevision: 7,
+    });
+    expect(Number(exp) - Number(iat)).toBeLessThanOrEqual(3600);
+    // Security off: the configured context's groups, and nothing else of it.
+    expect(payloadOf(received[1]!)['groups']).toEqual(['configured']);
+    expect(payloadOf(received[1]!)).not.toHaveProperty('tenant');
+  });
+
+  it('previews as the chosen groups alone', async () => {
+    const { cube } = await signing();
+    await cube.as({ groups: ['g-sales'] }).load({ measures: ['orders.count'] }, undefined, {
+      groups: ['g-hr'],
+      tenant: 'other',
+      wechartModel: 'forged',
+    });
+    const payload = payloadOf(received[0]!);
+    expect(payload['groups']).toEqual(['g-hr']);
+    expect(payload['wechartModel']).toBe('e2e');
+    expect(payload).not.toHaveProperty('tenant');
+  });
+
+  it('carries only the user’s groups that some policy or folder names, in the order they have them (AC-008)', async () => {
+    const { cube } = await signing();
+    await cube
+      .as({ groups: ['g-ops', 'g-unnamed', 'g-sales', 'wechart-internal'] }, named)
+      .load({ measures: ['orders.count'] });
+    await cube.as({ groups: ['g-unnamed'] }, named).meta();
+    // A preview is as exactly the groups chosen for it (AC-166).
+    await cube
+      .as({ groups: ['g-ops'] }, named)
+      .load({ measures: ['orders.count'] }, undefined, { groups: ['g-hr', 'g-unnamed'] });
+
+    expect(payloadOf(received[0]!)['groups']).toEqual(['g-ops', 'g-sales']);
+    // None named: none carried, not the configured context's.
+    expect(payloadOf(received[1]!)['groups']).toEqual([]);
+    expect(payloadOf(received[2]!)['groups']).toEqual(['g-hr', 'g-unnamed']);
+  });
+
+  it('trims a user’s groups in the tokens signed before the keys are pushed too (AC-008)', async () => {
+    received = [];
+    respond = () => ({ status: 200, body: JSON.stringify({ cubes: [] }) });
+    const cube = new CubeClient({
+      apiUrl: baseUrl,
+      apiSecret: 'test-secret-do-not-leak',
+      securityContext: { tenant: 'acme' },
+      signer: () => undefined,
+    });
+    await cube.as({ groups: ['g-sales', 'g-unnamed'] }, async () => new Set(['g-sales'])).meta();
+    expect(headerOf(received[0]!)).toMatchObject({ alg: 'HS256' });
+    expect(payloadOf(received[0]!)['groups']).toEqual(['g-sales']);
+  });
+
+  it('keeps wechart’s own calls on the service credential', async () => {
+    const { cube } = await signing();
+    await cube.buildPreAggregations(['orders.daily']);
+    await cube.introspect('/v1/introspection/data-sources');
+    expect(received.map(bearerOf)).toEqual(['the-service-token', 'the-service-token']);
+  });
+});
+
 describe('the secret never leaves the service (AC-007)', () => {
   it('is not in the metadata result wechart hands back', async () => {
     const result = await client({ apiSecret: 'super-secret-value' }).meta();

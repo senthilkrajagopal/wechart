@@ -108,6 +108,14 @@ spec:
                 secretKeyRef:
                   name: {{ include "wechart.secretName" . }}
                   key: service-key.pem
+            # The key every query token is signed RS256 with, whose public
+            # half the API pushes to xcube at start (T437, AC-326). No other
+            # pod has it.
+            - name: WECHART_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wechart.secretName" . }}
+                  key: signing-key.pem
             # xcube's public key, which credentials are sealed to; the API
             # won't start without it (T333, AC-324). Its Job publishes it
             # (T455): until then this pod waits, and never runs without it.

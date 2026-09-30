@@ -25,6 +25,8 @@ import {
   type CachePolicy,
 } from './cube/client';
 import { authCheckOf } from './cube/authCheck';
+import type { QuerySigner } from './cube/signing';
+import { namedGroups } from './cube/named-groups';
 import { scopesOf } from './cube/scopes';
 import { healthOf, originOf } from './cube/health';
 import { MetaCache, MetaCachesByGroups } from './cube/meta-cache';
@@ -133,6 +135,11 @@ export interface BuildOptions {
    * to Cube carry — jobs, introspection, the whole model's field list.
    */
   readonly serviceToken?: () => Promise<string>;
+  /**
+   * The query signer, once its key is pushed to xcube (T437, AC-326): every
+   * query token is then RS256 under it (`cube/signing.ts`).
+   */
+  readonly querySigner?: () => QuerySigner | undefined;
   /**
    * What xcube last acknowledged of each model (T419), read for the revision
    * every token to Cube names and the field list follows (T421, AC-334).
@@ -318,6 +325,7 @@ export function buildServer({
   beforeFolderPublish,
   xcube,
   serviceToken,
+  querySigner,
   publications,
   folderAccess,
   dataSources,
@@ -459,6 +467,7 @@ export function buildServer({
       securityContext: config.securityContext,
       ...(model === undefined ? {} : { model }),
       ...(serviceToken === undefined ? {} : { service: serviceToken }),
+      ...(querySigner === undefined ? {} : { signer: querySigner }),
     });
 
   // Metadata is cached with a 60-second freshness bound (AC-009), so a
@@ -474,11 +483,29 @@ export function buildServer({
    * asks Cube for itself — compiling a publish, builds, schedules, a data
    * source's catalog, health — keeps the configured context.
    */
+  /**
+   * The groups a user's token may carry (T437, AC-008, AC-326): those some
+   * policy in the model names, every group granted on a folder, and the
+   * Super-Admin group (`cube/named-groups.ts`). Read where the folders'
+   * groups are kept, as the deployment keeps them.
+   */
+  const named =
+    security === 'oidc' && folderAccess !== undefined
+      ? namedGroups({
+          tree: () => folderAccess.tree(),
+          files: async () => (await (modelFiles?.all ?? modelFiles?.list)?.call(modelFiles)) ?? [],
+          revision: async () => model?.revision(),
+          ...(config.superAdminGroup === undefined
+            ? {}
+            : { superAdminGroup: config.superAdminGroup }),
+        })
+      : undefined;
   const cubeFor = (request: FastifyRequest): CubeClient =>
-    security === 'oidc' ? client.as({ groups: userOf(request).groups }) : client;
+    security === 'oidc' ? client.as({ groups: userOf(request).groups }, named) : client;
   // And metadata per set of groups: access policies hide members per group.
   const metaByGroups = new MetaCachesByGroups(
-    (groups) => new MetaCache({ fetchMeta: () => client.as({ groups }).meta(), ...metaOptions }),
+    (groups) =>
+      new MetaCache({ fetchMeta: () => client.as({ groups }, named).meta(), ...metaOptions }),
   );
   const metaFor = (request: FastifyRequest): MetaCache =>
     security === 'oidc' ? metaByGroups.for(userOf(request).groups) : meta;
@@ -557,7 +584,11 @@ export function buildServer({
   app.get('/api/cube-scopes', USER, async (request, reply) => {
     const scope = await jobsAccess.scope(request);
     if (!scope.all && !scope.writesAny) return reply.status(403).send(NO_JOBS);
-    return scopesOf((path, init) => client.ask(path, init));
+    return scopesOf(
+      (path, init) => client.ask(path, init),
+      // Jobs as wechart builds: with the service credential (T437, AC-326).
+      (path, init) => client.ask(path, init, true),
+    );
   });
 
   /**

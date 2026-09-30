@@ -163,6 +163,8 @@ describe('the API’s start-up (T333, AC-324)', () => {
         [XCUBE_PUBLIC_KEY]: DEV_JWK,
         WECHART_XCUBE_MODEL: 't455',
         WECHART_SERVICE_KEY_FILE: fileURLToPath(new URL('infra/xcube/dev-service-key.pem', REPO)),
+        // Required with the model since T437 (AC-326).
+        WECHART_SIGNING_KEY_FILE: fileURLToPath(new URL('infra/xcube/dev-signing-key.pem', REPO)),
       };
       vi.resetModules();
 

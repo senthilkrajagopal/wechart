@@ -3,6 +3,7 @@ import closeWithGrace from 'close-with-grace';
 import { pgSessionStore } from './auth/session-store';
 import { loadConfig } from './config';
 import { serviceCredential } from './cube/service-token';
+import { querySigner } from './cube/signing';
 import { closeDb, getDb } from './db/client';
 import { migrateToLatest } from './db/migrate';
 import { bookmarkStore } from './repos/bookmarks';
@@ -21,6 +22,7 @@ import { modelFileStore } from './repos/model-files';
 import { queryLog } from './repos/query-log';
 import { checkXcubeHoldsKey, xcubePublicKeyOf } from './secrets/xcube-key';
 import { xcubeAdmin } from './xcube/client';
+import { startSigning, xcubeKeys } from './xcube/keys';
 import { connectionSync, xcubeConnections } from './xcube/connections';
 import { publicationStore } from './xcube/publications';
 import { modelSync } from './xcube/snapshot';
@@ -35,6 +37,9 @@ import { buildServer } from './server';
  * production they are their own step before the API starts
  * (docs/research/db-access.md).
  */
+/** The issuer every query token names, and the pushed key set requires (T437). */
+const TOKEN_ISSUER = 'wechart';
+
 async function main(): Promise<void> {
   const config = {
     ...loadConfig(),
@@ -79,6 +84,29 @@ async function main(): Promise<void> {
           privateKeyPem: config.xcube.serviceKey,
           model: config.xcube.model,
         });
+  /**
+   * The query signing keys (T437, AC-326): every query token is RS256 under
+   * one once its public half is pushed to xcube, below; with a next key, the
+   * rotation to it.
+   */
+  const signers =
+    config.xcube === undefined
+      ? undefined
+      : {
+          current: await querySigner({
+            privateKeyPem: config.xcube.signingKey,
+            issuer: TOKEN_ISSUER,
+          }),
+          ...(config.xcube.nextSigningKey === undefined
+            ? {}
+            : {
+                next: await querySigner({
+                  privateKeyPem: config.xcube.nextSigningKey,
+                  issuer: TOKEN_ISSUER,
+                }),
+              }),
+        };
+  let signing: ReturnType<typeof startSigning> | undefined;
   const admin =
     config.xcube === undefined || service === undefined
       ? undefined
@@ -154,6 +182,8 @@ async function main(): Promise<void> {
     folders: () => folderIds.published(),
     ...(admin === undefined ? {} : { xcube: admin }),
     ...(service === undefined ? {} : { serviceToken: () => service.token() }),
+    // RS256 under the pushed key, once pushed (T437, AC-326).
+    ...(signers === undefined ? {} : { querySigner: () => signing?.signer() }),
     publications,
     // Each folder's AD groups (T314).
     folderAccess: folderAccessStore(db),
@@ -194,6 +224,25 @@ async function main(): Promise<void> {
       token: () => service.anyModelToken(),
       onWait: (why) => app.log.warn(`${why}: waiting to check xcube’s credential keys`),
     });
+
+  // The query keys pushed before anything is served (T437, AC-326): from
+  // then on the model takes RS256 tokens only. Waited for while xcube can't
+  // be reached; a newer set without our key stops the start.
+  if (signers !== undefined && service !== undefined && config.xcube !== undefined) {
+    signing = startSigning({
+      ...signers,
+      keys: xcubeKeys({
+        cubeApiUrl: config.cubeApiUrl,
+        model: config.xcube.model,
+        issuer: TOKEN_ISSUER,
+        token: () => service.token(),
+        onWait: (why) => app.log.warn(`${why}: waiting to push the query keys`),
+      }),
+      warn: (message, error) => app.log.warn({ err: error }, message),
+    });
+    await signing.ready;
+    app.log.info({ kid: signing.signer()?.kid }, 'query keys pushed to xcube');
+  }
 
   // Expired sessions are swept out: Postgres has no TTL (T316's review).
   const sweeping = setInterval(

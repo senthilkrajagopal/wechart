@@ -85,7 +85,7 @@
 >
 >     Compose's Cube and the docker-desktop release now run xcube. Each API pushes its own model:
 >     - `e2e` and `e2e-security`, for the two suites;
->     - `demo`, for the demo API on :4200, which now starts with `WECHART_XCUBE_MODEL=demo WECHART_SERVICE_KEY_FILE=<repo>/infra/xcube/dev-service-key.pem` (T420: the service credential replaced `WECHART_XCUBE_ADMIN_TOKEN`, which xcube no longer takes);
+>     - `demo`, for the demo API on :4200, which now starts with `WECHART_XCUBE_MODEL=demo WECHART_SERVICE_KEY_FILE=<repo>/infra/xcube/dev-service-key.pem WECHART_SIGNING_KEY_FILE=<repo>/infra/xcube/dev-signing-key.pem` (T420: the service credential replaced `WECHART_XCUBE_ADMIN_TOKEN`, which xcube no longer takes; T437: the query signing key is required with the model, and its first start pushes it, after which the `demo` model takes RS256 tokens only);
 >     - `wechart`, in the release.
 >
 >     Also done: T391 (value-axis labels, **AC-299**), T392 (series order, **AC-300**), T393 (table columns, **AC-301**), T394 (markdown text, **AC-302**).

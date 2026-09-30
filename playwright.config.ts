@@ -12,6 +12,10 @@ const DEV_XCUBE_PUBLIC_KEY = readFileSync(
 const DEV_SERVICE_KEY_FILE = fileURLToPath(
   new URL('./infra/xcube/dev-service-key.pem', import.meta.url),
 );
+/** wechart's development query signing key, pushed to xcube at start (infra/xcube/README.md; T437). */
+const DEV_SIGNING_KEY_FILE = fileURLToPath(
+  new URL('./infra/xcube/dev-signing-key.pem', import.meta.url),
+);
 
 const PORT = 5273;
 const baseURL = `http://localhost:${PORT}`;
@@ -101,6 +105,7 @@ export default defineConfig({
         // XCUBE_SERVICE_KEYS_FILE; T420). A dev key.
         WECHART_XCUBE_MODEL: 'e2e',
         WECHART_SERVICE_KEY_FILE: DEV_SERVICE_KEY_FILE,
+        WECHART_SIGNING_KEY_FILE: DEV_SIGNING_KEY_FILE,
         // The compose refresh worker's own health probes (T162, AC-156).
         CUBE_WORKER_URL: 'http://localhost:54001',
       },

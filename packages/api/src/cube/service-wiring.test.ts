@@ -17,7 +17,7 @@ const config: Config = {
   cubeApiSecret: 'secret',
   securityContext: { tenant: 'acme' },
   modelDir: '',
-  xcube: { model: 'e2e', serviceKey: 'read by main.ts alone' },
+  xcube: { model: 'e2e', serviceKey: 'read by main.ts alone', signingKey: 'read by main.ts alone' },
 };
 
 const asked: { path: string; authorization: string }[] = [];
@@ -86,6 +86,54 @@ describe('wechart’s own calls to Cube, as the server is wired (T420)', () => {
       { path: '/v1/introspection/data-sources', authorization: `Bearer ${SERVICE}` },
     ]);
     expect(sources.body).not.toContain(SERVICE);
+  });
+
+  /**
+   * T437 (AC-326), through the server as it is wired (T437's review): once
+   * its key is pushed, every query token the server's own client signs is
+   * RS256 under it, and wechart's own calls keep the service credential.
+   */
+  it('signs queries RS256 under the pushed key, and builds with the service credential still', async () => {
+    const { generateKeyPairSync } = await import('node:crypto');
+    const { querySigner } = await import('./signing');
+    const signer = await querySigner({
+      privateKeyPem: generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({
+        type: 'pkcs8',
+        format: 'pem',
+      }) as string,
+      issuer: 'wechart',
+    });
+    serve();
+    const app = buildServer({
+      config,
+      serviceToken: async () => SERVICE,
+      querySigner: () => signer,
+    });
+
+    await app.inject({ url: '/api/meta' });
+    await app.inject({
+      method: 'POST',
+      url: '/api/load',
+      payload: { query: { measures: ['orders.count'] } },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/builds',
+      payload: { preAggregation: 'orders.daily' },
+    });
+
+    const headerOf = (authorization: string) =>
+      JSON.parse(
+        Buffer.from(authorization.replace('Bearer ', '').split('.')[0]!, 'base64url').toString(),
+      ) as Record<string, unknown>;
+    expect(asked.map(({ path }) => path)).toEqual([
+      '/v1/meta',
+      '/v1/load',
+      '/v1/pre-aggregations/jobs',
+    ]);
+    for (const { authorization } of asked.slice(0, 2))
+      expect(headerOf(authorization)).toEqual({ alg: 'RS256', kid: signer.kid, typ: 'JWT' });
+    expect(asked[2]!.authorization).toBe(`Bearer ${SERVICE}`);
   });
 
   it('ask Cube for the field list with wechart’s own token, never the service credential', async () => {

@@ -155,4 +155,26 @@ describe('the API scopes wechart’s context has', () => {
     const { ask } = asking({ ...GRANTED, 'GET /v1/meta': page, 'POST /graphql': page });
     expect(await scopesOf(ask)).toMatchObject({ meta: 'unknown', graphql: 'unknown' });
   });
+
+  it('probes jobs with the credential wechart builds with, the service credential (T437, AC-326)', async () => {
+    // A user's token: xcube grants it no jobs (research xcube-slice-4.md, "Scopes by role").
+    const users = asking({
+      ...GRANTED,
+      'POST /v1/pre-aggregations/jobs': {
+        status: 403,
+        body: { error: 'API scope is missing: jobs' },
+      },
+    });
+    const service = asking({
+      'POST /v1/pre-aggregations/jobs': {
+        status: 400,
+        body: { error: 'No job description provided' },
+      },
+    });
+    expect(await scopesOf(users.ask, service.ask)).toMatchObject({ jobs: 'granted' });
+    expect(service.asked).toEqual([
+      { method: 'POST', path: '/v1/pre-aggregations/jobs', body: {} },
+    ]);
+    expect(users.asked.map(({ path }) => path)).not.toContain('/v1/pre-aggregations/jobs');
+  });
 });

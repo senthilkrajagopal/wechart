@@ -55,7 +55,7 @@ describe('the model and its revision in Cube’s tokens (T421, AC-334)', () => {
     const publications = memoryPublications();
     await publications.put('dev', { generation: 'g', revision: 3, contentHash: 'h3' });
     const app = buildServer({
-      config: configOf({ model: 'dev', serviceKey: SERVICE_KEY }),
+      config: configOf({ model: 'dev', serviceKey: SERVICE_KEY, signingKey: SERVICE_KEY }),
       publications,
     });
 
@@ -78,7 +78,7 @@ describe('the model and its revision in Cube’s tokens (T421, AC-334)', () => {
   it('names the model alone before xcube has acknowledged a revision of it', async () => {
     tokens.length = 0;
     const app = buildServer({
-      config: configOf({ model: 'dev', serviceKey: SERVICE_KEY }),
+      config: configOf({ model: 'dev', serviceKey: SERVICE_KEY, signingKey: SERVICE_KEY }),
       publications: memoryPublications(),
     });
 
@@ -97,7 +97,7 @@ describe('the model and its revision in Cube’s tokens (T421, AC-334)', () => {
     await publications.put('dev', { generation: 'g', revision: 3, contentHash: 'h3' });
     let down = false;
     const app = buildServer({
-      config: configOf({ model: 'dev', serviceKey: SERVICE_KEY }),
+      config: configOf({ model: 'dev', serviceKey: SERVICE_KEY, signingKey: SERVICE_KEY }),
       publications: {
         ...publications,
         get: async (model) => {

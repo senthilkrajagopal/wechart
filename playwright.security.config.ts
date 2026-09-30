@@ -12,6 +12,10 @@ const DEV_XCUBE_PUBLIC_KEY = readFileSync(
 const DEV_SERVICE_KEY_FILE = fileURLToPath(
   new URL('./infra/xcube/dev-service-key.pem', import.meta.url),
 );
+/** wechart's development query signing key, pushed to xcube at start (infra/xcube/README.md; T437). */
+const DEV_SIGNING_KEY_FILE = fileURLToPath(
+  new URL('./infra/xcube/dev-signing-key.pem', import.meta.url),
+);
 
 /**
  * The install Job's token for this suite's API, a development value (T443,
@@ -88,6 +92,7 @@ export default defineConfig({
         // never reaches the other. A dev value, as compose's.
         WECHART_XCUBE_MODEL: 'e2e-security',
         WECHART_SERVICE_KEY_FILE: DEV_SERVICE_KEY_FILE,
+        WECHART_SIGNING_KEY_FILE: DEV_SIGNING_KEY_FILE,
         CUBE_WORKER_URL: 'http://localhost:54001',
         WECHART_SECURITY: 'oidc',
         WECHART_PUBLIC_URL: baseURL,

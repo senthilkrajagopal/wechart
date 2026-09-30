@@ -106,10 +106,8 @@ This is T274's test. It needs helm, kubectl, curl and jq, and it checks:
 4. `/api/health` is ok, and `/api/cube-health` says Cube and its refresh worker are healthy.
 5. A query from the web app reaches the data source the values name. The script publishes one cube on `public.orders` (`PROBE_TABLE`) through `/api/model/publish`, as the Model workspace does. It asks `/api/load` for the cube's count and expects more than zero. Then it removes the file again.
 6. xcube serves the model (T447), checked between step 5's query and its removal:
-   - **No API (D1).** With the API scaled to 0 and Cube restarted, Cube still counts the probe cube. The script asks it from inside Cube's pod, with a token it signs itself with the release's Cube secret.
+   - **No API (D1).** With the API scaled to 0 and Cube restarted, Cube still counts the probe cube. The script asks it from inside Cube's pod, with a token it signs itself there, RS256 under the release's signing key (T437), which it passes to `node` on stdin.
    - **Two API replicas (D2).** With the API at 2, a second probe cube published through the Service is in each replica's `/api/meta` at once. The script then removes that probe and returns the API to `api.replicas`.
-
-   Step 6 needs `openssl` to sign the token.
 7. The query path survives losing one Cube instance and one API replica (T423, AC-319), with two of each. The script:
    - publishes a cube whose query sleeps 60 s in the warehouse, and asks for it;
    - on the first "Continue wait", deletes the Cube pod that took the query and the API pod that sent it. It finds them from Cube's log line for the request, which gives the caller's address. If it can't find them, the step fails;
@@ -223,6 +221,7 @@ At the first install the chart generates these secrets:
 - the metadata database's password;
 - xcube's role password, and the URL Cube connects to xcube's schema by;
 - wechart's service key pair (T420): the API signs its own calls to Cube and xcube with the private half, and Cube's API instance is given a certificate of the public half. It replaced xcube's static admin token, which an upgrade drops;
+- wechart's query signing key (T437): an RSA key, 4096 bits. The API signs every query token RS256 with it, and pushes its public half to xcube when it starts. xcube isn't given it by configuration. From that first push on, the model takes RS256 tokens only. To rotate it, give the API the new key as `WECHART_SIGNING_NEXT_KEY` beside the current one. The API pushes both, signs with the new one, and drops the old one from xcube an hour and a minute later. Then make the new key the Secret's `signing-key.pem` and remove the setting;
 - for sign-in, the session cookie's secret and the OIDC client secret its Dex shares with the API. It keeps them in the Secret `wechart-secrets`. Every upgrade reads them back, so they never change (`docs/research/helm.md`, "Pattern: generate-once Secret").
 
 The Secret is kept on uninstall (`helm.sh/resource-policy: keep`). The metadata database's volume outlives an uninstall too, and its password was set when the database was first initialised, so a new password would lock the API out. A reinstall with the same release name and namespace takes the kept Secret back.

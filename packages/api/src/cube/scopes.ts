@@ -80,9 +80,17 @@ async function stateOf(scope: Scope, ask: Ask): Promise<ScopeState> {
   }
 }
 
-export async function scopesOf(ask: Ask): Promise<Record<Scope, ScopeState>> {
+export async function scopesOf(
+  ask: Ask,
+  /**
+   * The service credential's ask (T437, AC-326): what wechart builds with, so
+   * `jobs` is probed with it. xcube grants no user token `jobs` in slice 4.
+   */
+  askAsService: Ask = ask,
+): Promise<Record<Scope, ScopeState>> {
   // One at a time: the order they are listed in, and no burst at Cube.
   const states: Partial<Record<Scope, ScopeState>> = {};
-  for (const scope of SCOPES) states[scope] = await stateOf(scope, ask);
+  for (const scope of SCOPES)
+    states[scope] = await stateOf(scope, scope === 'jobs' ? askAsService : ask);
   return states as Record<Scope, ScopeState>;
 }

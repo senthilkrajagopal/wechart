@@ -22,12 +22,12 @@
 #
 # Step 6 (T447) checks that xcube serves the model: with no API replica and
 # Cube restarted, and with two API replicas. It signs one Cube token itself,
-# with openssl.
+# RS256 under the release's signing key, with node in Cube's pod (T437).
 #
 # Step 7 (T423) stops one Cube instance and one API replica with a slow query
 # in flight, and checks the query, the session and both Deployments.
 #
-# Needs helm, kubectl, curl, jq and openssl (docs/deploy.md).
+# Needs helm, kubectl, curl and jq (docs/deploy.md).
 
 set -uo pipefail
 
@@ -53,7 +53,7 @@ fail() {
 k() { kubectl --context "$context" -n "$namespace" "$@"; }
 h() { helm --kube-context "$context" -n "$namespace" "$@"; }
 
-for tool in helm kubectl curl jq openssl; do
+for tool in helm kubectl curl jq; do
   command -v "$tool" > /dev/null || {
     echo "verify.sh needs $tool on the PATH" >&2
     exit 2
@@ -355,17 +355,35 @@ scale_api() {
   fail "6. the API didn't come to $1 Ready replicas"
 }
 xcube_checks() {
-  local api_deploy cube_deploy model secret token old answer code cube_count pods pod cookie names
+  local api_deploy cube_deploy model token old answer code cube_count pods pod cookie names
   api_deploy="$(component_of deployments api)"
   cube_deploy="$(component_of deployments cube)"
   model="$(jq -r '.api.xcubeModel' <<< "$release_values")"
-  secret="$(k get secret "$(component_of secrets secrets)" -o jsonpath='{.data.cube-api-secret}' | base64 -d)"
-  local now header payload signature
-  now="$(date +%s)"
-  header="$(printf '{"alg":"HS256","typ":"JWT"}' | b64url)"
-  payload="$(jq -cn --arg m "$model" --argjson t "$now" '{wechartModel: $m, iat: $t, exp: ($t + 600)}' | b64url)"
-  signature="$(printf '%s.%s' "$header" "$payload" | openssl dgst -sha256 -hmac "$secret" -binary | b64url)"
-  token="$header.$payload.$signature"
+  # RS256 under the release's signing key, which the API pushed to xcube at
+  # start: the model takes no other token since (T437, AC-326). Signed in
+  # Cube's pod, which has node, the key given on stdin so it's in no command
+  # line; its kid is the key's RFC 7638 thumbprint, as the API computes it.
+  # The Super-Admin group, which every folder admits with security on (T436).
+  local groups
+  groups="$(jq -c '[.security.superAdminGroup // empty | select(. != "")]' <<< "$release_values")"
+  token="$(k get secret "$(component_of secrets secrets)" -o jsonpath='{.data.signing-key\.pem}' \
+    | base64 -d \
+    | k exec -i "deployment/$cube_deploy" -c cube -- node -e '
+      const { createHash, createPrivateKey, createPublicKey, sign } = require("node:crypto");
+      let pem = "";
+      process.stdin.on("data", (chunk) => (pem += chunk)).on("end", () => {
+        const { n, e } = createPublicKey(pem).export({ format: "jwk" });
+        const kid = createHash("sha256").update(JSON.stringify({ e, kty: "RSA", n })).digest("base64url");
+        const part = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
+        const now = Math.floor(Date.now() / 1000);
+        const unsigned = part({ alg: "RS256", kid, typ: "JWT" }) + "." + part({
+          aud: "xcube", iss: "wechart", role: "user", groups: JSON.parse(process.argv[2]),
+          wechartModel: process.argv[1], iat: now, exp: now + 600,
+        });
+        console.log(unsigned + "." + sign("sha256", Buffer.from(unsigned), createPrivateKey(pem)).toString("base64url"));
+      });
+    ' "$model" "$groups" 2> /dev/null)"
+  [[ -n "$token" ]] || fail "6. could not sign a query token with the release's signing key"
 
   # D1: no API replica, and a Cube process started after them.
   scale_api 0

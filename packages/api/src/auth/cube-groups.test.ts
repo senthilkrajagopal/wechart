@@ -210,6 +210,56 @@ describe('a signed-in user’s groups in every Cube request (T322, AC-008)', () 
   });
 });
 
+/**
+ * T437 (AC-008, AC-326): a signed-in user's token carries only their groups
+ * that some access policy names or some folder's allowed set holds: every
+ * group granted on a folder, and the Super-Admin group (requirements "A
+ * token's groups").
+ */
+describe('only the groups some policy or folder names (T437, AC-008)', () => {
+  it('carries, on every route, the user’s groups a folder grants or a policy names, and no other', async () => {
+    const { cube, asked } = recordingCube();
+    const app = serve({
+      config: { ...secured, superAdminGroup: 'wechart-super-admins' },
+      cube,
+      sessions: pgSessionStore(getDb()),
+      folderAccess: {
+        tree: async () => [
+          { id: 'root', parentId: null, access: { readOnly: ['g03'], readWrite: null } },
+          { id: 'f-a', parentId: 'root', access: { readOnly: null, readWrite: ['g17', 'x'] } },
+        ],
+        set: async () => true,
+      },
+      modelFiles: {
+        list: async () => [],
+        all: async () => [
+          {
+            folderId: 'f-a',
+            path: 'hr.yml',
+            content:
+              'cubes:\n  - name: hr\n    sql_table: hr\n    access_policy:\n      - groups: [g09, g20]\n      - group: "*"\n',
+          },
+        ],
+        seed: async () => undefined,
+        write: async () => undefined,
+      },
+    });
+    const headers = { cookie: await signIn(app, USERS['many']!) };
+
+    const answers = [
+      await app.inject({ method: 'GET', url: '/api/meta', headers }),
+      await app.inject({ method: 'POST', url: '/api/load', headers, payload: QUERY }),
+      await app.inject({ method: 'POST', url: '/api/sql', headers, payload: QUERY }),
+      await app.inject({ method: 'POST', url: '/api/acceleration', headers, payload: QUERY }),
+      await app.inject({ method: 'DELETE', url: '/api/running-query/r-1', headers }),
+    ];
+    expect(answers.map((answer) => answer.statusCode)).toEqual([200, 200, 200, 200, 204]);
+    expect(asked).toHaveLength(7);
+    for (const { path, claims } of asked)
+      expect(claims['groups'], path).toEqual(['g03', 'g09', 'g17', 'g20']);
+  });
+});
+
 describe('with security off (AC-008, phase 1)', () => {
   it('asks Cube with the configured context alone', async () => {
     const { cube, asked } = recordingCube();

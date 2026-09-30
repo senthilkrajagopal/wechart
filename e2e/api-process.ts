@@ -12,6 +12,10 @@ export const CUBE = 'http://localhost:54000/cubejs-api';
 export const SERVICE_KEY_FILE = fileURLToPath(
   new URL('../infra/xcube/dev-service-key.pem', import.meta.url),
 );
+/** wechart's development query signing key (infra/xcube/README.md; T437). */
+export const SIGNING_KEY_FILE = fileURLToPath(
+  new URL('../infra/xcube/dev-signing-key.pem', import.meta.url),
+);
 
 /**
  * A service token for xcube's admin routes, as wechart's API signs its own
@@ -65,6 +69,7 @@ export async function startApi(
       ).trim(),
       WECHART_XCUBE_MODEL: model,
       WECHART_SERVICE_KEY_FILE: SERVICE_KEY_FILE,
+      WECHART_SIGNING_KEY_FILE: SIGNING_KEY_FILE,
       ...settings,
     },
     stdio: 'ignore',
