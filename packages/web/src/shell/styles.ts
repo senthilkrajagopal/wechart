@@ -1189,6 +1189,31 @@ main:has(.model-page) {
 /* Published, and the whole model: design 03's .status.ok, in the status colour (T479's review). */
 .model-editor__state--ok,
 .model-tree__state--ok { color: var(--wc-status-success); }
+/* A shared model, read-only (T342; rules 70 and 71; design 03 of 2026-09-27,
+   state A): where it is, with the eye, beside its path; "Edit in my
+   workspace" at the head's end, and why it can't be pressed yet on the line
+   under the head, beneath it. */
+.model-editor__read-only { flex: none; gap: 4px; white-space: nowrap; }
+.model-editor__read-only > svg { flex: none; }
+.model-editor__head .model-editor__copy { display: inline-flex; gap: 4px; align-items: center; margin-left: auto; }
+/* Opened from Explore, under its folder's breadcrumb (rule 70): one line
+   above the model's panes, as the data source settings' crumbs read. */
+.model-page__crumbs {
+  flex: none;
+  overflow: hidden;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.model-page__crumbs a { color: var(--wc-text-secondary); text-decoration: none; }
+.model-page__crumbs a:hover { text-decoration: underline; }
+.model-page__crumbs [aria-current='page'] { color: var(--wc-text-primary); }
+.model-page__crumbs .is-code { font-family: var(--wc-font-code); }
 /* Leaving with them asks first: the warning bar under the head, in view
    however far the form is scrolled. */
 .model-editor__warnbar.model-editor__leave { flex: none; align-items: center; }

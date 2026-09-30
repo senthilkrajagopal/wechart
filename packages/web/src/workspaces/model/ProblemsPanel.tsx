@@ -1,6 +1,8 @@
 import { StatusIcon } from '../../shell/StatusIcon';
 import { exploreHref, folderChain } from '../explore/folders';
 import type { FolderNode } from '../explore/FolderTree';
+import { SHARED_ROOT } from '../explore/roots';
+import { fileHref } from './inFolder';
 import type { Problem } from './problems';
 
 /**
@@ -56,6 +58,8 @@ export function ProblemsPanel({
   cubeProblems = [],
   folders = [],
   onPick,
+  folderId = SHARED_ROOT.id,
+  hrefOf = (each) => fileHref(each),
 }: {
   path: string;
   problems: readonly Problem[];
@@ -64,6 +68,10 @@ export function ProblemsPanel({
   folders?: readonly FolderNode[];
   /** A problem picked: the editor goes to where it is. */
   onPick?: (problem: Problem) => void;
+  /** The folder whose file is open (T342): the shared root's unless said. */
+  folderId?: string;
+  /** Another of that folder's files, as its tree links it. */
+  hrefOf?: (path: string) => string;
 }) {
   // Counted apart (AC-223), as the prototype's head does.
   const warnings = problems.filter((problem) => problem.severity === 'warning').length;
@@ -116,12 +124,15 @@ export function ProblemsPanel({
                   {problem.preAggregation === undefined ? 'Cube: ' : ''}
                   {problem.message}
                 </span>
-                {problem.folderId !== undefined ? (
+                {(problem.folderId ?? SHARED_ROOT.id) !== folderId ? (
                   // Another folder's file (T450's review): said with its
-                  // folder, and a way to that folder, never to the root's
-                  // file of the same path.
-                  <a className="model-problems__where" href={exploreHref(problem.folderId)}>
-                    {folderChain(folders, problem.folderId)
+                  // folder, and a way to that folder, never to the open
+                  // folder's file of the same path — the root's too (T342).
+                  <a
+                    className="model-problems__where"
+                    href={exploreHref(problem.folderId ?? SHARED_ROOT.id)}
+                  >
+                    {folderChain(folders, problem.folderId ?? SHARED_ROOT.id)
                       .map((crumb) => crumb.title)
                       .join(' / ')}
                     {' · '}
@@ -137,10 +148,7 @@ export function ProblemsPanel({
                   </span>
                 ) : (
                   // In another file: a way to it, where its rollup's row says what is wrong.
-                  <a
-                    className="model-problems__where"
-                    href={`/model/files/${encodeURIComponent(problem.path)}`}
-                  >
+                  <a className="model-problems__where" href={hrefOf(problem.path)}>
                     {problem.line === undefined
                       ? problem.path
                       : `${problem.path}:${String(problem.line)}`}

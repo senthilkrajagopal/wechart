@@ -329,7 +329,8 @@ test('the root lists its model files as models, after its charts, and one opens 
   await expect(row.getByRole('button', { name: /^Actions for/ })).toHaveCount(0);
 
   await row.getByRole('button', { name: 'orders.yml' }).click();
-  await expect(page).toHaveURL(/\/model\/files\/cubes%2Forders\.yml$/);
+  // In its folder, the root, named in the address beside the file (T342, AC-222).
+  await expect(page).toHaveURL(/\/explore\/folders\/root\/models\/cubes%2Forders\.yml$/);
   await expect(page.getByRole('textbox', { name: 'cubes/orders.yml, as YAML' })).toContainText(
     'name: orders',
   );

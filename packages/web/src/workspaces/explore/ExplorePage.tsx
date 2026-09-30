@@ -27,6 +27,7 @@ import { statusOfItem } from './proposalStatus';
 import { ExportPane } from '../../dashboard/export/ExportPane';
 import { ExportedToast } from '../../dashboard/export/ExportedToast';
 import { ImportPane } from './import/ImportPane';
+import { fileHref } from '../model/inFolder';
 
 const counted = (count: number, one: string) => `${String(count)} ${count === 1 ? one : `${one}s`}`;
 /** "A", "A and B", "A, B and C". */
@@ -745,9 +746,11 @@ export function ExplorePage() {
                   openFolder(item.id);
                   return;
                 }
-                // A model file, in the model editor (T334, AC-269).
+                // A model file, in the model editor (T334, AC-269), in its own
+                // folder beside that folder's files: never the root's file of
+                // the same path (T342, AC-222).
                 if (item.kind === 'model') {
-                  globalThis.location.assign(`/model/files/${encodeURIComponent(item.id)}`);
+                  globalThis.location.assign(fileHref(item.id, item.folderId ?? folderId));
                   return;
                 }
                 globalThis.location.assign(`/explore/${item.kind}s/${encodeURIComponent(item.id)}`);

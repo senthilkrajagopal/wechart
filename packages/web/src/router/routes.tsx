@@ -628,6 +628,45 @@ const modelFileRoute = createRoute({
 });
 
 /**
+ * A folder's model, opened from its row in Explore (T342; AC-222, AC-131;
+ * rules 70 and 71): under the folder's breadcrumb, its files beside the
+ * editor, the file chosen opened in place with the folder and its path in
+ * the address — read-only in a shared folder with sign-in on. Without a
+ * file, what each of the folder's files defines.
+ */
+const folderModelRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/explore/folders/$folderId/models',
+  component: function FolderModelSurface() {
+    const params = useParams({ strict: false }) as { folderId?: string };
+    const folderId = decodeURIComponent(params.folderId ?? '');
+    return (
+      <AppShell workspace="explore">
+        <ModelFilePage key={folderId} folderId={folderId} />
+      </AppShell>
+    );
+  },
+});
+
+const folderModelFileRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/explore/folders/$folderId/models/$path',
+  component: function FolderModelFileSurface() {
+    const params = useParams({ strict: false }) as { folderId?: string; path?: string };
+    const folderId = decodeURIComponent(params.folderId ?? '');
+    return (
+      <AppShell workspace="explore">
+        <ModelFilePage
+          key={folderId}
+          folderId={folderId}
+          path={decodeURIComponent(params.path ?? '')}
+        />
+      </AppShell>
+    );
+  },
+});
+
+/**
  * A stored data source's settings (T462, AC-269; design 03 of 2026-09-27):
  * an Explore item, under its folder's breadcrumb, opened from its row in
  * Explore or in Data sources.
@@ -658,6 +697,8 @@ const routeTree = rootRoute.addChildren([
   chartRoute,
   dataSourceRoute,
   modelFileRoute,
+  folderModelRoute,
+  folderModelFileRoute,
 ]);
 
 export function buildRouter() {

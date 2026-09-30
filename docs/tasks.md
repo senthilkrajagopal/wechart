@@ -5671,7 +5671,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - Run in Chrome, Firefox and Safari together; all 9 pass.
     - **AC-274 ticked** on `isolation.spec.ts`.
     - **AC-328 stays open.** Its data-source clause is T435's now (a sub-bullet added there, from the review), and its never-reused ids are T425's `folder-xcube-ids` tests.
-- [ ] T342 (AC-222, AC-131, AC-141, AC-329) Open a model in its folder, beside that folder's files, read-only when shared
+- [x] T342 (AC-222, AC-131, AC-141, AC-329) Open a model in its folder, beside that folder's files, read-only when shared
   - Files: `packages/web/src/router/routes.tsx` (`/explore/folders/$folderId/models/$path`), `packages/web/src/workspaces/model/{ModelFilePage,FileTree}.tsx`, `packages/web/src/workspaces/model/editedMembers.ts` (+ test), `packages/web/src/workspaces/explore/ExplorePage.tsx` (a model row's link), `packages/web/src/workspaces/model/ModelInFolder.test.tsx`, `e2e/security/model-in-folder.spec.ts`
   - Failing test: `model-in-folder.spec.ts`:
     - opening a model from a folder shows that folder's files beside the editor with the folder and file in the URL; every object each file defines is listed; a file with an error is marked; in a shared folder the editor is read-only with "Edit in my workspace" and no New cube or New view (AC-222, AC-131);
@@ -5680,6 +5680,54 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - saving a folder file that edits a member lists the charts bound to its full name (`<folderId>__<name>.<member>`), and a root edit to a member that a folder's view or extending cube exposes lists the charts bound to that folder's name (AC-141).
   - Depends on: T334, T345
   - *2026-09-26, from T450 and its review:* the Model workspace reads only the root's files until this task, so the edited-member list, the model page's names and Explore's model links are this task's.
+  - **Done 2026-09-30. AC-131 ticked. AC-222 and AC-329 stay open; AC-141 stays ticked.**
+    - **AC-131:** `security/model-in-folder.spec.ts` (Chrome), "lists every object each of the folder's files defines": a folder's overview lists each file's cubes and views with their dimensions, measures, joins, pre-aggregations, segments and hierarchies. The root's is still `model.spec.ts`'s.
+    - **AC-222 stays open.** Its workspace half, New cube and New view in My workspace, waits on T347: the workspace holds no model until xcube serves overlays. The rest is shown:
+      - the folder's files beside the editor, the next opened in place, folder and path in the address (both e2e specs);
+      - a file with problems marked: typed (`model-in-folder.spec.ts`) and stored (the security spec);
+      - no New cube, New view or Generate in a shared folder (the security spec).
+    - **AC-329 stays open** for its picker parts (T347, T475). The model page's part is shown by the phase-1 spec's references warning: members said by short name, with another folder's path, never `f…__`. The page names cubes by the names their files give them (design 12's Name column), not by title, which the task's line asked. The user may want that line settled when AC-329 is ticked.
+    - **AC-141:** `model-in-folder.spec.ts` (Chrome), two tests:
+      - saving a folder's file lists the chart bound to `<xcubeId>__<cube>.count`;
+      - a root edit lists the chart bound to a folder view's `<xcubeId>__t342_view.count`.
+      - `model.spec.ts`'s root test still passes, and so does `editedMembers.test.ts` (7 new cases).
+  - *As built:*
+    - **Routes.** `/explore/folders/$folderId/models` (the folder's overview) and `/explore/folders/$folderId/models/$path`, in Explore under the folder's breadcrumb (rule 70): Explore / Shared / … / Model / *path*. `/model` and `/model/files/$path` stay the Model workspace, the root's. `ModelFilePage` takes `folderId`: the folder's files (`modelFilesQuery`), its drafts and made file (their own keys and session storage; the root's keep the old ones), its tree links, and its publish (`folderId` in the body).
+    - **Explore.** Every model row opens, the root's too, at its folder's address (`opensFromExplore` is now true for every row). `explore.spec.ts` and `security/explore-roles.spec.ts` expect the root's row at `/explore/folders/root/models/…` now, not `/model/files/…`.
+    - **Read-only (rules 70 and 71).** With sign-in on, every model is read-only, the root's and `/model` included: a shared item isn't changed in place (T502), and My workspace holds no model yet.
+      - The form is locked and the YAML read-only.
+      - The head says "Read-only · in *folder path*" with the eye, where Discard and Save were.
+      - No New cube, New view or Generate, in the tree, the overview or its empty state.
+      - Drafts aren't shown.
+      - With sign-in off, everything is editable in place, as in phase 1.
+    - **Edit in my workspace** is shown **disabled**, with "Models can't be copied into My workspace yet, so this one is read-only here." under the head as its description. It's offered to a Super-Admin or read-write member whose access to the folder answers them (`folderAccessQuery`, `rightFrom`), and to no one who only views the folder (writer in Sales, above EMEA). T347 makes it work.
+    - **Generate cubes** is offered only in the root's model: it reads the root's data sources (T490).
+    - **Edited members (AC-141).** At a save, `GET /api/model/files?all=true` (new) gives every folder's files the user may see, each with its folder: every file with security off; with it on, only those in folders whose every kind of item they see. `editedMembersOf(before, after, placesOf(folders))`:
+      - names a folder's members `<xcubeId>__<name>.<member>` and the root's bare;
+      - resolves a view's `join_path` and an `extends` along the folder's path, nearest first, as xcube binds them;
+      - leaves out a folder not yet published to;
+      - skips a file that doesn't parse on both sides.
+    - **Names (AC-329).** The references warning says a member by short name, and another folder's with its path: `t342_view.count (Sales / EMEA)` (`shownMemberOf`).
+    - **Problems.** Cube's refusals mark this folder's files in the tree. Problems links another of the folder's files in the folder, and names the root's file of the same path as the root's.
+    - **Also:** `AccessChip`'s icon is exported as `AccessIcon`, for the eye.
+  - *The cold review (FAIL), fixed:*
+    - The join diagram linked a folder file's cubes to the root's files of the same path. It now links them in the folder (`JoinEditor`'s `hrefOf`).
+    - A folder that isn't there, or that the user can't see, now shows the Not found page (rule 67), not "could not be read (404)". It isn't retried.
+    - Two unit tests' names claimed the page's gating; they now name the component contract they test.
+  - *Not changed after review:*
+    - With `/api/me` unanswered, a model is read-only: the gate fills it before any page draws.
+    - With sign-in off, New cube and New view are offered in every folder, as phase 1 had it. That will matter when AC-222 is ticked, alongside T359 (AC-254).
+  - *Left:*
+    - Schedules', Jobs', "Data as of"'s and search's model links still go to `/model/files/…`. A folder rollup's "Edit in Model" therefore opens nothing: `/model/files/f…__cube.yml`, seen in `folder-models.spec.ts`. They could use the folder's address now.
+    - The form's pickers and join diagram on a folder's file read that folder's files only, not the cubes on its path (T347, T475).
+    - The folder route takes no `?cube=&tab=` yet.
+  - *Tests:*
+    - Unit: web 2014 (`ModelInFolder.test.tsx` 16, `editedMembers.test.ts` 15, `FolderContents.test.tsx`); api 1048 (`model.test.ts` and `access/models.test.ts`, `?all=true`).
+      - `access/models.test.ts` got Dex's 503 once while the e2e's stack started, and passed alone.
+    - Chrome, security: `model-in-folder.spec.ts` and `explore-roles.spec.ts`, 23/23.
+    - Chrome, phase 1: `model-in-folder.spec.ts` and the model, explore, generate, folder-model, publish and data-source specs, 70/71.
+      - The failure is `folder-models.spec.ts`'s "Schedules reads a folder rollup's key SQL". It expects Schedules to show a prefixed name, and T371 made it show short names. It isn't from this task.
+    - Run on feat/xcube with T437 and T436 (3f4d807): compose's Cube takes RS256 tokens only, and gates folders.
 
 ## P2.5 Workspaces (F29)
 

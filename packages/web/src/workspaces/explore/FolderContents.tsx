@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import { MenuButton, type MenuItem } from '../../shell/MenuButton';
 import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
 import { chartTypeText } from './chartTypeLabels';
-import { SHARED_ROOT } from './roots';
 
 /**
  * The contents of the selected folder (AC-017), under the prototype's columns
@@ -191,13 +190,11 @@ const BUILT_ON_CLASS: Record<CatalogItem['kind'], string> = {
 const plural = (count: number, one: string) => `${String(count)} ${one}${count === 1 ? '' : 's'}`;
 
 /**
- * Whether Explore opens a row (T334): every kind, and a model only in the
- * shared root, whose files the model editor opens. Another folder's models
- * open in their folder with T342; until then they are listed by name.
+ * Whether Explore opens a row: every kind. A data source opens in its
+ * settings (T462, UX-222), and a model in its own folder, beside that
+ * folder's files (T342) — the root's and every other folder's alike.
  */
-export const opensFromExplore = (item: CatalogItem): boolean =>
-  // A data source opens in its settings (T462, UX-222), a model in its editor.
-  item.kind === 'data-source' || item.kind !== 'model' || item.folderId === SHARED_ROOT.id;
+export const opensFromExplore: (item: CatalogItem) => boolean = () => true;
 
 /** The Type column: a chart by its chart type, never only "Chart" (AC-193). */
 function typeText(item: CatalogItem): string {

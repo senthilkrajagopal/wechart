@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 
+import { fileHref } from './inFolder';
 import type { JoinGraph } from './joinGraph';
 import { BOX, drawJoin, layOut } from './joinLayout';
 
@@ -49,7 +50,10 @@ export function JoinEditor({
   cubes,
   onAdd,
   readOnly = false,
+  hrefOf = (path) => fileHref(path),
 }: {
+  /** A cube's file, as the tree links it: in its folder (T342); the Model workspace's by default. */
+  hrefOf?: ((path: string) => string) | undefined;
   graph: JoinGraph;
   /** The cube the editor opens on: marked, and the one a join is added to. */
   cube: string | undefined;
@@ -110,11 +114,7 @@ export function JoinEditor({
 
   const cubeLink = (name: string) => {
     const path = pathOf(name);
-    return path === undefined || name === current ? (
-      name
-    ) : (
-      <a href={`/model/files/${encodeURIComponent(path)}`}>{name}</a>
-    );
+    return path === undefined || name === current ? name : <a href={hrefOf(path)}>{name}</a>;
   };
 
   return (

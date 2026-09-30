@@ -247,6 +247,31 @@ describe('only a folder’s read-write members change its models (T334, AC-266, 
     expect(await openedPaths('nobody', 'root')).toEqual([]);
   });
 
+  /**
+   * T342, AC-141: a save's edited members are looked for across every
+   * folder's files the user may see — a view or extending cube in another
+   * folder exposes a member by that folder's name — each with its folder.
+   * Never a file of a folder they can't see, or see only dashboards of.
+   */
+  it('gives every folder’s files they may see at once, each with its folder, and none of the rest', async () => {
+    const every = async (who: string) =>
+      (await as(who, { method: 'GET', url: '/api/model/files?all=true' }))
+        .json<{ files: { folderId: string; path: string }[] }>()
+        .files.filter((file) => file.path.includes(MARK))
+        .map(({ folderId, path }) => ({ folderId, path }));
+
+    expect(await every('writer')).toEqual(
+      expect.arrayContaining([
+        { folderId: 'root', path: paths.root },
+        { folderId: ids.a, path: paths.a },
+        { folderId: ids.b, path: paths.b },
+      ]),
+    );
+    expect((await every('writer')).map((file) => file.path)).not.toContain(paths.c);
+    expect(await every('reader')).toEqual([]);
+    expect(await every('nobody')).toEqual([]);
+  });
+
   it('answers a change in a folder they can’t see as a folder that isn’t there', async () => {
     const answer = await publish('writer', ids.c, paths.c);
 

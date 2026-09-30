@@ -471,7 +471,7 @@ Traces to: `[docs/inputs §9]`, direction.md §2, rule 41.
 Purpose: author the semantic model in a form and in code, with the same file underneath.
 Traces to: `[docs/inputs §4b]`, direction.md §7b, rules 20, 26–28; `[research/cube/data-modeling.md]`.
 
-- [ ] AC-131 WHEN the user opens a model in a folder, THE SYSTEM SHALL show the cubes, views, measures, dimensions, segments, hierarchies, joins and pre-aggregations each of its files defines (phase 2: models live in folders, `[P2 input]`).
+- [x] AC-131 WHEN the user opens a model in a folder, THE SYSTEM SHALL show the cubes, views, measures, dimensions, segments, hierarchies, joins and pre-aggregations each of its files defines (phase 2: models live in folders, `[P2 input]`).
       Fails when: a file's object is missing from the listing.
 - [x] AC-132 THE SYSTEM SHALL offer a form for every key Cube's validator accepts on a cube or a view, with enumerations offering exactly the validator's allowed values (direction.md rule 26).
       Fails when: a key the validator accepts has no form field, or an enumeration offers a value the validator rejects.

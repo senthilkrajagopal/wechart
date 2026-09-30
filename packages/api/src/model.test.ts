@@ -57,6 +57,31 @@ describe('the model files', () => {
     await app.close();
   });
 
+  // T342, AC-141: every folder's at once, each with its folder, for a save's
+  // edited members to be looked for across them.
+  it('are every folder’s at once, each with its folder, when all are asked for', async () => {
+    const app = buildServer({
+      config,
+      modelFiles: {
+        ...memory(),
+        all: async () => [files[0]!, { ...files[1]!, folderId: 'emea' }],
+      },
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/model/files?all=true' });
+
+    expect(response.statusCode).toBe(200);
+    expect(
+      response
+        .json<{ files: { folderId: string; path: string }[] }>()
+        .files.map(({ folderId, path }) => ({ folderId, path })),
+    ).toEqual([
+      { folderId: 'root', path: 'cubes/orders.yml' },
+      { folderId: 'emea', path: 'views/summary.yml' },
+    ]);
+    await app.close();
+  });
+
   it('are none, not an error, where no store is wired', async () => {
     const app = buildServer({ config });
 

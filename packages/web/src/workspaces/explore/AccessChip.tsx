@@ -16,7 +16,8 @@ const CHIPS: Record<
   'view-only': { label: 'View only', icon: 'eye', accent: false },
 };
 
-function Icon({ name }: { readonly name: 'shield' | 'pencil' | 'eye' | 'lock' }) {
+/** The chips' icons, at 14 px: also a read-only model's eye (T342). */
+export function AccessIcon({ name }: { readonly name: 'shield' | 'pencil' | 'eye' | 'lock' }) {
   return (
     <svg
       width="14"
@@ -55,7 +56,7 @@ export function AccessChip({ access }: { readonly access: FolderAccess }) {
       className={chip.accent ? 'access-chip access-chip--accent' : 'access-chip'}
       data-testid="access-chip"
     >
-      <Icon name={chip.icon} />
+      <AccessIcon name={chip.icon} />
       {/* Said as what it is, not as a bare word beside the heading. */}
       <span className="visually-hidden">Your access: </span>
       {chip.label}
@@ -71,7 +72,7 @@ export function AccessChip({ access }: { readonly access: FolderAccess }) {
 export function OnlySuperAdminsChip() {
   return (
     <span className="access-chip" data-testid="only-super-admins">
-      <Icon name="lock" />
+      <AccessIcon name="lock" />
       Only Super-Admins can see this folder
     </span>
   );

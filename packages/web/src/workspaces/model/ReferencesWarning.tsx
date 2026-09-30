@@ -48,10 +48,16 @@ export function ReferencesWarning({
   found,
   onSave,
   onCancel,
+  nameOf = (member) => member,
 }: {
   found: MemberReferences;
   onSave: () => void;
   onCancel: () => void;
+  /**
+   * A member as the page names it: charts name a folder's by its full name
+   * (AC-328), which is never shown (T342, AC-329). As charts name it by default.
+   */
+  nameOf?: ((member: string) => string) | undefined;
 }) {
   const bar = useRef<HTMLDivElement>(null);
   const cancel = useRef<HTMLButtonElement>(null);
@@ -93,7 +99,7 @@ export function ReferencesWarning({
                       : `/explore/dashboards/${encodeURIComponent(chart.dashboardId)}`
                   }
                   title={chart.title ?? chart.id}
-                  members={chart.members}
+                  members={chart.members.map(nameOf)}
                 />
               ))}
             </ul>
@@ -108,7 +114,7 @@ export function ReferencesWarning({
                   key={dashboard.id}
                   href={`/explore/dashboards/${encodeURIComponent(dashboard.id)}`}
                   title={dashboard.title ?? dashboard.id}
-                  members={dashboard.members}
+                  members={dashboard.members.map(nameOf)}
                 />
               ))}
             </ul>

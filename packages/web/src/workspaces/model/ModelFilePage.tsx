@@ -1,16 +1,33 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useBlocker, useRouter, type ShouldBlockFn } from '@tanstack/react-router';
 
+import { PencilIcon } from '../../dashboard/edit/EditChrome';
 import { META_QUERY } from '../../query/meta';
 import { InfoBar } from '../../shell/InfoBar';
+import { ME_QUERY } from '../../shell/me';
 import { MenuButton, type MenuItem } from '../../shell/MenuButton';
+import { NotFound } from '../../shell/NotFound';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
 
-import { FOLDERS_QUERY } from '../explore/folders';
-import { FileList, MODEL_FILES_QUERY } from './FileList';
+import { AccessIcon } from '../explore/AccessChip';
+import { AccessRefused, folderAccessQuery } from '../explore/access/AccessPanel';
+import { rightFrom } from '../explore/folderRole';
+import { exploreHref, folderChain, FOLDERS_QUERY } from '../explore/folders';
+import { SHARED_ROOT } from '../explore/roots';
+import { ALL_MODEL_FILES_QUERY, FileList, modelFilesQuery, ModelFilesNotFound } from './FileList';
 import { GenerateCubes } from './GenerateCubes';
-import { FileTree, fileHref } from './FileTree';
+import { FileTree } from './FileTree';
+import { fileHref, folderWordsOf, modelAccessOf, modelHref, shownMemberOf } from './inFolder';
 import { objectsOf } from './objects';
 import { CubeForm } from './form/CubeForm';
 import { JoinEditor } from './JoinEditor';
@@ -20,7 +37,7 @@ import { LossWarning } from './LossWarning';
 import { problemsOf, type Problem } from './problems';
 import { ProblemsPanel, type CubeProblem } from './ProblemsPanel';
 import { draftJoinsOf } from './draftJoins';
-import { editedMembersOf } from './editedMembers';
+import { editedMembersOf, placesOf } from './editedMembers';
 import { ReadOnlyFile } from './ReadOnlyFile';
 import { ReferencesWarning, type MemberReferences } from './ReferencesWarning';
 import { publishModel, referencesTo } from './publish';
@@ -135,6 +152,75 @@ interface ModelFile {
 }
 const NO_DRAFTS: readonly ModelFile[] = [];
 
+const ROOT = SHARED_ROOT.id;
+
+/**
+ * Where a model is open (T342; AC-222, rules 70 and 71): its folder — the
+ * shared root's in the Model workspace — each of its files' addresses, and
+ * whether it may be changed here. Read-only, it says where it is, and offers
+ * "Edit in my workspace" to those who could propose it back.
+ */
+interface Place {
+  readonly folderId: string;
+  readonly hrefOf: (path: string) => string;
+  readonly readOnly: boolean;
+  readonly editInWorkspace: boolean;
+  /** The folder as Explore says it: "Sales / EMEA", or "Shared"; none until the folders are read. */
+  readonly words: string | undefined;
+}
+
+/** The files whose notes bar was hidden, by where each is: one path in two folders is two files. */
+const notesKeyOf = (folderId: string, path: string) =>
+  folderId === ROOT ? path : `${folderId}/${path}`;
+
+/**
+ * Why a shared model can't be edited in a copy yet: My workspace holds no
+ * model until xcube serves workspaces (T347), so the copy it would make
+ * can't be published or previewed.
+ */
+const NO_MODEL_COPY =
+  'Models can’t be copied into My workspace yet, so this one is read-only here.';
+
+/**
+ * A read-only model's word for where it is, with the eye (design 03 of
+ * 2026-09-27, state A): its folder once the folders are read.
+ */
+function ReadOnlyBadge({ words }: { words: string | undefined }) {
+  return (
+    <span className="badge model-editor__read-only">
+      <AccessIcon name="eye" />
+      {words === undefined ? 'Read-only' : `Read-only · in ${words}`}
+    </span>
+  );
+}
+
+/**
+ * "Edit in my workspace" (rule 71), as a read-write member of a shared
+ * folder is offered it: not yet to be pressed, the reason said under the
+ * head, which the button names as its description.
+ */
+function EditInWorkspace({ reason }: { reason: string }) {
+  return (
+    <button
+      type="button"
+      className="btn-sm btn-primary model-editor__copy"
+      disabled
+      aria-describedby={reason}
+    >
+      <PencilIcon />
+      Edit in my workspace
+    </button>
+  );
+}
+
+function NoCopyYet({ id }: { id: string }) {
+  return (
+    <p id={id} className="model-editor__with model-editor__blocked">
+      {NO_MODEL_COPY}
+    </p>
+  );
+}
+
 const orNone = (found: readonly Problem[]) => (found.length === 0 ? NONE : found);
 
 function FileEditor({
@@ -149,9 +235,12 @@ function FileEditor({
   fresh = false,
   drafts = NO_DRAFTS,
   onPublished,
+  where,
 }: {
   path: string;
   content: string;
+  /** Where the file is, and whether it may be changed here (T342). */
+  where: Place;
   /** Just made by New view: opens on its Cubes, a new one ready to pick (T493). */
   fresh?: boolean;
   /** The model's other unpublished files: those this one's cubes join publish with it (T488). */
@@ -305,7 +394,9 @@ function FileEditor({
    * applied or kept.
    */
   const errors = problems.filter(isError);
-  const readOnly = errors.length > 0 || text !== read || pending !== null || references !== null;
+  // And always where the model is shared (T342, rule 71).
+  const readOnly =
+    where.readOnly || errors.length > 0 || text !== read || pending !== null || references !== null;
   /** Where a picked problem sends the editor's cursor. */
   const [goTo, setGoTo] = useState<{ at: number }>();
   const [first] = errors;
@@ -355,7 +446,8 @@ function FileEditor({
    * into view (note 9).
    */
   const annotations = useMemo(() => annotationsOf(text), [text]);
-  const [notesShut, setNotesShut] = useState(() => notesHidden(path));
+  const notesKey = notesKeyOf(where.folderId, path);
+  const [notesShut, setNotesShut] = useState(() => notesHidden(notesKey));
   const [notesShown, setNotesShown] = useState(false);
   const [reveal, setReveal] = useState<{ line: number }>();
   const flagged = useMemo(() => annotations.map((each) => each.from), [annotations]);
@@ -388,7 +480,7 @@ function FileEditor({
           }, 0);
         }}
         onHide={() => {
-          hideNotes(path);
+          hideNotes(notesKey);
           setNotesShut(true);
           setNotesShown(false);
         }}
@@ -413,7 +505,8 @@ function FileEditor({
           : now,
     );
   };
-  const allFiles = useQuery(MODEL_FILES_QUERY);
+  // The folder's files: the model this one is in (T342).
+  const allFiles = useQuery(modelFilesQuery(where.folderId));
   // To name the folder of a refusal about another folder's file (T450's review).
   const folders = useQuery(FOLDERS_QUERY);
   /**
@@ -518,6 +611,7 @@ function FileEditor({
     return paths.flatMap((each) => drafts.filter((draft) => draft.path === each));
   }, [path, read, allFiles.data, drafts]);
   const withId = useId();
+  const noCopyId = useId();
 
   const reportChanged = useRef(onChanged);
   useEffect(() => {
@@ -604,12 +698,13 @@ function FileEditor({
   const ownErrors = errors.length + invalid.length;
   useEffect(() => {
     const byPath: Record<string, number> = { [path]: ownErrors };
-    // The tree is the root's files: another folder's file of the same path
-    // is not one of them (T450's review).
+    // The tree is this folder's files: another folder's file of the same
+    // path is not one of them (T450's review, T342).
     for (const problem of [...cubeProblems, ...refusedRollups])
-      if (problem.folderId === undefined) byPath[problem.path] = (byPath[problem.path] ?? 0) + 1;
+      if ((problem.folderId ?? ROOT) === where.folderId)
+        byPath[problem.path] = (byPath[problem.path] ?? 0) + 1;
     reportProblems.current?.(byPath);
-  }, [path, ownErrors, cubeProblems, refusedRollups]);
+  }, [path, ownErrors, cubeProblems, refusedRollups, where.folderId]);
 
   /**
    * Publish this file — after listing the charts and dashboards that use the
@@ -621,21 +716,43 @@ function FileEditor({
     setPublishing(true);
     setOutcome(null);
     if (checked === undefined) {
+      const unchecked = () => {
+        setPublishing(false);
+        setOutcome({
+          ok: false,
+          text: 'What uses the changed members could not be checked, so nothing was saved.',
+        });
+      };
       // Across the whole model: a view in another file exposes a cube's
-      // member by a name of its own (T147's review).
-      const others = (allFiles.data ?? []).filter((file) => file.path !== path);
+      // member by a name of its own (T147's review) — and a view or an
+      // extending cube in another folder, by that folder's (T342). Every
+      // folder's files the user may see, as they are now.
+      let every: readonly (ModelFile & { readonly folderId?: string })[];
+      let places: ReturnType<typeof placesOf>;
+      try {
+        const [files, known] = await Promise.all([
+          queryClient.fetchQuery(ALL_MODEL_FILES_QUERY),
+          queryClient.fetchQuery(FOLDERS_QUERY),
+        ]);
+        every = files;
+        places = placesOf(known);
+      } catch {
+        unchecked();
+        return;
+      }
+      const own = { folderId: where.folderId, path };
+      const others = every.filter(
+        (file) => (file.folderId ?? ROOT) !== where.folderId || file.path !== path,
+      );
       const edited = editedMembersOf(
-        [...others, { path, content: saved }],
-        [...others, { path, content: sent }],
+        [...others, { ...own, content: saved }],
+        [...others, { ...own, content: sent }],
+        places,
       );
       if (edited.length > 0) {
         const found = await referencesTo(edited);
         if (found === undefined) {
-          setPublishing(false);
-          setOutcome({
-            ok: false,
-            text: 'What uses the changed members could not be checked, so nothing was saved.',
-          });
+          unchecked();
           return;
         }
         if (found.charts.length + found.dashboards.length > 0) {
@@ -650,6 +767,8 @@ function FileEditor({
     // each new file refused over a file or a name the model has (AC-249).
     const result = await publishModel([{ path, content: sent }, ...joined], {
       created: [...(published ? [] : [path]), ...joined.map((each) => each.path)],
+      // Into its own folder (T452, T342).
+      folderId: where.folderId === ROOT ? undefined : where.folderId,
     });
     setPublishing(false);
     if (result.kind === 'published') {
@@ -659,8 +778,8 @@ function FileEditor({
       setCubeProblems([]);
       setRefusedRollups(keepRefusedRollups([]));
       setOutcome({ ok: true, text: 'Published. Cube is reading the new model.' });
-      // The listing, and every field list, read the model afresh (AC-137).
-      void queryClient.invalidateQueries({ queryKey: MODEL_FILES_QUERY.queryKey });
+      // The listing, every folder's, and every field list, read the model afresh (AC-137).
+      void queryClient.invalidateQueries({ queryKey: modelFilesQuery(ROOT).queryKey });
       void queryClient.invalidateQueries({ queryKey: META_QUERY.queryKey });
     } else if (result.kind === 'refused') {
       setCubeProblems(result.problems);
@@ -703,7 +822,10 @@ function FileEditor({
               rule 3; design 03 note 2 and state C). A state the head keeps, not
               news: no live region to announce it. Just published, the outcome
               says it instead, the one line the head has room for (T479's review). */}
-          {outcome?.ok === true && !changed ? null : (
+          {where.readOnly ? (
+            // Shared: where it is, read-only (T342; design 03 of 2026-09-27, state A).
+            <ReadOnlyBadge words={where.words} />
+          ) : outcome?.ok === true && !changed ? null : (
             <span
               className={`model-editor__state${published && !changed ? ' model-editor__state--ok' : ''}`}
             >
@@ -725,37 +847,47 @@ function FileEditor({
             </StateLine>
           )}
           {switcher}
-          {/* Both always there, as design 03 draws them; pressed only with a
-              change (D2) — a file made here always has one to discard. */}
-          <button
-            type="button"
-            className="btn-sm model-editor__discard"
-            disabled={published ? !changed : onDiscard === undefined}
-            onClick={discard}
-          >
-            Discard
-          </button>
-          <button
-            ref={saveButton}
-            type="button"
-            className="btn-sm btn-primary"
-            aria-describedby={joined.length === 0 ? undefined : withId}
-            disabled={!canPublish}
-            onClick={() => {
-              void publish();
-            }}
-          >
-            {publishing ? (
-              // Under way, with its icon as well as its word (T183, AC-177).
-              <>
-                <StatusIcon kind="run" />
-                Saving…
-              </>
-            ) : (
-              'Save & reload Cube'
-            )}
-          </button>
+          {where.readOnly ? (
+            // No change in place: a copy in My workspace, for those who may make one (rule 71).
+            where.editInWorkspace ? (
+              <EditInWorkspace reason={noCopyId} />
+            ) : null
+          ) : (
+            <>
+              {/* Both always there, as design 03 draws them; pressed only with a
+                  change (D2) — a file made here always has one to discard. */}
+              <button
+                type="button"
+                className="btn-sm model-editor__discard"
+                disabled={published ? !changed : onDiscard === undefined}
+                onClick={discard}
+              >
+                Discard
+              </button>
+              <button
+                ref={saveButton}
+                type="button"
+                className="btn-sm btn-primary"
+                aria-describedby={joined.length === 0 ? undefined : withId}
+                disabled={!canPublish}
+                onClick={() => {
+                  void publish();
+                }}
+              >
+                {publishing ? (
+                  // Under way, with its icon as well as its word (T183, AC-177).
+                  <>
+                    <StatusIcon kind="run" />
+                    Saving…
+                  </>
+                ) : (
+                  'Save & reload Cube'
+                )}
+              </button>
+            </>
+          )}
         </div>
+        {where.readOnly && where.editInWorkspace ? <NoCopyYet id={noCopyId} /> : null}
         {/* What Save publishes besides this file, said under it before it is
             pressed, whole on its own line (AC-346; T488's review). */}
         {joined.length === 0 ? null : (
@@ -810,6 +942,9 @@ function FileEditor({
                 setReferences(null);
                 saveButton.current?.focus();
               }}
+              // A folder's members by the names its files give them, never
+              // their prefixed ones (T342, AC-329).
+              nameOf={(member) => shownMemberOf(member, where.folderId, folders.data ?? [])}
             />
           )}
           {pending === null ? null : (
@@ -846,11 +981,14 @@ function FileEditor({
             <p className="model-editor__veil" role="status">
               <StatusIcon kind="err" />
               <span>
-                The YAML doesn’t parse (line {first.line}).{' '}
-                {cubes.length + views.length > 0
-                  ? 'The form is read-only until the code is fixed.'
-                  : // Broken when it was opened: there is no form yet to hold.
-                    'Its form shows once the code is fixed.'}
+                The YAML doesn’t parse (line {first.line}).
+                {/* Shared, it isn't fixed here (T342). */}
+                {where.readOnly
+                  ? null
+                  : cubes.length + views.length > 0
+                    ? ' The form is read-only until the code is fixed.'
+                    : // Broken when it was opened: there is no form yet to hold.
+                      ' Its form shows once the code is fixed.'}
               </span>
             </p>
           )}
@@ -876,7 +1014,7 @@ function FileEditor({
                   // Its rollups a publish was refused for, on their rows (T207, AC-189).
                   rollupProblems={refusedRollups.filter(
                     (problem) =>
-                      problem.folderId === undefined &&
+                      (problem.folderId ?? ROOT) === where.folderId &&
                       problem.path === path &&
                       problem.preAggregation?.cube === value['name'],
                   )}
@@ -948,6 +1086,8 @@ function FileEditor({
               graph={graph}
               cube={cubeNames[0]}
               cubes={cubeNames}
+              // Its cubes' files are this folder's (T342's review).
+              hrefOf={where.hrefOf}
               // Locked as the form is (AC-135): an edit then would be written over the typing.
               readOnly={readOnly}
               onAdd={(name, join) => {
@@ -973,6 +1113,9 @@ function FileEditor({
                 setText(next);
               }}
               label={`${path}, as YAML`}
+              // Shared, it is read, not typed in (T342): fixed for the editor's
+              // life, which is keyed by it.
+              readOnly={where.readOnly}
               problems={listed}
               goTo={goTo}
               wrap={wrap}
@@ -989,6 +1132,8 @@ function FileEditor({
           problems={listed}
           cubeProblems={cubeProblems}
           folders={folders.data ?? []}
+          folderId={where.folderId}
+          hrefOf={where.hrefOf}
           onPick={(problem) => {
             // To the YAML, where the problem is (the prototype's click does too).
             setView('yaml');
@@ -1030,6 +1175,7 @@ function FileBody({
   fresh = false,
   drafts,
   onPublished,
+  where,
 }: {
   path: string;
   content: string;
@@ -1044,6 +1190,7 @@ function FileBody({
   onChanged: (changed: boolean) => void;
   onText?: ((text: string) => void) | undefined;
   onDiscard?: (() => void) | undefined;
+  where: Place;
 }) {
   const read = useMemo(() => objectsOf(path, content), [path, content]);
   // Code or a template: its text in the code view, read-only, with the reason (T146, AC-140).
@@ -1051,10 +1198,12 @@ function FileBody({
   if (read.code !== undefined)
     return <ReadOnlyFile key={path} path={path} content={content} code={read.code} />;
   // A file that does not parse opens too: its problems are listed, to be fixed.
-  // Keyed by the file: another file is another text, not this one's state.
+  // Keyed by the file: another file is another text, not this one's state —
+  // and by whether it may be changed here, which the YAML's editor keeps.
   return (
     <FileEditor
-      key={path}
+      key={`${path}${where.readOnly ? ' read-only' : ''}`}
+      where={where}
       path={path}
       content={content}
       published={published}
@@ -1082,6 +1231,14 @@ const MADE_KEY = ['model-made'] as const;
 /** Whether Generate cubes is docked, kept for the tab (ModelFilePage's `generating`). */
 const GENERATING_KEY = ['generate-cubes-open'] as const;
 const DRAFTS_STORAGE = 'wechart.model.drafts';
+/**
+ * Each folder's own drafts and made file (T342): a draft is published into
+ * the folder it was made in. The root's keep the Model workspace's keys.
+ */
+const inFolderKey = <Key extends readonly string[]>(key: Key, folderId: string) =>
+  folderId === ROOT ? key : ([...key, folderId] as const);
+const draftsStorageOf = (folderId: string) =>
+  folderId === ROOT ? DRAFTS_STORAGE : `${DRAFTS_STORAGE}.${folderId}`;
 
 /**
  * The files New cube or New view made whose Name has had its first focus
@@ -1096,9 +1253,9 @@ function markNamed(made: object) {
   NAMED.add(made);
 }
 
-function readDrafts(): Record<string, string> {
+function readDrafts(storage: string): Record<string, string> {
   try {
-    const kept: unknown = JSON.parse(sessionStorage.getItem(DRAFTS_STORAGE) ?? '{}');
+    const kept: unknown = JSON.parse(sessionStorage.getItem(storage) ?? '{}');
     return isPlain(kept)
       ? Object.fromEntries(
           Object.entries(kept).filter(
@@ -1111,9 +1268,9 @@ function readDrafts(): Record<string, string> {
   }
 }
 
-function keepDrafts(drafts: Readonly<Record<string, string>>) {
+function keepDrafts(storage: string, drafts: Readonly<Record<string, string>>) {
   try {
-    sessionStorage.setItem(DRAFTS_STORAGE, JSON.stringify(drafts));
+    sessionStorage.setItem(storage, JSON.stringify(drafts));
   } catch {
     // Kept on this page only.
   }
@@ -1158,26 +1315,67 @@ interface OpenOn {
 export function ModelFilePage({
   path,
   openOn,
+  folderId,
 }: {
   path?: string | undefined;
   openOn?: OpenOn | undefined;
+  /**
+   * The folder whose model this is, opened from Explore under its
+   * breadcrumb (T342, AC-222); none is the Model workspace's, the root's.
+   */
+  folderId?: string | undefined;
 }) {
-  const files = useQuery(MODEL_FILES_QUERY);
+  const folder = folderId ?? ROOT;
+  const files = useQuery(modelFilesQuery(folder));
   const queryClient = useQueryClient();
   const router = useRouter();
+  const folders = useQuery(FOLDERS_QUERY);
+  /**
+   * Whether it may be changed here (rules 70 and 71): with sign-in on, a
+   * model is shared and read-only; "Edit in my workspace" for those whose
+   * access to its folder answers them, a Super-Admin or read-write member.
+   */
+  const me = useQuery(ME_QUERY);
+  const access = useQuery({
+    ...folderAccessQuery(folder),
+    enabled: me.data?.security === 'oidc',
+    retry: false,
+  });
+  const { readOnly, editInWorkspace } = modelAccessOf({
+    me: me.data,
+    right: rightFrom({
+      answered: access.isSuccess,
+      refusedWith: access.error instanceof AccessRefused ? access.error.status : undefined,
+    }),
+  });
+  const hrefOf = useCallback((each: string) => fileHref(each, folderId), [folderId]);
+  const words = folderWordsOf(folder, folders.data ?? []);
+  const where = useMemo<Place>(
+    () => ({
+      folderId: folder,
+      hrefOf,
+      readOnly,
+      editInWorkspace,
+      words,
+    }),
+    [folder, hrefOf, readOnly, editInWorkspace, words],
+  );
+  const draftsKey = inFolderKey(DRAFTS_KEY, folder);
+  const draftsStorage = draftsStorageOf(folder);
+  const madeKey = inFolderKey(MADE_KEY, folder);
   const drafts = useQuery({
-    queryKey: DRAFTS_KEY,
-    queryFn: readDrafts,
-    initialData: readDrafts,
+    queryKey: draftsKey,
+    queryFn: () => readDrafts(draftsStorage),
+    initialData: () => readDrafts(draftsStorage),
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: Number.POSITIVE_INFINITY,
   }).data;
   const setDrafts = useCallback(
     (next: Readonly<Record<string, string>>) => {
-      queryClient.setQueryData(DRAFTS_KEY, next);
-      keepDrafts(next);
+      queryClient.setQueryData(inFolderKey(DRAFTS_KEY, folder), next);
+      keepDrafts(draftsStorageOf(folder), next);
     },
-    [queryClient],
+    [queryClient, folder],
   );
   /**
    * A file New cube or New view made, kept as a draft once it opens: leaving
@@ -1187,7 +1385,7 @@ export function ModelFilePage({
    */
   const made =
     useQuery<{ path: string; content: string } | null>({
-      queryKey: MADE_KEY,
+      queryKey: madeKey,
       queryFn: () => null,
       initialData: null,
       staleTime: Number.POSITIVE_INFINITY,
@@ -1195,22 +1393,25 @@ export function ModelFilePage({
     }).data ?? undefined;
   const setMade = useCallback(
     (next: { path: string; content: string } | undefined) => {
-      queryClient.setQueryData(MADE_KEY, next ?? null);
+      queryClient.setQueryData(inFolderKey(MADE_KEY, folder), next ?? null);
     },
-    [queryClient],
+    [queryClient, folder],
   );
   useEffect(() => {
     if (made === undefined || path !== made.path || made.path in drafts) return;
     setDrafts({ ...drafts, [made.path]: made.content });
   }, [path, made, drafts, setDrafts]);
   const stored = files.data ?? [];
-  // A draft once published is a stored file: the store's copy wins.
-  const unpublished = Object.entries({
-    ...drafts,
-    ...(made !== undefined && path === made.path ? { [made.path]: made.content } : {}),
-  })
-    .filter(([draft]) => !stored.some((file) => file.path === draft))
-    .map(([draftPath, content]) => ({ path: draftPath, content }));
+  // A draft once published is a stored file: the store's copy wins. None
+  // where the model is read-only: nothing made here would be published (T342).
+  const unpublished = readOnly
+    ? []
+    : Object.entries({
+        ...drafts,
+        ...(made !== undefined && path === made.path ? { [made.path]: made.content } : {}),
+      })
+        .filter(([draft]) => !stored.some((file) => file.path === draft))
+        .map(([draftPath, content]) => ({ path: draftPath, content }));
   const all = [...stored, ...unpublished];
   /**
    * The open file's fellow drafts, one list while their text is unchanged:
@@ -1233,8 +1434,15 @@ export function ModelFilePage({
     unpublishedPaths.add(changed.from);
 
   const open = (next: string) => {
-    router.history.push(fileHref(next));
+    router.history.push(hrefOf(next));
   };
+  /**
+   * What may be made here (AC-222): New cube and New view where the model
+   * may be changed; Generate cubes only in the root's model, whose data
+   * sources it reads (T490) and whose drafts it adds.
+   */
+  const mayMake = !readOnly;
+  const mayGenerate = mayMake && folder === ROOT;
   /**
    * Whether Generate cubes is open (T145, AC-139): kept for the tab, as what
    * it holds is (GenerateCubes' `GENERATE_KEY`), so it stays docked when a
@@ -1314,26 +1522,38 @@ export function ModelFilePage({
         makeNew('view');
       },
     },
-    {
-      key: 'generate',
-      // Set apart: it opens a pane, not a file (state A).
-      separatorBefore: true,
-      label: (
-        <>
-          <span className="itemicon ic-source" aria-hidden="true">
-            ◍
-          </span>
-          Generate from a data source…
-        </>
-      ),
-      onSelect: startGenerate,
-    },
+    // Only where Generate may add to the model (T342).
+    ...(mayGenerate
+      ? [
+          {
+            key: 'generate',
+            // Set apart: it opens a pane, not a file (state A).
+            separatorBefore: true,
+            label: (
+              <>
+                <span className="itemicon ic-source" aria-hidden="true">
+                  ◍
+                </span>
+                Generate from a data source…
+              </>
+            ),
+            onSelect: startGenerate,
+          },
+        ]
+      : []),
   ];
   /** A file made here, discarded: it goes, and the overview opens (AC-226). */
   const discardDraft = (draft: string) => {
     if (made?.path === draft) setMade(undefined);
     setDrafts(Object.fromEntries(Object.entries(drafts).filter(([each]) => each !== draft)));
-    router.history.push('/model');
+    router.history.push(modelHref(folderId));
+  };
+  /** The breadcrumb's links, followed in the app, so leaving with changes is asked about (AC-226). */
+  const inApp = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+      return;
+    event.preventDefault();
+    router.history.push(event.currentTarget.getAttribute('href') ?? '/explore');
   };
 
   /**
@@ -1368,157 +1588,211 @@ export function ModelFilePage({
     name.select();
   }, [path, made, files.isSuccess]);
 
+  /** Generate cubes docked: only where it may be (T342). */
+  const docked = generating && mayGenerate;
+
+  // A folder that isn't there, or isn't the user's to see: the same page for
+  // both, as any address that matches nothing (rule 67; T342's review).
+  if (files.error instanceof ModelFilesNotFound) return <NotFound />;
+
   return (
-    <div
-      ref={page}
-      className={`model-workspace model-page${generating ? ' model-page--generating' : ''}`}
-    >
-      <FileTree
-        files={all}
-        current={path}
-        reported={reported?.from === path ? reported?.byPath : undefined}
-        unpublished={unpublishedPaths}
-        onOpen={open}
-        onNew={makeNew}
-        generating={generating}
-        onGenerate={startGenerate}
-        reading={files.isPending}
-      />
-      <div className="model-page__main">
-        {path === undefined ? (
-          // No file open: every cube and view, by file (AC-131), as design 12
-          // draws it (T486): the title row at once, its one primary + New ▾.
-          <div className="model-page__overview">
-            <div className="model-overview__title-row">
-              <h1 className="workspace-title">Model</h1>
-              <MenuButton label="New" items={newItems}>
-                ＋ New ▾
-              </MenuButton>
-            </div>
-            {files.isPending ? (
-              // State F: reading, the table's frame drawn beneath (no jump when it comes).
-              <>
-                <StateLine kind="run">Reading the model…</StateLine>
-                <div className="model-overview model-overview--reading" aria-hidden="true">
-                  <div className="model-overview__skeleton-head" />
-                  {[120, 140].map((width) => (
-                    <div key={width} className="model-overview__skeleton-row">
-                      <span className="skeleton-bar" style={{ width }} />
-                      <span className="skeleton-bar" style={{ width: 40 }} />
-                      <span className="skeleton-bar" style={{ width: 80 }} />
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : files.isError ? (
-              // Its words, and Retry (rule 18).
-              <div className="info-bar model-overview__failed" role="alert">
-                <StatusIcon kind="err" />
-                <p>{files.error.message}</p>
-                <button
-                  type="button"
-                  className="btn-sm"
-                  onClick={() => {
-                    void files.refetch();
-                  }}
-                >
-                  Retry
-                </button>
-              </div>
-            ) : (
-              <>
-                <InfoBar>
-                  <p>Every cube and view in the model, by file. Open a row to edit its file.</p>
-                </InfoBar>
-                <FileList
-                  files={all}
-                  unpublished={unpublishedPaths}
-                  onOpen={open}
-                  onNew={makeNew}
-                  onGenerate={startGenerate}
-                />
-              </>
-            )}
-          </div>
-        ) : files.isPending ? (
-          // Untitled while it reads: the title comes once, with what it heads.
-          <StateLine kind="run">Reading the model…</StateLine>
-        ) : files.isError ? (
-          <StateLine kind="err">{files.error.message}</StateLine>
-        ) : file === undefined ? (
-          <Solo path={path}>
-            <StateLine kind="err">There is no model file {path}.</StateLine>
-          </Solo>
-        ) : (
-          <FileBody
-            path={file.path}
-            content={file.content}
-            published={!isDraft}
-            openOn={openOn}
-            // Opened for the first time from New view: on its Cubes, ready to pick one.
-            fresh={made !== undefined && made.path === file.path && !named(made) && freshView(made)}
-            drafts={otherDrafts}
-            onPublished={(sent) => {
-              // In the store now: listed so at once, before the files are read again,
-              // and no longer drafts, so a second save doesn't send them as new
-              // (T488's review).
-              queryClient.setQueryData(
-                MODEL_FILES_QUERY.queryKey,
-                (old: readonly ModelFile[] | undefined) => [
-                  ...(old ?? []).filter((each) => !sent.some((one) => one.path === each.path)),
-                  ...sent,
-                ],
-              );
-              const paths = new Set(sent.map((each) => each.path));
-              setDrafts(
-                Object.fromEntries(Object.entries(drafts).filter(([at]) => !paths.has(at))),
-              );
-              if (made !== undefined && paths.has(made.path)) setMade(undefined);
-            }}
-            onProblems={(byPath) => {
-              setReported({ from: file.path, byPath });
-            }}
-            onChanged={(now) => {
-              setChanged({ from: file.path, changed: now });
-            }}
-            onDiscard={
-              isDraft
-                ? () => {
-                    discardDraft(file.path);
-                  }
-                : undefined
-            }
-            // A new file keeps what is typed in it until it is published.
-            onText={
-              isDraft
-                ? (text) => {
-                    if (drafts[file.path] !== text) setDrafts({ ...drafts, [file.path]: text });
-                  }
-                : undefined
-            }
-          />
-        )}
-      </div>
-      {/* Docked beside the model, as design 01's pane is (design 11): on a
-          file's page it takes the code's place, and the form widens. */}
-      {generating ? (
-        <GenerateCubes
-          existing={all}
-          onClose={closeGenerate}
-          onAdded={(added) => {
-            // Drafts in the tree, none published until saved (R36, AC-345).
-            setDrafts({
-              ...drafts,
-              ...Object.fromEntries(added.map((each) => [each.path, each.content])),
-            });
-          }}
-          onOpen={(opened) => {
-            setGenerating(false);
-            open(opened);
-          }}
-          onShow={open}
+    <>
+      {folderId === undefined ? null : (
+        // Opened from Explore: under its folder's breadcrumb (rule 70), each
+        // step a way back — to Explore, each folder, the folder's model.
+        <nav aria-label="Breadcrumb" className="model-page__crumbs">
+          <a href="/explore" onClick={inApp}>
+            Explore
+          </a>
+          {folderChain(folders.data ?? [], folder).map((crumb) => (
+            <span key={crumb.id}>
+              <span aria-hidden="true"> / </span>
+              <a href={exploreHref(crumb.id)} onClick={inApp}>
+                {crumb.title}
+              </a>
+            </span>
+          ))}
+          <span aria-hidden="true"> / </span>
+          {path === undefined ? (
+            <span aria-current="page">Model</span>
+          ) : (
+            <>
+              <a href={modelHref(folderId)} onClick={inApp}>
+                Model
+              </a>
+              <span aria-hidden="true"> / </span>
+              <span aria-current="page" className="is-code">
+                {path}
+              </span>
+            </>
+          )}
+        </nav>
+      )}
+      <div
+        ref={page}
+        className={`model-workspace model-page${docked ? ' model-page--generating' : ''}`}
+      >
+        <FileTree
+          files={all}
+          current={path}
+          reported={reported?.from === path ? reported?.byPath : undefined}
+          unpublished={unpublishedPaths}
+          onOpen={open}
+          onNew={mayMake ? makeNew : undefined}
+          generating={docked}
+          onGenerate={mayGenerate ? startGenerate : undefined}
+          reading={files.isPending}
+          hrefOf={hrefOf}
         />
-      ) : null}
-    </div>
+        <div className="model-page__main">
+          {path === undefined ? (
+            // No file open: every cube and view, by file (AC-131), as design 12
+            // draws it (T486): the title row at once, its one primary + New ▾ —
+            // none where the model is read-only, which it says (T342).
+            <div className="model-page__overview">
+              <div className="model-overview__title-row">
+                <h1 className="workspace-title">Model</h1>
+                {readOnly ? (
+                  <ReadOnlyBadge words={words} />
+                ) : (
+                  <MenuButton label="New" items={newItems}>
+                    ＋ New ▾
+                  </MenuButton>
+                )}
+              </div>
+              {files.isPending ? (
+                // State F: reading, the table's frame drawn beneath (no jump when it comes).
+                <>
+                  <StateLine kind="run">Reading the model…</StateLine>
+                  <div className="model-overview model-overview--reading" aria-hidden="true">
+                    <div className="model-overview__skeleton-head" />
+                    {[120, 140].map((width) => (
+                      <div key={width} className="model-overview__skeleton-row">
+                        <span className="skeleton-bar" style={{ width }} />
+                        <span className="skeleton-bar" style={{ width: 40 }} />
+                        <span className="skeleton-bar" style={{ width: 80 }} />
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : files.isError ? (
+                // Its words, and Retry (rule 18).
+                <div className="info-bar model-overview__failed" role="alert">
+                  <StatusIcon kind="err" />
+                  <p>{files.error.message}</p>
+                  <button
+                    type="button"
+                    className="btn-sm"
+                    onClick={() => {
+                      void files.refetch();
+                    }}
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <InfoBar>
+                    <p>
+                      {readOnly
+                        ? 'Every cube and view in the model, by file. Open a row to read its file.'
+                        : 'Every cube and view in the model, by file. Open a row to edit its file.'}
+                    </p>
+                  </InfoBar>
+                  <FileList
+                    files={all}
+                    unpublished={unpublishedPaths}
+                    onOpen={open}
+                    onNew={mayMake ? makeNew : undefined}
+                    onGenerate={mayGenerate ? startGenerate : undefined}
+                    hrefOf={hrefOf}
+                  />
+                </>
+              )}
+            </div>
+          ) : files.isPending ? (
+            // Untitled while it reads: the title comes once, with what it heads.
+            <StateLine kind="run">Reading the model…</StateLine>
+          ) : files.isError ? (
+            <StateLine kind="err">{files.error.message}</StateLine>
+          ) : file === undefined ? (
+            <Solo path={path}>
+              <StateLine kind="err">There is no model file {path}.</StateLine>
+            </Solo>
+          ) : (
+            <FileBody
+              where={where}
+              path={file.path}
+              content={file.content}
+              published={!isDraft}
+              openOn={openOn}
+              // Opened for the first time from New view: on its Cubes, ready to pick one.
+              fresh={
+                made !== undefined && made.path === file.path && !named(made) && freshView(made)
+              }
+              drafts={otherDrafts}
+              onPublished={(sent) => {
+                // In the store now: listed so at once, before the files are read again,
+                // and no longer drafts, so a second save doesn't send them as new
+                // (T488's review).
+                queryClient.setQueryData(
+                  modelFilesQuery(folder).queryKey,
+                  (old: readonly ModelFile[] | undefined) => [
+                    ...(old ?? []).filter((each) => !sent.some((one) => one.path === each.path)),
+                    ...sent,
+                  ],
+                );
+                const paths = new Set(sent.map((each) => each.path));
+                setDrafts(
+                  Object.fromEntries(Object.entries(drafts).filter(([at]) => !paths.has(at))),
+                );
+                if (made !== undefined && paths.has(made.path)) setMade(undefined);
+              }}
+              onProblems={(byPath) => {
+                setReported({ from: file.path, byPath });
+              }}
+              onChanged={(now) => {
+                setChanged({ from: file.path, changed: now });
+              }}
+              onDiscard={
+                isDraft
+                  ? () => {
+                      discardDraft(file.path);
+                    }
+                  : undefined
+              }
+              // A new file keeps what is typed in it until it is published.
+              onText={
+                isDraft
+                  ? (text) => {
+                      if (drafts[file.path] !== text) setDrafts({ ...drafts, [file.path]: text });
+                    }
+                  : undefined
+              }
+            />
+          )}
+        </div>
+        {/* Docked beside the model, as design 01's pane is (design 11): on a
+          file's page it takes the code's place, and the form widens. */}
+        {docked ? (
+          <GenerateCubes
+            existing={all}
+            onClose={closeGenerate}
+            onAdded={(added) => {
+              // Drafts in the tree, none published until saved (R36, AC-345).
+              setDrafts({
+                ...drafts,
+                ...Object.fromEntries(added.map((each) => [each.path, each.content])),
+              });
+            }}
+            onOpen={(opened) => {
+              setGenerating(false);
+              open(opened);
+            }}
+            onShow={open}
+          />
+        ) : null}
+      </div>
+    </>
   );
 }

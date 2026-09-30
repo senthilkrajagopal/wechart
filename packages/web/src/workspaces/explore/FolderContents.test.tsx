@@ -517,13 +517,13 @@ describe('models in a folder (T334, AC-269)', () => {
     expect(screen.queryByRole('button', { name: 'Actions for orders.yml' })).toBeNull();
   });
 
-  it('opens a model it may open, and leaves one it may not as its name alone', async () => {
+  it('opens every folder’s model, the root’s and another’s alike (T342)', async () => {
     const onOpen = vi.fn();
     render(
       <FolderContents
         items={models}
         onOpen={onOpen}
-        // Explore's own rule (T334's review): the root's models open.
+        // Explore's own rule: since T342 a model opens in its own folder.
         opens={opensFromExplore}
       />,
     );
@@ -532,6 +532,16 @@ describe('models in a folder (T334, AC-269)', () => {
     expect(onOpen).toHaveBeenCalledWith(models[0]);
 
     onOpen.mockClear();
+    await userEvent.click(screen.getByRole('button', { name: 'returns.yml' }));
+    expect(onOpen).toHaveBeenCalledWith(models[2]);
+  });
+
+  it('leaves a row it may not open as its name alone', async () => {
+    const onOpen = vi.fn();
+    render(
+      <FolderContents items={models} onOpen={onOpen} opens={(item) => item.folderId === 'root'} />,
+    );
+
     expect(screen.queryByRole('button', { name: 'returns.yml' })).toBeNull();
     await userEvent.click(screen.getByText('returns.yml'));
     screen.getByTestId('item-cubes/returns.yml').focus();

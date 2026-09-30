@@ -1,6 +1,8 @@
 import { useId, useState, type MouseEvent } from 'react';
 
 import { StatusIcon } from '../../shell/StatusIcon';
+import { SHARED_ROOT } from '../explore/roots';
+import { fileHref } from './inFolder';
 import { objectsOf, type FileObjects, type MemberKind, type ModelObject } from './objects';
 
 /**
@@ -61,8 +63,51 @@ export const MODEL_FILES_QUERY = {
   },
 };
 
-/** The file's page, as the tree links it. */
-const hrefOf = (path: string) => `/model/files/${encodeURIComponent(path)}`;
+/**
+ * A folder the API says isn't there, or isn't the user's to see (404): its
+ * page reads as Not found, the same for both (rule 67; T342's review).
+ */
+export class ModelFilesNotFound extends Error {}
+
+/**
+ * A folder's model files (T334, T342): the root's are `MODEL_FILES_QUERY`,
+ * under whose key every folder's sits, so invalidating it reads them all
+ * again.
+ */
+export const modelFilesQuery = (folderId: string) =>
+  folderId === SHARED_ROOT.id
+    ? MODEL_FILES_QUERY
+    : {
+        queryKey: [...MODEL_FILES_QUERY.queryKey, folderId],
+        queryFn: async ({ signal }: { signal: AbortSignal }): Promise<readonly ModelFile[]> => {
+          const response = await fetch(`/api/model/files?folder=${encodeURIComponent(folderId)}`, {
+            signal,
+          });
+          if (response.status === 404) throw new ModelFilesNotFound('No such folder.');
+          if (!response.ok)
+            throw new Error(`The model files could not be read (${String(response.status)}).`);
+          return ((await response.json()) as { files: ModelFile[] }).files;
+        },
+        // No folder is no folder on a second asking either: said at once.
+        retry: (failures: number, error: Error) =>
+          !(error instanceof ModelFilesNotFound) && failures < 3,
+      };
+
+/**
+ * Every folder's model files the user may see, each with its folder (T342):
+ * what a save's edited members are looked for across (AC-141). Read at
+ * the save, not kept.
+ */
+export const ALL_MODEL_FILES_QUERY = {
+  queryKey: [...MODEL_FILES_QUERY.queryKey, '*all'],
+  queryFn: async (): Promise<readonly (ModelFile & { readonly folderId?: string })[]> => {
+    const response = await fetch('/api/model/files?all=true');
+    if (!response.ok)
+      throw new Error(`The model files could not be read (${String(response.status)}).`);
+    return ((await response.json()) as { files: (ModelFile & { folderId?: string })[] }).files;
+  },
+  staleTime: 0,
+};
 
 /** A code file's kind, as its row names it (pin 9). */
 const codeLabel = (code: NonNullable<FileObjects['code']>) =>
@@ -136,14 +181,19 @@ export function FileList({
   onOpen,
   onNew,
   onGenerate,
+  hrefOf = (path) => fileHref(path),
 }: {
   /** The model's files: the store's, and the drafts made here. */
   files: readonly ModelFile[];
   /** Files not yet published: marked, as the tree marks them (state C). */
   unpublished: ReadonlySet<string>;
   onOpen: (path: string) => void;
-  onNew: (kind: 'cube' | 'view') => void;
-  onGenerate: () => void;
+  /** New cube and New view; none where the model is read-only (T342, AC-222). */
+  onNew?: ((kind: 'cube' | 'view') => void) | undefined;
+  /** Generate cubes; none where the model is read-only, or in a folder (T342). */
+  onGenerate?: (() => void) | undefined;
+  /** Each file's address: in its folder, opened from Explore (T342); the Model workspace's by default. */
+  hrefOf?: ((path: string) => string) | undefined;
 }) {
   const [ascending, setAscending] = useState(true);
 
@@ -152,32 +202,44 @@ export function FileList({
     return (
       <div className="model-overview model-overview--empty">
         <p className="model-overview__empty-title">There are no model files.</p>
-        <p className="model-overview__empty-text">
-          Generate cubes from a data source’s tables, or start a cube or a view by hand.
-        </p>
-        <div className="model-overview__empty-actions">
-          <button type="button" className="btn-sm" onClick={onGenerate}>
-            Generate from a data source…
-          </button>
-          <button
-            type="button"
-            className="btn-sm"
-            onClick={() => {
-              onNew('cube');
-            }}
-          >
-            New cube
-          </button>
-          <button
-            type="button"
-            className="btn-sm"
-            onClick={() => {
-              onNew('view');
-            }}
-          >
-            New view
-          </button>
-        </div>
+        {onNew === undefined && onGenerate === undefined ? null : (
+          <>
+            <p className="model-overview__empty-text">
+              {onGenerate === undefined
+                ? 'Start a cube or a view by hand.'
+                : 'Generate cubes from a data source’s tables, or start a cube or a view by hand.'}
+            </p>
+            <div className="model-overview__empty-actions">
+              {onGenerate === undefined ? null : (
+                <button type="button" className="btn-sm" onClick={onGenerate}>
+                  Generate from a data source…
+                </button>
+              )}
+              {onNew === undefined ? null : (
+                <>
+                  <button
+                    type="button"
+                    className="btn-sm"
+                    onClick={() => {
+                      onNew('cube');
+                    }}
+                  >
+                    New cube
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-sm"
+                    onClick={() => {
+                      onNew('view');
+                    }}
+                  >
+                    New view
+                  </button>
+                </>
+              )}
+            </div>
+          </>
+        )}
       </div>
     );
 

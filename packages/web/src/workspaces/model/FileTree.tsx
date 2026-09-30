@@ -1,6 +1,7 @@
 import { useId, useMemo, useState } from 'react';
 
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
+import { fileHref } from './inFolder';
 import { objectsOf, type FileObjects } from './objects';
 import { validationProblems } from './validate';
 
@@ -44,17 +45,19 @@ export interface FileTreeProps {
    */
   readonly unpublished?: ReadonlySet<string> | undefined;
   readonly onOpen: (path: string) => void;
-  readonly onNew: (kind: 'cube' | 'view') => void;
+  /**
+   * New cube and New view; none where the model is read-only, in a shared
+   * folder with sign-in on (T342, AC-222).
+   */
+  readonly onNew?: ((kind: 'cube' | 'view') => void) | undefined;
   /** Generate cubes from a data source's tables (T145, AC-139). */
   readonly onGenerate?: (() => void) | undefined;
   /** Whether Generate cubes is open: its button is shown pressed (design 11 pin 9). */
   readonly generating?: boolean | undefined;
   /** Whether the model's files are still being read (design 12 state F). */
   readonly reading?: boolean | undefined;
-}
-
-export function fileHref(path: string): string {
-  return `/model/files/${encodeURIComponent(path)}`;
+  /** Each file's address: in its folder, opened from Explore (T342); the Model workspace's by default. */
+  readonly hrefOf?: ((path: string) => string) | undefined;
 }
 
 export function FileTree({
@@ -67,6 +70,7 @@ export function FileTree({
   onGenerate,
   generating = false,
   reading = false,
+  hrefOf = (path) => fileHref(path),
 }: FileTreeProps) {
   // Each file read once for whether it parses, whether Cube would take what
   // it says (AC-227), and whether it is code the form can't open (AC-140) —
@@ -167,7 +171,7 @@ export function FileTree({
                       <li key={file.path}>
                         <a
                           className="model-tree__file"
-                          href={fileHref(file.path)}
+                          href={hrefOf(file.path)}
                           aria-current={file.path === current ? 'page' : undefined}
                           onClick={(event) => {
                             // A plain click opens it in place; a new tab still can.
@@ -217,26 +221,33 @@ export function FileTree({
             </div>
           );
         })}
-        {/* After the files, as design 03 draws New cube and New view. */}
-        <div className="model-tree__actions">
-          <button type="button" className="btn-sm" onClick={() => onNew('cube')}>
-            <span aria-hidden="true">+ </span>New cube
-          </button>
-          <button type="button" className="btn-sm" onClick={() => onNew('view')}>
-            <span aria-hidden="true">+ </span>New view
-          </button>
-          {onGenerate === undefined ? null : (
-            // As designs 11 and 12 name it, drawn pressed while its pane is open;
-            // it opens a pane, not a disclosure, so pressed again it goes there.
-            <button
-              type="button"
-              className={`btn-sm model-tree__generate${generating ? ' is-open' : ''}`}
-              onClick={onGenerate}
-            >
-              <span aria-hidden="true">+ </span>Generate from a data source…
-            </button>
-          )}
-        </div>
+        {/* After the files, as design 03 draws New cube and New view: none
+            where the model is read-only (T342). */}
+        {onNew === undefined && onGenerate === undefined ? null : (
+          <div className="model-tree__actions">
+            {onNew === undefined ? null : (
+              <>
+                <button type="button" className="btn-sm" onClick={() => onNew('cube')}>
+                  <span aria-hidden="true">+ </span>New cube
+                </button>
+                <button type="button" className="btn-sm" onClick={() => onNew('view')}>
+                  <span aria-hidden="true">+ </span>New view
+                </button>
+              </>
+            )}
+            {onGenerate === undefined ? null : (
+              // As designs 11 and 12 name it, drawn pressed while its pane is open;
+              // it opens a pane, not a disclosure, so pressed again it goes there.
+              <button
+                type="button"
+                className={`btn-sm model-tree__generate${generating ? ' is-open' : ''}`}
+                onClick={onGenerate}
+              >
+                <span aria-hidden="true">+ </span>Generate from a data source…
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </nav>
   );

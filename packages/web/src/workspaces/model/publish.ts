@@ -34,18 +34,29 @@ export type PublishOutcome =
 
 export async function publishModel(
   files: readonly { path: string; content: string }[],
-  /**
-   * The new files among them (drafts, T488): the API refuses any over a file
-   * or a name it has (T276, AC-249).
-   */
-  { created = [] }: { created?: readonly string[] } = {},
+  {
+    created = [],
+    folderId,
+  }: {
+    /**
+     * The new files among them (drafts, T488): the API refuses any over a file
+     * or a name it has (T276, AC-249).
+     */
+    created?: readonly string[];
+    /** The folder whose files they are (T452, T342): the shared root's unless named. */
+    folderId?: string | undefined;
+  } = {},
 ): Promise<PublishOutcome> {
   let response: Response;
   try {
     response = await fetch('/api/model/publish', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(created.length > 0 ? { files, create: created } : { files }),
+      body: JSON.stringify({
+        ...(folderId === undefined ? {} : { folderId }),
+        files,
+        ...(created.length > 0 ? { create: created } : {}),
+      }),
     });
   } catch {
     return { kind: 'failed', message: 'wechart could not be reached, so nothing was published.' };

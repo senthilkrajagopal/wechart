@@ -1,3 +1,6 @@
+import type { FolderNode } from '../explore/FolderTree';
+import { folderChain } from '../explore/folders';
+import { SHARED_ROOT } from '../explore/roots';
 import { objectsOf } from './objects';
 import { modelOf } from './sync';
 
@@ -12,9 +15,54 @@ import { modelOf } from './sync';
  * Each member's definition is kept as text; a view's or an extending cube's
  * includes the definition of the member it takes, so a change to that shows
  * as a change to every name it goes by (T147's review).
+ *
+ * With models in folders (T342): a folder's items are published as
+ * `<xcubeId>__<name>` (AC-328), the root's bare, and the names a folder's
+ * view or extending cube uses are found along its path, nearest first, as
+ * xcube binds them (AC-272). So each member is named as charts are bound to
+ * it: a folder's by its full name, and a root member a folder's view exposes
+ * by that folder's name too.
  */
 type Value = Record<string, unknown>;
-type File = { readonly path: string; readonly content: string };
+type File = {
+  readonly path: string;
+  readonly content: string;
+  /** The folder holding it; none is the shared root's. */
+  readonly folderId?: string | undefined;
+};
+
+/** Where each folder's items are named and found (T342). */
+export interface Places {
+  /** A folder and each folder above it, itself first, the root last: where its names are found. */
+  readonly pathOf: (folderId: string) => readonly string[];
+  /**
+   * What its items' full names start with: nothing for the root, and none
+   * at all for a folder not yet published to, whose items no chart names.
+   */
+  readonly prefixOf: (folderId: string) => string | undefined;
+}
+
+const ROOT = SHARED_ROOT.id;
+
+/** Every file the root's, as a model was before folders held any. */
+const ROOT_ONLY: Places = { pathOf: () => [ROOT], prefixOf: () => '' };
+
+/** The folders as `/api/folders` lists them, each named by its stored xcube id (T429). */
+export function placesOf(folders: readonly FolderNode[]): Places {
+  return {
+    pathOf: (folderId) =>
+      folderId === ROOT
+        ? [ROOT]
+        : folderChain(folders, folderId)
+            .map((crumb) => crumb.id)
+            .reverse(),
+    prefixOf: (folderId) => {
+      if (folderId === ROOT) return '';
+      const xcubeId = folders.find((folder) => folder.id === folderId)?.xcubeId;
+      return typeof xcubeId === 'string' && xcubeId !== '' ? `${xcubeId}__` : undefined;
+    },
+  };
+}
 
 /** The lists whose members a chart can name. */
 const LISTS = ['measures', 'dimensions', 'segments', 'hierarchies'] as const;
@@ -32,56 +80,103 @@ const ownMembers = (object: Value): Map<string, string> => {
   return found;
 };
 
-/** Each member of the model by the name charts use, and its definition as text; none if one doesn't parse. */
-function modelMembers(files: readonly File[]): Map<string, string> | undefined {
-  const cubes = new Map<string, { own: Map<string, string>; extends: string | undefined }>();
-  const views: Value[] = [];
+const folderOf = (file: File) => file.folderId ?? ROOT;
+/** A file by where it is: the same path in two folders is two files. */
+const keyOf = (file: File) => `${folderOf(file)}\n${file.path}`;
+
+/** Whether a file is read as YAML here and doesn't parse. */
+const unparsed = (file: File) =>
+  objectsOf(file.path, file.content).code === undefined &&
+  modelOf(file.content).model === undefined;
+
+/**
+ * Each member of the model by the name charts use, and its definition as
+ * text; none if a file doesn't parse. `skipped` are files left out of both
+ * sides of the comparison.
+ */
+function modelMembers(
+  files: readonly File[],
+  places: Places,
+  skipped: ReadonlySet<string>,
+): Map<string, string> | undefined {
+  type Cube = { own: Map<string, string>; extends: string | undefined };
+  /** Each folder's cubes, by name. */
+  const cubes = new Map<string, Map<string, Cube>>();
+  const views: { folder: string; view: Value }[] = [];
   for (const file of files) {
+    if (skipped.has(keyOf(file))) continue;
     // Code and templates are Cube's to run; what they define isn't read here.
     if (objectsOf(file.path, file.content).code !== undefined) continue;
     const { model } = modelOf(file.content);
     if (model === undefined) return undefined;
+    const folder = folderOf(file);
+    const here = cubes.get(folder) ?? new Map<string, Cube>();
+    cubes.set(folder, here);
     for (const cube of objects(model.cubes)) {
       const name = cube['name'];
       if (typeof name !== 'string') continue;
       const parent = cube['extends'];
-      cubes.set(name, {
+      here.set(name, {
         own: ownMembers(cube),
         extends: typeof parent === 'string' ? parent : undefined,
       });
     }
-    views.push(...objects(model.views));
+    views.push(...objects(model.views).map((view) => ({ folder, view })));
   }
+
+  /** The cube a name means in a folder: the nearest on its path with one (AC-272), never `not`. */
+  const find = (from: string, name: string, not?: string) => {
+    for (const at of places.pathOf(from)) {
+      if (`${at}/${name}` === not) continue;
+      if (cubes.get(at)?.has(name) === true) return at;
+    }
+    return undefined;
+  };
 
   /** A cube's members: its parent's, then its own over them. */
   const resolved = new Map<string, Map<string, string>>();
-  const membersOf = (name: string, seen: ReadonlySet<string> = new Set()): Map<string, string> => {
-    const done = resolved.get(name);
+  const membersOf = (
+    at: string,
+    name: string,
+    seen: ReadonlySet<string> = new Set(),
+  ): Map<string, string> => {
+    const key = `${at}/${name}`;
+    const done = resolved.get(key);
     if (done !== undefined) return done;
-    const cube = cubes.get(name);
-    if (cube === undefined || seen.has(name)) return new Map();
+    const cube = cubes.get(at)?.get(name);
+    if (cube === undefined || seen.has(key)) return new Map();
+    // Its parent as its own folder finds it, never itself.
+    const parentAt = cube.extends === undefined ? undefined : find(at, cube.extends, key);
     const members =
-      cube.extends === undefined
+      cube.extends === undefined || parentAt === undefined
         ? new Map<string, string>()
-        : new Map(membersOf(cube.extends, new Set([...seen, name])));
+        : new Map(membersOf(parentAt, cube.extends, new Set([...seen, key])));
     for (const [member, definition] of cube.own) members.set(member, definition);
-    resolved.set(name, members);
+    resolved.set(key, members);
     return members;
   };
 
   const found = new Map<string, string>();
-  for (const name of cubes.keys())
-    for (const [member, definition] of membersOf(name)) found.set(`${name}.${member}`, definition);
+  for (const [at, here] of cubes) {
+    const prefix = places.prefixOf(at);
+    if (prefix === undefined) continue;
+    for (const name of here.keys())
+      for (const [member, definition] of membersOf(at, name))
+        found.set(`${prefix}${name}.${member}`, definition);
+  }
 
-  for (const view of views) {
+  for (const { folder, view } of views) {
     const name = view['name'];
-    if (typeof name !== 'string') continue;
-    for (const [member, definition] of ownMembers(view)) found.set(`${name}.${member}`, definition);
+    const prefix = places.prefixOf(folder);
+    if (typeof name !== 'string' || prefix === undefined) continue;
+    for (const [member, definition] of ownMembers(view))
+      found.set(`${prefix}${name}.${member}`, definition);
     for (const entry of objects(view['cubes'])) {
       const path = entry['join_path'];
       if (typeof path !== 'string') continue;
       const cube = path.split('.').pop() ?? path;
-      const source = membersOf(cube);
+      const sourceAt = find(folder, cube);
+      const source = sourceAt === undefined ? new Map<string, string>() : membersOf(sourceAt, cube);
       const includes = entry['includes'];
       const excluded = new Set(
         (Array.isArray(entry['excludes']) ? (entry['excludes'] as unknown[]) : []).filter(
@@ -97,7 +192,7 @@ function modelMembers(files: readonly File[]): Map<string, string> | undefined {
           : (Array.isArray(includes) ? (includes as unknown[]) : []).flatMap((each) =>
               typeof each === 'string' ? [{ name: each }] : objects([each]),
             );
-      const prefix = entry['prefix'] === true;
+      const prefixed = entry['prefix'] === true;
       const cubeAlias = typeof entry['alias'] === 'string' ? entry['alias'] : cube;
       for (const item of items) {
         const member = item['name'];
@@ -105,9 +200,9 @@ function modelMembers(files: readonly File[]): Map<string, string> | undefined {
         const alias = item['alias'];
         // research Y.10a: an alias names it; with a prefix, `<cube or its alias>_<member>`.
         const exposed =
-          typeof alias === 'string' ? alias : prefix ? `${cubeAlias}_${member}` : member;
+          typeof alias === 'string' ? alias : prefixed ? `${cubeAlias}_${member}` : member;
         found.set(
-          `${name}.${exposed}`,
+          `${prefix}${name}.${exposed}`,
           JSON.stringify({ join_path: path, item, source: source.get(member) ?? null }),
         );
       }
@@ -116,10 +211,26 @@ function modelMembers(files: readonly File[]): Map<string, string> | undefined {
   return found;
 }
 
-/** The members `after` changes or no longer has, of those `before` has. */
-export function editedMembersOf(before: readonly File[], after: readonly File[]): string[] {
-  const was = modelMembers(before);
-  const is = modelMembers(after);
+/**
+ * The members `after` changes or no longer has, of those `before` has. A
+ * file that doesn't parse on either side is left out of both: unchanged, it
+ * edits nothing (T342, where every folder's files are read); one the save
+ * breaks or mends stops the comparison, and nothing is listed.
+ */
+export function editedMembersOf(
+  before: readonly File[],
+  after: readonly File[],
+  places: Places = ROOT_ONLY,
+): string[] {
+  const brokenAfter = new Set(after.filter(unparsed).map(keyOf));
+  const skipped = new Set(
+    before
+      .filter(unparsed)
+      .map(keyOf)
+      .filter((key) => brokenAfter.has(key)),
+  );
+  const was = modelMembers(before, places, skipped);
+  const is = modelMembers(after, places, skipped);
   if (was === undefined || is === undefined) return [];
   return [...was].filter(([name, definition]) => is.get(name) !== definition).map(([name]) => name);
 }

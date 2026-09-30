@@ -613,7 +613,32 @@ export function buildServer({
    * of, has none for them.
    */
   app.get('/api/model/files', USER, async (request, reply) => {
-    const { folder } = request.query as { folder?: unknown };
+    const { folder, all } = request.query as { folder?: unknown; all?: unknown };
+    const answered = (files: readonly ModelFile[]) => ({
+      files: files.map((file) => ({
+        folderId: file.folderId ?? ROOT_FOLDER_ID,
+        path: file.path,
+        content: file.content,
+        ...objectsOf(file.path, file.content),
+      })),
+    });
+    /**
+     * Every folder's at once (T342, AC-141): what a save's edited members
+     * are looked for across, since a view or an extending cube in another
+     * folder exposes a member by that folder's name. Only folders whose every
+     * kind of item the user may see, as one folder's are.
+     */
+    if (all === 'true') {
+      const seenAll = await visibilityOf(request);
+      const every = modelFiles ? await (modelFiles.all?.() ?? modelFiles.list()) : [];
+      return answered(
+        seenAll === undefined
+          ? every
+          : every.filter(
+              (file) => seenAll.rights.get(file.folderId ?? ROOT_FOLDER_ID)?.kinds === 'all',
+            ),
+      );
+    }
     const folderId = typeof folder === 'string' && folder !== '' ? folder : ROOT_FOLDER_ID;
     const seen = await visibilityOf(request);
     if (seen !== undefined) {
@@ -622,15 +647,7 @@ export function buildServer({
         return reply.code(404).send({ error: 'There’s no such folder, or it isn’t yours to see.' });
       if (right?.kinds !== 'all') return { files: [] };
     }
-    const files = modelFiles ? await modelFiles.list(folderId) : [];
-    return {
-      files: files.map((file) => ({
-        folderId: file.folderId ?? ROOT_FOLDER_ID,
-        path: file.path,
-        content: file.content,
-        ...objectsOf(file.path, file.content),
-      })),
-    };
+    return answered(modelFiles ? await modelFiles.list(folderId) : []);
   });
 
   registerModelPublishing(app, {
