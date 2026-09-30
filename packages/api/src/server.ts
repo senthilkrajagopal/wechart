@@ -1642,6 +1642,43 @@ export function buildServer({
   /** Whether the folder governing an item is a shared one, in no workspace (T502). */
   const isShared = async (kind: string, item: Stored) =>
     (await workspaceRootOf(await governingFolder(kind, item))) === null;
+  /**
+   * The refusal, where the folder already has another dashboard of this
+   * title (T336, AC-270): one of a name in a folder, and free across folders
+   * (AC-271). Only a user's own naming or moving is asked; an approval
+   * replaces the one of its name, as proposals do (P2.6 E).
+   */
+  const dashboardNamed = async (
+    folderId: string | null,
+    title: unknown,
+    except?: string,
+    /** Where it is and what it's called now: asked only when either changes (T336's review). */
+    before?: { readonly folderId: string | null; readonly title: unknown },
+  ) => {
+    if (folderId === null || typeof title !== 'string' || docs?.named === undefined)
+      return undefined;
+    if (
+      before !== undefined &&
+      before.folderId === folderId &&
+      typeof before.title === 'string' &&
+      before.title.trim() === title.trim()
+    )
+      return undefined;
+    /**
+     * Not in My workspace: drafts there may share a name, as those brought in
+     * from a file and copies do (AC-357), and are held to it when proposed
+     * (T513's decision; T336's review).
+     */
+    if (folderId === MY_WORKSPACE_ID || (await workspaceRootOf(folderId)) !== null)
+      return undefined;
+    const found = await docs.named('dashboard', folderId, title.trim());
+    return found === null || found.id === except
+      ? undefined
+      : {
+          error: `This folder already has a dashboard named “${title.trim()}”.`,
+          existing: { kind: 'dashboard', id: found.id, title: title.trim() },
+        };
+  };
   /** What a dashboard or chart holds, apart from where it is and what it is called (T502). */
   const contentOf = (body: Record<string, unknown>) =>
     Object.fromEntries(
@@ -2278,6 +2315,12 @@ export function buildServer({
       targetFolderId = target;
     }
 
+    // One dashboard of a name in a folder (T336, AC-270).
+    if (kind === 'dashboard') {
+      const taken = await dashboardNamed(folderId, title);
+      if (taken !== undefined) return reply.code(409).send(taken);
+    }
+
     /**
      * A dashboard is created with its interaction mode and its default
      * marking already in it (AC-072, direction.md rule 57), not left to be
@@ -2483,6 +2526,18 @@ export function buildServer({
       // A stored chart this build can't read is upgraded by this save, as before.
       const stored = found.stored ?? (await docs.get?.(kind, id).catch(() => null));
       written = withStoredTarget(written, stored?.body);
+    }
+
+    // Never a second dashboard of its name in its folder (T336, AC-270).
+    if (kind === 'dashboard') {
+      const was = found.stored ?? (await docs.get?.(kind, id).catch(() => null)) ?? null;
+      const taken = await dashboardNamed(
+        folderIdOf(written),
+        written['title'],
+        id,
+        was === null ? undefined : { folderId: folderIdOf(was.body), title: was.body['title'] },
+      );
+      if (taken !== undefined) return reply.code(409).send(taken);
     }
 
     // Published into its folder: each cube it names bound there (T429, AC-272).
@@ -2748,6 +2803,16 @@ export function buildServer({
      */
     const storedDashboard =
       found.stored?.body ?? (await docs.get('dashboard', dashboardId))?.body ?? null;
+    // Never a second dashboard of its name in its folder (T336, AC-270).
+    const taken = await dashboardNamed(
+      dashboardFolder,
+      (dashboard.body as Record<string, unknown>)['title'],
+      dashboardId,
+      storedDashboard === null
+        ? undefined
+        : { folderId: folderIdOf(storedDashboard), title: storedDashboard['title'] },
+    );
+    if (taken !== undefined) return reply.code(409).send(taken);
     const madeHere = async (chart: { body: Record<string, unknown> }) =>
       chart.body['localToDashboardId'] === undefined &&
       found.seen !== undefined &&
@@ -2865,6 +2930,20 @@ export function buildServer({
           : await governingFolder(kind, found.stored);
       if (from !== body.folderId && (await crossesWorkspace(from, body.folderId)))
         return reply.code(409).send(ACROSS_WORKSPACE);
+    }
+
+    // Renamed or moved, never to a second of its name in a folder (T336, AC-270).
+    if (kind === 'dashboard' && (title !== undefined || body?.folderId !== undefined)) {
+      const stored = found.stored ?? (await docs.get?.(kind, id)) ?? null;
+      if (stored !== null) {
+        const taken = await dashboardNamed(
+          body?.folderId ?? folderIdOf(stored.body),
+          title ?? stored.body['title'],
+          id,
+          { folderId: folderIdOf(stored.body), title: stored.body['title'] },
+        );
+        if (taken !== undefined) return reply.code(409).send(taken);
+      }
     }
 
     // A folder holding models or data sources moved into My workspace would

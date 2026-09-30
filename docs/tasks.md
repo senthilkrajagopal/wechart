@@ -5606,10 +5606,27 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **Tests:**
       - Units: ui 47, core 443, recommender 123, charts 473, web 1535, api 713.
       - Chrome: `security/folder-data-sources.spec.ts` (1) and `explore.spec.ts` (19).
-- [ ] T336 (AC-270, AC-271, AC-249) Keep names unique per folder, and free across folders
+- [x] T336 (AC-270, AC-271, AC-249) Keep names unique per folder, and free across folders
   - Files: `packages/api/src/model/names.ts` (+ test), `packages/api/src/model/publish.ts`, `packages/api/src/server.ts`
   - Failing test: `names.test.ts`: in one folder, a second cube of a name (across the folder's models), model file, dashboard or data source is refused with the existing item named; the same names in two folders are accepted; a generated cube clashing with one in the target folder is refused, naming it, and the existing file is unchanged (AC-270, AC-271, AC-249).
   - Depends on: T334, T335
+  - **Done 2026-09-30.** Dashboards were the one kind not held to it.
+    - A dashboard's create, rename, move, save, and save with its charts all refuse a title another dashboard in the destination folder has. The answer is `409 { error: "This folder already has a dashboard named “…”.", existing }`, from `dashboardNamed` in `server.ts`, a lookup by folder and title.
+    - An approval still replaces the dashboard of its name (P2.6 E).
+    - Already held, and now shown in one place, `routes/names.test.ts` (the suite's database, the stub xcube, sign-in off):
+      - a second cube of a name across a folder's files (T426's `redeclaredIn`), naming the file that has it;
+      - one model file per path;
+      - a data source of a name (its store's `409`);
+      - a generated cube clashing only with its own folder's (T276 and T450's `clashesOf`), the stored file unchanged, and the same name generated in another folder taken (AC-249).
+    - **AC-270, AC-271 and AC-249 ticked** on `names.test.ts`.
+    - Actual files: `server.ts` and `routes/names.test.ts`; no `model/names.ts` was needed.
+    - **Review fixes:**
+      1. New → Dashboard creates at once as "Untitled dashboard", so a second one in a folder was refused (AC-020). A taken default is now numbered on, "Untitled dashboard 2" and so on, in `ExplorePage.tsx`'s create. A name the user gave is refused as it is.
+      2. Every save was asked, so a dashboard sharing its name with another (phase 1's, or one landed) could no longer be saved at all. Now only a change of title or folder is asked.
+      3. My workspace isn't held to it. Drafts there may share a name, as imported ones (AC-357) and copies do, and are held to it when proposed: T513's decision, now written into AC-270. An approval replaces the one of its name, so a shared folder never gets two.
+      4. The refusal shows the server's words: Explore's rename and move ("Could not save: This folder already has…"), and a dashboard save. Before, every save `409` was said as "changed somewhere else".
+      5. The tests: each stands alone, the save with its charts is tested, a model file's path is refused on create, a data source is renamed through its route, and the messages are exact. The AC-249 case also checks that nothing clashing is saved, and that a generated path found only in another folder is taken.
+    - Not done: case and surrounding spaces. "Revenue" and "revenue" are two names, as for data sources. A title saved with a trailing space isn't matched to one without.
 - **T337 (retired 2026-09-25, superseded by the architecture decisions 1–3 and 5; the ID stays):** ~~(AC-272, AC-275, AC-309) Serve each folder chain its model, nearest definition first~~. There are no chains: xcube binds names at publish in one flat model, and AC-309 is retired. The new resolution and publish tasks replace it (P2.17).
   - Files: `packages/api/src/model/chain.ts` (+ test), `packages/api/src/model/publish.ts` (`GET /api/cube-model/chains`, `/chains/:chain/files`, `/chains/:chain/version`)
   - Failing test: `chain.test.ts`:

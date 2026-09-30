@@ -148,7 +148,17 @@ export async function saveDashboard({
     clearTimeout(timer);
   }
 
-  if (response.status === 409) throw new StaleSaveError(await staleKind(response));
+  if (response.status === 409) {
+    // A refusal the server words, with `error` (a name the folder has, a
+    // shared dashboard): said as it is, never as a save gone stale, whose
+    // answer carries `message` (T336's review).
+    const said = (await response
+      .clone()
+      .json()
+      .catch(() => ({}))) as { error?: unknown };
+    if (typeof said.error === 'string') throw new Error(`Could not save: ${said.error}`);
+    throw new StaleSaveError(await staleKind(response));
+  }
   if (!response.ok) {
     // A refusal says why; a server fault says only that it failed, with the
     // status — its body is "Internal error" by design, which tells no one

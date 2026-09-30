@@ -174,6 +174,25 @@ describe('when the save cannot go through', () => {
     ).rejects.toBeInstanceOf(StaleSaveError);
   });
 
+  it('says a conflict the server words as it is, never as a stale save (T336’s review)', async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            error: 'This folder already has a dashboard named “Revenue”.',
+            existing: { kind: 'dashboard', id: 'd2', title: 'Revenue' },
+          }),
+          { status: 409 },
+        ),
+    );
+
+    const refused = saveDashboard({ dashboardId: 'd1', document: DOC, version: 1, fetchImpl });
+    await expect(refused).rejects.not.toBeInstanceOf(StaleSaveError);
+    await expect(
+      saveDashboard({ dashboardId: 'd1', document: DOC, version: 1, fetchImpl }),
+    ).rejects.toThrow('Could not save: This folder already has a dashboard named “Revenue”.');
+  });
+
   it('refuses quietly for nothing else', async () => {
     // The body the server really sends on a fault (AC-007): it says nothing,
     // so the status is what is shown.

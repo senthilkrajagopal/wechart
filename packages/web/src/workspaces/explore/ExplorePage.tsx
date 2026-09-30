@@ -28,8 +28,7 @@ import { ExportPane } from '../../dashboard/export/ExportPane';
 import { ExportedToast } from '../../dashboard/export/ExportedToast';
 import { ImportPane } from './import/ImportPane';
 
-const counted = (count: number, one: string) =>
-  `${String(count)} ${count === 1 ? one : `${one}s`}`;
+const counted = (count: number, one: string) => `${String(count)} ${count === 1 ? one : `${one}s`}`;
 /** "A", "A and B", "A, B and C". */
 const listed = (names: readonly string[]) =>
   names.length <= 1
@@ -145,16 +144,38 @@ export function ExplorePage() {
       title?: string;
       targetFolderId?: string;
     }) => {
-      const response = await fetch('/api/documents', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          kind,
-          title,
-          folderId,
-          ...(targetFolderId === undefined ? {} : { targetFolderId }),
-        }),
-      });
+      const post = (named: string) =>
+        fetch('/api/documents', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            kind,
+            title: named,
+            folderId,
+            ...(targetFolderId === undefined ? {} : { targetFolderId }),
+          }),
+        });
+      let response = await post(title);
+      /**
+       * A folder holds one dashboard of a name (T336, AC-270): the default
+       * one, taken, is numbered on, "Untitled dashboard 2" and so on (T336's
+       * review). A name the user gave is refused as it is.
+       */
+      for (
+        let next = 2;
+        response.status === 409 &&
+        kind === 'dashboard' &&
+        title === DEFAULT_TITLES[kind] &&
+        next <= 99;
+        next += 1
+      ) {
+        const said = (await response
+          .clone()
+          .json()
+          .catch(() => ({}))) as { existing?: unknown };
+        if (said.existing === undefined) break;
+        response = await post(`${title} ${String(next)}`);
+      }
       if (!response.ok) {
         // The server's reason, where it gives one (T345's review).
         const said = (await response.json().catch(() => ({}))) as {
@@ -206,7 +227,16 @@ export function ExplorePage() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ title, folderId: target }),
       });
-      if (!response.ok) throw new Error(`Could not save: ${String(response.status)}`);
+      if (!response.ok) {
+        // The server's reason, where it gives one: a name the folder has (T336's review).
+        const said = (await response.json().catch(() => ({}))) as {
+          error?: string;
+          message?: string;
+        };
+        throw new Error(
+          `Could not save: ${said.error ?? said.message ?? `error ${String(response.status)}`}`,
+        );
+      }
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
@@ -618,9 +648,7 @@ export function ExplorePage() {
             // in the workspace isn't (T345's review).
             // Nor while a data source is being added in its pane: something
             // new would replace it, and what was typed there with it (T471).
-            busy={
-              create.isPending || !known || me.isPending || addingSource !== null || importing
-            }
+            busy={create.isPending || !known || me.isPending || addingSource !== null || importing}
             // Where an import lands: My workspace, with sign-in off too (T513,
             // AC-356; design 13, state G); only the user's own (T331).
             {...(role.inOwnWorkspace && !searching
@@ -862,7 +890,8 @@ export function ExplorePage() {
                 ? []
                 : [counted(landed.created.dataSources, 'data source')]),
             ];
-            const where = landed.target.path.length === 0 ? 'Shared' : landed.target.path.join(' / ');
+            const where =
+              landed.target.path.length === 0 ? 'Shared' : landed.target.path.join(' / ');
             setImported({
               message: `Imported to My workspace as new drafts: ${listed(created)}. Nothing in ${where} changed.`,
               // Proposed as any draft is (design 05): with sign-in on, where proposals are.
