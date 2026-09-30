@@ -2975,9 +2975,14 @@ export function buildServer({
         });
     }
 
+    // A dashboard's own charts are part of it, and go with it (T518, AC-363).
+    const own = kind === 'dashboard' && docs.localTo ? await docs.localTo(id) : [];
     const removed = await docs.remove(kind, id);
-    // A dashboard's bookmarks are of it, and go with it (T127's review).
-    if (removed && kind === 'dashboard') await bookmarks?.removeFor(id);
+    if (removed && kind === 'dashboard') {
+      for (const chart of own) await docs.remove('chart', chart.id);
+      // Its bookmarks are of it too (T127's review).
+      await bookmarks?.removeFor(id);
+    }
     return reply.status(removed ? 204 : 404).send();
   });
 
@@ -2995,6 +3000,15 @@ export function buildServer({
     if (board === undefined) return reply;
     const chart = await itemFor(request, reply, 'chart', body.chartId, 'open');
     if (chart === undefined) return reply;
+    // A dashboard's own chart is part of it, and goes when it goes (T518's
+    // review, AC-363): shown on another, it would leave that one's tile empty.
+    const local = (chart.stored ?? (await docs.get?.('chart', body.chartId)))?.body[
+      'localToDashboardId'
+    ];
+    if (typeof local === 'string')
+      throw new BadRequest(
+        'This chart is its dashboard’s own: save it to folders to show it on another.',
+      );
     // A chart in a workspace stays on that workspace's dashboards (T343's review).
     if (
       board.stored !== null &&
