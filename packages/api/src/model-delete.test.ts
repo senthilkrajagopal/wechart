@@ -150,6 +150,54 @@ describe('deleting a model item (T428, AC-275, AC-291)', () => {
     expect(response.statusCode).toBe(409);
     expect(response.json()).toEqual({
       error: '“orders” is still used by the chart “Sales by month”.',
+      views: [],
+      cubes: [],
+      charts: [{ id: 'c1', title: 'Sales by month' }],
+      dashboards: [],
+      hidden: 0,
+    });
+    expect(store.files).toEqual(FILES);
+    expect(sent).toEqual([]);
+    await app.close();
+  });
+
+  it('refuses one a view uses or another cube joins to, naming them from their bindings, and changes nothing (T520, AC-365)', async () => {
+    const { app, store, stub, sent } = await serving([
+      {
+        kind: 'chart',
+        id: 'c1',
+        title: 'Sales by month',
+        body: { chart: { source: { cube: 'fsales__orders' } } },
+      },
+    ]);
+    const ids = (await folders()).ids;
+    // /Sales's `summary` joins its `orders`, and its view `sales_view` uses it,
+    // as xcube recorded them at their publish.
+    stub.holdItems(
+      'dev',
+      [
+        ...itemsOf(FILES, ids),
+        {
+          folderId: 'fsales',
+          name: 'sales_view',
+          kind: 'view',
+          yaml: 'views:\n  - name: sales_view\n    cubes:\n      - join_path: orders\n',
+        },
+      ],
+      {
+        fsales__summary: { summary: 'fsales__summary', orders: 'fsales__orders' },
+        fsales__sales_view: { sales_view: 'fsales__sales_view', orders: 'fsales__orders' },
+      },
+    );
+
+    const response = await remove(app, 'sales', 'cubes/orders.yml');
+
+    expect(response.statusCode, response.body).toBe(409);
+    expect(response.json()).toEqual({
+      error:
+        '“orders” is still used by the view “sales_view”, the cube “summary” and the chart “Sales by month”.',
+      views: [{ name: 'sales_view', folderId: 'sales' }],
+      cubes: [{ name: 'summary', folderId: 'sales' }],
       charts: [{ id: 'c1', title: 'Sales by month' }],
       dashboards: [],
       hidden: 0,
@@ -295,11 +343,53 @@ describe('renaming a model item (T428, AC-275)', () => {
     expect(response.statusCode).toBe(409);
     expect(response.json()).toEqual({
       error: '“orders” is still used by the dashboard “Sales”.',
+      views: [],
+      cubes: [],
       charts: [],
       dashboards: [{ id: 'd1', title: 'Sales' }],
       hidden: 0,
     });
     expect(store.files).toEqual(FILES);
+    await app.close();
+  });
+
+  it('names a cube that joins to it, unless the same publish sends that cube again (T520’s review)', async () => {
+    const { app, stub } = await serving();
+    const ids = (await folders()).ids;
+    // /Sales's `summary` joins its `orders`, as xcube recorded at its publish.
+    stub.holdItems('dev', itemsOf(FILES, ids), {
+      fsales__summary: { summary: 'fsales__summary', orders: 'fsales__orders' },
+    });
+    const renamed = cubeFile('cubes/orders.yml', 'purchases');
+
+    const alone = await app.inject({
+      method: 'POST',
+      url: '/api/model/publish',
+      payload: { folderId: 'sales', files: [renamed] },
+    });
+    expect(alone.statusCode).toBe(409);
+    expect(alone.json<{ error: string }>().error).toBe(
+      '“orders” is still used by the cube “summary”.',
+    );
+
+    // With `summary` sent again, joined to the new name: its old binding is no
+    // dependence, and xcube's check judges its new one.
+    const together = await app.inject({
+      method: 'POST',
+      url: '/api/model/publish',
+      payload: {
+        folderId: 'sales',
+        files: [
+          renamed,
+          {
+            path: 'cubes/summary.yml',
+            content:
+              'cubes:\n  - name: summary\n    sql_table: public.summary\n    joins:\n      - name: purchases\n        relationship: many_to_one\n        sql: "{CUBE}.id = {purchases.id}"\n',
+          },
+        ],
+      },
+    });
+    expect(together.statusCode, together.body).toBe(200);
     await app.close();
   });
 });

@@ -141,11 +141,14 @@ test.describe('published items stay bound until published again (T428, AC-275)',
     expect(kept.body.chart.wells.measures).toEqual([`${full(ids.a, 'binding_orders')}.count`]);
     expect(await answered(request)).toBe(before);
 
-    // Deleting /A's while the chart names it is refused, naming the chart.
+    // Deleting /A's while the chart names it, and /A's `binding_lines` joins
+    // it, is refused, naming both: the cube from xcube's bindings (AC-365).
     const refused = await deleteIn(request, ids.a, 'binding_orders');
     expect(refused.status()).toBe(409);
     expect(await refused.json()).toEqual({
-      error: `“binding_orders” is still used by the chart “Bound ${RUN}”.`,
+      error: `“binding_orders” is still used by the cube “binding_lines” and the chart “Bound ${RUN}”.`,
+      views: [],
+      cubes: [{ name: 'binding_lines', folderId: ids.a }],
       charts: [{ id: ids.chart, title: `Bound ${RUN}` }],
       dashboards: [],
       hidden: 0,
@@ -167,7 +170,7 @@ test.describe('published items stay bound until published again (T428, AC-275)',
     expect(await answered(request)).toBe(0);
   });
 
-  test('a delete another model item is bound to is refused by xcube, and one nothing uses applies', async ({
+  test('a delete another model item is bound to is refused, naming it from xcube’s bindings, and one nothing uses applies', async ({
     page,
   }) => {
     const request = page.request;
@@ -183,10 +186,18 @@ test.describe('published items stay bound until published again (T428, AC-275)',
       `“binding_orders” is still used by the chart “Bound ${RUN}”.`,
     );
 
-    // /A's `binding_lines` joins /A's `binding_orders`: xcube refuses the delete.
+    // /A's `binding_lines` joins /A's `binding_orders`: its delete is refused,
+    // naming the cube from xcube's bindings (T520, AC-365).
     const refused = await deleteIn(request, ids.a, 'binding_orders');
-    expect(refused.status(), await refused.text()).toBe(422);
-    expect(JSON.stringify(await refused.json())).toContain('binding_lines');
+    expect(refused.status(), await refused.text()).toBe(409);
+    expect(await refused.json()).toEqual({
+      error: '“binding_orders” is still used by the cube “binding_lines”.',
+      views: [],
+      cubes: [{ name: 'binding_lines', folderId: ids.a }],
+      charts: [],
+      dashboards: [],
+      hidden: 0,
+    });
 
     // `binding_lines` itself nothing uses: deleted, and then `binding_orders` too.
     expect((await deleteIn(request, ids.a, 'binding_lines')).status()).toBe(200);

@@ -151,6 +151,7 @@ export function registerModelPublishing(
     folders,
     beforeFolderPublish,
     referencedBy,
+    dependentsOf,
   }: {
     config: Config;
     client: CubeClient;
@@ -198,6 +199,22 @@ export function registerModelPublishing(
       /** How many more there are that the user may not see: counted, never named (AC-322). */
       readonly hidden: number;
     }>;
+    /**
+     * The model items bound to any of these cubes, by full name, at their own
+     * publish (T520, AC-365): the views that use one and the cubes that join
+     * to one, from xcube's recorded bindings. Named where the user sees their
+     * folder's models, counted where not.
+     */
+    dependentsOf?: (
+      request: FastifyRequest,
+      cubes: readonly string[],
+      /** Items the change sends again, by full name: their new bindings are xcube's to judge. */
+      except: readonly string[],
+    ) => Promise<{
+      readonly views: readonly { readonly name: string; readonly folderId: string }[];
+      readonly cubes: readonly { readonly name: string; readonly folderId: string }[];
+      readonly hidden: number;
+    }>;
   },
 ): void {
   /**
@@ -205,14 +222,46 @@ export function registerModelPublishing(
    * folder, by its xcube id: the refusal, naming them; else nothing (T428,
    * AC-275). wechart checks its own items; xcube, its model's.
    */
-  const inUse = async (request: FastifyRequest, names: readonly string[], xcubeId: string) => {
-    if (names.length === 0 || referencedBy === undefined) return undefined;
-    const full = names.map((name) => (xcubeId === XCUBE_ROOT ? name : `${xcubeId}__${name}`));
-    const { charts, dashboards, hidden } = await referencedBy(request, full);
-    if (charts.length === 0 && dashboards.length === 0 && hidden === 0) return undefined;
+  const inUse = async (
+    request: FastifyRequest,
+    names: readonly string[],
+    xcubeId: string,
+    /** Short names of the items the change sends again (T520's review). */
+    resent: readonly string[] = [],
+  ) => {
+    if (names.length === 0 || (referencedBy === undefined && dependentsOf === undefined))
+      return undefined;
+    const fullOf = (name: string) => (xcubeId === XCUBE_ROOT ? name : `${xcubeId}__${name}`);
+    const full = names.map(fullOf);
+    const referenced = (await referencedBy?.(request, full)) ?? {
+      charts: [],
+      dashboards: [],
+      hidden: 0,
+    };
+    // The model's own dependents first: views and joins (T520, AC-365).
+    const models = (await dependentsOf?.(request, full, resent.map(fullOf))) ?? {
+      views: [],
+      cubes: [],
+      hidden: 0,
+    };
+    const { charts, dashboards } = referenced;
+    const { views, cubes } = models;
+    const hidden = referenced.hidden + models.hidden;
+    if (
+      charts.length === 0 &&
+      dashboards.length === 0 &&
+      views.length === 0 &&
+      cubes.length === 0 &&
+      hidden === 0
+    )
+      return undefined;
     const quoted = (titles: readonly { title: string | null }[]) =>
       titles.map((each) => `“${each.title ?? 'Untitled'}”`).join(', ');
+    const named = (items: readonly { name: string }[]) =>
+      items.map((each) => `“${each.name}”`).join(', ');
     const users = [
+      ...(views.length === 0 ? [] : [`the view${views.length === 1 ? '' : 's'} ${named(views)}`]),
+      ...(cubes.length === 0 ? [] : [`the cube${cubes.length === 1 ? '' : 's'} ${named(cubes)}`]),
       ...(charts.length === 0
         ? []
         : [`the chart${charts.length === 1 ? '' : 's'} ${quoted(charts)}`]),
@@ -223,9 +272,13 @@ export function registerModelPublishing(
       ...(hidden === 0
         ? []
         : [`${String(hidden)} item${hidden === 1 ? '' : 's'} in folders you can’t see`]),
-    ].join(' and ');
+    ];
+    const listed =
+      users.length < 2 ? users.join('') : `${users.slice(0, -1).join(', ')} and ${users.at(-1)!}`;
     return {
-      error: `${names.map((name) => `“${name}”`).join(', ')} ${names.length === 1 ? 'is' : 'are'} still used by ${users}.`,
+      error: `${names.map((name) => `“${name}”`).join(', ')} ${names.length === 1 ? 'is' : 'are'} still used by ${listed}.`,
+      views: views.map(({ name, folderId }) => ({ name, folderId })),
+      cubes: cubes.map(({ name, folderId }) => ({ name, folderId })),
       charts: charts.map(({ id, title }) => ({ id, title })),
       dashboards: dashboards.map(({ id, title }) => ({ id, title })),
       hidden,
@@ -449,7 +502,12 @@ export function registerModelPublishing(
         .filter((file) => changed.some((each) => each.path === file.path))
         .flatMap((file) => declaredIn(file.content).map(({ name }) => name))
         .filter((name) => name !== '' && !declaring.has(name));
-      const used = await inUse(request, renamedAway, served.ids.get(folderId)!);
+      // An item this publish sends again binds anew, as xcube's check judges:
+      // its old bindings are no dependence (T520's review).
+      const resent = changed
+        .flatMap((file) => declaredIn(file.content).map(({ name }) => name))
+        .filter((name) => name !== '');
+      const used = await inUse(request, renamedAway, served.ids.get(folderId)!, resent);
       if (used !== undefined) return reply.status(409).send(used);
       const paths = new Set(changed.map((file) => file.path));
       const overTemplate = inFolder.find(

@@ -85,6 +85,8 @@ const paths = {
   b: `model/${MARK}/b_orders.yml`,
   c: `model/${MARK}/c_orders.yml`,
   root: `model/${MARK}/root_orders.yml`,
+  // /A/B's second, which only T520's test uses.
+  stock: `model/${MARK}/b_stock.yml`,
 };
 let rootBefore: StoredDocument | null = null;
 
@@ -304,10 +306,72 @@ describe('deleting a model (T428)', () => {
     expect(answer.statusCode).toBe(409);
     expect(answer.json()).toEqual({
       error: `“${MARK}_orders” is still used by 1 item in folders you can’t see.`,
+      views: [],
+      cubes: [],
       charts: [],
       dashboards: [],
       hidden: 1,
     });
     expect((await files().list(ids.b)).map((file) => file.content)).toEqual([ORDERS]);
+  });
+
+  it('names a view in a folder they see, and counts a cube in one they can’t, from xcube’s bindings (T520, AC-365)', async () => {
+    const xids = await folderXcubeIds(getDb()).of([ids.b, ids.c]);
+    const [xcubeB, xcubeC] = [xids.get(ids.b)!, xids.get(ids.c)!];
+    // A cube of its own, which no chart names: only the model's items use it.
+    const STOCK = ORDERS.replace(`${MARK}_orders`, `${MARK}_stock`);
+    await files().seed([{ folderId: ids.b, path: paths.stock, content: STOCK }]);
+    const cube = `${xcubeB}__${MARK}_stock`;
+    // Only the refusal is asked of xcube here: what is bound to the cube.
+    const withXcube = buildServer({
+      config: secured,
+      sessions: pgSessionStore(getDb()),
+      documents: docs(),
+      catalog: catalog(getDb()),
+      folderAccess: folderAccessStore(getDb()),
+      modelFiles: files(),
+      folders: () => folderXcubeIds(getDb()).published(),
+      xcube: {
+        items: async () => [
+          {
+            folderId: xcubeB,
+            name: `${MARK}_view`,
+            kind: 'view',
+            fullName: `${xcubeB}__${MARK}_view`,
+            bindings: { [`${MARK}_stock`]: cube },
+          },
+          {
+            folderId: xcubeC,
+            name: `${MARK}_lines`,
+            kind: 'cube',
+            fullName: `${xcubeC}__${MARK}_lines`,
+            bindings: { [`${MARK}_stock`]: cube },
+          },
+        ],
+      } as never,
+    });
+    try {
+      const cookie = await signIn(withXcube, USERS['writer']!);
+      const answer = await withXcube.inject({
+        method: 'DELETE',
+        url: `/api/model/files?folder=${ids.b}&path=${encodeURIComponent(paths.stock)}`,
+        headers: { cookie },
+      });
+      expect(answer.statusCode, answer.body).toBe(409);
+      // /C's cube: counted, never named.
+      expect(answer.json()).toEqual({
+        error: `“${MARK}_stock” is still used by the view “${MARK}_view” and 1 item in folders you can’t see.`,
+        views: [{ name: `${MARK}_view`, folderId: ids.b }],
+        cubes: [],
+        charts: [],
+        dashboards: [],
+        hidden: 1,
+      });
+      expect((await files().list(ids.b)).map((file) => file.content).sort()).toEqual(
+        [ORDERS, STOCK].sort(),
+      );
+    } finally {
+      await withXcube.close();
+    }
   });
 });

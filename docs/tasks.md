@@ -9473,18 +9473,37 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
   - Files: `packages/api/src/server.ts` (`DELETE /api/documents/chart/:id`, whose `?confirm` goes), `packages/api/src/routes/delete-dependents.test.ts`, `packages/web/src/workspaces/explore/LibraryChartPage.tsx` (Delete's refusal replaces its confirm), `e2e/chart-delete.spec.ts` and `server.test.ts` (T021's confirm-then-delete, AC-023, retired)
   - Failing test: `delete-dependents.test.ts`: a library chart two dashboards use answers `409`, naming the one the user may see and counting the other, and stays; one no dashboard uses is deleted (AC-362).
   - Depends on: none (the page's wording, design 14)
-- [ ] T518 [P] (AC-363) Delete a dashboard with its own charts and its bookmarks
+- [x] T518 [P] (AC-363) Delete a dashboard with its own charts and its bookmarks
   - Files: `packages/api/src/server.ts` (`DELETE /api/documents/dashboard/:id`), `packages/api/src/routes/delete-dependents.test.ts`
   - Failing test: `delete-dependents.test.ts`: after a dashboard's delete, neither it, nor any of its own charts, nor its bookmarks is stored; a reader's delete answers `403` and removes nothing (AC-363).
   - Depends on: none
-- [ ] T519 [P] (AC-364) Refuse deleting a data source a cube is bound to, naming the cubes it may name
+  - **Done 2026-09-30.** A dashboard's own charts were left behind by its delete; they go with it now, as its bookmarks already did. **AC-363 ticked** on `delete-dependents.test.ts`.
+- [x] T519 [P] (AC-364) Refuse deleting a data source a cube is bound to, naming the cubes it may name
   - Files: `packages/api/src/routes/data-sources.ts` (the delete), `packages/api/src/access/data-sources.test.ts`, the data source's page (design 14)
   - Failing test: `data-sources.test.ts`: deleting a data source two cubes are bound to answers `409`, naming the cube in a folder the user sees and counting the other; one no cube is bound to is deleted (AC-364).
   - Depends on: none
-- [ ] T520 (AC-365) Refuse deleting a cube, or its model file, while a view, a join, a chart or a dashboard depends on it
+  - **Done 2026-09-30.** wechart asks first which cubes xcube bound to it at publish (T459's `usedBy`, as the Data sources page does). Bound, it answers `409 { error: "This data source is used by 2 cubes: change or delete them first.", cubes: [{ name, folderId, folderPath }], hidden }`, naming the cubes whose folders' every item the user sees. xcube's own refusal stays behind it, for when xcube can't be asked first. A workspace data source is never bound. **AC-364 ticked** on `data-sources.test.ts`, the delete's own surface. The web has no Delete for a folder's data source yet (only "Discard my copy"): T526 adds it.
+- [x] T520 (AC-365) Refuse deleting a cube, or its model file, while a view, a join, a chart or a dashboard depends on it
   - Files: `packages/api/src/model/delete.ts` (+ test), `packages/api/src/xcube/changesets.ts` (xcube's refusal of a delete that breaks a view or a join), the model file's Delete (design 14)
   - Failing test: `model/delete.test.ts`, against the stub xcube: a cube a view uses, one another cube joins to, and one a chart is bound to are each refused, naming what depends on it (views and joins from xcube's refused changeset, charts and dashboards from wechart's own references, AC-275); a cube nothing depends on is deleted (AC-365).
   - Depends on: none (if xcube's refusal doesn't name the view or join, xcube is asked through the Cube-expert agent)
+  - **Done 2026-09-30.**
+    - The views and cubes come from xcube's recorded bindings, not its refused changeset. `GET …/items` gives each published item every name it bound, so a cube's dependents are the items whose bindings name its full name. They are named where the user sees that folder's every item, and counted where not.
+    - The model routes' `inUse` (delete, and a publish that renames a name away) now answers `{ error, views, cubes, charts, dashboards, hidden }`, for example "“orders” is still used by the view “sales_view”, the cube “summary” and the chart “Sales by month”".
+    - If xcube can't be asked, xcube's own check of the change answers (`502`).
+    - Actual files: `packages/api/src/model/publish.ts` (`dependentsOf`, `inUse`) and `server.ts` (the wiring), not `model/delete.ts`.
+    - Tests: `model-delete.test.ts` (a view and a join named), `access/models.test.ts` (a view named, a cube in a folder the writer can't see counted), and `e2e/security/binding.spec.ts` against compose's xcube (/A's `binding_lines`, which joins `binding_orders`, named). The refusal bodies those tests already checked gain `views` and `cubes`. **AC-365 ticked.**
+    - **Review fixes:**
+      1. A publish that renames a cube and sends again the items that bound it was refused. Their old bindings no longer count: the items a publish sends again are left out (`except`), and xcube's check judges their new ones.
+      2. A dashboard's own chart could be attached to another dashboard through the API. Deleting its dashboard (T518) then left the other's tile empty. It is refused now (`400`, "save it to folders to show it on another").
+      3. The `items()` read waits 15 s, as T459's does, since it holds the one-at-a-time publish lock.
+      4. The tests: one no longer depends on the test before it; one checks that the bookmark survives a reader's delete and cleans up after itself.
+    - Not changed: a dashboard's delete isn't one transaction (the "breadth over save edge cases" rule). With `items()` unreachable, xcube's raw refusal (`422`) still names every bound item, as it did before.
+    - The web has no Delete for a model file yet: T526 adds it.
+- [ ] T526 (AC-364, AC-365) Delete a folder's data source, and a model file, from their pages, showing what refuses it *(added 2026-09-30, from T519 and T520's review)*
+  - Files: `packages/web/src/workspaces/data-sources/SourceSettings.tsx`, the model file's page (`ModelFilePage.tsx`), `e2e/security/deleting.spec.ts`
+  - Failing test: `deleting.spec.ts`: a read-write member deletes a data source no cube uses and a model file nothing uses; one in use shows design 14's refusal, naming what uses it and counting the rest (AC-364, AC-365).
+  - Depends on: T519, T520, design 14
 - [ ] T521 (AC-366) Delete only an empty folder, and offer Delete only on one
   - Files: `packages/api/src/server.ts` (`DELETE /api/documents/folder/:id`), `packages/api/src/routes/delete-dependents.test.ts`, `packages/web/src/workspaces/explore/{ExplorePage,FolderContents}.tsx`, `e2e/security/deleting.spec.ts`
   - Failing test: `delete-dependents.test.ts`: a folder holding a subfolder, a dashboard, a chart, a model or a data source answers `409`, saying what it holds, and stays; an empty one is deleted. `deleting.spec.ts`: Delete is in an empty folder's menu and not in one that holds something (AC-366).
@@ -9543,8 +9562,8 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
 | AC-354 | T508, T511 | AC-355 | T508, T511 | AC-356 | T508, T513 |
 | AC-357 | T508, T513 | AC-358 | T508, T514 | AC-359 | T508, T512 |
 | AC-360 | T511 | AC-361 | T514 | | |
-| AC-362 | T517 | AC-363 | T518 | AC-364 | T519 |
-| AC-365 | T520 | AC-366 | T521 | AC-367 | T522 |
+| AC-362 | T517 | AC-363 | T518 | AC-364 | T519, T526 |
+| AC-365 | T520, T526 | AC-366 | T521 | AC-367 | T522 |
 | AC-368 | T523 | AC-369 | T524 | AC-370 | T525 |
 | AC-296 | T370 | AC-297 | T371, T504 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441 |
 | AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |

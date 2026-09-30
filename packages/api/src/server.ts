@@ -632,6 +632,52 @@ export function buildServer({
           seen.dashboards.length,
       };
     },
+    // The views and cubes bound to them at their own publish (T520, AC-365),
+    // named where the user sees that folder's models, counted where not.
+    ...(xcube === undefined
+      ? {}
+      : {
+          dependentsOf: async (
+            request: FastifyRequest,
+            cubes: readonly string[],
+            except: readonly string[],
+          ) => {
+            const targets = new Set(cubes);
+            const resent = new Set(except);
+            const [items, served, seen] = await Promise.all([
+              // Unreached, or slow (it holds the publish lock): xcube's own
+              // check of the change answers for it (502). As T459 waits.
+              xcube.items({ timeoutMs: 15_000 }).catch(() => []),
+              folders === undefined ? ROOT_ONLY : folders(),
+              visibilityOf(request),
+            ]);
+            const wechartIdOf = new Map([...served.ids].map(([ours, theirs]) => [theirs, ours]));
+            const bound = items
+              .filter(
+                (item) =>
+                  !targets.has(item.fullName) &&
+                  !resent.has(item.fullName) &&
+                  Object.values(item.bindings).some((name) => targets.has(name)),
+              )
+              .map((item) => ({
+                kind: item.kind ?? 'cube',
+                name: item.name,
+                folderId: wechartIdOf.get(item.folderId) ?? item.folderId,
+              }));
+            const shown = bound.filter(
+              (item) => seen === undefined || seen.rights.get(item.folderId)?.kinds === 'all',
+            );
+            const strip = ({ name, folderId }: { name: string; folderId: string }) => ({
+              name,
+              folderId,
+            });
+            return {
+              views: shown.filter((item) => item.kind === 'view').map(strip),
+              cubes: shown.filter((item) => item.kind !== 'view').map(strip),
+              hidden: bound.length - shown.length,
+            };
+          },
+        }),
   });
   /**
    * Who may use Jobs and Schedules, over which folders (T371, AC-297; R40):
