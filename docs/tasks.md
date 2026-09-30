@@ -9549,6 +9549,12 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 
 Every surface here follows design 14 (R48), drawn before the UI tasks start. The API halves of T517–T521 depend on nothing else.
 
+*Design 14 approved 2026-09-30 (R49), with its proposals P1 (a folder row's second line shows its description, AC-369) and P2 (the kind in the address, AC-370). Its questions were answered:*
+- *Q1: drafts don't hold back a chart's delete (AC-362).*
+- *Q2: deleting a workspace item withdraws its open proposal (AC-372, T528).*
+- *Q3: readers get no kind filter (AC-370).*
+- *Q4: deletes are permanent, and every confirmation says "You can't undo this."*
+
 - [ ] T517 [P] (AC-362) Refuse deleting a library chart a dashboard uses, naming the dashboards it may name
   - Files: `packages/api/src/server.ts` (`DELETE /api/documents/chart/:id`, whose `?confirm` goes), `packages/api/src/routes/delete-dependents.test.ts`, `packages/web/src/workspaces/explore/LibraryChartPage.tsx` (Delete's refusal replaces its confirm), `e2e/chart-delete.spec.ts` and `server.test.ts` (T021's confirm-then-delete, AC-023, retired)
   - Failing test: `delete-dependents.test.ts`: a library chart two dashboards use answers `409`, naming the one the user may see and counting the other, and stays; one no dashboard uses is deleted (AC-362).
@@ -9584,6 +9590,18 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
   - Files: `packages/web/src/workspaces/data-sources/SourceSettings.tsx`, the model file's page (`ModelFilePage.tsx`), `e2e/security/deleting.spec.ts`
   - Failing test: `deleting.spec.ts`: a read-write member deletes a data source no cube uses and a model file nothing uses; one in use shows design 14's refusal, naming what uses it and counting the rest (AC-364, AC-365).
   - Depends on: T519, T520, design 14
+- [ ] T527 (AC-371) Put a library chart from off a dashboard's folder path on it as a chart of the dashboard's own *(added 2026-09-30, `[R49]`: the user's "Copy on use" for AC-263)*
+  - Files: `packages/api/src/server.ts` (`POST /api/dashboards/:id/charts`, the dashboard saves), `packages/web/src/dashboard/copyChartTo.ts` and the chart page's Add to dashboard, `packages/api/src/routes/copy-on-use.test.ts`, `e2e/security/copy-on-use.spec.ts`
+  - Failing test: `copy-on-use.test.ts`: adding a library chart whose folder isn't on the dashboard's folder path, or saving a dashboard that shows one, puts a copy of it on the dashboard as its own chart; one on the path stays shared. `copy-on-use.spec.ts`: a reader opens that dashboard and every tile answers (AC-371, AC-263).
+  - Depends on: T436
+- [ ] T528 (AC-372) Withdraw an item's open proposal when the item is deleted from My workspace, naming it in the confirmation *(added 2026-09-30, `[R49]`, design 14's Q2)*
+  - Files: the delete routes in `packages/api/src/server.ts` and `routes/data-sources.ts`, the delete dialogs (design 14), `packages/api/src/routes/delete-dependents.test.ts`
+  - Failing test: deleting a workspace dashboard, chart or data source waiting in an open proposal withdraws that proposal; the dialog names it before (AC-372).
+  - Depends on: T518, design 14
+- [ ] T529 (AC-008, AC-168) Rewrite the sample model's policy, and phase 1's two security tests, on groups *(added 2026-09-30, `[R49]`: xcube's tokens carry only groups)*
+  - Files: `infra/cube/model/views/secured_orders.yml`, `e2e/security.spec.ts` (T172's and T174's tests)
+  - Failing test: `security.spec.ts`: a dashboard previewed as `{ groups: [...] }` runs as it, and its tile's SQL shows the row filter the group-based policy adds (AC-168).
+  - Depends on: T437
 - [ ] T521 (AC-366) Delete only an empty folder, and offer Delete only on one
   - Files: `packages/api/src/server.ts` (`DELETE /api/documents/folder/:id`), `packages/api/src/routes/delete-dependents.test.ts`, `packages/web/src/workspaces/explore/{ExplorePage,FolderContents}.tsx`, `e2e/security/deleting.spec.ts`
   - Failing test: `delete-dependents.test.ts`: a folder holding a subfolder, a dashboard, a chart, a model or a data source answers `409`, saying what it holds, and stays; an empty one is deleted. `deleting.spec.ts`: Delete is in an empty folder's menu and not in one that holds something (AC-366).
@@ -9645,6 +9663,7 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
 | AC-362 | T517 | AC-363 | T518 | AC-364 | T519, T526 |
 | AC-365 | T520, T526 | AC-366 | T521 | AC-367 | T522 |
 | AC-368 | T523 | AC-369 | T524 | AC-370 | T525 |
+| AC-371 | T527 | AC-372 | T528 | | |
 | AC-296 | T370 | AC-297 | T371, T504 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441 |
 | AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |
 | AC-302 | T394 | AC-303 | T395 | AC-304 | T396 |

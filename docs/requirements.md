@@ -874,6 +874,17 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R49 — design 14 approved; its questions; a restored data source's test; xcube's tokens and the sample policy** (2026-09-30, the user)
+- Design 14 (`docs/design/reviews/2026-09-30/designs/14-deleting-clearing-finding.html`): "Approve (Recommended)".
+- Its proposals: "P1 Description in rows, P2 Kind in the address". *A folder row's second line shows its description; the chosen kind is kept in the address (`?kind=`) and stays as subfolders open. P3 (auditing deletes) is not adopted.*
+- Q1, another user's draft dashboard showing a shared chart: "No, drafts don't block". *Only a dashboard in a shared folder blocks a library chart's delete; a draft that showed the chart loses the tile.*
+- Q2, deleting one workspace item that has an open proposal: "Withdraw it, named (Recommended)". *The confirmation names the proposal, and deleting withdraws it, as Clear My workspace does.*
+- Q3, readers and the kind filter: "Readers see only Dashboards and chart that they are entitled to.. no filters for readers".
+- Q4, permanent deletes: "Permanent, said so (Recommended)". *Every delete confirmation ends "You can't undo this."*
+- A data source's version restored as a draft (T515) and AC-158: "Test before proposing (Recommended)". *The draft is saved as the version had it and proposed only once a test of exactly its settings passes; AC-158 is amended so.*
+- xcube's query tokens carry only groups (T437), so the phase-1 sample policy's `securityContext.is_employee` can never hold: "Rewrite on groups (Recommended)". *The sample model's policy and the two phase-1 tests (T172, T174) use a group instead.*
+- AC-263, a library chart kept in a folder a reader can't see, on a dashboard they may see: once xcube gates folders (T436), Cube refuses its tile. The user chose "Copy on use". *A dashboard shows only library charts found on its own folder's path; putting one from elsewhere on it makes it a chart of the dashboard's own, so no tile ever needs a folder its readers can't see.*
+
 **R48 — deleting, clearing the workspace, a folder per edit, filtering Explore by kind** (2026-09-30, the user; to requirements only, not to be worked on yet)
 - The user: "Let us add the option of deleting empty folders, or deleting individual artifacts. Example if charts can be deleted if no dashboards are using it, dashboards can be deleted because nothing else depends on it, datasources can be deleted if no cubes depend on it, and cubes can be deleted if there are no views connecting to it. In workspaece there should be option to clear the entire workspace, when editing a resource from folder view, it should create a project<date+time> folder (And if possible have folder comments on what resource is being modified).. Also in the explore view there should be option to filter resources only by dashboards and charts, or only by datasources, or only by models. Add it the requirements.. dont work on it right now"
 - *Folded into §P2.6 I. A data source is already refused a delete while a cube is bound to it.*
