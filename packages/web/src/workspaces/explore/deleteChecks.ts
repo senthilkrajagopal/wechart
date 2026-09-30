@@ -88,6 +88,69 @@ export const checkChart = (id: string, signedIn: boolean) => async (): Promise<C
   return chartRefusal(found, { signedIn }) ?? { kind: 'confirm', text: 'No dashboard uses it.' };
 };
 
+/** What a folder holds, by kind, as its delete's refusal counts it (T521, AC-366). */
+export interface Holdings {
+  readonly subfolders: number;
+  readonly dashboards: number;
+  readonly charts: number;
+  readonly models: number;
+  readonly dataSources: number;
+}
+
+/** "1 subfolder and 2 dashboards": AC-366's order, only the kinds it has. */
+function holdingsText(holds: Holdings): string {
+  const parts = (
+    [
+      [holds.subfolders, 'subfolder', 'subfolders'],
+      [holds.dashboards, 'dashboard', 'dashboards'],
+      [holds.charts, 'chart', 'charts'],
+      [holds.models, 'model', 'models'],
+      [holds.dataSources, 'data source', 'data sources'],
+    ] as const
+  )
+    .filter(([count]) => count > 0)
+    .map(([count, one, many]) => `${String(count)} ${count === 1 ? one : many}`);
+  return parts.length < 2
+    ? parts.join('')
+    : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)!}`;
+}
+
+/**
+ * Design 14's state E4: a folder that filled after Delete was offered, or
+ * one the API was asked of directly. Delete is offered only on an empty one.
+ */
+export function folderRefusal(holds: Holdings, title: string, open: () => void): Refusal {
+  return {
+    kind: 'refused',
+    lead: `It isn’t empty any more. It holds ${holdingsText(holds)}. Only an empty folder can be deleted.`,
+    also: { label: `Open ${title}`, onSelect: open },
+  };
+}
+
+/** An empty folder's confirmation (state E3): nothing is asked first. */
+export const FOLDER_CONFIRMATION = {
+  kind: 'confirm',
+  text: 'It’s empty, so nothing else goes with it.',
+} as const;
+
+/** Deletes a folder: its refusal, where it holds something now (state E4). */
+export const removeFolder =
+  (id: string, title: string, open: () => void) => async (): Promise<Refusal | undefined> => {
+    const response = await fetch(`/api/documents/folder/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    if (response.status === 409) {
+      const said = (await response.json().catch(() => ({}))) as {
+        holds?: Holdings;
+        error?: string;
+      };
+      if (said.holds !== undefined) return folderRefusal(said.holds, title, open);
+      throw new Error(said.error ?? 'It could not be deleted.');
+    }
+    if (!response.ok) throw await failure(response, 'It could not be deleted');
+    return undefined;
+  };
+
 /** Deletes a library chart: its refusal, where a dashboard took it up meanwhile (state A4). */
 export const removeChart =
   (id: string, signedIn: boolean) => async (): Promise<Refusal | undefined> => {

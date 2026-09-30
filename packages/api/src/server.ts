@@ -1976,6 +1976,48 @@ export function buildServer({
     return (await dataSources.all()).filter((source) => subtree.has(source.folderId)).length;
   };
 
+  /**
+   * What a folder itself holds, by kind (T521, AC-366): its subfolders and
+   * its own items. Its models and data sources as their stores hold them,
+   * where the server has them.
+   */
+  const holdingsOf = async (folderId: string) => {
+    const own = cat?.ownCounts ? (await cat.ownCounts()).get(folderId) : undefined;
+    const subfolders = cat
+      ? ((await cat.folders({ counted: false })) as { parentId: string | null }[]).filter(
+          (folder) => folder.parentId === folderId,
+        ).length
+      : 0;
+    return {
+      subfolders,
+      dashboards: own?.dashboards ?? 0,
+      charts: own?.charts ?? 0,
+      models:
+        modelFiles === undefined ? (own?.models ?? 0) : (await modelFiles.list(folderId)).length,
+      dataSources:
+        dataSources === undefined
+          ? (own?.dataSources ?? 0)
+          : (await dataSources.inFolder(folderId)).length,
+    };
+  };
+  /** "1 subfolder, 2 dashboards and 1 chart", in AC-366's order, only the kinds it has. */
+  const holdingsText = (holds: Awaited<ReturnType<typeof holdingsOf>>): string => {
+    const parts = (
+      [
+        [holds.subfolders, 'subfolder', 'subfolders'],
+        [holds.dashboards, 'dashboard', 'dashboards'],
+        [holds.charts, 'chart', 'charts'],
+        [holds.models, 'model', 'models'],
+        [holds.dataSources, 'data source', 'data sources'],
+      ] as const
+    )
+      .filter(([count]) => count > 0)
+      .map(([count, one, many]) => `${String(count)} ${count === 1 ? one : many}`);
+    return parts.length < 2
+      ? parts.join('')
+      : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)!}`;
+  };
+
   /** A refused or unasked binding, answered. */
   const bindingRefused = (reply: FastifyReply, kind: string, bound: Bound) =>
     bound.kind === 'refused'
@@ -3882,21 +3924,22 @@ export function buildServer({
         });
     }
 
-    // A folder holding models, itself or beneath it, isn't deleted: its cubes
-    // would leave xcube with nothing checked against what uses them (T428's
-    // review, AC-275). Its models are deleted first, each checked.
+    /**
+     * Only an empty folder is deleted (T521, AC-366): one holding a subfolder,
+     * a dashboard, a library chart, a model or a data source is refused,
+     * saying what it holds. What it held was left in no folder, seen by no
+     * one; its models' cubes left xcube with nothing checked against what
+     * uses them (T428's review, AC-275), and its data sources their sealed
+     * secrets (T335's review). A read-write member sees the whole folder, so
+     * nothing it holds is hidden from them.
+     */
     if (kind === 'folder') {
-      const models = await modelsBeneath(id);
-      if (models > 0)
+      const holds = await holdingsOf(id);
+      const said = holdingsText(holds);
+      if (said !== '')
         return reply.status(409).send({
-          error: `This folder holds ${String(models)} model${models === 1 ? '' : 's'}, in it or beneath it: delete ${models === 1 ? 'it' : 'them'} first.`,
-        });
-      // Nor one holding data sources: they and their sealed secrets would be
-      // left in no folder, seen by no one (T335's review).
-      const sources = await dataSourcesBeneath(id);
-      if (sources > 0)
-        return reply.status(409).send({
-          error: `This folder holds ${String(sources)} data source${sources === 1 ? '' : 's'}, in it or beneath it: delete ${sources === 1 ? 'it' : 'them'} first.`,
+          error: `This folder holds ${said}: only an empty folder can be deleted.`,
+          holds,
         });
     }
 

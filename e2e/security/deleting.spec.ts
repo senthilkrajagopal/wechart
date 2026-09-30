@@ -175,3 +175,180 @@ test.describe('deleting a library chart (T517, AC-362)', () => {
     });
   });
 });
+
+/**
+ * T521 (AC-366; design 14, state E): only an empty folder is deleted, and
+ * Explore offers Delete on a folder only when it's empty: in its row's ⋯,
+ * and in its own header's ⋯ once it's open. One that filled meanwhile is
+ * refused, saying what it holds.
+ */
+const PARENT = `Folders ${RUN}`;
+const folders = { parent: '', empty: '', holds: '', board: '', open: '', fills: '' };
+
+test.describe('deleting a folder (T521, AC-366)', () => {
+  test.afterAll(async ({ browser }) => {
+    const admin = await as(browser, 'super');
+    if (folders.board !== '')
+      await admin.request.delete(`/api/documents/dashboard/${folders.board}`);
+    for (const id of [folders.fills, folders.open, folders.holds, folders.empty])
+      if (id !== '') {
+        const inside = await admin.request.get(`/api/folders/${id}/contents`);
+        if (inside.ok())
+          for (const item of (await inside.json()) as { kind: string; id: string }[])
+            await admin.request.delete(`/api/documents/${item.kind}/${item.id}`);
+        await admin.request.delete(`/api/documents/folder/${id}`);
+      }
+    if (folders.parent !== '')
+      await admin.request.delete(`/api/documents/folder/${folders.parent}`);
+    await admin.close();
+  });
+
+  test.describe('as super', () => {
+    test.use({ role: 'super' });
+
+    test('makes a folder writer changes, with an empty subfolder and one holding a dashboard', async ({
+      page,
+    }) => {
+      const folder = async (title: string, parent: string) => {
+        const answer = await page.request.post('/api/documents', {
+          data: { kind: 'folder', title, folderId: parent },
+        });
+        expect(answer.status(), await answer.text()).toBe(201);
+        return ((await answer.json()) as { id: string }).id;
+      };
+      folders.parent = await folder(PARENT, 'root');
+      expect(
+        (
+          await page.request.put(`/api/folders/${folders.parent}/access`, {
+            data: { readOnly: ['sales-ro'], readWrite: ['sales-rw'] },
+          })
+        ).status(),
+      ).toBe(200);
+      folders.empty = await folder(`Archive ${RUN}`, folders.parent);
+      folders.holds = await folder(`Holds ${RUN}`, folders.parent);
+      folders.open = await folder(`Opened ${RUN}`, folders.parent);
+      folders.fills = await folder(`Fills ${RUN}`, folders.parent);
+      const board = await page.request.post('/api/documents', {
+        data: { kind: 'dashboard', title: `Kept ${RUN}`, folderId: folders.holds },
+      });
+      folders.board = ((await board.json()) as { id: string }).id;
+    });
+  });
+
+  test.describe('as writer', () => {
+    test.use({ role: 'writer' });
+
+    test('is offered Delete on an empty folder’s row only, and deletes it once confirmed', async ({
+      page,
+    }) => {
+      await page.goto(`/explore?folder=${folders.parent}`);
+      const contents = page.getByTestId('explore-contents');
+      await expect(contents.getByRole('heading', { level: 1 })).toHaveText(PARENT);
+
+      // A folder that holds something: Rename and Move to…, and no Delete (E1).
+      await page
+        .getByTestId(`item-${folders.holds}`)
+        .getByRole('button', { name: `Actions for Holds ${RUN}` })
+        .click();
+      await expect(page.getByRole('menu').getByRole('menuitem')).toHaveText(['Rename', 'Move to…']);
+      await page.keyboard.press('Escape');
+
+      // An empty one ends in Delete… (E1), confirmed (E3).
+      const row = page.getByTestId(`item-${folders.empty}`);
+      await row.getByRole('button', { name: `Actions for Archive ${RUN}` }).click();
+      await expect(page.getByRole('menu').getByRole('menuitem')).toHaveText([
+        'Rename',
+        'Move to…',
+        'Delete…',
+      ]);
+      await page.getByRole('menuitem', { name: 'Delete…' }).click();
+      const dialog = page.getByRole('alertdialog', { name: `Delete “Archive ${RUN}”?` });
+      await expect(dialog).toContainText(
+        'It’s empty, so nothing else goes with it. You can’t undo this.',
+      );
+      await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+      await dialog.getByRole('button', { name: 'Delete folder' }).click();
+      await expect(row).toHaveCount(0);
+      await expect(
+        page.getByRole('status').filter({ hasText: `Deleted “Archive ${RUN}”.` }),
+      ).toBeVisible();
+      folders.empty = '';
+      // A folder holding something is refused through the API too, saying what it holds.
+      const refused = await page.request.delete(`/api/documents/folder/${folders.holds}`);
+      expect(refused.status()).toBe(409);
+      expect(((await refused.json()) as { error: string }).error).toBe(
+        'This folder holds 1 dashboard: only an empty folder can be deleted.',
+      );
+    });
+
+    test('deletes the open folder from its header’s ⋯ while it’s empty, and opens its parent', async ({
+      page,
+    }) => {
+      // Holding something, the header has no ⋯ (pin 7).
+      await page.goto(`/explore?folder=${folders.holds}`);
+      const contents = page.getByTestId('explore-contents');
+      await expect(contents.getByRole('heading', { level: 1 })).toHaveText(`Holds ${RUN}`);
+      await expect(contents.getByTestId(`item-${folders.board}`)).toBeVisible();
+      await expect(page.getByRole('button', { name: `More actions for Holds ${RUN}` })).toHaveCount(
+        0,
+      );
+
+      await page.goto(`/explore?folder=${folders.open}`);
+      await expect(contents.getByRole('heading', { level: 1 })).toHaveText(`Opened ${RUN}`);
+      await page.getByRole('button', { name: `More actions for Opened ${RUN}` }).click();
+      await page.getByRole('menuitem', { name: 'Delete folder…' }).click();
+      await page
+        .getByRole('alertdialog', { name: `Delete “Opened ${RUN}”?` })
+        .getByRole('button', { name: 'Delete folder' })
+        .click();
+      // Its parent opens, saying so, with focus on its heading.
+      await expect(page).toHaveURL(new RegExp(`folder=${folders.parent}$`));
+      await expect(contents.getByRole('heading', { level: 1 })).toHaveText(PARENT);
+      await expect(contents.getByRole('heading', { level: 1 })).toBeFocused();
+      await expect(
+        page.getByRole('status').filter({ hasText: `Deleted “Opened ${RUN}”.` }),
+      ).toBeVisible();
+      expect((await page.request.get(`/api/documents/folder/${folders.open}`)).status()).toBe(404);
+      folders.open = '';
+    });
+
+    test('refuses one that filled after Delete was offered, saying what it holds', async ({
+      page,
+    }) => {
+      await page.goto(`/explore?folder=${folders.parent}`);
+      const row = page.getByTestId(`item-${folders.fills}`);
+      await row.getByRole('button', { name: `Actions for Fills ${RUN}` }).click();
+      await expect(page.getByRole('menuitem', { name: 'Delete…' })).toBeVisible();
+      // Someone adds a folder to it meanwhile.
+      const added = await page.request.post('/api/documents', {
+        data: { kind: 'folder', title: `Added ${RUN}`, folderId: folders.fills },
+      });
+      expect(added.status(), await added.text()).toBe(201);
+      await page.getByRole('menuitem', { name: 'Delete…' }).click();
+      await page
+        .getByRole('alertdialog', { name: `Delete “Fills ${RUN}”?` })
+        .getByRole('button', { name: 'Delete folder' })
+        .click();
+      const refused = page.getByRole('alertdialog', { name: `Can’t delete “Fills ${RUN}”` });
+      await expect(refused).toContainText(
+        'It isn’t empty any more. It holds 1 subfolder. Only an empty folder can be deleted.',
+      );
+      await refused.getByRole('button', { name: `Open Fills ${RUN}` }).click();
+      const heading = page.getByTestId('explore-contents').getByRole('heading', { level: 1 });
+      await expect(heading).toHaveText(`Fills ${RUN}`);
+      await expect(heading).toBeFocused();
+      // Read afresh: it holds a subfolder, so neither its header nor its row
+      // offers Delete any more, though it counts no item (T521's review).
+      await expect(page.getByTestId('explore-contents').getByText(`Added ${RUN}`)).toBeVisible();
+      await expect(page.getByRole('button', { name: `More actions for Fills ${RUN}` })).toHaveCount(
+        0,
+      );
+      await page.goto(`/explore?folder=${folders.parent}`);
+      await page
+        .getByTestId(`item-${folders.fills}`)
+        .getByRole('button', { name: `Actions for Fills ${RUN}` })
+        .click();
+      await expect(page.getByRole('menu').getByRole('menuitem')).toHaveText(['Rename', 'Move to…']);
+    });
+  });
+});

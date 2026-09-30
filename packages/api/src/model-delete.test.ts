@@ -293,9 +293,11 @@ describe('a folder holding models (T428)', () => {
       payload: { folderId: 'mine' },
     });
 
+    // Only an empty folder is deleted, saying what it holds (T521, AC-366).
     expect(deleted.statusCode).toBe(409);
     expect(deleted.json()).toEqual({
-      error: 'This folder holds 2 models, in it or beneath it: delete them first.',
+      error: 'This folder holds 1 subfolder and 2 models: only an empty folder can be deleted.',
+      holds: { subfolders: 1, dashboards: 0, charts: 0, models: 2, dataSources: 0 },
     });
     expect(moved.statusCode).toBe(409);
     expect(moved.json()).toEqual({

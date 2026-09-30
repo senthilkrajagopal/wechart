@@ -29,7 +29,8 @@ import { ExportedToast } from '../../dashboard/export/ExportedToast';
 import { ImportPane } from './import/ImportPane';
 import { fileHref } from '../model/inFolder';
 import { DeleteDialog, type Checked, type Confirmation, type Refusal } from './DeleteDialog';
-import { checkChart, removeChart } from './deleteChecks';
+import { checkChart, FOLDER_CONFIRMATION, removeChart, removeFolder } from './deleteChecks';
+import { MenuButton, type MenuItem } from '../../shell/MenuButton';
 import { clearSaid, peekSaid } from './deletedToast';
 
 const counted = (count: number, one: string) => `${String(count)} ${count === 1 ? one : `${one}s`}`;
@@ -377,6 +378,44 @@ export function ExplorePage() {
     ? me.data !== undefined &&
       (me.data.security === 'off' || me.data.superAdmin || me.data.readWrite === true)
     : role.mayRename;
+  /**
+   * The open folder's own Delete folder…, in its header's ⋯ (T521, AC-366;
+   * design 14, state E2): only while it holds nothing, never on a root, and
+   * for one who may change both it and the folder holding it, as its delete
+   * needs (AC-291). A header with nothing to offer has no ⋯.
+   */
+  const parentId = chain.length > 1 ? chain.at(-2)?.id : undefined;
+  const openIsEmpty =
+    !searching && known && !isRoot && contents.isSuccess && contents.data.length === 0;
+  const parentAccess = useQuery({
+    ...folderAccessQuery(parentId ?? ''),
+    enabled: signedIn && !inMyWorkspace && openIsEmpty && parentId !== undefined,
+    retry: false,
+  });
+  const mayDeleteOpen =
+    openIsEmpty &&
+    role.mayRename &&
+    parentId !== undefined &&
+    (!signedIn || inMyWorkspace || parentAccess.isSuccess);
+  const headerMenu: MenuItem[] = mayDeleteOpen
+    ? [
+        {
+          key: 'delete-folder',
+          label: 'Delete folder…',
+          danger: true,
+          onSelect: () => {
+            setDeletingOpen(true);
+            setDeletingItem({
+              kind: 'folder',
+              id: folderId,
+              title: folderTitle,
+              owner: null,
+              updatedAt: '',
+            });
+          },
+        },
+      ]
+    : [];
   const [accessOf, setAccessOf] = useState<string | null>(null);
   const accessButton = useRef<HTMLButtonElement>(null);
   /**
@@ -414,10 +453,17 @@ export function ExplorePage() {
    * toast says so. An item deleted from its own page lands here saying so.
    */
   const [deletingItem, setDeletingItem] = useState<CatalogItem | null>(null);
+  /** The open folder, deleted from its header's ⋯ (state E2): its parent opens after. */
+  const [deletingOpen, setDeletingOpen] = useState(false);
   const [said, setSaid] = useState('');
   const heading = useRef<HTMLHeadingElement | null>(null);
   /** The heading takes focus once it is drawn: after its item's page deleted it, its folder's. */
   const focusHeading = useRef(false);
+  /** Asked for from a dialog's answer, as it closes: the heading takes focus once drawn. */
+  const [titleFocus, setTitleFocus] = useState(0);
+  useEffect(() => {
+    if (titleFocus > 0) heading.current?.focus();
+  }, [titleFocus]);
   useEffect(() => {
     // After the page has drawn, so the toast's live region, kept mounted,
     // announces its words as they arrive (design 14, A5 and keyboard).
@@ -448,7 +494,43 @@ export function ExplorePage() {
           check: checkChart(item.id, signedIn),
           remove: removeChart(item.id, signedIn),
         }
-      : undefined;
+      : // Offered only on an empty one (T521, AC-366): confirmed, nothing asked first.
+        item.kind === 'folder'
+        ? {
+            action: 'Delete folder',
+            check: FOLDER_CONFIRMATION,
+            remove: async () => {
+              const refusal = await removeFolder(item.id, item.title, () => {
+                setDeletingItem(null);
+                setDeletingOpen(false);
+                openFolder(item.id);
+                // Focus on its heading, not left on the dialog gone (T521's review).
+                setTitleFocus((times) => times + 1);
+              })();
+              // It isn't empty: what it holds is read afresh, so Delete is
+              // offered on it no more (T521's review).
+              if (refusal !== undefined) refreshListings();
+              return refusal;
+            },
+          }
+        : undefined;
+  /**
+   * A folder with nothing in it (T521, AC-366): no item it counts, and no
+   * subfolder. Delete is offered on no other: none rather than a greyed one
+   * (design 14, screen 1).
+   */
+  const isEmptyFolder = (item: CatalogItem) =>
+    item.kind === 'folder' &&
+    item.itemCount === 0 &&
+    folders.isSuccess &&
+    !folders.data.some((folder) => folder.parentId === item.id);
+  /** What a delete, or a refused one, may have changed: the lists, the tree and its counts. */
+  const refreshListings = () => {
+    void queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
+    void queryClient.invalidateQueries({ queryKey: ['explore-search'] });
+    void queryClient.invalidateQueries({ queryKey: ['folders'] });
+    void queryClient.invalidateQueries({ queryKey: ['folder-roots'] });
+  };
   const rowDeleted = (item: CatalogItem) => {
     const listed = shown.data ?? [];
     const at = listed.findIndex((each) => each.kind === item.kind && each.id === item.id);
@@ -457,10 +539,16 @@ export function ExplorePage() {
     setSaid(`Deleted “${item.title}”.`);
     if (next === undefined) heading.current?.focus();
     else focusRow.current = next.id;
-    void queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
-    void queryClient.invalidateQueries({ queryKey: ['explore-search'] });
-    void queryClient.invalidateQueries({ queryKey: ['folders'] });
-    void queryClient.invalidateQueries({ queryKey: ['folder-roots'] });
+    refreshListings();
+  };
+  /** The open folder deleted from its header: its parent opens, saying so, its heading focused (E3). */
+  const openDeleted = (item: CatalogItem, parentId: string) => {
+    setDeletingItem(null);
+    setDeletingOpen(false);
+    setSaid(`Deleted “${item.title}”.`);
+    openFolder(parentId);
+    heading.current?.focus();
+    refreshListings();
   };
   // The docked panes replace each other: not two at once (T471).
   const accessOpen =
@@ -702,6 +790,16 @@ export function ExplorePage() {
               Access
             </button>
           ) : null}
+          {headerMenu.length === 0 ? null : (
+            <MenuButton
+              label={`More actions for ${folderTitle}`}
+              className="btn-ghost btn-sm"
+              testId="folder-more"
+              items={headerMenu}
+            >
+              <span aria-hidden="true">⋯</span>
+            </MenuButton>
+          )}
           <span className="explore__spacer" />
           <input
             type="search"
@@ -838,7 +936,9 @@ export function ExplorePage() {
                     onDelete: (item: CatalogItem) => {
                       setDeletingItem(item);
                     },
-                    deletes: (item: CatalogItem) => deleteOf(item) !== undefined,
+                    deletes: (item: CatalogItem) =>
+                      deleteOf(item) !== undefined &&
+                      (item.kind !== 'folder' || isEmptyFolder(item)),
                   }
                 : {})}
               // Not while a data source is being added in the pane it would
@@ -959,16 +1059,21 @@ export function ExplorePage() {
             check={deleting.check}
             remove={deleting.remove}
             onDeleted={() => {
-              rowDeleted(deletingItem);
+              if (deletingOpen && parentId !== undefined) openDeleted(deletingItem, parentId);
+              else rowDeleted(deletingItem);
             }}
             onClose={() => {
               const item = deletingItem;
+              const fromHeader = deletingOpen;
               setDeletingItem(null);
-              // Back on the row's ⋯ it came from (design 14, keyboard).
+              setDeletingOpen(false);
+              // Back on the ⋯ it came from (design 14, keyboard).
               requestAnimationFrame(() => {
                 document
                   .querySelector<HTMLElement>(
-                    `[data-testid="item-${CSS.escape(item.id)}"] [aria-haspopup="menu"]`,
+                    fromHeader
+                      ? '[data-testid="folder-more"]'
+                      : `[data-testid="item-${CSS.escape(item.id)}"] [aria-haspopup="menu"]`,
                   )
                   ?.focus();
               });

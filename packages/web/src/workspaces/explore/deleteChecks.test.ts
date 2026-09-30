@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { chartRefusal, type ChartDependents } from './deleteChecks';
+import { chartRefusal, folderRefusal, type ChartDependents } from './deleteChecks';
 
 /**
  * What design 14's state A says of a library chart the shared folders'
@@ -79,5 +79,32 @@ describe('a chart’s refusal (T517, AC-362; design 14, state A)', () => {
     expect(
       chartRefusal({ dashboards: [SEEN], hidden: 0 }, { signedIn: true, justNow: true })?.lead,
     ).toBe('A dashboard started using it just now. Nothing was deleted.');
+  });
+});
+
+describe('a folder’s refusal (T521, AC-366; design 14, state E4)', () => {
+  it('says what it holds, by kind in AC-366’s order, only the kinds it has, with a way to open it', () => {
+    const open = vi.fn();
+    const refusal = folderRefusal(
+      { subfolders: 1, dashboards: 2, charts: 0, models: 1, dataSources: 0 },
+      'Archive 2025',
+      open,
+    );
+    expect(refusal.lead).toBe(
+      'It isn’t empty any more. It holds 1 subfolder, 2 dashboards and 1 model. Only an empty folder can be deleted.',
+    );
+    expect(refusal.also?.label).toBe('Open Archive 2025');
+    refusal.also?.onSelect();
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it('names a lone kind alone', () => {
+    expect(
+      folderRefusal(
+        { subfolders: 0, dashboards: 0, charts: 0, models: 0, dataSources: 1 },
+        'X',
+        () => undefined,
+      ).lead,
+    ).toBe('It isn’t empty any more. It holds 1 data source. Only an empty folder can be deleted.');
   });
 });

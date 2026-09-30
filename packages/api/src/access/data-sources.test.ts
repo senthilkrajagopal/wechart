@@ -495,11 +495,23 @@ describe('a folder holding data sources (T335’s review)', () => {
         method: 'DELETE',
         url: `/api/documents/folder/${outer}`,
       });
+      // Only an empty folder is deleted, saying what it holds (T521, AC-366).
       expect(refused.statusCode).toBe(409);
       expect(refused.json()).toEqual({
-        error: 'This folder holds 1 data source, in it or beneath it: delete it first.',
+        error: 'This folder holds 1 subfolder: only an empty folder can be deleted.',
+        holds: { subfolders: 1, dashboards: 0, charts: 0, models: 0, dataSources: 0 },
       });
       expect(await docs().get('folder', outer)).not.toBeNull();
+      // Nor is the folder holding the data source.
+      const inside = await open.inject({ method: 'DELETE', url: `/api/documents/folder/${inner}` });
+      expect(inside.statusCode).toBe(409);
+      expect(inside.json<{ holds: unknown }>().holds).toEqual({
+        subfolders: 0,
+        dashboards: 0,
+        charts: 0,
+        models: 0,
+        dataSources: 1,
+      });
     } finally {
       await sources().remove(held.id);
       await open.close();

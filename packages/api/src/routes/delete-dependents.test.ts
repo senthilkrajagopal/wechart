@@ -83,6 +83,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (app !== undefined) await app.close();
+  // Models and data sources a folder's test put in it.
+  await getDb().deleteFrom('model_files').where('path', 'like', `%${MARK}%`).execute();
+  await getDb().deleteFrom('data_sources').where('name', 'like', `%${MARK}%`).execute();
   // Bookmarks on dashboards a test left standing.
   for (const { kind, id } of made) if (kind === 'dashboard') await bookmarks().removeFor(id);
   for (const { kind, id } of made.reverse())
@@ -273,5 +276,71 @@ describe('deleting a library chart (T517, AC-362)', () => {
     const deleted = await as('reader', { method: 'DELETE', url: `/api/documents/chart/${chart}` });
     expect([asked.statusCode, deleted.statusCode]).toEqual([403, 403]);
     expect((await docs().get('chart', chart))?.id).toBe(chart);
+  });
+});
+
+describe('deleting a folder (T521, AC-366)', () => {
+  /** A folder in /Sales, or in the folder given. */
+  const folderIn = (title: string, parent = ids.sales) =>
+    doc('folder', { title: `${title} ${MARK}`, folderId: parent });
+  const deleteFolder = (id: string) =>
+    as('writer', { method: 'DELETE', url: `/api/documents/folder/${id}` });
+
+  it('refuses one holding a subfolder, dashboards or a chart, saying what it holds, and keeps it', async () => {
+    const full = await folderIn('Full');
+    await folderIn('Inside', full);
+    for (const title of ['A', 'B'])
+      await doc('dashboard', {
+        schemaVersion: 1,
+        title: `${title} ${MARK}`,
+        folderId: full,
+        pages: [],
+      });
+    await doc('chart', {
+      schemaVersion: 1,
+      title: `C ${MARK}`,
+      folderId: full,
+      chart: { source: { cube: 'orders' }, wells: { measures: ['orders.count'] } },
+    });
+    const answer = await deleteFolder(full);
+    expect(answer.statusCode, answer.body).toBe(409);
+    expect(answer.json()).toEqual({
+      error:
+        'This folder holds 1 subfolder, 2 dashboards and 1 chart: only an empty folder can be deleted.',
+      holds: { subfolders: 1, dashboards: 2, charts: 1, models: 0, dataSources: 0 },
+    });
+    expect((await docs().get('folder', full))?.id).toBe(full);
+  });
+
+  it('refuses one holding a model or a data source, saying so', async () => {
+    const holding = await folderIn('Holding');
+    await getDb()
+      .insertInto('model_files')
+      .values({ folder_id: holding, path: `cubes/held_${MARK}.yml`, content: 'cubes: []\n' })
+      .execute();
+    await getDb()
+      .insertInto('data_sources')
+      .values({
+        id: randomUUID(),
+        folder_id: holding,
+        name: `held_${MARK}`,
+        type: 'postgres',
+        settings: JSON.stringify({}),
+      })
+      .execute();
+    const answer = await deleteFolder(holding);
+    expect(answer.statusCode, answer.body).toBe(409);
+    expect(answer.json()).toEqual({
+      error: 'This folder holds 1 model and 1 data source: only an empty folder can be deleted.',
+      holds: { subfolders: 0, dashboards: 0, charts: 0, models: 1, dataSources: 1 },
+    });
+    expect((await docs().get('folder', holding))?.id).toBe(holding);
+  });
+
+  it('deletes an empty one, for a user who may change the folder holding it', async () => {
+    const empty = await folderIn('Empty');
+    const answer = await deleteFolder(empty);
+    expect(answer.statusCode, answer.body).toBe(204);
+    expect(await docs().get('folder', empty)).toBeNull();
   });
 });
