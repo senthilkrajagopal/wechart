@@ -396,6 +396,81 @@ describe('every data source the user may see, in every folder (T364, AC-157)', (
     });
   });
 
+  it('refuses deleting one cubes are bound to, naming those the user sees and counting the rest (T519, AC-364)', async () => {
+    const withXcube = buildServer({
+      config: secured,
+      sessions: pgSessionStore(getDb()),
+      documents: docs(),
+      catalog: catalog(getDb()),
+      folderAccess: folderAccessStore(getDb()),
+      dataSources: sources(),
+      folders: async () => ({
+        ids: new Map([
+          ['root', 'froot'],
+          [ids.a, 'fa'],
+          [ids.b, 'fb'],
+          [ids.c, 'fc'],
+        ]),
+        parents: new Map(),
+      }),
+      xcube: {
+        items: async () => [
+          {
+            folderId: 'fb',
+            name: 'orders',
+            kind: 'cube',
+            fullName: 'fb__orders',
+            bindings: {},
+            dataSource: 'fb__warehouse',
+          },
+          {
+            folderId: 'fc',
+            name: 'secret',
+            kind: 'cube',
+            fullName: 'fc__secret',
+            bindings: {},
+            dataSource: 'fb__warehouse',
+          },
+        ],
+      } as never,
+    });
+    const unbound = (await sources().create(postgres(ids.b, `${MARK}_unbound`))).id;
+    try {
+      const refused = await withXcube.inject({
+        method: 'DELETE',
+        url: `/api/data-sources/${held.b}`,
+        headers: { cookie: cookies['writer']! },
+      });
+      expect(refused.statusCode, refused.body).toBe(409);
+      expect(refused.json()).toEqual({
+        error: 'This data source is used by 2 cubes: change or delete them first.',
+        cubes: [
+          {
+            name: 'orders',
+            folderId: ids.b,
+            folderPath: [
+              { id: ids.a, title: `A ${MARK}` },
+              { id: ids.b, title: `B ${MARK}` },
+            ],
+          },
+        ],
+        hidden: 1,
+      });
+      expect((await sources().get(held.b))?.id).toBe(held.b);
+
+      // One no cube is bound to goes.
+      const deleted = await withXcube.inject({
+        method: 'DELETE',
+        url: `/api/data-sources/${unbound}`,
+        headers: { cookie: cookies['writer']! },
+      });
+      expect(deleted.statusCode, deleted.body).toBe(204);
+      expect(await sources().get(unbound)).toBeUndefined();
+    } finally {
+      await withXcube.close();
+    }
+  });
+
   it('tells a read-write member from a read-only one, for the page with none to list (T364’s review)', async () => {
     const me = async (who: string) =>
       (await as(who, { method: 'GET', url: '/api/me' })).json<{ readWrite: boolean }>();

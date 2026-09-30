@@ -884,6 +884,23 @@ export function registerDataSources(
   app.delete('/api/data-sources/:id', USER, async (request, reply) => {
     const source = await reached(request, reply, 'write');
     if (source === undefined) return reply;
+    /**
+     * Not while cubes are bound to it (T519, AC-364): named where the user
+     * sees their folders, counted where not, as AC-322 counts. xcube refuses
+     * too, below, where it can't be asked here.
+     */
+    if (listing.usedBy !== undefined && !(await inAWorkspace(source))) {
+      const bound = (await listing.usedBy().catch(() => undefined))?.get(source.id) ?? [];
+      if (bound.length > 0) {
+        const [sees, pathOf] = await Promise.all([listing.sees(request), listing.pathOf()]);
+        const seen = bound.filter((cube) => sees(cube.folderId));
+        return reply.status(409).send({
+          error: `This data source is used by ${String(bound.length)} cube${bound.length === 1 ? '' : 's'}: change or delete ${bound.length === 1 ? 'it' : 'them'} first.`,
+          cubes: seen.map((cube) => ({ ...cube, folderPath: pathOf(cube.folderId) })),
+          hidden: bound.length - seen.length,
+        });
+      }
+    }
     try {
       const removed = await store.remove(
         source.id,
