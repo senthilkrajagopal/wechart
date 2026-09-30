@@ -376,6 +376,17 @@ export function catalog(db: Kysely<Database>) {
       return rows.map(toItem);
     },
 
+    /** The dashboards a tile of which shows this image: an `imageId` at any depth (T408). */
+    async dashboardsShowingImage(imageId: string): Promise<CatalogItem[]> {
+      const rows = await selectItems()
+        .where('kind', '=', 'dashboard')
+        .where(
+          sql<boolean>`jsonb_path_exists(body, 'strict $.** ? (@.imageId == $id)', jsonb_build_object('id', ${imageId}::text), true)`,
+        )
+        .execute();
+      return rows.map(toItem);
+    },
+
     /**
      * Search by title (AC-019). Dashboards and library charts only: folders are
      * not what someone is looking for here, and a chart local to a dashboard is

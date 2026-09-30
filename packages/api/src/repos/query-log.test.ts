@@ -105,6 +105,34 @@ describe('query log (AC-016)', () => {
     expect(found.map((entry) => entry.requestId).sort()).toEqual([...mine].sort());
     expect(await log().byRequestIds([])).toEqual([]);
   });
+
+  // T408 (AC-268): one user's alone, when named, as their Jobs lists them (R42.6).
+  it('finds only one user’s, when named', async () => {
+    const theirs = randomUUID();
+    const another = randomUUID();
+    await log().record({
+      requestId: theirs,
+      query: {},
+      durationMs: 5,
+      accelerated: false,
+      userKey: 'them',
+    });
+    await log().record({
+      requestId: another,
+      query: {},
+      durationMs: 5,
+      accelerated: false,
+      userKey: 'someone-else',
+    });
+
+    expect(
+      (await log().byRequestIds([theirs, another], 'them')).map((entry) => entry.requestId),
+    ).toEqual([theirs]);
+    expect((await log().byRequestIds([theirs, another])).map((each) => each.requestId)).toEqual([
+      theirs,
+      another,
+    ]);
+  });
 });
 
 /**

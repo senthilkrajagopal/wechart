@@ -7454,12 +7454,71 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 ## P2.15 The whole-surface checks
 
-- [ ] T408 (AC-268, AC-255, AC-261) Ask every route as users in and out of each group, and get nothing outside their folders
+- [x] T408 (AC-268, AC-255, AC-261) Ask every route as users in and out of each group, and get nothing outside their folders
   - Files: `packages/api/src/access/route-matrix.test.ts` (fixtures for /A, /A/B, /A/B/C, /C and a workspace; the users `super`, `writer`, `reader`, `many`, `nobody`)
   - Failing test: `route-matrix.test.ts`: for every route the server registers, each user gets only items in folders they may see and can change only what they may change; the test fails for a route it has no case for (AC-268).
   - *2026-09-26:* the same users' tokens are also asked of Cube directly, and get nothing wechart refuses them (AC-320's folder check, T436).
   - *2026-09-26, T327's review:* `GET /api/images/:id` answers any signed-in user who has an image's id. Its case here gives an image only to those who may open its dashboard.
   - Depends on: T340, T355, T364, T369, T371, T436
+  - **Done 2026-09-30.**
+    - Files, as built:
+      - `packages/api/src/access/route-matrix.test.ts`;
+      - `server.ts` (the image and `…/queries/find` routes; introspection's `seesSource`);
+      - `model/introspection.ts`, `repos/images.ts`, `repos/query-log.ts` (+ test);
+      - `packages/web/src/dashboard/tiles/ImageTile.tsx` (+ test);
+      - `e2e/security/cube-refuses.spec.ts`.
+    - **The matrix.** Its world:
+      - /A (read-only `sales-ro`), /A/B (read-write `sales-rw`), /A/B/C (read-only `g20`) and /C (read-write `managers`), and the shared root, which no group is granted.
+      - Each of the five places holds a dashboard with a chart of its own and an image, a library chart, a model file with a rollup, a data source, and a kept version.
+      - A root library chart is shown on /A/B's and /C's dashboards.
+      - `writer` and `manager` each have a workspace dashboard and chart, a proposal, a bookmark and a query in the log.
+      - Six users sign in through Dex: `super`, `writer`, `reader`, `many` (20 groups), `manager` and `nobody`.
+      - Each item is a secret: its ids, its title, and marks written into it (an image's bytes, a model's comment, a version's description, Cube's rows).
+      - Each secret names who may see it. The rights table spells out AC-261, AC-262, AC-263, AC-255 and AC-265, rather than calling `folderRights`.
+    - **The checks.**
+      - Every answer, whatever its status, is searched for every secret its user may not see.
+      - Each case also checks the answer itself: what the user may open answers with its mark, and anything else is refused (401, 403 or 404).
+      - A change is made by those who may make it, and refused to everyone else with the item unchanged. The no-op changes (a save or rename to the same) keep the world as it was.
+      - A shared dashboard's save is 409 `shared_in_place` even for its writers (T502).
+      - Lists and search show what the user may see, so no case is empty. Counts in the tree are exact (AC-194).
+      - A query refused for its item never reaches Cube (T340).
+      - The first test reads every route from the server (`routesOf`; a HEAD is its GET's) and fails for a route with no case, or a case with no route: 83 routes.
+    - **The stub Cube answers as xcube's gate does** (AC-320). Each place's cube is admitted to the groups its folder allows. A route that asked Cube as anyone but its user would bring back another place's cube titles or rows.
+    - **Found and fixed.** Seven routes, in three places, gave out what their user may not see:
+      - `GET /api/images/:id` answered anyone with the id. An image now goes to one who may open a stored dashboard showing it: the one it was added to, or any other, such as one an approval landed it on (the catalog's `dashboardsShowingImage`).
+        - That trusts a stored body, so a save now puts on a dashboard only images its user may see, or that it already showed (`addsOnlyReadableImages`, 403). This covers `PUT /api/documents/dashboard/:id` and `PUT /api/dashboards/:id`.
+        - An import leaves behind an image the importer may not see: its tile shows none (`keepsImage`, as `keepsChart` does for charts).
+        - Copies, restores, proposals and approvals write only what the user could already open.
+        - Named by the tile asking for it (`?for=dashboard:<id>` or `proposal:<id>`, as a query names its item), an image is also shown in two more cases: when a kept version of that dashboard shows it, to those who may read its history (T354, the version view); and when a proposal shows it, to those who may open the proposal (the review view).
+        - From T408's review: at first, `?for=` trusted the named dashboard's body. So anyone with a workspace could put another folder's image id on their own dashboard and read it through that. The save check closes that.
+      - `GET /api/introspection/sources` listed every data source Cube has, and `…/:source/{schemas,tables,columns,scaffold}` read any source's catalog with the service credential, for any signed-in user.
+        - Now a user browses only a data source they may see (AC-263): Cube's name for it is its connection's (`connectionNameOf`). Cube's own `default` is the root's.
+        - A name that is neither is a Super-Admin's alone, since what it reads isn't known here (T408's review: it first fell back to the root's, open to every writer).
+        - Any other source is refused before Cube is asked.
+      - `POST /api/jobs/queries/find` returned anyone's query records by request id. It now returns the user's own, and a Super-Admin everyone's, as their Jobs lists them (R42.6).
+    - **From T408's review, the matrix asks more.**
+      - Import and import review are asked with a real file for every target, and so is a file whose dashboard names another folder's image.
+      - Build states are asked with every place's token.
+      - Schedules are asked both ways (`?seen=1` shows a rollup's name to whoever may see its folder, R42.7, which the matrix now says).
+      - The review count must equal what "To review" lists.
+      - `default`, a source wechart doesn't know, a kept version's image, a proposal's image and a workspace data source are planted too.
+      - No mark is found inside another's: rollups' and tokens' marks end in a letter of their own.
+      - Not planted: workspace model files, which workspaces don't hold yet (T347).
+    - **Kept as it is, and said.**
+      - `GET /api/charts/:id/dashboards` answers `[]` for a chart the user may not open. That is what it answers for no chart, so nothing is told.
+      - History is a writer's and a Super-Admin's (T354).
+      - A cancel (`DELETE /api/running-query/:id`) always answers 204 (AC-011). The matrix shows Cube is asked it as the user, never as wechart.
+        - Found on the way: wechart sends Cube no `x-request-id`, so Cube's running query is named by an id of Cube's own, and the browser's cancel may stop nothing. That is AC-011's, not this task's.
+    - **Asked of Cube directly** (the 2026-09-26 note): T436's `cube-refuses.spec.ts`, with two cases added.
+      - A token of 20 groups, only the last of which /C allows, gets /C's cube, and the first 19 alone are refused (AC-255).
+      - /C's group gets /C/D's cube, whatever group /C/D sets (AC-261).
+    - Also run:
+      - the full API suite (1139) and the full web suite (1994);
+        - `tiles/UnplacedCodes.test.tsx` timed out twice in the full web suite, under load (its `findBy` waits 1 s for the country map), and passes alone. It is untouched here.
+      - `cube-refuses.spec.ts` in Chrome against compose's xcube (13);
+      - `export-import`, `history`, `review-view`, `workspace-edit` and `cube-refuses` security specs in Chrome (36);
+      - `tiles.spec.ts` and `generate-cubes.spec.ts` in Chrome (9).
+    - Files, as built, also: `repos/catalog.ts` (`dashboardsShowingImage`), `routes/import.ts` (`keepsImage`, `withoutImages`).
 - [ ] T409 (AC-307) Render a 10-chart dashboard in a folder with its own models within 3 s at p95 with security on
   - Files: `e2e/perf/secure-dashboard-open.spec.ts`
   - Failing test: `secure-dashboard-open.spec.ts`: 20 opens as `writer` of a 10-chart dashboard in /A/B, ~~whose chain has its own models~~ which has its own models (published as their own modules, 2026-09-26), render every tile with p95 ≤ 3,000 ms (AC-307).

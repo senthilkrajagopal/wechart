@@ -1,3 +1,4 @@
+import { useQueryItem } from '../../query/item';
 import type { Tile } from '../model/document';
 
 /**
@@ -12,6 +13,16 @@ import type { Tile } from '../model/document';
  */
 export function ImageTile({ tile, editing }: { tile: Tile; editing: boolean }) {
   const alt = tile.alt?.trim() ?? '';
+  /**
+   * The dashboard, or the proposal in review, it is on (T408, AC-268): an
+   * image goes to one who may open a dashboard showing it, as a query goes
+   * for its item (T340).
+   */
+  const item = useQueryItem();
+  const on =
+    item === undefined || item.kind === 'chart'
+      ? ''
+      : `?for=${item.kind}:${encodeURIComponent(item.id)}`;
   return (
     <div className="image-tile">
       {editing && alt === '' ? (
@@ -27,7 +38,7 @@ export function ImageTile({ tile, editing }: { tile: Tile; editing: boolean }) {
       ) : (
         <img
           className={`image-tile__image image-tile__image--${tile.fit ?? 'contain'}`}
-          src={`/api/images/${encodeURIComponent(tile.imageId)}`}
+          src={`/api/images/${encodeURIComponent(tile.imageId)}${on}`}
           alt={alt}
         />
       )}

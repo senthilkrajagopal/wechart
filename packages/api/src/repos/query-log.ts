@@ -117,16 +117,19 @@ export function queryLog(db: Kysely<Database>) {
      * The records of these request ids, whatever else was logged since —
      * a dashboard's own queries, as its page sent them (T180, AC-174).
      */
-    async byRequestIds(requestIds: readonly string[]): Promise<QueryLogRecord[]> {
+    async byRequestIds(
+      requestIds: readonly string[],
+      /** Only this user's (R42.6, T408); everyone's when absent. */
+      userKey?: string,
+    ): Promise<QueryLogRecord[]> {
       if (requestIds.length === 0) return [];
-      const rows = await db
+      let rows = db
         .selectFrom('query_log')
         .selectAll()
-        .where('request_id', 'in', [...requestIds])
-        .orderBy('id', 'asc')
-        .execute();
-
-      return rows.map(toRecord);
+        .where('request_id', 'in', [...requestIds]);
+      if (userKey !== undefined) rows = rows.where('user_key', '=', userKey);
+      const found = await rows.orderBy('id', 'asc').execute();
+      return found.map(toRecord);
     },
   };
 }

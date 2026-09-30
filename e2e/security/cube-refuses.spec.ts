@@ -29,14 +29,15 @@ import { changeShared } from './shared-change';
 const RUN = Math.random().toString(36).slice(2, 8);
 const MODEL = 'e2e-security';
 const SUPER = 'wechart-super-admins';
-const G = { ab: `ab-${RUN}`, c: `c-${RUN}` };
+const G = { ab: `ab-${RUN}`, c: `c-${RUN}`, cd: `cd-${RUN}` };
 const CUBES = {
   a: `refuses_a_${RUN}`,
   c: `refuses_c_${RUN}`,
+  cd: `refuses_cd_${RUN}`,
   n: `refuses_n_${RUN}`,
   policied: `refuses_p_${RUN}`,
 };
-const ids = { a: '', b: '', c: '', n: '', r: '', board: '', chart: '' };
+const ids = { a: '', b: '', c: '', cd: '', n: '', r: '', board: '', chart: '' };
 const full = (folderId: string, name: string) => `f${folderId.replaceAll('-', '')}__${name}`;
 
 async function folder(request: APIRequestContext, title: string, parent: string) {
@@ -147,10 +148,14 @@ test.describe('Cube refuses what wechart refuses (T436, AC-320)', () => {
     ids.a = await folder(request, `Refuses A ${RUN}`, 'root');
     ids.b = await folder(request, 'B', ids.a);
     ids.c = await folder(request, `Refuses C ${RUN}`, 'root');
+    // /C/D sets a group of its own, beneath /C's (T408, AC-261).
+    ids.cd = await folder(request, 'D', ids.c);
     await grant(request, ids.b, { readOnly: null, readWrite: [G.ab] });
     await grant(request, ids.c, { readOnly: [G.c], readWrite: null });
+    await grant(request, ids.cd, { readOnly: null, readWrite: [G.cd] });
     await publish(request, ids.a, CUBES.a, cubeYaml(CUBES.a));
     await publish(request, ids.c, CUBES.c, cubeYaml(CUBES.c));
+    await publish(request, ids.cd, CUBES.cd, cubeYaml(CUBES.cd));
     // An authored row-level policy: /A/B's group sees shipped orders alone,
     // the Super-Admins every row (no Super-Admin bypass of authored policies).
     await publish(
@@ -184,6 +189,22 @@ test.describe('Cube refuses what wechart refuses (T436, AC-320)', () => {
   test('a member of a group granted on /A/B gets the /A cube their charts are bound to', async () => {
     const a = full(ids.a, CUBES.a);
     expect(rows(await admitted([G.ab], a), a)).toBeGreaterThan(0);
+  });
+
+  // T408 (AC-255): a token of 20 groups, only the last of which /C allows.
+  test('a member of 20 groups gets a folder’s cube through the last of them alone', async () => {
+    const c = full(ids.c, CUBES.c);
+    const twenty = [...Array.from({ length: 19 }, (_, at) => `other-${String(at)}-${RUN}`), G.c];
+    expect(rows(await admitted(twenty, c), c)).toBeGreaterThan(0);
+    expect(refused(await count(twenty.slice(0, 19), c))).toEqual({ status: 403, gate: true });
+  });
+
+  // T408 (AC-261): /C's group reaches /C/D, whatever group /C/D sets.
+  test('a group granted on a folder gets its descendant’s cube, whatever group that sets', async () => {
+    const cd = full(ids.cd, CUBES.cd);
+    expect(rows(await admitted([G.c], cd), cd)).toBeGreaterThan(0);
+    expect(rows(await admitted([G.cd], cd), cd)).toBeGreaterThan(0);
+    expect(refused(await count([G.ab], cd))).toEqual({ status: 403, gate: true });
   });
 
   test('an authored row-level policy still filters within', async () => {
@@ -345,6 +366,7 @@ test.describe('cleaning up', () => {
     for (const [folderId, names] of [
       [ids.a, [CUBES.a, CUBES.policied, `refuses_sum_${RUN}`, `refuses_base_${RUN}`]],
       [ids.c, [CUBES.c]],
+      [ids.cd, [CUBES.cd]],
       [ids.n, [CUBES.n]],
     ] as const)
       for (const name of names)
@@ -352,7 +374,7 @@ test.describe('cleaning up', () => {
           await request.delete(
             `/api/model/files?folder=${folderId}&path=${encodeURIComponent(`cubes/${name}.yml`)}`,
           );
-    for (const id of [ids.b, ids.a, ids.c, ids.n, ids.r])
+    for (const id of [ids.b, ids.a, ids.cd, ids.c, ids.n, ids.r])
       if (id !== '') await request.delete(`/api/documents/folder/${id}`);
   });
 });

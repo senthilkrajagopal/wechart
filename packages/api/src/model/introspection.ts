@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { USER } from '../auth/guard';
 import type { CubeClient } from '../cube/client';
@@ -61,8 +61,21 @@ function queryOf(url: string): string {
 export function registerIntrospection(
   app: FastifyInstance,
   client: CubeClient,
-  { retryMs = 1000 }: { retryMs?: number } = {},
+  {
+    retryMs = 1000,
+    seesSource,
+  }: {
+    retryMs?: number;
+    /**
+     * Which of Cube's data sources this user may browse (T408, AC-268): one
+     * that is a wechart data source they may see (AC-263), and one Cube has
+     * from its own settings as the shared root's. Every one where not given
+     * (sign-in off).
+     */
+    seesSource?: (request: FastifyRequest) => Promise<(source: string) => boolean>;
+  } = {},
 ): void {
+  const seesOf = async (request: FastifyRequest) => (await seesSource?.(request)) ?? (() => true);
   const base = '/v1/introspection/data-sources';
 
   /** Cube's answer, asked again while it says to wait; a refusal in the API's words. */
@@ -117,36 +130,62 @@ export function registerIntrospection(
    * them as they are: fetch would resolve them out of the source's routes
    * (T145's review). Cube's own word for a name it doesn't know.
    */
-  const unknownSource = (reply: FastifyReply, source: string) =>
-    source === '.' || source === '..'
-      ? reply.status(404).send({ error: `Unknown data source: '${source}'` })
-      : undefined;
+  /**
+   * One the user may not browse answers as one Cube doesn't know, before
+   * Cube is asked (T408): the service credential reads any catalog.
+   */
+  const refusedSource = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    source: string,
+  ): Promise<boolean> => {
+    // Sent here, and said with a boolean: a reply is a thenable, which an
+    // async function's result would be awaited through.
+    if (source === '.' || source === '..')
+      await reply.status(404).send({ error: `Unknown data source: '${source}'` });
+    else if (!(await seesOf(request))(source))
+      await reply
+        .status(404)
+        .send({ error: 'There’s no such data source, or it isn’t yours to browse.' });
+    else return false;
+    return true;
+  };
 
-  app.get('/api/introspection/sources', USER, async (_request, reply) =>
-    send(reply, await askCube(base)),
-  );
+  // Cube's list, less those the user may not browse (T408).
+  app.get('/api/introspection/sources', USER, async (request, reply) => {
+    const answer = await askCube(base);
+    const listed = (answer.body as { dataSources?: unknown } | null)?.dataSources;
+    if (answer.status !== 200 || !Array.isArray(listed)) return send(reply, answer);
+    const sees = await seesOf(request);
+    return send(reply, {
+      status: 200,
+      body: {
+        ...(answer.body as Record<string, unknown>),
+        dataSources: listed.filter(
+          (each: unknown) =>
+            typeof (each as { dataSource?: unknown } | null)?.dataSource === 'string' &&
+            sees((each as { dataSource: string }).dataSource),
+        ),
+      },
+    });
+  });
 
   app.get('/api/introspection/sources/:source/schemas', USER, async (request, reply) => {
     const { source } = request.params as { source: string };
-    return (
-      unknownSource(reply, source) ??
-      send(reply, await askCube(`${sourcePath(source)}/schemas${queryOf(request.url)}`))
-    );
+    if (await refusedSource(request, reply, source)) return reply;
+    return send(reply, await askCube(`${sourcePath(source)}/schemas${queryOf(request.url)}`));
   });
 
   app.get('/api/introspection/sources/:source/tables', USER, async (request, reply) => {
     const { source } = request.params as { source: string };
-    return (
-      unknownSource(reply, source) ??
-      send(reply, await askCube(`${sourcePath(source)}/tables${queryOf(request.url)}`))
-    );
+    if (await refusedSource(request, reply, source)) return reply;
+    return send(reply, await askCube(`${sourcePath(source)}/tables${queryOf(request.url)}`));
   });
 
   for (const route of ['columns', 'scaffold'] as const)
     app.post(`/api/introspection/sources/:source/${route}`, USER, async (request, reply) => {
       const { source } = request.params as { source: string };
-      const refused = unknownSource(reply, source);
-      if (refused !== undefined) return refused;
+      if (await refusedSource(request, reply, source)) return reply;
       const tables = tablesOf(request.body);
       if (tables === undefined)
         return reply

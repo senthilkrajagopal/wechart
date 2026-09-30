@@ -81,7 +81,12 @@ const OWN_WORKSPACE: FolderRight = Object.freeze({ see: true, write: true, kinds
 import type { ConnectionTestStore } from './repos/connection-tests';
 import { DataSourceRefused, type DataSource, type DataSourceStore } from './repos/data-sources';
 import type { DataSourceLanding } from './routes/data-sources';
-import type { ConnectionHealth, TestAnswer, TestedConnection } from './xcube/connections';
+import {
+  connectionNameOf,
+  type ConnectionHealth,
+  type TestAnswer,
+  type TestedConnection,
+} from './xcube/connections';
 import type { FolderAccessStore } from './repos/folder-access';
 import type { AuditStore } from './repos/audit';
 import { actorOf, recordIn } from './audit/record';
@@ -225,7 +230,10 @@ export interface ImageStore {
     contentType: string;
     bytes: Buffer;
   }): Promise<unknown>;
-  get(id: string): Promise<{ contentType: string; bytes: Buffer } | undefined>;
+  /** Its bytes and type, and the dashboard it was added to (T408). */
+  get(
+    id: string,
+  ): Promise<{ contentType: string; bytes: Buffer; dashboardId?: string } | undefined>;
 }
 
 /** The slice of the document repository the server writes through. */
@@ -305,6 +313,8 @@ export interface CatalogReader {
   /** Each folder's own items by kind, for counts of what a user may see (T325, T331). */
   ownCounts?(): Promise<ReadonlyMap<string, OwnCounts>>;
   dashboardsUsing?(chartId: string): Promise<unknown[]>;
+  /** The dashboards whose tiles show an image (T408). */
+  dashboardsShowingImage?(imageId: string): Promise<readonly { folderId: string | null }[]>;
   /** Every chart and dashboard, with its body: what uses a member (T147). */
   referenceDocuments?(): Promise<readonly ReferenceDocument[]>;
 }
@@ -315,7 +325,8 @@ export interface QueryLogWriter {
   /** Newest first; one user's only, when named (R42.6). */
   recent(limit?: number, userKey?: string): Promise<unknown[]>;
   /** The records of these request ids (T180). */
-  byRequestIds?(requestIds: readonly string[]): Promise<unknown[]>;
+  /** Only one user's when named (T408). */
+  byRequestIds?(requestIds: readonly string[], userKey?: string): Promise<unknown[]>;
   /** A page of the log, narrowed and sorted over all of it (T240). */
   page?(ask: QueryLogPageAsk): Promise<{ records: unknown[]; total: number }>;
 }
@@ -808,11 +819,32 @@ export function buildServer({
   // And each folder's, under its prefixed names (T450's review).
   registerSchedules(app, client, modelFiles, folders, jobsAccess);
   // A data source's catalog, through Cube's introspection API (T145, AC-139).
-  registerIntrospection(
-    app,
-    client,
-    introspectionRetryMs === undefined ? {} : { retryMs: introspectionRetryMs },
-  );
+  registerIntrospection(app, client, {
+    ...(introspectionRetryMs === undefined ? {} : { retryMs: introspectionRetryMs }),
+    /**
+     * Only one the user may see (T408, AC-268, AC-263): Cube names a wechart
+     * data source by its connection (`connectionNameOf` its folder and
+     * name), and Cube's own `default`, from its settings, is the shared
+     * root's. A name that is neither is a Super-Admin's alone (T408's
+     * review): what it reads, and whose, isn't known here.
+     */
+    seesSource: async (request) => {
+      const seen = await visibilityOf(request);
+      if (seen === undefined) return () => true;
+      const published = folders === undefined ? ROOT_ONLY : await folders();
+      const folderOf = new Map<string, string>([['default', ROOT_FOLDER_ID]]);
+      for (const source of (await dataSources?.all()) ?? []) {
+        const xcubeId = published.ids.get(source.folderId);
+        if (xcubeId !== undefined)
+          folderOf.set(connectionNameOf(xcubeId, source.name), source.folderId);
+      }
+      const superAdmin = userOf(request).superAdmin;
+      return (source) => {
+        const folder = folderOf.get(source);
+        return folder === undefined ? superAdmin : seen.rights.get(folder)?.kinds === 'all';
+      };
+    },
+  });
   // The audit trail, for Super-Admins (T369, AC-295).
   if (audit !== undefined)
     registerAudit(app, {
@@ -1309,6 +1341,11 @@ export function buildServer({
         const seen = await visibilityOf(request);
         if (seen !== undefined && !(await mayOpen(seen, 'chart', chart))) return false;
         return staysInItsWorkspace(chart, own);
+      },
+      // An image they may see, where it is shown (T408's review).
+      keepsImage: async (request, imageId) => {
+        const seen = await visibilityOf(request);
+        return seen === undefined || readsImage(seen, imageId);
       },
       owner: (request) => userOf(request).key,
       create: (creates) => createTogether(creates),
@@ -1973,6 +2010,98 @@ export function buildServer({
       }
     }
     return into !== null && !beneath.has(into);
+  };
+  /** Whether a dashboard's body, or a proposal's snapshot, shows an image: a tile's `imageId`. */
+  const showsImage = (body: unknown, imageId: string): boolean => {
+    if (Array.isArray(body)) return body.some((each) => showsImage(each, imageId));
+    if (body === null || typeof body !== 'object') return false;
+    return Object.entries(body).some(([key, each]) =>
+      key === 'imageId' ? each === imageId : showsImage(each, imageId),
+    );
+  };
+  /** Every image a dashboard's body, or a proposal's snapshot, shows. */
+  const imageIdsOf = (body: unknown, found = new Set<string>()): Set<string> => {
+    if (Array.isArray(body)) for (const each of body) imageIdsOf(each, found);
+    else if (body !== null && typeof body === 'object')
+      for (const [key, each] of Object.entries(body))
+        if (key === 'imageId' && typeof each === 'string') found.add(each);
+        else imageIdsOf(each, found);
+    return found;
+  };
+  /** A stored dashboard this user may open, or none. */
+  const openableDashboard = async (seen: Visibility, dashboardId: string) => {
+    const stored = await docs?.get?.('dashboard', dashboardId).catch(() => null);
+    return stored != null && (await mayOpen(seen, 'dashboard', stored)) ? stored : undefined;
+  };
+  /**
+   * Whether this user may see an image wherever it is shown (T408, AC-268;
+   * T327's review): the dashboard it was added to is one they may open, or a
+   * stored dashboard they may open shows it — one an approval landed it on,
+   * or a copy of that. A stored dashboard shows only images its writer
+   * could see (`addsOnlyReadableImages`), so none is shown them by a body
+   * they wrote.
+   */
+  const readsImage = async (seen: Visibility, imageId: string): Promise<boolean> => {
+    const addedTo = (await images?.get(imageId))?.dashboardId;
+    if (addedTo === undefined) return false;
+    if ((await openableDashboard(seen, addedTo)) !== undefined) return true;
+    const showing = (await cat?.dashboardsShowingImage?.(imageId)) ?? [];
+    return showing.some(
+      (dashboard) => dashboard.folderId !== null && seen.rights.has(dashboard.folderId),
+    );
+  };
+  /**
+   * A save that puts on a dashboard only images its user may see, or that it
+   * already showed (T408's review): so a body they write is no way to
+   * another folder's image.
+   */
+  const addsOnlyReadableImages = async (
+    seen: Visibility,
+    before: unknown,
+    after: unknown,
+  ): Promise<boolean> => {
+    const had = imageIdsOf(before);
+    for (const imageId of imageIdsOf(after))
+      if (!had.has(imageId) && !(await readsImage(seen, imageId))) return false;
+    return true;
+  };
+  const IMAGES_REFUSED = { error: 'This dashboard can show only images you may open.' };
+  /**
+   * Whether an image goes to this user (T408, AC-268): one they may see
+   * wherever it is shown (`readsImage`); or, named by the tile asking for it
+   * (`?for=`, as a query names its item), one a kept version of that
+   * dashboard shows, to those who may read its history (T354), or one a
+   * proposal in review shows, to those who may open it. With sign-in off,
+   * anyone.
+   */
+  const mayShowImage = async (request: FastifyRequest, imageId: string): Promise<boolean> => {
+    const seen = await visibilityOf(request);
+    if (security === 'off' || seen === undefined) return true;
+    const item = queryItemOfParam((request.query as { for?: unknown } | undefined)?.for);
+    // The tile's own dashboard first: its stored body is one its writer could show.
+    if (item?.kind === 'dashboard') {
+      const stored = await openableDashboard(seen, item.id);
+      if (stored !== undefined && showsImage(stored.body, imageId)) return true;
+    }
+    if (await readsImage(seen, imageId)) return true;
+    if (item === null || item === undefined) return false;
+    if (item.kind === 'dashboard') {
+      if ((await historyItem(request, 'dashboard', item.id)) === undefined) return false;
+      const kept = (await versions?.list('dashboard', item.id)) ?? [];
+      return kept.some((version) => showsImage(version.content, imageId));
+    }
+    if (item.kind === 'proposal') {
+      const proposal = await proposals?.get(item.id);
+      const user = userOf(request);
+      return (
+        proposal != null &&
+        (user.superAdmin ||
+          proposal.author.key === user.key ||
+          proposal.items.every((each) => mayWrite(seen, each.landsIn))) &&
+        proposal.items.some((each) => showsImage(each.snapshot, imageId))
+      );
+    }
+    return false;
   };
   /** The charts a dashboard's body shows: its `charts` list and every tile's `chartId` (as `dashboardsUsing` reads it). */
   const chartIdsOf = (body: unknown): Set<string> => {
@@ -3044,6 +3173,9 @@ export function buildServer({
       ) {
         return reply.code(403).send({ error: 'This dashboard can show only charts you may open.' });
       }
+      // And only images they may see (T408's review).
+      if (kind === 'dashboard' && !(await addsOnlyReadableImages(seen, stored.body, body.body)))
+        return reply.code(403).send(IMAGES_REFUSED);
       // A shared one's content changes through a proposal, never here (T502,
       // AC-278); moving or renaming it is no change to its content. Asked
       // after what they may not do at all, which says more.
@@ -3219,6 +3351,9 @@ export function buildServer({
       if (!(await addsOnlyOpenable(seen, stored.body, dashboard.body, into, making))) {
         return reply.code(403).send({ error: 'This dashboard can show only charts you may open.' });
       }
+      // And only images they may see (T408's review).
+      if (!(await addsOnlyReadableImages(seen, stored.body, dashboard.body)))
+        return reply.code(403).send(IMAGES_REFUSED);
     }
     /** Library charts' folders, as stored: saving one changes it everywhere it is used. */
     const libraryFolders: (string | null)[] = [];
@@ -3809,7 +3944,8 @@ export function buildServer({
   app.get('/api/images/:id', USER, async (request, reply) => {
     const { id } = request.params as { id: string };
     const image = await images?.get(id);
-    if (image === undefined) return reply.code(404).send({ error: 'No such image.' });
+    if (image === undefined || !(await mayShowImage(request, id)))
+      return reply.code(404).send({ error: 'No such image.' });
     return reply
       .header('content-type', image.contentType)
       .header('x-content-type-options', 'nosniff')
@@ -3958,7 +4094,11 @@ export function buildServer({
       requestIds.some((id) => typeof id !== 'string')
     )
       throw new BadRequest('requestIds is a list of request ids.');
-    return log?.byRequestIds ? log.byRequestIds(requestIds as string[]) : [];
+    // Their own alone, as their Jobs lists them; a Super-Admin's, everyone's
+    // (T408, AC-268; R42.6).
+    const whose =
+      security === 'off' || userOf(request).superAdmin ? undefined : userOf(request).key;
+    return log?.byRequestIds ? log.byRequestIds(requestIds as string[], whose) : [];
   });
 
   /**

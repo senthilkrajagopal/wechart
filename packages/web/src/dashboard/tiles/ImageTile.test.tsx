@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { QueryItemContext } from '../../query/item';
 import { DashboardView } from '../DashboardView';
 import type { DashboardDocument } from '../model/document';
 import { ImageTile } from './ImageTile';
@@ -40,6 +41,31 @@ describe('an image tile', () => {
     const image = screen.getByRole('img', { name: 'Logo' });
     expect(image.getAttribute('src')).toBe('/api/images/i1');
     expect(image.className).toContain('image-tile__image--cover');
+  });
+
+  /**
+   * T408 (AC-268): an image goes to one who may open a dashboard showing
+   * it, so the tile names the dashboard, or the proposal in review, it is
+   * on, as its queries name their item (T340).
+   */
+  it('names the dashboard, or the proposal, it is on', () => {
+    const tile = { id: 't', kind: 'image' as const, w: 4, imageId: 'i 1', alt: 'Logo' };
+    const { rerender } = render(
+      <QueryItemContext.Provider value={{ kind: 'dashboard', id: 'd/1' }}>
+        <ImageTile tile={tile} editing={false} />
+      </QueryItemContext.Provider>,
+    );
+    expect(screen.getByRole('img', { name: 'Logo' }).getAttribute('src')).toBe(
+      '/api/images/i%201?for=dashboard:d%2F1',
+    );
+    rerender(
+      <QueryItemContext.Provider value={{ kind: 'proposal', id: 'p1' }}>
+        <ImageTile tile={tile} editing={false} />
+      </QueryItemContext.Provider>,
+    );
+    expect(screen.getByRole('img', { name: 'Logo' }).getAttribute('src')).toBe(
+      '/api/images/i%201?for=proposal:p1',
+    );
   });
 });
 
@@ -140,8 +166,11 @@ describe('an image tile’s properties', () => {
     });
     expect(posted[0]?.contentType).toBe('image/png');
     // Not by role: with no alternative text yet, an image is presentational.
+    // Asked for the dashboard it is on (T408).
     await vi.waitFor(() => {
-      expect(tile.querySelector('img')?.getAttribute('src')).toBe('/api/images/img-1');
+      expect(tile.querySelector('img')?.getAttribute('src')).toBe(
+        '/api/images/img-1?for=dashboard:d1',
+      );
     });
 
     await userEvent.type(within(sidebar).getByLabelText('Alternative text'), 'Company logo');
@@ -175,7 +204,9 @@ describe('an image tile’s properties', () => {
 
     const tile = document.querySelector('[data-tile="t-img"]') as HTMLElement;
     await vi.waitFor(() => {
-      expect(tile.querySelector('img')?.getAttribute('src')).toBe('/api/images/img-1');
+      expect(tile.querySelector('img')?.getAttribute('src')).toBe(
+        '/api/images/img-1?for=dashboard:d1',
+      );
     });
     expect(within(sidebar).getByLabelText('Alternative text')).toHaveProperty(
       'value',

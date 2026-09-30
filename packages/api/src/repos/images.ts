@@ -25,10 +25,12 @@ export function imageStore(db: Kysely<Database>): ImageStore {
     async get(id) {
       const row = await db
         .selectFrom('images')
-        .select(['content_type', 'bytes'])
+        .select(['content_type', 'bytes', 'dashboard_id'])
         .where('id', '=', id)
         .executeTakeFirst();
-      return row === undefined ? undefined : { contentType: row.content_type, bytes: row.bytes };
+      return row === undefined
+        ? undefined
+        : { contentType: row.content_type, bytes: row.bytes, dashboardId: row.dashboard_id };
     },
   };
 }

@@ -171,6 +171,11 @@ export interface ImportAccess {
    * and that may show on a dashboard in their workspace.
    */
   readonly keepsChart: (request: FastifyRequest, chartId: string, own: string) => Promise<boolean>;
+  /**
+   * Whether an image the dashboard shows may stay on it: one this wechart
+   * has and the importer may see (T408). Absent, every one stays.
+   */
+  readonly keepsImage?: (request: FastifyRequest, imageId: string) => Promise<boolean>;
   readonly owner: (request: FastifyRequest) => string;
   /** Made together, or none (the documents' `createTogether`). */
   readonly create: (creates: readonly Create[]) => Promise<unknown>;
@@ -278,6 +283,35 @@ export function chartsNamedIn(body: unknown): Set<string> {
       }
   }
   return named;
+}
+
+/** Every image a dashboard's body shows: an `imageId` at any depth (T408). */
+export function imagesNamedIn(body: unknown): Set<string> {
+  const named = new Set<string>();
+  const pending: unknown[] = [body];
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (Array.isArray(value)) for (const each of value as unknown[]) pending.push(each);
+    else if (value !== null && typeof value === 'object')
+      for (const [key, each] of Object.entries(value))
+        if (key === 'imageId' && typeof each === 'string') named.add(each);
+        else pending.push(each);
+  }
+  return named;
+}
+
+/** A body with these images taken off their tiles, which then show none (T408). */
+export function withoutImages(body: unknown, dropped: ReadonlySet<string>): unknown {
+  if (dropped.size === 0) return body;
+  if (Array.isArray(body)) return body.map((each: unknown) => withoutImages(each, dropped));
+  if (body === null || typeof body !== 'object') return body;
+  return Object.fromEntries(
+    Object.entries(body)
+      .filter(
+        ([key, each]) => !(key === 'imageId' && typeof each === 'string' && dropped.has(each)),
+      )
+      .map(([key, each]) => [key, withoutImages(each, dropped)]),
+  );
 }
 
 export function registerImport(app: FastifyInstance, access: ImportAccess): void {
@@ -427,8 +461,13 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
       if (renamed.has(id)) continue;
       else if (await access.keepsChart(request, id, own)) kept.add(id);
       else renamed.set(id, randomUUID());
+    // An image the importer may not see stays behind: its tile shows none (T408).
+    const dropped = new Set<string>();
+    if (access.keepsImage !== undefined)
+      for (const imageId of imagesNamedIn(dashboard.body))
+        if (!(await access.keepsImage(request, imageId))) dropped.add(imageId);
     const board = exportedBodyOf(
-      withChartsRenamed(dashboard.body, renamed) as Record<string, unknown>,
+      withoutImages(withChartsRenamed(dashboard.body, renamed), dropped) as Record<string, unknown>,
     );
     // Whatever shape the file gave it, the dashboard names no chart but its
     // own new ones and those the importer may open (AC-263; T513's review).
