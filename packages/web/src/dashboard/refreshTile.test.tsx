@@ -196,6 +196,8 @@ describe('refreshing a tile a filter reaches', () => {
         filters: [{ member: 'orders.status', operator: 'equals', values: ['completed'] }],
       },
       cache: 'no-cache',
+      // For the dashboard it is on (T340, AC-268).
+      for: { kind: 'dashboard', id: 'd1' },
     });
     // The unfiltered chart is not what this tile draws, so it is not asked.
     expect(onRefresh).not.toHaveBeenCalled();

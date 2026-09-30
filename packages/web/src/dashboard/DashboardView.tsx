@@ -58,6 +58,7 @@ import { DrillCrumb, type DrilledView } from './drill/DrillCrumb';
 import { loadTile } from '../query/loadTile';
 import { markedShareFilter, needsMarkedShare } from '../query/markedShare';
 import { SecurityPreview } from '../query/securityPreview';
+import { QueryItemContext, type QueryItem } from '../query/item';
 import { ChartTile, type ChartTileProps } from '../tiles/ChartTile';
 import { TileError } from '../tiles/TileError';
 import { hiddenMemberOf, TileUnavailable } from '../tiles/TileUnavailable';
@@ -264,6 +265,11 @@ export interface DashboardViewProps {
    * the document does not carry its own id (T192).
    */
   readonly dashboardId: string;
+  /**
+   * The item its queries serve (T340, AC-268): the dashboard itself, unless
+   * a review draws it from a proposal, whose copy its reviewer can't open.
+   */
+  readonly queryItem?: QueryItem | undefined;
   readonly document: DashboardDocument;
   /** Compiled specs by chart id. The dashboard supplies their colours. */
   readonly specs: Readonly<Record<string, RenderSpec>>;
@@ -2050,8 +2056,29 @@ function withDrafts(
     : { ...document, chartDrafts: { ...document.chartDrafts, ...drafts } };
 }
 
+/**
+ * What every query beneath the dashboard is asked as, and for: its previewed
+ * security context (T172), and the item it serves (T340, AC-268).
+ */
+function QueriesAs({
+  preview,
+  item,
+  children,
+}: {
+  readonly preview: Readonly<Record<string, unknown>> | undefined;
+  readonly item: QueryItem;
+  readonly children: React.ReactNode;
+}) {
+  return (
+    <SecurityPreview.Provider value={preview}>
+      <QueryItemContext.Provider value={item}>{children}</QueryItemContext.Provider>
+    </SecurityPreview.Provider>
+  );
+}
+
 export function DashboardView({
   dashboardId,
+  queryItem,
   document,
   specs,
   errors,
@@ -2089,6 +2116,14 @@ export function DashboardView({
   onViewTaken,
   onSave,
 }: DashboardViewProps) {
+  /**
+   * The item every query of its tiles, filters, tokens and drills serves
+   * (T340, AC-268): kept by its kind and id, so a new object each render
+   * changes nothing below.
+   */
+  const itemKind = queryItem?.kind ?? 'dashboard';
+  const itemId = queryItem?.id ?? dashboardId;
+  const item = useMemo<QueryItem>(() => ({ kind: itemKind, id: itemId }), [itemKind, itemId]);
   /**
    * A shared one is edited in a copy in My workspace, never in place (T348,
    * AC-278): no Edit, no gear, no tile's ✎ and no "Start editing". Unlike
@@ -3981,6 +4016,7 @@ export function DashboardView({
         query,
         signal,
         ...(preview === undefined ? {} : { context: preview }),
+        item,
       })) as { data?: unknown; total?: unknown };
       const rows = Array.isArray(result.data) ? (result.data as Record<string, unknown>[]) : [];
       const spec = drawn.specs[chartId];
@@ -4214,6 +4250,7 @@ export function DashboardView({
         query: { ...query, total: true },
         signal,
         ...(preview === undefined ? {} : { context: preview }),
+        item,
       })) as { data?: unknown; total?: unknown };
       return Array.isArray(result.data) && typeof result.total === 'number'
         ? { returned: result.data.length, total: result.total }
@@ -4309,6 +4346,7 @@ export function DashboardView({
         query,
         signal,
         ...(preview === undefined ? {} : { context: preview }),
+        item,
       })) as { data?: unknown; total?: unknown };
       return {
         rows: Array.isArray(result.data) ? (result.data as Record<string, unknown>[]) : [],
@@ -4368,6 +4406,7 @@ export function DashboardView({
       const result = (await loadTile({
         query: basis.marked === undefined ? asked : withLimit(asked, basis.marked),
         ...(preview === undefined ? {} : { context: preview }),
+        item,
       })) as { data?: Record<string, unknown>[] };
       answered = answerMetaOf(result);
       return result.data ?? [];
@@ -4815,7 +4854,7 @@ export function DashboardView({
   };
 
   return (
-    <SecurityPreview.Provider value={preview}>
+    <QueriesAs preview={preview} item={item}>
       {preview === undefined ? null : <PreviewBanner context={preview} onExit={onExitPreview} />}
       {queryFor === undefined || viewedQuery === undefined ? null : (
         <ViewQuery
@@ -5633,7 +5672,7 @@ export function DashboardView({
           setExported('');
         }}
       />
-    </SecurityPreview.Provider>
+    </QueriesAs>
   );
 }
 

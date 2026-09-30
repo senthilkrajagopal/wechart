@@ -14,6 +14,7 @@ import {
 } from '../../editor/openChart';
 import type { TileSize } from '../../editor/PreviewFrame';
 import { SharedChartNotice } from '../../editor/SharedChartNotice';
+import { useQueryItem, type QueryItem } from '../../query/item';
 import { loadTile } from '../../query/loadTile';
 import { StateLine } from '../../shell/StatusIcon';
 import { tileChartOf } from '../chartSpec';
@@ -72,10 +73,12 @@ export interface ChartEditorOverlayProps {
  */
 async function drawnForDraft(
   edited: ChartDocument,
+  /** The dashboard it is edited on (T340, AC-268). */
+  item: QueryItem | undefined,
 ): Promise<{ drawn: ChartDraft['drawn']; total?: number }> {
   let total: number | undefined;
   const drawn = await tileChartOf(edited, async (query) => {
-    const result = (await loadTile({ query })) as {
+    const result = (await loadTile({ query, item })) as {
       data?: Record<string, unknown>[];
       total?: unknown;
     };
@@ -114,6 +117,8 @@ export function ChartEditorOverlay({
   tileId,
   urlTile,
 }: ChartEditorOverlayProps) {
+  // The dashboard it is edited on (T340, AC-268).
+  const item = useQueryItem();
   /**
    * **A chart already drafted opens on its draft**, not on what is stored.
    * Opened from the server a second time, the editor would start from the old
@@ -204,7 +209,7 @@ export function ChartEditorOverlay({
       const edited = chartDocumentWith(opened.document, state);
       // Drawn by the very function every tile uses, so an emptied chart reads
       // "no fields yet" rather than the tile keeping its old chart.
-      const { drawn, total } = await drawnForDraft(edited);
+      const { drawn, total } = await drawnForDraft(edited, item);
       // And what it was drawn as recorded, for Explore to name it by (AC-193).
       then({
         document: withDrawnAs(edited, drawn),
@@ -213,7 +218,7 @@ export function ChartEditorOverlay({
         ...(total === undefined ? {} : { total }),
       });
     },
-    [opened],
+    [opened, item],
   );
   const back = useCallback(() => leave(onBack), [leave, onBack]);
 
@@ -236,14 +241,14 @@ export function ChartEditorOverlay({
     setApplying(true);
     try {
       const edited = chartDocumentWith(opened.document, latest.current ?? opened.state);
-      const { drawn } = await drawnForDraft(edited);
+      const { drawn } = await drawnForDraft(edited, item);
       setCopied(true);
       onMakeLocalCopy({ document: withDrawnAs(edited, drawn), drawn });
     } finally {
       leaving.current = false;
       setApplying(false);
     }
-  }, [opened, onMakeLocalCopy]);
+  }, [opened, onMakeLocalCopy, item]);
   /** Focus on what was done, once said: the button pressed has gone with the offer. */
   const copiedNote = useRef<HTMLDivElement>(null);
   const localNow = opened?.document.localToDashboardId !== undefined;

@@ -33,6 +33,7 @@ import { ChartTypeCard } from './ChartTypeCard';
 import { ChartTypeGallery } from './ChartTypeGallery';
 import { CustomizeTab } from './CustomizeTab';
 import { answerMetaOf } from '../query/answerMeta';
+import { QueryItemContext, useQueryItem, type QueryItem } from '../query/item';
 import { loadTile } from '../query/loadTile';
 import { AccelerationBadge, accelerationOf } from '../tiles/AccelerationBadge';
 import { ChartTile } from '../tiles/ChartTile';
@@ -176,6 +177,11 @@ export interface ChartEditorProps {
    * picker offers the cubes on its path (T429, AC-329).
    */
   readonly folderId?: string | undefined;
+  /**
+   * The item its queries serve (T340, AC-268): the chart, on its own route.
+   * Left out, the item around it: the dashboard it is edited on.
+   */
+  readonly item?: QueryItem | undefined;
 }
 
 /** The inspector's tabs (AC-214, the prototype's Data and Customize). */
@@ -185,14 +191,25 @@ const INSPECTOR_TABS = [
 ] as const;
 type InspectorTab = (typeof INSPECTOR_TABS)[number][0];
 
-export function ChartEditor({
+/** The editor, its queries asked for its item where it is given one (T340, AC-268). */
+export function ChartEditor({ item, ...props }: ChartEditorProps = {}) {
+  return item === undefined ? (
+    <EditorBody {...props} />
+  ) : (
+    <QueryItemContext.Provider value={item}>
+      <EditorBody {...props} />
+    </QueryItemContext.Provider>
+  );
+}
+
+function EditorBody({
   initial = OPENED_WITH,
   tile,
   onChange,
   head,
   busy = false,
   folderId,
-}: ChartEditorProps = {}) {
+}: Omit<ChartEditorProps, 'item'>) {
   const [history, setHistory] = useState(() => historyOf(initial));
   const { cubeName, spec, chartType: chartTypeState, options, title } = history.present;
   /** The title as being typed, until it is set down (null: not being typed). */
@@ -368,9 +385,11 @@ export function ChartEditor({
    * previous request is abandoned and its Cube-side query cancelled (AC-011),
    * and the tile shows the new result rather than the old one.
    */
+  // The chart edited, or the dashboard it is edited on (T340, AC-268).
+  const item = useQueryItem();
   const result = useQuery({
-    queryKey: ['editor-preview', query],
-    queryFn: ({ signal }) => loadTile({ query, signal }),
+    queryKey: ['editor-preview', query, item ?? null],
+    queryFn: ({ signal }) => loadTile({ query, signal, item }),
     enabled: !isEmpty(spec),
   });
 

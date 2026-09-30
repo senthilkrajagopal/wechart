@@ -17,6 +17,7 @@ import {
   type FilterValues,
 } from './model';
 import { scopeLabel } from './scope';
+import { useQueryItem } from '../query/item';
 import { CheckboxList } from './widgets/CheckboxList';
 import { DateRange } from './widgets/DateRange';
 import { ListSearch } from './widgets/ListSearch';
@@ -87,8 +88,10 @@ function useOptions(member: Member, search: string, needed: boolean) {
   const asked = member.type === 'string' ? search.trim() : '';
   // Under a previewed security context, the values it may see (T172).
   const context = useContext(SecurityPreview);
+  // For the dashboard it filters (T340, AC-268).
+  const item = useQueryItem();
   return useQuery<Options>({
-    queryKey: ['filter-options', member.name, asked, context ?? null],
+    queryKey: ['filter-options', member.name, asked, context ?? null, item ?? null],
     enabled: needed,
     // The previous values stay listed while a search is asked.
     placeholderData: (previous) => previous,
@@ -105,6 +108,7 @@ function useOptions(member: Member, search: string, needed: boolean) {
         // A search overtaken by the next is cancelled on Cube too (AC-011).
         signal,
         ...(context === undefined ? {} : { context }),
+        item,
       })) as { data?: Record<string, unknown>[] };
       const rows = result.data ?? [];
       const values = rows

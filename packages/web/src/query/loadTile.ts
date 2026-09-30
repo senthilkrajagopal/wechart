@@ -13,6 +13,8 @@
  * something to name.
  */
 
+import { forItem, type QueryItem } from './item';
+
 export const CONTINUE_WAIT = 'Continue wait';
 
 const DEFAULT_RETRY_DELAY_MS = 500;
@@ -68,6 +70,8 @@ export interface LoadTileOptions {
    * (T172, AC-166). Left out, wechart's own.
    */
   readonly context?: Readonly<Record<string, unknown>> | undefined;
+  /** The item the query serves, which the API checks before Cube is asked (T340, AC-268). */
+  readonly item?: QueryItem | undefined;
 }
 
 export async function loadTile({
@@ -82,6 +86,7 @@ export async function loadTile({
   requestId = newRequestId(),
   cache,
   context,
+  item,
 }: LoadTileOptions): Promise<unknown> {
   let started = false;
 
@@ -127,6 +132,7 @@ export async function loadTile({
             query,
             ...(cache === undefined ? {} : { cache }),
             ...(context === undefined ? {} : { context }),
+            ...forItem(item),
           }),
           ...(signal ? { signal } : {}),
         });

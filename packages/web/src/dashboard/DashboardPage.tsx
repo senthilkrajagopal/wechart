@@ -31,6 +31,7 @@ import { DashboardView, type DashboardViewProps } from './DashboardView';
 import { chartWritesOf, drawnWithDrafts } from './edit/chartDrafts';
 import { saveDashboard, type CopiedChart } from './edit/save';
 import { chartIdsOf, type DashboardDocument } from './model/document';
+import type { QueryItem } from '../query/item';
 import type { ViewState } from './bookmarks/viewState';
 import { dashboardOf, type StoredDocument } from './model/stored';
 
@@ -473,6 +474,7 @@ export function ReadOnlyDashboard({
   dashboardId,
   document,
   heldCharts = {},
+  item = { kind: 'dashboard', id: dashboardId },
 }: {
   /** What the drawn charts are kept under: a proposal's, or a folder's. */
   readonly cacheKey: string;
@@ -480,6 +482,11 @@ export function ReadOnlyDashboard({
   readonly document: DashboardDocument;
   /** Chart documents' bodies by id, as a proposal holds them. */
   readonly heldCharts?: Readonly<Record<string, unknown>>;
+  /**
+   * The item its queries serve (T340, AC-268): the dashboard, or the
+   * proposal a review draws it from, whose copy its reviewer can't open.
+   */
+  readonly item?: QueryItem;
 }) {
   const ids = chartIdsOf(document);
   const charts = useQuery({
@@ -490,7 +497,9 @@ export function ReadOnlyDashboard({
           async (id) =>
             [
               id,
-              id in heldCharts ? await drawChartBody(heldCharts[id]) : await specFor(id),
+              id in heldCharts
+                ? await drawChartBody(heldCharts[id], undefined, undefined, item)
+                : await specFor(id, undefined, undefined, item),
             ] as const,
         ),
       );
@@ -528,6 +537,7 @@ export function ReadOnlyDashboard({
     <DashboardView
       key={cacheKey}
       dashboardId={dashboardId}
+      queryItem={item}
       document={document}
       specs={charts.data?.specs ?? {}}
       documents={charts.data?.documents}
@@ -797,7 +807,13 @@ function LoadedDashboard({
       // A refresh still out was asked before this load: overtaken by it.
       chartsGeneration.current += 1;
       const entries = await Promise.all(
-        queryKey[3].map(async (id) => [id, await specFor(id, undefined, preview)] as const),
+        queryKey[3].map(
+          async (id) =>
+            [
+              id,
+              await specFor(id, undefined, preview, { kind: 'dashboard', id: dashboardId }),
+            ] as const,
+        ),
       );
 
       // Split rather than collapsed: a chart that drew and a chart that failed
@@ -829,7 +845,14 @@ function LoadedDashboard({
     setRefreshing((now) => new Set([...now, chartId]));
     const began = chartsGeneration.current;
     try {
-      const { chart, document: read, answered: meta } = await specFor(chartId, 'no-cache', preview);
+      const {
+        chart,
+        document: read,
+        answered: meta,
+      } = await specFor(chartId, 'no-cache', preview, {
+        kind: 'dashboard',
+        id: dashboardId,
+      });
       // The charts were loaded again, or saved, while this was out: what
       // they hold now is newer than what this asked (T154's review).
       if (chartsGeneration.current !== began) return;
@@ -997,6 +1020,8 @@ export async function specFor(
   cache?: 'no-cache',
   /** A previewed security context, asked as (T172, AC-166). */
   context?: Readonly<Record<string, unknown>>,
+  /** The item its query serves: its dashboard's, or the chart's own (T340, AC-268). */
+  item: QueryItem = { kind: 'chart', id: chartId },
 ): Promise<{ chart: TileChart; document: ChartDocument | undefined; answered?: AnswerMeta }> {
   let stored;
   try {
@@ -1024,7 +1049,7 @@ export async function specFor(
     };
   }
 
-  return drawChartBody(stored.body, cache, context);
+  return drawChartBody(stored.body, cache, context, item);
 }
 
 /**
@@ -1035,6 +1060,8 @@ export async function drawChartBody(
   body: unknown,
   cache?: 'no-cache',
   context?: Readonly<Record<string, unknown>>,
+  /** The item its query serves (T340, AC-268): a dashboard, a chart or a proposal. */
+  item?: QueryItem,
 ): Promise<{ chart: TileChart; document: ChartDocument | undefined; answered?: AnswerMeta }> {
   let document;
   try {
@@ -1056,6 +1083,7 @@ export async function drawChartBody(
       query,
       ...(cache === undefined ? {} : { cache }),
       ...(context === undefined ? {} : { context }),
+      item,
     })) as { data?: Record<string, unknown>[] };
     answered = answerMetaOf(result);
     return result.data ?? [];

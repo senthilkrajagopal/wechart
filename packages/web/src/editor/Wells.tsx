@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { QUERY_GRANULARITY } from '@wechart/core';
 import { Fragment, useId, useState, type ReactNode } from 'react';
 
+import { useQueryItem } from '../query/item';
 import { loadTile } from '../query/loadTile';
 import { MenuButton, type MenuItem } from '../shell/MenuButton';
 import { StateLine, StatusIcon } from '../shell/StatusIcon';
@@ -575,8 +576,10 @@ function FilterPill({
 }) {
   // The member's values, as Cube has them, in order: what can be chosen,
   // never typed. The first VALUE_LIMIT, and the list says so when there are more.
+  // For the chart edited, or the dashboard it is edited on (T340, AC-268).
+  const item = useQueryItem();
   const values = useQuery({
-    queryKey: ['chart-filter-values', filter.member],
+    queryKey: ['chart-filter-values', filter.member, item ?? null],
     queryFn: async ({ signal }) => {
       const answer = await loadTile({
         query: {
@@ -585,6 +588,7 @@ function FilterPill({
           limit: VALUE_LIMIT + 1,
         },
         signal,
+        item,
       });
       return ((answer as { data?: Record<string, unknown>[] }).data ?? [])
         .map((row) => row[filter.member])

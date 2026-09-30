@@ -348,3 +348,28 @@ describe('asking as a previewed security context', () => {
     ]);
   });
 });
+
+/**
+ * T340 (AC-268): every query names the item it serves, which the API checks
+ * before Cube is asked.
+ */
+describe('naming the item a query serves', () => {
+  it('sends the item with the query, on every ask of a poll', async () => {
+    const { impl, calls } = fetchReturning(
+      { body: { error: CONTINUE_WAIT } },
+      { body: { data: [] } },
+    );
+
+    await loadTile({
+      query,
+      fetchImpl: impl,
+      retryDelayMs: 0,
+      item: { kind: 'dashboard', id: 'd-1' },
+    });
+
+    expect(calls.map((call) => JSON.parse(String(call.body)) as unknown)).toEqual([
+      { query, for: { kind: 'dashboard', id: 'd-1' } },
+      { query, for: { kind: 'dashboard', id: 'd-1' } },
+    ]);
+  });
+});

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
+import { forItem, useQueryItem, type QueryItem } from '../query/item';
 import { missingScopeOf, ScopeUnavailable } from '../query/scopes';
 import { StateLine } from '../shell/StatusIcon';
 import { RollupOnlyWarning } from './RollupOnlyWarning';
@@ -20,11 +21,15 @@ interface Answer {
   readonly miss?: { rollup: string | null; member: string; title?: string; reason: string };
 }
 
-async function askAcceleration(query: Record<string, unknown>, signal: AbortSignal) {
+async function askAcceleration(
+  query: Record<string, unknown>,
+  signal: AbortSignal,
+  item: QueryItem | undefined,
+) {
   const response = await fetch('/api/acceleration', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, ...forItem(item) }),
     signal,
   });
   const body = (await response.json().catch(() => null)) as (Answer & { error?: string }) | null;
@@ -34,9 +39,11 @@ async function askAcceleration(query: Record<string, unknown>, signal: AbortSign
 }
 
 export function AccelerationPanel({ query }: { query: Record<string, unknown> }) {
+  // For the chart edited, or the dashboard it is edited on (T340, AC-268).
+  const item = useQueryItem();
   const answer = useQuery({
-    queryKey: ['acceleration', query],
-    queryFn: ({ signal }) => askAcceleration(query, signal),
+    queryKey: ['acceleration', query, item ?? null],
+    queryFn: ({ signal }) => askAcceleration(query, signal, item),
   });
 
   if (answer.isPending)

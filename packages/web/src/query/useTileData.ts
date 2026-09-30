@@ -1,5 +1,6 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
+import { useQueryItem } from './item';
 import { loadTile } from './loadTile';
 
 /**
@@ -23,9 +24,11 @@ export function useTileData({
   query,
   enabled = true,
 }: UseTileDataOptions): UseQueryResult<unknown> {
+  // The item it serves (T340, AC-268).
+  const item = useQueryItem();
   return useQuery({
-    queryKey: ['tile', tileId, query],
-    queryFn: ({ signal }) => loadTile({ query, signal }),
+    queryKey: ['tile', tileId, query, item ?? null],
+    queryFn: ({ signal }) => loadTile({ query, signal, item }),
     enabled,
     // A failed query is a Cube error the tile shows (AC-012); retrying hides it
     // behind seconds of backoff and blows AC-175's budget.

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useRef } from 'react';
 
+import { forItem, useQueryItem } from '../query/item';
 import { StateLine } from '../shell/StatusIcon';
 import { useFocusTrap } from '../shell/useFocusTrap';
 
@@ -29,13 +30,19 @@ export function ViewQuery({
   const close = useRef<HTMLButtonElement>(null);
   useFocusTrap(box);
 
+  // The dashboard the tile is on (T340, AC-268).
+  const item = useQueryItem();
   const sql = useQuery({
-    queryKey: ['view-query-sql', query, context],
+    queryKey: ['view-query-sql', query, context, item ?? null],
     queryFn: async ({ signal }): Promise<{ queries: { sql: string; params: unknown[] }[] }> => {
       const response = await fetch('/api/sql', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(context === undefined ? { query } : { query, context }),
+        body: JSON.stringify({
+          query,
+          ...(context === undefined ? {} : { context }),
+          ...forItem(item),
+        }),
         signal,
       });
       const body: unknown = await response.json().catch(() => null);

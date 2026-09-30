@@ -348,6 +348,8 @@ function ItemPreview({
               dashboardId={item.id}
               document={dashboardOf({ body: item.snapshot } as StoredDocument)}
               heldCharts={held}
+              // Its reviewer can't open the author's copy: its queries are for the proposal (T340).
+              item={{ kind: 'proposal', id: proposal.id }}
             />
           </ReviewMarks.Provider>
         )
@@ -362,7 +364,11 @@ function ItemPreview({
           draw={() =>
             showing === 'current' && against !== null
               ? specFor(against.id)
-              : drawChartBody(item.snapshot)
+              : // For the proposal, whose copy its reviewer can't open (T340, AC-268).
+                drawChartBody(item.snapshot, undefined, undefined, {
+                  kind: 'proposal',
+                  id: proposal.id,
+                })
           }
         />
       )}

@@ -27,6 +27,15 @@ import {
 import { authCheckOf } from './cube/authCheck';
 import type { QuerySigner } from './cube/signing';
 import { namedGroups } from './cube/named-groups';
+import {
+  cubesOfChartBody,
+  cubesOfDashboardBody,
+  cubesOnPath,
+  cubesQueried,
+  queryItemOf,
+  queryItemOfParam,
+  type QueryItem,
+} from './access/queries';
 import { scopesOf } from './cube/scopes';
 import { healthOf, originOf } from './cube/health';
 import { MetaCache, MetaCachesByGroups } from './cube/meta-cache';
@@ -566,7 +575,26 @@ export function buildServer({
 
   app.get('/api/health', PUBLIC, () => ({ status: 'ok' }));
 
-  app.get('/api/meta', USER, async (request) => metaFor(request).meta());
+  /**
+   * The field list, as the user's groups see it. Asked for an item,
+   * `?for=<kind>:<id>` (T340, AC-268), it is that item's cubes and views
+   * alone, and 404 for one the user may not open; asked for none, as before.
+   */
+  app.get('/api/meta', USER, async (request, reply) => {
+    const raw = (request.query as { for?: unknown } | undefined)?.for;
+    if (raw === undefined || security === 'off') return metaFor(request).meta();
+    const item = queryItemOfParam(raw);
+    if (item === null || item === undefined) throw new BadRequest();
+    const scope = await queryScope(request, reply, item);
+    if (scope === undefined) return reply;
+    const meta = (await metaFor(request).meta()) as { cubes?: { name?: unknown }[] } | null;
+    if (scope.allowed === 'all' || !Array.isArray(meta?.cubes)) return meta;
+    const allowed = scope.allowed;
+    return {
+      ...meta,
+      cubes: meta.cubes.filter((cube) => typeof cube.name === 'string' && allowed.has(cube.name)),
+    };
+  });
 
   /**
    * Who is signed in (AC-190, AC-252, AC-254): the name the top bar shows,
@@ -1349,9 +1377,10 @@ export function buildServer({
    * four seconds and then errored is exactly what someone opens the Jobs
    * workspace to find.
    */
-  app.post('/api/load', USER, async (request) => {
+  app.post('/api/load', USER, async (request, reply) => {
     const body = request.body as
-      { query?: Record<string, unknown>; cache?: unknown; context?: unknown } | undefined;
+      | { query?: Record<string, unknown>; cache?: unknown; context?: unknown; for?: unknown }
+      | undefined;
     if (!body?.query) throw new BadRequest();
     // Cube's own cache policy, and only its own values: `no-cache` for a
     // tile's "Refresh now" (T154, AC-148).
@@ -1360,6 +1389,9 @@ export function buildServer({
       throw new BadRequest();
     // A previewed security context (T172, AC-166): its claims, never wechart's.
     const context = previewOf(request, body.context);
+    // The item it serves, checked before Cube is asked (T340, AC-268).
+    const scope = await queryScope(request, reply, queryItemOf(body.for));
+    if (scope === undefined || (await refusedOutside(reply, scope, body.query))) return reply;
 
     const requestId = String(request.headers['x-request-id'] ?? 'unknown');
     const startedAt = performance.now();
@@ -1400,10 +1432,13 @@ export function buildServer({
    * never reports one Cube does not use; the reason is worked out from its
    * dry run against the rollups it compiled (`preaggMatch.ts`).
    */
-  app.post('/api/acceleration', USER, async (request) => {
-    const body = request.body as { query?: Record<string, unknown> } | undefined;
+  app.post('/api/acceleration', USER, async (request, reply) => {
+    const body = request.body as { query?: Record<string, unknown>; for?: unknown } | undefined;
     if (!body?.query) throw new BadRequest();
     const query = body.query;
+    // The item it serves, checked before Cube is asked (T340, AC-268).
+    const scope = await queryScope(request, reply, queryItemOf(body.for));
+    if (scope === undefined || (await refusedOutside(reply, scope, query))) return reply;
     // One plan, or — for a query Cube runs as several — one per query; a
     // match only if a rollup serves every one, Cube's matching being
     // all-or-nothing (research/cube/pre-aggregations.md §2).
@@ -1446,9 +1481,13 @@ export function buildServer({
    * the context runs that is not shown.
    */
   app.post('/api/sql', USER, async (request, reply) => {
-    const body = request.body as { query?: Record<string, unknown>; context?: unknown } | undefined;
+    const body = request.body as
+      { query?: Record<string, unknown>; context?: unknown; for?: unknown } | undefined;
     if (!body?.query) throw new BadRequest();
     const context = previewOf(request, body.context);
+    // The item it serves, checked before Cube is asked (T340, AC-268).
+    const scope = await queryScope(request, reply, queryItemOf(body.for));
+    if (scope === undefined || (await refusedOutside(reply, scope, body.query))) return reply;
     const planned = await cubeFor(request).sql(body.query, context);
     const queries = (Array.isArray(planned) ? planned : [planned]).map((plan) => {
       const [sql, params] = (plan as { sql?: { sql?: [unknown, unknown] } } | null)?.sql?.sql ?? [];
@@ -2025,6 +2064,189 @@ export function buildServer({
       return undefined;
     }
     return { stored, seen };
+  };
+
+  /**
+   * What a query may name for an item: the cubes on folder paths, and what
+   * published items name. Built once per query (T340).
+   */
+  const scopeBuilder = async () => {
+    const allowed = new Set<string>();
+    const published = folders === undefined ? ROOT_ONLY : await folders();
+    const pathsDone = new Set<string | null>();
+    return {
+      allowed,
+      /**
+       * The cubes on a folder's path (the root's alone for none), as the
+       * editor's picker offers them (AC-329), and as a drill finds a tile's
+       * joined cubes (AC-237): they bind along that path.
+       */
+      path: async (folderId: string | null) => {
+        if (pathsDone.has(folderId)) return;
+        pathsDone.add(folderId);
+        for (const cube of await cubesOnPath(
+          folderId,
+          published,
+          async (at) => (await modelFiles?.list(at)) ?? [],
+        ))
+          allowed.add(cube);
+      },
+      names: (cubes: readonly string[]) => {
+        for (const cube of cubes) allowed.add(cube);
+      },
+    };
+  };
+  /** A stored chart, or none where it is gone or this wechart can't read it (T340's review). */
+  const chartOrNone = async (id: string): Promise<Stored | null> => {
+    try {
+      return (await docs?.get?.('chart', id)) ?? null;
+    } catch (failure) {
+      if (failure instanceof ChartDocumentError) return null;
+      throw failure;
+    }
+  };
+  /**
+   * What an item's charts let its queries name: a published chart's own
+   * cubes, bound when it was published, and the cubes on its folder's path;
+   * a workspace chart's, bound to nothing yet and its author's to write, only
+   * those on the shared root's path and its target folder's (AC-329).
+   */
+  const addChart = async (
+    scope: Awaited<ReturnType<typeof scopeBuilder>>,
+    chart: Stored,
+  ): Promise<void> => {
+    const governing = await governingFolder('chart', chart);
+    if ((await workspaceRootOf(governing)) !== null) {
+      await scope.path(null);
+      const target = chart.body['targetFolderId'];
+      if (typeof target === 'string') await scope.path(target);
+      return;
+    }
+    scope.names(cubesOfChartBody(chart.body));
+    await scope.path(governing);
+  };
+
+  /**
+   * The cubes and views a query may name, for the item it serves (T340,
+   * AC-268): with sign-in on, the item it names, `for: { kind, id }`, must be
+   * one the user may open (404 otherwise, as for one that isn't there), and a
+   * query naming none is a Super-Admin's alone (400 otherwise). `undefined`
+   * when the reply has been sent.
+   *
+   * The item is bound to the cubes it uses and to those they join through,
+   * which bind along its folder's path: a published item's own cubes (bound
+   * at publish, so its body is trusted) and those on its folder's path, and
+   * the same of each chart a dashboard shows. A workspace item's body is its
+   * author's to write and bound to nothing, so it reaches only the cubes on
+   * the shared root's path and its target folder's, as its picker offers
+   * them (AC-329), and is answered from the published model until T347's
+   * overlays.
+   */
+  const queryScope = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    item: QueryItem | undefined | null,
+  ): Promise<{ readonly allowed: ReadonlySet<string> | 'all' } | undefined> => {
+    if (security === 'off') return { allowed: 'all' };
+    if (item === undefined && userOf(request).superAdmin) return { allowed: 'all' };
+    if (item === undefined || item === null) {
+      await reply.code(400).send({
+        error:
+          'A query names the item it serves: send for: { kind, id }, the dashboard or the chart it is for.',
+      });
+      return undefined;
+    }
+    if (item.kind === 'proposal') return proposalScope(request, reply, item.id);
+    const found = await itemFor(request, reply, item.kind, item.id, 'open');
+    if (found === undefined) return undefined;
+    const stored = found.stored;
+    if (stored === null) return { allowed: 'all' };
+    const scope = await scopeBuilder();
+    if (item.kind === 'chart') {
+      await addChart(scope, stored);
+      return { allowed: scope.allowed };
+    }
+    const governing = await governingFolder('dashboard', stored);
+    const inWorkspace = (await workspaceRootOf(governing)) !== null;
+    if (inWorkspace) {
+      await scope.path(null);
+      const target = stored.body['targetFolderId'];
+      if (typeof target === 'string') await scope.path(target);
+    } else {
+      scope.names(cubesOfDashboardBody(stored.body));
+      await scope.path(governing);
+    }
+    const charts = [
+      ...(await Promise.all([...chartIdsOf(stored.body)].map(chartOrNone))).flatMap((chart) =>
+        chart ? [chart] : [],
+      ),
+      ...((await docs?.localTo?.(stored.id)) ?? []),
+    ];
+    for (const chart of charts) await addChart(scope, chart);
+    return { allowed: scope.allowed };
+  };
+  /**
+   * A proposal's review queries (T340, T356): what it holds, which its
+   * reviewer can't open. Opened by its author, the read-write members of
+   * every folder it lands in and the Super-Admins, as its route has it
+   * (T351); 404 otherwise. What it holds is its author's writing and bound
+   * to nothing yet, so it reaches the cubes on each folder it lands in's
+   * path, and those of the published charts a proposed dashboard shows.
+   */
+  const proposalScope = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    id: string,
+  ): Promise<{ readonly allowed: ReadonlySet<string> } | undefined> => {
+    const proposal = await proposals?.get(id);
+    const user = userOf(request);
+    const seen =
+      proposal === null || proposal === undefined ? undefined : await visibilityOf(request);
+    const opens =
+      proposal !== null &&
+      proposal !== undefined &&
+      (user.superAdmin ||
+        proposal.author.key === user.key ||
+        proposal.items.every((each) => seen === undefined || mayWrite(seen, each.landsIn)));
+    if (!opens) {
+      await reply.code(404).send(NOT_THERE);
+      return undefined;
+    }
+    const scope = await scopeBuilder();
+    const proposed = new Set(proposal.items.map((each) => each.id));
+    for (const each of proposal.items) {
+      await scope.path(each.landsIn);
+      if (each.kind !== 'dashboard') continue;
+      // A published chart it shows, not one it proposes.
+      for (const chartId of chartIdsOf(each.snapshot)) {
+        if (proposed.has(chartId)) continue;
+        const chart = await chartOrNone(chartId);
+        if (chart !== null) await addChart(scope, chart);
+      }
+    }
+    return { allowed: scope.allowed };
+  };
+  /** A query's first cube outside what its item may use: refused with a 403 (T340). */
+  const refusedOutside = async (
+    reply: FastifyReply,
+    scope: { readonly allowed: ReadonlySet<string> | 'all' },
+    query: Record<string, unknown>,
+  ): Promise<boolean> => {
+    if (scope.allowed === 'all') return false;
+    const allowed = scope.allowed;
+    const named = cubesQueried(query);
+    if (named === undefined) {
+      await reply.code(400).send({
+        error: 'The query can’t be read: send one query object, naming members by name.',
+      });
+      return true;
+    }
+    const outside = named.find((cube) => !allowed.has(cube));
+    if (outside === undefined) return false;
+    await reply.code(403).send({
+      error: `This query names “${outside}”, which the item it serves doesn’t use.`,
+    });
+    return true;
   };
 
   /** These visible folders' counts of what the user may see in and beneath them (AC-194). */

@@ -10,6 +10,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useId, useMemo, useRef } from 'react';
 
+import { useQueryItem } from '../query/item';
 import { loadTile } from '../query/loadTile';
 import { missingScopeOf, ScopeUnavailable } from '../query/scopes';
 import { StateLine } from '../shell/StatusIcon';
@@ -198,9 +199,11 @@ export function ResultsDrawer({
   onOpenChange,
   onViewChange,
 }: ResultsDrawerProps) {
+  // For the chart edited, or the dashboard it is edited on (T340, AC-268).
+  const item = useQueryItem();
   const underlying = useQuery({
-    queryKey: ['underlying', underlyingQuery],
-    queryFn: ({ signal }) => loadTile({ query: underlyingQuery, signal }),
+    queryKey: ['underlying', underlyingQuery, item ?? null],
+    queryFn: ({ signal }) => loadTile({ query: underlyingQuery, signal, item }),
     // Only asked for when the drawer is actually showing it: the rows beneath
     // an aggregate can be a large query, and nobody asked for it yet.
     enabled: open && view === 'underlying',

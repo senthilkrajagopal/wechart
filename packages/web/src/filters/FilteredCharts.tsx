@@ -4,6 +4,7 @@ import { useEffect, useImperativeHandle, type Ref } from 'react';
 
 import { tileChartOf, type TileChart } from '../dashboard/chartSpec';
 import { answerMetaOf, type AnswerMeta } from '../query/answerMeta';
+import { useQueryItem, type QueryItem } from '../query/item';
 import { loadTile } from '../query/loadTile';
 import { withFilters, withLimit, type ActiveFilter } from './apply';
 
@@ -162,6 +163,8 @@ export async function filteredChart(
    * unlimited data instead would be a false one.
    */
   limit?: CubeFilter,
+  /** The item its queries serve: the dashboard (T340, AC-268). */
+  item?: QueryItem,
 ): Promise<{ chart: TileChart | undefined; uncovered: string[]; answered?: AnswerMeta }> {
   const source = document.chart.source.cube;
   let asked = [...applied];
@@ -178,6 +181,7 @@ export async function filteredChart(
         signal,
         ...(cache === undefined ? {} : { cache }),
         ...(context === undefined ? {} : { context }),
+        item,
       })) as { data?: Record<string, unknown>[] };
       answered = answerMetaOf(result);
       return result.data ?? [];
@@ -241,6 +245,8 @@ export function FilteredCharts({
    */
   limits?: Readonly<Record<string, CubeFilter>> | undefined;
 }) {
+  // The dashboard every filtered chart is asked for (T340, AC-268).
+  const item = useQueryItem();
   const ids = [...new Set([...Object.keys(reached), ...Object.keys(limits ?? {})])];
   const charts = ids.flatMap((chartId) => {
     const document = documents?.[chartId];
@@ -269,19 +275,19 @@ export function FilteredCharts({
         await queryClient.fetchQuery({
           queryKey: filteredQueryKey(chartId, document, applied, context, limit),
           queryFn: ({ signal }) =>
-            filteredChart(document, applied, signal, 'no-cache', context, limit),
+            filteredChart(document, applied, signal, 'no-cache', context, limit, item),
           staleTime: 0,
         });
       },
     }),
-    [charts, queryClient, context],
+    [charts, queryClient, context, item],
   );
 
   const answers = useQueries({
     queries: charts.map(({ chartId, document, applied, limit }) => ({
       queryKey: filteredQueryKey(chartId, document, applied, context, limit),
       queryFn: ({ signal }: { signal: AbortSignal }) =>
-        filteredChart(document, applied, signal, undefined, context, limit),
+        filteredChart(document, applied, signal, undefined, context, limit, item),
     })),
   });
 

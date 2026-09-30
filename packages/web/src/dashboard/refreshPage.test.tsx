@@ -204,4 +204,29 @@ describe('refreshing a tile, on the page', () => {
       expect.objectContaining({ context, cache: 'no-cache' }),
     ]);
   });
+
+  /**
+   * T340 (AC-268): every query names the item it serves, which the API checks
+   * before Cube is asked: a dashboard's tiles, its own load and a refresh
+   * alike, name the dashboard.
+   */
+  it('names the dashboard in every query it makes, the charts’ load and the refresh alike', async () => {
+    answerAt(1);
+    page(newClient());
+    await vi.waitFor(() => {
+      expect(asOf()).toBe(timeOf(1));
+    });
+
+    answerAt(2);
+    await userEvent.click(screen.getByRole('button', { name: 'Refresh By status' }));
+    await vi.waitFor(() => {
+      expect(asOf()).toBe(timeOf(2));
+    });
+
+    const item = { kind: 'dashboard', id: 'd1' };
+    expect(loads).toEqual([
+      expect.objectContaining({ for: item }),
+      expect.objectContaining({ for: item, cache: 'no-cache' }),
+    ]);
+  });
 });

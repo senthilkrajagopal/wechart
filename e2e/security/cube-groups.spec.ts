@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
+import { changeShared } from './shared-change';
 
 /**
  * T322 (AC-008): WHILE security is enabled, [wechart] SHALL also attach the
@@ -22,22 +23,51 @@ const QUERY = { measures: ['secured_orders.count'], dimensions: ['secured_orders
  */
 const RUN = Math.random().toString(36).slice(2, 8);
 let granted = '';
+/**
+ * The dashboard the users' queries are for (T340, AC-268): every query names
+ * the item it serves. It shows a chart on the secured view, in their folder.
+ */
+const ids = { board: '', chart: '' };
 
 test.describe.configure({ mode: 'serial' });
 
 test.describe('the groups granted a folder (T436)', () => {
   test.use({ role: 'super' });
 
-  test('grants managers and sales-rw a folder of their own', async ({ page }) => {
-    const made = await page.request.post('/api/documents', {
-      data: { kind: 'folder', title: `Cube groups ${RUN}`, folderId: 'root' },
-    });
-    expect(made.status(), await made.text()).toBe(201);
-    granted = ((await made.json()) as { id: string }).id;
-    const set = await page.request.put(`/api/folders/${granted}/access`, {
+  test('grants managers and sales-rw a folder of their own, with a dashboard on the secured view', async ({
+    page,
+  }) => {
+    const request = page.request;
+    const made = async (data: Record<string, unknown>) => {
+      const answer = await request.post('/api/documents', { data });
+      expect(answer.status(), await answer.text()).toBe(201);
+      return ((await answer.json()) as { id: string }).id;
+    };
+    granted = await made({ kind: 'folder', title: `Cube groups ${RUN}`, folderId: 'root' });
+    const set = await request.put(`/api/folders/${granted}/access`, {
       data: { readOnly: ['managers', 'sales-rw'], readWrite: null },
     });
     expect(set.status(), await set.text()).toBe(200);
+    ids.chart = await made({ kind: 'chart', title: `Secured ${RUN}`, folderId: granted });
+    ids.board = await made({ kind: 'dashboard', title: `Secured ${RUN}`, folderId: granted });
+    // Given their content as a shared one's is given: by approving a copy (T502).
+    await changeShared(request, 'chart', ids.chart, (body) => ({
+      ...body,
+      chart: {
+        source: { cube: 'secured_orders' },
+        wells: {
+          measures: ['secured_orders.count'],
+          dimensions: ['secured_orders.status'],
+          timeDimensions: [],
+        },
+      },
+    }));
+    await changeShared(request, 'dashboard', ids.board, (body) => ({
+      ...body,
+      pages: [
+        { id: 'p1', title: 'Page 1', items: [{ id: 't1', kind: 'chart', chartId: ids.chart }] },
+      ],
+    }));
   });
 });
 
@@ -51,7 +81,9 @@ async function answerTo(
 ): Promise<{ status: number; rows: unknown[]; error: unknown; source: unknown }> {
   const until = Date.now() + 60_000;
   for (let attempt = 0; attempt < 90; attempt += 1) {
-    const response = await page.request.post('/api/load', { data: { query: QUERY } });
+    const response = await page.request.post('/api/load', {
+      data: { query: QUERY, for: { kind: 'dashboard', id: ids.board } },
+    });
     const body = (await response.json()) as { data?: unknown[]; error?: unknown; source?: unknown };
     if (body.error === 'Continue wait') continue;
     if (/None of these groups reaches folder/.test(String(body.error)) && Date.now() < until) {
@@ -98,6 +130,8 @@ test.describe('cleaning up', () => {
   test.use({ role: 'super' });
 
   test('removes the folder', async ({ page }) => {
+    if (ids.board !== '') await page.request.delete(`/api/documents/dashboard/${ids.board}`);
+    if (ids.chart !== '') await page.request.delete(`/api/documents/chart/${ids.chart}`);
     if (granted !== '') await page.request.delete(`/api/documents/folder/${granted}`);
   });
 });

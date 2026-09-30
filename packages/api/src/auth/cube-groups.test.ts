@@ -1,8 +1,11 @@
+import { randomUUID } from 'node:crypto';
+
 import type { FastifyInstance } from 'fastify';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { CubeClient } from '../cube/client';
 import { closeDb, getDb } from '../db/client';
+import { documents } from '../repos/documents';
 import { buildServer } from '../server';
 import { xcubeAdmin } from '../xcube/client';
 import { fakeXcube, FAKE_ADMIN_TOKEN } from '../xcube/fake';
@@ -80,10 +83,33 @@ function recordingCube(): {
 }
 
 const servers: FastifyInstance[] = [];
+/** Dashboards made here, removed after. */
+const boards: string[] = [];
 afterAll(async () => {
   await Promise.all(servers.map((server) => server.close()));
+  for (const id of boards) await documents(getDb()).remove('dashboard', id);
   await closeDb();
 });
+
+/**
+ * With sign-in on, a query names the item it serves (T340, AC-268): a
+ * dashboard in the root filtering on `orders`, which the queries here use.
+ */
+async function rootBoard(): Promise<{ kind: 'dashboard'; id: string }> {
+  const id = randomUUID();
+  boards.push(id);
+  await documents(getDb()).create({
+    kind: 'dashboard',
+    id,
+    body: {
+      title: 'Groups',
+      folderId: 'root',
+      owner: 'admin',
+      filters: [{ member: 'orders.status' }],
+    },
+  });
+  return { kind: 'dashboard', id };
+}
 const serve = (options: Parameters<typeof buildServer>[0]) => {
   const app = buildServer(options);
   servers.push(app);
@@ -95,15 +121,33 @@ const QUERY = { query: { measures: ['orders.count'] } };
 describe('a signed-in user’s groups in every Cube request (T322, AC-008)', () => {
   it('asks Cube with the configured context and exactly the user’s groups', async () => {
     const { cube, asked } = recordingCube();
-    const app = serve({ config: secured, cube, sessions: pgSessionStore(getDb()) });
+    // A dashboard of theirs to ask for (T340), in a root granting each of
+    // their groups, so every one is named and carried (T437).
+    const payload = { ...QUERY, for: await rootBoard() };
+    const app = serve({
+      config: secured,
+      cube,
+      sessions: pgSessionStore(getDb()),
+      documents: documents(getDb()),
+      folderAccess: {
+        tree: async () => [
+          {
+            id: 'root',
+            parentId: null,
+            access: { readOnly: [...USERS['many']!.groups], readWrite: null },
+          },
+        ],
+        set: async () => true,
+      },
+    });
     const cookie = await signIn(app, USERS['many']!);
     const headers = { cookie };
 
     const answers = [
       await app.inject({ method: 'GET', url: '/api/meta', headers }),
-      await app.inject({ method: 'POST', url: '/api/load', headers, payload: QUERY }),
-      await app.inject({ method: 'POST', url: '/api/sql', headers, payload: QUERY }),
-      await app.inject({ method: 'POST', url: '/api/acceleration', headers, payload: QUERY }),
+      await app.inject({ method: 'POST', url: '/api/load', headers, payload }),
+      await app.inject({ method: 'POST', url: '/api/sql', headers, payload }),
+      await app.inject({ method: 'POST', url: '/api/acceleration', headers, payload }),
       await app.inject({ method: 'DELETE', url: '/api/running-query/r-1', headers }),
     ];
     expect(answers.map((answer) => answer.statusCode)).toEqual([200, 200, 200, 200, 204]);
@@ -219,10 +263,13 @@ describe('a signed-in user’s groups in every Cube request (T322, AC-008)', () 
 describe('only the groups some policy or folder names (T437, AC-008)', () => {
   it('carries, on every route, the user’s groups a folder grants or a policy names, and no other', async () => {
     const { cube, asked } = recordingCube();
+    // A dashboard in the root, which g03 reads, to ask for (T340).
+    const payload = { ...QUERY, for: await rootBoard() };
     const app = serve({
       config: { ...secured, superAdminGroup: 'wechart-super-admins' },
       cube,
       sessions: pgSessionStore(getDb()),
+      documents: documents(getDb()),
       folderAccess: {
         tree: async () => [
           { id: 'root', parentId: null, access: { readOnly: ['g03'], readWrite: null } },
@@ -248,9 +295,9 @@ describe('only the groups some policy or folder names (T437, AC-008)', () => {
 
     const answers = [
       await app.inject({ method: 'GET', url: '/api/meta', headers }),
-      await app.inject({ method: 'POST', url: '/api/load', headers, payload: QUERY }),
-      await app.inject({ method: 'POST', url: '/api/sql', headers, payload: QUERY }),
-      await app.inject({ method: 'POST', url: '/api/acceleration', headers, payload: QUERY }),
+      await app.inject({ method: 'POST', url: '/api/load', headers, payload }),
+      await app.inject({ method: 'POST', url: '/api/sql', headers, payload }),
+      await app.inject({ method: 'POST', url: '/api/acceleration', headers, payload }),
       await app.inject({ method: 'DELETE', url: '/api/running-query/r-1', headers }),
     ];
     expect(answers.map((answer) => answer.statusCode)).toEqual([200, 200, 200, 200, 204]);

@@ -2,6 +2,7 @@ import { formatValue, type MemberFormats } from '@wechart/core';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { CSSProperties } from 'react';
 
+import { useQueryItem } from '../../query/item';
 import { loadTile } from '../../query/loadTile';
 
 /**
@@ -53,10 +54,17 @@ export function MeasureToken({
   /** A previewed security context (T172), as the dashboard's tiles take one. */
   readonly context?: Readonly<Record<string, unknown>> | undefined;
 }) {
+  // The dashboard it is on (T340, AC-268).
+  const item = useQueryItem();
   const answer = useQuery({
-    queryKey: ['text-token', query, context ?? null],
+    queryKey: ['text-token', query, context ?? null, item ?? null],
     queryFn: ({ signal }) =>
-      loadTile({ query: { ...query }, signal, ...(context === undefined ? {} : { context }) }),
+      loadTile({
+        query: { ...query },
+        signal,
+        ...(context === undefined ? {} : { context }),
+        item,
+      }),
     placeholderData: keepPreviousData,
   });
   if (answer.isPending)

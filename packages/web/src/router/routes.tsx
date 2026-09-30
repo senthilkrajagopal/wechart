@@ -440,7 +440,9 @@ function ChartEditorSurface() {
       // Drawn as a tile draws it, for what it was drawn as (AC-193): Explore
       // names a chart that follows the recommendation by that.
       const drawn = await tileChartOf(document, async (query) => {
-        const result = (await loadTile({ query })) as { data?: Record<string, unknown>[] };
+        const result = (await loadTile({ query, item: { kind: 'chart', id: chartId } })) as {
+          data?: Record<string, unknown>[];
+        };
         return result.data ?? [];
       });
       const response = await fetch(`/api/documents/chart/${encodeURIComponent(chartId)}`, {
@@ -517,6 +519,8 @@ function ChartEditorSurface() {
         // history, so a different chart has to be a different editor.
         <ChartEditor
           key={chartId}
+          // Its queries are for this chart (T340, AC-268).
+          item={{ kind: 'chart', id: chartId }}
           initial={view.initial}
           onChange={setEdited}
           // Its folder's path, for the picker (T429, AC-329): a local chart's

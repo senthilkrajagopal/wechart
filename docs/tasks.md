@@ -5642,13 +5642,52 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `infra/cube/cube.js` (the `wechartModel` claim in `contextToAppId`, `repositoryFactory` and `schemaVersion`; `scheduledRefreshContexts` from `/chains`; `driverFactory` answering `ds_*` names from `/api/cube-model/data-sources/:name`, from memory), `packages/api/src/model/publish.ts` (the key-guarded, decrypted data-source route), `packages/api/src/model/cube-config.test.ts`
   - Failing test: `cube-config.test.ts`: two chains get different app ids and fetch their own files; groups never enter an app id; `driverFactory` answers a `ds_*` name from wechart once and from memory after; an unknown name throws (AC-008, AC-272).
   - Depends on: T337, T338, T333
-- [ ] T340 (AC-268) ~~(AC-272, AC-268) Make every query name the item it serves, check access, and sign that item's chain~~ Make every query name the item it serves, and check access before it reaches Cube *(rewritten 2026-09-26: there is no chain to sign; binding is T429's, `[IP 3, IP 6]`)*
+- [x] T340 (AC-268) ~~(AC-272, AC-268) Make every query name the item it serves, check access, and sign that item's chain~~ Make every query name the item it serves, and check access before it reaches Cube *(rewritten 2026-09-26: there is no chain to sign; binding is T429's, `[IP 3, IP 6]`)*
   - Files: `packages/api/src/server.ts` (`/api/load`, `/api/sql`, `/api/acceleration`, `/api/meta` take `for: { kind, id }`), `packages/web/src/query/*` (tiles, the chart editor and the model editor pass their item), `packages/api/src/access/queries.test.ts`
   - Failing test: `queries.test.ts`:
     - a query for an item the user may not see answers 404 and reaches no Cube;
     - a query naming a member its item isn't bound to answers 403 and reaches no Cube (AC-268).
   - ~~`queries.test.ts`: … a query for a dashboard in /A/B is signed with /A/B's chain. `resolution.spec.ts`: a chart in /A/B draws /A/B's `sales` while /A defines its own (AC-272, AC-268).~~
   - Depends on: T326
+  - *As built (2026-09-30), with sign-in on (with it off nothing is checked, as in phase 1):*
+    - **The item** is `for: { kind, id }` on `POST /api/load`, `/api/sql` and `/api/acceleration`, and `?for=<kind>:<id>` on `GET /api/meta`. A kind is a `dashboard`, a `chart`, or a `proposal`: a proposal's review view draws what it holds, which its reviewer can't open (T356).
+    - **Before Cube is asked** (`server.ts` `queryScope`, `access/queries.ts`):
+      - an item the user may not open answers 404, as a missing one does. Opening follows `itemFor`: a reader opens the charts on their dashboards. A proposal opens for its author, the read-write members of every folder it lands in, and the Super-Admins, as its route has it;
+      - a query naming a cube or view its item isn't bound to answers 403. That covers its measures, dimensions, segments, time dimensions, filters (nested `and` and `or` too) and order.
+      - An item is bound to the cubes it uses and those they join through. For a published item those are its own cubes (bound at publish, so its body is trusted) and the cubes on its folder's path, since a drill asks a tile's joined cubes (AC-236, AC-237) and they bind along that path. The same goes for each chart a dashboard shows, from wherever it is kept.
+      - A workspace item's body is its author's to write and bound to nothing, so it reaches only the cubes on the shared root's path and its target folder's (AC-329). A proposal likewise reaches the paths of the folders it lands in, and the published charts a proposed dashboard shows. Paths are read from the model files, not asked of Cube.
+      - Workspace items are answered from the published model until T347's overlays.
+      - A query that isn't one object, or names a member by anything but a name, answers 400. Join hints are read with the rest.
+      - A chart this wechart can't read (a newer format) is left out of its dashboard's reach rather than failing every tile.
+    - **A query naming no item** answers 400, but a Super-Admin's, who may open every item (a small decision, reported). The security suite's own API calls as `super`, and the Security page's generated SQL (Super-Admins only with sign-in on), name none.
+    - **`/api/meta?for=`** answers the item's cubes and views alone. Asked for none, it is the user's groups' field list, as before. The web app doesn't ask it per item yet (for T408's route matrix to judge).
+    - **A preview** (T172) is refused a non-Super-Admin before the item is checked, as before.
+    - **The web app** names the item in every query:
+      - `QueryItemContext` (`query/item.ts`), set by `DashboardView` (the dashboard, or the proposal a review draws it from) and by the chart editor's route (the chart);
+      - `loadTile`'s `item`; `specFor` and `drawChartBody`;
+      - FilterBar, FilteredCharts, LiveToken, ViewQuery, ChartEditor, Wells, ResultsDrawer, AccelerationPanel, ChartEditorOverlay (the dashboard it is edited on), the chart page's save, `ReadOnlyDashboard` (history, reviews) and the review view.
+    - **Tests changed, not weakened:** `auth/cube-groups.test.ts`'s route tests name a dashboard in the root that uses `orders` (with sign-in on they would answer 400). `web/dashboard/refreshTile.test.tsx`'s exact body now carries `for`. `e2e/security/cube-groups.spec.ts` gives its users a dashboard on the secured view to ask for.
+    - `loadTile`'s `item` was written before its test (`loadTile.test.ts`, "naming the item a query serves"), which passed on first run; `refreshPage.test.tsx` and `queries.test.ts` were red first.
+  - **Review (one round, FAIL), fixed:**
+    1. A reader couldn't drill into a joined cube: path cubes were a writer's alone. Now anyone who may open the item gets them.
+    2. A query sent as an array, or with a member that wasn't a string, passed unread. It now answers 400, and join hints are read.
+    3. A workspace item's or a proposal's body could name any cube, since it is its author's to write. Now the paths above alone count.
+    4. One unreadable chart failed its whole dashboard.
+    - Tests added: a drill; a library chart shown from elsewhere, asked for by the dashboard and by the chart; an unreadable chart; the malformed shapes and join hints; a workspace chart and a proposal naming /X's cube.
+    - The fixture's charts now carry the current format; without it their bodies were migrated on read and the charts rule never ran.
+    - `DashboardView` keeps the item by kind and id, so a new object each render changes nothing below.
+  - **Known, not fixed:**
+    - Each query with sign-in on reads the access tree, the item, its charts and its paths' model files. A per-item cache would go stale across replicas and edits, so none was added; a dashboard's many tiles each read the same.
+    - A proposal's author keeps its paths' cubes after losing write on them, as its route lets them open it.
+  - **Done 2026-09-30.**
+    - **Unit suites:** `queries.test.ts` 14; API 1043; web 1989.
+    - **Security suite (Chrome):** 142 passed at first, and 141 after the review's fixes. The one failure was `audit.spec.ts`'s context ending at sign-in, which passed alone (2 of 2).
+    - **Phase-1 suite (Chrome):** 688 passed. Its 13 failures are the same as at T437 (the T331 top-bar change, layout checks, the two `is_employee` previews, and the known two).
+  - **For the user, decisions made:**
+    - with sign-in on, a Super-Admin's query may name no item (the Security page's generated SQL does), where anyone else's is refused 400;
+    - a proposal is an item a query may name, as its review view needs.
+    - Both are overturnable.
+  - **AC-268 stays open for T408's route matrix:** every route asked as users in and out of each group.
 - [x] T341 (AC-274, AC-328) Keep two folders' same-named cubes and their rollups apart, under their prefixed names *(rewritten 2026-09-26: xcube publishes each under `<folderId>__<shortName>` with its own `sql_alias`; nothing is served from wechart, `[IP 3, plan, R28]`; amended again 2026-09-26, `[X3, user; R30]`: the root's stay bare)*
   - Files: `e2e/security/isolation.spec.ts` ~~, the stub `packages/api/src/xcube/fake.ts`~~ (it needed no change)
   - Failing test: `isolation.spec.ts`, against compose's Cube running xcube's slice 3:
