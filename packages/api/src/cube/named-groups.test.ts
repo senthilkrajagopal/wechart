@@ -37,6 +37,22 @@ views:
     ]);
   });
 
+  it('reads a group a policy’s condition asks the context’s groups for (T529)', () => {
+    const content = `views:
+  - name: secured_orders
+    access_policy:
+      - group: sales
+        conditions:
+          - if: "{ securityContext.groups.includes('employees') }"
+          - if: '{ securityContext.groups.includes("contractors") or securityContext.region }'
+`;
+    expect(policyGroupsOf('secured.yml', content).sort()).toEqual([
+      'contractors',
+      'employees',
+      'sales',
+    ]);
+  });
+
   it('reads nothing from a file it can’t read as YAML, or one with no policy', () => {
     expect(policyGroupsOf('broken.yml', 'cubes: [ {')).toEqual([]);
     expect(policyGroupsOf('orders.js', 'cube(`orders`, { access_policy: [] })')).toEqual([]);

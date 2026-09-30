@@ -21,10 +21,11 @@ views:
           includes: '*'
         row_level:
           allow_all: true
-      # Sales: shipped orders only, and not the money — while employed.
+      # Sales: shipped orders only, and not the money — for employees, the
+      # group a token also carries (xcube's tokens carry groups alone, T529).
       - group: sales
         conditions:
-          - if: '{ securityContext.is_employee }'
+          - if: "{ securityContext.groups.includes('employees') }"
         member_level:
           includes: '*'
           excludes:

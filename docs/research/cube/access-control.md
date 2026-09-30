@@ -262,6 +262,12 @@ access_policy:
           values: ['{ securityContext.country }']
 ```
 
+### Observed locally (2026-09-30, compose xcube v1.7.45-919cff8c6e, RS256 tokens carrying groups alone)
+
+Once xcube's tokens carry only a context's groups (T437), a condition on any other claim can't hold. The seed's `sales` policy was moved onto groups: `if: "{ securityContext.groups.includes('employees') }"` (T529). Against the compose xcube, through wechart's preview (`e2e/security.spec.ts`, Chrome, 5 of 5):
+- **`{ groups: ["sales", "employees"] }`:** only `shipped`, and the tile's SQL carries `"orders".status = $1` bound to `shipped`. So a YAML condition's `.includes(…)` on `securityContext.groups` is evaluated at query time.
+- **`{ groups: ["sales"] }`:** the tile is "Not available to this security context", as before. The condition fails, so no policy grants anything.
+
 ### Observed locally (2026-09-22, compose Cube 1.7.42, the seed view `secured_orders`)
 
 The seed view `infra/cube/model/views/secured_orders.yml` declares three policies:

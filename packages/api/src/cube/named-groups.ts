@@ -50,6 +50,19 @@ export function policyGroupsOf(path: string, content: string): string[] {
         const named = Array.isArray(policy['groups']) ? policy['groups'] : [policy['group']];
         for (const group of named)
           if (typeof group === 'string' && group !== '*') groups.add(group);
+        // And a group a condition asks the context's groups for, as YAML's
+        // `.includes` lets it (research `cube/access-control.md`, conditions;
+        // T529): kept out of the token, the condition could never hold.
+        const conditions = policy['conditions'];
+        if (Array.isArray(conditions))
+          for (const condition of conditions) {
+            const test = isPlain(condition) ? condition['if'] : undefined;
+            if (typeof test !== 'string') continue;
+            for (const [, group] of test.matchAll(
+              /securityContext\.groups\.includes\(\s*['"]([^'"]+)['"]\s*\)/g,
+            ))
+              if (group !== undefined) groups.add(group);
+          }
       }
     }
   }

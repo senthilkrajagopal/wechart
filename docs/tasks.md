@@ -9613,10 +9613,15 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
   - Files: the delete routes in `packages/api/src/server.ts` and `routes/data-sources.ts`, the delete dialogs (design 14), `packages/api/src/routes/delete-dependents.test.ts`
   - Failing test: deleting a workspace dashboard, chart or data source waiting in an open proposal withdraws that proposal; the dialog names it before (AC-372).
   - Depends on: T518, design 14
-- [ ] T529 (AC-008, AC-168) Rewrite the sample model's policy, and phase 1's two security tests, on groups *(added 2026-09-30, `[R49]`: xcube's tokens carry only groups)*
+- [x] T529 (AC-008, AC-168) Rewrite the sample model's policy, and phase 1's two security tests, on groups *(added 2026-09-30, `[R49]`: xcube's tokens carry only groups)*
   - Files: `infra/cube/model/views/secured_orders.yml`, `e2e/security.spec.ts` (T172's and T174's tests)
   - Failing test: `security.spec.ts`: a dashboard previewed as `{ groups: [...] }` runs as it, and its tile's SQL shows the row filter the group-based policy adds (AC-168).
   - Depends on: T437
+  - **Done 2026-09-30.**
+    - The seed's `sales` policy is now for those also in `employees`: `if: "{ securityContext.groups.includes('employees') }"`.
+    - A group a condition names this way is one a policy names: `policyGroupsOf` in `cube/named-groups.ts` reads it, so a signed-in user's token carries it (`named-groups.test.ts`).
+    - The phase-1 tests preview `{ groups: ["sales", "employees"] }`. `security.spec.ts` passes 5 of 5 on Chrome against the compose xcube, with the observation in `research/cube/access-control.md`.
+    - AC-168 stays ticked on it. AC-008 stays open for its other parts.
 - [ ] T521 (AC-366) Delete only an empty folder, and offer Delete only on one
   - Files: `packages/api/src/server.ts` (`DELETE /api/documents/folder/:id`), `packages/api/src/routes/delete-dependents.test.ts`, `packages/web/src/workspaces/explore/{ExplorePage,FolderContents}.tsx`, `e2e/security/deleting.spec.ts`
   - Failing test: `delete-dependents.test.ts`: a folder holding a subfolder, a dashboard, a chart, a model or a data source answers `409`, saying what it holds, and stays; an empty one is deleted. `deleting.spec.ts`: Delete is in an empty folder's menu and not in one that holds something (AC-366).

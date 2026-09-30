@@ -95,7 +95,7 @@ test('the Security workspace lists every access policy the model declares, as de
     'sales',
     'all except total_amount',
     'status equals shipped',
-    '{ securityContext.is_employee }',
+    "{ securityContext.groups.includes('employees') }",
     'none',
     'views/secured_orders.yml',
   ]);
@@ -124,8 +124,9 @@ test('the Security workspace lists every access policy the model declares, as de
  * Fails when: the queries use the default context, or no banner is shown.
  *
  * Against the real Cube, whose policies on the secured view give the sales
- * group shipped orders only while it is employed (research/cube/
- * access-control.md, "Observed locally").
+ * group shipped orders only with the employees group too, the groups being
+ * all a token carries (research/cube/access-control.md, "Observed locally";
+ * T529).
  */
 test('a dashboard previewed as an edited security context runs as it, under a banner', async ({
   page,
@@ -135,7 +136,7 @@ test('a dashboard previewed as an edited security context runs as it, under a ba
   await page.goto('/security');
   const preview = page.getByRole('region', { name: 'Preview a security context' });
   const context = preview.getByLabel('Security context (JSON)');
-  await context.fill('{"groups": ["sales"], "is_employee": true}');
+  await context.fill('{"groups": ["sales", "employees"]}');
   await preview.getByLabel('Find a dashboard').fill(title);
 
   const asked: { context?: unknown }[] = [];
@@ -147,13 +148,13 @@ test('a dashboard previewed as an edited security context runs as it, under a ba
 
   // Named, and staying named.
   const banner = page.getByTestId('preview-banner');
-  await expect(banner).toContainText('Previewing as {"groups":["sales"],"is_employee":true}');
+  await expect(banner).toContainText('Previewing as {"groups":["sales","employees"]}');
   // The sales group's rows: shipped only.
   const tile = page.locator('[data-tile="tile-secured"]');
   await expect(tile.getByRole('table')).toContainText('shipped', { timeout: 15_000 });
   await expect(tile.getByRole('table')).not.toContainText('completed');
   expect(asked.length).toBeGreaterThan(0);
-  for (const body of asked) expect(body.context).toEqual({ groups: ['sales'], is_employee: true });
+  for (const body of asked) expect(body.context).toEqual({ groups: ['sales', 'employees'] });
   // Persistent: still in view once the dashboard has scrolled.
   const canvas = page.locator('.dashboard__canvas');
   await tile.hover();
@@ -175,7 +176,7 @@ test('a dashboard previewed as an edited security context runs as it, under a ba
  * error.
  * Fails when: the tile shows a raw Cube error.
  *
- * The sales group without `is_employee` fails the sales policy's condition,
+ * The sales group without `employees` fails the sales policy's condition,
  * so no policy grants it the secured view's members, and Cube answers the
  * tile's query as a hidden member (research/cube/access-control.md,
  * "Observed locally").
@@ -205,7 +206,7 @@ test('a tile whose member the previewed context is not given reads as unavailabl
  * filters for a chart under the previewed context.
  * Fails when: the SQL shown omits the row-level filters the policy adds.
  *
- * Against the real Cube: as the employed sales group, the secured view's
+ * Against the real Cube: as the sales and employees groups, the secured view's
  * policy adds `status = shipped` (research/cube/access-control.md,
  * "Observed locally").
  */
@@ -214,7 +215,7 @@ test('a previewed tile shows Cube’s SQL as the context, with the row filter it
   request,
 }) => {
   const { id } = await securedDashboard(request);
-  const context = { groups: ['sales'], is_employee: true };
+  const context = { groups: ['sales', 'employees'] };
   await page.goto(
     `/explore/dashboards/${id}?preview=${encodeURIComponent(JSON.stringify(context))}`,
   );
@@ -239,7 +240,7 @@ test('a previewed tile shows Cube’s SQL as the context, with the row filter it
   // Beside it, the row filter the policy declares for the context's group.
   const declared = dialog.getByRole('table', { name: 'Row filters declared for this context' });
   await expect(declared).toContainText('status equals shipped');
-  await expect(declared).toContainText('{ securityContext.is_employee }');
+  await expect(declared).toContainText("{ securityContext.groups.includes('employees') }");
 
   await dialog.getByRole('button', { name: 'Close' }).click();
   await expect(dialog).toHaveCount(0);
@@ -298,7 +299,7 @@ test('Security presets a group’s context, says what it can read and why, and k
   // (AC-167's test sees the same) — and the pane says so, and why.
   await presets.getByRole('button', { name: 'sales' }).click();
   await expect(secured).toContainText('Nothing');
-  await expect(secured).toContainText('only if { securityContext.is_employee }');
+  await expect(secured).toContainText("only if { securityContext.groups.includes('employees') }");
   // A group no policy names gets nothing from the secured view, and is told why.
   await context.fill('{"groups": ["marketing"]}');
   await expect(secured).toContainText('Nothing');
@@ -315,7 +316,7 @@ test('Security presets a group’s context, says what it can read and why, and k
   await expect(preview.getByTestId('preview-no-match')).toContainText('No dashboard matches');
 
   // Kept through a preview: out to the dashboard and back.
-  await context.fill('{"groups": ["sales"], "is_employee": true}');
+  await context.fill('{"groups": ["sales", "employees"]}');
   await find.fill(title);
   await preview.getByRole('link', { name: `Preview ${title}` }).click();
   await expect(page.getByTestId('preview-banner')).toBeVisible();
@@ -325,7 +326,7 @@ test('Security presets a group’s context, says what it can read and why, and k
     page
       .getByRole('region', { name: 'Preview a security context' })
       .getByLabel('Security context (JSON)'),
-  ).toHaveValue('{"groups": ["sales"], "is_employee": true}');
+  ).toHaveValue('{"groups": ["sales", "employees"]}');
 
   // A policy's source opens its file in Model — the file itself, not only
   // its address.
