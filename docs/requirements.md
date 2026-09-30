@@ -716,16 +716,22 @@ With security on, a deployment that names no Super-Admin group refuses to start 
   - **Country map detail:** Natural Earth 1:50m admin-0 boundaries (242 units, small states such as Singapore included) `[R22]`.
 - The UI fixes: AC-187's style mismatches, the failing cases of AC-201, AC-220 and AC-246, and Edge (AC-180).
 
-**I. Deleting, clearing and finding** `[R48]` *(added 2026-09-30; not yet specified: its open questions are in §P2.8)*
-- **Deleting one item when nothing depends on it:**
-  - a chart, when no dashboard uses it;
-  - a dashboard, which nothing depends on;
-  - a data source, when no cube depends on it;
-  - a cube, when no view connects to it;
-  - an empty folder.
-- **Clearing My workspace:** one action that empties the whole workspace.
-- **A folder per edit:** editing a resource from the folder view creates a folder named `project<date+time>` in My workspace to hold the copy. Where possible, the folder carries a comment saying which resource is being modified.
-- **Filtering Explore by kind:** only dashboards and charts, only data sources, or only models.
+**I. Deleting, clearing and finding** `[R48]` *(added 2026-09-30; its questions settled the same day, §P2.8)*
+- **Deleting one item only when nothing depends on it.** Otherwise the delete is refused, naming what depends on it:
+  - **a chart**, when no dashboard uses it. This replaces phase 1's "name the dashboards and confirm", which deleted it anyway (AC-023) `[R48-1]`;
+  - **a dashboard**, which nothing depends on;
+  - **a data source**, when no cube depends on it;
+  - **a cube**, when nothing depends on it: no view uses it, no other cube joins to it, and no chart or dashboard is bound to it `[R48-2]`;
+  - **a folder**, only when it is empty: no subfolders, dashboards, charts, models or data sources `[R48-3]`.
+- **Clearing My workspace:** one action removes every item in it. Its confirmation names any open proposals, and clearing withdraws them too `[R48-4]`.
+- **A folder per edit.** Each "Edit in my workspace" creates one folder in My workspace, named `project-YYYY-MM-DD-HHmm` in the user's time (for example `project-2026-09-30-1430`). It holds the copy and everything copied with it: the library charts' copies and the data sources chosen `[R48-5]`.
+  - A new item made in My workspace gets no project folder: it is made where the user makes it, as now `[R48-5b]`.
+- **Folder descriptions.** Folders get a description, shown under the folder's name in Explore and editable. A project folder's is prefilled with what is being edited and where from, for example "Editing Revenue overview from Sales / EMEA" `[R48-6]`.
+- **Filtering Explore by kind.** Over the open folder's contents: All (the default), Dashboards and charts, Data sources, or Models. The folder tree stays as it is `[R48-7]`.
+- *Claude's calls, under the standing instruction for small decisions:*
+  - A second project folder in the same minute is named with `-2`, then `-3`, since names are unique in a folder.
+  - A folder's description holds up to 1,000 characters, as a proposal's does.
+  - Under a kind filter, the open folder's subfolders stay listed, so they can still be opened from the list.
 
 ## P2.7 Non-goals for phase 2
 
@@ -758,19 +764,19 @@ The rest still apply: AI and chat authoring, scheduled delivery and alerts, embe
 | 6 | Audit retention | **A deployment setting, one year by default** |
 | 7 | Self-approval with security on | **Yes, always.** The approval step is never skipped |
 
-### Open from round R48 (2026-09-30)
+### Round R48 (2026-09-30): settled the same day
 
-§P2.6 I is not specified until these are settled with the user:
+Round R48's seven questions were answered by the user, each with the recommended choice. The decisions are folded into §P2.6 I.
 
-| # | Question |
-|---|---|
-| R48-1 | **A chart some dashboards use:** is its delete refused until none do? Or does today's "name them and confirm" (AC-023) stay, which deletes it and leaves their tiles without it? |
-| R48-2 | **A cube:** does only a view connecting to it block its delete? Or do a join from another cube, and the charts and dashboards bound to it, block it too (refused today, AC-275)? |
-| R48-3 | **A folder that isn't empty:** is its delete refused, so only empty folders go? Or does it go, with everything in it, after a confirmation? |
-| R48-4 | **Clearing My workspace while some of its items wait in open proposals:** are those proposals withdrawn with them, or are those items kept? |
-| R48-5 | **The project folder:** is there one per "Edit in my workspace", holding the dashboard's copy, its library charts' copies and any data sources chosen, together? What is the name's exact form (for example `project-2026-09-30-1430`)? Does a new item made in the workspace get one too? |
-| R48-6 | **The folder's comment:** is it a description on the folder, shown in Explore and editable, or only generated? |
-| R48-7 | **The kind filter:** does it filter the open folder's contents only, or list across every folder the user can see? Is "All" a choice, and the default? |
+| # | Question | Decision |
+|---|---|---|
+| R48-1 | A chart some dashboards use | **Its delete is refused until none does**, naming them (AC-023's confirm is replaced) |
+| R48-2 | What blocks deleting a cube | **Anything depending on it:** a view, a join from another cube, or a chart or dashboard bound to it |
+| R48-3 | A folder that isn't empty | **Only empty folders can be deleted** |
+| R48-4 | Clearing My workspace with items in open proposals | **The proposals are withdrawn too**, named in the confirmation |
+| R48-5 | The project folder | **One per "Edit in my workspace"**, holding everything copied with it, named `project-YYYY-MM-DD-HHmm`; none for a new item |
+| R48-6 | The folder's comment | **An editable folder description**, prefilled for a project folder |
+| R48-7 | The kind filter | **Over the open folder's contents:** All (default), Dashboards and charts, Data sources, Models |
 
 ## P2.9 Interview log
 
@@ -870,7 +876,17 @@ Questions are Claude's; answers are the user's, verbatim.
 
 **R48 — deleting, clearing the workspace, a folder per edit, filtering Explore by kind** (2026-09-30, the user; to requirements only, not to be worked on yet)
 - The user: "Let us add the option of deleting empty folders, or deleting individual artifacts. Example if charts can be deleted if no dashboards are using it, dashboards can be deleted because nothing else depends on it, datasources can be deleted if no cubes depend on it, and cubes can be deleted if there are no views connecting to it. In workspaece there should be option to clear the entire workspace, when editing a resource from folder view, it should create a project<date+time> folder (And if possible have folder comments on what resource is being modified).. Also in the explore view there should be option to filter resources only by dashboards and charts, or only by datasources, or only by models. Add it the requirements.. dont work on it right now"
-- *Folded into §P2.6 I. What it leaves open is in §P2.8, "Open from round R48". A data source is already refused a delete while a cube is bound to it.*
+- *Folded into §P2.6 I. A data source is already refused a delete while a cube is bound to it.*
+- On resuming, the user: "okay lets resume.. first we will tackle the most recent requirements and go on to implementing.. 1. Workspaces and proposals (finishing the edit-in-a-copy flow) and in parallel request 2. Cube enforcing access itself (xcube) ... then we will start with 3. Jobs and Schedules and 5. Audit trail and bookmarks and then 6"
+- Claude asked the seven questions. The user's answers:
+  - R48-1, a chart some dashboards use: "Refuse until unused (Recommended)"
+  - R48-2, what blocks deleting a cube: "Anything depending on it (Recommended)"
+  - R48-3, a folder that isn't empty: "Only empty folders (Recommended)"
+  - R48-4, clearing My workspace with open proposals: "Withdraw them too (Recommended)"
+  - R48-5, the project folder: "One per edit, all copies in it (Recommended)"
+  - R48-5b, a new item made in My workspace: "No, only edits (Recommended)"
+  - R48-6, the folder's comment: "Editable description, prefilled (Recommended)"
+  - R48-7, Explore's kind filter: "The open folder (Recommended)"
 
 **R47 — Jobs: the pre-aggregation's name as plain text** (2026-09-28, the user)
 - UX-080 against AC-229: "Plain text, amend AC-229". *A row click only selects. The docked pane's "Open in Model", deep-linking to the pre-aggregation, is the way to its definition. AC-229's "name linking to its definition in Model" is amended to "a way from its row" (T469's follow-up).*

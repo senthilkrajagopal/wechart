@@ -9465,6 +9465,47 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
   - Failing test: `history.test.ts`: restoring a data source's version makes a draft of it in the workspace, its settings as that version had them and its credentials as sealed, which can be proposed only after a passing test (AC-158); the folder is unchanged until it is approved (AC-289).
   - Depends on: T354, T357
 
+## P2.20 Deleting, clearing and finding (F39, added 2026-09-30, `[R48]`)
+
+Every surface here follows design 14 (R48), drawn before the UI tasks start. The API halves of T517–T521 depend on nothing else.
+
+- [ ] T517 [P] (AC-362) Refuse deleting a library chart a dashboard uses, naming the dashboards it may name
+  - Files: `packages/api/src/server.ts` (`DELETE /api/documents/chart/:id`, whose `?confirm` goes), `packages/api/src/routes/delete-dependents.test.ts`, `packages/web/src/workspaces/explore/LibraryChartPage.tsx` (Delete's refusal replaces its confirm), `e2e/chart-delete.spec.ts` and `server.test.ts` (T021's confirm-then-delete, AC-023, retired)
+  - Failing test: `delete-dependents.test.ts`: a library chart two dashboards use answers `409`, naming the one the user may see and counting the other, and stays; one no dashboard uses is deleted (AC-362).
+  - Depends on: none (the page's wording, design 14)
+- [ ] T518 [P] (AC-363) Delete a dashboard with its own charts and its bookmarks
+  - Files: `packages/api/src/server.ts` (`DELETE /api/documents/dashboard/:id`), `packages/api/src/routes/delete-dependents.test.ts`
+  - Failing test: `delete-dependents.test.ts`: after a dashboard's delete, neither it, nor any of its own charts, nor its bookmarks is stored; a reader's delete answers `403` and removes nothing (AC-363).
+  - Depends on: none
+- [ ] T519 [P] (AC-364) Refuse deleting a data source a cube is bound to, naming the cubes it may name
+  - Files: `packages/api/src/routes/data-sources.ts` (the delete), `packages/api/src/access/data-sources.test.ts`, the data source's page (design 14)
+  - Failing test: `data-sources.test.ts`: deleting a data source two cubes are bound to answers `409`, naming the cube in a folder the user sees and counting the other; one no cube is bound to is deleted (AC-364).
+  - Depends on: none
+- [ ] T520 (AC-365) Refuse deleting a cube, or its model file, while a view, a join, a chart or a dashboard depends on it
+  - Files: `packages/api/src/model/delete.ts` (+ test), `packages/api/src/xcube/changesets.ts` (xcube's refusal of a delete that breaks a view or a join), the model file's Delete (design 14)
+  - Failing test: `model/delete.test.ts`, against the stub xcube: a cube a view uses, one another cube joins to, and one a chart is bound to are each refused, naming what depends on it (views and joins from xcube's refused changeset, charts and dashboards from wechart's own references, AC-275); a cube nothing depends on is deleted (AC-365).
+  - Depends on: none (if xcube's refusal doesn't name the view or join, xcube is asked through the Cube-expert agent)
+- [ ] T521 (AC-366) Delete only an empty folder, and offer Delete only on one
+  - Files: `packages/api/src/server.ts` (`DELETE /api/documents/folder/:id`), `packages/api/src/routes/delete-dependents.test.ts`, `packages/web/src/workspaces/explore/{ExplorePage,FolderContents}.tsx`, `e2e/security/deleting.spec.ts`
+  - Failing test: `delete-dependents.test.ts`: a folder holding a subfolder, a dashboard, a chart, a model or a data source answers `409`, saying what it holds, and stays; an empty one is deleted. `deleting.spec.ts`: Delete is in an empty folder's menu and not in one that holds something (AC-366).
+  - Depends on: design 14
+- [ ] T522 (AC-367) Clear My workspace, withdrawing its open proposals
+  - Files: `packages/api/src/routes/workspace-clear.ts` (+ test), `packages/web/src/workspaces/explore/ClearWorkspaceDialog.tsx` (+ test), `e2e/security/deleting.spec.ts`
+  - Failing test: `workspace-clear.test.ts`: `POST /api/workspace/clear` removes every item and folder in the caller's workspace and withdraws its open proposals, leaving everyone else's workspace and every shared folder as they were. `deleting.spec.ts`: the dialog names the count and each open proposal before anything is removed (AC-367).
+  - Depends on: design 14
+- [ ] T523 (AC-368) Put each "Edit in my workspace" into its own project folder
+  - Files: `packages/api/src/server.ts` (`POST /api/workspace/copies`), `packages/api/src/routes/data-sources.ts` (`…/copy`), `packages/web/src/workspaces/explore/EditInWorkspaceDialog.tsx`, `packages/api/src/routes/workspace-copy.test.ts`, `e2e/security/workspace-edit.spec.ts`
+  - Failing test: `workspace-copy.test.ts`: a dashboard's copy lands with its library charts' copies and the chosen data sources' copies in one new folder, `project-YYYY-MM-DD-HHmm` in the user's time zone as the request gives it, with `-2` for a second in the same minute; a new item made in the workspace gets none (AC-368).
+  - Depends on: T524 (the folder's description), design 14
+- [ ] T524 (AC-369) Give folders a description, shown under the name in Explore, prefilled for a project folder
+  - Files: `packages/api/src/server.ts` (the folder's `description`, up to 1,000 characters), `packages/web/src/workspaces/explore/ExplorePage.tsx` (the header), `e2e/security/deleting.spec.ts` or `workspaces.spec.ts`
+  - Failing test: a description saved by a read-write member shows under the folder's name, a reader's save is refused, 1,001 characters are refused, and a project folder's starts as "Editing *title* from *path*" (AC-369).
+  - Depends on: design 14
+- [ ] T525 (AC-370) Filter Explore's open folder by kind
+  - Files: `packages/web/src/workspaces/explore/{ExplorePage,FolderContents}.tsx` (+ tests), `e2e/security/explore-roles.spec.ts` or `deleting.spec.ts`
+  - Failing test: with All, Dashboards and charts, Data sources and Models, the list shows only that kind and the subfolders, starts on All, and leaves the tree as it is (AC-370).
+  - Depends on: design 14
+
 ## Phase 2 coverage: acceptance criterion → task
 
 | AC | Tasks | AC | Tasks | AC | Tasks |
@@ -9502,6 +9543,9 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 | AC-354 | T508, T511 | AC-355 | T508, T511 | AC-356 | T508, T513 |
 | AC-357 | T508, T513 | AC-358 | T508, T514 | AC-359 | T508, T512 |
 | AC-360 | T511 | AC-361 | T514 | | |
+| AC-362 | T517 | AC-363 | T518 | AC-364 | T519 |
+| AC-365 | T520 | AC-366 | T521 | AC-367 | T522 |
+| AC-368 | T523 | AC-369 | T524 | AC-370 | T525 |
 | AC-296 | T370 | AC-297 | T371, T504 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441 |
 | AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |
 | AC-302 | T394 | AC-303 | T395 | AC-304 | T396 |

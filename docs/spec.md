@@ -136,8 +136,7 @@ Traces to: `[docs/inputs §8]`, direction.md §2.
       Fails when: a dashboard that used the object shows a missing-chart state after the move.
 - [x] AC-022 WHEN the user opens a library chart's page, THE SYSTEM SHALL list every dashboard that uses it and offer to add it to another dashboard.
       Fails when: a dashboard that contains the chart is missing from the list.
-- [x] AC-023 WHEN the user deletes a library chart that dashboards use, THE SYSTEM SHALL name those dashboards and require confirmation before deleting.
-      Fails when: the chart is deleted without naming the dashboards that use it.
+- **AC-023 (retired 2026-09-30, superseded by AC-362, `[R48]`; the ID stays and is never reused):** ~~WHEN the user deletes a library chart that dashboards use, THE SYSTEM SHALL name those dashboards and require confirmation before deleting.~~ A chart a dashboard uses can't be deleted at all now: its delete is refused, naming those dashboards.
 - [x] AC-024 WHEN the user navigates the Explore contents with the keyboard, THE SYSTEM SHALL move the selection with the arrow keys and open the selected item with Enter.
       Fails when: arrow keys do not move the selection, or Enter does not open the selected item.
 
@@ -1242,6 +1241,30 @@ Traces to: `[R43]`; design `docs/design/reviews/2026-09-28/designs/13-dashboard-
 - [x] AC-359 IF an export file can't be read, or holds a kind, chart type or driver this wechart doesn't have, THEN THE SYSTEM SHALL refuse to import it, saying which part and why, and change nothing (`[R43]`).
       Fails when: an unreadable or unsupported file changes anything, or its refusal doesn't name the part.
 
+## F39. Deleting, clearing and finding
+
+Purpose: delete an item only when nothing depends on it, clear My workspace in one go, keep each edit's copies together in a project folder with a description, and narrow Explore to one kind of item.
+Traces to: `[R48]`.
+
+- [ ] AC-362 WHEN a user deletes a library chart that a dashboard uses, THE SYSTEM SHALL refuse the delete, naming the dashboards that use it that the user may see and counting the rest, and SHALL delete a chart no dashboard uses (`[R48-1]`; supersedes AC-023).
+      Fails when: a chart a dashboard uses is deleted; the refusal names a dashboard the user may not see, or leaves out one they may; or a chart no dashboard uses can't be deleted by a user who may change its folder.
+- [ ] AC-363 WHEN a user who may change a dashboard deletes it, THE SYSTEM SHALL remove it together with its own charts and its bookmarks (`[R48]`).
+      Fails when: the dashboard, one of its own charts or one of its bookmarks is still there after the delete; or a user who may not change it can delete it.
+- [ ] AC-364 WHEN a user deletes a data source that a cube is bound to, THE SYSTEM SHALL refuse the delete, naming the cubes bound to it that the user may see and counting the rest, and SHALL delete a data source no cube is bound to (`[R48]`).
+      Fails when: a data source a cube is bound to is deleted; the refusal names a cube the user may not see; or a data source no cube is bound to can't be deleted by a user who may change its folder.
+- [ ] AC-365 WHEN a user deletes a cube, or the model file holding it, THE SYSTEM SHALL refuse the delete while a view uses the cube, another cube joins to it, or a chart or dashboard is bound to it, naming each of those the user may see and counting the rest; and SHALL delete a cube nothing depends on (`[R48-2]`; with AC-275).
+      Fails when: a cube a view, a join, a chart or a dashboard depends on is deleted; the refusal leaves out a dependent the user may see, or names one they may not; or a cube nothing depends on can't be deleted.
+- [ ] AC-366 WHEN a user who may delete a folder deletes it, THE SYSTEM SHALL delete it only if it holds nothing, no subfolder, dashboard, chart, model or data source; otherwise SHALL refuse, saying what it holds. Explore SHALL offer Delete on a folder only when it is empty (`[R48-3]`).
+      Fails when: a folder holding anything is deleted; the refusal doesn't say what it holds; Delete is offered on a folder that holds something; or an empty folder the user may delete can't be deleted.
+- [ ] AC-367 WHEN a user clears My workspace, THE SYSTEM SHALL first ask them to confirm, naming how many items it removes and each open proposal it withdraws; once confirmed, it SHALL remove every item and folder in their workspace and withdraw those proposals, changing nothing outside the workspace (`[R48-4]`).
+      Fails when: an item or folder is left in the workspace; an open proposal of one of its items stays open; the confirmation doesn't name an open proposal it withdraws; anything outside the user's workspace changes; or nothing is asked first.
+- [ ] AC-368 WHEN a user copies a shared item into their workspace with "Edit in my workspace", THE SYSTEM SHALL create one folder in My workspace named `project-YYYY-MM-DD-HHmm` in the user's time, and put the copy and everything copied with it there: the library charts' copies and the data sources chosen. A second copy in the same minute SHALL be named with `-2`, then `-3`. A new item made in My workspace SHALL get no project folder (`[R48-5]`).
+      Fails when: a copy is made with no project folder, or outside it; one copy's items are split across folders; the folder's name isn't the copy's time in that form; two folders take the same name; or a new item made in My workspace gets a project folder.
+- [ ] AC-369 THE SYSTEM SHALL let a user who may change a folder give it a description, of up to 1,000 characters, shown under its name in Explore's header. A project folder's description SHALL start prefilled with what is being edited and where it came from, for example "Editing Revenue overview from Sales / EMEA", and stay editable (`[R48-6]`).
+      Fails when: a saved description isn't shown under the folder's name; one who may not change the folder can change it; one over 1,000 characters is saved; or a project folder's description isn't prefilled with the item's title and its folder's path.
+- [ ] AC-370 WHEN the user chooses a kind in Explore's filter, one of All (the default), Dashboards and charts, Data sources and Models, THE SYSTEM SHALL list only the open folder's items of that kind, with its subfolders still listed to open, and leave the folder tree as it is (`[R48-7]`).
+      Fails when: an item of another kind is listed; an item of the kind is left out; the filter starts on anything but All; the subfolders disappear from the list; or the tree changes.
+
 ## Non-goals (phase 1)
 
 Copied from [requirements.md §7](./requirements.md):
@@ -1383,3 +1406,4 @@ The criteria phase 1 moved to its backlog on 2026-09-25 are back in this spec un
 | Designs 11 and 12's proposals, approved `[R36]` | AC-345 … AC-351 |
 | Both UI reviews' designs, the 2026-09-27 ones first where they differ, as a priority `[R37]` | AC-343, AC-344, AC-352 |
 | Exporting and importing a dashboard, with its chosen dependencies and no secrets `[R43]`; an import always into My workspace, with warnings `[R44]`; design 13's answers `[R46]` | AC-354 … AC-361 |
+| §P2.6 I Deleting only what nothing depends on, only empty folders, clearing My workspace, a project folder per edit with a description, Explore filtered by kind `[R48]` | AC-362 … AC-370 |
