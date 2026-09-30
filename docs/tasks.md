@@ -8187,7 +8187,16 @@ Every step leaves both suites working. The slice-4 image takes HS256 tokens unti
     - **Also:** `docs/deploy.md` (the key and its rotation), `infra/xcube/README.md`, the demo API's start line in `docs/handoff.md`.
   - **Review (one round), fixed:** an old-config replica restarting mid-rotation pushed its one key over the rotating set (now `ensure`); the rotation test now holds the push unanswered and checks nothing is signed with the next key meanwhile; tests added for the server's wiring (`service-wiring.test.ts`) and the chart's key (`cube-image.test.ts`); stale comments.
   - **For the user (from the review):** under RS256, xcube keeps only a token's groups, model, revision and role (research `xcube-slice-4.md`, "User tokens"), as R28 decided. So the sample policy's `{ securityContext.is_employee }` condition (`infra/cube/model/views/secured_orders.yml`) can never hold. A phase-1 preview of `{"groups":["sales"],"is_employee":true}` then gets no `shipped` rows. That breaks two tests in `e2e/security.spec.ts`: "a dashboard previewed as an edited security context runs as it" (T172) and "a previewed tile shows Cube's SQL … with the row filter its policy adds" (T174, AC-168, ticked). AC-008's "the configured security context" likewise reaches Cube as its groups alone. Not changed here: the sample's policy, those tests and the criteria' wording wait on the user.
-  - **Not ticked:** AC-326 and AC-008 wait on both e2e suites on RS256 tokens, and on the user's answer above.
+  - **Both suites on RS256 tokens (2026-09-30, Chrome, 3e8cd5d; the API pushed the key for `e2e` and `e2e-security`, which take no HS256 token since):**
+    - **Security suite: 129 of 129.** The whole run had 115 pass. Five failed signing in through Dex in its first minute and nine didn't run behind them; those four specs passed alone (15 of 15).
+    - **Phase-1 suite: 687 passed, 14 failed.** `cube-scopes.spec.ts` (introspection by the service credential alone, and GraphQL missing), `items-switch.spec.ts` and `xcube-cutover.spec.ts` pass. Of the failures:
+      - two are the user's question above (`security.spec.ts` :130, :212);
+      - two are known at HEAD (acceleration "Data as of", the 390 px model form);
+      - five look for a Model link in the top bar, which T331 (ddcce4c) no longer lists: `smoke`, `routing` "Model at /model", `design-conformance` T202 navigation, `shell` "folds navigation…";
+      - `folder-models` "Schedules reads a folder rollup's key SQL" finds its row under the short name and folder path, not the prefixed name it looks for;
+      - the rest are layout: `admin` Query log card, `design-conformance` T203 header gear and edit bar, `editor-preview` height (2 px), `a11y-tokens` (its context ended).
+      - None of these touch a Cube token, and T437 changes no web code.
+  - **Not ticked:** AC-326's overlay clause is AC-323's (T347). AC-008's "configured security context", and the two phase-1 tests, wait on the user's answer above. The task is unticked until then.
 - [x] T438 (AC-166) Preview a dashboard as the chosen groups, with a token carrying exactly those *(header restored 2026-09-28: 6f46537 dropped the line and left its body under T437)*
   - Files: `packages/api/src/server.ts` (the preview), `packages/web/src/workspaces/security/PreviewAs.tsx`, `e2e/security/preview-as.spec.ts`
   - Failing test: `preview-as.spec.ts`:
