@@ -8346,12 +8346,24 @@ Every step leaves both suites working. The slice-4 image takes HS256 tokens unti
       - three groups in the banner;
       - a preview naming more than groups, refused.
   - **Held back (backlog §6, with T437 → T436):** state E's tiles "Not available to these groups: it uses finance.churn, in a folder they don't reach". While wechart doesn't push folders' groups to xcube, xcube's folder check is off, so no tile is refused for its folder. The reach list is wechart's own reckoning of the same rule.
-- [ ] T457 (AC-272) Show a chart's second cube bound through its source cube's bindings, and a save refused while xcube is unreachable, against xcube *(added 2026-09-26: T429 showed both against the stub xcube only)*
+- [x] T457 (AC-272) Show a chart's second cube bound through its source cube's bindings, and a save refused while xcube is unreachable, against xcube *(added 2026-09-26: T429 showed both against the stub xcube only)*
   - Files: `e2e/security/picker.spec.ts`, `packages/api/src/model/bind.ts` (the refusal's wording, if it doesn't say xcube can't be reached)
   - Failing test: `picker.spec.ts`, against compose's xcube:
     - a chart in /A/B whose source cube joins a second cube is stored bound to the second cube its source cube was published bound to, even after a nearer one is published;
     - with xcube stopped, a chart save in a folder is refused, saying xcube can't be reached, and nothing is stored (AC-272).
   - Depends on: T420
+  - **Done 2026-09-30.** No product change: T429's binding and T502's approvals already did it; this shows them against compose's xcube (`919cff8c6e`), in Chrome.
+    - **The save is an approval.** Since T502 a shared chart or dashboard isn't saved in place with sign-in on. It is published by approving its copy, and the approval binds it (`routes/proposals.ts`, `bind`; 502 when xcube can't be asked), so both halves are shown through `e2e/security/shared-change.ts`.
+    - **`picker.spec.ts`, "binds a chart's second cube as its source cube was published bound…":**
+      - /A publishes `other`, /A/B publishes `src` joining it, then a nearer `other` in /A/B;
+      - a chart in /A/B on `src` with `other.id` stores `f<A>__other.id`;
+      - a chart on `other` itself stores /A/B's, which shows the nearer one was published;
+      - a chart naming a cube only /A/B/C (beneath) defines is refused at approval (422), naming it.
+    - **`xcube-unreachable.spec.ts`:** with compose's Cube (xcube) stopped, a chart's approval and a dashboard's (its filter's cube) each answer 502, "xcube could not be asked where the cubes of “…” are, so nothing was approved.", and neither item's version or content changes. Cube is started again in `finally` and in `afterAll`.
+    - **The review (one round) found** that stopping Cube in `picker.spec.ts` would break every spec running beside it. The test moved to `xcube-unreachable.spec.ts`, in a project of its own that runs after the three browsers' (`playwright.security.config.ts`), and on its own with `--project=xcube-unreachable --no-deps`.
+    - **Runs:** `picker.spec.ts` 5 of 5; `xcube-unreachable.spec.ts` 2 of 2.
+    - **AC-272 ticked**, on these and T429's picker tests: a chart in /A/B binds /A/B's own over /A's, and a sibling's name (`picker_widgets`) is refused, naming it.
+    - **Not shown against xcube:** a move (`PATCH`) while xcube is unreachable. `chart-binding.test.ts` shows the in-place save's 502 against the stub.
 - [ ] T458 (AC-327) Show that no request from Cube or xcube reaches wechart during a publish, a query, a refresh or a connection test *(added 2026-09-26, from T361's review: T431 and T442 are done, and AC-327's request-side Fails-when had no test)*
   - Files: `e2e/security/no-callbacks.spec.ts`, `packages/api/src/server.ts` (a request's source, logged as it is today)
   - Failing test: `no-callbacks.spec.ts`, against compose's Cube and xcube:

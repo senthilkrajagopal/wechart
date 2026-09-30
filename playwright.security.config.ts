@@ -55,7 +55,11 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   projects: [
-    { name: 'chrome', use: { ...devices['Desktop Chrome'], channel: 'chrome' } },
+    {
+      name: 'chrome',
+      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+      testIgnore: /xcube-unreachable\.spec\.ts/,
+    },
     // xcube's binding, and a data source changed in place, are shown through
     // the API, in no browser, so once: their copies in three browsers would
     // publish, move and remove data sources in one model at once, and trip
@@ -63,12 +67,21 @@ export default defineConfig({
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
-      testIgnore: /(data-source-binding|changed-in-place)\.spec\.ts/,
+      testIgnore: /(data-source-binding|changed-in-place|xcube-unreachable)\.spec\.ts/,
     },
     {
       name: 'safari',
       use: { ...devices['Desktop Safari'] },
-      testIgnore: /(data-source-binding|changed-in-place)\.spec\.ts/,
+      testIgnore: /(data-source-binding|changed-in-place|xcube-unreachable)\.spec\.ts/,
+    },
+    // A save while xcube can't be reached stops compose's Cube, which every
+    // other spec needs: after all three browsers, once (T457's review). On
+    // its own: `--project=xcube-unreachable --no-deps`.
+    {
+      name: 'xcube-unreachable',
+      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+      testMatch: /xcube-unreachable\.spec\.ts/,
+      dependencies: ['chrome', 'firefox', 'safari'],
     },
   ],
   webServer: [

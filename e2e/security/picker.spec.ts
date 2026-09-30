@@ -166,4 +166,116 @@ test.describe('cubes bound and picked on a folder’s path (T429)', () => {
     for (const text of await results.getByRole('option').allTextContents())
       expect(text).not.toContain('__');
   });
+
+  /**
+   * T457, AC-272: a chart's second cube is bound through the bindings its
+   * source cube was published with, so it joins as its cube does: /A/B's
+   * `src` joins `other`, bound to /A's when `src` was published. A nearer
+   * `other` published in /A/B afterwards rebinds nothing (R31), so a chart
+   * published in /A/B then still binds /A's.
+   */
+  test('binds a chart’s second cube as its source cube was published bound, a nearer one since notwithstanding (T457)', async ({
+    page,
+  }) => {
+    const request = page.request;
+    const other = `picker_other_${RUN}`;
+    const src = `picker_src_${RUN}`;
+    const full = (folderId: string, name: string) => `f${folderId.replaceAll('-', '')}__${name}`;
+    await publishYaml(request, ids.a, other, cubeOf(other));
+    await publishYaml(request, ids.b, src, cubeOf(src, other));
+    // The nearer one, after `src` was bound to /A's.
+    await publishYaml(request, ids.b, other, cubeOf(other));
+
+    const id = await chartIn(request, ids.b, `Joined chart ${RUN}`);
+    const saved = await changeShared(request, 'chart', id, (body) => ({
+      ...body,
+      chart: {
+        source: { cube: src },
+        wells: { measures: [`${src}.count`], dimensions: [`${other}.id`], timeDimensions: [] },
+      },
+    }));
+    expect(saved).toEqual([{ kind: 'chart', id, version: 2 }]);
+    const stored = (await (await request.get(`/api/documents/chart/${id}`)).json()) as {
+      body: {
+        chart: { source: { cube: string }; wells: { measures: string[]; dimensions: string[] } };
+      };
+    };
+    expect(stored.body.chart.source.cube).toBe(full(ids.b, src));
+    expect(stored.body.chart.wells.measures).toEqual([`${full(ids.b, src)}.count`]);
+    // /A's, as `src` joins it, not /A/B's nearer one.
+    expect(stored.body.chart.wells.dimensions).toEqual([`${full(ids.a, other)}.id`]);
+    // While a chart starting from `other` itself takes the nearer, /A/B's:
+    // what differs above is `src`'s bindings, not a publish that didn't land.
+    const near = await chartIn(request, ids.b, `Near chart ${RUN}`);
+    await changeShared(request, 'chart', near, (body) => ({
+      ...body,
+      chart: {
+        source: { cube: other },
+        wells: { measures: [`${other}.count`], dimensions: [], timeDimensions: [] },
+      },
+    }));
+    const nearStored = (await (await request.get(`/api/documents/chart/${near}`)).json()) as {
+      body: { chart: { source: { cube: string } } };
+    };
+    expect(nearStored.body.chart.source.cube).toBe(full(ids.b, other));
+
+    // A cube only /A/B/C, beneath /A/B, defines is on no path of /A/B's.
+    const deep = `picker_deep_${RUN}`;
+    await publishYaml(request, ids.c, deep, cubeOf(deep));
+    const below = await chartIn(request, ids.b, `Below chart ${RUN}`);
+    const refused = await proposeShared(request, 'chart', below, (body) => ({
+      ...body,
+      chart: {
+        source: { cube: deep },
+        wells: { measures: [`${deep}.count`], dimensions: [], timeDimensions: [] },
+      },
+    }));
+    expect(refused.approved.status()).toBe(422);
+    expect(await refused.approved.json()).toEqual({
+      error: `No folder on the path of “Below chart ${RUN}” holds “${deep}”, so nothing was approved.`,
+      names: [deep],
+    });
+    await refused.cleanUp();
+  });
+
+  // A save refused while xcube can't be reached is `xcube-unreachable.spec.ts`'s:
+  // it stops Cube, so it runs apart from the rest (T457's review).
 });
+
+/** A cube over the orders, joining `joins` one to one by id where named. */
+function cubeOf(name: string, joins?: string): string {
+  return [
+    'cubes:',
+    `  - name: ${name}`,
+    '    sql_table: public.orders',
+    '    measures:',
+    '      - name: count',
+    '        type: count',
+    '    dimensions:',
+    '      - name: id',
+    '        sql: id',
+    '        type: number',
+    '        primary_key: true',
+    ...(joins === undefined
+      ? []
+      : [
+          '    joins:',
+          `      - name: ${joins}`,
+          '        relationship: one_to_one',
+          `        sql: "{CUBE}.id = {${joins}}.id"`,
+        ]),
+    '',
+  ].join('\n');
+}
+
+async function publishYaml(
+  request: APIRequestContext,
+  folderId: string,
+  name: string,
+  content: string,
+) {
+  const published = await request.post('/api/model/publish', {
+    data: { folderId, files: [{ path: `cubes/${name}.yml`, content }] },
+  });
+  expect(published.status(), await published.text()).toBe(200);
+}
