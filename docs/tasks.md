@@ -8364,13 +8364,29 @@ Every step leaves both suites working. The slice-4 image takes HS256 tokens unti
     - **Runs:** `picker.spec.ts` 5 of 5; `xcube-unreachable.spec.ts` 2 of 2.
     - **AC-272 ticked**, on these and T429's picker tests: a chart in /A/B binds /A/B's own over /A's, and a sibling's name (`picker_widgets`) is refused, naming it.
     - **Not shown against xcube:** a move (`PATCH`) while xcube is unreachable. `chart-binding.test.ts` shows the in-place save's 502 against the stub.
-- [ ] T458 (AC-327) Show that no request from Cube or xcube reaches wechart during a publish, a query, a refresh or a connection test *(added 2026-09-26, from T361's review: T431 and T442 are done, and AC-327's request-side Fails-when had no test)*
+- [x] T458 (AC-327) Show that no request from Cube or xcube reaches wechart during a publish, a query, a refresh or a connection test *(added 2026-09-26, from T361's review: T431 and T442 are done, and AC-327's request-side Fails-when had no test)*
   - Files: `e2e/security/no-callbacks.spec.ts`, `packages/api/src/server.ts` (a request's source, logged as it is today)
   - Failing test: `no-callbacks.spec.ts`, against compose's Cube and xcube:
     - through a publish, a query, a pre-aggregation build (refresh) and a connection test, the API logs no request whose source is a Cube or xcube container;
     - wechart serves no route for Cube to read a model or a connection from (T431's and T442's route checks, cited);
     - the web app asks nothing of Cube's or xcube's address (AC-327).
   - Depends on: T442, T361
+  - **Done 2026-09-30.** No product change. It is built on T431's `e2e/no-callbacks.spec.ts`, in the phase-1 suite, whose API of its own is xcube-configured like the others.
+    - **The request side.** A recorder in front of the test's API sees every request the test makes, marked; the API's own request log is read too (`startApi`'s new `onLog`). Every request it served is logged with the address it was asked at.
+      - Shown first, from inside Cube's container and the refresh worker's: a request to the recorder is seen there, and one to the API's own port is seen in its log.
+      - Then a publish (xcube's dry run and push), a query, a jobs-API build to `done`, a connection test (xcube with Cube's driver, against compose's sample Postgres, sealed as the browser seals) and the field list, and 35 s for a refresh-worker tick (every 30 s).
+      - The recorder saw nothing unmarked, and the API served nothing but what came through the recorder: the counts match.
+    - **The route side.** `/api/cube-model/*` answers 404 here (T431). `access/data-sources.test.ts` shows no route of the table serves a connection (T442), and `auth/guard.test.ts` shows there is no `/api/cube-model` route and no `cube` access class.
+    - **The browser.** Every request the page makes stays on its origin, and none names Cube's or xcube's address, in three flows:
+      - a dashboard and the model page (`no-callbacks.spec.ts`);
+      - a publish from the model editor (`publish-model.spec.ts`);
+      - the wizard's two connection tests and the data source it makes (`security/new-data-source.spec.ts`).
+    - **Review (one round), fixed:**
+      - the recorder watched an address nothing gives Cube, so a callback to the API's own port would have gone unseen (now the API's log);
+      - the refresh worker's tick wasn't in the window, nor its container shown;
+      - the browser clause covered only a dashboard and the model page.
+    - **Runs, Chrome:** `no-callbacks.spec.ts` 2 of 2; `publish-model.spec.ts` 1 of 1; `new-data-source.spec.ts` 4 of 4.
+    - **AC-327 ticked.**
 - [x] T459 (AC-157) Show beside each data source the cubes bound to it, from xcube's items *(added 2026-09-27, from T364: xcube binds a cube at publish and never rebinds it, so only xcube knows which cubes use a data source)*
   - Files: `packages/api/src/xcube/client.ts` (`GET …/items`' `dataSource`), `packages/api/src/routes/data-sources.ts` (`GET /api/data-sources`' `usedBy`), `packages/web/src/workspaces/data-sources/DataSourcesList.tsx`, `e2e/security/data-sources.spec.ts`
   - Failing test: `data-sources.spec.ts`, against compose's xcube: a cube published in a folder under a data source's folder lists, beside that source, with its folder's path; published again after a nearer source of that name is added, it stays beside the first source until it is republished; a cube in a folder the viewer can't reach isn't listed (AC-157).

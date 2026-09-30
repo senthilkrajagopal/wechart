@@ -50,7 +50,14 @@ export async function startApi(
     database = 'wechart_meta',
     model,
     settings = {},
-  }: { database?: string; model: string; settings?: Record<string, string> },
+    onLog,
+  }: {
+    database?: string;
+    model: string;
+    settings?: Record<string, string>;
+    /** Each line the API logs, as it logs it (T458: every request it serves is one). */
+    onLog?: (line: string) => void;
+  },
 ): Promise<ApiProcess> {
   const api = spawn('node', ['packages/api/dist/main.js'], {
     cwd: new URL('..', import.meta.url).pathname,
@@ -72,8 +79,17 @@ export async function startApi(
       WECHART_SIGNING_KEY_FILE: SIGNING_KEY_FILE,
       ...settings,
     },
-    stdio: 'ignore',
+    stdio: onLog === undefined ? 'ignore' : ['ignore', 'pipe', 'ignore'],
   });
+  if (onLog !== undefined) {
+    let pending = '';
+    api.stdout?.setEncoding('utf8');
+    api.stdout?.on('data', (chunk: string) => {
+      const lines = (pending + chunk).split('\n');
+      pending = lines.pop() ?? '';
+      for (const line of lines) if (line.trim() !== '') onLog(line);
+    });
+  }
   const url = `http://localhost:${String(port)}`;
   try {
     await expect

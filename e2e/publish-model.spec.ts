@@ -35,6 +35,10 @@ test('a measure published in the Model workspace is in the chart builder’s fie
   await other.getByLabel('Cube or view').selectOption({ value: cube });
   await expect(other.getByTestId(`member-${cube}.count`)).toBeVisible();
 
+  // Every request the page makes from here, to show a publish asks wechart
+  // alone, never Cube or xcube (T458, AC-327).
+  const asked: string[] = [];
+  page.on('request', (request) => asked.push(request.url()));
   await page.goto(`/model/files/${encodeURIComponent(path)}`);
   const form = page.getByRole('region', { name: `Cube ${cube}` });
   await form.getByRole('tab', { name: /^Measures/ }).click();
@@ -53,6 +57,10 @@ test('a measure published in the Model workspace is in the chart builder’s fie
   await own('name').getByLabel('Name', { exact: true }).fill('published');
   await page.getByRole('button', { name: 'Save & reload Cube' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Published' })).toBeVisible(PUBLISHED);
+  const origin = new URL(page.url()).origin;
+  expect(asked.filter((url) => url.endsWith('/api/model/publish'))).toHaveLength(1);
+  expect(asked.filter((url) => !url.startsWith(`${origin}/`))).toEqual([]);
+  expect(asked.filter((url) => /:5400[01]\b|cubejs-api|\/v1\/semantic\//.test(url))).toEqual([]);
 
   // The chart builder, which reads the model from Cube's /v1/meta through wechart.
   await page.goto('/explore/charts/seed-chart-empty/edit');

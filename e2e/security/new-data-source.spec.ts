@@ -69,7 +69,10 @@ test.describe('a data source added in the workspace (T363)', () => {
       page,
     }) => {
       const bodies: string[] = [];
+      // Every request the page makes, to show it asks wechart alone (T458, AC-327).
+      const asked: string[] = [];
       page.on('request', (request) => {
+        asked.push(request.url());
         if (request.url().startsWith(`${BASE_URL}/api/`)) bodies.push(request.postData() ?? '');
       });
       const answers: string[] = [];
@@ -207,6 +210,14 @@ test.describe('a data source added in the workspace (T363)', () => {
       const rows = everyRow();
       expect(rows).toContain(NAME);
       expect(rows).not.toContain(CANARY);
+
+      // Two connection tests and a data source made, and the browser asked
+      // wechart alone: never Cube or xcube (T458, AC-327).
+      expect(asked.length).toBeGreaterThan(0);
+      expect(asked.filter((url) => !url.startsWith(`${BASE_URL}/`))).toEqual([]);
+      expect(asked.filter((url) => /:5400[01]\b|cubejs-api|\/v1\/semantic\//.test(url))).toEqual(
+        [],
+      );
     });
 
     /**
