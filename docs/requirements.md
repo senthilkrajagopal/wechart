@@ -716,6 +716,17 @@ With security on, a deployment that names no Super-Admin group refuses to start 
   - **Country map detail:** Natural Earth 1:50m admin-0 boundaries (242 units, small states such as Singapore included) `[R22]`.
 - The UI fixes: AC-187's style mismatches, the failing cases of AC-201, AC-220 and AC-246, and Edge (AC-180).
 
+**I. Deleting, clearing and finding** `[R48]` *(added 2026-09-30; not yet specified: its open questions are in §P2.8)*
+- **Deleting one item when nothing depends on it:**
+  - a chart, when no dashboard uses it;
+  - a dashboard, which nothing depends on;
+  - a data source, when no cube depends on it;
+  - a cube, when no view connects to it;
+  - an empty folder.
+- **Clearing My workspace:** one action that empties the whole workspace.
+- **A folder per edit:** editing a resource from the folder view creates a folder named `project<date+time>` in My workspace to hold the copy. Where possible, the folder carries a comment saying which resource is being modified.
+- **Filtering Explore by kind:** only dashboards and charts, only data sources, or only models.
+
 ## P2.7 Non-goals for phase 2
 
 - **Individual users on folders.** AD groups only `[P2 input, R16]`.
@@ -746,6 +757,20 @@ The rest still apply: AI and chat authoring, scheduled delivery and alerts, embe
 | 5 | What rejecting a proposal does | **Back to the author's workspace, with the approver's reason** |
 | 6 | Audit retention | **A deployment setting, one year by default** |
 | 7 | Self-approval with security on | **Yes, always.** The approval step is never skipped |
+
+### Open from round R48 (2026-09-30)
+
+§P2.6 I is not specified until these are settled with the user:
+
+| # | Question |
+|---|---|
+| R48-1 | **A chart some dashboards use:** is its delete refused until none do? Or does today's "name them and confirm" (AC-023) stay, which deletes it and leaves their tiles without it? |
+| R48-2 | **A cube:** does only a view connecting to it block its delete? Or do a join from another cube, and the charts and dashboards bound to it, block it too (refused today, AC-275)? |
+| R48-3 | **A folder that isn't empty:** is its delete refused, so only empty folders go? Or does it go, with everything in it, after a confirmation? |
+| R48-4 | **Clearing My workspace while some of its items wait in open proposals:** are those proposals withdrawn with them, or are those items kept? |
+| R48-5 | **The project folder:** is there one per "Edit in my workspace", holding the dashboard's copy, its library charts' copies and any data sources chosen, together? What is the name's exact form (for example `project-2026-09-30-1430`)? Does a new item made in the workspace get one too? |
+| R48-6 | **The folder's comment:** is it a description on the folder, shown in Explore and editable, or only generated? |
+| R48-7 | **The kind filter:** does it filter the open folder's contents only, or list across every folder the user can see? Is "All" a choice, and the default? |
 
 ## P2.9 Interview log
 
@@ -842,6 +867,10 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: How should wechart decide that a dimension holds ISO-3 country codes? A: "Values, plus a model override (Recommended)"
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
+
+**R48 — deleting, clearing the workspace, a folder per edit, filtering Explore by kind** (2026-09-30, the user; to requirements only, not to be worked on yet)
+- The user: "Let us add the option of deleting empty folders, or deleting individual artifacts. Example if charts can be deleted if no dashboards are using it, dashboards can be deleted because nothing else depends on it, datasources can be deleted if no cubes depend on it, and cubes can be deleted if there are no views connecting to it. In workspaece there should be option to clear the entire workspace, when editing a resource from folder view, it should create a project<date+time> folder (And if possible have folder comments on what resource is being modified).. Also in the explore view there should be option to filter resources only by dashboards and charts, or only by datasources, or only by models. Add it the requirements.. dont work on it right now"
+- *Folded into §P2.6 I. What it leaves open is in §P2.8, "Open from round R48". A data source is already refused a delete while a cube is bound to it.*
 
 **R47 — Jobs: the pre-aggregation's name as plain text** (2026-09-28, the user)
 - UX-080 against AC-229: "Plain text, amend AC-229". *A row click only selects. The docked pane's "Open in Model", deep-linking to the pre-aggregation, is the way to its definition. AC-229's "name linking to its definition in Model" is amended to "a way from its row" (T469's follow-up).*
