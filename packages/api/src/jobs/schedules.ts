@@ -188,7 +188,8 @@ export function registerSchedules(
     const forDataAsOf = (request.query as { seen?: unknown }).seen === '1';
     if (!scope.all && !forDataAsOf && !scope.writesAny) return reply.status(403).send(NO_JOBS);
     const rows = schedulesFrom(
-      await client.metaExtended(),
+      // The whole model's, xcube's own: the folder gate filters no own read (T436).
+      await client.modelMeta(),
       // Every folder's files where the store has them: a folder's rollups too.
       modelFiles === undefined ? [] : await (modelFiles.all?.() ?? modelFiles.list()),
       folders === undefined ? new Map() : (await folders()).ids,

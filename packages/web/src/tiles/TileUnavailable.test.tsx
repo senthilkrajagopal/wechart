@@ -22,6 +22,24 @@ describe('hiddenMemberOf', () => {
     expect(hiddenMemberOf(new TileLoadError(HIDDEN, {}, 500))).toBe('secured_orders.count');
   });
 
+  /**
+   * T436 (AC-167): with xcube's folder gate on, a cube in a folder none of
+   * the context's groups reaches is refused with a 403 naming the folder and
+   * the cube (research xcube-4754c2c960.md, "A query into a folder the groups
+   * don't reach"), which is as much a state of the context as a hidden member.
+   */
+  it('reads the cube xcube’s folder gate refused the context', () => {
+    expect(
+      hiddenMemberOf(
+        new TileLoadError(
+          'None of these groups reaches folder f3b1c4d5e6f708192a3b4c5d6e7f80910 (f3b1c4d5e6f708192a3b4c5d6e7f80910__churn)',
+          {},
+          403,
+        ),
+      ),
+    ).toBe('f3b1c4d5e6f708192a3b4c5d6e7f80910__churn');
+  });
+
   it('reads nothing from any other failure', () => {
     expect(
       hiddenMemberOf(new TileLoadError("Can't find join path to join 'a', 'b'", {}, 400)),

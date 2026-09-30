@@ -261,6 +261,40 @@ describe('the service credential, on wechart’s own calls (AC-326, AC-250)', ()
     expect(payloadOf(received[0]!)).toMatchObject({ wechartModel: 'e2e', wechartRevision: 7 });
   });
 
+  /**
+   * T436 (AC-320, AC-334): under xcube's folder gate a token sees only the
+   * folders its groups reach, so the whole model's field list, Jobs',
+   * Schedules' and a publish's, is xcube's own `GET …/meta`, unfiltered, with
+   * the service credential, from the revision last recorded or a newer one
+   * (research xcube-meta-revision-and-bindings.md, "GET …/meta").
+   */
+  it('reads the whole model’s field list from xcube’s own meta, with it, at the revision recorded', async () => {
+    const cube = serviced();
+    await cube.modelMeta();
+
+    expect(received.map((request) => [request.url, bearerOf(request)])).toEqual([
+      ['/v1/semantic/models/e2e/meta?extended=true&revision=7', 'Bearer the-service-token'],
+    ]);
+  });
+
+  it('asks xcube’s own meta for no revision before one is recorded, and Cube’s without xcube', async () => {
+    // No xcube: Cube's own (`client()` starts the record afresh).
+    const plain = client();
+    await new CubeClient({
+      apiUrl: baseUrl,
+      apiSecret: 'test-secret-do-not-leak',
+      securityContext: { tenant: 'acme' },
+      model: { id: 'e2e', revision: async () => undefined },
+      service: async () => 'the-service-token',
+    }).modelMeta();
+    await plain.modelMeta();
+
+    expect(received.map((request) => request.url)).toEqual([
+      '/v1/semantic/models/e2e/meta?extended=true',
+      '/v1/meta?extended=true',
+    ]);
+  });
+
   it('queries for wechart’s users with their own tokens still', async () => {
     const cube = serviced();
     await cube.load({ measures: ['orders.count'] });

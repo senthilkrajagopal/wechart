@@ -637,6 +637,43 @@ describe('creating catalog objects (AC-020)', () => {
     await app.close();
   });
 
+  /**
+   * T436, AC-320: wechart sends every folder's allowed groups "after every
+   * permission or folder change". A folder's groups saved puts the tree; a
+   * refused save doesn't.
+   */
+  it('puts the folder tree to xcube after a folder’s groups are saved, and not after a refusal', async () => {
+    const afterFolderChange = vi.fn(async () => undefined);
+    const app = buildServer({
+      config,
+      cube: stubCube(() => ({})),
+      afterFolderChange,
+      folderAccess: {
+        tree: async () => [{ id: 'root', parentId: null }],
+        set: async () => true,
+      },
+    });
+
+    const refused = await app.inject({
+      method: 'PUT',
+      url: '/api/folders/root/access',
+      payload: { readOnly: ['g'], owner: 'someone' },
+    });
+    expect(refused.statusCode).toBe(400);
+    const saved = await app.inject({
+      method: 'PUT',
+      url: '/api/folders/root/access',
+      payload: { readOnly: ['g'], readWrite: null },
+    });
+    expect(saved.statusCode, saved.body).toBe(200);
+    await vi.waitFor(() => {
+      expect(afterFolderChange).toHaveBeenCalledTimes(1);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(afterFolderChange).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
   it('defaults to the root folder when none is given', async () => {
     const documents = recordingDocuments();
     const app = buildServer({ config, documents, cube: stubCube(() => ({})) });

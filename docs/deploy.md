@@ -236,6 +236,8 @@ The following stay: the two volumes (`data-wechart-meta-0` and `data-wechart-cub
 
 ## Choices and limits
 
+- **The folder gate (T436).** With sign-in on, the API sends xcube every folder's allowed groups and turns its folder gate on for the release's model. It does this when it starts, after every folder or permission change, and every 60 s. Cube then refuses a folder's cubes to a token none of whose groups the folder allows. That first start is one-way for xcube's schema: turning security on for any model raises the oldest xcube version that may read the schema to slice 4 (`docs/research/xcube-slice-4.md`, Gotcha 13). An older xcube image then refuses to start on it, so going back means dropping xcube's schema and letting the API send everything again. While an older xcube is still connected, the API sends the groups without turning the gate on, and tries again at the next push.
+
 - **Two API replicas and two Cube instances** (T423, AC-319). Any API replica serves any request: sessions, the model and the metadata live in the database or xcube, and Cube calls nothing of the API's. Cube's instances share one queue in Cube Store; the refresh worker stays at one (`docs/research/cube/ha-topology.md` §1, §2). On a stop:
   - **The preStop sleep.** Each sleeps 5 s before it is told to stop, so the Service stops sending it requests first.
   - **The API** finishes its requests under way for up to 15 s.

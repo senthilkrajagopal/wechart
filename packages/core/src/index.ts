@@ -229,6 +229,8 @@ export {
 
 export { folderRights, isSuperAdmin, type FolderRight, type Viewer } from './access/visibility';
 
+export { allowedGroups } from './access/allowed';
+
 export {
   CUBE_PARSE,
   objectsOf,

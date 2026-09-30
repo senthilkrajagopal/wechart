@@ -17,8 +17,10 @@ import { contentHashOf } from './snapshot';
  * - `GET …/models/:model/revision`: `404 unknown_model` for a model never
  *   put, otherwise `{ model, generation, mode, current }`, `current` with
  *   its `itemsHash` (null for a files-mode revision).
- * - `PUT …/models/:model/folders`: the tree, `{ model, hash }`; `400
- *   invalid_folders` without the root `froot`.
+ * - `PUT …/models/:model/folders`: the tree, `{ model, hash, security }`,
+ *   each folder's `allowedGroups` kept as sent and `security` as given
+ *   (slice 4); `400 invalid_folders` without the root `froot`; `409
+ *   older_instances` when told to.
  * - `PUT …/models/:model/snapshot` with `items`: the switch, and after it
  *   the whole model; `200` for the current items whatever the base, `409
  *   conflict` when the base isn't current, `422 invalid_items` when told to
@@ -56,6 +58,8 @@ interface Model {
   mode: 'files' | 'items';
   tree: readonly TreeFolder[] | undefined;
   revisions: Revision[];
+  /** The folder gate (slice 4): off until a tree turns it on. */
+  security?: boolean;
 }
 
 export interface FakeCall {
@@ -88,6 +92,8 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
   let tooLarge = false;
   /** A tree hash to answer instead of the tree's own, as a stale answer would. */
   let wrongTreeHash: number = 0;
+  /** Tree puts to refuse `409 older_instances`, as with an older xcube connected. */
+  let olderInstances = 0;
 
   const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), {
@@ -405,17 +411,31 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
 
     /** The tree (research 3a, "PUT …/folders"): one root, `froot`; it creates the model. */
     if (route[2] === 'folders' && method === 'PUT') {
-      const { folders } = body as { folders: readonly TreeFolder[] };
+      const { folders, security } = body as {
+        folders: readonly TreeFolder[];
+        security?: boolean;
+      };
       if (!folders.some((folder) => folder.id === 'froot' && folder.parentId === null))
         return answer(400, {
           error: 'The tree has no root folder froot',
           code: 'invalid_folders',
           problems: ['The tree has no root folder froot'],
         });
-      modelOf(model).tree = folders;
+      const held = modelOf(model);
+      // Only turning security on is refused while older instances are connected.
+      if (olderInstances > 0 && security === true && held.security !== true) {
+        olderInstances -= 1;
+        return answer(409, {
+          error: 'Older xcube instances are connected',
+          code: 'older_instances',
+          instances: ['xcube-v3-old'],
+        });
+      }
+      held.tree = folders;
+      if (security !== undefined) held.security = security;
       const hash = wrongTreeHash > 0 ? 'f'.repeat(64) : treeHashOf(folders);
       if (wrongTreeHash > 0) wrongTreeHash -= 1;
-      return answer(200, { model, hash });
+      return answer(200, { model, hash, security: held.security ?? false });
     }
 
     /**
@@ -664,6 +684,12 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
     wrongTreeHashNext: (n: number) => {
       wrongTreeHash = n;
     },
+    /** The next `n` tree puts turning security on are refused `409 older_instances` (slice 4). */
+    olderInstancesNext: (n: number) => {
+      olderInstances = n;
+    },
+    /** Whether the model's folder gate is on, as the last tree put it. */
+    security: (model: string): boolean => models.get(model)?.security ?? false,
     /** Imports are refused with these errors, until cleared with `undefined`. */
     refuse: (
       errors: readonly (ModelError | ItemError)[] | undefined,

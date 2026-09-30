@@ -136,6 +136,35 @@ describe('wechart’s own calls to Cube, as the server is wired (T420)', () => {
     expect(asked[2]!.authorization).toBe(`Bearer ${SERVICE}`);
   });
 
+  /**
+   * T436 (AC-320, AC-334), as wired: Jobs' and Schedules' field list is the
+   * whole model's, xcube's own, with the service credential at the recorded
+   * revision; under the folder gate wechart's query token would see no
+   * folder's cubes.
+   */
+  it('read Jobs’ and Schedules’ field list from xcube’s own meta with it', async () => {
+    const { memoryPublications } = await import('../xcube/publications');
+    const publications = memoryPublications();
+    await publications.put('e2e', { generation: 'g', revision: 4, contentHash: 'h' });
+    serve();
+    const app = buildServer({ config, serviceToken: async () => SERVICE, publications });
+
+    const listed = await app.inject({ url: '/api/preaggregations' });
+    const scheduled = await app.inject({ url: '/api/schedules' });
+
+    expect([listed.statusCode, scheduled.statusCode]).toEqual([200, 200]);
+    expect(asked).toEqual([
+      {
+        path: '/v1/semantic/models/e2e/meta',
+        authorization: `Bearer ${SERVICE}`,
+      },
+      {
+        path: '/v1/semantic/models/e2e/meta',
+        authorization: `Bearer ${SERVICE}`,
+      },
+    ]);
+  });
+
   it('ask Cube for the field list with wechart’s own token, never the service credential', async () => {
     const app = serve();
 

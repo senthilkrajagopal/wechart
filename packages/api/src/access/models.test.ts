@@ -11,7 +11,9 @@ import { documents, type DocumentKind, type StoredDocument } from '../repos/docu
 import { folderAccessStore, ROOT_ACCESS_ID } from '../repos/folder-access';
 import { folderXcubeIds } from '../repos/folder-xcube-ids';
 import { modelFileStore } from '../repos/model-files';
-import { buildServer } from '../server';
+import { buildServer, type ModelFile } from '../server';
+import { xcubeAdmin } from '../xcube/client';
+import { fakeXcube, FAKE_ADMIN_TOKEN } from '../xcube/fake';
 
 /**
  * T334: models are folder items.
@@ -372,6 +374,60 @@ describe('deleting a model (T428)', () => {
       );
     } finally {
       await withXcube.close();
+    }
+  });
+});
+
+/**
+ * T436 (AC-321): with security on, the publish check's probes run as a
+ * token every probed folder admits, the Super-Admin group's; a probe the
+ * folder gate refused would pass without checking anything (research
+ * `xcube-slice-4.md`, Gotcha 10).
+ */
+describe('a publish’s check, with security on (T436, AC-321)', () => {
+  it('runs its probes as the Super-Admin group, which every folder admits', async () => {
+    const stub = fakeXcube();
+    const held: ModelFile[] = [{ path: `${MARK}/probe.yml`, content: ORDERS }];
+    const checked = buildServer({
+      config: secured,
+      sessions: pgSessionStore(getDb()),
+      documents: docs(),
+      catalog: catalog(getDb()),
+      folderAccess: folderAccessStore(getDb()),
+      modelFiles: {
+        list: async (folderId) => (folderId === undefined || folderId === 'root' ? held : []),
+        seed: async () => undefined,
+        write: async () => undefined,
+      },
+      folders: () => folderXcubeIds(getDb()).published(),
+      xcube: xcubeAdmin({
+        cubeApiUrl: secured.cubeApiUrl,
+        model: 'dev',
+        token: FAKE_ADMIN_TOKEN,
+        fetch: stub.fetch,
+      }),
+    });
+    try {
+      const cookie = await signIn(checked, USERS['super']!);
+      await checked.inject({
+        method: 'POST',
+        url: '/api/model/publish',
+        headers: { cookie },
+        payload: {
+          files: [
+            { path: `${MARK}/probe.yml`, content: ORDERS.replace('type: count', 'type: sum') },
+          ],
+        },
+      });
+
+      const dryRuns = stub.calls.filter((call) => call.path.includes('dryRun=true'));
+      expect(dryRuns.length).toBeGreaterThan(0);
+      for (const call of dryRuns)
+        expect((call.body as { securityContext: unknown }).securityContext).toEqual({
+          groups: ['wechart-super-admins'],
+        });
+    } finally {
+      await checked.close();
     }
   });
 });

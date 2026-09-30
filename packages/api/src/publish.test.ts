@@ -91,6 +91,7 @@ function cubeReading() {
         },
       },
       metaExtended: { value: async () => ({ cubes: [] }) },
+      modelMeta: { value: async () => ({ cubes: [] }) },
     }) as CubeClient,
     asked,
   };
@@ -604,8 +605,9 @@ describe('publishing generated cubes (AC-249)', () => {
     ]);
     const stub = fakeXcube();
     const { cube } = cubeReading();
+    // The whole model's field list, xcube's own since T436.
     const compiled = Object.create(cube, {
-      metaExtended: {
+      modelMeta: {
         value: async () => ({
           cubes: [
             { name: 'orders', type: 'cube', fileName: 'cubes/orders.js' },
@@ -700,9 +702,10 @@ describe('publishing generated cubes (AC-249)', () => {
     const LINES = { path: 'cubes/lines.js', content: 'cube(`lines`, { sql_table: `lines` });\n' };
     const store = memory([ORDERS, VIEW, LINES]);
     const { cube } = cubeReading();
-    // Only Cube's model names the cube of a file wechart doesn't read as YAML.
+    // Only Cube's model names the cube of a file wechart doesn't read as YAML:
+    // the whole model's field list, xcube's own since T436.
     const compiled = Object.create(cube, {
-      metaExtended: {
+      modelMeta: {
         value: async () => ({
           cubes: [
             { name: 'orders', type: 'cube', fileName: 'cubes/orders.yml' },

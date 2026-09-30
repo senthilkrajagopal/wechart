@@ -95,6 +95,19 @@ function onPath(files: readonly ModelFile[], chain: readonly string[]): ModelFil
 }
 
 /**
+ * The context a publish check's probes run as (T436, AC-321): with security
+ * on, the Super-Admin group, which every folder's allowed set holds, so
+ * xcube's folder gate admits every probe; a refused probe would pass without
+ * checking anything (research `xcube-slice-4.md`, Gotcha 10). With it off,
+ * the configured context, as before.
+ */
+export function probeContextOf(config: Config): Record<string, unknown> {
+  if (config.security !== 'oidc' || config.superAdminGroup === undefined)
+    return config.securityContext;
+  return { groups: [config.superAdminGroup] };
+}
+
+/**
  * Rollups naming what the model doesn't have (T207, AC-189): Cube compiles
  * them, then fails queries on their cube (research/cube/pre-aggregations.md,
  * "Observed locally"). Every one refuses the publish, one already live in a
@@ -357,7 +370,7 @@ export function registerModelPublishing(
         changed: [file],
         live,
         folders: served.ids,
-        securityContext: config.securityContext,
+        securityContext: probeContextOf(config),
         log: (error) => {
           app.log.warn({ err: error }, 'could not ask xcube to check a delete');
         },
@@ -471,11 +484,11 @@ export function registerModelPublishing(
             : [];
       if (created.length > 0) {
         // Cube's model names the cubes of files not read here as YAML, which
-        // only the root holds; asked as wechart asks it everything, and
+        // only the root holds; the whole model's, xcube's own (T436), and
         // without it the files alone decide.
         const compiled =
           folderId === ROOT_FOLDER_ID
-            ? await client.metaExtended().then(compiledIn, (error: unknown) => {
+            ? await client.modelMeta().then(compiledIn, (error: unknown) => {
                 app.log.warn(
                   { err: error },
                   'could not read Cube’s model to check generated names',
@@ -552,7 +565,7 @@ export function registerModelPublishing(
         changed,
         live,
         folders: served.ids,
-        securityContext: config.securityContext,
+        securityContext: probeContextOf(config),
         log: (error) => {
           app.log.warn({ err: error }, 'could not ask xcube to check the model');
         },

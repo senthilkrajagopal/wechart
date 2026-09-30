@@ -38,7 +38,11 @@ const ROOT_ONLY: readonly TreeFolder[] = [{ id: 'froot', parentId: null }];
 function deployment(
   stub: ReturnType<typeof fakeXcube>,
   model = 'dev',
-  { token = FAKE_ADMIN_TOKEN, start = 0 } = {},
+  {
+    token = FAKE_ADMIN_TOKEN,
+    start = 0,
+    security,
+  }: { token?: string; start?: number; security?: boolean } = {},
 ) {
   let files: readonly ModelFile[] = [ORDERS];
   let tree: readonly TreeFolder[] = ROOT_ONLY;
@@ -58,6 +62,7 @@ function deployment(
     publications,
     log: { warn, info: vi.fn() },
     now: () => now,
+    ...(security === undefined ? {} : { security }),
   });
   return {
     sync,
@@ -517,6 +522,73 @@ describe('the folder tree (T449, AC-333)', () => {
     await Promise.all([first, second, third]);
     expect(stub.calls.filter((call) => call.path.endsWith('/folders'))).toHaveLength(2);
     expect(stub.tree('dev')).toEqual(TREE);
+  });
+
+  /**
+   * T436 (AC-320): every folder's allowed groups, and whether security is
+   * on, with the tree when the API starts and after every permission or
+   * folder change (research `xcube-slice-4.md`, "PUT …/folders").
+   */
+  const GROUPED: readonly TreeFolder[] = [
+    { id: 'froot', parentId: null, allowedGroups: ['g-ro', 'super'] },
+    { id: 'fa1', parentId: 'froot', allowedGroups: ['g-ro', 'super'] },
+  ];
+  const folderPuts = (stub: ReturnType<typeof fakeXcube>) =>
+    stub.calls.filter((call) => call.method === 'PUT' && call.path.endsWith('/folders'));
+
+  it('puts every folder’s allowed groups, and whether security is on (T436, AC-320)', async () => {
+    for (const security of [true, false]) {
+      const stub = fakeXcube();
+      const dev = deployment(stub, 'dev', { security });
+      dev.setTree(GROUPED);
+
+      expect(await dev.sync.pushTree('folder')).toEqual({
+        kind: 'sent',
+        hash: treeHashOf(GROUPED),
+      });
+      expect(folderPuts(stub).map((call) => call.body)).toEqual([{ folders: GROUPED, security }]);
+      expect(stub.security('dev')).toBe(security);
+    }
+  });
+
+  it('sends each folder’s allowed groups with every items snapshot, and not security, which one refuses (T436)', async () => {
+    const stub = fakeXcube();
+    const dev = deployment(stub, 'dev', { security: true });
+    dev.setTree(GROUPED);
+
+    await dev.sync.sync('start');
+
+    const body = snapshots(stub)[0]?.body as Record<string, unknown>;
+    expect(body['folders']).toEqual(GROUPED);
+    expect(body).not.toHaveProperty('security');
+  });
+
+  it('puts the groups while xcube answers 409 older_instances, and turns security on once it doesn’t (T436)', async () => {
+    const stub = fakeXcube();
+    const dev = deployment(stub, 'dev', { security: true });
+    dev.setTree(GROUPED);
+
+    // An older xcube is connected: turning security on is refused, so the
+    // tree and its groups go without it, and it is said (T436's review).
+    stub.olderInstancesNext(1);
+    expect(await dev.sync.pushTree('start')).toEqual({ kind: 'sent', hash: treeHashOf(GROUPED) });
+    expect(folderPuts(stub).map((call) => call.body)).toEqual([
+      { folders: GROUPED, security: true },
+      { folders: GROUPED },
+    ]);
+    expect(stub.tree('dev')).toEqual(GROUPED);
+    expect(stub.security('dev')).toBe(false);
+    expect(dev.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ instances: ['xcube-v3-old'] }),
+      'xcube runs an older instance that can’t hold security: the folders’ groups are put, and security is turned on at the next push',
+    );
+
+    // Retried, not dropped: the next push turns it on.
+    expect(await dev.sync.pushTree('reconcile')).toEqual({
+      kind: 'sent',
+      hash: treeHashOf(GROUPED),
+    });
+    expect(stub.security('dev')).toBe(true);
   });
 
   it('sends the tree with every items snapshot', async () => {

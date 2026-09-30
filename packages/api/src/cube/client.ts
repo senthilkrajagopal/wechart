@@ -247,17 +247,37 @@ export class CubeClient {
 
   /**
    * `/v1/meta?extended=true`: the model as compiled, its pre-aggregations
-   * included, from the revision last recorded or a newer one (T421, AC-334).
-   *
-   * Jobs and Schedules read it here still, not from xcube's own
-   * `GET …/meta?extended=true` under the service credential (T420): that
-   * route answers from whatever revision the instance has active, and for
-   * about half a second after a publish that is the one before it, which
-   * AC-334 forbids. xcube is asked to take a least revision there
-   * (`~/Work/xcube-exchange/to-xcube/`); the move waits for its image.
+   * included, from the revision last recorded or a newer one (T421, AC-334),
+   * as this client's token sees it: under xcube's folder gate, only the
+   * folders its groups reach. The acceleration panel reads it as its user.
+   * wechart's own reads of the whole model (Jobs, Schedules, a publish) are
+   * `modelMeta`'s (T436).
    */
   async metaExtended(): Promise<unknown> {
     return this.#request('/v1/meta?extended=true', { method: 'GET' });
+  }
+
+  /**
+   * The whole model's field list, as `metaExtended` shapes it, for wechart's
+   * own reads: Jobs', Schedules' and a publish's (T436, AC-320, AC-334).
+   * Under xcube's folder gate a token sees only the folders its groups
+   * reach, so it is xcube's own `GET …/meta?extended=true`, unfiltered, with
+   * the service credential, from the revision last recorded or a newer one
+   * (research xcube-meta-revision-and-bindings.md, "GET …/meta"). A 503 while
+   * an instance catches up is waited out as a query's is. Without xcube,
+   * Cube's own, as before.
+   */
+  async modelMeta(): Promise<unknown> {
+    const { service, model } = this.#options;
+    if (service === undefined || model === undefined) return this.metaExtended();
+    const revision = await model.revision();
+    // No revision recorded yet: none asked, which xcube refuses as 0 (Gotcha 1).
+    const at = revision !== undefined && revision > 0 ? `&revision=${String(revision)}` : '';
+    return this.#answer(
+      `/v1/semantic/models/${encodeURIComponent(model.id)}/meta?extended=true${at}`,
+      { method: 'GET' },
+      service,
+    );
   }
 
   /**

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { describe, expect, it } from 'vitest';
 
-import { publishedTree, treeHashOf, xcubeIdOf } from './folders';
+import { publishedTree, treeHashOf, withAllowedGroups, xcubeIdOf } from './folders';
 
 /**
  * T425 / AC-328: each folder's name in xcube is a stored id, `f` plus letters
@@ -127,5 +127,61 @@ describe('the tree’s hash, as xcube answers it', () => {
 
     expect(treeHashOf(tree)).toBe(expected);
     expect(treeHashOf([...tree].reverse())).toBe(expected);
+  });
+
+  it('leaves a folder’s allowed groups out: they are no part of it (T436; xcube-slice-4.md, "PUT …/folders")', () => {
+    const plain = [
+      { id: 'froot', parentId: null },
+      { id: 'fb1', parentId: 'froot' },
+    ];
+    expect(treeHashOf(plain.map((folder) => ({ ...folder, allowedGroups: ['g', 'super'] })))).toBe(
+      treeHashOf(plain),
+    );
+  });
+});
+
+/**
+ * T436 (AC-320): every folder xcube's tree holds is sent with its allowed
+ * groups (`allowedGroups` in `@wechart/core`): those granted on it, above it
+ * or below it, and the Super-Admin group. A folder xcube is sent without
+ * them keeps the ones it had, unless it moved (research `xcube-slice-4.md`,
+ * Gotcha 3), so each is sent every time; one no grant reaches carries the
+ * Super-Admin group alone.
+ */
+describe('the tree with each folder’s allowed groups (T436, AC-320)', () => {
+  const ids = new Map([
+    ['root', 'froot'],
+    ['a', 'fa1'],
+    ['b', 'fb1'],
+    ['new', 'fn1'],
+  ]);
+  const tree = [
+    { id: 'froot', parentId: null },
+    { id: 'fa1', parentId: 'froot' },
+    { id: 'fb1', parentId: 'fa1' },
+    { id: 'fn1', parentId: 'froot' },
+  ];
+  const access = [
+    { id: 'root', parentId: null },
+    { id: 'a', parentId: 'root', access: { readOnly: ['a-ro'], readWrite: null } },
+    { id: 'b', parentId: 'a', access: { readOnly: null, readWrite: ['b-rw'] } },
+  ];
+
+  it('gives each folder its allowed groups, by its wechart id', () => {
+    expect(withAllowedGroups(tree, ids, access, 'super')).toEqual([
+      { id: 'froot', parentId: null, allowedGroups: ['a-ro', 'b-rw', 'super'] },
+      { id: 'fa1', parentId: 'froot', allowedGroups: ['a-ro', 'b-rw', 'super'] },
+      { id: 'fb1', parentId: 'fa1', allowedGroups: ['a-ro', 'b-rw', 'super'] },
+      // Made since the groups were read: the Super-Admin group alone.
+      { id: 'fn1', parentId: 'froot', allowedGroups: ['super'] },
+    ]);
+  });
+
+  it('gives none but the grants with no Super-Admin group configured (sign-in off)', () => {
+    expect(withAllowedGroups(tree, ids, access, undefined)[3]).toEqual({
+      id: 'fn1',
+      parentId: 'froot',
+      allowedGroups: [],
+    });
   });
 });

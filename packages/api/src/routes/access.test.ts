@@ -187,6 +187,36 @@ describe('setting a folder’s groups (T314, AC-259)', () => {
     }
   });
 
+  /**
+   * T436's review: every folder's allowed groups go to xcube, which takes a
+   * group of 1–256 characters and at most 10,000 per folder (research
+   * `xcube-slice-4.md`, "PUT …/folders"). One it refuses would stop every
+   * tree push, and with it every later revocation reaching Cube.
+   */
+  it('refuses a group xcube couldn’t take, and a grant that would give a folder more than 10,000', async () => {
+    const app = serving(base);
+    const a = await folder('root');
+    const long = await put(app, a, { readOnly: ['g'.repeat(257)] });
+    expect(long.statusCode).toBe(400);
+    expect(long.json()).toEqual({
+      error: 'An AD group’s name is at most 256 characters.',
+    });
+    expect((await put(app, a, { readOnly: ['g'.repeat(256)] })).statusCode).toBe(200);
+
+    const many = Array.from({ length: 10_000 }, (_, at) => `g${String(at)}`);
+    const tooMany = await put(app, a, { readOnly: many, readWrite: ['one-more'] });
+    expect(tooMany.statusCode).toBe(400);
+    expect(tooMany.json()).toEqual({
+      error:
+        'This would let more than 10,000 AD groups into a folder, which Cube can’t hold: grant fewer groups.',
+    });
+    // Nothing was stored.
+    expect((await get(app, a)).json<{ setting: unknown }>().setting).toEqual({
+      readOnly: ['g'.repeat(256)],
+      readWrite: null,
+    });
+  });
+
   it('answers 404 for a folder that isn’t in the shared tree, a workspace’s included', async () => {
     const app = serving(base);
     const inWorkspace = await folder('ws:someone');

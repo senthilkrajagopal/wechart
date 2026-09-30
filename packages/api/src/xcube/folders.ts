@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 
+import { allowedGroups, type AccessFolder } from '@wechart/core';
+
 import { ROOT_FOLDER_ID } from '../repos/catalog';
 
 /**
@@ -27,6 +29,38 @@ export function xcubeIdOf(folderId: string): string | undefined {
 export interface TreeFolder {
   readonly id: string;
   readonly parentId: string | null;
+  /**
+   * The groups xcube's folder gate admits to the folder's cubes and views
+   * (T436, AC-320): sent with every folder every time, since one sent
+   * without them keeps what it had unless it moved (research
+   * `xcube-slice-4.md`, Gotcha 3). No part of the tree's hash.
+   */
+  readonly allowedGroups?: readonly string[];
+}
+
+/**
+ * The published tree with each folder's allowed groups (T436, AC-320;
+ * `allowedGroups` in `@wechart/core`), found by its wechart id. A folder the
+ * groups were read without (made since) carries the Super-Admin group alone,
+ * as one no grant reaches does.
+ */
+export function withAllowedGroups(
+  tree: readonly TreeFolder[],
+  ids: ReadonlyMap<string, string>,
+  access: readonly AccessFolder[],
+  superAdminGroup: string | undefined,
+): TreeFolder[] {
+  const allowed = allowedGroups(access, superAdminGroup);
+  const wechartIdOf = new Map([...ids].map(([wechartId, xcubeId]) => [xcubeId, wechartId]));
+  const none = superAdminGroup === undefined || superAdminGroup === '' ? [] : [superAdminGroup];
+  return tree.map(({ id, parentId }) => {
+    const wechartId = wechartIdOf.get(id);
+    return {
+      id,
+      parentId,
+      allowedGroups: (wechartId === undefined ? undefined : allowed.get(wechartId)) ?? none,
+    };
+  });
 }
 
 /**

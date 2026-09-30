@@ -354,12 +354,23 @@ export function buildServer({
   /**
    * A folder made, changed, moved or removed through any of the document
    * routes: the tree is put to xcube once the answer is sent (T449, AC-333).
+   * So is a folder's groups saved, which change every allowed set above and
+   * below it (T436, AC-320).
    */
   if (afterFolderChange !== undefined)
     app.addHook('onResponse', async (request, reply) => {
       // A write only: not a read, a HEAD included (T449's review).
       if (reply.statusCode >= 300 || !['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method))
         return;
+      if (
+        request.method === 'PUT' &&
+        request.routeOptions.url === '/api/folders/:folderId/access'
+      ) {
+        void afterFolderChange().catch((error: unknown) => {
+          app.log.warn({ err: error }, 'could not put the folder tree to xcube');
+        });
+        return;
+      }
       if (!request.url.startsWith('/api/documents')) return;
       const kind =
         (request.params as { kind?: unknown } | undefined)?.kind ??
@@ -783,6 +794,7 @@ export function buildServer({
             (cat ? await cat.folders({ counted: false }) : []) as { id: string; title: string }[]
           ).map((folder) => [folder.id, folder.title]),
         ),
+      config.superAdminGroup,
     );
   /**
    * Data sources (T335): seen by those who see a folder's every kind — never

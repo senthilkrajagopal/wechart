@@ -81,8 +81,12 @@ export interface XcubeAdmin {
     readonly items: readonly Item[];
     readonly source?: Record<string, unknown>;
   }): Promise<SnapshotAnswer>;
-  /** The folder tree (T449, AC-333), and the tree hash xcube answers for it. */
-  folders(tree: readonly TreeFolder[]): Promise<{ readonly hash: string }>;
+  /**
+   * The folder tree (T449, AC-333), and the tree hash xcube answers for it:
+   * each folder with its allowed groups, and whether security is on, when
+   * given (T436, AC-320; research `xcube-slice-4.md`, "PUT …/folders").
+   */
+  folders(tree: readonly TreeFolder[], security?: boolean): Promise<{ readonly hash: string }>;
   /**
    * A changeset checked, storing nothing (T426; research 3a, "POST
    * …/changesets?dryRun=true"): its errors on items, and each probe's answer.
@@ -164,6 +168,8 @@ export class XcubeError extends Error {
     readonly status: number,
     readonly code: string | undefined,
     message: string,
+    /** xcube's answer, where it gives more than its words: `instances`, say (T436). */
+    readonly details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = 'XcubeError';
@@ -185,6 +191,13 @@ const REFUSED_CODES = new Set(['invalid_path', 'invalid_file_type', 'duplicate_p
  * `bad_request` too, which the same body earns every time (T449's review).
  */
 const REFUSED_ITEMS_CODES = new Set(['invalid_folders', 'too_large', 'bad_request']);
+
+/** A folder as xcube takes it: its allowed groups where it has them (T436). */
+const folderOf = ({ id, parentId, allowedGroups }: TreeFolder) => ({
+  id,
+  parentId,
+  ...(allowedGroups === undefined ? {} : { allowedGroups: [...allowedGroups] }),
+});
 
 export function xcubeAdmin({
   cubeApiUrl,
@@ -229,6 +242,7 @@ export function xcubeAdmin({
       status,
       typeof answer['code'] === 'string' ? answer['code'] : undefined,
       `xcube answered ${String(status)}${typeof answer['error'] === 'string' ? `: ${answer['error']}` : ''}`,
+      answer,
     );
 
   return {
@@ -252,9 +266,10 @@ export function xcubeAdmin({
       };
     },
 
-    async folders(tree) {
+    async folders(tree, security) {
       const { status, answer } = await call('PUT', '/folders', {
-        folders: tree.map(({ id, parentId }) => ({ id, parentId })),
+        folders: tree.map(folderOf),
+        ...(security === undefined ? {} : { security }),
       });
       if (status !== 200) throw failed(status, answer);
       return { hash: String(answer['hash'] ?? '') };
@@ -384,7 +399,8 @@ export function xcubeAdmin({
     async itemsSnapshot({ baseRevision, folders, items, source }) {
       const { status, answer } = await call('PUT', '/snapshot', {
         baseRevision,
-        folders: folders.map(({ id, parentId }) => ({ id, parentId })),
+        // Each with its allowed groups; `security` is no key of a snapshot's (Gotcha 1).
+        folders: folders.map(folderOf),
         items: items.map(({ folderId, name, kind, yaml }) => ({ folderId, name, kind, yaml })),
         ...(source === undefined ? {} : { source }),
       });

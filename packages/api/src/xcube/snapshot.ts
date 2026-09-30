@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 import type { ModelFile } from '../server';
 import type { Changeset } from './changesets';
-import type { XcubeAdmin } from './client';
+import { XcubeError, type XcubeAdmin } from './client';
 import { treeHashOf, type TreeFolder } from './folders';
 import { itemsHashOf, itemsOf } from './items';
 import type { PublicationStore } from './publications';
@@ -64,7 +64,6 @@ const TREE_RETRIES = 1;
 const REFUSED_FOR_MS = 10 * 60_000;
 /** A conflict is read and sent again this many more times. */
 const RETRIES = 3;
-
 export function modelSync({
   model,
   admin,
@@ -74,6 +73,7 @@ export function modelSync({
   publications,
   log,
   now = Date.now,
+  security,
 }: {
   readonly model: string;
   readonly admin: XcubeAdmin;
@@ -92,6 +92,12 @@ export function modelSync({
     info: (details: Record<string, unknown>, message: string) => void;
   };
   readonly now?: () => number;
+  /**
+   * Whether xcube's folder gate is on for the model (T436, AC-320): sent
+   * with every tree. Sign-in on, it is; off, every token is admitted. Not
+   * sent where not given.
+   */
+  readonly security?: boolean;
 }) {
   let refused: { hash: string; at: number } | undefined;
   /**
@@ -223,8 +229,28 @@ export function modelSync({
     try {
       const folders = await tree();
       const expected = treeHashOf(folders);
+      let turningOn = security;
       for (let attempt = 0; attempt <= TREE_RETRIES; attempt += 1) {
-        const { hash } = await admin.folders(folders);
+        let hash: string;
+        try {
+          ({ hash } = await admin.folders(folders, turningOn));
+        } catch (error) {
+          /**
+           * An older xcube is connected, so security can't be turned on yet
+           * (`409 older_instances`). The tree and its groups are put without
+           * it, so new folders and changed groups still land, and turning it
+           * on is retried at the next push: the 60 s reconcile at the latest.
+           */
+          if (!(error instanceof XcubeError && error.code === 'older_instances') || !turningOn)
+            throw error;
+          log.warn(
+            { model, reason, instances: error.details?.['instances'] },
+            'xcube runs an older instance that can’t hold security: the folders’ groups are put, and security is turned on at the next push',
+          );
+          turningOn = undefined;
+          attempt -= 1;
+          continue;
+        }
         if (hash === expected) return { kind: 'sent', hash };
       }
       log.warn({ model, reason }, 'xcube answered a folder tree hash that isn’t wechart’s');

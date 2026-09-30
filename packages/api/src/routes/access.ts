@@ -1,4 +1,5 @@
 import {
+  allowedGroups,
   effectiveGroups,
   folderRights,
   type AccessFolder,
@@ -42,8 +43,18 @@ function listFrom(value: unknown, name: string): GroupList {
     throw new Refused(`${name} must be a list of AD group names, or null to inherit the parent’s.`);
   }
   // Each group once, as the provider names it.
-  return [...new Set((value as string[]).map((group) => group.trim()))];
+  const groups = [...new Set((value as string[]).map((group) => group.trim()))];
+  // As xcube takes one in a folder's allowed set (T436; research
+  // `xcube-slice-4.md`, "PUT …/folders"): one it refuses stops every push.
+  if (groups.some((group) => group.length > MAX_GROUP_LENGTH))
+    throw new Refused(`An AD group’s name is at most ${String(MAX_GROUP_LENGTH)} characters.`);
+  return groups;
 }
+
+/** The longest group name xcube's folder gate takes. */
+const MAX_GROUP_LENGTH = 256;
+/** The most groups xcube takes in one folder's allowed set. */
+const MAX_ALLOWED_GROUPS = 10_000;
 
 function settingFrom(body: unknown): FolderAccessSetting {
   if (typeof body !== 'object' || body === null || Array.isArray(body)) {
@@ -86,6 +97,8 @@ export function registerFolderAccess(
   },
   /** Every folder's name, for the paths a preview's reach names (T438). */
   titles?: () => Promise<ReadonlyMap<string, string>>,
+  /** In every folder's allowed set, counted against xcube's limit (T436). */
+  superAdminGroup?: string,
 ): void {
   /**
    * What a set of groups reaches (T438, AC-166; design 08, state E): every
@@ -245,6 +258,17 @@ export function registerFolderAccess(
       if (error instanceof Refused) return reply.code(400).send({ error: error.message });
       throw error;
     }
+    // Every folder's allowed set within what xcube takes, with this saved
+    // (T436): the root's is every group granted anywhere.
+    const after = tree.map((each) => (each.id === folderId ? { ...each, access: setting } : each));
+    // A loop, not Math.max over a spread: a large tree would overflow the call stack.
+    let largest = 0;
+    for (const set of allowedGroups(after, superAdminGroup).values())
+      largest = Math.max(largest, set.length);
+    if (largest > MAX_ALLOWED_GROUPS)
+      return reply.code(400).send({
+        error: `This would let more than ${MAX_ALLOWED_GROUPS.toLocaleString('en-US')} AD groups into a folder, which Cube can’t hold: grant fewer groups.`,
+      });
     try {
       if (!(await store.set(folderId, setting))) return notFound(reply);
     } catch (error) {

@@ -10,11 +10,21 @@
  * too; outside a preview it shows Cube's message, advice and all.
  */
 const HIDDEN = /You requested hidden member: '([^']+)'/;
+/**
+ * xcube's folder gate (T436, AC-320): a 403 naming the folder none of the
+ * context's groups reaches, and the cube or view in it (research
+ * xcube-4754c2c960.md, "A query into a folder the groups don't reach").
+ */
+const GATED = /None of these groups reaches folder \S+ \(([^)]+)\)/;
 
-/** The member Cube refused the context first; undefined for any other failure. */
+/**
+ * The member Cube refused the context first, or the cube xcube's folder gate
+ * refused it; undefined for any other failure.
+ */
 export function hiddenMemberOf(error: unknown): string | undefined {
   const message = error instanceof Error ? error.message : undefined;
-  return message === undefined ? undefined : HIDDEN.exec(message)?.[1];
+  if (message === undefined) return undefined;
+  return HIDDEN.exec(message)?.[1] ?? GATED.exec(message)?.[1];
 }
 
 /**

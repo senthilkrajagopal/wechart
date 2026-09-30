@@ -150,7 +150,8 @@ export function registerBuilds(
     access === undefined ? Promise.resolve(EVERYTHING) : access.scope(request);
   const listed = async () =>
     buildablesFrom(
-      await client.metaExtended(),
+      // The whole model's, xcube's own: the folder gate filters no own read (T436).
+      await client.modelMeta(),
       modelFiles ? await modelFiles.list() : [],
       access === undefined ? undefined : await placements(access),
     );

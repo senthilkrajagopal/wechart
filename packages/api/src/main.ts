@@ -24,6 +24,7 @@ import { checkXcubeHoldsKey, xcubePublicKeyOf } from './secrets/xcube-key';
 import { xcubeAdmin } from './xcube/client';
 import { startSigning, xcubeKeys } from './xcube/keys';
 import { connectionSync, xcubeConnections } from './xcube/connections';
+import { withAllowedGroups } from './xcube/folders';
 import { publicationStore } from './xcube/publications';
 import { modelSync } from './xcube/snapshot';
 import { seedDevData } from './seed';
@@ -119,6 +120,8 @@ async function main(): Promise<void> {
   const publications = publicationStore(db);
   // Each folder's stored xcube id, and the tree they make (T425).
   const folderIds = folderXcubeIds(db);
+  // Each folder's AD groups (T314).
+  const folderAccess = folderAccessStore(db);
   const sync =
     admin === undefined || config.xcube === undefined
       ? undefined
@@ -127,7 +130,14 @@ async function main(): Promise<void> {
           admin,
           // Every folder's files, each its folder's item (T452).
           files: () => modelFiles.all(),
-          tree: () => folderIds.tree(),
+          // Each folder with its allowed groups, which xcube's folder gate
+          // admits by, and the gate on with sign-in (T436, AC-320).
+          tree: async () => {
+            const tree = await folderIds.tree();
+            const { ids } = await folderIds.published();
+            return withAllowedGroups(tree, ids, await folderAccess.tree(), config.superAdminGroup);
+          },
+          security: config.security === 'oidc',
           folderIds: async () => (await folderIds.published()).ids,
           publications,
           log: {
@@ -186,7 +196,7 @@ async function main(): Promise<void> {
     ...(signers === undefined ? {} : { querySigner: () => signing?.signer() }),
     publications,
     // Each folder's AD groups (T314).
-    folderAccess: folderAccessStore(db),
+    folderAccess,
     // The audit trail (T368, AC-294).
     audit: auditStore(db),
     // Workspace items proposed to their target folders (T349, AC-284).
