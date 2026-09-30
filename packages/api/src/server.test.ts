@@ -757,12 +757,11 @@ describe('creating catalog objects (AC-020)', () => {
   });
 });
 
-describe('deleting a library chart (AC-023)', () => {
+describe('deleting a library chart (AC-362; AC-023 retired)', () => {
   /**
-   * AC-023: WHEN the user deletes a library chart that dashboards use, THE
-   * SYSTEM SHALL name those dashboards and require confirmation before
-   * deleting.
-   * Fails when: the chart is deleted without naming the dashboards that use it.
+   * AC-362 (T517), superseding AC-023: a library chart a shared folder's
+   * dashboard uses can't be deleted at all; the refusal names those
+   * dashboards. AC-023's confirm-then-delete is gone, and with it `?confirm`.
    */
   function fixture(dashboards: { id: string; title: string }[]) {
     const removed: string[] = [];
@@ -804,7 +803,7 @@ describe('deleting a library chart (AC-023)', () => {
     await app.close();
   });
 
-  it('refuses an unconfirmed delete and names the dashboards', async () => {
+  it('refuses the delete and names the dashboards', async () => {
     const f = fixture([
       { id: 'd1', title: 'Weekly revenue' },
       { id: 'd2', title: 'Board pack' },
@@ -823,7 +822,7 @@ describe('deleting a library chart (AC-023)', () => {
     await app.close();
   });
 
-  it('deletes once confirmed', async () => {
+  it('refuses it though "confirmed": AC-023’s confirmation is retired', async () => {
     const f = fixture([{ id: 'd1', title: 'Weekly revenue' }]);
     const app = buildServer({ config, ...f, cube: stubCube(() => ({})) });
 
@@ -832,12 +831,12 @@ describe('deleting a library chart (AC-023)', () => {
       url: '/api/documents/chart/c1?confirm=true',
     });
 
-    expect(response.statusCode).toBe(204);
-    expect(f.removed).toEqual(['c1']);
+    expect(response.statusCode).toBe(409);
+    expect(f.removed).toEqual([]);
     await app.close();
   });
 
-  it('deletes an unused chart without demanding confirmation', async () => {
+  it('deletes an unused chart', async () => {
     const f = fixture([]);
     const app = buildServer({ config, ...f, cube: stubCube(() => ({})) });
 
@@ -866,12 +865,15 @@ describe('deleting a library chart (AC-023)', () => {
       documents: {
         create: async (input: { id: string }) => ({ id: input.id }),
         remove: async () => false,
+        get: async () => null,
       },
     });
 
     const response = await app.inject({ method: 'DELETE', url: '/api/documents/chart/gone' });
+    // Asked first, by its dialog, it answers the same (T517's review).
+    const asked = await app.inject({ method: 'GET', url: '/api/documents/chart/gone/dependents' });
 
-    expect(response.statusCode).toBe(404);
+    expect([response.statusCode, asked.statusCode]).toEqual([404, 404]);
     await app.close();
   });
 });

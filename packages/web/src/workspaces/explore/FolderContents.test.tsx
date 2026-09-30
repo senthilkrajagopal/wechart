@@ -727,3 +727,55 @@ describe('My workspace, as design 04 draws it (T498)', () => {
     expect(lineOf('d-copy')).toBeNull();
   });
 });
+
+describe('Delete… in a row’s ⋯ (design 14, pin 8; T517)', () => {
+  it('ends a library chart’s menu, set apart, and opens the delete for that row', async () => {
+    const onDelete = vi.fn();
+    render(
+      <FolderContents
+        items={items}
+        onRename={vi.fn()}
+        onMove={vi.fn()}
+        folders={[
+          { id: 'root', title: 'Shared', parentId: null },
+          { id: 'f2', title: 'Other' },
+        ]}
+        onDelete={onDelete}
+        deletes={(item) => item.kind === 'chart'}
+      />,
+    );
+    await userEvent.click(
+      within(rowFor('c1')).getByRole('button', { name: 'Actions for Revenue by region' }),
+    );
+    const menu = screen.getByRole('menu');
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Rename', 'Move to…', 'Delete…']);
+    expect(within(menu).getAllByRole('separator')).toHaveLength(1);
+    const remove = within(menu).getByRole('menuitem', { name: 'Delete…' });
+    expect(remove.className).toContain('is-danger');
+    await userEvent.click(remove);
+    expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: 'c1' }));
+  });
+
+  it('is offered on no row it isn’t given for', async () => {
+    render(
+      <FolderContents
+        items={items}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        deletes={(item) => item.kind === 'chart'}
+      />,
+    );
+    await userEvent.click(
+      within(rowFor('d1')).getByRole('button', { name: 'Actions for Revenue' }),
+    );
+    expect(
+      within(screen.getByRole('menu'))
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Rename']);
+  });
+});

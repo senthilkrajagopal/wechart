@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from '@tanstack/react-router';
 import { readChartDocument } from '@wechart/core';
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useId, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { CHART_MISSING, formatsFrom } from '../../dashboard/chartSpec';
 import { PencilIcon } from '../../dashboard/edit/EditChrome';
@@ -23,6 +24,12 @@ import { TileSkeleton } from '../../tiles/TileSkeleton';
 import { CHART_TYPE_LABEL, chartTypeText } from './chartTypeLabels';
 import { FolderCrumbs } from './FolderCrumbs';
 import { ChartHomeLine, LocalChartActions, useChartHome } from './LocalChartHome';
+import { MenuButton } from '../../shell/MenuButton';
+import { DeleteDialog } from './DeleteDialog';
+import { checkChart, removeChart } from './deleteChecks';
+import { sayOnExplore } from './deletedToast';
+import { exploreHref } from './folders';
+import { SHARED_ROOT } from './roots';
 
 /**
  * A library chart's page, as the prototype's `chartPage()` (AC-212): its
@@ -31,7 +38,7 @@ import { ChartHomeLine, LocalChartActions, useChartHome } from './LocalChartHome
  * dashboards it is used on (AC-022), with a way to add it to another.
  *
  * Knowing where a chart is already used is what makes editing it safe — it is
- * the same question AC-023 asks before a delete and AC-128 asks before an edit.
+ * the same question AC-362 asks before a delete and AC-128 asks before an edit.
  */
 export interface UsingDashboard {
   readonly id: string;
@@ -280,53 +287,33 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
   const dashboards = (candidates.data ?? []).filter((item) => item.kind === 'dashboard');
 
   /**
-   * AC-023: a delete that would affect dashboards is refused by the service
-   * until confirmed, and the refusal carries their names. The dialog shows
-   * what the server said rather than a list the browser assembled, so what the
-   * user confirms is what the server checked.
+   * Deleting it (T517, AC-362; design 14, state A): Delete chart… in the
+   * header's ⋯, for those who may change its folder — anyone with sign-in
+   * off; with it on, in their workspace, or as a shared folder's read-write
+   * member, who may copy it. Never a shared dashboard's own chart, which goes
+   * only as its dashboard changes (T502, AC-278). The dialog asks the server
+   * what uses it first; a chart a shared dashboard shows is refused, naming
+   * those dashboards.
    */
-  const [blockedBy, setBlockedBy] = useState<UsingDashboard[] | null>(null);
-  /**
-   * The confirmation's focus (T182, AC-176): on the choice that loses nothing
-   * as it opens, Escape keeps the chart, and closing gives focus back to
-   * Delete chart — a keyboard user is never left on a control that has gone.
-   */
-  const deleteButton = useRef<HTMLButtonElement>(null);
-  const keepButton = useRef<HTMLButtonElement>(null);
-  const confirming = blockedBy !== null;
-  useEffect(() => {
-    if (!confirming) return undefined;
-    keepButton.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      setBlockedBy(null);
-      deleteButton.current?.focus();
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [confirming]);
-
-  const remove = useMutation({
-    mutationFn: async (confirmed: boolean) => {
-      const response = await fetch(
-        `/api/documents/chart/${encodeURIComponent(chartId)}${confirmed ? '?confirm=true' : ''}`,
-        { method: 'DELETE' },
-      );
-
-      if (response.status === 409) {
-        const conflict = (await response.json()) as { dashboards: UsingDashboard[] };
-        setBlockedBy(conflict.dashboards);
-        return 'blocked' as const;
-      }
-      if (!response.ok) throw new Error(`Could not delete: ${String(response.status)}`);
-      return 'deleted' as const;
-    },
-    onSuccess: (outcome) => {
-      if (outcome === 'deleted') globalThis.location.assign('/explore');
-    },
-  });
+  const router = useRouter();
+  const [deleting, setDeleting] = useState(false);
+  const moreButton = useRef<HTMLSpanElement>(null);
+  const mayDelete =
+    me.data !== undefined &&
+    stored.data !== undefined &&
+    (!signedIn ||
+      place?.kind === 'workspace' ||
+      (place?.kind === 'shared' && place.copy !== undefined));
+  const title = saved?.title ?? stored.data?.body.title ?? 'Chart';
+  const deleted = () => {
+    setDeleting(false);
+    // Back to its folder, which says it's gone (A5).
+    sayOnExplore(`Deleted “${title}”.`);
+    void queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
+    void queryClient.invalidateQueries({ queryKey: ['folders'] });
+    void queryClient.invalidateQueries({ queryKey: ['folder-roots'] });
+    router.history.push(exploreHref(stored.data?.body.folderId ?? SHARED_ROOT.id));
+  };
 
   /** Putting it on another dashboard (AC-022). */
   const addTo = (
@@ -362,53 +349,6 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
         <StateLine kind="err">{(addToDashboard.error as Error).message}</StateLine>
       ) : null}
     </div>
-  );
-
-  /** Deleting it, confirmed where dashboards use it (AC-023). */
-  const deleteControls = (
-    <>
-      <button
-        ref={deleteButton}
-        type="button"
-        onClick={() => remove.mutate(false)}
-        disabled={remove.isPending}
-      >
-        Delete chart
-      </button>
-      {remove.isPending ? <StateLine kind="run">Deleting it…</StateLine> : null}
-
-      {blockedBy ? (
-        <div role="alertdialog" aria-labelledby="delete-heading" className="confirm">
-          <h3 id="delete-heading">Delete this chart?</h3>
-          <p>
-            {blockedBy.length === 1
-              ? 'One dashboard uses this chart:'
-              : `${String(blockedBy.length)} dashboards use this chart:`}
-          </p>
-          <ul aria-label="Dashboards that use this chart">
-            {blockedBy.map((dashboard) => (
-              <li key={dashboard.id}>{dashboard.title}</li>
-            ))}
-          </ul>
-          <p>Deleting it will leave them without this chart.</p>
-          <button type="button" onClick={() => remove.mutate(true)}>
-            Delete anyway
-          </button>
-          <button
-            ref={keepButton}
-            type="button"
-            onClick={() => {
-              setBlockedBy(null);
-              deleteButton.current?.focus();
-            }}
-          >
-            Keep the chart
-          </button>
-        </div>
-      ) : null}
-
-      {remove.isError ? <StateLine kind="err">{(remove.error as Error).message}</StateLine> : null}
-    </>
   );
 
   return (
@@ -546,6 +486,28 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
               // dashboard (T348's review, AC-278): nothing to do here.
               <LocalChartActions dashboardId={localTo} home={home} />
             )}
+            {/* Destructive and occasional actions in ⋯ (design 06, pin 5;
+                design 14, screen 2): Delete chart…, last. */}
+            {mayDelete ? (
+              <span ref={moreButton} className="chart-page__more">
+                <MenuButton
+                  label={`More actions for ${title}`}
+                  className="btn-ghost btn-sm"
+                  items={[
+                    {
+                      key: 'delete',
+                      label: 'Delete chart…',
+                      danger: true,
+                      onSelect: () => {
+                        setDeleting(true);
+                      },
+                    },
+                  ]}
+                >
+                  <span aria-hidden="true">⋯</span>
+                </MenuButton>
+              </span>
+            ) : null}
             {/* Where it lives (T348; design 04, states E and F). */}
             {place?.line === undefined || localTo !== undefined ? null : (
               <p className="dashboard__ownership">{place.line}</p>
@@ -645,13 +607,22 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
                   {addTo}
                 </Detail>
               )}
-              {/* A shared dashboard's own chart is part of it: it goes only as
-                  the dashboard changes, by a proposal (T502, AC-278). */}
-              {place?.kind === 'shared' && localTo !== undefined ? null : (
-                <Detail title="Delete">{deleteControls}</Detail>
-              )}
             </aside>
           </div>
+          {deleting ? (
+            <DeleteDialog
+              name={title}
+              action="Delete chart"
+              check={checkChart(chartId, signedIn)}
+              remove={removeChart(chartId, signedIn)}
+              onDeleted={deleted}
+              onClose={() => {
+                setDeleting(false);
+                // Back on the ⋯ it came from (design 14, keyboard).
+                moreButton.current?.querySelector<HTMLButtonElement>('button')?.focus();
+              }}
+            />
+          ) : null}
         </section>
       </div>
       {historyOpen ? (

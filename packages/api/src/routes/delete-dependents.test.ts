@@ -43,7 +43,8 @@ const docs = () => documents(getDb());
 const bookmarks = () => bookmarkStore(getDb());
 const made: { kind: DocumentKind; id: string }[] = [];
 const cookies: Record<string, string> = {};
-const ids = { sales: '' };
+/** /Sales, and /Hidden, `managers`' alone, which writer can't see; writer's workspace. */
+const ids = { sales: '', hidden: '', workspace: '' };
 let app: FastifyInstance;
 
 async function doc(kind: DocumentKind, body: Record<string, unknown>, id: string = randomUUID()) {
@@ -58,6 +59,11 @@ beforeAll(async () => {
     folderId: 'root',
     access: { readOnly: ['sales-ro'], readWrite: ['sales-rw'] },
   });
+  ids.hidden = await doc('folder', {
+    title: `Hidden ${MARK}`,
+    folderId: 'root',
+    access: { readOnly: [], readWrite: ['managers'] },
+  });
   app = buildServer({
     config: secured,
     sessions: pgSessionStore(getDb()),
@@ -67,6 +73,12 @@ beforeAll(async () => {
     bookmarks: bookmarks(),
   });
   for (const who of ['writer', 'reader']) cookies[who] = await signIn(app, USERS[who]!);
+  const me = await app.inject({
+    method: 'GET',
+    url: '/api/me',
+    headers: { cookie: cookies['writer']! },
+  });
+  ids.workspace = `ws:${me.json<{ key: string }>().key}`;
 });
 
 afterAll(async () => {
@@ -158,5 +170,108 @@ describe('deleting a dashboard (T518, AC-363)', () => {
       'This chart is its dashboard’s own: save it to folders to show it on another.',
     );
     expect((await docs().get('dashboard', other))?.body['pages']).toEqual([]);
+  });
+});
+
+describe('deleting a library chart (T517, AC-362)', () => {
+  /** A library chart in /Sales, and a dashboard showing it in each of these folders. */
+  async function chartOn(title: string, folders: readonly string[]) {
+    const chart = await doc('chart', {
+      schemaVersion: 1,
+      title,
+      folderId: ids.sales,
+      chart: { source: { cube: 'orders' }, wells: { measures: ['orders.count'] } },
+    });
+    const boards: string[] = [];
+    for (const [index, folderId] of folders.entries())
+      boards.push(
+        await doc('dashboard', {
+          schemaVersion: 1,
+          title: `${title} board ${String(index + 1)}`,
+          folderId,
+          pages: [{ id: 'p1', items: [{ id: 't1', kind: 'chart', chartId: chart }] }],
+        }),
+      );
+    return { chart, boards };
+  }
+  const dependents = (id: string) =>
+    as('writer', { method: 'GET', url: `/api/documents/chart/${id}/dependents` });
+
+  it('refuses one a shared folder’s dashboards use, naming those the user may see and counting the rest, and keeps it', async () => {
+    const title = `Top products ${MARK}`;
+    const { chart, boards } = await chartOn(title, [ids.sales, ids.hidden]);
+    const expected = {
+      dashboards: [
+        {
+          id: boards[0],
+          title: `${title} board 1`,
+          folderId: ids.sales,
+          folderPath: [{ id: ids.sales, title: `Sales ${MARK}` }],
+        },
+      ],
+      hidden: 1,
+    };
+
+    // What the dialog reads first: what the delete's own refusal would name (design 14, A1).
+    const asked = await dependents(chart);
+    expect(asked.statusCode, asked.body).toBe(200);
+    expect(asked.json()).toEqual(expected);
+
+    // Nor does "confirm" get it past, as it did for AC-023, now retired.
+    for (const url of [
+      `/api/documents/chart/${chart}`,
+      `/api/documents/chart/${chart}?confirm=true`,
+    ]) {
+      const answer = await as('writer', { method: 'DELETE', url });
+      expect(answer.statusCode, answer.body).toBe(409);
+      expect(answer.json()).toEqual({
+        error: 'This chart is used by 2 dashboards: remove it from them first.',
+        ...expected,
+      });
+    }
+    expect((await docs().get('chart', chart))?.id).toBe(chart);
+  });
+
+  it('deletes one only drafts in a workspace show, the user’s or another’s, at any depth: their tiles find it gone', async () => {
+    const inside = await doc('folder', { title: `Project ${MARK}`, folderId: ids.workspace });
+    const { chart, boards } = await chartOn(`Draft use ${MARK}`, [
+      ids.workspace,
+      inside,
+      `ws:someone-else-${MARK}`,
+    ]);
+    expect((await dependents(chart)).json()).toEqual({ dashboards: [], hidden: 0 });
+    const answer = await as('writer', { method: 'DELETE', url: `/api/documents/chart/${chart}` });
+    expect(answer.statusCode, answer.body).toBe(204);
+    expect(await docs().get('chart', chart)).toBeNull();
+    // The drafts stay, naming the chart they showed.
+    for (const board of boards) expect((await docs().get('dashboard', board))?.id).toBe(board);
+  });
+
+  it('answers the ask about a shared dashboard’s own chart as its delete: part of the dashboard (T502)', async () => {
+    const { own } = await boardWithOwnChart(`Own ${MARK}`);
+    const asked = await dependents(own);
+    const deleted = await as('writer', { method: 'DELETE', url: `/api/documents/chart/${own}` });
+    expect([asked.statusCode, deleted.statusCode]).toEqual([409, 409]);
+    expect(asked.json()).toEqual(deleted.json());
+    expect((await docs().get('chart', own))?.id).toBe(own);
+  });
+
+  it('deletes one no dashboard uses, for a user who may change its folder', async () => {
+    const { chart } = await chartOn(`Unused ${MARK}`, []);
+    expect((await dependents(chart)).json()).toEqual({ dashboards: [], hidden: 0 });
+    const answer = await as('writer', { method: 'DELETE', url: `/api/documents/chart/${chart}` });
+    expect(answer.statusCode, answer.body).toBe(204);
+    expect(await docs().get('chart', chart)).toBeNull();
+  });
+
+  it('answers a reader’s ask as it answers their delete: they may not change it', async () => {
+    const { chart } = await chartOn(`Read only ${MARK}`, [ids.sales]);
+    const asked = await as('reader', {
+      method: 'GET',
+      url: `/api/documents/chart/${chart}/dependents`,
+    });
+    const deleted = await as('reader', { method: 'DELETE', url: `/api/documents/chart/${chart}` });
+    expect([asked.statusCode, deleted.statusCode]).toEqual([403, 403]);
+    expect((await docs().get('chart', chart))?.id).toBe(chart);
   });
 });

@@ -277,7 +277,7 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
         if (body['localToDashboardId'] === id)
           await removed(
             `chart ${chartId}`,
-            writer.request.delete(`/api/documents/chart/${chartId}?confirm=true`),
+            writer.request.delete(`/api/documents/chart/${chartId}`),
           );
       }
     }
@@ -286,9 +286,8 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
         `${kind} ${id}`,
         kind === 'data-source'
           ? writer.request.delete(`/api/data-sources/${id}`)
-          : writer.request.delete(
-              `/api/documents/${kind}/${id}${kind === 'chart' ? '?confirm=true' : ''}`,
-            ),
+          : // Drafts in a workspace hold no chart back (T517, AC-362).
+            writer.request.delete(`/api/documents/${kind}/${id}`),
       );
     await writer.close();
 
@@ -298,12 +297,12 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
     });
     await signInThroughDex(await context.newPage(), 'super');
     const request = context.request;
-    // The charts, confirmed though a dashboard shows them, then the dashboard,
-    // then what they used.
-    for (const id of [ids.revenue, ids.orders, ids.top, ids.margin].filter((each) => each !== ''))
-      await removed(`chart ${id}`, request.delete(`/api/documents/chart/${id}?confirm=true`));
+    // The dashboard, then the charts it showed, which a shared dashboard
+    // keeps from being deleted (T517, AC-362), then what they used.
     if (ids.board !== '')
       await removed('dashboard', request.delete(`/api/documents/dashboard/${ids.board}`));
+    for (const id of [ids.revenue, ids.orders, ids.top, ids.margin].filter((each) => each !== ''))
+      await removed(`chart ${id}`, request.delete(`/api/documents/chart/${id}`));
     for (const { folderId, name } of [...published].reverse())
       await removed(
         modelPath(name),

@@ -362,7 +362,7 @@ describe('a read-write member changes nothing above their folder (T327, AC-262)'
       ],
       [
         'delete the root’s library chart',
-        { method: 'DELETE', url: `/api/documents/chart/${ids.rootLibrary}?confirm=true` },
+        { method: 'DELETE', url: `/api/documents/chart/${ids.rootLibrary}` },
       ],
       [
         'rename /A',

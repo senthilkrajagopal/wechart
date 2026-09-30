@@ -1,87 +1,224 @@
-import { expect, test, type APIRequestContext } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
 /**
- * AC-023: WHEN the user deletes a library chart that dashboards use, THE SYSTEM
- * SHALL name those dashboards and require confirmation before deleting.
- * Fails when: the chart is deleted without naming the dashboards that use it.
+ * AC-362 (T517; design 14, state A), which retires AC-023's
+ * confirm-then-delete: WHEN a user deletes a library chart that a dashboard in
+ * a shared folder uses, THE SYSTEM SHALL refuse the delete, naming the
+ * dashboards that use it that the user may see and counting the rest, and
+ * SHALL delete a chart no such dashboard uses. A draft in a workspace doesn't
+ * hold it back: its tile shows the chart gone.
  *
- * Both halves matter: the dashboards are *named* (not merely counted), and the
- * chart is still there until the user says so.
+ * With sign-in off every folder is the one user's to see, and My workspace
+ * (`mine`) is where drafts are.
  */
 const API = 'http://localhost:4100';
 
-async function create(request: APIRequestContext, kind: 'dashboard' | 'chart', title: string) {
+async function create(
+  request: APIRequestContext,
+  kind: 'dashboard' | 'chart',
+  title: string,
+  folderId = 'root',
+) {
   const response = await request.post(`${API}/api/documents`, {
-    data: { kind, title, folderId: 'root' },
+    data: { kind, title, folderId },
   });
   expect(response.status()).toBe(201);
   return (await response.json()) as { id: string };
 }
 
-test('names the dashboards and does not delete until confirmed', async ({ page, request }) => {
+async function showOn(request: APIRequestContext, dashboardId: string, chartId: string) {
+  const added = await request.post(`${API}/api/dashboards/${dashboardId}/charts`, {
+    data: { chartId },
+  });
+  expect(added.status(), await added.text()).toBe(204);
+}
+
+/** Delete chart…, from the chart page's header ⋯ (design 14, screen 2, pin 1). */
+async function askToDelete(page: Page, title: string) {
+  await page.getByRole('button', { name: `More actions for ${title}` }).click();
+  await page.getByRole('menuitem', { name: 'Delete chart…' }).click();
+}
+
+test('refuses a chart shared dashboards use, naming them, with Close alone, and keeps it', async ({
+  page,
+  request,
+}) => {
   const unique = `del-${String(Date.now())}`;
   const chart = await create(request, 'chart', `Chart ${unique}`);
   const first = await create(request, 'dashboard', `First ${unique}`);
   const second = await create(request, 'dashboard', `Second ${unique}`);
-  for (const dashboard of [first, second]) {
-    await request.post(`${API}/api/dashboards/${dashboard.id}/charts`, {
-      data: { chartId: chart.id },
-    });
-  }
+  for (const dashboard of [first, second]) await showOn(request, dashboard.id, chart.id);
 
   await page.goto(`/explore/charts/${chart.id}`);
-  await page.getByRole('button', { name: 'Delete chart' }).click();
+  // The details pane's Delete section is gone (design 14, pin 1).
+  await expect(page.getByRole('heading', { name: 'Delete', exact: true })).toHaveCount(0);
+  await askToDelete(page, `Chart ${unique}`);
 
-  const dialog = page.getByRole('alertdialog');
+  const dialog = page.getByRole('alertdialog', { name: `Can’t delete “Chart ${unique}”` });
   await expect(dialog).toBeVisible();
-  // Named, not counted.
-  await expect(dialog).toContainText(`First ${unique}`);
-  await expect(dialog).toContainText(`Second ${unique}`);
+  await expect(dialog).toContainText(
+    '2 dashboards use it. Remove it from each of them, then delete it.',
+  );
+  // Named, each a link to its dashboard with its folder, never counted.
+  const list = dialog.getByRole('list', { name: 'Dashboards that use it, 2' });
+  for (const [dashboard, title] of [
+    [first, `First ${unique}`],
+    [second, `Second ${unique}`],
+  ] as const) {
+    const link = list.getByRole('link', { name: new RegExp(title) });
+    await expect(link).toHaveAttribute('href', `/explore/dashboards/${dashboard.id}`);
+    await expect(link).toHaveAttribute('target', '_blank');
+  }
+  await expect(list.getByText('Shared', { exact: true })).toHaveCount(2);
+  await expect(dialog).not.toContainText('more in folders you can’t see');
+  await expect(dialog.getByRole('button')).toHaveText(['Close']);
+  await expect(dialog.getByRole('button', { name: 'Close' })).toBeFocused();
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect(dialog).toHaveCount(0);
 
-  // Still there while the dialog is open.
-  expect((await request.get(`${API}/api/folders/root/contents`)).ok()).toBe(true);
-  await page.getByRole('button', { name: 'Keep the chart' }).click();
-  await expect(page.getByTestId('selected-object')).toHaveText(chart.id);
+  // Still there.
+  expect((await request.get(`${API}/api/documents/chart/${chart.id}`)).status()).toBe(200);
 });
 
-test('deletes once the user confirms', async ({ page, request }) => {
-  const unique = `del2-${String(Date.now())}`;
-  const chart = await create(request, 'chart', `Chart ${unique}`);
-  const dashboard = await create(request, 'dashboard', `Uses ${unique}`);
-  await request.post(`${API}/api/dashboards/${dashboard.id}/charts`, {
-    data: { chartId: chart.id },
-  });
+test('deletes a chart no dashboard uses once confirmed, back in its folder', async ({
+  page,
+  request,
+}) => {
+  const title = `Unused ${String(Date.now())}`;
+  const chart = await create(request, 'chart', title);
 
   await page.goto(`/explore/charts/${chart.id}`);
-  await page.getByRole('button', { name: 'Delete chart' }).click();
-  await page.getByRole('button', { name: 'Delete anyway' }).click();
+  await askToDelete(page, title);
+  const dialog = page.getByRole('alertdialog', { name: `Delete “${title}”?` });
+  await expect(dialog).toContainText('No dashboard uses it. You can’t undo this.');
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await dialog.getByRole('button', { name: 'Delete chart' }).click();
 
+  // Its folder, saying so, with focus on its heading (A5; design 14, keyboard).
   await expect(page).toHaveURL(/\/explore$/);
-  const after = await request.get(`${API}/api/charts/${chart.id}/dashboards`);
-  expect(after.ok()).toBe(true);
+  await expect(page.getByRole('status').filter({ hasText: `Deleted “${title}”.` })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Shared' })).toBeFocused();
+  expect((await request.get(`${API}/api/documents/chart/${chart.id}`)).status()).toBe(404);
 });
 
-test('the service refuses an unconfirmed delete even without the dialog', async ({ request }) => {
+test('refuses a dashboard’s own chart while its dashboard shows it, as AC-023 kept it', async ({
+  page,
+  request,
+}) => {
+  const unique = `own-${String(Date.now())}`;
+  const dashboard = await create(request, 'dashboard', `Home ${unique}`);
+  const chart = await create(request, 'chart', `Own ${unique}`);
+  const owned = await request.put(`${API}/api/documents/chart/${chart.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title: `Own ${unique}`,
+        owner: 'admin',
+        localToDashboardId: dashboard.id,
+        chart: { source: { cube: 'orders' }, wells: { measures: ['orders.count'] } },
+      },
+    },
+  });
+  expect(owned.status(), await owned.text()).toBe(200);
+  const shown = await request.put(`${API}/api/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title: `Home ${unique}`,
+        folderId: 'root',
+        owner: 'admin',
+        pages: [
+          {
+            id: 'p1',
+            title: 'Page 1',
+            items: [{ id: 't1', kind: 'chart', w: 6, h: 40, chartId: chart.id }],
+          },
+        ],
+      },
+    },
+  });
+  expect(shown.status(), await shown.text()).toBe(200);
+
+  await page.goto(`/explore/charts/${chart.id}`);
+  await askToDelete(page, `Own ${unique}`);
+  const dialog = page.getByRole('alertdialog', { name: `Can’t delete “Own ${unique}”` });
+  await expect(
+    dialog.getByRole('list', { name: 'Dashboards that use it, 1' }).getByRole('link'),
+  ).toHaveAttribute('href', `/explore/dashboards/${dashboard.id}`);
+  expect((await request.get(`${API}/api/documents/chart/${chart.id}`)).status()).toBe(200);
+});
+
+test('is held back by no draft in My workspace, whose tile then finds the chart gone', async ({
+  page,
+  request,
+}) => {
+  const unique = `draft-${String(Date.now())}`;
+  const chart = await create(request, 'chart', `Chart ${unique}`);
+  const draft = await create(request, 'dashboard', `Draft ${unique}`, 'mine');
+  // A tile showing it, as a draft built in the editor would.
+  const read = await request.get(`${API}/api/documents/dashboard/${draft.id}`);
+  const stored = (await read.json()) as { body: Record<string, unknown>; version: number };
+  const saved = await request.put(`${API}/api/documents/dashboard/${draft.id}`, {
+    data: {
+      version: stored.version,
+      body: {
+        ...stored.body,
+        pages: [
+          {
+            id: 'p1',
+            title: 'Page 1',
+            items: [{ id: 't1', kind: 'chart', w: 6, h: 40, chartId: chart.id }],
+          },
+        ],
+      },
+    },
+  });
+  expect(saved.status(), await saved.text()).toBe(200);
+
+  await page.goto(`/explore/charts/${chart.id}`);
+  await askToDelete(page, `Chart ${unique}`);
+  const dialog = page.getByRole('alertdialog', { name: `Delete “Chart ${unique}”?` });
+  await dialog.getByRole('button', { name: 'Delete chart' }).click();
+  await expect(page).toHaveURL(/\/explore$/);
+
+  await page.goto(`/explore/dashboards/${draft.id}`);
+  await expect(page.getByTestId('tile-missing-chart')).toHaveText(
+    'This chart is no longer available.',
+  );
+});
+
+test('the service refuses the delete without the dialog, and "confirm" no longer passes it', async ({
+  request,
+}) => {
   const unique = `del3-${String(Date.now())}`;
   const chart = await create(request, 'chart', `Chart ${unique}`);
   const dashboard = await create(request, 'dashboard', `Uses ${unique}`);
-  await request.post(`${API}/api/dashboards/${dashboard.id}/charts`, {
-    data: { chartId: chart.id },
-  });
+  await showOn(request, dashboard.id, chart.id);
 
-  // The request a script would send, with no dialog involved.
-  const response = await request.delete(`${API}/api/documents/chart/${chart.id}`);
-
-  expect(response.status()).toBe(409);
-  const body = (await response.json()) as { dashboards: { title: string }[] };
-  expect(body.dashboards.map((d) => d.title)).toContain(`Uses ${unique}`);
+  for (const query of ['', '?confirm=true']) {
+    const response = await request.delete(`${API}/api/documents/chart/${chart.id}${query}`);
+    expect(response.status()).toBe(409);
+    const body = (await response.json()) as { dashboards: { title: string }[]; hidden: number };
+    expect(body.dashboards.map((d) => d.title)).toEqual([`Uses ${unique}`]);
+    expect(body.hidden).toBe(0);
+  }
+  expect((await request.get(`${API}/api/documents/chart/${chart.id}`)).status()).toBe(200);
 });
 
-test('an unused chart deletes without a confirmation step', async ({ page, request }) => {
-  const chart = await create(request, 'chart', `Unused ${String(Date.now())}`);
+test('deletes from its row in Explore, the list staying open', async ({ page, request }) => {
+  const title = `Row ${String(Date.now())}`;
+  const chart = await create(request, 'chart', title);
 
-  await page.goto(`/explore/charts/${chart.id}`);
-  await page.getByRole('button', { name: 'Delete chart' }).click();
+  await page.goto('/explore');
+  const row = page.getByTestId(`item-${chart.id}`);
+  await row.getByRole('button', { name: `Actions for ${title}` }).click();
+  await page.getByRole('menuitem', { name: 'Delete…' }).click();
+  const dialog = page.getByRole('alertdialog', { name: `Delete “${title}”?` });
+  await dialog.getByRole('button', { name: 'Delete chart' }).click();
 
+  await expect(row).toHaveCount(0);
   await expect(page).toHaveURL(/\/explore$/);
+  await expect(page.getByRole('status').filter({ hasText: `Deleted “${title}”.` })).toBeVisible();
 });

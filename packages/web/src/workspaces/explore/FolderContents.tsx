@@ -110,6 +110,13 @@ export interface FolderContentsProps {
    * "Export…" in every dashboard row's ⋯, a reader's too.
    */
   readonly onExport?: ((item: CatalogItem) => void) | undefined;
+  /**
+   * Deleting a row (design 14, pin 8; T517): "Delete…" last in its ⋯, set
+   * apart in the error ink, where `deletes` says it may be — given only to
+   * those who may change the folder (rule 68). No key deletes from the list.
+   */
+  readonly onDelete?: ((item: CatalogItem) => void) | undefined;
+  readonly deletes?: ((item: CatalogItem) => boolean) | undefined;
 }
 
 /**
@@ -289,6 +296,8 @@ export function FolderContents({
   opens = () => true,
   workspace,
   onExport,
+  onDelete,
+  deletes = () => false,
 }: FolderContentsProps) {
   const open = (item: CatalogItem) => {
     if (opens(item)) onOpen?.(item);
@@ -326,7 +335,22 @@ export function FolderContents({
    * never where the user may change nothing (rule 68, T331); Propose… in the
    * workspace; Export… for a dashboard.
    */
-  const menuOf = (item: CatalogItem, targets: readonly FolderMove[]): MenuItem[] => [
+  const menuOf = (item: CatalogItem, targets: readonly FolderMove[]): MenuItem[] => {
+    const others = otherActions(item, targets);
+    return onDelete !== undefined && deletes(item)
+      ? [
+          ...others,
+          {
+            key: 'delete',
+            label: 'Delete…',
+            danger: true,
+            separatorBefore: others.length > 0,
+            onSelect: () => onDelete(item),
+          },
+        ]
+      : others;
+  };
+  const otherActions = (item: CatalogItem, targets: readonly FolderMove[]): MenuItem[] => [
     // A data source is renamed on its own page (T497).
     ...(onRename !== undefined && item.kind !== 'data-source'
       ? [

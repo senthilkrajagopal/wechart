@@ -6480,6 +6480,92 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   color: var(--wc-text-on-accent);
 }
 
+/* Deleting (design 14, states A–E): 520 px, the refusal's icon beside its
+   title, and what depends on the item as rows of 34 px, grouped by kind. */
+.dialog.delete-dialog { width: min(520px, calc(100vw - 32px)); max-width: none; gap: 12px; padding: 20px; }
+.dialog.delete-dialog h2 { display: flex; gap: 8px; align-items: center; }
+.dialog.delete-dialog p { margin: 0; }
+.delete-dialog__deps {
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+}
+.delete-dialog__deps ul { margin: 0; padding: 0; list-style: none; }
+.delete-dialog__group {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  background: var(--wc-bg-subtle);
+  border-bottom: 1px solid var(--wc-border-subtle);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  font-weight: var(--wc-text-xs-strong-weight);
+  color: var(--wc-text-secondary);
+}
+.delete-dialog__count { margin-left: auto; font-weight: 400; font-variant-numeric: tabular-nums; }
+.delete-dialog__row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto 14px;
+  gap: 8px;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
+.delete-dialog__deps > div:last-child .delete-dialog__row:last-child { border-bottom: 0; }
+.delete-dialog__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.delete-dialog__name a { color: var(--wc-accent); text-decoration: none; }
+.delete-dialog__name a:hover { text-decoration: underline; }
+.delete-dialog__where {
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  color: var(--wc-text-secondary);
+  white-space: nowrap;
+}
+.delete-dialog__ext { color: var(--wc-text-muted); }
+.delete-dialog__kind {
+  display: inline-grid;
+  place-items: center;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-secondary);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+}
+.dialog p.delete-dialog__unseen {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  color: var(--wc-text-secondary);
+}
+.dialog p.delete-dialog__note { font-size: var(--wc-text-xs-size); line-height: var(--wc-text-xs-line); }
+.delete-dialog__goes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+}
+.delete-dialog__goes li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
+.delete-dialog__goes li:last-child { border-bottom: 0; }
+.delete-dialog__goes .delete-dialog__where { margin-left: auto; }
+
 /* The undo toast (AC-060, direction.md rule 38). Bottom right, above
    everything, and it does not take the pointer away from the dashboard. */
 .undo-toast {

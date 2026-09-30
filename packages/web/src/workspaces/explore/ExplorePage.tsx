@@ -28,6 +28,9 @@ import { ExportPane } from '../../dashboard/export/ExportPane';
 import { ExportedToast } from '../../dashboard/export/ExportedToast';
 import { ImportPane } from './import/ImportPane';
 import { fileHref } from '../model/inFolder';
+import { DeleteDialog, type Checked, type Confirmation, type Refusal } from './DeleteDialog';
+import { checkChart, removeChart } from './deleteChecks';
+import { clearSaid, peekSaid } from './deletedToast';
 
 const counted = (count: number, one: string) => `${String(count)} ${count === 1 ? one : `${one}s`}`;
 /** "A", "A and B", "A, B and C". */
@@ -404,6 +407,61 @@ export function ExplorePage() {
         ?.focus();
     });
   };
+  /**
+   * A row being deleted (design 14, states A–E; T517): its dialog asks what
+   * depends on it first. Once it's gone, the list stays, the row that took
+   * its place takes focus, or the heading where the list is empty, and a
+   * toast says so. An item deleted from its own page lands here saying so.
+   */
+  const [deletingItem, setDeletingItem] = useState<CatalogItem | null>(null);
+  const [said, setSaid] = useState('');
+  const heading = useRef<HTMLHeadingElement | null>(null);
+  /** The heading takes focus once it is drawn: after its item's page deleted it, its folder's. */
+  const focusHeading = useRef(false);
+  useEffect(() => {
+    // After the page has drawn, so the toast's live region, kept mounted,
+    // announces its words as they arrive (design 14, A5 and keyboard).
+    const frame = requestAnimationFrame(() => {
+      const text = peekSaid();
+      if (text === null) return;
+      clearSaid();
+      setSaid(text);
+      if (heading.current === null) focusHeading.current = true;
+      else heading.current.focus();
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+  const deleteOf = (
+    item: CatalogItem,
+  ):
+    | {
+        action: string;
+        check: (() => Promise<Checked>) | Confirmation;
+        remove: () => Promise<Refusal | undefined>;
+      }
+    | undefined =>
+    item.kind === 'chart'
+      ? {
+          action: 'Delete chart',
+          check: checkChart(item.id, signedIn),
+          remove: removeChart(item.id, signedIn),
+        }
+      : undefined;
+  const rowDeleted = (item: CatalogItem) => {
+    const listed = shown.data ?? [];
+    const at = listed.findIndex((each) => each.kind === item.kind && each.id === item.id);
+    const next = listed[at + 1] ?? listed[at - 1];
+    setDeletingItem(null);
+    setSaid(`Deleted “${item.title}”.`);
+    if (next === undefined) heading.current?.focus();
+    else focusRow.current = next.id;
+    void queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
+    void queryClient.invalidateQueries({ queryKey: ['explore-search'] });
+    void queryClient.invalidateQueries({ queryKey: ['folders'] });
+    void queryClient.invalidateQueries({ queryKey: ['folder-roots'] });
+  };
   // The docked panes replace each other: not two at once (T471).
   const accessOpen =
     mayEditAccess &&
@@ -594,7 +652,20 @@ export function ExplorePage() {
               }}
             />
           ) : (
-            <h1 className="explore__title">{searching ? 'Search' : folderTitle}</h1>
+            // Focusable by script, for after a delete empties the list (design 14).
+            <h1
+              ref={(element) => {
+                heading.current = element;
+                if (element !== null && focusHeading.current) {
+                  focusHeading.current = false;
+                  element.focus();
+                }
+              }}
+              tabIndex={-1}
+              className="explore__title"
+            >
+              {searching ? 'Search' : folderTitle}
+            </h1>
           )}
           {/* The user's access here (rule 69; T331), and when no group
               reaches the folder, that only Super-Admins see it (rule 63). */}
@@ -763,6 +834,11 @@ export function ExplorePage() {
                       relocate.mutate({ item, title }),
                     onMove: (item: CatalogItem, target: string) =>
                       relocate.mutate({ item, folderId: target }),
+                    // Delete… last in the row's ⋯ (design 14, pin 8).
+                    onDelete: (item: CatalogItem) => {
+                      setDeletingItem(item);
+                    },
+                    deletes: (item: CatalogItem) => deleteOf(item) !== undefined,
                   }
                 : {})}
               // Not while a data source is being added in the pane it would
@@ -871,6 +947,40 @@ export function ExplorePage() {
         message={exported}
         onDismiss={() => {
           setExported('');
+        }}
+      />
+      {(() => {
+        const deleting = deletingItem === null ? undefined : deleteOf(deletingItem);
+        return deletingItem === null || deleting === undefined ? null : (
+          <DeleteDialog
+            key={`${deletingItem.kind}:${deletingItem.id}`}
+            name={deletingItem.title}
+            action={deleting.action}
+            check={deleting.check}
+            remove={deleting.remove}
+            onDeleted={() => {
+              rowDeleted(deletingItem);
+            }}
+            onClose={() => {
+              const item = deletingItem;
+              setDeletingItem(null);
+              // Back on the row's ⋯ it came from (design 14, keyboard).
+              requestAnimationFrame(() => {
+                document
+                  .querySelector<HTMLElement>(
+                    `[data-testid="item-${CSS.escape(item.id)}"] [aria-haspopup="menu"]`,
+                  )
+                  ?.focus();
+              });
+            }}
+          />
+        );
+      })()}
+      {/* Deleted, from a row or from the item's own page (design 14, A5). */}
+      <ExportedToast
+        message={said}
+        onDismiss={() => {
+          setSaid('');
         }}
       />
       {importing ? (

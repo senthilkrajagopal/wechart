@@ -962,24 +962,7 @@ export function buildServer({
           if (seen === undefined) return () => true;
           return (folderId) => seen.rights.get(folderId)?.kinds === 'all';
         },
-        pathOf: async () => {
-          const all = (cat ? await cat.folders({ counted: false }) : []) as {
-            id: string;
-            title: string;
-            parentId: string | null;
-          }[];
-          const byId = new Map(all.map((folder) => [folder.id, folder]));
-          return (folderId) => {
-            const path: { id: string; title: string }[] = [];
-            for (
-              let at = byId.get(folderId);
-              at !== undefined && path.length <= all.length;
-              at = at.parentId === null ? undefined : byId.get(at.parentId)
-            )
-              path.unshift({ id: at.id, title: at.title });
-            return path;
-          };
-        },
+        pathOf: () => folderPathsOf(),
       },
       ...(config.xcubePublicKey === undefined ? {} : { key: config.xcubePublicKey }),
       access: async (request, folderId, want) => {
@@ -1742,6 +1725,29 @@ export function buildServer({
       }
       return seen.rights.get(folderOf(document) ?? '')?.kinds === 'all';
     });
+  };
+
+  /**
+   * Each folder's path from the shared root, as `{ id, title }` steps: the
+   * root's is none (T364; T517). Read once, then asked per folder.
+   */
+  const folderPathsOf = async () => {
+    const all = (cat ? await cat.folders({ counted: false }) : []) as {
+      id: string;
+      title: string;
+      parentId: string | null;
+    }[];
+    const byId = new Map(all.map((folder) => [folder.id, folder]));
+    return (folderId: string) => {
+      const path: { id: string; title: string }[] = [];
+      for (
+        let at = byId.get(folderId);
+        at !== undefined && path.length <= all.length;
+        at = at.parentId === null ? undefined : byId.get(at.parentId)
+      )
+        path.unshift({ id: at.id, title: at.title });
+      return path;
+    };
   };
 
   /** The folder and every folder beneath it, by id (T428). */
@@ -3739,18 +3745,110 @@ export function buildServer({
   });
 
   /**
-   * AC-023: deleting a library chart that dashboards use names them and
-   * requires confirmation.
-   *
-   * The check is on the server, not only in the dialog: a delete that arrives
-   * without confirmation is refused with the list of dashboards, so the naming
-   * cannot be skipped by calling the API directly. `409` rather than `400` —
-   * nothing about the request is malformed, it conflicts with the current
-   * state.
+   * A shared dashboard's own chart, part of it: it goes only as its dashboard
+   * changes, by a proposal (T502's review, AC-278). Known with sign-in on.
+   */
+  const ownOfShared = async (
+    kind: string,
+    found: { stored: Stored | null; seen: Visibility | undefined },
+  ) =>
+    kind === 'chart' &&
+    found.seen !== undefined &&
+    found.stored !== null &&
+    typeof found.stored.body['localToDashboardId'] === 'string' &&
+    (await isShared('chart', found.stored));
+
+  /**
+   * What keeps a chart from being deleted (T517, AC-362): the dashboards in
+   * shared folders that show it, named where the user sees their folder and
+   * counted where not (AC-322). A draft in a workspace doesn't hold it back:
+   * its tile finds the chart gone. A dashboard's own chart is asked the same,
+   * so it isn't taken off its dashboard's tile unawares, as AC-023 kept it.
+   */
+  const chartDependents = async (
+    request: FastifyRequest,
+    id: string,
+  ): Promise<{
+    dashboards: {
+      id: string;
+      title: string;
+      folderId: string | null;
+      folderPath: { id: string; title: string }[];
+    }[];
+    hidden: number;
+  }> => {
+    if (!cat?.dashboardsUsing) return { dashboards: [], hidden: 0 };
+    const using = (await cat.dashboardsUsing(id)) as {
+      id: string;
+      title: string;
+      folderId: string | null;
+    }[];
+    if (using.length === 0) return { dashboards: [], hidden: 0 };
+    // Where each folder is: in a workspace, at any depth, or shared (T343).
+    const parents = new Map(
+      ((await cat.folders({ counted: false })) as { id: string; parentId: string | null }[]).map(
+        (folder) => [folder.id, folder.parentId],
+      ),
+    );
+    const inAWorkspace = (folderId: string | null) => {
+      const passed = new Set<string>();
+      for (let at = folderId; at != null && !passed.has(at); at = parents.get(at) ?? null) {
+        if (isWorkspaceId(at)) return true;
+        passed.add(at);
+      }
+      return false;
+    };
+    const shared = using.filter((dashboard) => !inAWorkspace(dashboard.folderId));
+    const seen = await visibilityOf(request);
+    const named = shared.filter(
+      (dashboard) =>
+        seen === undefined || (dashboard.folderId !== null && seen.rights.has(dashboard.folderId)),
+    );
+    const pathOf = await folderPathsOf();
+    return {
+      dashboards: named.map((dashboard) => ({
+        id: dashboard.id,
+        title: dashboard.title,
+        folderId: dashboard.folderId,
+        folderPath: dashboard.folderId === null ? [] : pathOf(dashboard.folderId),
+      })),
+      hidden: shared.length - named.length,
+    };
+  };
+
+  /**
+   * What a delete would be refused for, asked before its dialog opens
+   * (T517; design 14, A1): the same answer as its own `409`, to the same
+   * users, so what the dialog says is what the delete checks.
+   */
+  app.get('/api/documents/:kind/:id/dependents', USER, async (request, reply) => {
+    const { kind, id } = request.params as { kind: string; id: string };
+    if (kind !== 'chart') throw new BadRequest('Only a chart’s dependents are asked here');
+    const found = await itemFor(request, reply, kind, id, 'write');
+    if (found === undefined) return reply;
+    if (await ownOfShared(kind, found)) return reply.code(409).send(sharedInPlace('dashboard'));
+    // With security off nothing was read: one that isn't there is said so, as
+    // its delete says it; one this build can't read (AC-181) still goes.
+    if (found.stored === null && docs?.get !== undefined) {
+      const stored = await docs.get('chart', id).catch((failure: unknown) => {
+        if (failure instanceof ChartDocumentError) return undefined;
+        throw failure;
+      });
+      if (stored === null) return reply.code(404).send(NOT_THERE);
+    }
+    return chartDependents(request, id);
+  });
+
+  /**
+   * Deleting a folder, dashboard or chart. A library chart a shared folder's
+   * dashboard shows is refused, naming the dashboards (T517, AC-362; AC-023's
+   * confirm-then-delete is retired). The check is on the server, not only in
+   * the dialog, so calling the API directly can't skip it. `409` rather than
+   * `400`: nothing about the request is malformed, it conflicts with the
+   * current state.
    */
   app.delete('/api/documents/:kind/:id', USER, async (request, reply) => {
     const { kind, id } = request.params as { kind: string; id: string };
-    const { confirm } = request.query as { confirm?: string };
 
     if (kind !== 'folder' && kind !== 'dashboard' && kind !== 'chart') {
       throw new BadRequest('kind must be one of folder, dashboard or chart');
@@ -3770,32 +3868,18 @@ export function buildServer({
     ) {
       return reply.code(403).send({ error: READ_ONLY });
     }
-    // A shared dashboard's own chart is part of it: it goes only as its
-    // dashboard changes, by a proposal (T502's review, AC-278).
-    if (
-      kind === 'chart' &&
-      found.seen !== undefined &&
-      found.stored !== null &&
-      typeof found.stored.body['localToDashboardId'] === 'string' &&
-      (await isShared('chart', found.stored))
-    )
+    if (kind === 'chart' && (await ownOfShared(kind, found)))
       return reply.code(409).send(sharedInPlace('dashboard'));
 
-    if (kind === 'chart' && confirm !== 'true' && cat?.dashboardsUsing) {
-      // Named only where they may see them (T326's review).
-      const seen = found.seen;
-      const dashboards = ((await cat.dashboardsUsing(id)) as { folderId: string | null }[]).filter(
-        (dashboard) =>
-          seen === undefined ||
-          (dashboard.folderId !== null && seen.rights.has(dashboard.folderId)),
-      );
-      if (dashboards.length > 0) {
+    if (kind === 'chart') {
+      const { dashboards, hidden } = await chartDependents(request, id);
+      const using = dashboards.length + hidden;
+      if (using > 0)
         return reply.status(409).send({
-          error: 'This chart is used by dashboards. Confirm to delete it.',
-          requiresConfirmation: true,
+          error: `This chart is used by ${String(using)} dashboard${using === 1 ? '' : 's'}: remove it from ${using === 1 ? 'it' : 'them'} first.`,
           dashboards,
+          hidden,
         });
-      }
     }
 
     // A folder holding models, itself or beneath it, isn't deleted: its cubes

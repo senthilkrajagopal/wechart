@@ -411,7 +411,7 @@ describe('a shared item is never changed in place (T502, AC-278)', () => {
     const before = await stored('chart', ids.local);
     const answer = await as('writer', {
       method: 'DELETE',
-      url: `/api/documents/chart/${ids.local}?confirm=true`,
+      url: `/api/documents/chart/${ids.local}`,
     });
     expect(answer.statusCode, answer.body).toBe(409);
     expect(answer.json()).toEqual(REFUSED('dashboard'));

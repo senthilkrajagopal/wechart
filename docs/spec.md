@@ -1246,7 +1246,7 @@ Traces to: `[R43]`; design `docs/design/reviews/2026-09-28/designs/13-dashboard-
 Purpose: delete an item only when nothing depends on it, clear My workspace in one go, keep each edit's copies together in a project folder with a description, and narrow Explore to one kind of item.
 Traces to: `[R48]`.
 
-- [ ] AC-362 WHEN a user deletes a library chart that a dashboard in a shared folder uses, THE SYSTEM SHALL refuse the delete, naming the dashboards that use it that the user may see and counting the rest, and SHALL delete a chart no such dashboard uses. A draft in a workspace doesn't hold it back: its tile shows the chart gone (`[R48-1]`; supersedes AC-023; drafts, 2026-09-30, `[R49]`).
+- [x] AC-362 WHEN a user deletes a library chart that a dashboard in a shared folder uses, THE SYSTEM SHALL refuse the delete, naming the dashboards that use it that the user may see and counting the rest, and SHALL delete a chart no such dashboard uses. A draft in a workspace doesn't hold it back: its tile shows the chart gone (`[R48-1]`; supersedes AC-023; drafts, 2026-09-30, `[R49]`).
       Fails when: a chart a shared folder's dashboard uses is deleted; the refusal names a dashboard the user may not see, or leaves out one they may; a draft keeps the chart from being deleted; or a chart no shared dashboard uses can't be deleted by a user who may change its folder.
 - [x] AC-363 WHEN a user who may change a dashboard deletes it, THE SYSTEM SHALL remove it together with its own charts and its bookmarks (`[R48]`).
       Fails when: the dashboard, one of its own charts or one of its bookmarks is still there after the delete; or a user who may not change it can delete it.

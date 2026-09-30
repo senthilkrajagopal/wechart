@@ -33,18 +33,21 @@ test('a delete dialog takes focus on its safe choice, closes on Escape, and give
   });
 
   await page.goto(`/explore/charts/${chart.id}`);
-  const remove = page.getByRole('button', { name: 'Delete chart' });
-  await remove.focus();
+  // Delete chart…, in the header's ⋯ (T517; design 14, screen 2).
+  const more = page.getByRole('button', { name: `More actions for Chart ${unique}` });
+  await more.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitem', { name: 'Delete chart…' })).toBeFocused();
   await page.keyboard.press('Enter');
 
-  const dialog = page.getByRole('alertdialog');
+  // A dashboard uses it: Can't delete, with Close, the choice that loses nothing.
+  const dialog = page.getByRole('alertdialog', { name: `Can’t delete “Chart ${unique}”` });
   await expect(dialog).toBeVisible();
-  // On the choice that loses nothing.
-  await expect(dialog.getByRole('button', { name: 'Keep the chart' })).toBeFocused();
+  await expect(dialog.getByRole('button', { name: 'Close' })).toBeFocused();
 
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
-  await expect(remove).toBeFocused();
+  await expect(more).toBeFocused();
 });
 
 const DASHBOARD = '/explore/dashboards/seed-root-dashboard-1';
