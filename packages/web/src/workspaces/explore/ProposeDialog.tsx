@@ -69,8 +69,11 @@ function doesText(item: ProposalCheckItem, targetPath: readonly string[]): strin
     : `replaces version ${String(item.replaces.version)}${where === 'this folder' ? '' : ` in ${where}`}`;
 }
 
-/** What the live region says, and only as the count crosses 900 and 1,000. */
-function announcementOf(length: number): string {
+/**
+ * What the live region says, and only as the count crosses 900 and 1,000:
+ * the folder description's counter says it too (T524).
+ */
+export function announcementOf(length: number): string {
   if (length > PROPOSAL_TEXT_LIMIT)
     return `${count.format(length - PROPOSAL_TEXT_LIMIT)} over the limit of 1,000 characters.`;
   if (length === PROPOSAL_TEXT_LIMIT) return 'At the limit of 1,000 characters.';

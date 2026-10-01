@@ -22,6 +22,8 @@ export interface FolderNode {
   readonly itemCount?: number;
   /** Its id in xcube, which names its items (T429, AC-328); none until it has one. */
   readonly xcubeId?: string | null;
+  /** What it is for, in its own words (T524, AC-369); none is null. */
+  readonly description?: string | null;
 }
 
 export interface FolderTreeProps {

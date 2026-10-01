@@ -553,9 +553,15 @@ export function FolderContents({
                       ) : (
                         <span className="folder-contents__title">{item.title}</span>
                       )}
-                      {/* The prototype's second line: what the dashboard is for;
-                          in the workspace, where it goes (design 04, pin 3). */}
-                      {workspace !== undefined ? (
+                      {/* The prototype's second line: what the dashboard is for,
+                          or the folder (T524; design 14, P1); in the workspace,
+                          where it goes (design 04, pin 3), a folder its
+                          description in that line's place where it has one. */}
+                      {item.kind === 'folder' && item.description ? (
+                        <span className="folder-contents__description is-one-line">
+                          {item.description}
+                        </span>
+                      ) : workspace !== undefined ? (
                         <OriginLine item={item} workspace={workspace} />
                       ) : item.kind === 'dashboard' && item.description ? (
                         <span className="folder-contents__description">{item.description}</span>

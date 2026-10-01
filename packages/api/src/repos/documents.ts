@@ -343,11 +343,14 @@ export function documents(db: Kysely<Database>) {
       id,
       title,
       folderId,
+      description,
     }: {
       kind: DocumentKind;
       id: string;
       title?: string;
       folderId?: string;
+      /** A folder's description (T524, AC-369): null takes it away. */
+      description?: string | null;
     }): Promise<StoredDocument> {
       const current = await db
         .selectFrom('documents')
@@ -358,11 +361,14 @@ export function documents(db: Kysely<Database>) {
 
       if (!current) throw new DocumentNotFoundError(kind, id);
 
+      const { description: _was, ...rest } = current.body as Record<string, unknown>;
       const body = {
-        ...(current.body as Record<string, unknown>),
+        ...(description === undefined ? (current.body as Record<string, unknown>) : rest),
         ...(title === undefined ? {} : { title }),
         ...(folderId === undefined ? {} : { folderId }),
+        ...(description === undefined || description === null ? {} : { description }),
       };
+      void _was;
 
       const updated = await db
         .updateTable('documents')

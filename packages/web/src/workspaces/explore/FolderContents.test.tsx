@@ -720,6 +720,41 @@ describe('My workspace, as design 04 draws it (T498)', () => {
     expect(lineOf('more')?.textContent).toBe('3 items · folders in My workspace have no target');
   });
 
+  it('says a folder’s description in that line’s place, where it has one (T524; design 14, P1)', () => {
+    render(
+      <FolderContents
+        items={[
+          mine[0]!,
+          {
+            ...mine[0]!,
+            id: 'project',
+            title: 'project-2026-09-30-1430',
+            description: 'Editing Revenue overview from Sales / EMEA',
+          },
+        ]}
+        workspace={workspace}
+      />,
+    );
+
+    expect(lineOf('drafts')?.textContent).toBe('1 item · folders in My workspace have no target');
+    expect(lineOf('project')).toBeNull();
+    expect(
+      screen.getByTestId('item-project').querySelector('.folder-contents__description')
+        ?.textContent,
+    ).toBe('Editing Revenue overview from Sales / EMEA');
+  });
+
+  it('gives a shared folder’s row its description as its second line (P1)', () => {
+    render(
+      <FolderContents
+        items={[{ ...mine[0]!, description: 'Revenue, pipeline and product mix.' }]}
+      />,
+    );
+    expect(
+      screen.getByTestId('item-drafts').querySelector('.folder-contents__description')?.textContent,
+    ).toBe('Revenue, pipeline and product mix.');
+  });
+
   it('shows Status in place of Built on and Owner, each item a draft with its icon', () => {
     render(<FolderContents items={mine} workspace={workspace} />);
 

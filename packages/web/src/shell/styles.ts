@@ -522,6 +522,64 @@ main:has(.explore) {
   height: 36px;
   max-width: 320px;
 }
+/* A folder's description under its name (T524, AC-369; design 14, state H):
+   text-sm in text-secondary, two lines then More; Edit beside it. */
+.folder-description {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  max-width: 860px;
+  margin-top: -4px;
+  font-size: var(--wc-text-sm-size);
+  line-height: var(--wc-text-sm-line);
+  color: var(--wc-text-secondary);
+}
+/* Its own line breaks kept: plain Enter is a new line (design 14, keyboard). */
+.folder-description__text { white-space: pre-line; overflow-wrap: anywhere; }
+.folder-description__text.is-clamped {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.folder-description .btn-link,
+.folder-description__add {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--wc-accent);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  font-weight: var(--wc-text-xs-strong-weight);
+  cursor: pointer;
+}
+.folder-description .btn-link:hover,
+.folder-description__add:hover { text-decoration: underline; }
+.folder-description__add { align-self: flex-start; margin-top: -4px; }
+.folder-description.folder-description--editing { display: grid; gap: 6px; max-width: 720px; }
+.folder-description__top {
+  display: flex;
+  align-items: center;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  font-weight: var(--wc-text-xs-strong-weight);
+}
+.folder-description__counter { margin-left: auto; font-weight: 400; font-variant-numeric: tabular-nums; }
+.folder-description__counter.is-over { color: var(--wc-status-error); font-weight: 600; }
+.folder-description textarea { width: 100%; min-height: 68px; resize: vertical; font: inherit; color: var(--wc-text-primary); }
+.folder-description textarea[aria-invalid='true'] { border-color: var(--wc-status-error); }
+.folder-description__over {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin: 0;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  color: var(--wc-status-error);
+}
+.folder-description__bar { display: flex; align-items: center; gap: 8px; }
+.folder-description__keys { font-size: var(--wc-text-xs-size); color: var(--wc-text-muted); }
 .explore__head input.explore__search:not([type='checkbox']):not([type='radio']):not([type='file']) {
   width: 260px;
   max-width: 100%;
@@ -3265,6 +3323,13 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
   line-height: var(--wc-text-xs-line);
   font-weight: var(--wc-text-xs-weight);
   color: var(--wc-text-muted);
+}
+/* A folder's, clamped to one line (design 14, P1). */
+.folder-contents__description.is-one-line {
+  max-width: 60ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* The Jobs workspace's tabs, and its pre-aggregations with their builds (T155). */
 /* Tabs on the page ground, not on a band of their own (T466, UX-109). */

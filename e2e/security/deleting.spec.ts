@@ -757,3 +757,101 @@ test.describe('deleting a workspace item waiting in a proposal (T528, AC-372)', 
     });
   });
 });
+
+/**
+ * T524 (AC-369; design 14, state H and P1): a read-write member gives a
+ * folder a description, edited in place under its name with the counter;
+ * it shows there and as the second line of the folder's row; a reader sees
+ * it and can't change it; past 1,000 characters it isn't saved.
+ */
+const DESCRIBED = `Described ${RUN}`;
+const INSIDE = `Inside ${RUN}`;
+const described = { parent: '', folder: '' };
+const DESCRIPTION = `Revenue, pipeline and product mix ${RUN}, refreshed nightly.`;
+
+test.describe('a folder’s description (T524, AC-369)', () => {
+  test.afterAll(async ({ browser }) => {
+    const admin = await as(browser, 'super');
+    for (const id of [described.folder, described.parent])
+      if (id !== '') await admin.request.delete(`/api/documents/folder/${id}`);
+    await admin.close();
+  });
+
+  test.describe('as super', () => {
+    test.use({ role: 'super' });
+
+    test('makes a folder writer changes and reader reads, with a folder in it', async ({
+      page,
+    }) => {
+      const parent = await page.request.post('/api/documents', {
+        data: { kind: 'folder', title: DESCRIBED, folderId: 'root' },
+      });
+      described.parent = ((await parent.json()) as { id: string }).id;
+      expect(
+        (
+          await page.request.put(`/api/folders/${described.parent}/access`, {
+            data: { readOnly: ['sales-ro'], readWrite: ['sales-rw'] },
+          })
+        ).status(),
+      ).toBe(200);
+      const folder = await page.request.post('/api/documents', {
+        data: { kind: 'folder', title: INSIDE, folderId: described.parent },
+      });
+      described.folder = ((await folder.json()) as { id: string }).id;
+    });
+  });
+
+  test.describe('as writer', () => {
+    test.use({ role: 'writer' });
+
+    test('adds one in place, under the name and on the row, and can’t save one over 1,000', async ({
+      page,
+    }) => {
+      await page.goto(`/explore?folder=${described.folder}`);
+      const contents = page.getByTestId('explore-contents');
+      await expect(contents.getByRole('heading', { level: 1 })).toHaveText(INSIDE);
+      await contents.getByRole('button', { name: 'Add a description' }).click();
+      const field = contents.getByRole('textbox', { name: `Description of ${INSIDE}` });
+      await expect(field).toBeFocused();
+
+      // Past 1,000: the counter says so, nothing is cut, and Save waits (H3).
+      await field.fill('x'.repeat(1001));
+      await expect(contents.getByText('1,001 / 1,000')).toBeVisible();
+      await expect(contents.getByText('Shorten to 1,000 characters.')).toBeVisible();
+      await expect(contents.getByRole('button', { name: 'Save' })).toBeDisabled();
+      const refused = await page.request.patch(`/api/documents/folder/${described.folder}`, {
+        data: { description: 'x'.repeat(1001) },
+      });
+      expect(refused.status()).toBe(400);
+
+      await field.fill(DESCRIPTION);
+      await expect(contents.getByText(`${String(DESCRIPTION.length)} / 1,000`)).toBeVisible();
+      await contents.getByRole('button', { name: 'Save' }).click();
+      await expect(contents.locator('.folder-description__text')).toHaveText(DESCRIPTION);
+      await expect(contents.getByRole('button', { name: 'Edit description' })).toBeFocused();
+
+      // Its row's second line, in the folder holding it (P1).
+      await page.goto(`/explore?folder=${described.parent}`);
+      await expect(
+        page.getByTestId(`item-${described.folder}`).locator('.folder-contents__description'),
+      ).toHaveText(DESCRIPTION);
+    });
+  });
+
+  test.describe('as reader', () => {
+    test.use({ role: 'reader' });
+
+    test('reads it, with no way to change it', async ({ page }) => {
+      await page.goto(`/explore?folder=${described.folder}`);
+      const contents = page.getByTestId('explore-contents');
+      await expect(contents.locator('.folder-description__text')).toHaveText(DESCRIPTION);
+      await expect(
+        contents.getByRole('button', { name: /Edit description|Add a description/ }),
+      ).toHaveCount(0);
+      const refused = await page.request.patch(`/api/documents/folder/${described.folder}`, {
+        data: { description: 'Mine now' },
+      });
+      expect(refused.status()).toBe(403);
+    });
+  });
+});

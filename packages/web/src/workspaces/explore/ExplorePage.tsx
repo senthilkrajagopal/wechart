@@ -28,6 +28,7 @@ import { ExportPane } from '../../dashboard/export/ExportPane';
 import { ExportedToast } from '../../dashboard/export/ExportedToast';
 import { ImportPane } from './import/ImportPane';
 import { fileHref } from '../model/inFolder';
+import { FolderDescription } from './FolderDescription';
 import { DeleteDialog, type Checked, type Confirmation, type Refusal } from './DeleteDialog';
 import {
   checkChart,
@@ -612,6 +613,29 @@ export function ExplorePage() {
     setFolderId(id);
   };
 
+  /** The open folder's description, as the folders were read (T524, AC-369). */
+  const openFolderDescription =
+    (folders.data ?? []).find((folder) => folder.id === folderId)?.description ?? null;
+  /** Saves it, or throws the server's reason; the tree and rows then read it afresh. */
+  const saveDescription = async (text: string) => {
+    const response = await fetch(`/api/documents/folder/${encodeURIComponent(folderId)}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ description: text }),
+    });
+    if (!response.ok) {
+      const said = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+      };
+      throw new Error(
+        `Could not save: ${said.error ?? said.message ?? `error ${String(response.status)}`}`,
+      );
+    }
+    await queryClient.invalidateQueries({ queryKey: ['folders'] });
+    await queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
+  };
+
   const commitRename = () => {
     // Only the rename begun in this folder: `renaming` is null otherwise.
     if (renaming === null || renameOf === null) return;
@@ -903,6 +927,17 @@ export function ExplorePage() {
           )}
         </div>
 
+        {/* What the folder is for, under its name (T524, AC-369; design 14,
+            state H): never a root's, nor over a search's results. */}
+        {!searching && known && !isRoot ? (
+          <FolderDescription
+            key={folderId}
+            folderTitle={folderTitle}
+            description={chain.length > 0 ? openFolderDescription : null}
+            mayEdit={role.mayRename}
+            onSave={saveDescription}
+          />
+        ) : null}
         {create.isError ? (
           <StateLine kind="err">{(create.error as Error).message}</StateLine>
         ) : null}

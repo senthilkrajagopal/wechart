@@ -248,6 +248,8 @@ export interface DocumentWriter {
     id: string;
     title?: string;
     folderId?: string;
+    /** A folder's description (T524, AC-369): null takes it away. */
+    description?: string | null;
   }): Promise<unknown>;
   attachChart?(dashboardId: string, chartId: string): Promise<unknown>;
   remove?(kind: 'folder' | 'dashboard' | 'chart', id: string): Promise<boolean>;
@@ -333,6 +335,8 @@ export interface QueryLogWriter {
 
 /** The query log's time ranges, in seconds (AC-230). */
 const WITHIN_SECONDS = { hour: 3_600, day: 86_400, week: 604_800 } as const;
+/** A folder's description's limit, in characters, as code points (T524, AC-369). */
+const FOLDER_DESCRIPTION_LIMIT = 1000;
 
 export function buildServer({
   config,
@@ -3254,14 +3258,21 @@ export function buildServer({
 
     // A folder's AD groups are the access route's alone (T314's review): kept
     // as stored, whatever this body says or leaves out, so saving a folder
-    // can neither grant access nor take it away.
+    // can neither grant access nor take it away. Its description is the
+    // description's route's (PATCH, held to 1,000 characters), kept so too
+    // (T524's review).
     let written = body.body;
     if (kind === 'folder') {
-      const { access: _sent, ...rest } = body.body;
-      void _sent;
+      const { access: _sent, description: _said, ...rest } = body.body;
+      void [_sent, _said];
       const stored = found.stored ?? (await docs.get?.('folder', id));
-      written =
-        stored?.body['access'] === undefined ? rest : { ...rest, access: stored.body['access'] };
+      written = {
+        ...rest,
+        ...(stored?.body['access'] === undefined ? {} : { access: stored.body['access'] }),
+        ...(stored?.body['description'] === undefined
+          ? {}
+          : { description: stored.body['description'] }),
+      };
     } else {
       // A stored chart this build can't read is upgraded by this save, as before.
       const stored = found.stored ?? (await docs.get?.(kind, id).catch(() => null));
@@ -3675,7 +3686,8 @@ export function buildServer({
 
   app.patch('/api/documents/:kind/:id', USER, async (request, reply) => {
     const { kind, id } = request.params as { kind: string; id: string };
-    const body = request.body as { title?: string; folderId?: string } | undefined;
+    const body = request.body as
+      { title?: string; folderId?: string; description?: unknown } | undefined;
 
     if (kind !== 'folder' && kind !== 'dashboard' && kind !== 'chart') {
       throw new BadRequest('kind must be one of folder, dashboard or chart');
@@ -3684,6 +3696,24 @@ export function buildServer({
 
     const title = body?.title?.trim();
     if (title !== undefined && title === '') throw new BadRequest('A title cannot be blank');
+    /**
+     * A folder's description (T524, AC-369): text of at most 1,000
+     * characters, counted as code points as the dialog's counter counts them,
+     * never cut; blank takes it away. A dashboard's is in its settings.
+     */
+    let description: string | null | undefined;
+    if (body?.description !== undefined) {
+      const sent = body.description;
+      if (kind !== 'folder') throw new BadRequest('Only a folder’s description is set here');
+      if ((sent !== null && typeof sent !== 'string') || /\0/.test(`${String(sent)}`))
+        return reply.code(400).send({ error: 'A description is text.' });
+      description = typeof sent === 'string' && sent.trim() !== '' ? sent : null;
+      const length = description === null ? 0 : [...description].length;
+      if (length > FOLDER_DESCRIPTION_LIMIT)
+        return reply.code(400).send({
+          error: `A description is at most 1,000 characters: this one has ${length.toLocaleString('en-GB')}.`,
+        });
+    }
 
     // With security on, one they may change, moved only where they may write
     // too (T326, AC-266).
@@ -3786,6 +3816,7 @@ export function buildServer({
       id,
       ...(title === undefined ? {} : { title }),
       ...(body?.folderId === undefined ? {} : { folderId: body.folderId }),
+      ...(description === undefined ? {} : { description }),
     });
   });
 

@@ -86,6 +86,8 @@ export interface FolderNode {
   readonly itemCount: number;
   /** Its id in xcube (T425), which names its items; none until it has one (T429, AC-329). */
   readonly xcubeId: string | null;
+  /** What it is for, in its own words (T524, AC-369); none is null. */
+  readonly description?: string | null;
 }
 
 /** The folder a document sits in when it sits at the top of the shared tree. */
@@ -188,6 +190,8 @@ export function catalog(db: Kysely<Database>) {
           'documents.folder_id',
           'folder_xcube_ids.xcube_id',
         ])
+        // What it is for, under its name in Explore (T524, AC-369).
+        .select(sql<string | null>`documents.body ->> 'description'`.as('description'))
         .where('documents.kind', '=', 'folder')
         .orderBy('documents.title', 'asc')
         .execute();
@@ -202,6 +206,8 @@ export function catalog(db: Kysely<Database>) {
         parentId: row.folder_id,
         itemCount: counts.get(row.id) ?? 0,
         xcubeId: row.xcube_id,
+        // A blank one is none, as a dashboard's is.
+        description: row.description?.trim() ? row.description : null,
       }));
     },
 
