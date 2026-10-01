@@ -26,6 +26,8 @@ const made = {
   library: '',
   chartCopy: '',
   copy: '',
+  /** The project folder the copy went into (T523). */
+  project: '',
   chart: '',
   own: '',
   boardProposal: '',
@@ -86,6 +88,7 @@ test.describe('deciding a proposal in its review view (T356, AC-288)', () => {
           ['chart', made.chartCopy],
           ['chart', made.chart],
           ['chart', made.own],
+          ['folder', made.project],
         ] as const)
           if (id !== '') await context.request.delete(`/api/documents/${kind}/${id}`);
       }
@@ -158,10 +161,13 @@ test.describe('deciding a proposal in its review view (T356, AC-288)', () => {
       page,
     }) => {
       const copied = await page.request.post('/api/workspace/copies', {
-        data: { kind: 'dashboard', id: made.board },
+        data: { kind: 'dashboard', id: made.board, timeZone: 'UTC' },
       });
       expect(copied.status(), await copied.text()).toBeLessThan(300);
-      made.copy = ((await copied.json()) as { id: string }).id;
+      ({ id: made.copy, folderId: made.project } = (await copied.json()) as {
+        id: string;
+        folderId: string;
+      });
       const stored = (await (
         await page.request.get(`/api/documents/dashboard/${made.copy}`)
       ).json()) as {

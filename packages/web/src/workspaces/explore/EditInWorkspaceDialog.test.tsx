@@ -51,8 +51,12 @@ const offered = {
   viewOnly: false,
 };
 
-function shown() {
+/** The browser's time zone, which names the copy's folder (T523). */
+const ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+function shown({ sourceFailsOnce = false, copyThere = false } = {}) {
   const sent: string[] = [];
+  let failing = sourceFailsOnce;
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: RequestInit) => {
@@ -66,12 +70,30 @@ function shown() {
       sent.push(`${init?.method ?? 'GET'} ${url} ${String(init?.body ?? '')}`);
       if (url === '/api/workspace/copies')
         return Promise.resolve(
-          new Response(JSON.stringify({ kind: 'dashboard', id: 'copy1', created: true }), {
-            status: 201,
-          }),
+          copyThere
+            ? // Their copy, made meanwhile, at My workspace's root.
+              new Response(
+                JSON.stringify({
+                  kind: 'dashboard',
+                  id: 'copy1',
+                  created: false,
+                  folderId: 'mine',
+                }),
+              )
+            : new Response(
+                JSON.stringify({ kind: 'dashboard', id: 'copy1', created: true, folderId: 'p1' }),
+                { status: 201 },
+              ),
         );
-      if (url === '/api/data-sources/ds1/copy')
+      if (url === '/api/data-sources/ds1/copy') {
+        if (failing) {
+          failing = false;
+          return Promise.resolve(
+            new Response(JSON.stringify({ error: 'xcube is away.' }), { status: 503 }),
+          );
+        }
         return Promise.resolve(new Response(JSON.stringify({ id: 'dscopy' }), { status: 201 }));
+      }
       return Promise.resolve(new Response('{}', { status: 404 }));
     }),
   );
@@ -104,6 +126,7 @@ async function boxOf(name: RegExp, disabled: boolean) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('Edit in my workspace, for a dashboard (T348, AC-279)', () => {
@@ -130,7 +153,9 @@ describe('Edit in my workspace, for a dashboard (T348, AC-279)', () => {
     await vi.waitFor(() => {
       expect(onCopied).toHaveBeenCalledWith('copy1');
     });
-    expect(sent).toEqual(['POST /api/workspace/copies {"kind":"dashboard","id":"d1"}']);
+    expect(sent).toEqual([
+      `POST /api/workspace/copies {"kind":"dashboard","id":"d1","timeZone":"${ZONE}"}`,
+    ]);
   });
 
   it('shows a data source in a folder the user only reads, and doesn’t offer it (T348’s review)', async () => {
@@ -147,7 +172,7 @@ describe('Edit in my workspace, for a dashboard (T348, AC-279)', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('copies a ticked data source too', async () => {
+  it('copies a ticked data source too, into the folder the dashboard’s copy made (T523, AC-368)', async () => {
     const { sent, onCopied } = shown();
     const dialog = screen.getByRole('dialog', { name: 'Edit in my workspace' });
     await userEvent.click(await boxOf(/emea_replica/, false));
@@ -156,8 +181,54 @@ describe('Edit in my workspace, for a dashboard (T348, AC-279)', () => {
       expect(onCopied).toHaveBeenCalledWith('copy1');
     });
     expect(sent).toEqual([
-      'POST /api/data-sources/ds1/copy ',
-      'POST /api/workspace/copies {"kind":"dashboard","id":"d1"}',
+      `POST /api/workspace/copies {"kind":"dashboard","id":"d1","timeZone":"${ZONE}"}`,
+      'POST /api/data-sources/ds1/copy {"into":"p1"}',
+    ]);
+  });
+});
+
+describe('the folder a dashboard’s copies go into (T523, AC-368; design 14, state G1)', () => {
+  it('names it: the minute in the browser’s time zone as the dialog opens', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    // Local time: the browser's own zone.
+    vi.setSystemTime(new Date(2026, 8, 30, 14, 30, 12));
+    shown();
+    const dialog = screen.getByRole('dialog', { name: 'Edit in my workspace' });
+    expect((await within(dialog).findByTestId('project-folder')).textContent).toBe(
+      'Into a new folder in My workspace: project-2026-09-30-1430',
+    );
+  });
+
+  it('puts a ticked data source beside their copy made meanwhile, never in a folder of its own (T523’s review)', async () => {
+    const { sent, onCopied } = shown({ copyThere: true });
+    const dialog = screen.getByRole('dialog', { name: 'Edit in my workspace' });
+    await userEvent.click(await boxOf(/emea_replica/, false));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Copy and edit' }));
+    await vi.waitFor(() => {
+      expect(onCopied).toHaveBeenCalledWith('copy1');
+    });
+    expect(sent).toEqual([
+      `POST /api/workspace/copies {"kind":"dashboard","id":"d1","timeZone":"${ZONE}"}`,
+      'POST /api/data-sources/ds1/copy {"into":"mine"}',
+    ]);
+  });
+
+  it('copies only what is left on a second try, into the same folder, once a data source’s copy failed', async () => {
+    const { sent, onCopied } = shown({ sourceFailsOnce: true });
+    const dialog = screen.getByRole('dialog', { name: 'Edit in my workspace' });
+    await userEvent.click(await boxOf(/emea_replica/, false));
+    const copy = within(dialog).getByRole('button', { name: 'Copy and edit' });
+    await userEvent.click(copy);
+    expect((await within(dialog).findByRole('alert')).textContent).toBe('xcube is away.');
+    expect(onCopied).not.toHaveBeenCalled();
+    await userEvent.click(copy);
+    await vi.waitFor(() => {
+      expect(onCopied).toHaveBeenCalledWith('copy1');
+    });
+    expect(sent).toEqual([
+      `POST /api/workspace/copies {"kind":"dashboard","id":"d1","timeZone":"${ZONE}"}`,
+      'POST /api/data-sources/ds1/copy {"into":"p1"}',
+      'POST /api/data-sources/ds1/copy {"into":"p1"}',
     ]);
   });
 });

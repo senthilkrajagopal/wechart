@@ -15,6 +15,7 @@ import { folderAccessStore } from '../repos/folder-access';
 import { proposalStore } from '../repos/proposals';
 import { versionStore } from '../repos/versions';
 import { buildServer } from '../server';
+import { removeProjectFolders, TEST_TIME_ZONE } from './project-folder.fixture';
 
 /**
  * T354 (AC-289; design 06 of 2026-09-27; rule 80): a shared item's history,
@@ -198,6 +199,7 @@ afterAll(async () => {
     .where('created_at', '>', new Date(Date.now() - 3600_000))
     .execute()
     .catch(() => undefined);
+  await removeProjectFolders();
   for (const { kind, id } of made.reverse()) await docs().remove(kind, id);
   await closeDb();
 });
@@ -405,9 +407,9 @@ describe('an item’s history (T354, AC-289)', () => {
     const copied = await as('writer', {
       method: 'POST',
       url: '/api/workspace/copies',
-      payload: { kind: 'chart', id: chart },
+      payload: { kind: 'chart', id: chart, timeZone: TEST_TIME_ZONE },
     });
-    const copy = copied.json<{ id: string }>().id;
+    const { id: copy, folderId: copiedTo } = copied.json<{ id: string; folderId: string }>();
 
     const asked = await restore('writer', 'chart', chart, { version: 1 });
     expect(asked.statusCode, asked.body).toBe(409);
@@ -431,6 +433,8 @@ describe('an item’s history (T354, AC-289)', () => {
       version: 2,
       folderId: ids.sales,
     });
+    // In its place: the project folder the copy was in (T523's review).
+    expect(draft.body['folderId']).toBe(copiedTo);
     expect(await docs().get('chart', copy)).toBeNull();
 
     // Proposed, it waits: nothing replaces it until that is decided.
@@ -624,9 +628,10 @@ describe('an item’s history (T354, AC-289)', () => {
     const copied = await as('writer', {
       method: 'POST',
       url: `/api/data-sources/${source.id}/copy`,
+      payload: { timeZone: TEST_TIME_ZONE },
     });
     expect(copied.statusCode, copied.body).toBe(201);
-    const copyId = copied.json<{ id: string }>().id;
+    const { id: copyId, folderId: copiedTo } = copied.json<{ id: string; folderId: string }>();
     const asked = await restore('writer', 'data-source', source.id, { version: 1 });
     expect(asked.statusCode, asked.body).toBe(409);
     expect(asked.json()).toMatchObject({ id: copyId, replaceable: true });
@@ -639,6 +644,8 @@ describe('an item’s history (T354, AC-289)', () => {
     expect(await sources().get(copyId)).toBeUndefined();
     const draft = (await sources().get(replaced.json<{ id: string }>().id))!;
     expect([draft.fields['host'], draft.origin?.id]).toEqual(['db-one', source.id]);
+    // In its place: the project folder the copy was in (T523's review).
+    expect(draft.folderId).toBe(copiedTo);
   });
 
   it('tags the newest version current when a rename has moved the item on since (T354’s review)', async () => {

@@ -13,6 +13,7 @@ import { connectionTestStore } from '../repos/connection-tests';
 import { dataSourceStore } from '../repos/data-sources';
 import { documents } from '../repos/documents';
 import { folderAccessStore } from '../repos/folder-access';
+import { removeProjectFolders, TEST_TIME_ZONE } from '../routes/project-folder.fixture';
 import { buildServer } from '../server';
 
 /**
@@ -89,6 +90,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (app !== undefined) await app.close();
   await getDb().deleteFrom('data_sources').where('name', 'like', `${MARK}%`).execute();
+  await removeProjectFolders();
   await getDb().deleteFrom('audit_records').where('folder_id', '=', folderId).execute();
   // And the sign-ins this file made, which name no folder.
   await getDb()
@@ -120,6 +122,7 @@ describe('a data source copied into a workspace (T368’s review)', () => {
     const copied = await as('writer', {
       method: 'POST',
       url: `/api/data-sources/${held.id}/copy`,
+      payload: { timeZone: TEST_TIME_ZONE },
     });
     expect(copied.statusCode, copied.body).toBe(201);
     const copyId = copied.json<{ id: string }>().id;

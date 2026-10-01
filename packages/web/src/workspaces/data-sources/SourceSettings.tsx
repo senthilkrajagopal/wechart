@@ -35,6 +35,7 @@ import { DeleteDialog } from '../explore/DeleteDialog';
 import { checkSource, openProposalOf, removeSource } from '../explore/deleteChecks';
 import { sayOnExplore } from '../explore/deletedToast';
 import { exploreHref } from '../explore/folders';
+import { browserTimeZone } from '../explore/projectFolder';
 
 /**
  * A stored data source's settings (T462; AC-269, AC-161, AC-163, AC-310),
@@ -198,8 +199,11 @@ function Settings({ source }: { source: StoredSource }) {
 
   const editInWorkspace = async () => {
     setFailed(null);
+    // Into a project folder of its own, named in the user's time (T523, AC-368).
     const response = await fetch(`/api/data-sources/${encodeURIComponent(source.id)}/copy`, {
       method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ timeZone: browserTimeZone() }),
     });
     if (!response.ok) {
       const said = (await response.json().catch(() => ({}))) as { error?: string };

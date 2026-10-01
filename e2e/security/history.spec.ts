@@ -15,7 +15,14 @@ import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
 const RUN = Math.random().toString(36).slice(2, 8);
 const FOLDER = `History ${RUN}`;
 const BOARD = `Ledger ${RUN}`;
-const made = { folder: '', board: '', copy: '', restoreDraft: '', proposals: [] as string[] };
+const made = {
+  folder: '',
+  board: '',
+  copy: '',
+  project: '',
+  restoreDraft: '',
+  proposals: [] as string[],
+};
 
 test.describe.configure({ mode: 'serial' });
 
@@ -32,6 +39,9 @@ test.describe('an item’s history, and restoring a version (T357, AC-289)', () 
           await context.request.post(`/api/proposals/${proposal}/reject`, { data: {} });
         for (const id of [made.copy, made.restoreDraft])
           if (id !== '') await context.request.delete(`/api/documents/dashboard/${id}`);
+        // The project folder the copy went into (T523).
+        if (made.project !== '')
+          await context.request.delete(`/api/documents/folder/${made.project}`);
       }
       if (who === 'super') {
         if (made.board !== '')
@@ -70,9 +80,12 @@ test.describe('an item’s history, and restoring a version (T357, AC-289)', () 
 
     test('proposes a change: a page tab of its own', async ({ page }) => {
       const copied = await page.request.post('/api/workspace/copies', {
-        data: { kind: 'dashboard', id: made.board },
+        data: { kind: 'dashboard', id: made.board, timeZone: 'UTC' },
       });
-      made.copy = ((await copied.json()) as { id: string }).id;
+      ({ id: made.copy, folderId: made.project } = (await copied.json()) as {
+        id: string;
+        folderId: string;
+      });
       const stored = (await (
         await page.request.get(`/api/documents/dashboard/${made.copy}`)
       ).json()) as { body: Record<string, unknown>; version: number };

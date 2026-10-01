@@ -12,6 +12,12 @@ import { documents, type DocumentKind } from '../repos/documents';
 import { folderAccessStore } from '../repos/folder-access';
 import { proposalStore } from '../repos/proposals';
 import { buildServer } from '../server';
+import {
+  removeProjectFolders,
+  TEST_TIME_ZONE,
+  workspaceFoldersOf,
+  workspaceKeyOf,
+} from './project-folder.fixture';
 
 /**
  * T358 (AC-284; design 05 of 2026-09-27, states A, B and F): the Propose
@@ -95,6 +101,7 @@ afterAll(async () => {
   await db.deleteFrom('audit_records').where('folder_id', 'in', [ids.emea, ids.sales]).execute();
   if (writerKey !== '')
     await db.deleteFrom('documents').where('folder_id', '=', `ws:${writerKey}`).execute();
+  await removeProjectFolders();
   for (const { kind, id } of made.reverse()) await docs().remove(kind, id);
   await closeDb();
 });
@@ -117,11 +124,12 @@ describe('checking what a proposal would do (T358, AC-284)', () => {
     const copied = await as('writer', {
       method: 'POST',
       url: '/api/workspace/copies',
-      payload: { kind: 'chart', id: ids.shared },
+      payload: { kind: 'chart', id: ids.shared, timeZone: TEST_TIME_ZONE },
     });
     expect(copied.statusCode, copied.body).toBe(201);
     const copy = copied.json<{ id: string }>().id;
-    writerKey = ((await docs().get('chart', copy))!.body['folderId'] as string).slice(3);
+    // Its project folder's workspace (T523).
+    writerKey = await workspaceKeyOf((await docs().get('chart', copy))!.body['folderId'] as string);
 
     const answer = await check('writer', { kind: 'chart', id: copy });
     expect(answer.statusCode, answer.body).toBe(200);
@@ -197,7 +205,7 @@ describe('a proposal as its review view reads it (T356’s review)', () => {
       await as('writer', {
         method: 'POST',
         url: '/api/workspace/copies',
-        payload: { kind: 'chart', id: shared },
+        payload: { kind: 'chart', id: shared, timeZone: TEST_TIME_ZONE },
       })
     ).json<{ id: string }>().id;
     const proposed = await as('writer', {
@@ -265,13 +273,15 @@ describe('an item that went with another’s proposal (T358’s review)', () => 
       const answer = await as('writer', {
         method: 'POST',
         url: '/api/workspace/copies',
-        payload: { kind, id },
+        payload: { kind, id, timeZone: TEST_TIME_ZONE },
       });
       expect(answer.statusCode, answer.body).toBeLessThan(300);
       return answer.json<{ id: string }>().id;
     };
     const boardCopy = await copy('dashboard', board);
-    const chartCopy = (await docs().withOrigin('chart', ids.shared, [`ws:${writerKey}`]))[0]?.id;
+    const chartCopy = (
+      await docs().withOrigin('chart', ids.shared, await workspaceFoldersOf(writerKey))
+    )[0]?.id;
     const shownCopy = chartCopy ?? (await copy('chart', ids.shared));
     const proposed = await as('writer', {
       method: 'POST',

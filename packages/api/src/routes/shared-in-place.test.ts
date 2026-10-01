@@ -12,6 +12,7 @@ import { dataSourceStore } from '../repos/data-sources';
 import { documents, type DocumentKind } from '../repos/documents';
 import { folderAccessStore } from '../repos/folder-access';
 import { buildServer } from '../server';
+import { removeProjectFolders, TEST_TIME_ZONE } from './project-folder.fixture';
 
 /**
  * T502 (AC-278): with sign-in on, a shared folder's dashboard, chart or data
@@ -165,6 +166,7 @@ afterAll(async () => {
   if (app !== undefined) await app.close();
   if (open !== undefined) await open.close();
   if (ids.copy !== '') await sources().remove(ids.copy);
+  await removeProjectFolders();
   if (ids.source !== '') await sources().remove(ids.source);
   for (const { kind, id } of made.reverse())
     await docs()
@@ -362,6 +364,7 @@ describe('a shared item is never changed in place (T502, AC-278)', () => {
     const copied = await as('writer', {
       method: 'POST',
       url: `/api/data-sources/${ids.source}/copy`,
+      payload: { timeZone: TEST_TIME_ZONE },
     });
     expect(copied.statusCode, copied.body).toBe(201);
     ids.copy = copied.json<{ id: string }>().id;

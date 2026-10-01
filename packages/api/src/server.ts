@@ -105,6 +105,13 @@ import {
   type ShownCopy,
   withChartsRenamed,
 } from './routes/workspace-copy';
+import {
+  editingText,
+  freeName,
+  NO_TIME_ZONE,
+  projectName,
+  timeZoneOf,
+} from './routes/project-folder';
 import type { QueryLogEntry, QueryLogPageAsk } from './repos/query-log';
 
 /**
@@ -174,6 +181,8 @@ export interface BuildOptions {
   readonly proposals?: ProposalStore;
   /** The versions of what approvals land, kept (T352, AC-288). */
   readonly versions?: VersionStore;
+  /** The time now: a project folder's name is its minute (T523, AC-368). Tests set it. */
+  readonly now?: () => Date;
   /** Data sources as folder items, their secrets sealed (T335, AC-269). */
   readonly dataSources?: DataSourceStore;
   /**
@@ -369,6 +378,7 @@ export function buildServer({
   audit,
   proposals,
   versions,
+  now = () => new Date(),
 }: BuildOptions): FastifyInstance {
   const app = Fastify({
     logger,
@@ -928,6 +938,31 @@ export function buildServer({
               : {
                   withdraw: (request: FastifyRequest, id: string) =>
                     withdrawWithDelete({ store: proposals, audit }, request, 'data-source', id),
+                }),
+            // A copy's project folder (T523, AC-368), as a dashboard's copy makes one.
+            ...(docs === undefined
+              ? {}
+              : {
+                  projects: {
+                    foldersOf: async (workspace: string) => [
+                      workspace,
+                      ...(await foldersBeneath(workspace)).map((folder) => folder.id),
+                    ],
+                    make: async (request, workspace, timeZone, about) => {
+                      const folder = await projectFolderIn(
+                        workspace,
+                        userOf(request).key,
+                        timeZone,
+                        about,
+                      );
+                      await docs.create(folder);
+                      return folder.id;
+                    },
+                    drop: (folderId: string) =>
+                      docs.remove?.('folder', folderId) ?? Promise.resolve(),
+                    inTurn: <T>(workspace: string, work: () => Promise<T>) =>
+                      inTurn(workspace, work),
+                  },
                 }),
           }),
       ...(dataSourceLanding === undefined ? {} : { landing: dataSourceLanding }),
@@ -2563,22 +2598,106 @@ export function buildServer({
   });
 
   /**
+   * The dashboards in the user's workspace, wherever in it they are: those a
+   * chart may be put on with sign-in on (T502), a copy among them in its
+   * project folder (T523's review). One with no workspace has none.
+   */
+  app.get('/api/workspace/dashboards', USER, async (request, reply) => {
+    const seen = await visibilityOf(request);
+    if (seen === undefined || !cat)
+      return reply.code(404).send({ error: 'Workspaces need sign-in.' });
+    const own = workspaceIdOf(userOf(request).key);
+    if (!seen.rights.has(own)) return [];
+    const folderIds = [own, ...(await foldersBeneath(own)).map((folder) => folder.id)];
+    const rows = (
+      await Promise.all(folderIds.map((id) => cat.contents(id, { counted: false })))
+    ).flat() as { kind: string }[];
+    return rows.filter((row) => row.kind === 'dashboard');
+  });
+
+  /**
+   * Copies into one workspace made one at a time, in the order asked (T523):
+   * each finds the copy made before it rather than making a second, and no
+   * two project folders take one name. Within this server: two servers'
+   * copies at once can still both be made.
+   */
+  const turns = new Map<string, Promise<unknown>>();
+  const inTurn = async <T>(workspace: string, work: () => Promise<T>): Promise<T> => {
+    const before = turns.get(workspace) ?? Promise.resolve();
+    const mine = before.then(() => work());
+    const done = mine.then(
+      () => undefined,
+      () => undefined,
+    );
+    turns.set(workspace, done);
+    try {
+      return await mine;
+    } finally {
+      if (turns.get(workspace) === done) turns.delete(workspace);
+    }
+  };
+
+  /**
+   * A copy's project folder in the workspace `own` (T523; AC-368, AC-369;
+   * design 14, state G), to be made with the copy: named for this minute in
+   * `timeZone`, `-2`, `-3`… where a folder of the workspace has that name,
+   * and described by what it edits and where that came from.
+   */
+  const projectFolderIn = async (
+    own: string,
+    owner: string,
+    timeZone: string,
+    about: { readonly title: string; readonly fromFolderId: string | null },
+  ) => {
+    const all = (cat ? await cat.folders({ counted: false }) : []) as {
+      id: string;
+      title: string;
+    }[];
+    const inWorkspace = new Set((await foldersBeneath(own)).map((folder) => folder.id));
+    const taken = new Set(
+      all.filter((folder) => inWorkspace.has(folder.id)).map((folder) => folder.title),
+    );
+    const pathOf = await folderPathsOf();
+    const path =
+      about.fromFolderId === null ? [] : pathOf(about.fromFolderId).map((folder) => folder.title);
+    return {
+      kind: 'folder' as const,
+      id: randomUUID(),
+      body: {
+        title: freeName(projectName(now(), timeZone), taken),
+        folderId: own,
+        owner,
+        description: editingText(about.title, path),
+      },
+    };
+  };
+
+  /**
    * "Edit in my workspace" (T344; AC-278, AC-279): a shared dashboard or
    * library chart copied into the user's own workspace, or their copy already
    * there opened (200, `created: false`). Only for one they may propose back:
    * a read-write member of its folder, who has a workspace (AC-277, AC-284).
    * A local chart goes with its dashboard; what is in a workspace is edited
    * there. With sign-in off there are no workspaces.
+   *
+   * Each copy goes into a project folder of its own, made with it, which the
+   * answer names (`folderId`): the dashboard or chart and the library charts'
+   * copies (T523, AC-368). The data sources chosen with a dashboard are
+   * copied into it next, by their own route (`into`). Their copy already
+   * there makes none.
    */
   app.post('/api/workspace/copies', USER, async (request, reply) => {
     const seen = await visibilityOf(request);
     if (seen === undefined || !docs?.get || !docs.createTogether || !docs.withOrigin)
       return reply.code(404).send({ error: 'Workspaces need sign-in.' });
-    const body = request.body as { kind?: unknown; id?: unknown } | undefined;
+    const body = request.body as { kind?: unknown; id?: unknown; timeZone?: unknown } | undefined;
     const kind = body?.kind;
     const id = body?.id;
     if ((kind !== 'dashboard' && kind !== 'chart') || typeof id !== 'string' || id === '')
       throw new BadRequest('Name the dashboard or chart to copy: { kind, id }.');
+    // Its folder's name is the minute in the user's time zone (T523).
+    const timeZone = timeZoneOf(body?.timeZone);
+    if (timeZone === undefined) throw new BadRequest(NO_TIME_ZONE);
     const own = workspaceIdOf(userOf(request).key);
     if (!seen.rights.has(own))
       return reply.code(403).send({
@@ -2606,52 +2725,63 @@ export function buildServer({
       throw new BadRequest('It is in a workspace already: edit it there.');
     if (home === null || !mayWrite(seen, home)) return reply.code(403).send({ error: READ_ONLY });
 
-    // Their copies, wherever in their workspace they are.
-    const mine = [own, ...(await foldersBeneath(own)).map((folder) => folder.id)];
-    const copyOf = async (what: 'dashboard' | 'chart', originId: string) =>
-      (await docs.withOrigin!(what, originId, mine))[0];
-    // Their copy, if there is one, opens instead: never a second.
-    const existing = await copyOf(kind, id);
-    if (existing !== undefined) return { kind, id: existing.id, created: false };
+    return inTurn(own, async () => {
+      // Their copies, wherever in their workspace they are.
+      const mine = [own, ...(await foldersBeneath(own)).map((folder) => folder.id)];
+      const copyOf = async (what: 'dashboard' | 'chart', originId: string) =>
+        (await docs.withOrigin!(what, originId, mine))[0];
+      // Their copy, if there is one, opens instead: never a second. With the
+      // folder it is in, where what is copied with it goes (T523's review).
+      const existing = await copyOf(kind, id);
+      if (existing !== undefined)
+        return { kind, id: existing.id, created: false, folderId: existing.body['folderId'] };
 
-    const owner = userOf(request).key;
-    let copies;
-    if (kind === 'dashboard') {
-      /**
-       * What each chart it shows becomes (T344's review): one its copier
-       * can't open refuses the copy, rather than landing in their workspace;
-       * one they have a copy of already is that copy; a library chart they
-       * may propose back is copied as one; any other becomes the copy's own
-       * local chart, so nothing else governs it.
-       */
-      const shown: ShownCopy[] = [];
-      for (const chartId of chartIdsOf(stored.body)) {
-        const chart = await read('chart', chartId);
-        if (chart.unreadable !== undefined)
-          return reply.code(422).send({ error: chart.unreadable });
-        if (chart.found == null) continue;
-        const found = chart.found;
-        if (!(await mayOpen(seen, 'chart', found)))
-          return reply.code(409).send({
-            error: 'It shows a chart you can’t open, so it can’t be copied into your workspace.',
-          });
-        const folder = folderIdOf(found.body);
-        const library = typeof found.body['localToDashboardId'] !== 'string';
-        const reused = library ? await copyOf('chart', found.id) : undefined;
-        if (reused !== undefined) shown.push({ as: 'reuse', chart: found, copyId: reused.id });
-        else if (library && folder !== null && mayWrite(seen, folder))
-          shown.push({ as: 'library', chart: found });
-        else
-          shown.push({
-            as: 'local',
-            chart: found,
-            folderSeen: folder !== null && seen.rights.has(folder),
-          });
-      }
-      copies = dashboardCopies(stored, shown, own, owner, () => randomUUID());
-    } else copies = [chartCopy(stored, own, owner, () => randomUUID())];
-    await docs.createTogether(copies);
-    return reply.code(201).send({ kind, id: copies[0]!.id, created: true });
+      const owner = userOf(request).key;
+      // Its project folder, made with it below, or not at all where it's refused.
+      const title = stored.body['title'];
+      const project = await projectFolderIn(own, owner, timeZone, {
+        title: typeof title === 'string' ? title : '',
+        fromFolderId: home,
+      });
+      let copies;
+      if (kind === 'dashboard') {
+        /**
+         * What each chart it shows becomes (T344's review): one its copier
+         * can't open refuses the copy, rather than landing in their workspace;
+         * one they have a copy of already is that copy; a library chart they
+         * may propose back is copied as one; any other becomes the copy's own
+         * local chart, so nothing else governs it.
+         */
+        const shown: ShownCopy[] = [];
+        for (const chartId of chartIdsOf(stored.body)) {
+          const chart = await read('chart', chartId);
+          if (chart.unreadable !== undefined)
+            return reply.code(422).send({ error: chart.unreadable });
+          if (chart.found == null) continue;
+          const found = chart.found;
+          if (!(await mayOpen(seen, 'chart', found)))
+            return reply.code(409).send({
+              error: 'It shows a chart you can’t open, so it can’t be copied into your workspace.',
+            });
+          const folder = folderIdOf(found.body);
+          const library = typeof found.body['localToDashboardId'] !== 'string';
+          const reused = library ? await copyOf('chart', found.id) : undefined;
+          if (reused !== undefined) shown.push({ as: 'reuse', chart: found, copyId: reused.id });
+          else if (library && folder !== null && mayWrite(seen, folder))
+            shown.push({ as: 'library', chart: found });
+          else
+            shown.push({
+              as: 'local',
+              chart: found,
+              folderSeen: folder !== null && seen.rights.has(folder),
+            });
+        }
+        copies = dashboardCopies(stored, shown, project.id, owner, () => randomUUID());
+      } else copies = [chartCopy(stored, project.id, owner, () => randomUUID())];
+      // The folder and everything in it at once.
+      await docs.createTogether!([project, ...copies]);
+      return reply.code(201).send({ kind, id: copies[0]!.id, created: true, folderId: project.id });
+    });
   });
 
   /**
@@ -2867,7 +2997,9 @@ export function buildServer({
           });
         throw failure;
       }
-      const named = (await dataSources.inFolder(own)).find(
+      // In place of their copy: in its project folder (T523), or else the root.
+      const home = existing?.folderId ?? own;
+      const named = (await dataSources.inFolder(home)).find(
         (source) => source.name === current.name && source.id !== existing?.id,
       );
       if (named !== undefined)
@@ -2878,7 +3010,7 @@ export function buildServer({
       let draft;
       try {
         draft = await dataSources.create({
-          folderId: own,
+          folderId: home,
           name: current.name,
           ...shape,
           targetFolderId: current.folderId,
@@ -2930,6 +3062,10 @@ export function buildServer({
       version: item.current,
     };
     const owner = userOf(request).key;
+    // The user's copy of it, which the draft replaces where it is: in its
+    // project folder (T523), or else My workspace's root.
+    const existing = (await docs.withOrigin(kind, id, mine))[0];
+    const into = typeof existing?.body['folderId'] === 'string' ? existing.body['folderId'] : own;
     let copies;
     if (kind === 'dashboard') {
       const parts = new Map((content.parts ?? []).map((part) => [part.id, part.body]));
@@ -2953,13 +3089,12 @@ export function buildServer({
         const reused = (await docs.withOrigin('chart', found.id, mine))[0];
         if (reused !== undefined) shown.push({ as: 'reuse', chart: found, copyId: reused.id });
       }
-      copies = dashboardCopies(asNow, shown, own, owner, () => randomUUID());
-    } else copies = [chartCopy(asNow, own, owner, () => randomUUID())];
+      copies = dashboardCopies(asNow, shown, into, owner, () => randomUUID());
+    } else copies = [chartCopy(asNow, into, owner, () => randomUUID())];
 
     // The user's copy of it, which the draft replaces (T354's review): only
     // when asked, since what it holds goes, and never while it waits for
     // review.
-    const existing = (await docs.withOrigin(kind, id, mine))[0];
     if (existing !== undefined) {
       if ((await proposals?.openFor(kind, existing.id)) != null)
         return reply.code(409).send({

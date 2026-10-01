@@ -16,6 +16,12 @@ import { folderAccessStore } from '../repos/folder-access';
 import { proposalStore } from '../repos/proposals';
 import { versionStore } from '../repos/versions';
 import { buildServer } from '../server';
+import {
+  removeProjectFolders,
+  TEST_TIME_ZONE,
+  workspaceFoldersOf,
+  workspaceKeyOf,
+} from './project-folder.fixture';
 
 /**
  * T352 (AC-288, AC-298; design 05 of 2026-09-27, state I): approving a
@@ -162,6 +168,7 @@ afterAll(async () => {
     .where('folder_id', '=', ids.sales)
     .execute();
   await db.deleteFrom('data_sources').where('folder_id', '=', ids.sales).execute();
+  await removeProjectFolders();
   for (const { kind, id } of made.reverse()) await docs().remove(kind, id);
   await closeDb();
 });
@@ -193,11 +200,11 @@ describe('approving a proposal (T352, AC-288)', () => {
     const copied = await as('writer', {
       method: 'POST',
       url: '/api/workspace/copies',
-      payload: { kind: 'dashboard', id: ids.board },
+      payload: { kind: 'dashboard', id: ids.board, timeZone: TEST_TIME_ZONE },
     });
     const copy = copied.json<{ id: string }>().id;
     const stored = (await docs().get('dashboard', copy))!;
-    writerKey = (stored.body['folderId'] as string).slice('ws:'.length);
+    writerKey = await workspaceKeyOf(stored.body['folderId'] as string);
     // Changed in the workspace, keeping their names (AC-288 replaces by name):
     // the dashboard's description, and its library chart's measure.
     await docs().update({
@@ -206,7 +213,9 @@ describe('approving a proposal (T352, AC-288)', () => {
       body: { ...stored.body, description: `Revenue since July ${MARK}` },
       expectedVersion: stored.version,
     });
-    const shown = (await docs().withOrigin('chart', ids.library, [`ws:${writerKey}`]))[0]!;
+    const shown = (
+      await docs().withOrigin('chart', ids.library, await workspaceFoldersOf(writerKey))
+    )[0]!;
     await docs().update({
       kind: 'chart',
       id: shown.id,
@@ -330,9 +339,13 @@ describe('approving a proposal (T352, AC-288)', () => {
     const kept = await shared(`kept_${MARK}`);
     const replaced = await shared(`replaced_${MARK}`);
     const copyOf = async (id: string) =>
-      (await as('writer', { method: 'POST', url: `/api/data-sources/${id}/copy` })).json<{
-        id: string;
-      }>().id;
+      (
+        await as('writer', {
+          method: 'POST',
+          url: `/api/data-sources/${id}/copy`,
+          payload: { timeZone: TEST_TIME_ZONE },
+        })
+      ).json<{ id: string }>().id;
     const keptCopy = await copyOf(kept);
     const replacedCopy = await copyOf(replaced);
     const other: SealedV1 = {
@@ -387,6 +400,7 @@ describe('approving a proposal (T352, AC-288)', () => {
     const copied = await as('writer', {
       method: 'POST',
       url: `/api/data-sources/${ids.source}/copy`,
+      payload: { timeZone: TEST_TIME_ZONE },
     });
     const copyId = copied.json<{ id: string }>().id;
     const proposalId = await propose({ kind: 'data-source', id: copyId });
@@ -468,7 +482,7 @@ describe('approving a proposal (T352, AC-288)', () => {
     const copied = await as('writer', {
       method: 'POST',
       url: '/api/workspace/copies',
-      payload: { kind: 'chart', id: moved },
+      payload: { kind: 'chart', id: moved, timeZone: TEST_TIME_ZONE },
     });
     expect(copied.statusCode, copied.body).toBe(201);
     const movedProposal = await propose({ kind: 'chart', id: copied.json<{ id: string }>().id });

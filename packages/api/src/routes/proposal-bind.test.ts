@@ -12,6 +12,7 @@ import { folderAccessStore } from '../repos/folder-access';
 import { proposalStore } from '../repos/proposals';
 import { versionStore } from '../repos/versions';
 import { buildServer } from '../server';
+import { removeProjectFolders, TEST_TIME_ZONE } from './project-folder.fixture';
 import { xcubeAdmin } from '../xcube/client';
 import { fakeXcube, FAKE_ADMIN_TOKEN } from '../xcube/fake';
 
@@ -118,6 +119,7 @@ afterAll(async () => {
     .where(({ eb, ref }) => eb(ref('body', '->>').key('title'), 'like', `%${MARK}%`))
     .execute();
   for (const { kind, id } of left) await docs().remove(kind as DocumentKind, id);
+  await removeProjectFolders();
   for (const { kind, id } of made.reverse())
     await docs()
       .remove(kind, id)
@@ -222,7 +224,7 @@ describe('an approval publishes, binding each item in its folder (T502, AC-272)'
     const copied = await as({
       method: 'POST',
       url: '/api/workspace/copies',
-      payload: { kind: 'dashboard', id: shared },
+      payload: { kind: 'dashboard', id: shared, timeZone: TEST_TIME_ZONE },
     });
     expect(copied.statusCode, copied.body).toBe(201);
     const copyId = copied.json<{ id: string }>().id;

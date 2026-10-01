@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { FastifyInstance, InjectOptions } from 'fastify';
+import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { pgSessionStore } from '../auth/session-store';
@@ -42,6 +43,13 @@ const secured = {
 };
 
 const MARK = `copy${randomUUID().slice(0, 8)}`;
+/**
+ * The server's clock (T523): a minute of a year of this run's own, so no
+ * earlier run's project folder takes its name. 09:00 UTC is 14:30 in Kolkata.
+ */
+const YEAR = 2100 + Math.floor(Math.random() * 800);
+let clock = new Date(Date.UTC(YEAR, 8, 30, 9, 0, 30));
+const ZONE = 'Asia/Kolkata';
 const docs = () => documents(getDb());
 const made: { kind: DocumentKind; id: string }[] = [];
 const cookies: Record<string, string> = {};
@@ -114,17 +122,25 @@ beforeAll(async () => {
     documents: docs(),
     catalog: catalog(getDb()),
     folderAccess: folderAccessStore(getDb()),
+    now: () => clock,
   });
   for (const who of ['writer', 'reader']) cookies[who] = await signIn(app, USERS[who]!);
 });
 
 afterAll(async () => {
   if (app !== undefined) await app.close();
-  // The copies, made in writer's workspace by the route.
+  // The copies, made in writer's workspace by the route, and the project
+  // folders they went into, described by what they copied (T523).
   const copies = await getDb()
     .selectFrom('documents')
     .select(['kind', 'id'])
-    .where(({ eb, ref }) => eb(ref('body', '->>').key('title'), 'like', `%${MARK}%`))
+    .where(({ eb, ref, or }) =>
+      or([
+        eb(ref('body', '->>').key('title'), 'like', `%${MARK}%`),
+        eb(ref('body', '->>').key('description'), 'like', `%${MARK}%`),
+      ]),
+    )
+    .orderBy(sql`kind = 'folder'`)
     .execute();
   for (const { kind, id } of copies) await docs().remove(kind as DocumentKind, id);
   for (const { kind, id } of made.reverse()) await docs().remove(kind, id);
@@ -133,8 +149,14 @@ afterAll(async () => {
 
 const as = (who: string, options: InjectOptions) =>
   app.inject({ ...options, headers: { ...options.headers, cookie: cookies[who]! } });
-const copy = (who: string, kind: string, id: string) =>
-  as(who, { method: 'POST', url: '/api/workspace/copies', payload: { kind, id } });
+const copy = (who: string, kind: string, id: string, timeZone: string = ZONE) =>
+  as(who, { method: 'POST', url: '/api/workspace/copies', payload: { kind, id, timeZone } });
+/** A copy's folder: the project folder it went into, in the workspace (T523). */
+const projectOf = async (folderId: unknown) => {
+  const folder = (await docs().get('folder', String(folderId)))!;
+  expect(folder.body['folderId']).toMatch(/^ws:/);
+  return folder;
+};
 const chartIdsIn = (body: unknown): string[] => {
   const found: string[] = [];
   const read = (value: unknown): void => {
@@ -159,7 +181,8 @@ describe('Edit in my workspace (T344, AC-278, AC-279)', () => {
     expect(id).not.toBe(ids.board);
 
     const board = (await docs().get('dashboard', id))!;
-    expect(board.body['folderId']).toMatch(/^ws:/);
+    // In the workspace, in the project folder it made (T523, AC-368).
+    expect((await projectOf(board.body['folderId'])).body['title']).toMatch(/^project-/);
     expect(board.body['targetFolderId']).toBe(ids.sales);
     expect(board.body['origin']).toEqual({
       kind: 'dashboard',
@@ -197,10 +220,13 @@ describe('Edit in my workspace (T344, AC-278, AC-279)', () => {
     const first = await copy('writer', 'dashboard', ids.board);
     const again = await copy('writer', 'dashboard', ids.board);
     expect(again.statusCode).toBe(200);
+    const id = first.json<{ id: string }>().id;
+    // With the folder it is in, where what is copied with it goes (T523's review).
     expect(again.json()).toEqual({
       kind: 'dashboard',
-      id: first.json<{ id: string }>().id,
+      id,
       created: false,
+      folderId: (await docs().get('dashboard', id))!.body['folderId'],
     });
   });
 
@@ -214,7 +240,7 @@ describe('Edit in my workspace (T344, AC-278, AC-279)', () => {
     const answer = await copy('writer', 'chart', lone);
     expect(answer.statusCode, answer.body).toBe(201);
     const chart = (await docs().get('chart', answer.json<{ id: string }>().id))!;
-    expect(chart.body['folderId']).toMatch(/^ws:/);
+    expect((await projectOf(chart.body['folderId'])).body['title']).toMatch(/^project-/);
     expect(chart.body['targetFolderId']).toBe(ids.sales);
     expect(chart.body['origin']).toMatchObject({
       kind: 'chart',
@@ -227,7 +253,12 @@ describe('Edit in my workspace (T344, AC-278, AC-279)', () => {
     const boardsCopy = chartIdsIn((await docs().get('dashboard', board))!.body['pages'])[0];
     const library = await copy('writer', 'chart', ids.library);
     expect(library.statusCode).toBe(200);
-    expect(library.json()).toEqual({ kind: 'chart', id: boardsCopy, created: false });
+    expect(library.json()).toEqual({
+      kind: 'chart',
+      id: boardsCopy,
+      created: false,
+      folderId: (await docs().get('dashboard', board))!.body['folderId'],
+    });
   });
 
   it('copies only what the user may propose back: never for a user with no workspace, a folder they only read, or one they can’t see', async () => {
@@ -490,5 +521,221 @@ describe('the charts a copied dashboard shows (T344’s review, AC-279)', () => 
     expect(saved.statusCode, saved.body).toBe(200);
     expect((await docs().get('dashboard', made))!.body['origin']).toEqual(stored.body['origin']);
     expect(await own()).toMatch(/^ws:/);
+  });
+});
+
+/**
+ * T523 (AC-368; design 14, state G): each "Edit in my workspace" makes one
+ * folder in My workspace, `project-YYYY-MM-DD-HHmm` in the user's time zone
+ * as the request gives it, holding the copy and everything copied with it;
+ * `-2`, then `-3`, in the same minute. Its description starts as "Editing
+ * *title* from *path*" (AC-369). Their copy already there makes none, and so
+ * does a new item made in the workspace.
+ */
+describe('a project folder for each Edit in my workspace (T523, AC-368, AC-369)', () => {
+  const at = (hour: number, minute: number) => {
+    clock = new Date(Date.UTC(YEAR, 8, 30, hour, minute, 30));
+  };
+  /** The project folders this run made, of a minute: none of another's year. */
+  const projects = async (named = `project-${String(YEAR)}-`) =>
+    (
+      await getDb()
+        .selectFrom('documents')
+        .select('id')
+        .where('kind', '=', 'folder')
+        .where(({ eb, ref }) => eb(ref('body', '->>').key('title'), 'like', `${named}%`))
+        .orderBy('id')
+        .execute()
+    ).map((row) => row.id);
+  const lone = (title: string, folderId = ids.sales) =>
+    doc('chart', {
+      schemaVersion: 1,
+      title: `${title} ${MARK}`,
+      folderId,
+      chart: { source: { cube: 'orders' }, wells: { measures: ['orders.count'] } },
+    });
+
+  it('puts a dashboard’s copy and its library charts’ copies in one new folder, named for the minute in the user’s time zone and described by what it edits', async () => {
+    at(9, 1);
+    const emea = await doc('folder', { title: `EMEA ${MARK}`, folderId: ids.sales });
+    const library = await lone('EMEA library', emea);
+    const local = randomUUID();
+    const boardId = randomUUID();
+    await doc(
+      'chart',
+      {
+        schemaVersion: 1,
+        title: `EMEA local ${MARK}`,
+        localToDashboardId: boardId,
+        chart: { source: { cube: 'orders' }, wells: { measures: ['orders.total'] } },
+      },
+      local,
+    );
+    await doc(
+      'dashboard',
+      {
+        schemaVersion: 1,
+        title: `Revenue overview ${MARK}`,
+        folderId: emea,
+        pages: [
+          {
+            id: 'p1',
+            items: [
+              { id: 't1', kind: 'chart', chartId: library },
+              { id: 't2', kind: 'chart', chartId: local },
+            ],
+          },
+        ],
+        charts: [local],
+      },
+      boardId,
+    );
+
+    const answer = await copy('writer', 'dashboard', boardId);
+    expect(answer.statusCode, answer.body).toBe(201);
+    const { id, folderId } = answer.json<{ id: string; folderId: string }>();
+    const board = (await docs().get('dashboard', id))!;
+    expect(board.body['folderId']).toBe(folderId);
+
+    const project = await projectOf(folderId);
+    // 09:01 UTC is 14:31 in Kolkata.
+    expect(project.body['title']).toBe(`project-${String(YEAR)}-09-30-1431`);
+    expect(project.body['description']).toBe(
+      `Editing Revenue overview ${MARK} from Sales ${MARK} / EMEA ${MARK}`,
+    );
+    // Everything copied with it is there: the library chart's copy beside it,
+    // its local chart's copy with it.
+    const [libraryCopy, localCopy] = chartIdsIn(board.body['pages']);
+    expect((await docs().get('chart', libraryCopy!))!.body['folderId']).toBe(folderId);
+    expect((await docs().get('chart', localCopy!))!.body['localToDashboardId']).toBe(id);
+    expect(await projects(`project-${String(YEAR)}-09-30-1431`)).toEqual([folderId]);
+  });
+
+  it('names a second copy in the same minute with -2, then -3, and each by the minute in its own time zone', async () => {
+    at(9, 2);
+    const names: unknown[] = [];
+    for (const title of ['First', 'Second', 'Third']) {
+      const answer = await copy('writer', 'chart', await lone(title));
+      expect(answer.statusCode, answer.body).toBe(201);
+      const chart = (await docs().get('chart', answer.json<{ id: string }>().id))!;
+      const project = await projectOf(chart.body['folderId']);
+      expect(project.body['description']).toBe(`Editing ${title} ${MARK} from Sales ${MARK}`);
+      names.push(project.body['title']);
+    }
+    const minute = `project-${String(YEAR)}-09-30-1432`;
+    expect(names).toEqual([minute, `${minute}-2`, `${minute}-3`]);
+
+    // 09:02 UTC is 23:02 the day before in Honolulu.
+    const elsewhere = await copy('writer', 'chart', await lone('Honolulu'), 'Pacific/Honolulu');
+    const chart = (await docs().get('chart', elsewhere.json<{ id: string }>().id))!;
+    expect((await projectOf(chart.body['folderId'])).body['title']).toBe(
+      `project-${String(YEAR)}-09-29-2302`,
+    );
+  });
+
+  it('opens their copy already there, making no folder', async () => {
+    at(9, 3);
+    const chartId = await lone('Again');
+    const first = await copy('writer', 'chart', chartId);
+    const before = await projects();
+    at(9, 4);
+    const again = await copy('writer', 'chart', chartId);
+    expect(again.statusCode).toBe(200);
+    expect(again.json()).toEqual({
+      kind: 'chart',
+      id: first.json<{ id: string }>().id,
+      created: false,
+      folderId: first.json<{ folderId: string }>().folderId,
+    });
+    expect(await projects()).toEqual(before);
+  });
+
+  it('lists My workspace’s dashboards wherever in it they are, for a chart to be put on (T523’s review)', async () => {
+    at(9, 8);
+    const boardId = await doc('dashboard', {
+      schemaVersion: 1,
+      title: `Listed ${MARK}`,
+      folderId: ids.sales,
+      pages: [],
+    });
+    const copied = await copy('writer', 'dashboard', boardId);
+    expect(copied.statusCode, copied.body).toBe(201);
+    const listed = async (who: string) => {
+      const answer = await as(who, { method: 'GET', url: '/api/workspace/dashboards' });
+      expect(answer.statusCode, answer.body).toBe(200);
+      return answer.json<{ id: string; kind: string }[]>();
+    };
+    const mine = await listed('writer');
+    // The copy, in its project folder; never a shared one.
+    expect(mine.map((row) => row.id)).toContain(copied.json<{ id: string }>().id);
+    expect(mine.map((row) => row.id)).not.toContain(boardId);
+    expect(new Set(mine.map((row) => row.kind))).toEqual(new Set(['dashboard']));
+    // One with no workspace has none (AC-277).
+    expect(await listed('reader')).toEqual([]);
+  });
+
+  it('makes copies asked for at once one at a time, so no two folders take one name (T523’s review)', async () => {
+    at(9, 7);
+    const charts = await Promise.all(['Together one', 'Together two'].map((title) => lone(title)));
+    const answers = await Promise.all(charts.map((chartId) => copy('writer', 'chart', chartId)));
+    const names = await Promise.all(
+      answers.map(async (answer) => {
+        expect(answer.statusCode, answer.body).toBe(201);
+        const folderId = answer.json<{ folderId: string }>().folderId;
+        return (await projectOf(folderId)).body['title'];
+      }),
+    );
+    const minute = `project-${String(YEAR)}-09-30-1437`;
+    expect([...names].sort()).toEqual([minute, `${minute}-2`]);
+  });
+
+  it('makes no folder for a copy refused, nor for a new item made in My workspace', async () => {
+    at(9, 5);
+    const before = await projects();
+    const draft = await doc('chart', {
+      schemaVersion: 1,
+      title: `Draft ${MARK}`,
+      folderId: 'mine',
+      chart: { source: { cube: 'orders' }, wells: { measures: ['orders.count'] } },
+    });
+    const showing = await doc('dashboard', {
+      schemaVersion: 1,
+      title: `Showing a draft ${MARK}`,
+      folderId: ids.sales,
+      pages: [{ id: 'p1', items: [{ id: 't1', kind: 'chart', chartId: draft }] }],
+    });
+    expect((await copy('writer', 'dashboard', showing)).statusCode).toBe(409);
+
+    const made = await as('writer', {
+      method: 'POST',
+      url: '/api/documents',
+      payload: {
+        kind: 'dashboard',
+        title: `Churn watch ${MARK}`,
+        folderId: 'mine',
+        targetFolderId: ids.sales,
+      },
+    });
+    expect(made.statusCode, made.body).toBe(201);
+    const stored = (await docs().get('dashboard', made.json<{ id: string }>().id))!;
+    expect(stored.body['folderId']).toMatch(/^ws:/);
+    expect(await projects()).toEqual(before);
+  });
+
+  it('refuses a copy that names no time zone, or one that is none, making nothing', async () => {
+    at(9, 6);
+    const chartId = await lone('Zoneless');
+    for (const payload of [
+      { kind: 'chart', id: chartId },
+      { kind: 'chart', id: chartId, timeZone: 'Mars/Olympus_Mons' },
+      { kind: 'chart', id: chartId, timeZone: 7 },
+    ]) {
+      const refused = await as('writer', { method: 'POST', url: '/api/workspace/copies', payload });
+      expect(refused.statusCode).toBe(400);
+      expect(refused.json()).toEqual({
+        error: 'Say the time zone its folder is named in: { timeZone }, as the browser names it.',
+      });
+    }
+    expect(await docs().withOrigin('chart', chartId)).toEqual([]);
   });
 });

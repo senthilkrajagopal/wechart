@@ -15,6 +15,12 @@ import { documents, type DocumentKind } from '../repos/documents';
 import { folderAccessStore } from '../repos/folder-access';
 import { proposalStore } from '../repos/proposals';
 import { buildServer } from '../server';
+import {
+  removeProjectFolders,
+  TEST_TIME_ZONE,
+  workspaceFoldersOf,
+  workspaceKeyOf,
+} from './project-folder.fixture';
 
 /**
  * T349 (AC-284): a workspace item proposed into its target folder is
@@ -153,8 +159,8 @@ beforeAll(async () => {
   cookies['writer'] = await signIn(app, USERS['writer']!);
   cookies['reader'] = await signIn(app, USERS['reader']!);
   ids.copy = await copyOf('dashboard', ids.board);
-  writerKey = ((await docs().get('dashboard', ids.copy))!.body['folderId'] as string).slice(
-    'ws:'.length,
+  writerKey = await workspaceKeyOf(
+    (await docs().get('dashboard', ids.copy))!.body['folderId'] as string,
   );
 });
 
@@ -180,6 +186,7 @@ afterAll(async () => {
       .where('owner', '=', writerKey)
       .execute();
   }
+  await removeProjectFolders();
   if (ids.source !== '') await sources().remove(ids.source);
   for (const { kind, id } of made.reverse()) await docs().remove(kind, id);
   await closeDb();
@@ -195,7 +202,7 @@ async function copyOf(kind: 'dashboard' | 'chart', id: string): Promise<string> 
   const answer = await as('writer', {
     method: 'POST',
     url: '/api/workspace/copies',
-    payload: { kind, id },
+    payload: { kind, id, timeZone: TEST_TIME_ZONE },
   });
   expect(answer.statusCode, answer.body).toBeLessThan(300);
   return answer.json<{ id: string }>().id;
@@ -243,7 +250,9 @@ describe('proposing a workspace item (T349, AC-284)', () => {
   it('records a dashboard with the charts it shows from the workspace, what each replaces, the author, the time and the description', async () => {
     const copy = ids.copy;
     const stored = (await docs().get('dashboard', copy))!;
-    const shown = (await docs().withOrigin('chart', ids.library, [`ws:${writerKey}`]))[0]!;
+    const shown = (
+      await docs().withOrigin('chart', ids.library, await workspaceFoldersOf(writerKey))
+    )[0]!;
     const local = (await docs().withOrigin('chart', ids.local))[0]!;
     const before = {
       board: await served('dashboard', ids.board),
@@ -384,6 +393,7 @@ describe('proposing a workspace item (T349, AC-284)', () => {
     const copy = await as('writer', {
       method: 'POST',
       url: `/api/data-sources/${ids.source}/copy`,
+      payload: { timeZone: TEST_TIME_ZONE },
     });
     expect(copy.statusCode, copy.body).toBe(201);
     const id = copy.json<{ id: string }>().id;

@@ -95,4 +95,33 @@ export async function testedSource<Body extends Record<string, unknown>>(
   return { ...body, testId: answer.testId };
 }
 
+/**
+ * The project folder an "Edit in my workspace" copy went into (T523,
+ * AC-368), to be taken away once the copy is: My workspace's root, `mine`,
+ * for one that is in none.
+ */
+export async function projectFolderOf(
+  request: APIRequestContext,
+  kind: 'dashboard' | 'chart' | 'data-source',
+  id: string,
+): Promise<string> {
+  const answer = await request.get(
+    kind === 'data-source'
+      ? `/api/data-sources/${encodeURIComponent(id)}`
+      : `/api/documents/${kind}/${encodeURIComponent(id)}`,
+  );
+  expect(answer.status(), await answer.text()).toBe(200);
+  const read = (await answer.json()) as { folderId?: string; body?: { folderId?: string } };
+  return (kind === 'data-source' ? read.folderId : read.body?.folderId) ?? 'mine';
+}
+
+/** Takes away the project folder a copy went into, once the copy is gone (T523). */
+export async function removeProjectFolder(
+  request: APIRequestContext,
+  folderId: string,
+): Promise<void> {
+  if (folderId !== '' && folderId !== 'mine')
+    await request.delete(`/api/documents/folder/${encodeURIComponent(folderId)}`);
+}
+
 export { expect };

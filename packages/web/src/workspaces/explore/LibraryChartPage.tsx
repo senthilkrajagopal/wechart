@@ -29,6 +29,7 @@ import { DeleteDialog } from './DeleteDialog';
 import { checkChart, removeChart } from './deleteChecks';
 import { sayOnExplore } from './deletedToast';
 import { exploreHref } from './folders';
+import { browserTimeZone } from './projectFolder';
 import { SHARED_ROOT } from './roots';
 
 /**
@@ -119,7 +120,8 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
       const response = await fetch('/api/workspace/copies', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ kind: 'chart', id: chartId }),
+        // Into a project folder of its own, named in the user's time (T523, AC-368).
+        body: JSON.stringify({ kind: 'chart', id: chartId, timeZone: browserTimeZone() }),
       });
       const answer = (await response.json().catch(() => null)) as { id?: string } | null;
       if (!response.ok || answer?.id === undefined)
@@ -245,14 +247,15 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
 
   /**
    * The dashboards it may be added to. With sign-in on, only My workspace's:
-   * a shared dashboard gains a tile only by a proposal (T502, AC-278).
+   * a shared dashboard gains a tile only by a proposal (T502, AC-278). All of
+   * them, wherever in it, a copy in its project folder (T523, AC-368).
    */
   const candidates = useQuery({
     queryKey: ['search', 'dashboards', signedIn],
     enabled: !me.isPending,
     queryFn: () =>
       getJson<{ id: string; title: string; kind: string }[]>(
-        `/api/folders/${signedIn ? 'mine' : 'root'}/contents`,
+        signedIn ? '/api/workspace/dashboards' : '/api/folders/root/contents',
       ),
   });
 

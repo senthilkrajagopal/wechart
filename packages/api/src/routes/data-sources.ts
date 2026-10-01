@@ -6,7 +6,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { actorOf, dataSourceChange, recordIn } from '../audit/record';
 import { INSTALL, USER } from '../auth/guard';
 import type { AuditStore } from '../repos/audit';
-import { ROOT_FOLDER_ID } from '../repos/catalog';
+import { MY_WORKSPACE_ID, ROOT_FOLDER_ID } from '../repos/catalog';
 import {
   DataSourceRefused,
   settingsPrintOf,
@@ -28,6 +28,7 @@ import { cubeStateOf } from '../xcube/cube-state';
 import type { CubeUsing } from '../xcube/used-by';
 
 import { sharedInPlace } from './shared-in-place';
+import { NO_TIME_ZONE, timeZoneOf } from './project-folder';
 
 /**
  * A data source's own routes (T335; AC-269, AC-164, AC-312, AC-161, AC-262,
@@ -190,6 +191,7 @@ export function registerDataSources(
     listing,
     audit,
     withdraw,
+    projects,
   }: {
     /** Where each change is recorded (T368, AC-294): a secret only said replaced. */
     readonly audit?: Pick<AuditStore, 'record'>;
@@ -235,6 +237,28 @@ export function registerDataSources(
      * deleted (T528, AC-372). Unset with sign-in off, where none is proposed.
      */
     readonly withdraw?: (request: FastifyRequest, id: string) => Promise<unknown>;
+    /**
+     * "Edit in my workspace"'s project folders (T523, AC-368). Set with
+     * `ownWorkspace`.
+     */
+    readonly projects?: {
+      /** Every folder of the workspace, its root first: where a copy may be. */
+      readonly foldersOf: (workspace: string) => Promise<readonly string[]>;
+      /**
+       * A project folder in the workspace for a copy of `title` from the
+       * folder `fromFolderId`, named for this minute in `timeZone`; made.
+       */
+      readonly make: (
+        request: FastifyRequest,
+        workspace: string,
+        timeZone: string,
+        about: { readonly title: string; readonly fromFolderId: string },
+      ) => Promise<string>;
+      /** One a copy that failed was to go into, taken away again. */
+      readonly drop: (folderId: string) => Promise<unknown>;
+      /** Copies into one workspace made one at a time (T523). */
+      readonly inTurn: <T>(workspace: string, work: () => Promise<T>) => Promise<T>;
+    };
   },
 ): void {
   // Public by nature: it seals, and opens nothing (AC-298).
@@ -853,38 +877,67 @@ export function registerDataSources(
    * or their copy already there opened (200, `created: false`). Only for a
    * read-write member of its folder, who has a workspace; what is in a
    * workspace is changed there. With sign-in off there are no workspaces.
+   *
+   * Copied alone, it goes into a project folder of its own, named for the
+   * minute in the user's time zone (`timeZone`); copied with a dashboard,
+   * into the folder that dashboard's copy made (`into`), which must be in
+   * their workspace (T523, AC-368). Their copy already there, wherever in
+   * their workspace, makes none.
    */
   app.post('/api/data-sources/:id/copy', USER, async (request, reply) => {
-    if (ownWorkspace === undefined)
+    if (ownWorkspace === undefined || projects === undefined)
       return reply.status(404).send({ error: 'Workspaces need sign-in.' });
     const own = await ownWorkspace(request);
     if (own === undefined)
       return reply.status(403).send({
         error: 'You have no workspace: only read-write members and Super-Admins have one.',
       });
+    const body = (request.body ?? {}) as { into?: unknown; timeZone?: unknown };
+    // My workspace's root as an answer names it: `mine` (T523's review).
+    const asked = { ...body, ...(body.into === MY_WORKSPACE_ID ? { into: own } : {}) };
+    const timeZone = asked.into === undefined ? timeZoneOf(asked.timeZone) : undefined;
+    if (asked.into === undefined && timeZone === undefined)
+      return reply.status(400).send({ error: NO_TIME_ZONE });
     const source = await reached(request, reply, 'read');
     if (source === undefined) return reply;
     if (await inAWorkspace(source))
       return reply.status(400).send({ error: 'It is in a workspace already: change it there.' });
     const refusal = await access(request, source.folderId, 'write');
     if (refusal !== undefined) return reply.status(refusal.status).send(refusal.body);
-    const existing = await store.copyIn(source.id, own);
-    if (existing !== undefined) return { ...viewOf(existing), created: false };
-    try {
-      const copied = await store.copy(source.id, own);
-      // Recorded where the original is, which the copy goes back to (T368's review).
-      await recordChange(
-        request,
-        { id: copied.id, name: copied.name, folderId: source.folderId },
-        `Copied into a workspace, from version ${String(source.version)}`,
-      );
-      return reply.status(201).send({ ...viewOf(copied), created: true });
-    } catch (failure) {
-      // Two copies at once: the one made first opens (T346's review).
-      const raced = await store.copyIn(source.id, own);
-      if (raced !== undefined) return { ...viewOf(raced), created: false };
-      return refused(reply, failure);
-    }
+    return projects.inTurn(own, async () => {
+      const mine = await projects.foldersOf(own);
+      if (
+        asked.into !== undefined &&
+        (typeof asked.into !== 'string' || !mine.includes(asked.into))
+      )
+        return reply.status(404).send({ error: 'There’s no such folder in your workspace.' });
+      const existing = await store.copyIn(source.id, mine);
+      if (existing !== undefined) return { ...viewOf(existing), created: false };
+      const into =
+        typeof asked.into === 'string'
+          ? asked.into
+          : await projects.make(request, own, timeZone!, {
+              title: source.name,
+              fromFolderId: source.folderId,
+            });
+      try {
+        const copied = await store.copy(source.id, into);
+        // Recorded where the original is, which the copy goes back to (T368's review).
+        await recordChange(
+          request,
+          { id: copied.id, name: copied.name, folderId: source.folderId },
+          `Copied into a workspace, from version ${String(source.version)}`,
+        );
+        return reply.status(201).send({ ...viewOf(copied), created: true });
+      } catch (failure) {
+        // The folder made for it goes with it.
+        if (into !== asked.into) await projects.drop(into).catch(() => undefined);
+        // Two copies at once, from two servers: the one made first opens (T346's review).
+        const raced = await store.copyIn(source.id, mine);
+        if (raced !== undefined) return { ...viewOf(raced), created: false };
+        return refused(reply, failure);
+      }
+    });
   });
 
   /**

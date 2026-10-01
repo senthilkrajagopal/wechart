@@ -3865,6 +3865,20 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 .edit-in-workspace__name { font-weight: 600; }
 .edit-in-workspace__where { grid-column: 2; font-size: 12px; color: var(--wc-text-secondary); }
 .dialog p.edit-in-workspace__note { margin: 0; font-size: 12px; }
+/* Where its copies go (T523; design 14, state G1). */
+.dialog p.edit-in-workspace__folder {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  color: var(--wc-text-secondary);
+}
+.edit-in-workspace__project {
+  font-family: var(--wc-font-code);
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--wc-text-primary);
+}
 
 /* An item's History (T357; design 06): a 360 px panel docked right of the
    item. Closed, its container is no box at all, so nothing moves. */

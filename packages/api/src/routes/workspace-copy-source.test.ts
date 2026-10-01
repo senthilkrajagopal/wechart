@@ -47,6 +47,9 @@ const secured = {
 };
 
 const MARK = `cps${randomUUID().slice(0, 8)}`;
+/** The server's clock (T523): 09:00 UTC on a day of a year of this run's own. */
+const YEAR = 2100 + Math.floor(Math.random() * 800);
+let clock = new Date(Date.UTC(YEAR, 8, 30, 9, 0, 30));
 const sealed = (tag: string): SealedV1 => ({
   v: 1,
   kid: 'kid-1',
@@ -57,7 +60,7 @@ const docs = () => documents(getDb());
 const sources = () => dataSourceStore(getDb());
 const made: { kind: DocumentKind; id: string }[] = [];
 const folders = { sales: '', ops: '', hidden: '' };
-const held = { sales: '', ops: '', hidden: '' };
+const held = { sales: '', ops: '', hidden: '', emea: '' };
 const cookies: Record<string, string> = {};
 const asked: { sealed: Record<string, SealedV1> }[] = [];
 let app: FastifyInstance;
@@ -95,6 +98,7 @@ beforeAll(async () => {
     folderAccess: folderAccessStore(getDb()),
     dataSources: sources(),
     connectionTests: connectionTestStore(getDb()),
+    now: () => clock,
     connectionTest: async (body) => {
       asked.push(body as never);
       return { ok: true, checks: [{ id: 'connect', status: 'passed', durationMs: 1 }] } as never;
@@ -111,14 +115,34 @@ afterAll(async () => {
     .where('target_folder_id', 'in', Object.values(folders).filter(Boolean))
     .execute();
   for (const id of Object.values(held)) if (id !== '') await sources().remove(id);
+  // The project folders they went into, described by what they copied (T523).
+  await getDb()
+    .deleteFrom('documents')
+    .where('kind', '=', 'folder')
+    .where(({ eb, ref }) => eb(ref('body', '->>').key('description'), 'like', `%${MARK}%`))
+    .execute();
   for (const { kind, id } of made.reverse()) await docs().remove(kind, id);
   await closeDb();
 });
 
 const as = (who: string, options: InjectOptions) =>
   app.inject({ ...options, headers: { ...options.headers, cookie: cookies[who]! } });
-const copy = (who: string, id: string) =>
-  as(who, { method: 'POST', url: `/api/data-sources/${id}/copy` });
+const copy = (who: string, id: string, payload: Record<string, unknown> = { timeZone: 'UTC' }) =>
+  as(who, { method: 'POST', url: `/api/data-sources/${id}/copy`, payload });
+/** A copy's folder: the project folder it went into, in the workspace (T523). */
+const projectOf = async (folderId: string) => (await docs().get('folder', folderId))!;
+/** The folders a description describes, by id. */
+const describing = async (description: string) =>
+  (
+    await getDb()
+      .selectFrom('documents')
+      .select('id')
+      .where('kind', '=', 'folder')
+      .where(({ eb, ref }) => eb(ref('body', '->>').key('description'), '=', description))
+      .execute()
+  )
+    .map((row) => row.id)
+    .sort();
 
 describe('a data source copied into the workspace (T346, AC-280, AC-298)', () => {
   it('keeps its settings, its name and its sealed credentials byte for byte, targets its folder, and names its origin', async () => {
@@ -129,7 +153,8 @@ describe('a data source copied into the workspace (T346, AC-280, AC-298)', () =>
     expect(id).not.toBe(held.sales);
 
     const copied = (await sources().get(id))!;
-    expect(copied.folderId).toMatch(/^ws:/);
+    // In the workspace, in the project folder it made (T523, AC-368).
+    expect((await projectOf(copied.folderId)).body['folderId']).toMatch(/^ws:/);
     expect([copied.name, copied.driver, copied.authMethod, copied.fields]).toEqual([
       'warehouse',
       'postgres',
@@ -212,10 +237,16 @@ describe('a data source copied into the workspace (T346, AC-280, AC-298)', () =>
 
   it('makes one copy however close together the copies come', async () => {
     await getDb().deleteFrom('data_sources').where('target_folder_id', '=', folders.ops).execute();
+    const before = await describing(`Editing warehouse from ops ${MARK}`);
     const answers = await Promise.all([1, 2, 3].map(() => copy('writer', held.ops)));
     const ids = new Set(answers.map((answer) => answer.json<{ id: string }>().id));
     expect(ids.size).toBe(1);
     expect(answers.every((answer) => [200, 201].includes(answer.statusCode))).toBe(true);
+    // In one project folder: none made for the copies that found it (T523).
+    const copied = (await sources().get([...ids][0]!))!;
+    expect(await describing(`Editing warehouse from ops ${MARK}`)).toEqual(
+      [...before, copied.folderId].sort(),
+    );
   });
 
   it('has no workspaces to copy into with sign-in off', async () => {
@@ -235,5 +266,121 @@ describe('a data source copied into the workspace (T346, AC-280, AC-298)', () =>
     } finally {
       await open.close();
     }
+  });
+});
+
+/**
+ * T523 (AC-368; design 14, state G4): a data source's own "Edit in my
+ * workspace" copies it into a project folder of its own, named for the
+ * minute in the user's time zone and described by it; copied with a
+ * dashboard, it goes into the folder the dashboard's copy made.
+ */
+describe('a data source’s copy in its project folder (T523, AC-368, AC-369)', () => {
+  const emea = { folder: '', source: '' };
+
+  beforeAll(async () => {
+    emea.folder = randomUUID();
+    made.push({ kind: 'folder', id: emea.folder });
+    await docs().create({
+      kind: 'folder',
+      id: emea.folder,
+      body: { owner: 'admin', title: `EMEA ${MARK}`, folderId: folders.sales },
+    });
+    emea.source = (
+      await sources().create({
+        folderId: emea.folder,
+        name: 'emea_replica',
+        driver: 'postgres',
+        authMethod: 'password',
+        fields: { host: 'emea-db', port: 5432, database: 'sales', user: 'cube', ssl: false },
+        sealed: { password: sealed('emea') },
+      })
+    ).id;
+    held.emea = emea.source;
+  });
+
+  afterAll(async () => {
+    await getDb().deleteFrom('data_sources').where('target_folder_id', '=', emea.folder).execute();
+  });
+
+  it('copies one alone into a new folder, named for the minute in the user’s time zone and described by it', async () => {
+    clock = new Date(Date.UTC(YEAR, 8, 30, 9, 1, 30));
+    const answer = await copy('writer', emea.source, { timeZone: 'Asia/Kolkata' });
+    expect(answer.statusCode, answer.body).toBe(201);
+    const copied = (await sources().get(answer.json<{ id: string }>().id))!;
+    const project = await projectOf(copied.folderId);
+    expect(project.body['folderId']).toMatch(/^ws:/);
+    // 09:01 UTC is 14:31 in Kolkata.
+    expect(project.body['title']).toBe(`project-${String(YEAR)}-09-30-1431`);
+    expect(project.body['description']).toBe(
+      `Editing emea_replica from sales ${MARK} / EMEA ${MARK}`,
+    );
+    await getDb().deleteFrom('data_sources').where('id', '=', copied.id).execute();
+  });
+
+  it('goes into the folder its dashboard’s copy made, when it is named, making none', async () => {
+    // A dashboard of EMEA's, copied as the dialog copies it: the dashboard first.
+    const board = randomUUID();
+    made.push({ kind: 'dashboard', id: board });
+    await docs().create({
+      kind: 'dashboard',
+      id: board,
+      body: {
+        owner: 'admin',
+        schemaVersion: 1,
+        title: `EMEA board ${MARK}`,
+        folderId: emea.folder,
+        pages: [],
+      },
+    });
+    const boardCopy = await as('writer', {
+      method: 'POST',
+      url: '/api/workspace/copies',
+      payload: { kind: 'dashboard', id: board, timeZone: 'UTC' },
+    });
+    expect(boardCopy.statusCode, boardCopy.body).toBe(201);
+    const { id: copyId, folderId: into } = boardCopy.json<{ id: string; folderId: string }>();
+    made.push({ kind: 'dashboard', id: copyId });
+    const before = await describing(`Editing emea_replica from sales ${MARK} / EMEA ${MARK}`);
+    const answer = await copy('writer', emea.source, { into });
+    expect(answer.statusCode, answer.body).toBe(201);
+    // Beside the dashboard's copy, in the one folder its description names.
+    expect((await sources().get(answer.json<{ id: string }>().id))!.folderId).toBe(into);
+    expect((await docs().get('dashboard', copyId))!.body['folderId']).toBe(into);
+    expect((await projectOf(into)).body['description']).toBe(
+      `Editing EMEA board ${MARK} from sales ${MARK} / EMEA ${MARK}`,
+    );
+    expect(await describing(`Editing emea_replica from sales ${MARK} / EMEA ${MARK}`)).toEqual(
+      before,
+    );
+    await getDb().deleteFrom('data_sources').where('target_folder_id', '=', emea.folder).execute();
+
+    // Named `mine`, as an answer names the root: My workspace's root (T523's review).
+    const toRoot = await copy('writer', emea.source, { into: 'mine' });
+    expect(toRoot.statusCode, toRoot.body).toBe(201);
+    expect((await sources().get(toRoot.json<{ id: string }>().id))!.folderId).toMatch(/^ws:/);
+    await getDb().deleteFrom('data_sources').where('target_folder_id', '=', emea.folder).execute();
+  });
+
+  it('goes into no folder outside the user’s own workspace, and needs a time zone where it makes one', async () => {
+    for (const into of [folders.sales, randomUUID(), 'mine-not', 7]) {
+      const refused = await copy('writer', emea.source, { into });
+      expect(refused.statusCode).toBe(404);
+      expect(refused.json()).toEqual({ error: 'There’s no such folder in your workspace.' });
+    }
+    for (const payload of [{}, { timeZone: 'Mars/Olympus_Mons' }]) {
+      const refused = await copy('writer', emea.source, payload);
+      expect(refused.statusCode).toBe(400);
+      expect(refused.json()).toEqual({
+        error: 'Say the time zone its folder is named in: { timeZone }, as the browser names it.',
+      });
+    }
+    expect(
+      await getDb()
+        .selectFrom('data_sources')
+        .select('id')
+        .where('target_folder_id', '=', emea.folder)
+        .execute(),
+    ).toEqual([]);
   });
 });

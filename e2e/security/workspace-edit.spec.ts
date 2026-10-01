@@ -1,4 +1,11 @@
-import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
+import {
+  BASE_URL,
+  expect,
+  projectFolderOf,
+  removeProjectFolder,
+  signInThroughDex,
+  test,
+} from './fixtures';
 
 /**
  * T348 (AC-278, AC-279; design 04, states D, E, F and G; rules 71–73): a
@@ -15,7 +22,18 @@ const RUN = Math.random().toString(36).slice(2, 8);
 const FOLDER = `Edit here ${RUN}`;
 const BOARD = `Pipeline ${RUN}`;
 const CHART = `Margin ${RUN}`;
-const made = { folder: '', board: '', copy: '', chart: '', chartCopy: '' };
+const made = {
+  folder: '',
+  board: '',
+  copy: '',
+  chart: '',
+  chartCopy: '',
+  /** The project folders the copies went into (T523). */
+  boardProject: '',
+  chartProject: '',
+};
+/** A project folder's name: the minute it was made, `-2` and on in the same minute (T523). */
+const PROJECT = /^project-\d{4}-\d{2}-\d{2}-\d{4}(-\d+)?$/;
 
 test.describe.configure({ mode: 'serial' });
 
@@ -31,6 +49,8 @@ test.describe('editing a shared dashboard in my workspace (T348, AC-278)', () =>
         if (made.copy !== '') await context.request.delete(`/api/documents/dashboard/${made.copy}`);
         if (made.chartCopy !== '')
           await context.request.delete(`/api/documents/chart/${made.chartCopy}`);
+        for (const project of [made.boardProject, made.chartProject])
+          await removeProjectFolder(context.request, project);
       }
       if (who === 'super') {
         if (made.board !== '')
@@ -97,6 +117,10 @@ test.describe('editing a shared dashboard in my workspace (T348, AC-278)', () =>
       );
       await expect(dialog.getByTestId('always-copied')).toHaveText('Always copied: the dashboard.');
       await expect(dialog).toContainText('Anything you don’t copy is used from its folder.');
+      // Where it goes: a new folder, named for this minute (T523; design 14, G1).
+      await expect(dialog.getByTestId('project-folder')).toHaveText(
+        /^Into a new folder in My workspace: project-\d{4}-\d{2}-\d{2}-\d{4}$/,
+      );
       await dialog.getByRole('button', { name: 'Copy and edit' }).click();
 
       // The copy, open to be edited, then its header in view mode (state F).
@@ -108,6 +132,7 @@ test.describe('editing a shared dashboard in my workspace (T348, AC-278)', () =>
       made.copy = /\/explore\/dashboards\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? '';
       expect(made.copy).toMatch(/^[0-9a-f-]{36}$/);
       expect(made.copy).not.toBe(made.board);
+      made.boardProject = await projectFolderOf(page.request, 'dashboard', made.copy);
       // Opened to be edited ("Copy and edit").
       await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();
       await page.goto(`/explore/dashboards/${made.copy}`);
@@ -156,6 +181,7 @@ test.describe('editing a shared dashboard in my workspace (T348, AC-278)', () =>
       made.chartCopy = /\/explore\/charts\/([0-9a-f-]{36})\/edit/.exec(page.url())?.[1] ?? '';
       expect(made.chartCopy).toMatch(/^[0-9a-f-]{36}$/);
       expect(made.chartCopy).not.toBe(made.chart);
+      made.chartProject = await projectFolderOf(page.request, 'chart', made.chartCopy);
 
       // Its page: the band, where it came from and goes, and Propose as its primary.
       await page.goto(`/explore/charts/${made.chartCopy}`);
@@ -172,6 +198,45 @@ test.describe('editing a shared dashboard in my workspace (T348, AC-278)', () =>
       await page.goto(`/explore/charts/${made.chart}`);
       await page.locator('.chart-page__head').getByRole('button', { name: 'Open my copy' }).click();
       await expect(page).toHaveURL(new RegExp(`/explore/charts/${made.chartCopy}/edit$`));
+    });
+
+    /**
+     * T523 (AC-368, AC-369; design 14, states G2 and G3): each copy went
+     * into a folder of its own in My workspace, named for the minute it was
+     * made, its description saying what it edits and where from; the
+     * dashboard's folder holds its copy.
+     */
+    test('finds each copy in a project folder of its own, which says what it edits', async ({
+      page,
+    }) => {
+      expect(made.boardProject).not.toBe('mine');
+      expect(made.chartProject).not.toBe('mine');
+      expect(made.chartProject).not.toBe(made.boardProject);
+      await page.goto('/explore?folder=mine');
+      const contents = page.getByTestId('explore-contents');
+      for (const [project, title] of [
+        [made.boardProject, BOARD],
+        [made.chartProject, CHART],
+      ] as const) {
+        const row = contents.getByTestId(`item-${project}`);
+        await expect(row.locator('.folder-contents__open')).toHaveText(PROJECT);
+        // Its description as its second line (P1).
+        await expect(row.locator('.folder-contents__description')).toHaveText(
+          `Editing ${title} from ${FOLDER}`,
+        );
+      }
+
+      // Opened: named in its heading, described under it, editable there (G3).
+      const row = contents.getByTestId(`item-${made.boardProject}`);
+      const open = row.locator('.folder-contents__open');
+      const name = (await open.textContent()) ?? '';
+      await open.click();
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
+      await expect(page.locator('.folder-description__text')).toHaveText(
+        `Editing ${BOARD} from ${FOLDER}`,
+      );
+      await expect(page.getByRole('button', { name: 'Edit description' })).toBeVisible();
+      await expect(contents.getByTestId(`item-${made.copy}`)).toBeVisible();
     });
   });
 

@@ -15,6 +15,7 @@ import { documents, type DocumentKind } from '../repos/documents';
 import { folderAccessStore } from '../repos/folder-access';
 import { proposalStore } from '../repos/proposals';
 import { buildServer } from '../server';
+import { removeProjectFolders, TEST_TIME_ZONE } from './project-folder.fixture';
 
 /**
  * R48 (F39): an item is deleted only when nothing depends on it, and then
@@ -112,6 +113,8 @@ afterAll(async () => {
   // Models and data sources a folder's test put in it.
   await getDb().deleteFrom('model_files').where('path', 'like', `%${MARK}%`).execute();
   await getDb().deleteFrom('data_sources').where('name', 'like', `%${MARK}%`).execute();
+  // The folder the data source's copy went into (T523).
+  await removeProjectFolders();
   // Bookmarks on dashboards a test left standing.
   for (const { kind, id } of made) if (kind === 'dashboard') await bookmarks().removeFor(id);
   for (const { kind, id } of made.reverse())
@@ -504,7 +507,11 @@ describe('deleting a workspace item waiting in a proposal (T528, AC-372)', () =>
         },
       },
     });
-    const copy = await as('writer', { method: 'POST', url: `/api/data-sources/${source.id}/copy` });
+    const copy = await as('writer', {
+      method: 'POST',
+      url: `/api/data-sources/${source.id}/copy`,
+      payload: { timeZone: TEST_TIME_ZONE },
+    });
     expect(copy.statusCode, copy.body).toBe(201);
     const copyId = copy.json<{ id: string }>().id;
     const proposal = await proposed('data-source', copyId);

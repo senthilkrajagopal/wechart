@@ -39,9 +39,15 @@ export async function proposeShared(
   change: (body: Body, ownChartIds: readonly string[]) => Body,
   { description = 'Changed for a test.', ownCharts = [] as readonly OwnChart[] } = {},
 ): Promise<{ approved: APIResponse; cleanUp: () => Promise<void> }> {
-  const copied = await request.post('/api/workspace/copies', { data: { kind, id } });
+  const copied = await request.post('/api/workspace/copies', {
+    data: { kind, id, timeZone: 'UTC' },
+  });
   expect(copied.status(), await copied.text()).toBeLessThan(300);
-  const copyId = ((await copied.json()) as { id: string }).id;
+  // In the project folder it made, where one was (T523).
+  const { id: copyId, folderId: projectId } = (await copied.json()) as {
+    id: string;
+    folderId?: string;
+  };
   const read = async () =>
     (await (await request.get(`/api/documents/${kind}/${copyId}`)).json()) as {
       body: Body;
@@ -93,8 +99,10 @@ export async function proposeShared(
       const chart = await request.get(`/api/documents/chart/${chartId}`);
       if (!chart.ok()) continue;
       const { body } = (await chart.json()) as { body: { folderId?: string } };
-      if (body.folderId === 'mine') await request.delete(`/api/documents/chart/${chartId}`);
+      if (body.folderId === 'mine' || (projectId !== undefined && body.folderId === projectId))
+        await request.delete(`/api/documents/chart/${chartId}`);
     }
+    if (projectId !== undefined) await request.delete(`/api/documents/folder/${projectId}`);
   };
   return { approved, cleanUp };
 }
@@ -126,9 +134,12 @@ export async function changeSharedSource(
   change: (copyId: string) => Promise<Body>,
   description = 'Changed for a test.',
 ): Promise<void> {
-  const copied = await request.post(`/api/data-sources/${id}/copy`);
+  const copied = await request.post(`/api/data-sources/${id}/copy`, {
+    data: { timeZone: 'UTC' },
+  });
   expect(copied.status(), await copied.text()).toBeLessThan(300);
-  const copyId = ((await copied.json()) as { id: string }).id;
+  // In the project folder it made, where one was (T523).
+  const { id: copyId, folderId } = (await copied.json()) as { id: string; folderId: string };
   const saved = await request.put(`/api/data-sources/${copyId}`, { data: await change(copyId) });
   expect(saved.status(), await saved.text()).toBe(200);
   const proposed = await request.post('/api/proposals', {
@@ -141,4 +152,5 @@ export async function changeSharedSource(
   );
   expect(approved.status(), await approved.text()).toBe(200);
   expect((await request.delete(`/api/data-sources/${copyId}`)).status()).toBe(204);
+  if (folderId !== 'mine') await request.delete(`/api/documents/folder/${folderId}`);
 }

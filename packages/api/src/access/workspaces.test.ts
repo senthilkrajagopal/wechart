@@ -11,6 +11,7 @@ import { connectionTestStore } from '../repos/connection-tests';
 import { dataSourceStore } from '../repos/data-sources';
 import { documents, type DocumentKind } from '../repos/documents';
 import { folderAccessStore } from '../repos/folder-access';
+import { removeProjectFolders, TEST_TIME_ZONE } from '../routes/project-folder.fixture';
 import { buildServer } from '../server';
 
 /**
@@ -87,6 +88,7 @@ afterAll(async () => {
     .execute();
   for (const { kind, id } of [...mine, ...made].reverse())
     await docs().remove(kind as DocumentKind, id);
+  await removeProjectFolders();
   await closeDb();
 });
 
@@ -419,14 +421,20 @@ describe('items made in the workspace name their target folder (T345, AC-282)', 
     const copied = await as('writer', {
       method: 'POST',
       url: '/api/workspace/copies',
-      payload: { kind: 'dashboard', id: idOf(shared) },
+      payload: { kind: 'dashboard', id: idOf(shared), timeZone: TEST_TIME_ZONE },
     });
     expect(copied.statusCode, copied.body).toBe(201);
-    const rows = (await (await contents('writer', 'mine')).json()) as {
-      id: string;
-      targetFolderId?: string | null;
-      origin?: { id: string; version: number; folderId?: string } | null;
-    }[];
+    // The new one where it was made; the copy in the project folder it made (T523, AC-368).
+    const listed = async (folderId: string) =>
+      (await (await contents('writer', folderId)).json()) as {
+        id: string;
+        targetFolderId?: string | null;
+        origin?: { id: string; version: number; folderId?: string } | null;
+      }[];
+    const rows = [
+      ...(await listed('mine')),
+      ...(await listed(copied.json<{ folderId: string }>().folderId)),
+    ];
     const row = (id: string) => rows.find((each) => each.id === id);
     expect([row(idOf(made))?.targetFolderId, row(idOf(made))?.origin]).toEqual([sales, null]);
     expect([row(idOf(copied))?.targetFolderId, row(idOf(copied))?.origin]).toEqual([
@@ -515,16 +523,21 @@ describe('items made in the workspace name their target folder (T345, AC-282)', 
       const copied = await as('writer', {
         method: 'POST',
         url: `/api/data-sources/${held.id}/copy`,
+        payload: { timeZone: TEST_TIME_ZONE },
       });
       expect(copied.statusCode, copied.body).toBe(201);
       kept.push(idOf(copied));
 
-      const rows = (await (await contents('writer', 'mine')).json()) as {
-        id: string;
-        kind: string;
-        targetFolderId?: string | null;
-        origin?: unknown;
-      }[];
+      // The new one where it was made; the copy in its project folder (T523, AC-368).
+      const listed = async (folderId: string) =>
+        (await (await contents('writer', folderId)).json()) as {
+          id: string;
+          kind: string;
+          targetFolderId?: string | null;
+          origin?: unknown;
+        }[];
+      const copiedTo = (await dataSourceStore(getDb()).get(idOf(copied)))!.folderId;
+      const rows = [...(await listed('mine')), ...(await listed(copiedTo))];
       const row = (id: string) => rows.find((each) => each.id === id);
       expect(row(idOf(made))).toMatchObject({
         kind: 'data-source',

@@ -576,7 +576,15 @@ test.describe('deleting a data source and a model file (T526, AC-364, AC-365)', 
  * goes with it (B3), from its row (B1) or its header's ⋯ (B2).
  */
 const TARGET = `Proposed to ${RUN}`;
-const drafts = { folder: '', board: '', chart: '', plain: '', source: '', copy: '' };
+const drafts = {
+  folder: '',
+  board: '',
+  chart: '',
+  plain: '',
+  source: '',
+  copy: '',
+  project: '',
+};
 const SHARED_SOURCE = `t528_${RUN}`;
 
 test.describe('deleting a workspace item waiting in a proposal (T528, AC-372)', () => {
@@ -589,6 +597,9 @@ test.describe('deleting a workspace item waiting in a proposal (T528, AC-372)', 
     ] as const)
       if (id !== '') await writer.request.delete(`/api/documents/${kind}/${id}`);
     if (drafts.copy !== '') await writer.request.delete(`/api/data-sources/${drafts.copy}`);
+    // The project folder the copy went into (T523).
+    if (drafts.project !== '')
+      await writer.request.delete(`/api/documents/folder/${drafts.project}`);
     await writer.close();
     const admin = await as(browser, 'super');
     if (drafts.source !== '') await admin.request.delete(`/api/data-sources/${drafts.source}`);
@@ -737,9 +748,14 @@ test.describe('deleting a workspace item waiting in a proposal (T528, AC-372)', 
     test('discards a proposed data source copy, naming the proposal it withdraws', async ({
       page,
     }) => {
-      const copied = await page.request.post(`/api/data-sources/${drafts.source}/copy`);
+      const copied = await page.request.post(`/api/data-sources/${drafts.source}/copy`, {
+        data: { timeZone: 'UTC' },
+      });
       expect(copied.status(), await copied.text()).toBe(201);
-      drafts.copy = ((await copied.json()) as { id: string }).id;
+      ({ id: drafts.copy, folderId: drafts.project } = (await copied.json()) as {
+        id: string;
+        folderId: string;
+      });
       await propose(page, 'data-source', drafts.copy);
 
       await page.goto(`/explore/data-sources/${drafts.copy}`);

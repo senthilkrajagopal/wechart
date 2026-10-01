@@ -9887,10 +9887,40 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
   - Files: `packages/api/src/routes/workspace-clear.ts` (+ test), `packages/web/src/workspaces/explore/ClearWorkspaceDialog.tsx` (+ test), `e2e/security/deleting.spec.ts`
   - Failing test: `workspace-clear.test.ts`: `POST /api/workspace/clear` removes every item and folder in the caller's workspace and withdraws its open proposals, leaving everyone else's workspace and every shared folder as they were. `deleting.spec.ts`: the dialog names the count and each open proposal before anything is removed (AC-367).
   - Depends on: design 14
-- [ ] T523 (AC-368) Put each "Edit in my workspace" into its own project folder
+- [x] T523 (AC-368) Put each "Edit in my workspace" into its own project folder
   - Files: `packages/api/src/server.ts` (`POST /api/workspace/copies`), `packages/api/src/routes/data-sources.ts` (`…/copy`), `packages/web/src/workspaces/explore/EditInWorkspaceDialog.tsx`, `packages/api/src/routes/workspace-copy.test.ts`, `e2e/security/workspace-edit.spec.ts`
   - Failing test: `workspace-copy.test.ts`: a dashboard's copy lands with its library charts' copies and the chosen data sources' copies in one new folder, `project-YYYY-MM-DD-HHmm` in the user's time zone as the request gives it, with `-2` for a second in the same minute; a new item made in the workspace gets none (AC-368).
   - Depends on: T524 (the folder's description), design 14
+  - **Done 2026-10-01. AC-368 and AC-369 ticked** (AC-369's prefill here, the rest in T524).
+    - **API.**
+      - `POST /api/workspace/copies` takes `timeZone`, the browser's IANA name. Without one, or with one that isn't a zone, it answers `400` ("Say the time zone its folder is named in: …") and copies nothing.
+      - It makes a folder in My workspace's root named `project-YYYY-MM-DD-HHmm` for the server's minute in that zone, `-2`, `-3`… where a folder anywhere in the workspace has that name. The folder's description is "Editing *title* from *path*" (the item's folder path; "Shared" for the root; kept within 1,000 characters).
+      - The folder is made in one transaction with the dashboard or chart copy and its library charts' copies (`routes/project-folder.ts`). The answer names it as `folderId`.
+      - Their copy already there makes no folder. The answer then names the folder that copy is in.
+    - `POST /api/data-sources/:id/copy` takes `{ timeZone }` for its own project folder, or `{ into }`: the dashboard copy's folder, which must be in the user's own workspace (`mine` is its root), otherwise `404`. Their copy already there, wherever in the workspace, opens: `copyIn` now searches every folder of the workspace.
+    - Copies into one workspace are made one at a time within the server (`inTurn`). So three copies at once make one data source copy, and two copies in one minute take `-1430` and `-1430-2`.
+    - `GET /api/workspace/dashboards` (new) lists My workspace's dashboards wherever they are. The chart page's Dashboard picker uses it, because copies now sit in project folders.
+    - A version's restore (T354, T515) now replaces the user's copy where it is, in its project folder. A restore with no copy there still lands at the workspace root.
+    - `BuildOptions.now` lets tests fix the clock.
+    - **Web.**
+      - `EditInWorkspaceDialog` gains G1's line, "Into a new folder in My workspace: project-…", for the browser's minute when the dialog opens.
+      - Copy and edit copies the dashboard first, with the browser's time zone, then each ticked data source `into` its folder. A second try after a data source fails copies only what is left, into the same folder.
+      - The chart page and the data source page send the time zone (`projectFolder.ts`).
+    - **Tests.**
+      - `workspace-copy.test.ts`: the folder, its name in Kolkata and in Honolulu, `-2`/`-3`, copies asked for at once, none for a copy already there, a refused copy or a new item, no time zone, and the workspace's dashboards.
+      - `workspace-copy-source.test.ts`: a data source alone; one `into` a real dashboard copy's folder, then `mine`; refusals.
+      - `history.test.ts`: the restored draft's folder.
+      - `EditInWorkspaceDialog.test.tsx`.
+      - `e2e/security/workspace-edit.spec.ts`, "finds each copy in a project folder of its own": the rows' second lines, and the folder's heading and its prefilled, editable description.
+      - `workspaces.spec.ts`: the copy in its project folder.
+      - `data-sources.spec.ts`: the copy's breadcrumb names its project folder.
+    - Every API test and e2e that copies now sends a time zone and takes away its project folders (`routes/project-folder.fixture.ts`; `projectFolderOf` and `removeProjectFolder` in `e2e/security/fixtures.ts`).
+    - **Review:** fixed the following.
+      - A data source ticked beside a copy that was already there got a folder of its own.
+      - The chart page's picker sent one request per workspace folder; it now uses the one route.
+      - Added tests for copies asked for at once, a data source `into` a real dashboard copy's folder, and the restore's placement.
+    - **Not built, on purpose:** G4's toast. As T348 chose, a chart's or data source's copy opens at once instead. Its page's breadcrumb names the project folder.
+    - **For the user:** a request with no time zone is refused, not given a default zone. Two servers copying into one workspace at the same moment can still make two folders of one name, or two copies of one data source; the turn is kept within one server.
 - [x] T524 (AC-369) Give folders a description, shown under the name in Explore, prefilled for a project folder
   - Files: `packages/api/src/server.ts` (the folder's `description`, up to 1,000 characters), `packages/web/src/workspaces/explore/ExplorePage.tsx` (the header), `e2e/security/deleting.spec.ts` or `workspaces.spec.ts`
   - Failing test: a description saved by a read-write member shows under the folder's name, a reader's save is refused, 1,001 characters are refused, and a project folder's starts as "Editing *title* from *path*" (AC-369).

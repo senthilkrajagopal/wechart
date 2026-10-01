@@ -1,6 +1,6 @@
 import { seedDefault } from '../../packages/api/src/seed-default';
 import { CUBE, serviceToken } from '../api-process';
-import { expect, test } from './fixtures';
+import { expect, projectFolderOf, removeProjectFolder, test } from './fixtures';
 import { ROOT_DEFAULT_ENV } from './root-default';
 
 /**
@@ -96,6 +96,8 @@ test.describe('the root’s default data source, seeded at install (T443, AC-310
     await main.getByRole('button', { name: 'Edit in my workspace' }).click();
     await expect(main.locator('.source-settings__status')).toHaveText('Draft');
     const copy = decodeURIComponent(page.url().split('/').pop() ?? '');
+    // The project folder it went into (T523), taken away after it.
+    const project = await projectFolderOf(page.request, 'data-source', copy);
 
     try {
       const tabs = main.getByRole('tablist', { name: 'Data source' });
@@ -125,6 +127,7 @@ test.describe('the root’s default data source, seeded at install (T443, AC-310
       await expect(panel.getByText(/ · encrypted$/)).toBeVisible();
     } finally {
       await page.request.delete(`/api/data-sources/${encodeURIComponent(copy)}`);
+      await removeProjectFolder(page.request, project);
     }
   });
 });

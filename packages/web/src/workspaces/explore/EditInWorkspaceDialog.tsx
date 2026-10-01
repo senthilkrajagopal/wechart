@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 
 import { StateLine } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
+import { browserTimeZone, projectNameAt } from './projectFolder';
 
 /**
  * "Edit in my workspace" for a shared dashboard (T348, AC-278, AC-279;
@@ -99,12 +100,48 @@ export function EditInWorkspaceDialog({
       return new Set(sources.filter((_, index) => mayCopy[index]).map((source) => source.id));
     },
   });
+  /**
+   * The folder its copies go into (T523, AC-368; design 14, state G1): the
+   * minute as the dialog opens. The API names it for the minute Copy and
+   * edit is pressed, `-2` where that name is taken.
+   */
+  const [projectName] = useState(() => projectNameAt(new Date()));
+  /** The dashboard's copy once made: a second try copies only what's left, into its folder. */
+  const made = useRef<{ readonly id: string; readonly folderId?: string } | null>(null);
+  /** The data sources copied already. */
+  const sourcesCopied = useRef(new Set<string>());
   const copy = useMutation({
     mutationFn: async () => {
-      // Its data sources first, so the dashboard's copy finds them there.
+      // The dashboard first: its copy makes the folder the rest go into.
+      if (made.current === null) {
+        const response = await fetch('/api/workspace/copies', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ kind: 'dashboard', id: dashboardId, timeZone: browserTimeZone() }),
+        });
+        const answer = (await response.json().catch(() => null)) as {
+          id?: string;
+          folderId?: string;
+          error?: string;
+        } | null;
+        if (!response.ok || answer?.id === undefined)
+          throw new Error(answer?.error ?? `It could not be copied (${String(response.status)}).`);
+        made.current = {
+          id: answer.id,
+          ...(answer.folderId === undefined ? {} : { folderId: answer.folderId }),
+        };
+      }
+      const { id: copyId, folderId } = made.current;
       for (const id of ticked) {
+        if (sourcesCopied.current.has(id)) continue;
         const answer = await fetch(`/api/data-sources/${encodeURIComponent(id)}/copy`, {
           method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          // Into the dashboard's copy's folder: the one it made, or, where their
+          // copy was there already, the one that copy is in (T523's review).
+          body: JSON.stringify(
+            folderId === undefined ? { timeZone: browserTimeZone() } : { into: folderId },
+          ),
         });
         if (!answer.ok) {
           const said = (await answer.json().catch(() => null)) as { error?: string } | null;
@@ -112,19 +149,9 @@ export function EditInWorkspaceDialog({
             said?.error ?? `A data source could not be copied (${String(answer.status)}).`,
           );
         }
+        sourcesCopied.current.add(id);
       }
-      const response = await fetch('/api/workspace/copies', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ kind: 'dashboard', id: dashboardId }),
-      });
-      const answer = (await response.json().catch(() => null)) as {
-        id?: string;
-        error?: string;
-      } | null;
-      if (!response.ok || answer?.id === undefined)
-        throw new Error(answer?.error ?? `It could not be copied (${String(response.status)}).`);
-      return answer.id;
+      return copyId;
     },
     onSuccess: (copyId) => {
       onCopied(copyId);
@@ -186,6 +213,13 @@ export function EditInWorkspaceDialog({
             )}
             <p className="edit-in-workspace__note">
               Anything you don’t copy is used from its folder.
+            </p>
+            <p className="edit-in-workspace__folder" data-testid="project-folder">
+              <span className="itemicon ic-folder" data-icon="folder" aria-hidden="true" />
+              <span>
+                Into a new folder in My workspace:{' '}
+                <b className="edit-in-workspace__project">{projectName}</b>
+              </span>
             </p>
           </>
         )}

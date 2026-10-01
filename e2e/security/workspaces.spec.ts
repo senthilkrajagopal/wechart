@@ -150,10 +150,14 @@ test.describe('each author’s own workspace (T343, AC-276, AC-277)', () => {
       expect(shared.status(), await shared.text()).toBe(201);
       const sharedId = ((await shared.json()) as { id: string }).id;
       const copied = await page.request.post('/api/workspace/copies', {
-        data: { kind: 'dashboard', id: sharedId },
+        data: { kind: 'dashboard', id: sharedId, timeZone: 'UTC' },
       });
       expect(copied.status(), await copied.text()).toBe(201);
-      const copyId = ((await copied.json()) as { id: string }).id;
+      // In a project folder of its own (T523, AC-368).
+      const { id: copyId, folderId: projectId } = (await copied.json()) as {
+        id: string;
+        folderId: string;
+      };
       const folder = await page.request.post('/api/documents', {
         data: { kind: 'folder', title: `Drafts ${RUN}`, folderId: 'mine' },
       });
@@ -200,17 +204,23 @@ test.describe('each author’s own workspace (T343, AC-276, AC-277)', () => {
         await expect(line(made.boards['writer']!)).toHaveText(
           `Goes to Workspace sales ${RUN} · new`,
         );
-        await expect(line(copyId)).toHaveText(
-          `Goes to Workspace sales ${RUN} · copied from version 1`,
-        );
         await expect(line(folderId)).toHaveText('0 items · folders in My workspace have no target');
-        await expect(contents.getByTestId(`item-${copyId}`).getByRole('cell').nth(1)).toHaveText(
-          'Draft',
-        );
         await expect(contents).toContainText(
           'Items here are private. Each goes to its target folder only when you propose it and it’s approved; you may approve your own.',
         );
         await expect(contents).not.toContainText('Charts are shared');
+        // The copy, in its project folder, which its description names (T523, P1).
+        const project = contents.getByTestId(`item-${projectId}`);
+        await expect(project.locator('.folder-contents__description')).toHaveText(
+          `Editing shared board ${RUN} from Workspace sales ${RUN}`,
+        );
+        await project.getByRole('button', { name: /^project-/ }).click();
+        await expect(line(copyId)).toHaveText(
+          `Goes to Workspace sales ${RUN} · copied from version 1`,
+        );
+        await expect(contents.getByTestId(`item-${copyId}`).getByRole('cell').nth(1)).toHaveText(
+          'Draft',
+        );
 
         // A shared folder is as it was: no band, Built on and Owner.
         await tree(page)
@@ -222,6 +232,7 @@ test.describe('each author’s own workspace (T343, AC-276, AC-277)', () => {
         await expect(contents.getByRole('columnheader', { name: 'Owner' })).toBeVisible();
       } finally {
         await page.request.delete(`/api/documents/dashboard/${copyId}`);
+        await page.request.delete(`/api/documents/folder/${projectId}`);
         await page.request.delete(`/api/documents/dashboard/${sharedId}`);
         await page.request.delete(`/api/documents/folder/${folderId}`);
       }

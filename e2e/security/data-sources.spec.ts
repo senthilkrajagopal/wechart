@@ -4,7 +4,15 @@ import { readFileSync } from 'node:fs';
 import type { APIRequestContext } from '@playwright/test';
 import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
-import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtures';
+import {
+  BASE_URL,
+  expect,
+  projectFolderOf,
+  removeProjectFolder,
+  signInThroughDex,
+  test,
+  testedSource,
+} from './fixtures';
 
 /**
  * T364 (AC-157, AC-233): Data sources lists every data source the user may
@@ -375,9 +383,15 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
       const original = page.url();
       await main.getByRole('button', { name: 'Edit in my workspace' }).click();
       await expect(page).not.toHaveURL(original);
+      // In a project folder of its own, which its breadcrumb names (T523; design 14, G4).
       await expect(
         main.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link'),
-      ).toHaveText(['Explore', 'My workspace']);
+      ).toHaveText(['Explore', 'My workspace', /^project-\d{4}-\d{2}-\d{2}-\d{4}(-\d+)?$/]);
+      const project = await projectFolderOf(
+        page.request,
+        'data-source',
+        decodeURIComponent(page.url().split('/').pop() ?? ''),
+      );
       await expect(main.locator('.source-settings__status')).toHaveText('Draft');
       await expect(main.locator('.source-settings__origin')).toHaveText(
         `Copied from Sources parent ${RUN} / Sources ${RUN} › sales_${RUN} · version 1`,
@@ -398,6 +412,7 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
       await discard.click();
       await question.getByRole('button', { name: 'Discard' }).click();
       await expect(page).toHaveURL(/\/explore\?folder=/);
+      await removeProjectFolder(page.request, project);
       await page.goto('/data-sources');
       await expect(
         page
@@ -431,6 +446,7 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
       await main.getByRole('button', { name: 'Edit in my workspace' }).click();
       await expect(main.locator('.source-settings__status')).toHaveText('Draft');
       made.sources.push(decodeURIComponent(page.url().split('/').pop() ?? ''));
+      const project = await projectFolderOf(page.request, 'data-source', made.sources.at(-1)!);
       const tabs = main.getByRole('tablist', { name: 'Data source' });
       // In the workspace, the page says so across its width (T498; design 04, pin 2).
       const band = main.getByRole('note').filter({ hasText: 'only you can see this' });
@@ -539,6 +555,7 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
         .click();
       await expect(page).toHaveURL(/\/explore\?folder=/);
       expect(asked).toEqual([]);
+      await removeProjectFolder(page.request, project);
     });
   });
 

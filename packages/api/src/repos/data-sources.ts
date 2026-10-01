@@ -151,8 +151,11 @@ export interface DataSourceStore {
    * targeting its original's folder, and naming its origin.
    */
   copy(id: string, into: string): Promise<DataSource>;
-  /** The copy of `originId` in `into`, if there is one (T346). */
-  copyIn(originId: string, into: string): Promise<DataSource | undefined>;
+  /**
+   * The copy of `originId` in one of the folders `into`, if there is one
+   * (T346): a workspace's, wherever in it the copy is (T523).
+   */
+  copyIn(originId: string, into: readonly string[]): Promise<DataSource | undefined>;
   /**
    * Names what a workspace one is now a copy of: the data source its approval
    * landed as (T352's review), so "Edit in my workspace" finds it. Its
@@ -409,8 +412,9 @@ export function dataSourceStore(
     },
 
     async copyIn(originId, into) {
+      if (into.length === 0) return undefined;
       const row = (await select()
-        .where('folder_id', '=', into)
+        .where('folder_id', 'in', [...into])
         .where(sql<boolean>`origin ->> 'id' = ${originId}`)
         .executeTakeFirst()) as Row | undefined;
       return row === undefined ? undefined : (await withSecrets([row]))[0];
