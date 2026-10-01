@@ -22,7 +22,10 @@ import {
 import { AccessIcon } from '../explore/AccessChip';
 import { AccessRefused, folderAccessQuery } from '../explore/access/AccessPanel';
 import { rightFrom } from '../explore/folderRole';
-import { exploreHref, folderChain, FOLDERS_QUERY } from '../explore/folders';
+import { exploreHref, folderChain, FOLDERS_QUERY, targetPathOf } from '../explore/folders';
+import { DeleteDialog } from '../explore/DeleteDialog';
+import { checkModel, removeModel } from '../explore/deleteChecks';
+import { sayOnExplore } from '../explore/deletedToast';
 import { SHARED_ROOT } from '../explore/roots';
 import { ALL_MODEL_FILES_QUERY, FileList, modelFilesQuery, ModelFilesNotFound } from './FileList';
 import { GenerateCubes } from './GenerateCubes';
@@ -210,6 +213,68 @@ function EditInWorkspace({ reason }: { reason: string }) {
       <PencilIcon />
       Edit in my workspace
     </button>
+  );
+}
+
+/**
+ * Delete *file*…, in the model page's header ⋯ (T526, AC-365; design 14,
+ * state D1): for those who may change its folder, since a delete is direct
+ * (AC-291) though a shared model is read-only here. It asks first what
+ * depends on its cube (D2); deleted, its folder opens in Explore, saying so.
+ */
+function DeleteModelMenu({ path, where }: { path: string; where: Place }) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const folders = useQuery(FOLDERS_QUERY);
+  const [deleting, setDeleting] = useState(false);
+  const more = useRef<HTMLSpanElement>(null);
+  const name = path.split('/').at(-1) ?? path;
+  const pathOf = (id: string) => targetPathOf(folders.data ?? [], id);
+  return (
+    <>
+      <span ref={more}>
+        <MenuButton
+          label={`More actions for ${name}`}
+          className="btn-ghost btn-sm"
+          items={[
+            {
+              key: 'delete',
+              label: `Delete ${name}…`,
+              danger: true,
+              onSelect: () => {
+                setDeleting(true);
+              },
+            },
+          ]}
+        >
+          <span aria-hidden="true">⋯</span>
+        </MenuButton>
+      </span>
+      {deleting ? (
+        <DeleteDialog
+          name={name}
+          action="Delete model"
+          check={checkModel(where.folderId, path, pathOf)}
+          remove={removeModel(where.folderId, path, pathOf)}
+          onDeleted={() => {
+            setDeleting(false);
+            sayOnExplore(`Deleted “${name}”.`);
+            void queryClient.invalidateQueries({
+              queryKey: modelFilesQuery(where.folderId).queryKey,
+            });
+            void queryClient.invalidateQueries({ queryKey: META_QUERY.queryKey });
+            void queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
+            void queryClient.invalidateQueries({ queryKey: ['folders'] });
+            void queryClient.invalidateQueries({ queryKey: ['folder-roots'] });
+            router.history.push(exploreHref(where.folderId));
+          }}
+          onClose={() => {
+            setDeleting(false);
+            more.current?.querySelector<HTMLButtonElement>('button')?.focus();
+          }}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -883,6 +948,12 @@ function FileEditor({
               </button>
             </>
           )}
+          {/* A published file, for those who may change its folder (design 14,
+              D1); not while it has unpublished changes, which Discard or Save
+              settles first (T526's review: leaving would ask about a file gone). */}
+          {published && !changed && (!where.readOnly || where.editInWorkspace) ? (
+            <DeleteModelMenu path={path} where={where} />
+          ) : null}
         </div>
         {where.readOnly && where.editInWorkspace ? <NoCopyYet id={noCopyId} /> : null}
         {/* What Save publishes besides this file, said under it before it is

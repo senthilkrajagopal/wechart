@@ -26,6 +26,10 @@ export interface Dependent {
   readonly href?: string;
   /** Its folder or file, after its name. */
   readonly where: string;
+  /** Where its folder opens, in a new tab: a cube's, whose name opens nothing (state C). */
+  readonly whereHref?: string;
+  /** Its model file, before its folder, a link of its own (state C: Cube · Model · Folder). */
+  readonly file?: { readonly text: string; readonly href?: string };
   /** Its name in the code face: a cube's or view's. */
   readonly code?: boolean;
 }
@@ -128,6 +132,30 @@ function Opens() {
   );
 }
 
+/** Words, as a link opening in a new tab where there is somewhere to go. */
+function Linked({
+  text,
+  href,
+  code = false,
+}: {
+  readonly text: string;
+  readonly href?: string | undefined;
+  readonly code?: boolean;
+}) {
+  if (href === undefined) return <span className={code ? 'is-code' : undefined}>{text}</span>;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={code ? 'is-code' : undefined}
+    >
+      {text}
+      <span className="visually-hidden"> (opens in a new tab)</span>
+    </a>
+  );
+}
+
 function Groups({ groups }: { readonly groups: readonly DependentGroup[] }) {
   return (
     <div className="delete-dialog__deps">
@@ -165,8 +193,22 @@ function Groups({ groups }: { readonly groups: readonly DependentGroup[] }) {
                     </a>
                   )}
                 </span>
-                <span className="delete-dialog__where">{row.where}</span>
-                {row.href === undefined ? <span /> : <Opens />}
+                <span className="delete-dialog__where">
+                  {row.file === undefined ? null : (
+                    <>
+                      <Linked text={row.file.text} href={row.file.href} code />
+                      {' · '}
+                    </>
+                  )}
+                  <Linked text={row.where} href={row.whereHref} />
+                </span>
+                {row.href === undefined &&
+                row.whereHref === undefined &&
+                row.file?.href === undefined ? (
+                  <span />
+                ) : (
+                  <Opens />
+                )}
               </li>
             ))}
           </ul>

@@ -733,8 +733,18 @@ export function buildServer({
       const all = (await cat?.referenceDocuments?.()) ?? [];
       const users = usersOfCubes(all, cubes);
       const seen = usersOfCubes(await visibleOf(request, all), cubes);
+      // Each with its folder, for a delete's dialog to say where it is (T526).
+      const folderOf = new Map(
+        all.map((each) => [
+          `${each.kind}:${each.id}`,
+          folderIdOf((each.body ?? {}) as Record<string, unknown>),
+        ]),
+      );
+      const placed = (kind: string, items: readonly { id: string; title: string | null }[]) =>
+        items.map((item) => ({ ...item, folderId: folderOf.get(`${kind}:${item.id}`) ?? null }));
       return {
-        ...seen,
+        charts: placed('chart', seen.charts),
+        dashboards: placed('dashboard', seen.dashboards),
         hidden:
           users.charts.length +
           users.dashboards.length -

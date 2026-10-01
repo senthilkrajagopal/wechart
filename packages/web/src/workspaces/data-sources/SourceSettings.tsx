@@ -30,6 +30,11 @@ import {
   useSourceEdit,
 } from './SourceEditor';
 import { DATA_SOURCES_QUERY } from './query';
+import { MenuButton } from '../../shell/MenuButton';
+import { DeleteDialog } from '../explore/DeleteDialog';
+import { checkSource, removeSource } from '../explore/deleteChecks';
+import { sayOnExplore } from '../explore/deletedToast';
+import { exploreHref } from '../explore/folders';
 
 /**
  * A stored data source's settings (T462; AC-269, AC-161, AC-163, AC-310),
@@ -166,6 +171,9 @@ function Settings({ source }: { source: StoredSource }) {
     source.origin === null ? undefined : list.data?.find((each) => each.id === source.origin?.id);
   const root = rootOf(source);
   const discardButton = useRef<HTMLButtonElement>(null);
+  /** Deleting a shared one (T526; design 14, state C). */
+  const [deleting, setDeleting] = useState(false);
+  const moreButton = useRef<HTMLSpanElement>(null);
   /**
    * Changed here where the user may write it: in their workspace, or in place
    * with sign-in off, where there are no workspaces (T497). A shared one with
@@ -309,6 +317,30 @@ function Settings({ source }: { source: StoredSource }) {
           <button type="button" className="btn btn-primary" onClick={() => void editInWorkspace()}>
             Edit in my workspace
           </button>
+        ) : null}
+        {/* Delete data source…, last, in the header's ⋯ (T526; design 14,
+            state C1): a shared one, for those who may change its folder. A
+            workspace copy keeps Discard my copy…, since no published cube is
+            ever bound to a copy (AC-280). */}
+        {!source.inWorkspace && source.canWrite && viewing === undefined ? (
+          <span ref={moreButton}>
+            <MenuButton
+              label={`More actions for ${source.name}`}
+              className="btn-ghost btn-sm"
+              items={[
+                {
+                  key: 'delete',
+                  label: 'Delete data source…',
+                  danger: true,
+                  onSelect: () => {
+                    setDeleting(true);
+                  },
+                },
+              ]}
+            >
+              <span aria-hidden="true">⋯</span>
+            </MenuButton>
+          </span>
         ) : null}
       </div>
       {failed === null ? null : <StateLine kind="err">{failed}</StateLine>}
@@ -463,6 +495,30 @@ function Settings({ source }: { source: StoredSource }) {
         </>
       ) : null}
 
+      {deleting ? (
+        <DeleteDialog
+          name={source.name}
+          action="Delete data source"
+          check={checkSource(source.id)}
+          remove={removeSource(source.id)}
+          onDeleted={() => {
+            setDeleting(false);
+            // Its folder opens, saying so; the Data sources list drops it (state C).
+            sayOnExplore(`Deleted “${source.name}”.`);
+            void queryClient.invalidateQueries({ queryKey: DATA_SOURCES_QUERY.queryKey });
+            void queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
+            void queryClient.invalidateQueries({ queryKey: ['folders'] });
+            void queryClient.invalidateQueries({ queryKey: ['folder-roots'] });
+            edit.release();
+            router.history.push(exploreHref(source.folderId));
+          }}
+          onClose={() => {
+            setDeleting(false);
+            // Back on the ⋯ it came from (design 14, keyboard).
+            moreButton.current?.querySelector<HTMLButtonElement>('button')?.focus();
+          }}
+        />
+      ) : null}
       {asking ? (
         <AskToDiscardCopy
           source={source}

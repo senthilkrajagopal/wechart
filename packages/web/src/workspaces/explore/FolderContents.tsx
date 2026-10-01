@@ -336,8 +336,16 @@ export function FolderContents({
    * workspace; Export… for a dashboard.
    */
   const menuOf = (item: CatalogItem, targets: readonly FolderMove[]): MenuItem[] => {
-    const others = otherActions(item, targets);
-    return onDelete !== undefined && deletes(item)
+    const deletable = onDelete !== undefined && deletes(item);
+    // A model's name is its file's, changed in the model editor (T334): its
+    // ⋯ holds Open and Delete…, where it may be deleted (design 14, pin 9).
+    const others =
+      item.kind === 'model'
+        ? deletable
+          ? [{ key: 'open', label: 'Open', onSelect: () => onOpen?.(item) }]
+          : []
+        : otherActions(item, targets);
+    return deletable
       ? [
           ...others,
           {
@@ -583,7 +591,7 @@ export function FolderContents({
                 {/* A model's name is its file's, changed in the model editor
                     (T334): it has no rename or move here. A row with nothing
                     to offer, a reader's folder's (rule 68, T331), has no ⋯. */}
-                {item.kind === 'model' || menuOf(item, targets).length === 0 ? null : (
+                {menuOf(item, targets).length === 0 ? null : (
                   <MenuButton
                     label={`Actions for ${item.title}`}
                     className="btn-ghost btn-sm folder-contents__menu"

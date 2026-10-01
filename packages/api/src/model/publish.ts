@@ -219,9 +219,17 @@ export function registerModelPublishing(
       request: FastifyRequest,
       cubes: readonly string[],
     ) => Promise<{
-      /** Those the user may see, named. */
-      readonly charts: readonly { readonly id: string; readonly title: string | null }[];
-      readonly dashboards: readonly { readonly id: string; readonly title: string | null }[];
+      /** Those the user may see, named, each with its folder where it has one (T526). */
+      readonly charts: readonly {
+        readonly id: string;
+        readonly title: string | null;
+        readonly folderId?: string | null;
+      }[];
+      readonly dashboards: readonly {
+        readonly id: string;
+        readonly title: string | null;
+        readonly folderId?: string | null;
+      }[];
       /** How many more there are that the user may not see: counted, never named (AC-322). */
       readonly hidden: number;
     }>;
@@ -282,6 +290,35 @@ export function registerModelPublishing(
     );
     return reply.status(422).send(refusal.answer);
   };
+
+  /**
+   * What depends on these short names in a folder, by its xcube id: the
+   * views and cubes bound to them, and the charts and dashboards that name
+   * them, each named where the user may see it and counted where not (T428,
+   * T520; AC-275, AC-365).
+   */
+  const dependentsIn = async (
+    request: FastifyRequest,
+    names: readonly string[],
+    xcubeId: string,
+    /** Short names of the items the change sends again (T520's review). */
+    resent: readonly string[] = [],
+  ) => {
+    const fullOf = (name: string) => (xcubeId === XCUBE_ROOT ? name : `${xcubeId}__${name}`);
+    const full = names.map(fullOf);
+    const referenced = names.length === 0 ? undefined : await referencedBy?.(request, full);
+    // The model's own dependents first: views and joins (T520, AC-365).
+    const models =
+      names.length === 0 ? undefined : await dependentsOf?.(request, full, resent.map(fullOf));
+    return {
+      views: models?.views ?? [],
+      cubes: models?.cubes ?? [],
+      charts: referenced?.charts ?? [],
+      dashboards: referenced?.dashboards ?? [],
+      hidden: (referenced?.hidden ?? 0) + (models?.hidden ?? 0),
+    };
+  };
+
   /**
    * Refused while a chart or dashboard names any of these short names in a
    * folder, by its xcube id: the refusal, naming them; else nothing (T428,
@@ -296,22 +333,12 @@ export function registerModelPublishing(
   ) => {
     if (names.length === 0 || (referencedBy === undefined && dependentsOf === undefined))
       return undefined;
-    const fullOf = (name: string) => (xcubeId === XCUBE_ROOT ? name : `${xcubeId}__${name}`);
-    const full = names.map(fullOf);
-    const referenced = (await referencedBy?.(request, full)) ?? {
-      charts: [],
-      dashboards: [],
-      hidden: 0,
-    };
-    // The model's own dependents first: views and joins (T520, AC-365).
-    const models = (await dependentsOf?.(request, full, resent.map(fullOf))) ?? {
-      views: [],
-      cubes: [],
-      hidden: 0,
-    };
-    const { charts, dashboards } = referenced;
-    const { views, cubes } = models;
-    const hidden = referenced.hidden + models.hidden;
+    const { views, cubes, charts, dashboards, hidden } = await dependentsIn(
+      request,
+      names,
+      xcubeId,
+      resent,
+    );
     if (
       charts.length === 0 &&
       dashboards.length === 0 &&
@@ -367,6 +394,67 @@ export function registerModelPublishing(
     last = run.catch(() => undefined);
     return run;
   };
+
+  /**
+   * What a model file's delete would be refused for, asked before its dialog
+   * opens (T526; design 14, D1–D2): what depends on the cube or view it
+   * declares, as the delete's own refusal names it, with each view's and
+   * cube's file and each chart's and dashboard's folder to say where it is.
+   * Asked as the delete is: by those who may change its folder, of a file
+   * that is there.
+   */
+  app.get('/api/model/files/dependents', USER, async (request, reply) => {
+    const { folder, path } = request.query as { folder?: unknown; path?: unknown };
+    const folderId = typeof folder === 'string' && folder !== '' ? folder : ROOT_FOLDER_ID;
+    if (typeof path !== 'string' || path === '')
+      return reply.status(400).send({ error: 'Name the model file by its path.' });
+    const refusal = await refusalIn?.(request, folderId);
+    if (refusal !== undefined) return reply.status(refusal.status).send(refusal.body);
+    // Refused here as the delete refuses them (T526's review).
+    const xcubeId = ((await folders?.()) ?? ROOT_ONLY).ids.get(folderId);
+    if (modelFiles?.remove === undefined || xcubeId === undefined)
+      return reply.status(409).send({
+        error: 'Models can’t be deleted here: xcube doesn’t serve this folder.',
+      });
+    const live = (await modelFiles.all?.()) ?? (await modelFiles.list());
+    const inFolder = (each: ModelFile, id: string) => (each.folderId ?? ROOT_FOLDER_ID) === id;
+    const file = live.find((each) => inFolder(each, folderId) && each.path === path);
+    if (file === undefined)
+      return reply.status(404).send({ error: `There’s no model file ${path} here.` });
+    if (JINJA.test(file.content))
+      return reply.status(409).send({
+        error: `${path} is a Jinja template, and templates are read-only here.`,
+      });
+    const declares = declaredIn(file.content)
+      .filter(({ name }) => name !== '')
+      .map(({ kind, name }) => ({ kind, name }));
+    const found = await dependentsIn(
+      request,
+      declares.map(({ name }) => name),
+      xcubeId,
+    );
+    /** The file in its folder declaring an item, to say where it is. */
+    const fileOf = (name: string, id: string) =>
+      live.find(
+        (each) => inFolder(each, id) && declaredIn(each.content).some((one) => one.name === name),
+      )?.path;
+    const placed = (items: readonly { name: string; folderId: string }[]) =>
+      items.map(({ name, folderId: id }) => {
+        const where = fileOf(name, id);
+        return { name, folderId: id, ...(where === undefined ? {} : { file: where }) };
+      });
+    const foldered = (
+      items: readonly { id: string; title: string | null; folderId?: string | null }[],
+    ) => items.map(({ id, title, folderId: id2 }) => ({ id, title, folderId: id2 ?? null }));
+    return {
+      declares,
+      views: placed(found.views),
+      cubes: placed(found.cubes),
+      charts: foldered(found.charts),
+      dashboards: foldered(found.dashboards),
+      hidden: found.hidden,
+    };
+  });
 
   /**
    * Delete a model item: its file, from its folder (T428, AC-275, AC-291).

@@ -6526,6 +6526,8 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   color: var(--wc-text-secondary);
   white-space: nowrap;
 }
+.delete-dialog__where a { color: var(--wc-accent); text-decoration: none; }
+.delete-dialog__where a:hover { text-decoration: underline; }
 .delete-dialog__ext { color: var(--wc-text-muted); }
 .delete-dialog__kind {
   display: inline-grid;

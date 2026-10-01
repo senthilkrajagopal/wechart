@@ -223,7 +223,8 @@ test('T479: the editor head as design 03 note 2 — 44 px, a 13/600 path, its st
   await expect(state.locator('svg')).toHaveAttribute('data-icon', 'ok');
   await expect(head.getByRole('button', { name: 'Discard' })).toBeDisabled();
   await expect(head.getByRole('button', { name: 'Save & reload Cube' })).toBeDisabled();
-  await expect(head.getByRole('button')).toHaveText(['Discard', 'Save & reload Cube']);
+  // Then its ⋯, holding Delete *file*… (T526; design 14, D1).
+  await expect(head.getByRole('button')).toHaveText(['Discard', 'Save & reload Cube', '⋯']);
 
   // Edited: unpublished, and both enabled.
   await page

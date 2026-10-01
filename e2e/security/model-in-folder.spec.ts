@@ -216,7 +216,8 @@ test.describe('a model in its folder, read-only when shared (T342; AC-222, AC-13
       await page.goto(`/explore?folder=${made.emea}`);
       const row = page.getByTestId(`item-${ORDERS}`);
       await expect(row.getByRole('cell').nth(0)).toHaveText('Model');
-      await row.getByRole('button', { name: 'orders.yml' }).click();
+      // Its name, not its ⋯ "Actions for orders.yml" (T526).
+      await row.getByRole('button', { name: 'orders.yml', exact: true }).click();
 
       // The folder and the file in the address (AC-222), under the folder's breadcrumb (rule 70).
       await expect(page).toHaveURL(

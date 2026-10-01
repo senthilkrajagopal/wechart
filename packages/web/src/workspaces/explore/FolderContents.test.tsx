@@ -517,6 +517,35 @@ describe('models in a folder (T334, AC-269)', () => {
     expect(screen.queryByRole('button', { name: 'Actions for orders.yml' })).toBeNull();
   });
 
+  it('holds Open and Delete… in its ⋯ where it may be deleted (T526; design 14, pin 9 and D1)', async () => {
+    const onOpen = vi.fn();
+    const onDelete = vi.fn();
+    render(
+      <FolderContents
+        items={models}
+        onOpen={onOpen}
+        onRename={vi.fn()}
+        onMove={vi.fn()}
+        folders={[{ id: 'emea', title: 'EMEA' }]}
+        onDelete={onDelete}
+        deletes={(item) => item.kind === 'model'}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for orders.yml' }));
+    const menu = screen.getByRole('menu');
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Open', 'Delete…']);
+    expect(within(menu).getAllByRole('separator')).toHaveLength(1);
+    await userEvent.click(within(menu).getByRole('menuitem', { name: 'Open' }));
+    expect(onOpen).toHaveBeenCalledWith(models[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for orders.yml' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Delete…' }));
+    expect(onDelete).toHaveBeenCalledWith(models[0]);
+  });
+
   it('opens every folder’s model, the root’s and another’s alike (T342)', async () => {
     const onOpen = vi.fn();
     render(

@@ -244,7 +244,8 @@ test.describe('Explore and the top bar by role (T331; AC-001, AC-192, AC-194)', 
       await explore(page);
       const row = contents(page).getByTestId('item-cubes/orders.yml');
       await expect(row.getByRole('cell').nth(0)).toHaveText('Model');
-      await row.getByRole('button', { name: 'orders.yml' }).click();
+      // Its name, not its ⋯ "Actions for orders.yml" (T526).
+      await row.getByRole('button', { name: 'orders.yml', exact: true }).click();
       // In its folder, the root, named in the address beside the file (T342, AC-222).
       await expect(page).toHaveURL(/\/explore\/folders\/root\/models\/cubes%2Forders\.yml$/);
       await expect(page.getByRole('textbox', { name: 'cubes/orders.yml, as YAML' })).toContainText(

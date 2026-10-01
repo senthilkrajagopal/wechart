@@ -326,9 +326,12 @@ test('the root lists its model files as models, after its charts, and one opens 
   const row = page.getByTestId('item-cubes/orders.yml');
   await expect(row.getByRole('cell').nth(0)).toHaveText('Model');
   await expect(row.getByRole('cell').nth(1)).toHaveText('1 cube · 0 views');
-  await expect(row.getByRole('button', { name: /^Actions for/ })).toHaveCount(0);
+  // Its ⋯ holds Open and Delete…, never Rename or Move (T526; design 14, pin 9).
+  await row.getByRole('button', { name: 'Actions for orders.yml' }).click();
+  await expect(page.getByRole('menu').getByRole('menuitem')).toHaveText(['Open', 'Delete…']);
+  await page.keyboard.press('Escape');
 
-  await row.getByRole('button', { name: 'orders.yml' }).click();
+  await row.getByRole('button', { name: 'orders.yml', exact: true }).click();
   // In its folder, the root, named in the address beside the file (T342, AC-222).
   await expect(page).toHaveURL(/\/explore\/folders\/root\/models\/cubes%2Forders\.yml$/);
   await expect(page.getByRole('textbox', { name: 'cubes/orders.yml, as YAML' })).toContainText(

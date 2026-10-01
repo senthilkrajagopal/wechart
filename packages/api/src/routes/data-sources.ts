@@ -881,26 +881,60 @@ export function registerDataSources(
     }
   });
 
+  /**
+   * The published cubes bound to a data source (T519, AC-364): named where
+   * the user sees their folders, counted where not, as AC-322 counts. None
+   * for a workspace's, which no published cube is ever bound to, or where
+   * xcube can't be asked, whose own refusal then stands behind the delete.
+   */
+  const boundTo = async (request: FastifyRequest, source: DataSource) => {
+    if (listing.usedBy === undefined || (await inAWorkspace(source)))
+      return { total: 0, cubes: [], hidden: 0, known: true };
+    const used = await listing.usedBy().catch(() => undefined);
+    // Not known: xcube couldn't be asked (T526's review).
+    if (used === undefined) return { total: 0, cubes: [], hidden: 0, known: false };
+    const bound = used.get(source.id) ?? [];
+    if (bound.length === 0) return { total: 0, cubes: [], hidden: 0, known: true };
+    const [sees, pathOf] = await Promise.all([listing.sees(request), listing.pathOf()]);
+    const seen = bound.filter((cube) => sees(cube.folderId));
+    return {
+      total: bound.length,
+      cubes: seen.map((cube) => ({ ...cube, folderPath: pathOf(cube.folderId) })),
+      hidden: bound.length - seen.length,
+      known: true,
+    };
+  };
+
+  /**
+   * What its delete would be refused for, asked before its dialog opens
+   * (T526; design 14, state C): the same cubes as the delete's own `409`, to
+   * the same users.
+   */
+  app.get('/api/data-sources/:id/dependents', USER, async (request, reply) => {
+    const source = await reached(request, reply, 'write');
+    if (source === undefined) return reply;
+    const { cubes, hidden, known } = await boundTo(request, source);
+    // Never "none" where it isn't known: the dialog would say so (T526's review).
+    if (!known)
+      return reply.status(503).send({
+        error:
+          'xcube couldn’t be asked which published cubes are bound to it. Try again once it’s back.',
+      });
+    return { cubes, hidden };
+  });
+
   app.delete('/api/data-sources/:id', USER, async (request, reply) => {
     const source = await reached(request, reply, 'write');
     if (source === undefined) return reply;
-    /**
-     * Not while cubes are bound to it (T519, AC-364): named where the user
-     * sees their folders, counted where not, as AC-322 counts. xcube refuses
-     * too, below, where it can't be asked here.
-     */
-    if (listing.usedBy !== undefined && !(await inAWorkspace(source))) {
-      const bound = (await listing.usedBy().catch(() => undefined))?.get(source.id) ?? [];
-      if (bound.length > 0) {
-        const [sees, pathOf] = await Promise.all([listing.sees(request), listing.pathOf()]);
-        const seen = bound.filter((cube) => sees(cube.folderId));
-        return reply.status(409).send({
-          error: `This data source is used by ${String(bound.length)} cube${bound.length === 1 ? '' : 's'}: change or delete ${bound.length === 1 ? 'it' : 'them'} first.`,
-          cubes: seen.map((cube) => ({ ...cube, folderPath: pathOf(cube.folderId) })),
-          hidden: bound.length - seen.length,
-        });
-      }
-    }
+    // Not while cubes are bound to it (T519, AC-364). xcube refuses too,
+    // below, where it can't be asked here.
+    const { total, cubes, hidden } = await boundTo(request, source);
+    if (total > 0)
+      return reply.status(409).send({
+        error: `This data source is used by ${String(total)} cube${total === 1 ? '' : 's'}: change or delete ${total === 1 ? 'it' : 'them'} first.`,
+        cubes,
+        hidden,
+      });
     try {
       const removed = await store.remove(
         source.id,

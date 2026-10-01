@@ -458,6 +458,22 @@ describe('every data source the user may see, in every folder (T364, AC-157)', (
       });
       expect((await sources().get(held.b))?.id).toBe(held.b);
 
+      // What its dialog asks first answers the same (T526; design 14, state C).
+      const ask = (id: string, who = 'writer') =>
+        withXcube.inject({
+          method: 'GET',
+          url: `/api/data-sources/${id}/dependents`,
+          headers: { cookie: cookies[who]! },
+        });
+      const asked = await ask(held.b);
+      expect(asked.statusCode, asked.body).toBe(200);
+      const { error: _said, ...dependents } = refused.json<Record<string, unknown>>();
+      void _said;
+      expect(asked.json()).toEqual(dependents);
+      expect((await ask(unbound)).json()).toEqual({ cubes: [], hidden: 0 });
+      // To those who may delete it alone, as its delete is.
+      expect((await ask(held.b, 'reader')).statusCode).toBe(404);
+
       // One no cube is bound to goes.
       const deleted = await withXcube.inject({
         method: 'DELETE',
@@ -468,6 +484,37 @@ describe('every data source the user may see, in every folder (T364, AC-157)', (
       expect(await sources().get(unbound)).toBeUndefined();
     } finally {
       await withXcube.close();
+    }
+  });
+
+  it('says, when xcube can’t be asked, that what is bound to it isn’t known, never that nothing is (T526’s review)', async () => {
+    const away = buildServer({
+      config: secured,
+      sessions: pgSessionStore(getDb()),
+      documents: docs(),
+      catalog: catalog(getDb()),
+      folderAccess: folderAccessStore(getDb()),
+      dataSources: sources(),
+      folders: async () => ({ ids: new Map([['root', 'froot']]), parents: new Map() }),
+      xcube: {
+        items: async () => {
+          throw new Error('xcube is away');
+        },
+      } as never,
+    });
+    try {
+      const asked = await away.inject({
+        method: 'GET',
+        url: `/api/data-sources/${held.b}/dependents`,
+        headers: { cookie: cookies['writer']! },
+      });
+      expect(asked.statusCode, asked.body).toBe(503);
+      expect(asked.json()).toEqual({
+        error:
+          'xcube couldn’t be asked which published cubes are bound to it. Try again once it’s back.',
+      });
+    } finally {
+      await away.close();
     }
   });
 

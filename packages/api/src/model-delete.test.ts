@@ -207,6 +207,72 @@ describe('deleting a model item (T428, AC-275, AC-291)', () => {
     await app.close();
   });
 
+  it('answers what its delete would be refused for, asked before its dialog opens, each with its file or folder (T526; design 14, D2)', async () => {
+    const { app, stub } = await serving([
+      {
+        kind: 'chart',
+        id: 'c1',
+        title: 'Sales by month',
+        body: { folderId: 'sales', chart: { source: { cube: 'fsales__orders' } } },
+      },
+    ]);
+    const ids = (await folders()).ids;
+    stub.holdItems('dev', itemsOf(FILES, ids), {
+      fsales__summary: { summary: 'fsales__summary', orders: 'fsales__orders' },
+    });
+    const ask = (folder: string, path: string) =>
+      app.inject({
+        method: 'GET',
+        url: `/api/model/files/dependents?folder=${folder}&path=${encodeURIComponent(path)}`,
+      });
+
+    const used = await ask('sales', 'cubes/orders.yml');
+    expect(used.statusCode, used.body).toBe(200);
+    expect(used.json()).toEqual({
+      declares: [{ kind: 'cube', name: 'orders' }],
+      views: [],
+      cubes: [{ name: 'summary', folderId: 'sales', file: 'cubes/summary.yml' }],
+      charts: [{ id: 'c1', title: 'Sales by month', folderId: 'sales' }],
+      dashboards: [],
+      hidden: 0,
+    });
+    // One nothing uses: nothing to name.
+    expect((await ask('sales', 'cubes/summary.yml')).json()).toEqual({
+      declares: [{ kind: 'cube', name: 'summary' }],
+      views: [],
+      cubes: [],
+      charts: [],
+      dashboards: [],
+      hidden: 0,
+    });
+    // One that isn't there answers as its delete does.
+    expect((await ask('sales', 'cubes/nothing.yml')).statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('answers the ask about a template, and a folder xcube doesn’t serve, as their deletes: refused (T526’s review)', async () => {
+    const { app, store } = await serving();
+    store.files = [
+      ...store.files,
+      { path: 'cubes/t.yml', content: 'cubes:\n  - name: t\n    sql: "{{ x }}"\n' },
+      { folderId: 'elsewhere', path: 'cubes/e.yml', content: 'cubes:\n  - name: e\n' },
+    ];
+    for (const [folder, path] of [
+      ['root', 'cubes/t.yml'],
+      ['elsewhere', 'cubes/e.yml'],
+    ] as const) {
+      const query = `folder=${folder}&path=${encodeURIComponent(path)}`;
+      const asked = await app.inject({
+        method: 'GET',
+        url: `/api/model/files/dependents?${query}`,
+      });
+      const deleted = await app.inject({ method: 'DELETE', url: `/api/model/files?${query}` });
+      expect([asked.statusCode, deleted.statusCode], path).toEqual([409, 409]);
+      expect(asked.json(), path).toEqual(deleted.json());
+    }
+    await app.close();
+  });
+
   it('refuses one xcube refuses, with xcube’s naming of what is bound to it, and changes nothing', async () => {
     const { app, store, stub, sent } = await serving();
     stub.refuse([

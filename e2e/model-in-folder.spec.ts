@@ -151,7 +151,8 @@ test('a folder’s model opens beside its files, one after another in place, a f
     await page.goto(`/explore?folder=${folderId}`);
     await page
       .getByTestId('item-cubes/t342_a.yml')
-      .getByRole('button', { name: 't342_a.yml' })
+      // Its name, not its ⋯ "Actions for t342_a.yml" (T526).
+      .getByRole('button', { name: 't342_a.yml', exact: true })
       .click();
 
     // The folder and the file in the address, the folder's files beside it.

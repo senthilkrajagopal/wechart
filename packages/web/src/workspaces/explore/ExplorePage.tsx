@@ -29,7 +29,16 @@ import { ExportedToast } from '../../dashboard/export/ExportedToast';
 import { ImportPane } from './import/ImportPane';
 import { fileHref } from '../model/inFolder';
 import { DeleteDialog, type Checked, type Confirmation, type Refusal } from './DeleteDialog';
-import { checkChart, FOLDER_CONFIRMATION, removeChart, removeFolder } from './deleteChecks';
+import {
+  checkChart,
+  checkModel,
+  checkSource,
+  FOLDER_CONFIRMATION,
+  removeChart,
+  removeFolder,
+  removeModel,
+  removeSource,
+} from './deleteChecks';
 import { MenuButton, type MenuItem } from '../../shell/MenuButton';
 import { clearSaid, peekSaid } from './deletedToast';
 
@@ -513,7 +522,24 @@ export function ExplorePage() {
               return refusal;
             },
           }
-        : undefined;
+        : // A shared one, refused while a cube is bound to it (T526, AC-364;
+          // state C). A workspace copy is discarded on its page.
+          item.kind === 'data-source' && !inOwnWorkspace
+          ? {
+              action: 'Delete data source',
+              check: checkSource(item.id),
+              remove: removeSource(item.id),
+            }
+          : // Its file, refused while anything depends on its cube (T526, AC-365; state D).
+            item.kind === 'model'
+            ? {
+                action: 'Delete model',
+                check: checkModel(item.folderId ?? folderId, item.id, folderPathOf),
+                remove: removeModel(item.folderId ?? folderId, item.id, folderPathOf),
+              }
+            : undefined;
+  /** A folder the user sees, as the dialogs name it: "Sales / EMEA", or "Shared". */
+  const folderPathOf = (id: string) => targetPathOf(folders.data ?? [], id);
   /**
    * A folder with nothing in it (T521, AC-366): no item it counts, and no
    * subfolder. Delete is offered on no other: none rather than a greyed one
@@ -530,6 +556,8 @@ export function ExplorePage() {
     void queryClient.invalidateQueries({ queryKey: ['explore-search'] });
     void queryClient.invalidateQueries({ queryKey: ['folders'] });
     void queryClient.invalidateQueries({ queryKey: ['folder-roots'] });
+    // A data source gone from its row leaves the Data sources page too (T526's review).
+    void queryClient.invalidateQueries({ queryKey: ['data-sources'] });
   };
   const rowDeleted = (item: CatalogItem) => {
     const listed = shown.data ?? [];
