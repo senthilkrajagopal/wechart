@@ -484,6 +484,8 @@ describe('deleting a workspace item waiting in a proposal (T528, AC-372)', () =>
     const answer = await as('writer', { method: 'DELETE', url: `/api/documents/chart/${chart}` });
     expect(answer.statusCode, answer.body).toBe(204);
     expect((await proposals().get(proposal))?.status).toBe('withdrawn');
+    // Out of the writer's workspace at once: other files count what is in it.
+    await docs().remove('dashboard', board);
   });
 
   it('withdraws a data source’s open proposal with it', async () => {
@@ -521,5 +523,7 @@ describe('deleting a workspace item waiting in a proposal (T528, AC-372)', () =>
     });
     expect(answer.statusCode, answer.body).toBe(204);
     expect((await proposals().get(proposal))?.status).toBe('open');
+    // Out of the writer's workspace at once: other files count what is in it.
+    await docs().remove('dashboard', other);
   });
 });
