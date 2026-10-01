@@ -9786,6 +9786,7 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
   - Failing test: `delete-dependents.test.ts`: after a dashboard's delete, neither it, nor any of its own charts, nor its bookmarks is stored; a reader's delete answers `403` and removes nothing (AC-363).
   - Depends on: none
   - **Done 2026-09-30.** A dashboard's own charts were left behind by its delete; they go with it now, as its bookmarks already did. **AC-363 ticked** on `delete-dependents.test.ts`.
+  - *Follow-up, 2026-10-01:* `e2e/chart-page.spec.ts`'s "a local chart whose dashboard cannot be opened" made its orphan by deleting the dashboard, which now takes the chart too; it names a dashboard that never existed instead.
 - [x] T519 [P] (AC-364) Refuse deleting a data source a cube is bound to, naming the cubes it may name
   - Files: `packages/api/src/routes/data-sources.ts` (the delete), `packages/api/src/access/data-sources.test.ts`, the data source's page (design 14)
   - Failing test: `data-sources.test.ts`: deleting a data source two cubes are bound to answers `409`, naming the cube in a folder the user sees and counting the other; one no cube is bound to is deleted (AC-364).

@@ -226,8 +226,18 @@ test('a local chart whose dashboard cannot be opened says so, on its page and in
   request,
 }) => {
   const made = await localChart(request);
-  // Its dashboard gone: a local chart outlives it.
-  expect((await request.delete(`${API}/documents/dashboard/${made.dashboardId}`)).ok()).toBe(true);
+  // Its dashboard can't be opened: one that never existed. A dashboard's
+  // delete takes its own charts with it (T518, AC-363), so no local chart
+  // outlives its dashboard that way any more.
+  const read = await request.get(`${API}/documents/chart/${made.chartId}`);
+  const stored = (await read.json()) as { body: Record<string, unknown>; version: number };
+  const orphaned = await request.put(`${API}/documents/chart/${made.chartId}`, {
+    data: {
+      version: stored.version,
+      body: { ...stored.body, localToDashboardId: `never-${made.unique}` },
+    },
+  });
+  expect(orphaned.status(), await orphaned.text()).toBe(200);
 
   await page.goto(`/explore/charts/${made.chartId}`);
   await expect(page.locator('.chart-page__head')).toContainText(
