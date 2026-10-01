@@ -1269,6 +1269,38 @@ Traces to: `[R48]`.
 - [ ] AC-372 WHEN a user deletes an item in their workspace that waits in an open proposal, THE SYSTEM SHALL name that proposal in the confirmation, and withdraw it with the delete (`[R49]`, design 14's Q2).
       Fails when: such an item is deleted with its proposal still open, or the confirmation doesn't name the proposal.
 
+## F40. The SQL runner
+
+Purpose: run read-only SQL on a data source's own connection, or on Cube Store, through xcube, for those a Super-Admin allows, capped and recorded.
+Traces to: `[R50]`; research `docs/research/sql-runner.md`.
+
+- [ ] AC-373 WHERE a Super-Admin has switched the SQL runner on for a data source in a folder, THE SYSTEM SHALL let Super-Admins and that folder's own read-write members run SQL on it, from a SQL tab on its page, and nobody else. On a data source not switched on, it SHALL let nobody run SQL (`[R50-1, R50-14]`).
+      Fails when: a member who sees the data source only as an ancestor's, a read-only member or a user of another folder can run SQL on it, by the tab or by the API; anyone can run SQL on one not switched on; or an allowed user finds no SQL tab.
+- [ ] AC-374 WHEN a Super-Admin switches the runner on for a data source or for Cube Store, THE SYSTEM SHALL first ask them to confirm that its credential is read-only, and record who confirmed it and when. Every data source, and Cube Store, SHALL start with the runner off (`[R50-1, R50-2]`; the confirmation, Claude's call).
+      Fails when: the runner is on without that confirmation; the record lacks who or when; anyone but a Super-Admin can switch it; or a data source starts with it on.
+- [ ] AC-375 IF the SQL is anything but one `SELECT` (with `WITH … SELECT` and set operations) or one `EXPLAIN` without `ANALYZE`, THEN THE SYSTEM SHALL refuse it before anything reaches the database, saying it runs only SELECT and EXPLAIN (`[R50-2, R50-4]`).
+      Fails when: an INSERT, UPDATE, DELETE, MERGE, CREATE TABLE or VIEW, `SELECT … INTO`, `SELECT … FOR UPDATE`, a `WITH` holding a write, `EXPLAIN ANALYZE`, or two statements in one run reaches the database; or the refusal doesn't say why.
+- [ ] AC-376 WHILE a run is on a PostgreSQL, Redshift, MySQL or Oracle data source, THE SYSTEM SHALL run it in a read-only transaction, so that a SELECT calling a function that writes fails and changes nothing (`[R50-2]`).
+      Fails when: on the development PostgreSQL, a run of `SELECT nextval('<a sequence>')` advances that sequence.
+- [ ] AC-377 WHEN a run's result has more than 10,000 rows, or more than 10 MB, THE SYSTEM SHALL show only the first 10,000 rows, or as many as fit in 10 MB, and say which limit it reached (`[R50-7, R50-10]`).
+      Fails when: more than 10,000 rows, or more than 10 MB, come back; or a cut result doesn't say it was cut and at which limit.
+- [ ] AC-378 IF a run hasn't finished after 30 seconds, THEN THE SYSTEM SHALL stop it on the database and say it was stopped at 30 seconds (`[R50-8]`).
+      Fails when: a statement of the run is still running on the database after the run is said to have stopped, or no run is stopped at 30 seconds.
+- [ ] AC-379 WHILE a user has a run going, THE SYSTEM SHALL refuse them a second run, and offer Cancel, which stops the first on the database (`[R50-9]`; cancel, Claude's call).
+      Fails when: one user has two runs going at once; or after Cancel, its statement is still running on the database.
+- [ ] AC-380 WHEN a run finishes, THE SYSTEM SHALL show its rows in a grid headed by each column's name and type, with the row count and the time it took, and offer them as a CSV holding exactly those rows, with no second run (`[R50-11]`).
+      Fails when: a column's type, the row count or the duration is missing; the CSV's rows differ from the grid's; or the CSV runs the SQL again.
+- [ ] AC-381 THE SYSTEM SHALL list a user's own past runs to them alone, each with its SQL, data source, time, outcome and row count, kept as long as audit records are (`[R50-12]`; the retention, Claude's call).
+      Fails when: a user's list shows another's run, or leaves out one of theirs within the audit retention.
+- [ ] AC-382 WHEN a user runs SQL, THE SYSTEM SHALL record an audit event of it with who, which data source and its folder, when, the outcome, the row count, the duration, and the SQL with every literal replaced (`[R50-13]`, with AC-294).
+      Fails when: one of those is missing from the event, or the event holds a literal of the SQL, such as a value in its WHERE clause.
+- [ ] AC-383 WHEN the owner of a data source in My workspace, a copy or one made there, opens it, THE SYSTEM SHALL let them run SQL on it with no switch, and nobody else (`[R50-6]`).
+      Fails when: its owner can't run SQL on it, or another user can.
+- [ ] AC-384 WHERE a Super-Admin has switched the runner on for Cube Store, THE SYSTEM SHALL list Cube Store among the root's data sources, to Super-Admins and to those who may run SQL on some data source, and let them run only read-only SQL on it: SELECT, SHOW, DESCRIBE and EXPLAIN (`[R50-3, R50-5]`; where it is listed, Claude's call).
+      Fails when: another user sees Cube Store listed or runs SQL on it; it runs any other command; or it is listed while switched off.
+- [ ] AC-385 THE SYSTEM SHALL say on the SQL tab, before any run, that the SQL runs on the database directly, past folder permissions and access policies (`[R50]`, research §5 S3).
+      Fails when: the tab shows no such sentence.
+
 ## Non-goals (phase 1)
 
 Copied from [requirements.md §7](./requirements.md):
@@ -1304,10 +1336,17 @@ Copied from [requirements.md §P2.7](./requirements.md):
 - Cube Store beyond one node `[AD 11]`.
 - Anything but wechart's server calling Cube or xcube, for now `[AD 10]`.
 - xcube's slice 7, and aliasing a file-set model's JavaScript, Jinja and Python cubes when their data source's target changes `[R39]`.
+- Around the SQL runner `[R50]`:
+  - a separate read-only login per data source (phase 3);
+  - Cube's semantic SQL API;
+  - saved or shared queries;
+  - templating;
+  - a cube or chart made from a run's results.
 
 Phase 1's non-goals still stand, except these, which phase 2 brings in:
 - users, groups, roles and SSO (F25–F26);
-- maps, as the country map (AC-305).
+- maps, as the country map (AC-305);
+- read-only SQL on Cube Store, the SQL runner's only reach into Cube Store's internals (AC-384).
 
 ~~Per-folder models (F28)~~ Folder-prefixed names in one flat model (F28) aren't multi-tenancy in phase 1's sense: they're one organisation's folders, not per-tenant deployments. That non-goal stands.
 
@@ -1411,3 +1450,4 @@ The criteria phase 1 moved to its backlog on 2026-09-25 are back in this spec un
 | Both UI reviews' designs, the 2026-09-27 ones first where they differ, as a priority `[R37]` | AC-343, AC-344, AC-352 |
 | Exporting and importing a dashboard, with its chosen dependencies and no secrets `[R43]`; an import always into My workspace, with warnings `[R44]`; design 13's answers `[R46]` | AC-354 … AC-361 |
 | §P2.6 I Deleting only what nothing depends on, only empty folders, clearing My workspace, a project folder per edit with a description, Explore filtered by kind `[R48]`; design 14's answers, a dashboard's library charts on its own path `[R49]` | AC-362 … AC-372 |
+| §P2.6 J The SQL runner: who, the switch and its confirmation, SELECT and EXPLAIN only, the read-only transaction, the caps, one run per user, results and CSV, history, audit, workspace data sources, Cube Store, the warning `[R50]` | AC-373 … AC-385 |

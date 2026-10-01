@@ -733,6 +733,36 @@ With security on, a deployment that names no Super-Admin group refuses to start 
   - A folder's description holds up to 1,000 characters, as a proposal's does.
   - Under a kind filter, the open folder's subfolders stay listed, so they can still be opened from the list.
 
+**J. The SQL runner** `[R50]` *(added 2026-10-01; research `docs/research/sql-runner.md`; its questions settled the same day, §P2.8)*
+- **What it is.** Read-only SQL run on a data source's own connection, as Cube Cloud's SQL Runner does, through a guarded xcube admin route `[R50]`. Only xcube opens a data source's sealed secret, so only xcube runs the SQL `[AD 7]`, at the request of wechart's server, which decides who may and records it `[AD 10]`. It is raw SQL on the database's tables, not Cube's semantic SQL API: it bypasses the folder gate and every access policy, which the page says plainly (research §5 S3).
+- **Who may run it** `[R50-1]`: Super-Admins, and the read-write members of the data source's own folder (not members who see it only as an ancestor's), on a data source a Super-Admin has switched the runner on for. Off by default.
+- **Which credential** `[R50-2]`: the data source's own serving credential, with the Super-Admin who switches the runner on attesting that it is read-only. A separate read-only login per data source is for phase 3.
+- **Read-only, enforced in layers** `[R50-2, R50-4]`:
+  - **Only SELECT and EXPLAIN run**: a statement must parse as a single `SELECT` (or `WITH … SELECT`) or an `EXPLAIN` without `ANALYZE`. Everything else is refused before it runs: INSERT, UPDATE, DELETE, MERGE, CREATE TABLE or VIEW, `SELECT … INTO`, `SELECT … FOR UPDATE`, and a `WITH` holding a write.
+  - **One statement per run**, so nothing can end the transaction around it.
+  - **A read-only transaction** where the database has one: PostgreSQL, Redshift, MySQL and Oracle. It also stops a SELECT that calls a writing function.
+  - **BigQuery's dry run** classifies the statement first.
+  - What remains (research §5 S2): on Snowflake, SQL Server and Dremio, a SELECT calling a function that writes passes the parse; only a SELECT-only login closes that, in phase 3.
+- **What it runs on** `[R50-3]`: data sources landed in folders; the user's own data sources in My workspace (copies and new ones); and Cube Store, read-only.
+  - **A workspace data source** may always be run on by its owner `[R50-6]`.
+  - **Cube Store** has the same kind of switch, which a Super-Admin turns on. Then those who may run SQL on some data source may run read-only SQL on Cube Store, which holds every folder's rollups `[R50-5]`.
+- **Caps per run** `[R50-7 … R50-10]`:
+  - at most **10,000 rows**, said as "limited to 10,000 rows" when there were more;
+  - at most **30 seconds**, stopped on the database's side;
+  - **one run at a time per user**;
+  - at most **10 MB** of results, marked truncated beyond.
+- **Results** `[R50-11]`: a grid with the row count, duration and column types, and a **CSV download** of up to the row cap.
+- **History** `[R50-12]`: each user sees their own past runs, kept in wechart.
+- **Audit** `[R50-13]`: every run is an audit event: who, which data source and folder, when, the outcome, the row count and the duration, with the SQL, its literals redacted.
+- **Where** `[R50-14]`: a tab on each data source's page, in Explore and in Data sources, beside its settings, test and history.
+- *Claude's calls, under the standing instruction for small decisions:*
+  - **With security off,** the single user holds every permission, as a Super-Admin does (AC-254), so the runner is offered to them on any data source switched on.
+  - **The attestation** is part of switching the runner on: the Super-Admin confirms the credential is read-only, and the switch records who confirmed it and when.
+  - **While a run is going,** Run is held back, and its user may cancel it. Cancelling stops the statement on the database.
+  - **A CSV holds the rows the run returned.** The query isn't run again, unlike Superset's export.
+  - **Cube Store is listed** as one more entry in the root's data sources, only for those who may run SQL on it.
+  - **Run history is kept as long as audit records are** (a deployment setting, one year by default, R18-6), and only its user sees it.
+
 ## P2.7 Non-goals for phase 2
 
 - **Individual users on folders.** AD groups only `[P2 input, R16]`.
@@ -743,6 +773,13 @@ With security on, a deployment that names no Super-Admin group refuses to start 
 - **Cube Store beyond one node** `[AD 11]`.
 - **Anything but wechart's server calling Cube or xcube**, for now `[AD 10]`.
 - **xcube's slice 7**, and **aliasing a file-set model's JavaScript, Jinja and Python cubes when their data source's target changes** `[R39]`.
+- **Around the SQL runner** `[R50]`:
+  - a separate read-only login per data source, which is phase 3 `[R50-2]`;
+  - Cube's semantic SQL API (`/v1/cubesql`), still deferred from Part 1;
+  - saved or shared queries `[R50-12]`;
+  - templating in the SQL;
+  - making a cube or a chart from a run's results.
+  - *The last four weren't asked for, so they stay out until asked.*
 
 Phase 1's non-goals still stand, except two that phase 2 brings into scope:
 - **Users, groups, roles and SSO** (§P2.6 A–B).
@@ -777,6 +814,27 @@ Round R48's seven questions were answered by the user, each with the recommended
 | R48-5 | The project folder | **One per "Edit in my workspace"**, holding everything copied with it, named `project-YYYY-MM-DD-HHmm`; none for a new item |
 | R48-6 | The folder's comment | **An editable folder description**, prefilled for a project folder |
 | R48-7 | The kind filter | **Over the open folder's contents:** All (default), Dashboards and charts, Data sources, Models |
+
+### Round R50 (2026-10-01): settled the same day
+
+Round R50's fourteen questions on the SQL runner were answered by the user. The decisions are folded into §P2.6 J.
+
+| # | Question | Decision |
+|---|---|---|
+| R50-1 | Who may run SQL on a data source | **Super-Admins and the own folder's read-write members, where a Super-Admin has switched it on** (off by default) |
+| R50-2 | Which credential runs it | **The serving credential, a Super-Admin attesting it is read-only**, with read-only enforced in layers as far as each database allows; a separate read-only login is phase 3 |
+| R50-3 | What it runs on | **Landed data sources, My workspace's, and Cube Store read-only** |
+| R50-4 | Which statements | **SELECT and EXPLAIN only** |
+| R50-5 | Who may run it on Cube Store | **The same switch as data sources** |
+| R50-6 | A data source in My workspace | **Always, for its owner** |
+| R50-7 | Row cap | **10,000 rows** |
+| R50-8 | Time cap | **30 seconds** |
+| R50-9 | Concurrency | **One run at a time per user** |
+| R50-10 | Result size | **10 MB** |
+| R50-11 | Results | **CSV up to the row cap** |
+| R50-12 | History | **Each user's own run history** |
+| R50-13 | Audit | **The event, with the SQL's literals redacted** |
+| R50-14 | Where in the UI | **A tab on each data source** |
 
 ## P2.9 Interview log
 
@@ -873,6 +931,25 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: How should wechart decide that a dimension holds ISO-3 country codes? A: "Values, plus a model override (Recommended)"
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
+
+**R50 — the SQL runner** (2026-09-30 to 2026-10-01, the user)
+- The user: "3. Build a SQL runner into wechart through xcube. This would be a guarded admin route that runs read-only SQL on a model's connection, like Cube Cloud's SQL Runner. have any independent agent do analysis on on Cube Cloud's SQL Runner and Superset SQL Lab. You can use superset instance on localhost:8088. (This is a dev instance so you can get the password from the config files if required)"
+- *An independent agent studied both (`docs/research/sql-runner.md`). Claude asked its questions:*
+  - R50-1, who may run SQL on a data source: "Own-folder writers, if enabled"
+  - R50-2, which credential runs it: "Is there anyway to ensure only read-only operations are done on the datastore for example on select queries.. no update, delete, insert queries or not create table create view kind of operation if that is doable we can do that... for phase 3.. we can just go with otion 3 here"
+    - *Option 3 was "Serving login, admin attests". Claude answered that read-only can be enforced in layers. Only single SELECT or EXPLAIN statements parse; a read-only transaction applies where the database has one; there is one statement per run, and BigQuery gets a dry run. One gap remains: on Snowflake, SQL Server and Dremio, a SELECT calling a writing function passes the parse, and only a SELECT-only login closes that (phase 3). Recorded so in §P2.6 J.*
+  - R50-3, what it can target: "Landed data sources, My workspace's copies, "Cube Store, read-only""
+  - R50-4, which statements run: "SELECT and EXPLAIN only"
+  - R50-7, row cap: "10,000 rows"
+  - R50-8, time cap: "30 seconds"
+  - R50-9, concurrency: "1 per user"
+  - R50-10, result size: "10 MB"
+  - R50-5, who may run SQL on Cube Store: "Same switch as sources"
+  - R50-6, a copy in My workspace: "Always, for its owner"
+  - R50-11, results: "CSV up to the row cap"
+  - R50-12, history: "My own run history"
+  - R50-13, audit: "The event + SQL, literals redacted"
+  - R50-14, where it lives: "A tab on each data source (Recommended)"
 
 **R49 — design 14 approved; its questions; a restored data source's test; xcube's tokens and the sample policy** (2026-09-30, the user)
 - Design 14 (`docs/design/reviews/2026-09-30/designs/14-deleting-clearing-finding.html`): "Approve (Recommended)".

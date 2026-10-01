@@ -9690,6 +9690,43 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
   - Files: `packages/web/src/workspaces/explore/{ExplorePage,FolderContents}.tsx` (+ tests), `e2e/security/explore-roles.spec.ts` or `deleting.spec.ts`
   - Failing test: with All, Dashboards and charts, Data sources and Models, the list shows only that kind and the subfolders, starts on All, and leaves the tree as it is (AC-370).
   - Depends on: design 14
+- [ ] T530 (AC-222) Point Schedules', Jobs', "Data as of"'s and search's model links at the file's own folder *(added 2026-10-01, from T342's report)*
+  - Files: the links to `/model/files/…` in `packages/web/src/workspaces/{schedules,jobs}/`, the tile's "Data as of", and search, `e2e/folder-models.spec.ts`
+  - Failing test: `folder-models.spec.ts`: a folder rollup's "Edit in Model" opens `/explore/folders/<its folder>/models/<path>` with that file open, and a root rollup's opens the root's (AC-222). The same spec's "Schedules reads a folder rollup's key SQL" expects the short name Schedules now shows.
+  - Depends on: T342
+
+## P2.21 The SQL runner (F40, added 2026-10-01, `[R50]`)
+
+Read-only SQL on a data source's own connection, or on Cube Store, through xcube, which alone opens the credential. Asked of xcube in `~/Work/xcube-exchange/to-xcube/2026-10-01-0057-sql-runner.md`. Every task that runs SQL starts once that image is published (the standing rule). The UI follows design 15 once approved.
+
+- [ ] T531 [P] (AC-374, AC-373) Switch the runner on and off, for a Super-Admin only, with the read-only confirmation recorded
+  - Files: `packages/api/src/routes/data-sources.ts` (`PUT /api/data-sources/:id/sql-runner`), a migration for the switch and who confirmed it when, `packages/api/src/routes/sql-runner.test.ts`
+  - Failing test: `sql-runner.test.ts`: a data source starts off; a Super-Admin's switch without `readOnlyConfirmed: true` is refused (400), and with it the switch is on, recording who and when; a read-write member's answers `403` (AC-374).
+  - Depends on: none
+- [ ] T532 (AC-373, AC-375, AC-376, AC-377, AC-378, AC-383) Run SQL on a data source through xcube, for those who may
+  - Files: `packages/api/src/routes/sql-runner.ts` (+ test), `packages/api/src/xcube/admin.ts` (the run route), `e2e/security/sql-runner.spec.ts`
+  - Failing test: `sql-runner.test.ts` against the stub xcube: Super-Admins and the own folder's read-write members run on a switched-on source, an ancestor's member, a reader, another folder's member, and anyone on a switched-off one are refused; a workspace source's owner runs with no switch, and no one else (AC-373, AC-383); 10,000 rows, 30 seconds and 10 MB go with each run. `sql-runner.spec.ts` against compose's xcube:
+    - an INSERT, `SELECT … INTO`, `EXPLAIN ANALYZE` and two statements are refused, changing nothing (AC-375);
+    - `SELECT nextval(…)` leaves the sequence as it was (AC-376);
+    - 10,001 rows come back as 10,000, said so (AC-377);
+    - `pg_sleep(31)` is stopped at 30 seconds and gone from `pg_stat_activity` (AC-378).
+  - Depends on: T531, xcube's image
+- [ ] T533 (AC-379) One run at a time per user, and Cancel
+  - Files: `packages/api/src/routes/sql-runner.ts` (+ test), `e2e/security/sql-runner.spec.ts`
+  - Failing test: a second run while one is going answers `409`; Cancel stops the first, and its statement is gone from `pg_stat_activity` (AC-379).
+  - Depends on: T532
+- [ ] T534 (AC-381, AC-382) Keep each user's run history, and audit every run with its SQL's literals replaced
+  - Files: `packages/api/src/routes/sql-runner.ts`, a migration for the runs, `packages/api/src/audit/*`, tests
+  - Failing test: a run is listed to its user alone, with its SQL, source, time, outcome and rows; the audit event has who, the source and its folder, when, the outcome, the rows, the duration, and `redactedSql` with no literal from the SQL (AC-381, AC-382).
+  - Depends on: T532
+- [ ] T535 (AC-373, AC-377, AC-379, AC-380, AC-385) The SQL tab on a data source's page
+  - Files: `packages/web/src/workspaces/data-sources/SqlRunner.tsx` (+ test), `SourceSettings.tsx`, `e2e/security/sql-runner.spec.ts`
+  - Failing test: the tab says SQL runs past folder permissions and access policies (AC-385); a run shows each column's name and type, the row count and the duration, and its CSV holds exactly those rows without a second run (AC-380); a cut result says which limit (AC-377); Run is held back while one goes, with Cancel (AC-379); only allowed users find the tab (AC-373).
+  - Depends on: T532, T533, T534, design 15
+- [ ] T536 (AC-384, AC-374) Cube Store: its switch, its listing, and read-only SQL on it
+  - Files: `packages/api/src/routes/sql-runner.ts`, the root's data sources listing, `SqlRunner.tsx`, tests and `e2e/security/sql-runner.spec.ts`
+  - Failing test: switched off, no one sees Cube Store listed; switched on, a Super-Admin and a user who may run SQL on some source see it and run a `SELECT` on a rollup table, a reader doesn't, and a cache command is refused (AC-384).
+  - Depends on: T531, T535, xcube's image
 
 ## Phase 2 coverage: acceptance criterion → task
 
@@ -9732,6 +9769,11 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
 | AC-365 | T520, T526 | AC-366 | T521 | AC-367 | T522 |
 | AC-368 | T523 | AC-369 | T524 | AC-370 | T525 |
 | AC-371 | T527 | AC-372 | T528 | | |
+| AC-373 | T531, T532, T535 | AC-374 | T531, T536 | AC-375 | T532 |
+| AC-376 | T532 | AC-377 | T532, T535 | AC-378 | T532 |
+| AC-379 | T533, T535 | AC-380 | T535 | AC-381 | T534 |
+| AC-382 | T534 | AC-383 | T532 | AC-384 | T536 |
+| AC-385 | T535 | | | | |
 | AC-296 | T370 | AC-297 | T371, T504 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441 |
 | AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |
 | AC-302 | T394 | AC-303 | T395 | AC-304 | T396 |
