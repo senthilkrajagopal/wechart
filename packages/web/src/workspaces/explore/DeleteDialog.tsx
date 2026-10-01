@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
+import { shortDay } from '../../shell/relativeAge';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
 
@@ -53,14 +54,106 @@ export interface Refusal {
   readonly also?: { readonly label: string; readonly onSelect: () => void };
 }
 
+/** One thing that goes with what is deleted (design 14, B3): "Its 6 own charts · on no other dashboard". */
+export interface Goes {
+  readonly key: string;
+  readonly icon: 'chart' | 'bookmark';
+  readonly text: string;
+  readonly aside: string;
+}
+
+/** An open proposal the delete withdraws (T528, AC-372; design 14, F2's rows). */
+export interface WithdrawnProposal {
+  readonly id: string;
+  readonly title: string;
+  /** Where it goes: "Sales / EMEA", or "Shared". */
+  readonly targetPath: string;
+  readonly proposedAt: string;
+}
+
 export interface Confirmation {
   readonly kind: 'confirm';
   /** What the confirmation says; "You can't undo this." follows it, or follows `note`. */
   readonly text: string;
-  /** What goes with it, or the proposals it withdraws, between the text and the note. */
+  /** What goes with it, listed under the text (B3). */
+  readonly goes?: readonly Goes[];
+  /** Each open proposal it withdraws, named before anything goes (AC-372). */
+  readonly withdraws?: readonly WithdrawnProposal[];
+  /** Anything else, between the lists and the note. */
   readonly details?: ReactNode;
   /** A last line, in the small size, before "You can't undo this." */
   readonly note?: string;
+}
+
+/** A bookmark's icon, for what goes with a dashboard (B3). */
+function BookmarkIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+      <path
+        d="M4.5 2h7v12L8 11.2 4.5 14z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** What goes with it, and the proposals it withdraws, each a list named by its heading. */
+function ConfirmationLists({
+  confirmation,
+  withdrawsId,
+}: {
+  readonly confirmation: Confirmation;
+  /** The withdrawn proposals' heading's id, which the dialog is described by too. */
+  readonly withdrawsId: string;
+}) {
+  const withdraws = confirmation.withdraws ?? [];
+  const now = new Date();
+  return (
+    <>
+      {confirmation.goes === undefined || confirmation.goes.length === 0 ? null : (
+        <ul className="delete-dialog__goes" aria-label={confirmation.text}>
+          {confirmation.goes.map((each) => (
+            <li key={each.key}>
+              {each.icon === 'chart' ? (
+                <span className="itemicon ic-chart" data-icon="chart" aria-hidden="true" />
+              ) : (
+                <span className="itemicon" aria-hidden="true">
+                  <BookmarkIcon />
+                </span>
+              )}
+              <span>{each.text}</span> <span className="delete-dialog__where">{each.aside}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {withdraws.length === 0 ? null : (
+        <div className="delete-dialog__withdraws">
+          <p id={withdrawsId} className="delete-dialog__label">
+            {withdraws.length === 1
+              ? 'It withdraws its open proposal'
+              : `It withdraws ${String(withdraws.length)} open proposals`}
+          </p>
+          <ul className="delete-dialog__goes" aria-labelledby={withdrawsId}>
+            {withdraws.map((proposal) => (
+              <li key={proposal.id}>
+                <span className="status status--idle">
+                  <StatusIcon kind="idle" />
+                  Waiting for review
+                </span>{' '}
+                <span className="delete-dialog__title">{proposal.title}</span>{' '}
+                <span className="delete-dialog__where">
+                  → {proposal.targetPath} · {shortDay(new Date(proposal.proposedAt), now)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
+  );
 }
 
 export type Checked = Refusal | Confirmation;
@@ -89,6 +182,13 @@ type Phase =
   | { readonly at: 'refused'; readonly refusal: Refusal };
 
 const UNDO = 'You can’t undo this.';
+
+/** Whether "You can't undo this." follows the text: nothing listed or noted after it. */
+const endsInText = (confirmation: Confirmation) =>
+  confirmation.note === undefined &&
+  (confirmation.goes ?? []).length === 0 &&
+  (confirmation.withdraws ?? []).length === 0 &&
+  confirmation.details === undefined;
 
 const ICON_CLASS: Record<Dependent['icon'], string> = {
   dashboard: 'itemicon ic-dash',
@@ -305,11 +405,16 @@ export function DeleteDialog({
 
   const title =
     phase.at === 'refused' ? `Can’t delete “${name}”` : (heading ?? `Delete “${name}”?`);
+  /** The proposals a confirmation withdraws, said with it (T528's review). */
+  const withdrawn =
+    phase.at === 'confirm' || phase.at === 'deleting' ? (phase.confirmation.withdraws ?? []) : [];
   const announced =
     phase.at === 'refused'
       ? `Can’t delete: ${phase.refusal.lead}`
       : phase.at === 'confirm'
-        ? phase.confirmation.text
+        ? withdrawn.length === 0
+          ? phase.confirmation.text
+          : `${phase.confirmation.text} It withdraws ${withdrawn.length === 1 ? 'its open proposal' : `${String(withdrawn.length)} open proposals`}: ${withdrawn.map((each) => each.title).join(', ')}.`
         : '';
 
   return (
@@ -319,7 +424,7 @@ export function DeleteDialog({
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={`${ids}-title`}
-        aria-describedby={`${ids}-body`}
+        aria-describedby={withdrawn.length === 0 ? `${ids}-body` : `${ids}-body ${ids}-withdraws`}
         className="dialog delete-dialog"
       >
         <h2 id={`${ids}-title`}>
@@ -353,14 +458,19 @@ export function DeleteDialog({
           </StateLine>
         ) : (
           <>
+            {/* "You can't undo this." ends it: after the text alone, or after
+                what is listed, in the last line (Q4). */}
             <p id={`${ids}-body`}>
               {phase.confirmation.text}
-              {phase.confirmation.note === undefined ? ` ${UNDO}` : ''}
+              {endsInText(phase.confirmation) ? ` ${UNDO}` : ''}
             </p>
+            <ConfirmationLists confirmation={phase.confirmation} withdrawsId={`${ids}-withdraws`} />
             {phase.confirmation.details}
-            {phase.confirmation.note === undefined ? null : (
+            {endsInText(phase.confirmation) ? null : (
               <p className="delete-dialog__note">
-                {phase.confirmation.note} {UNDO}
+                {phase.confirmation.note === undefined
+                  ? UNDO
+                  : `${phase.confirmation.note} ${UNDO}`}
               </p>
             )}
             {phase.at === 'deleting' ? <StateLine kind="run">Deleting…</StateLine> : null}

@@ -6,10 +6,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { pgSessionStore } from '../auth/session-store';
 import { PUBLIC_URL, signIn, USERS } from '../auth/sign-in.fixture';
 import { closeDb, getDb } from '../db/client';
+import { auditStore } from '../repos/audit';
 import { bookmarkStore } from '../repos/bookmarks';
 import { catalog } from '../repos/catalog';
+import { connectionTestStore } from '../repos/connection-tests';
+import { dataSourceStore } from '../repos/data-sources';
 import { documents, type DocumentKind } from '../repos/documents';
 import { folderAccessStore } from '../repos/folder-access';
+import { proposalStore } from '../repos/proposals';
 import { buildServer } from '../server';
 
 /**
@@ -71,6 +75,11 @@ beforeAll(async () => {
     catalog: catalog(getDb()),
     folderAccess: folderAccessStore(getDb()),
     bookmarks: bookmarks(),
+    // A workspace item's open proposal, withdrawn with its delete (T528).
+    dataSources: dataSourceStore(getDb()),
+    connectionTests: connectionTestStore(getDb()),
+    audit: auditStore(getDb()),
+    proposals: proposalStore(getDb()),
   });
   for (const who of ['writer', 'reader']) cookies[who] = await signIn(app, USERS[who]!);
   const me = await app.inject({
@@ -83,6 +92,23 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (app !== undefined) await app.close();
+  const db = getDb();
+  // Proposals, their records, and what the writer's workspace was given (T528).
+  await db.deleteFrom('proposals').where('target_folder_id', '=', ids.sales).execute();
+  await db.deleteFrom('audit_records').where('folder_id', '=', ids.sales).execute();
+  if (ids.workspace !== '') {
+    await db
+      .deleteFrom('documents')
+      .where('kind', 'in', ['dashboard', 'chart'])
+      .where('folder_id', '=', ids.workspace)
+      .where('title', 'like', `%${MARK}%`)
+      .execute();
+    await db
+      .deleteFrom('data_sources')
+      .where('folder_id', '=', ids.workspace)
+      .where('name', 'like', `%${MARK}%`)
+      .execute();
+  }
   // Models and data sources a folder's test put in it.
   await getDb().deleteFrom('model_files').where('path', 'like', `%${MARK}%`).execute();
   await getDb().deleteFrom('data_sources').where('name', 'like', `%${MARK}%`).execute();
@@ -153,6 +179,46 @@ describe('deleting a dashboard (T518, AC-363)', () => {
     expect((await bookmarks().list(board, 'someone')).map((each) => each.name)).toEqual([
       `Q3 ${MARK}`,
     ]);
+  });
+
+  it('says, asked first, how many own charts go with it and how many library charts stay (design 14, B3; T528)', async () => {
+    const { board, own } = await boardWithOwnChart(`Counted ${MARK}`);
+    const library = await doc('chart', {
+      schemaVersion: 1,
+      title: `Shown ${MARK}`,
+      folderId: ids.sales,
+      chart: { source: { cube: 'orders' }, wells: { measures: ['orders.count'] } },
+    });
+    const stored = (await docs().get('dashboard', board))!;
+    await docs().update({
+      kind: 'dashboard',
+      id: board,
+      body: {
+        ...stored.body,
+        pages: [
+          {
+            id: 'p1',
+            items: [
+              { id: 't1', kind: 'chart', chartId: own },
+              { id: 't2', kind: 'chart', chartId: library },
+            ],
+          },
+        ],
+      },
+      expectedVersion: stored.version ?? 1,
+    });
+    const asked = await as('writer', {
+      method: 'GET',
+      url: `/api/documents/dashboard/${board}/dependents`,
+    });
+    expect(asked.statusCode, asked.body).toBe(200);
+    expect(asked.json()).toEqual({ ownCharts: 1, libraryCharts: 1 });
+    // To those who may delete it alone.
+    const reader = await as('reader', {
+      method: 'GET',
+      url: `/api/documents/dashboard/${board}/dependents`,
+    });
+    expect(reader.statusCode).toBe(403);
   });
 
   it('never has another dashboard show its own chart, which goes with it (T518’s review)', async () => {
@@ -342,5 +408,118 @@ describe('deleting a folder (T521, AC-366)', () => {
     const answer = await deleteFolder(empty);
     expect(answer.statusCode, answer.body).toBe(204);
     expect(await docs().get('folder', empty)).toBeNull();
+  });
+});
+
+describe('deleting a workspace item waiting in a proposal (T528, AC-372)', () => {
+  const proposals = () => proposalStore(getDb());
+  const proposed = async (kind: string, id: string) => {
+    const answer = await as('writer', {
+      method: 'POST',
+      url: '/api/proposals',
+      payload: { kind, id },
+    });
+    expect(answer.statusCode, answer.body).toBe(201);
+    return answer.json<{ id: string }>().id;
+  };
+  /** A dashboard or chart made new in the writer's workspace, to go to /Sales. */
+  const madeNew = async (kind: 'dashboard' | 'chart', title: string) => {
+    const answer = await as('writer', {
+      method: 'POST',
+      url: '/api/documents',
+      payload: { kind, title, folderId: 'mine', targetFolderId: ids.sales },
+    });
+    expect(answer.statusCode, answer.body).toBe(201);
+    return answer.json<{ id: string }>().id;
+  };
+
+  it('withdraws a dashboard’s open proposal with it, its own record saying so', async () => {
+    const board = await madeNew('dashboard', `Waiting board ${MARK}`);
+    const proposal = await proposed('dashboard', board);
+    const answer = await as('writer', {
+      method: 'DELETE',
+      url: `/api/documents/dashboard/${board}`,
+    });
+    expect(answer.statusCode, answer.body).toBe(204);
+    expect(await docs().get('dashboard', board)).toBeNull();
+    const withdrawn = await proposals().get(proposal);
+    expect(withdrawn?.status).toBe('withdrawn');
+    expect(withdrawn?.decision?.reason).toBeNull();
+    const recorded = await getDb()
+      .selectFrom('audit_records')
+      .select('summary')
+      .where('folder_id', '=', ids.sales)
+      .where('summary', 'like', `%Waiting board ${MARK}%`)
+      .execute();
+    expect(recorded.map((each) => each.summary)).toEqual([
+      `Withdrew “Waiting board ${MARK}”: it was deleted from My workspace`,
+    ]);
+  });
+
+  it('withdraws the proposal a chart goes with, though it isn’t the proposal’s own item', async () => {
+    const chart = await madeNew('chart', `Waiting chart ${MARK}`);
+    const stored = (await docs().get('chart', chart))!;
+    await docs().update({
+      kind: 'chart',
+      id: chart,
+      body: {
+        ...stored.body,
+        chart: { source: { cube: 'orders' }, wells: { measures: ['orders.count'] } },
+      },
+      expectedVersion: stored.version ?? 1,
+    });
+    const board = await madeNew('dashboard', `Showing board ${MARK}`);
+    const boardStored = (await docs().get('dashboard', board))!;
+    await docs().update({
+      kind: 'dashboard',
+      id: board,
+      body: {
+        ...boardStored.body,
+        pages: [{ id: 'p1', items: [{ id: 't1', kind: 'chart', chartId: chart }] }],
+      },
+      expectedVersion: boardStored.version ?? 1,
+    });
+    const proposal = await proposed('dashboard', board);
+    expect((await proposals().openFor('chart', chart))?.id).toBe(proposal);
+    const answer = await as('writer', { method: 'DELETE', url: `/api/documents/chart/${chart}` });
+    expect(answer.statusCode, answer.body).toBe(204);
+    expect((await proposals().get(proposal))?.status).toBe('withdrawn');
+  });
+
+  it('withdraws a data source’s open proposal with it', async () => {
+    const source = await dataSourceStore(getDb()).create({
+      folderId: ids.sales,
+      name: `shared_${MARK}`,
+      driver: 'postgres',
+      authMethod: 'password',
+      fields: { host: 'sales-db', port: 5432, database: 'sales', user: 'cube', ssl: false },
+      sealed: {
+        password: {
+          v: 1,
+          kid: 'kid-1',
+          enc: Buffer.alloc(32, `enc-${MARK}`).toString('base64url'),
+          ct: Buffer.alloc(272, `ct-${MARK}`).toString('base64url'),
+        },
+      },
+    });
+    const copy = await as('writer', { method: 'POST', url: `/api/data-sources/${source.id}/copy` });
+    expect(copy.statusCode, copy.body).toBe(201);
+    const copyId = copy.json<{ id: string }>().id;
+    const proposal = await proposed('data-source', copyId);
+    const answer = await as('writer', { method: 'DELETE', url: `/api/data-sources/${copyId}` });
+    expect(answer.statusCode, answer.body).toBe(204);
+    expect((await proposals().get(proposal))?.status).toBe('withdrawn');
+  });
+
+  it('leaves the proposals of items it isn’t in alone', async () => {
+    const other = await madeNew('dashboard', `Still waiting ${MARK}`);
+    const proposal = await proposed('dashboard', other);
+    const board = await madeNew('dashboard', `Never proposed ${MARK}`);
+    const answer = await as('writer', {
+      method: 'DELETE',
+      url: `/api/documents/dashboard/${board}`,
+    });
+    expect(answer.statusCode, answer.body).toBe(204);
+    expect((await proposals().get(proposal))?.status).toBe('open');
   });
 });

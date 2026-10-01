@@ -9852,10 +9852,18 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
     - moving a dashboard, or a folder above it, gives it copies of the charts now off its path;
     - each move's answer names the dashboards that got copies (AC-371).
   - Depends on: T527
-- [ ] T528 (AC-372) Withdraw an item's open proposal when the item is deleted from My workspace, naming it in the confirmation *(added 2026-09-30, `[R49]`, design 14's Q2)*
+- [x] T528 (AC-372) Withdraw an item's open proposal when the item is deleted from My workspace, naming it in the confirmation *(added 2026-09-30, `[R49]`, design 14's Q2)*
   - Files: the delete routes in `packages/api/src/server.ts` and `routes/data-sources.ts`, the delete dialogs (design 14), `packages/api/src/routes/delete-dependents.test.ts`
   - Failing test: deleting a workspace dashboard, chart or data source waiting in an open proposal withdraws that proposal; the dialog names it before (AC-372).
   - Depends on: T518, design 14
+  - **Done 2026-10-01.**
+    - **API.** `withdrawWithDelete` (`routes/proposals.ts`) withdraws the open proposal a workspace item waits in, its own or another item's it goes with, before the item is removed, by the user deleting it (as their own rejection withdraws one, state K), and records it ("Withdrew “Revenue overview”: it was deleted from My workspace"). It runs in the dashboard and chart delete (`server.ts`) and the data source delete (`data-sources.ts`, a `withdraw` option), after their refusals. `GET /api/documents/dashboard/:id/dependents` answers `{ ownCharts, libraryCharts }` for B3.
+    - **Web.** The delete dialog lists what goes with an item and names each open proposal it withdraws, F2's row ("Waiting for review · *title* → *target* · *day*"), before Delete is pressed, and says it to a screen reader. The proposal is asked (`GET /api/proposals`) only for an item in the user's workspace. A workspace data source copy's Discard my copy… names it too, read afresh as it opens, Discard waiting until it is known.
+    - **Design 14's state B, built here** (AC-363's UI had no task, and a dashboard's delete needs a dialog): Delete… on a dashboard's row (B1) and Delete dashboard… in its header's ⋯ (B2), for those who may change its folder, with B3's confirmation (its own charts and every bookmark go; the library charts it shows stay).
+    - Tests: `delete-dependents.test.ts` (a dashboard's, a chart's that goes with a dashboard's, and a data source copy's proposal withdrawn, recorded; another's left open; B3's counts), `deleteChecks.test.ts`, `DeleteDialog.test.tsx`; `e2e/security/deleting.spec.ts` (named and withdrawn from a dashboard's row, a chart's page and a data source copy's Discard; B2 with no proposal). **AC-372 ticked.**
+    - **Review:** fixed Discard naming a proposal from a stale read (or none while it was read), Delete… on a workspace data source's row (design 14 C keeps Discard my copy… there), the proposal asked of shared items, the announcement and description leaving the proposal out, and a test that would break with the year.
+    - **Left as is (the "breadth over save edge cases" rule):** the withdraw runs before the remove, so a remove that then fails leaves the proposal withdrawn and the item there; an approved proposal still landing isn't withdrawn.
+    - **For the user:** a data source made new in My workspace (not a copy) has no way to be deleted from the UI: design 14's C gives copies Discard my copy… and leaves the rest unsaid.
 - [x] T529 (AC-008, AC-168) Rewrite the sample model's policy, and phase 1's two security tests, on groups *(added 2026-09-30, `[R49]`: xcube's tokens carry only groups)*
   - Files: `infra/cube/model/views/secured_orders.yml`, `e2e/security.spec.ts` (T172's and T174's tests)
   - Failing test: `security.spec.ts`: a dashboard previewed as `{ groups: [...] }` runs as it, and its tile's SQL shows the row filter the group-based policy adds (AC-168).

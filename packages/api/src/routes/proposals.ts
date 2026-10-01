@@ -204,6 +204,52 @@ class Refused extends Error {
   }
 }
 
+/**
+ * A workspace item deleted withdraws the open proposal it waits in, its own
+ * or another item's it goes with (T528, AC-372; design 14's Q2): withdrawn
+ * by the user deleting it, as their own rejection withdraws one (state K),
+ * and recorded so. Asked before the item goes, so none is left open on an
+ * item that's gone. The proposal withdrawn, or none.
+ */
+export async function withdrawWithDelete(
+  { store, audit }: { readonly store: ProposalStore; readonly audit?: AuditStore | undefined },
+  request: FastifyRequest,
+  kind: ProposalKind,
+  itemId: string,
+): Promise<Proposal | null> {
+  const open = await store.openFor(kind, itemId);
+  if (open === null) return null;
+  const user = userOf(request);
+  const decided = await store.decide(open.id, {
+    status: 'withdrawn',
+    by: { key: user.key, name: user.name },
+    reason: null,
+  });
+  if (decided === null) return null;
+  await recordIn(
+    audit,
+    {
+      actor: actorOf(user),
+      event: 'rejection',
+      folderId: decided.targetFolderId,
+      item: { kind: decided.kind, id: decided.itemId, title: decided.title },
+      summary: `Withdrew “${decided.title}”: ${
+        decided.kind === kind && decided.itemId === itemId
+          ? 'it was'
+          : `“${decided.items.find((item) => item.kind === kind && item.id === itemId)?.title ?? 'an item it holds'}”, which goes with it, was`
+      } deleted from My workspace`,
+      details: {
+        proposalId: decided.id,
+        reason: null,
+        author: decided.author,
+        deleted: { kind, id: itemId },
+      },
+    },
+    request.log,
+  );
+  return decided;
+}
+
 export function registerProposals(app: FastifyInstance, routes: ProposalRoutes): void {
   const { store, documents, dataSources } = routes;
 

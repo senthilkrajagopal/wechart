@@ -1266,7 +1266,7 @@ Traces to: `[R48]`.
       Fails when: an item of another kind is listed; an item of the kind is left out; the filter starts on anything but All; the subfolders disappear from the list; the tree changes; the kind is lost on opening a subfolder or on reloading; or a read-only user is offered the filter.
 - [ ] AC-371 WHEN a user puts a library chart on a dashboard whose folder path doesn't hold the chart's folder, THE SYSTEM SHALL put a copy of it there as a chart of the dashboard's own, so no tile needs a folder the dashboard's readers can't see (`[R49]`, the user's answer on AC-263: "Copy on use"). The same SHALL hold when an approval lands a dashboard, and when moving a chart, a dashboard or a folder would leave a dashboard showing such a chart: each such dashboard gets its own copy, and the user who moved it is told which (amended 2026-10-01, the user's answer: "Copy on move + approval", `[R50]`).
       Fails when: a dashboard shows a library chart kept in a folder off its own folder's path, after a save, an approval or a move; or a move that copied doesn't say which dashboards got copies.
-- [ ] AC-372 WHEN a user deletes an item in their workspace that waits in an open proposal, THE SYSTEM SHALL name that proposal in the confirmation, and withdraw it with the delete (`[R49]`, design 14's Q2).
+- [x] AC-372 WHEN a user deletes an item in their workspace that waits in an open proposal, THE SYSTEM SHALL name that proposal in the confirmation, and withdraw it with the delete (`[R49]`, design 14's Q2).
       Fails when: such an item is deleted with its proposal still open, or the confirmation doesn't name the proposal.
 
 ## F40. The SQL runner

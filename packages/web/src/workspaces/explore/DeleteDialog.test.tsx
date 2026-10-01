@@ -2,6 +2,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
+import { shortDay } from '../../shell/relativeAge';
 import { DeleteDialog, type Checked, type Refusal } from './DeleteDialog';
 
 /**
@@ -158,6 +159,48 @@ describe('the delete dialog (design 14, states A–E)', () => {
       await Promise.resolve();
     });
     expect(onDeleted).toHaveBeenCalledTimes(1);
+  });
+
+  it('lists what goes with it, and names each open proposal it withdraws (B3; T528, AC-372)', async () => {
+    shown(async () => ({
+      kind: 'confirm',
+      text: 'These go with it:',
+      goes: [
+        { key: 'own', icon: 'chart', text: 'Its 2 own charts', aside: 'on no other dashboard' },
+      ],
+      note: 'The 1 library chart it shows stays in its folder.',
+      withdraws: [
+        {
+          id: 'p1',
+          title: 'Revenue overview',
+          targetPath: 'Sales / EMEA',
+          proposedAt: '2026-09-29T10:00:00.000Z',
+        },
+      ],
+    }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Delete “Top products”?' });
+    const goes = await within(dialog).findByRole('list', { name: 'These go with it:' });
+    expect(
+      within(goes)
+        .getAllByRole('listitem')
+        .map((row) => row.textContent),
+    ).toEqual(['Its 2 own charts on no other dashboard']);
+    const proposals = within(dialog).getByRole('list', {
+      name: 'It withdraws its open proposal',
+    });
+    expect(
+      within(proposals)
+        .getAllByRole('listitem')
+        .map((row) => row.textContent),
+    ).toEqual([
+      // The day as Reviews says it: with its year once that isn't this one.
+      `Waiting for review Revenue overview → Sales / EMEA · ${shortDay(new Date('2026-09-29T10:00:00.000Z'), new Date())}`,
+    ]);
+    expect(
+      within(dialog).getByText(
+        'The 1 library chart it shows stays in its folder. You can’t undo this.',
+      ),
+    ).not.toBeNull();
   });
 
   it('cancels on Escape from the confirmation', async () => {

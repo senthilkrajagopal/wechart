@@ -312,6 +312,8 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
     void queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
     void queryClient.invalidateQueries({ queryKey: ['folders'] });
     void queryClient.invalidateQueries({ queryKey: ['folder-roots'] });
+    // Its open proposal, withdrawn with it, leaves Reviews (T528).
+    void queryClient.invalidateQueries({ queryKey: ['reviews'] });
     router.history.push(exploreHref(stored.data?.body.folderId ?? SHARED_ROOT.id));
   };
 
@@ -613,7 +615,7 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
             <DeleteDialog
               name={title}
               action="Delete chart"
-              check={checkChart(chartId, signedIn)}
+              check={checkChart(chartId, signedIn, place?.kind === 'workspace')}
               remove={removeChart(chartId, signedIn)}
               onDeleted={deleted}
               onClose={() => {

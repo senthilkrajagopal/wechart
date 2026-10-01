@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-import type { Browser } from '@playwright/test';
+import type { Browser, Page } from '@playwright/test';
 import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
 import { BASE_URL, expect, signInThroughDex, test, testedSource, type Role } from './fixtures';
@@ -565,6 +565,195 @@ test.describe('deleting a data source and a model file (T526, AC-364, AC-365)', 
       ).toBeVisible();
       expect((await page.request.get(`/api/data-sources/${modeled.source}`)).status()).toBe(404);
       modeled.source = '';
+    });
+  });
+});
+
+/**
+ * T528 (AC-372; design 14, state B and Q2): deleting an item in My workspace
+ * that waits in an open proposal names that proposal in the confirmation,
+ * and withdraws it with the delete. A dashboard's confirmation says what
+ * goes with it (B3), from its row (B1) or its header's ⋯ (B2).
+ */
+const TARGET = `Proposed to ${RUN}`;
+const drafts = { folder: '', board: '', chart: '', plain: '', source: '', copy: '' };
+const SHARED_SOURCE = `t528_${RUN}`;
+
+test.describe('deleting a workspace item waiting in a proposal (T528, AC-372)', () => {
+  test.afterAll(async ({ browser }) => {
+    const writer = await as(browser, 'writer');
+    for (const [kind, id] of [
+      ['dashboard', drafts.board],
+      ['dashboard', drafts.plain],
+      ['chart', drafts.chart],
+    ] as const)
+      if (id !== '') await writer.request.delete(`/api/documents/${kind}/${id}`);
+    if (drafts.copy !== '') await writer.request.delete(`/api/data-sources/${drafts.copy}`);
+    await writer.close();
+    const admin = await as(browser, 'super');
+    if (drafts.source !== '') await admin.request.delete(`/api/data-sources/${drafts.source}`);
+    if (drafts.folder !== '') await admin.request.delete(`/api/documents/folder/${drafts.folder}`);
+    await admin.close();
+  });
+
+  test.describe('as super', () => {
+    test.use({ role: 'super' });
+
+    test('makes the folder the drafts go to, with a data source in it', async ({ page }) => {
+      const folder = await page.request.post('/api/documents', {
+        data: { kind: 'folder', title: TARGET, folderId: 'root' },
+      });
+      drafts.folder = ((await folder.json()) as { id: string }).id;
+      expect(
+        (
+          await page.request.put(`/api/folders/${drafts.folder}/access`, {
+            data: { readOnly: ['sales-ro'], readWrite: ['sales-rw'] },
+          })
+        ).status(),
+      ).toBe(200);
+      const source = await page.request.post('/api/data-sources', {
+        data: await testedSource(page.request, {
+          folderId: drafts.folder,
+          name: SHARED_SOURCE,
+          driver: 'postgres',
+          authMethod: 'password',
+          fields: FIELDS,
+          sealed: { password: await sealSecretV1(KEY, 'postgres', 'password', FIELDS, 'sample') },
+        }),
+      });
+      expect(source.status(), await source.text()).toBe(201);
+      drafts.source = ((await source.json()) as { id: string }).id;
+    });
+  });
+
+  test.describe('as writer', () => {
+    test.use({ role: 'writer' });
+
+    /** A draft made new in My workspace, to go to the folder. */
+    const draft = async (page: Page, kind: 'dashboard' | 'chart', title: string) => {
+      const answer = await page.request.post('/api/documents', {
+        data: { kind, title, folderId: 'mine', targetFolderId: drafts.folder },
+      });
+      expect(answer.status(), await answer.text()).toBe(201);
+      return ((await answer.json()) as { id: string }).id;
+    };
+    const propose = async (page: Page, kind: string, id: string) => {
+      const answer = await page.request.post('/api/proposals', { data: { kind, id } });
+      expect(answer.status(), await answer.text()).toBe(201);
+    };
+    const proposalOf = async (page: Page, kind: string, id: string) =>
+      (
+        (await (await page.request.get(`/api/proposals?kind=${kind}&itemId=${id}`)).json()) as {
+          status: string;
+        }
+      ).status;
+
+    test('deletes a proposed dashboard from its row, naming what goes and the proposal it withdraws', async ({
+      page,
+    }) => {
+      drafts.board = await draft(page, 'dashboard', `Waiting ${RUN}`);
+      await propose(page, 'dashboard', drafts.board);
+
+      await page.goto('/explore?folder=mine');
+      await page
+        .getByTestId(`item-${drafts.board}`)
+        .getByRole('button', { name: `Actions for Waiting ${RUN}` })
+        .click();
+      await page.getByRole('menuitem', { name: 'Delete…' }).click();
+      const dialog = page.getByRole('alertdialog', { name: `Delete “Waiting ${RUN}”?` });
+      await expect(
+        dialog.getByRole('list', { name: 'These go with it:' }).getByRole('listitem'),
+      ).toHaveText(['Every bookmark on it other people’s too']);
+      const withdrawn = dialog.getByRole('list', { name: 'It withdraws its open proposal' });
+      await expect(withdrawn.getByRole('listitem')).toHaveText(
+        new RegExp(`^Waiting for review Waiting ${RUN} → ${TARGET} · `),
+      );
+      await expect(dialog).toContainText('You can’t undo this.');
+      await dialog.getByRole('button', { name: 'Delete dashboard' }).click();
+      await expect(page.getByTestId(`item-${drafts.board}`)).toHaveCount(0);
+      expect(await proposalOf(page, 'dashboard', drafts.board)).toBe('withdrawn');
+      drafts.board = '';
+    });
+
+    test('deletes a proposed chart from its page’s ⋯, naming the proposal it withdraws', async ({
+      page,
+    }) => {
+      drafts.chart = await draft(page, 'chart', `Waiting chart ${RUN}`);
+      const stored = (await (
+        await page.request.get(`/api/documents/chart/${drafts.chart}`)
+      ).json()) as { body: Record<string, unknown>; version: number };
+      const saved = await page.request.put(`/api/documents/chart/${drafts.chart}`, {
+        data: {
+          version: stored.version,
+          body: {
+            ...stored.body,
+            chart: { source: { cube: 'orders' }, wells: { measures: ['orders.count'] } },
+          },
+        },
+      });
+      expect(saved.status(), await saved.text()).toBe(200);
+      await propose(page, 'chart', drafts.chart);
+
+      await page.goto(`/explore/charts/${drafts.chart}`);
+      await page.getByRole('button', { name: `More actions for Waiting chart ${RUN}` }).click();
+      await page.getByRole('menuitem', { name: 'Delete chart…' }).click();
+      const dialog = page.getByRole('alertdialog', { name: `Delete “Waiting chart ${RUN}”?` });
+      await expect(dialog).toContainText('No dashboard uses it.');
+      await expect(
+        dialog.getByRole('list', { name: 'It withdraws its open proposal' }).getByRole('listitem'),
+      ).toHaveText(new RegExp(`^Waiting for review Waiting chart ${RUN} → ${TARGET} · `));
+      await dialog.getByRole('button', { name: 'Delete chart' }).click();
+      await expect(page).toHaveURL(/\/explore\?folder=/);
+      expect(await proposalOf(page, 'chart', drafts.chart)).toBe('withdrawn');
+      drafts.chart = '';
+    });
+
+    test('deletes a dashboard from its header’s ⋯, no proposal to name (B2)', async ({ page }) => {
+      drafts.plain = await draft(page, 'dashboard', `Plain ${RUN}`);
+      await page.goto(`/explore/dashboards/${drafts.plain}`);
+      await page.getByTestId('dashboard-more').click();
+      await expect(page.getByRole('menu').getByRole('menuitem')).toHaveText([
+        'Export…',
+        'Delete dashboard…',
+      ]);
+      await page.getByRole('menuitem', { name: 'Delete dashboard…' }).click();
+      const dialog = page.getByRole('alertdialog', { name: `Delete “Plain ${RUN}”?` });
+      // Once the check has answered: what goes, and no proposal to name.
+      await expect(dialog.getByRole('list', { name: 'These go with it:' })).toBeVisible();
+      await expect(
+        dialog.getByRole('list', { name: 'It withdraws its open proposal' }),
+      ).toHaveCount(0);
+      await dialog.getByRole('button', { name: 'Delete dashboard' }).click();
+      await expect(page).toHaveURL(/\/explore\?folder=/);
+      await expect(
+        page.getByRole('status').filter({ hasText: `Deleted “Plain ${RUN}”.` }),
+      ).toBeVisible();
+      expect((await page.request.get(`/api/documents/dashboard/${drafts.plain}`)).status()).toBe(
+        404,
+      );
+      drafts.plain = '';
+    });
+
+    test('discards a proposed data source copy, naming the proposal it withdraws', async ({
+      page,
+    }) => {
+      const copied = await page.request.post(`/api/data-sources/${drafts.source}/copy`);
+      expect(copied.status(), await copied.text()).toBe(201);
+      drafts.copy = ((await copied.json()) as { id: string }).id;
+      await propose(page, 'data-source', drafts.copy);
+
+      await page.goto(`/explore/data-sources/${drafts.copy}`);
+      await page.getByRole('button', { name: 'Discard my copy…' }).click();
+      const dialog = page.getByRole('alertdialog', { name: 'Discard your copy?' });
+      await expect(dialog.getByTestId('discard-withdraws')).toHaveText(
+        new RegExp(
+          `^It withdraws its open proposal, waiting for review: ${SHARED_SOURCE} → ${TARGET} · `,
+        ),
+      );
+      await dialog.getByRole('button', { name: 'Discard' }).click();
+      await expect(page).toHaveURL(/\/explore\?folder=mine$/);
+      expect(await proposalOf(page, 'data-source', drafts.copy)).toBe('withdrawn');
+      drafts.copy = '';
     });
   });
 });

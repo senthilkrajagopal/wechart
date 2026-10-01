@@ -96,7 +96,7 @@ import { registerDataSources } from './routes/data-sources';
 import { registerExport } from './routes/export';
 import { sharedInPlace } from './routes/shared-in-place';
 import { registerImport } from './routes/import';
-import { registerProposals } from './routes/proposals';
+import { registerProposals, withdrawWithDelete } from './routes/proposals';
 import type { ProposalStore } from './repos/proposals';
 import type { VersionStore } from './repos/versions';
 import {
@@ -918,6 +918,13 @@ export function buildServer({
               const own = workspaceIdOf(userOf(request).key);
               return seen?.rights.has(own) === true ? own : undefined;
             },
+            // Its open proposal withdrawn as it is deleted (T528, AC-372).
+            ...(proposals === undefined
+              ? {}
+              : {
+                  withdraw: (request: FastifyRequest, id: string) =>
+                    withdrawWithDelete({ store: proposals, audit }, request, 'data-source', id),
+                }),
           }),
       ...(dataSourceLanding === undefined ? {} : { landing: dataSourceLanding }),
       ...(connectionTest === undefined ? {} : { tester: connectionTest }),
@@ -3875,9 +3882,24 @@ export function buildServer({
    */
   app.get('/api/documents/:kind/:id/dependents', USER, async (request, reply) => {
     const { kind, id } = request.params as { kind: string; id: string };
-    if (kind !== 'chart') throw new BadRequest('Only a chart’s dependents are asked here');
+    if (kind !== 'chart' && kind !== 'dashboard')
+      throw new BadRequest('Only a chart’s or a dashboard’s dependents are asked here');
     const found = await itemFor(request, reply, kind, id, 'write');
     if (found === undefined) return reply;
+    /**
+     * A dashboard: nothing refuses its delete. What its confirmation says goes
+     * with it, its own charts, and what stays, the library charts it shows
+     * (design 14, B3; T518, AC-363).
+     */
+    if (kind === 'dashboard') {
+      const stored = found.stored ?? (await docs?.get?.('dashboard', id)) ?? null;
+      if (stored === null) return reply.code(404).send(NOT_THERE);
+      const own = new Set((docs?.localTo ? await docs.localTo(id) : []).map((each) => each.id));
+      return {
+        ownCharts: own.size,
+        libraryCharts: [...chartIdsOf(stored.body)].filter((each) => !own.has(each)).length,
+      };
+    }
     if (await ownOfShared(kind, found)) return reply.code(409).send(sharedInPlace('dashboard'));
     // With security off nothing was read: one that isn't there is said so, as
     // its delete says it; one this build can't read (AC-181) still goes.
@@ -3952,6 +3974,16 @@ export function buildServer({
           holds,
         });
     }
+
+    // A workspace item's open proposal goes with it, withdrawn first, so none
+    // is left open on an item that's gone (T528, AC-372).
+    if (
+      kind !== 'folder' &&
+      proposals !== undefined &&
+      found.stored !== null &&
+      !(await isShared(kind, found.stored))
+    )
+      await withdrawWithDelete({ store: proposals, audit }, request, kind, id);
 
     // A dashboard's own charts are part of it, and go with it (T518, AC-363).
     const own = kind === 'dashboard' && docs.localTo ? await docs.localTo(id) : [];

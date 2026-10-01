@@ -32,7 +32,7 @@ import {
 import { DATA_SOURCES_QUERY } from './query';
 import { MenuButton } from '../../shell/MenuButton';
 import { DeleteDialog } from '../explore/DeleteDialog';
-import { checkSource, removeSource } from '../explore/deleteChecks';
+import { checkSource, openProposalOf, removeSource } from '../explore/deleteChecks';
 import { sayOnExplore } from '../explore/deletedToast';
 import { exploreHref } from '../explore/folders';
 
@@ -887,6 +887,21 @@ function AskToDiscardCopy({
   const box = useRef<HTMLDivElement>(null);
   const keep = useRef<HTMLButtonElement>(null);
   useFocusTrap(box);
+  /**
+   * The open proposal it waits in, which discarding it withdraws, named first
+   * (T528, AC-372): read afresh as the dialog opens, never from a cache that
+   * may predate a proposal, and Discard waits for it (T528's review).
+   */
+  const proposal = useQuery({
+    queryKey: ['open-proposal', 'data-source', source.id],
+    queryFn: () => openProposalOf('data-source', source.id),
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    retry: false,
+  });
+  const withdraws = proposal.data?.[0];
+  const known = proposal.isSuccess && !proposal.isFetching;
   // Read through a ref: the page's re-renders mustn't pull focus back to Keep (T462's review).
   const keeping = useRef(onKeep);
   useEffect(() => {
@@ -910,7 +925,7 @@ function AskToDiscardCopy({
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={`${ids}-title`}
-        aria-describedby={`${ids}-body`}
+        aria-describedby={withdraws === undefined ? `${ids}-body` : `${ids}-body ${ids}-withdraws`}
         className="source-pane__ask"
       >
         <h3 id={`${ids}-title`}>Discard your copy?</h3>
@@ -919,11 +934,28 @@ function AskToDiscardCopy({
           removed.
           {source.origin === null ? '' : ` ${sharedPathText(source.originPath)} keeps its own.`}
         </p>
+        {withdraws === undefined ? null : (
+          <p
+            id={`${ids}-withdraws`}
+            className="source-pane__ask-withdraws"
+            data-testid="discard-withdraws"
+          >
+            It withdraws its open proposal, waiting for review: <b>{withdraws.title}</b> →{' '}
+            {withdraws.targetPath} · {shortDay(new Date(withdraws.proposedAt), new Date())}.
+          </p>
+        )}
+        {proposal.isError ? (
+          <StateLine kind="err">
+            Whether it waits in a proposal couldn’t be read, so it can’t be discarded yet:{' '}
+            {proposal.error.message}
+          </StateLine>
+        ) : null}
         <div className="source-pane__ask-actions">
           <button ref={keep} type="button" className="btn" onClick={onKeep}>
             Keep it
           </button>
-          <button type="button" className="btn btn-danger" onClick={onDiscard}>
+          {/* Not until what it withdraws is known, so it is named first (AC-372). */}
+          <button type="button" className="btn btn-danger" disabled={!known} onClick={onDiscard}>
             Discard
           </button>
         </div>

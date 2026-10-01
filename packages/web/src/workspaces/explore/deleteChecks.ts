@@ -1,4 +1,4 @@
-import type { Checked, Refusal } from './DeleteDialog';
+import type { Checked, Confirmation, Refusal, WithdrawnProposal } from './DeleteDialog';
 import { fileHref } from '../model/inFolder';
 import { exploreHref } from './folders';
 import { SHARED_ROOT } from './roots';
@@ -82,12 +82,129 @@ export function chartRefusal(
   };
 }
 
-/** Asks what uses a library chart, for its dialog (state A1). */
-export const checkChart = (id: string, signedIn: boolean) => async (): Promise<Checked> => {
-  const response = await fetch(`/api/documents/chart/${encodeURIComponent(id)}/dependents`);
-  if (!response.ok) throw await failure(response, 'What uses it couldn’t be read');
-  const found = (await response.json()) as ChartDependents;
-  return chartRefusal(found, { signedIn }) ?? { kind: 'confirm', text: 'No dashboard uses it.' };
+/** An item's latest proposal, as `GET /api/proposals` answers it for its author. */
+interface ProposalAnswer {
+  readonly id: string;
+  readonly title: string;
+  readonly status: string;
+  readonly proposedAt: string;
+  readonly targetPath: readonly string[];
+}
+
+/** The proposal a delete withdraws: the item's latest, while it is open (T528, AC-372). */
+export function withdrawnBy(answer: ProposalAnswer): WithdrawnProposal | undefined {
+  if (answer.status !== 'open') return undefined;
+  return {
+    id: answer.id,
+    title: answer.title,
+    targetPath: answer.targetPath.slice(1).join(' / ') || SHARED_ROOT.title,
+    proposedAt: answer.proposedAt,
+  };
+}
+
+/**
+ * The open proposal a workspace item waits in, its own or another item's it
+ * goes with, which its delete withdraws (T528, AC-372): none for one never
+ * proposed, and none with sign-in off, where nothing is.
+ */
+export async function openProposalOf(
+  kind: 'dashboard' | 'chart' | 'data-source',
+  id: string,
+): Promise<readonly WithdrawnProposal[]> {
+  const response = await fetch(
+    `/api/proposals?kind=${encodeURIComponent(kind)}&itemId=${encodeURIComponent(id)}`,
+  );
+  if (response.status === 404) return [];
+  if (!response.ok) throw await failure(response, 'Its proposal couldn’t be read');
+  const found = withdrawnBy((await response.json()) as ProposalAnswer);
+  return found === undefined ? [] : [found];
+}
+
+/** A confirmation, naming what it withdraws where it withdraws anything. */
+const withdrawing = (
+  confirmation: Confirmation,
+  withdraws: readonly WithdrawnProposal[],
+): Confirmation => (withdraws.length === 0 ? confirmation : { ...confirmation, withdraws });
+
+/**
+ * Asks what uses a library chart, for its dialog (state A1), and, for one in
+ * the user's workspace, the proposal its delete withdraws (T528): only a
+ * workspace item is ever proposed.
+ */
+export const checkChart =
+  (id: string, signedIn: boolean, inWorkspace = false) =>
+  async (): Promise<Checked> => {
+    const response = await fetch(`/api/documents/chart/${encodeURIComponent(id)}/dependents`);
+    if (!response.ok) throw await failure(response, 'What uses it couldn’t be read');
+    const found = (await response.json()) as ChartDependents;
+    return (
+      chartRefusal(found, { signedIn }) ??
+      withdrawing(
+        { kind: 'confirm', text: 'No dashboard uses it.' },
+        inWorkspace ? await openProposalOf('chart', id) : [],
+      )
+    );
+  };
+
+/** What goes with a dashboard (T518, AC-363), and what stays (design 14, B3). */
+export interface DashboardDependents {
+  readonly ownCharts: number;
+  readonly libraryCharts: number;
+}
+
+/** Design 14's B3: its own charts and its bookmarks go; the library charts it shows stay. */
+export function dashboardConfirmation(found: DashboardDependents): Confirmation {
+  const plural = (count: number, one: string, many: string) =>
+    `${String(count)} ${count === 1 ? one : many}`;
+  return {
+    kind: 'confirm',
+    text: 'These go with it:',
+    goes: [
+      ...(found.ownCharts === 0
+        ? []
+        : [
+            {
+              key: 'own',
+              icon: 'chart' as const,
+              text: `Its ${plural(found.ownCharts, 'own chart', 'own charts')}`,
+              aside: 'on no other dashboard',
+            },
+          ]),
+      {
+        key: 'bookmarks',
+        icon: 'bookmark' as const,
+        text: 'Every bookmark on it',
+        aside: 'other people’s too',
+      },
+    ],
+    ...(found.libraryCharts === 0
+      ? {}
+      : {
+          note: `The ${plural(found.libraryCharts, 'library chart', 'library charts')} it shows ${found.libraryCharts === 1 ? 'stays in its folder' : 'stay in their folders'}.`,
+        }),
+  };
+}
+
+/**
+ * Asks what goes with a dashboard, for its dialog (B3), and, for one in the
+ * user's workspace, the proposal its delete withdraws (T528).
+ */
+export const checkDashboard = (id: string, inWorkspace: boolean) => async (): Promise<Checked> => {
+  const response = await fetch(`/api/documents/dashboard/${encodeURIComponent(id)}/dependents`);
+  if (!response.ok) throw await failure(response, 'What goes with it couldn’t be read');
+  return withdrawing(
+    dashboardConfirmation((await response.json()) as DashboardDependents),
+    inWorkspace ? await openProposalOf('dashboard', id) : [],
+  );
+};
+
+/** Deletes a dashboard, its own charts and its bookmarks with it (T518, AC-363). */
+export const removeDashboard = (id: string) => async (): Promise<Refusal | undefined> => {
+  const response = await fetch(`/api/documents/dashboard/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) throw await failure(response, 'It could not be deleted');
+  return undefined;
 };
 
 /** A data source's dependents (T519, T526; AC-364): the published cubes bound to it. */
@@ -156,7 +273,10 @@ export function sourceRefusal(
   };
 }
 
-/** Asks what a data source is bound to, for its dialog (state C). */
+/**
+ * Asks what a shared data source is bound to, for its dialog (state C). A
+ * workspace copy is discarded on its page instead, naming its proposal.
+ */
 export const checkSource = (id: string) => async (): Promise<Checked> => {
   const response = await fetch(`/api/data-sources/${encodeURIComponent(id)}/dependents`);
   if (!response.ok) throw await failure(response, 'What uses it couldn’t be read');

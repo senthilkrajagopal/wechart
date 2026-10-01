@@ -6567,6 +6567,15 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 }
 .delete-dialog__goes li:last-child { border-bottom: 0; }
 .delete-dialog__goes .delete-dialog__where { margin-left: auto; }
+.delete-dialog__withdraws { display: grid; gap: 6px; }
+.dialog p.delete-dialog__label {
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  font-weight: var(--wc-text-xs-strong-weight);
+  color: var(--wc-text-secondary);
+}
+.delete-dialog__title { font-weight: var(--wc-text-sm-strong-weight); }
+.delete-dialog__goes .status { display: inline-flex; align-items: center; gap: 4px; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
 
 /* The undo toast (AC-060, direction.md rule 38). Bottom right, above
    everything, and it does not take the pointer away from the dashboard. */

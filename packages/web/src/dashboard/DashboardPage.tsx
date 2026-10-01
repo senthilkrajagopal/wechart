@@ -12,7 +12,11 @@ import type { FilterValues } from '../filters/model';
 import { CHART_MISSING, formatsFrom, tileChartOf, type TileChart } from './chartSpec';
 import { StateLine } from '../shell/StatusIcon';
 import { DashboardLoading } from './DashboardLoading';
-import { ROOT_FOLDERS } from '../workspaces/explore/roots';
+import { ROOT_FOLDERS, SHARED_ROOT } from '../workspaces/explore/roots';
+import { useRouter } from '@tanstack/react-router';
+import { DeleteDialog } from '../workspaces/explore/DeleteDialog';
+import { checkDashboard, removeDashboard } from '../workspaces/explore/deleteChecks';
+import { sayOnExplore } from '../workspaces/explore/deletedToast';
 import { ProposalBand } from '../workspaces/explore/ProposalBand';
 import { ProposeFlow } from '../workspaces/explore/ProposeFlow';
 import { ME_QUERY } from '../shell/me';
@@ -24,7 +28,7 @@ import {
 } from '../workspaces/history/HistoryPanel';
 import { RestoreDialogs, useRestore, type RestoringVersion } from '../workspaces/history/restore';
 import { EditInWorkspaceDialog } from '../workspaces/explore/EditInWorkspaceDialog';
-import { FOLDERS_QUERY, targetPathOf } from '../workspaces/explore/folders';
+import { exploreHref, FOLDERS_QUERY, targetPathOf } from '../workspaces/explore/folders';
 import { placeOf, type ItemWorkspace } from '../workspaces/explore/placeOf';
 import { WorkspaceBand } from '../workspaces/explore/WorkspaceBand';
 import { DashboardView, type DashboardViewProps } from './DashboardView';
@@ -229,6 +233,22 @@ export function DashboardPage({
                 }
               : undefined,
         };
+  /**
+   * Delete dashboard…, in its header's ⋯ (design 14, B2; T528): for those
+   * who may change its folder, anyone with sign-in off; with it on, in their
+   * workspace, or as a shared folder's read-write member, who may copy it.
+   * Its own charts and its bookmarks go with it (AC-363); in the workspace
+   * its open proposal is withdrawn, named first (AC-372).
+   */
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [deleting, setDeleting] = useState(false);
+  const mayDelete =
+    me.data !== undefined &&
+    saved.data !== undefined &&
+    (!signedIn ||
+      place?.kind === 'workspace' ||
+      (place?.kind === 'shared' && place.copy !== undefined));
   /** A restore proposed: what to say, and where to review it (state E). */
   const [restored, setRestored] = useState<{ text: string; proposalId: string } | undefined>(
     undefined,
@@ -311,6 +331,29 @@ export function DashboardPage({
           }}
         />
       ) : null}
+      {deleting ? (
+        <DeleteDialog
+          name={document.title}
+          action="Delete dashboard"
+          check={checkDashboard(dashboardId, place?.kind === 'workspace')}
+          remove={removeDashboard(dashboardId)}
+          onDeleted={() => {
+            setDeleting(false);
+            // Its folder opens, saying so (design 14, B).
+            sayOnExplore(`Deleted “${document.title}”.`);
+            void queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
+            void queryClient.invalidateQueries({ queryKey: ['folders'] });
+            void queryClient.invalidateQueries({ queryKey: ['folder-roots'] });
+            void queryClient.invalidateQueries({ queryKey: ['reviews'] });
+            router.history.push(exploreHref(document.folderId ?? SHARED_ROOT.id));
+          }}
+          onClose={() => {
+            setDeleting(false);
+            // Back on the ⋯ it came from (design 14, keyboard).
+            window.document.querySelector<HTMLElement>('[data-testid="dashboard-more"]')?.focus();
+          }}
+        />
+      ) : null}
       <RestoreDialogs
         kind="dashboard"
         restore={restore}
@@ -366,6 +409,13 @@ export function DashboardPage({
                 : {})}
               onEditingChange={closeHistoryWhileEditing}
               place={placeActions}
+              {...(mayDelete
+                ? {
+                    onDelete: () => {
+                      setDeleting(true);
+                    },
+                  }
+                : {})}
             />
           ) : (
             <VersionView
@@ -582,7 +632,10 @@ function LoadedDashboard({
   historyOpen,
   onEditingChange,
   place,
+  onDelete,
 }: {
+  /** Delete dashboard… in its header's ⋯ (design 14, B2): absent where it may not be deleted. */
+  onDelete?: (() => void) | undefined;
   /** Its History button (T357): absent where History isn't offered. */
   onHistory?: (() => void) | undefined;
   historyOpen?: boolean | undefined;
@@ -969,6 +1022,7 @@ function LoadedDashboard({
         historyOpen={historyOpen}
         onEditingChange={onEditingChange}
         place={place}
+        onDelete={onDelete}
         // E and a tile's pencil open the chart editor over the dashboard, in
         // the view itself (T032). They used to navigate here, a full page
         // load that ended the edit session — so there was no dashboard to

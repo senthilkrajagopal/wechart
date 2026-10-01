@@ -31,10 +31,12 @@ import { fileHref } from '../model/inFolder';
 import { DeleteDialog, type Checked, type Confirmation, type Refusal } from './DeleteDialog';
 import {
   checkChart,
+  checkDashboard,
   checkModel,
   checkSource,
   FOLDER_CONFIRMATION,
   removeChart,
+  removeDashboard,
   removeFolder,
   removeModel,
   removeSource,
@@ -496,48 +498,60 @@ export function ExplorePage() {
         check: (() => Promise<Checked>) | Confirmation;
         remove: () => Promise<Refusal | undefined>;
       }
-    | undefined =>
-    item.kind === 'chart'
-      ? {
+    | undefined => {
+    switch (item.kind) {
+      // In the workspace its open proposal is withdrawn, named first (T528, AC-372).
+      case 'chart':
+        return {
           action: 'Delete chart',
-          check: checkChart(item.id, signedIn),
+          check: checkChart(item.id, signedIn, inOwnWorkspace),
           remove: removeChart(item.id, signedIn),
-        }
-      : // Offered only on an empty one (T521, AC-366): confirmed, nothing asked first.
-        item.kind === 'folder'
-        ? {
-            action: 'Delete folder',
-            check: FOLDER_CONFIRMATION,
-            remove: async () => {
-              const refusal = await removeFolder(item.id, item.title, () => {
-                setDeletingItem(null);
-                setDeletingOpen(false);
-                openFolder(item.id);
-                // Focus on its heading, not left on the dialog gone (T521's review).
-                setTitleFocus((times) => times + 1);
-              })();
-              // It isn't empty: what it holds is read afresh, so Delete is
-              // offered on it no more (T521's review).
-              if (refusal !== undefined) refreshListings();
-              return refusal;
-            },
-          }
-        : // A shared one, refused while a cube is bound to it (T526, AC-364;
-          // state C). A workspace copy is discarded on its page.
-          item.kind === 'data-source' && !inOwnWorkspace
-          ? {
+        };
+      // Its own charts and its bookmarks go with it (T518, AC-363; state B).
+      case 'dashboard':
+        return {
+          action: 'Delete dashboard',
+          check: checkDashboard(item.id, inOwnWorkspace),
+          remove: removeDashboard(item.id),
+        };
+      // Offered only on an empty one (T521, AC-366): confirmed, nothing asked first.
+      case 'folder':
+        return {
+          action: 'Delete folder',
+          check: FOLDER_CONFIRMATION,
+          remove: async () => {
+            const refusal = await removeFolder(item.id, item.title, () => {
+              setDeletingItem(null);
+              setDeletingOpen(false);
+              openFolder(item.id);
+              // Focus on its heading, not left on the dialog gone (T521's review).
+              setTitleFocus((times) => times + 1);
+            })();
+            // It isn't empty: what it holds is read afresh, so Delete is
+            // offered on it no more (T521's review).
+            if (refusal !== undefined) refreshListings();
+            return refusal;
+          },
+        };
+      // A shared one, refused while a cube is bound to it (T526, AC-364;
+      // state C). A workspace copy keeps Discard my copy… on its page.
+      case 'data-source':
+        return inOwnWorkspace
+          ? undefined
+          : {
               action: 'Delete data source',
               check: checkSource(item.id),
               remove: removeSource(item.id),
-            }
-          : // Its file, refused while anything depends on its cube (T526, AC-365; state D).
-            item.kind === 'model'
-            ? {
-                action: 'Delete model',
-                check: checkModel(item.folderId ?? folderId, item.id, folderPathOf),
-                remove: removeModel(item.folderId ?? folderId, item.id, folderPathOf),
-              }
-            : undefined;
+            };
+      // Its file, refused while anything depends on its cube (T526, AC-365; state D).
+      case 'model':
+        return {
+          action: 'Delete model',
+          check: checkModel(item.folderId ?? folderId, item.id, folderPathOf),
+          remove: removeModel(item.folderId ?? folderId, item.id, folderPathOf),
+        };
+    }
+  };
   /** A folder the user sees, as the dialogs name it: "Sales / EMEA", or "Shared". */
   const folderPathOf = (id: string) => targetPathOf(folders.data ?? [], id);
   /**
@@ -558,6 +572,9 @@ export function ExplorePage() {
     void queryClient.invalidateQueries({ queryKey: ['folder-roots'] });
     // A data source gone from its row leaves the Data sources page too (T526's review).
     void queryClient.invalidateQueries({ queryKey: ['data-sources'] });
+    // A proposal withdrawn with its item leaves Reviews and the statuses (T528).
+    void queryClient.invalidateQueries({ queryKey: ['reviews'] });
+    void queryClient.invalidateQueries({ queryKey: ['proposal-of'] });
   };
   const rowDeleted = (item: CatalogItem) => {
     const listed = shown.data ?? [];

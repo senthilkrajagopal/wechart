@@ -2,9 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   chartRefusal,
+  checkChart,
+  checkDashboard,
+  dashboardConfirmation,
   folderRefusal,
   modelRefusal,
   sourceRefusal,
+  withdrawnBy,
   type ChartDependents,
 } from './deleteChecks';
 
@@ -276,5 +280,89 @@ describe('a model file’s refusal (T526, AC-365; design 14, state D)', () => {
     ).toBe(
       'Its cube customers started being used just now, by 2 items in folders you can’t see. Nothing was deleted.',
     );
+  });
+});
+
+describe('a dashboard’s confirmation (T528; design 14, state B3)', () => {
+  it('says what goes with it, and the library charts that stay', () => {
+    expect(dashboardConfirmation({ ownCharts: 6, libraryCharts: 2 })).toEqual({
+      kind: 'confirm',
+      text: 'These go with it:',
+      goes: [
+        { key: 'own', icon: 'chart', text: 'Its 6 own charts', aside: 'on no other dashboard' },
+        {
+          key: 'bookmarks',
+          icon: 'bookmark',
+          text: 'Every bookmark on it',
+          aside: 'other people’s too',
+        },
+      ],
+      note: 'The 2 library charts it shows stay in their folders.',
+    });
+  });
+
+  it('leaves out own charts it hasn’t, and the note with no library chart', () => {
+    expect(dashboardConfirmation({ ownCharts: 0, libraryCharts: 0 })).toEqual({
+      kind: 'confirm',
+      text: 'These go with it:',
+      goes: [
+        {
+          key: 'bookmarks',
+          icon: 'bookmark',
+          text: 'Every bookmark on it',
+          aside: 'other people’s too',
+        },
+      ],
+    });
+  });
+});
+
+describe('the open proposal a delete withdraws (T528, AC-372)', () => {
+  const answer = {
+    id: 'p1',
+    title: 'Revenue overview',
+    status: 'open',
+    proposedAt: '2026-09-29T10:00:00.000Z',
+    targetPath: ['Shared', 'Sales', 'EMEA'],
+  };
+
+  it('is named, with where it goes and when it was proposed, while it is open', () => {
+    expect(withdrawnBy(answer)).toEqual({
+      id: 'p1',
+      title: 'Revenue overview',
+      targetPath: 'Sales / EMEA',
+      proposedAt: '2026-09-29T10:00:00.000Z',
+    });
+    expect(withdrawnBy({ ...answer, targetPath: ['Shared'] })?.targetPath).toBe('Shared');
+  });
+
+  it('is none once decided', () => {
+    for (const status of ['approved', 'rejected', 'withdrawn'])
+      expect(withdrawnBy({ ...answer, status })).toBeUndefined();
+  });
+
+  it('is named by a workspace dashboard’s and chart’s checks, and asked of no shared one', async () => {
+    const asked: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      asked.push(url);
+      const body = url.includes('/api/proposals')
+        ? answer
+        : url.includes('/dashboard/')
+          ? { ownCharts: 0, libraryCharts: 0 }
+          : { dashboards: [], hidden: 0 };
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    try {
+      const board = await checkDashboard('d1', true)();
+      expect(board.kind === 'confirm' && board.withdraws).toEqual([withdrawnBy(answer)]);
+      const chart = await checkChart('c1', true, true)();
+      expect(chart.kind === 'confirm' && chart.withdraws).toEqual([withdrawnBy(answer)]);
+      asked.length = 0;
+      const shared = await checkChart('c2', true, false)();
+      expect(shared).toEqual({ kind: 'confirm', text: 'No dashboard uses it.' });
+      expect(asked.some((url) => url.includes('/api/proposals'))).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

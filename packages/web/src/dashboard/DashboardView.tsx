@@ -319,6 +319,11 @@ export interface DashboardViewProps {
   /** Edit mode entered or left (T357's review). */
   readonly onEditingChange?: ((editing: boolean) => void) | undefined;
   /**
+   * Delete dashboard…, last in the header's ⋯ (design 14, B2; T528): given
+   * to those who may change its folder.
+   */
+  readonly onDelete?: (() => void) | undefined;
+  /**
    * Where it lives, with sign-in on (T348, AC-278; design 04, states E and
    * F): the line under its title; a shared one edited only in a copy; a
    * workspace one proposed back.
@@ -2094,6 +2099,7 @@ export function DashboardView({
   historyOpen = false,
   onEditingChange,
   place,
+  onDelete,
   documents,
   reach,
   model,
@@ -5112,6 +5118,18 @@ export function DashboardView({
                       setExporting(true);
                     },
                   },
+                  // Last, set apart, in the error ink (design 14, B2).
+                  ...(onDelete === undefined
+                    ? []
+                    : [
+                        {
+                          key: 'delete',
+                          label: 'Delete dashboard…',
+                          danger: true,
+                          separatorBefore: true,
+                          onSelect: onDelete,
+                        },
+                      ]),
                 ]}
               >
                 <span aria-hidden="true">⋯</span>

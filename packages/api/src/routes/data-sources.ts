@@ -189,6 +189,7 @@ export function registerDataSources(
     health,
     listing,
     audit,
+    withdraw,
   }: {
     /** Where each change is recorded (T368, AC-294): a secret only said replaced. */
     readonly audit?: Pick<AuditStore, 'record'>;
@@ -229,6 +230,11 @@ export function registerDataSources(
      * (AC-277). Unset with sign-in off, where there are no workspaces (T346).
      */
     readonly ownWorkspace?: (request: FastifyRequest) => Promise<string | undefined>;
+    /**
+     * Withdraws the open proposal a workspace data source waits in, as it is
+     * deleted (T528, AC-372). Unset with sign-in off, where none is proposed.
+     */
+    readonly withdraw?: (request: FastifyRequest, id: string) => Promise<unknown>;
   },
 ): void {
   // Public by nature: it seals, and opens nothing (AC-298).
@@ -935,6 +941,8 @@ export function registerDataSources(
         cubes,
         hidden,
       });
+    // A workspace one's open proposal goes with it, withdrawn first (T528, AC-372).
+    if (withdraw !== undefined && (await inAWorkspace(source))) await withdraw(request, source.id);
     try {
       const removed = await store.remove(
         source.id,
