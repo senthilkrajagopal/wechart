@@ -6941,16 +6941,43 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - the switcher hiding Jobs and Schedules from readers (AC-001, T331);
     - moving the field list to xcube's admin `…/meta?revision=` (R41, before security goes on);
     - the design's Folder column and filter (T504).
-- [ ] T504 (AC-145, AC-150, AC-151, AC-155, AC-234, AC-297) Design the Jobs and Schedules surfaces no design draws, and reconcile designs 10 and 07 *(added 2026-09-28, R40: "Draw new designs first")*
+- [x] T504 (AC-145, AC-150, AC-151, AC-155, AC-234, AC-297) Design the Jobs and Schedules surfaces no design draws, and reconcile designs 10 and 07 *(added 2026-09-28, R40: "Draw new designs first")*
   - Through the ui-design skill: partitions and Rebuild selected (AC-145); Run history and a build's log (AC-150); the queue with cancel (AC-151); suspended and Resume (AC-155); the wechart schedule form and its rows (AC-234); every state (loading, error, empty, refused, revoked, out of scope, sign-in off, below 1,024 px); a read-write member's and a Super-Admin's views (AC-297). Design 10 pin 6 reworded (R40.2).
   - Its open questions are backlog §6's Jobs and Schedules list.
   - *R41:* nothing that needs the refresh worker's build history, which is deferred: no "Failed", "Duration vs average", "Trigger: Schedule" or "Recent builds" for builds Cube starts on its own. Built states and last-built times come from xcube's partitions route. Running and queued come from the queue route (xcube, item 1). The refresh worker's status comes from item 3.
   - Depends on: none. Blocks T374, T375, T376, T378 and T379's UI.
-- [ ] T372 (AC-150) Record every build wechart starts and follow it to its end on the server
-  - Files: a migration `…_build-history.cjs`, `packages/api/src/repos/build-history.ts` (+ test), `packages/api/src/jobs/{build,follow}.ts` (+ tests)
-  - Failing test: as T156 (above): the build is stored with its pre-aggregation, "started from Jobs" and each partition's token; the API follows every open token to its end without a browser, and again after a restart; an expired token is "Cube's record expired"; the log keeps every reported state; a 101st record drops the oldest (AC-150).
-  - *2026-09-26:* with the API on two replicas (AC-319), exactly one replica follows each token, and every write is idempotent (research `cube/ha-topology.md`, table row 5). The test runs two followers against one database.
-  - Depends on: T371
+  - **Done 2026-10-02.** Design 16 (`docs/design/reviews/2026-10-01/designs/16-jobs-schedules.html`) was approved as drawn, with P1–P5 and every question's drawn default (`[R56]`, commit `5890521`). It ticks no criterion itself.
+    - **Spec:** AC-145, AC-150, AC-151, AC-153 … AC-155, AC-234, AC-294 and AC-297 amended; AC-391 … AC-399 added.
+    - **Tasks:** its follow-ups are T372, T374 … T379 and T505, rewritten the same day, and T550 … T560, added. Each builds against xcube's routes as built, in the image compose pins (`89628a0e88`; research `xcube-jobs-schedules-routes.md`, `xcube-slice-6.md`). The task that first calls a route checks it against compose's running xcube.
+    - **Order:**
+      1. the history (T372);
+      2. Run history, the queue and the partitions (T374, T376, T375);
+      3. the rows (T550);
+      4. the refresh keys (T377, T551);
+      5. wechart's schedules (T378, T552, T379);
+      6. the audit (T505);
+      7. the refresh worker and the proposals (T553 … T558);
+      8. the folder views and the design's states (T559, T560).
+
+      Each commit leaves the unit and e2e suites passing: a task that renames what a test finds changes that test in the same commit.
+- [ ] T372 [P] (AC-150) Record each build wechart starts, one record per start, and follow it to its end on the server
+  - *Rewritten 2026-10-02 to design 16 (`[R56]`):* one record per start (Q6), its four outcomes, and starters that include wechart's schedules.
+  - Files:
+    - a migration `packages/api/src/db/migrations/…_build-history.cjs`;
+    - `packages/api/src/repos/build-history.ts` (+ test);
+    - `packages/api/src/jobs/{build,follow}.ts` (+ tests);
+    - `packages/api/src/cube/client.ts`: wechart's own `x-request-id` on each jobs post, so the queue's entries can be matched to it (research `xcube-jobs-schedules-routes.md`, Gotcha 3; `cube/job-records.md` finding 4).
+  - Failing test: `follow.test.ts` and `build-history.test.ts`, against the stub Cube:
+    - **The record.** A start through `POST /api/builds` is stored as one record. It holds the pre-aggregation, its folder, the partitions asked for, who started it, its request id and each partition's token.
+    - **Following.** The API follows every open token to its end with no browser open, and again after a restart. Two followers on one database follow each token once, and every write is idempotent (AC-319; research `cube/ha-topology.md`, table row 5).
+    - **The outcome** is one of:
+      - done;
+      - failed, with how many partitions failed and Cube's error;
+      - Cube's record expired, for a token Cube answers `not_found` before wechart saw its end. That outcome counts as neither done nor failed.
+    - **The log** keeps each state Cube reported, per token, with the time wechart saw it.
+    - **The duration** runs from the start to the last token's end, as wechart saw it.
+    - **The cap.** A 101st record of a pre-aggregation drops its oldest (AC-150).
+  - Depends on: none (T371 is done)
 - [moved to the next phase] T373 (AC-150) ~~Record the refresh worker's builds through Cube's `logger` option~~ Pull the refresh worker's builds from xcube into wechart's history *(rewritten 2026-09-26: Cube never calls wechart, so xcube records build events through Cube's `logger` option and wechart pulls them, `[AD 1, R27]`; research `cube/xcube-runtime.md`, finding 6. **Deferred 2026-09-28, R41:** the user, "History of the refresh worker's build.. we can defer this to the next phase"; `docs/phase-2/backlog.md` §7)*
   - Files: `packages/api/src/xcube/builds.ts` (+ test), `packages/api/src/repos/build-history.ts`. xcube's build-event record and its route come from the Cube side; the route is proposed on the plan's contract, which lists none yet.
   - Failing test: `builds.test.ts`, against the stub xcube:
@@ -6958,27 +6985,110 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - a `* * * * *` rollup appears in Run history within one check period (AC-150).
   - ~~Files: as T261 (above). Failing test: as T261: … the logger never throws (AC-150).~~
   - Depends on: T372, T420
-- [ ] T374 (AC-150) Show Run history in Jobs
-  - Files: as T262 (above)
-  - Failing test: as T262: Run history lists builds newest first with the prototype's columns and filters, opens a build's log, and still lists a build older than Cube's 24 hours (AC-150).
+- [ ] T374 (AC-150) Show Run history in Jobs, and a build's log
+  - *Rewritten 2026-10-02 to design 16's state B (`[R56]`).*
+  - *2026-09-28, R42.2:* Jobs keeps "Trigger" as the refresh key (AC-229) and adds "Started by" from this history. The refresh worker's builds show none until their history comes, next phase (R41).
+  - Files:
+    - `packages/api/src/jobs/history.ts` (+ test): a paged, filtered route, scoped as T371 scopes Jobs;
+    - `packages/web/src/workspaces/jobs/{RunHistory,BuildLog}.tsx` (+ tests);
+    - `packages/web/src/workspaces/jobs/JobsPage.tsx`: the tab, at `?tab=history`, mounted as the others are;
+    - `e2e/jobs.spec.ts`.
+  - Failing test:
+    - `RunHistory.test.tsx`:
+      - records are listed newest first, 50 at a time, with Newer and Older;
+      - the Outcome, Started by, Folder and Time filters narrow them;
+      - one start of 30 partitions is one row, its partitions listed in its log (B3);
+      - Cube's record expired has its own outcome, its log naming the gap (B2);
+      - the empty state names no other folder, and says the refresh worker's builds come later (B4).
+    - `BuildLog.test.tsx`: the pane shows the outcome, partitions, folder, who started it and how, when it ended and how long it took, Cube's error, and each state Cube reported with its token and the time wechart saw it.
+    - `history.test.ts`: a read-write member gets only their folders' records; a reader gets `403`.
+    - `e2e/jobs.spec.ts`, against compose's Cube:
+      - a build started from Jobs is listed, its log naming its token and its end state, Done. This carries AC-149's e2e (the token, followed to its end) onto the new surface;
+      - a record whose finish is moved back 25 hours in the suite's database is still listed (AC-150).
   - Depends on: T372
-  - *2026-09-28, R42.2:* Jobs keeps "Trigger" as the refresh key (AC-229) and adds "Started by" from this history; the refresh worker's builds show none until their history comes, next phase (R41).
-- [ ] T375 (AC-145) List a rollup's partitions and rebuild the selected ones
-  - Files: as T151 (above), with the partition list read through Cube's system route or, if that needs more than configuration, a fork endpoint added by the Cube-expert agent. *(2026-09-26, `[X4, X6]`: `/cubejs-system/*` isn't served under xcube; the list comes from xcube's `POST …/pre-aggregations/partitions` under the service credential (T420), which answers as Cube's system route did. It can drop a module's "Continue wait" rather than report it (`xcube-slice-6.md` Gotcha 11): ask again, don't show an empty list.)*
-  - Failing test: as T151: every partition Cube lists is shown with its period, state and last build time, and a rebuild starts jobs for exactly the selected partitions (AC-145).
-  - Depends on: T372
-- [ ] T376 (AC-151) Show the build queue and cancel a queued entry
-  - Files: a queue listing and cancel endpoint in ~~the `cube-introspection` package~~ xcube, as an admin route under the service credential. It comes from the Cube side and is proposed on the plan's contract (2026-09-26). wechart: `packages/api/src/jobs/queue.ts` (+ test), `packages/web/src/workspaces/jobs/BuildQueue.tsx`
-  - Failing test: `queue.test.ts`, against the rebuilt Cube: every queued build appears with its pre-aggregation, partition, state and token, and cancelling removes it (AC-151).
-  - Depends on: T372
-  - *2026-09-28, R41:* asked of xcube in `to-xcube/2026-09-28-1200-jobs-schedules-routes.md`, item 1, with whether a cancelled refresh-worker build is queued again at its next tick. Built once its image is published. A read-write member sees and cancels only their folders' entries (AC-297). Its UI follows T504's design.
-- [ ] T377 (AC-153, AC-154) Fix what T258's, T159's and T160's reviews found, then tick AC-153 and AC-154 again
-  - Files and failing tests: as T264 (above), each finding with a test that fails first
-  - Depends on: ~~T339~~ T426 (2026-09-26: schedules are read from the published modules)
-- [ ] T505 (AC-294) Record builds started from Jobs, cancels, and changes to wechart-owned schedules in the audit trail *(added 2026-09-28, R42.8)*
-  - Files: `packages/api/src/jobs/build.ts` (and T376's cancel, T378's schedules), `packages/api/src/access/audit.test.ts`
-  - Failing test: `audit.test.ts`: starting a build from Jobs records who, which pre-aggregation, its folder and when; a cancel and a schedule change likewise (AC-294).
-  - Depends on: T371; the cancel on T376, schedule changes on T378
+- [ ] T376 (AC-151) Show the build queue, and cancel a queued build wechart started
+  - *Rewritten 2026-10-02 to design 16's state C, against xcube's queue route as built (`89628a0e88`; research `xcube-jobs-schedules-routes.md` §1).* Of xcube's two ways, the user chose to cancel only builds wechart started (Q1). Cube's refresh worker queues a build it lost to a cancel again at its next run.
+  - Files:
+    - `packages/api/src/xcube/queue.ts` (+ test): `GET …/models/{model}/pre-aggregations/queue` and `POST …/queue/cancel`, under the service credential;
+    - `packages/api/src/jobs/queue.ts` (+ test);
+    - `packages/web/src/workspaces/jobs/BuildQueue.tsx` (+ test);
+    - `packages/web/src/workspaces/jobs/JobsPage.tsx`: the tab, at `?tab=queue`, with its count;
+    - `e2e/jobs.spec.ts`.
+  - Failing test:
+    - `queue.test.ts`, against the stub xcube:
+      - **Listing.** Every entry in the user's folders is listed, oldest first. Each has its pre-aggregation by short name, its folder, partition, state (queued, building, or stalled), starter and token. The starter is the person or wechart schedule found in wechart's history by the entry's request id or job token. Otherwise it is Cube's refresh worker (`startedBy: scheduler`) or a query, and the token reads "—" (Q5).
+      - **Scope.** Another folder's entries are left out for a member (AC-297).
+      - **Cancel.** Cancelling a queued entry wechart started sends its key, and records the build as cancelled, by whom (AC-150). Cancelling one wechart didn't start is refused with `403` before xcube is asked (Q1).
+      - **Refusals.** xcube's `notCancelled` reasons read "it had started building" (`processing`) and "it had already left the queue" (`gone`) (AC-151).
+    - `BuildQueue.test.tsx`: an entry wechart didn't start has no Cancel, and the list says why.
+    - `e2e/jobs.spec.ts`, against compose's xcube: a build queued from Jobs appears with its token; Cancel takes it out, and Run history reads Cancelled (AC-151).
+  - Depends on: T372. The first call checks the routes against compose's xcube.
+- [ ] T375 (AC-145) List a rollup's partitions with their states, and rebuild the selected ones or all
+  - *Rewritten 2026-10-02 to design 16's screen 1 and state A (`[R56]`).* The list comes from xcube's `POST …/pre-aggregations/partitions` under the service credential (T420), since `/cubejs-system/*` isn't served under xcube (`[X4, X6]`). That route can drop a module that answers "Continue wait" (`xcube-slice-6.md`, Gotcha 11), so it is asked again, never shown empty.
+  - Files:
+    - `packages/api/src/xcube/partitions.ts` (+ test);
+    - `packages/api/src/jobs/partitions.ts` (+ test);
+    - `packages/api/src/jobs/build.ts`: a start for chosen partitions, or all;
+    - `packages/web/src/workspaces/jobs/{Partitions,BuildPanel,StateBadge}.tsx` (+ tests);
+    - `e2e/jobs.spec.ts`.
+  - Failing test:
+    - `partitions.test.ts`, against the stub xcube:
+      - **Every partition** Cube lists is shown with its period in UTC, its state and its newest version's time. Built or not built comes from the partitions route; building, queued or stalled from the queue (T376).
+      - **Failed** shows only when the latest build of the partition in wechart's history failed and no newer version exists, naming the build it still serves.
+      - **Other rollups.** One that isn't partitioned has one row, "Whole pre-aggregation". A lambda or a rollup join names the rollups it is built from.
+      - **Continue wait.** An answer missing a module's item is asked for again (Gotcha 11).
+      - **Rebuilding.** Rebuild selected posts one jobs request per selected partition, its `dateRange` at the partition's start as a UTC wall-clock string (research `cube/system-partitions.md`, "Jobs-API rebuild"). Build all posts one for the whole. Either records one start (T372) (AC-145).
+    - `e2e/jobs.spec.ts`, against compose's Cube, on a month-partitioned cube the test brings: rebuilding two of its partitions starts jobs whose tables name exactly those two (AC-145).
+  - **Also in this commit:** StateBadge reads Cube's `scheduled` and `processing` as Queued and Building (design 16, pin 5). Its own tests and the e2e's words change with it. The pane's per-session list of tokens gives way to "Builds started from wechart", so AC-149's e2e follows the build in Queue and Run history (T374, T376).
+  - Depends on: T372, T376
+- [ ] T550 (AC-391) Each pre-aggregation's row: its state, when it was last built, who started that build, and its partitions *(added 2026-10-02, `[R56]`: design 16's screen 1)*
+  - Files:
+    - `packages/api/src/jobs/build.ts` (+ test): `GET /api/preaggregations` gains each row's state, last built, starter and partition count;
+    - `packages/web/src/workspaces/jobs/BuildPanel.tsx` (+ test);
+    - `e2e/jobs.spec.ts`.
+  - Failing test:
+    - `build.test.ts`, against the stub xcube:
+      - a row reads the state among its partitions that most needs attention: failed, then building, queued, stalled, partly built ("n of N"), not built, and built;
+      - last built is the newest version among its partitions;
+      - started by names the person or wechart schedule whose build made that version, from wechart's history, and "—" for one wechart didn't start (AC-391).
+    - `BuildPanel.test.tsx`: the row shows these with the footnote under the table. The session-only "Not built here" is gone.
+    - `e2e/jobs.spec.ts`: the seed rollup, built by the refresh worker, reads Built, with a time and "—" (AC-391).
+  - Depends on: T375
+- [ ] T377 [P] (AC-153) Fix what T258's and T159's reviews found, with design 16's daylight-saving rule, then tick AC-153 again
+  - *Rewritten 2026-10-02:* T160's findings move to T551 (AC-154), and a daylight-saving change among the next runs is now decided (`[R56]`, Q3).
+  - Files:
+    - `packages/core/src/refresh-key.ts` (+ test);
+    - `packages/web/src/workspaces/model/preagg/RefreshSchedule.tsx` (+ test);
+    - `packages/web/src/workspaces/model/validate.ts` (+ test);
+    - `packages/api/src/model/publish.ts` (+ test);
+    - `e2e/model-schedule.spec.ts`.
+  - Failing test: each of T264's T159 and T258 findings (above) gets a test that fails first:
+    - a rollup with `scheduled_refresh: false` says it isn't scheduled, and shows no runs;
+    - the Los Angeles tests run on a fixed clock;
+    - `0 minute` and `0 hour` are refused;
+    - a huge interval draws without throwing;
+    - clearing a key with `incremental` leaves no key without `every`;
+    - the e2e's bound is the key's own check period;
+    - a tab or newline around a cron is refused, as Cube's regex refuses it;
+    - the API's check follows YAML aliases and merges, as Problems does, and probe (a2)'s answer is recorded beside AC-153;
+    - next runs stop at the zone's next daylight-saving change, followed by the warning, while a zone with no change ahead lists five (AC-153, Q3).
+  - Depends on: none (T426 is done)
+- [ ] T551 (AC-154) Schedules' refresh-key rows as design 16 draws them, every rollup included *(added 2026-10-02, `[R56]`; T160's review findings, moved from T377)*
+  - Files:
+    - `packages/api/src/jobs/schedules.ts` (+ test): the field list from xcube's `GET …/meta?extended=true&hidden=true` (research `xcube-jobs-schedules-routes.md` §2);
+    - `packages/web/src/workspaces/schedules/{SchedulesPage,SchedulePane}.tsx` (+ tests);
+    - `e2e/schedules.spec.ts`.
+  - Failing test:
+    - `schedules.test.ts`, against the stub xcube:
+      - a rollup of a cube marked `public: false` is listed;
+      - each row carries its schedule in words and as written, with its zone; its next run, from `nextRefreshes` with AC-153's daylight-saving rule; and when Cube last built it, from the partitions route (T375), with no outcome or starter (R41);
+      - T160's descriptions are fixed (a cron with incremental, `original_sql`'s defaults, a default key over several cubes, `sql` with `every`, and an interval's epoch anchor), in one function shared with Jobs' Trigger.
+    - `SchedulesPage.test.tsx`:
+      - the owner shows as an icon and a label; "Cube's default" and "Not scheduled" have icons;
+      - the pane shows the `refresh_key` as written, its file, the five next runs with the five-minute note, Open in Model to the pre-aggregation itself, and Open in Jobs (AC-154).
+    - `e2e/schedules.spec.ts`, against compose's xcube: a `public: false` cube's rollup is listed, read-only, and Open in Model opens that pre-aggregation (AC-154).
+  - Depends on: T375. It checks `?hidden=true` against compose's xcube first.
+- *T505 moved below T379 on 2026-10-02 (`[R56]`): it records the cancel and the schedule changes, so it follows them.*
 - [x] T506 (AC-353) Keep a stored BigQuery key or Snowflake or Dremio token unless replaced, and warn that replacing it rebuilds the rollups *(added 2026-09-28, R42.5)*
   - Files: `packages/web/src/workspaces/data-sources/ConnectionForm.tsx` (+ `ConnectionForm.test.tsx`), `packages/web/src/workspaces/data-sources/SourceEditor.test.tsx`, `e2e/security/data-sources.spec.ts`
   - Failing test: the form shows the stored key or token as kept; choosing Replace shows the warning before Save; saving without choosing Replace sends no new envelope (AC-353).
@@ -7009,16 +7119,166 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - **The e2e's fixture:** no Dremio runs in compose, and a data source is made only from a passing test of it (AC-158). So the fixture's test runs through the API against `127.0.0.1:9047`, where nothing listens in Cube's container, and fails there. It is then marked passed in the suite's own database (`markPassed`, `docker exec wechart-meta psql`), and the source is made through the API from it. Only the fixture goes round the test gate. The warning shows before Save, so no Dremio is needed after that.
   - **Not covered, a question for the user if wanted:** switching the way a data source signs in to a key or token (say, Snowflake from a key pair to OAuth) stores a key or token where none was. By `xcube-919cff8c6e.md` ("a new host, database, user or key holder aliases a data source's cubes and rebuilds their rollups"), that likely rebuilds too; no test has checked it. AC-353 speaks only of one already stored, so nothing is said there.
   - AC-353 ticked.
-- [ ] T378 (AC-234) Run a wechart-owned cron schedule through Cube's jobs API
-  - Files: `packages/api/package.json` (pg-boss 12.33.2), `packages/api/src/scheduler/{schedules,worker}.ts` (+ tests), `packages/web/src/workspaces/schedules/ScheduleForm.tsx`
-  - Failing test: `schedules.test.ts`: the next runs shown match the cron expression and time zone, and with a fake clock a due run starts a build through the jobs API (AC-234).
-  - Depends on: T372
+- [ ] T378 (AC-234, AC-297) Run wechart's own schedules: each due run builds every partition through Cube's jobs API
+  - *Rewritten 2026-10-02 to design 16 (`[R56]`):*
+    - five fields and a required zone;
+    - every partition per run (Q7);
+    - a choice for a missed run (Q8);
+    - changes and deletes applied at once;
+    - any read-write member of the folder may change a schedule (Q10).
   - *2026-09-28, R42.3:* pre-aggregation builds only; no result-cache warm-ups.
-- [ ] T379 (AC-155) Suspend a repeatedly failing schedule, say so, and offer Resume
-  - Files: `packages/api/src/scheduler/suspend.ts` (+ test), `packages/web/src/workspaces/schedules/SchedulesPage.tsx`
-  - Failing test: `suspend.test.ts`: after the configured number of consecutive failures the schedule stops running and says so, and Resume starts it again (AC-155).
-  - Depends on: T378
+  - Files:
+    - `packages/api/package.json`: pg-boss 12.33.2 (research `scheduler.md`);
+    - a migration `packages/api/src/db/migrations/…_schedules.cjs`;
+    - `packages/api/src/scheduler/{schedules,worker,cron}.ts` (+ tests);
+    - `packages/api/src/routes/schedules.ts` (+ test).
+  - Failing test:
+    - `cron.test.ts`:
+      - a five-field cron is read back in words;
+      - an unreadable one is refused, naming the field: `0 25 * * 1-5` names the hour, and six fields names the count;
+      - a cron a refresh key could express is accepted, and flagged as one (Q11);
+      - the next five runs, from pg-boss's `previewSchedule`, are given in the zone and in UTC, across a daylight-saving change at the zone's own time (Q3).
+    - `schedules.test.ts`, with a fake clock and the stub Cube:
+      - a due run posts one jobs request for every partition, recorded as one start by the schedule (T372);
+      - a run missed while the scheduler was stopped runs once when it starts again, or doesn't, as its schedule says (Q8);
+      - two API replicas start each due run once (AC-319);
+      - a schedule with no zone is refused (AC-234).
+    - `routes/schedules.test.ts`:
+      - a read-write member of the pre-aggregation's folder makes, changes and deletes a schedule, at once and with no proposal, and changes one another member made;
+      - a member of another folder gets `403`, and so does a reader;
+      - a schedule whose maker has left the folder's groups still runs, and still names them (AC-297, Q10).
+  - Depends on: T372
+- [ ] T552 (AC-234, AC-392, AC-154) Make, change and delete a wechart schedule on Schedules, listed beside the refresh keys *(added 2026-10-02, `[R56]`: design 16's screen 2 and state D)*
+  - Files: `packages/web/src/workspaces/schedules/{ScheduleForm,SchedulesPage,SchedulePane}.tsx` (+ tests), `e2e/schedules.spec.ts`
+  - Failing test:
+    - `ScheduleForm.test.tsx`: New schedule opens the form in the pane (AC-234), with:
+      - a pre-aggregation from the user's folders, and a name;
+      - the cron, read back in words as it's typed;
+      - a required zone that starts empty;
+      - the next five runs;
+      - an unreadable cron named, with Create waiting;
+      - a cron a refresh key could run, with its note (Q11);
+      - the line that each run builds every partition, and the missed-run choice, with "Run it once, when wechart is back" chosen (Q8).
+    - `SchedulePane.test.tsx`: for a rollup whose refresh key runs, the form and the pane say that it runs too, and nothing offers `scheduled_refresh: false` (AC-392).
+    - `SchedulesPage.test.tsx`:
+      - a rollup with both kinds of schedule has two rows; wechart's names who made it, with how its last run ended (AC-154);
+      - a change applies at once;
+      - a delete's confirmation ends "You can't undo this." (design 14's rule).
+    - `e2e/schedules.spec.ts`: a `* * * * *` schedule made on the page starts its build against compose's Cube within its minute, and Run history lists it as started by the schedule (AC-234).
+  - Depends on: T378, T551
+- [ ] T379 (AC-155) Suspend a wechart schedule after its set number of failed runs in a row, say so, and offer Resume
+  - *Rewritten 2026-10-02 to design 16's state E and Q9 (`[R56]`).*
   - *2026-09-28, R42.4:* wechart-owned schedules only; the number is set per schedule, 3 by default. A refresh key keeps Cube's own retry.
+  - Files:
+    - `packages/api/src/scheduler/suspend.ts` (+ test);
+    - the schedules table's limit and its count of failures in a row (a migration);
+    - `packages/api/src/routes/schedules.ts` (+ test): Resume;
+    - `packages/web/src/workspaces/schedules/{ScheduleForm,SchedulePane,SchedulesPage}.tsx` (+ tests): the "Suspend after" field, the suspended row and pane;
+    - `e2e/schedules.spec.ts`.
+  - Failing test:
+    - `suspend.test.ts`, with a fake clock and the stub Cube (AC-155):
+      - a run counts as failed when Cube refuses its start, or when any of its partitions ends failed or missing partition;
+      - "Cube's record expired" leaves the count as it was;
+      - at the schedule's number in a row, it starts no more runs;
+      - Resume starts it again from its next time, with the count at 0;
+      - the number must be a whole number of 1 or more, 3 by default, with no "never".
+    - `SchedulePane.test.tsx` (AC-155):
+      - a suspended schedule's row and pane say "Suspended after n failures", list its failed runs with Cube's last error, and offer Resume, focused;
+      - before the limit, the row reads "n failed in a row · suspends after N".
+    - `e2e/schedules.spec.ts`: a schedule on a pre-aggregation the model no longer has is suspended after its number of runs, and Resume clears that (AC-155, state E4).
+  - Depends on: T552
+- [ ] T505 (AC-294) Record builds started from Jobs, cancels, and changes to wechart-owned schedules in the audit trail, a suspension by "wechart's scheduler" *(added 2026-09-28, R42.8; rewritten and moved here 2026-10-02 to design 16's state I and Q12, `[R56]`)*
+  - Files:
+    - `packages/api/src/audit/record.ts` (+ test);
+    - `packages/api/src/jobs/{build,queue}.ts`;
+    - `packages/api/src/routes/schedules.ts`;
+    - `packages/api/src/scheduler/suspend.ts`;
+    - `packages/api/src/access/audit.test.ts`;
+    - `packages/web/src/workspaces/security/AuditTrail.tsx` (+ test): the three kinds, each with its icon, in the table and the Event filter.
+  - Failing test: `access/audit.test.ts` (AC-294):
+    - **Build started.** Build now, Build all and Rebuild selected record it, with who, the pre-aggregation, its folder, the partitions and when.
+    - **Build cancelled.** A cancel records it, with the partition and its state at the time.
+    - **Schedule change.** Making, changing, resuming and deleting a schedule record it, each with before and after. A suspension records it with "wechart's scheduler" as who.
+    - **Not recorded:** a run that a schedule starts.
+  - Depends on: T376, T379. AC-294 stays open until T368's other kinds land (T349 … T354).
+- [ ] T553 [P] (AC-393) The refresh worker's badge and panel, from xcube's refresh-worker route *(added 2026-10-02, `[R56]`: design 16's state F and Q4)*
+  - Files:
+    - `packages/api/src/xcube/refresh-worker.ts` (+ test): `GET …/models/{model}/refresh-worker`, research `xcube-jobs-schedules-routes.md` §3;
+    - `packages/api/src/cube/health.ts` (+ test);
+    - a route for those who may use Jobs (T371's scope), since `/api/cube-health` is public;
+    - `packages/web/src/workspaces/jobs/{Health,RefreshWorkerPanel}.tsx` (+ tests);
+    - `e2e/jobs.spec.ts`.
+  - Failing test:
+    - `health.test.ts`, against the stub xcube (AC-393, Q4):
+      - running, with the last run;
+      - behind, while every worker's revision is below the model's;
+      - failing, while a module's `lastError.at` is later than its `lastOkAt`;
+      - none, with no workers;
+      - a module's error text only in a Super-Admin's answer.
+    - `Health.test.tsx`: the badge in each state, as an icon and a label, opening the panel; Cube's health as built (AC-156).
+    - `e2e/jobs.spec.ts`, against compose's xcube: the badge names the worker's last run.
+  - Depends on: none. The first call checks the route against compose's xcube.
+- [ ] T554 (AC-394) Stop a building build that wechart started *(added 2026-10-02, `[R56]`: design 16's P1)*
+  - Files: `packages/api/src/jobs/queue.ts` (+ test), `packages/web/src/workspaces/jobs/BuildQueue.tsx` (+ test), `e2e/jobs.spec.ts`
+  - Failing test:
+    - `queue.test.ts`, against the stub xcube:
+      - Stop on a building entry wechart started sends xcube's cancel with `processing: true`;
+      - its record reads cancelled while building, with who stopped it, and the trail records Build cancelled (AC-294);
+      - Stop on an entry the refresh worker or a query started is never offered, and is refused with `403` (AC-394).
+    - `e2e/jobs.spec.ts`, against compose's xcube: a stopped build leaves the queue, and its partition gets no new version from it (AC-394).
+  - Depends on: T376, T505
+- [ ] T555 (AC-395) Run now on a wechart schedule *(added 2026-10-02, `[R56]`: design 16's P2)*
+  - Files: `packages/api/src/routes/schedules.ts` (+ test), `packages/web/src/workspaces/schedules/SchedulePane.tsx` (+ test)
+  - Failing test: `routes/schedules.test.ts`, with a fake clock and the stub Cube:
+    - Run now starts a build of every partition at once;
+    - Run history records it as started by Run now on the schedule, by the user, and the trail records Build started (AC-294);
+    - the schedule's next run is unchanged (AC-395).
+  - Depends on: T552, T505
+  - **For the user, before it's built:**
+    - whether a failed Run now counts toward the schedule's suspension (AC-155 counts "runs");
+    - whether Run now is offered on a suspended or paused schedule.
+- [ ] T556 (AC-396) Pause and resume a wechart schedule by hand *(added 2026-10-02, `[R56]`: design 16's P3)*
+  - Files: `packages/api/src/routes/schedules.ts`, `packages/api/src/scheduler/schedules.ts` (+ tests), `packages/web/src/workspaces/schedules/{SchedulesPage,SchedulePane}.tsx` (+ tests)
+  - Failing test: with a fake clock:
+    - a paused schedule starts no run at its times;
+    - it reads "Paused · by <name>", with the idle icon;
+    - resumed, it next runs at its first time after the resume, not one that fell while it was paused;
+    - a pause and a resume are each a Schedule change in the trail (AC-396, AC-294).
+  - Depends on: T552, T505
+- [ ] T557 (AC-397) Schedules' owner filter, with counts *(added 2026-10-02, `[R56]`: design 16's P4)*
+  - Files: `packages/web/src/workspaces/schedules/SchedulesPage.tsx` (+ test)
+  - Failing test: All, Cube's refresh worker and wechart each show the count of the rows they then list, over the folders the user sees. Each lists only its own owner's schedules (AC-397).
+  - Depends on: T552
+- [ ] T558 (AC-398) Jobs' header summary: building, queued, failed and suspended *(added 2026-10-02, `[R56]`: design 16's P5)*
+  - Files: `packages/api/src/jobs/summary.ts` (+ test), `packages/web/src/workspaces/jobs/{JobsPage,Summary}.tsx` (+ tests)
+  - Failing test:
+    - `summary.test.ts`, over a member's folders only, counts:
+      - the building and queued entries (T376);
+      - the pre-aggregations reading failed (AC-391);
+      - the suspended schedules (T379).
+    - `Summary.test.tsx`: each count links to its tab, or to Schedules, filtered, and the list there has that many rows (AC-398).
+  - Depends on: T550, T376, T379
+- [ ] T559 (AC-297, AC-399) The Folder column, filter and scope note on every Jobs tab and on Schedules *(added 2026-10-02, `[R56]`; the "Folder column and filter" T371 left to the design)*
+  - Files: `packages/web/src/workspaces/jobs/{BuildPanel,RunHistory,BuildQueue,FolderFilter}.tsx`, `packages/web/src/workspaces/schedules/SchedulesPage.tsx` (+ tests), `e2e/security/jobs-scope.spec.ts`
+  - Failing test: `jobs-scope.spec.ts`, as a read-write member of /Sales/EMEA and as a Super-Admin (AC-297, rule 84):
+    - each tab and Schedules shows each row's folder;
+    - "All of mine" lists the member's folders, with Include subfolders, and "All folders" a Super-Admin's;
+    - the member's page carries the scope note and names no other folder; a Super-Admin's carries none.
+  - Depends on: T374, T376, T550, T552
+- [ ] T560 (AC-399) Design 16's states, and its rewording of design 10's note *(added 2026-10-02, `[R56]`: design 16's state G and state J)*
+  - Files: `packages/web/src/workspaces/jobs/*`, `packages/web/src/workspaces/schedules/*` (+ tests), `e2e/jobs.spec.ts`, `e2e/schedules.spec.ts`, `e2e/a11y-tokens.spec.ts`
+  - Failing test: component tests for each of design 16's G states, on Jobs' tabs and on Schedules (AC-399):
+    - loading, as skeleton rows;
+    - an error, with Retry and Details;
+    - empty in the user's folders;
+    - a refusal, in the API's words;
+    - access lost while open, with "You no longer have access to do this." and the list read again;
+    - `?preagg=` out of scope, reading Not found just as a missing one does;
+    - sign-in off, as a Super-Admin sees it;
+    - at 390 px, the pane as a full-screen sheet.
+
+    The pane's note reads as state J words it. The Access panel's read-write help, which T473 draws, takes state J's wording there.
+  - Depends on: T559, T553, T554, T555, T556, T557, T558
 
 ## P2.11 Quick calculations and calculation requests (F6, returned)
 
@@ -9770,6 +10030,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - Cancel and "Save n changes";
     - the group suggestions, "Not set here. Inherits from …", the self-lockout question and the Undo toast.
   - Depends on: T330
+  - *2026-10-02, `[R56]`:* the read-write list's help line reads as design 16's state J rewords it: "Propose changes, create subfolders, set access, and build and schedule this folder's pre-aggregations. They also see every folder above, view-only, but not its pre-aggregations in Jobs." (AC-399)
 - [ ] T474 (AC-165, AC-166, AC-295, AC-343) Security as design 08's three tabs, for Super-Admins only
   - Files: `packages/web/src/workspaces/security/…` (+ tests), `e2e/security/security-page.spec.ts`
   - Failing test: `security-page.spec.ts`:
@@ -10637,6 +10898,13 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       2. `addTileAsBeforeCopyOnUse` adds that tile to the stored body in the suite's `wechart_security` database, through `psql` in compose's `wechart-meta`, with the values as psql variables.
     - The spec's assertions are unchanged, and it passes 9 of 9 on Chrome. A reader's export (no models or data sources offered) was already its own case.
 
+## P2.22 The model editor's pane, popped out (added 2026-10-02, `[R58]`)
+
+- [ ] T600 (AC-420) Pop the model editor's YAML and join diagram out into a larger dialog, and back into place
+  - Files: `packages/web/src/shell/PopOut.tsx` (+ test), `packages/web/src/workspaces/model/ModelFilePage.tsx`, `packages/web/src/shell/styles.ts`, `e2e/model-popout.spec.ts`
+  - Failing test: `PopOut.test.tsx`: popped out, the content is in a modal dialog and its place is empty; Esc, the close button or the pop-in control puts the same element back, with focus on the pop-out control. `model-popout.spec.ts`: text typed in the YAML before and while popped out is kept, and undo still undoes it after closing; the dialog is larger than the pane (AC-420).
+  - Depends on: none
+
 ## Phase 2 coverage: acceptance criterion → task
 
 | AC | Tasks | AC | Tasks | AC | Tasks |
@@ -10647,14 +10915,14 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-093 | T386 | AC-097 | T387, T453 | AC-104 | T388 |
 | AC-116 | T389 | AC-131 | T334, T342 | AC-141 | T342 |
 | AC-145 | T375, T504 | | | | |
-| AC-150 | T372, ~~T373~~ (next phase, R41), T374, T504 | AC-151 | T376, T504 | AC-153 | T377 |
-| AC-154 | T377 | AC-155 | T379, T504 | AC-157 | T364, T459 |
+| AC-150 | T372, ~~T373~~ (next phase, R41), T374, T376, T504 | AC-151 | T376, T504 | AC-153 | T377 |
+| AC-154 | ~~T377~~ T551, T552 | AC-155 | T379, T504 | AC-157 | T364, T459 |
 | AC-158 | T363, T461, T497 | AC-159 | T361, T363 | AC-160 | T360, T454, T363 |
 | AC-161 | T335, T363, T365, T435, T442, T462, T497, T501 | AC-163 | T362, T363, T461, T462 | AC-164 | T335, T497 |
 | AC-176 | T405 | AC-180 | T407 | AC-187 | T406, T466–T470, T476–T478 |
 | AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
 | AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |
-| AC-234 | T378, T504 | AC-246 | T404 | AC-249 | T336, T450 |
+| AC-234 | T378, T552, T504 | AC-246 | T404 | AC-249 | T336, T450 |
 | AC-251 | T318, T321, T324, T431 | AC-252 | T316, T319, T320 | AC-253 | T317, T321 |
 | AC-254 | T311, T319, T351, T359 | AC-255 | T312, T408 | AC-256 | T313, T323, T325, T326 |
 | AC-257 | T315, T320, T324 | AC-258 | T411 | AC-259 | T314, T330 |
@@ -10669,7 +10937,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-284 | T349, T358 | AC-285 | T350, T451 | AC-286 | T351 |
 | AC-287 | T355, T356 | AC-288 | T352, ~~T426~~ T451 | AC-289 | T354, T357, T515 |
 | AC-290 | T353, T358 | AC-291 | T329, ~~T426~~ T451 | AC-292 | T366 |
-| AC-293 | T367 | AC-294 | T368, T505 | AC-295 | T369 |
+| AC-293 | T367 | AC-294 | T368, T505, T554, T555, T556 | AC-295 | T369 |
 | AC-353 | T506, T509 | AC-096 | T507 | | |
 | AC-354 | T508, T511 | AC-355 | T508, T511 | AC-356 | T508, T513 |
 | AC-357 | T508, T513 | AC-358 | T508, T514 | AC-359 | T508, T512 |
@@ -10684,9 +10952,12 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-382 | T534 | AC-383 | T532, T535 | AC-384 | T536 |
 | AC-385 | T535 | AC-386 | T539 | AC-387 | T535 |
 | AC-388 | T541 | AC-389 | T540 | AC-390 | T544 |
+| AC-391 | T550 | AC-392 | T552 | AC-393 | T553 |
+| AC-394 | T554 | AC-395 | T555 | AC-396 | T556 |
+| AC-397 | T557 | AC-398 | T558 | AC-399 | T559, T560, T473 |
 | AC-281 (again, rebinding) | T542 | AC-283 (again, use-only copies) | T543 | | |
 | AC-354 (again, copy on use) | T538 | | | | |
-| AC-296 | T370 | AC-297 | T371, T504 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441 |
+| AC-296 | T370 | AC-297 | T371, T378, T559, T504 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441 |
 | AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |
 | AC-302 | T394 | AC-303 | T395 | AC-304 | T396 |
 | AC-305 | T398 | AC-306 | T399 | AC-307 | T409, T444 |
@@ -10709,5 +10980,6 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-344 | T470, T479–T487, T493, T494 | AC-345 | T488 | AC-346 | T488 |
 | AC-347 | T489 | AC-348 | T490 | AC-349 | T491 |
 | AC-350 | T492 | AC-351 | T493 | AC-249 (again, drafts) | T488 |
+| AC-420 | T600 | | | | |
 
 AC-009, AC-136 and AC-137 are ticked from phase 1. ~~They stay ticked until slice 3 changes how publishing works; T426 and T432 then reword them and retest them (R28 Q9).~~ They keep their wording and their ticks while their tests pass: T447 re-runs them against xcube at slice 2's cut-over, and T426 and T432 again in slice 3 (2026-09-26, `[R29]`). AC-235 was unticked by R29 and is ticked again by T445 and T447.

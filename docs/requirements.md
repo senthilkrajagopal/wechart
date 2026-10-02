@@ -950,6 +950,13 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R58 — a bigger YAML and join diagram** (2026-10-02, the user)
+- The user: "can you add functionality to see join diagram and yaml in a bigger model screen... you should be able to popout into modal and closing should pop back into place..". *AC-420, T600.*
+- *Claude's calls, overturnable:*
+  - the whole right-hand pane pops out: its switch, Wrap and problems go with the editor or diagram, so either view is reachable in the dialog;
+  - the dialog takes most of the window;
+  - the pane is drawn once and moved, so nothing in it is reset.
+
 **R57 — Generate cubes for a demo** (2026-10-02, the user)
 - The user: "please work on T492.. i have a demo tomorrow.. and need the generate cube functionality. Put the generate cube functionality also in the workspace home. It can be in the Workspace home page along with New Dashboard/chart/folder .....", then "take the generate cube as a priority".
 - Claude explained that a generated cube in My workspace must name the shared folder it is to go to. The user: "oh okay... in that case.. add generate cube within the datasource details page..", "you dont have to add it on the workspace home", and "Also clicking on the [...] on datasource in explore view also should have generate cube". *AC-350 amended; T492.*
