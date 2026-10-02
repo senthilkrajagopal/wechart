@@ -1,5 +1,27 @@
 # Handoff — 2026-09-24
 
+> **Now, 2026-10-02 (read this block first).**
+> - **The user has a demo on 2026-10-03** on the docker-desktop release.
+>   - It runs wechart d8ac962 with xcube 89628a0e88, sign-in on, at http://localhost:8089, and all 42 verify.sh checks pass.
+>   - The demo path is Generate cubes (T492), shown as super: open `default`'s data source page, or its row's ⋯ in Explore, then Generate cubes…, which opens My workspace's model.
+>   - Don't redeploy before the demo unless the user asks.
+>   - The same images are on ghcr.io as `:d8ac962` and `:latest`, for amd64 and arm64. `xcube:latest` is 89628a0e88.
+>   - The stray packages `wechart-apiatest` and `wechart-webatest` (a zsh `$t:latest` mistake) are the user's to delete, or `gh auth refresh -s delete:packages`.
+> - **Agents in flight, each in a worktree.** Cherry-pick each commit as it reports.
+>   - **SQL runner:** T535, T539, T536, then the partial-rows follow-up, pinning xcube 6d9673ccda.
+>   - **Approval:** a new task for AC-141's warning on the workspace save (R55), then T451's sign-in-off half. Don't pick either until after the demo.
+>   - **Design 16:** spec and tasks amendments for R56, P1–P5 and Q1–Q12's defaults. It works in the main checkout and makes docs commits only.
+>   - **Group 5:** T367 (bookmark sharing), then T368 (the audit trail).
+>   - **F6:** research on xcube's quick calculations, then T382–T385.
+> - **Next, after design 16's docs land:** Jobs and Schedules, then group 6 (T473–T478, T405, T406), then the phase-1 regression run (T410).
+> - **Since 2026-10-01:**
+>   - T544 (the review's collapsible panels, as design 05);
+>   - T532–T534 (the SQL runner);
+>   - T451's sign-in-on half (models land only through proposals; verify.sh lands its probes that way);
+>   - T456;
+>   - T492.
+>   - R55 (AC-141 warns at the workspace save; the copy-runner gap is in backlog §8) and R56 (design 16 approved) are recorded, and R57 is the user's Generate cubes requests.
+
 > **Phase 2, 2026-09-25: implementing.** The workflow ran interview (R11–R19), spec
 > (F25–F36), research, the user's choices (R20–R22), the design direction (§7e,
 > accepted in R23) and the task plan: `docs/tasks.md` › "Phase 2", T311–T411,
