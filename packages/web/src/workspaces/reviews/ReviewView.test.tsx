@@ -258,6 +258,99 @@ describe('the review view (T356)', () => {
     expect(within(inspector).queryByRole('button', { name: /Approve|Reject/ })).toBeNull();
   });
 
+  /**
+   * T350 (AC-285; design 05's main screen and state G): the workspace models
+   * a dashboard resolves through are in it, said why, and each is reviewed as
+   * a YAML diff against the folder's current file.
+   */
+  const MODEL_NOW =
+    'cubes:\n  - name: sales\n    measures:\n      - name: total\n        type: number_agg\n';
+  const MODEL_PROPOSED =
+    'cubes:\n  - name: sales\n    measures:\n      - name: total\n        type: avg\n      - name: margin\n        type: sum\n';
+  const withModels = (over: Partial<ProposalDetail> = {}) => {
+    const detail = proposal(over);
+    return {
+      ...detail,
+      items: [
+        detail.items[0]!,
+        detail.items[1]!,
+        {
+          kind: 'model' as const,
+          id: 'm1',
+          title: 'cubes/sales.yml',
+          version: 2,
+          landsIn: 'f1',
+          landsInPath: ['Shared', 'Sales', 'EMEA'],
+          replaces: { id: 'shared-m1', version: 3, copiedFrom: true },
+          replacesNow: 3,
+          snapshot: { path: 'cubes/sales.yml', content: MODEL_PROPOSED },
+          ...(detail.status === 'open' ? { current: { content: MODEL_NOW, version: 3 } } : {}),
+        },
+        {
+          kind: 'model' as const,
+          id: 'm2',
+          title: 'cubes/regions.yml',
+          version: 1,
+          landsIn: 'f1',
+          landsInPath: ['Shared', 'Sales', 'EMEA'],
+          replaces: null,
+          replacesNow: null,
+          snapshot: { path: 'cubes/regions.yml', content: 'cubes:\n  - name: regions\n' },
+        },
+      ],
+    };
+  };
+
+  it('lists the models a dashboard resolves through, saying why they go with it', async () => {
+    shown(withModels());
+    const list = await screen.findByRole('list', { name: 'In this proposal' });
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual([
+      'Revenue overviewDashboard · replaces version 7',
+      'cubes/sales.ymlModel · replaces version 3',
+      'cubes/regions.ymlModel · new in this folder',
+    ]);
+    expect(screen.getByTestId('review-bundle').textContent).toBe(
+      'The models go with the dashboard: its cubes resolve only through the author’s cubes/sales.yml and cubes/regions.yml. They’re approved or rejected together.',
+    );
+  });
+
+  it('says why a library chart goes too, where models go with it', async () => {
+    const detail = withModels();
+    shown({ ...detail, items: [...detail.items, proposal({}).items[2]!] });
+    expect((await screen.findByTestId('review-bundle')).textContent).toBe(
+      'The chart it shows from the author’s workspace goes with it. The models go with the dashboard: its cubes resolve only through the author’s cubes/sales.yml and cubes/regions.yml. They’re approved or rejected together.',
+    );
+  });
+
+  it('shows a model as its YAML against the folder’s, and a new one as all added', async () => {
+    shown(withModels());
+    await userEvent.click(await screen.findByRole('button', { name: /cubes\/sales\.yml/ }));
+    expect((await screen.findByTestId('yaml-diff-head')).textContent).toBe(
+      'cubes/sales.yml version 3 → proposed · +3 −1',
+    );
+    expect(
+      screen.getByRole('textbox', {
+        name: 'cubes/sales.yml: the proposed YAML against the current',
+      }),
+    ).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: /cubes\/regions\.yml/ }));
+    expect((await screen.findByTestId('yaml-diff-head')).textContent).toBe(
+      'cubes/regions.yml new in this folder · +2',
+    );
+  });
+
+  it('shows a decided proposal’s model as proposed, with nothing to set it against', async () => {
+    shown(withModels({ status: 'approved', mayApprove: false, mayReject: false }));
+    await userEvent.click(await screen.findByRole('button', { name: /cubes\/sales\.yml/ }));
+    expect((await screen.findByTestId('yaml-diff-head')).textContent).toBe(
+      'cubes/sales.yml as proposed',
+    );
+  });
+
   it('says so when there is no such proposal, or it isn’t the user’s to see', async () => {
     vi.stubGlobal(
       'fetch',

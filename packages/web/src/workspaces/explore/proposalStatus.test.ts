@@ -60,6 +60,23 @@ describe('a workspace row’s status (T358)', () => {
     ).toEqual({ kind: 'ok', text: 'In folder' });
   });
 
+  // T350 (AC-285): a model row is listed by its path; its proposal names its file's id.
+  it('finds a model by its file’s id', () => {
+    const mine = [
+      row({
+        items: [
+          { kind: 'dashboard', id: 'b1' },
+          { kind: 'model', id: 'file-1' },
+        ],
+      }),
+    ];
+    expect(statusOfItem(mine, { kind: 'model', id: 'cubes/sales.yml', fileId: 'file-1' })).toEqual({
+      kind: 'run',
+      text: 'Waiting for review',
+    });
+    expect(statusOfItem(mine, { kind: 'model', id: 'cubes/sales.yml' })).toBeUndefined();
+  });
+
   it('is none for an item in no proposal, or one withdrawn', () => {
     expect(statusOfItem([row({})], { kind: 'chart', id: 'other' })).toBeUndefined();
     expect(

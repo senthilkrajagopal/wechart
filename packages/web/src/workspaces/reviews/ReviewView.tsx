@@ -23,6 +23,7 @@ import {
 } from './review';
 import { folderText, KIND_LABEL, REVIEWS_QUERY } from './reviews';
 import { SettingsDiff } from './SettingsDiff';
+import { YamlDiff } from './YamlDiff';
 
 /**
  * A proposal's review view (T356, AC-286, AC-288; design 05's main screen,
@@ -35,7 +36,7 @@ import { SettingsDiff } from './SettingsDiff';
  *   it).
  * - The item drawn: a dashboard or chart read-only, Proposed or Current, as
  *   readers in the folder would see it; a data source's settings beside the
- *   folder's (a model's YAML diff comes with workspace models, T350).
+ *   folder's; a model's YAML against the folder's file (T350, state G).
  * - The inspector: who, when, what they said, what it replaces where, and
  *   Approve and Reject, only here.
  */
@@ -152,8 +153,7 @@ export function ReviewView({
           </ul>
           {items.length > 1 ? (
             <p className="review-view__bundle" data-testid="review-bundle">
-              These go with the {KIND_LABEL[proposal.kind].toLowerCase()}, which shows them from the
-              author’s workspace. They’re approved or rejected together.
+              {bundleText(proposal.kind, items)}
             </p>
           ) : null}
         </nav>
@@ -250,6 +250,35 @@ const decisionText = (proposal: ProposalDetail) => {
     : `${word} by ${proposal.decision.by.name} · ${momentText(proposal.decision.at)}`;
 };
 
+/**
+ * Why the rest goes with the item (AC-285; design 05's main screen): the
+ * charts it shows from the author's workspace, and the models its cubes
+ * resolve through, which only that workspace has.
+ */
+function bundleText(kind: ProposalDetail['kind'], items: readonly ProposalItem[]): string {
+  const [first, ...rest] = items;
+  const models = rest.filter((each) => each.kind === 'model');
+  const word = KIND_LABEL[kind].toLowerCase();
+  const together = 'They’re approved or rejected together.';
+  if (models.length === 0)
+    return `These go with the ${word}, which shows them from the author’s workspace. ${together}`;
+  const named = models.map((each) => each.title);
+  const list =
+    named.length === 1 ? named[0]! : `${named.slice(0, -1).join(', ')} and ${named.at(-1)!}`;
+  const others = rest.length - models.length;
+  const charts =
+    others === 0
+      ? ''
+      : others === 1
+        ? 'The chart it shows from the author’s workspace goes with it. '
+        : 'The charts it shows from the author’s workspace go with it. ';
+  const why =
+    first?.kind === 'model'
+      ? `it names the author’s ${list}`
+      : `its cubes resolve only through the author’s ${list}`;
+  return `${charts}${models.length === 1 ? 'The model goes' : 'The models go'} with the ${word}: ${why}. ${together}`;
+}
+
 const sameFolder = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((part, at) => part === b[at]);
 
@@ -307,6 +336,24 @@ function ItemPreview({
   }, [item.kind, item.snapshot, open, against, held, current.data]);
 
   if (item.kind === 'data-source') return <SettingsDiff item={item} alone={!open} />;
+  // A model's YAML against the folder's file now (T350; design 05, state G).
+  if (item.kind === 'model') {
+    const proposed = typeof item.snapshot['content'] === 'string' ? item.snapshot['content'] : '';
+    return (
+      <div className="review-view__preview">
+        <YamlDiff
+          path={item.title}
+          proposed={proposed}
+          {...(!open || (item.replaces !== null && item.current === undefined)
+            ? // Decided, or the folder's file gone since: as proposed, alone.
+              { asProposed: true }
+            : item.current === undefined
+              ? {}
+              : { current: item.current.content, version: item.current.version })}
+        />
+      </div>
+    );
+  }
   const folder = folderText(item.landsInPath);
   return (
     <div className="review-view__preview">

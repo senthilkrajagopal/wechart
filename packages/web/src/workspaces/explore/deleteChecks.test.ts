@@ -4,6 +4,7 @@ import {
   chartRefusal,
   checkChart,
   checkDashboard,
+  checkModel,
   dashboardConfirmation,
   folderRefusal,
   modelRefusal,
@@ -360,6 +361,32 @@ describe('the open proposal a delete withdraws (T528, AC-372)', () => {
       asked.length = 0;
       const shared = await checkChart('c2', true, false)();
       expect(shared).toEqual({ kind: 'confirm', text: 'No dashboard uses it.' });
+      expect(asked.some((url) => url.includes('/api/proposals'))).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  // T350: a workspace model waits in proposals too, by its file's id.
+  it('is named by a workspace model’s check, asked by its file’s id, and of no shared one', async () => {
+    const asked: string[] = [];
+    const empty = { declares: [{ kind: 'cube', name: 'sales' }], views: [], cubes: [] };
+    vi.stubGlobal('fetch', async (url: string) => {
+      asked.push(url);
+      const body = url.includes('/api/proposals')
+        ? answer
+        : url.includes('folder=ws-project')
+          ? { ...empty, charts: [], dashboards: [], hidden: 0, fileId: 'file-1' }
+          : { ...empty, charts: [], dashboards: [], hidden: 0 };
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    try {
+      const mine = await checkModel('ws-project', 'cubes/sales.yml', () => undefined)();
+      expect(mine.kind === 'confirm' && mine.withdraws).toEqual([withdrawnBy(answer)]);
+      expect(asked).toContain('/api/proposals?kind=model&itemId=file-1');
+      asked.length = 0;
+      const shared = await checkModel('sales', 'cubes/sales.yml', () => undefined)();
+      expect(shared).toEqual({ kind: 'confirm', text: 'Nothing depends on its cubes.' });
       expect(asked.some((url) => url.includes('/api/proposals'))).toBe(false);
     } finally {
       vi.unstubAllGlobals();

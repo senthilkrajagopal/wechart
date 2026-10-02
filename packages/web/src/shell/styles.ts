@@ -4072,6 +4072,26 @@ main:has(.dashboard) > .with-panel[data-open='true'] { flex: 1; min-height: 0; p
 .review-view__preview { display: grid; gap: 8px; min-width: 0; }
 .review-view__switch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .review-view__read-only { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+/* A model's YAML diff (T350; design 05, state G): the code face, line
+   numbers, the changes marked + and − beside their tint (YamlDiff.tsx). */
+.yaml-diff { display: grid; gap: 6px; min-width: 0; }
+.yaml-diff__head { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.yaml-diff__head .is-code { font-family: var(--wc-font-code); color: var(--wc-text-primary); font-weight: 600; }
+.yaml-diff__code .cm-editor {
+  max-height: calc(100vh - 220px);
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 4px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  font-size: 12px;
+}
+.yaml-diff__code .cm-scroller { overflow: auto; font-family: var(--wc-font-code); }
+.yaml-diff__code .cm-gutters {
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-secondary);
+  border-right: 1px solid var(--wc-border-subtle);
+}
+.yaml-diff__code .cm-focused { outline: 2px solid var(--wc-accent); }
 .review-view__inspector.admin-pane {
   display: grid;
   gap: 14px;

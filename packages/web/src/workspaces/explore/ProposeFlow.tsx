@@ -10,7 +10,7 @@ import { ProposeDialog, type ProposalCheck, type ProposalCheckItem } from './Pro
  * again, as is the item's own band.
  */
 export interface Proposable {
-  readonly kind: 'dashboard' | 'chart' | 'data-source';
+  readonly kind: 'dashboard' | 'chart' | 'data-source' | 'model';
   readonly id: string;
   readonly title: string;
 }

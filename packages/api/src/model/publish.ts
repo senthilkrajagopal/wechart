@@ -198,6 +198,8 @@ export function registerModelPublishing(
         workspaceId: string,
         folderId: string,
         path: string,
+        /** Whose delete it is: the open proposal the file waits in is withdrawn by them (T350). */
+        request: FastifyRequest,
       ) => Promise<{ status: number; body: unknown }>;
     };
     /**
@@ -448,7 +450,13 @@ export function registerModelPublishing(
       const own = (await modelFiles?.list(folderId))?.find((each) => each.path === path);
       if (own === undefined)
         return reply.status(404).send({ error: `There’s no model file ${path} here.` });
+      // Its id, which a proposal names it by: the delete dialog names the
+      // proposal its delete withdraws (T350, AC-372).
+      const stored = (await modelFiles?.inFolders?.([folderId]))?.find(
+        (each) => each.path === path,
+      );
       return {
+        ...(stored === undefined ? {} : { fileId: stored.id }),
         declares: declaredIn(own.content)
           .filter(({ name }) => name !== '')
           .map(({ kind, name }) => ({ kind, name })),
@@ -522,7 +530,7 @@ export function registerModelPublishing(
       // My workspace's: removed from its overlay first, then its store (T347).
       const inWorkspace = await workspace?.rootOf(folderId);
       if (workspace !== undefined && inWorkspace != null) {
-        const answer = await workspace.remove(inWorkspace, folderId, path);
+        const answer = await workspace.remove(inWorkspace, folderId, path, request);
         return reply.status(answer.status).send(answer.body);
       }
       const served = (await folders?.()) ?? ROOT_ONLY;

@@ -1180,11 +1180,15 @@ export function ExplorePage() {
                 : {})}
             />
             {proposing === null ||
-            (proposing.kind !== 'dashboard' &&
-              proposing.kind !== 'chart' &&
-              proposing.kind !== 'data-source') ? null : (
+            proposing.kind === 'folder' ||
+            (proposing.kind === 'model' && proposing.fileId === undefined) ? null : (
               <ProposeFlow
-                item={{ kind: proposing.kind, id: proposing.id, title: proposing.title }}
+                item={{
+                  kind: proposing.kind,
+                  // A model by its file's id, not its path (T350).
+                  id: proposing.kind === 'model' ? proposing.fileId! : proposing.id,
+                  title: proposing.title,
+                }}
                 targetPath={pathFromShared(
                   proposing.targetFolderId == null
                     ? undefined

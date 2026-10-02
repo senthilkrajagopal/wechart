@@ -58,6 +58,8 @@ export interface CatalogItem {
    * workspace (T498, design 04 pin 3). Null elsewhere.
    */
   readonly targetFolderId?: string | null;
+  /** A workspace model's file id, which its proposal names it by (T350); a model's `id` is its path. */
+  readonly fileId?: string;
   readonly origin?: {
     readonly kind?: string;
     readonly id: string;
@@ -278,7 +280,7 @@ export function catalog(db: Kysely<Database>) {
       // Then its models, one to a model file, by path (T334, AC-269).
       const models = await db
         .selectFrom('model_files')
-        .select(['path', 'content', 'updated_at', 'target_folder_id', 'origin'])
+        .select(['id', 'path', 'content', 'updated_at', 'target_folder_id', 'origin'])
         .where('folder_id', '=', folderId)
         .orderBy(sql`path collate "C"`)
         .execute();
@@ -321,6 +323,8 @@ export function catalog(db: Kysely<Database>) {
               ? {}
               : {
                   targetFolderId: model.target_folder_id,
+                  // What a proposal names it by (T350).
+                  fileId: model.id,
                   origin:
                     model.origin === null
                       ? null

@@ -41,6 +41,14 @@ describe('the Reviews lists’ words (T355)', () => {
         { kind: 'data-source', title: 'sales_dw' },
       ]),
     ).toBe('+2 charts, +1 data source');
+    // The models a dashboard resolves through (T350; design 05, state D's "+1 model").
+    expect(includesText([{ kind: 'model', title: 'cubes/sales.yml' }])).toBe('+1 model');
+    expect(
+      includesText([
+        { kind: 'model', title: 'cubes/sales.yml' },
+        { kind: 'model', title: 'cubes/regions.yml' },
+      ]),
+    ).toBe('+2 models');
   });
 
   it('says each state in words, with who decided it, and the version it landed as', () => {

@@ -99,6 +99,7 @@ import { registerExport } from './routes/export';
 import { sharedInPlace } from './routes/shared-in-place';
 import { SUBMITTED } from './routes/submitted';
 import { registerImport } from './routes/import';
+import { proposalModels } from './routes/proposal-models';
 import { registerProposals, withdrawWithDelete } from './routes/proposals';
 import type { ProposalStore } from './repos/proposals';
 import type { VersionStore } from './repos/versions';
@@ -907,6 +908,9 @@ export function buildServer({
           overlays,
           foldersOf: workspaceFolderIds,
           contentWith: overlayContentWith,
+          // Frozen while it waits in a proposal (T350, AC-388).
+          submitted: async (fileId) =>
+            proposals !== undefined && (await proposals.openFor('model', fileId)) !== null,
         });
 
   registerModelPublishing(app, {
@@ -921,7 +925,17 @@ export function buildServer({
             targetRefusal: (request: FastifyRequest, target: unknown) =>
               targetRefusalOf(request, target),
             save: wsModels.save,
-            remove: wsModels.remove,
+            // Its open proposal withdrawn by the user deleting it (T528, T350).
+            remove: (workspaceId, folderId, path, request) =>
+              wsModels.remove(
+                workspaceId,
+                folderId,
+                path,
+                proposals === undefined
+                  ? undefined
+                  : (fileId) =>
+                      withdrawWithDelete({ store: proposals, audit }, request, 'model', fileId),
+              ),
           },
         }),
     // A publish is seen at once by every set of groups too (T322).
@@ -1276,6 +1290,21 @@ export function buildServer({
       // A landed dashboard shows only library charts on its folder's path:
       // any other as its own copy (T537, AC-371). With sign-in on, as T527.
       ...(security === 'off' ? {} : { pathOf: (folderId: string) => pathTo(folderId) }),
+      // The workspace models a dashboard resolves through go with it (T350, AC-285).
+      ...(overlays === undefined ||
+      modelFiles?.inFolders === undefined ||
+      modelFiles.byId === undefined
+        ? {}
+        : {
+            models: proposalModels({
+              files: {
+                inFolders: modelFiles.inFolders.bind(modelFiles),
+                byId: modelFiles.byId.bind(modelFiles),
+              },
+              foldersOf: workspaceFolderIds,
+              xcubeIds: async () => (folders === undefined ? ROOT_ONLY : await folders()).ids,
+            }),
+          }),
       // A data source's changed settings, proposed only once tested (T515, AC-158).
       ...(dataSources === undefined || connectionTests === undefined
         ? {}
@@ -3485,7 +3514,11 @@ export function buildServer({
       },
       foldersBeneath: async (root) => (await foldersBeneath(root)).map((folder) => folder.id),
       contents: async (folderId) =>
-        (await cat.contents(folderId, { counted: false })) as { kind: string; id: string }[],
+        (await cat.contents(folderId, { counted: false })) as {
+          kind: string;
+          id: string;
+          fileId?: string;
+        }[],
       removeDocument: (kind, id) => remove(kind, id),
       localCharts: (dashboardId) => localTo(dashboardId),
       ...(bookmarks === undefined

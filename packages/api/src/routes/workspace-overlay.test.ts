@@ -517,7 +517,10 @@ describe('a workspace model’s delete (T347)', () => {
       url: `/api/model/files/dependents?folder=${encodeURIComponent(folderId)}&path=${encodeURIComponent(path)}`,
     });
     expect(asked.statusCode, asked.body).toBe(200);
+    // With its file's id, which a proposal names it by (T350, AC-372).
+    const file = (await files().inFolders([folderId])).find((each) => each.path === path);
     expect(asked.json()).toEqual({
+      fileId: file!.id,
       declares: [{ kind: 'cube', name: cubeName('orders') }],
       views: [],
       cubes: [],

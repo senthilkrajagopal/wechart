@@ -45,6 +45,8 @@ export interface CatalogItem {
   readonly driver?: string | null;
   /** Where a workspace item is to go (T345, AC-282): a shared folder's id. */
   readonly targetFolderId?: string | null;
+  /** A workspace model's file id, which its proposal names it by (T350). */
+  readonly fileId?: string;
   /**
    * What a workspace copy was copied from, at which version (T344, AC-278);
    * a data source's names no kind (T346).
@@ -348,12 +350,22 @@ export function FolderContents({
   const menuOf = (item: CatalogItem, targets: readonly FolderMove[]): MenuItem[] => {
     const deletable = onDelete !== undefined && deletes(item);
     // A model's name is its file's, changed in the model editor (T334): its
-    // ⋯ holds Open and Delete…, where it may be deleted (design 14, pin 9).
+    // ⋯ holds Open and Delete…, where it may be deleted (design 14, pin 9),
+    // and in the workspace Propose… (T350).
     const others =
       item.kind === 'model'
-        ? deletable
-          ? [{ key: 'open', label: 'Open', onSelect: () => onOpen?.(item) }]
-          : []
+        ? [
+            ...(deletable ? [{ key: 'open', label: 'Open', onSelect: () => onOpen?.(item) }] : []),
+            ...(workspace?.onPropose !== undefined
+              ? [
+                  {
+                    key: 'propose',
+                    label: 'Propose…',
+                    onSelect: () => workspace.onPropose?.(item),
+                  },
+                ]
+              : []),
+          ]
         : otherActions(item, targets);
     return deletable
       ? [

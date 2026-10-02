@@ -108,7 +108,7 @@ export function withdrawnBy(answer: ProposalAnswer): WithdrawnProposal | undefin
  * proposed, and none with sign-in off, where nothing is.
  */
 export async function openProposalOf(
-  kind: 'dashboard' | 'chart' | 'data-source',
+  kind: 'dashboard' | 'chart' | 'data-source' | 'model',
   id: string,
 ): Promise<readonly WithdrawnProposal[]> {
   const response = await fetch(
@@ -423,17 +423,23 @@ export function modelRefusal(
 const modelQuery = (folderId: string, path: string) =>
   `folder=${encodeURIComponent(folderId)}&path=${encodeURIComponent(path)}`;
 
-/** Asks what depends on a model file's cube, for its dialog (state D). */
+/**
+ * Asks what depends on a model file's cube, for its dialog (state D), and,
+ * for one in the user's workspace, the proposal its delete withdraws (T528,
+ * T350): the answer names such a file's id, which its proposal names it by.
+ */
 export const checkModel =
   (folderId: string, path: string, pathOf: (folderId: string) => string | undefined) =>
   async (): Promise<Checked> => {
     const response = await fetch(`/api/model/files/dependents?${modelQuery(folderId, path)}`);
     if (!response.ok) throw await failure(response, 'What uses it couldn’t be read');
+    const found = (await response.json()) as ModelDependents & { fileId?: unknown };
     return (
-      modelRefusal((await response.json()) as ModelDependents, pathOf) ?? {
-        kind: 'confirm',
-        text: 'Nothing depends on its cubes.',
-      }
+      modelRefusal(found, pathOf) ??
+      withdrawing(
+        { kind: 'confirm', text: 'Nothing depends on its cubes.' },
+        typeof found.fileId === 'string' ? await openProposalOf('model', found.fileId) : [],
+      )
     );
   };
 

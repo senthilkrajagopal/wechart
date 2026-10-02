@@ -11,7 +11,7 @@ import type { Database, ProposalItemTable, ProposalTable } from '../db/schema';
  * the folder, the author, the time and an optional description. The folder
  * keeps serving what it had until an approval (AC-286, AC-288).
  */
-export const PROPOSAL_KINDS = ['dashboard', 'chart', 'data-source'] as const;
+export const PROPOSAL_KINDS = ['dashboard', 'chart', 'data-source', 'model'] as const;
 export type ProposalKind = (typeof PROPOSAL_KINDS)[number];
 export type ProposalStatus = 'open' | 'approved' | 'rejected' | 'withdrawn';
 

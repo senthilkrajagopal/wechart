@@ -9,11 +9,14 @@ import type { ReviewRow } from '../reviews/reviews';
  */
 export function statusOfItem(
   mine: readonly ReviewRow[] | undefined,
-  item: { readonly kind: string; readonly id: string },
+  /** A model row by its path, with its file's id, which its proposal names it by (T350). */
+  item: { readonly kind: string; readonly id: string; readonly fileId?: string | undefined },
 ): { kind: StateKind; text: string } | undefined {
+  const id = item.kind === 'model' ? item.fileId : item.id;
+  if (id === undefined) return undefined;
   const holds = (row: ReviewRow) =>
-    (row.itemId === item.id && row.kind === item.kind) ||
-    (row.items ?? []).some((each) => each.id === item.id && each.kind === item.kind);
+    (row.itemId === id && row.kind === item.kind) ||
+    (row.items ?? []).some((each) => each.id === id && each.kind === item.kind);
   const latest = mine?.find(holds);
   if (latest === undefined) return undefined;
   switch (latest.status) {
@@ -26,7 +29,7 @@ export function statusOfItem(
       return {
         kind: 'ok',
         text:
-          latest.landedVersion === null || latest.itemId !== item.id
+          latest.landedVersion === null || latest.itemId !== id
             ? 'In folder'
             : `In folder as version ${String(latest.landedVersion)}`,
       };

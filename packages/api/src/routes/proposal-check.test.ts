@@ -189,7 +189,10 @@ describe('checking what a proposal would do (T358, AC-284)', () => {
 
     const reader = await check('reader', { kind: 'chart', id });
     expect(reader.statusCode).toBe(403);
-    expect((await check('writer', { kind: 'model', id })).statusCode).toBe(400);
+    // A folder is proposed by nothing (T350 made a model a kind that is).
+    expect((await check('writer', { kind: 'folder', id })).statusCode).toBe(400);
+    // A chart's id is no model file of theirs.
+    expect((await check('writer', { kind: 'model', id })).statusCode).toBe(404);
   });
 });
 

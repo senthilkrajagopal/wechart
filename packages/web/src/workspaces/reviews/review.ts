@@ -25,6 +25,8 @@ export interface ProposalItem {
   readonly snapshot: Readonly<Record<string, unknown>>;
   /** A data source's credentials against the folder's: never their values. */
   readonly secretChanges?: Readonly<Record<string, 'unchanged' | 'replaced' | 'new'>>;
+  /** A model's file as the folder has it now, while it waits (T350; design 05, state G). */
+  readonly current?: { readonly content: string; readonly version: number };
 }
 
 export interface ProposalDetail {

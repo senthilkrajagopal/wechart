@@ -16,7 +16,7 @@ import { useFocusTrap } from '../../shell/useFocusTrap';
  */
 export const PROPOSAL_TEXT_LIMIT = 1000;
 
-type Kind = 'dashboard' | 'chart' | 'data-source';
+type Kind = 'dashboard' | 'chart' | 'data-source' | 'model';
 
 export interface ProposalCheckItem {
   readonly kind: Kind;
@@ -46,7 +46,27 @@ const KIND_LABEL: Record<Kind, string> = {
   dashboard: 'Dashboard',
   chart: 'Chart',
   'data-source': 'Data source',
+  model: 'Model',
 };
+
+/**
+ * Why what goes with it goes (AC-285; design 05, state A): the charts it
+ * shows from the workspace, and the models its cubes resolve through, which
+ * only the workspace has.
+ */
+function goesText(first: ProposalCheckItem, goesWith: readonly ProposalCheckItem[]): string {
+  const word = KIND_LABEL[first.kind].toLowerCase();
+  const models = goesWith.filter((item) => item.kind === 'model').length;
+  const others = goesWith.length - models;
+  const together = 'They’re approved or rejected together.';
+  if (models === 0)
+    return `The ${word} shows ${others === 1 ? 'this item' : 'these items'} from your workspace. ${together}`;
+  const these = models === 1 ? 'this model' : 'these models';
+  if (first.kind === 'model') return `It names ${these} only your workspace has. ${together}`;
+  return others === 0
+    ? `The ${word}’s cubes resolve through ${these} only your workspace has. ${together}`
+    : `The ${word} shows ${others === 1 ? 'this chart' : 'these charts'} from your workspace, and its cubes resolve through ${these} only your workspace has. ${together}`;
+}
 
 /** A folder as the dialog names it: "Sales / EMEA", and the root as "Shared". */
 const folderText = (path: readonly string[]) => {
@@ -184,11 +204,7 @@ export function ProposeDialog({
             {goesWith.length === 0 ? null : (
               <div className="propose-dialog__goes">
                 <h3 id={`${ids}-goes`}>Goes with it</h3>
-                <p>
-                  The {KIND_LABEL[first.kind].toLowerCase()} shows{' '}
-                  {goesWith.length === 1 ? 'this item' : 'these items'} from your workspace. They’re
-                  approved or rejected together.
-                </p>
+                <p data-testid="propose-goes">{goesText(first, goesWith)}</p>
                 <ul aria-labelledby={`${ids}-goes`}>
                   {goesWith.map((item) => (
                     <li key={`${item.kind}-${item.id}`}>

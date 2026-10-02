@@ -5,6 +5,7 @@ import type { StoredModelFile, WorkspaceModelFile } from '../repos/model-files';
 import type { ModelFile } from '../server';
 import type { ItemError } from '../xcube/client';
 import type { OverlayContent, OverlayModel, OverlaySync, PushResult } from '../xcube/overlays';
+import { SUBMITTED } from './submitted';
 
 /**
  * Models in My workspace (T347; AC-222, AC-281, AC-282, AC-323): saved,
@@ -41,6 +42,8 @@ export interface WorkspaceModelDeps {
     workspaceId: string,
     models: readonly OverlayModel[],
   ) => Promise<{ readonly content: OverlayContent; readonly folders: ReadonlyMap<string, string> }>;
+  /** Whether a model file waits in an open proposal, and so is frozen (T350, AC-388). */
+  readonly submitted?: (fileId: string) => Promise<boolean>;
 }
 
 const NEEDS_TARGET =
@@ -124,7 +127,13 @@ function refusalOf(
   return { status: 422, body: { error: result.error } };
 }
 
-export function workspaceModels({ files, overlays, foldersOf, contentWith }: WorkspaceModelDeps) {
+export function workspaceModels({
+  files,
+  overlays,
+  foldersOf,
+  contentWith,
+  submitted,
+}: WorkspaceModelDeps) {
   /**
    * The workspace's models now, with these changed, as the overlay would
    * hold them, pushed. A changed file whose target xcube's tree doesn't hold
@@ -167,6 +176,14 @@ export function workspaceModels({ files, overlays, foldersOf, contentWith }: Wor
       target: string | undefined,
     ): Promise<Answer> {
       const held = await files.inFolders(await foldersOf(workspaceId));
+      // Not while one waits in a proposal (T541, AC-388): withdrawn first.
+      for (const file of held)
+        if (
+          file.folderId === folderId &&
+          changed.some((each) => each.path === file.path) &&
+          (await submitted?.(file.id)) === true
+        )
+          return { status: 409, body: SUBMITTED };
       const writes: WorkspaceModelFile[] = [];
       const after: Placed[] = held.filter(
         (file) => !(file.folderId === folderId && changed.some((each) => each.path === file.path)),
@@ -207,8 +224,17 @@ export function workspaceModels({ files, overlays, foldersOf, contentWith }: Wor
       };
     },
 
-    /** A file removed from the workspace (T347): the overlay without it, then the store. */
-    async remove(workspaceId: string, folderId: string, path: string): Promise<Answer> {
+    /**
+     * A file removed from the workspace (T347): the overlay without it, then
+     * the store. The open proposal it waits in is withdrawn before it goes,
+     * as a deleted dashboard's is (T528, AC-372).
+     */
+    async remove(
+      workspaceId: string,
+      folderId: string,
+      path: string,
+      withdraw?: (fileId: string) => Promise<unknown>,
+    ): Promise<Answer> {
       const held = await files.inFolders(await foldersOf(workspaceId));
       const file = held.find((each) => each.folderId === folderId && each.path === path);
       if (file === undefined || files.remove === undefined)
@@ -219,6 +245,7 @@ export function workspaceModels({ files, overlays, foldersOf, contentWith }: Wor
       const { result, folders } = pushed;
       if (result.kind !== 'stored' && result.kind !== 'empty')
         return refusalOf(result, held, [{ folderId, path }], folders);
+      await withdraw?.(file.id);
       await files.remove(folderId, path);
       return {
         status: 200,

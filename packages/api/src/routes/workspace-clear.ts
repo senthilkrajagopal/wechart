@@ -21,10 +21,13 @@ export interface WorkspaceClearDeps {
   readonly workspaceOf: (request: FastifyRequest) => Promise<string | undefined>;
   /** Every folder beneath the workspace's root, each before the folders in it. */
   readonly foldersBeneath: (root: string) => Promise<readonly string[]>;
-  /** What a folder holds, as the catalog lists it: a model by its file's path. */
+  /**
+   * What a folder holds, as the catalog lists it: a model by its file's path,
+   * with the file's id its proposal names it by (T350).
+   */
   readonly contents: (
     folderId: string,
-  ) => Promise<readonly { readonly kind: string; readonly id: string }[]>;
+  ) => Promise<readonly { readonly kind: string; readonly id: string; readonly fileId?: string }[]>;
   readonly removeDocument: (kind: 'folder' | 'dashboard' | 'chart', id: string) => Promise<unknown>;
   /** A dashboard's own charts, which go with it. */
   readonly localCharts: (dashboardId: string) => Promise<readonly { readonly id: string }[]>;
@@ -44,11 +47,12 @@ const NO_WORKSPACE = {
   error: 'You have no workspace: only read-write members and Super-Admins have one.',
 };
 
-/** The kinds a proposal takes: a model waits in none yet (T347). */
+/** The kinds a proposal takes. */
 const PROPOSED: Readonly<Record<string, ProposalKind>> = {
   dashboard: 'dashboard',
   chart: 'chart',
   'data-source': 'data-source',
+  model: 'model',
 };
 
 interface Held {
@@ -59,6 +63,8 @@ interface Held {
     readonly folderId: string;
     readonly kind: string;
     readonly id: string;
+    /** What a proposal names it by, where not its id: a model's file id. */
+    readonly proposedAs: string;
   }[];
 }
 
@@ -70,7 +76,12 @@ export function registerWorkspaceClear(app: FastifyInstance, deps: WorkspaceClea
         [root, ...folders].map(async (folderId) =>
           (await deps.contents(folderId))
             .filter((row) => row.kind !== 'folder')
-            .map((row) => ({ folderId, kind: row.kind, id: row.id })),
+            .map((row) => ({
+              folderId,
+              kind: row.kind,
+              id: row.id,
+              proposedAs: row.fileId ?? row.id,
+            })),
         ),
       )
     ).flat();
@@ -97,7 +108,7 @@ export function registerWorkspaceClear(app: FastifyInstance, deps: WorkspaceClea
     for (const item of items) {
       const kind = PROPOSED[item.kind];
       if (kind === undefined) continue;
-      const open = await deps.proposals.store.openFor(kind, item.id);
+      const open = await deps.proposals.store.openFor(kind, item.proposedAs);
       if (open !== null) found.set(open.id, open);
     }
     return [...found.values()].sort((a, b) => a.proposedAt.getTime() - b.proposedAt.getTime());

@@ -36,7 +36,7 @@ import type { Problem } from './problems';
  * (research/code-editor.md, "Highlighting from tokens"). Not
  * `defaultHighlightStyle`: a light style, it put dark blue on dark.
  */
-const TOKEN_HIGHLIGHT = HighlightStyle.define([
+export const TOKEN_HIGHLIGHT = HighlightStyle.define([
   { tag: tags.propertyName, color: 'var(--wc-code-key)' },
   { tag: [tags.string, tags.special(tags.string)], color: 'var(--wc-code-string)' },
   { tag: [tags.number, tags.bool, tags.null], color: 'var(--wc-code-number)' },
@@ -51,7 +51,7 @@ const TOKEN_HIGHLIGHT = HighlightStyle.define([
  * The caret and the selection in the tokens too: CodeMirror's base theme
  * draws a black caret and a light selection, lost on the dark ground.
  */
-const TOKEN_THEME = EditorView.theme({
+export const TOKEN_THEME = EditorView.theme({
   '.cm-content': { caretColor: 'var(--wc-text-primary)' },
   '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--wc-text-primary)' },
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':

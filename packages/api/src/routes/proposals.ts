@@ -18,7 +18,8 @@ import {
   type ProposedItem,
   type Replaces,
 } from '../repos/proposals';
-import type { VersionStore } from '../repos/versions';
+import type { VersionKind, VersionStore } from '../repos/versions';
+import { UnservedModel, type ProposalModels } from './proposal-models';
 import { withChartsRenamed } from './workspace-copy';
 
 /**
@@ -120,6 +121,12 @@ export interface ProposalRoutes {
    * charts kept on its folder's path; unset, it lands showing what it shows.
    */
   readonly pathOf?: (folderId: string) => Promise<ReadonlySet<string>>;
+  /**
+   * The workspace's models (T350, AC-285): those a dashboard or chart names
+   * cubes through go in its proposal, and a model may be proposed by itself.
+   * Unset, a proposal holds none.
+   */
+  readonly models?: ProposalModels;
 }
 
 const NOT_THERE = { error: 'There is no such item in your workspace.' };
@@ -127,6 +134,7 @@ const KIND_WORD: Record<ProposalKind, string> = {
   dashboard: 'dashboard',
   chart: 'chart',
   'data-source': 'data source',
+  model: 'model',
 };
 
 const folderIdOf = (body: Record<string, unknown>): string | null =>
@@ -334,7 +342,8 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
       landsIn: target,
       replaces,
     };
-    if (kind === 'chart') return [first];
+    if (kind === 'chart')
+      return [first, ...(await modelItems(writes, () => routes.models!.needed(own, [first])))];
     // The charts it shows from the workspace go with it: its own, and the
     // library charts in the workspace, copied or new, each to its own
     // folder. Shared ones stay as they are.
@@ -387,7 +396,28 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
         replaces: await replacedIn('chart', chart, chartTarget),
       });
     }
-    return items;
+    return [...items, ...(await modelItems(writes, () => routes.models!.needed(own, items)))];
+  };
+
+  /**
+   * The workspace models that go with it (T350, AC-285), each to a folder
+   * its author may propose into: none where the workspace holds no models.
+   */
+  const modelItems = async (
+    writes: (folderId: string) => boolean,
+    find: () => Promise<ProposedItem[] | undefined>,
+  ): Promise<ProposedItem[]> => {
+    if (routes.models === undefined) return [];
+    let found: ProposedItem[];
+    try {
+      found = (await find()) ?? [];
+    } catch (failure) {
+      if (failure instanceof UnservedModel) throw new Refused(409, failure.message);
+      throw failure;
+    }
+    for (const model of found)
+      await landing(writes, model.landsIn, `“${model.title}”, which goes with it,`);
+    return found;
   };
 
   /**
@@ -421,7 +451,14 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
   const versionNowOf = async (kind: ProposalKind, id: string | undefined) => {
     if (id === undefined) return null;
     if (kind === 'data-source') return (await dataSources?.get(id))?.version ?? null;
+    if (kind === 'model') return (await routes.models?.current(id))?.version ?? null;
     return (await read(kind, id))?.version ?? null;
+  };
+
+  /** The file a model item replaces, as its folder has it now. */
+  const currentModelOf = async (id: string) => {
+    const current = await routes.models?.current(id);
+    return current === undefined ? {} : { current };
   };
 
   /** A folder's path from Shared, a name a step: `['Shared', 'Sales', 'EMEA']`. */
@@ -484,6 +521,10 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     if (proposal === null || rights === null || !rights.see)
       return reply.code(404).send({ error: 'There is no such proposal.' });
     const answer = answerOf(proposal);
+    // A folder's model file is shown to whoever may change it: never to an
+    // author who has since lost that (T350's review).
+    const user = userOf(request);
+    const writes = await routes.writable(request);
     const items = [];
     for (const [at, item] of answer.items.entries()) {
       const snapshot = proposal.items[at]!.snapshot;
@@ -499,6 +540,14 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
         // replaced may be what it landed as (T356's review).
         ...(item.kind === 'data-source' && proposal.status === 'open'
           ? { secretChanges: await secretChangesOf(snapshot, item.replaces?.id) }
+          : {}),
+        // A model's file as its folder has it now, for its YAML diff (T350;
+        // design 05, state G); none for a new one, or once decided.
+        ...(item.kind === 'model' &&
+        item.replaces !== null &&
+        proposal.status === 'open' &&
+        (user.superAdmin || writes(item.landsIn))
+          ? await currentModelOf(item.replaces.id)
           : {}),
       });
     }
@@ -743,7 +792,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     const docs = documents as Required<ProposalRoutes['documents']>;
     const landed: { kind: ProposalKind; id: string; version: number; from: ProposedItem }[] = [];
     const keep = async (
-      kind: ProposalKind,
+      kind: VersionKind,
       itemId: string,
       version: number,
       content: Record<string, unknown>,
@@ -1083,6 +1132,13 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
       routes.versions === undefined
     )
       return reply.code(503).send({ error: 'Approvals can’t be landed here.' });
+    // A model lands through xcube's changeset at approval (T451). Until then a
+    // proposal holding one lands nothing, so no dashboard lands without the
+    // models it resolves through (T350, AC-285).
+    if (proposal.items.some((item) => item.kind === 'model'))
+      return reply
+        .code(503)
+        .send({ error: 'Models can’t be landed here yet, so nothing was approved.' });
     const changed = await changedSince(proposal);
     if (changed !== undefined)
       return reply.code(409).send({
@@ -1173,7 +1229,10 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
       typeof id !== 'string' ||
       id === ''
     )
-      throw new Refused(400, 'Name the dashboard, chart or data source to propose: { kind, id }.');
+      throw new Refused(
+        400,
+        'Name the dashboard, chart, model or data source to propose: { kind, id }.',
+      );
     const proposing = kind as ProposalKind;
     const sent = body?.description;
     // Text Postgres can hold: no NUL character (T353's review).
@@ -1208,6 +1267,12 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
       stored = source === undefined ? null : { id: source.id, body: {}, version: source.version };
       home = source?.folderId ?? null;
       target = source?.targetFolderId;
+    } else if (proposing === 'model') {
+      // A workspace model file, by its id (T350).
+      const file = await routes.models?.file(id);
+      stored = file === undefined ? null : { id: file.id, body: {}, version: file.version };
+      home = file?.folderId ?? null;
+      target = file?.targetFolderId;
     } else {
       stored = await read(proposing, id);
       home = stored === null ? null : folderIdOf(stored.body);
@@ -1267,6 +1332,15 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
           replaces: named === undefined ? null : { id: named.id, version: named.version },
         },
       ];
+    } else if (proposing === 'model') {
+      // With the workspace models it names (T350); one its overlay places
+      // nowhere, as no folder xcube serves, can't be.
+      items = await modelItems(writes, () => routes.models!.alone(own, id));
+      if (items.length === 0)
+        throw new Refused(
+          409,
+          'This model is to go to a folder xcube doesn’t serve now, so it can’t be proposed.',
+        );
     } else
       items = await documentItems(writes, proposing as 'dashboard' | 'chart', stored, own, target);
     return { proposing, id, description, target, items };
@@ -1277,7 +1351,20 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     const waiting = items.find((each) => each.kind === kind && each.id === itemId);
     return waiting === undefined || waiting === items[0]
       ? 'It is waiting for review already: its proposal must be decided first.'
-      : `It shows “${waiting.title}”, which is waiting for review in another proposal. That one must be decided first.`;
+      : waiting.kind === 'model'
+        ? `“${waiting.title}”, which goes with it, is waiting for review in another proposal. That one must be decided first.`
+        : `It shows “${waiting.title}”, which is waiting for review in another proposal. That one must be decided first.`;
+  };
+
+  /** "1 chart and 2 models": what goes with an item, by kind. */
+  const goingWithText = (items: readonly ProposedItem[]) => {
+    const count = (kind: ProposalKind, one: string, many: string) => {
+      const n = items.filter((each) => each.kind === kind).length;
+      return n === 0 ? [] : [`${String(n)} ${n === 1 ? one : many}`];
+    };
+    return [...count('chart', 'chart', 'charts'), ...count('model', 'model', 'models')].join(
+      ' and ',
+    );
   };
 
   /**
@@ -1356,7 +1443,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     }
 
     const answer = answerOf(proposal);
-    const goesWith = items.length - 1;
+    const goesWith = goingWithText(items.slice(1));
     await recordIn(
       routes.audit,
       {
@@ -1369,9 +1456,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
           (answer.replaces === null
             ? ', as new'
             : `, replacing version ${String(answer.replaces.version)}`) +
-          (goesWith === 0
-            ? ''
-            : `, with ${String(goesWith)} ${goesWith === 1 ? 'chart' : 'charts'}`),
+          (goesWith === '' ? '' : `, with ${goesWith}`),
         // What each item is and where it lands: never what it holds (AC-298).
         details: {
           proposalId: proposal.id,

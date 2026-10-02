@@ -708,6 +708,40 @@ describe('My workspace, as design 04 draws it (T498)', () => {
     expect(lineOf('d-new')?.querySelector('.visually-hidden')?.textContent).toBe('Goes to ');
   });
 
+  // T350: a workspace model is proposed from its row too, as every other item is.
+  it('offers Propose… on a model’s row, with Open and Delete…', async () => {
+    const onPropose = vi.fn();
+    const model: CatalogItem = {
+      kind: 'model',
+      id: 'cubes/sales.yml',
+      title: 'sales.yml',
+      owner: null,
+      updatedAt: at,
+      declares: { cubes: 1, views: 0 },
+      targetFolderId: 'sales-emea',
+      fileId: 'file-1',
+      origin: null,
+    };
+    render(
+      <FolderContents
+        items={[model]}
+        workspace={{ ...workspace, onPropose }}
+        onOpen={vi.fn()}
+        onDelete={vi.fn()}
+        deletes={() => true}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for sales.yml' }));
+    const menu = screen.getByRole('menu');
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Open', 'Propose…', 'Delete…']);
+    await userEvent.click(within(menu).getByRole('menuitem', { name: 'Propose…' }));
+    expect(onPropose).toHaveBeenCalledWith(model);
+  });
+
   it('says a folder has no target, with how many items it holds', () => {
     render(
       <FolderContents

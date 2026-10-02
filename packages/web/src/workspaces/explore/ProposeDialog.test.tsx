@@ -67,6 +67,35 @@ describe('the Propose dialog (T358, AC-284)', () => {
     ).not.toBeNull();
   });
 
+  // T350 (AC-285; design 05, state A): the models its cubes resolve through, and why.
+  it('lists the workspace models a dashboard resolves through, saying why they go with it', () => {
+    const { dialog } = shown({
+      ...READY,
+      items: [
+        ...READY.items,
+        {
+          kind: 'model',
+          id: 'm1',
+          title: 'cubes/sales.yml',
+          landsInPath: ['Shared', 'Sales', 'EMEA'],
+          replaces: { id: 'm0', version: 3, copiedFrom: true },
+        },
+      ],
+    });
+    const goes = within(dialog).getByRole('list', { name: 'Goes with it' });
+    expect(
+      within(goes)
+        .getAllByRole('listitem')
+        .map((row) => row.textContent),
+    ).toEqual([
+      'Chart · Margin by month — new in Finance',
+      'Model · cubes/sales.yml — replaces version 3',
+    ]);
+    expect(within(dialog).getByTestId('propose-goes').textContent).toBe(
+      'The dashboard shows this chart from your workspace, and its cubes resolve through this model only your workspace has. They’re approved or rejected together.',
+    );
+  });
+
   it('says a new one is new, and warns when it replaces an item it wasn’t copied from', () => {
     shown({
       ...READY,

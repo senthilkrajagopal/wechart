@@ -6,7 +6,7 @@ import type { StateKind } from '../../shell/StatusIcon';
  * design 05 of 2026-09-27, states C, D and E), as `GET /api/reviews`
  * answers them: never an item's content.
  */
-export type ReviewKind = 'dashboard' | 'chart' | 'data-source';
+export type ReviewKind = 'dashboard' | 'chart' | 'data-source' | 'model';
 export type ReviewStatus = 'open' | 'approved' | 'rejected' | 'withdrawn';
 
 export interface ReviewRow {
@@ -94,12 +94,14 @@ export const KIND_LABEL: Record<ReviewKind, string> = {
   dashboard: 'Dashboard',
   chart: 'Chart',
   'data-source': 'Data source',
+  model: 'Model',
 };
 
 const PLURAL: Record<ReviewKind, string> = {
   dashboard: 'dashboards',
   chart: 'charts',
   'data-source': 'data sources',
+  model: 'models',
 };
 
 /** A folder as the page names it: "Sales / EMEA", and the root as "Shared". */

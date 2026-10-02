@@ -6014,11 +6014,68 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - Tests added: a renamed copy, a chart already waiting with a dashboard, a chart bound to a folder the author can't write, a target gone, a non-string or blank description, the audit summary word for word with no envelope in it, the folders' GETs unchanged, and each test standing alone.
     - The Propose dialog's check before sending is T358's (a check route; noted there).
   - *Moved to T352 (2026-09-28):* the `409` for in-place edits of shared items (AC-278). Until an approval can land, a change in place is still the only way a shared item changes. Refusing it here would leave shared items unchangeable until then.
-- [ ] T350 (AC-285) Put the workspace-only models a proposed dashboard needs into the same proposal
+- [x] T350 (AC-285) Put the workspace-only models a proposed dashboard needs into the same proposal
   - Files: `packages/api/src/routes/proposals.ts`, ~~`packages/api/src/model/chain.ts`~~ `packages/api/src/xcube/overlays.ts` (2026-09-26), `packages/api/src/routes/proposal-bundle.test.ts`
   - Failing test: `proposal-bundle.test.ts`: a dashboard whose cubes resolve only through the author's workspace models is proposed with them, and approving or rejecting applies to all together, as one changeset (AC-285).
   - Depends on: T349, T347
   - *2026-09-28, from T356:* the review view's model YAML diff (design 05, state G) comes with this task, once proposals hold models: `packages/web/src/workspaces/reviews/YamlDiff.tsx` (+ test) on `@codemirror/merge` (`docs/research/codemirror-merge.md`), shown for a model item in the review view.
+  - *As built (2026-10-01; design 05, states A, D and G):*
+    - **Which models go with it** (`routes/proposal-models.ts`):
+      - A workspace model makes, in its overlay, the cube `<xcube folder id>__<name>` where it is placed (its target, a copy's origin's folder; the root's is `<name>`).
+      - A model goes with a proposed dashboard or chart when one of the proposal's charts, or the dashboard's own filters and text tiles, names that cube.
+      - Then, in turn, every workspace model those models name goes too, by short name, as xcube resolves an overlay item's names (Gotcha 5). Names come from joins, `extends`, view join paths, `{…}` references and member paths standing alone. The reading takes in more than xcube binds (`public.orders` reads as `public`), so it can only bring a model of that name along, never leave one behind.
+      - Nothing else in the workspace goes. A shared library chart the dashboard shows is bound to published names, so it brings no model.
+    - **Small decision, overturnable:** a model goes with the item whenever the item names the cube the model makes, even if the folder already has a cube of that name. A copy changed in the workspace (a measure added, say) is what the item was drawn against, and the folder's own may lack what the item uses. A copy still exactly as its folder's file is doesn't go, and its names aren't followed: the item resolves the same without it (T350's review).
+    - A model it needs whose target xcube doesn't serve now (a folder deleted since) refuses the proposal, 409, naming it. It is never silently left behind.
+    - **A model item:**
+      - `{ kind: 'model', id: <model file id>, title: <path>, version, snapshot: { path, content, origin }, landsIn: <its target>, replaces }`.
+      - `replaces` is the landsIn folder's file that declares the same name (AC-288's "same kind and name").
+      - Model items follow the dashboard and its charts.
+      - Each goes to a folder its author may write, checked as a library chart's is.
+      - `PROPOSAL_KINDS` gains `model`. A model may be proposed by itself (`{ kind: 'model', id }`), with the workspace models it names. One whose target xcube doesn't serve is refused with 409.
+      - The proposal's overlay (T440) holds them, so its review's previews answer through them in compose's xcube (the e2e queries the new measure through it).
+    - **Frozen while it waits** (AC-388, T541):
+      - A save of a model in an open proposal answers 409 `submitted`.
+      - Deleting one withdraws the proposal (T528), then deletes it. Its delete dialog names that proposal first (AC-372): the dependents route answers a workspace file's `fileId`, and `checkModel` asks for its open proposal. So does Clear My workspace (T522), since the catalog's workspace model rows now carry `fileId`.
+    - **Approving one holding a model answers 503,** "Models can’t be landed here yet, so nothing was approved.", and lands nothing. So no dashboard lands without the models it resolves through, and none lands apart. Landing the models is T451's, with the xcube changeset applied at approval (T352's note). **AC-285 stays open until that lands them.** Rejecting and withdrawing decide them all together, as tested.
+    - **The review** (`GET /api/proposals/:id`):
+      - A model item answers `current: { content, version }`, the folder's file now, while the proposal is open and the item replaces a file, to a read-write member of the folder it lands in or a Super-Admin. An author who has since lost that access isn't shown it. `replacesNow` reads model files.
+      - The review view shows a model item as `YamlDiff`:
+        - a unified diff against the folder's file, on `@codemirror/merge` 6.12.2 (`unifiedMergeView`, `mergeControls: false`), read-only, with line numbers and the YAML token theme;
+        - `+` and `−` in the change gutter and before each removed line as well as the tint (rule 3);
+        - headed "_path_ version _n_ → proposed · +_a_ −_r_", or "new in this folder";
+        - long unchanged stretches folded (`collapseUnchanged`, 3 lines kept around each change).
+        - Not drawn: state G's `@@ cubes › orders › dimensions @@` hunk headers. The merge view has none to give, and it folds unchanged stretches in their place.
+      - A decided proposal's model, or one whose folder file is gone, shows "as proposed", alone.
+      - The bundle note says why the models go: "…its cubes resolve only through the author’s _path_."
+    - **The Propose dialog** lists the models under "Goes with it", with the reason: "…and its cubes resolve through this model only your workspace has." Its words differ from state A's ("1 model only your workspace has: sales.yml"), since the list beside it names each.
+    - A workspace model's row in Explore offers Propose… beside Open and Delete…, proposing it by its file id. Its status reads from that id. The Reviews row counts "+1 model".
+    - The audit summary of a proposal says "with 1 chart and 2 models".
+    - Also files: `packages/api/src/repos/{proposals,catalog}.ts`, `routes/{proposals,workspace-models,workspace-clear}.ts`, `model/publish.ts` (the request passed to a workspace delete), `server.ts`; `packages/web/src/workspaces/reviews/{YamlDiff,ReviewView,review,reviews}.ts(x)`, `explore/{ProposeDialog,ProposeFlow,ExplorePage,FolderContents,proposalStatus}.ts(x)`, `model/YamlEditor.tsx` (its token theme exported), `shell/styles.ts`.
+    - Tests:
+      - `proposal-bundle.test.ts`:
+        - the models a dashboard's chart needs and those they join, and no other; the same for a chart proposed alone;
+        - none where the cubes resolve without the workspace, an unchanged copy included;
+        - a needed model with an unserved target refused;
+        - the folder's file not shown to an author who lost access;
+        - the check route; frozen, then free once rejected together; one waiting refuses another dashboard, naming it;
+        - approval refused with nothing landed;
+        - a model proposed alone; its delete's check naming its file, and withdrawn by its delete and by a clear;
+      - `proposal-models.test.ts`; `workspace-overlay.test.ts` (the dependents answer's `fileId`);
+      - web: `YamlDiff`, `ReviewView`, `ProposeDialog`, `reviews`, `proposalStatus`, `deleteChecks`, `FolderContents`;
+      - `e2e/security/proposal-models.spec.ts` in Chrome: proposed from Explore, the dialog's list and reason, the overlay answering the new measure, the copy frozen with the refusal's words, the review's YAML diff, and the model's delete dialog naming the proposal.
+    - **Review fixes (one round):**
+      1. Deleting a model in a proposal withdrew it without the dialog saying so (AC-372). The dialog now names it.
+      2. Propose… wasn't offered on model rows. It is now.
+      3. An unchanged copy was bundled, freezing it and making the proposal wait for T451. It is left out now.
+      4. A needed model with an unserved target was silently dropped. It is refused now.
+      5. The folder's current file was shown to an author who had lost access. It isn't now.
+      6. Wording: a lone chart in the bundle note, and the message for a model waiting elsewhere. Unchanged stretches of the diff are folded.
+  - **Left:**
+    - Landing the models at approval: T451 (above). AC-285 stays open.
+    - **AC-278's model half** (refusing an in-place publish of a shared model file) waits until a model can land through an approval. Refusing it now would leave shared models unchangeable, as T349 reasoned for the rest.
+    - The band on the author's model (design 05, state M): the model editor shows none yet. A frozen save says why in its error line.
+    - `proposal-bundle.test.ts` runs in order over one workspace. A failure part-way leaves a proposal open, and the tests after it then fail with 409.
 - [x] T351 (AC-286) Let only the author, the target folder's read-write members and Super-Admins decide a proposal
   - *2026-09-28, from T349's review (a small decision, overturnable):* a proposal can land in more than one folder, where a dashboard shows a library chart bound elsewhere. A read-write member decides it only if they may write every folder it lands in (`proposal_items.lands_in`), so no folder's content changes without one of its own members, its author, or a Super-Admin.
   - Files: `packages/api/src/routes/proposals.ts`, `packages/api/src/routes/proposal-deciders.test.ts`
@@ -8136,6 +8193,11 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - a stale base revision (`409`) is checked again (AC-321, AC-288, AC-291).
   - *2026-09-26, from T428's review:* an approval is AC-275's "approved" trigger. It must refuse a delete or rename of a name a chart or dashboard still uses, as a direct publish does (`inUse` in `model/publish.ts`, and the visibility rule with it). A test here should show it, so AC-275 stays demonstrated.
   - Depends on: T426, T349, T352
+  - *2026-10-01, from T350:* proposals hold model items now (`{ kind: 'model', id: <model file id>, title: <path>, snapshot: { path, content, origin }, landsIn, replaces }`). Until this task lands them, `POST /api/proposals/:id/approve` refuses any proposal holding one with 503 and lands nothing. Replace that guard with the changeset applied at approval, models before the charts and dashboard that bind to them, and AC-285 can be ticked (`proposal-bundle.test.ts` has the 503 test to turn into the landing test).
+    - `replaces` is the landsIn folder's file declaring the model's name, but files are stored by folder and path. A landing must handle both cases (T350's review):
+      - a different path declaring that name: remove the replaced file, or the folder declares the name twice;
+      - the same path taken by a file declaring another name: refuse, or that file is overwritten.
+    - `changedSince` doesn't check model items yet.
   - *2026-09-30, from T427:* an approval the check refuses is AC-322's other trigger. Answer it with `refusalOf` (`xcube/refusal.ts`), as the direct publish does, and record it in the audit trail. The review view's refusal (design 05, state L; `reviews/Refusal.tsx`) is built here, since nothing refuses an approval before this task. AC-322 stays open until a test here shows it.
 - [x] T427 (AC-322) Word a refused publish: breaks named in the folders the user may see, a count for the rest, all in the audit trail
   - Files: `packages/api/src/xcube/refusal.ts` (+ test), `packages/web/src/workspaces/reviews/Refusal.tsx` (+ test)
@@ -9958,7 +10020,7 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
     - **The author's band** says "It can’t be changed while it waits: withdraw its proposal to change it, then propose it again". This replaces design 05 state M's "changed since proposing" note, and its `currentVersion` prop is gone.
     - **One test changed for the new rule:** `proposals.test.ts` now expects the later save to be refused (R52).
     - **Tests:** `proposal-freeze.test.ts` (5 cases: dashboard, its own chart, chart, data source; withdrawn and rejected; hidden items answer 404) and `ProposalBand.test.tsx`.
-    - **AC-388 stays open for models** (T350).
+    - **AC-388 stays open for models** (T350). *Ticked 2026-10-01 with T350:* a model in an open proposal refuses a save with the same 409 (`proposal-bundle.test.ts`; `e2e/security/proposal-models.spec.ts` checks the refusal's words against compose).
     - **Left:**
       - The data-source freeze is wired only with sign-in on, where proposals run. T359 brings proposals to sign-in off and must wire it there too.
       - If an approval lands but its settle then fails, its items stay frozen under an approved proposal, which can't be withdrawn. Unlikely, and left under the breadth rule.
