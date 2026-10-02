@@ -950,6 +950,10 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R57 — Generate cubes for a demo** (2026-10-02, the user)
+- The user: "please work on T492.. i have a demo tomorrow.. and need the generate cube functionality. Put the generate cube functionality also in the workspace home. It can be in the Workspace home page along with New Dashboard/chart/folder .....", then "take the generate cube as a priority".
+- Claude explained that a generated cube in My workspace must name the shared folder it is to go to. The user: "oh okay... in that case.. add generate cube within the datasource details page..", "you dont have to add it on the workspace home", and "Also clicking on the [...] on datasource in explore view also should have generate cube". *AC-350 amended; T492.*
+
 **R56 — design 16 approved: Jobs and Schedules** (2026-10-02, the user)
 - Q: Approve design 16 (`docs/design/reviews/2026-10-01/designs/16-jobs-schedules.html`, T504)? A: "Approve as drawn (Recommended)".
 - Q: Which of its proposals P1–P5 should be built? A: "All five (Recommended)". *The five:*

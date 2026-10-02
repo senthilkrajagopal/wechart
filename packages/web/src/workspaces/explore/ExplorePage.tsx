@@ -28,7 +28,8 @@ import { ExportPane } from '../../dashboard/export/ExportPane';
 import { ExportedToast } from '../../dashboard/export/ExportedToast';
 import { ImportPane } from './import/ImportPane';
 import { fileHref } from '../model/inFolder';
-import { startModelDraft } from '../model/ModelFilePage';
+import { generateFrom, startModelDraft } from '../model/ModelFilePage';
+import { cubeSourceOf } from '../data-sources/cubeSource';
 import { FolderDescription } from './FolderDescription';
 import { DeleteDialog, type Checked, type Confirmation, type Refusal } from './DeleteDialog';
 import { ClearWorkspaceDialog } from './ClearWorkspaceDialog';
@@ -352,6 +353,16 @@ export function ExplorePage() {
    */
   const me = useQuery(ME_QUERY);
   const signedIn = me.data?.security === 'oidc';
+  /**
+   * Who may generate cubes from a data source (T492): one with a workspace,
+   * whose model they go to, or the single user with sign-in off.
+   */
+  const mayGenerateCubes =
+    me.data !== undefined &&
+    (me.data.security === 'off' || me.data.superAdmin || me.data.readWrite === true);
+  /** A listed data source's name in Cube, where Cube lists it: a shared one (T492's review). */
+  const cubeSourceOfItem = (item: CatalogItem) =>
+    cubeSourceOf({ name: item.title, folderId: item.folderId, inWorkspace: inMyWorkspace });
   /**
    * Shared work is changed through My workspace and a proposal: signed in,
    * and with sign-in off too, by the single user, since R52 (T359, AC-254).
@@ -1170,6 +1181,25 @@ export function ExplorePage() {
                     }
                   : undefined
               }
+              // A data source's tables as cubes (T492): into My workspace's
+              // model, to go to its folder, for those with a workspace; with
+              // sign-in off, the root's model.
+              onGenerate={
+                mayGenerateCubes
+                  ? (item) => {
+                      const source = cubeSourceOfItem(item);
+                      if (source === undefined) return;
+                      router.history.push(
+                        generateFrom(queryClient, {
+                          source,
+                          target: item.folderId ?? SHARED_ROOT.id,
+                          signedIn,
+                        }),
+                      );
+                    }
+                  : undefined
+              }
+              generates={(item) => cubeSourceOfItem(item) !== undefined}
               // Once the folders are read: before, every target would read as
               // one the user can't see (T498's review).
               {...(inOwnWorkspace && folders.isSuccess

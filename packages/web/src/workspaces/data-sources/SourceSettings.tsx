@@ -36,6 +36,8 @@ import { checkSource, openProposalOf, removeSource } from '../explore/deleteChec
 import { sayOnExplore } from '../explore/deletedToast';
 import { exploreHref } from '../explore/folders';
 import { browserTimeZone } from '../explore/projectFolder';
+import { generateFrom } from '../model/ModelFilePage';
+import { cubeSourceOf } from './cubeSource';
 
 /**
  * A stored data source's settings (T462; AC-269, AC-161, AC-163, AC-310),
@@ -198,6 +200,20 @@ function Settings({ source }: { source: StoredSource }) {
     me.data !== undefined &&
     (me.data.security === 'off' || me.data.superAdmin || me.data.readWrite === true);
 
+  /**
+   * Generating cubes from it (T492): by its connection's name in Cube, where
+   * Cube lists it (a shared one), for one with a workspace or the single user.
+   */
+  const inCube = cubeSourceOf({
+    name: source.name,
+    folderId: source.folderId,
+    inWorkspace: source.inWorkspace,
+  });
+  const mayGenerate =
+    inCube !== undefined &&
+    me.data !== undefined &&
+    (me.data.security === 'off' || me.data.superAdmin || me.data.readWrite === true);
+
   const editInWorkspace = async () => {
     setFailed(null);
     // Into a project folder of its own, named in the user's time (T523, AC-368).
@@ -316,6 +332,27 @@ function Settings({ source }: { source: StoredSource }) {
             History
           </button>
         )}
+        {/* Its tables as cubes (T492; the user, 2026-10-02: "add generate cube
+            within the datasource details page"): into My workspace's model,
+            to go to its folder, for those with a workspace; with sign-in off,
+            the root's model. */}
+        {mayGenerate && inCube !== undefined && viewing === undefined ? (
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              router.history.push(
+                generateFrom(queryClient, {
+                  source: inCube,
+                  target: source.folderId,
+                  signedIn: me.data?.security === 'oidc',
+                }),
+              );
+            }}
+          >
+            Generate cubes…
+          </button>
+        ) : null}
         {/* Not while an old version shows (design 06, state A). */}
         {copies && viewing === undefined ? (
           <button type="button" className="btn btn-primary" onClick={() => void editInWorkspace()}>

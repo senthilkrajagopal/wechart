@@ -1,5 +1,5 @@
 import { DRIVERS, DRIVER_TYPES, type DriverType } from '@wechart/core';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
   useCallback,
   useEffect,
@@ -17,6 +17,8 @@ import type { ListedSource } from '../data-sources/DataSourcesList';
 import { DriverMark } from '../data-sources/driverMarks';
 import { HealthBadge } from '../data-sources/health';
 import { DATA_SOURCES_QUERY } from '../data-sources/query';
+import { TargetTree } from '../data-sources/TargetTree';
+import type { Target } from '../explore/NewItemDialog';
 import { SHARED_ROOT } from '../explore/roots';
 import { objectsOf } from './objects';
 import { modelOf } from './sync';
@@ -144,6 +146,24 @@ function useAsked<T>(url: string | undefined, again: number): Asked<T> {
 
 /** The pane's state, kept for the tab while it is open: see the header. */
 export const GENERATE_KEY = ['generate-cubes'] as const;
+
+/**
+ * The pane afresh, on a data source and the folder its cubes are to go to:
+ * opened from that data source's page (T492; the user, 2026-10-02: "add
+ * generate cube within the datasource details page"). Whatever the pane held
+ * before is dropped.
+ */
+export function generateWith(
+  queryClient: QueryClient,
+  { source, target }: { readonly source: string; readonly target?: string | undefined },
+): void {
+  // An answer still owed to the pane before lands in no one's (T492's review).
+  nextTurn('look');
+  nextTurn('generate');
+  queryClient.removeQueries({ queryKey: GENERATE_KEY });
+  queryClient.setQueryData([...GENERATE_KEY, 'source'], source);
+  if (target !== undefined) queryClient.setQueryData([...GENERATE_KEY, 'target'], target);
+}
 
 /**
  * The latest look at columns and the latest generation, each by its turn: an
@@ -367,12 +387,28 @@ export function GenerateCubes({
   onAdded,
   onOpen,
   onShow,
+  workspace,
 }: {
   /** The model's files, stored and drafted: what a generated cube must not clash with (T276). */
   existing: readonly { readonly path: string; readonly content: string }[];
   onClose: () => void;
-  /** The generated files, to keep as the model's unpublished drafts (T488, AC-345). */
-  onAdded: (files: { path: string; content: string }[]) => void;
+  /**
+   * The generated files, to keep as the model's unpublished drafts (T488,
+   * AC-345); in My workspace, with the shared folder they are to go to (T492).
+   */
+  onAdded: (files: { path: string; content: string }[], target?: string) => void;
+  /**
+   * In My workspace (T492, AC-350): the pane says so, and asks which of these
+   * shared folders the cubes are to go to, as a new workspace model file must
+   * name one. Undefined until they are read.
+   */
+  workspace?:
+    | {
+        readonly targets: readonly Target[] | undefined;
+        /** Why they couldn't be read, where they couldn't. */
+        readonly failed?: string | undefined;
+      }
+    | undefined;
   /** Opens a file added here, closing the pane (design 11 state N). */
   onOpen?: ((path: string) => void) | undefined;
   /** Opens a file the model has beside the pane, which stays (design 11 pin 17). */
@@ -447,6 +483,16 @@ export function GenerateCubes({
     kind: 'idle',
   }));
   const [added, setAdded] = useKept<Added>('added', () => ({ kind: 'idle' }));
+  /** In My workspace, the shared folder the cubes are to go to (T492). */
+  const [chosenTarget, setTarget] = useKept('target', () => '');
+  const targets = workspace?.targets;
+  const target =
+    chosenTarget !== '' && targets?.some((each) => each.id === chosenTarget) !== false
+      ? chosenTarget
+      : targets?.length === 1
+        ? targets[0]!.id
+        : '';
+  const needsTarget = workspace !== undefined && target === '';
   const [typesOpen, setTypesOpen] = useState(false);
   // A press or focus outside the Type menu closes it, as a menu does (T485's review).
   const typesBox = useRef<HTMLDivElement>(null);
@@ -669,10 +715,11 @@ export function GenerateCubes({
    * (R36, AC-345): each is, when saved, with the drafts its cubes join (AC-346).
    */
   const add = () => {
-    if (generated.kind !== 'ok' || clashing > 0) return;
+    if (generated.kind !== 'ok' || clashing > 0 || needsTarget) return;
     const files = generated.value.map((cube) => ({ path: pathOf(cube), content: cube.content }));
     setAdded({ kind: 'done', count: files.length });
-    onAdded(files);
+    if (workspace === undefined) onAdded(files);
+    else onAdded(files, target);
   };
 
   const goTo = (next: number) => {
@@ -792,7 +839,9 @@ export function GenerateCubes({
           : null
         : reviewing && clashing > 0
           ? `Resolve ${plural(clashing, 'clash', 'clashes')} first`
-          : null;
+          : reviewing && generated.kind === 'ok' && needsTarget
+            ? 'Choose where they go'
+            : null;
   const primaryLabel =
     step === 0
       ? 'Next: Tables'
@@ -808,7 +857,7 @@ export function GenerateCubes({
   const primaryDisabled =
     step === 0 ? schema === '' : step === 1 ? chosen.size === 0 : !done && generated.kind !== 'ok';
   /** Pressable, but refused with its reason beside it, while a cube clashes (AC-249). */
-  const primaryRefused = reviewing && clashing > 0;
+  const primaryRefused = reviewing && (clashing > 0 || (generated.kind === 'ok' && needsTarget));
   const onPrimary = () => {
     if (step === 0) goTo(1);
     else if (step === 1) generate();
@@ -841,6 +890,13 @@ export function GenerateCubes({
         <h2 ref={heading} id={`${ids}-title`} tabIndex={-1}>
           Generate cubes
         </h2>
+        {/* As the new data source pane's head says it (T492, AC-350). */}
+        {workspace === undefined ? null : (
+          <span className="source-pane__where">
+            <span className="source-pane__person" aria-hidden="true" />
+            in My workspace
+          </span>
+        )}
         <button type="button" className="source-pane__close" aria-label="Close" onClick={ask}>
           ×
         </button>
@@ -1306,10 +1362,18 @@ export function GenerateCubes({
                     <p>
                       Added {cubes(added.count)} as {added.count === 1 ? 'a draft' : 'drafts'}.
                     </p>
-                    <p>
-                      Nothing is published yet. Saving a draft publishes it, with the drafts its
-                      cubes join.
-                    </p>
+                    {workspace === undefined ? (
+                      <p>
+                        Nothing is published yet. Saving a draft publishes it, with the drafts its
+                        cubes join.
+                      </p>
+                    ) : (
+                      // Saved in My workspace, then proposed to their folder (T492).
+                      <p>
+                        Saving a draft keeps it in My workspace, with the drafts its cubes join.
+                        Propose it to put it in its folder.
+                      </p>
+                    )}
                   </div>
                 </div>
                 <h3 className="connection-form__legend">Files</h3>
@@ -1556,6 +1620,31 @@ export function GenerateCubes({
                 <p className="generate-pane__footnote">
                   A column used only in a join, such as a foreign key, is listed as left out too.
                 </p>
+                {/* Where they go, which a new workspace model file must name (T492). */}
+                {workspace === undefined || done ? null : workspace.failed !== undefined ? (
+                  <StateLine kind="err">
+                    The folders they may go to couldn’t be read: {workspace.failed}
+                  </StateLine>
+                ) : targets === undefined ? (
+                  <StateLine kind="run">Reading the folders they may go to…</StateLine>
+                ) : targets.length === 0 ? (
+                  <StateLine kind="err">
+                    You have read-write access to no shared folder, so there is nowhere for them to
+                    go.
+                  </StateLine>
+                ) : (
+                  <div className="generate-pane__target">
+                    <TargetTree
+                      targets={targets}
+                      chosen={target}
+                      onChoose={setTarget}
+                      describedBy={`${ids}-target-note`}
+                    />
+                    <p id={`${ids}-target-note`} className="connection-form__note">
+                      They stay private in My workspace until you propose them to the folder.
+                    </p>
+                  </div>
+                )}
               </>
             ) : null}
           </section>

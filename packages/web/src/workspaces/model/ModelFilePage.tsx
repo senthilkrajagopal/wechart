@@ -27,9 +27,9 @@ import { DeleteDialog } from '../explore/DeleteDialog';
 import { checkModel, removeModel } from '../explore/deleteChecks';
 import { sayOnExplore } from '../explore/deletedToast';
 import { NewItemDialog, type Target } from '../explore/NewItemDialog';
-import { isMyWorkspace, SHARED_ROOT } from '../explore/roots';
+import { isMyWorkspace, MY_WORKSPACE, SHARED_ROOT } from '../explore/roots';
 import { ALL_MODEL_FILES_QUERY, FileList, modelFilesQuery, ModelFilesNotFound } from './FileList';
-import { GenerateCubes } from './GenerateCubes';
+import { GenerateCubes, generateWith } from './GenerateCubes';
 import { FileTree } from './FileTree';
 import { fileHref, folderWordsOf, modelAccessOf, modelHref, shownMemberOf } from './inFolder';
 import { objectsOf } from './objects';
@@ -1441,6 +1441,25 @@ const DRAFTS_KEY = ['model-drafts'] as const;
 const MADE_KEY = ['model-made'] as const;
 /** Whether Generate cubes is docked, kept for the tab (ModelFilePage's `generating`). */
 const GENERATING_KEY = ['generate-cubes-open'] as const;
+
+/**
+ * Generate cubes, opened afresh on a data source for the model page to dock
+ * (T492; the user, 2026-10-02): from that data source's page or its row's
+ * ⋯ in Explore. With sign-in on, the cubes go to My workspace's model, to go
+ * to `target`; with it off, to the root's. Gives the model page's address.
+ */
+export function generateFrom(
+  queryClient: ReturnType<typeof useQueryClient>,
+  { source, target, signedIn }: {
+    readonly source: string;
+    readonly target?: string | undefined;
+    readonly signedIn: boolean;
+  },
+): string {
+  generateWith(queryClient, { source, ...(signedIn ? { target } : {}) });
+  queryClient.setQueryData(GENERATING_KEY, true);
+  return signedIn ? modelHref(MY_WORKSPACE.id) : modelHref();
+}
 const DRAFTS_STORAGE = 'wechart.model.drafts';
 /**
  * Each folder's own drafts and made file (T342): a draft is published into
@@ -1683,7 +1702,8 @@ export function ModelFilePage({
    * sources it reads (T490) and whose drafts it adds.
    */
   const mayMake = !readOnly;
-  const mayGenerate = mayMake && folder === ROOT;
+  // And My workspace's, whence the cubes are proposed to their folder (T492, AC-350).
+  const mayGenerate = mayMake && (folder === ROOT || where.inWorkspace);
   /**
    * Whether Generate cubes is open (T145, AC-139): kept for the tab, as what
    * it holds is (GenerateCubes' `GENERATE_KEY`), so it stays docked when a
@@ -1866,6 +1886,12 @@ export function ModelFilePage({
 
   /** Generate cubes docked: only where it may be (T342). */
   const docked = generating && mayGenerate;
+  /** The shared folders generated cubes may go to, from My workspace (T492). */
+  const generateTargets = useQuery({
+    queryKey: ['folder-targets'],
+    queryFn: targetsOf,
+    enabled: docked && where.inWorkspace,
+  });
 
   // A folder that isn't there, or isn't the user's to see: the same page for
   // both, as any address that matches nothing (rule 67; T342's review).
@@ -2054,7 +2080,18 @@ export function ModelFilePage({
           <GenerateCubes
             existing={all}
             onClose={closeGenerate}
-            onAdded={(added) => {
+            {...(where.inWorkspace
+              ? {
+                  workspace: {
+                    targets: generateTargets.data,
+                    failed: generateTargets.error?.message,
+                  },
+                }
+              : {})}
+            onAdded={(added, target) => {
+              // In My workspace, each kept with where it is to go, as New cube's is (T492).
+              if (target !== undefined)
+                for (const each of added) keepDraftTarget(folder, each.path, target);
               // Drafts in the tree, none published until saved (R36, AC-345).
               setDrafts({
                 ...drafts,

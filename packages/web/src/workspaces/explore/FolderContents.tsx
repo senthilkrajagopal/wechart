@@ -123,6 +123,13 @@ export interface FolderContentsProps {
    */
   readonly onExport?: ((item: CatalogItem) => void) | undefined;
   /**
+   * Generating cubes from a data source's row (T492; the user, 2026-10-02):
+   * "Generate cubes…" in its ⋯, for those who may make a model.
+   */
+  readonly onGenerate?: ((item: CatalogItem) => void) | undefined;
+  /** Which data sources it is offered for: those Cube lists (T492's review). */
+  readonly generates?: ((item: CatalogItem) => boolean) | undefined;
+  /**
    * Deleting a row (design 14, pin 8; T517): "Delete…" last in its ⋯, set
    * apart in the error ink, where `deletes` says it may be — given only to
    * those who may change the folder (rule 68). No key deletes from the list.
@@ -315,6 +322,8 @@ export function FolderContents({
   opens = () => true,
   workspace,
   onExport,
+  onGenerate,
+  generates = () => true,
   onDelete,
   deletes = () => false,
 }: FolderContentsProps) {
@@ -417,6 +426,10 @@ export function FolderContents({
     // Into a file, in the Export pane (T511; design 13, state A).
     ...(onExport !== undefined && item.kind === 'dashboard'
       ? [{ key: 'export', label: 'Export…', onSelect: () => onExport(item) }]
+      : []),
+    // Its tables as cubes, in the Generate cubes pane (T492).
+    ...(onGenerate !== undefined && item.kind === 'data-source' && generates(item)
+      ? [{ key: 'generate', label: 'Generate cubes…', onSelect: () => onGenerate(item) }]
       : []),
   ];
 

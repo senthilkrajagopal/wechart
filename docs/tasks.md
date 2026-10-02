@@ -9616,12 +9616,30 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - it is mixed when some are chosen and checked when all are;
     - pressed again, it clears the page.
   - Depends on: T485
-- [ ] T492 (AC-350) With security on, Generate cubes says "in My workspace" and adds there
-  - Files: `packages/web/src/workspaces/model/GenerateCubes.tsx` (+ test), `e2e/security/model-in-folder.spec.ts`
-  - Failing test: `model-in-folder.spec.ts`, with security on:
+- [x] T492 (AC-350) With security on, Generate cubes says "in My workspace" and adds there; offered on a data source's page and its row's ⋯ *(amended 2026-10-02, `[R57]`)*
+  - Files: `packages/web/src/workspaces/model/{GenerateCubes,ModelFilePage}.tsx` (+ test), `packages/web/src/workspaces/data-sources/SourceSettings.tsx`, `packages/web/src/workspaces/explore/{FolderContents,ExplorePage}.tsx`, `e2e/security/generate-in-workspace.spec.ts`
+  - Failing test: `generate-in-workspace.spec.ts`, with security on:
     - the pane's head reads "in My workspace", with the person icon;
     - the added drafts are in the user's workspace model, and no shared folder's changes.
   - Depends on: T488, T342, T345
+  - **Done 2026-10-02.**
+    - **Where it is offered.**
+      - My workspace's model page offers Generate cubes, as the root's does. The pane heads itself "in My workspace", with the person icon, as the new data source wizard does.
+      - A data source's page has "Generate cubes…", and so does its row's ⋯ in Explore. Both are offered to those who may make a model: anyone with a workspace (a Super-Admin or a read-write member), and the single user with sign-in off.
+      - They are offered only for a shared data source Cube lists, which the pane opens by Cube's connection name (`cubeSource.ts`, after the API's `connectionNameOf`). That name is the data source's own in the root, and `f<folder id without dashes>__<name>` in a folder with a UUID id.
+      - None is offered in My workspace, which introspection doesn't read, or in a folder with a seed's id, whose xcube id is stored rather than derived. This was the review's medium finding.
+      - Each opens the pane afresh, on that data source (`generateFrom` in `ModelFilePage.tsx`, `generateWith` in `GenerateCubes.tsx`).
+      - With sign-in on, it opens in My workspace's model, `/explore/folders/mine/models`. With sign-in off, it opens in the root's, `/model`, as before.
+      - The user dropped a New-menu entry in My workspace: "you dont have to add it on the workspace home".
+    - **The target folder.** The API refuses a new workspace model file that names no folder to go to (`NEEDS_TARGET`). So in My workspace the Review step asks, with the data source wizard's Target folder tree. It starts on the data source's own folder, or the copy's target. Add stays refused, with "Choose where they go", until a folder is chosen. Each draft keeps its folder (`keepDraftTarget`), and its save sends it.
+    - **Tests.**
+      - `GenerateCubes.test.tsx`, "generating cubes in My workspace": the head and its person icon; the target required and passed on; the preset source, which isn't the first listed, and its folder; a failed read of the folders said; no target asked outside My workspace.
+      - `cubeSource.test.ts`: Cube's name in the root, in a UUID folder, and none in My workspace or in a seed's folder.
+    - **The review's other fixes.** Opening the pane afresh drops any answer still owed to the one before (`nextTurn`). A failed read of the target folders is said as one, not as reading forever.
+      - `e2e/security/generate-in-workspace.spec.ts`, Chrome, against compose's xcube:
+        - from the root `default`'s page: the pane in My workspace on `default`, `generate.chrome_stores` generated, Shared chosen, added, opened and saved; the file is in My workspace's model and not the root's;
+        - from its ⋯ in Explore: the pane opens on `default`.
+      - `e2e/generate-cubes.spec.ts` still passes with sign-in off.
 - [x] T493 (AC-351, AC-344) New view with no cube chosen for the user, opened on Cubes
   - **Done 2026-09-27.** Tested in `e2e/model-design.spec.ts` (T493's test, in Chrome, Firefox and Safari), `CubeForm.test.tsx` ("a new view’s Cubes") and `scopes.test.ts` (the join paths).
   - **The new view:**

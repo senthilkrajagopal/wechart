@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { GenerateCubes } from './GenerateCubes';
+import { GenerateCubes, generateWith } from './GenerateCubes';
 
 /**
  * T145 / AC-139: WHEN the user generates cubes from a data source, THE SYSTEM
@@ -21,7 +21,12 @@ import { GenerateCubes } from './GenerateCubes';
 const STORES = `cubes:\n  - name: chrome_stores\n    sql_table: generate.chrome_stores\n    dimensions:\n      - name: id\n        sql: id\n        type: number\n        primary_key: true\n    measures:\n      - name: count\n        type: count\n`;
 const VISITS = `cubes:\n  - name: chrome_visits\n    sql_table: generate.chrome_visits\n    joins:\n      - name: chrome_stores\n        sql: "{CUBE}.store_id = {chrome_stores.id}"\n        relationship: many_to_one\n    measures:\n      - name: count\n        type: count\n`;
 
-function api(scaffolded?: unknown) {
+function api(
+  scaffolded?: unknown,
+  sources: readonly { dataSource: string; dbType: string }[] = [
+    { dataSource: 'default', dbType: 'postgres' },
+  ],
+) {
   const asked: { url: string; body?: unknown }[] = [];
   vi.stubGlobal(
     'fetch',
@@ -32,7 +37,7 @@ function api(scaffolded?: unknown) {
       const json = (value: unknown, status = 200) =>
         new Response(JSON.stringify(value), { status });
       if (url === '/api/introspection/sources')
-        return json({ dataSources: [{ dataSource: 'default', dbType: 'postgres' }] });
+        return json({ dataSources: sources });
       if (url.startsWith('/api/introspection/sources/default/schemas'))
         return json({ schemas: [{ name: 'generate' }, { name: 'public' }] });
       if (url.startsWith('/api/introspection/sources/default/tables'))
@@ -968,5 +973,94 @@ describe('generating cubes from a data source (AC-139)', () => {
       (within(again).getByRole('checkbox', { name: 'chrome_visits' }) as HTMLInputElement).checked,
     ).toBe(true);
     expect(foot(dialog)).toEqual(['‹ Back', 'Cancel', 'Generate 1 cube *']);
+  });
+});
+
+/**
+ * T492 (AC-350; R36, design 11 proposal 5): in My workspace, the pane heads
+ * itself "in My workspace", as the new data source pane does, and adds the
+ * cubes as the workspace's drafts, each to go to the shared folder chosen,
+ * which a new workspace model file must name (the API's NEEDS_TARGET).
+ * Opened from a data source's page, it starts on that data source and its
+ * folder (the user, 2026-10-02: "add generate cube within the datasource
+ * details page").
+ */
+describe('generating cubes in My workspace (T492, AC-350)', () => {
+  const targets = [
+    { id: 'root', path: [] },
+    { id: 'f-sales', path: ['Sales'] },
+  ];
+
+  /** Both tables chosen and generated: the Review step. */
+  async function reviewed(dialog: HTMLElement) {
+    const tables = await toTables(dialog);
+    await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_stores' }));
+    await userEvent.click(within(tables).getByRole('checkbox', { name: 'chrome_visits' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Generate 2 cubes' }));
+    await within(dialog).findByRole('region', { name: 'cubes/chrome_stores.yml' });
+  }
+
+  it('says it is in My workspace, and adds the cubes to go to the folder chosen', async () => {
+    api();
+    const { dialog, onAdded } = pane({ workspace: { targets } });
+    expect(dialog.querySelector('.source-pane__head .source-pane__where')?.textContent).toBe(
+      'in My workspace',
+    );
+    // With the person icon, as the new data source pane's head has it.
+    expect(dialog.querySelectorAll('.source-pane__where > .source-pane__person')).toHaveLength(1);
+    await reviewed(dialog);
+
+    // Where they go is asked, and needed before they are added.
+    const tree = within(dialog).getByRole('tree', { name: 'Target folder' });
+    expect(dialog.querySelector('.source-pane__foot-note')?.textContent).toBe(
+      'Choose where they go',
+    );
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add 2 cubes as drafts' }));
+    expect(onAdded).not.toHaveBeenCalled();
+    await userEvent.click(within(tree).getByRole('treeitem', { name: 'Sales' }));
+    expect(dialog.querySelector('.source-pane__foot-note')).toBeNull();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add 2 cubes as drafts' }));
+    expect(onAdded).toHaveBeenCalledWith(
+      [
+        { path: 'cubes/chrome_stores.yml', content: STORES },
+        { path: 'cubes/chrome_visits.yml', content: VISITS },
+      ],
+      'f-sales',
+    );
+  });
+
+  it('starts on the data source and the folder it was opened for', async () => {
+    api(undefined, [
+      { dataSource: 'f0f3a9c2e1b2d4e5f8a9b0c1d2e3f4a5b__sales_dw', dbType: 'postgres' },
+      { dataSource: 'default', dbType: 'postgres' },
+    ]);
+    const cache = withCache();
+    generateWith(cache.client, { source: 'default', target: 'root' });
+    const { dialog } = pane({ workspace: { targets } }, cache);
+    // Not the first listed: the one it was opened for.
+    const source = await within(dialog).findByRole('radio', { name: 'default PostgreSQL' });
+    expect((source as HTMLInputElement).checked).toBe(true);
+    await reviewed(dialog);
+    const tree = within(dialog).getByRole('tree', { name: 'Target folder' });
+    expect(within(tree).getByRole('treeitem', { name: 'Shared' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+  });
+
+  it('says so when the folders they may go to can’t be read', async () => {
+    api();
+    const { dialog } = pane({ workspace: { targets: undefined, failed: 'Refused (503).' } });
+    await reviewed(dialog);
+    expect(within(dialog).getByRole('alert').textContent).toBe(
+      'The folders they may go to couldn’t be read: Refused (503).',
+    );
+  });
+
+  it('asks no folder outside My workspace', async () => {
+    api();
+    const { dialog } = pane();
+    expect(dialog.querySelector('.source-pane__where')).toBeNull();
+    await reviewed(dialog);
+    expect(within(dialog).queryByRole('tree', { name: 'Target folder' })).toBeNull();
   });
 });
