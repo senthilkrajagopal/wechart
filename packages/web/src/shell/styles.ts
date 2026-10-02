@@ -3769,6 +3769,141 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .audit-trail__note { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+
+/* The SQL tab (T535; design 15, screen 1): the editor and its result beside
+   My runs, 320 px; the warning always above the editor. */
+.sql-runner { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; position: relative; }
+.sql-runner__main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.sql-runner__line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.sql-runner__line b { font-weight: 600; color: var(--wc-text-primary); }
+.sql-runner__spacer { flex: 1; }
+.sql-runner__line .status { white-space: normal; }
+.sql-runner__warning {
+  display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 8px 12px;
+  border-radius: 6px; font-size: 12px; line-height: 16px; color: var(--wc-text-primary);
+  background: color-mix(in srgb, var(--wc-status-warning-icon) 14%, var(--wc-bg-surface));
+  border: 1px solid color-mix(in srgb, var(--wc-status-warning-icon) 45%, var(--wc-bg-surface));
+}
+.sql-runner__warning b { font-weight: 600; }
+.sql-runner__elsewhere {
+  margin: 0; padding: 8px 12px; border-radius: 6px; font-size: 12px; line-height: 16px;
+  background: var(--wc-bg-subtle); border: 1px solid var(--wc-border-subtle);
+}
+.sql-runner__failed { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-status-error); }
+.sql-runner__editor {
+  display: grid; gap: 10px; padding: 12px; border-radius: 6px;
+  background: var(--wc-bg-surface); border: 1px solid var(--wc-border-subtle);
+}
+.sql-editor .cm-editor { min-height: 140px; max-height: 360px; }
+.sql-editor .cm-placeholder { color: var(--wc-text-muted); }
+.sql-runner__bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sql-runner__keys { display: inline-flex; gap: 4px; }
+.sql-runner__keys kbd {
+  font-size: 12px; font-weight: 600; line-height: 16px; padding: 0 5px; border-radius: 4px;
+  border: 1px solid var(--wc-border-strong); border-bottom-width: 2px; background: var(--wc-bg-surface);
+}
+.sql-runner__limits { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.sql-runner__empty { margin: 0; padding: 28px 16px; text-align: center; font-size: 12px; color: var(--wc-text-secondary); }
+.sql-runner__turn-off { margin-left: 8px; }
+.sql-runner__toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 80;
+  display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 6px;
+  background: var(--wc-text-primary); color: var(--wc-bg-surface); font-size: 14px;
+}
+.sql-runner__toast .btn-link { color: inherit; text-decoration: underline; }
+
+/* A run's result (states B–E): its head, the grid scrolling both ways under its header. */
+.sql-result {
+  display: flex; flex-direction: column; min-width: 0; border-radius: 6px; overflow: hidden;
+  background: var(--wc-bg-surface); border: 1px solid var(--wc-border-subtle);
+}
+.sql-result__head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px; border-bottom: 1px solid var(--wc-border-subtle); }
+.sql-result__detail { font-size: 12px; color: var(--wc-text-secondary); font-variant-numeric: tabular-nums; }
+.sql-result__spacer { flex: 1; }
+.sql-result__note, .sql-result__cut { margin: 0; padding: 8px 12px; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.sql-result__note { border-bottom: 1px solid var(--wc-border-subtle); }
+.sql-result__cut {
+  color: var(--wc-status-warning); font-weight: 600;
+  background: color-mix(in srgb, var(--wc-status-warning-icon) 10%, var(--wc-bg-surface));
+}
+.sql-result__scroll { overflow: auto; max-height: 480px; }
+.sql-result__scroll:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: -2px; }
+.sql-result__grid { border-collapse: separate; border-spacing: 0; min-width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+.sql-result__grid th {
+  position: sticky; top: 0; z-index: 1; text-align: left; vertical-align: top; white-space: nowrap;
+  padding: 4px 10px; background: var(--wc-bg-subtle);
+  border-bottom: 1px solid var(--wc-border-subtle); border-right: 1px solid var(--wc-border-subtle);
+}
+.sql-result__name { display: block; font-weight: 600; color: var(--wc-text-primary); }
+.sql-result__type { display: block; font: 400 12px/16px var(--wc-font-code); color: var(--wc-text-secondary); }
+.sql-result__grid td {
+  height: 24px; padding: 0 10px; white-space: nowrap;
+  border-bottom: 1px solid var(--wc-border-subtle); border-right: 1px solid var(--wc-border-subtle);
+}
+.sql-result__n { color: var(--wc-text-muted); text-align: right; width: 52px; }
+.sql-result__grid .sql-result__num { text-align: right; }
+.sql-result__null { color: var(--wc-text-muted); font-style: italic; }
+.sql-result__empty { margin: 0; padding: 16px; font-size: 12px; color: var(--wc-text-secondary); }
+.sql-result__error { margin: 0; padding: 8px 12px; font: 400 12px/18px var(--wc-font-code); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* While off (P1; G3): a panel, never a greyed-out tab. */
+.sql-off {
+  display: grid; gap: 12px; max-width: 680px; padding: 22px 24px; border-radius: 6px;
+  background: var(--wc-bg-surface); border: 1px solid var(--wc-border-subtle);
+}
+.sql-off h2 { display: flex; gap: 8px; align-items: center; margin: 0; font-size: 16px; line-height: 22px; }
+.sql-off p { margin: 0; color: var(--wc-text-secondary); }
+.sql-off__act { display: flex; gap: 10px; align-items: center; }
+.sql-off__note { font-size: 12px; color: var(--wc-text-secondary); }
+
+/* Turning it on (screen 2). */
+.sql-turn-on { width: min(520px, calc(100vw - 32px)); }
+.sql-turn-on .sql-turn-on__as {
+  grid-template-columns: 90px minmax(0, 1fr); gap: 6px 12px; padding: 10px 12px;
+  border-radius: 6px; background: var(--wc-bg-subtle);
+}
+.sql-turn-on__sub { margin: 0; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--wc-text-secondary); }
+.sql-turn-on__layers { display: grid; gap: 6px; margin: 0; padding-left: 18px; font-size: 12px; line-height: 16px; }
+.sql-turn-on__attest {
+  display: grid; grid-template-columns: 16px 1fr; gap: 10px; align-items: start;
+  padding: 10px 12px; border: 1px solid var(--wc-border-strong); border-radius: 6px;
+}
+.sql-turn-on__failed { color: var(--wc-status-error); }
+
+/* My runs (pins 11, 12; F). */
+.sql-runs {
+  display: flex; flex-direction: column; min-width: 0; border-radius: 6px; overflow: hidden;
+  background: var(--wc-bg-surface); border: 1px solid var(--wc-border-subtle);
+}
+.sql-runs__head { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px 0 14px; border-bottom: 1px solid var(--wc-border-subtle); }
+.sql-runs__head h2 { margin: 0 auto 0 0; font-size: 14px; }
+.sql-runs .seg label {
+  display: inline-flex; align-items: center; height: 24px; padding: 0 8px; font-size: 12px; cursor: pointer;
+  border-left: 1px solid var(--wc-border-subtle); background: var(--wc-bg-surface);
+}
+.sql-runs .seg label:first-child { border-left: 0; }
+.sql-runs .seg label.is-on { background: color-mix(in srgb, var(--wc-accent) 12%, var(--wc-bg-surface)); color: var(--wc-accent); font-weight: 600; }
+.sql-runs .seg input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.sql-runs .seg label:focus-within { outline: 2px solid var(--wc-accent); outline-offset: -2px; }
+.sql-runs__sub { margin: 0; padding: 6px 14px; font-size: 12px; color: var(--wc-text-secondary); border-bottom: 1px solid var(--wc-border-subtle); }
+.sql-runs__none { margin: 0; padding: 12px 14px; font-size: 12px; color: var(--wc-text-secondary); }
+.sql-runs__list { margin: 0; padding: 0; list-style: none; }
+.sql-runs__run {
+  display: grid; gap: 4px; width: 100%; padding: 8px 12px 9px 14px; text-align: left; border: 0; border-radius: 0;
+  border-bottom: 1px solid var(--wc-border-subtle); background: none; color: inherit; text-decoration: none; font: inherit;
+}
+.sql-runs__run:hover { background: var(--wc-bg-hover); }
+.sql-runs__top { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; }
+.sql-runs__rows, .sql-runs__when { color: var(--wc-text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sql-runs__when { margin-left: auto; }
+.sql-runs__source { font-size: 12px; color: var(--wc-text-secondary); }
+.sql-runs__sql {
+  font: 400 12px/16px var(--wc-font-code); overflow: hidden; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+@media (max-width: 1024px) {
+  .sql-runner { grid-template-columns: minmax(0, 1fr); }
+}
 .audit-trail__subfolders { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; color: var(--wc-text-secondary); }
 .audit-trail__range { display: inline-flex; gap: 8px; font-size: 12px; }
 .audit-trail__events { position: relative; }

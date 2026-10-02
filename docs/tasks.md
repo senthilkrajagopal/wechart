@@ -10858,7 +10858,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       4. **A run on a data source one no longer sees** is listed under the name it had, not a later one.
       5. **The audit trail page** names a run on a copy as "copy in My workspace", and wraps its SQL in the code face.
     - **AC-381 waits for T535's My runs,** its page's list. **AC-382 is ticked:** its event is on the real stack.
-- [ ] T535 (AC-373, AC-377, AC-378, AC-379, AC-380, AC-381, AC-383, AC-385, AC-387) The SQL tab on a data source's page, as design 15 draws it
+- [x] T535 (AC-373, AC-377, AC-378, AC-379, AC-380, AC-381, AC-383, AC-385, AC-387) The SQL tab on a data source's page, as design 15 draws it
   - Files: `packages/web/src/workspaces/data-sources/SqlRunner.tsx` (+ test, the app's CodeMirror in SQL mode, P2), `SourceSettings.tsx`, `e2e/security/sql-runner.spec.ts`
   - Failing test:
     - the warning sits above the editor and can't be hidden (AC-385);
@@ -10869,6 +10869,59 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - My runs lists this source's runs by default, with All (AC-381);
     - allowed users find the tab, with the off panel while it's off (AC-373).
   - Depends on: T532, T533, T534, design 15 (approved)
+  - **Done 2026-10-02.**
+    - **What the page is told** (`GET /api/data-sources/:id`): a new `sqlAccess`, beside T531's `sqlRunner`, which is unchanged. It says whether this user gets the tab (write access to its folder, or owning it in their workspace), whether they may run now and why not, and for a workspace copy whether it needs a switch. It comes from the run's own rule, `mayRunSql`, so the tab and the API can't disagree. None is given without xcube's runner.
+    - **The tab** (`SqlRunner.tsx`), SQL, sixth and last (pin 1):
+      - **Off** (P1): a panel, "The SQL runner is off for …", saying who could run SQL. A Super-Admin gets Turn on the SQL runner…; a read-write member is told only a Super-Admin can, and that their own data sources in My workspace need none. A repointed copy says why it needs the switch.
+      - **The turn-on dialog** (screen 2, G1): what it runs as, the database and host, the password "Stored · encrypted", what wechart does on this driver (`sqlLogin.ts`: a read-only transaction on PostgreSQL, Redshift, MySQL and Oracle; a dry run on BigQuery; what it can't enforce on the others), and the attestation checkbox. Turn on waits for it, Cancel has focus, Esc cancels.
+      - **On:**
+        - the line "Runs on … at …, as …", and who turned it on and when, with Turn off for a Super-Admin; or, in My workspace, "Yours…";
+        - the warning, above the editor, with nothing to hide it (AC-385);
+        - the editor (`SqlEditor.tsx`), the app's CodeMirror in SQL mode (P2): ⌘/Ctrl+Enter runs the selection where there is one, else the whole text, and Run reads "Run selection" (Q1, AC-387). Its text is kept per data source while moving between tabs and pages;
+        - the limits; Run held back while a run goes, with Cancel and the time against 30 s (AC-379). Another run of the user's going elsewhere is said, with Go to it and Cancel that run (D2);
+        - the result (`SqlResult.tsx`): the grid headed by each column's name and database type (Q5), values as they came (numbers often as text), NULL in italics, numbers right-aligned by their type (pin 9), the row count and time (AC-380); "Limited to 10,000 rows" or "Limited to 10 MB" at its head, its note and its last row (AC-377); "Stopped at 30 seconds", "Cancelled after …", "Not run" with the design's second sentence (E2), and the database's error as given;
+        - Download CSV (`sqlCsv.ts`): the result in hand, the column names first, NULL empty, RFC 4180, named for the data source and the run's start. Nothing runs again (AC-380);
+        - My runs (F, Q2): only theirs, this data source's by default with All, newest first, 50 at a time with Show older runs. A run puts its SQL back in the editor, with Undo; one on another data source opens that data source's tab with its SQL;
+        - a polite live region that says Running and then the outcome.
+    - **Small decisions, overturnable:**
+      - a run of under 10 ms reads "under 0.01 s";
+      - the key cap reads ⌘ on a Mac and Ctrl elsewhere.
+    - **The editor's insertion at the cursor** (`insertion`, with its test) was built with the editor. It is T539's: the schema browser is what uses it.
+    - **Fixed after the review** (one round). The review passed all seven ACs; these are its defects:
+      1. **The CSV marks formulas as text.** Text starting with `=`, `+`, `-`, `@`, a tab or a carriage return gets a leading `'`, as the chart export does. That covers column names too. A number, or a number the database sent as text, is left as it came.
+      2. **My runs gives the day** of a run that wasn't today: "Today 14:32", "Yesterday 17:40", "24 Sep 14:32", and the year for an earlier one. The switch's date and the Undo note do the same.
+      3. **The keyboard, as design 15 draws it:**
+         - focus goes back to the editor when a run ends, unless the user has moved elsewhere;
+         - after Turn on, focus goes to the editor. After Turn off, a note says turning it on again asks for the confirmation again, and focus goes to "Turn on the SQL runner…";
+         - the editor is described by the warning and the limits;
+         - ↑ and ↓ move between runs in My runs, and choosing one puts focus in the editor;
+         - the grid is named "Result: N rows, M columns";
+         - the live region reads a refusal whole.
+      4. **Failures are said.** A failed Cancel says why; a 404 means the run already ended, so it says nothing. A failed Turn off says why. Turn on is sent once however often it's pressed, so the switch isn't audited twice.
+      5. **A run with no answer reads "No answer", not "Not run".** That covers xcube being late or away, and a dropped connection, which now says whether it ran isn't known. A refused EXPLAIN on another driver (Oracle's EXPLAIN PLAN, for example) gives xcube's reason, not the ANALYZE sentence.
+      6. **Drafts are kept per user.** They're keyed by who is signed in, so the next user in the same browser tab doesn't see them.
+      7. **Links open the SQL tab:** "Go to it", and a run on another data source in My runs, through `?tab=sql`, which the data source's page reads.
+      8. **The turn-on dialog on a Super-Admin's own repointed copy** says only its owner may then run SQL.
+      9. **AC-378 and AC-379** now have their open task, T545.
+    - **Left as the review found them:**
+      - My runs' items keep their text as their name, not a composed label;
+      - Cube Store's runs in All (a `null` data source) wait for T536, which gives them their own tab.
+    - **Research:** `code-editor.md`'s addendum for `Prec`, `Mod-Enter` (taken by `insertBlankLine`), `replaceSelection`, `placeholder` and `runScopeHandlers`. No new package.
+    - **Tests:**
+      - `SqlEditor.test.tsx` (4), `SqlResult.test.tsx` (13), `sqlCsv.test.ts` (4), `sqlLogin.test.ts` (5), and `SqlRunner.test.tsx` (23, against a stubbed API);
+      - `routes/sql-runner.test.ts`: what the page is told, for the folder's member, a Super-Admin, a member below, a workspace copy and a repointed one;
+      - `e2e/security/sql-runner.spec.ts` (Chrome, compose's xcube), as the writer and a Super-Admin:
+        - the sixth tab, the warning above the editor, a run's columns and types, rows and time, and its CSV, with one run only;
+        - the selection with ⌘/Ctrl+Enter;
+        - 10,001 rows and some 20 MB, each said cut at its limit;
+        - Running…, Cancel and "Cancelled after"; a DELETE's refusal;
+        - focus back in the editor after a run;
+        - My runs, this data source's first, then All, a run's day, and `?tab=sql` opening the SQL tab with the editor's text kept;
+        - the off panel, focus after Turn off and Turn on, and turning it on through the dialog;
+        - a copy and a data source made new in My workspace, each run by its owner;
+      - `data-sources.spec.ts`: its writer's tab list gains SQL.
+    - **Checked by eye** against design 15 in Chrome at 1440 × 900: the off panel, the dialog, a result and a refusal.
+    - **ACs ticked:** AC-373, AC-377, AC-380, AC-381, AC-383, AC-385, AC-387. **AC-378 and AC-379** stay open for the rows that arrive before a stop or a cancel, which wait on xcube's next image (T545).
 - [ ] T539 (AC-386) A schema browser beside the SQL editor
   - Files: `packages/web/src/workspaces/data-sources/SchemaBrowser.tsx` (+ test), the introspection routes wechart already calls (`packages/api/src/model/introspection.ts`), for a data source by its id
   - Failing test: the browser lists the data source's schemas, tables and columns with types, as introspection answers, only to those who may run SQL on it; choosing one puts its name in the editor at the cursor (AC-386).
@@ -10880,6 +10933,10 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - a My workspace owner allowed only on their own source doesn't (Q7), nor does a reader;
     - a SHOW and a cache command are refused (AC-384, AC-374).
   - Depends on: T531, T535, xcube's image
+- [ ] T545 (AC-378, AC-379) Show the rows that came back before a stop or a cancel, marked stopped *(added 2026-10-02, from T535's review)*
+  - Files: `docs/research/` (a doc for xcube `6d9673ccda`, or a correction beside `xcube-sql-runner.md`), `docker-compose.yml`, the Helm values, `packages/api/src/deploy/cube-image.test.ts`, `docs/deploy.md`, `packages/api/src/routes/sql-runner.ts`, `packages/api/src/xcube/sql-runner.ts`, `SqlResult.tsx`, tests and `e2e/security/sql-runner.spec.ts`
+  - Failing test: a run stopped at 30 seconds, and one cancelled, show the rows that arrived before it, marked stopped, in place of "Nothing came back"; one with none says so (AC-378, AC-379; design 15's Q6).
+  - Depends on: T535, T536, xcube `v1.7.45-6d9673ccda` (published by digest)
 - [x] T538 (AC-354) Set export-import's hidden dependencies up as copy-on-use allows *(added 2026-10-01, from T527)*
   - Files: `e2e/security/export-import.spec.ts`
   - Failing test:
@@ -10961,8 +11018,8 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-368 | T523 | AC-369 | T524 | AC-370 | T525 |
 | AC-371 | T527, T537 | AC-372 | T528 | | |
 | AC-373 | T531, T532, T535 | AC-374 | T531, T536 | AC-375 | T532 |
-| AC-376 | T532 | AC-377 | T532, T535 | AC-378 | T532 |
-| AC-379 | T533, T535 | AC-380 | T535 | AC-381 | T534 |
+| AC-376 | T532 | AC-377 | T532, T535 | AC-378 | T532, T535, T545 |
+| AC-379 | T533, T535, T545 | AC-380 | T535 | AC-381 | T534, T535 |
 | AC-382 | T534 | AC-383 | T532, T535 | AC-384 | T536 |
 | AC-385 | T535 | AC-386 | T539 | AC-387 | T535 |
 | AC-388 | T541 | AC-389 | T540 | AC-390 | T544 |

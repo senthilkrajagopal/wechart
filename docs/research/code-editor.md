@@ -268,6 +268,16 @@ Design 03 note 8 draws a wrapped line's later rows under the line's text (`paddi
 - UNVERIFIED as an observed behaviour: the ancestor-scroll spill for `y: 'start'` near the end of the document. It is inferred from reading `scrollRectIntoView` (`view.js:540-631`) and has not been seen in a browser. The T482 e2e should cover "Show in YAML" on the file's last lines.
 - **Frontmatter:** no new packages. `@codemirror/view`, `@codemirror/state` and `@codemirror/lint` are already in `packages:`. The pinned versions above match `packages/web/package.json`. The reference manual and example URLs could be added to `sources:`.
 
+## Addendum 2026-10-01: the SQL runner's editor (T535, design 15's P2 and Q1)
+
+Read in the installed packages: `@codemirror/commands` 6.11.1, `@codemirror/view` 6.43.12 and `@codemirror/state` 6.7.5, as `packages/web/package.json` pins them. No new package.
+
+- **⌘/Ctrl+Enter is taken by the default keymap.** `defaultKeymap` binds `Mod-Enter` to `insertBlankLine` (`@codemirror/commands/dist/index.js:1806`). So the editor's own `Mod-Enter`, which runs the SQL, is given at `Prec.highest`, ahead of it ([Prec](https://codemirror.net/docs/ref/#state.Prec)). `Mod` is Cmd on a Mac and Ctrl elsewhere ([keymap](https://codemirror.net/docs/ref/#view.keymap)).
+- **The selection's text:** `state.selection.main` and `state.sliceDoc(from, to)`. An `updateListener` sees `update.selectionSet` when the selection moves ([ViewUpdate](https://codemirror.net/docs/ref/#view.ViewUpdate)).
+- **A name put in at the cursor** (T539): `state.replaceSelection(text)` replaces the selection, or inserts at the cursor, and places the cursor after it (`@codemirror/state/dist/index.js:2639`; [EditorState.replaceSelection](https://codemirror.net/docs/ref/#state.EditorState.replaceSelection)).
+- **The empty editor's hint:** `placeholder(text)` from `@codemirror/view` (`dist/index.js:10102`; [placeholder](https://codemirror.net/docs/ref/#view.placeholder)).
+- **Testing a key in jsdom:** `runScopeHandlers(view, event, 'editor')` runs the keymap's handlers for a `KeyboardEvent`, and says whether one took it (`dist/index.js:9113`; [runScopeHandlers](https://codemirror.net/docs/ref/#view.runScopeHandlers)). jsdom's `navigator.platform` isn't a Mac's, so `Mod` there is Ctrl.
+
 Sources:
 - https://codemirror.net/docs/ref/
 - https://codemirror.net/examples/decoration/

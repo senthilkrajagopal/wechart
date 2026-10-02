@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
-import type { APIRequestContext, Browser } from '@playwright/test';
+import type { APIRequestContext, Browser, Page } from '@playwright/test';
 import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
 import {
@@ -375,5 +375,242 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
         data: { on: true, readOnlyConfirmed: true },
       });
     }
+  });
+
+  /**
+   * T535 (AC-373, AC-377, AC-378, AC-379, AC-380, AC-381, AC-383, AC-385,
+   * AC-387; design 15): the SQL tab on the data source's page, as its
+   * folder's read-write member and a Super-Admin use it.
+   */
+  test.describe('the SQL tab (T535)', () => {
+    /** The writer, on the data source's SQL tab. */
+    async function onTab(browser: Browser, id = world.sourceId) {
+      const writer = await signedIn(browser, 'writer');
+      await writer.page.goto(`/explore/data-sources/${id}`);
+      const tabs = writer.page.getByRole('tablist', { name: 'Data source' });
+      await tabs.getByRole('tab', { name: 'SQL' }).click();
+      return { ...writer, panel: writer.page.getByRole('tabpanel', { name: 'SQL' }) };
+    }
+    /** The editor's text replaced by `sql`, typed as a person types it. */
+    async function typeSql(page: Page, sql: string) {
+      await page.locator('.sql-editor .cm-content').click();
+      await page.keyboard.press('ControlOrMeta+A');
+      await page.keyboard.press('Delete');
+      await page.keyboard.type(sql);
+    }
+
+    test('is the sixth tab, warns above the editor, and shows a run’s columns, types, rows and time, and its CSV (AC-373, AC-385, AC-380)', async ({
+      browser,
+    }) => {
+      const { context, page, panel } = await onTab(browser);
+      const posts: string[] = [];
+      page.on('request', (request) => {
+        if (request.method() === 'POST' && request.url().endsWith('/sql'))
+          posts.push(request.url());
+      });
+      try {
+        await expect(
+          page.getByRole('tablist', { name: 'Data source' }).getByRole('tab'),
+        ).toHaveText(['General', 'Connection', 'Test history', 'Usage', 'In Cube', 'SQL']);
+        const warning = panel.getByTestId('sql-warning');
+        await expect(warning).toHaveText(
+          'This SQL runs on the database directly, as sample. Folder permissions and access policies don’t apply here: you can read whatever that login can read.',
+        );
+        const above = (await warning.boundingBox())!;
+        const editor = (await panel.locator('.sql-editor').boundingBox())!;
+        expect(above.y + above.height).toBeLessThanOrEqual(editor.y);
+
+        await typeSql(page, "SELECT 1 AS one, 'a' AS letter");
+        await panel.getByRole('button', { name: 'Run', exact: true }).click();
+        const grid = panel.getByRole('table', { name: 'Result: 1 row, 2 columns' });
+        await expect(grid.getByRole('columnheader')).toHaveText(['#', 'oneint4', 'lettertext']);
+        // Focus goes back to the editor when the run ends (design 15, keyboard).
+        await expect(panel.locator('.sql-editor .cm-content')).toBeFocused();
+        await expect(panel.getByTestId('sql-result-head')).toHaveText(
+          /^Finished 1 row · (under )?[\d.]+ s · at \d\d:\d\d:\d\dDownload CSV$/,
+        );
+        const [download] = await Promise.all([
+          page.waitForEvent('download'),
+          panel.getByRole('button', { name: 'Download CSV' }).click(),
+        ]);
+        expect(download.suggestedFilename()).toMatch(/^warehouse-\d{4}-\d\d-\d\d-\d{6}\.csv$/);
+        expect(readFileSync(await download.path(), 'utf8')).toBe('one,letter\r\n1,a\r\n');
+        expect(posts).toHaveLength(1);
+      } finally {
+        await context.close();
+      }
+    });
+
+    test('runs only the selection, Run reading “Run selection”, with ⌘/Ctrl+Enter (AC-387)', async ({
+      browser,
+    }) => {
+      const { context, page, panel } = await onTab(browser);
+      try {
+        await typeSql(page, 'SELECT 1 AS a;\nSELECT 2 AS b');
+        await page.keyboard.press('Shift+Home');
+        await expect(panel.getByRole('button', { name: 'Run selection' })).toBeVisible();
+        await page.keyboard.press('ControlOrMeta+Enter');
+        await expect(
+          panel.getByRole('table', { name: 'Result' }).getByRole('columnheader'),
+        ).toHaveText(['#', 'bint4']);
+      } finally {
+        await context.close();
+      }
+    });
+
+    test('says a run was cut at 10,000 rows, holds Run back while one goes with Cancel, and says a refusal’s why (AC-377, AC-379, AC-378)', async ({
+      browser,
+    }) => {
+      const { context, page, panel } = await onTab(browser);
+      try {
+        await typeSql(page, 'SELECT g FROM generate_series(1, 10001) g');
+        await panel.getByRole('button', { name: 'Run', exact: true }).click();
+        await expect(panel.getByTestId('sql-result-head')).toContainText('Limited to 10,000 rows');
+        await expect(panel.getByTestId('sql-result-cut')).toHaveText(
+          'Limited to 10,000 rows. Narrow the query with WHERE, or group it, to see the rest.',
+        );
+        // Some 20 MB of rows: as many as fit in 10 MB, said so.
+        await typeSql(page, "SELECT repeat('x', 100000) AS wide FROM generate_series(1, 200)");
+        await panel.getByRole('button', { name: 'Run', exact: true }).click();
+        await expect(panel.getByTestId('sql-result-head')).toContainText('Limited to 10 MB');
+        await expect(panel.getByTestId('sql-result-note')).toHaveText(
+          /^The query returned more than 10 MB\. These are the first \d+ rows, as many as fit in 10 MB\.$/,
+        );
+        await expect(panel.getByTestId('sql-result-cut')).toHaveText(
+          'Limited to 10 MB. Choose fewer or smaller columns to see more rows.',
+        );
+
+        await typeSql(page, 'SELECT pg_sleep(20)');
+        await panel.getByRole('button', { name: 'Run', exact: true }).click();
+        await expect(panel.getByRole('button', { name: 'Running…' })).toBeDisabled();
+        await panel.getByRole('button', { name: 'Cancel' }).click();
+        await expect(panel.getByTestId('sql-result-head')).toHaveText(/^Cancelled after [\d.]+ s/);
+        await expect(panel.getByTestId('sql-result-note')).toHaveText(
+          'You cancelled the run, and it was stopped on the database. Nothing came back.',
+        );
+
+        await typeSql(page, 'DELETE FROM pg_class');
+        await panel.getByRole('button', { name: 'Run', exact: true }).click();
+        await expect(panel.getByTestId('sql-result-note')).toHaveText(
+          'Only SELECT and EXPLAIN run here, one statement at a time. This is a DELETE statement. Nothing reached the database.',
+        );
+      } finally {
+        await context.close();
+      }
+    });
+
+    test('lists My runs, this data source’s by default, with All (AC-381)', async ({ browser }) => {
+      const { context, page, panel } = await onTab(browser);
+      try {
+        await typeSql(page, `SELECT 'mine_${RUN}' AS m`);
+        await panel.getByRole('button', { name: 'Run', exact: true }).click();
+        await expect(panel.getByRole('table', { name: 'Result' })).toBeVisible();
+        const runs = panel.getByRole('region', { name: 'My runs' });
+        await expect(runs.getByRole('radio', { name: 'This data source' })).toBeChecked();
+        await expect(runs.getByRole('listitem').first()).toContainText(`SELECT 'mine_${RUN}' AS m`);
+        await runs.getByRole('radio', { name: 'All' }).click();
+        await expect(runs.getByRole('listitem').first()).toContainText(`warehouse · SQL ${RUN}`);
+        await expect(runs.getByRole('listitem').first()).toContainText(/Today \d\d:\d\d/);
+        // A run's link opens its data source on the SQL tab, the editor's text kept (T535's review).
+        await page.goto(`/explore/data-sources/${world.sourceId}?tab=sql`);
+        await expect(
+          page.getByRole('tablist', { name: 'Data source' }).getByRole('tab', { name: 'SQL' }),
+        ).toHaveAttribute('aria-selected', 'true');
+        await expect(panel.locator('.sql-editor .cm-content')).toHaveText(
+          `SELECT 'mine_${RUN}' AS m`,
+        );
+      } finally {
+        await context.close();
+      }
+    });
+
+    test('shows the off panel while off, and a Super-Admin turns it on only by confirming (AC-373; P1)', async ({
+      page,
+    }) => {
+      await page.goto(`/explore/data-sources/${world.sourceId}`);
+      await page
+        .getByRole('tablist', { name: 'Data source' })
+        .getByRole('tab', { name: 'SQL' })
+        .click();
+      const panel = page.getByRole('tabpanel', { name: 'SQL' });
+      await panel.getByRole('button', { name: 'Turn off' }).click();
+      const off = panel.getByRole('region', { name: 'The SQL runner is off for warehouse' });
+      await expect(off).toBeVisible();
+      await expect(panel.locator('.sql-editor')).toHaveCount(0);
+      // Said, and focus on Turn on… (design 15, keyboard).
+      await expect(off.getByTestId('sql-turned-off')).toHaveText(
+        'The SQL runner is off. Turning it on again asks for the confirmation again.',
+      );
+      await expect(off.getByRole('button', { name: 'Turn on the SQL runner…' })).toBeFocused();
+      await off.getByRole('button', { name: 'Turn on the SQL runner…' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Turn on the SQL runner for warehouse?' });
+      await expect(dialog.getByRole('button', { name: 'Turn on' })).toBeDisabled();
+      await dialog.getByRole('checkbox', { name: /I confirm that sample can only read/ }).check();
+      await dialog.getByRole('button', { name: 'Turn on' }).click();
+      await expect(panel.getByTestId('sql-switch')).toContainText('SQL runner on · turned on by');
+      await expect(panel.locator('.sql-editor')).toBeVisible();
+      await expect(panel.locator('.sql-editor .cm-content')).toBeFocused();
+    });
+
+    test('runs on its owner’s copy in My workspace with no switch, saying it is theirs (AC-383)', async ({
+      browser,
+    }) => {
+      const writer = await signedIn(browser, 'writer');
+      const copied = await writer.page.request.post(`/api/data-sources/${world.sourceId}/copy`, {
+        data: { timeZone: 'UTC' },
+      });
+      expect(copied.status(), await copied.text()).toBeLessThan(300);
+      const copyId = ((await copied.json()) as { id: string }).id;
+      const project = await projectFolderOf(writer.page.request, 'data-source', copyId);
+      await writer.context.close();
+      const { context, page, panel } = await onTab(browser, copyId);
+      try {
+        await expect(panel.getByTestId('sql-yours')).toHaveText(
+          'Yours: you may run SQL on your own data sources in My workspace, with no switch. Nobody else can.',
+        );
+        await typeSql(page, 'SELECT current_database() AS db');
+        await panel.getByRole('button', { name: 'Run', exact: true }).click();
+        await expect(
+          panel.getByRole('table', { name: 'Result' }).getByRole('cell').nth(1),
+        ).toHaveText('sample');
+
+        // And one made new there, to go to the folder: its owner runs it too.
+        const fresh = await page.request.post('/api/data-sources', {
+          data: await testedSource(page.request, {
+            folderId: project,
+            targetFolderId: world.folderId,
+            name: `fresh_${RUN}`,
+            driver: 'postgres',
+            authMethod: 'password',
+            fields: FIELDS,
+            sealed: {
+              password: await sealSecretV1(KEY, 'postgres', 'password', FIELDS, 'sample'),
+            },
+          }),
+        });
+        expect(fresh.status(), await fresh.text()).toBe(201);
+        const freshId = ((await fresh.json()) as { id: string }).id;
+        try {
+          await page.goto(`/explore/data-sources/${freshId}`);
+          await page
+            .getByRole('tablist', { name: 'Data source' })
+            .getByRole('tab', { name: 'SQL' })
+            .click();
+          const freshPanel = page.getByRole('tabpanel', { name: 'SQL' });
+          await expect(freshPanel.getByTestId('sql-yours')).toBeVisible();
+          await typeSql(page, 'SELECT 41 + 1 AS answer');
+          await freshPanel.getByRole('button', { name: 'Run', exact: true }).click();
+          await expect(
+            freshPanel.getByRole('table', { name: 'Result' }).getByRole('cell').nth(1),
+          ).toHaveText('42');
+        } finally {
+          await page.request.delete(`/api/data-sources/${freshId}`);
+        }
+      } finally {
+        await page.request.delete(`/api/data-sources/${copyId}`);
+        await removeProjectFolder(page.request, project);
+        await context.close();
+      }
+    });
   });
 });

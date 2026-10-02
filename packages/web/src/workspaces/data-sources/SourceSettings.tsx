@@ -30,6 +30,7 @@ import {
   useSourceEdit,
 } from './SourceEditor';
 import { DATA_SOURCES_QUERY } from './query';
+import { SqlTab, type SqlRunnerState } from './SqlRunner';
 import { MenuButton } from '../../shell/MenuButton';
 import { DeleteDialog } from '../explore/DeleteDialog';
 import { checkSource, openProposalOf, removeSource } from '../explore/deleteChecks';
@@ -78,6 +79,10 @@ export interface StoredSource {
   readonly description: string | null;
   readonly originPath?: readonly Folder[];
   readonly targetPath?: readonly Folder[];
+  /** Its SQL runner's switch (T531): on, and who confirmed it when. */
+  readonly sqlRunner?: Pick<SqlRunnerState, 'on' | 'confirmedBy' | 'confirmedAt'>;
+  /** Its SQL tab, as this user may use it (T535); none where the API runs no SQL. */
+  readonly sqlAccess?: Pick<SqlRunnerState, 'tab' | 'runs' | 'why' | 'needsSwitch'>;
 }
 
 interface HistoryTest {
@@ -129,7 +134,13 @@ const TABS = [
   ['usage', 'Usage'],
   ['cube', 'In Cube'],
 ] as const;
-type Tab = (typeof TABS)[number][0];
+/**
+ * SQL, the sixth, last so the five keep their places (design 15, pin 1):
+ * for Super-Admins and the folder's own read-write members, and a workspace
+ * data source's owner; with its off panel while off, never greyed out (P1).
+ */
+const WITH_SQL = [...TABS, ['sql', 'SQL']] as const;
+type Tab = (typeof WITH_SQL)[number][0];
 
 export function SourceSettings({ id }: { id: string }) {
   const source = useQuery(sourceQuery(id));
@@ -143,7 +154,14 @@ function Settings({ source }: { source: StoredSource }) {
   const base = useId();
   const queryClient = useQueryClient();
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>('connection');
+  const tabs: readonly (readonly [Tab, string])[] =
+    source.sqlAccess?.tab === true ? WITH_SQL : TABS;
+  // A link may name the tab to open on (`?tab=sql`, from My runs: T535's
+  // review), where this user has it.
+  const [tab, setTab] = useState<Tab>(() => {
+    const asked = new URLSearchParams(globalThis.location.search).get('tab');
+    return tabs.find(([key]) => key === asked)?.[0] ?? 'connection';
+  });
   /** Proposing it again from its rejected band (T358). */
   /** Where "Propose again…" proposes it to, while its dialog is open. */
   const [proposingAgain, setProposingAgain] = useState<readonly string[] | null>(null);
@@ -447,7 +465,7 @@ function Settings({ source }: { source: StoredSource }) {
           aria-label="Data source"
           className="edit-sidebar__tabs source-settings__tabs"
         >
-          {TABS.map(([key, label]) => (
+          {tabs.map(([key, label]) => (
             <button
               key={key}
               type="button"
@@ -461,7 +479,7 @@ function Settings({ source }: { source: StoredSource }) {
               }}
               onKeyDown={(event) => {
                 onTabKey(event, (at) => {
-                  setTab(TABS[at]?.[0] ?? key);
+                  setTab(tabs[at]?.[0] ?? key);
                 });
               }}
             >
@@ -524,6 +542,20 @@ function Settings({ source }: { source: StoredSource }) {
             ) : (
               <Usage source={source} listed={source.origin === null ? listed : original} />
             )
+          ) : tab === 'sql' && source.sqlAccess !== undefined ? (
+            <SqlTab
+              source={{
+                id: source.id,
+                name: source.name,
+                driver: source.driver,
+                fields: source.fields,
+                folderPath: source.folderPath,
+                inWorkspace: source.inWorkspace,
+                sqlRunner: { on: false, ...source.sqlRunner, ...source.sqlAccess },
+              }}
+              // With sign-in off, the one user holds every permission (AC-254).
+              superAdmin={me.data?.superAdmin === true || me.data?.security === 'off'}
+            />
           ) : (
             <InCube id={source.id} />
           )}

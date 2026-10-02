@@ -8,7 +8,7 @@ import { ADMIN, INSTALL, USER } from '../auth/guard';
 import type { AuditStore } from '../repos/audit';
 import type { SqlRunnerSwitchStore } from '../repos/sql-runner-switches';
 import type { SqlRunStore } from '../repos/sql-runs';
-import { needsSwitch, registerSqlRunner, type SqlRunnerOptions } from './sql-runner';
+import { mayRunSql, needsSwitch, registerSqlRunner, type SqlRunnerOptions } from './sql-runner';
 import { signsInOtherwise } from './sql-runner-switch';
 import { MY_WORKSPACE_ID, ROOT_FOLDER_ID } from '../repos/catalog';
 import {
@@ -494,6 +494,23 @@ export function registerDataSources(
     return runnerOf(source);
   });
 
+  /**
+   * Its SQL tab, as this user is to see it (T535; AC-373, AC-383; design
+   * 15's P1): offered to whoever may write its folder, or own it in their
+   * workspace; whether they may run SQL now, and why not. None without
+   * xcube's runner, where no tab is offered.
+   */
+  const sqlAccessOf = async (request: FastifyRequest, source: DataSource) => {
+    const workspace = (await workspaceOf?.(source.folderId)) ?? null;
+    const refusal = await mayRunSql(request, source, { workspace, access, switches, store });
+    return {
+      tab: workspace !== null || (await access(request, source.folderId, 'write')) === undefined,
+      runs: refusal === undefined,
+      ...(workspace === null ? {} : { needsSwitch: await needsSwitch(source, store) }),
+      ...(refusal === undefined ? {} : { why: refusal.error }),
+    };
+  };
+
   app.get('/api/data-sources/:id', USER, async (request, reply) => {
     const source = await reached(request, reply, 'read');
     if (source === undefined) return reply;
@@ -501,6 +518,7 @@ export function registerDataSources(
     return {
       ...viewOf(source),
       ...(switches === undefined ? {} : { sqlRunner: await runnerOf(source) }),
+      ...(sqlRunner === undefined ? {} : { sqlAccess: await sqlAccessOf(request, source) }),
       folderPath: pathOf(source.folderId),
       canWrite: (await access(request, source.folderId, 'write')) === undefined,
       inWorkspace: await inAWorkspace(source),

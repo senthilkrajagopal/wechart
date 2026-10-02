@@ -520,6 +520,46 @@ describe('SQL on a data source in My workspace (T532, AC-383)', () => {
   });
 });
 
+/** What a data source's page says of its SQL tab to `who` (T535). */
+const accessOf = async (who: string, id: string) => {
+  const answer = await as(who, { method: 'GET', url: `/api/data-sources/${id}` });
+  expect(answer.statusCode, answer.body).toBe(200);
+  return answer.json<{ sqlAccess?: unknown }>().sqlAccess;
+};
+
+describe('what a data source’s page says of its SQL tab (T535, AC-373, AC-383; design 15’s P1)', () => {
+  it('gives the tab to Super-Admins and the folder’s own read-write members, saying while off that it is off, and to nobody else', async () => {
+    const original = await originalFor('tabbed');
+    const off = {
+      tab: true,
+      runs: false,
+      why: 'The SQL runner is off for this data source: a Super-Admin turns it on.',
+    };
+    expect(await accessOf('super', original)).toEqual(off);
+    expect(await accessOf('writer', original)).toEqual(off);
+    // A member who sees it from a folder below gets no tab.
+    expect(await accessOf('manager', original)).toEqual({
+      tab: false,
+      runs: false,
+      why: 'Only Super-Admins and read-write members of its own folder run SQL on it.',
+    });
+    await turnOn(original);
+    expect(await accessOf('writer', original)).toEqual({ tab: true, runs: true });
+  });
+
+  it('gives a workspace data source’s owner the tab with no switch, and says why a repointed copy needs one', async () => {
+    const copy = await copyOf('writer', await originalFor('tabbed_copy'));
+    expect(await accessOf('writer', copy.id)).toEqual({ tab: true, runs: true, needsSwitch: false });
+    await sources().update(copy.id, { fields: { ...FIELDS, database: 'payroll' } });
+    expect(await accessOf('writer', copy.id)).toEqual({
+      tab: true,
+      runs: false,
+      needsSwitch: true,
+      why: expect.stringMatching(/^This copy signs in to another database/),
+    });
+  });
+});
+
 describe('a copy pointed elsewhere than its original (T532, design 15’s Q8)', () => {
   const original = { authMethod: 'password', fields: FIELDS };
 
