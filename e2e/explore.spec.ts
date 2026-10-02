@@ -151,10 +151,12 @@ test('creating is offered through one New menu: Dashboard, Chart and Folder', as
   const menu = page.getByRole('menu', { name: 'New' });
   // By label: each item leads with its type's icon chip, which is decorative.
   // My workspace's New offers a data source and an import as well (T363;
-  // AC-192).
+  // AC-192), and a model, previewed through the workspace's overlay (T347,
+  // AC-282).
   await expect(menu.getByRole('menuitem')).toHaveText([
     /Dashboard$/,
     /Chart$/,
+    /Model$/,
     /Data source$/,
     /Folder$/,
     /Import a dashboard…from a file$/,
