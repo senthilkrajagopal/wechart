@@ -3728,6 +3728,54 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 .build-jobs__job { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; font-size: 12px; }
 .build-jobs__table { color: var(--wc-text-secondary); overflow-wrap: anywhere; }
 .build-panel__note { margin: 8px 0 0; color: var(--wc-text-secondary); font-size: 12px; }
+/* Run history and a build's log (T374; design 16, state B). */
+.run-history__count { margin-left: auto; font-size: 12px; color: var(--wc-text-secondary); }
+.run-history__table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.run-history__name { font-family: var(--wc-font-code); font-size: 12px; font-weight: 600; }
+.run-history__empty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--wc-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+.run-history__empty b { color: var(--wc-text-primary); font-size: 14px; line-height: 20px; }
+.run-history .audit-trail__pager { justify-content: flex-start; align-items: center; }
+.run-history__note { font-size: 12px; color: var(--wc-text-secondary); }
+.owner { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; white-space: nowrap; }
+.owner svg { color: var(--wc-text-secondary); flex: none; }
+.build-log__title code { font-size: 13px; }
+.build-log__section { display: grid; gap: 6px; }
+.build-log__section h3 {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--wc-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.build-log__error,
+.build-log__lines {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 4px;
+  background: var(--wc-bg-subtle);
+  font: 400 12px/18px var(--wc-font-code);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.build-log__lines { list-style: none; max-height: 320px; overflow: auto; }
+.build-log__lines li { display: grid; grid-template-columns: max-content 1fr; gap: 10px; }
+.build-log__time { color: var(--wc-text-secondary); }
+.build-log__bad { color: var(--wc-status-error); }
+.build-log__gap { color: var(--wc-text-muted); font-style: italic; }
+.build-log__help { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.build-log__starter { margin: 0; }
 /* The Security workspace (T171): its policies' table, and the note on phase 2. */
 /* One column as wide as the page leaves it, not as its widest table: an
    implicit column took the tables' width, and the title and notes ran past a

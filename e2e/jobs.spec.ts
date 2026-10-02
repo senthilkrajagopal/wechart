@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { psql } from './store';
+
 /**
  * AC-016: THE SYSTEM SHALL record, for every query it issues, the Cube
  * request, the duration and whether it was accelerated, and expose those
@@ -69,6 +71,74 @@ test('building a pre-aggregation shows its job token and follows it to done', as
     await page.request.post('/api/builds/status', { data: { tokens: [token] } })
   ).json()) as { status: string }[];
   expect(answered.map((each) => each.status)).toEqual(['done']);
+});
+
+/**
+ * T374 / AC-150: a build wechart started is recorded once, followed to its
+ * end by the API — no page asks after it here — and listed in Jobs' Run
+ * history, its log naming its token and Cube's end state, Done. This carries
+ * AC-149's test, the token followed to its end, onto the new surface. A
+ * record whose end is moved back 25 hours, past Cube's own record of the
+ * job, is still listed.
+ */
+test('Run history lists a build started from Jobs, its log naming its token and Done, a day on too', async ({
+  page,
+}) => {
+  await page.goto('/jobs');
+  const row = page
+    .getByRole('table', { name: 'Pre-aggregations' })
+    .getByRole('row')
+    .filter({ hasText: ROLLUP });
+  const answered = page.waitForResponse(
+    (response) => response.url().endsWith('/api/builds') && response.request().method() === 'POST',
+  );
+  await row.getByRole('button', { name: `Build ${ROLLUP}` }).click();
+  const { tokens, runId } = (await (await answered).json()) as {
+    tokens: string[];
+    runId: string;
+  };
+  expect(tokens.length).toBeGreaterThan(0);
+
+  // Run history, at its own address: this build's row, followed to Done by
+  // the API with no page asking Cube after it.
+  await page.goto('/jobs?tab=history');
+  const built = page.getByTestId(`build-row-${runId}`);
+  await expect(built).toContainText(ROLLUP);
+  await expect(built.getByTestId('build-outcome')).toHaveText('Done', { timeout: 30_000 });
+  await expect(built.getByTestId('starter')).toHaveText('admin');
+
+  // Its log: the token, whole in its title, and Cube's end state.
+  await built.getByRole('button', { name: ROLLUP }).click();
+  const pane = page.getByRole('complementary', { name: `Build of ${ROLLUP}` });
+  const log = pane.getByRole('region', { name: 'Log · what Cube reported, when wechart saw it' });
+  await expect(pane.getByTitle(tokens[0]!)).toBeVisible();
+  await expect(log.getByRole('listitem').last()).toContainText('done');
+  await expect(pane.getByTestId('build-outcome')).toHaveText('Done');
+
+  // A day and an hour on, Cube's record of the job long gone: still listed.
+  expect(runId).toMatch(/^[0-9a-f-]+$/);
+  expect(
+    psql(
+      `UPDATE build_runs SET started_at = started_at - interval '25 hours',
+         answered_at = answered_at - interval '25 hours',
+         ended_at = ended_at - interval '25 hours'
+       WHERE id = '${runId}' RETURNING id;`,
+    ).split('\n')[0],
+  ).toBe(runId);
+  await page.reload();
+  const moved = page.getByTestId(`build-row-${runId}`);
+  // Behind every build of the last 25 hours now: paged to, Older by Older,
+  // once the first page is in.
+  await expect(page.getByText(/\d+ builds? · newest first/)).toBeVisible();
+  await expect(async () => {
+    if ((await moved.count()) === 0)
+      await page.getByRole('button', { name: 'Older' }).click({ timeout: 2_000 });
+    await expect(moved).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
+  await expect(moved.getByTestId('build-outcome')).toHaveText('Done');
+  // Started more than a day ago, as the page now says.
+  const startedAt = Date.parse((await moved.locator('time').getAttribute('datetime')) ?? '');
+  expect(Date.now() - startedAt).toBeGreaterThan(25 * 3_600_000);
 });
 
 /**
@@ -374,13 +444,15 @@ test('the query log narrows, sorts and pages, its headers in view as it scrolls'
   expect(asked.at(-1)?.get('offset')).toBe('25');
 
   // Narrowed by outcome, asked of the API from the first page: failures only.
-  await page.getByLabel('Outcome').selectOption('failed');
+  // The Queries tab's: Run history, mounted beside it, has an Outcome too (T374).
+  const outcome = page.getByRole('tabpanel', { name: 'Queries' }).getByLabel('Outcome');
+  await outcome.selectOption('failed');
   await expect(range).toHaveText('1–12 of 12');
   expect(asked.at(-1)?.get('outcome')).toBe('failed');
   expect(asked.at(-1)?.get('offset')).toBe('0');
   await expect(rows).toHaveCount(12);
   for (const text of await rows.allTextContents()) expect(text).toContain('Failed');
-  await page.getByLabel('Outcome').selectOption('all');
+  await outcome.selectOption('all');
   await expect(range).toHaveText('1–25 of 60');
 
   // Sorted by duration, longest first.

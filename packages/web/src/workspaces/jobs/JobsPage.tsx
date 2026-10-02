@@ -7,14 +7,17 @@ import { StateLine } from '../../shell/StatusIcon';
 import { BuildPanel } from './BuildPanel';
 import { Health } from './Health';
 import { FIRST_ASK, QueryLog, queryStringOf, type QueryLogAsk, type QueryRecord } from './QueryLog';
+import { RunHistory } from './RunHistory';
 
 /**
  * The Jobs workspace, in the prototype's tabs: the pre-aggregations, each
- * built on request and followed to its end (T155, AC-149), and the queries
+ * built on request and followed to its end (T155, AC-149); Run history, the
+ * builds wechart started (T374, AC-150; design 16, pin 1); and the queries
  * wechart has issued, newest first (AC-016).
  */
 const TABS = [
   ['preaggs', 'Pre-aggregations'],
+  ['history', 'Run history'],
   ['queries', 'Queries'],
 ] as const;
 type Tab = (typeof TABS)[number][0];
@@ -59,7 +62,7 @@ function Queries() {
   );
 }
 
-/** `?tab=queries` opens the log: a link to it, and the accessibility sweep's. */
+/** `?tab=queries` opens the log, and `?tab=history` Run history: a link to either, and the accessibility sweep's. */
 function tabOfUrl(): Tab {
   const asked = new URLSearchParams(window.location.search).get('tab');
   return TABS.some(([key]) => key === asked) ? (asked as Tab) : 'preaggs';
@@ -67,6 +70,9 @@ function tabOfUrl(): Tab {
 
 export function JobsPage({ pollMs }: { pollMs?: number }) {
   const [open, setOpen] = useState<Tab>(tabOfUrl);
+  /** The tabs opened so far: Run history is read once its tab first opens, then kept. */
+  const [opened, setOpened] = useState<ReadonlySet<Tab>>(() => new Set([tabOfUrl()]));
+  if (!opened.has(open)) setOpened(new Set([...opened, open]));
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const base = useId();
   return (
@@ -122,6 +128,14 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
           // `?preagg=`, from a tile's Data as of › Open in Jobs (T273, AC-245).
           selectedFirst={new URLSearchParams(window.location.search).get('preagg')}
         />
+      </div>
+      <div
+        role="tabpanel"
+        id={`${base}-history-panel`}
+        aria-labelledby={`${base}-history`}
+        hidden={open !== 'history'}
+      >
+        <RunHistory enabled={opened.has('history')} />
       </div>
       <div
         role="tabpanel"

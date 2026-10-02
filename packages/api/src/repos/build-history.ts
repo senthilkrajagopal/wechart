@@ -120,6 +120,56 @@ export interface StateSeen {
 /** The latest records of each pre-aggregation that are kept (AC-150). */
 export const KEPT_PER_PRE_AGGREGATION = 100;
 
+/** Run history's page: 50 builds at a time (AC-150). */
+export const BUILDS_PAGE = 50;
+
+/** What Run history is narrowed by (T374, AC-150). */
+export interface BuildListFilters {
+  /** An outcome, or `open` for a build not yet ended. */
+  readonly outcome?: BuildOutcome | 'cancelled' | 'open';
+  /** A person by their key, or a schedule by its id. */
+  readonly starter?: { readonly kind: 'person' | 'schedule'; readonly id: string };
+  readonly folderIds?: readonly string[];
+  /** Started then or later. */
+  readonly since?: Date;
+}
+
+/** A build as Run history lists it: its record without its jobs, with how many there are and how far they've got. */
+export type BuildSummary = Omit<BuildRecord, 'tokens' | 'requestId' | 'answeredAt'> & {
+  readonly jobs: number;
+  /** Its jobs ended, and building. */
+  readonly progress: { readonly done: number; readonly building: number };
+};
+
+type RunRow = {
+  id: string;
+  pre_aggregation: string;
+  folder_id: string | null;
+  partitions: string[] | null;
+  partition_granularity: string | null;
+  via: string;
+  starter_kind: string;
+  starter_key: string | null;
+  starter_name: string | null;
+  schedule_id: string | null;
+  schedule_name: string | null;
+  started_at: Date;
+  ended_at: Date | null;
+  outcome: string | null;
+  failed_count: number | null;
+  error: string | null;
+};
+
+const starterOf = (
+  row: Pick<
+    RunRow,
+    'starter_kind' | 'starter_key' | 'starter_name' | 'schedule_id' | 'schedule_name'
+  >,
+): Starter =>
+  row.starter_kind === 'schedule'
+    ? { kind: 'schedule', id: row.schedule_id ?? '', name: row.schedule_name ?? '' }
+    : { kind: 'person', key: row.starter_key ?? '', name: row.starter_name ?? '' };
+
 /**
  * A job's end, as its final state says it: failed — `failure: …`, its
  * partition missing, or its pre-aggregation gone from the model — expired,
@@ -444,6 +494,130 @@ export function buildHistory(db: Kysely<Database>) {
         .limit(500)
         .execute();
       for (const { id } of ended) await close(id);
+    },
+
+    /**
+     * Run history (T374, AC-150): the builds in `within`'s folders — every
+     * folder's, given none — newest first, a page at a time, narrowed by
+     * `filters`; the next page starts after `before`, the last build of this
+     * one, and `older` names it while there are more.
+     */
+    async list({
+      within,
+      filters = {},
+      before,
+      limit = BUILDS_PAGE,
+    }: {
+      readonly within: readonly string[] | undefined;
+      readonly filters?: BuildListFilters;
+      readonly before?: string;
+      readonly limit?: number;
+    }): Promise<{ records: BuildSummary[]; older?: string }> {
+      if (within !== undefined && within.length === 0) return { records: [] };
+      let query = db
+        .selectFrom('build_runs as r')
+        .select([
+          'r.id',
+          'r.pre_aggregation',
+          'r.folder_id',
+          'r.partitions',
+          'r.partition_granularity',
+          'r.via',
+          'r.starter_kind',
+          'r.starter_key',
+          'r.starter_name',
+          'r.schedule_id',
+          'r.schedule_name',
+          'r.started_at',
+          'r.ended_at',
+          'r.outcome',
+          'r.failed_count',
+          'r.error',
+        ])
+        .select((eb) => [
+          eb
+            .selectFrom('build_tokens as t')
+            .select(eb.fn.countAll<string>().as('n'))
+            .whereRef('t.run_id', '=', 'r.id')
+            .as('jobs'),
+          eb
+            .selectFrom('build_tokens as t')
+            .select(eb.fn.countAll<string>().as('n'))
+            .whereRef('t.run_id', '=', 'r.id')
+            .where('t.finished', '=', true)
+            .as('done'),
+          eb
+            .selectFrom('build_tokens as t')
+            .select(eb.fn.countAll<string>().as('n'))
+            .whereRef('t.run_id', '=', 'r.id')
+            .where('t.finished', '=', false)
+            .where('t.status', '=', 'processing')
+            .as('building'),
+        ]);
+      if (within !== undefined) query = query.where('r.folder_id', 'in', within);
+      if (filters.folderIds !== undefined)
+        query =
+          filters.folderIds.length === 0
+            ? query.where(sql<boolean>`false`)
+            : query.where('r.folder_id', 'in', filters.folderIds);
+      if (filters.outcome === 'open') query = query.where('r.outcome', 'is', null);
+      else if (filters.outcome !== undefined)
+        query = query.where('r.outcome', '=', filters.outcome);
+      if (filters.starter?.kind === 'person')
+        query = query
+          .where('r.starter_kind', '=', 'person')
+          .where('r.starter_key', '=', filters.starter.id);
+      if (filters.starter?.kind === 'schedule')
+        query = query.where('r.schedule_id', '=', filters.starter.id);
+      if (filters.since !== undefined) query = query.where('r.started_at', '>=', filters.since);
+      // Paged from a build of `within`'s folders only: from another's, nothing
+      // (T374's review), so its start can't be learnt by paging.
+      if (before !== undefined)
+        query = query.where(
+          within === undefined
+            ? sql<boolean>`(r.started_at, r.id) < (SELECT started_at, id FROM build_runs WHERE id = ${before})`
+            : sql<boolean>`(r.started_at, r.id) < (SELECT started_at, id FROM build_runs WHERE id = ${before} AND folder_id IN (${sql.join(within)}))`,
+        );
+      const rows = await query
+        .orderBy('r.started_at', 'desc')
+        .orderBy('r.id', 'desc')
+        .limit(limit + 1)
+        .execute();
+      const records = rows.slice(0, limit).map((row): BuildSummary => ({
+        id: row.id,
+        preAggregation: row.pre_aggregation,
+        folderId: row.folder_id,
+        partitions: row.partitions,
+        granularity: row.partition_granularity,
+        via: row.via as BuildVia,
+        starter: starterOf(row),
+        startedAt: row.started_at,
+        endedAt: row.ended_at,
+        durationMs:
+          row.ended_at === null ? null : row.ended_at.getTime() - row.started_at.getTime(),
+        outcome: row.outcome as BuildOutcome | null,
+        failedCount: row.failed_count,
+        error: row.error,
+        jobs: Number(row.jobs ?? 0),
+        progress: { done: Number(row.done ?? 0), building: Number(row.building ?? 0) },
+      }));
+      return rows.length > limit ? { records, older: records.at(-1)!.id } : { records };
+    },
+
+    /** Who started builds in `within`'s folders — every folder's, given none — each once, by their latest name. */
+    async starters(within: readonly string[] | undefined): Promise<Starter[]> {
+      if (within !== undefined && within.length === 0) return [];
+      let query = db
+        .selectFrom('build_runs')
+        .distinctOn(['starter_kind', sql`COALESCE(starter_key, schedule_id)`])
+        .select(['starter_kind', 'starter_key', 'starter_name', 'schedule_id', 'schedule_name']);
+      if (within !== undefined) query = query.where('folder_id', 'in', within);
+      const rows = await query
+        .orderBy('starter_kind')
+        .orderBy(sql`COALESCE(starter_key, schedule_id)`)
+        .orderBy('started_at', 'desc')
+        .execute();
+      return rows.map(starterOf).sort((a, b) => a.name.localeCompare(b.name));
     },
   };
 }

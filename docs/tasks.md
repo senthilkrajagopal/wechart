@@ -7077,8 +7077,22 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - a `* * * * *` rollup appears in Run history within one check period (AC-150).
   - ~~Files: as T261 (above). Failing test: as T261: … the logger never throws (AC-150).~~
   - Depends on: T372, T420
-- [ ] T374 (AC-150) Show Run history in Jobs, and a build's log
+- [x] T374 (AC-150) Show Run history in Jobs, and a build's log
   - *Rewritten 2026-10-02 to design 16's state B (`[R56]`).*
+  - **As built (2026-10-02):**
+    - `GET /api/jobs/builds` (`jobs/history.ts`): newest first, 50 at a time, `older` naming the next page's start; `outcome` (done, failed, cancelled, expired, open), `starter` (`person:<key>`, `schedule:<id>`), `folder` and `within` (day, week, month; all time otherwise). Each record says its jobs and, while open, how many ended and how many are building, by its short name and folder path. The answer also gives the Started by and Folder choices: the starters in the user's folders, and the shared folders they build in (a Super-Admin's every one). `GET /api/jobs/builds/:id` gives one record with its jobs and their logs; out of scope it reads Not found, as a missing one does (state G6). Both answer `403` to anyone with no Jobs, and both are in the route matrix.
+    - `RunHistory.tsx` and `BuildLog.tsx` at `?tab=history`, between Pre-aggregations and Queries. Run history is read once its tab first opens, then kept mounted as the others are, and read again every 5 s. Time opens on Last 7 days, as design 16 draws it.
+    - The log: the ask; Cube's answer with its job, its token whole in the title; then each state with when wechart saw it, its table where it first appears, each line of several jobs named by its partition, else its token. A day past the start, a line carries its date (B2). One start of several partitions also lists each partition with its state and token (B3).
+    - `build_runs` keeps the partition granularity (T372's migration), for "Whole", "All 10" and each partition's period.
+  - **One review round (spec-reviewer), fixed:**
+    1. A security bug: a Super-Admin's Folder choices listed folders in users' own workspaces (AC-276). Only folders under the shared root are offered now; a test asks as a Super-Admin and a member.
+    2. Log times past the start's day had no date.
+    3. A line of several jobs whose job had no table named neither its partition nor its token.
+    4. The gap line before Cube's record expired said "wechart's API was stopped", a cause wechart can't know. It reads "wechart didn't see how it ended"; the help text under it is design 16's.
+    5. Paging from another folder's build id (`before`) could tell when that build started. The cursor is now looked up in the user's own folders only.
+    6. The e2e's 25-hour record pages with Older until it's found.
+  - **Left as found (minor), for the user:** the count says the page's builds, "50 builds", while Older has more; the pane closes if a refresh moves its build to the next page; tabs don't change the address (as Queries already doesn't); once opened, Run history reads again every 5 s while hidden; the row button's name is the rollup's alone, not design 16's "name, folder, state, partition"; the B3 pane reads "Failed · 2 of 30", not "… of 30 partitions", and lists every partition rather than "…27 more, all Done"; B1's "dateRange" line isn't drawn; the Outcome filter also offers Cancelled and "Queued or building", and Time "Last 30 days", which the design doesn't draw.
+  - **AC-150 stays open** until the cancelled outcome (T376).
   - *2026-09-28, R42.2:* Jobs keeps "Trigger" as the refresh key (AC-229) and adds "Started by" from this history. The refresh worker's builds show none until their history comes, next phase (R41).
   - Files:
     - `packages/api/src/jobs/history.ts` (+ test): a paged, filtered route, scoped as T371 scopes Jobs;

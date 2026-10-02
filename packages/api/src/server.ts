@@ -47,6 +47,7 @@ import { ADMIN, PUBLIC, registerGuard, registerRouteAccess, USER } from './auth/
 import { registerSignIn, signInOptionsOf } from './auth/routes';
 import { Forbidden, registerUser, Unauthenticated, userOf } from './auth/user';
 import { registerBuilds } from './jobs/build';
+import { registerBuildHistory } from './jobs/history';
 import { registerSchedules } from './jobs/schedules';
 import { NO_JOBS, type JobsAccess } from './jobs/scope';
 import {
@@ -1130,6 +1131,9 @@ export function buildServer({
     jobsAccess,
     buildHistory === undefined ? undefined : { store: buildHistory, now },
   );
+  // Run history and each build's log, scoped as Jobs is (T374, AC-150).
+  if (buildHistory !== undefined)
+    registerBuildHistory(app, { store: buildHistory, access: jobsAccess, now });
   // With the model's files: a key's SQL is read there (T273's review).
   // And each folder's, under its prefixed names (T450's review).
   registerSchedules(app, client, modelFiles, folders, jobsAccess);

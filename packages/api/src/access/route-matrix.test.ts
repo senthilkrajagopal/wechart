@@ -11,6 +11,7 @@ import { PUBLIC_URL, signIn, USERS } from '../auth/sign-in.fixture';
 import { CubeClient } from '../cube/client';
 import { closeDb, getDb } from '../db/client';
 import { auditStore } from '../repos/audit';
+import { buildHistory } from '../repos/build-history';
 import { bookmarkStore } from '../repos/bookmarks';
 import { catalog } from '../repos/catalog';
 import { connectionTestStore } from '../repos/connection-tests';
@@ -162,6 +163,8 @@ interface Held {
   image: string;
 }
 const at = {} as Record<Place, Held>;
+/** The build recorded in each place (T374). */
+const builds = {} as Record<Place, string>;
 /** Each owner's workspace and what it holds. */
 interface Workspace {
   key: string;
@@ -605,6 +608,8 @@ beforeAll(async () => {
     // The SQL runner, its switch, each user's runs and xcube's (T531–T533).
     sqlRunnerSwitches: sqlRunnerSwitches(getDb()),
     sqlRuns: sqlRuns(getDb()),
+    // The builds wechart started, and Run history (T372, T374).
+    buildHistory: buildHistory(getDb()),
     sqlRunner: xcubeSqlRunner({
       cubeApiUrl: secured.cubeApiUrl,
       model: 'dev',
@@ -730,9 +735,39 @@ beforeAll(async () => {
     };
   }
 
+  // A build wechart started in each place, in Run history (T374).
+  for (const place of PLACES) {
+    const startedAt = new Date();
+    builds[place] = await buildHistory(getDb()).start({
+      preAggregation: `${fullName(place)}.${rollupOf(place)}`,
+      folderId: at[place].folder,
+      partitions: null,
+      granularity: null,
+      via: 'build-all',
+      starter: {
+        kind: 'person',
+        key: `${MARK}-starter-${place}`,
+        // Ends where no other place's does: /A's isn't inside /A/B's.
+        name: `${MARK} starter in ${place}.`,
+      },
+      requestId: `${MARK}-build-${place}`,
+      tokens: [`${MARK}-history-${place}-t`],
+      startedAt,
+      answeredAt: startedAt,
+    });
+  }
+
   // Every secret, and who may see it.
   for (const place of PLACES) {
     const held = at[place];
+    // A build's record, and who started it, to those who may build there (T374, AC-297).
+    secret(
+      `build record in ${place}`,
+      (who) => writes(who, place),
+      builds[place],
+      `${MARK} starter in ${place}.`,
+      `${MARK}-history-${place}-t`,
+    );
     if (place !== 'root') {
       secret(`folder ${place}`, (who) => opens(who, place), held.folder, `${MARK} folder ${place}`);
       secret(`groups of ${place}`, (who) => opens(who, place), groupOf(place));
@@ -863,6 +898,7 @@ afterAll(async () => {
   for (const id of extraSources) await db.deleteFrom('data_sources').where('id', '=', id).execute();
   if (images.length > 0) await db.deleteFrom('images').where('id', 'in', images).execute();
   await db.deleteFrom('query_log').where('request_id', 'like', `${MARK}%`).execute();
+  await db.deleteFrom('build_runs').where('request_id', 'like', `${MARK}%`).execute();
   const ids = made.map((each) => each.id);
   if (ids.length > 0) await db.deleteFrom('item_versions').where('item_id', 'in', ids).execute();
   for (const [owner] of OWNERS)
@@ -1979,6 +2015,18 @@ const CASES: Record<string, Case> = {
     },
     (who) => inPlaces(who, writes, tokenOf),
   ),
+  // Run history, and a build's own record: the folders they build in (T374, AC-297).
+  'GET /api/jobs/builds': listed({ method: 'GET', url: '/api/jobs/builds?within=all' }, (who) =>
+    inPlaces(who, writes, (place) => builds[place]),
+  ),
+  'GET /api/jobs/builds/:id': async () => {
+    for (const place of PLACES)
+      await openedOnlyBy(
+        `/api/jobs/builds/${builds[place]}`,
+        (who) => writes(who, place),
+        builds[place],
+      );
+  },
   // Schedules: a read-write member's own folders' rollups.
   'GET /api/schedules': listed({ method: 'GET', url: '/api/schedules' }, (who) =>
     inPlaces(who, writes, rollupOf),
