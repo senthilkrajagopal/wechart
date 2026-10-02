@@ -10057,13 +10057,40 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
       - Chart and folder moves by `PUT` aren't tested; a dashboard's is.
       - A folder's own charts keep their bindings when it moves (AC-275, no rebinding), so its readers can still be refused a tile bound off its new path. That was so before this task.
     - **For the user:** drafts aren't copied on a move (the decision above). AC-371's "each such dashboard" reads as every dashboard, so confirm that a draft may wait for its save or its approval.
-- [ ] T540 (AC-389) Recreate a deleted target folder when its proposal is approved *(added 2026-10-01, `[R52]`)*
+- [x] T540 (AC-389) Recreate a deleted target folder when its proposal is approved *(added 2026-10-01, `[R52]`)*
   - Files: `packages/api/src/server.ts` (a folder's delete keeps a record of it), a migration for deleted folders' records, `packages/api/src/routes/proposals.ts` (`land`), `packages/api/src/routes/folder-recreate.test.ts`
   - Failing test: `folder-recreate.test.ts`:
     - a proposal whose target folder, and that folder's empty parent, were deleted is approved;
     - both come back with their ids, names, parents, descriptions and groups, and the items land in the folder;
     - a same-named folder made meanwhile leaves the recreated one "<name> (2)" (AC-389).
   - Depends on: T521
+  - **Done 2026-10-02.**
+    - **The record.** Deleting a shared folder keeps its body as it was (name, parent, description, groups) as a document of kind `deleted-folder` (`repos/deleted-folders.ts`).
+      - The body is held under `folder`, so the columns generated from a document's top level are empty, and no listing by folder or title finds a record.
+      - A record is kept only while an open proposal lands in the folder, or a kept record names it as its parent. A workspace folder keeps none.
+      - **No migration, unlike the plan.** The root's groups are kept the same way, as a `setting` document. A new migration applied to the shared `wechart_test` and e2e databases would break every other branch's runs until it reached `feat/xcube`.
+    - **At approval.** `land` first asks `recreate` for each folder an item lands in. `folderBack` (server.ts) makes a deleted one again from its record, with its id, its deleted parents first, then puts the tree to xcube before anything is bound there.
+      - A name another folder has taken in its parent since is numbered: "<name> (2)", then "(3)".
+      - With no record, the approval is refused (`409`, "Its folder was deleted, and wechart has no record of it to make it again. Reject it, and propose it to another folder.") and the proposal stays open. A folder deleted before T540 has no record.
+      - If the tree can't be put, the approval is refused (`503`, "…Approve it again in a moment.") and the proposal stays open. The folder stays made again.
+    - **Who may approve.** A deleted folder's read-write members, as its groups were when it was deleted, read along its parents, deleted or not (`deletedWritable`, core's `folderRights`), and a Super-Admin. **Claude's call, overturnable.**
+    - **Tests:** `folder-recreate.test.ts` (6):
+      - a folder and its deleted parent come back, each with its id, name, parent, description and groups, and the dashboard lands in it, approved by its author;
+      - a folder of its name made since leaves it "<name> (2)";
+      - a deleted folder isn't listed in its parent's contents, and its reader can't approve into it;
+      - no record is kept for a folder no proposal goes to;
+      - the tree is put once; a failed put gives a `503`, the proposal stays open, and the next approval lands;
+      - with no record, a `409` and the proposal open.
+    - **Review (one round, FAIL), fixed:**
+      - records were listed in their parent's contents, which broke AC-366's e2e and AC-264;
+      - every deleted folder was kept for good and read on every rights check;
+      - no test showed a non-member refused;
+      - a failed tree push was ignored.
+    - **Left (low, the breadth rule):**
+      - an approval refused after its folder was made again leaves the folder made;
+      - two approvals into one deleted folder at once give the second a `500`;
+      - a record outlives a rejected or withdrawn proposal.
+    - The security e2e `deleting.spec.ts` was not run: another session's security stack was up on 4300. The unit test asserts what it checks, that a deleted folder isn't listed.
 - [x] T541 (AC-388) Freeze a workspace item while it is in an open proposal *(added 2026-10-01, `[R52]`)*
   - Files: the save routes for dashboards, charts and data sources in `packages/api/src/server.ts` and `routes/data-sources.ts` (models with T350), the editors' notices, `packages/api/src/routes/proposal-freeze.test.ts`
   - Failing test: `proposal-freeze.test.ts`: a dashboard, chart or data source in an open proposal refuses a save (`409`), saying it was submitted and that withdrawing lets it be changed; once withdrawn or decided, it saves (AC-388).

@@ -89,7 +89,8 @@ import {
   type TestAnswer,
   type TestedConnection,
 } from './xcube/connections';
-import type { FolderAccessStore } from './repos/folder-access';
+import type { DeletedFolderStore } from './repos/deleted-folders';
+import { settingOf, type FolderAccessStore } from './repos/folder-access';
 import type { AuditStore } from './repos/audit';
 import { actorOf, recordIn } from './audit/record';
 import { registerFolderAccess } from './routes/access';
@@ -191,6 +192,11 @@ export interface BuildOptions {
   readonly sessions?: SessionStore;
   /** Each folder's AD groups (T314, AC-259, AC-260). */
   readonly folderAccess?: FolderAccessStore;
+  /**
+   * A record of each shared folder deleted, kept to make it again when a
+   * proposal still going to it is approved (T540, AC-389).
+   */
+  readonly deletedFolders?: DeletedFolderStore;
   /** The audit trail (T368, AC-294): where sign-ins and changes are recorded. */
   readonly audit?: AuditStore;
   /** Workspace items proposed to their target folders (T349, AC-284). */
@@ -409,6 +415,7 @@ export function buildServer({
   querySigner,
   publications,
   folderAccess,
+  deletedFolders,
   dataSources,
   sqlRunnerSwitches,
   dataSourceLanding,
@@ -1485,10 +1492,13 @@ export function buildServer({
         return seen?.rights.has(own) === true ? own : null;
       },
       workspaceOf: (folderId) => workspaceRootOf(folderId),
-      // Read once a request, then asked per folder (T351's review).
+      // Read once a request, then asked per folder (T351's review). A folder
+      // deleted since, as its groups were then (T540, AC-389).
       writable: async (request) => {
         const seen = await visibilityOf(request);
-        return (folderId) => seen === undefined || mayWrite(seen, folderId);
+        if (seen === undefined) return () => true;
+        const gone = await deletedWritable(request);
+        return (folderId) => mayWrite(seen, folderId) || gone.has(folderId);
       },
       // A target's path from Shared, on the Reviews page (T355).
       folders: async () =>
@@ -1497,8 +1507,113 @@ export function buildServer({
           title: string;
           parentId: string | null;
         }[],
+      // A folder it lands in, deleted since, made again first (T540, AC-389),
+      // and put to xcube before anything is bound in it.
+      ...(deletedFolders === undefined
+        ? {}
+        : {
+            recreate: async (folderId: string) => {
+              const back = await folderBack(folderId);
+              if (back !== 'made' || afterFolderChange === undefined)
+                return back === 'none' ? 'none' : 'there';
+              // A push that failed says so, as `pushTree` answers it, rather
+              // than throwing (T540's review): nothing is bound against a
+              // tree xcube doesn't hold.
+              const pushed = await afterFolderChange().catch((error: unknown) => {
+                app.log.warn({ err: error }, 'could not put the folder tree to xcube');
+                return { kind: 'failed' };
+              });
+              return (pushed as { kind?: unknown } | undefined)?.kind === 'failed'
+                ? 'unpushed'
+                : 'there';
+            },
+          }),
     });
   }
+
+  /**
+   * Whether a shared folder just deleted needs a record (T540's review): only
+   * while an open proposal lands in it, or a deleted folder kept for one
+   * names it as its parent. No other is ever made again, so none other is
+   * kept, read on every rights check, or held for good.
+   */
+  const stillWanted = async (folderId: string): Promise<boolean> => {
+    if (deletedFolders === undefined) return false;
+    if (
+      proposals !== undefined &&
+      (await proposals.open()).some((proposal) =>
+        proposal.items.some((item) => item.landsIn === folderId),
+      )
+    )
+      return true;
+    return (await deletedFolders.all()).some((record) => folderIdOf(record.body) === folderId);
+  };
+
+  /**
+   * The deleted folders the request's user could change, as their groups
+   * were when they were deleted, along their parents, deleted or not (T540,
+   * AC-389): who may approve what lands in one.
+   */
+  const deletedWritable = async (request: FastifyRequest): Promise<ReadonlySet<string>> => {
+    if (deletedFolders === undefined || folderAccess === undefined) return new Set();
+    const records = await deletedFolders.all();
+    if (records.length === 0) return new Set();
+    const live = await folderAccess.tree();
+    const there = new Set(live.map((folder) => folder.id));
+    const gone = records
+      .filter((record) => !there.has(record.id))
+      .map((record) => ({
+        id: record.id,
+        parentId: folderIdOf(record.body) ?? ROOT_FOLDER_ID,
+        access: settingOf(record.body['access']),
+      }));
+    const user = userOf(request);
+    const rights = folderRights([...live, ...gone], {
+      groups: user.groups,
+      superAdmin: user.superAdmin,
+    });
+    return new Set(
+      gone.filter((folder) => rights.get(folder.id)?.write === true).map((folder) => folder.id),
+    );
+  };
+
+  /**
+   * A folder deleted since a proposal to it was made, made again from
+   * wechart's record of it (T540, AC-389): with its id and its body as it
+   * was (its name, parent, description and groups), its deleted parents
+   * first. A name another folder has taken in its parent since is numbered:
+   * "Sales (2)". `there` when it never went, `made` when it is made again,
+   * `none` when there is no record to make it from.
+   */
+  const folderBack = async (
+    folderId: string,
+    passed: ReadonlySet<string> = new Set(),
+  ): Promise<'there' | 'made' | 'none'> => {
+    if (folderId === ROOT_FOLDER_ID || (await docs?.get?.('folder', folderId)) != null)
+      return 'there';
+    // A cycle in the records is no way back.
+    if (docs === undefined || deletedFolders === undefined || passed.has(folderId)) return 'none';
+    const record = await deletedFolders.get(folderId);
+    if (record === null) return 'none';
+    const parent = folderIdOf(record.body) ?? ROOT_FOLDER_ID;
+    if ((await folderBack(parent, new Set([...passed, folderId]))) === 'none') return 'none';
+    const title = typeof record.body['title'] === 'string' ? record.body['title'] : '';
+    const taken = new Set(
+      (
+        (cat ? await cat.folders({ counted: false }) : []) as {
+          title: string;
+          parentId: string | null;
+        }[]
+      )
+        .filter((folder) => folder.parentId === parent)
+        .map((folder) => folder.title),
+    );
+    let named = title;
+    for (let next = 2; taken.has(named); next += 1) named = `${title} (${String(next)})`;
+    await docs.create({ kind: 'folder', id: folderId, body: { ...record.body, title: named } });
+    await deletedFolders.forget(folderId);
+    return 'made';
+  };
 
   /**
    * Exporting a dashboard (T511; AC-354, AC-355): what may go with it, of
@@ -5065,9 +5180,17 @@ export function buildServer({
     )
       await withdrawWithDelete({ store: proposals, audit }, request, kind, id);
 
+    // A shared folder as it is now, to keep a record of once it is gone (T540).
+    const recorded =
+      kind === 'folder' && deletedFolders !== undefined && (await workspaceRootOf(id)) === null
+        ? (found.stored ?? (await docs.get?.('folder', id)) ?? null)
+        : null;
+
     // A dashboard's own charts are part of it, and go with it (T518, AC-363).
     const own = kind === 'dashboard' && docs.localTo ? await docs.localTo(id) : [];
     const removed = await docs.remove(kind, id);
+    if (removed && recorded !== null && (await stillWanted(id)))
+      await deletedFolders!.keep({ id, body: recorded.body });
     if (removed && kind === 'dashboard') {
       for (const chart of own) await docs.remove('chart', chart.id);
       // Its bookmarks are of it too (T127's review).

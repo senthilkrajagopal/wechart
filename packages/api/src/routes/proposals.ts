@@ -127,6 +127,15 @@ export interface ProposalRoutes {
    * Unset, a proposal holds none.
    */
   readonly models?: ProposalModels;
+  /**
+   * A folder an approval lands in, deleted since it was proposed (T540,
+   * AC-389): made again from wechart's record of it, with its id, its
+   * deleted parents first. `there` when it is, made again or never gone;
+   * `none` when there is no record to make it from; `unpushed` when it was
+   * made again but xcube's folder tree could not be put. Unset, none is made
+   * again.
+   */
+  readonly recreate?: (folderId: string) => Promise<'there' | 'none' | 'unpushed'>;
 }
 
 const NOT_THERE = { error: 'There is no such item in your workspace.' };
@@ -812,6 +821,22 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
         description: authored === null ? null : proposal.description,
         proposalId: authored === null ? null : proposal.id,
       });
+
+    // A folder it lands in, deleted since, made again first (T540, AC-389).
+    if (routes.recreate !== undefined)
+      for (const folderId of new Set(proposal.items.map((item) => item.landsIn))) {
+        const back = await routes.recreate(folderId);
+        if (back === 'none')
+          throw new Refused(
+            409,
+            'Its folder was deleted, and wechart has no record of it to make it again. Reject it, and propose it to another folder.',
+          );
+        if (back === 'unpushed')
+          throw new Refused(
+            503,
+            'Its folder was made again, but Cube’s folder tree could not be updated, so nothing was approved. Approve it again in a moment.',
+          );
+      }
 
     // A data source: landed as it is, envelopes and all (AC-298).
     const source = proposal.items.find((item) => item.kind === 'data-source');

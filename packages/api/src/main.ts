@@ -10,6 +10,7 @@ import { bookmarkStore } from './repos/bookmarks';
 import { catalog } from './repos/catalog';
 import { connectionTestStore } from './repos/connection-tests';
 import { dataSourceStore } from './repos/data-sources';
+import { deletedFolderStore } from './repos/deleted-folders';
 import { documents } from './repos/documents';
 import { folderXcubeIds } from './repos/folder-xcube-ids';
 import { folderAccessStore } from './repos/folder-access';
@@ -198,6 +199,8 @@ async function main(): Promise<void> {
     publications,
     // Each folder's AD groups (T314).
     folderAccess,
+    // Each shared folder deleted, kept to make it again at an approval (T540, AC-389).
+    deletedFolders: deletedFolderStore(db),
     // The audit trail (T368, AC-294).
     audit: auditStore(db),
     // Workspace items proposed to their target folders (T349, AC-284).

@@ -34,7 +34,11 @@ function listOf(value: unknown): GroupList {
     : null;
 }
 
-function settingOf(value: unknown): FolderAccessSetting {
+/**
+ * A folder body's `access`, read as its groups: anything not a setting reads
+ * as unset. A deleted folder's record is read by it too (T540).
+ */
+export function settingOf(value: unknown): FolderAccessSetting {
   if (typeof value !== 'object' || value === null) return UNSET;
   const { readOnly, readWrite } = value as Record<string, unknown>;
   return { readOnly: listOf(readOnly), readWrite: listOf(readWrite) };
