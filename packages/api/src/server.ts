@@ -2695,9 +2695,6 @@ export function buildServer({
     const id = body?.id;
     if ((kind !== 'dashboard' && kind !== 'chart') || typeof id !== 'string' || id === '')
       throw new BadRequest('Name the dashboard or chart to copy: { kind, id }.');
-    // Its folder's name is the minute in the user's time zone (T523).
-    const timeZone = timeZoneOf(body?.timeZone);
-    if (timeZone === undefined) throw new BadRequest(NO_TIME_ZONE);
     const own = workspaceIdOf(userOf(request).key);
     if (!seen.rights.has(own))
       return reply.code(403).send({
@@ -2724,6 +2721,10 @@ export function buildServer({
     if ((await workspaceRootOf(home)) !== null)
       throw new BadRequest('It is in a workspace already: edit it there.');
     if (home === null || !mayWrite(seen, home)) return reply.code(403).send({ error: READ_ONLY });
+    // Its folder's name is the minute in the user's time zone (T523): asked
+    // once the copy is theirs to make, a refusal first (T408's matrix).
+    const timeZone = timeZoneOf(body?.timeZone);
+    if (timeZone === undefined) throw new BadRequest(NO_TIME_ZONE);
 
     return inTurn(own, async () => {
       // Their copies, wherever in their workspace they are.

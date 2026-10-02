@@ -895,15 +895,16 @@ export function registerDataSources(
     const body = (request.body ?? {}) as { into?: unknown; timeZone?: unknown };
     // My workspace's root as an answer names it: `mine` (T523's review).
     const asked = { ...body, ...(body.into === MY_WORKSPACE_ID ? { into: own } : {}) };
-    const timeZone = asked.into === undefined ? timeZoneOf(asked.timeZone) : undefined;
-    if (asked.into === undefined && timeZone === undefined)
-      return reply.status(400).send({ error: NO_TIME_ZONE });
     const source = await reached(request, reply, 'read');
     if (source === undefined) return reply;
     if (await inAWorkspace(source))
       return reply.status(400).send({ error: 'It is in a workspace already: change it there.' });
     const refusal = await access(request, source.folderId, 'write');
     if (refusal !== undefined) return reply.status(refusal.status).send(refusal.body);
+    // Asked once the copy is theirs to make, a refusal first (T408's matrix).
+    const timeZone = asked.into === undefined ? timeZoneOf(asked.timeZone) : undefined;
+    if (asked.into === undefined && timeZone === undefined)
+      return reply.status(400).send({ error: NO_TIME_ZONE });
     return projects.inTurn(own, async () => {
       const mine = await projects.foldersOf(own);
       if (

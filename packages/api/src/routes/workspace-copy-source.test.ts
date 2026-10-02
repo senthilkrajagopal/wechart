@@ -382,5 +382,8 @@ describe('a data source’s copy in its project folder (T523, AC-368, AC-369)', 
         .where('target_folder_id', '=', emea.folder)
         .execute(),
     ).toEqual([]);
+    // Refused first where it isn't theirs to copy, a time zone or none (T408's matrix).
+    expect((await copy('reader', emea.source, {})).statusCode).toBe(403);
+    expect((await copy('writer', held.hidden, {})).statusCode).toBe(404);
   });
 });

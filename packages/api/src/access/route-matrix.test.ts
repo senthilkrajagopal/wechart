@@ -1098,6 +1098,19 @@ const CASES: Record<string, Case> = {
           }),
         );
   },
+  /**
+   * What a delete would take or be refused for (T517, T518; AC-362, AC-363),
+   * asked before its dialog opens: where they may delete it, the dashboards
+   * they may see named and the rest counted, never named.
+   */
+  'GET /api/documents/:kind/:id/dependents': async () => {
+    for (const place of PLACES)
+      for (const [kind, id] of [
+        ['dashboard', at[place].dashboard],
+        ['chart', at[place].libraryChart],
+      ] as const)
+        await openedOnlyBy(`/api/documents/${kind}/${id}/dependents`, (who) => writes(who, place));
+  },
   'DELETE /api/documents/:kind/:id': async () => {
     for (const place of PLACES)
       for (const who of WHO) {
@@ -1428,6 +1441,7 @@ const CASES: Record<string, Case> = {
   },
 
   // Copies into My workspace: of what they may open, by one who has one (AC-277).
+  // Each asked as the browser asks it, with its time zone (T523); refused, it makes no folder.
   'POST /api/workspace/copies': async () => {
     for (const place of PLACES)
       for (const who of WHO.filter((each) => !opens(each, place) || !hasWorkspace(each)))
@@ -1435,10 +1449,43 @@ const CASES: Record<string, Case> = {
           await ask(who, {
             method: 'POST',
             url: '/api/workspace/copies',
-            payload: { kind: 'dashboard', id: at[place].dashboard },
+            payload: { kind: 'dashboard', id: at[place].dashboard, timeZone: 'UTC' },
           }),
           `${who} copying from ${place}`,
         );
+  },
+  // A workspace's dashboards, wherever in it (T523): each user's own alone.
+  'GET /api/workspace/dashboards': listed(
+    { method: 'GET', url: '/api/workspace/dashboards' },
+    (who) => (who === 'writer' || who === 'manager' ? [ws[who].dashboard] : []),
+  ),
+  /**
+   * Clearing My workspace (T522, AC-367): asked first, what a clear would
+   * take, theirs alone; refused to one with no workspace. Cleared here only
+   * by `super`, whose workspace holds nothing the other cases need: the
+   * workspaces of `writer` and `manager` are as they were.
+   */
+  'GET /api/workspace/clear': async () => {
+    for (const who of WHO) {
+      const response = await ask(who, { method: 'GET', url: '/api/workspace/clear' });
+      const where = `${who} asking what clearing takes`;
+      if (!hasWorkspace(who)) refused(response, where);
+      else {
+        answered(response, where);
+        if (who === 'writer' || who === 'manager')
+          expect(response.body, where).toContain(ws[who].proposal);
+      }
+    }
+  },
+  'POST /api/workspace/clear': async () => {
+    for (const who of WHO.filter((each) => !hasWorkspace(each) || each === 'super')) {
+      const response = await ask(who, { method: 'POST', url: '/api/workspace/clear' });
+      const where = `${who} clearing`;
+      if (hasWorkspace(who)) answered(response, where);
+      else refused(response, where);
+    }
+    for (const [owner] of OWNERS)
+      expect(await docs().get('dashboard', ws[owner].dashboard), `${owner}'s kept`).not.toBeNull();
   },
 
   // Proposals and reviews: the author's, and those who may decide them (AC-287).
@@ -1568,10 +1615,17 @@ const CASES: Record<string, Case> = {
           await ask(who, {
             method: 'POST',
             url: `/api/data-sources/${at[place].source}/copy`,
-            payload: {},
+            payload: { timeZone: 'UTC' },
           }),
           `${who} copying ${place}'s data source`,
         );
+  },
+  // What its delete would be refused for (T526, AC-364): asked where they may delete it.
+  'GET /api/data-sources/:id/dependents': async () => {
+    for (const place of PLACES)
+      await openedOnlyBy(`/api/data-sources/${at[place].source}/dependents`, (who) =>
+        writes(who, place),
+      );
   },
   'DELETE /api/data-sources/:id': async () => {
     for (const place of PLACES)
@@ -1657,6 +1711,18 @@ const CASES: Record<string, Case> = {
             url: `/api/model/files?folder=${at[place].folder}&path=${encodeURIComponent(at[place].model)}`,
           }),
           `${who} deleting ${place}'s model`,
+        );
+  },
+  // What its delete would be refused for (T526, AC-365): asked as its delete is.
+  'GET /api/model/files/dependents': async () => {
+    for (const place of PLACES)
+      for (const who of WHO.filter((each) => !writes(each, place)))
+        refused(
+          await ask(who, {
+            method: 'GET',
+            url: `/api/model/files/dependents?folder=${at[place].folder}&path=${encodeURIComponent(at[place].model)}`,
+          }),
+          `${who} asking what ${place}'s model is used by`,
         );
   },
   /**

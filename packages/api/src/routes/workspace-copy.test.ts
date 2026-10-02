@@ -737,5 +737,17 @@ describe('a project folder for each Edit in my workspace (T523, AC-368, AC-369)'
       });
     }
     expect(await docs().withOrigin('chart', chartId)).toEqual([]);
+    // Refused first where it isn't theirs to copy, a time zone or none (T408's matrix).
+    for (const [who, id, status] of [
+      ['reader', ids.board, 403],
+      ['writer', ids.hiddenBoard, 404],
+    ] as const) {
+      const refused = await as(who, {
+        method: 'POST',
+        url: '/api/workspace/copies',
+        payload: { kind: 'dashboard', id },
+      });
+      expect(refused.statusCode, `${who} ${refused.body}`).toBe(status);
+    }
   });
 });
