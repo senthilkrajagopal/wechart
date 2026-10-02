@@ -194,6 +194,7 @@ describe('xcube’s answers (T419, AC-333)', () => {
       cubeMessage: null,
       probes: [],
       currentRevision: 7,
+      items: [],
     });
     expect(calls[0]?.url).toBe(
       'http://cube.invalid/cubejs-api/v1/semantic/models/dev/changesets?dryRun=true',
@@ -205,6 +206,60 @@ describe('xcube’s answers (T419, AC-333)', () => {
       securityContext: {},
       probes: [],
     });
+  });
+
+  /**
+   * T456 (AC-321; research `xcube-meta-revision-and-bindings.md`, `ItemRef`):
+   * a dry run's items, each bound as it would land, a cube with its data
+   * source, a view with none; an entry not shaped so is left out.
+   */
+  it('gives each item a dry run would make, with what it would bind to', async () => {
+    // A cube extending another, its data source its parent's; a view, with none.
+    const child = { folderId: 'fsales', name: 'child', fullName: 'fsales__child', bindings: {} };
+    const summary = {
+      folderId: 'froot',
+      name: 'summary',
+      fullName: 'summary',
+      bindings: { lines: 'fsales__lines' },
+    };
+    const admin = answering(200, {
+      model: 'dev',
+      valid: true,
+      errors: [],
+      cubeMessage: null,
+      probes: [],
+      itemsHash: 'i'.repeat(64),
+      currentRevision: 8,
+      items: [
+        {
+          folderId: 'fsales',
+          name: 'lines',
+          fullName: 'fsales__lines',
+          bindings: { orders: 'orders', odd: 3 },
+          dataSource: 'fsales__warehouse',
+        },
+        { ...child, dataSource: null },
+        summary,
+        { folderId: 'froot', name: 'broken' },
+      ],
+    });
+    const answer = await admin.checkChangeset({
+      upserts: [],
+      deletes: [],
+      securityContext: {},
+      probes: [],
+    });
+    expect(answer.items).toEqual([
+      {
+        folderId: 'fsales',
+        name: 'lines',
+        fullName: 'fsales__lines',
+        bindings: { orders: 'orders' },
+        dataSource: 'fsales__warehouse',
+      },
+      { ...child, dataSource: null },
+      summary,
+    ]);
   });
 
   it('applies a changeset: stored, already in, a stale base, or refused', async () => {

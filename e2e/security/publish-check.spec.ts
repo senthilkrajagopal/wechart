@@ -1,6 +1,6 @@
 import type { APIRequestContext } from '@playwright/test';
 
-import { landed } from '../model-files';
+import { approvedBy, landed, modelFilesIn, proposedModel } from '../model-files';
 import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
 
 /**
@@ -25,7 +25,19 @@ const OTHER_PATH = `cubes/${OTHER}.yml`;
 const cubeOf = (name: string) =>
   `cubes:\n  - name: ${name}\n    sql: SELECT 1 AS n\n    dimensions:\n      - name: n\n        sql: n\n        type: number\n        primary_key: true\n        public: true\n    measures:\n      - name: total\n        sql: n\n        type: sum\n`;
 const JOINED = `${cubeOf(CUBE)}    joins:\n      - name: ${OTHER}\n        sql: "{CUBE}.n = {${OTHER}}.n"\n        relationship: many_to_one\n`;
-const made = { folder: '', project: '', proposal: '' };
+// T456's: a folder beneath, and a model to go there joined to the other cube.
+const INNER = `Inner ${RUN}`;
+const LINES_NAME = `t456_lines_${RUN}`;
+const LINES_PATH = `cubes/${LINES_NAME}.yml`;
+const LINES = `${cubeOf(LINES_NAME)}    joins:\n      - name: ${OTHER}\n        sql: "{CUBE}.n = {${OTHER}}.n"\n        relationship: many_to_one\n`;
+const made = {
+  folder: '',
+  project: '',
+  proposal: '',
+  inner: '',
+  linesProject: '',
+  rebound: '',
+};
 
 const filesOf = async (request: APIRequestContext) => {
   const answer = await request.get(`/api/model/files?folder=${made.folder}`);
@@ -49,22 +61,34 @@ test.describe('a proposal’s model, checked when proposed and at approval (T451
       await signInThroughDex(await context.newPage(), who);
       const { request } = context;
       if (who === 'writer') {
-        if (made.proposal !== '')
-          await request.post(`/api/proposals/${made.proposal}/reject`, { data: {} });
-        if (made.project !== '') {
+        for (const proposal of [made.proposal, made.rebound].filter((id) => id !== ''))
+          await request.post(`/api/proposals/${proposal}/reject`, { data: {} });
+        for (const [project, path] of [
+          [made.project, PATH],
+          [made.linesProject, LINES_PATH],
+        ] as const) {
+          if (project === '') continue;
           await request.delete(
-            `/api/model/files?folder=${encodeURIComponent(made.project)}&path=${encodeURIComponent(PATH)}`,
+            `/api/model/files?folder=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`,
             { timeout: 90_000 },
           );
-          await request.delete(`/api/documents/folder/${made.project}`);
+          await request.delete(`/api/documents/folder/${project}`);
         }
       }
       if (who === 'super' && made.folder !== '') {
-        for (const path of [PATH, OTHER_PATH])
-          await request.delete(
-            `/api/model/files?folder=${made.folder}&path=${encodeURIComponent(path)}`,
-            { timeout: 90_000 },
-          );
+        // What joins first: the folder beneath's, then the folder's.
+        for (const [folder, path] of [
+          [made.inner, LINES_PATH],
+          [made.inner, OTHER_PATH],
+          [made.folder, PATH],
+          [made.folder, OTHER_PATH],
+        ] as const)
+          if (folder !== '')
+            await request.delete(
+              `/api/model/files?folder=${folder}&path=${encodeURIComponent(path)}`,
+              { timeout: 90_000 },
+            );
+        if (made.inner !== '') await request.delete(`/api/documents/folder/${made.inner}`);
         await request.delete(`/api/documents/folder/${made.folder}`);
       }
       await context.close();
@@ -211,6 +235,93 @@ test.describe('a proposal’s model, checked when proposed and at approval (T451
       expect(load.status(), await load.text()).toBe(200);
       const [row] = ((await load.json()) as { data: Record<string, unknown>[] }).data;
       expect(Number(row?.[`${prefix}${CUBE}.total`])).toBe(1);
+    });
+  });
+
+  /**
+   * T456 (AC-321, amended 2026-10-01; R52, "a submitted item is frozen"): an
+   * approval is refused when an item would bind otherwise than when it was
+   * proposed, naming it and both bindings, and nothing lands; withdrawn and
+   * proposed again, it lands as it binds now. `writer` proposes a model to
+   * /Checked/Inner joined to /Checked's other cube; `super` then lands a
+   * nearer cube of that name in /Checked/Inner.
+   */
+  test.describe('as super, for T456', () => {
+    test.use({ role: 'super' });
+
+    test('makes a folder beneath the first', async ({ page }) => {
+      const inner = await page.request.post('/api/documents', {
+        data: { kind: 'folder', title: INNER, folderId: made.folder },
+      });
+      expect(inner.status(), await inner.text()).toBe(201);
+      made.inner = ((await inner.json()) as { id: string }).id;
+    });
+  });
+
+  test.describe('as writer, for T456', () => {
+    test.use({ role: 'writer' });
+
+    test('proposes a model to it, joined to its parent’s other cube', async ({ page }) => {
+      const { request } = page;
+      const project = await request.post('/api/documents', {
+        data: { kind: 'folder', title: `Lines ${RUN}`, folderId: 'mine' },
+      });
+      expect(project.status(), await project.text()).toBe(201);
+      made.linesProject = ((await project.json()) as { id: string }).id;
+      const saved = await request.post('/api/model/publish', {
+        data: {
+          folderId: made.linesProject,
+          targetFolderId: made.inner,
+          files: [{ path: LINES_PATH, content: LINES }],
+        },
+        timeout: 90_000,
+      });
+      expect(saved.status(), await saved.text()).toBe(200);
+      const proposed = await proposedModel(request, made.linesProject, LINES_PATH);
+      expect(proposed.status(), await proposed.text()).toBe(201);
+      made.rebound = ((await proposed.json()) as { id: string }).id;
+    });
+  });
+
+  test.describe('as super, meanwhile, for T456', () => {
+    test.use({ role: 'super' });
+
+    test('lands a cube of the joined name in the folder beneath', async ({ page }) => {
+      const nearer = { path: OTHER_PATH, content: cubeOf(OTHER) };
+      expect(await landed(page.request, made.inner, [nearer])).toEqual([nearer]);
+    });
+  });
+
+  test.describe('as writer, approving, for T456', () => {
+    test.use({ role: 'writer' });
+
+    test('is refused, naming the model and both bindings, and nothing lands', async ({ page }) => {
+      await page.goto(`/reviews/${made.rebound}`);
+      await page.getByRole('button', { name: 'Approve my own proposal' }).click();
+      await page.getByRole('button', { name: 'Approve and publish' }).click();
+      await expect(page.getByRole('alert')).toHaveText(
+        `Can’t approve: “${LINES_PATH}” would bind otherwise than when it was proposed: “${OTHER}” would be the one in ${FOLDER} / ${INNER}, not the one in ${FOLDER}. Nothing was approved; its author can withdraw it and propose it again.`,
+        { timeout: 90_000 },
+      );
+      expect((await modelFilesIn(page.request, made.inner)).map((file) => file.path)).toEqual([
+        OTHER_PATH,
+      ]);
+      const proposal = await page.request.get(`/api/proposals/${made.rebound}`);
+      expect(((await proposal.json()) as { status: string }).status).toBe('open');
+    });
+
+    test('withdrawn and proposed again, it lands as it binds now', async ({ page }) => {
+      const { request } = page;
+      const withdrawn = await request.post(`/api/proposals/${made.rebound}/reject`, { data: {} });
+      expect(withdrawn.status(), await withdrawn.text()).toBe(200);
+      made.rebound = '';
+      const again = await proposedModel(request, made.linesProject, LINES_PATH);
+      expect(again.status(), await again.text()).toBe(201);
+      const approved = await approvedBy(request, ((await again.json()) as { id: string }).id);
+      expect(approved.status(), await approved.text()).toBe(200);
+      expect(await modelFilesIn(request, made.inner)).toEqual(
+        expect.arrayContaining([expect.objectContaining({ path: LINES_PATH, content: LINES })]),
+      );
     });
   });
 });

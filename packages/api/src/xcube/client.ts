@@ -236,6 +236,21 @@ export interface ItemError {
   readonly message: string;
 }
 
+/**
+ * An item a changeset would make, bound as it would land (research
+ * `xcube-meta-revision-and-bindings.md`, "Item references (`ItemRef`) in
+ * answers"): nearest first along its path, over the database head.
+ */
+export interface ItemRef {
+  readonly folderId: string;
+  readonly name: string;
+  readonly fullName: string;
+  /** Each other cube or view it names, to the full name bound; never its own, nor a data source. */
+  readonly bindings: Readonly<Record<string, string>>;
+  /** A cube's data source as bound; absent on a view, `null` for one that `extends`. */
+  readonly dataSource?: string | null;
+}
+
 /** xcube's check of a changeset (research 3a, `ItemsCheck`). */
 export interface ItemsCheckAnswer {
   readonly valid: boolean;
@@ -244,7 +259,43 @@ export interface ItemsCheckAnswer {
   readonly probes: CheckAnswer['probes'];
   /** The database head the change was checked on. */
   readonly currentRevision: number | null;
+  /**
+   * The upserted items, as they would bind (T456): none where names or
+   * bindings fail, and none from an image older than `40efaef823`.
+   */
+  readonly items: readonly ItemRef[];
 }
+
+/** The items of an answer, each as xcube refers to one; any it doesn't shape so, left out. */
+const itemRefsOf = (items: unknown): ItemRef[] =>
+  Array.isArray(items)
+    ? items.flatMap((each: unknown): ItemRef[] => {
+        const item = each as Partial<Record<keyof ItemRef, unknown>> | null;
+        if (
+          typeof item?.folderId !== 'string' ||
+          typeof item.name !== 'string' ||
+          typeof item.fullName !== 'string' ||
+          item.bindings === null ||
+          typeof item.bindings !== 'object'
+        )
+          return [];
+        return [
+          {
+            folderId: item.folderId,
+            name: item.name,
+            fullName: item.fullName,
+            bindings: Object.fromEntries(
+              Object.entries(item.bindings as Record<string, unknown>).filter(
+                (entry): entry is [string, string] => typeof entry[1] === 'string',
+              ),
+            ),
+            ...(typeof item.dataSource === 'string' || item.dataSource === null
+              ? { dataSource: item.dataSource }
+              : {}),
+          },
+        ];
+      })
+    : [];
 
 /** An answer xcube gave that none of the above are: said with its status and code. */
 export class XcubeError extends Error {
@@ -413,6 +464,7 @@ export function xcubeAdmin({
           cubeMessage: null,
           probes: [],
           currentRevision: null,
+          items: [],
         };
       if (status !== 200) throw failed(status, answer);
       return {
@@ -422,6 +474,7 @@ export function xcubeAdmin({
         probes: Array.isArray(answer['probes']) ? (answer['probes'] as CheckAnswer['probes']) : [],
         currentRevision:
           typeof answer['currentRevision'] === 'number' ? answer['currentRevision'] : null,
+        items: itemRefsOf(answer['items']),
       };
     },
 

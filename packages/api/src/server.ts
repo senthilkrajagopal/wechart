@@ -93,6 +93,7 @@ import {
   type TestedConnection,
 } from './xcube/connections';
 import type { DeletedFolderStore } from './repos/deleted-folders';
+import type { ProposalBindingStore } from './repos/proposal-bindings';
 import { settingOf, type FolderAccessStore } from './repos/folder-access';
 import type { AuditStore } from './repos/audit';
 import { actorOf, recordIn } from './audit/record';
@@ -201,6 +202,11 @@ export interface BuildOptions {
    * proposal still going to it is approved (T540, AC-389).
    */
   readonly deletedFolders?: DeletedFolderStore;
+  /**
+   * What each proposal's items bound to when it was made (T456, AC-321): an
+   * approval binding one otherwise is refused.
+   */
+  readonly proposalBindings?: ProposalBindingStore;
   /** The audit trail (T368, AC-294): where sign-ins and changes are recorded. */
   readonly audit?: AuditStore;
   /** Workspace items proposed to their target folders (T349, AC-284). */
@@ -434,6 +440,7 @@ export function buildServer({
   publications,
   folderAccess,
   deletedFolders,
+  proposalBindings,
   dataSources,
   sqlRunnerSwitches,
   sqlRunner,
@@ -1357,6 +1364,14 @@ export function buildServer({
       // With its models, as they will resolve once landed (T451).
       bind: (kind, folderId, body, resolver) => boundIn(kind, folderId, body, undefined, resolver),
       modelLanding,
+      // Held to what its items bound to when proposed (T456, AC-321).
+      ...(proposalBindings === undefined ? {} : { bindings: proposalBindings }),
+      ...(folders === undefined
+        ? {}
+        : {
+            folderOfXcube: async (xcubeId: string) =>
+              [...(await folders()).ids].find(([, id]) => id === xcubeId)?.[0],
+          }),
       // A landed dashboard shows only library charts on its folder's path:
       // any other as its own copy (T537, AC-371). With sign-in on, as T527.
       ...(security === 'off' ? {} : { pathOf: (folderId: string) => pathTo(folderId) }),

@@ -6,7 +6,13 @@ import { ROOT_FOLDER_ID } from '../repos/catalog';
 import { changesetOf, type Changeset } from './changesets';
 import { ROOT_ONLY, XCUBE_ROOT } from './folders';
 import { itemsHashOf, itemsOf } from './items';
-import { XcubeError, type CheckAnswer, type ItemsCheckAnswer, type XcubeAdmin } from './client';
+import {
+  XcubeError,
+  type CheckAnswer,
+  type ItemRef,
+  type ItemsCheckAnswer,
+  type XcubeAdmin,
+} from './client';
 import { plainYamlOf } from './snapshot';
 
 /**
@@ -39,6 +45,8 @@ export type CheckResult =
       readonly kind: 'compiled';
       readonly rollups: () => RollupsVerdict;
       readonly changeset?: Changeset;
+      /** On a model in items mode, what each item it upserts would bind to (T456). */
+      readonly items?: readonly ItemRef[];
     };
 
 export type RollupsVerdict =
@@ -217,6 +225,8 @@ export async function checkWithXcube({
       kind: 'compiled',
       rollups: () => verdictOf(owners, byId),
       ...(whole ? {} : { changeset: change }),
+      // Each batch checks the same change: the first's items are every batch's.
+      items: first.items,
     };
   }
 

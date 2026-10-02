@@ -17,6 +17,7 @@ import { clashesOf, compiledIn } from './clashes';
 import { refreshKeyProblemsOf } from './refreshKeys';
 import { rollupProblemsOf, type RollupProblem } from './rollupReferences';
 import type { StoredModelFile } from '../repos/model-files';
+import type { ItemBindings } from '../repos/proposal-bindings';
 import type { Changeset } from '../xcube/changesets';
 import { itemsOf } from '../xcube/items';
 import type { HeldItem } from '../xcube/client';
@@ -966,9 +967,32 @@ export function registerModelPublishing(
       if (rollups.kind === 'unasked') return no(502, rollups.error);
       if (rollups.kind === 'unjoinable') return breaks(rollups.errors);
 
+      // What each model would bind to, by its workspace file's id: the dry
+      // run's item of its name in the folder it lands in (T456, AC-321).
+      const bound = new Map(
+        models.flatMap((model) => {
+          const xcubeId = served.ids.get(model.folderId);
+          const name = declaredIn(model.content)[0]?.name;
+          const item = checked.items?.find(
+            (each) => each.folderId === xcubeId && each.name === name,
+          );
+          return item === undefined
+            ? []
+            : [
+                [
+                  model.fileId,
+                  {
+                    bindings: item.bindings,
+                    ...(item.dataSource === undefined ? {} : { dataSource: item.dataSource }),
+                  },
+                ] as const,
+              ];
+        }),
+      );
       return {
         kind: 'checked',
         writes: plan.writes,
+        bound,
         // Sent whole where xcube isn't what the store holds (T426): then what
         // it will hold is the draft's items alone, never its head's (T451's review).
         resolver:
@@ -1079,6 +1103,11 @@ export type LandingCheck =
   | {
       readonly kind: 'checked';
       readonly writes: readonly LandingWrite[];
+      /**
+       * What each model would bind to as it lands, by its workspace file's id
+       * (T456): none for one the dry run gives no item for.
+       */
+      readonly bound: ReadonlyMap<string, ItemBindings>;
       /** Names as xcube will resolve them once it lands: what a proposal's charts bind with. */
       readonly resolver: Pick<XcubeAdmin, 'resolve' | 'items'>;
       /** Written, sent to xcube and seen: each model's file as it landed, by its workspace file's id. */

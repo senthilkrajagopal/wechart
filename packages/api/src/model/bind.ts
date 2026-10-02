@@ -25,6 +25,10 @@ const FOLDER_PREFIX = /^f[a-z0-9]{1,40}__/;
 /** A cube's short name: its full name without its folder's id. */
 export const shortOf = (name: string): string => name.replace(FOLDER_PREFIX, '');
 
+/** The xcube folder a full name is in, by its prefix: none for the root's, which has none. */
+export const xcubeFolderOf = (name: string): string | null =>
+  FOLDER_PREFIX.exec(name)?.[0].slice(0, -'__'.length) ?? null;
+
 export type Binding =
   /** Each name as stored, where it binds to another full name, to that name. */
   | { readonly kind: 'bound'; readonly renames: ReadonlyMap<string, string> }

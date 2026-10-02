@@ -14,6 +14,7 @@ import { dataSourceStore } from '../repos/data-sources';
 import { documents, type DocumentKind } from '../repos/documents';
 import { folderAccessStore } from '../repos/folder-access';
 import { modelFileStore } from '../repos/model-files';
+import { PROPOSAL_BINDINGS, proposalBindingStore } from '../repos/proposal-bindings';
 import { proposalStore } from '../repos/proposals';
 import { versionStore } from '../repos/versions';
 import { buildServer } from '../server';
@@ -71,7 +72,7 @@ const cookies: Record<string, string> = {};
 const docs = () => documents(getDb());
 const files = () => modelFileStore(getDb());
 const made: { kind: DocumentKind; id: string }[] = [];
-const ids = { sales: '', ops: '', project: '', spare: '' };
+const ids = { sales: '', ops: '', east: '', project: '', spare: '' };
 const shared = (path: string) => `cubes/${path}.yml`;
 
 beforeAll(async () => {
@@ -115,18 +116,29 @@ beforeAll(async () => {
     },
   });
   await files().write([{ folderId: ids.ops, path: shared(OPS), content: cube(OPS) }]);
+  // /Sales/East, beneath it: a name nearer than /Sales's (T456).
+  ids.east = randomUUID();
+  made.push({ kind: 'folder', id: ids.east });
+  await docs().create({
+    kind: 'folder',
+    id: ids.east,
+    body: { owner: 'admin', title: `East ${MARK}`, folderId: ids.sales },
+  });
 
   const xids = new Map([
     ['root', 'froot'],
     [ids.sales, 'fsales'],
     [ids.ops, 'fops'],
+    [ids.east, 'feast'],
   ]);
+  const parentOf = new Map([[ids.east, ids.sales]]);
   stub = fakeXcube();
   admin = xcubeAdmin({ cubeApiUrl, model: MODEL, token: FAKE_ADMIN_TOKEN, fetch: stub.fetch });
   await admin.folders([
     { id: 'froot', parentId: null },
     { id: 'fsales', parentId: 'froot' },
     { id: 'fops', parentId: 'froot' },
+    { id: 'feast', parentId: 'fsales' },
   ]);
   // xcube holds what the store does of the folders it serves, as once synced:
   // the suite's root files too.
@@ -158,12 +170,15 @@ beforeAll(async () => {
     modelFiles: files(),
     dataSources: dataSourceStore(getDb()),
     proposals: proposalStore(getDb()),
+    proposalBindings: proposalBindingStore(getDb()),
     versions: versionStore(getDb()),
     audit: auditStore(getDb()),
     xcube: admin,
     folders: async () => ({
       ids: xids,
-      parents: new Map([...xids.keys()].map((id) => [id, id === 'root' ? null : 'root'])),
+      parents: new Map(
+        [...xids.keys()].map((id) => [id, id === 'root' ? null : (parentOf.get(id) ?? 'root')]),
+      ),
     }),
     // What a publish sends, applied as the sync applies it (T426).
     afterPublish: async (changeset) => {
@@ -185,15 +200,43 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (app !== undefined) await app.close();
-  await getDb().deleteFrom('proposals').where('target_folder_id', '=', ids.sales).execute();
-  await getDb().deleteFrom('audit_records').where('folder_id', '=', ids.sales).execute();
-  await getDb().deleteFrom('item_versions').where('folder_id', '=', ids.sales).execute();
+  // What each proposal bound to when it was made (T456), then the proposals.
+  const proposed = await getDb()
+    .selectFrom('proposals')
+    .select('id')
+    .where('target_folder_id', 'in', [ids.sales, ids.east])
+    .execute();
+  if (proposed.length > 0)
+    await getDb()
+      .deleteFrom('documents')
+      .where('kind', '=', PROPOSAL_BINDINGS)
+      .where(
+        'id',
+        'in',
+        proposed.map((each) => String(each.id)),
+      )
+      .execute();
+  await getDb()
+    .deleteFrom('proposals')
+    .where('target_folder_id', 'in', [ids.sales, ids.east])
+    .execute();
+  await getDb()
+    .deleteFrom('audit_records')
+    .where('folder_id', 'in', [ids.sales, ids.east])
+    .execute();
+  await getDb()
+    .deleteFrom('item_versions')
+    .where('folder_id', 'in', [ids.sales, ids.east])
+    .execute();
   await getDb()
     .deleteFrom('data_sources')
     .where('folder_id', 'in', [ids.sales, ids.project])
     .execute();
   await removeProjectFolders();
-  await getDb().deleteFrom('model_files').where('folder_id', 'in', [ids.sales, ids.ops]).execute();
+  await getDb()
+    .deleteFrom('model_files')
+    .where('folder_id', 'in', [ids.sales, ids.ops, ids.east])
+    .execute();
   await getDb()
     .deleteFrom('documents')
     .where(({ eb, ref }) => eb(ref('body', '->>').key('title'), 'like', `%${MARK}%`))
@@ -217,11 +260,11 @@ async function copy(path: string) {
   return copied;
 }
 const copiedInto = async (path: string) => (await copy(path)).json<{ folderId: string }>().folderId;
-const save = (path: string, content: string, folderId = ids.project) =>
+const save = (path: string, content: string, folderId = ids.project, target = ids.sales) =>
   as('writer', {
     method: 'POST',
     url: '/api/model/publish',
-    payload: { folderId, files: [{ path, content }], targetFolderId: ids.sales },
+    payload: { folderId, files: [{ path, content }], targetFolderId: target },
   });
 const workspaceFile = async (path: string, folderId = ids.project) =>
   (await files().inFolders([folderId])).find((file) => file.path === path)!;
@@ -249,7 +292,7 @@ const dryRunsSince = (from: number) =>
     .filter((call) => call.method === 'POST' && call.path.endsWith('/changesets?dryRun=true'));
 
 /** A dashboard in the writer's workspace, to go to /Sales, with a chart of its own naming `cubeName`. */
-async function boardNaming(cubeName: string) {
+async function boardNaming(cubeName: string, target = ids.sales) {
   const board = randomUUID();
   const chart = randomUUID();
   await docs().create({
@@ -272,7 +315,7 @@ async function boardNaming(cubeName: string) {
       owner: USERS['writer']!.email,
       title,
       folderId: ids.project,
-      targetFolderId: ids.sales,
+      targetFolderId: target,
       pages: [{ id: 'p1', items: [{ id: 't1', kind: 'chart', chartId: chart }] }],
       charts: [chart],
     },
@@ -706,5 +749,137 @@ describe('a proposal’s models, landed through xcube’s changeset (T451)', () 
         .filter((each) => each.name === name)
         .map((each) => each.id),
     ).toEqual([approved.json<Landed>().landed[0]!.id]);
+  });
+});
+
+/**
+ * A cube published in a folder meanwhile, as a landing or a publish puts one
+ * there: in the store and in xcube's head alike, so the next check is a
+ * changeset's, not the whole model's.
+ */
+async function publishedIn(folderId: string, xcubeId: string, name: string, content: string) {
+  await files().write([{ folderId, path: shared(name), content }]);
+  await admin.applyChangeset({
+    baseRevision: stub.head(MODEL)?.revision ?? null,
+    upserts: [{ folderId: xcubeId, name, kind: 'cube', yaml: content }],
+    deletes: [],
+  });
+}
+
+/**
+ * T456 (AC-321, amended 2026-10-01; R52, "a submitted item is frozen"): an
+ * approval is refused when any of its items would bind to a cube or data
+ * source other than the one it bound to when it was proposed, naming each
+ * item and both bindings, so what lands is what was submitted. Its author
+ * withdraws it and proposes it again. A model's bindings are the changeset's
+ * dry run's, when proposed and at approval; a chart's or a dashboard's, its
+ * names bound in the folder it lands in, as an approval binds them (T502).
+ */
+describe('an approval binding an item otherwise than when it was proposed (T456)', () => {
+  const eastItem = (name: string) =>
+    stub.head(MODEL)?.items.find((item) => item.folderId === 'feast' && item.name === name);
+  const eastFiles = async () =>
+    (await files().inFolders([ids.east])).map(({ path, version, content }) => ({
+      path,
+      version,
+      content,
+    }));
+
+  it('is refused for a model whose join a nearer cube would take, naming it and both, and lands nothing', async () => {
+    const base = `${MARK}_base`;
+    const lines = `${MARK}_lines`;
+    await publishedIn(ids.sales, 'fsales', base, cube(base));
+    // New in the workspace, to go to /Sales/East, joined to /Sales's.
+    const joined = cube(
+      lines,
+      [
+        '    joins:',
+        `      - name: ${base}`,
+        `        sql: "{CUBE}.id = {${base}}.id"`,
+        '        relationship: many_to_one',
+        '',
+      ].join('\n'),
+    );
+    expect((await save(shared(lines), joined, ids.project, ids.east)).statusCode).toBe(200);
+    const id = (await workspaceFile(shared(lines))).id;
+    const proposed = await propose('model', id);
+    expect(proposed.statusCode, proposed.body).toBe(201);
+    const proposalId = proposed.json<{ id: string }>().id;
+
+    // /Sales/East publishes a cube of that name meanwhile: nearer, the join would take it.
+    await publishedIn(ids.east, 'feast', base, cube(base));
+    const before = await eastFiles();
+    const head = stub.head(MODEL)?.revision;
+    const refused = await approve(proposalId);
+    expect(refused.statusCode, refused.body).toBe(409);
+    expect(refused.json()).toEqual({
+      error: `“${shared(lines)}” would bind otherwise than when it was proposed: “${base}” would be the one in Sales ${MARK} / East ${MARK}, not the one in Sales ${MARK}. Nothing was approved; its author can withdraw it and propose it again.`,
+      rebound: [
+        {
+          kind: 'model',
+          id,
+          title: shared(lines),
+          names: [{ name: base, was: `fsales__${base}`, now: `feast__${base}` }],
+        },
+      ],
+    });
+    // Nothing landed, in the store or in xcube, and it still waits.
+    expect(await eastFiles()).toEqual(before);
+    expect(stub.head(MODEL)?.revision).toBe(head);
+    expect(eastItem(lines)).toBeUndefined();
+    expect(await statusOf(proposalId)).toBe('open');
+
+    // Withdrawn and proposed again, it binds as it does now, and lands.
+    expect((await withdraw(proposalId)).statusCode).toBe(200);
+    const again = await propose('model', id);
+    expect(again.statusCode, again.body).toBe(201);
+    const approved = await approve(again.json<{ id: string }>().id);
+    expect(approved.statusCode, approved.body).toBe(200);
+    expect(eastItem(lines)?.yaml).toBe(joined);
+  });
+
+  it('is refused for a chart a nearer cube would take, naming it and both, and lands nothing', async () => {
+    const solo = `${MARK}_solo`;
+    await publishedIn(ids.sales, 'fsales', solo, measured(solo, 'margin'));
+    // The workspace's dashboard for /Sales/East, its own chart on /Sales's cube.
+    const { board, chart, title } = await boardNaming(`fsales__${solo}`, ids.east);
+    const proposed = await propose('dashboard', board);
+    expect(proposed.statusCode, proposed.body).toBe(201);
+    const proposalId = proposed.json<{ id: string }>().id;
+
+    await publishedIn(ids.east, 'feast', solo, measured(solo, 'margin'));
+    const refused = await approve(proposalId);
+    expect(refused.statusCode, refused.body).toBe(409);
+    expect(refused.json()).toEqual({
+      error: `“Margin ${MARK}” would bind otherwise than when it was proposed: “${solo}” would be the one in Sales ${MARK} / East ${MARK}, not the one in Sales ${MARK}. Nothing was approved; its author can withdraw it and propose it again.`,
+      rebound: [
+        {
+          kind: 'chart',
+          id: chart,
+          title: `Margin ${MARK}`,
+          names: [{ name: solo, was: `fsales__${solo}`, now: `feast__${solo}` }],
+        },
+      ],
+    });
+    expect(await docs().named('dashboard', ids.east, title)).toBeNull();
+    expect(await statusOf(proposalId)).toBe('open');
+    expect((await withdraw(proposalId)).statusCode).toBe(200);
+  });
+
+  it('lands one whose items bind as they did when it was proposed', async () => {
+    const steady = `${MARK}_steady`;
+    await publishedIn(ids.sales, 'fsales', steady, measured(steady, 'margin'));
+    const { board, title } = await boardNaming(`fsales__${steady}`, ids.east);
+    const proposed = await propose('dashboard', board);
+    expect(proposed.statusCode, proposed.body).toBe(201);
+    // A cube of another name published meanwhile changes no binding of its.
+    const other = `${MARK}_other`;
+    await publishedIn(ids.east, 'feast', other, cube(other));
+    const approved = await approve(proposed.json<{ id: string }>().id);
+    expect(approved.statusCode, approved.body).toBe(200);
+    const [landed] = await docs().localTo((await docs().named('dashboard', ids.east, title))!.id);
+    expect((landed!.body['chart'] as { source: { cube: string } }).source.cube).toBe(
+      `fsales__${steady}`,
+    );
   });
 });

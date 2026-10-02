@@ -220,6 +220,46 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
     return bindings;
   };
 
+  /**
+   * An item as a changeset's answer refers to it (research
+   * `xcube-meta-revision-and-bindings.md`, `ItemRef`): bound nearest first
+   * over `items`, only the names its YAML uses, never its own (Gotcha 18), and
+   * a cube's data source as written, `default` where it names none, `null`
+   * where it extends another, as xcube gives it for a model with no
+   * connections (Gotcha 8).
+   */
+  const refOf = (item: Item, items: readonly Item[], tree: readonly TreeFolder[]) => {
+    const parsed = (parseYaml(item.yaml) ?? {}) as Record<string, unknown>;
+    const declared = (parsed['cubes'] ?? parsed['views']) as Record<string, unknown>[] | undefined;
+    const own = declared?.[0] ?? {};
+    const named = [
+      ...((own['joins'] ?? []) as { name?: unknown }[]).map((join) => join.name),
+      own['extends'],
+    ].filter((name): name is string => typeof name === 'string');
+    const bindings: Record<string, string> = {};
+    for (const name of named) {
+      const bound = resolveIn(items, tree, item.folderId, name);
+      if (bound !== null) bindings[name] = bound;
+    }
+    const written = own['data_source'];
+    return {
+      folderId: item.folderId,
+      name: item.name,
+      fullName: fullNameOf(item),
+      bindings,
+      ...(item.kind === 'cube'
+        ? {
+            dataSource:
+              typeof written === 'string'
+                ? written
+                : typeof own['extends'] === 'string'
+                  ? null
+                  : 'default',
+          }
+        : {}),
+    };
+  };
+
   const fetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     if (isDown) throw new TypeError('fetch failed');
     if (hanging)
@@ -603,7 +643,8 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
               : [],
           itemsHash: valid ? itemsHashOf(result) : null,
           currentRevision: current?.revision ?? null,
-          items: [],
+          // As each would land, bound over the result (T456); none when refused.
+          items: valid ? (change.upserts ?? []).map((item) => refOf(item, result, held.tree!)) : [],
         });
       }
       // Another replica's changeset lands between this one's read and its send.

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { ChartDocumentError } from '@wechart/core';
+import { ChartDocumentError, type ChartDefinition } from '@wechart/core';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { actorOf, recordIn } from '../audit/record';
@@ -19,9 +19,15 @@ import {
   type Replaces,
 } from '../repos/proposals';
 import type { VersionKind, VersionStore } from '../repos/versions';
+import { cubesOfChart, cubesOfDashboard, shortOf, xcubeFolderOf } from '../model/bind';
 import type { LandingModel } from '../model/landing';
 import { declaredIn } from '../model/split';
 import type { LandingCheck, ModelLanding } from '../model/publish';
+import type {
+  ItemBindings,
+  ProposalBindings,
+  ProposalBindingStore,
+} from '../repos/proposal-bindings';
 import type { XcubeAdmin } from '../xcube/client';
 import { ModelRefusal, type ProposalModels } from './proposal-models';
 import { withChartsRenamed } from './workspace-copy';
@@ -151,6 +157,13 @@ export interface ProposalRoutes {
    * proposal holding one is checked by nothing and can't be approved.
    */
   readonly modelLanding?: ModelLanding;
+  /**
+   * What each item bound to when it was proposed (T456, AC-321): an approval
+   * binding one otherwise is refused. Unset, nothing is compared.
+   */
+  readonly bindings?: ProposalBindingStore;
+  /** wechart's folder by its xcube id, to say where a name binds (T456). */
+  readonly folderOfXcube?: (xcubeId: string) => Promise<string | undefined>;
 }
 
 const NOT_THERE = { error: 'There is no such item in your workspace.' };
@@ -502,6 +515,151 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
   const pathOf = async (id: string) => {
     if (id === 'root') return 'Shared';
     return (await pathPartsOf(id)).slice(1).join(' / ') || id;
+  };
+
+  /**
+   * A dashboard's or a chart's names as bound in the folder it lands in
+   * (T456): each cube it names, by its short name, to the full name bound.
+   */
+  const documentBindingsOf = (kind: ProposalKind, body: Record<string, unknown>): ItemBindings => {
+    const chart = body['chart'] as ChartDefinition | undefined;
+    const names =
+      kind === 'dashboard'
+        ? cubesOfDashboard(body)
+        : typeof chart?.source?.cube === 'string' && chart.source.cube !== ''
+          ? [cubesOfChart(chart).source, ...cubesOfChart(chart).others]
+          : [];
+    return { bindings: Object.fromEntries(names.map((name) => [shortOf(name), name])) };
+  };
+
+  /**
+   * What each item would bind to when proposed (T456, AC-321), to hold an
+   * approval to: a model's, by the dry run of its changeset; a dashboard's
+   * or a chart's, as an approval binds it, with the proposal's models as
+   * they would land. One that can't be bound now is held to nothing.
+   */
+  const bindingsWhenProposed = async (
+    items: readonly ProposedItem[],
+    landing: Extract<LandingCheck, { kind: 'checked' }> | undefined,
+  ): Promise<ProposalBindings> => {
+    const bound: Record<string, ItemBindings> = {};
+    const board = items.find((item) => item.kind === 'dashboard');
+    for (const item of items) {
+      if (item.kind === 'model') {
+        const model = landing?.bound.get(item.id);
+        if (model !== undefined) bound[`${item.kind}/${item.id}`] = model;
+        continue;
+      }
+      if ((item.kind !== 'dashboard' && item.kind !== 'chart') || routes.bind === undefined)
+        continue;
+      const local = board !== undefined && item.snapshot['localToDashboardId'] === board.id;
+      const at = await routes.bind(
+        item.kind,
+        local ? board.landsIn : item.landsIn,
+        item.snapshot,
+        landing?.resolver,
+      );
+      if (at.kind === 'ok')
+        bound[`${item.kind}/${item.id}`] = documentBindingsOf(item.kind, at.body);
+    }
+    return bound;
+  };
+
+  /** A name an item would bind otherwise: to the full name it bound when proposed, and now. */
+  interface Rebinding {
+    readonly name: string;
+    readonly was: string | null;
+    readonly now: string | null;
+  }
+  interface Rebound {
+    readonly item: ProposedItem;
+    readonly names: readonly Rebinding[];
+    readonly dataSource?: { readonly was: string | null; readonly now: string | null };
+  }
+
+  /**
+   * The items an approval would bind otherwise than when they were proposed
+   * (T456, AC-321): each name bound to another full name, or to none, and a
+   * cube's data source, where both say one. An item with nothing held to
+   * (proposed before T456, or not bound then) is held to nothing.
+   */
+  const reboundIn = (
+    recorded: ProposalBindings | null,
+    now: readonly { readonly item: ProposedItem; readonly bound: ItemBindings | undefined }[],
+  ): Rebound[] =>
+    recorded === null
+      ? []
+      : now.flatMap(({ item, bound }): Rebound[] => {
+          const was = recorded[`${item.kind}/${item.id}`];
+          if (was === undefined || bound === undefined) return [];
+          const names = [...new Set([...Object.keys(was.bindings), ...Object.keys(bound.bindings)])]
+            .sort()
+            .flatMap((name): Rebinding[] => {
+              const before = was.bindings[name] ?? null;
+              const after = bound.bindings[name] ?? null;
+              return before === after ? [] : [{ name, was: before, now: after }];
+            });
+          const source =
+            'dataSource' in was && 'dataSource' in bound && was.dataSource !== bound.dataSource
+              ? { was: was.dataSource ?? null, now: bound.dataSource ?? null }
+              : undefined;
+          return names.length === 0 && source === undefined
+            ? []
+            : [{ item, names, ...(source === undefined ? {} : { dataSource: source }) }];
+        });
+
+  /** Where a full name binds, as a refusal says it: "the one in Sales / EMEA". */
+  const whereBound = async (full: string) => {
+    const xcubeId = xcubeFolderOf(full);
+    if (xcubeId === null) return 'the one in Shared';
+    const folderId = await routes.folderOfXcube?.(xcubeId);
+    return folderId === undefined
+      ? 'one in a folder no longer there'
+      : `the one in ${await pathOf(folderId)}`;
+  };
+
+  /**
+   * An approval refused for binding its items otherwise than when they were
+   * proposed (T456, AC-321; R52, "a submitted item is frozen"), naming each
+   * and both bindings. Its author withdraws it and proposes it again.
+   */
+  const reboundRefusal = async (rebound: readonly Rebound[]) => {
+    const sentences = await Promise.all(
+      rebound.map(async ({ item, names, dataSource }) => {
+        const clauses = await Promise.all(
+          names.map(async ({ name, was, now }) =>
+            now === null
+              ? `“${name}” would bind to nothing, not ${await whereBound(was!)}`
+              : was === null
+                ? `“${name}” would be ${await whereBound(now)}, though it bound to nothing then`
+                : `“${name}” would be ${await whereBound(now)}, not ${await whereBound(was)}`,
+          ),
+        );
+        if (dataSource !== undefined) {
+          const sourceOf = async (full: string | null) =>
+            full === null
+              ? 'the one it extends'
+              : `“${shortOf(full)}”, ${(await whereBound(full)).replace(/^the one /, '')}`;
+          clauses.push(
+            `its data source would be ${await sourceOf(dataSource.now)}, not ${await sourceOf(dataSource.was)}`,
+          );
+        }
+        return `“${item.title}” would bind otherwise than when it was proposed: ${clauses.join('; ')}.`;
+      }),
+    );
+    return new Refused(
+      409,
+      `${sentences.join(' ')} Nothing was approved; its author can withdraw it and propose it again.`,
+      {
+        rebound: rebound.map(({ item, names, dataSource }) => ({
+          kind: item.kind,
+          id: item.id,
+          title: item.title,
+          names,
+          ...(dataSource === undefined ? {} : { dataSource }),
+        })),
+      },
+    );
   };
 
   /**
@@ -1115,10 +1273,22 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
       }
     };
 
+    /**
+     * Held to what it bound to when proposed (T456, AC-321): an item that
+     * would bind otherwise refuses the approval before anything is written,
+     * save the data sources landed first (R52).
+     */
+    const recorded = (await routes.bindings?.get(proposal.id)) ?? null;
+    const documentsBound = (bodies: Awaited<ReturnType<typeof prepareDocuments>>) =>
+      bodies.map(({ item, body }) => ({ item, bound: documentBindingsOf(item.kind, body) }));
+
     // Models next, through xcube's changeset, then what binds to them (T451).
     const models = proposal.items.filter((item) => item.kind === 'model');
     if (models.length === 0) {
-      await writeDocuments(await prepareDocuments(undefined));
+      const bodies = await prepareDocuments(undefined);
+      const rebound = reboundIn(recorded, documentsBound(bodies));
+      if (rebound.length > 0) throw await reboundRefusal(rebound);
+      await writeDocuments(bodies);
       return landed;
     }
     const lander = routes.modelLanding;
@@ -1135,6 +1305,11 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
       });
       if (checked.kind === 'refused') throw await refusedBy(checked);
       const bodies = await prepareDocuments(checked.resolver);
+      const rebound = reboundIn(recorded, [
+        ...models.map((item) => ({ item, bound: checked.bound.get(item.id) })),
+        ...documentsBound(bodies),
+      ]);
+      if (rebound.length > 0) throw await reboundRefusal(rebound);
       const files = await checked.commit();
       for (const write of checked.writes) {
         const item = models.find((each) => each.id === write.fileId)!;
@@ -1558,6 +1733,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
         });
     }
     const models = items.filter((item) => item.kind === 'model');
+    let checkedModels: Extract<LandingCheck, { kind: 'checked' }> | undefined;
     if (models.length > 0 && routes.modelLanding !== undefined) {
       const checked = await routes.modelLanding.check(request, {
         models: models.map(landingModelOf),
@@ -1567,8 +1743,9 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
         targetFolderId: target,
       });
       if (checked.kind === 'refused') throw await refusedBy(checked);
+      checkedModels = checked;
     }
-    return { proposing, id, description, target, items };
+    return { proposing, id, description, target, items, checkedModels };
   }
 
   /** The message for an item already waiting, in its proposal or as another's. */
@@ -1641,8 +1818,11 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
   });
 
   async function propose(request: FastifyRequest, reply: FastifyReply) {
-    const { proposing, id, description, target, items } = await plan(request, true);
+    const { proposing, id, description, target, items, checkedModels } = await plan(request, true);
     const user = userOf(request);
+    // What each item binds to as it is proposed: what an approval is held to (T456).
+    const bound =
+      routes.bindings === undefined ? {} : await bindingsWhenProposed(items, checkedModels);
     let proposal: Proposal;
     try {
       proposal = await store.create({
@@ -1660,6 +1840,10 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
         open === null ? {} : { proposalId: open.id },
       );
     }
+    // Made already: one not recorded is held to nothing, never answered as a failure.
+    await routes.bindings?.keep(proposal.id, bound).catch((failure: unknown) => {
+      request.log.warn({ err: failure }, 'a proposal’s bindings were not recorded');
+    });
 
     const answer = answerOf(proposal);
     const goesWith = goingWithText(items.slice(1));
