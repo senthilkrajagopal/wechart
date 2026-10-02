@@ -24,6 +24,8 @@ export interface Member {
   readonly cube: string;
   /** A measure's aggregation, as Cube reports it: count, sum, avg… */
   readonly aggType?: string;
+  /** A measure that is itself a rolling window, which takes no quick calculation (R46). */
+  readonly cumulative?: true;
 }
 
 export interface CubeSummary {
@@ -53,6 +55,7 @@ interface RawMember {
   shortTitle?: string;
   type?: string;
   aggType?: string;
+  cumulative?: boolean;
   aliasMember?: string;
   isVisible?: boolean;
   public?: boolean;
@@ -113,6 +116,7 @@ export function membersOf(meta: unknown, cubeName: string): Member[] {
       type: member.type ?? 'string',
       cube: (member.aliasMember ?? member.name ?? cubeName).split('.')[0] ?? cubeName,
       ...(typeof member.aggType === 'string' ? { aggType: member.aggType } : {}),
+      ...(member.cumulative === true ? { cumulative: true as const } : {}),
     }));
 
   return [

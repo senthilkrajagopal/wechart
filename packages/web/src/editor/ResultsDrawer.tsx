@@ -47,6 +47,16 @@ export interface ResultsDrawerProps {
   readonly granularities?: MemberGranularities;
   /** Each member's title from the model, for the tables' headers (AC-220). */
   readonly titles?: Readonly<Record<string, string>>;
+  /**
+   * The result rows' own formats and titles, where they differ from the
+   * model's: a quick calculation's values stand under its measure's name,
+   * written and named as the chart has them (AC-048). The underlying rows
+   * are the measure as it is.
+   */
+  readonly result?: {
+    readonly formats?: MemberFormats | undefined;
+    readonly titles?: Readonly<Record<string, string>> | undefined;
+  };
   readonly onOpenChange: (open: boolean) => void;
   readonly onViewChange: (view: DrawerView) => void;
 }
@@ -196,6 +206,7 @@ export function ResultsDrawer({
   formats = {},
   granularities = {},
   titles = {},
+  result,
   onOpenChange,
   onViewChange,
 }: ResultsDrawerProps) {
@@ -285,9 +296,9 @@ export function ResultsDrawer({
             <RowTable
               rows={rows}
               testId="drawer-result-rows"
-              formats={formats}
+              formats={result?.formats ?? formats}
               granularities={granularities}
-              titles={titles}
+              titles={result?.titles ?? titles}
               numeric={numeric}
               fields={fieldsOf(query)}
             />

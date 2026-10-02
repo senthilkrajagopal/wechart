@@ -18,6 +18,12 @@
 import type { ChartDefinition, ChartDocument } from './chart-document';
 import { granularitiesOf } from './chart-spec';
 import type { MemberFormats } from './format';
+import {
+  calculatedMeasures,
+  calculationsInEffect,
+  periodGrainOf,
+  withMemberLabels,
+} from './quickCalc';
 import { CHANNELS, type ChartType, type Encoding, type RenderSpec } from './render-spec';
 import { applySort } from './sort';
 import { applyRowLimit, applyTopN } from './topN';
@@ -125,13 +131,34 @@ export function compile(document: ChartDocument, options: CompileOptions): Rende
     if (value !== undefined) encoding[channel] = value;
   }
 
+  const granularities = granularitiesOf(chart.wells.timeDimensions, chart.granularities);
+  /**
+   * The quick calculations Cube computed for the rows (AC-048), as the
+   * chart's query asked for them (`toCubeQuery`): each measure named with its
+   * calculation and written in its own way.
+   */
+  const grain = periodGrainOf(granularities);
+  const calculated = calculatedMeasures(
+    calculationsInEffect(
+      {
+        measures: chart.wells.measures,
+        ...(chart.calculations === undefined ? {} : { calculations: chart.calculations }),
+        // The type it is drawn as: the editor holds a chosen box plot outside the
+        // chart, and asks its query as one (T382's review).
+        chartType: chart.chartType ?? options.chartType,
+      },
+      grain,
+    ),
+    grain,
+  );
+
   // Both transformations happen here rather than in each renderer, so a chart
   // type cannot be quietly exempt from either. Order matters: the cap
   // *selects* which categories are shown (AC-041) and the sort *arranges*
   // what survives (AC-044), so folding first means the tail is chosen on
   // merit rather than on whatever the sort put last.
   // The row limit last, on the rows as drawn (T390, AC-041).
-  return applyRowLimit(
+  const drawn = applyRowLimit(
     applySort(
       applyTopN({
         chartType: chart.chartType ?? options.chartType,
@@ -143,8 +170,9 @@ export function compile(document: ChartDocument, options: CompileOptions): Rende
         ...(options.formats === undefined ? {} : { formats: options.formats }),
         ...(options.titles === undefined ? {} : { titles: options.titles }),
         ...(options.shortTitles === undefined ? {} : { shortTitles: options.shortTitles }),
+        ...(Object.keys(calculated).length === 0 ? {} : { calculated }),
         // By the grain each was asked at, chosen or not (AC-188, AC-216).
-        granularities: granularitiesOf(chart.wells.timeDimensions, chart.granularities),
+        granularities,
         measures: [...chart.wells.measures],
         // The wells' order, which a table heads its columns by (T393, AC-301).
         fields: [
@@ -159,4 +187,13 @@ export function compile(document: ChartDocument, options: CompileOptions): Rende
       }),
     ),
   );
+  // Named with its calculation, and written as it is, even before the
+  // model's titles and formats arrive (AC-048).
+  return Object.keys(calculated).length === 0
+    ? drawn
+    : withMemberLabels(drawn, {
+        formats: options.formats ?? {},
+        titles: options.titles ?? {},
+        shortTitles: options.shortTitles,
+      });
 }

@@ -167,4 +167,46 @@ describe('rebinding a query through an overlay (T542, AC-281)', () => {
     expect(memberBack('fops__orders.count', back)).toBe('fsales__orders.count');
     expect(memberBack('customers.count', back)).toBe('customers.count');
   });
+
+  /**
+   * AC-048: a quick calculation names its measure in the query's
+   * `calculations` block, and xcube answers it under its companion's column,
+   * `<measure>__xc_<calculation>` (research `xcube-quick-calcs.md`). Rebound,
+   * the block names the overlay's own measure, and the column comes back
+   * under the item's name for it, so the chart reads it as the measure.
+   */
+  it('rebinds a quick calculation’s measure, and answers its column under the item’s name', () => {
+    const { query, back } = reboundQuery(
+      {
+        measures: ['fsales__orders.count', 'customers.count'],
+        calculations: [
+          { measure: 'fsales__orders.count', kind: 'running_total' },
+          { measure: 'customers.count', kind: 'rank' },
+        ],
+      },
+      OWN,
+    );
+    expect(query['calculations']).toEqual([
+      { measure: 'fops__orders.count', kind: 'running_total' },
+      { measure: 'customers.count', kind: 'rank' },
+    ]);
+    expect(
+      answerRebound(
+        {
+          data: [
+            { 'fops__orders.count__xc_running_total': '30', 'customers.count__xc_rank': '1' },
+          ],
+          annotation: {
+            measures: { 'fops__orders.count__xc_running_total': { title: 'Count (running total)' } },
+          },
+        },
+        back,
+      ),
+    ).toEqual({
+      data: [{ 'fsales__orders.count__xc_running_total': '30', 'customers.count__xc_rank': '1' }],
+      annotation: {
+        measures: { 'fsales__orders.count__xc_running_total': { title: 'Count (running total)' } },
+      },
+    });
+  });
 });

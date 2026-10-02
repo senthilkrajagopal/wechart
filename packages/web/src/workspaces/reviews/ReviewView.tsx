@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { withMemberLabels } from '@wechart/core';
 import { useMemo, useState } from 'react';
 
 import { drawChartBody, ReadOnlyDashboard, specFor } from '../../dashboard/DashboardPage';
@@ -617,8 +618,8 @@ function ChartPreview({
     () =>
       spec === undefined
         ? undefined
-        : {
-            ...spec,
+        : // A calculated measure keeps its calculation in its name (AC-048).
+          withMemberLabels(spec, {
             formats: formatsFrom(meta.data),
             titles: Object.fromEntries(
               allMembers(meta.data).map((member) => [member.name, member.title]),
@@ -626,7 +627,7 @@ function ChartPreview({
             shortTitles: Object.fromEntries(
               allMembers(meta.data).map((member) => [member.name, member.shortTitle]),
             ),
-          },
+          }),
     [spec, meta.data],
   );
   if (drawn.isPending) return <TileSkeleton chartType="bar" height={360} />;

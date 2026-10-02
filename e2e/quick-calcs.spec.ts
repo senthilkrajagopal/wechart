@@ -1,7 +1,7 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
 import { wellPicker } from './wells';
-import { newInMyWorkspace } from './workspace';
+import { IN_MY_WORKSPACE, newInMyWorkspace } from './workspace';
 
 /**
  * Quick calculations (F6), in the chart editor as it is served.
@@ -161,4 +161,337 @@ test.describe('a calculation over time on a chart with no time field (AC-049)', 
     }, reason);
     expect(fits).toBe('fits');
   });
+});
+
+const API = 'http://localhost:4100/api';
+
+/**
+ * A table chart of the test's own, in My workspace: `measure` by month of
+ * Ordered at, or by `dimension`, with `calculation` applied to the measure.
+ */
+async function calculatedChart(
+  request: APIRequestContext,
+  {
+    measure,
+    calculation,
+    dimension,
+    chartType = 'table',
+    localTo,
+  }: {
+    measure: string;
+    calculation: Record<string, unknown>;
+    dimension?: string;
+    chartType?: string;
+    localTo?: string;
+  },
+): Promise<string> {
+  const title = `Calculated ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const created = await request.post(`${API}/documents`, {
+    data: { kind: 'chart', title, ...IN_MY_WORKSPACE },
+  });
+  expect(created.status()).toBe(201);
+  const { id } = (await created.json()) as { id: string };
+  const stored = (await (await request.get(`${API}/documents/chart/${id}`)).json()) as {
+    version: number;
+    body: Record<string, unknown>;
+  };
+  const saved = await request.put(`${API}/documents/chart/${id}`, {
+    data: {
+      version: stored.version,
+      body: {
+        ...stored.body,
+        ...(localTo === undefined ? {} : { localToDashboardId: localTo }),
+        chart: {
+          source: { cube: 'orders' },
+          wells: {
+            measures: [measure],
+            dimensions: dimension === undefined ? [] : [dimension],
+            timeDimensions: dimension === undefined ? ['orders.ordered_at'] : [],
+          },
+          ...(dimension === undefined ? { granularities: { 'orders.ordered_at': 'month' } } : {}),
+          chartType,
+          filters: [],
+          calculations: { [measure]: calculation },
+        },
+      },
+    },
+  });
+  expect(saved.ok()).toBe(true);
+  return id;
+}
+
+/** The query a tile asks for its chart, and Cube's answer to it, as they cross the network. */
+function askedOfCube(page: Page, column: string) {
+  return page.waitForResponse(async (response) => {
+    if (!response.url().endsWith('/api/load') || !response.ok()) return false;
+    const answer = (await response.json()) as { data?: Record<string, unknown>[] };
+    return answer.data?.some((row) => column in row) === true;
+  });
+}
+
+/**
+ * AC-048: WHEN a quick calculation is applied, THE SYSTEM SHALL compute it in
+ * Cube as a multi-stage measure rather than in the browser, and the tile SHALL
+ * label the measure with the calculation applied.
+ * Fails when: the value is computed from the already-fetched rows, or the
+ * label does not name the calculation.
+ *
+ * Each of the six on a chart drawn on its page. The query names the
+ * calculation, Cube's answer carries it in the companion's own column (so it
+ * was computed there, as xcube's multi-stage measure: research
+ * `xcube-quick-calcs.md`), and the table heads the measure's column with the
+ * calculation and shows Cube's values. The seed's monthly order counts, from
+ * January 2026, are 30, 28, 31, 30, 31, 30, 31, 29, and each status has 80.
+ */
+test.describe('a quick calculation, computed in Cube and named on the chart (AC-048)', () => {
+  const CASES = [
+    {
+      calculation: { kind: 'runningTotal' },
+      kind: 'running_total',
+      measure: 'orders.count',
+      column: 'orders.count__xc_running_total',
+      heading: 'Orders Count (running total)',
+      rows: { 'Jan 2026': '30', 'Feb 2026': '58', 'Mar 2026': '89' },
+    },
+    {
+      calculation: { kind: 'percentOfTotal' },
+      kind: 'pct_of_total',
+      measure: 'orders.total_amount',
+      dimension: 'orders.status',
+      column: 'orders.total_amount__xc_pct_of_total',
+      heading: 'Orders Total Amount (% of total)',
+      rows: { completed: '33.6%', processing: '33.33%', shipped: '33.07%' },
+    },
+    {
+      calculation: { kind: 'differenceFromPrevious' },
+      kind: 'difference',
+      measure: 'orders.count',
+      column: 'orders.count__xc_diff_month',
+      heading: 'Orders Count (difference from previous month)',
+      rows: { 'Feb 2026': '-2', 'Mar 2026': '3', 'Apr 2026': '-1' },
+    },
+    {
+      calculation: { kind: 'percentDifferenceFromPrevious' },
+      kind: 'pct_difference',
+      measure: 'orders.count',
+      column: 'orders.count__xc_pdiff_month',
+      heading: 'Orders Count (% difference from previous month)',
+      rows: { 'Feb 2026': '-6.67%', 'Mar 2026': '10.71%' },
+    },
+    {
+      calculation: { kind: 'rank' },
+      kind: 'rank',
+      measure: 'orders.count',
+      column: 'orders.count__xc_rank',
+      heading: 'Orders Count (rank)',
+      rows: { 'Jan 2026': '4', 'Feb 2026': '8', 'Mar 2026': '1' },
+    },
+    {
+      calculation: { kind: 'movingAverage', periods: 3 },
+      kind: 'moving_average',
+      measure: 'orders.count',
+      column: 'orders.count__xc_ma3_month',
+      heading: 'Orders Count (3-month moving average)',
+      rows: { 'Jan 2026': '30', 'Feb 2026': '29', 'Mar 2026': '29.67' },
+    },
+  ] as const;
+
+  for (const each of CASES) {
+    test(`${each.heading}: asked of Cube, answered there, and named`, async ({
+      page,
+      request,
+    }) => {
+      const id = await calculatedChart(request, {
+        measure: each.measure,
+        calculation: each.calculation,
+        ...('dimension' in each ? { dimension: each.dimension } : {}),
+      });
+      const answered = askedOfCube(page, each.column);
+      await page.goto(`/explore/charts/${id}`);
+
+      // Asked of Cube by its measure, and answered in the companion's column.
+      const response = await answered;
+      const { query } = response.request().postDataJSON() as {
+        query: { measures: string[]; calculations: unknown };
+      };
+      expect(query.measures).toEqual([each.measure]);
+      expect(query.calculations).toEqual([
+        { measure: each.measure, kind: each.kind, ...('periods' in each.calculation ? { periods: 3 } : {}) },
+      ]);
+
+      // The tile names the calculation, and shows Cube's values.
+      const tile = page.locator('.chart-page__tile');
+      await expect(tile.getByRole('columnheader', { name: each.heading })).toBeVisible();
+      for (const [at, value] of Object.entries(each.rows)) {
+        const row = tile.getByTestId('table-row').filter({ hasText: at });
+        await expect(row.getByRole('cell').last()).toHaveText(value);
+      }
+    });
+  }
+
+  /**
+   * The user's answer (2026-09-24): a running total counts from the start of
+   * the chart's range. On a dashboard whose date filter holds March to June,
+   * March is March's own 31, not the 89 counted from the data's start.
+   */
+  test('a running total on a dashboard counts from the start of its date range', async ({
+    page,
+    request,
+  }) => {
+    const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+    const title = `Running ${unique}`;
+    const dashboard = (await (
+      await request.post(`${API}/documents`, {
+        data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+      })
+    ).json()) as { id: string };
+    const chart = await calculatedChart(request, {
+      measure: 'orders.count',
+      calculation: { kind: 'runningTotal' },
+      chartType: 'bar',
+      localTo: dashboard.id,
+    });
+    const placed = await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title,
+          ...IN_MY_WORKSPACE,
+          owner: 'admin',
+          settings: { width: 'fixed' },
+          pages: [
+            {
+              id: 'only',
+              title: 'Only',
+              items: [{ id: 'tile-running', kind: 'chart', w: 6, h: 40, chartId: chart }],
+            },
+          ],
+          filters: [{ id: 'f-ordered', widget: 'dateRange', member: 'orders.ordered_at' }],
+        },
+      },
+    });
+    expect(placed.ok()).toBe(true);
+    const range = [
+      {
+        id: 'f-ordered',
+        member: 'orders.ordered_at',
+        value: { kind: 'dates', from: '2026-03-01', to: '2026-06-30' },
+      },
+    ];
+
+    // The tile's query with the dashboard's range on it.
+    const answered = page.waitForResponse(async (response) => {
+      if (!response.url().endsWith('/api/load') || !response.ok()) return false;
+      const { query } = response.request().postDataJSON() as { query: Record<string, unknown> };
+      const answer = (await response.json()) as { data?: Record<string, unknown>[] };
+      return (
+        JSON.stringify(query['timeDimensions']).includes('dateRange') &&
+        answer.data?.some((row) => 'orders.count__xc_running_total' in row) === true
+      );
+    });
+    await page.goto(
+      `/explore/dashboards/${dashboard.id}?filters=${encodeURIComponent(JSON.stringify(range))}`,
+    );
+    await expect(page.getByRole('heading', { name: title })).toBeVisible();
+    const { query } = (await answered).request().postDataJSON() as {
+      query: { timeDimensions: unknown; calculations: unknown };
+    };
+    expect(query.calculations).toEqual([{ measure: 'orders.count', kind: 'running_total' }]);
+    expect(query.timeDimensions).toEqual([
+      { dimension: 'orders.ordered_at', granularity: 'month', dateRange: ['2026-03-01', '2026-06-30'] },
+    ]);
+
+    const tile = page.locator('[data-tile="tile-running"]');
+    await expect(tile.getByTestId('chart-canvas')).toBeVisible();
+    await tile.getByTestId('toggle-table-view').click();
+    await expect(tile.getByRole('columnheader', { name: 'Orders Count (running total)' })).toBeVisible();
+    for (const [at, value] of Object.entries({
+      'Mar 2026': '31',
+      'Apr 2026': '61',
+      'May 2026': '92',
+      'Jun 2026': '122',
+    })) {
+      const row = tile.getByTestId('table-row').filter({ hasText: at });
+      await expect(row.getByRole('cell').last()).toHaveText(value);
+    }
+  });
+});
+
+/**
+ * R46: a calculation wrong for the measure's type is disabled in the menu,
+ * with the reason (research `xcube-quick-calcs.md`, "Which types take which
+ * calculation").
+ */
+test('the menu on an average disables % of total, running total and moving average, saying why', async ({
+  page,
+}) => {
+  await page.goto('/explore/charts/seed-chart-empty/edit');
+  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  await wellPicker(page, 'measures').selectOption('orders.average_amount');
+  await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
+  const pill = page.getByTestId('in-measures-orders.average_amount');
+  await pill.getByRole('button', { name: 'Calculations on Average Amount' }).click();
+  const menu = page.getByRole('menu', { name: 'Calculations on Average Amount' });
+
+  for (const [name, why] of [
+    ['% of total', 'Not for an average: its values don’t add up to a total.'],
+    ['Running total', 'Not for an average: adding up its periods gives no true total.'],
+    ['Moving average, 3 periods', 'Not for an average: averaging its periods gives no true average.'],
+  ] as const) {
+    const item = menu.getByRole('menuitem', { name, exact: true });
+    await expect(item).toHaveAttribute('aria-disabled', 'true');
+    await expect(item).toHaveAccessibleDescription(why);
+  }
+  for (const name of ['Difference from previous period', '% difference from previous period', 'Rank'])
+    await expect(menu.getByRole('menuitem', { name, exact: true })).not.toHaveAttribute(
+      'aria-disabled',
+    );
+});
+
+/**
+ * R45.4: the chart's last time field taken out, a calculation over time stays
+ * chosen but paused: the chart draws the plain measure, and a note names the
+ * field it needs. With the field back, it runs again.
+ */
+test('a running total is paused while the chart has no time field, and runs again with one', async ({
+  page,
+}) => {
+  await page.goto('/explore/charts/seed-chart-empty/edit');
+  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  // Time first, so the plain count is first asked once Ordered at is taken out.
+  await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  const button = page
+    .getByTestId('in-measures-orders.count')
+    .getByRole('button', { name: 'Calculations on Count' });
+  await button.click();
+  const asked = page.waitForRequest(
+    (request) =>
+      request.url().endsWith('/api/load') &&
+      (request.postDataJSON() as { query: Record<string, unknown> }).query['calculations'] !==
+        undefined,
+  );
+  await page.getByRole('menuitem', { name: 'Running total', exact: true }).click();
+  await asked;
+
+  // Ordered at taken out: still chosen, paused, and the plain count asked.
+  const plain = page.waitForRequest((request) => {
+    if (!request.url().endsWith('/api/load')) return false;
+    const { query } = request.postDataJSON() as { query: Record<string, unknown> };
+    return query['timeDimensions'] === undefined && Array.isArray(query['measures']);
+  });
+  await page.getByRole('button', { name: 'Remove Ordered at from Time' }).click();
+  const { query } = (await plain).postDataJSON() as { query: Record<string, unknown> };
+  expect(query).not.toHaveProperty('calculations');
+  await expect(button).toContainText('Running total');
+  await expect(page.getByTestId('calc-paused-orders.count')).toHaveText(
+    'Running total on Count is paused, so Count is drawn as it is. Needs a time field in Time: add Ordered at.',
+  );
+
+  // Back in Time, it runs again: the query that asks for it is the one asked
+  // before, answered from the cache, so no note is left.
+  await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
+  await expect(page.getByTestId('calc-paused-orders.count')).toHaveCount(0);
+  await expect(button).toContainText('Running total');
 });

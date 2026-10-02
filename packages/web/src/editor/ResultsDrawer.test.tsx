@@ -132,6 +132,49 @@ describe('its values (AC-046)', () => {
     expect(cells).toEqual(['Jan 2, 2026']);
   });
 
+  /**
+   * AC-048 (T382's review): the result rows hold a quick calculation's values
+   * under its measure's name, so they are headed and written as the chart
+   * names and writes it; the underlying rows are the measure as it is.
+   */
+  it('writes and heads a calculated measure as the chart does, and the rows behind it as they are', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    respondWith([{ 'orders.total_amount': '125.5' }]);
+    const plain = {
+      formats: { 'orders.total_amount': 'currency' },
+      titles: { 'orders.total_amount': 'Orders Total Amount' },
+    };
+    const shownAs = (view: DrawerView) => (
+      <QueryClientProvider client={client}>
+        <ResultsDrawer
+          rows={[{ 'orders.total_amount': '0.336' }]}
+          query={{ measures: ['orders.total_amount'] }}
+          underlyingQuery={{ measures: ['orders.total_amount'], ungrouped: true }}
+          open
+          view={view}
+          {...plain}
+          result={{
+            formats: { 'orders.total_amount': 'percent' },
+            titles: { 'orders.total_amount': 'Orders Total Amount (% of total)' },
+          }}
+          onOpenChange={vi.fn()}
+          onViewChange={vi.fn()}
+        />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(shownAs('result'));
+    const result = screen.getByTestId('drawer-result-rows');
+    expect(within(result).getByRole('columnheader').textContent).toBe(
+      'Orders Total Amount (% of total)',
+    );
+    expect(result.querySelector('td')?.textContent).toBe('33.6%');
+
+    rerender(shownAs('underlying'));
+    const underlying = await screen.findByTestId('drawer-underlying-rows');
+    expect(within(underlying).getByRole('columnheader').textContent).toBe('Orders Total Amount');
+    expect(underlying.querySelector('td')?.textContent).toBe('$125.5');
+  });
+
   it('writes an ungrouped time value with its time of day (AC-188)', async () => {
     respondWith([{ [AT]: '2026-01-02T15:04:05.000' }]);
     drawer({ view: 'underlying', granularities: { [AT]: 'day' } });

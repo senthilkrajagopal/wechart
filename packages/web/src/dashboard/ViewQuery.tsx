@@ -1,9 +1,50 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useRef } from 'react';
 
+import { splitCalculations } from '../query/calculations';
 import { forItem, useQueryItem } from '../query/item';
 import { StateLine } from '../shell/StatusIcon';
 import { useFocusTrap } from '../shell/useFocusTrap';
+
+type Statements = { queries: { sql: string; params: unknown[] }[] };
+
+/**
+ * The SQL Cube runs for a tile's query (`POST /api/sql`): each statement, of
+ * each query the tile asks it as — two where its quick calculations can't
+ * share one (AC-048, `splitCalculations`), as `loadTile` asks them.
+ */
+export async function sqlOf(
+  query: Readonly<Record<string, unknown>>,
+  {
+    signal,
+    ...asked
+  }: {
+    readonly context?: Readonly<Record<string, unknown>>;
+    readonly for?: unknown;
+    readonly signal?: AbortSignal;
+  },
+  fetchImpl: typeof fetch = fetch,
+): Promise<Statements> {
+  const answers = await Promise.all(
+    splitCalculations(query).map(async (part) => {
+      const response = await fetchImpl('/api/sql', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ query: part, ...asked }),
+        ...(signal === undefined ? {} : { signal }),
+      });
+      const body: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        const error = (body as { error?: unknown } | null)?.error;
+        throw new Error(
+          typeof error === 'string' ? error : `Cube answered ${String(response.status)}.`,
+        );
+      }
+      return body as Statements;
+    }),
+  );
+  return { queries: answers.flatMap((answer) => answer.queries) };
+}
 
 /**
  * A chart tile's View query (AC-199): the Cube query it asks — its chart's,
@@ -34,26 +75,8 @@ export function ViewQuery({
   const item = useQueryItem();
   const sql = useQuery({
     queryKey: ['view-query-sql', query, context, item ?? null],
-    queryFn: async ({ signal }): Promise<{ queries: { sql: string; params: unknown[] }[] }> => {
-      const response = await fetch('/api/sql', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          query,
-          ...(context === undefined ? {} : { context }),
-          ...forItem(item),
-        }),
-        signal,
-      });
-      const body: unknown = await response.json().catch(() => null);
-      if (!response.ok) {
-        const error = (body as { error?: unknown } | null)?.error;
-        throw new Error(
-          typeof error === 'string' ? error : `Cube answered ${String(response.status)}.`,
-        );
-      }
-      return body as { queries: { sql: string; params: unknown[] }[] };
-    },
+    queryFn: ({ signal }) =>
+      sqlOf(query, { ...(context === undefined ? {} : { context }), ...forItem(item), signal }),
     staleTime: 0,
   });
 

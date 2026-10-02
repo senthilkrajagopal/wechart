@@ -7,7 +7,7 @@ import type {
   WellName,
 } from '@wechart/core';
 import { useQuery } from '@tanstack/react-query';
-import { QUERY_GRANULARITY } from '@wechart/core';
+import { QUERY_GRANULARITY, quickCalcName } from '@wechart/core';
 import { Fragment, useId, useState, type ReactNode } from 'react';
 
 import { useQueryItem } from '../query/item';
@@ -17,7 +17,7 @@ import { StateLine, StatusIcon } from '../shell/StatusIcon';
 import { FieldIcon } from './FieldList';
 import type { Member } from './fields';
 import { QuickCalcMenu } from './QuickCalcMenu';
-import { quickCalcUnavailable } from './quickCalcAvailability';
+import { overTimeUnavailable, quickCalcUnavailable } from './quickCalcAvailability';
 
 /**
  * How many of a member's values a filter pill offers (a decision, T229):
@@ -222,7 +222,35 @@ export function Wells({
   const timeFields = available
     .filter((member) => member.kind === 'timeDimension')
     .map((member) => titleOf(member.name));
-  const whyNot = (kind: QuickCalcKind) => quickCalcUnavailable(kind, spec, timeFields);
+  /** …and one wrong for the measure's type, with why (R46). */
+  const whyNotOn = (measure: string) => {
+    const known = available.find((member) => member.name === measure);
+    const kind = {
+      ...(known?.aggType === undefined ? {} : { aggType: known.aggType }),
+      ...(known?.cumulative === true ? { cumulative: true } : {}),
+    };
+    return (calc: QuickCalcKind) =>
+      quickCalcUnavailable(calc, spec, timeFields, { measure: kind, titleOf });
+  };
+  /**
+   * Each calculation over time still chosen while the chart can't run it
+   * (R45.4): paused, its measure drawn plain, and why.
+   */
+  const paused = spec.measures.flatMap((measure) => {
+    const applied = spec.calculations?.[measure];
+    const why =
+      applied === undefined
+        ? undefined
+        : overTimeUnavailable(applied.kind, spec, timeFields, titleOf);
+    if (applied === undefined || why === undefined) return [];
+    const title = titleOf(measure);
+    return [
+      {
+        measure,
+        note: `${quickCalcName(applied)} on ${title} is paused, so ${title} is drawn as it is. ${why}`,
+      },
+    ];
+  });
   // Any dimension but the category the boxes are drawn by (T400).
   const pointWell =
     eachPointIs === undefined ? null : (
@@ -319,7 +347,7 @@ export function Wells({
                           tag={known?.aggType}
                           applied={spec.calculations?.[member]}
                           onApply={(calc) => onCalculation(member, calc)}
-                          whyNot={whyNot}
+                          whyNot={whyNotOn(member)}
                           testId={`calcs-${member}`}
                         />
                       ) : known?.aggType === undefined ? null : (
@@ -364,6 +392,18 @@ export function Wells({
                 {refusal}
               </p>
             ) : null}
+            {well.name === 'measures'
+              ? paused.map(({ measure, note }) => (
+                  // A paused calculation, and what it needs (R45.4).
+                  <p
+                    key={measure}
+                    className="wells__note"
+                    data-testid={`calc-paused-${measure}`}
+                  >
+                    {note}
+                  </p>
+                ))
+              : null}
           </section>
         );
         // A box plot's "Each point is" sits below the value (direction.md §7, Box plot).

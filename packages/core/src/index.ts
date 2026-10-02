@@ -84,12 +84,25 @@ export {
 export { compile, defaultEncoding, type CompileOptions } from './compile';
 
 export {
+  CALC_GRANULARITIES,
   MOVING_AVERAGE_PERIODS,
+  OVER_TIME,
   QUICK_CALCS,
   QUICK_CALC_NAMES,
   applyQuickCalc,
+  calculationsInEffect,
+  periodGrainOf,
+  quickCalcLabel,
   quickCalcName,
+  quickCalcTypeRefusal,
+  withMemberLabels,
+  withoutCalculations,
+  type CalculatedMeasure,
+  type CalculationAsked,
+  type MeasureKind,
+  type MemberLabels,
   type MovingAveragePeriods,
+  type PeriodGrain,
   type QuickCalc,
   type QuickCalcKind,
 } from './quickCalc';

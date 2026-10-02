@@ -13,6 +13,7 @@
  */
 import type { MemberFormats, MemberGranularities } from './format';
 import type { MarkingPredicate } from './markings/predicate';
+import type { CalculatedMeasure } from './quickCalc';
 
 /**
  * Every chart type wechart draws — exactly the list AC-037 names.
@@ -153,6 +154,13 @@ export interface RenderSpec {
    * everywhere else.
    */
   readonly shortTitles?: Readonly<Record<string, string>>;
+  /**
+   * Each measure whose values Cube computed as a quick calculation (AC-048),
+   * by the measure: what its name gains, and how its values are written. The
+   * rows hold the calculated values under the measure's own name. Absent when
+   * the chart computes none.
+   */
+  readonly calculated?: Readonly<Record<string, CalculatedMeasure>>;
   /**
    * Each time member's granularity in the query the rows answer (AC-188), so
    * every place a time value is written can write it by its bucket — "Jan

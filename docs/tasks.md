@@ -7398,7 +7398,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **For the user, before T382** (the review's two further findings):
       - A calculation over time already applied stays on its measure when the chart's last time field is taken out. The menu shows it applied, with its item disabled, and "No calculation" takes it off. Nothing computes it yet, but once T382 does, that saved chart would be AC-049's failing state ("offered and produces an error"). Should taking out the last time field take such calculations off, or keep them and draw the plain measure with a note? The spec doesn't say.
       - Cube's rolling windows need "a time dimension **with a date range**" (`research/cube/data-modeling.md` Y.7). This task's rule takes any time field as enough, and the editor's query carries no date range. Whether T382 supplies one (the chart's range, per the user's running-total answer), or a running total or moving average is disabled without one, is T382's to settle.
-- [ ] T382 (AC-048) Compute quick calculations in Cube as generated multi-stage measures, and label the measure
+- [x] T382 (AC-048) Compute quick calculations in Cube as generated multi-stage measures, and label the measure
   - Files: `packages/core/src/quickCalc.ts` (+ test), ~~`packages/api/src/model/chain.ts` (only the companions charts use, added to the served files)~~ the companions charts use, published to xcube as generated YAML items of the cube's folder through a changeset (2026-09-26: nothing is served from wechart, `[IP 1]`), `e2e/quick-calcs.spec.ts`
   - Failing test: `quickCalc.test.ts` and `quick-calcs.spec.ts`: each calculation queries a generated companion measure (the spike's shapes) rather than post-processing rows, and the tile labels the measure with the calculation (AC-048).
   - ~~**Ask the user first:** does a running total count from the start of the data (Cube's `trailing: unbounded`, observed) or from the start of the chart's range (research spike, "Open for the user")?~~ Answered 2026-09-24: from the chart's range (`docs/handoff.md` §2).
@@ -7417,6 +7417,61 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - **A running total of `count_distinct` is correct** in xcube's plain rolling form, so wechart enables it.
     - ~~`packages/api/src/model/chain.ts`~~ The Files become `packages/core/src/quickCalc.ts` (the block and the per-type rules), `packages/web/src/query/loadTile.ts` (sending the block, reading the named column), and `e2e/quick-calcs.spec.ts`.
   - Depends on: T380, ~~T337~~ T426; xcube's (c′) image
+  - **As built:**
+    - core: `packages/core/src/{quickCalc,chart-spec,compile,render-spec,topN,pivot,index}.ts` (+ quickCalc, topN, pivot tests);
+    - web: `packages/web/src/query/{calculations,loadTile}.ts` (+ tests), `packages/web/src/dashboard/{chartSpec.ts,DashboardView.tsx,ViewQuery.tsx}` (+ chartSpec and ViewQuery tests), `packages/web/src/editor/{Wells.tsx,quickCalcAvailability.ts,fields.ts,ResultsDrawer.tsx,ChartEditor.tsx}` (+ Wells, quickCalcAvailability and ResultsDrawer tests), `packages/web/src/workspaces/explore/LibraryChartPage.tsx`, `packages/web/src/workspaces/reviews/ReviewView.tsx`;
+    - api: `packages/api/src/access/rebind.ts` (+ test);
+    - `e2e/quick-calcs.spec.ts`;
+    - research `docs/research/xcube-quick-calcs.md` (committed before, ee88b5f).
+  - **Done 2026-10-02**, on compose's xcube `89628a0e88`, which carries quick calculations (research `xcube-quick-calcs.md`, checked against it by curl).
+    - **Asked of Cube.** `toCubeQuery` adds xcube's `calculations` block, sorted by measure, for each calculation in effect: `percentOfTotal` → `pct_of_total`, the differences → `difference` and `pct_difference`, `runningTotal` → `running_total`, `rank` → `rank`, a moving average → `moving_average` with its `periods`. A chart with none asks nothing new, so its query and its cache entry stay as they were. A box plot asks none: its rows are each one observation.
+    - **Read back.** xcube answers each calculation in its companion's column, `<measure>__xc_<calculation>`, a suffix no authored member may hold. `loadTile` reads that column, and its annotation, back under the measure's name. The value is Cube's, as it came; nothing is worked out in the browser.
+    - **A running total from the chart's range.** xcube filters on the range of the query's time field at its grain, so a dashboard's date filter on the chart's own time field starts the total there: March 31, April 61 (e2e). Without a range, it counts from the start of the data, as the user's answer allows ("from the chart's range"; the editor's query carries none).
+      - xcube refuses a running total over a range in one query with a difference, % difference or moving average (`combination`). So `loadTile` asks them apart, each as any query is, with its own request id to cancel, and joins their rows by the rest of their columns. A period missing from one keeps the other's value. The data are as old as the oldest part, and served from rollups only where both were. View query asks each part for its SQL.
+    - **Named.** `compile` gives each calculated measure a `calculated` entry. Its title and short title gain the calculation, in xcube's words: "Count (running total)", "(difference from previous month)", "(3-month moving average)". `withMemberLabels` is what every place uses to put the model's titles and formats on a drawn chart: the dashboard's tiles and drills, the chart page and the review view. So the label survives the model's titles arriving later.
+    - **Written.** A share (% of total, % difference) is written as a percentage, and a rank as a plain number. A difference, a running total and a moving average keep the measure's own format: xcube's annotation carries `percent` for the shares alone and drops the measure's own format (research, Gotcha 1).
+    - **The rows behind it** (the underlying rows, marked rows and their CSV, and the editor drawer's underlying view) are the measure as it is: the model's titles and formats, never the calculation's. The drawer's result view is the chart's.
+    - **Not summed here.** Top N's "Other (n)" has no value for a calculated measure, and the pivot gives one no totals. A sum of ranks or running totals is no calculation of the rest.
+    - **R46, by type.** The menu disables, with the reason, what xcube refuses or what would change meaning. Cube's `aggType` is camelized (`countDistinct`).
+      - % of total is disabled for `avg`, `min`, `max`, `number` and both distinct counts, whose shares overlap.
+      - Running total and moving average are disabled for `avg`, `min`, `max` and `number`. A running total of a distinct count is enabled (the spike).
+      - Every calculation is disabled for a rolling measure (`cumulative`) and for a measure of a type that isn't a number.
+    - **R45.4, paused.** A calculation over time stays chosen while the chart has no time field. It is also kept while the chart has two time fields, or a grain finer than the hour, which xcube refuses. Meanwhile it isn't asked for, the chart draws the plain measure, and the Metrics well says so: "Running total on Count is paused, so Count is drawn as it is. Needs a time field in Time: add Ordered at." The menu disables these calculations with the same reasons.
+    - **Workspace previews.** The API's overlay rebinding (T542) renames each calculation's measure, and answers its column under the name the item holds.
+    - **What the tests show.**
+      - `quickCalc.test.ts`:
+        - the block for each of the six, sorted, and none on a box plot, a measure the chart doesn't show, or a chart with none;
+        - paused, the three ways;
+        - the label for each, at the chart's grain, and the format each takes;
+        - the label kept through `withMemberLabels`, and before the model's titles arrive;
+        - none on an editor box plot;
+        - the rows behind left plain;
+        - the type rules.
+      - `calculations.test.ts` and `loadTile.test.ts`: the column read back under the measure's name, as it came; the split, and its join.
+      - `topN.test.ts`, `pivot.test.ts`, `chartSpec.test.ts`, `ResultsDrawer.test.tsx`, `ViewQuery.test.ts`, `Wells.test.tsx`, `quickCalcAvailability.test.ts` and `rebind.test.ts`.
+      - `e2e/quick-calcs.spec.ts` (Chrome), each of the six on a table chart drawn on its page. Each asks Cube by its block, Cube's answer carries the companion's column (so it was computed there), and the table heads the column with the calculation and shows Cube's values:
+        - running total 30, 58, 89;
+        - % of total 33.6%, 33.33%, 33.07% by status;
+        - difference −2, 3, −1;
+        - % difference −6.67%, 10.71%;
+        - rank 4, 8, 1;
+        - 3-month moving average 30, 29, 29.67.
+        
+        A running total on a dashboard filtered to March–June gives 31, 61, 92, 122 in its tile's table view. The average's menu is disabled with the reasons, and a running total is paused and resumed. **AC-048 ticked.**
+    - **The cold review (FAIL)** found five real bugs, each fixed and tested:
+      1. The underlying and marked rows, and their CSV, wrote raw values under the calculation's label and format.
+      2. The editor's results drawer wrote calculated values under the plain measure's.
+      3. An editor box plot was labelled as calculated.
+      4. View query asked the unsplit query, which xcube refuses.
+      5. Top N's "Other" and the pivot's totals summed calculated values in the browser.
+    - **Left as found:**
+      - A calculation saved before R46 on a type it is wrong for (T380 allowed any) is still asked for. The tile then shows xcube's reason ("Calculations can't be computed: … an avg measure has no correct pct of total").
+      - xcube's annotation can name another granularity for a running total (research, Gotcha 2). wechart names it from the chart.
+    - **The test cadence:**
+      - the full core and web unit suites passed, and the API's rebind tests;
+      - in Chrome, `quick-calcs.spec.ts` and the specs around the tiles passed after the review's fixes: titles, table-columns, table-view, tiles, chart-page, editor-preview, chart-editor, dashboard, filters, export, marked-share, library-chart and tile-menu (202 of 203).
+      - The one failure, `editor-preview.spec.ts` "a tile resized in this session is previewed at its new height" (2 px against 1), fails alone too, and fails the same way on the unchanged base (`04cc5a4`, every change set aside). It is not this task's.
+    - **For the user:** the paused note (R45.4) is drawn in the editor's Metrics well. A saved chart with a paused calculation draws the plain measure on dashboards and its page with no note. Should the tile say so too?
 - [ ] T383 (AC-050) Record a calculation request and show it to the read-write members of the folder whose model defines the cube
   - Files: `packages/api/src/repos/calc-requests.ts` (+ test), `packages/web/src/editor/RequestCalcDialog.tsx`
   - Failing test: `calc-requests.test.ts`: the request holds the chart, the fields and the description, and is listed for that folder's read-write members and no one else (AC-050).

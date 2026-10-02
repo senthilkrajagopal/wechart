@@ -373,3 +373,84 @@ describe('naming the item a query serves', () => {
     ]);
   });
 });
+
+/**
+ * AC-048: a quick calculation is asked of Cube in the query's `calculations`
+ * block, and Cube's answer read back under the measure's own name (research
+ * `xcube-quick-calcs.md`; `calculations.test.ts` has the rest).
+ */
+describe('a query asking for quick calculations (AC-048)', () => {
+  const calculated = {
+    measures: ['orders.count'],
+    timeDimensions: [{ dimension: 'orders.ordered_at', granularity: 'month' }],
+    calculations: [{ measure: 'orders.count', kind: 'rank' }],
+  };
+
+  it('sends the block as it is, and reads the calculation’s column as the measure', async () => {
+    const { impl, calls } = fetchReturning(
+      { body: { error: CONTINUE_WAIT } },
+      { body: { data: [{ 'orders.ordered_at.month': 'jan', 'orders.count__xc_rank': '4' }] } },
+    );
+
+    const result = await loadTile({ query: calculated, fetchImpl: impl, retryDelayMs: 0 });
+
+    expect((JSON.parse(String(calls[0]?.body)) as { query: unknown }).query).toEqual(calculated);
+    expect(result).toEqual({ data: [{ 'orders.ordered_at.month': 'jan', 'orders.count': '4' }] });
+  });
+
+  it('asks a running total over a range apart from a difference, and joins their rows', async () => {
+    const ranged = {
+      measures: ['orders.count', 'orders.total_amount'],
+      timeDimensions: [
+        { dimension: 'orders.ordered_at', granularity: 'month', dateRange: ['2026-01-01', '2026-02-28'] },
+      ],
+      calculations: [
+        { measure: 'orders.count', kind: 'running_total' },
+        { measure: 'orders.total_amount', kind: 'difference' },
+      ],
+    };
+    const asked: unknown[] = [];
+    const impl = vi.fn(async (_url: string, init?: RequestInit) => {
+      const { query: sent } = JSON.parse(String(init?.body)) as {
+        query: { measures: string[] };
+      };
+      asked.push(sent);
+      const data = sent.measures.includes('orders.count')
+        ? [
+            { 'orders.ordered_at.month': '2026-01', 'orders.count__xc_running_total': '30' },
+            { 'orders.ordered_at.month': '2026-02', 'orders.count__xc_running_total': '58' },
+          ]
+        : [{ 'orders.ordered_at.month': '2026-02', 'orders.total_amount__xc_diff_month': '5757.50' }];
+      return new Response(JSON.stringify({ data }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const result = (await loadTile({ query: ranged, fetchImpl: impl, retryDelayMs: 0 })) as {
+      data: unknown[];
+    };
+
+    expect(asked).toHaveLength(2);
+    expect(asked).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          measures: ['orders.count'],
+          calculations: [{ measure: 'orders.count', kind: 'running_total' }],
+        }),
+        expect.objectContaining({
+          measures: ['orders.total_amount'],
+          calculations: [{ measure: 'orders.total_amount', kind: 'difference' }],
+        }),
+      ]),
+    );
+    expect(result.data).toEqual([
+      { 'orders.ordered_at.month': '2026-01', 'orders.count': '30' },
+      {
+        'orders.ordered_at.month': '2026-02',
+        'orders.count': '58',
+        'orders.total_amount': '5757.50',
+      },
+    ]);
+  });
+});

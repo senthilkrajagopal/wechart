@@ -96,9 +96,11 @@ export function applyTopN(spec: RenderSpec): RenderSpec {
     [category]: `${OTHER_LABEL} (${String(folded.length)})`,
   };
   for (const measure of measures) {
-    otherRow[measure] = total(
-      folded.flatMap((entry) => entry.rows.map((row) => numberAt(row, measure))),
-    );
+    // A quick calculation is Cube's, row by row (AC-048): a sum of ranks or
+    // running totals is none of the rest's, so its fold has no value.
+    otherRow[measure] = Object.hasOwn(spec.calculated ?? {}, measure)
+      ? null
+      : total(folded.flatMap((entry) => entry.rows.map((row) => numberAt(row, measure))));
   }
 
   return { ...spec, rows: [...kept.flatMap((entry) => entry.rows), otherRow] };

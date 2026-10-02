@@ -602,6 +602,96 @@ describe('the menu on a measure pill (AC-047)', () => {
       screen.getByRole('menuitem', { name: 'Running total' }).getAttribute('aria-disabled'),
     ).toBeNull();
   });
+
+  /**
+   * R46: a calculation that would be wrong for the measure's type is
+   * disabled, with the reason (research `xcube-quick-calcs.md`, "Which types
+   * take which calculation").
+   */
+  it('disables, with the reason, what is wrong for an average, and offers the rest', async () => {
+    const average: Member = {
+      name: 'orders.average_amount',
+      title: 'Orders Average amount',
+      shortTitle: 'Average amount',
+      kind: 'measure',
+      type: 'number',
+      cube: 'orders',
+      aggType: 'avg',
+    };
+    const onCalculation = vi.fn();
+    render(
+      <Wells
+        spec={{
+          ...spec,
+          measures: ['orders.average_amount'],
+          timeDimensions: ['orders.ordered_at'],
+        }}
+        available={[average, timeDimension]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        onCalculation={onCalculation}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Calculations on Average amount' }));
+    for (const [name, why] of [
+      ['% of total', 'Not for an average: its values don’t add up to a total.'],
+      ['Running total', 'Not for an average: adding up its periods gives no true total.'],
+      [
+        'Moving average, 3 periods',
+        'Not for an average: averaging its periods gives no true average.',
+      ],
+    ] as const) {
+      const item = screen.getByRole('menuitem', { name, description: why });
+      expect(item.getAttribute('aria-disabled')).toBe('true');
+      expect(item.textContent).toContain(why);
+    }
+    for (const name of ['Difference from previous period', 'Rank'])
+      expect(screen.getByRole('menuitem', { name }).getAttribute('aria-disabled')).toBeNull();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Running total' }));
+    expect(onCalculation).not.toHaveBeenCalled();
+  });
+
+  /**
+   * R45.4: with the chart's last time field taken out, a calculation over
+   * time stays chosen but paused: the chart draws the plain measure, with a
+   * note naming the field it needs.
+   */
+  it('says a calculation over time is paused, and what it needs, while the chart has no time field', () => {
+    render(
+      <Wells
+        spec={{ ...spec, calculations: { 'orders.count': { kind: 'runningTotal' } } }}
+        available={[measure, amount, timeDimension]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        onCalculation={vi.fn()}
+      />,
+    );
+
+    // Still chosen, on its pill.
+    expect(screen.getByTestId('in-measures-orders.count').textContent).toContain('Running total');
+    expect(screen.getByTestId('calc-paused-orders.count').textContent).toBe(
+      'Running total on Count is paused, so Count is drawn as it is. Needs a time field in Time: add Ordered at.',
+    );
+  });
+
+  it('says nothing is paused once the chart has a time field again', () => {
+    render(
+      <Wells
+        spec={{
+          ...spec,
+          timeDimensions: ['orders.ordered_at'],
+          calculations: { 'orders.count': { kind: 'runningTotal' } },
+        }}
+        available={[measure, amount, timeDimension]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        onCalculation={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId('calc-paused-orders.count')).toBeNull();
+  });
 });
 
 /**

@@ -13,6 +13,7 @@
  * something to name.
  */
 
+import { calculatedAnswer, joinAnswers, splitCalculations } from './calculations';
 import { forItem, type QueryItem } from './item';
 
 export const CONTINUE_WAIT = 'Continue wait';
@@ -74,7 +75,28 @@ export interface LoadTileOptions {
   readonly item?: QueryItem | undefined;
 }
 
-export async function loadTile({
+export async function loadTile(options: LoadTileOptions): Promise<unknown> {
+  /**
+   * Quick calculations (AC-048): a running total over a range and another
+   * calculation over time can't share a query in xcube, so they are asked
+   * apart, each as any query is, and their rows joined (`calculations.ts`).
+   * Each part is its own request, with its own id to cancel by.
+   */
+  const parts = splitCalculations(options.query);
+  if (parts.length > 1) {
+    const { requestId: _one, ...each } = options;
+    void _one;
+    const answers = await Promise.all(parts.map((query) => loadOne({ ...each, query })));
+    return joinAnswers(answers, options.query);
+  }
+  return loadOne(options);
+}
+
+/**
+ * One query asked through the API, and its answer, each quick calculation's
+ * column read under its measure's name (AC-048).
+ */
+async function loadOne({
   query,
   signal,
   fetchImpl = fetch,
@@ -110,7 +132,7 @@ export async function loadTile({
   signal?.addEventListener('abort', cancelOnCube, { once: true });
 
   try {
-    return await poll();
+    return calculatedAnswer(await poll(), query);
   } finally {
     signal?.removeEventListener('abort', cancelOnCube);
   }

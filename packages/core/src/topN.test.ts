@@ -49,6 +49,18 @@ describe('collapsing the tail', () => {
     expect(folded?.[COUNT]).toBe(30);
   });
 
+  /**
+   * AC-048 (T382's review): a quick calculation is Cube's, row by row. A sum
+   * of ranks or running totals is no calculation of the rest, so "Other"
+   * shows the categories it folds, with no value of its own.
+   */
+  it('leaves a calculated measure’s fold without a value, never a sum worked out here', () => {
+    const folded = applyTopN(spec({ calculated: { [COUNT]: { label: 'rank' } } })).rows.at(-1);
+
+    expect(folded?.[STATUS]).toBe(`${OTHER_LABEL} (2)`);
+    expect(folded?.[COUNT]).toBe(null);
+  });
+
   it('ranks by value, so the tail is the small members and not the late ones', () => {
     const unsorted = spec({
       rows: [

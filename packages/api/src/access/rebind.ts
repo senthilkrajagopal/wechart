@@ -102,6 +102,11 @@ function withNames(
     );
   if (Array.isArray(query['joinHints']))
     out['joinHints'] = query['joinHints'].map((hint: unknown) => list(hint));
+  // A quick calculation names its measure (AC-048; research `xcube-quick-calcs.md`).
+  if (Array.isArray(query['calculations']))
+    out['calculations'] = query['calculations'].map((each: unknown) =>
+      isPlain(each) && 'measure' in each ? { ...each, measure: rename(each['measure']) } : each,
+    );
   return out;
 }
 
@@ -149,13 +154,25 @@ export function reboundQuery(
 }
 
 /**
- * The names the item asked an answer's key by: the member asked, or one of
- * its time dimensions at a grain (`….ordered_at.month`). A key it didn't ask
- * as another name, as it is.
+ * The suffix of a quick calculation's column, `<measure>__xc_<calculation>`,
+ * which no authored member may hold (research `xcube-quick-calcs.md`).
+ */
+const CALCULATION = '__xc_';
+
+/**
+ * The names the item asked an answer's key by: the member asked, one of its
+ * time dimensions at a grain (`….ordered_at.month`), or a quick calculation of
+ * it (`….count__xc_rank`, AC-048). A key it didn't ask as another name, as it
+ * is.
  */
 const namesOf = (key: string, back: Back): readonly string[] => {
   const exact = back.get(key);
   if (exact !== undefined) return exact;
+  const calculated = key.indexOf(CALCULATION);
+  if (calculated > 0) {
+    const asked = back.get(key.slice(0, calculated));
+    if (asked !== undefined) return asked.map((name) => `${name}${key.slice(calculated)}`);
+  }
   let found: string | undefined;
   for (const asked of back.keys())
     if (key.startsWith(`${asked}.`) && (found === undefined || asked.length > found.length))

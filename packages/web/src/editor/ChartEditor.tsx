@@ -743,6 +743,10 @@ function EditorBody({
             underlyingQuery={underlyingQuery}
             formats={formats}
             titles={titles}
+            // A quick calculation's values, as the chart writes and names them (AC-048).
+            {...(drawnSpec?.calculated === undefined
+              ? {}
+              : { result: { formats: drawnSpec.formats, titles: drawnSpec.titles } })}
             granularities={granularitiesOf(spec.timeDimensions, spec.granularities)}
             open={drawer.open}
             view={drawer.view}

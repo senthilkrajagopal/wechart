@@ -227,6 +227,19 @@ describe('number formats (AC-046)', () => {
     expect(specs['b']?.formats).toEqual(formats);
   });
 
+  /**
+   * AC-048: a measure Cube computed as % of total is a share, whatever its
+   * own format, and a rank a plain number.
+   */
+  it('writes a calculated measure as its calculation is written, not as the measure is', () => {
+    const formats = { 'orders.total_amount': 'currency' };
+    const share = { ...drawn(), calculated: { 'orders.total_amount': { label: '% of total', format: 'percent' } } } as const;
+
+    const specs = withFormats({ share }, formats);
+
+    expect(specs['share']?.formats).toEqual({ 'orders.total_amount': 'percent' });
+  });
+
   it('reads the formats out of the model', () => {
     const meta = {
       cubes: [

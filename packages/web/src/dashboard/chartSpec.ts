@@ -3,6 +3,7 @@ import {
   isEmpty,
   toChartSpec,
   toCubeQuery,
+  withMemberLabels,
   type ChartDocument,
   type MemberFormats,
   type RenderSpec,
@@ -95,7 +96,10 @@ export function withFormats(
   specs: Readonly<Record<string, RenderSpec>>,
   formats: MemberFormats,
 ): Readonly<Record<string, RenderSpec>> {
-  return Object.fromEntries(Object.entries(specs).map(([id, spec]) => [id, { ...spec, formats }]));
+  // A calculated measure written as its calculation is (AC-048).
+  return Object.fromEntries(
+    Object.entries(specs).map(([id, spec]) => [id, withMemberLabels(spec, { formats })]),
+  );
 }
 
 export async function tileChartOf(document: ChartDocument, load: LoadRows): Promise<TileChart> {

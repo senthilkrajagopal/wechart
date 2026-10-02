@@ -5,7 +5,12 @@
  */
 
 import type { MemberGranularities, TimeGranularity } from './format';
-import type { QuickCalc } from './quickCalc';
+import {
+  calculationBlock,
+  calculationsInEffect,
+  periodGrainOf,
+  type QuickCalc,
+} from './quickCalc';
 import type { ChartType } from './render-spec';
 
 export type WellName = 'measures' | 'dimensions' | 'timeDimensions';
@@ -156,8 +161,8 @@ export function toCubeQuery(spec: ChartSpec): Record<string, unknown> {
     };
   }
 
+  const grains = granularitiesOf(spec.timeDimensions, spec.granularities);
   if (spec.timeDimensions.length > 0) {
-    const grains = granularitiesOf(spec.timeDimensions, spec.granularities);
     query['timeDimensions'] = [...spec.timeDimensions]
       .sort()
       .map((dimension) => ({ dimension, granularity: grains[dimension] ?? QUERY_GRANULARITY }));
@@ -165,6 +170,15 @@ export function toCubeQuery(spec: ChartSpec): Record<string, unknown> {
 
   const filters = cubeFiltersOf(spec.filters);
   if (filters.length > 0) query['filters'] = filters;
+
+  /**
+   * Each quick calculation in effect, asked of Cube by its measure (AC-048):
+   * xcube computes it as a multi-stage measure and answers it under its own
+   * column (research `xcube-quick-calcs.md`). A chart with none asks nothing
+   * new, so its query, and its cache entry, stay as they were.
+   */
+  const calculations = calculationBlock(calculationsInEffect(spec, periodGrainOf(grains)));
+  if (calculations.length > 0) query['calculations'] = calculations;
 
   return query;
 }

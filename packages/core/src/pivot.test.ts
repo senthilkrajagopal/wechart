@@ -114,6 +114,20 @@ describe('totals', () => {
     expect(pivot(spec()).grandTotals).toEqual([15]);
   });
 
+  /**
+   * AC-048 (T382's review): a quick calculation is Cube's, cell by cell; a
+   * sum of ranks or running totals is no total of it, so it has none here.
+   */
+  it('gives a calculated measure no totals, rather than a sum worked out here', () => {
+    const result = pivot(spec({ calculated: { [COUNT]: { label: 'running total' } } }));
+
+    expect(result.rowTotals).toEqual([[null], [null]]);
+    expect(result.columnTotals).toEqual([[null], [null]]);
+    expect(result.grandTotals).toEqual([null]);
+    // Its cells are Cube's, as they came.
+    expect(result.cells[1]?.[1]).toEqual([8]);
+  });
+
   it('totals each measure separately', () => {
     const result = pivot(
       spec({

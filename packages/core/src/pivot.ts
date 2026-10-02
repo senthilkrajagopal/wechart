@@ -115,15 +115,20 @@ export function pivot(spec: RenderSpec): PivotResult {
     });
   }
 
+  // A quick calculation is Cube's, cell by cell (AC-048): a sum of it is no total of it.
+  const totalled = measures.map((measure) => !Object.hasOwn(spec.calculated ?? {}, measure));
+  const sumOf = (m: number, values: readonly (number | null)[]) =>
+    totalled[m] === true ? total(values) : null;
+
   const rowTotals = cells.map((columns) =>
-    measures.map((_, m) => total(columns.map((cell) => cell[m] ?? null))),
+    measures.map((_, m) => sumOf(m, columns.map((cell) => cell[m] ?? null))),
   );
 
   const columnTotals = columnHeaders.map((_, c) =>
-    measures.map((__, m) => total(cells.map((columns) => columns[c]?.[m] ?? null))),
+    measures.map((__, m) => sumOf(m, cells.map((columns) => columns[c]?.[m] ?? null))),
   );
 
-  const grandTotals = measures.map((_, m) => total(rowTotals.map((row) => row[m] ?? null)));
+  const grandTotals = measures.map((_, m) => sumOf(m, rowTotals.map((row) => row[m] ?? null)));
 
   const order = rowOrder(spec, rowHeaders, rowTotals);
   return {

@@ -41,6 +41,8 @@ import {
   type MemberFormats,
   type RenderSpec,
   CHART_TYPE_NAMES,
+  withMemberLabels,
+  withoutCalculations,
 } from '@wechart/core';
 import {
   useCallback,
@@ -2159,6 +2161,15 @@ export function DashboardView({
   );
   const chartTitleOf = (chartId: string) => drawn.documents?.[chartId]?.title;
   /**
+   * The rows behind a chart, ungrouped, carry no quick calculation (AC-048):
+   * each measure is written and named as the model has it, never as its
+   * calculation's.
+   */
+  const plainFormatsOf = (spec: RenderSpec | undefined) =>
+    formats ?? withoutCalculations(spec?.formats, spec);
+  const plainTitlesOf = (spec: RenderSpec | undefined) =>
+    titles ?? withoutCalculations(spec?.titles, spec);
+  /**
    * A chart's type as Properties says it (AC-203): its saved type, or, where
    * it follows the recommender, "Automatic" and the type it is drawn as.
    */
@@ -2843,12 +2854,13 @@ export function DashboardView({
   const formatted = useMemo(() => {
     const written =
       formats === undefined ? withFiltered.specs : withFormats(withFiltered.specs, formats);
+    // A calculated measure keeps its calculation in its name (AC-048).
     return titles === undefined
       ? written
       : Object.fromEntries(
           Object.entries(written).map(([id, spec]) => [
             id,
-            { ...spec, titles, ...(shortTitles === undefined ? {} : { shortTitles }) },
+            withMemberLabels(spec, { titles, shortTitles }),
           ]),
         );
   }, [withFiltered.specs, formats, titles, shortTitles]);
@@ -3994,12 +4006,7 @@ export function DashboardView({
         ...(state.kind === 'done'
           ? {
               // Written with the model's formats and titles, as every tile is (T270's review).
-              spec: {
-                ...state.spec,
-                ...(formats === undefined ? {} : { formats }),
-                ...(titles === undefined ? {} : { titles }),
-                ...(shortTitles === undefined ? {} : { shortTitles }),
-              },
+              spec: withMemberLabels(state.spec, { formats, titles, shortTitles }),
               ...(state.answered === undefined ? {} : { answered: state.answered }),
             }
           : {}),
@@ -4039,8 +4046,10 @@ export function DashboardView({
           // In the wells' order, as the chart's table (T393's review, AC-301).
           fields: spec?.fields ?? [],
           measures: spec?.measures ?? [],
-          formats: spec?.formats ?? {},
-          titles: spec?.titles ?? {},
+          // The rows themselves, never a quick calculation's (AC-048): each
+          // measure as the model writes and names it.
+          formats: plainFormatsOf(spec),
+          titles: plainTitlesOf(spec),
         }),
         written: rows.length,
         total: typeof result.total === 'number' ? result.total : undefined,
@@ -4369,8 +4378,9 @@ export function DashboardView({
     },
     measures: drawn.specs[open.chartId]?.measures ?? [],
     fields: drawn.specs[open.chartId]?.fields ?? [],
-    formats: drawn.specs[open.chartId]?.formats ?? {},
-    titles: drawn.specs[open.chartId]?.titles ?? {},
+    // The rows themselves, never a quick calculation's (AC-048).
+    formats: plainFormatsOf(drawn.specs[open.chartId]),
+    titles: plainTitlesOf(drawn.specs[open.chartId]),
   });
   /**
    * The details panel's marking, as the query it asks (AC-240): a change

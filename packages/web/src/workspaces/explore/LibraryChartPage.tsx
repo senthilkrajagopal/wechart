@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
-import { readChartDocument } from '@wechart/core';
+import { readChartDocument, withMemberLabels } from '@wechart/core';
 import { useId, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { CHART_MISSING, formatsFrom } from '../../dashboard/chartSpec';
@@ -201,8 +201,8 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
     () =>
       spec === undefined
         ? undefined
-        : {
-            ...spec,
+        : // A calculated measure keeps its calculation in its name (AC-048).
+          withMemberLabels(spec, {
             formats: formatsFrom(meta.data),
             titles: Object.fromEntries(
               allMembers(meta.data).map((member) => [member.name, member.title]),
@@ -211,7 +211,7 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
             shortTitles: Object.fromEntries(
               allMembers(meta.data).map((member) => [member.name, member.shortTitle]),
             ),
-          },
+          }),
     [spec, meta.data],
   );
   const hasFields =

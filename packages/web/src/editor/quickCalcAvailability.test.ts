@@ -52,6 +52,51 @@ describe('a quick calculation without a time dimension (AC-049)', () => {
     expect(quickCalcUnavailable('rank', untimed, ['Ordered at'])).toBeUndefined();
   });
 
+  /**
+   * xcube computes a calculation over time on exactly one time field, at the
+   * hour or coarser (research `xcube-quick-calcs.md`): with two, or a grain
+   * saved finer than the pill offers, it would refuse the query.
+   */
+  it('is unavailable with two time fields in Time, or a time field finer than the hour', () => {
+    expect(
+      quickCalcUnavailable(
+        'runningTotal',
+        { timeDimensions: ['orders.ordered_at', 'orders.shipped_at'] },
+        ['Ordered at', 'Shipped at'],
+      ),
+    ).toBe('Needs one time field in Time, and this chart has 2.');
+    expect(
+      quickCalcUnavailable(
+        'differenceFromPrevious',
+        { timeDimensions: ['orders.ordered_at'], granularities: { 'orders.ordered_at': 'minute' } },
+        ['Ordered at'],
+        { titleOf: () => 'Ordered at' },
+      ),
+    ).toBe('Needs Ordered at by the hour or longer.');
+    expect(
+      quickCalcUnavailable('rank', { timeDimensions: ['orders.ordered_at', 'orders.shipped_at'] }, []),
+    ).toBeUndefined();
+  });
+
+  /** R46: what is wrong for the measure's type, said first. */
+  it('is unavailable where it would be wrong for the measure’s type, saying why', () => {
+    expect(
+      quickCalcUnavailable('percentOfTotal', { timeDimensions: [] }, [], {
+        measure: { aggType: 'countDistinct' },
+      }),
+    ).toMatch(/^Not for a distinct count/);
+    expect(
+      quickCalcUnavailable('runningTotal', { timeDimensions: [] }, ['Ordered at'], {
+        measure: { aggType: 'avg' },
+      }),
+    ).toMatch(/^Not for an average/);
+    expect(
+      quickCalcUnavailable('runningTotal', { timeDimensions: ['orders.ordered_at'] }, [], {
+        measure: { aggType: 'countDistinct' },
+      }),
+    ).toBeUndefined();
+  });
+
   it('leaves all six available once the chart has a time dimension', () => {
     for (const kind of QUICK_CALCS) {
       expect(
