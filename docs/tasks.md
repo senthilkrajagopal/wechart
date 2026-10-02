@@ -9824,7 +9824,7 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
     - Not in the e2e: a dependent in a folder the writer can't see. A grant reaches down, so whoever may change a data source's or model's folder sees every folder whose cubes can bind to it; the count is shown by the API tests and `deleteChecks.test.ts`.
     - **Review:** fixed the lead naming one cube of several, views and cubes as links, Model a link of its own, the model page's ⋯ while changes are unsaved (leaving asked about a file gone), the dependents read saying "none" with xcube away, Delete offered on templates and unserved folders, and A4's detail.
     - **Left:** T515's "an e2e of the page's restore, through the real xcube test, with T526's data-source page work" isn't done here.
-- [ ] T527 (AC-371) Put a library chart from off a dashboard's folder path on it as a chart of the dashboard's own *(added 2026-09-30, `[R49]`: the user's "Copy on use" for AC-263)*
+- [x] T527 (AC-371) Put a library chart from off a dashboard's folder path on it as a chart of the dashboard's own *(added 2026-09-30, `[R49]`: the user's "Copy on use" for AC-263)*
   - Files: `packages/api/src/server.ts` (`POST /api/dashboards/:id/charts`, the dashboard saves), `packages/web/src/dashboard/copyChartTo.ts` and the chart page's Add to dashboard, `packages/api/src/routes/copy-on-use.test.ts`, `e2e/security/copy-on-use.spec.ts`
   - Failing test: `copy-on-use.test.ts`: adding a library chart whose folder isn't on the dashboard's folder path, or saving a dashboard that shows one, puts a copy of it on the dashboard as its own chart; one on the path stays shared. `copy-on-use.spec.ts`: a reader opens that dashboard and every tile answers (AC-371, AC-263).
   - Depends on: T436
@@ -9844,7 +9844,7 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
       - the attach is two writes;
       - a chart that can't be read is left as it is.
     - **AC-371 stays open for moves and approvals, which are T537's.** The user's answer was "Copy on move + approval". AC-263 stays open for its other parts.
-- [ ] T537 (AC-371) Copy on move and at approval: no dashboard left showing a library chart off its folder's path *(added 2026-10-01, the user's answer on T527's review: "Copy on move + approval")*
+- [x] T537 (AC-371) Copy on move and at approval: no dashboard left showing a library chart off its folder's path *(added 2026-10-01, the user's answer on T527's review: "Copy on move + approval")*
   - Files: `packages/api/src/routes/proposals.ts` (`land`), `packages/api/src/server.ts` (`PATCH /api/documents/:kind/:id`, a folder's move), the move dialogs' notice, `packages/api/src/routes/copy-on-use.test.ts`, `e2e/security/copy-on-use.spec.ts`
   - Failing test: `copy-on-use.test.ts`:
     - an approval that lands a dashboard showing an off-path library chart lands it with its own copy;
@@ -9852,6 +9852,44 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
     - moving a dashboard, or a folder above it, gives it copies of the charts now off its path;
     - each move's answer names the dashboards that got copies (AC-371).
   - Depends on: T527
+  - **Done 2026-10-01. AC-371 ticked.**
+    - **At approval** (`land` in `routes/proposals.ts`): the landed dashboard is set against its folder's path (`pathOf`, which the server gives with sign-in on). Any library chart it shows from off that path becomes its own copy, bound in its folder, as a save in the workspace makes one (T527). That covers a shared chart, and one of the proposal's own library charts landing in another folder. The one copied stays as it is, or lands as proposed.
+      - The copies are bound before anything is written, so a name the path doesn't hold refuses the approval (`422`, naming it), as T502's binding does.
+      - The copies are written before the dashboard, and kept in its landed version's `parts`.
+    - **On a move** (`copiesOnMove` in `server.ts`): with sign-in on, moving a library chart, a dashboard or a folder is checked against the tree as it will be, before anything is written.
+      - Each shared dashboard the move would leave showing a library chart off its path gets its own copy, bound in its folder. The copies, the dashboards and the move are written together (`updateTogether`), or none of them. A binding refused answers `422` and moves nothing.
+      - Which dashboards a move can affect: those showing a moved chart; the moved dashboard; the dashboards in a moved folder or beneath it.
+      - The same holds in `PATCH` (Explore's Move to…) and in a `PUT` that changes an item's folder.
+    - **The answer** adds `copiedOn: [{ id, title, charts: [{ from, id, title }] }]` for the dashboards in folders the mover may see, and `copiedHidden: n` for the rest, as a refusal counts what it can't name (AC-322). A move that copied nothing answers as before.
+    - **Explore** says it under the folder's contents (`movedCopies.ts`): "“Revenue” now shows its own copy of “Orders”: after this move, that chart isn’t kept in the dashboard’s folder or one above it." Dashboards it may not name are counted.
+    - **Small decision, overturnable:** a draft in a workspace is not copied on a move. Copying it would change another user's draft under their open editor, whose next save would then be refused as stale, and the mover can't be told of it. Its next save copies it (`copiesOnUse`, T527), and so does its approval (above). With sign-in off nothing is copied, as T527 decided.
+    - Tests:
+      - `copy-on-use.test.ts` (16). The 9 new ones cover:
+        - a chart moved, with the dashboard named, one in a hidden folder counted, one now on its path and a draft both left;
+        - a dashboard moved;
+        - a folder moved, with dashboards in it and two folders down;
+        - a `PUT` move;
+        - a move that copies nothing;
+        - an approval copying a shared chart and the proposal's own chart for another folder, with the kept version's parts;
+        - sign-in off;
+        - against the stub xcube: a folder move's copy bound along the new path, and a move whose copy can't be bound refused, moving nothing.
+      - `movedCopies.test.ts`.
+      - `e2e/security/copy-on-use.spec.ts` in Chrome (8):
+        - F's chart moved to G from Explore's Move to…, which names the dashboard. Its copy is bound on F's path, and the moved chart is bound to G's own `orders`.
+        - The writer's draft showing a chart moved to G since lands with its own copy.
+        - The reader gets a `200` with data from every tile of both dashboards. The reader's test now runs after the writer's, and checks every tile, not the first.
+    - **Review (one round, FAIL), fixed:**
+      1. A folder move's copies were bound against xcube's tree before the move, which is pushed only after the answer. They now resolve as xcube will once the move is pushed: nearest first up to the moved folder, then from where it goes (`movedResolver`; `boundIn`'s `moving`).
+      2. A refused move named a dashboard and chart in a folder the mover can't see. It now says only that such a dashboard is in a folder they can't see.
+      3. An approval was refused by a shared chart this build can't read. Such a chart is left as it is, as a save leaves it.
+      4. A `PUT` move with no `updateTogether` dropped its copies. It is now refused, as T527's save is.
+      5. A folder move read the folder tree again for each chart. It now reads it once.
+    - **Left, under the breadth rule:**
+      - Copies made at approval are written before the items, so a later write that fails leaves them behind (`land` was never one transaction).
+      - A folder move reads every chart and dashboard to find the dashboards beneath it.
+      - Chart and folder moves by `PUT` aren't tested; a dashboard's is.
+      - A folder's own charts keep their bindings when it moves (AC-275, no rebinding), so its readers can still be refused a tile bound off its new path. That was so before this task.
+    - **For the user:** drafts aren't copied on a move (the decision above). AC-371's "each such dashboard" reads as every dashboard, so confirm that a draft may wait for its save or its approval.
 - [ ] T540 (AC-389) Recreate a deleted target folder when its proposal is approved *(added 2026-10-01, `[R52]`)*
   - Files: `packages/api/src/server.ts` (a folder's delete keeps a record of it), a migration for deleted folders' records, `packages/api/src/routes/proposals.ts` (`land`), `packages/api/src/routes/folder-recreate.test.ts`
   - Failing test: `folder-recreate.test.ts`:

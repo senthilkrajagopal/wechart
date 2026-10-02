@@ -114,6 +114,12 @@ export interface ProposalRoutes {
     | { readonly kind: 'refused'; readonly names: readonly string[] }
     | { readonly kind: 'unreachable' }
   >;
+  /**
+   * A shared folder's path: it, the folders above it, and the root (T537,
+   * AC-371). Set with sign-in on, where a landed dashboard shows only library
+   * charts kept on its folder's path; unset, it lands showing what it shows.
+   */
+  readonly pathOf?: (folderId: string) => Promise<ReadonlySet<string>>;
 }
 
 const NOT_THERE = { error: 'There is no such item in your workspace.' };
@@ -838,6 +844,66 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
       ...proposal.items.filter((item) => item.kind === 'chart'),
       ...(board === undefined ? [] : [board]),
     ];
+    /**
+     * Copy at approval (T537, AC-371): the landed dashboard shows only
+     * library charts kept on its folder's path. Any other it shows, a shared
+     * one or one of the proposal's landing in another folder, becomes a chart
+     * of its own, bound in its folder, as a save in the workspace makes one
+     * (T527). The one it copies stays as it is, or lands as proposed.
+     */
+    const copies: { id: string; body: Record<string, unknown> }[] = [];
+    const ownCopies = async (dashboard: ProposedItem, body: Record<string, unknown>) => {
+      if (routes.pathOf === undefined) return body;
+      const path = await routes.pathOf(dashboard.landsIn);
+      const going = new Map(proposal.items.map((item) => [idOf.get(item.id)!, item]));
+      const renames = new Map<string, string>();
+      for (const chartId of shownCharts(body)) {
+        const item = going.get(chartId);
+        let content: Record<string, unknown>;
+        let kept: string | null;
+        if (item !== undefined) {
+          // Its own charts land with it; a library chart, in its own folder.
+          if (item.kind !== 'chart' || isLocal(item)) continue;
+          content = item.snapshot;
+          kept = item.landsIn;
+        } else {
+          // One this build can't read is left as it is, as a save leaves it
+          // (T527); it doesn't refuse the approval (T537's review).
+          const chart = await documents.get('chart', chartId).catch((failure: unknown) => {
+            if (failure instanceof ChartDocumentError) return null;
+            throw failure;
+          });
+          // Another dashboard's own chart is none of this one's to copy.
+          if (chart === null || typeof chart.body['localToDashboardId'] === 'string') continue;
+          content = chart.body;
+          kept = folderIdOf(chart.body);
+        }
+        if (kept === null || path.has(kept)) continue;
+        const copy = landedBody(content, { localTo: boardId! }, body['owner']);
+        const bound =
+          routes.bind === undefined
+            ? ({ kind: 'ok', body: copy } as const)
+            : await routes.bind('chart', dashboard.landsIn, copy);
+        const title = item === undefined ? titleOf(content) : item.title;
+        if (bound.kind === 'refused')
+          throw new Refused(
+            422,
+            `“${title}” is kept off the path of “${dashboard.title}”, and its own copy can’t be bound there: no folder on its path holds ${bound.names.map((name) => `“${name}”`).join(', ')}. Nothing was approved.`,
+            { names: bound.names },
+          );
+        if (bound.kind === 'unreachable')
+          throw new Refused(
+            502,
+            `xcube could not be asked where the cubes of “${title}” are, so nothing was approved.`,
+          );
+        const id = randomUUID();
+        renames.set(chartId, id);
+        copies.push({ id, body: bound.body });
+      }
+      return renames.size === 0
+        ? body
+        : (withChartsRenamed(body, renames) as Record<string, unknown>);
+    };
     // Each bound in its folder first (T502): a name its path doesn't hold
     // refuses the approval before anything is written.
     const bodies: { item: ProposedItem; body: Record<string, unknown> }[] = [];
@@ -848,10 +914,13 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
           : (await docs.get(item.kind as 'dashboard' | 'chart', item.replaces.id))?.body['owner'];
       const body =
         item === board
-          ? landedBody(
-              withChartsRenamed(item.snapshot, renamed) as Record<string, unknown>,
-              { folderId: item.landsIn },
-              replacedOwner,
+          ? await ownCopies(
+              item,
+              landedBody(
+                withChartsRenamed(item.snapshot, renamed) as Record<string, unknown>,
+                { folderId: item.landsIn },
+                replacedOwner,
+              ),
             )
           : isLocal(item)
             ? landedBody(item.snapshot, { localTo: boardId! }, replacedOwner)
@@ -875,11 +944,16 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
       bodies.push({ item, body: bound.body });
     }
     await keepReplaced();
+    // Its own copies first, then the charts and the dashboard showing them (T537).
+    for (const copy of copies) await docs.create({ kind: 'chart', id: copy.id, body: copy.body });
     for (const { item, body } of bodies) await write(item, body);
     // The replaced dashboard's own charts it no longer shows go: its kept
     // version holds them.
     if (boardId !== undefined) {
-      const shown = new Set(proposal.items.filter(isLocal).map((item) => idOf.get(item.id)!));
+      const shown = new Set([
+        ...proposal.items.filter(isLocal).map((item) => idOf.get(item.id)!),
+        ...copies.map((copy) => copy.id),
+      ]);
       for (const chart of await docs.localTo(boardId))
         if (!shown.has(chart.id)) await docs.remove('chart', chart.id);
     }

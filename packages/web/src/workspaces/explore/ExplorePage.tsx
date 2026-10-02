@@ -54,6 +54,7 @@ import {
 } from './deleteChecks';
 import { MenuButton, type MenuItem } from '../../shell/MenuButton';
 import { clearSaid, peekSaid } from './deletedToast';
+import { movedCopiesText, type MovedCopies } from './movedCopies';
 
 const counted = (count: number, one: string) => `${String(count)} ${count === 1 ? one : `${one}s`}`;
 /** "A", "A and B", "A, B and C". */
@@ -270,6 +271,10 @@ export function ExplorePage() {
           `Could not save: ${said.error ?? said.message ?? `error ${String(response.status)}`}`,
         );
       }
+      // A move gives each dashboard it would leave showing a chart off its
+      // folder's path its own copy, and says which (T537, AC-371).
+      if (target === undefined) return undefined;
+      return movedCopiesText(((await response.json().catch(() => ({}))) as MovedCopies) ?? {});
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
@@ -1011,6 +1016,11 @@ export function ExplorePage() {
             old name, and without this nothing would explain why. */}
         {relocate.isError ? (
           <StateLine kind="err">{(relocate.error as Error).message}</StateLine>
+        ) : null}
+        {relocate.isSuccess && relocate.data !== undefined ? (
+          <StateLine kind="ok" testId="moved-copies">
+            {relocate.data}
+          </StateLine>
         ) : null}
         {searching && results.isSuccess && results.data.length > SEARCH_SHOWN ? (
           <StateLine kind="warn">

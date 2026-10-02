@@ -1067,6 +1067,9 @@ export function buildServer({
       // An approval publishes: each item bound in its folder, as a save there
       // was before a shared one could no longer be saved (T502, AC-272).
       bind: (kind, folderId, body) => boundIn(kind, folderId, body),
+      // A landed dashboard shows only library charts on its folder's path:
+      // any other as its own copy (T537, AC-371). With sign-in on, as T527.
+      ...(security === 'off' ? {} : { pathOf: (folderId: string) => pathTo(folderId) }),
       // A data source's changed settings, proposed only once tested (T515, AC-158).
       ...(dataSources === undefined || connectionTests === undefined
         ? {}
@@ -1755,10 +1758,64 @@ export function buildServer({
     | { readonly kind: 'ok'; readonly body: Record<string, unknown> }
     | { readonly kind: 'refused'; readonly names: readonly string[] }
     | { readonly kind: 'unreachable' };
+  /**
+   * xcube's resolver as it will answer once a folder move is pushed (T537's
+   * review; research `xcube-slice-3a.md`, "POST …/resolve": nearest first,
+   * over the head's items): among the items in `from` and each folder above
+   * it up to the moved folder, then from the folder it moves into, up.
+   */
+  const movedResolver = async (
+    from: string,
+    moving: { readonly folder: string; readonly to: string },
+    ids: ReadonlyMap<string, string>,
+  ): Promise<Pick<XcubeAdmin, 'resolve' | 'items'>> => {
+    const admin = xcube!;
+    const parents = await parentsOf();
+    const below: string[] = [];
+    for (
+      let at: string | null | undefined = from, steps = 0;
+      at != null && steps <= parents.size;
+      at = parents.get(at), steps += 1
+    ) {
+      const xcubeId = ids.get(at);
+      if (xcubeId !== undefined) below.push(xcubeId);
+      if (at === moving.folder) break;
+    }
+    const above = ids.get(moving.to);
+    return {
+      items: (options) => admin.items(options),
+      resolve: async (_folderId, names) => {
+        const held = await admin.items();
+        const found = new Map<string, string | null>();
+        const rest: string[] = [];
+        for (const name of names) {
+          const near = below
+            .map((folderId) =>
+              held.find((item) => item.folderId === folderId && item.name === name),
+            )
+            .find((item) => item !== undefined);
+          if (near === undefined) rest.push(name);
+          else found.set(name, near.fullName);
+        }
+        if (rest.length > 0) {
+          const answered = above === undefined ? new Map() : await admin.resolve(above, rest);
+          for (const name of rest) found.set(name, answered.get(name) ?? null);
+        }
+        return found;
+      },
+    };
+  };
   const boundIn = async (
     kind: 'chart' | 'dashboard',
     folderId: string | null,
     body: Record<string, unknown>,
+    /**
+     * A folder move not yet written, which xcube's tree doesn't hold yet
+     * (T537's review): `folder`, `folderId` or one above it, as if it were in
+     * `to`. Names resolve nearest first from `folderId` up to `folder`, then
+     * from `to` up, as xcube will resolve them once the move is pushed.
+     */
+    moving?: { readonly folder: string; readonly to: string },
   ): Promise<Bound> => {
     if (xcube === undefined || folders === undefined || folderId === null)
       return { kind: 'ok', body };
@@ -1770,13 +1827,15 @@ export function buildServer({
       return { kind: 'ok', body };
     if (kind === 'dashboard' && filterCubes.length === 0) return { kind: 'ok', body };
     try {
-      const xcubeId = (await folders()).ids.get(folderId);
+      const ids = (await folders()).ids;
+      const xcubeId = ids.get(folderId);
       if (xcubeId === undefined || (await xcube.revision()).mode !== 'items')
         return { kind: 'ok', body };
+      const resolver = moving === undefined ? xcube : await movedResolver(folderId, moving, ids);
       const bind = () =>
         kind === 'chart'
-          ? bindChart(xcube, xcubeId, chart!)
-          : bindNames(xcube, xcubeId, filterCubes);
+          ? bindChart(resolver, xcubeId, chart!)
+          : bindNames(resolver, xcubeId, filterCubes);
       // A folder made a moment ago may not be in xcube's tree yet, its push
       // made after the answer: put it, and ask again (T429's review).
       const binding = await bind().catch(async (error: unknown) => {
@@ -1944,9 +2003,9 @@ export function buildServer({
     if ((await workspaceRootOf(folder)) === null) return folder;
     return typeof body['targetFolderId'] === 'string' ? body['targetFolderId'] : null;
   };
-  /** A shared folder's path: it, the folders above it, and the root (T527). */
-  const pathTo = async (folderId: string): Promise<ReadonlySet<string>> => {
-    const parents = new Map(
+  /** Each folder's parent, as the folders are now. */
+  const parentsOf = async (): Promise<Map<string, string | null>> =>
+    new Map(
       (
         (cat ? await cat.folders({ counted: false }) : []) as {
           id: string;
@@ -1954,6 +2013,11 @@ export function buildServer({
         }[]
       ).map((folder) => [folder.id, folder.parentId]),
     );
+  /** A folder's path in a tree: it, the folders above it, and the root (T527). */
+  const pathIn = (
+    parents: ReadonlyMap<string, string | null>,
+    folderId: string,
+  ): ReadonlySet<string> => {
     const path = new Set<string>([ROOT_FOLDER_ID]);
     for (
       let at: string | null | undefined = folderId;
@@ -1963,6 +2027,8 @@ export function buildServer({
       path.add(at);
     return path;
   };
+  /** A shared folder's path, as the folders are now (T527). */
+  const pathTo = async (folderId: string) => pathIn(await parentsOf(), folderId);
   interface CopiedOnUse {
     /** The library chart copied. */
     readonly from: string;
@@ -1987,16 +2053,30 @@ export function buildServer({
     shown: Iterable<string>,
     sent: ReadonlyMap<string, Record<string, unknown>> = new Map(),
   ): Promise<Map<string, CopiedOnUse>> => {
-    const copies = new Map<string, CopiedOnUse>();
-    if (security === 'off' || docs?.get === undefined) return copies;
-    if ((await workspaceRootOf(folderIdOf(dashboard.body))) === null) return copies;
+    if (security === 'off' || docs?.get === undefined) return new Map();
+    if ((await workspaceRootOf(folderIdOf(dashboard.body))) === null) return new Map();
     const home = await landsIn(dashboard.body);
-    if (home === null) return copies;
-    const path = await pathTo(home);
+    if (home === null) return new Map();
+    return copiesOffPath(dashboard, shown, await pathTo(home), (_id, body) => landsIn(body), sent);
+  };
+  /**
+   * The library charts a dashboard shows that are kept off a folder path, each
+   * as a copy of its own (T527, T537): `keptIn` says where a chart is kept,
+   * none for one that can't be said.
+   */
+  const copiesOffPath = async (
+    dashboard: { readonly id: string; readonly body: Record<string, unknown> },
+    shown: Iterable<string>,
+    path: ReadonlySet<string>,
+    keptIn: (chartId: string, body: Record<string, unknown>) => Promise<string | null>,
+    sent: ReadonlyMap<string, Record<string, unknown>> = new Map(),
+  ): Promise<Map<string, CopiedOnUse>> => {
+    const copies = new Map<string, CopiedOnUse>();
+    if (docs?.get === undefined) return copies;
     for (const chartId of shown) {
       const found = await docs.get('chart', chartId).catch(() => null);
       if (found === null || typeof found.body['localToDashboardId'] === 'string') continue;
-      const kept = await landsIn(found.body);
+      const kept = await keptIn(chartId, found.body);
       if (kept === null || path.has(kept)) continue;
       const {
         folderId: _folder,
@@ -2025,6 +2105,207 @@ export function buildServer({
     [...copies.values()].map(({ from, id, title }) => ({ from, id, title }));
   const renamesOf = (copies: ReadonlyMap<string, CopiedOnUse>) =>
     new Map([...copies].map(([from, copy]) => [from, copy.id]));
+  /** A dashboard a move leaves with copies: written with the move (T537). */
+  interface CopiedOnMove {
+    readonly id: string;
+    readonly title: unknown;
+    /** The folder it is in once moved. */
+    readonly folderId: string;
+    readonly version: number;
+    /** Its body as it is to be written, showing its copies. */
+    readonly body: Record<string, unknown>;
+    /** Each copy, bound in its folder. */
+    readonly copies: readonly CopiedOnUse[];
+  }
+  /** Why a move's copy couldn't be bound: the dashboard, its folder, the chart, the names. */
+  interface MoveRefusal {
+    readonly dashboard: unknown;
+    readonly folderId: string;
+    readonly chart: unknown;
+    readonly names: readonly string[];
+  }
+  /**
+   * Copy on move (T537, AC-371, amended 2026-10-01: "Copy on move +
+   * approval"): with sign-in on, moving a library chart, a dashboard or a
+   * folder leaves no shared dashboard showing a library chart kept off its
+   * folder's path. Each one it would leave so gets its own copy, as copy on
+   * use makes one (T527), bound in the dashboard's folder; a name its path
+   * doesn't hold refuses the move, as it refuses a save. Asked before the
+   * move is written, of the tree as it will be.
+   *
+   * A draft in a workspace is left for its next save, or its approval, to
+   * copy (`copiesOnUse`, `land`): it is its author's, whom the mover can't
+   * tell (a small decision, overturnable).
+   *
+   * `body`: a moved dashboard's, as it is to be written.
+   */
+  const copiesOnMove = async (moved: {
+    readonly kind: 'chart' | 'dashboard' | 'folder';
+    readonly id: string;
+    readonly to: string;
+    readonly body?: Record<string, unknown>;
+  }): Promise<
+    | { readonly kind: 'ok'; readonly dashboards: readonly CopiedOnMove[] }
+    | ({ readonly kind: 'refused' | 'unreachable' } & MoveRefusal)
+  > => {
+    if (security === 'off' || docs?.get === undefined) return { kind: 'ok', dashboards: [] };
+    const parents = await parentsOf();
+    if (moved.kind === 'folder') parents.set(moved.id, moved.to);
+    // Read from the one tree, once (T537's review): the workspace a folder is
+    // in, and where a library chart is kept, as `landsIn` says it.
+    const workspaceIn = (folderId: string | null) => {
+      for (let at = folderId, steps = 0; at != null && steps <= parents.size; steps += 1) {
+        if (isWorkspaceId(at)) return at;
+        at = parents.get(at) ?? null;
+      }
+      return null;
+    };
+    const keptIn = async (chartId: string, chart: Record<string, unknown>) => {
+      if (moved.kind === 'chart' && chartId === moved.id) return moved.to;
+      const folder = folderIdOf(chart);
+      if (workspaceIn(folder) === null) return folder;
+      const target = chart['targetFolderId'];
+      return typeof target === 'string' ? target : null;
+    };
+    // The dashboards whose path, or whose chart's place, the move changes.
+    let affected: readonly string[];
+    if (moved.kind === 'dashboard') affected = [moved.id];
+    else if (moved.kind === 'chart')
+      affected = (
+        (cat?.dashboardsUsing ? await cat.dashboardsUsing(moved.id) : []) as { id: string }[]
+      ).map((each) => each.id);
+    else {
+      const beneath = (folderId: string | null) => {
+        for (let at = folderId, steps = 0; at != null && steps <= parents.size; steps += 1) {
+          if (at === moved.id) return true;
+          at = parents.get(at) ?? null;
+        }
+        return false;
+      };
+      affected = ((await cat?.referenceDocuments?.()) ?? [])
+        .filter(
+          (each) =>
+            each.kind === 'dashboard' &&
+            beneath(folderIdOf((each.body ?? {}) as Record<string, unknown>)),
+        )
+        .map((each) => each.id);
+    }
+    const dashboards: CopiedOnMove[] = [];
+    for (const id of affected) {
+      const stored = await docs.get('dashboard', id).catch(() => null);
+      if (stored === null) continue;
+      const own = moved.kind === 'dashboard' && id === moved.id;
+      const body = own && moved.body !== undefined ? moved.body : stored.body;
+      const home = own ? moved.to : folderIdOf(stored.body);
+      if (home === null || workspaceIn(home) !== null) continue;
+      const copies = await copiesOffPath(
+        { id, body },
+        chartIdsOf(body),
+        pathIn(parents, home),
+        keptIn,
+      );
+      if (copies.size === 0) continue;
+      const bound: CopiedOnUse[] = [];
+      for (const copy of copies.values()) {
+        // On its path once moved: a folder's move isn't in xcube's tree yet
+        // (T537's review), so its names are asked as xcube will answer them.
+        const binding = await boundIn(
+          'chart',
+          home,
+          copy.body,
+          moved.kind === 'folder' ? { folder: moved.id, to: moved.to } : undefined,
+        );
+        if (binding.kind !== 'ok')
+          return {
+            kind: binding.kind,
+            dashboard: body['title'],
+            folderId: home,
+            chart: copy.title,
+            names: binding.kind === 'refused' ? binding.names : [],
+          };
+        bound.push({ ...copy, body: binding.body });
+      }
+      dashboards.push({
+        id,
+        title: body['title'],
+        folderId: home,
+        version: stored.version ?? 0,
+        body: withChartsRenamed(body, renamesOf(copies)) as Record<string, unknown>,
+        copies: bound,
+      });
+    }
+    return { kind: 'ok', dashboards };
+  };
+  /**
+   * A move's copies refused, answered as a save's binding is (T537): the
+   * dashboard and chart named where the mover may see the dashboard's
+   * folder, and only said to be in one they can't otherwise (T537's review,
+   * AC-322).
+   */
+  const moveRefused = (
+    reply: FastifyReply,
+    seen: Visibility | undefined,
+    refused: { readonly kind: 'refused' | 'unreachable' } & MoveRefusal,
+  ) => {
+    const named = seen === undefined || seen.rights.has(refused.folderId);
+    if (refused.kind === 'unreachable')
+      return reply.code(502).send({
+        error: named
+          ? `xcube could not be asked where the cubes of “${String(refused.chart)}” are, so nothing was moved.`
+          : 'xcube could not be asked where a chart’s cubes are, so nothing was moved.',
+      });
+    return reply.code(422).send(
+      named
+        ? {
+            error: `Moved, “${String(refused.dashboard)}” would show “${String(refused.chart)}” from off its folder’s path, and its own copy can’t be bound there: no folder on its path holds ${refused.names
+              .map((name) => `“${name}”`)
+              .join(', ')}. Nothing was moved.`,
+            names: refused.names,
+          }
+        : {
+            error:
+              'Moved, a dashboard in a folder you can’t see would show a chart from off its folder’s path, and its own copy can’t be bound there. Nothing was moved.',
+          },
+    );
+  };
+  /**
+   * What a move's answer says it copied (T537, AC-371): each dashboard that
+   * got copies, named where the mover may see its folder, and counted where
+   * not, as a refusal counts what it can't name (AC-322).
+   */
+  const copiedOnMove = (seen: Visibility | undefined, dashboards: readonly CopiedOnMove[]) => {
+    if (dashboards.length === 0) return {};
+    const named = dashboards.filter(
+      (dashboard) => seen === undefined || seen.rights.has(dashboard.folderId),
+    );
+    return {
+      copiedOn: named.map((dashboard) => ({
+        id: dashboard.id,
+        title: dashboard.title,
+        charts: dashboard.copies.map(({ from, id, title }) => ({ from, id, title })),
+      })),
+      copiedHidden: dashboards.length - named.length,
+    };
+  };
+  /** The writes of a move's copies: each copy made, each dashboard showing its own. */
+  const copyWritesOf = (dashboards: readonly CopiedOnMove[], except?: string) => [
+    ...dashboards.flatMap((dashboard) =>
+      dashboard.copies.map((copy) => ({
+        kind: 'chart' as const,
+        id: copy.id,
+        body: copy.body,
+        expectedVersion: 0,
+      })),
+    ),
+    ...dashboards
+      .filter((dashboard) => dashboard.id !== except)
+      .map((dashboard) => ({
+        kind: 'dashboard' as const,
+        id: dashboard.id,
+        body: dashboard.body,
+        expectedVersion: dashboard.version,
+      })),
+  ];
   /**
    * The refusal, where the folder already has another dashboard of this
    * title (T336, AC-270): one of a name in a folder, and free across folders
@@ -3565,7 +3846,31 @@ export function buildServer({
         return reply.code(409).send(sharedInPlace(kind));
     }
 
+    // Moved here as a PATCH moves it, it leaves no shared dashboard showing a
+    // chart off its path: each gets its own copy (T537, AC-371).
+    const was = found.stored;
+    const to = folderIdOf(written);
+    const onMove =
+      was !== null &&
+      to !== null &&
+      to !== folderIdOf(was.body) &&
+      !(kind === 'chart' && typeof was.body['localToDashboardId'] === 'string')
+        ? await copiesOnMove({ kind, id, to, body: written })
+        : ({ kind: 'ok', dashboards: [] } as const);
+    if (onMove.kind !== 'ok') return moveRefused(reply, found.seen, onMove);
+    // No copy is worked out without a way to write it (T527's review).
+    if (onMove.dashboards.length > 0 && docs.updateTogether === undefined)
+      throw new BadRequest('Persistence is not configured');
+
     try {
+      if (onMove.dashboards.length > 0 && docs.updateTogether !== undefined) {
+        const showing = onMove.dashboards.find((dashboard) => dashboard.id === id)?.body;
+        const moved = await docs.updateTogether([
+          ...copyWritesOf(onMove.dashboards, id),
+          { kind, id, body: showing ?? written, expectedVersion: body.version },
+        ]);
+        return { ...moved.at(-1), ...copiedOnMove(found.seen, onMove.dashboards) };
+      }
       if (copies.size === 0 || docs.updateTogether === undefined)
         return await docs.update({ kind, id, body: written, expectedVersion: body.version });
       // The copies made with it, or none of it (T527).
@@ -4014,9 +4319,58 @@ export function buildServer({
       if (refusal !== undefined) return reply.status(409).send(refusal);
     }
 
+    /** Several written together, or none; a race lost says so (T537). */
+    const together = async (
+      writes: Parameters<NonNullable<DocumentWriter['updateTogether']>>[0],
+    ): Promise<readonly { id: string; version: number }[] | undefined> => {
+      try {
+        return await docs.updateTogether!(writes);
+      } catch (failure) {
+        if (failure instanceof Error && failure.name === 'StaleDocumentError') {
+          void reply.code(409).send({
+            message: 'Something this move changes was changed at the same moment. Try again.',
+          });
+          return undefined;
+        }
+        throw failure;
+      }
+    };
+
+    // A folder moved: each shared dashboard in it it leaves showing a chart
+    // off its path gets its own copy, written with the move (T537, AC-371).
+    if (kind === 'folder' && body?.folderId !== undefined && docs.get && docs.updateTogether) {
+      const stored = await docs.get('folder', id);
+      if (stored !== null && folderIdOf(stored.body) !== body.folderId) {
+        const onMove = await copiesOnMove({ kind, id, to: body.folderId });
+        if (onMove.kind !== 'ok') return moveRefused(reply, found.seen, onMove);
+        if (onMove.dashboards.length > 0) {
+          // As `relocate` writes it.
+          const { description: _was, ...rest } = stored.body;
+          void _was;
+          const written = await together([
+            ...copyWritesOf(onMove.dashboards),
+            {
+              kind,
+              id,
+              body: {
+                ...(description === undefined ? stored.body : rest),
+                ...(title === undefined ? {} : { title }),
+                folderId: body.folderId,
+                ...(description === undefined || description === null ? {} : { description }),
+              },
+              expectedVersion: stored.version ?? 0,
+            },
+          ]);
+          if (written === undefined) return reply;
+          return { ...written.at(-1), ...copiedOnMove(found.seen, onMove.dashboards) };
+        }
+      }
+    }
+
     // Moved into a folder, a chart or a dashboard is published there: each
     // cube it names bound on its new path, and a dashboard's own charts with
-    // it (T429's review, AC-272). Written together where any binding changes.
+    // it (T429's review, AC-272). Written together where any binding changes,
+    // or a dashboard it leaves gets a copy (T537).
     if (kind !== 'folder' && body?.folderId !== undefined && docs.get && docs.updateTogether) {
       const stored = await docs.get(kind, id);
       if (stored !== null && folderIdOf(stored.body) !== body.folderId) {
@@ -4051,12 +4405,27 @@ export function buildServer({
               });
           }
         }
-        if (writes.length > 0 || JSON.stringify(self.body) !== JSON.stringify(moved)) {
-          const written = await docs.updateTogether([
+        // Each shared dashboard it leaves showing a chart off its path, the
+        // moved one included, with its own copy (T537, AC-371). A dashboard's
+        // own chart goes where its dashboard goes, and leaves none.
+        const onMove =
+          kind === 'chart' && typeof stored.body['localToDashboardId'] === 'string'
+            ? ({ kind: 'ok', dashboards: [] } as const)
+            : await copiesOnMove({ kind, id, to: body.folderId, body: self.body });
+        if (onMove.kind !== 'ok') return moveRefused(reply, found.seen, onMove);
+        const showing = onMove.dashboards.find((dashboard) => dashboard.id === id)?.body;
+        if (
+          onMove.dashboards.length > 0 ||
+          writes.length > 0 ||
+          JSON.stringify(self.body) !== JSON.stringify(moved)
+        ) {
+          const written = await together([
+            ...copyWritesOf(onMove.dashboards, id),
             ...writes,
-            { kind, id, body: self.body, expectedVersion: stored.version ?? 0 },
+            { kind, id, body: showing ?? self.body, expectedVersion: stored.version ?? 0 },
           ]);
-          return written.at(-1);
+          if (written === undefined) return reply;
+          return { ...written.at(-1), ...copiedOnMove(found.seen, onMove.dashboards) };
         }
       }
     }
