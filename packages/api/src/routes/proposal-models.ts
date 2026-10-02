@@ -14,17 +14,23 @@ import { XCUBE_ROOT, xcubeIdOf } from '../xcube/folders';
  * A workspace's previews read its models through its overlay, each placed in
  * its target folder (a copy's is its origin's folder), where it makes the
  * cube `<folder>__<name>` (the root's, `<name>`) in place of any published
- * one of that name (T347). A dashboard or chart drawn there names such a
- * cube only through the workspace, so its proposal holds the model too, and
- * the two are approved or rejected together: landed apart, one would land
- * naming a cube its folder doesn't have, or not as it was drawn.
+ * one of that name (T347). A dashboard or chart naming such a cube was drawn
+ * through the workspace, so its proposal holds the model too, and the two are
+ * approved or rejected together: landed apart, one would land naming a cube
+ * its folder doesn't have, or not as it was drawn.
+ *
+ * By the full name the item holds, not its short name: the workspace's
+ * previews rebind a stored name to the workspace's own cube of its short name
+ * wherever that one goes (T542, AC-281), but an approval binds the item where
+ * it lands (T502), so a model placed off the name's folder is never what the
+ * landed item uses, and doesn't go with it (T542's review).
  *
  * A small decision, overturnable: a model goes with the item where the item
  * names the cube the model makes, whether or not the folder already has a
  * cube of that name. A copy changed in the workspace (a measure added, say)
- * is what the item was drawn against; the folder's own may lack what it
- * uses. A copy left exactly as its folder's file is doesn't go: the item
- * resolves the same without it (T350's review).
+ * is what the item was drawn against; the folder's own may lack what it uses.
+ * A copy left exactly as its folder's file is doesn't go: the item resolves
+ * the same without it (T350's review).
  *
  * Those models' own names resolve in the overlay first, by short name,
  * whatever its folder (research `xcube-slice-5.md`, Gotcha 5), so each
@@ -226,6 +232,7 @@ export function proposalModels(deps: ProposalModelDeps) {
     file: (id: string) => deps.files.byId(id),
 
     /** The workspace models these proposed items name cubes through, and what those name. */
+    /** By the full names the items hold: what they land bound to (above). */
     async needed(workspaceId: string, items: readonly ProposedItem[]): Promise<ProposedItem[]> {
       const used = new Set(items.flatMap(cubesNamedBy));
       if (used.size === 0) return [];

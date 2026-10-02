@@ -5908,7 +5908,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - Copying a model needs read-write access to its folder, as a dashboard's copy does (T344).
     - A model save refused with `409 older_instances` answers `503`; a data source's background push logs it.
   - **Review (one round), fixed:** a workspace model couldn't be deleted from the page or Explore (the dependents check answered `409`); a model whose target had gone was stored and silently left out of the previews; an answer from an older overlay version passed as current; every tile read the whole workspace; the overlay was named only after an open check, not also for the asker's own workspace alone; New cube's name wasn't checked until Save; the tests' order mattered, and the read-only target (`403`) had none.
-  - **For the user (AC-281):** a workspace item's stored cube names are full names. A cube new in the workspace with the short name of one on the item's path, but going to another folder, is offered first by the picker; a tile saved earlier on the path's cube keeps querying that one. AC-281's "uses a folder's cube while the workspace defines that name" reads as failing then. Should stored names be rebound to the workspace's own (through `POST …/resolve` with `overlay`, which the client has), or does AC-281 mean names as they are picked? AC-281 stays unticked until answered. The amendment's "workspace pickers resolve through `POST …/resolve` with `overlay`" is met by the field list's marks instead; `resolve` with `overlay` is in the client, unused.
+  - **For the user (AC-281):** a workspace item's stored cube names are full names. A cube new in the workspace with the short name of one on the item's path, but going to another folder, is offered first by the picker; a tile saved earlier on the path's cube keeps querying that one. AC-281's "uses a folder's cube while the workspace defines that name" reads as failing then. Should stored names be rebound to the workspace's own (through `POST …/resolve` with `overlay`, which the client has), or does AC-281 mean names as they are picked? AC-281 stays unticked until answered. The amendment's "workspace pickers resolve through `POST …/resolve` with `overlay`" is met by the field list's marks instead; `resolve` with `overlay` is in the client, unused. *Answered 2026-10-01 (R53, "Rebind in the workspace"), built by T542.*
   - **Left:**
     - **AC-278's model half**, refusing in-place changes to a shared model file: with T350, once a model can land through an approval (T349's reasoning: refusing now would leave shared models unchangeable).
     - **Sign-in off (R52, AC-254):** workspaces with security off are T359's; overlays are made only with sign-in on, so a workspace model save then answers `409` until T359.
@@ -8713,7 +8713,7 @@ T347 (above) pushes workspace overlays, with the workspace's data sources.
     - A proposal's overlay is never pushed until reviewed; the propose-time check stays T451's changeset dry run (AC-321 as amended). One xcube won't take then — a publish since left it no longer applying — answers `409`, "This proposal can't be previewed as it is: `<folder>/<item>: <why>`", and is never named (a workspace's likewise); Cube would say only that it is gone.
   - **Review (one round), fixed:** an overlay xcube refused was still named, so its previews said only "gone", never the item; the approval's drop had no test; the review's Current side read the proposal's field list; the decision hook was skipped where workspace models aren't stored; the client's refusals spoke of "your workspace" to a proposal's reviewer.
   - **Left:** a drop that fails is logged, and another replica never retries it; the overlay then lasts out its day in xcube, named by no token (research Gotcha 3).
-  - **AC-323 stays open:** its "a name resolves outside the overlay while the overlay defines it" waits on the user's answer on AC-281 (T347's note).
+  - **AC-323 stays open:** its "a name resolves outside the overlay while the overlay defines it" waits on the user's answer on AC-281 (T347's note). *Settled 2026-10-01 by T542 ("Rebind in the workspace"), and ticked with it.*
 - [ ] T456 (AC-321) Refuse an approval when any item would bind otherwise than in the proposal's preview *(added 2026-09-26, `[R31]`)*
   - **Why.** In an overlay, names resolve among its items first, whatever their folder; landed, nearest-first along each item's path (`xcube-slice-5.md` Gotcha 5). The user chose to refuse the approval, naming the items, so that what lands is what was previewed.
   - **xcube first.** `GET …/overlays/{id}` doesn't report an item's bindings, and a changeset's dry run may not either (to be checked in `xcube-slice-3a.md` and the fork). Where they don't, ask xcube, through the Cube-expert agent and `~/Work/xcube-exchange/to-xcube/`, to report each item's bindings in both. Build this once that image is published.
@@ -10091,10 +10091,42 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
       - two approvals into one deleted folder at once give the second a `500`;
       - a record outlives a rejected or withdrawn proposal.
     - The security e2e `deleting.spec.ts` was not run: another session's security stack was up on 4300. The unit test asserts what it checks, that a deleted folder isn't listed.
-- [ ] T542 (AC-281, AC-323) Rebind a workspace item's stored names to the workspace's own cube in its previews *(added 2026-10-01, `[R53]`: "Rebind in the workspace")*
+- [x] T542 (AC-281, AC-323) Rebind a workspace item's stored names to the workspace's own cube in its previews *(added 2026-10-01, `[R53]`: "Rebind in the workspace")*
   - Files: `packages/api/src/xcube/overlays.ts` and the query route's workspace branch in `server.ts` (`POST …/resolve` with `overlay`), `e2e/security/workspace-overlay.spec.ts`
   - Failing test: a tile saved against a path's `orders`, then a workspace cube `orders` made to land elsewhere: the tile's preview answers from the workspace's cube; landed, it binds where it lands (AC-281).
   - Depends on: T347, T440
+  - *As built (2026-10-01):*
+    - **Rebinding** (`packages/api/src/access/rebind.ts`):
+      - In the previews of a workspace item, and of a proposal, each name the query holds is resolved again by its short name against the overlay's own cubes and views. The overlay is the one the scope already ensured.
+      - Where the overlay holds one of that short name, wherever it places it, that one is asked; otherwise the stored name is kept.
+      - This is xcube's overlay-first rule (research `xcube-slice-5.md`, "POST …/resolve with overlay"), applied to the overlay's content as pushed. **Small decision, overturnable:** no `resolve` round trip. The overlay holds one item of a short name, so the content answers it exactly.
+      - Names are renamed only where Cube's query keeps them: measures, dimensions, segments, time dimensions, filters (`and`/`or` too), order in either shape, and join hints. A filter's values are data and are never renamed.
+      - Cube's answer is put back under the names the item asked: each row, the annotation, the echoed `query` and `pivotQuery`, and each of `results`. So tiles read it as they always did.
+        - This works member by member. A query naming a member both ways (a chart drawn before the workspace's cube, given a member after) asks it once, and is answered under both names.
+        - A time dimension's grain keys (`….ordered_at.month`) follow their member.
+      - `/api/load`, `/api/sql` and `/api/acceleration` rebind before the scope check, which checks the names actually asked. The acceleration panel's member that stops a rollup comes back under the stored name. Its rollup ids, and Cube's errors, name the workspace's cube.
+      - A shared item opened by itself is queried as it was, since its scope has no overlay. A shared library chart shown on a workspace dashboard is rebound with the dashboard's previews, which is AC-281's "the workspace's own cube of that name answers there too".
+    - **AC-285 is unchanged** (T542's review): a model goes with a proposed item only where the item names the full name the model makes. An approval binds the item where it lands (T502), so a model placed off the name's folder is never what the landed item uses, and bundling it would only hold the proposal at T451's 503 and freeze the model. The proposal's review shows what would land. A tile drawn once the workspace's cube was made names that cube, so its model goes, and the proposal's previews rebind through it.
+    - **Landed, it binds where it lands** (the failing test's last clause): an approval binds a chart's names by short name, nearest first from the folder it lands in (T502, `proposal-bind.test.ts`). For an item rebound in the workspace, that is shown once T451 lands proposals holding models.
+    - Files, as built: `packages/api/src/access/rebind.ts` (+ test), `packages/api/src/server.ts` (`rebinds` in the overlay scope, `reboundIn`, the three query routes), `routes/proposal-models.ts` (its notes), `routes/workspace-rebind.test.ts`, `e2e/security/workspace-rebind.spec.ts`. The planned `xcube/overlays.ts` and `workspace-overlay.spec.ts` weren't needed.
+    - Tests:
+      - `access/rebind.test.ts`;
+      - `routes/workspace-rebind.test.ts`:
+        - the path's cube asked while the workspace has none of the name;
+        - the workspace's own asked once made, to go to /Ops, and answered under the stored name;
+        - a member named both ways asked once and answered under both;
+        - `/api/sql` asked of the workspace's cube;
+        - a shared item unchanged;
+        - a proposal of a dashboard holding /Sales's name, without the /Ops model, its preview unchanged;
+        - a proposal whose tile names the workspace's cube, with the model, its preview rebinding the other name through the proposal's overlay;
+      - `e2e/security/workspace-rebind.spec.ts` in Chrome against compose's xcube: a tile saved against the first folder's cube answers 1, then 5 once the workspace's own cube is made for the second folder; the folder's dashboard still answers 1.
+    - **Review fixes (one round):**
+      1. A query naming a member both ways was answered under the wrong names. It is now answered member by member.
+      2. Bundling models by short name would have held proposals the landed item never uses. It was reverted to full names.
+      - Tests were added for both, and for `/api/sql`.
+    - **Left:**
+      - A rebound tile's titles and formats come from the field list of the name it holds (the folder's cube), while its numbers come from the workspace's. A tile made after the workspace's cube names that cube, and reads both from it.
+      - `workspace-rebind.test.ts` runs in order: the tests after the save rely on it.
 - [ ] T543 (AC-283) Copy a model from a folder one may only read into My workspace, to use and never propose back *(added 2026-10-01, `[R53]`: "Yes, use-only copy")*
   - Files: the model copy route (`routes/workspace-models.ts`), the model page's "Use in my workspace", the proposal's refusal, tests
   - Failing test: a reader of a folder copies its model into their workspace and previews with it; proposing it back to that folder is refused; proposing it to a folder they write lands it as a new model (AC-283).
