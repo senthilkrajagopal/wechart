@@ -16,8 +16,12 @@ import type { XcubeAdmin } from '../xcube/client';
 import { clashesOf, compiledIn } from './clashes';
 import { refreshKeyProblemsOf } from './refreshKeys';
 import { rollupProblemsOf, type RollupProblem } from './rollupReferences';
+import type { StoredModelFile } from '../repos/model-files';
 import type { Changeset } from '../xcube/changesets';
+import { itemsOf } from '../xcube/items';
+import type { HeldItem } from '../xcube/client';
 import { chainOf, ROOT_ONLY, XCUBE_ROOT, type PublishedFolders } from '../xcube/folders';
+import { planLanding, type LandingModel, type LandingWrite } from './landing';
 import { declaredIn, misnamedIn, redeclaredIn, severalIn, unreadableIn } from './split';
 import type { CompileError } from './validate';
 
@@ -281,7 +285,7 @@ export function registerModelPublishing(
       readonly hidden: number;
     }>;
   },
-): void {
+): { readonly landing: ModelLanding } {
   /**
    * The publish check's refusal (T427, AC-322): its breaks in folders whose
    * models the user may see named, the rest counted, and every one recorded
@@ -817,4 +821,258 @@ export function registerModelPublishing(
       return commit(checked.changeset);
     }),
   );
+
+  /**
+   * A proposal's models, landed through xcube's changeset (T451; AC-321,
+   * AC-288, AC-275, AC-322): checked by its dry run when proposed and again
+   * at approval, each in its folder as `planLanding` places it, then applied
+   * as a publish is, under the same one-at-a-time.
+   */
+  const landing: ModelLanding = {
+    inTurn: oneAtATime,
+    async check(request, { models, phase, record, proposalId, title, targetFolderId }) {
+      const nothing = phase === 'approval' ? 'nothing was approved' : 'it wasn’t proposed';
+      const no = (status: number, error: string): LandingCheck => ({
+        kind: 'refused',
+        status,
+        body: { error },
+      });
+      if (modelFiles?.inFolders === undefined || xcube === undefined)
+        return no(
+          503,
+          `Models can’t be landed here: xcube isn’t configured (WECHART_XCUBE_MODEL and WECHART_SERVICE_KEY), so ${nothing}.`,
+        );
+      const served = (await folders?.()) ?? ROOT_ONLY;
+      const unserved = models.find((model) => !served.ids.has(model.folderId));
+      if (unserved !== undefined)
+        return no(
+          409,
+          `“${unserved.title}” is to go to a folder xcube doesn’t serve now (it may have been deleted), so ${nothing}.`,
+        );
+      const landsIn = [...new Set(models.map((model) => model.folderId))];
+      const plan = planLanding(await modelFiles.inFolders(landsIn), models);
+      if (plan.kind === 'refused') return no(409, plan.error);
+      // Read-only, as publishing over one is (T428's review).
+      const template = plan.writes.find(
+        (write) => write.over !== null && JINJA.test(write.over.content),
+      );
+      if (template !== undefined)
+        return no(
+          409,
+          `${template.over!.path} is a Jinja template, and templates are read-only here, so ${nothing}.`,
+        );
+      // A name renamed away is refused while a chart or dashboard names it (AC-275).
+      for (const [folderId, names] of plan.renamedAway) {
+        const used = await inUse(
+          request,
+          names,
+          served.ids.get(folderId)!,
+          plan.resent.get(folderId) ?? [],
+        );
+        if (used !== undefined) return { kind: 'refused', status: 409, body: used };
+      }
+
+      const live = (await modelFiles.all?.()) ?? (await modelFiles.list());
+      const keyOf = (folderId: string, path: string) => `${folderId}\n${path}`;
+      const goes = new Set(
+        plan.writes.flatMap((write) => [
+          keyOf(write.folderId, write.path),
+          ...(write.from === undefined ? [] : [keyOf(write.folderId, write.from)]),
+        ]),
+      );
+      const changed = plan.writes.map(({ folderId, path, content }): ModelFile =>
+        folderId === ROOT_FOLDER_ID ? { path, content } : { folderId, path, content },
+      );
+      const draft = [
+        ...live.filter((file) => !goes.has(keyOf(file.folderId ?? ROOT_FOLDER_ID, file.path))),
+        ...changed,
+      ].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+      if (landsIn.some((folderId) => folderId !== ROOT_FOLDER_ID))
+        await beforeFolderPublish?.().catch((error: unknown) => {
+          app.log.warn({ err: error }, 'could not put the folder tree to xcube before a landing');
+        });
+
+      /** Each break named where the user may see its folder's models, the rest counted (AC-322). */
+      const breaks = async (errors: readonly CompileError[]): Promise<LandingCheck> => {
+        const sees = (await seesModelsIn?.(request)) ?? (() => true);
+        const refusal = refusalOf(errors, sees);
+        const files = models.map((model) => model.title);
+        if (record)
+          await recordIn(
+            audit,
+            {
+              actor: actorOf(request.wechartUser ?? null),
+              event: 'publish-refused',
+              folderId: targetFolderId,
+              item:
+                proposalId === undefined
+                  ? { kind: 'model', id: models[0]?.fileId ?? '', title }
+                  : { kind: 'proposal', id: proposalId, title },
+              summary: `${phase === 'approval' ? 'Approving' : 'Proposing'} “${title}”: ${refusal.summary}`,
+              details: {
+                change: phase,
+                ...(proposalId === undefined ? {} : { proposalId }),
+                ...refusal.recorded,
+                files,
+              },
+            },
+            request.log,
+          );
+        return {
+          kind: 'refused',
+          status: 422,
+          body: {
+            error: `${String(errors.length)} ${errors.length === 1 ? 'item' : 'items'} would break, so ${nothing}.`,
+            errors: refusal.answer.errors,
+            hidden: refusal.answer.hidden ?? 0,
+          },
+        };
+      };
+      const checked = await checkWithXcube({
+        xcube,
+        draft,
+        changed,
+        live,
+        folders: served.ids,
+        securityContext: probeContextOf(config),
+        log: (error) => {
+          app.log.warn({ err: error }, 'could not ask xcube to check a proposal’s models');
+        },
+      });
+      if (checked.kind === 'unreachable') return no(502, checked.error);
+      if (checked.kind === 'invalid') return breaks(checked.errors);
+      const unknown = unknownInRollups(draft, served);
+      if (unknown.length > 0) return breaks(unknown);
+      const crons = refreshKeyProblemsOf(changed).map((problem) => ({
+        ...problem,
+        ...folderOfFile(changed.find((file) => file.path === problem.path)),
+      }));
+      if (crons.length > 0) return breaks(crons);
+      const rollups = checked.rollups();
+      if (rollups.kind === 'unasked') return no(502, rollups.error);
+      if (rollups.kind === 'unjoinable') return breaks(rollups.errors);
+
+      return {
+        kind: 'checked',
+        writes: plan.writes,
+        // Sent whole where xcube isn't what the store holds (T426): then what
+        // it will hold is the draft's items alone, never its head's (T451's review).
+        resolver:
+          checked.changeset === undefined
+            ? await landedResolver(
+                undefined,
+                { upserts: itemsOf(draft, served.ids), deletes: [] },
+                served,
+              )
+            : await landedResolver(xcube, checked.changeset, served),
+        commit: async () => {
+          await modelFiles.write(
+            plan.writes
+              .filter((write) => write.from === undefined || modelFiles.relocate === undefined)
+              .map(({ folderId, path, content }) => ({ folderId, path, content })),
+          );
+          for (const write of plan.writes) {
+            if (write.from === undefined) continue;
+            if (modelFiles.relocate !== undefined)
+              await modelFiles.relocate(write.folderId, write.from, write);
+            else await modelFiles.remove?.(write.folderId, write.from);
+          }
+          // Committed first, then sent: xcube is never ahead of wechart (T419).
+          await afterPublish?.(checked.changeset).catch((error: unknown) => {
+            app.log.warn({ err: error }, 'could not send a proposal’s models to xcube');
+          });
+          meta.invalidate();
+          const now = await modelFiles.inFolders!(landsIn);
+          return new Map(
+            plan.writes.flatMap((write) => {
+              const file = now.find(
+                (each) => each.folderId === write.folderId && each.path === write.path,
+              );
+              return file === undefined ? [] : [[write.fileId, file] as const];
+            }),
+          );
+        },
+      };
+    },
+  };
+  return { landing };
+}
+
+/**
+ * Names resolved as xcube will once a changeset lands (T451): its upserts in
+ * their folders, its deletes gone, nearest first from a folder up to the
+ * root (research 3a, `Scope.resolve`), so a proposal's charts bind to the
+ * models landing with them before anything is written.
+ */
+async function landedResolver(
+  /** The head the changeset goes over; none where it is sent whole. */
+  xcube: XcubeAdmin | undefined,
+  changeset: Changeset,
+  served: PublishedFolders,
+): Promise<Pick<XcubeAdmin, 'resolve' | 'items'>> {
+  const keyOf = (item: { folderId: string; name: string }) => `${item.folderId}/${item.name}`;
+  const away = new Set([...changeset.deletes, ...changeset.upserts].map(keyOf));
+  const items: HeldItem[] = [
+    ...(xcube === undefined ? [] : await xcube.items()).filter((item) => !away.has(keyOf(item))),
+    ...changeset.upserts.map((item) => ({
+      folderId: item.folderId,
+      name: item.name,
+      kind: item.kind,
+      fullName: item.folderId === XCUBE_ROOT ? item.name : `${item.folderId}__${item.name}`,
+      bindings: {},
+    })),
+  ];
+  const parents = new Map(
+    [...served.parents].flatMap(([id, parent]) => {
+      const xcubeId = served.ids.get(id);
+      return xcubeId === undefined
+        ? []
+        : [[xcubeId, parent === null ? null : (served.ids.get(parent) ?? null)] as const];
+    }),
+  );
+  return {
+    items: () => Promise.resolve(items),
+    resolve: (folderId, names) =>
+      Promise.resolve(
+        new Map(
+          names.map((name) => {
+            for (const at of chainOf(folderId, parents)) {
+              const found = items.find((item) => item.folderId === at && item.name === name);
+              if (found !== undefined) return [name, found.fullName] as const;
+            }
+            return [name, null] as const;
+          }),
+        ),
+      ),
+  };
+}
+
+/** What a landing is asked for (T451). */
+export interface LandingRequest {
+  readonly models: readonly LandingModel[];
+  /** Proposing or approving: said in a refusal's words and its record. */
+  readonly phase: 'proposal' | 'approval';
+  /** Whether a refusal is recorded: not for the Propose dialog's own check. */
+  readonly record: boolean;
+  readonly proposalId?: string;
+  /** What is proposed, as the record names it. */
+  readonly title: string;
+  readonly targetFolderId: string;
+}
+
+export type LandingCheck =
+  | { readonly kind: 'refused'; readonly status: number; readonly body: Record<string, unknown> }
+  | {
+      readonly kind: 'checked';
+      readonly writes: readonly LandingWrite[];
+      /** Names as xcube will resolve them once it lands: what a proposal's charts bind with. */
+      readonly resolver: Pick<XcubeAdmin, 'resolve' | 'items'>;
+      /** Written, sent to xcube and seen: each model's file as it landed, by its workspace file's id. */
+      readonly commit: () => Promise<ReadonlyMap<string, StoredModelFile>>;
+    };
+
+export interface ModelLanding {
+  /** One at a time with publishes, from a landing's check to its commit. */
+  readonly inTurn: <T>(work: () => Promise<T>) => Promise<T>;
+  check(request: FastifyRequest, landing: LandingRequest): Promise<LandingCheck>;
 }

@@ -1,3 +1,4 @@
+import type { Break } from './Refusal';
 import type { ReviewKind, ReviewStatus } from './reviews';
 
 /**
@@ -74,16 +75,49 @@ export const proposalQuery = (id: string) => ({
   },
 });
 
-/** A decision the API refused: its words, and a data source's problems. */
+/**
+ * A decision the API refused: its words, a data source's problems, and the
+ * publish check's breaks, named and counted (T451; design 05, state L).
+ */
 export class DecisionRefused extends Error {
   constructor(
     message: string,
     readonly problems: readonly string[] = [],
+    readonly breaks: readonly Break[] = [],
+    readonly hidden = 0,
   ) {
     super(message);
     this.name = 'DecisionRefused';
   }
+
+  /** Whether the publish check refused it, rather than anything else. */
+  get checked(): boolean {
+    return this.breaks.length > 0 || this.hidden > 0;
+  }
 }
+
+/** The publish check's breaks as the API answers them: each a file, its folder and error. */
+const breaksOf = (errors: unknown): Break[] =>
+  Array.isArray(errors)
+    ? errors.flatMap((each: unknown): Break[] => {
+        const error = each as Partial<Record<keyof Break, unknown>> | null;
+        if (
+          typeof error?.path !== 'string' ||
+          typeof error.message !== 'string' ||
+          !Array.isArray(error.folderPath)
+        )
+          return [];
+        return [
+          {
+            path: error.path,
+            folderPath: error.folderPath.filter((part): part is string => typeof part === 'string'),
+            message: error.message,
+            ...(typeof error.line === 'number' ? { line: error.line } : {}),
+            ...(typeof error.column === 'number' ? { column: error.column } : {}),
+          },
+        ];
+      })
+    : [];
 
 /** Approve or reject it; the API's answer, or its refusal thrown. */
 export async function decide(
@@ -99,8 +133,13 @@ export async function decide(
   const answer = (await response.json().catch(() => null)) as {
     error?: unknown;
     problems?: unknown;
+    errors?: unknown;
+    hidden?: unknown;
     landed?: { kind: string; id: string; version: number }[];
   } | null;
+  // The publish check's refusal is the one with its `errors`; another's
+  // `hidden` (what still uses a name, AC-275) is said in its own words.
+  const checked = Array.isArray(answer?.errors);
   if (!response.ok)
     throw new DecisionRefused(
       typeof answer?.error === 'string'
@@ -109,8 +148,15 @@ export async function decide(
       Array.isArray(answer?.problems)
         ? answer.problems.filter((each): each is string => typeof each === 'string')
         : [],
+      checked ? breaksOf(answer?.errors) : [],
+      checked && typeof answer?.hidden === 'number' ? answer.hidden : 0,
     );
   return answer ?? {};
+}
+
+/** "14:05": a moment's time of day, as the inspector writes it. */
+export function clockText(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
 /** "27 Sep 2026, 14:05", as the review view's inspector writes a moment. */
@@ -118,8 +164,7 @@ export function momentText(iso: string): string {
   const at = new Date(iso);
   // The month as "Sep": en-GB's short month is "Sept".
   const month = at.toLocaleDateString('en-US', { month: 'short' });
-  const clock = at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-  return `${String(at.getDate())} ${month} ${String(at.getFullYear())}, ${clock}`;
+  return `${String(at.getDate())} ${month} ${String(at.getFullYear())}, ${clockText(iso)}`;
 }
 
 /** The items a reviewer is shown: a dashboard's own charts are part of it. */

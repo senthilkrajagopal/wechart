@@ -435,19 +435,25 @@ describe('the workspace models a proposed dashboard needs (T350, AC-285)', () =>
     expect((await save(`cubes/${CUSTOMERS}.yml`, cube(CUSTOMERS))).statusCode).toBe(200);
   });
 
-  it('is never approved without them: until a model can land, nothing lands', async () => {
+  it('is never approved without them: a model the check refuses keeps the dashboard back too (T451)', async () => {
     const { board } = await boardNaming(`fsales__${ORDERS}`);
     const proposed = await propose('dashboard', board);
     expect(proposed.statusCode, proposed.body).toBe(201);
     const { id } = proposed.json<Answered>();
-    const approved = await as('super', {
-      method: 'POST',
-      url: `/api/proposals/${id}/approve`,
-      payload: {},
-    });
-    expect(approved.statusCode, approved.body).toBe(503);
+    stub.refuse([{ folderId: 'fsales', name: CUSTOMERS, kind: 'compile', message: 'no table' }]);
+    let approved;
+    try {
+      approved = await as('super', {
+        method: 'POST',
+        url: `/api/proposals/${id}/approve`,
+        payload: {},
+      });
+    } finally {
+      stub.refuse(undefined);
+    }
+    expect(approved.statusCode, approved.body).toBe(422);
     expect(approved.json<{ error: string }>().error).toBe(
-      'Models can’t be landed here yet, so nothing was approved.',
+      '1 item would break, so nothing was approved.',
     );
     // The folder is as it was, and the proposal still waits.
     expect(

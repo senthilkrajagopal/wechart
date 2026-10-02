@@ -4251,6 +4251,24 @@ main:has(.review-view) {
   line-height: 16px;
 }
 .review-decision__refused p { margin: 0; }
+/* An approval the publish check refused (T451; design 05, state L): each
+   break on the error's tint, its error in code type; the rest counted. */
+.review-refusal { display: grid; gap: 6px; }
+.review-refusal > .state-line { margin: 0; font-size: 13px; color: var(--wc-status-error); }
+.review-refusal__breaks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.review-refusal__break {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--wc-status-error) 9%, var(--wc-bg-surface));
+  font-size: 12px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+.review-refusal__break .mono { font-family: var(--wc-font-code); }
+.review-refusal__hidden,
+.review-view__help { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
 .review-decision__refused ul { margin: 4px 0 0; padding-left: 16px; }
 /* A data source's settings beside the folder's (state H). */
 .review-settings { width: 100%; border-collapse: collapse; font-size: 13px; }

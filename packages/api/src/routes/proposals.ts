@@ -19,6 +19,10 @@ import {
   type Replaces,
 } from '../repos/proposals';
 import type { VersionKind, VersionStore } from '../repos/versions';
+import type { LandingModel } from '../model/landing';
+import { declaredIn } from '../model/split';
+import type { LandingCheck, ModelLanding } from '../model/publish';
+import type { XcubeAdmin } from '../xcube/client';
 import { ModelRefusal, type ProposalModels } from './proposal-models';
 import { withChartsRenamed } from './workspace-copy';
 
@@ -110,6 +114,11 @@ export interface ProposalRoutes {
     kind: 'chart' | 'dashboard',
     folderId: string,
     body: Record<string, unknown>,
+    /**
+     * Names resolved as they will be once the proposal's models land (T451):
+     * its charts bind to them before anything is written.
+     */
+    resolver?: Pick<XcubeAdmin, 'resolve' | 'items'>,
   ) => Promise<
     | { readonly kind: 'ok'; readonly body: Record<string, unknown> }
     | { readonly kind: 'refused'; readonly names: readonly string[] }
@@ -136,6 +145,12 @@ export interface ProposalRoutes {
    * again.
    */
   readonly recreate?: (folderId: string) => Promise<'there' | 'none' | 'unpushed'>;
+  /**
+   * A proposal's models landed through xcube's changeset (T451): checked by
+   * its dry run when proposed and at approval, then applied. Unset, a
+   * proposal holding one is checked by nothing and can't be approved.
+   */
+  readonly modelLanding?: ModelLanding;
 }
 
 const NOT_THERE = { error: 'There is no such item in your workspace.' };
@@ -797,7 +812,11 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
    * charts, never the workspace's. The version each replaces, and the new
    * one, are kept (AC-289's history). Answers what landed, by item.
    */
-  const land = async (proposal: Proposal, approver: { key: string; name: string }) => {
+  const land = async (
+    proposal: Proposal,
+    approver: { key: string; name: string },
+    request: FastifyRequest,
+  ) => {
     const docs = documents as Required<ProposalRoutes['documents']>;
     const landed: { kind: ProposalKind; id: string; version: number; from: ProposedItem }[] = [];
     const keep = async (
@@ -838,11 +857,27 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
           );
       }
 
-    // A data source: landed as it is, envelopes and all (AC-298).
-    const source = proposal.items.find((item) => item.kind === 'data-source');
-    if (source !== undefined) {
+    /**
+     * A data source first: landed as it is, envelopes and all (AC-298), and
+     * the rest checked against it. A refused approval leaves it landed
+     * (AC-321; R52, "Land data sources first"), its version kept, so
+     * approving again lands over it rather than beside it; and the
+     * workspace's is a copy of it at once.
+     */
+    const proposed = proposal.items.find((item) => item.kind === 'data-source');
+    if (proposed !== undefined) {
       const lander = routes.dataSourceLanding;
       if (lander === undefined) throw new Refused(503, 'Data sources can’t be landed here.');
+      // What this proposal landed before its approval was refused, if it did
+      // (T451's review): never another data source of the folder.
+      const before = ((await routes.versions?.landedBy(proposal.id)) ?? []).find(
+        (version) => version.kind === 'data-source',
+      );
+      const again = before === undefined ? undefined : await lander.current(before.itemId);
+      const source: ProposedItem =
+        proposed.replaces === null && before !== undefined && again !== undefined
+          ? { ...proposed, replaces: { id: before.itemId, version: again.version } }
+          : proposed;
       const current =
         source.replaces === null ? undefined : await lander.current(source.replaces.id);
       const at = await lander.land(source);
@@ -867,7 +902,12 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
         { author: proposal.author, approver },
       );
       landed.push({ kind: 'data-source', id: at.id, version: at.version, from: source });
-      return landed;
+      await routes.dataSources
+        ?.setOrigin(source.id, { id: at.id, version: at.version, folderId: source.landsIn })
+        .catch((failure: unknown) => {
+          request.log.warn({ err: failure }, 'a landed data source’s origin was not updated');
+        });
+      if (proposal.items.every((item) => item.kind === 'data-source')) return landed;
     }
 
     // Dashboards and charts: every landed id first, so each shows the folder's.
@@ -878,6 +918,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     const boardId = board === undefined ? undefined : idOf.get(board.id)!;
     const isLocal = (item: ProposedItem) =>
       board !== undefined && item.snapshot['localToDashboardId'] === board.id;
+    const isDocument = (item: ProposedItem) => item.kind === 'dashboard' || item.kind === 'chart';
 
     // The versions replaced, as they are now: a dashboard with its own charts.
     const partsOf = async (dashboardId: string) =>
@@ -885,7 +926,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     // Kept once it is certain to land: a refused binding keeps nothing (T502's review).
     const keepReplaced = async () => {
       for (const item of proposal.items) {
-        if (item.replaces === null || isLocal(item)) continue;
+        if (item.replaces === null || isLocal(item) || !isDocument(item)) continue;
         const kind = item.kind as 'dashboard' | 'chart';
         const current = await docs.get(kind, item.replaces.id);
         if (current === null) continue;
@@ -902,7 +943,13 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     };
 
     // Charts first, then the dashboard that shows them.
-    const renamed = new Map([...idOf].filter(([from]) => from !== board?.id));
+    const renamed = new Map(
+      [...idOf].filter(
+        ([from]) =>
+          from !== board?.id &&
+          proposal.items.some((item) => item.id === from && item.kind === 'chart'),
+      ),
+    );
     const write = async (item: ProposedItem, body: Record<string, unknown>) => {
       const kind = item.kind as 'dashboard' | 'chart';
       const id = idOf.get(item.id)!;
@@ -926,7 +973,11 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
      * (T527). The one it copies stays as it is, or lands as proposed.
      */
     const copies: { id: string; body: Record<string, unknown> }[] = [];
-    const ownCopies = async (dashboard: ProposedItem, body: Record<string, unknown>) => {
+    const ownCopies = async (
+      dashboard: ProposedItem,
+      body: Record<string, unknown>,
+      resolver: Pick<XcubeAdmin, 'resolve' | 'items'> | undefined,
+    ) => {
       if (routes.pathOf === undefined) return body;
       const path = await routes.pathOf(dashboard.landsIn);
       const going = new Map(proposal.items.map((item) => [idOf.get(item.id)!, item]));
@@ -957,7 +1008,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
         const bound =
           routes.bind === undefined
             ? ({ kind: 'ok', body: copy } as const)
-            : await routes.bind('chart', dashboard.landsIn, copy);
+            : await routes.bind('chart', dashboard.landsIn, copy, resolver);
         const title = item === undefined ? titleOf(content) : item.title;
         if (bound.kind === 'refused')
           throw new Refused(
@@ -978,77 +1029,179 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
         ? body
         : (withChartsRenamed(body, renames) as Record<string, unknown>);
     };
-    // Each bound in its folder first (T502): a name its path doesn't hold
-    // refuses the approval before anything is written.
-    const bodies: { item: ProposedItem; body: Record<string, unknown> }[] = [];
-    for (const item of ordered) {
-      const replacedOwner =
-        item.replaces === null
-          ? proposal.author.key
-          : (await docs.get(item.kind as 'dashboard' | 'chart', item.replaces.id))?.body['owner'];
-      const body =
-        item === board
-          ? await ownCopies(
-              item,
-              landedBody(
-                withChartsRenamed(item.snapshot, renamed) as Record<string, unknown>,
-                { folderId: item.landsIn },
-                replacedOwner,
-              ),
-            )
-          : isLocal(item)
-            ? landedBody(item.snapshot, { localTo: boardId! }, replacedOwner)
-            : landedBody(item.snapshot, { folderId: item.landsIn }, replacedOwner);
-      const folder = isLocal(item) ? board!.landsIn : item.landsIn;
-      const bound =
-        routes.bind === undefined
-          ? ({ kind: 'ok', body } as const)
-          : await routes.bind(item.kind as 'dashboard' | 'chart', folder, body);
-      if (bound.kind === 'refused')
-        throw new Refused(
-          422,
-          `No folder on the path of “${item.title}” holds ${bound.names.map((name) => `“${name}”`).join(', ')}, so nothing was approved.`,
-          { names: bound.names },
-        );
-      if (bound.kind === 'unreachable')
-        throw new Refused(
-          502,
-          `xcube could not be asked where the cubes of “${item.title}” are, so nothing was approved.`,
-        );
-      bodies.push({ item, body: bound.body });
-    }
-    await keepReplaced();
-    // Its own copies first, then the charts and the dashboard showing them (T537).
-    for (const copy of copies) await docs.create({ kind: 'chart', id: copy.id, body: copy.body });
-    for (const { item, body } of bodies) await write(item, body);
-    // The replaced dashboard's own charts it no longer shows go: its kept
-    // version holds them.
-    if (boardId !== undefined) {
-      const shown = new Set([
-        ...proposal.items.filter(isLocal).map((item) => idOf.get(item.id)!),
-        ...copies.map((copy) => copy.id),
-      ]);
-      for (const chart of await docs.localTo(boardId))
-        if (!shown.has(chart.id)) await docs.remove('chart', chart.id);
-    }
 
-    // The new versions, kept: a dashboard with its charts as they landed.
-    for (const at of landed) {
-      if (at.kind === 'chart' && isLocal(at.from)) continue;
-      const kind = at.kind as 'dashboard' | 'chart';
-      const stored = (await docs.get(kind, at.id))!;
-      await keep(
-        kind,
-        at.id,
-        at.version,
-        { body: stored.body, parts: kind === 'dashboard' ? await partsOf(at.id) : [] },
-        at.from.landsIn,
-        titleOf(stored.body),
-        { author: proposal.author, approver },
-      );
-    }
+    /**
+     * Each bound in its folder first (T502): a name its path doesn't hold
+     * refuses the approval before anything is written. With the proposal's
+     * models, as their names will resolve once they land (T451).
+     */
+    const prepareDocuments = async (
+      resolver: Pick<XcubeAdmin, 'resolve' | 'items'> | undefined,
+    ) => {
+      const bodies: { item: ProposedItem; body: Record<string, unknown> }[] = [];
+      for (const item of ordered) {
+        const replacedOwner =
+          item.replaces === null
+            ? proposal.author.key
+            : (await docs.get(item.kind as 'dashboard' | 'chart', item.replaces.id))?.body['owner'];
+        const body =
+          item === board
+            ? await ownCopies(
+                item,
+                landedBody(
+                  withChartsRenamed(item.snapshot, renamed) as Record<string, unknown>,
+                  { folderId: item.landsIn },
+                  replacedOwner,
+                ),
+                resolver,
+              )
+            : isLocal(item)
+              ? landedBody(item.snapshot, { localTo: boardId! }, replacedOwner)
+              : landedBody(item.snapshot, { folderId: item.landsIn }, replacedOwner);
+        const folder = isLocal(item) ? board!.landsIn : item.landsIn;
+        const bound =
+          routes.bind === undefined
+            ? ({ kind: 'ok', body } as const)
+            : await routes.bind(item.kind as 'dashboard' | 'chart', folder, body, resolver);
+        if (bound.kind === 'refused')
+          throw new Refused(
+            422,
+            `No folder on the path of “${item.title}” holds ${bound.names.map((name) => `“${name}”`).join(', ')}, so nothing was approved.`,
+            { names: bound.names },
+          );
+        if (bound.kind === 'unreachable')
+          throw new Refused(
+            502,
+            `xcube could not be asked where the cubes of “${item.title}” are, so nothing was approved.`,
+          );
+        bodies.push({ item, body: bound.body });
+      }
+      return bodies;
+    };
 
+    const writeDocuments = async (
+      bodies: readonly { item: ProposedItem; body: Record<string, unknown> }[],
+    ) => {
+      await keepReplaced();
+      // Its own copies first, then the charts and the dashboard showing them (T537).
+      for (const copy of copies) await docs.create({ kind: 'chart', id: copy.id, body: copy.body });
+      const from = landed.length;
+      for (const { item, body } of bodies) await write(item, body);
+      // The replaced dashboard's own charts it no longer shows go: its kept
+      // version holds them.
+      if (boardId !== undefined) {
+        const shown = new Set([
+          ...proposal.items.filter(isLocal).map((item) => idOf.get(item.id)!),
+          ...copies.map((copy) => copy.id),
+        ]);
+        for (const chart of await docs.localTo(boardId))
+          if (!shown.has(chart.id)) await docs.remove('chart', chart.id);
+      }
+
+      // The new versions, kept: a dashboard with its charts as they landed.
+      for (const at of landed.slice(from)) {
+        if (at.kind === 'chart' && isLocal(at.from)) continue;
+        const kind = at.kind as 'dashboard' | 'chart';
+        const stored = (await docs.get(kind, at.id))!;
+        await keep(
+          kind,
+          at.id,
+          at.version,
+          { body: stored.body, parts: kind === 'dashboard' ? await partsOf(at.id) : [] },
+          at.from.landsIn,
+          titleOf(stored.body),
+          { author: proposal.author, approver },
+        );
+      }
+    };
+
+    // Models next, through xcube's changeset, then what binds to them (T451).
+    const models = proposal.items.filter((item) => item.kind === 'model');
+    if (models.length === 0) {
+      await writeDocuments(await prepareDocuments(undefined));
+      return landed;
+    }
+    const lander = routes.modelLanding;
+    if (lander === undefined)
+      throw new Refused(503, 'Models can’t be landed here, so nothing was approved.');
+    await lander.inTurn(async () => {
+      const checked = await lander.check(request, {
+        models: models.map(landingModelOf),
+        phase: 'approval',
+        record: true,
+        proposalId: proposal.id,
+        title: proposal.title,
+        targetFolderId: proposal.targetFolderId,
+      });
+      if (checked.kind === 'refused') throw await refusedBy(checked);
+      const bodies = await prepareDocuments(checked.resolver);
+      const files = await checked.commit();
+      for (const write of checked.writes) {
+        const item = models.find((each) => each.id === write.fileId)!;
+        const file = files.get(write.fileId);
+        if (file === undefined) continue;
+        // The one it replaced, kept now it is replaced; then the one landed (AC-288).
+        if (write.over !== null)
+          await keep(
+            'model',
+            write.over.id,
+            write.over.version,
+            { path: write.over.path, content: write.over.content },
+            write.folderId,
+            write.over.path,
+            null,
+          );
+        await keep(
+          'model',
+          file.id,
+          file.version,
+          { path: file.path, content: file.content },
+          write.folderId,
+          file.path,
+          { author: proposal.author, approver },
+        );
+        landed.push({ kind: 'model', id: file.id, version: file.version, from: item });
+      }
+      await writeDocuments(bodies);
+    });
     return landed;
+  };
+
+  /** A proposed model as it lands: its file, in the folder it lands in (T451). */
+  const landingModelOf = (item: ProposedItem): LandingModel => {
+    const origin = item.snapshot['origin'] as { id?: unknown } | null | undefined;
+    return {
+      fileId: item.id,
+      title: item.title,
+      folderId: item.landsIn,
+      path: String(item.snapshot['path']),
+      content: String(item.snapshot['content']),
+      originId: typeof origin?.id === 'string' ? origin.id : null,
+    };
+  };
+
+  /**
+   * A landing's refusal, its breaks each with its folder's path from Shared
+   * for the review view to say (design 05, state L).
+   */
+  const refusedBy = async (checked: Extract<LandingCheck, { kind: 'refused' }>) => {
+    const { error, errors, ...rest } = checked.body as {
+      error: string;
+      errors?: readonly { folderId?: string }[];
+    };
+    return new Refused(checked.status, error, {
+      ...rest,
+      ...(errors === undefined
+        ? {}
+        : {
+            errors: await Promise.all(
+              errors.map(async (each) => ({
+                ...each,
+                folderPath: await pathPartsOf(each.folderId ?? 'root'),
+              })),
+            ),
+          }),
+    });
   };
 
   /**
@@ -1070,6 +1223,16 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
             id: at.id,
             version: at.version,
             folderId: at.from.landsIn,
+          });
+          continue;
+        }
+        // A model: a copy of the file it landed as (T451).
+        if (at.kind === 'model') {
+          await routes.models?.setOrigin(at.from.id, {
+            id: at.id,
+            folderId: at.from.landsIn,
+            path: String(at.from.snapshot['path']),
+            version: at.version,
           });
           continue;
         }
@@ -1115,6 +1278,21 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
         if (current?.folderId !== item.landsIn) return item;
         continue;
       }
+      // A model: what it replaces still there, and still the folder's file of its name (T451).
+      if (item.kind === 'model') {
+        if (routes.models === undefined) continue;
+        if (item.replaces !== null) {
+          const current = await routes.models.file(item.replaces.id);
+          if (current === undefined || current.folderId !== item.landsIn) return item;
+        }
+        const [declared] = declaredIn(String(item.snapshot['content']));
+        const named =
+          declared === undefined
+            ? undefined
+            : await routes.models.declaring(item.landsIn, declared.name);
+        if ((named?.id ?? null) !== (item.replaces?.id ?? null)) return item;
+        continue;
+      }
       const kind = item.kind as 'dashboard' | 'chart';
       if (item.replaces !== null) {
         const current = await documents.get(kind, item.replaces.id);
@@ -1157,13 +1335,6 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
       routes.versions === undefined
     )
       return reply.code(503).send({ error: 'Approvals can’t be landed here.' });
-    // A model lands through xcube's changeset at approval (T451). Until then a
-    // proposal holding one lands nothing, so no dashboard lands without the
-    // models it resolves through (T350, AC-285).
-    if (proposal.items.some((item) => item.kind === 'model'))
-      return reply
-        .code(503)
-        .send({ error: 'Models can’t be landed here yet, so nothing was approved.' });
     const changed = await changedSince(proposal);
     if (changed !== undefined)
       return reply.code(409).send({
@@ -1185,7 +1356,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     }
     let landed: Awaited<ReturnType<typeof land>>;
     try {
-      landed = await land(decided, approver);
+      landed = await land(decided, approver, request);
     } catch (failure) {
       // Nothing it couldn't land is left approved: open again, to decide anew.
       await store.reopen(decided.id);
@@ -1201,7 +1372,8 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     await store.settle(decided.id);
     await markOrigins(landed, request.log);
     const first = landed.find((at) => at.from.id === decided.itemId);
-    const charts = landed.filter((at) => at !== first).length;
+    // What landed with it, by kind: its charts and its models (T451's review).
+    const withIt = goingWithText(landed.filter((at) => at !== first).map((at) => at.from));
     await recordIn(
       routes.audit,
       {
@@ -1212,7 +1384,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
         summary:
           `Approved “${decided.title}”` +
           (first === undefined ? '' : ` as version ${String(first.version)}`) +
-          (charts === 0 ? '' : `, with ${String(charts)} ${charts === 1 ? 'chart' : 'charts'}`),
+          (withIt === '' ? '' : `, with ${withIt}`),
         details: {
           proposalId: decided.id,
           author: decided.author,
@@ -1244,7 +1416,11 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
    * recording nothing: for the route, and for the Propose dialog's check as
    * it opens (T358; design 05, state F).
    */
-  async function plan(request: FastifyRequest) {
+  async function plan(
+    request: FastifyRequest,
+    /** Whether a refusal of its models' check is recorded: not the Propose dialog's own check. */
+    record: boolean,
+  ) {
     const body = request.body as
       { kind?: unknown; id?: unknown; description?: unknown } | undefined;
     const kind = body?.kind;
@@ -1368,6 +1544,30 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
         );
     } else
       items = await documentItems(writes, proposing as 'dashboard' | 'chart', stored, own, target);
+    /**
+     * Its models checked by the dry run of the changeset they would make
+     * (T451, AC-321): one that breaks the model, renames away a name still
+     * used, or can't land where it goes isn't proposed.
+     */
+    // An item already waiting is said first: nothing is checked for it (T451's review).
+    for (const item of items) {
+      const open = await store.openFor(item.kind, item.id);
+      if (open !== null)
+        throw new Refused(409, waitingMessage(items, item.kind, item.id), {
+          proposalId: open.id,
+        });
+    }
+    const models = items.filter((item) => item.kind === 'model');
+    if (models.length > 0 && routes.modelLanding !== undefined) {
+      const checked = await routes.modelLanding.check(request, {
+        models: models.map(landingModelOf),
+        phase: 'proposal',
+        record,
+        title: items[0]!.title,
+        targetFolderId: target,
+      });
+      if (checked.kind === 'refused') throw await refusedBy(checked);
+    }
     return { proposing, id, description, target, items };
   }
 
@@ -1401,14 +1601,8 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
   app.post('/api/proposals/check', USER, async (request, reply) => {
     if (!routes.enabled) return reply.code(404).send({ error: 'Proposals need sign-in.' });
     try {
-      const { target, items } = await plan(request);
-      for (const item of items) {
-        const open = await store.openFor(item.kind, item.id);
-        if (open !== null)
-          throw new Refused(409, waitingMessage(items, item.kind, item.id), {
-            proposalId: open.id,
-          });
-      }
+      // An item already waiting is refused there too (`plan`).
+      const { target, items } = await plan(request, false);
       const pathParts = pathPartsOf;
       const answered = answerOf({
         id: '',
@@ -1447,7 +1641,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
   });
 
   async function propose(request: FastifyRequest, reply: FastifyReply) {
-    const { proposing, id, description, target, items } = await plan(request);
+    const { proposing, id, description, target, items } = await plan(request, true);
     const user = userOf(request);
     let proposal: Proposal;
     try {

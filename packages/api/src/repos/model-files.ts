@@ -65,6 +65,18 @@ export function modelFileStore(db: Kysely<Database>): ModelFileStore & {
   replace(path: string, files: readonly ModelFile[], folderId?: string): Promise<unknown>;
   all(): Promise<readonly ModelFile[]>;
   remove(folderId: string, path: string): Promise<unknown>;
+  /**
+   * A folder's file moved to another path with new content, at its next
+   * version, its id kept (T451): a proposed model of its name landing at
+   * its own path.
+   */
+  relocate(
+    folderId: string,
+    from: string,
+    file: { readonly path: string; readonly content: string },
+  ): Promise<unknown>;
+  /** A workspace model's origin, once what it was proposed as has landed (T451). */
+  setOrigin(id: string, origin: ModelOrigin): Promise<unknown>;
 } {
   const STORED = [
     'id',
@@ -142,6 +154,26 @@ export function modelFileStore(db: Kysely<Database>): ModelFileStore & {
         .orderBy(sql`path collate "C"`)
         .execute();
       return rows.map((row) => ({ folderId: row.folder_id, path: row.path, content: row.content }));
+    },
+    async relocate(folderId, from, { path, content }) {
+      await db
+        .updateTable('model_files')
+        .set({
+          path,
+          content,
+          version: sql`version + 1`,
+          updated_at: sql`now()`,
+        })
+        .where('folder_id', '=', folderId)
+        .where('path', '=', from)
+        .execute();
+    },
+    async setOrigin(id, origin) {
+      await db
+        .updateTable('model_files')
+        .set({ origin: JSON.stringify(origin) })
+        .where('id', '=', id)
+        .execute();
     },
     /** A file removed from its folder: a model item deleted (T428). */
     async remove(folderId: string, path: string) {

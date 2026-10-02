@@ -169,4 +169,57 @@ describe('deciding a proposal (T356)', () => {
     expect(onDecided).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Approve' })).toBeTruthy();
   });
+
+  it('says a refusal naming what still uses a name in its own words, counted dependents and all (T451’s review)', async () => {
+    shown(proposal({}), {
+      status: 409,
+      body: {
+        error: '“orders” is still used by the chart “Margin” and 2 items in folders you can’t see.',
+        charts: [{ id: 'c1', title: 'Margin' }],
+        hidden: 2,
+      },
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Approve and publish' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe(
+      'Can’t approve: “orders” is still used by the chart “Margin” and 2 items in folders you can’t see.',
+    );
+    expect((screen.getByRole('button', { name: 'Approve' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+  });
+
+  it('names each break of an approval the publish check refused, and Approve waits (T451, state L)', async () => {
+    const { onDecided } = shown(proposal({}), {
+      status: 422,
+      body: {
+        error: '2 items would break, so nothing was approved.',
+        errors: [
+          {
+            path: 'sales.yml',
+            folderId: 'f2',
+            folderPath: ['Shared', 'Sales', 'EMEA'],
+            line: 34,
+            column: 9,
+            message: 'measure orders.avg_value: unknown member orders.amount_net',
+          },
+        ],
+        hidden: 1,
+      },
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Approve and publish' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe('Can’t approve: 1 item would break');
+    expect(screen.getByRole('listitem').textContent).toBe(
+      'sales.yml · Sales / EMEA · line 34, column 9measure orders.avg_value: unknown member orders.amount_net',
+    );
+    expect(screen.getByText('1 item in a folder you can’t see would also break.')).toBeTruthy();
+    // Nothing changed: approving again waits until something does.
+    expect((screen.getByRole('button', { name: 'Approve' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    expect(onDecided).not.toHaveBeenCalled();
+  });
 });

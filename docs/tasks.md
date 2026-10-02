@@ -8244,7 +8244,7 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - **AC-136, AC-009 and AC-137 stay ticked, retested on items mode:**
       - `check.test.ts` (20), `snapshot.test.ts` (25), `client.test.ts`, `changesets.test.ts` and `publish.test.ts`;
       - in Chrome on compose's Cube on the image: the model specs (50), including `model.spec.ts`'s error on its file with no line, `publish-model.spec.ts`'s new member in the chart builder, and the cut-over spec's D2, where the revision holding the publish says `via: 'changeset'` and the other API and Cube instance list it at once.
-- [ ] T451 (AC-321, AC-288, AC-291, AC-322) Check a proposal with a changeset's dry run when it is made, and apply that changeset at approval *(split from T426, 2026-09-26)*
+- [ ] T451 (AC-321, AC-288, AC-291, AC-322, AC-285) Check a proposal with a changeset's dry run when it is made, and apply that changeset at approval *(split from T426, 2026-09-26)*
   - Files: `packages/api/src/routes/proposals.ts`, `packages/api/src/xcube/changesets.ts`, `e2e/security/publish-check.spec.ts`
   - Failing test: `publish-check.spec.ts`, against xcube's image:
     - a proposal is checked (`dryRun`) when made, and applied at approval;
@@ -8258,6 +8258,59 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
       - the same path taken by a file declaring another name: refuse, or that file is overwritten.
     - `changedSince` doesn't check model items yet.
   - *2026-09-30, from T427:* an approval the check refuses is AC-322's other trigger. Answer it with `refusalOf` (`xcube/refusal.ts`), as the direct publish does, and record it in the audit trail. The review view's refusal (design 05, state L; `reviews/Refusal.tsx`) is built here, since nothing refuses an approval before this task. AC-322 stays open until a test here shows it.
+  - *2026-10-01, the coordinator, for the user:* with sign-in off, models stay editable in place until this task lands them through approval; then they become workspace-only, as the rest are, as part of this task. With R52: a proposal's data sources land first, and a refused approval leaves them landed.
+  - **Models land, 2026-10-01 (the switch to workspace-only models follows in its own commit). AC-285 and AC-322 ticked; AC-321 waits for T456's binding half.**
+    - **AC-288 isn't ticked, for the user:** its Fails-when says "an approval that fails the check changes the folder", but under R52 a refused approval leaves its data sources landed. AC-288 needs R52's exception before it can be ticked; everything else it asks is shown.
+    - **Where a model lands** (`model/landing.ts`, `planLanding`). Each lands in its folder over the file declaring its name.
+      - That file at another path is moved to the model's path, keeping its id and history.
+      - A file at the model's path declaring another name refuses it, unless it is the file the model was copied from. That is a rename: the name renamed away is checked against what uses it (AC-275).
+      - A rename onto a name another file there declares, two models landing at one path or as one name, and two landing over one file are refused.
+    - **The check** (`publish.ts`, `landing.check`), the publish's own under its one-at-a-time:
+      - a template is read-only;
+      - a name renamed away that a chart or dashboard uses refuses it (`inUse`, AC-275);
+      - then xcube's dry run of the changeset the models make, the rollups' unknown members, the crons and the joins, as a publish.
+      - It runs when a proposal is made, and the Propose dialog's check runs it too (unrecorded), and again at approval. An item already waiting in a proposal is refused before it.
+    - **A refusal** (`422`): "_n_ item(s) would break, so nothing was approved." (or "…so it wasn’t proposed."), with each break the user may see (its file, its folder's path from Shared, the line and column of a YAML error) and a count of the rest (`refusalOf`). It is recorded as `publish-refused`, with `change: 'approval'` or `'proposal'` and the proposal's id; design 08's state B draws it. The proposal stays open, and nothing changes.
+    - **At approval**, in order (AC-321, R52):
+      - deleted folders are made again (T540);
+      - data sources land first, and stay landed if the rest is refused. Approving again lands over the one this proposal landed (its kept version), not beside it;
+      - then the models' check, then each chart and dashboard bound with the names as they will resolve once the models land (`landedResolver`: the head's items, less the changeset's deletes, with its upserts, nearest first; where the model is sent whole, the draft's items alone);
+      - then the models are written and sent (`modelFiles.write`, `relocate`, `afterPublish`), each replaced version and each new one kept as kind `model`, `{ path, content }` (AC-288), and the charts and dashboard written.
+      - The workspace's models are then copies of what they landed as (`origin`).
+    - `changedSince` checks model items: what one replaces is still in its folder, and still the folder's file of its name.
+    - **The review** (design 05):
+      - state L (`reviews/Refusal.tsx`): "Can’t approve: _n_ items would break", each break named, the rest counted, and Approve disabled;
+      - pin 7: a proposal holding a model shows "Publish check · Every affected module compiled · _time proposed_" and "Checked again when you approve."
+    - **Tests:**
+      - `model/landing.test.ts` (8);
+      - `routes/proposal-landing.test.ts` (9):
+        - checked when proposed, then landed at approval with the dashboard bound to them, versions kept, the approval recorded with what landed with it, and the workspace's origins set;
+        - a chart bound to a cube only its models make (AC-285);
+        - a refused approval names its break, counts one the approver can't see, records it and changes nothing;
+        - refused when proposed;
+        - the path held by another name's file;
+        - the file of its name moved, its id kept;
+        - AC-275 at approval;
+        - R52;
+        - a data source proposed as new lands beside its origin, never over it.
+      - `proposal-bundle.test.ts`: its 503 test is now a model the check refuses keeping the dashboard back;
+      - web: `Refusal.test.tsx` (2), `DecisionPanel.test.tsx` (state L, and AC-275's refusal in its own words), `ReviewView.test.tsx` (pin 7);
+      - `e2e/security/publish-check.spec.ts` (7), against compose's xcube, on Chrome: proposed through the dry run, refused at approval in the review once the cube it joins was deleted (state L, nothing changed), then landed and queried across the join.
+    - **Review (one round, FAIL), fixed:**
+      - two models landing over one file (a rename of it and a move of it) wrote one over the other;
+      - re-landing a data source went by the workspace copy's origin, so one proposed as new could land over another;
+      - AC-275's refusal, with hidden dependents, was drawn as the check's;
+      - the landed resolver had no test, and mixed xcube's head with a whole send;
+      - the approval's record counted models as charts;
+      - the dry run ran before "already waiting".
+    - **Left:**
+      - AC-291 isn't ticked: its direct actions are T428's and T521's, not shown again here.
+      - A `409` stale base when the changeset is applied is the sync's to retry (T426).
+      - A failure after the models are written (the dashboard's write failing, say) reopens the proposal, which `changedSince` then refuses; such a proposal is withdrawn and proposed again.
+      - A workspace model's own bindings at landing are xcube's; the landed resolver gives a landing model none, so a chart's joined cubes resolve from its folder (T456 reads the dry run's bindings).
+      - The review shows a renamed copy as new (T350's by-name `replaces`); approving renames its origin.
+      - The reviews list's "Approved as version _n_" picks a model proposal's version by kind.
+      - The mixed data-source and model proposal R52 orders is made only through the store: no route makes one yet.
 - [x] T427 (AC-322) Word a refused publish: breaks named in the folders the user may see, a count for the rest, all in the audit trail
   - Files: `packages/api/src/xcube/refusal.ts` (+ test), `packages/web/src/workspaces/reviews/Refusal.tsx` (+ test)
   - Failing test: `refusal.test.ts`:
@@ -10543,7 +10596,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-275 | ~~T337, T352~~ T428 | AC-276 | T343 | AC-277 | T343 |
 | AC-278 | T344, T348, T502 | AC-279 | T344 | AC-280 | T346, T347 |
 | AC-281 | T347 | AC-282 | T345, T347, T363 | AC-283 | T347 |
-| AC-284 | T349, T358 | AC-285 | T350 | AC-286 | T351 |
+| AC-284 | T349, T358 | AC-285 | T350, T451 | AC-286 | T351 |
 | AC-287 | T355, T356 | AC-288 | T352, ~~T426~~ T451 | AC-289 | T354, T357, T515 |
 | AC-290 | T353, T358 | AC-291 | T329, ~~T426~~ T451 | AC-292 | T366 |
 | AC-293 | T367 | AC-294 | T368, T505 | AC-295 | T369 |

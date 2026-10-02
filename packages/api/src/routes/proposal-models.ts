@@ -1,6 +1,7 @@
 import type { ChartDefinition } from '@wechart/core';
 import { parse } from 'yaml';
 
+import type { ModelOrigin } from '../db/schema';
 import { cubesOfChart, cubesOfDashboard } from '../model/bind';
 import { declaredIn } from '../model/split';
 import type { StoredModelFile } from '../repos/model-files';
@@ -56,6 +57,8 @@ export interface ProposalModelDeps {
   readonly files: {
     inFolders(folderIds: readonly string[]): Promise<readonly StoredModelFile[]>;
     byId(id: string): Promise<StoredModelFile | undefined>;
+    /** A workspace model's origin, once it has landed (T451). */
+    setOrigin?(id: string, origin: ModelOrigin): Promise<unknown>;
   };
   /** A workspace's folders: its root and every folder in it. */
   readonly foldersOf: (workspaceId: string) => Promise<readonly string[]>;
@@ -278,6 +281,14 @@ export function proposalModels(deps: ProposalModelDeps) {
     async current(id: string): Promise<{ content: string; version: number } | undefined> {
       const file = await deps.files.byId(id);
       return file === undefined ? undefined : { content: file.content, version: file.version };
+    },
+
+    /** A folder's file declaring this name now (T451): what a model of it replaces there. */
+    declaring: (folderId: string, name: string) => replacedIn(folderId, name),
+
+    /** A workspace model now a copy of what it landed as (T451). */
+    async setOrigin(fileId: string, origin: ModelOrigin): Promise<void> {
+      await deps.files.setOrigin?.(fileId, origin);
     },
   };
 }

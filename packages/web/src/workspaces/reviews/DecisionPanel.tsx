@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 
 import { PROPOSAL_TEXT_LIMIT } from '../explore/ProposeDialog';
+import { Refusal } from './Refusal';
 import { DecisionRefused, decide, shownItems, type ProposalDetail } from './review';
 import { folderText } from './reviews';
 
@@ -116,7 +117,10 @@ export function DecisionPanel({
         </p>
       ) : null}
 
-      {decision.isError ? (
+      {refused?.checked === true ? (
+        // The publish check's own refusal: each break named or counted (state L).
+        <Refusal breaks={refused.breaks} hidden={refused.hidden} />
+      ) : decision.isError ? (
         <div role="alert" className="review-decision__refused">
           <p>
             {decision.variables === 'approve' ? 'Can’t approve: ' : 'Can’t reject: '}
@@ -218,7 +222,8 @@ export function DecisionPanel({
                 className="btn btn-primary"
                 aria-haspopup="dialog"
                 aria-expanded={step === 'confirming'}
-                disabled={decision.isPending}
+                // Refused by the check, nothing changed: approving again waits (state L).
+                disabled={decision.isPending || refused?.checked === true}
                 onClick={() => {
                   decision.reset();
                   setStep('confirming');

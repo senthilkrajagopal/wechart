@@ -328,6 +328,21 @@ describe('the review view (T356)', () => {
     );
   });
 
+  it('shows the publish check from when its models were proposed, before Approve (T451, pin 7)', async () => {
+    shown(withModels());
+    const check = await screen.findByRole('region', { name: 'Publish check' });
+    expect(within(check).getByRole('status').textContent).toBe(
+      'Every affected module compiled · 14:05',
+    );
+    expect(within(check).getByText('Checked again when you approve.')).toBeTruthy();
+  });
+
+  it('has no publish check where nothing in it is a model', async () => {
+    shown(proposal({}));
+    await screen.findByRole('list', { name: 'In this proposal' });
+    expect(screen.queryByRole('region', { name: 'Publish check' })).toBeNull();
+  });
+
   it('says why a library chart goes too, where models go with it', async () => {
     const detail = withModels();
     shown({ ...detail, items: [...detail.items, proposal({}).items[2]!] });

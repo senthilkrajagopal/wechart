@@ -7,9 +7,10 @@ import type { Database } from '../db/schema';
  * each a copy it holds: its content as it was, who proposed it, who approved
  * it, when, and the description. A version from before proposals, replaced by
  * the first approval, has neither author nor approver. A data source's
- * content keeps its credentials as sealed (AC-298).
+ * content keeps its credentials as sealed (AC-298). A model's is its file,
+ * `{ path, content }` (T451).
  */
-export type VersionKind = 'dashboard' | 'chart' | 'data-source';
+export type VersionKind = 'dashboard' | 'chart' | 'data-source' | 'model';
 
 /** How many of an item's versions are kept, newest first (AC-289). */
 export const KEPT_VERSIONS = 10;

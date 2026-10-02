@@ -122,6 +122,7 @@ import {
   timeZoneOf,
 } from './routes/project-folder';
 import type { QueryLogEntry, QueryLogPageAsk } from './repos/query-log';
+import type { ModelOrigin } from './db/schema';
 import type { StoredModelFile, WorkspaceModelFile } from './repos/model-files';
 import { workspaceModels } from './routes/workspace-models';
 import {
@@ -268,6 +269,14 @@ export interface ModelFileStore {
   inFolders?(folderIds: readonly string[]): Promise<readonly StoredModelFile[]>;
   /** One file by its id (T347, T350). */
   byId?(id: string): Promise<StoredModelFile | undefined>;
+  /** A file moved to another path in its folder, its id kept: a model landing (T451). */
+  relocate?(
+    folderId: string,
+    from: string,
+    file: { readonly path: string; readonly content: string },
+  ): Promise<unknown>;
+  /** A workspace model's origin, set once what it was proposed as has landed (T451). */
+  setOrigin?(id: string, origin: ModelOrigin): Promise<unknown>;
 }
 
 /** Where image tiles' images are kept: bytes, and the type they were accepted as. */
@@ -948,7 +957,8 @@ export function buildServer({
             proposals !== undefined && (await proposals.openFor('model', fileId)) !== null,
         });
 
-  registerModelPublishing(app, {
+  // And a proposal's models, landed as a publish is (T451).
+  const { landing: modelLanding } = registerModelPublishing(app, {
     config,
     client,
     // My workspace's models, through its overlay (T347).
@@ -1343,7 +1353,9 @@ export function buildServer({
       enabled: true,
       // An approval publishes: each item bound in its folder, as a save there
       // was before a shared one could no longer be saved (T502, AC-272).
-      bind: (kind, folderId, body) => boundIn(kind, folderId, body),
+      // With its models, as they will resolve once landed (T451).
+      bind: (kind, folderId, body, resolver) => boundIn(kind, folderId, body, undefined, resolver),
+      modelLanding,
       // A landed dashboard shows only library charts on its folder's path:
       // any other as its own copy (T537, AC-371). With sign-in on, as T527.
       ...(security === 'off' ? {} : { pathOf: (folderId: string) => pathTo(folderId) }),
@@ -1357,6 +1369,9 @@ export function buildServer({
               files: {
                 inFolders: modelFiles.inFolders.bind(modelFiles),
                 byId: modelFiles.byId.bind(modelFiles),
+                ...(modelFiles.setOrigin === undefined
+                  ? {}
+                  : { setOrigin: modelFiles.setOrigin.bind(modelFiles) }),
               },
               foldersOf: workspaceFolderIds,
               xcubeIds: async () => (folders === undefined ? ROOT_ONLY : await folders()).ids,
@@ -2228,6 +2243,8 @@ export function buildServer({
      * from `to` up, as xcube will resolve them once the move is pushed.
      */
     moving?: { readonly folder: string; readonly to: string },
+    /** Names as they will resolve once a proposal's models land (T451). */
+    landing?: Pick<XcubeAdmin, 'resolve' | 'items'>,
   ): Promise<Bound> => {
     if (xcube === undefined || folders === undefined || folderId === null)
       return { kind: 'ok', body };
@@ -2243,7 +2260,8 @@ export function buildServer({
       const xcubeId = ids.get(folderId);
       if (xcubeId === undefined || (await xcube.revision()).mode !== 'items')
         return { kind: 'ok', body };
-      const resolver = moving === undefined ? xcube : await movedResolver(folderId, moving, ids);
+      const resolver =
+        landing ?? (moving === undefined ? xcube : await movedResolver(folderId, moving, ids));
       const bind = () =>
         kind === 'chart'
           ? bindChart(resolver, xcubeId, chart!)

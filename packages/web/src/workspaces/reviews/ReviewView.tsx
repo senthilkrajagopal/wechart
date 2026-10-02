@@ -15,6 +15,7 @@ import { TileError } from '../../tiles/TileError';
 import { TileSkeleton } from '../../tiles/TileSkeleton';
 import { DecisionPanel } from './DecisionPanel';
 import {
+  clockText,
   momentText,
   proposalQuery,
   shownItems,
@@ -320,6 +321,18 @@ export function ReviewView({
                 </p>
               )}
             </section>
+            {/* The publish check, before Approve (pin 7; T451, AC-321): its
+                models were checked by the dry run when proposed, or it
+                wouldn't have been; Approve runs it again. */}
+            {proposal.status === 'open' && proposal.items.some((each) => each.kind === 'model') ? (
+              <section className="review-view__sect" aria-label="Publish check">
+                <h2>Publish check</h2>
+                <StateLine kind="ok">
+                  Every affected module compiled · {clockText(proposal.proposedAt)}
+                </StateLine>
+                <p className="review-view__help">Checked again when you approve.</p>
+              </section>
+            ) : null}
             {proposal.status === 'open' ? (
               <DecisionPanel proposal={proposal} onDecided={setSaid} />
             ) : (
