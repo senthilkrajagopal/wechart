@@ -260,6 +260,16 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
         const said = (await response.json().catch(() => null)) as { error?: string } | null;
         throw new Error(said?.error ?? `Could not add: ${String(response.status)}`);
       }
+      // Kept off the path of the folder that dashboard is read in, it went on
+      // as the dashboard's own copy (T527, AC-371).
+      const answer =
+        response.status === 201
+          ? ((await response.json().catch(() => null)) as { copied?: unknown[] } | null)
+          : null;
+      const title = dashboards.find((dashboard) => dashboard.id === dashboardId)?.title;
+      return (answer?.copied?.length ?? 0) > 0
+        ? `Added to “${title ?? 'that dashboard'}” as its own copy: this chart isn’t kept in the folder that dashboard is shown in, or one above it.`
+        : undefined;
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['chart-dashboards', chartId] });
@@ -343,6 +353,11 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
       </button>
       {/* Under way, in words with its icon, not only by the button fading (AC-177). */}
       {addToDashboard.isPending ? <StateLine kind="run">Adding it…</StateLine> : null}
+      {addToDashboard.data === undefined ? null : (
+        <StateLine kind="ok" testId="added-as-copy">
+          {addToDashboard.data}
+        </StateLine>
+      )}
       {addToDashboard.isError ? (
         <StateLine kind="err">{(addToDashboard.error as Error).message}</StateLine>
       ) : null}

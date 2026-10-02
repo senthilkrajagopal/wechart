@@ -85,7 +85,12 @@ import { registerImport } from './routes/import';
 import { registerProposals } from './routes/proposals';
 import type { ProposalStore } from './repos/proposals';
 import type { VersionStore } from './repos/versions';
-import { chartCopy, dashboardCopies, type ShownCopy } from './routes/workspace-copy';
+import {
+  chartCopy,
+  dashboardCopies,
+  type ShownCopy,
+  withChartsRenamed,
+} from './routes/workspace-copy';
 import type { QueryLogEntry, QueryLogPageAsk } from './repos/query-log';
 
 /**
@@ -1736,6 +1741,97 @@ export function buildServer({
   const isShared = async (kind: string, item: Stored) =>
     (await workspaceRootOf(await governingFolder(kind, item))) === null;
   /**
+   * The folder an item is read in (T527): a workspace item's target, where
+   * its proposal lands it (AC-282); any other, its own. None for a workspace
+   * item with no target.
+   */
+  const landsIn = async (body: Record<string, unknown>): Promise<string | null> => {
+    const folder = folderIdOf(body);
+    if ((await workspaceRootOf(folder)) === null) return folder;
+    return typeof body['targetFolderId'] === 'string' ? body['targetFolderId'] : null;
+  };
+  /** A shared folder's path: it, the folders above it, and the root (T527). */
+  const pathTo = async (folderId: string): Promise<ReadonlySet<string>> => {
+    const parents = new Map(
+      (
+        (cat ? await cat.folders({ counted: false }) : []) as {
+          id: string;
+          parentId: string | null;
+        }[]
+      ).map((folder) => [folder.id, folder.parentId]),
+    );
+    const path = new Set<string>([ROOT_FOLDER_ID]);
+    for (
+      let at: string | null | undefined = folderId;
+      at != null && !path.has(at);
+      at = parents.get(at)
+    )
+      path.add(at);
+    return path;
+  };
+  interface CopiedOnUse {
+    /** The library chart copied. */
+    readonly from: string;
+    readonly id: string;
+    readonly title: unknown;
+    readonly body: Record<string, unknown>;
+  }
+  /**
+   * Copy on use (T527, AC-371; the user's answer on AC-263): with sign-in on,
+   * a dashboard shows only library charts kept on the path of the folder it
+   * is read in — that folder or one above it — which every reader of it may
+   * open, and xcube admits them to. Any other library chart it shows becomes
+   * a chart of its own: a copy, in no folder, which it shows instead. Asked
+   * of a workspace's dashboard, judged by its target: a shared one's content
+   * changes only by an approval (T502), which lands a workspace one's.
+   *
+   * `sent` has the bodies of charts saved with it, copied as they are sent.
+   * Answers each chart's copy by the id it replaces; none with sign-in off.
+   */
+  const copiesOnUse = async (
+    dashboard: { readonly id: string; readonly body: Record<string, unknown> },
+    shown: Iterable<string>,
+    sent: ReadonlyMap<string, Record<string, unknown>> = new Map(),
+  ): Promise<Map<string, CopiedOnUse>> => {
+    const copies = new Map<string, CopiedOnUse>();
+    if (security === 'off' || docs?.get === undefined) return copies;
+    if ((await workspaceRootOf(folderIdOf(dashboard.body))) === null) return copies;
+    const home = await landsIn(dashboard.body);
+    if (home === null) return copies;
+    const path = await pathTo(home);
+    for (const chartId of shown) {
+      const found = await docs.get('chart', chartId).catch(() => null);
+      if (found === null || typeof found.body['localToDashboardId'] === 'string') continue;
+      const kept = await landsIn(found.body);
+      if (kept === null || path.has(kept)) continue;
+      const {
+        folderId: _folder,
+        targetFolderId: _target,
+        origin: _origin,
+        owner: _owner,
+        ...content
+      } = sent.get(chartId) ?? found.body;
+      void [_folder, _target, _origin, _owner];
+      const owner = dashboard.body['owner'];
+      copies.set(chartId, {
+        from: chartId,
+        id: randomUUID(),
+        title: content['title'],
+        body: {
+          ...content,
+          localToDashboardId: dashboard.id,
+          ...(typeof owner === 'string' ? { owner } : {}),
+        },
+      });
+    }
+    return copies;
+  };
+  /** What a reply says was copied (T527): each copy, and the chart it copies. */
+  const copiedOf = (copies: ReadonlyMap<string, CopiedOnUse>) =>
+    [...copies.values()].map(({ from, id, title }) => ({ from, id, title }));
+  const renamesOf = (copies: ReadonlyMap<string, CopiedOnUse>) =>
+    new Map([...copies].map(([from, copy]) => [from, copy.id]));
+  /**
    * The refusal, where the folder already has another dashboard of this
    * title (T336, AC-270): one of a name in a folder, and free across folders
    * (AC-271). Only a user's own naming or moving is asked; an approval
@@ -2758,6 +2854,17 @@ export function buildServer({
       if (taken !== undefined) return reply.code(409).send(taken);
     }
 
+    // Each library chart it shows from off its path, as its own copy (T527, AC-371).
+    const copies =
+      kind === 'dashboard'
+        ? await copiesOnUse({ id, body: written }, chartIdsOf(written))
+        : new Map();
+    if (copies.size > 0) {
+      // Made with it in one write, or not shown at all (T527's review).
+      if (docs.updateTogether === undefined) throw new BadRequest('Persistence is not configured');
+      written = withChartsRenamed(written, renamesOf(copies)) as typeof written;
+    }
+
     // Published into its folder: each cube it names bound there (T429, AC-272).
     if (kind !== 'folder') {
       const bound = await boundIn(
@@ -2779,7 +2886,21 @@ export function buildServer({
     }
 
     try {
-      return await docs.update({ kind, id, body: written, expectedVersion: body.version });
+      if (copies.size === 0 || docs.updateTogether === undefined)
+        return await docs.update({ kind, id, body: written, expectedVersion: body.version });
+      // The copies made with it, or none of it (T527).
+      const folder = await governingFolder(kind, { id, body: written });
+      const charts = [];
+      for (const copy of copies.values()) {
+        const bound = await boundIn('chart', folder, copy.body);
+        if (bound.kind !== 'ok') return bindingRefused(reply, 'chart', bound);
+        charts.push({ kind: 'chart' as const, id: copy.id, body: bound.body, expectedVersion: 0 });
+      }
+      const together = await docs.updateTogether([
+        ...charts,
+        { kind, id, body: written, expectedVersion: body.version },
+      ]);
+      return { ...together[charts.length], copied: copiedOf(copies) };
     } catch (failure) {
       // A save that lost a race is not a server fault; the browser has to
       // reload and decide what to do, which it cannot if this is a 500.
@@ -3031,6 +3152,22 @@ export function buildServer({
         : { folderId: folderIdOf(storedDashboard), title: storedDashboard['title'] },
     );
     if (taken !== undefined) return reply.code(409).send(taken);
+    // Each library chart it shows from off its path, as its own copy, made in
+    // the same write (T527, AC-371): one saved with it, as it is sent.
+    const withTarget = withStoredTarget(dashboard.body as Record<string, unknown>, storedDashboard);
+    const copies = await copiesOnUse(
+      { id: dashboardId, body: withTarget },
+      chartIdsOf(withTarget),
+      new Map(checked.map((chart) => [chart.id, chart.body])),
+    );
+    const shownBody =
+      copies.size === 0
+        ? withTarget
+        : (withChartsRenamed(withTarget, renamesOf(copies)) as Record<string, unknown>);
+    const writing = [
+      ...checked,
+      ...[...copies.values()].map((copy) => ({ id: copy.id, body: copy.body, version: 0 })),
+    ];
     const madeHere = async (chart: { body: Record<string, unknown> }) =>
       chart.body['localToDashboardId'] === undefined &&
       found.seen !== undefined &&
@@ -3038,7 +3175,7 @@ export function buildServer({
         ? storedDashboard
         : undefined;
     const boundCharts: Record<string, unknown>[] = [];
-    for (const chart of checked) {
+    for (const chart of writing) {
       const body = withStoredTarget(
         chart.body,
         chart.version === 0 ? await madeHere(chart) : storedCharts.get(chart.id),
@@ -3051,16 +3188,12 @@ export function buildServer({
       if (bound.kind !== 'ok') return bindingRefused(reply, 'chart', bound);
       boundCharts.push(bound.body);
     }
-    const boundDashboard = await boundIn(
-      'dashboard',
-      dashboardFolder,
-      withStoredTarget(dashboard.body as Record<string, unknown>, storedDashboard),
-    );
+    const boundDashboard = await boundIn('dashboard', dashboardFolder, shownBody);
     if (boundDashboard.kind !== 'ok') return bindingRefused(reply, 'dashboard', boundDashboard);
 
     try {
       const written = await docs.updateTogether([
-        ...checked.map((chart, index) => ({
+        ...writing.map((chart, index) => ({
           kind: 'chart' as const,
           id: chart.id,
           body: boundCharts[index]!,
@@ -3076,10 +3209,11 @@ export function buildServer({
 
       // Returned in the order given: the charts, then the dashboard.
       return {
-        version: written[checked.length]?.version,
+        version: written[writing.length]?.version,
         charts: Object.fromEntries(
-          checked.map((chart, index) => [chart.id, written[index]?.version]),
+          writing.map((chart, index) => [chart.id, written[index]?.version]),
         ),
+        ...(copies.size === 0 ? {} : { copied: copiedOf(copies) }),
       };
     } catch (failure) {
       if (failure instanceof Error && failure.name === 'StaleDocumentError') {
@@ -3370,6 +3504,32 @@ export function buildServer({
       (await isShared('dashboard', board.stored))
     )
       return reply.code(409).send(sharedInPlace('dashboard'));
+
+    // One kept off the path of the folder it lands in goes on it as its own
+    // copy (T527, AC-371).
+    const copy =
+      board.stored === null
+        ? undefined
+        : (await copiesOnUse(board.stored, [body.chartId])).get(body.chartId);
+    if (copy !== undefined) {
+      // Never the off-path chart itself, for want of a way to make its copy (T527's review).
+      if (docs.create === undefined) throw new BadRequest('Persistence is not configured');
+      // Bound where it is now governed, as a save binds its copies.
+      const bound = await boundIn(
+        'chart',
+        await governingFolder('chart', { id: copy.id, body: copy.body }),
+        copy.body,
+      );
+      if (bound.kind !== 'ok') return bindingRefused(reply, 'chart', bound);
+      await docs.create({ kind: 'chart', id: copy.id, body: bound.body });
+      try {
+        await docs.attachChart(dashboardId, copy.id);
+      } catch (failure) {
+        await docs.remove?.('chart', copy.id);
+        throw failure;
+      }
+      return reply.status(201).send({ copied: copiedOf(new Map([[copy.from, copy]])) });
+    }
 
     await docs.attachChart(dashboardId, body.chartId);
     return reply.status(204).send();

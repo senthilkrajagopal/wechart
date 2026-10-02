@@ -39,6 +39,19 @@ export class StaleSaveError extends Error {
 
 export interface SaveResult {
   readonly version: number;
+  /**
+   * The library charts the save put on the dashboard as its own copies, each
+   * by the chart it copies (T527, AC-371): kept off the path of the folder it
+   * is read in. Absent when there were none.
+   */
+  readonly copied?: readonly CopiedChart[];
+}
+
+/** A library chart a save copied onto the dashboard, as the server names it (T527). */
+export interface CopiedChart {
+  readonly from: string;
+  readonly id: string;
+  readonly title: string;
 }
 
 /** A chart edited from one of the dashboard's tiles, to be written with it (T192). */
@@ -167,10 +180,13 @@ export async function saveDashboard({
     throw new Error(`Could not save: ${reason ?? String(response.status)}`);
   }
 
-  const saved = (await response.json()) as { version?: number };
+  const saved = (await response.json()) as { version?: number; copied?: CopiedChart[] };
   // The new version, so a second save in the same session is not itself
   // stale against the first.
-  return { version: saved.version ?? version + 1 };
+  return {
+    version: saved.version ?? version + 1,
+    ...(saved.copied === undefined || saved.copied.length === 0 ? {} : { copied: saved.copied }),
+  };
 }
 
 /**

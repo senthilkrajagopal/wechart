@@ -9657,6 +9657,30 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
   - Files: `packages/api/src/server.ts` (`POST /api/dashboards/:id/charts`, the dashboard saves), `packages/web/src/dashboard/copyChartTo.ts` and the chart page's Add to dashboard, `packages/api/src/routes/copy-on-use.test.ts`, `e2e/security/copy-on-use.spec.ts`
   - Failing test: `copy-on-use.test.ts`: adding a library chart whose folder isn't on the dashboard's folder path, or saving a dashboard that shows one, puts a copy of it on the dashboard as its own chart; one on the path stays shared. `copy-on-use.spec.ts`: a reader opens that dashboard and every tile answers (AC-371, AC-263).
   - Depends on: T436
+  - **Done 2026-10-01, putting a chart on.**
+    - **The rule is applied by `copiesOnUse` in `server.ts`.** With sign-in on, a workspace dashboard is judged by the path of its target folder: that folder, the folders above it, and the root. Any library chart it shows from off that path becomes its own copy. The copy keeps the source's content (as sent, when the chart is saved with it) and drops its folder and target; the body names the copy instead.
+      - A workspace's own chart is judged by its target.
+      - With sign-in on, a shared dashboard's content changes only by an approval (T502), and the approval lands the workspace body. With sign-in off, nothing is copied: there are no readers to keep out.
+    - **Where it runs:** Add to dashboard (`POST /api/dashboards/:id/charts`, `201 { copied }`, the copy bound in its dashboard's folder), the document save, and the save with charts. Both saves make their copies in one write with the dashboard and answer `copied`.
+    - **What the user sees:** the dashboard's saved line and the chart page say which chart became the dashboard's own copy.
+    - **Tests:**
+      - `copy-on-use.test.ts`, 7 cases: on and off the path, ancestors and descendants, one copy for two tiles, a chart sent with the save, no second copy, a workspace chart by its target, and sign-in off.
+      - `save.test.ts`.
+      - `e2e/security/copy-on-use.spec.ts`, 5 on Chrome: G's chart on F's dashboard lands as F's own, bound to the root's `orders`, and F's reader gets an answer from the tile that xcube's gate would refuse them for G's.
+    - **Review fixes:** no copy is worked out without a way to write it; the attach binds its copy; the wording holds for a workspace chart.
+    - **Left under the breadth rule:**
+      - two clicks of Add to dashboard make two copies;
+      - the attach is two writes;
+      - a chart that can't be read is left as it is.
+    - **AC-371 stays open for moves and approvals, which are T537's.** The user's answer was "Copy on move + approval". AC-263 stays open for its other parts.
+- [ ] T537 (AC-371) Copy on move and at approval: no dashboard left showing a library chart off its folder's path *(added 2026-10-01, the user's answer on T527's review: "Copy on move + approval")*
+  - Files: `packages/api/src/routes/proposals.ts` (`land`), `packages/api/src/server.ts` (`PATCH /api/documents/:kind/:id`, a folder's move), the move dialogs' notice, `packages/api/src/routes/copy-on-use.test.ts`, `e2e/security/copy-on-use.spec.ts`
+  - Failing test: `copy-on-use.test.ts`:
+    - an approval that lands a dashboard showing an off-path library chart lands it with its own copy;
+    - moving a library chart off a dashboard's path gives that dashboard its own copy;
+    - moving a dashboard, or a folder above it, gives it copies of the charts now off its path;
+    - each move's answer names the dashboards that got copies (AC-371).
+  - Depends on: T527
 - [ ] T528 (AC-372) Withdraw an item's open proposal when the item is deleted from My workspace, naming it in the confirmation *(added 2026-09-30, `[R49]`, design 14's Q2)*
   - Files: the delete routes in `packages/api/src/server.ts` and `routes/data-sources.ts`, the delete dialogs (design 14), `packages/api/src/routes/delete-dependents.test.ts`
   - Failing test: deleting a workspace dashboard, chart or data source waiting in an open proposal withdraws that proposal; the dialog names it before (AC-372).
@@ -9768,7 +9792,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-362 | T517 | AC-363 | T518 | AC-364 | T519, T526 |
 | AC-365 | T520, T526 | AC-366 | T521 | AC-367 | T522 |
 | AC-368 | T523 | AC-369 | T524 | AC-370 | T525 |
-| AC-371 | T527 | AC-372 | T528 | | |
+| AC-371 | T527, T537 | AC-372 | T528 | | |
 | AC-373 | T531, T532, T535 | AC-374 | T531, T536 | AC-375 | T532 |
 | AC-376 | T532 | AC-377 | T532, T535 | AC-378 | T532 |
 | AC-379 | T533, T535 | AC-380 | T535 | AC-381 | T534 |

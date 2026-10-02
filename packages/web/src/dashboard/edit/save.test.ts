@@ -282,6 +282,23 @@ describe('the version', () => {
 });
 
 /**
+ * T527 / AC-371: a library chart kept off the path of the folder a dashboard
+ * is read in goes on it as the dashboard's own copy, made by the save. The
+ * save says which, so the page can tell the user.
+ */
+describe('charts put on it as its own copies', () => {
+  it('are named, by the chart each copies', async () => {
+    const copied = [{ from: 'c1', id: 'c9', title: 'Orders by region' }];
+    const fetchImpl = vi.fn(
+      async () => new Response(JSON.stringify({ version: 3, copied }), { status: 200 }),
+    );
+    const result = await saveDashboard({ dashboardId: 'd1', document: DOC, version: 2, fetchImpl });
+
+    expect(result).toEqual({ version: 3, copied });
+  });
+});
+
+/**
  * T192 / AC-183: a chart edited from a tile is written only when the
  * dashboard is saved — and together with it. Two requests have no safe order:
  * charts first leaves them changed if the dashboard then fails, which is

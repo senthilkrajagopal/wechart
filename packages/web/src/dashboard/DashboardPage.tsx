@@ -29,7 +29,7 @@ import { placeOf, type ItemWorkspace } from '../workspaces/explore/placeOf';
 import { WorkspaceBand } from '../workspaces/explore/WorkspaceBand';
 import { DashboardView, type DashboardViewProps } from './DashboardView';
 import { chartWritesOf, drawnWithDrafts } from './edit/chartDrafts';
-import { saveDashboard } from './edit/save';
+import { saveDashboard, type CopiedChart } from './edit/save';
 import { chartIdsOf, type DashboardDocument } from './model/document';
 import type { ViewState } from './bookmarks/viewState';
 import { dashboardOf, type StoredDocument } from './model/stored';
@@ -623,6 +623,8 @@ function LoadedDashboard({
     id: string,
     next: DashboardDocument,
     drafts: DashboardDocument['chartDrafts'],
+    /** The library charts the save put on it as its own copies (T527, AC-371). */
+    copied: readonly CopiedChart[] = [],
   ) => {
     const shown = new Set(chartIdsOf(next));
     const moved = Object.entries(drafts ?? {}).flatMap(([chartId, draft]) =>
@@ -633,8 +635,12 @@ function LoadedDashboard({
         ? [{ title: draft.document.title, folderId: draft.document.folderId }]
         : [],
     );
+    const copies = copied.map(
+      ({ title }) =>
+        `“${title}” isn’t kept in the folder this dashboard is shown in, or one above it, so the dashboard now shows its own copy of it.`,
+    );
     if (moved.length === 0) {
-      setSavedToFolders('');
+      setSavedToFolders(copies.join(' '));
       return;
     }
     // By name where the folders can be read; by id, never not at all. The
@@ -649,12 +655,13 @@ function LoadedDashboard({
       // Said by id.
     }
     setSavedToFolders(
-      moved
-        .map(
+      [
+        ...moved.map(
           ({ title, folderId }) =>
             `Saved “${title}” to ${names.get(folderId) ?? folderId}. It is now a shared chart.`,
-        )
-        .join(' '),
+        ),
+        ...copies,
+      ].join(' '),
     );
   };
   /**
@@ -754,9 +761,9 @@ function LoadedDashboard({
      * throw here would turn a stored save into a failure (gotcha 1) — and
      * `invalidateQueries` neither throws nor rejects unless asked to.
      */
-    onSuccess: async (_saved, { id, next, drafts }) => {
+    onSuccess: async (saved, { id, next, drafts }) => {
       setSaveFailed('');
-      void sayWhereSaved(id, next, drafts);
+      void sayWhereSaved(id, next, drafts, saved.copied);
       void queryClient.invalidateQueries({ queryKey: ['dashboard-charts', id] });
       await queryClient.invalidateQueries({ queryKey: ['dashboard', id] });
     },
