@@ -26,6 +26,7 @@ import { checkXcubeHoldsKey, xcubePublicKeyOf } from './secrets/xcube-key';
 import { xcubeAdmin } from './xcube/client';
 import { startSigning, xcubeKeys } from './xcube/keys';
 import { connectionSync, xcubeConnections } from './xcube/connections';
+import { xcubeSqlRunner } from './xcube/sql-runner';
 import { withAllowedGroups } from './xcube/folders';
 import { publicationStore } from './xcube/publications';
 import { modelSync } from './xcube/snapshot';
@@ -211,6 +212,16 @@ async function main(): Promise<void> {
     dataSources,
     // The SQL runner's switch per data source, and Cube Store's (T531, AC-374).
     sqlRunnerSwitches: sqlRunnerSwitches(db),
+    // Read-only SQL run by xcube, on a data source's connection (T532, AC-373).
+    ...(config.xcube === undefined || service === undefined
+      ? {}
+      : {
+          sqlRunner: xcubeSqlRunner({
+            cubeApiUrl: config.cubeApiUrl,
+            model: config.xcube.model,
+            token: () => service.token(),
+          }),
+        }),
     ...(landing === undefined
       ? {}
       : {

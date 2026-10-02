@@ -48,3 +48,26 @@ export function signsInOtherwise(driver: string, before: Login, after: Login): b
     : ['user', 'username', ...ALSO];
   return keys.some((key) => !isDeepStrictEqual(before.fields?.[key], after.fields?.[key]));
 }
+
+/**
+ * Whether a copy in My workspace signs in otherwise than its original (T532,
+ * AC-383; design 15's Q8): another database or role, another user (a field of
+ * its way of signing in), or another way of signing in. A copy keeps its
+ * original's envelopes, bound only to where it connects (AC-312), so these
+ * are where it could reach what the original never did with the same secret.
+ * A change of where it connects needs its secret entered again, so is none.
+ */
+export function copyRepointed(
+  driver: string,
+  original: Pick<Login, 'authMethod' | 'fields'>,
+  copy: Pick<Login, 'authMethod' | 'fields'>,
+): boolean {
+  if (copy.authMethod !== original.authMethod) return true;
+  const target = isDriver(driver) ? new Set(targetKeysOf(driver)) : new Set<string>();
+  const keys = isDriver(driver)
+    ? [...authFieldsOf(driver, original.authMethod), ...ALSO]
+    : ['user', 'username', ...ALSO];
+  return keys
+    .filter((key) => !target.has(key))
+    .some((key) => !isDeepStrictEqual(original.fields?.[key], copy.fields?.[key]));
+}

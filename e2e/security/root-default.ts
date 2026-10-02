@@ -10,10 +10,13 @@ import { seedDefault } from '../../packages/api/src/seed-default';
  * their names once it is stored (xcube 919cff8c6e; research
  * xcube-919cff8c6e.md, "wechart's case").
  *
- * Each run's data reset removes it from xcube, and until it is stored again
- * the root's cubes are served from Cube's environment under aliases (that
- * research, Gotcha 1). A spec that reads the root's names seeds it first; a
- * second seeding changes nothing.
+ * A run's data reset leaves it in xcube while the root's cubes are published:
+ * xcube refuses to drop it (`409 in_use`). Were it removed, from `465865f3fd`
+ * (pinned with `89628a0e88`) the root would keep its names, since Cube's
+ * environment reaches where it did (xcube-465865f3fd.md, findings 8 and 9;
+ * correcting xcube-919cff8c6e.md, Gotcha 1). A spec that reads the root's
+ * names seeds it first all the same, as wechart's own record of it; a second
+ * seeding changes nothing.
  */
 export const ROOT_DEFAULT_ENV = {
   WECHART_API_URL: `http://localhost:${String(API_PORT)}`,

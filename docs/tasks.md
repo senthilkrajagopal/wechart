@@ -10388,7 +10388,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       4. turning off one already off isn't recorded;
       5. a deleted data source's switch goes with it.
     - **A small decision, overturnable.** A change of database counts as signing in otherwise, so AC-374's wording gains "database".
-- [ ] T532 (AC-373, AC-375, AC-376, AC-377, AC-378, AC-383) Run SQL on a data source through xcube, for those who may
+- [x] T532 (AC-373, AC-375, AC-376, AC-377, AC-378, AC-383) Run SQL on a data source through xcube, for those who may
   - Files: `packages/api/src/routes/sql-runner.ts` (+ test), `packages/api/src/xcube/admin.ts` (the run route), `e2e/security/sql-runner.spec.ts`
   - Failing test: `sql-runner.test.ts` against the stub xcube: Super-Admins and the own folder's read-write members run on a switched-on source, an ancestor's member, a reader, another folder's member, and anyone on a switched-off one are refused; a workspace source's owner runs with no switch, and no one else, unless it is a copy pointed at another database, user or role, which needs the switch (AC-373, AC-383); 10,000 rows, 30 seconds and 10 MB go with each run. `sql-runner.spec.ts` against compose's xcube:
     - an INSERT, `SELECT … INTO`, `EXPLAIN ANALYZE` and two statements are refused, changing nothing (AC-375);
@@ -10396,6 +10396,56 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - 10,001 rows come back as 10,000, said so (AC-377);
     - `pg_sleep(31)` is stopped at 30 seconds and gone from `pg_stat_activity` (AC-378).
   - Depends on: T531, xcube's image
+  - **Done 2026-10-01**, in two commits: the pin first, at the coordinator's request, so feat/xcube's compose matched the running image; then the run.
+    - **The pin.** xcube `89628a0e88` in compose, both Helm values, `docs/deploy.md` and `cube-image.test.ts`. Compose's `wechart-cube` and its worker were recreated on it under the e2e lock. Its migrations 9–12 ran: the pin also brings `465865f3fd`, the build queue and quick calculations, each opt-in. The routes were probed against it, and what differs from xcube's answer is in `xcube-sql-runner.md`, "Checked against compose's running image".
+    - **The client.** `xcube/sql-runner.ts`, not `xcube/admin.ts`, which doesn't exist: xcube's three routes, each answer read as `ran`, `refused`, `stopped`, `failed`, `busy` or `missing`.
+    - **The route.** `POST /api/data-sources/:id/sql` `{ sql }` (`routes/sql-runner.ts`, registered with the data sources' routes):
+      - **Who:** one rule, `mayRunSql`, for the run and the tab (T535):
+        - a shared folder's data source: write access to its folder (a Super-Admin, or its own folder's read-write members; one who sees it from a folder below has none), and its switch on;
+        - one in My workspace: its owner, the only one who sees it, with no switch, unless it is a copy pointed elsewhere (below).
+      - **Refusals:** `403` with why: the runner is off, or not theirs; `404` for one they can't see. Each is decided before anything reaches xcube.
+      - **The run:** a fresh run id, the SQL (1–100,000 characters) and R50's caps (10,000 rows, 30,000 ms, 10 MB).
+        - A shared one runs on its connection, `<xcube folder id>__<name>`.
+        - A workspace's runs on its workspace's overlay (`?overlay=`), made sure of first (T347), under its original's folder or its target's.
+      - **Answers:** `{ outcome: 'finished', columns, rows, rowCount, truncated, durationMs, statement }`, or, with its status:
+        - `refused` (400): "Only SELECT and EXPLAIN run here, one statement at a time.", with xcube's reason and the kind found;
+        - `timeout` or `cancelled` (422);
+        - `failed`: the database's message (422), or "Couldn't connect…" (502);
+        - `busy` (503, `Retry-After: 5`);
+        - `unavailable` (409, or 503 with xcube away).
+        - xcube's `redactedSql` isn't sent to the browser; T534 keeps it.
+    - **A repointed copy** (AC-383, Q8): `copyRepointed` counts another database, role, user (a field of its way of signing in) or way of signing in; not a change of where it connects, which needs its secret entered again (AC-312).
+      - Such a copy needs the switch, and `PUT …/sql-runner` now takes one for it.
+      - **In effect it can't run until landed:** no Super-Admin sees another user's workspace, so only a Super-Admin's own copy can be switched on. The refusal says so: "…No Super-Admin can see your workspace, so propose it: once it's approved and landed, a Super-Admin can turn it on there."
+    - **Small decisions, overturnable:**
+      - a copy whose original is gone needs the switch, since it can't be compared;
+      - with sign-in off, a workspace's data source has no preview (no overlays), so a run on it says so (`409`);
+      - a change of the way of signing in counts as repointed.
+    - **Tests:**
+      - `xcube/sql-runner.test.ts` (the client) and `routes/sql-runner.test.ts` (14, against the stub xcube, whose SQL routes are added to `xcube/fake.ts`);
+      - the route matrix's case: nobody while off; once on, writers of the place alone;
+      - `e2e/security/sql-runner.spec.ts` (6, Chrome, against compose's xcube):
+        - the read-write member runs and the reader is refused (AC-373);
+        - every write, lock, `EXPLAIN ANALYZE` and two statements in AC-375's list is refused, and nothing changes (AC-375);
+        - `nextval()` leaves the sequence as it was (AC-376);
+        - 10,001 rows come as 10,000, `truncated: 'rows'` (AC-377);
+        - `pg_sleep(31)` is stopped at 30 s and gone from `pg_stat_activity` (AC-378);
+        - with the original's runner off, the owner of a workspace copy runs on it through their overlay; a Super-Admin can't; pointed at another database, it is refused for want of the switch (AC-383).
+    - **Review fixes:**
+      1. Only xcube's SQL refusals (`not_read_only`, `several_statements`) are said as "Only SELECT and EXPLAIN run here"; any other 400 is thrown, a `502`.
+      2. The e2e's workspace case turns the original's runner off first.
+      3. The workspace route tests each have an original of their own, and a copy whose original is gone is tested, with a refusal of its own.
+      4. AC-375's e2e covers its whole list.
+      5. The pin brought `465865f3fd`, so the comments and `docs/deploy.md` line it corrected are corrected: a reset leaves the root `default` in xcube, and the root keeps its names without it (`root-default.ts`, `isolation.spec.ts`).
+    - **Noted from the review, unchanged:**
+      - Oracle's service name is part of where it connects (AC-312), so an Oracle copy pointed at another service name isn't counted as repointed: its secret must be entered again.
+      - The run is decided on wechart's stored copy, while xcube runs the overlay version it holds. A push xcube refused leaves its last version, as T347 does for previews. No path to a stale, repointed connection was found.
+      - The client's `cancel` and Cube Store target, and the stub's held runs, are built ahead for T533 and T536.
+    - **For the user** (the review's first finding): an unchanged copy runs on its original's login with no switch and no read-only confirmation, as R50-6 and Q8 decided. So a read-write member can copy a data source whose runner is off and run SQL on it. On Snowflake, SQL Server and Dremio, a SELECT calling a writing function then passes xcube's check, where only the attestation stood. Reported to the coordinator.
+    - **ACs:**
+      - AC-375 and AC-376 are ticked.
+      - AC-373, AC-377 and AC-383 wait for T535's tab, which shows them. AC-383's one made new in the workspace is so far shown only against the stub.
+      - **AC-378's rows wait on xcube:** a stopped or cancelled run gives no rows (`xcube-sql-runner.md`). Asked of xcube in `to-xcube/2026-10-01-2308-sql-runner-partial-rows.md`. Until then, a stop says "Nothing came back", design 15's drawn default.
 - [ ] T533 (AC-379) One run at a time per user, and Cancel
   - Files: `packages/api/src/routes/sql-runner.ts` (+ test), `e2e/security/sql-runner.spec.ts`
   - Failing test: a second run while one is going answers `409`; Cancel stops the first, and its statement is gone from `pg_stat_activity` (AC-379).
@@ -10404,7 +10454,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
   - Files: `packages/api/src/routes/sql-runner.ts`, a migration for the runs, `packages/api/src/audit/*`, tests
   - Failing test: a run is listed to its user alone, with its SQL, source, time, outcome and rows; the audit event has who, the source and its folder, when, the outcome, the rows, the duration, and `redactedSql` with no literal from the SQL (AC-381, AC-382).
   - Depends on: T532
-- [ ] T535 (AC-373, AC-377, AC-378, AC-379, AC-380, AC-381, AC-385, AC-387) The SQL tab on a data source's page, as design 15 draws it
+- [ ] T535 (AC-373, AC-377, AC-378, AC-379, AC-380, AC-381, AC-383, AC-385, AC-387) The SQL tab on a data source's page, as design 15 draws it
   - Files: `packages/web/src/workspaces/data-sources/SqlRunner.tsx` (+ test, the app's CodeMirror in SQL mode, P2), `SourceSettings.tsx`, `e2e/security/sql-runner.spec.ts`
   - Failing test:
     - the warning sits above the editor and can't be hidden (AC-385);
@@ -10488,7 +10538,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-373 | T531, T532, T535 | AC-374 | T531, T536 | AC-375 | T532 |
 | AC-376 | T532 | AC-377 | T532, T535 | AC-378 | T532 |
 | AC-379 | T533, T535 | AC-380 | T535 | AC-381 | T534 |
-| AC-382 | T534 | AC-383 | T532 | AC-384 | T536 |
+| AC-382 | T534 | AC-383 | T532, T535 | AC-384 | T536 |
 | AC-385 | T535 | AC-386 | T539 | AC-387 | T535 |
 | AC-388 | T541 | AC-389 | T540 | AC-390 | T544 |
 | AC-281 (again, rebinding) | T542 | AC-283 (again, use-only copies) | T543 | | |

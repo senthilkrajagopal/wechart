@@ -182,10 +182,10 @@ test.describe('two folders’ same-named cubes, kept apart (T341, AC-274, AC-328
     page,
   }) => {
     const request = page.request;
-    // The root's `default` stored first, as an install's Job stores it: each
-    // run's reset removes it, and until it is back the root's cubes are
-    // served from Cube's environment under aliases (xcube-919cff8c6e.md,
-    // Gotcha 2).
+    // The root's `default` stored first, as an install's Job stores it. A
+    // reset leaves it in xcube while the root's cubes are published, and from
+    // `465865f3fd` the root keeps its names without it; seeded all the same,
+    // a second seeding changing nothing (xcube-465865f3fd.md, findings 8, 9).
     const seeded = await seedRootDefault();
     expect(seeded.code, seeded.said.join('\n')).toBe(0);
     ids.a = await folder(request, `Isolation A ${RUN}`, 'root');

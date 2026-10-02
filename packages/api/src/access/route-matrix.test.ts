@@ -22,12 +22,14 @@ import { imageStore } from '../repos/images';
 import { modelFileStore } from '../repos/model-files';
 import { proposalStore } from '../repos/proposals';
 import { queryLog } from '../repos/query-log';
+import { sqlRunnerSwitches } from '../repos/sql-runner-switches';
 import { versionStore } from '../repos/versions';
 import { buildServer } from '../server';
 import { xcubeAdmin } from '../xcube/client';
 import { connectionNameOf } from '../xcube/connections';
 import { fakeXcube, FAKE_ADMIN_TOKEN } from '../xcube/fake';
 import { itemsOf } from '../xcube/items';
+import { xcubeSqlRunner } from '../xcube/sql-runner';
 
 /**
  * T408 (AC-268, AC-255, AC-261): every route the server registers, asked as
@@ -597,6 +599,14 @@ beforeAll(async () => {
     folders: () => folderXcubeIds(getDb()).published(),
     xcube: admin,
     dataSources: sources(),
+    // The SQL runner, its switch and xcube's runs (T531, T532).
+    sqlRunnerSwitches: sqlRunnerSwitches(getDb()),
+    sqlRunner: xcubeSqlRunner({
+      cubeApiUrl: secured.cubeApiUrl,
+      model: 'dev',
+      token: FAKE_ADMIN_TOKEN,
+      fetch: stub.fetch,
+    }),
     connectionTests: connectionTestStore(getDb()),
     connectionTest: async () =>
       ({ ok: true, checks: [{ id: 'connect', status: 'passed', durationMs: 1 }] }) as never,
@@ -1639,6 +1649,23 @@ const CASES: Record<string, Case> = {
           }),
           `${who} switching ${place}'s SQL runner`,
         );
+  },
+  // SQL run on a data source (T532, AC-373): nobody while its runner is off;
+  // once on, Super-Admins and its own folder's read-write members alone.
+  'POST /api/data-sources/:id/sql': async () => {
+    const switches = sqlRunnerSwitches(getDb());
+    const asked = { method: 'POST' as const, payload: { sql: 'SELECT 1' } };
+    for (const place of PLACES) {
+      const url = `/api/data-sources/${at[place].source}/sql`;
+      for (const who of WHO)
+        refused(await ask(who, { ...asked, url }), `${who} running SQL on ${place}'s, off`);
+      await switches.on(at[place].source, { key: 'super', name: 'Super' });
+      try {
+        await openedOnlyBy(url, (who) => writes(who, place), undefined, asked);
+      } finally {
+        await switches.off(at[place].source);
+      }
+    }
   },
   'DELETE /api/data-sources/:id': async () => {
     for (const place of PLACES)

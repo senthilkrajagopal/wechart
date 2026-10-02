@@ -46,7 +46,9 @@ Cube runs v1.7.45, unmodified, with the user's fork's package xcube. xcube adds 
 - Don't change a data source's target while the release is rolling: until every Cube instance runs the new image, an older one would serve or build under the other names.
 - A data source's first target is the one it has when this image first serves it, so on an upgrade with the root `default` already stored, the root keeps its names. Where Cube served the root from its own settings before `default` was stored (a fresh install, or after `default` is removed), the root keeps its names only if `default` reaches the host, port, database and user Cube reads from `CUBEJS_DB_*`, for PostgreSQL, Redshift or MySQL. The chart seeds `default` from `cube.dataSource`, which Cube also reads, so they match: don't set those four again in `cube.dataSource.env` or `seedFields`. For another warehouse, the seeding then renames the root's cubes and rebuilds their rollups once.
 - After that, changing a data source's host, port, database, user or key holder aliases its cubes and rebuilds their rollups once; moving it back restores the names, and rebuilds the rollups if Cube dropped the old tables meanwhile, as it does by default. A new password changes nothing. A BigQuery key or Snowflake or Dremio token entered again, even the same one, counts as a change (a question for the user: `docs/phase-2/backlog.md` §6).
-- If the root's `default` is removed from xcube, as a data reset does, the root's cubes are aliased until it is stored again.
+- ~~If the root's `default` is removed from xcube, as a data reset does, the root's cubes are aliased until it is stored again.~~ Corrected with `465865f3fd`, in this release since `89628a0e88` (`xcube-465865f3fd.md`, findings 8 and 9):
+  - a data reset doesn't remove it while the root's cubes are published, since xcube refuses (`409 in_use`);
+  - if it is removed, the root keeps its names where `CUBEJS_DB_*` reaches the host, port, database and user it did (PostgreSQL, Redshift, MySQL).
 
 xcube is the package that was `cube-introspection/`, renamed at the fork's commit `a13b9cff43` with its HTTP API unchanged.
 

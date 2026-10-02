@@ -7,6 +7,7 @@ import { actorOf, dataSourceChange, recordIn } from '../audit/record';
 import { ADMIN, INSTALL, USER } from '../auth/guard';
 import type { AuditStore } from '../repos/audit';
 import type { SqlRunnerSwitchStore } from '../repos/sql-runner-switches';
+import { needsSwitch, registerSqlRunner, type SqlRunnerOptions } from './sql-runner';
 import { signsInOtherwise } from './sql-runner-switch';
 import { MY_WORKSPACE_ID, ROOT_FOLDER_ID } from '../repos/catalog';
 import {
@@ -197,11 +198,14 @@ export function registerDataSources(
     submitted,
     projects,
     switches,
+    sqlRunner,
   }: {
     /** Where each change is recorded (T368, AC-294): a secret only said replaced. */
     readonly audit?: Pick<AuditStore, 'record'>;
     /** The SQL runner's switch on each (T531, AC-374): unset, none is offered. */
     readonly switches?: SqlRunnerSwitchStore;
+    /** xcube's SQL runner (T532, AC-373): unset without xcube, where a run says so. */
+    readonly sqlRunner?: SqlRunnerOptions;
     /**
      * For the Data sources page (T364, AC-157): which folders the request's
      * user sees every item of, and each folder's path from the root. Always
@@ -348,6 +352,9 @@ export function registerDataSources(
     return source;
   };
 
+  // SQL run on one, by those who may (T532, AC-373, AC-383).
+  registerSqlRunner(app, { runner: sqlRunner, store, switches, access, reached, workspaceOf });
+
   /**
    * Every data source the user may see, in every folder (T364, AC-157): each
    * with its folder's path, its driver, and its health from the last test of
@@ -434,7 +441,8 @@ export function registerDataSources(
    * Super-Admin's alone, on a shared folder's data source, and on only with
    * its login confirmed read-only, kept with who and when. Either way an
    * audit event (design 15's P4). A workspace's needs none: its owner runs
-   * SQL on it (AC-383).
+   * SQL on it (AC-383); but a copy pointed elsewhere than its original does
+   * (T532, Q8), which only a Super-Admin who owns it can see to give.
    */
   app.put('/api/data-sources/:id/sql-runner', ADMIN, async (request, reply) => {
     if (switches === undefined)
@@ -444,7 +452,7 @@ export function registerDataSources(
       return reply.status(400).send({ error: 'Say whether to turn it on: { on: true | false }.' });
     const source = await reached(request, reply, 'read');
     if (source === undefined) return reply;
-    if (await inAWorkspace(source))
+    if ((await inAWorkspace(source)) && !(await needsSwitch(source, store)))
       return reply.status(400).send({
         error: 'A data source in My workspace needs no switch: its owner runs SQL on it.',
       });

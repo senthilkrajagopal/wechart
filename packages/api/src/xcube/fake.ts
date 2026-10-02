@@ -28,6 +28,11 @@ import { contentHashOf } from './snapshot';
  *   `409 mode` once the model holds items.
  * - `PUT …/snapshot?dryRun=true` with `files`: the check (T445), with no
  *   mode check, as xcube's.
+ * - `POST …/connections/:name/sql`, `POST …/cubestore/sql` and `POST
+ *   …/sql/cancel` (T532; research `xcube-sql-runner.md`): one row by default,
+ *   or as the test answers it; with `?overlay=`, `404 unknown_overlay` or
+ *   `unknown_connection` unless the overlay holds the connection; held until
+ *   cancelled when told to hold.
  * - `401 unauthorized` without `Bearer <admin token>`.
  */
 export const FAKE_ADMIN_TOKEN = 'fake-xcube-admin-token-0123456789abcdef';
@@ -80,6 +85,25 @@ export interface FakeCall {
   answered: number;
 }
 
+/**
+ * A SQL run as the stub was asked it (T532; research `xcube-sql-runner.md`):
+ * on a stored connection, an overlay's own, or Cube Store.
+ */
+export interface FakeSqlAsk {
+  readonly model: string;
+  readonly target:
+    { readonly connection: string; readonly overlay: string | null } | { readonly cubeStore: true };
+  readonly sql: string;
+  readonly runId: string;
+  readonly maxRows?: number;
+  readonly timeoutMs?: number;
+  readonly maxBytes?: number;
+}
+
+/** Every literal as `?`, as xcube's `redactedSql` has it: strings and numbers. */
+const redactedOf = (sql: string) =>
+  sql.replace(/'(?:[^']|'')*'/g, '?').replace(/\b\d+(?:\.\d+)?\b/g, '?');
+
 export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly string[] } = {}) {
   let generation = randomUUID();
   let models = new Map<string, Model>();
@@ -118,6 +142,14 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
   let overlayVersions = 0;
   /** Overlay pushes to refuse as told, in order: `422 invalid_secret`, say. */
   const overlayRefusals: { status: number; body: Record<string, unknown>; id?: string }[] = [];
+  /** Each SQL run asked (T532), and how the test answers one: `undefined` is one row. */
+  const sqlAsked: FakeSqlAsk[] = [];
+  let sqlAnswer:
+    | ((ask: FakeSqlAsk) => { status: number; body: Record<string, unknown> } | undefined)
+    | undefined;
+  /** Runs held until cancelled, or until their caller gives up (T533). */
+  let holdingSql = false;
+  const sqlGoing = new Map<string, () => void>();
 
   const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), {
@@ -316,6 +348,78 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
           })),
         });
       }
+    }
+
+    /** The SQL runner's routes (T532; research `xcube-sql-runner.md`). */
+    const sqlRoute =
+      /\/v1\/semantic\/models\/([^/]+)\/(?:connections\/([^/]+)\/sql|(cubestore)\/sql|sql\/(cancel))$/.exec(
+        url.pathname,
+      );
+    if (sqlRoute !== null && method === 'POST') {
+      const model = decodeURIComponent(sqlRoute[1]!);
+      const asked = body as Omit<FakeSqlAsk, 'model' | 'target'>;
+      if (sqlRoute[4] === 'cancel') {
+        const going = sqlGoing.get(asked.runId);
+        going?.();
+        return answer(200, { model, runId: asked.runId, found: going !== undefined });
+      }
+      const overlay = url.searchParams.get('overlay');
+      const connection = sqlRoute[2] === undefined ? undefined : decodeURIComponent(sqlRoute[2]);
+      if (connection !== undefined && overlay !== null) {
+        const held = overlays.get(`${model}/${overlay}`);
+        if (held === undefined)
+          return answer(404, {
+            error: `No overlay "${overlay}": it expired, was dropped, or never was`,
+            code: 'unknown_overlay',
+            statement: null,
+            redactedSql: null,
+          });
+        if (!held.connections.some((each) => fullNameOf(each) === connection))
+          return answer(404, {
+            error: `No connection "${connection}"`,
+            code: 'unknown_connection',
+            statement: null,
+            redactedSql: null,
+          });
+      }
+      const ask: FakeSqlAsk = {
+        ...asked,
+        model,
+        target: connection === undefined ? { cubeStore: true } : { connection, overlay },
+      };
+      sqlAsked.push(ask);
+      const redactedSql = redactedOf(ask.sql);
+      const statement = /^\s*explain\b/i.test(ask.sql) ? 'explain' : 'select';
+      if (holdingSql)
+        return new Promise<Response>((resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            sqlGoing.delete(ask.runId);
+            reject(init.signal?.reason);
+          });
+          sqlGoing.set(ask.runId, () => {
+            sqlGoing.delete(ask.runId);
+            resolve(
+              answer(422, {
+                error: 'The run was cancelled',
+                code: 'cancelled',
+                statement,
+                redactedSql,
+                durationMs: 5,
+              }),
+            );
+          });
+        });
+      const given = sqlAnswer?.(ask);
+      if (given !== undefined) return answer(given.status, given.body);
+      return answer(200, {
+        columns: [{ name: 'one', type: 'int4' }],
+        rows: [[1]],
+        rowCount: 1,
+        truncated: null,
+        durationMs: 1,
+        statement,
+        redactedSql,
+      });
     }
 
     const route =
@@ -867,6 +971,18 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
     refuseOverlayNext: (status: number, body: Record<string, unknown>, id?: string) => {
       overlayRefusals.push({ status, body, ...(id === undefined ? {} : { id }) });
     },
+    /** Each SQL run asked, in order (T532). */
+    sqlAsked: () => [...sqlAsked],
+    /** How SQL runs are answered from now on: `undefined` from it, or none given, is one row. */
+    answerSql: (answer: typeof sqlAnswer) => {
+      sqlAnswer = answer;
+    },
+    /** SQL runs held until cancelled, or until their caller gives up (T533). */
+    holdSql: (on: boolean) => {
+      holdingSql = on;
+    },
+    /** The run ids held now. */
+    sqlGoing: () => [...sqlGoing.keys()],
     /** xcube's schema emptied and made again: a new generation, and no models. */
     recreate: () => {
       generation = randomUUID();

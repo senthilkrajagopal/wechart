@@ -82,6 +82,7 @@ const OWN_WORKSPACE: FolderRight = Object.freeze({ see: true, write: true, kinds
 import type { ConnectionTestStore } from './repos/connection-tests';
 import { DataSourceRefused, type DataSource, type DataSourceStore } from './repos/data-sources';
 import type { SqlRunnerSwitchStore } from './repos/sql-runner-switches';
+import type { XcubeSqlRunner } from './xcube/sql-runner';
 import { signsInOtherwise } from './routes/sql-runner-switch';
 import type { DataSourceLanding } from './routes/data-sources';
 import {
@@ -210,6 +211,8 @@ export interface BuildOptions {
   readonly dataSources?: DataSourceStore;
   /** The SQL runner's switch per data source, and Cube Store's (T531, AC-374). */
   readonly sqlRunnerSwitches?: SqlRunnerSwitchStore;
+  /** xcube's SQL runner (T532, AC-373). Unset without xcube: a run says it needs it. */
+  readonly sqlRunner?: XcubeSqlRunner;
   /**
    * Where a data source lands before it is stored, and leaves before it is
    * removed (T442): xcube's connections. Unset without xcube.
@@ -421,6 +424,7 @@ export function buildServer({
   deletedFolders,
   dataSources,
   sqlRunnerSwitches,
+  sqlRunner,
   dataSourceLanding,
   connectionTest,
   connectionTests,
@@ -1174,6 +1178,26 @@ export function buildServer({
       // Each change recorded (T368, AC-294).
       ...(audit === undefined ? {} : { audit }),
       ...(sqlRunnerSwitches === undefined ? {} : { switches: sqlRunnerSwitches }),
+      // SQL run through xcube (T532): a workspace's data source in its overlay (T347).
+      ...(sqlRunner === undefined
+        ? {}
+        : {
+            sqlRunner: {
+              xcube: sqlRunner,
+              folders: async () => (folders === undefined ? ROOT_ONLY : await folders()).ids,
+              ...(overlays === undefined
+                ? {}
+                : {
+                    overlayOf: async (workspace: string) => {
+                      const ensured = await overlays.ensure(workspace);
+                      if (ensured === undefined) return undefined;
+                      return ensured.problem === undefined
+                        ? { id: ensured.id }
+                        : { problem: ensured.problem };
+                    },
+                  }),
+            },
+          }),
       ...(config.seedToken === undefined ? {} : { seedToken: config.seedToken }),
       // Workspaces: signed-in users' (T343), and with sign-in off the single
       // user's, `mine` (T359, AC-254), as the documents' routes have them:
