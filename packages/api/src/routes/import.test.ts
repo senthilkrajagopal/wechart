@@ -289,8 +289,7 @@ afterAll(async () => {
           .select(['kind', 'id'])
           .where('local_to_dashboard_id', 'in', boards)
           .execute();
-  for (const { kind, id } of [...local, ...imported])
-    await docs().remove(kind as DocumentKind, id);
+  for (const { kind, id } of [...local, ...imported]) await docs().remove(kind as DocumentKind, id);
   for (const id of held) await sources().remove(id);
   await files().remove(ids.sales, `${MARK}/customers.yml`);
   for (const { kind, id } of made.reverse()) await docs().remove(kind, id);
@@ -318,14 +317,20 @@ const importing = (
   file: unknown,
   targetFolderId: unknown = ids.sales,
   dataSources: unknown = [{ name: SOURCE, to: ids.source }],
-) =>
-  as(who, { method: 'POST', url: IMPORTS, payload: { file, targetFolderId, dataSources } });
+) => as(who, { method: 'POST', url: IMPORTS, payload: { file, targetFolderId, dataSources } });
 
 /** Every document's kind, id and version, to show nothing saved changed. */
+// By id and then kind: a chart and a dashboard may share an id, and with no
+// tie-break Postgres may give them in either order (seen in full runs).
 const everything = async () =>
-  (await getDb().selectFrom('documents').select(['kind', 'id', 'version']).orderBy('id').execute()).map(
-    (row) => `${row.kind}:${row.id}:${String(row.version)}`,
-  );
+  (
+    await getDb()
+      .selectFrom('documents')
+      .select(['kind', 'id', 'version'])
+      .orderBy('id')
+      .orderBy('kind')
+      .execute()
+  ).map((row) => `${row.kind}:${row.id}:${String(row.version)}`);
 
 interface Reviewed {
   target: { id: string; path: string[] };
@@ -393,7 +398,9 @@ describe('Review: what an import would land, and what it may affect (T513, AC-35
         },
         workspace: [],
       }),
-    ).toEqual([{ kind: 'cube-in-target', cube: `${MARK}_customers`, file: `${MARK}/customers.yml` }]);
+    ).toEqual([
+      { kind: 'cube-in-target', cube: `${MARK}_customers`, file: `${MARK}/customers.yml` },
+    ]);
     // And a model of its path, as a same-named item.
     expect(
       warningsOf({
@@ -652,7 +659,9 @@ describe('an import’s data sources (T514, AC-358)', () => {
     }
     expect(await everything()).toEqual(before);
     // Sales's own binds a model in EMEA, below it.
-    const reviewed = await review('writer', exportFile(), emea, [{ name: SOURCE, map: ids.source }]);
+    const reviewed = await review('writer', exportFile(), emea, [
+      { name: SOURCE, map: ids.source },
+    ]);
     expect(reviewed.statusCode, reviewed.body).toBe(200);
     expect(reviewed.json<Reviewed>().items.find((item) => item.kind === 'data-source')).toEqual({
       kind: 'data-source',
@@ -663,7 +672,9 @@ describe('an import’s data sources (T514, AC-358)', () => {
       mappedTo: { name: SOURCE, path: [`Sales ${MARK}`] },
       warnings: [],
     });
-    const answer = await importing('writer', exportFile(), emea, [{ name: SOURCE, to: ids.source }]);
+    const answer = await importing('writer', exportFile(), emea, [
+      { name: SOURCE, to: ids.source },
+    ]);
     expect(answer.statusCode, answer.body).toBe(201);
   });
 
