@@ -7,6 +7,7 @@ import { actorOf, dataSourceChange, recordIn } from '../audit/record';
 import { ADMIN, INSTALL, USER } from '../auth/guard';
 import type { AuditStore } from '../repos/audit';
 import type { SqlRunnerSwitchStore } from '../repos/sql-runner-switches';
+import type { SqlRunStore } from '../repos/sql-runs';
 import { needsSwitch, registerSqlRunner, type SqlRunnerOptions } from './sql-runner';
 import { signsInOtherwise } from './sql-runner-switch';
 import { MY_WORKSPACE_ID, ROOT_FOLDER_ID } from '../repos/catalog';
@@ -199,7 +200,10 @@ export function registerDataSources(
     projects,
     switches,
     sqlRunner,
+    sqlRuns,
   }: {
+    /** Each user's SQL runs, one going at a time (T533, AC-379). */
+    readonly sqlRuns?: SqlRunStore;
     /** Where each change is recorded (T368, AC-294): a secret only said replaced. */
     readonly audit?: Pick<AuditStore, 'record'>;
     /** The SQL runner's switch on each (T531, AC-374): unset, none is offered. */
@@ -353,7 +357,15 @@ export function registerDataSources(
   };
 
   // SQL run on one, by those who may (T532, AC-373, AC-383).
-  registerSqlRunner(app, { runner: sqlRunner, store, switches, access, reached, workspaceOf });
+  registerSqlRunner(app, {
+    runner: sqlRunner,
+    runs: sqlRuns,
+    store,
+    switches,
+    access,
+    reached,
+    workspaceOf,
+  });
 
   /**
    * Every data source the user may see, in every folder (T364, AC-157): each

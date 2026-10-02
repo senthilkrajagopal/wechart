@@ -231,6 +231,42 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
     ).toBe('0');
   });
 
+  test('holds a second run back while one goes, and Cancel stops the first on the database (T533, AC-379)', async ({
+    page,
+  }) => {
+    const marker = `cancel_${RUN}`;
+    const active = () =>
+      sample(
+        `SELECT count(*) FROM pg_stat_activity WHERE state = 'active' AND query LIKE '%AS ${marker}%' AND pid <> pg_backend_pid()`,
+      );
+    const first = runOn(page.request, world.sourceId, `SELECT pg_sleep(25) AS ${marker}`);
+    await expect.poll(active, { timeout: 15_000 }).toBe('1');
+
+    const second = await runOn(page.request, world.sourceId, 'SELECT 1');
+    expect(second.status(), await second.text()).toBe(409);
+    expect(await second.json()).toMatchObject({
+      outcome: 'going',
+      going: { dataSource: { id: world.sourceId, name: 'warehouse' } },
+    });
+    expect(await (await page.request.get('/api/sql-runs/going')).json()).toMatchObject({
+      going: { dataSource: { id: world.sourceId } },
+    });
+
+    const started = Date.now();
+    const cancelled = await page.request.post('/api/sql-runs/cancel');
+    expect(cancelled.status(), await cancelled.text()).toBe(200);
+    expect(await cancelled.json()).toEqual({ cancelled: true });
+    const answer = await first;
+    expect(answer.status(), await answer.text()).toBe(422);
+    expect(await answer.json()).toMatchObject({
+      outcome: 'cancelled',
+      error: 'Cancelled: the run was stopped on the database.',
+    });
+    expect(Date.now() - started).toBeLessThan(10_000);
+    expect(active()).toBe('0');
+    expect(await (await page.request.get('/api/sql-runs/going')).json()).toEqual({ going: null });
+  });
+
   test('runs for its owner on a copy in My workspace, with no switch, in their workspace’s preview (AC-383)', async ({
     page,
     browser,

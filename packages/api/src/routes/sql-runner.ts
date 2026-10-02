@@ -5,6 +5,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { USER } from '../auth/guard';
 import type { DataSource, DataSourceStore } from '../repos/data-sources';
 import type { SqlRunnerSwitchStore } from '../repos/sql-runner-switches';
+import type { GoingRun, SqlRunStore } from '../repos/sql-runs';
 import { XcubeError } from '../xcube/client';
 import { connectionNameOf } from '../xcube/connections';
 import type { SqlAnswer, SqlTarget, XcubeSqlRunner } from '../xcube/sql-runner';
@@ -118,51 +119,73 @@ export const needsSwitch = async (
   store: Pick<DataSourceStore, 'get'>,
 ): Promise<boolean> => (await whyNeedsSwitch(source, store)) !== undefined;
 
+/** A run's answer, its status and body: built first, sent once its row is done (T533's review). */
+interface RunReply {
+  readonly status: number;
+  readonly body: { readonly outcome: string } & Record<string, unknown>;
+  readonly retryAfter?: string;
+}
+
 /** A run's answer, as the browser is given it: never its redacted SQL, which history keeps (T534). */
-function answered(reply: FastifyReply, answer: SqlAnswer) {
+function replyOf(answer: SqlAnswer): RunReply {
   switch (answer.kind) {
     case 'ran':
       return {
-        outcome: 'finished',
-        columns: answer.columns,
-        rows: answer.rows,
-        rowCount: answer.rowCount,
-        truncated: answer.truncated,
-        durationMs: answer.durationMs,
-        statement: answer.statement,
+        status: 200,
+        body: {
+          outcome: 'finished',
+          columns: answer.columns,
+          rows: answer.rows,
+          rowCount: answer.rowCount,
+          truncated: answer.truncated,
+          durationMs: answer.durationMs,
+          statement: answer.statement,
+        },
       };
     case 'refused':
-      return reply.status(400).send({
-        outcome: 'refused',
-        error: ONLY_READS,
-        reason: answer.reason,
-        statement: answer.statement,
-      });
+      return {
+        status: 400,
+        body: {
+          outcome: 'refused',
+          error: ONLY_READS,
+          reason: answer.reason,
+          statement: answer.statement,
+        },
+      };
     case 'stopped':
-      return reply.status(422).send({
-        outcome: answer.how,
-        error: answer.how === 'timeout' ? STOPPED : CANCELLED,
-        durationMs: answer.durationMs,
-      });
+      return {
+        status: 422,
+        body: {
+          outcome: answer.how,
+          error: answer.how === 'timeout' ? STOPPED : CANCELLED,
+          durationMs: answer.durationMs,
+        },
+      };
     case 'failed':
-      return reply.status(answer.code === 'connect_failed' ? 502 : 422).send({
-        outcome: 'failed',
-        error:
-          answer.code === 'connect_failed'
-            ? `Couldn’t connect to the database: ${answer.error}`
-            : answer.error,
-        durationMs: answer.durationMs,
-      });
+      return {
+        status: answer.code === 'connect_failed' ? 502 : 422,
+        body: {
+          outcome: 'failed',
+          error:
+            answer.code === 'connect_failed'
+              ? `Couldn’t connect to the database: ${answer.error}`
+              : answer.error,
+          durationMs: answer.durationMs,
+        },
+      };
     case 'busy':
-      return reply.status(503).header('retry-after', '5').send({ outcome: 'busy', error: BUSY });
+      return { status: 503, body: { outcome: 'busy', error: BUSY }, retryAfter: '5' };
     case 'missing':
-      return reply.status(409).send({
-        outcome: 'unavailable',
-        error:
-          answer.code === 'unknown_overlay'
-            ? 'xcube no longer holds your workspace’s preview. Run it again.'
-            : 'xcube doesn’t hold this data source’s connection yet. Try again in a moment.',
-      });
+      return {
+        status: 409,
+        body: {
+          outcome: 'unavailable',
+          error:
+            answer.code === 'unknown_overlay'
+              ? 'xcube no longer holds your workspace’s preview. Run it again.'
+              : 'xcube doesn’t hold this data source’s connection yet. Try again in a moment.',
+        },
+      };
   }
 }
 
@@ -175,9 +198,12 @@ export function registerSqlRunner(
     access,
     reached,
     workspaceOf,
+    runs,
   }: {
     /** Unset where xcube isn't run: a run then says so. */
     readonly runner: SqlRunnerOptions | undefined;
+    /** Each user's runs, one going at a time (T533); unset, none is held back. */
+    readonly runs: SqlRunStore | undefined;
     readonly store: Pick<DataSourceStore, 'get'>;
     readonly switches: SqlRunnerSwitchStore | undefined;
     readonly access: DataSourceAccess;
@@ -203,6 +229,7 @@ export function registerSqlRunner(
       const xcubeId = ids.get(source.folderId);
       if (xcubeId !== undefined) return { connection: connectionNameOf(xcubeId, source.name) };
       await reply.status(409).send({
+        outcome: 'unavailable',
         error: 'This data source’s folder isn’t in xcube yet, so SQL can’t run on it.',
       });
       return undefined;
@@ -212,6 +239,7 @@ export function registerSqlRunner(
     const placed = ids.get(source.origin?.folderId ?? source.targetFolderId ?? '');
     if (options.overlayOf === undefined || placed === undefined) {
       await reply.status(409).send({
+        outcome: 'unavailable',
         error:
           options.overlayOf === undefined
             ? 'SQL on a workspace’s data source runs in its workspace’s preview, which this deployment doesn’t have.'
@@ -222,6 +250,7 @@ export function registerSqlRunner(
     const overlay = await options.overlayOf(workspace);
     if (overlay === undefined || 'problem' in overlay) {
       await reply.status(409).send({
+        outcome: 'unavailable',
         error: `Your workspace can’t be previewed as it is, so SQL can’t run on it: ${
           overlay === undefined ? 'it holds nothing to preview' : overlay.problem
         }`,
@@ -252,21 +281,101 @@ export function registerSqlRunner(
 
     const target = await targetOf(reply, source, workspace, runner);
     if (target === undefined) return reply;
+
+    // One run going at a time for its user, across every API instance (T533, AC-379).
+    const runId = randomUUID();
+    if (runs !== undefined) {
+      const started = await runs.start({
+        runId,
+        userKey: userKeyOf(request),
+        dataSourceId: source.id,
+      });
+      if (!started.started) {
+        const going = await goingView(started.going);
+        return reply.status(409).send({
+          outcome: 'going',
+          error: `You have a run going on ${going.dataSource?.name ?? 'a data source'}. One run at a time: cancel it, or wait for it to finish.`,
+          going,
+        });
+      }
+    }
+    let said: RunReply;
     try {
-      return answered(
-        reply,
-        await runner.xcube.run(target, { sql, runId: randomUUID(), ...SQL_CAPS }),
-      );
+      said = replyOf(await runner.xcube.run(target, { sql, runId, ...SQL_CAPS }));
     } catch (error) {
-      if (error instanceof XcubeError)
-        return reply
-          .status(502)
-          .send({ outcome: 'failed', error: `xcube refused the run: ${error.message}` });
-      request.log.warn({ err: error }, 'could not ask xcube to run SQL');
+      if (!(error instanceof XcubeError))
+        request.log.warn({ err: error }, 'could not ask xcube to run SQL');
+      said =
+        error instanceof XcubeError
+          ? {
+              status: 502,
+              body: { outcome: 'failed', error: `xcube refused the run: ${error.message}` },
+            }
+          : {
+              status: 503,
+              body: {
+                outcome: 'unavailable',
+                error: 'xcube can’t be reached to run the SQL. Try again once it’s back.',
+              },
+            };
+    }
+    // Done before it is answered, so the next run never overlaps it (T533's review).
+    await runs?.finish(runId, said.body.outcome).catch((error: unknown) => {
+      request.log.warn({ err: error }, 'could not note a SQL run as done');
+    });
+    if (said.retryAfter !== undefined) void reply.header('retry-after', said.retryAfter);
+    return reply.status(said.status).send(said.body);
+  });
+
+  /** The run going, as its user is shown it: on which data source, since when. */
+  const goingView = async (going: GoingRun) => {
+    const source = going.dataSourceId === null ? undefined : await store.get(going.dataSourceId);
+    return {
+      dataSource: source === undefined ? null : { id: source.id, name: source.name },
+      startedAt: going.startedAt.toISOString(),
+    };
+  };
+
+  /** The user's run going, if any (T533; design 15, D2): any of their pages may ask. */
+  app.get('/api/sql-runs/going', USER, async (request) => {
+    const going = await runs?.going(userKeyOf(request));
+    return { going: going === undefined ? null : await goingView(going) };
+  });
+
+  /**
+   * Cancel (T533, AC-379): the user's own run going, stopped on the database
+   * by xcube, on whichever instance runs it. Its own request then answers
+   * that it was cancelled.
+   */
+  app.post('/api/sql-runs/cancel', USER, async (request, reply) => {
+    const going = await runs?.going(userKeyOf(request));
+    if (going === undefined) return reply.status(404).send({ error: 'You have no run going.' });
+    if (runner === undefined)
+      return reply
+        .status(503)
+        .send({ error: 'SQL runs on xcube, which this deployment doesn’t run.' });
+    try {
+      // Asked again while its row still goes: a cancel can come before xcube
+      // knows the run, which it does once its request arrives (T533's review).
+      for (let tries = 1; ; tries += 1) {
+        if (await runner.xcube.cancel(going.runId)) return { cancelled: true };
+        if (tries >= CANCEL_TRIES) return { cancelled: false };
+        await new Promise((resolve) => setTimeout(resolve, CANCEL_AGAIN_MS));
+        const still = await runs?.going(userKeyOf(request));
+        if (still?.runId !== going.runId) return { cancelled: false };
+      }
+    } catch (error) {
+      request.log.warn({ err: error }, 'could not ask xcube to cancel a SQL run');
       return reply.status(503).send({
-        outcome: 'unavailable',
-        error: 'xcube can’t be reached to run the SQL. Try again once it’s back.',
+        error: 'xcube can’t be reached to cancel the run. Try again once it’s back.',
       });
     }
   });
 }
+
+/** Whose runs: the signed-in user's, or with sign-in off its one user's. */
+const userKeyOf = (request: FastifyRequest) => request.wechartUser?.key ?? 'single-user';
+
+/** A cancel asked again while xcube doesn't know the run yet: up to 5 s. */
+const CANCEL_TRIES = 20;
+const CANCEL_AGAIN_MS = 250;

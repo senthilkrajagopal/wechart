@@ -23,6 +23,7 @@ import { modelFileStore } from '../repos/model-files';
 import { proposalStore } from '../repos/proposals';
 import { queryLog } from '../repos/query-log';
 import { sqlRunnerSwitches } from '../repos/sql-runner-switches';
+import { sqlRuns } from '../repos/sql-runs';
 import { versionStore } from '../repos/versions';
 import { buildServer } from '../server';
 import { xcubeAdmin } from '../xcube/client';
@@ -599,8 +600,9 @@ beforeAll(async () => {
     folders: () => folderXcubeIds(getDb()).published(),
     xcube: admin,
     dataSources: sources(),
-    // The SQL runner, its switch and xcube's runs (T531, T532).
+    // The SQL runner, its switch, each user's runs and xcube's (T531–T533).
     sqlRunnerSwitches: sqlRunnerSwitches(getDb()),
+    sqlRuns: sqlRuns(getDb()),
     sqlRunner: xcubeSqlRunner({
       cubeApiUrl: secured.cubeApiUrl,
       model: 'dev',
@@ -1666,6 +1668,22 @@ const CASES: Record<string, Case> = {
         await switches.off(at[place].source);
       }
     }
+  },
+  // A user's own run going, and its cancel (T533, AC-379): anyone's own,
+  // never another's. None goes here, so each says so.
+  'GET /api/sql-runs/going': async () => {
+    for (const who of WHO) {
+      const answer = await ask(who, { method: 'GET', url: '/api/sql-runs/going' });
+      answered(answer, `${who} asking for their run going`);
+      expect(answer.json(), who).toEqual({ going: null });
+    }
+  },
+  'POST /api/sql-runs/cancel': async () => {
+    for (const who of WHO)
+      refused(
+        await ask(who, { method: 'POST', url: '/api/sql-runs/cancel' }),
+        `${who} cancelling a run they don't have`,
+      );
   },
   'DELETE /api/data-sources/:id': async () => {
     for (const place of PLACES)

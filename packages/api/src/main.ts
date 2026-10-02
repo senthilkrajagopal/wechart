@@ -16,6 +16,7 @@ import { folderXcubeIds } from './repos/folder-xcube-ids';
 import { folderAccessStore } from './repos/folder-access';
 import { auditStore } from './repos/audit';
 import { sqlRunnerSwitches } from './repos/sql-runner-switches';
+import { sqlRuns } from './repos/sql-runs';
 import { AUDIT_RETENTION_DAYS, startAuditRetention } from './audit/retention';
 import { readModelDir } from './model/read-dir';
 import { startModel } from './model/split';
@@ -212,6 +213,8 @@ async function main(): Promise<void> {
     dataSources,
     // The SQL runner's switch per data source, and Cube Store's (T531, AC-374).
     sqlRunnerSwitches: sqlRunnerSwitches(db),
+    // Each user's SQL runs, one going at a time (T533, AC-379).
+    sqlRuns: sqlRuns(db),
     // Read-only SQL run by xcube, on a data source's connection (T532, AC-373).
     ...(config.xcube === undefined || service === undefined
       ? {}

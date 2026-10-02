@@ -149,6 +149,8 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
     | undefined;
   /** Runs held until cancelled, or until their caller gives up (T533). */
   let holdingSql = false;
+  /** How long a held run takes to be known, and so cancellable, after it arrives. */
+  let sqlKnownAfterMs = 0;
   const sqlGoing = new Map<string, () => void>();
 
   const json = (status: number, body: unknown) =>
@@ -396,18 +398,21 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
             sqlGoing.delete(ask.runId);
             reject(init.signal?.reason);
           });
-          sqlGoing.set(ask.runId, () => {
-            sqlGoing.delete(ask.runId);
-            resolve(
-              answer(422, {
-                error: 'The run was cancelled',
-                code: 'cancelled',
-                statement,
-                redactedSql,
-                durationMs: 5,
-              }),
-            );
-          });
+          const known = () =>
+            sqlGoing.set(ask.runId, () => {
+              sqlGoing.delete(ask.runId);
+              resolve(
+                answer(422, {
+                  error: 'The run was cancelled',
+                  code: 'cancelled',
+                  statement,
+                  redactedSql,
+                  durationMs: 5,
+                }),
+              );
+            });
+          if (sqlKnownAfterMs === 0) known();
+          else setTimeout(known, sqlKnownAfterMs);
         });
       const given = sqlAnswer?.(ask);
       if (given !== undefined) return answer(given.status, given.body);
@@ -983,6 +988,10 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
     },
     /** The run ids held now. */
     sqlGoing: () => [...sqlGoing.keys()],
+    /** A held run known, and so cancellable, only this long after it arrives (T533's review). */
+    sqlKnownAfter: (ms: number) => {
+      sqlKnownAfterMs = ms;
+    },
     /** xcube's schema emptied and made again: a new generation, and no models. */
     recreate: () => {
       generation = randomUUID();

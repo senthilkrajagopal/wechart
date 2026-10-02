@@ -10446,10 +10446,30 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - AC-375 and AC-376 are ticked.
       - AC-373, AC-377 and AC-383 wait for T535's tab, which shows them. AC-383's one made new in the workspace is so far shown only against the stub.
       - **AC-378's rows wait on xcube:** a stopped or cancelled run gives no rows (`xcube-sql-runner.md`). Asked of xcube in `to-xcube/2026-10-01-2308-sql-runner-partial-rows.md`. Until then, a stop says "Nothing came back", design 15's drawn default.
-- [ ] T533 (AC-379) One run at a time per user, and Cancel
+- [x] T533 (AC-379) One run at a time per user, and Cancel
   - Files: `packages/api/src/routes/sql-runner.ts` (+ test), `e2e/security/sql-runner.spec.ts`
   - Failing test: a second run while one is going answers `409`; Cancel stops the first, and its statement is gone from `pg_stat_activity` (AC-379).
   - Depends on: T532
+  - **Done 2026-10-01.**
+    - **One going per user, across every API instance:** a run is a row of `sql_runs` (migration `1758490533000`, `repos/sql-runs.ts`) from its start until it finishes. A partial unique index takes one unfinished row per user, so the database refuses a second, two at once included.
+    - **A row left going** past two minutes is counted lost when its user next starts one, so an API instance stopped mid-run holds no one up. No run lasts longer: 30 s, connecting and xcube's clock.
+    - **The run:** after every check, and before xcube is asked, its row is started.
+      - A second, on any data source, answers `409` `{ outcome: 'going', error, going: { dataSource: { id, name }, startedAt } }`, and nothing reaches xcube.
+      - The row is finished, with its outcome, before the run is answered, so the next run never overlaps it.
+    - **`GET /api/sql-runs/going`:** the user's own run going, or `null`, for design 15's D2.
+    - **`POST /api/sql-runs/cancel`:** the user's own run going is cancelled through xcube, by its run id, on whichever instance runs it. It answers `{ cancelled }`, or `404` with none going. The run's own request then answers `422 cancelled`.
+    - **Tests:**
+      - `repos/sql-runs.test.ts` (4, against Postgres): one going; another user's beside it; five starts at once make one; a lost row holds no one up;
+      - `routes/sql-runner-going.test.ts` (5, against the stub xcube holding each run): a second refused on another data source, naming the first; another user runs; Cancel ends the first as cancelled; a Cancel before xcube knows the run; xcube away at a Cancel; a failed run frees its user;
+      - the route matrix's two cases;
+      - `e2e/security/sql-runner.spec.ts` (Chrome, compose's xcube): with `pg_sleep(25)` going, a second run answers `409`; Cancel answers `cancelled: true`, the first answers `cancelled` within 10 s, and its statement is gone from `pg_stat_activity`.
+    - **Review fixes:**
+      1. The row was finished after a refused, stopped or failed run's answer had gone out, since those answers were sent at once. Now every answer is built, its row finished, then sent. A test whose rows finish slowly shows it.
+      2. A Cancel that comes before xcube knows the run is asked again every 250 ms, for up to 5 s, while its row still goes.
+      3. Tested too: a Cancel while xcube can't be reached answers `503`, and the run goes on.
+      4. A run that can't go to xcube now says `outcome: 'unavailable'` with its `409`, so the tab tells it from `going` by outcome.
+      5. The route tests mark runs a test cut short as lost before they start.
+    - **AC-379 stays open** for its rows that arrived before a cancel, which wait on xcube (T532's note), and for the tab's Cancel (T535).
 - [ ] T534 (AC-381, AC-382) Keep each user's run history, and audit every run with its SQL's literals replaced
   - Files: `packages/api/src/routes/sql-runner.ts`, a migration for the runs, `packages/api/src/audit/*`, tests
   - Failing test: a run is listed to its user alone, with its SQL, source, time, outcome and rows; the audit event has who, the source and its folder, when, the outcome, the rows, the duration, and `redactedSql` with no literal from the SQL (AC-381, AC-382).

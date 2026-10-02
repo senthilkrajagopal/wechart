@@ -165,6 +165,7 @@ export interface Database {
   proposal_items: ProposalItemTable;
   item_versions: ItemVersionTable;
   sql_runner_switches: SqlRunnerSwitchTable;
+  sql_runs: SqlRunTable;
 }
 
 /** The SQL runner switched on for a target (T531, AC-374): a data source's id, or `cubestore`. */
@@ -173,6 +174,17 @@ export interface SqlRunnerSwitchTable {
   confirmed_by_key: string;
   confirmed_by_name: string;
   confirmed_at: Generated<Date>;
+}
+
+/** A user's SQL run (T533, AC-379): one unfinished per user at most. */
+export interface SqlRunTable {
+  id: string;
+  user_key: string;
+  /** None for Cube Store (T536). */
+  data_source_id: string | null;
+  started_at: Generated<Date>;
+  finished_at: Date | null;
+  outcome: string | null;
 }
 
 /** A version of a shared item wechart landed (T352, AC-288), a copy it holds. */
