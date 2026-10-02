@@ -216,6 +216,8 @@ export async function withdrawWithDelete(
   request: FastifyRequest,
   kind: ProposalKind,
   itemId: string,
+  /** Why it goes: deleted alone, or with all of My workspace (T522, AC-367). */
+  because: 'deleted' | 'cleared' = 'deleted',
 ): Promise<Proposal | null> {
   const open = await store.openFor(kind, itemId);
   if (open === null) return null;
@@ -233,16 +235,19 @@ export async function withdrawWithDelete(
       event: 'rejection',
       folderId: decided.targetFolderId,
       item: { kind: decided.kind, id: decided.itemId, title: decided.title },
-      summary: `Withdrew “${decided.title}”: ${
-        decided.kind === kind && decided.itemId === itemId
-          ? 'it was'
-          : `“${decided.items.find((item) => item.kind === kind && item.id === itemId)?.title ?? 'an item it holds'}”, which goes with it, was`
-      } deleted from My workspace`,
+      summary:
+        because === 'cleared'
+          ? `Withdrew “${decided.title}”: My workspace was cleared`
+          : `Withdrew “${decided.title}”: ${
+              decided.kind === kind && decided.itemId === itemId
+                ? 'it was'
+                : `“${decided.items.find((item) => item.kind === kind && item.id === itemId)?.title ?? 'an item it holds'}”, which goes with it, was`
+            } deleted from My workspace`,
       details: {
         proposalId: decided.id,
         reason: null,
         author: decided.author,
-        deleted: { kind, id: itemId },
+        ...(because === 'cleared' ? { cleared: true } : { deleted: { kind, id: itemId } }),
       },
     },
     request.log,

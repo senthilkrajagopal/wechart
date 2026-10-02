@@ -64,15 +64,20 @@ export default defineConfig({
     // the API, in no browser, so once: their copies in three browsers would
     // publish, move and remove data sources in one model at once, and trip
     // each other (T435; T501's review: each move is a new epoch for the model).
+    // Clearing My workspace is shown once too: the three browsers share Dex's
+    // one `manager`, whose workspace a clear in one would empty under the
+    // others (T522's review).
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
-      testIgnore: /(data-source-binding|changed-in-place|xcube-unreachable)\.spec\.ts/,
+      testIgnore:
+        /(data-source-binding|changed-in-place|xcube-unreachable|workspace-clear)\.spec\.ts/,
     },
     {
       name: 'safari',
       use: { ...devices['Desktop Safari'] },
-      testIgnore: /(data-source-binding|changed-in-place|xcube-unreachable)\.spec\.ts/,
+      testIgnore:
+        /(data-source-binding|changed-in-place|xcube-unreachable|workspace-clear)\.spec\.ts/,
     },
     // A save while xcube can't be reached stops compose's Cube, which every
     // other spec needs: after all three browsers, once (T457's review). On

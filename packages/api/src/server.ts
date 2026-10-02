@@ -105,6 +105,7 @@ import {
   type ShownCopy,
   withChartsRenamed,
 } from './routes/workspace-copy';
+import { registerWorkspaceClear } from './routes/workspace-clear';
 import {
   editingText,
   freeName,
@@ -2784,6 +2785,62 @@ export function buildServer({
       return reply.code(201).send({ kind, id: copies[0]!.id, created: true, folderId: project.id });
     });
   });
+
+  // Clear My workspace (T522, AC-367).
+  if (cat !== undefined && docs?.remove !== undefined && docs.localTo !== undefined) {
+    const remove = docs.remove.bind(docs);
+    const localTo = docs.localTo.bind(docs);
+    registerWorkspaceClear(app, {
+      workspaceOf: async (request) => {
+        // With sign-in off, the single user's (design 14, F).
+        if (security === 'off') return MY_WORKSPACE_ID;
+        // Their own, as T513 takes it: never the single user's (T522's review).
+        const own = workspaceIdOf(userOf(request).key);
+        const seen = await visibilityOf(request);
+        if (seen === undefined) return own;
+        return seen.rights.has(own) ? own : undefined;
+      },
+      foldersBeneath: async (root) => (await foldersBeneath(root)).map((folder) => folder.id),
+      contents: async (folderId) =>
+        (await cat.contents(folderId, { counted: false })) as { kind: string; id: string }[],
+      removeDocument: (kind, id) => remove(kind, id),
+      localCharts: (dashboardId) => localTo(dashboardId),
+      ...(bookmarks === undefined
+        ? {}
+        : { removeBookmarks: (dashboardId: string) => bookmarks.removeFor(dashboardId) }),
+      ...(dataSources === undefined
+        ? {}
+        : {
+            removeDataSource: async (request: FastifyRequest, id: string) => {
+              const source = await dataSources.get(id);
+              if (source === undefined || !(await dataSources.remove(id, {}))) return;
+              // Recorded as its own delete records it (AC-294; T522's review).
+              await recordIn(
+                audit,
+                {
+                  actor: actorOf(userOf(request)),
+                  event: 'data-source-change',
+                  folderId: source.folderId,
+                  item: { kind: 'data-source', id: source.id, title: source.name },
+                  summary: 'Removed',
+                },
+                request.log,
+              );
+            },
+          }),
+      ...(modelFiles?.remove === undefined
+        ? {}
+        : {
+            removeModel: (folderId: string, path: string) => modelFiles.remove!(folderId, path),
+          }),
+      ...(proposals === undefined ? {} : { proposals: { store: proposals, audit } }),
+      pathOf: async () => {
+        const pathOf = await folderPathsOf();
+        return (folderId: string) => pathOf(folderId);
+      },
+      inTurn,
+    });
+  }
 
   /**
    * A shared item's history (T354, AC-289; design 06; rule 80): its last 10

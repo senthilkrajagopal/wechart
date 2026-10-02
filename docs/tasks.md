@@ -9883,10 +9883,35 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
     - Tests: `delete-dependents.test.ts` (every kind held, and an empty one deleted), `deleteChecks.test.ts`, `e2e/security/deleting.spec.ts` (E1–E4, and a folder holding only a subfolder). **AC-366 ticked.**
     - **Review:** fixed the listings not being read again after a refusal, and focus after "Open *folder*"; the models counted by the folder's own files. The test-integrity hook flagged `data-sources.test.ts` as weakened; it wasn't (its assertion pins more now, and one was added).
     - **For the user:** an empty shared folder may still be where a workspace draft, data source or open proposal is to go (`targetFolderId`); deleting it leaves those pointing at no folder. AC-366 doesn't say whether that should hold the delete back.
-- [ ] T522 (AC-367) Clear My workspace, withdrawing its open proposals
+- [x] T522 (AC-367) Clear My workspace, withdrawing its open proposals
   - Files: `packages/api/src/routes/workspace-clear.ts` (+ test), `packages/web/src/workspaces/explore/ClearWorkspaceDialog.tsx` (+ test), `e2e/security/deleting.spec.ts`
   - Failing test: `workspace-clear.test.ts`: `POST /api/workspace/clear` removes every item and folder in the caller's workspace and withdraws its open proposals, leaving everyone else's workspace and every shared folder as they were. `deleting.spec.ts`: the dialog names the count and each open proposal before anything is removed (AC-367).
   - Depends on: design 14
+  - **Done 2026-10-01. AC-367 ticked.**
+    - **API** (`routes/workspace-clear.ts`, registered in `server.ts`).
+      - `GET /api/workspace/clear` says what a clear would remove: `items` and `folders` at any depth, and the items by kind (`dashboards`, library `charts`, `models`, `dataSources`). It also lists each open proposal its items wait in, oldest first, with where it goes ("Shared" for the root, "A deleted folder" for one gone since, as Reviews says).
+      - `POST /api/workspace/clear` withdraws those proposals first, through T528's `withdrawWithDelete`, which takes a new `because: 'cleared'`. Each withdrawal is recorded as "Withdrew “*title*”: My workspace was cleared".
+      - It then removes each dashboard with its own charts and bookmarks, each library chart and model, and each data source, recorded "Removed" as its own delete records it (AC-294). The folders go last, each after the folders in it.
+      - It runs in the workspace's turn, as T523's copies do. It answers the counts and `withdrawn`.
+      - Asked by someone with no workspace, it answers `403`. With sign-in off it clears the single user's `mine`; signed in, never that.
+    - **Web.**
+      - Explore's header ⋯ offers Clear My workspace… only at My workspace's root, only while its listing holds something, and not during a search (F1).
+      - `ClearWorkspaceDialog.tsx` is the delete's dialog (`DeleteDialog`). It shows "Clear My workspace?", then "This removes everything in My workspace: 14 items and 3 folders (5 dashboards, …)." naming only the kinds held, then "It withdraws *n* open proposals" with one row each, then the note and "You can’t undo this.". Cancel has focus (F2).
+      - Once cleared, the toast says "Cleared My workspace: … removed, *n* proposals withdrawn.". The heading takes focus and the listings are read afresh, so the ⋯ goes (F3). A failed clear says why, and the listings are read afresh too.
+    - **Tests.**
+      - `routes/workspace-clear.test.ts`: what it says first, changing nothing; the clear itself, with the audit records; another's workspace and /Sales's items and versions unchanged; an empty workspace; no workspace; sign-in off; a signed-in Super-Admin never clearing `mine`.
+      - `ClearWorkspaceDialog.test.tsx`.
+      - `e2e/security/workspace-clear.spec.ts` (not `deleting.spec.ts`), as `manager`, in Chrome alone. The three browsers share Dex's one `manager`, so `playwright.security.config.ts` leaves this spec out of Firefox and Safari, as it does `data-source-binding` and `changed-in-place`.
+    - **Review:** fixed the following.
+      - The e2e emptied `manager`'s workspace under its other browsers.
+      - A data source cleared away went unrecorded.
+      - A deleted target was named "Shared".
+      - A signed-in user with no folder grants read cleared `mine`.
+      - A failed clear left the listings stale.
+      - The API tests now clear leftovers from earlier runs first.
+    - The test-integrity hook flagged two false positives:
+      - `workspace-clear.test.ts`: the proposals' `expect.any(String)` times became their stored values, which is stricter.
+      - `deleting.spec.ts`: the clear test moved out of that file, all 23 assertions with it, before it was ever committed.
 - [x] T523 (AC-368) Put each "Edit in my workspace" into its own project folder
   - Files: `packages/api/src/server.ts` (`POST /api/workspace/copies`), `packages/api/src/routes/data-sources.ts` (`…/copy`), `packages/web/src/workspaces/explore/EditInWorkspaceDialog.tsx`, `packages/api/src/routes/workspace-copy.test.ts`, `e2e/security/workspace-edit.spec.ts`
   - Failing test: `workspace-copy.test.ts`: a dashboard's copy lands with its library charts' copies and the chosen data sources' copies in one new folder, `project-YYYY-MM-DD-HHmm` in the user's time zone as the request gives it, with `-2` for a second in the same minute; a new item made in the workspace gets none (AC-368).

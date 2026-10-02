@@ -30,6 +30,7 @@ import { ImportPane } from './import/ImportPane';
 import { fileHref } from '../model/inFolder';
 import { FolderDescription } from './FolderDescription';
 import { DeleteDialog, type Checked, type Confirmation, type Refusal } from './DeleteDialog';
+import { ClearWorkspaceDialog } from './ClearWorkspaceDialog';
 import {
   checkChart,
   checkDashboard,
@@ -409,25 +410,47 @@ export function ExplorePage() {
     role.mayRename &&
     parentId !== undefined &&
     (!signedIn || inMyWorkspace || parentAccess.isSuccess);
-  const headerMenu: MenuItem[] = mayDeleteOpen
-    ? [
-        {
-          key: 'delete-folder',
-          label: 'Delete folder…',
-          danger: true,
-          onSelect: () => {
-            setDeletingOpen(true);
-            setDeletingItem({
-              kind: 'folder',
-              id: folderId,
-              title: folderTitle,
-              owner: null,
-              updatedAt: '',
-            });
+  /**
+   * Clear My workspace… (T522, AC-367; design 14, F1): in its root's header
+   * ⋯, the one place its whole contents are in view, only while it holds
+   * something. Never in the tree, nor in a folder of it.
+   */
+  const [clearing, setClearing] = useState(false);
+  const mayClear =
+    isMyWorkspace(folderId) && !searching && contents.isSuccess && contents.data.length > 0;
+  const headerMenu: MenuItem[] = [
+    ...(mayDeleteOpen
+      ? [
+          {
+            key: 'delete-folder',
+            label: 'Delete folder…',
+            danger: true,
+            onSelect: () => {
+              setDeletingOpen(true);
+              setDeletingItem({
+                kind: 'folder',
+                id: folderId,
+                title: folderTitle,
+                owner: null,
+                updatedAt: '',
+              });
+            },
           },
-        },
-      ]
-    : [];
+        ]
+      : []),
+    ...(mayClear
+      ? [
+          {
+            key: 'clear-workspace',
+            label: 'Clear My workspace…',
+            danger: true,
+            onSelect: () => {
+              setClearing(true);
+            },
+          },
+        ]
+      : []),
+  ];
   const [accessOf, setAccessOf] = useState<string | null>(null);
   const accessButton = useRef<HTMLButtonElement>(null);
   /**
@@ -1161,7 +1184,25 @@ export function ExplorePage() {
           />
         );
       })()}
-      {/* Deleted, from a row or from the item's own page (design 14, A5). */}
+      {clearing ? (
+        <ClearWorkspaceDialog
+          onCleared={(text) => {
+            // Nothing left to clear: the ⋯ goes, the heading has focus (F3).
+            setClearing(false);
+            setSaid(text);
+            heading.current?.focus();
+            refreshListings();
+          }}
+          onFailed={refreshListings}
+          onClose={() => {
+            setClearing(false);
+            requestAnimationFrame(() => {
+              document.querySelector<HTMLElement>('[data-testid="folder-more"]')?.focus();
+            });
+          }}
+        />
+      ) : null}
+      {/* Deleted, from a row or from the item's own page (design 14, A5); cleared (F3). */}
       <ExportedToast
         message={said}
         onDismiss={() => {
