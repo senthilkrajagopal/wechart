@@ -314,3 +314,11 @@ The user: these "will be deferred and not done in this phase". No task builds th
     - design 10's "Failed", "Duration vs average", "Trigger: Schedule" and "Recent builds";
     - design 07's last build outcome, and who started it.
   - xcube would record build events from Cube's logger in every process, map orchestrators to models, and serve `GET …/builds?after=`, each event tagged with its pre-aggregation and folder (`docs/inputs/2026-09-28-jobs-schedules-analysis.md`).
+
+## 8. Deferred past phase 3
+
+- **The SQL runner on an unchanged workspace copy (T532's review, 2026-10-02).**
+  - **What happens.** An unchanged My workspace copy of a data source runs SQL on its original's login with no switch of its own (R50-6, design 15's Q8). That holds even while the original's runner is switched off. So any read-write member can copy a shared source whose runner is off and run SQL on it at once.
+  - **The risk.** On Snowflake, SQL Server and Dremio, a SELECT calling a writing function passes xcube's read-only check. There, the read-only-login attestation behind the switch is the only guard.
+  - **Options raised:** a copy runs only while its original's runner is on, on every driver or on those three only.
+  - **The user (2026-10-02):** "Not a problem. Ignore this for now. Track it in a backlog.. it will not be addressed in this phase or in phase 3". The runner stays as R50-6 decided.
