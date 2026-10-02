@@ -32,6 +32,8 @@ import { SecuritySurface } from '../workspaces/security/SecuritySurface';
 import { ReviewsPage, type ReviewsView } from '../workspaces/reviews/ReviewsPage';
 import { ReviewView } from '../workspaces/reviews/ReviewView';
 import { DataSourcesPage } from '../workspaces/data-sources/DataSourcesPage';
+import { CUBE_STORE_ID } from '../workspaces/data-sources/cubeStore';
+import { CubeStorePage } from '../workspaces/data-sources/CubeStorePage';
 import { SourceSettings } from '../workspaces/data-sources/SourceSettings';
 import { SchedulesPage } from '../workspaces/schedules/SchedulesPage';
 import { ModelFilePage } from '../workspaces/model/ModelFilePage';
@@ -717,9 +719,11 @@ const dataSourceRoute = createRoute({
   path: '/explore/data-sources/$objectId',
   component: function DataSourceSurface() {
     const params = useParams({ strict: false }) as { objectId?: string };
+    const id = decodeURIComponent(params.objectId ?? '');
     return (
       <AppShell workspace="explore">
-        <SourceSettings id={decodeURIComponent(params.objectId ?? '')} />
+        {/* Cube Store's page, its SQL tab alone (T536, AC-384). */}
+        {id === CUBE_STORE_ID ? <CubeStorePage /> : <SourceSettings id={id} />}
       </AppShell>
     );
   },

@@ -54,7 +54,17 @@ const article = (word: string) => (/^[AEIOU]/.test(word) ? 'an' : 'a');
 export function refusalSentence(
   { statement, reason }: { readonly statement: string | null; readonly reason: string },
   sql: string,
+  /** Cube Store's commands are commands, as design 15's H3 names them (T536). */
+  onCubeStore = false,
 ): string {
+  // On Cube Store, xcube says why where it isn't the kind alone: system.cache,
+  // or where to read instead of a SHOW (T536's review; its probe).
+  const own = onCubeStore && !/^Only a SELECT/.test(reason) ? reason.replace(/\.$/, '') : null;
+  if (onCubeStore && statement === 'select' && own !== null) return `${own}.`;
+  if (onCubeStore && statement !== null && statement !== 'select' && statement !== 'explain') {
+    const kind = statement.toUpperCase();
+    return `This is ${article(kind)} ${kind} command.${own === null ? '' : ` ${own}.`}`;
+  }
   if (statement === 'explain')
     // Another driver's EXPLAIN is refused for its own reason: Oracle's EXPLAIN
     // PLAN writes PLAN_TABLE; SQL Server and BigQuery have none (research
@@ -73,7 +83,7 @@ export function refusalSentence(
   }
   if (statement !== null && statement !== 'select') {
     const kind = statement.toUpperCase();
-    return `This is ${article(kind)} ${kind} statement.`;
+    return `This is ${article(kind)} ${kind} ${onCubeStore ? 'command' : 'statement'}.`;
   }
   return `wechart couldn’t read it as a SELECT or EXPLAIN: ${reason.replace(/\.$/, '')}.`;
 }
@@ -118,12 +128,15 @@ export function SqlResult({
   sql,
   startedAt,
   onDownload,
+  onCubeStore = false,
 }: {
   result: SqlOutcome;
   /** The SQL it ran, for a refusal's words. */
   sql: string;
   startedAt: Date;
   onDownload: () => void;
+  /** Run on Cube Store (T536): no cancel, and commands, not statements. */
+  onCubeStore?: boolean;
 }) {
   const at = `at ${clock(startedAt)}`;
   switch (result.outcome) {
@@ -236,8 +249,11 @@ export function SqlResult({
         <div className="sql-result" data-testid="sql-result">
           <Head kind="err" label="Stopped at 30 seconds" detail={at} />
           <Note>
-            The run hadn’t finished after 30 seconds, so it was stopped on the database. Nothing
-            came back. Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.
+            The run hadn’t finished after 30 seconds, so{' '}
+            {onCubeStore
+              ? 'xcube stopped waiting for it, and Cube Store ends the query at its own time limit'
+              : 'it was stopped on the database'}
+            . Nothing came back. Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.
           </Note>
         </div>
       );
@@ -261,7 +277,8 @@ export function SqlResult({
         <div className="sql-result" data-testid="sql-result">
           <Head kind="err" label="Not run" detail={at} />
           <Note>
-            {result.error} {refusalSentence(result, sql)} Nothing reached the database.
+            {result.error} {refusalSentence(result, sql, onCubeStore)} Nothing reached{' '}
+            {onCubeStore ? 'Cube Store' : 'the database'}.
           </Note>
         </div>
       );

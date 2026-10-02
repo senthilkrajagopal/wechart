@@ -175,6 +175,8 @@ describe('a user’s own runs (T534, AC-381)', () => {
           folderPath: [{ id: folder, title: `Sales ${MARK}` }],
           inWorkspace: false,
         },
+        // Not Cube Store's (T536).
+        cubeStore: false,
         startedAt: expect.any(String),
         outcome: 'finished',
         rowCount: 1,

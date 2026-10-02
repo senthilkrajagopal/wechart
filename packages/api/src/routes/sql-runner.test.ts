@@ -549,7 +549,11 @@ describe('what a data source’s page says of its SQL tab (T535, AC-373, AC-383;
 
   it('gives a workspace data source’s owner the tab with no switch, and says why a repointed copy needs one', async () => {
     const copy = await copyOf('writer', await originalFor('tabbed_copy'));
-    expect(await accessOf('writer', copy.id)).toEqual({ tab: true, runs: true, needsSwitch: false });
+    expect(await accessOf('writer', copy.id)).toEqual({
+      tab: true,
+      runs: true,
+      needsSwitch: false,
+    });
     await sources().update(copy.id, { fields: { ...FIELDS, database: 'payroll' } });
     expect(await accessOf('writer', copy.id)).toEqual({
       tab: true,

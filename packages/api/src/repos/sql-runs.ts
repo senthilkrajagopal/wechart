@@ -137,7 +137,8 @@ export function sqlRuns(db: Kysely<Database>) {
       after,
     }: {
       readonly userKey: string;
-      readonly dataSourceId?: string;
+      /** One data source's runs; null for Cube Store's (T536). */
+      readonly dataSourceId?: string | null;
       readonly limit?: number;
       /** The page after the one that gave this; none for the first. */
       readonly after?: string | undefined;
@@ -147,7 +148,8 @@ export function sqlRuns(db: Kysely<Database>) {
         .selectAll()
         .where('user_key', '=', userKey)
         .where('finished_at', 'is not', null);
-      if (dataSourceId !== undefined) query = query.where('data_source_id', '=', dataSourceId);
+      if (dataSourceId === null) query = query.where('data_source_id', 'is', null);
+      else if (dataSourceId !== undefined) query = query.where('data_source_id', '=', dataSourceId);
       if (after !== undefined)
         query = query.where(
           sql<boolean>`(started_at, id) < (SELECT started_at, id FROM sql_runs WHERE id = ${after} AND user_key = ${userKey})`,

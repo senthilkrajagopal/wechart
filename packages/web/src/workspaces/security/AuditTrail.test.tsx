@@ -540,6 +540,38 @@ describe('the audit trail (T369, AC-295)', () => {
     );
   });
 
+  it('names a run on Cube Store, at the root, as Cube Store (T536; design 15, state J)', async () => {
+    serve({
+      first: {
+        records: [
+          {
+            id: 'q4',
+            at: today(14, 51, 18),
+            actor: { key: 'wren', name: 'Wren', identity: 'wren@corp.example' },
+            event: 'sql-run',
+            folderId: 'root',
+            folderPath: [],
+            item: { kind: 'cube-store', id: 'cubestore', title: 'Cube Store' },
+            summary: 'Finished · 214 rows · 0.31 s',
+            details: {
+              outcome: 'finished',
+              rowCount: 214,
+              durationMs: 310,
+              sql: 'SELECT table_schema FROM information_schema.tables LIMIT ?',
+              inWorkspace: false,
+            },
+          },
+        ],
+        total: 1,
+        retentionDays: 365,
+      },
+    });
+    open();
+    await screen.findByRole('table', { name: 'Audit trail' });
+    const row = within(table()).getAllByRole('row')[1]!;
+    expect(within(row).getAllByRole('cell')[4]?.textContent).toBe('Cube Store');
+  });
+
   it('pages to older records and back (pin 9)', async () => {
     const asked = serve({
       first: { records: RECORDS.slice(0, 2), next: 'c1', total: 3, retentionDays: 365 },

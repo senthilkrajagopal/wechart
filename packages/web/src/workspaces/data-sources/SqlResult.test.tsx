@@ -188,6 +188,72 @@ describe('a run stopped, cancelled, refused or failed (T535, AC-378, AC-379, AC-
   });
 });
 
+describe('a run on Cube Store (T536, AC-384; design 15’s H3)', () => {
+  it('names a refused command as a command, and says nothing reached Cube Store', () => {
+    render(
+      <SqlResult
+        result={{
+          outcome: 'refused',
+          error: 'On Cube Store, only SELECT and EXPLAIN run, one statement at a time.',
+          reason: 'Only a SELECT or an EXPLAIN runs on Cube Store: this is a QUEUE command',
+          statement: 'queue',
+        }}
+        sql="QUEUE LIST"
+        startedAt={AT}
+        onDownload={vi.fn()}
+        onCubeStore
+      />,
+    );
+    expect(screen.getByTestId('sql-result-note').textContent).toBe(
+      'On Cube Store, only SELECT and EXPLAIN run, one statement at a time. This is a QUEUE command. Nothing reached Cube Store.',
+    );
+  });
+
+  it('gives xcube’s own words where it says why, as for system.cache, and after a SHOW (T536’s review)', () => {
+    const say = (statement: string, reason: string, sql: string) =>
+      refusalSentence({ statement, reason }, sql, true);
+    // As compose's xcube answers them (T536's probe).
+    expect(
+      say(
+        'select',
+        'system.cache holds Cube’s cached results and queued queries: it isn’t read here',
+        'SELECT * FROM system.cache LIMIT 1',
+      ),
+    ).toBe('system.cache holds Cube’s cached results and queued queries: it isn’t read here.');
+    expect(
+      say(
+        'show',
+        'Read Cube Store’s tables instead, with a LIMIT: information_schema.tables and .columns, system.tables, system.partitions, system.chunks, system.indexes',
+        'SHOW SCHEMAS',
+      ),
+    ).toBe(
+      'This is a SHOW command. Read Cube Store’s tables instead, with a LIMIT: information_schema.tables and .columns, system.tables, system.partitions, system.chunks, system.indexes.',
+    );
+    expect(
+      say(
+        'queue',
+        'Only a SELECT or an EXPLAIN runs here: this is a QUEUE statement',
+        'QUEUE TRUNCATE',
+      ),
+    ).toBe('This is a QUEUE command.');
+  });
+
+  it('says a run stopped at 30 seconds was left by xcube, for Cube Store to end: it has no cancel', () => {
+    render(
+      <SqlResult
+        result={{ outcome: 'timeout', durationMs: 30_000 }}
+        sql="SELECT 1"
+        startedAt={AT}
+        onDownload={vi.fn()}
+        onCubeStore
+      />,
+    );
+    expect(screen.getByTestId('sql-result-note').textContent).toBe(
+      'The run hadn’t finished after 30 seconds, so xcube stopped waiting for it, and Cube Store ends the query at its own time limit. Nothing came back. Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.',
+    );
+  });
+});
+
 describe('the second sentence of a refusal (design 15, E2)', () => {
   const refused = (statement: string | null, reason: string) => ({ statement, reason });
   it('names what was found', () => {

@@ -10977,13 +10977,73 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
   - Files: `packages/api/src/model/introspection.ts`, `packages/api/src/routes/sql-runner.ts`, `routes/sql-catalog.test.ts`, `e2e/security/sql-runner.spec.ts`, and a research doc for xcube's image
   - Failing test: a data source made new in My workspace, and a copy that connects otherwise than its original, list their own schemas, tables and columns, read through their workspace's overlay (AC-386).
   - Depends on: T539, xcube's introspection taking `?overlay=` (`to-xcube/2026-10-02-1000-introspection-overlay.md`), published by digest
-- [ ] T536 (AC-384, AC-374) Cube Store: its switch, its listing, and read-only SQL on it
+- [x] T536 (AC-384, AC-374) Cube Store: its switch, its listing, and read-only SQL on it
   - Files: `packages/api/src/routes/sql-runner.ts`, the root's data sources listing, `SqlRunner.tsx`, tests and `e2e/security/sql-runner.spec.ts`
   - Failing test: switched off, no one sees Cube Store listed, and a Super-Admin finds Turn on… in Data sources' header ⋯ (P5); its confirmation says everyone allowed reads every folder's rollups (Q9). Switched on:
     - a Super-Admin, and a user allowed on a switched-on folder's data source, see it and run a `SELECT` on a rollup table;
     - a My workspace owner allowed only on their own source doesn't (Q7), nor does a reader;
     - a SHOW and a cache command are refused (AC-384, AC-374).
   - Depends on: T531, T535, xcube's image
+  - **Done 2026-10-02.**
+    - **The API** (`routes/sql-runner.ts`; its switch's row `cubestore`, T531's table):
+      - `GET /api/cube-store`: its switch, by name, and whether this user may run SQL on it.
+        - A Super-Admin is always told, so as to find Turn on… (P5).
+        - Once it is on, so is anyone allowed on a data source in a folder whose runner a Super-Admin switched on. A data source in My workspace doesn't count (Q7).
+        - Anyone else gets `404`, as for a data source they can't see, and so does everyone where xcube's runner isn't set up.
+      - `PUT /api/cube-store/sql-runner`: a Super-Admin's alone. It turns on only with the confirmation of Q9, keeps who and when, and records an audit event at the root, on and off (P4).
+      - `POST /api/cube-store/sql`: run through xcube's `…/cubestore/sql` with R50's caps. One run at a time with the user's others; kept in My runs; audited at the root as "Cube Store", as a lost run already was (T534). Refused and stopped runs answer in Cube Store's words.
+      - **A shared run path,** `runOn`, now serves a data source's run and Cube Store's alike.
+      - **History:** runs are `cubeStore: true` (no data source), and `?dataSource=cubestore` lists Cube Store's alone. The run going says `cubeStore` too.
+    - **The page:**
+      - **Data sources** (P5, H1):
+        - while off, a Super-Admin's header ⋯ holds "Turn on the SQL runner for Cube Store…", with Q9's dialog;
+        - once on, a row "Cube Store · Shared · Cube Store · every folder's rollups", for whoever may use it.
+      - **Explore's root** lists it as a data source, built on "Cube Store · read-only SQL", read from `GET /api/cube-store`. It has no Delete.
+      - **Its page** (`CubeStorePage.tsx`, `/explore/data-sources/cubestore`; H2):
+        - "Explore / Shared / Cube Store", "Read-only SQL", and the SQL tab alone;
+        - the SQL tab is the data sources' own, with Cube Store's warning and switch line;
+        - no schema browser, since Cube Store has no catalog to introspect;
+        - no Cancel, since Cube Store has none (research `xcube-sql-runner.md`). A run stopped at 30 seconds says xcube stopped waiting and Cube Store ends the query at its own limit;
+        - a refusal names a command, "This is a SHOW command.", and says nothing reached Cube Store (H3).
+      - **My runs:** a Cube Store run seen from a data source's page links to Cube Store's tab, and no longer puts its SQL in the wrong editor (T535's review, finding 6).
+    - **Small decisions, overturnable:**
+      - Cube Store is listed from the page, by `GET /api/cube-store`, not added to `GET /api/data-sources` or to the root's contents, which other flows read as data sources (import, Generate cubes);
+      - in the audit trail it is the item `cube-store` at the root ("Shared"), as T534 already wrote a lost run;
+      - its CSV file is named `cubestore-…`.
+    - **Tests:**
+      - `routes/sql-cube-store.test.ts` (7):
+        - the switch, its refusal without confirming, and its audit events;
+        - off, refused to all and shown to a Super-Admin alone;
+        - a Super-Admin's SELECT with R50's caps;
+        - Q7, with a copy in the writer's workspace;
+        - the writer, once their folder's data source is on, and not a member below or a reader;
+        - a refusal in Cube Store's words;
+        - history and the audit event.
+      - Repos: `targets()`, and Cube Store's runs alone. The `going` and history shapes gain `cubeStore`.
+      - The route matrix covers the three routes: off, on with no folder's data source switched on, and then each place's.
+      - Web: `CubeStorePage.test.tsx` (7), `DataSourcesPage.test.tsx` (3 more), `SqlResult.test.tsx` (2 more), `FolderContents.test.tsx` (1 more).
+      - `e2e/security/sql-runner.spec.ts` (Chrome, compose's Cube Store):
+        - turned on from Data sources' ⋯, and listed;
+        - the writer finds it at Explore's root and runs a SELECT on `information_schema.tables`;
+        - a SHOW, a QUEUE command and `system.cache` are refused;
+        - the reader sees it nowhere, and is answered `404`.
+    - **Fixed after the review** (one round, which passed both ACs):
+      1. **Focus** goes to the new Cube Store row once it is turned on from Data sources' ⋯, which then goes.
+      2. **A refusal in xcube's own words** where it gives a reason, as compose's xcube was found to (T536's probe):
+         - `system.cache` "holds Cube's cached results and queued queries: it isn't read here";
+         - a SHOW adds "Read Cube Store's tables instead, with a LIMIT: …".
+      3. **The audit trail** names a Cube Store run "Cube Store", not "cube-store · Cube Store".
+      4. **More tests:**
+         - Q7 with the writer's copy switched on: still no Cube Store;
+         - a run's audit event's outcome, rows, time and redacted SQL;
+         - an EXPLAIN in the e2e;
+         - the e2e's second test turns it on itself.
+      5. **Cube Store's "missing" answer** names its model, not a connection.
+    - **For the user** (raised to the coordinator): Cube Store has no cancel. At 30 seconds xcube stops waiting, but Cube Store runs the query on to its own limit, 120 s (research `xcube-sql-runner.md`). So for up to 90 s after a stop, a user's next run can start while Cube Store still runs their last, and AC-378's "still running … after the run is said to have stopped" holds for it. wechart says so ("Cube Store ends the query at its own time limit"), but doesn't hold the user's next run back. Whether to (hold the slot until 120 s) or to amend AC-378 and AC-379 for Cube Store is the user's call.
+    - **Left as found:**
+      - the breadcrumbs on Cube Store's page reload the page;
+      - who may use Cube Store is read one switched data source at a time.
+    - **ACs ticked:** AC-384; AC-374, with T531's half.
 - [ ] T545 (AC-378, AC-379) Show the rows that came back before a stop or a cancel, marked stopped *(added 2026-10-02, from T535's review)*
   - Files: `docs/research/` (a doc for xcube `6d9673ccda`, or a correction beside `xcube-sql-runner.md`), `docker-compose.yml`, the Helm values, `packages/api/src/deploy/cube-image.test.ts`, `docs/deploy.md`, `packages/api/src/routes/sql-runner.ts`, `packages/api/src/xcube/sql-runner.ts`, `SqlResult.tsx`, tests and `e2e/security/sql-runner.spec.ts`
   - Failing test: a run stopped at 30 seconds, and one cancelled, show the rows that arrived before it, marked stopped, in place of "Nothing came back"; one with none says so (AC-378, AC-379; design 15's Q6).

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { MenuButton, type MenuItem } from '../../shell/MenuButton';
 import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
+import { CUBE_STORE_ID } from '../data-sources/cubeStore';
 import { chartTypeText } from './chartTypeLabels';
 
 /**
@@ -241,6 +242,8 @@ function builtOnText(item: CatalogItem, kinds: ReadonlyMap<string, 'cube' | 'vie
     return item.declares == null
       ? '—'
       : `${plural(item.declares.cubes, 'cube')} · ${plural(item.declares.views, 'view')}`;
+  // Cube Store, once on, among the root's data sources (T536; design 15's H1).
+  if (item.kind === 'data-source' && item.id === CUBE_STORE_ID) return 'Cube Store · read-only SQL';
   // Its driver, by name (references.md §4); its health joins it (T362, T365).
   if (item.kind === 'data-source')
     return item.driver == null

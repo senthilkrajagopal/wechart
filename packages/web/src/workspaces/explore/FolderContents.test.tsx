@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
+import { cubeStoreItem } from '../data-sources/cubeStore';
 import { FolderContents, opensFromExplore, type CatalogItem } from './FolderContents';
 
 /**
@@ -613,6 +614,20 @@ describe('data sources in a folder (T335, AC-269)', () => {
     expect(
       screen.getByTestId('item-ds-1').querySelector('.itemicon')?.getAttribute('data-icon'),
     ).toBe('data-source');
+  });
+
+  it('lists Cube Store, once on, as a data source for read-only SQL (T536; design 15’s H1)', () => {
+    render(
+      <FolderContents
+        items={[cubeStoreItem({ on: true, runs: true, confirmedAt: '2026-10-02T09:00:00.000Z' })]}
+      />,
+    );
+    expect(
+      within(screen.getByTestId('item-cubestore'))
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent)
+        .slice(0, 2),
+    ).toEqual(['Data source', 'Cube Store · read-only SQL']);
   });
 
   it('offers no rename or move yet, and opens its settings page (T462, UX-222)', async () => {

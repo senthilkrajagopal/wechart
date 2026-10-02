@@ -3792,6 +3792,8 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 .sql-runner__failed { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-status-error); }
 /* The editor, and the schema browser beside it (T539, design 15's P3). */
 .sql-runner__work { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 10px; align-items: start; }
+/* Cube Store's, with no catalog to browse beside it (T536). */
+.sql-runner__work--alone { grid-template-columns: minmax(0, 1fr); }
 .sql-schema {
   display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow: auto;
   padding: 10px 8px; border-radius: 6px;

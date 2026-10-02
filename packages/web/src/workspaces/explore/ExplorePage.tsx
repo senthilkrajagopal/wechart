@@ -14,6 +14,12 @@ import {
 import { AccessChip, OnlySuperAdminsChip } from './AccessChip';
 import { CreateMenu, DEFAULT_TITLES, type CreatableKind } from './CreateMenu';
 import { folderRoleOf, rightFrom } from './folderRole';
+import {
+  CUBE_STORE_ID,
+  CUBE_STORE_QUERY,
+  cubeStoreItem,
+  cubeStoreListed,
+} from '../data-sources/cubeStore';
 import { NewSourceWizard } from '../data-sources/NewSourceWizard';
 import { NewItemDialog, type Target } from './NewItemDialog';
 import { FolderContents, opensFromExplore, type CatalogItem } from './FolderContents';
@@ -145,7 +151,18 @@ export function ExplorePage() {
 
   const contents = useQuery({
     queryKey: ['folder-contents', folderId],
-    queryFn: () => getJson<CatalogItem[]>(`/api/folders/${encodeURIComponent(folderId)}/contents`),
+    queryFn: async () => {
+      const items = await getJson<CatalogItem[]>(
+        `/api/folders/${encodeURIComponent(folderId)}/contents`,
+      );
+      if (folderId !== SHARED_ROOT.id) return items;
+      // Cube Store, among the root's data sources once on, to whoever may use
+      // it, as its API says (T536, AC-384; design 15's H1).
+      const cubeStore = await queryClient.fetchQuery(CUBE_STORE_QUERY).catch(() => null);
+      return cubeStore !== null && cubeStoreListed(cubeStore)
+        ? [...items, cubeStoreItem(cubeStore)]
+        : items;
+    },
     enabled: !searching,
   });
 
@@ -624,8 +641,9 @@ export function ExplorePage() {
         };
       // A shared one, refused while a cube is bound to it (T526, AC-364;
       // state C). A workspace copy keeps Discard my copy… on its page.
+      // Cube Store is switched off, never deleted (T536).
       case 'data-source':
-        return inOwnWorkspace
+        return inOwnWorkspace || item.id === CUBE_STORE_ID
           ? undefined
           : {
               action: 'Delete data source',

@@ -35,6 +35,12 @@ export function sqlRunnerSwitches(db: Kysely<Database>) {
       return row === undefined ? undefined : switchOf(row);
     },
 
+    /** Every target switched on: who may use Cube Store is read from them (T536, Q7). */
+    async targets(): Promise<string[]> {
+      const rows = await db.selectFrom('sql_runner_switches').select('target').execute();
+      return rows.map((row) => row.target);
+    },
+
     /** Those of these targets switched on, for a listing. */
     async among(targets: readonly string[]): Promise<Map<string, SqlRunnerSwitch>> {
       if (targets.length === 0) return new Map();

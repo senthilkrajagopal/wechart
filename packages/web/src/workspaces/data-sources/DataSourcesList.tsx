@@ -6,6 +6,7 @@ import { shortDay } from '../../shell/relativeAge';
 import { healthOf, HealthBadge } from './health';
 import { TableScroll } from '../../shell/TableScroll';
 import { MY_WORKSPACE, SHARED_ROOT } from '../explore/roots';
+import { CUBE_STORE_ID } from './cubeStore';
 
 /**
  * Every data source the user may see, in every folder (T364, AC-157), as
@@ -141,31 +142,34 @@ export function DataSourcesList({
   sources,
   seesEveryFolder = false,
   readWrite = false,
+  cubeStore = false,
 }: {
   sources: readonly ListedSource[];
   /** A Super-Admin, or the one user with security off: none listed is none there. */
   seesEveryFolder?: boolean;
   /** A read-write member of some folder: none listed is none in their folders yet. */
   readWrite?: boolean;
+  /** Cube Store listed, once on, to one who may use it (T536, AC-384; design 15's H1). */
+  cubeStore?: boolean;
 }) {
   const [folder, setFolder] = useState('');
   const [driver, setDriver] = useState('');
   const [health, setHealth] = useState('');
   const [search, setSearch] = useState('');
 
-  if (sources.length === 0 && seesEveryFolder)
+  if (sources.length === 0 && !cubeStore && seesEveryFolder)
     return (
       <InfoBar>
         <p>No data source has been added yet.</p>
       </InfoBar>
     );
-  if (sources.length === 0 && readWrite)
+  if (sources.length === 0 && !cubeStore && readWrite)
     return (
       <InfoBar>
         <p>No data source has been added to your folders, or to the folders above them, yet.</p>
       </InfoBar>
     );
-  if (sources.length === 0)
+  if (sources.length === 0 && !cubeStore)
     return (
       <div className="sources-empty">
         <InfoBar>
@@ -190,6 +194,13 @@ export function DataSourcesList({
       (health === '' || healthOf(source).kind === health) &&
       source.name.toLowerCase().includes(search.trim().toLowerCase()),
   );
+  // Its own row, at the root, while no filter but its name leaves it out.
+  const cubeStoreShown =
+    cubeStore &&
+    (folder === '' || folder === SHARED_ROOT.id) &&
+    driver === '' &&
+    health === '' &&
+    'cube store'.includes(search.trim().toLowerCase());
 
   return (
     <>
@@ -291,6 +302,21 @@ export function DataSourcesList({
                 </tr>
               );
             })}
+            {cubeStoreShown ? (
+              // "Cube Store · Shared · Cube Store · every folder's rollups" (design 15's H1).
+              <tr data-testid="source-cubestore">
+                <td className="sources-name">
+                  <a href={`/explore/data-sources/${CUBE_STORE_ID}`}>Cube Store</a>
+                </td>
+                <td>
+                  <a href={`/explore?folder=${SHARED_ROOT.id}`}>{SHARED_ROOT.title}</a>
+                </td>
+                <td>Cube Store</td>
+                <td className="sources-muted">every folder’s rollups</td>
+                <td />
+                <td />
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </TableScroll>

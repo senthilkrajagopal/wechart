@@ -667,4 +667,120 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
       }
     });
   });
+
+  /**
+   * T536 (AC-384, AC-374; design 15's state H, P5, Q7, Q9): Cube Store, on
+   * compose's xcube. Off, a Super-Admin finds its switch in Data sources' ⋯;
+   * once on, it is listed at the root to them and to the writer, whose
+   * folder's data source is switched on, and not to the reader. SELECT and
+   * EXPLAIN alone run on it.
+   */
+  test.describe('Cube Store (T536)', () => {
+    test.afterAll(async ({ browser }) => {
+      // Off again, for every other spec.
+      const admin = await signedIn(browser, 'super');
+      try {
+        await admin.page.request.put('/api/cube-store/sql-runner', { data: { on: false } });
+      } finally {
+        await admin.context.close();
+      }
+    });
+
+    test('is turned on from Data sources’ ⋯ by a Super-Admin, confirming who may then read every folder’s rollups (P5, Q9)', async ({
+      page,
+    }) => {
+      await page.request.put('/api/cube-store/sql-runner', { data: { on: false } });
+      await page.goto('/sources');
+      await expect(page.getByRole('link', { name: 'Cube Store' })).toHaveCount(0);
+      await page.getByRole('button', { name: 'More actions for Data sources' }).click();
+      await page.getByRole('menuitem', { name: 'Turn on the SQL runner for Cube Store…' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Turn on the SQL runner for Cube Store?' });
+      await expect(dialog).toContainText(
+        'Cube Store has no logins of its own, so wechart’s check on each command is the only guard.',
+      );
+      await expect(dialog.getByRole('button', { name: 'Turn on' })).toBeDisabled();
+      await dialog.getByRole('checkbox').check();
+      await dialog.getByRole('button', { name: 'Turn on' }).click();
+      await expect(page.getByTestId('source-cubestore')).toHaveText(
+        'Cube StoreSharedCube Storeevery folder’s rollups',
+      );
+    });
+
+    test('is listed at the root for the writer, whose folder’s data source is on, and runs SELECT and EXPLAIN alone (AC-384)', async ({
+      page: admin,
+      browser,
+    }) => {
+      // On, whatever the test before did (T536's review).
+      const on = await admin.request.put('/api/cube-store/sql-runner', {
+        data: { on: true, readOnlyConfirmed: true },
+      });
+      expect(on.status(), await on.text()).toBe(200);
+      const writer = await signedIn(browser, 'writer');
+      const reader = await signedIn(browser, 'reader');
+      try {
+        const { page } = writer;
+        await page.goto('/explore?folder=root');
+        await page.getByTestId('item-cubestore').getByText('Cube Store', { exact: true }).click();
+        await expect(page).toHaveURL(/\/explore\/data-sources\/cubestore/);
+        await expect(page.getByRole('heading', { level: 1, name: 'Cube Store' })).toBeVisible();
+        await expect(
+          page.getByRole('tablist', { name: 'Data source' }).getByRole('tab'),
+        ).toHaveText(['SQL']);
+        const panel = page.getByRole('tabpanel', { name: 'SQL' });
+        await expect(panel.getByTestId('sql-warning')).toHaveText(
+          'This SQL runs on Cube Store directly. It holds every folder’s rollups, and folder permissions and access policies don’t apply.',
+        );
+        await panel.locator('.sql-editor .cm-content').click();
+        await page.keyboard.type(
+          'SELECT table_schema, table_name FROM information_schema.tables LIMIT 5',
+        );
+        await panel.getByRole('button', { name: 'Run', exact: true }).click();
+        await expect(panel.getByTestId('sql-result-head')).toHaveText(/^Finished/);
+        // An EXPLAIN runs too: Cube Store's logical plan (research `xcube-sql-runner.md`).
+        await panel.locator('.sql-editor .cm-content').click();
+        await page.keyboard.press('ControlOrMeta+A');
+        await page.keyboard.type('EXPLAIN SELECT 1');
+        await panel.getByRole('button', { name: 'Run', exact: true }).click();
+        await expect(panel.getByTestId('sql-result-head')).toHaveText(/^Finished 1 row/);
+        // Anything else is refused before it reaches Cube Store, as compose's
+        // xcube refuses each (T536's probe), in its words where it gives them.
+        for (const [sql, said] of [
+          // xcube's own words, with its straight apostrophes.
+          [
+            'SHOW SCHEMAS',
+            "This is a SHOW command. Read Cube Store's tables instead, with a LIMIT",
+          ],
+          ['QUEUE TRUNCATE', 'This is a QUEUE command. Nothing reached Cube Store.'],
+          [
+            'SELECT * FROM system.cache LIMIT 1',
+            "system.cache holds Cube's cached results and queued queries: it isn't read here. Nothing reached Cube Store.",
+          ],
+        ] as const) {
+          await panel.locator('.sql-editor .cm-content').click();
+          await page.keyboard.press('ControlOrMeta+A');
+          await page.keyboard.type(sql);
+          await panel.getByRole('button', { name: 'Run', exact: true }).click();
+          await expect(panel.getByTestId('sql-result-head')).toHaveText(/^Not run/);
+          await expect(panel.getByTestId('sql-result-note')).toContainText(
+            'On Cube Store, only SELECT and EXPLAIN run, one statement at a time.',
+          );
+          await expect(panel.getByTestId('sql-result-note')).toContainText(said);
+        }
+
+        // The reader isn't allowed on any data source: no Cube Store, listed or by its page.
+        await reader.page.goto('/explore?folder=root');
+        await expect(reader.page.getByTestId('explore-contents')).toBeVisible();
+        await expect(reader.page.getByTestId('item-cubestore')).toHaveCount(0);
+        expect((await reader.page.request.get('/api/cube-store')).status()).toBe(404);
+        expect(
+          (
+            await reader.page.request.post('/api/cube-store/sql', { data: { sql: 'SELECT 1' } })
+          ).status(),
+        ).toBe(404);
+      } finally {
+        await writer.context.close();
+        await reader.context.close();
+      }
+    });
+  });
 });

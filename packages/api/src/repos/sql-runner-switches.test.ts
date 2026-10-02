@@ -43,6 +43,14 @@ describe('the SQL runner’s switch (T531, AC-374)', () => {
     expect(again.confirmedBy.name).toBe('Second');
   });
 
+  it('names every target switched on, for who may use Cube Store (T536, Q7)', async () => {
+    const [one, two] = [randomUUID(), randomUUID()].map((id) => `ds-${id}`);
+    made.push(one!, two!);
+    await switches().on(one!, { key: 'k', name: 'N' });
+    expect(await switches().targets()).toContain(one!);
+    expect(await switches().targets()).not.toContain(two!);
+  });
+
   it('answers several at once, for a listing', async () => {
     const [one, two, three] = [randomUUID(), randomUUID(), randomUUID()].map((id) => `ds-${id}`);
     made.push(one!, two!);

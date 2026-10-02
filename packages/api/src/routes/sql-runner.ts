@@ -4,10 +4,15 @@ import { isDeepStrictEqual } from 'node:util';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { actorOf, recordIn } from '../audit/record';
-import { USER } from '../auth/guard';
+import { ADMIN, USER } from '../auth/guard';
 import type { AuditStore } from '../repos/audit';
+import { ROOT_FOLDER_ID } from '../repos/catalog';
 import type { DataSource, DataSourceStore } from '../repos/data-sources';
-import type { SqlRunnerSwitchStore } from '../repos/sql-runner-switches';
+import {
+  CUBE_STORE_TARGET,
+  type SqlRunnerSwitch,
+  type SqlRunnerSwitchStore,
+} from '../repos/sql-runner-switches';
 import type { GoingRun, LostRun, SqlRunStore } from '../repos/sql-runs';
 import { XcubeError } from '../xcube/client';
 import { connectionNameOf } from '../xcube/connections';
@@ -132,8 +137,33 @@ interface RunReply {
   readonly retryAfter?: string;
 }
 
+/** Where a run goes, and what its row and its audit event say of it. */
+interface RunAt {
+  readonly target: SqlTarget;
+  /** Its data source; none for Cube Store. */
+  readonly dataSourceId: string | null;
+  readonly dataSourceName: string;
+  readonly folderId: string | null;
+  readonly item: { readonly kind: string; readonly id: string; readonly title: string };
+  readonly inWorkspace: boolean;
+}
+
+/**
+ * Cube Store in the audit trail, at the root, as "Shared" (design 15's J):
+ * as a run its server stopped mid-way recorded it (T534).
+ */
+const CUBE_STORE_ITEM = { kind: 'cube-store', id: CUBE_STORE_TARGET, title: 'Cube Store' };
+const CUBE_STORE_ONLY_READS =
+  'On Cube Store, only SELECT and EXPLAIN run, one statement at a time.';
+/** Cube Store has no cancel: xcube stops waiting at the clock (research `xcube-sql-runner.md`). */
+const CUBE_STORE_STOPPED =
+  'Stopped at 30 seconds: xcube stopped waiting for it, and Cube Store ends the query at its own time limit.';
+const CUBE_STORE_OFF =
+  'The SQL runner is off for Cube Store: a Super-Admin turns it on in Data sources.';
+const NO_CUBE_STORE = 'There’s no such data source, or it isn’t yours to see.';
+
 /** A run's answer, as the browser is given it: never its redacted SQL, which history keeps (T534). */
-function replyOf(answer: SqlAnswer): RunReply {
+function replyOf(answer: SqlAnswer, onCubeStore = false): RunReply {
   switch (answer.kind) {
     case 'ran':
       return {
@@ -153,7 +183,7 @@ function replyOf(answer: SqlAnswer): RunReply {
         status: 400,
         body: {
           outcome: 'refused',
-          error: ONLY_READS,
+          error: onCubeStore ? CUBE_STORE_ONLY_READS : ONLY_READS,
           reason: answer.reason,
           statement: answer.statement,
         },
@@ -163,7 +193,8 @@ function replyOf(answer: SqlAnswer): RunReply {
         status: 422,
         body: {
           outcome: answer.how,
-          error: answer.how === 'timeout' ? STOPPED : CANCELLED,
+          error:
+            answer.how === 'timeout' ? (onCubeStore ? CUBE_STORE_STOPPED : STOPPED) : CANCELLED,
           durationMs: answer.durationMs,
         },
       };
@@ -174,7 +205,7 @@ function replyOf(answer: SqlAnswer): RunReply {
           outcome: 'failed',
           error:
             answer.code === 'connect_failed'
-              ? `Couldn’t connect to the database: ${answer.error}`
+              ? `Couldn’t connect to ${onCubeStore ? 'Cube Store' : 'the database'}: ${answer.error}`
               : answer.error,
           durationMs: answer.durationMs,
         },
@@ -189,7 +220,9 @@ function replyOf(answer: SqlAnswer): RunReply {
           error:
             answer.code === 'unknown_overlay'
               ? 'xcube no longer holds your workspace’s preview. Run it again.'
-              : 'xcube doesn’t hold this data source’s connection yet. Try again in a moment.',
+              : onCubeStore
+                ? 'xcube doesn’t hold this model yet, so Cube Store can’t be asked. Try again in a moment.'
+                : 'xcube doesn’t hold this data source’s connection yet. Try again in a moment.',
         },
       };
   }
@@ -287,14 +320,16 @@ export function registerSqlRunner(
         actor: actorOf(request.wechartUser),
         event: 'sql-run',
         folderId:
-          source === undefined
-            ? null
-            : workspace === null
-              ? source.folderId
-              : (source.origin?.folderId ?? source.targetFolderId ?? source.folderId),
+          lost.dataSourceId === null
+            ? ROOT_FOLDER_ID
+            : source === undefined
+              ? null
+              : workspace === null
+                ? source.folderId
+                : (source.origin?.folderId ?? source.targetFolderId ?? source.folderId),
         item:
           lost.dataSourceId === null
-            ? { kind: 'cube-store', id: 'cubestore', title: 'Cube Store' }
+            ? CUBE_STORE_ITEM
             : {
                 kind: 'data-source',
                 id: lost.dataSourceId,
@@ -315,6 +350,22 @@ export function registerSqlRunner(
     );
   };
 
+  /** The SQL a run was asked for, or why it isn't one: said here. */
+  const sqlOf = async (request: FastifyRequest, reply: FastifyReply) => {
+    const sql = (request.body as { sql?: unknown } | undefined)?.sql;
+    if (typeof sql !== 'string' || sql.trim() === '') {
+      await reply.status(400).send({ error: 'Send the SQL to run: { sql }.' });
+      return undefined;
+    }
+    if (sql.length > MAX_SQL) {
+      await reply
+        .status(400)
+        .send({ error: `SQL runs at most ${MAX_SQL.toLocaleString('en')} characters long.` });
+      return undefined;
+    }
+    return sql;
+  };
+
   app.post('/api/data-sources/:id/sql', USER, async (request, reply) => {
     const source = await reached(request, reply, 'read');
     if (source === undefined) return reply;
@@ -322,13 +373,8 @@ export function registerSqlRunner(
     const refusal = await mayRunSql(request, source, { workspace, access, switches, store });
     if (refusal !== undefined) return reply.status(refusal.status).send({ error: refusal.error });
 
-    const sql = (request.body as { sql?: unknown } | undefined)?.sql;
-    if (typeof sql !== 'string' || sql.trim() === '')
-      return reply.status(400).send({ error: 'Send the SQL to run: { sql }.' });
-    if (sql.length > MAX_SQL)
-      return reply
-        .status(400)
-        .send({ error: `SQL runs at most ${MAX_SQL.toLocaleString('en')} characters long.` });
+    const sql = await sqlOf(request, reply);
+    if (sql === undefined) return reply;
     if (runner === undefined)
       return reply.status(503).send({
         error: 'SQL runs on xcube, which this deployment doesn’t run.',
@@ -336,7 +382,33 @@ export function registerSqlRunner(
 
     const target = await targetOf(reply, source, workspace, runner);
     if (target === undefined) return reply;
+    return runOn(request, reply, runner, sql, {
+      target,
+      dataSourceId: source.id,
+      dataSourceName: source.name,
+      // A copy's where its original is, as its other records are (T368's review).
+      folderId:
+        workspace === null
+          ? source.folderId
+          : (source.origin?.folderId ?? source.targetFolderId ?? source.folderId),
+      item: { kind: 'data-source', id: source.id, title: source.name },
+      inWorkspace: workspace !== null,
+    });
+  });
 
+  /**
+   * A run, once the user may make it and its target is known (T532–T534):
+   * one going at a time for its user, its row done before it is answered,
+   * and every run an audit event. A data source's run, or Cube Store's.
+   */
+  const runOn = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    options: SqlRunnerOptions,
+    sql: string,
+    at: RunAt,
+  ) => {
+    const onCubeStore = 'cubeStore' in at.target;
     // One run going at a time for its user, across every API instance (T533, AC-379).
     const runId = randomUUID();
     if (runs !== undefined) {
@@ -345,15 +417,15 @@ export function registerSqlRunner(
       const started = await runs.start({
         runId,
         userKey: userKeyOf(request),
-        dataSourceId: source.id,
+        dataSourceId: at.dataSourceId,
         sql,
-        dataSourceName: source.name,
+        dataSourceName: at.dataSourceName,
       });
       if (!started.started) {
         const going = await goingView(started.going);
         return reply.status(409).send({
           outcome: 'going',
-          error: `You have a run going on ${going.dataSource?.name ?? 'a data source'}. One run at a time: cancel it, or wait for it to finish.`,
+          error: `You have a run going on ${going.dataSource?.name ?? (going.cubeStore ? 'Cube Store' : 'a data source')}. One run at a time: cancel it, or wait for it to finish.`,
           going,
         });
       }
@@ -363,8 +435,8 @@ export function registerSqlRunner(
     /** Why there is no answer of xcube's: it refused the request, didn't answer in time, or wasn't reached. */
     let unanswered: 'refused' | 'late' | 'away' | undefined;
     try {
-      answer = await runner.xcube.run(target, { sql, runId, ...SQL_CAPS });
-      said = replyOf(answer);
+      answer = await options.xcube.run(at.target, { sql, runId, ...SQL_CAPS });
+      said = replyOf(answer, onCubeStore);
     } catch (error) {
       unanswered =
         error instanceof XcubeError
@@ -419,24 +491,20 @@ export function registerSqlRunner(
       {
         actor: actorOf(request.wechartUser),
         event: 'sql-run',
-        // A copy's where its original is, as its other records are (T368's review).
-        folderId:
-          workspace === null
-            ? source.folderId
-            : (source.origin?.folderId ?? source.targetFolderId ?? source.folderId),
-        item: { kind: 'data-source', id: source.id, title: source.name },
+        folderId: at.folderId,
+        item: at.item,
         summary: summaryOf(answer, done, unanswered),
         details: {
           ...done,
           sql: answer !== undefined && 'redactedSql' in answer ? answer.redactedSql : null,
-          inWorkspace: workspace !== null,
+          inWorkspace: at.inWorkspace,
         },
       },
       request.log,
     );
     if (said.retryAfter !== undefined) void reply.header('retry-after', said.retryAfter);
     return reply.status(said.status).send(said.body);
-  });
+  };
 
   /**
    * A user's own past runs (T534, AC-381; design 15's F and Q2): theirs
@@ -454,7 +522,10 @@ export function registerSqlRunner(
       return reply.status(400).send({ error: 'Name one data source, and one page to follow.' });
     const page = await runs.list({
       userKey: userKeyOf(request),
-      ...(dataSource === undefined ? {} : { dataSourceId: dataSource }),
+      // Cube Store's by its page's id, `cubestore`: its runs have no data source (T536).
+      ...(dataSource === undefined
+        ? {}
+        : { dataSourceId: dataSource === CUBE_STORE_TARGET ? null : dataSource }),
       ...(after === undefined ? {} : { after }),
     });
     const pathOf = await paths();
@@ -486,6 +557,8 @@ export function registerSqlRunner(
         id: run.id,
         sql: run.sql,
         dataSource: view,
+        // Cube Store's has no data source (T536).
+        cubeStore: run.dataSourceId === null,
         startedAt: run.startedAt.toISOString(),
         outcome: run.outcome,
         rowCount: run.rowCount,
@@ -495,6 +568,122 @@ export function registerSqlRunner(
       });
     }
     return page.next === undefined ? { runs: out } : { runs: out, next: page.next };
+  });
+
+  /**
+   * Cube Store as this user is to see it (T536; AC-384, AC-374; design 15's
+   * state H, Q7, P5): a Super-Admin's to switch, and once on, for
+   * Super-Admins and for those allowed on a data source in a folder a
+   * Super-Admin switched on. One in My workspace doesn't count (Q7): its
+   * owner may run SQL on it with no switch, and nearly every read-write
+   * member could otherwise read every folder's rollups. None to anyone else,
+   * nor without xcube's runner.
+   */
+  const cubeStoreFor = async (
+    request: FastifyRequest,
+  ): Promise<{ readonly on: SqlRunnerSwitch | undefined; readonly runs: boolean } | undefined> => {
+    if (runner === undefined || switches === undefined) return undefined;
+    const on = await switches.of(CUBE_STORE_TARGET);
+    if (request.wechartUser?.superAdmin === true) return { on, runs: on !== undefined };
+    if (on === undefined) return undefined;
+    return (await allowedOnASwitchedFolder(request)) ? { on, runs: true } : undefined;
+  };
+  /** Whether the user may run SQL on some data source in a folder, its runner switched on (Q7). */
+  const allowedOnASwitchedFolder = async (request: FastifyRequest) => {
+    for (const target of (await switches?.targets()) ?? []) {
+      if (target === CUBE_STORE_TARGET) continue;
+      const source = await store.get(target);
+      if (source === undefined || (await workspaceOf?.(source.folderId)) != null) continue;
+      if ((await access(request, source.folderId, 'write')) === undefined) return true;
+    }
+    return false;
+  };
+  /** Its switch as anyone it is shown to may see it: by name, never a key (AC-374). */
+  const switchView = (on: SqlRunnerSwitch | undefined) =>
+    on === undefined
+      ? { on: false as const }
+      : {
+          on: true as const,
+          confirmedBy: { name: on.confirmedBy.name },
+          confirmedAt: on.confirmedAt.toISOString(),
+        };
+
+  app.get('/api/cube-store', USER, async (request, reply) => {
+    const seen = await cubeStoreFor(request);
+    if (seen === undefined) return reply.status(404).send({ error: NO_CUBE_STORE });
+    return { ...switchView(seen.on), runs: seen.runs };
+  });
+
+  /**
+   * Cube Store's switch (T536, AC-374; design 15's Q9 and P4): a
+   * Super-Admin's alone, applied at once, and on only once they confirm that
+   * what wechart reaches it with can only read, and that everyone allowed may
+   * read every folder's rollups, with wechart's check the only guard. Either
+   * way an audit event, at the root.
+   */
+  app.put('/api/cube-store/sql-runner', ADMIN, async (request, reply) => {
+    if (switches === undefined || runner === undefined)
+      return reply.status(503).send({ error: 'The SQL runner isn’t set up here.' });
+    const value = (request.body ?? {}) as { on?: unknown; readOnlyConfirmed?: unknown };
+    if (typeof value.on !== 'boolean')
+      return reply.status(400).send({ error: 'Say whether to turn it on: { on: true | false }.' });
+    const record = (summary: string, sqlRunner: 'on' | 'off') =>
+      recordIn(
+        audit,
+        {
+          actor: actorOf(request.wechartUser),
+          event: 'data-source-change',
+          folderId: ROOT_FOLDER_ID,
+          item: CUBE_STORE_ITEM,
+          summary,
+          details: { sqlRunner },
+        },
+        request.log,
+      );
+    if (!value.on) {
+      // A change only where there is one to record (T531's review).
+      if ((await switches.of(CUBE_STORE_TARGET)) !== undefined) {
+        await switches.off(CUBE_STORE_TARGET);
+        await record('Turned the SQL runner off for Cube Store', 'off');
+      }
+      return { on: false };
+    }
+    if (value.readOnlyConfirmed !== true)
+      return reply.status(400).send({
+        error:
+          'Confirm that what wechart reaches Cube Store with can only read, and that everyone allowed may read every folder’s rollups, before turning the SQL runner on.',
+      });
+    const user = request.wechartUser;
+    const on = await switches.on(CUBE_STORE_TARGET, {
+      key: user?.key ?? 'single-user',
+      name: user?.name ?? 'You',
+    });
+    await record(
+      'Turned the SQL runner on for Cube Store, confirming everyone allowed may read every folder’s rollups',
+      'on',
+    );
+    return switchView(on);
+  });
+
+  /**
+   * Read-only SQL on Cube Store (T536, AC-384; R50-3, R50-5): SELECT and
+   * EXPLAIN alone, as xcube checks, with R50's caps. Its runs are kept and
+   * audited as a data source's are, at the root.
+   */
+  app.post('/api/cube-store/sql', USER, async (request, reply) => {
+    const seen = await cubeStoreFor(request);
+    if (seen === undefined) return reply.status(404).send({ error: NO_CUBE_STORE });
+    if (!seen.runs) return reply.status(403).send({ error: CUBE_STORE_OFF });
+    const sql = await sqlOf(request, reply);
+    if (sql === undefined || runner === undefined) return reply;
+    return runOn(request, reply, runner, sql, {
+      target: { cubeStore: true },
+      dataSourceId: null,
+      dataSourceName: 'Cube Store',
+      folderId: ROOT_FOLDER_ID,
+      item: CUBE_STORE_ITEM,
+      inWorkspace: false,
+    });
   });
 
   /**
@@ -591,6 +780,8 @@ export function registerSqlRunner(
     const source = going.dataSourceId === null ? undefined : await store.get(going.dataSourceId);
     return {
       dataSource: source === undefined ? null : { id: source.id, name: source.name },
+      // Cube Store's has no data source (T536).
+      cubeStore: going.dataSourceId === null,
       startedAt: going.startedAt.toISOString(),
     };
   };

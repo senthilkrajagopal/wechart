@@ -22,7 +22,7 @@ import { imageStore } from '../repos/images';
 import { modelFileStore } from '../repos/model-files';
 import { proposalStore } from '../repos/proposals';
 import { queryLog } from '../repos/query-log';
-import { sqlRunnerSwitches } from '../repos/sql-runner-switches';
+import { CUBE_STORE_TARGET, sqlRunnerSwitches } from '../repos/sql-runner-switches';
 import { sqlRuns } from '../repos/sql-runs';
 import { versionStore } from '../repos/versions';
 import { buildServer } from '../server';
@@ -826,6 +826,12 @@ afterAll(async () => {
   const sourced = PLACES.map((place) => at[place]?.source).filter((id) => id !== undefined);
   if (sourced.length > 0)
     await db.deleteFrom('sql_runs').where('data_source_id', 'in', sourced).execute();
+  // And those on Cube Store (T536), which have no data source.
+  await db
+    .deleteFrom('sql_runs')
+    .where('data_source_id', 'is', null)
+    .where('sql', 'like', `%${MARK}%`)
+    .execute();
   if (models.length > 0) await db.deleteFrom('model_files').where('path', 'in', models).execute();
   await db.deleteFrom('data_sources').where('name', 'like', `${mark}%`).execute();
   for (const id of extraSources) await db.deleteFrom('data_sources').where('id', '=', id).execute();
@@ -1678,6 +1684,21 @@ const CASES: Record<string, Case> = {
   'GET /api/data-sources/:id/catalog/schemas': () => sqlCatalog('schemas'),
   'GET /api/data-sources/:id/catalog/tables': () => sqlCatalog('tables?schema=public'),
   'POST /api/data-sources/:id/catalog/columns': () => sqlCatalog('columns', 'POST'),
+  // Cube Store (T536, AC-384, AC-374; design 15's Q7): while off, only a
+  // Super-Admin is told of it and nobody runs SQL on it; once on, Super-Admins
+  // and the writers of a folder whose data source is switched on. Its switch
+  // is a Super-Admin's.
+  'GET /api/cube-store': () => cubeStoreCase({ method: 'GET', url: '/api/cube-store' }, false),
+  'POST /api/cube-store/sql': () =>
+    cubeStoreCase(
+      { method: 'POST', url: '/api/cube-store/sql', payload: { sql: `SELECT '${MARK}'` } },
+      true,
+    ),
+  'PUT /api/cube-store/sql-runner': () =>
+    openedOnlyBy('/api/cube-store/sql-runner', (who) => who === 'super', undefined, {
+      method: 'PUT',
+      payload: { on: false },
+    }),
   // A user's own run going, and its cancel (T533, AC-379): anyone's own,
   // never another's. None goes here, so each says so.
   'GET /api/sql-runs/going': async () => {
@@ -2028,6 +2049,36 @@ async function sqlCatalog(what: string, method: 'GET' | 'POST' = 'GET') {
     } finally {
       await switches.off(at[place].source);
     }
+  }
+}
+
+/**
+ * Cube Store's state or a run on it (T536), as everyone asks it: off, then
+ * on with no folder's data source switched on, then with each place's.
+ */
+async function cubeStoreCase(options: InjectOptions & { url: string }, running: boolean) {
+  const switches = sqlRunnerSwitches(getDb());
+  await switches.off(CUBE_STORE_TARGET);
+  try {
+    // Off: a Super-Admin is told so, to find Turn on…; nobody runs SQL on it.
+    await openedOnlyBy(options.url, (who) => !running && who === 'super', undefined, options);
+    await switches.on(CUBE_STORE_TARGET, { key: 'super', name: 'Super' });
+    await openedOnlyBy(options.url, (who) => who === 'super', undefined, options);
+    for (const place of PLACES) {
+      await switches.on(at[place].source, { key: 'super', name: 'Super' });
+      try {
+        await openedOnlyBy(
+          options.url,
+          (who) => who === 'super' || writes(who, place),
+          undefined,
+          options,
+        );
+      } finally {
+        await switches.off(at[place].source);
+      }
+    }
+  } finally {
+    await switches.off(CUBE_STORE_TARGET);
   }
 }
 

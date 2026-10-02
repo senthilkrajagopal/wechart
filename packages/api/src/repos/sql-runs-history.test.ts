@@ -106,6 +106,15 @@ describe('a user’s run history (T534, AC-381)', () => {
     ).toEqual([onB]);
   });
 
+  it('lists Cube Store’s runs alone when asked, by no data source (T536, AC-384)', async () => {
+    const me = userOf();
+    await ran(me, 'ds-a', 'SELECT 1', 20);
+    const onCubeStore = await ran(me, null, 'SELECT 2', 10);
+    expect(
+      (await runs().list({ userKey: me, dataSourceId: null })).runs.map((run) => run.id),
+    ).toEqual([onCubeStore]);
+  });
+
   it('gives 50 at a time, and the next 50 from where the last page ended', async () => {
     const me = userOf();
     const ids: string[] = [];

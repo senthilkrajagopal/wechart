@@ -1,11 +1,14 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { ME_QUERY } from '../../shell/me';
 import { InfoBar } from '../../shell/InfoBar';
+import { MenuButton } from '../../shell/MenuButton';
 import { StateLine } from '../../shell/StatusIcon';
 import type { Target } from '../explore/NewItemDialog';
+import { CUBE_STORE_QUERY, cubeStoreListed } from './cubeStore';
 import { DataSourcesList } from './DataSourcesList';
+import { CubeStoreTurnOn } from './SqlRunner';
 import { NewSourceWizard } from './NewSourceWizard';
 import { DATA_SOURCES_QUERY } from './query';
 
@@ -20,6 +23,22 @@ export function DataSourcesPage() {
   const sources = useQuery(DATA_SOURCES_QUERY);
   const me = useQuery(ME_QUERY);
   const queryClient = useQueryClient();
+  /**
+   * Cube Store (T536, AC-384; design 15's P5): while off, its switch is in
+   * the header's ⋯, for a Super-Admin, whom alone the API tells of it then;
+   * once on, a row of its own, to whoever may use it.
+   */
+  const cubeStore = useQuery(CUBE_STORE_QUERY);
+  const [turningOn, setTurningOn] = useState(false);
+  /** Turned on here: focus goes to its new row, the ⋯ being gone (T536's review). */
+  const turnedOn = useRef(false);
+  const more = useRef<HTMLSpanElement>(null);
+  const listed = cubeStoreListed(cubeStore.data);
+  useEffect(() => {
+    if (!turnedOn.current || !listed) return;
+    turnedOn.current = false;
+    document.querySelector<HTMLElement>('[data-testid="source-cubestore"] a')?.focus();
+  }, [listed]);
   /**
    * "+ Data source", as the approved prototype's page has it (T363): made in
    * My workspace, which a signed-in Super-Admin or read-write member has
@@ -64,7 +83,37 @@ export function DataSourcesPage() {
               + Data source
             </button>
           ) : null}
+          {me.data?.superAdmin === true && cubeStore.data?.on === false ? (
+            <span ref={more}>
+              <MenuButton
+                label="More actions for Data sources"
+                className="btn-ghost btn-sm"
+                items={[
+                  {
+                    key: 'cube-store',
+                    label: 'Turn on the SQL runner for Cube Store…',
+                    onSelect: () => {
+                      setTurningOn(true);
+                    },
+                  },
+                ]}
+              >
+                <span aria-hidden="true">⋯</span>
+              </MenuButton>
+            </span>
+          ) : null}
         </div>
+        {turningOn ? (
+          <CubeStoreTurnOn
+            onTurnedOn={() => {
+              turnedOn.current = true;
+            }}
+            onClose={() => {
+              setTurningOn(false);
+              more.current?.querySelector('button')?.focus();
+            }}
+          />
+        ) : null}
         {addFailed === null ? null : <StateLine kind="err">{addFailed}</StateLine>}
         <InfoBar>
           {/* Design 01's note (T496): how to change one, where there's a workspace to (T462). */}
@@ -88,6 +137,7 @@ export function DataSourcesPage() {
             sources={sources.data}
             seesEveryFolder={me.data?.superAdmin === true}
             readWrite={me.data?.readWrite === true}
+            cubeStore={listed}
           />
         )}
       </div>

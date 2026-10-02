@@ -553,7 +553,10 @@ export function AuditTrail({
                       <td>
                         {record.item === null
                           ? '—'
-                          : `${KIND_LABEL[record.item.kind] ?? record.item.kind} · ${record.item.title}`}
+                          : // Cube Store is one of its kind: its name alone (T536; state J).
+                            record.item.kind === 'cube-store'
+                            ? record.item.title
+                            : `${KIND_LABEL[record.item.kind] ?? record.item.kind} · ${record.item.title}`}
                         {/* A run on a workspace copy, recorded at its original's folder (state J). */}
                         {record.event === 'sql-run' && record.details?.['inWorkspace'] === true
                           ? ' · copy in My workspace'

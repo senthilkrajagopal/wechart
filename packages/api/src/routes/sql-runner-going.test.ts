@@ -167,6 +167,8 @@ describe('one run at a time per user, and Cancel (T533, AC-379)', () => {
       error: `You have a run going on one_${MARK}. One run at a time: cancel it, or wait for it to finish.`,
       going: {
         dataSource: { id: sourceIds[0], name: `one_${MARK}` },
+        // Not Cube Store's (T536).
+        cubeStore: false,
         startedAt: expect.any(String),
       },
     });
@@ -177,6 +179,7 @@ describe('one run at a time per user, and Cancel (T533, AC-379)', () => {
     expect(going.json()).toEqual({
       going: {
         dataSource: { id: sourceIds[0], name: `one_${MARK}` },
+        cubeStore: false,
         startedAt: expect.any(String),
       },
     });
