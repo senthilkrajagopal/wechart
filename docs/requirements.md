@@ -950,6 +950,14 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R53 — names in the workspace, and models one may only read** (2026-10-01, the user)
+- Q (from T347): a chart stores the full name of the cube it was bound to. A workspace cube of the same short name, landing elsewhere, isn't used by tiles saved before it was made. Rebind stored names in the workspace? A: "Rebind in the workspace (Recommended)". *AC-281 amended.*
+- Q (from T347): may someone who may only read a folder copy its model into their workspace just to use it? A: "Yes, use-only copy (Recommended)". *A use-only copy can't be proposed back to that folder. AC-283 amended.*
+- Claude's calls from T359's report, each overturnable:
+  - with security off, models stay editable in place until approval can land them (T451), then become workspace-only like the rest;
+  - with security off, an item in no folder is the single user's own;
+  - copy on use stays off with security off (AC-371 scoped).
+
 **R52 — design 5's approval questions, and security off** (2026-10-01, the user)
 - Asked while T451, T456 and T359 were planned:
   - Q: A proposal can bring a data source with the models that use it, and xcube's dry run binds only to landed data sources. What then? A: "Land data sources first". *A refused approval leaves them landed; AC-321 amended.*

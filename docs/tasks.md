@@ -10091,6 +10091,14 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
       - two approvals into one deleted folder at once give the second a `500`;
       - a record outlives a rejected or withdrawn proposal.
     - The security e2e `deleting.spec.ts` was not run: another session's security stack was up on 4300. The unit test asserts what it checks, that a deleted folder isn't listed.
+- [ ] T542 (AC-281, AC-323) Rebind a workspace item's stored names to the workspace's own cube in its previews *(added 2026-10-01, `[R53]`: "Rebind in the workspace")*
+  - Files: `packages/api/src/xcube/overlays.ts` and the query route's workspace branch in `server.ts` (`POST …/resolve` with `overlay`), `e2e/security/workspace-overlay.spec.ts`
+  - Failing test: a tile saved against a path's `orders`, then a workspace cube `orders` made to land elsewhere: the tile's preview answers from the workspace's cube; landed, it binds where it lands (AC-281).
+  - Depends on: T347, T440
+- [ ] T543 (AC-283) Copy a model from a folder one may only read into My workspace, to use and never propose back *(added 2026-10-01, `[R53]`: "Yes, use-only copy")*
+  - Files: the model copy route (`routes/workspace-models.ts`), the model page's "Use in my workspace", the proposal's refusal, tests
+  - Failing test: a reader of a folder copies its model into their workspace and previews with it; proposing it back to that folder is refused; proposing it to a folder they write lands it as a new model (AC-283).
+  - Depends on: T347, T350
 - [x] T541 (AC-388) Freeze a workspace item while it is in an open proposal *(added 2026-10-01, `[R52]`)*
   - Files: the save routes for dashboards, charts and data sources in `packages/api/src/server.ts` and `routes/data-sources.ts` (models with T350), the editors' notices, `packages/api/src/routes/proposal-freeze.test.ts`
   - Failing test: `proposal-freeze.test.ts`: a dashboard, chart or data source in an open proposal refuses a save (`409`), saying it was submitted and that withdrawing lets it be changed; once withdrawn or decided, it saves (AC-388).
@@ -10392,6 +10400,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-382 | T534 | AC-383 | T532 | AC-384 | T536 |
 | AC-385 | T535 | AC-386 | T539 | AC-387 | T535 |
 | AC-388 | T541 | AC-389 | T540 | | |
+| AC-281 (again, rebinding) | T542 | AC-283 (again, use-only copies) | T543 | | |
 | AC-354 (again, copy on use) | T538 | | | | |
 | AC-296 | T370 | AC-297 | T371, T504 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441 |
 | AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |
