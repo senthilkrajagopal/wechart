@@ -16,11 +16,12 @@ cube:
   # from ed08180c37 (T420, R31), and each cube's bound data source in its
   # items from e53cf2a8b8 (T459), and a data source changed in place served
   # from its new target, its cubes keeping their names while it is at the
-  # target it was first served with, from 919cff8c6e (T501, R38). The fork's
+  # target it was first served with, from 919cff8c6e (T501, R38), and the
+  # read-only SQL runner from 89628a0e88 (T532, R50). The fork's
   # CI publishes it for amd64 and arm64, pinned here by digest
   # (docs/deploy.md). Cube and its refresh worker both run it, with the
   # image's own command.
-  image: ghcr.io/senthilkrajagopal/xcube:v1.7.45-919cff8c6e@sha256:cb04cb9ba8e3b7db58ae8297a986f2deeaaf12497c853ab6d5c25c88797c5596
+  image: ghcr.io/senthilkrajagopal/xcube:v1.7.45-89628a0e88@sha256:155d204cf8405578c1667435c4518e4fb14e7b1f63af1bea66ebc263fb7a4d17
   dataSource:
     type: postgres
     host: superset-postgresql.superset.svc.cluster.local

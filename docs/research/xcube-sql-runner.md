@@ -13,7 +13,54 @@ researched: 2026-10-01
 - xcube at 89628a0e88: `src/sql/classify.ts` (the check), `src/sql/runner.ts` (each database's session), `src/sql/runs.ts` (caps, clock, cancel), `src/admin/routes.ts` (the three routes), `src/store/migrations.ts` (migration 12, additive: one table, `sql_runs`), README "Serving models" → "SQL runner" and "Admin API", and its tests (`test/integration/sql-runner.test.ts`, `test/unit/sql-classify.test.ts`, `test/unit/sql-runner.test.ts`);
 - the background study, `docs/research/sql-runner.md`.
 
-Nothing below has yet been checked against compose's running xcube: the image isn't pinned yet. T532 checks it when it pins the image.
+## Checked against compose's running image (T532, 2026-10-01)
+
+T532 pinned the image and recreated compose's `wechart-cube` and `wechart-cube-refresh-worker` on it. Its revision label is `89628a0e88e636710ffc3553046f4b7fa0945fc2`. Then it probed the routes as model `e2e-security`, under the service credential, on the stored root `default` (PostgreSQL 18, `sample-db`, as `sample`), and on Cube Store 1.7.45.
+
+**What held as xcube said:**
+- **A SELECT** answers `200` with `columns`, `rows`, `rowCount`, `truncated: null`, `durationMs`, `statement: 'select'` and `redactedSql`.
+  - `int8` and `numeric` come as strings (`"2"`, `"1.5"`), `bytea` as `"\\x01"`, and NULL as `null`.
+  - A duplicate column name is kept (`SELECT 1 AS a, 2 AS a`).
+  - `UNION ALL` and `WITH … SELECT` run.
+- **`redactedSql` replaces every literal with `?`**, numbers among them: `… WHERE relname = ? AND relpages > ? LIMIT ?`.
+- **Refused before running, `400 not_read_only`:**
+  - `INSERT` (`statement: 'insert'`);
+  - `SELECT … INTO TEMP`, `SELECT … FOR UPDATE` and a `WITH` holding a `DELETE`, each `statement: 'select'`;
+  - `EXPLAIN ANALYZE` (`statement: 'explain'`).
+- **Two statements:** `400 several_statements`, with `statement: null`.
+- **`EXPLAIN SELECT 1`** answers one column, `QUERY PLAN` (`text`).
+- **`SELECT nextval('<a sequence>')`** answers `422 query_failed`, "cannot execute nextval() in a read-only transaction". The sequence's `last_value` was unchanged (AC-376).
+- **The row cap:** 10,001 rows came back as 10,000, `truncated: 'rows'`. With `maxRows: 5`, as 5.
+- **The byte cap:** with `maxBytes: 5000`, four rows of 1,000 characters came back, `truncated: 'bytes'`.
+- **The time cap:** `pg_sleep(4)` with `timeoutMs: 1000` answered `422 timeout`, "The statement ran past 1 s and was stopped", after 1,012 ms.
+- **The database's message is passed on as it is:** `SELECT 'abc'::int` answered `422 query_failed`, `invalid input syntax for type integer: "abc"`, with the literal in it.
+- **Not found:**
+  - an unknown connection answers `404 unknown_connection`;
+  - an unknown overlay answers `404 unknown_overlay`, "it expired, was dropped, or never was";
+  - both with `statement: null` and `redactedSql: null`.
+- **Cancel:**
+  - A second run of the same `runId` answered `409 run_in_progress` while the first ran.
+  - `POST …/sql/cancel` answered `found: true`. The run answered `422 cancelled` 1.5 s after it began, and its `pg_sleep(20)` was gone from `pg_stat_activity`.
+  - An unknown `runId` answers `found: false`.
+- **Cube Store:**
+  - `SELECT … FROM information_schema.tables` answers with each column's `type: null`. With `maxRows: 2`, two rows came back, `truncated: 'rows'`.
+  - A SELECT with no rows answers `columns: []`.
+  - `SHOW SCHEMAS` is refused (`statement: 'show'`), the refusal naming the tables to read instead.
+  - `system.cache` and `QUEUE TRUNCATE` are refused.
+  - `EXPLAIN SELECT 1` answers one column, `logical plan`.
+
+**What xcube's answer didn't say:**
+1. **A stopped or cancelled run gives no rows.** `422 timeout` and `422 cancelled` carry only `error`, `code`, `statement`, `redactedSql` and `durationMs`. That held even where rows had been read before the stop (`SELECT g, CASE WHEN g > 3 THEN pg_sleep(3) END FROM generate_series(1, 10) g`, stopped at 2 s). So design 15's Q6 ("rows that arrived before a stop are shown, marked cut", AC-378, AC-379) can't be met from this image. Reported to the user; xcube would need to answer the rows it read with `timeout` and `cancelled`.
+2. **A type PostgreSQL's driver doesn't name comes as `oid <n>`:** `pg_class.relname`, of type `name`, came as `"oid 19"`.
+3. **A `timestamptz` value comes without its zone,** in the API server's local time: `now()` came as `"2026-10-02T06:06:27.045"`.
+
+**The pin brings more than the SQL runner.** `919cff8c6e..89628a0e88` holds five commits (read in the fork, `git log`):
+- `465865f3fd`: a base keeps its target (migration 9; researched in `xcube-465865f3fd.md`, which lists what wechart was to change to pin it);
+- `84aaad4a9f`: the build queue with cancel, `GET …/meta?hidden=true` and the refresh worker's status (migration 10). Each is a new route or an opt-in parameter;
+- `e597c37c6c` and `5a237aedf8`: quick calculations (migration 11);
+- `89628a0e88`: the SQL runner (migration 12).
+
+Compose's xcube schema ran migrations 9–12 at the first start (`xcube.schema_migrations`, applied 2026-10-02 06:04 UTC). By reading, nothing is renamed or rebuilt on this upgrade (`xcube-465865f3fd.md`, finding 10). That was not checked beyond Cube starting and answering `/readyz`.
 
 ## The routes
 
