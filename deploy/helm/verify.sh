@@ -151,6 +151,54 @@ trap on_exit EXIT
 trap 'exit 130' INT TERM
 # With sign-in on, every check after the sign-in ones carries that session.
 fetch() { curl -sS -o "$body" -w '%{http_code}' --max-time 30 -b "$jar" "$@"; }
+# A landing's calls: a dry run when proposed, the changeset at approval (T451).
+fetch_long() { curl -sS -o "$body" -w '%{http_code}' --max-time 120 -b "$jar" "$@"; }
+
+# Puts the model file $1, its text $2, in the shared root as a shared model
+# is changed (T451; AC-278, R52): with sign-in on, only through My workspace
+# and a proposal its author approves, in a workspace folder of its own,
+# removed again once landed; with sign-in off, published in place. Prints the
+# last call's status, its answer in $body.
+land_in_root() {
+  local path="$1" content="$2" files status folder file proposal kept
+  files="$(jq -n --arg path "$path" --arg content "$content" '{files: [{path: $path, content: $content}]}')"
+  if [[ "${security:-false}" != true ]]; then
+    fetch_long -X POST -H 'content-type: application/json' --data "$files" "$url/api/model/publish"
+    return
+  fi
+  status="$(fetch -X POST -H 'content-type: application/json' \
+    --data "$(jq -n --arg t "wechart-verify $(date +%s)" '{kind: "folder", title: $t, folderId: "mine"}')" \
+    "$url/api/documents")"
+  if [[ "$status" != 201 ]]; then
+    echo "$status"
+    return
+  fi
+  folder="$(jq -r '.id' "$body")"
+  local at
+  at="folder=$folder&path=$(jq -rn --arg p "$path" '$p | @uri')"
+  status="$(fetch_long -X POST -H 'content-type: application/json' \
+    --data "$(jq --arg f "$folder" '. + {folderId: $f, targetFolderId: "root"}' <<< "$files")" \
+    "$url/api/model/publish")"
+  if [[ "$status" == 200 ]]; then
+    status="$(fetch "$url/api/model/files/dependents?$at")"
+    file="$(jq -r '.fileId // empty' "$body")"
+    status="$(fetch_long -X POST -H 'content-type: application/json' \
+      --data "$(jq -n --arg id "$file" '{kind: "model", id: $id}')" "$url/api/proposals")"
+    if [[ "$status" == 201 ]]; then
+      proposal="$(jq -r '.id' "$body")"
+      status="$(fetch_long -X POST -H 'content-type: application/json' --data '{}' \
+        "$url/api/proposals/$proposal/approve")"
+    fi
+  fi
+  # My workspace as it was; the answer that decided kept for the caller.
+  kept="$(mktemp)"
+  cp "$body" "$kept"
+  fetch_long -X DELETE "$url/api/model/files?$at" > /dev/null
+  fetch -X DELETE "$url/api/documents/folder/$folder" > /dev/null
+  cp "$kept" "$body"
+  rm -f "$kept"
+  echo "$status"
+}
 
 # 3a. With sign-in on (T324, AC-251, AC-257): a page without a session goes
 # to sign-in and the API refuses it; the development provider beside wechart
@@ -428,8 +476,7 @@ xcube_checks() {
   local content request
   content="$(printf 'cubes:\n  - name: %s\n    sql_table: %s\n    measures:\n      - name: count\n        type: count\n' \
     "$replica_cube" "$probe_table")"
-  request="$(jq -n --arg path "$replica_path" --arg content "$content" '{files: [{path: $path, content: $content}]}')"
-  status="$(fetch -X POST -H 'content-type: application/json' --data "$request" "$url/api/model/publish")"
+  status="$(land_in_root "$replica_path" "$content")"
   if [[ "$status" == 200 ]]; then
     for pod in $pods; do
       names="$(replica_meta "$pod" | jq -r '[.cubes[].name] | join(" ")' 2> /dev/null)"
@@ -485,8 +532,7 @@ stop_one_checks() {
   slow_cube="wechart_verify_slow_$(date +%s)"
   content="$(printf 'cubes:\n  - name: %s\n    sql: SELECT 1 AS id, pg_sleep(60) AS slept\n    measures:\n      - name: count\n        type: count\n' \
     "$slow_cube")"
-  request="$(jq -n --arg path "$slow_path" --arg content "$content" '{files: [{path: $path, content: $content}]}')"
-  status="$(fetch -X POST -H 'content-type: application/json' --data "$request" "$url/api/model/publish")"
+  status="$(land_in_root "$slow_path" "$content")"
   if [[ "$status" != 200 ]]; then
     fail "7. publishing $slow_path answered $status: $(head -c 600 "$body")"
     return
@@ -625,12 +671,15 @@ else
   echo "      data source: $source, table $probe_table"
   content="$(printf 'cubes:\n  - name: %s\n    sql_table: %s\n    measures:\n      - name: count\n        type: count\n' \
     "$probe_cube" "$probe_table")"
-  request="$(jq -n --arg path "$probe_path" --arg content "$content" '{files: [{path: $path, content: $content}]}')"
-  status="$(fetch -X POST -H 'content-type: application/json' --data "$request" "$url/api/model/publish")"
+  status="$(land_in_root "$probe_path" "$content")"
   published=0
   if [[ "$status" == 200 ]]; then
     published=1
-    pass "5. published $probe_path through /api/model/publish"
+    if [[ "$security" == true ]]; then
+      pass "5. landed $probe_path in the shared root through My workspace and an approved proposal"
+    else
+      pass "5. published $probe_path through /api/model/publish"
+    fi
     query="$(jq -n --arg m "$probe_cube.count" '{query: {measures: [$m]}}')"
     # Asked again while Cube answers "Continue wait", as the web app does
     # (packages/web/src/query/loadTile.ts).
