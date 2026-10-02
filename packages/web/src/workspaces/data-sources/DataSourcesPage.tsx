@@ -23,10 +23,12 @@ export function DataSourcesPage() {
   /**
    * "+ Data source", as the approved prototype's page has it (T363): made in
    * My workspace, which a signed-in Super-Admin or read-write member has
-   * (AC-276, AC-277), asking where it is to go (AC-282).
+   * (AC-276, AC-277), and the single user with sign-in off (T359, AC-254),
+   * asking where it is to go (AC-282).
    */
   const hasWorkspace =
-    me.data?.security === 'oidc' && (me.data.superAdmin || me.data.readWrite === true);
+    me.data !== undefined &&
+    (me.data.security === 'off' || me.data.superAdmin || me.data.readWrite === true);
   const [adding, setAdding] = useState<readonly Target[] | null>(null);
   const [addFailed, setAddFailed] = useState<string | null>(null);
   const add = async () => {

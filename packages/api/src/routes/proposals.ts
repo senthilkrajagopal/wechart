@@ -34,8 +34,8 @@ import { withChartsRenamed } from './workspace-copy';
  * (AC-286); until then each serves what it had. An item waits in one open
  * proposal at a time, as its item or going with another's.
  *
- * With sign-in off there are no workspaces, so nothing to propose (T359
- * brings the single user's).
+ * With sign-in off, the single user proposes from their workspace and
+ * approves their own, as with it on (T359, AC-254).
  */
 interface Stored {
   readonly id: string;

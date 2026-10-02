@@ -6366,6 +6366,40 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Failing test: `workspace-single-user.spec.ts`: with security off, editing a dashboard goes through "Edit in my workspace", a proposal and "Approve my own proposal", and nothing asks for a sign-in or refuses a permission (AC-254).
   - Depends on: T356, T358
   - Also (T319's review): the Single-user mode chip's menu gains its second sentence from references.md › Surface 1, "Your proposals still wait for your approval in Reviews.", once proposals and Reviews exist.
+  - **Built 2026-10-01; the phase-1 suite's rewrite follows in its own commit. AC-254 stays open for models (T347), as AC-278 does.**
+    - **The server** (`server.ts`). With security off, the single user is held as a signed-in Super-Admin is, and their workspace is `mine` (`ownWorkspaceOf`):
+      - `visibilityOf` gives them every folder and My workspace;
+      - `itemFor` reads and checks items, so T502's `409` applies, and moves can't cross the workspace's edge (`crossesWorkspace`);
+      - proposals, Reviews and history are on;
+      - the data sources' workspace, with T541's freeze, is wired.
+      - A server built with no store of folders' groups (unit tests' stubs alone; `main.ts` always has one) keeps phase 1's behaviour, as `visibilityOf` already did for a Super-Admin without one.
+    - **An item in no folder** (`unfiled`; phase 1's seed has several) is the single user's alone, in no shared folder and seen by no reader. It is opened, listed, searched and changed in place as before. No item can be moved or saved into no folder, so it is no way around a shared item's copy. **Claude's call, overturnable:** treated as shared, it could be neither changed nor copied, since a copy needs a folder.
+    - **The web.** For workspace flows the single user is as a signed-in Super-Admin:
+      - a shared dashboard, chart or data source offers "Edit in my workspace" and no edit in place;
+      - a copy offers Propose, its band and History;
+      - Reviews is in the top bar;
+      - New in a shared folder offers a folder alone, and in My workspace asks where it goes;
+      - "+ Data source" is made in My workspace;
+      - the Single-user chip says its second sentence.
+      - There is no Access chip or panel (no groups), and phase 1's tree order stays.
+    - **Not changed:**
+      - **Models** keep being edited in place with sign-in off. With sign-in on the API publishes them in place too until workspaces hold models (T347), though its editor is read-only; read-only here would leave the single user no way to change a model. **For the user:** keep them in place until T347, or make them read-only now?
+      - **Copy on use** (AC-371) stays off with sign-in off, as T527 decided: there are no readers to keep out. An approval with sign-in off now lands a dashboard as it is, so AC-371's Fails-when may want scoping to sign-in on.
+    - **Tests changed because R52 reverses them:** `proposals.test.ts`, `shared-in-place.test.ts`, `workspace-copy-source.test.ts`, `copy-on-use.test.ts` and `history.test.ts` (their sign-in-off cases); `ReviewsControl`, `AccountMenu`, `folderRole` and `DataSourcesPage` tests.
+    - **Tests:**
+      - `single-user.test.ts` (5):
+        - a shared item refused in place;
+        - copy, change, propose, Reviews, self-approval and history, with no 401 or 403;
+        - an unfiled item changed in place;
+        - no move into no folder.
+      - `e2e/workspace-single-user.spec.ts` in the phase-1 configuration on Chrome: the chip's sentence, "Edit in my workspace", a heading added in the editor and saved, Propose, Reviews, "Approve my own proposal", version 2 in the folder, and no 401 or 403.
+    - **Review (one round, FAIL), fixed:**
+      - `unfiled` let a shared item be moved into no folder and then changed in place; no item can be put there now;
+      - unfiled items were hidden from references, search and a chart's dashboards;
+      - `history.test.ts` was stale;
+      - the e2e changed the copy through the API and asserted the missing Edit before the page was ready;
+      - several comments were stale.
+    - **Left:** web unit tests for the pages' sign-in-off branches (the e2e covers the dashboard's); a data source proposed and approved with sign-in off; a reject with sign-in off.
 
 ## P2.7 Data sources and connections (F18, returned)
 

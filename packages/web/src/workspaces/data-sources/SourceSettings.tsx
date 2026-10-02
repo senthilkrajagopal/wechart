@@ -154,10 +154,11 @@ function Settings({ source }: { source: StoredSource }) {
    * and Super-Admins. A version is set against the settings now; restoring
    * one drafts it in My workspace, which opens to be tested and proposed.
    */
-  const signedIn = me.data?.security === 'oidc';
+  // Signed in, and with sign-in off the single user, since R52 (T359, AC-254).
+  const viaWorkspace = me.data !== undefined;
   const history = useQuery({
     ...historyQuery('data-source', source.id),
-    enabled: signedIn && !source.inWorkspace,
+    enabled: viaWorkspace && !source.inWorkspace,
   });
   const [historyOpen, setHistoryOpen] = useState(false);
   const historyButton = useRef<HTMLButtonElement>(null);
@@ -176,11 +177,11 @@ function Settings({ source }: { source: StoredSource }) {
   const [deleting, setDeleting] = useState(false);
   const moreButton = useRef<HTMLSpanElement>(null);
   /**
-   * Changed here where the user may write it: in their workspace, or in place
-   * with sign-in off, where there are no workspaces (T497). A shared one with
-   * sign-in on is changed through a copy (rule 71).
+   * Changed here where the user may write it, in their workspace (T497). A
+   * shared one is changed through a copy (rule 71), with sign-in off too
+   * since R52 (T359, AC-254).
    */
-  const editable = source.canWrite && (source.inWorkspace || me.data?.security === 'off');
+  const editable = source.canWrite && source.inWorkspace;
   const edit = useSourceEdit(source);
   /** A plain click on a link of the page's is followed by the router, which the leave guard sees. */
   const inApp = (event: MouseEvent<HTMLAnchorElement>) => {
@@ -190,12 +191,12 @@ function Settings({ source }: { source: StoredSource }) {
     event.preventDefault();
     router.history.push(link.getAttribute('href') ?? '/explore');
   };
-  /** Changed through a copy in the user's workspace, which sign-in gives (rule 71). */
+  /** Changed through a copy in the user's workspace (rule 71), the single user's too (T359). */
   const copies =
     !source.inWorkspace &&
     source.canWrite &&
-    me.data?.security === 'oidc' &&
-    (me.data.superAdmin || me.data.readWrite === true);
+    me.data !== undefined &&
+    (me.data.security === 'off' || me.data.superAdmin || me.data.readWrite === true);
 
   const editInWorkspace = async () => {
     setFailed(null);
@@ -235,9 +236,9 @@ function Settings({ source }: { source: StoredSource }) {
     <div className="source-settings">
       {/* In the user's workspace, the page says so across its width (T498;
           design 04, pin 2; design 03). */}
-      {source.inWorkspace && me.data?.security === 'oidc' ? <WorkspaceBand /> : null}
+      {source.inWorkspace && viaWorkspace ? <WorkspaceBand /> : null}
       {/* Its proposal's band: waiting, or rejected with the reason (T358, AC-290). */}
-      {source.inWorkspace && me.data?.security === 'oidc' ? (
+      {source.inWorkspace && viaWorkspace ? (
         <ProposalBand
           kind="data-source"
           id={source.id}

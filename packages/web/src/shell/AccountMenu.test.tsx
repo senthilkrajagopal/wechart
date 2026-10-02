@@ -149,8 +149,10 @@ describe('with security off (AC-254)', () => {
 
     await userEvent.click(chip);
     const panel = screen.getByTestId('account-panel');
+    // Its second sentence once proposals and Reviews are there (T359, AC-254;
+    // references.md, Surface 1).
     expect(panel.textContent).toContain(
-      'Sign-in is off, so wechart runs as one user with every permission.',
+      'Sign-in is off, so wechart runs as one user with every permission. Your proposals still wait for your approval in Reviews.',
     );
     expect(screen.queryByRole('menuitem', { name: 'Sign out' })).toBeNull();
     expect(screen.queryByText('Sign out')).toBeNull();

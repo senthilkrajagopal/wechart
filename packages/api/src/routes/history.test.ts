@@ -662,16 +662,26 @@ describe('an item’s history (T354, AC-289)', () => {
     expect(history.versions.map((each) => each.current)).toEqual([true, false, false]);
   });
 
-  it('has none with sign-in off, as proposals don’t', async () => {
+  /**
+   * The single user's with sign-in off since R52 ("Workspace-only now"):
+   * their approvals keep versions, as a Super-Admin reads them (T359,
+   * AC-254). It had none until then, as proposals hadn't.
+   */
+  it('is the single user’s to read with sign-in off', async () => {
     const off = buildServer({
       config: { ...secured, security: 'off' as const },
       documents: docs(),
       catalog: catalog(getDb()),
+      folderAccess: folderAccessStore(getDb()),
       versions: versions(),
     });
+    const answer = await off.inject({ method: 'GET', url: `/api/history/dashboard/${ids.board}` });
+    expect(answer.statusCode, answer.body).toBe(200);
     expect(
-      (await off.inject({ method: 'GET', url: `/api/history/dashboard/${ids.board}` })).statusCode,
-    ).toBe(404);
+      answer.json<{ versions: { version: number }[] }>().versions.map((each) => each.version),
+    ).toEqual(
+      (await versions().list('dashboard', ids.board)).slice(0, 10).map((each) => each.version),
+    );
     await off.close();
   });
 });

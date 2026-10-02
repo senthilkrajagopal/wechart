@@ -162,13 +162,18 @@ export function DashboardPage({
   const document = saved.data?.document;
   // As the shell asks it, so this reads what the shell already has.
   const me = useQuery({ ...ME_QUERY, retry: false });
-  const signedIn = me.data?.security === 'oidc';
+  /**
+   * Shared work is changed through My workspace and a proposal, with its
+   * history and its author's band: signed in, and with sign-in off too, by
+   * the single user, since R52 (T359, AC-254).
+   */
+  const viaWorkspace = me.data !== undefined;
   /** Where "Propose again…" proposes it to, while its dialog is open. */
   const [proposingAgain, setProposingAgain] = useState<readonly string[] | null>(null);
   // Its History (T357, AC-289): offered only where the API shows it, to the
   // folder's read-write members and Super-Admins.
-  const history = useQuery({ ...historyQuery('dashboard', dashboardId), enabled: signedIn });
-  const mayHistory = signedIn && history.data != null;
+  const history = useQuery({ ...historyQuery('dashboard', dashboardId), enabled: viaWorkspace });
+  const mayHistory = viaWorkspace && history.data != null;
   const historyOpen = mayHistory && panel === 'history';
   /** A kept version drawn in its place (design 06, state A). */
   const [viewing, setViewing] = useState<number | undefined>(undefined);
@@ -185,8 +190,8 @@ export function DashboardPage({
     },
     [panel, onPanel],
   );
-  // Where it lives and how it's changed, with sign-in on (T348, AC-278).
-  const folders = useQuery({ ...FOLDERS_QUERY, enabled: signedIn });
+  // Where it lives and how it's changed (T348, AC-278; T359).
+  const folders = useQuery({ ...FOLDERS_QUERY, enabled: viaWorkspace });
   const [copying, setCopying] = useState(false);
   const current = history.data?.versions.find((each) => each.current);
   const place =
@@ -235,8 +240,8 @@ export function DashboardPage({
         };
   /**
    * Delete dashboard…, in its header's ⋯ (design 14, B2; T528): for those
-   * who may change its folder, anyone with sign-in off; with it on, in their
-   * workspace, or as a shared folder's read-write member, who may copy it.
+   * who may change its folder, in their workspace, or as a shared folder's
+   * read-write member, who may copy it; the single user with sign-in off too.
    * Its own charts and its bookmarks go with it (AC-363); in the workspace
    * its open proposal is withdrawn, named first (AC-372).
    */
@@ -246,9 +251,10 @@ export function DashboardPage({
   const mayDelete =
     me.data !== undefined &&
     saved.data !== undefined &&
-    (!signedIn ||
-      place?.kind === 'workspace' ||
-      (place?.kind === 'shared' && place.copy !== undefined));
+    // No place said: a server with no workspaces, as phase 1's was.
+    (place === undefined ||
+      place.kind === 'workspace' ||
+      (place.kind === 'shared' && place.copy !== undefined));
   /** A restore proposed: what to say, and where to review it (state E). */
   const [restored, setRestored] = useState<{ text: string; proposalId: string } | undefined>(
     undefined,
@@ -299,8 +305,8 @@ export function DashboardPage({
           04, pin 2 and state F). */}
       {saved.data?.workspace?.inWorkspace === true ? <WorkspaceBand /> : null}
       {/* Its author's band: waiting, or rejected with the reason (T358,
-          AC-290). None for anyone else; none asked for with sign-in off. */}
-      {signedIn ? (
+          AC-290). None for anyone else; the single user's too (T359). */}
+      {viaWorkspace ? (
         <ProposalBand
           kind="dashboard"
           id={dashboardId}

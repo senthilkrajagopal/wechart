@@ -347,11 +347,17 @@ export function ExplorePage() {
   /**
    * The open folder's Access panel (T330, AC-259, AC-260): with sign-in on,
    * for whoever the folder's access answers (a Super-Admin or a read-write
-   * member, rule 68). With sign-in off there is one user and no groups, and
-   * Explore stays as phase 1 had it.
+   * member, rule 68). With sign-in off there is one user and no groups, so
+   * no Access; the single user works through My workspace (`viaWorkspace`).
    */
   const me = useQuery(ME_QUERY);
   const signedIn = me.data?.security === 'oidc';
+  /**
+   * Shared work is changed through My workspace and a proposal: signed in,
+   * and with sign-in off too, by the single user, since R52 (T359, AC-254).
+   * Unknown until who is asking is.
+   */
+  const viaWorkspace = me.data !== undefined;
   // My workspace only where the API counts one (T343, AC-277); with sign-in
   // on, first in the tree (T498; design 04, pin 1). The shared root only
   // where a grant lets them see it (T331, AC-194).
@@ -369,12 +375,12 @@ export function ExplorePage() {
    */
   const rootsPending = signedIn && rootCounts.isPending;
   /**
-   * In a signed-in user's workspace, each item says where it goes and where
-   * it came from, and its status (T498; design 04, pins 2–4 and 8). With
-   * sign-in off, phase 1's one user's workspace goes nowhere.
+   * In the user's workspace, each item says where it goes and where it came
+   * from, and its status (T498; design 04, pins 2–4 and 8): the single
+   * user's too, with sign-in off (T359).
    */
   const inOwnWorkspace =
-    signedIn && inMyWorkspace && !searching && roots.some((root) => isMyWorkspace(root.id));
+    viaWorkspace && inMyWorkspace && !searching && roots.some((root) => isMyWorkspace(root.id));
   /**
    * The Show filter (T525, AC-370; design 14, state I): over the open
    * folder's list, never a search's, which lists dashboards and charts from
@@ -411,8 +417,8 @@ export function ExplorePage() {
     retry: false,
   });
   const mayEditAccess = signedIn && !searching && known && access.isSuccess;
-  /** A shared folder open with sign-in on: its New and footnote are the role's (T331). */
-  const inSharedSignedIn = signedIn && !searching && !inMyWorkspace;
+  /** A shared folder open: its New and footnote are the role's (T331), the single user's too (T359). */
+  const inShared = viaWorkspace && !searching && !inMyWorkspace;
   /**
    * What the open folder offers the user, by their role there (T331; AC-192,
    * AC-194, rule 69): its access answers a Super-Admin or a read-write
@@ -576,8 +582,8 @@ export function ExplorePage() {
       case 'chart':
         return {
           action: 'Delete chart',
-          check: checkChart(item.id, signedIn, inOwnWorkspace),
-          remove: removeChart(item.id, signedIn),
+          check: checkChart(item.id, viaWorkspace, inOwnWorkspace),
+          remove: removeChart(item.id, viaWorkspace),
         };
       // Its own charts and its bookmarks go with it (T518, AC-363; state B).
       case 'dashboard':
@@ -972,13 +978,13 @@ export function ExplorePage() {
                 }
               : {})}
             onCreate={(kind) => {
-              // In a signed-in user's workspace, a dashboard or chart names the
-              // shared folder it is to go to first (T345, AC-282). With sign-in
-              // off, phase 1's one user's is theirs alone: nothing goes anywhere.
-              if (kind !== 'folder' && signedIn && role.inOwnWorkspace) void askTarget(kind);
+              // In the user's workspace, a dashboard or chart names the shared
+              // folder it is to go to first (T345, AC-282), the single user's
+              // too with sign-in off (T359).
+              if (kind !== 'folder' && role.inOwnWorkspace) void askTarget(kind);
               else create.mutate({ kind });
             }}
-            {...(signedIn && role.inOwnWorkspace
+            {...(role.inOwnWorkspace
               ? {
                   onNewSource: () => void askTarget('data-source'),
                   // A model, previewed through the workspace's overlay (T347, AC-282).
@@ -1118,7 +1124,7 @@ export function ExplorePage() {
                   ? 'Nothing matches.'
                   : // New makes no dashboard or chart in a shared folder (T331):
                     // the footnote says where they are made.
-                    inSharedSignedIn
+                    inShared
                     ? 'This folder is empty.'
                     : 'This folder is empty. Use ＋ New to add a dashboard or chart.'
               }
@@ -1211,7 +1217,7 @@ export function ExplorePage() {
                 Items here are private. Each goes to its target folder only when you propose it and
                 it’s approved; you may approve your own.
               </p>
-            ) : inSharedSignedIn ? (
+            ) : inShared ? (
               role.creates.length > 0 ? (
                 <p className="explore__note">
                   To add a dashboard, chart, model or data source here, create it in My workspace
@@ -1347,8 +1353,8 @@ export function ExplorePage() {
               landed.target.path.length === 0 ? 'Shared' : landed.target.path.join(' / ');
             setImported({
               message: `Imported to My workspace as new drafts: ${listed(created)}. Nothing in ${where} changed.`,
-              // Proposed as any draft is (design 05): with sign-in on, where proposals are.
-              ...(signedIn
+              // Proposed as any draft is (design 05), the single user's too (T359).
+              ...(viaWorkspace
                 ? {
                     dashboard: {
                       kind: 'dashboard',

@@ -360,11 +360,14 @@ describe('copy on use (T527, AC-371, AC-263)', () => {
     expect(tilesOf((await stored('dashboard', ids.toSales)).body)).toEqual([copied!.id]);
   });
 
+  // The single user's own, in My workspace, to go to /Sales: a shared one
+  // isn't saved in place with sign-in off either (T359, AC-254).
   it('with sign-in off, copies nothing', async () => {
     const board = await doc('dashboard', {
       schemaVersion: 1,
       title: `Open ${MARK}`,
-      folderId: ids.sales,
+      folderId: 'mine',
+      targetFolderId: ids.sales,
       pages: [],
     });
     const before = await stored('dashboard', board);

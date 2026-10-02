@@ -67,21 +67,25 @@ describe('the Reviews control (T355, AC-287)', () => {
     expect(await screen.findByRole('link', { name: 'Reviews, 1 waiting' })).not.toBeNull();
   });
 
-  it('is not there for one who may decide nothing, nor with sign-in off', async () => {
-    for (const me of [
-      { ...writer, readWrite: false },
-      { ...writer, security: 'off', readWrite: true },
-    ]) {
-      const fetchMock = serve(me, 2);
-      const { unmount } = shown();
-      await vi.waitFor(() => {
-        expect(fetchMock).toHaveBeenCalledWith('/api/me', expect.anything());
-      });
-      await screen.findByText('bar');
-      expect(screen.queryByRole('link', { name: /Reviews/ })).toBeNull();
-      expect(fetchMock.mock.calls.map(([url]) => url)).not.toContain('/api/reviews/count');
-      unmount();
-      vi.unstubAllGlobals();
-    }
+  it('is not there for one who may decide nothing', async () => {
+    const fetchMock = serve({ ...writer, readWrite: false }, 2);
+    shown();
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/me', expect.anything());
+    });
+    await screen.findByText('bar');
+    expect(screen.queryByRole('link', { name: /Reviews/ })).toBeNull();
+    expect(fetchMock.mock.calls.map(([url]) => url)).not.toContain('/api/reviews/count');
+  });
+
+  /**
+   * T359 (AC-254): with sign-in off, the single user holds every permission,
+   * as a Super-Admin does, and approves their own proposals.
+   */
+  it('is shown to the single user, with sign-in off', async () => {
+    serve({ name: 'admin', groups: [], superAdmin: true, security: 'off' }, 2);
+    shown();
+    const link = await screen.findByRole('link', { name: 'Reviews, 2 waiting' });
+    expect(link.getAttribute('href')).toBe('/reviews');
   });
 });

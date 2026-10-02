@@ -10,7 +10,8 @@ import { targetPathOf } from './folders';
  *   by those who may copy it;
  * - in the workspace: where it came from and where it goes, with
  *   "Propose to *target*…".
- * Nothing with sign-in off, where there are no workspaces. Until the folders
+ * The single user's too, with sign-in off (T359, AC-254); nothing where the
+ * API says no place, as for an item in no folder then. Until the folders
  * are known, no line and no target, but still no edit of a shared one
  * (T348's review): a path read from no folders would be wrong.
  */

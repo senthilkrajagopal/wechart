@@ -70,10 +70,10 @@ export function rightFrom({
  * - AC-194: "+ Folder" for those who may make one in the open folder.
  * - Rule 69: a shared folder's header says the user's access there.
  *
- * With sign-in off, phase 1's Explore: its one user makes anything anywhere
- * and has no chip, as T330 left the Access button out. Working through the
- * workspace with sign-in off is T359's (AC-254). Until who is signed in is
- * known, nothing: never an offer the user may not take.
+ * With sign-in off, the single user's is a Super-Admin's, since R52 ("Workspace-only
+ * now", T359, AC-254), with no chip, as T330 left the Access button out.
+ * Until who is signed in is known, nothing: never an offer the user may not
+ * take.
  */
 export function folderRoleOf({
   signedIn,
@@ -82,10 +82,12 @@ export function folderRoleOf({
   hasWorkspace,
   right,
 }: FolderRoleOf): FolderRole {
+  // The single user works as a Super-Admin does (T359, AC-254; R52), with no
+  // chip: there are no groups.
   if (signedIn === false)
     return {
       access: undefined,
-      creates: EVERY_KIND,
+      creates: inMyWorkspace ? EVERY_KIND : ['folder'],
       mayRename: true,
       mayAddFolder: true,
       inOwnWorkspace: inMyWorkspace,

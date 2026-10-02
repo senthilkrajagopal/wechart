@@ -20,7 +20,7 @@ import { removeProjectFolders, TEST_TIME_ZONE } from './project-folder.fixture';
  * changes through a copy in the workspace, proposed and approved. A `PUT` of
  * content answers `409`, "Edit in my workspace", and changes nothing. The
  * same in a workspace saves. Moving and renaming are as they were, and so are
- * a folder's settings. With sign-in off, nothing changes.
+ * a folder's settings. With sign-in off too, since R52 (T359, AC-254).
  *
  * `writer` (`sales-rw`) and `super` write /Sales.
  */
@@ -477,7 +477,12 @@ describe('a shared item is never changed in place (T502, AC-278)', () => {
     expect(settled.statusCode, settled.body).toBe(200);
   });
 
-  it('changes nothing with sign-in off: a folder’s dashboard saves in place', async () => {
+  /**
+   * With sign-in off too, since R52 ("Workspace-only now"): the single user
+   * changes a shared item through My workspace and a proposal they approve
+   * themselves (T359, AC-254). It was saved in place until then.
+   */
+  it('refuses it with sign-in off too: the single user changes it in My workspace', async () => {
     const before = await stored('dashboard', ids.board);
     const answer = await open.inject({
       method: 'PUT',
@@ -487,9 +492,8 @@ describe('a shared item is never changed in place (T502, AC-278)', () => {
         version: before.version,
       },
     });
-    expect(answer.statusCode, answer.body).toBe(200);
-    expect((await stored('dashboard', ids.board)).body['pages']).toEqual([
-      { id: 'p1', title: `Open ${MARK}`, items: [] },
-    ]);
+    expect(answer.statusCode, answer.body).toBe(409);
+    expect(answer.json<{ code: string }>().code).toBe('shared_in_place');
+    expect(await stored('dashboard', ids.board)).toEqual(before);
   });
 });

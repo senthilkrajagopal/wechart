@@ -507,11 +507,18 @@ describe('proposing a workspace item (T349, AC-284)', () => {
 });
 
 describe('proposals with sign-in off', () => {
-  it('are not there, as workspaces aren’t (T359 brings them)', async () => {
+  /**
+   * There since R52 ("Workspace-only now"): the single user works through
+   * My workspace and approves their own proposals (T359, AC-254), which
+   * `single-user.test.ts` walks through. A shared item isn't theirs to
+   * propose: it is changed in a copy, as with sign-in on.
+   */
+  it('are the single user’s, as their workspace is (T359)', async () => {
     const off = buildServer({
       config: { ...secured, security: 'off' as const },
       documents: docs(),
       catalog: catalog(getDb()),
+      folderAccess: folderAccessStore(getDb()),
       proposals: proposalStore(getDb()),
     });
     try {
@@ -520,23 +527,23 @@ describe('proposals with sign-in off', () => {
         url: '/api/proposals',
         payload: { kind: 'dashboard', id: ids.board },
       });
-      expect(answer.statusCode).toBe(404);
-      expect(answer.json<{ error: string }>().error).toBe('Proposals need sign-in.');
-      // Nor is a proposal to open (T351's review), approve (T352), reject
-      // (T353), show on an item, or list for review (T355).
-      for (const [method, url] of [
-        ['GET', `/api/proposals/${randomUUID()}`],
-        ['POST', `/api/proposals/${randomUUID()}/approve`],
-        ['POST', `/api/proposals/${randomUUID()}/reject`],
-        ['GET', `/api/proposals?kind=dashboard&itemId=${ids.board}`],
-        ['GET', '/api/reviews'],
-        ['GET', '/api/reviews/count'],
-        ['POST', '/api/proposals/check'],
-      ] as const) {
-        const answer = await off.inject({ method, url });
-        expect(answer.statusCode, url).toBe(404);
-        expect(answer.json<{ error: string }>().error, url).toBe('Proposals need sign-in.');
-      }
+      expect(answer.statusCode, answer.body).toBe(400);
+      expect(answer.json<{ error: string }>().error).toBe(
+        'It is in a shared folder: edit it in your workspace, and propose that.',
+      );
+      // Reviews are theirs to list and count, and a proposal not there is said so.
+      const reviews = await off.inject({ method: 'GET', url: '/api/reviews' });
+      expect(reviews.statusCode, reviews.body).toBe(200);
+      expect(Object.keys(reviews.json<Record<string, unknown>>()).sort()).toEqual([
+        'mine',
+        'toReview',
+      ]);
+      const count = await off.inject({ method: 'GET', url: '/api/reviews/count' });
+      expect(count.statusCode, count.body).toBe(200);
+      expect(typeof count.json<{ waiting: unknown }>().waiting).toBe('number');
+      const none = await off.inject({ method: 'GET', url: `/api/proposals/${randomUUID()}` });
+      expect(none.statusCode).toBe(404);
+      expect(none.json<{ error: string }>().error).toBe('There is no such proposal.');
     } finally {
       await off.close();
     }

@@ -64,13 +64,31 @@ describe('adding a data source from Data sources (T363)', () => {
   it.each([
     // Read-only everywhere: no workspace (AC-277).
     ['a read-only user', { superAdmin: false, readWrite: false, security: 'oidc' }],
-    // Sign-in off: phase 1's one user, whose data sources Cube's environment holds.
-    ['anyone with sign-in off', { superAdmin: true, readWrite: true, security: 'off' }],
   ])('offers none to %s, who has no workspace to make one in', async (_who, me) => {
     serve({ name: 'Someone', groups: [], ...me });
     page();
     expect(await screen.findByRole('heading', { name: 'Data sources' })).toBeDefined();
     await screen.findByText(/Every data source you can see/i);
     expect(screen.queryByRole('button', { name: '+ Data source' })).toBeNull();
+  });
+
+  /**
+   * With sign-in off since R52 ("Workspace-only now"): the single user makes
+   * one in My workspace and proposes it, as a signed-in user does (T359,
+   * AC-254). Phase 1 offered none: its data sources were Cube's environment's.
+   */
+  it('offers the single user one, with sign-in off, made in My workspace', async () => {
+    const user = userEvent.setup();
+    const asked = serve({
+      name: 'admin',
+      groups: [],
+      superAdmin: true,
+      readWrite: true,
+      security: 'off',
+    });
+    page();
+    await user.click(await screen.findByRole('button', { name: '+ Data source' }));
+    expect(await screen.findByRole('dialog', { name: 'New data source' })).toBeDefined();
+    expect(asked).toContain('/api/folders/targets');
   });
 });

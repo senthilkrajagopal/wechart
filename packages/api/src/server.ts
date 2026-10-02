@@ -505,6 +505,23 @@ export function buildServer({
     void overlays.push(workspaceIdOf(user.key)).catch(warn);
   });
   const security = config.security ?? 'off';
+  /**
+   * A user's own workspace root: `ws:<key>` with sign-in on (T343, AC-276);
+   * with it off, `mine`, the single user's, who works through it as a
+   * signed-in Super-Admin does (T359, AC-254).
+   */
+  const ownWorkspaceOf = (key: string): string =>
+    security === 'off' ? MY_WORKSPACE_ID : workspaceIdOf(key);
+  /**
+   * An item in no folder, with sign-in off: the single user's alone, as
+   * phase 1 kept it, in no shared folder and seen by no reader, so it is
+   * opened and changed in place (T359, AC-254). With sign-in on no one sees
+   * one.
+   */
+  const unfiled = (folderId: string | null): boolean => security === 'off' && folderId === null;
+  /** Whether a user sees what a folder holds, an `unfiled` item's no folder included. */
+  const sees = (seen: Visibility, folderId: string | null): boolean =>
+    unfiled(folderId) || (folderId !== null && seen.rights.has(folderId));
   // Before any route: every route declares who may call it (T318, AC-251).
   registerRouteAccess(app);
   if (security === 'oidc')
@@ -952,7 +969,7 @@ export function buildServer({
       const seen = await visibilityOf(request);
       if (seen === undefined || mayWrite(seen, folderId)) return undefined;
       // The root, and My workspace to one who has none, refuse as read-only (T343).
-      const said = folderId === ROOT_FOLDER_ID || folderId === workspaceIdOf(userOf(request).key);
+      const said = folderId === ROOT_FOLDER_ID || folderId === ownWorkspaceOf(userOf(request).key);
       return !said && !seen.rights.has(folderId)
         ? { status: 404, body: { error: 'There’s no such folder, or it isn’t yours to see.' } }
         : { status: 403, body: { error: READ_ONLY } };
@@ -1148,16 +1165,17 @@ export function buildServer({
       ...(audit === undefined ? {} : { audit }),
       ...(sqlRunnerSwitches === undefined ? {} : { switches: sqlRunnerSwitches }),
       ...(config.seedToken === undefined ? {} : { seedToken: config.seedToken }),
-      // Workspaces are signed-in users' (T343): with security off, as the
-      // documents' routes, a data source has none (T345's review).
-      ...(config.security === 'off'
+      // Workspaces: signed-in users' (T343), and with sign-in off the single
+      // user's, `mine` (T359, AC-254), as the documents' routes have them:
+      // none with sign-in off and no store of folders' groups (`itemFor`).
+      ...(security === 'off' && folderAccess === undefined
         ? {}
         : {
             workspaceOf: (folderId: string) => workspaceRootOf(folderId),
             // The user's own, where they have one (AC-277; T346).
             ownWorkspace: async (request: FastifyRequest) => {
               const seen = await visibilityOf(request);
-              const own = workspaceIdOf(userOf(request).key);
+              const own = ownWorkspaceOf(userOf(request).key);
               return seen?.rights.has(own) === true ? own : undefined;
             },
             // Its open proposal withdrawn as it is deleted (T528, AC-372).
@@ -1264,7 +1282,7 @@ export function buildServer({
         if (
           right === undefined &&
           want === 'write' &&
-          folderId === workspaceIdOf(userOf(request).key)
+          folderId === ownWorkspaceOf(userOf(request).key)
         )
           return { status: 403, body: { error: READ_ONLY } };
         if (right === undefined) return notThere;
@@ -1282,8 +1300,8 @@ export function buildServer({
     registerProposals(app, {
       store: proposals,
       ...(audit === undefined ? {} : { audit }),
-      // Workspaces are signed-in users' (T343); T359 brings the single user's.
-      enabled: security !== 'off',
+      // Signed-in users' (T343), and with sign-in off the single user's (T359, AC-254).
+      enabled: true,
       // An approval publishes: each item bound in its folder, as a save there
       // was before a shared one could no longer be saved (T502, AC-272).
       bind: (kind, folderId, body) => boundIn(kind, folderId, body),
@@ -1463,7 +1481,7 @@ export function buildServer({
           }),
       ownWorkspace: async (request) => {
         const seen = await visibilityOf(request);
-        const own = workspaceIdOf(userOf(request).key);
+        const own = ownWorkspaceOf(userOf(request).key);
         return seen?.rights.has(own) === true ? own : null;
       },
       workspaceOf: (folderId) => workspaceRootOf(folderId),
@@ -1571,8 +1589,8 @@ export function buildServer({
       workspaceOf: async (request) => {
         if (security === 'off') return MY_WORKSPACE_ID;
         const seen = await visibilityOf(request);
-        if (seen === undefined) return workspaceIdOf(userOf(request).key);
-        const own = workspaceIdOf(userOf(request).key);
+        if (seen === undefined) return ownWorkspaceOf(userOf(request).key);
+        const own = ownWorkspaceOf(userOf(request).key);
         return seen.rights.has(own) ? own : undefined;
       },
       targetOf: async (request, reply, own, target) => {
@@ -1868,10 +1886,11 @@ export function buildServer({
   /**
    * With security on, what the request's user may see of the shared tree
    * (T325, AC-264): each folder a grant reaches, down or up (`folderRights`).
-   * With it off, undefined: the single user sees everything, as in phase 1.
+   * With it off, the single user's, a Super-Admin's: every folder, and My
+   * workspace (`mine`), through which they change shared work as with it on
+   * (T359, AC-254; `[R52]`).
    */
   const visibilityOf = async (request: FastifyRequest): Promise<Visibility | undefined> => {
-    if (security === 'off') return undefined;
     const user = userOf(request);
     if (folderAccess === undefined) {
       // No store of groups: a Super-Admin sees everything, and no one else anything.
@@ -1886,7 +1905,7 @@ export function buildServer({
     // read-only access everywhere has none (AC-277).
     if (!user.superAdmin && ![...rights.values()].some((right) => right.write))
       return { tree, rights };
-    const own = workspaceIdOf(user.key);
+    const own = ownWorkspaceOf(user.key);
     const inside = await foldersBeneath(own);
     for (const id of [own, ...inside.map((folder) => folder.id)]) rights.set(id, OWN_WORKSPACE);
     return { tree: [...tree, { id: own, parentId: null }, ...inside], rights };
@@ -1969,6 +1988,7 @@ export function buildServer({
    */
   const mayOpen = async (seen: Visibility, kind: string, item: Stored): Promise<boolean> => {
     const folder = await governingFolder(kind, item);
+    if (unfiled(folder)) return true;
     const right = folder === null ? undefined : seen.rights.get(folder);
     const library = kind === 'chart' && typeof item.body['localToDashboardId'] !== 'string';
     if (!library) return right !== undefined;
@@ -1978,9 +1998,7 @@ export function buildServer({
     const using = (cat?.dashboardsUsing ? await cat.dashboardsUsing(item.id) : []) as {
       folderId: string | null;
     }[];
-    return using.some(
-      (dashboard) => dashboard.folderId !== null && seen.rights.has(dashboard.folderId),
-    );
+    return using.some((dashboard) => sees(seen, dashboard.folderId));
   };
   /**
    * A chart's or a dashboard's cubes bound in the folder it is published
@@ -2098,7 +2116,8 @@ export function buildServer({
   /**
    * Of these charts and dashboards, those the user may see (T326's review):
    * a dashboard in a folder they see, a chart local to one, a library chart
-   * where every kind is theirs. All of them with security off.
+   * where every kind is theirs; with sign-in off, the single user's, an
+   * `unfiled` one's included (T359).
    */
   const visibleOf = async (
     request: FastifyRequest,
@@ -2112,12 +2131,13 @@ export function buildServer({
       all.filter((each) => each.kind === 'dashboard').map((each) => [each.id, each]),
     );
     return all.filter((document) => {
-      if (document.kind === 'dashboard') return seen.rights.has(folderOf(document) ?? '');
+      if (document.kind === 'dashboard') return sees(seen, folderOf(document));
       if (document.localToDashboardId !== null) {
         const dashboard = dashboards.get(document.localToDashboardId);
-        return dashboard !== undefined && seen.rights.has(folderOf(dashboard) ?? '');
+        return dashboard !== undefined && sees(seen, folderOf(dashboard));
       }
-      return seen.rights.get(folderOf(document) ?? '')?.kinds === 'all';
+      const folder = folderOf(document);
+      return unfiled(folder) || seen.rights.get(folder ?? '')?.kinds === 'all';
     });
   };
 
@@ -2211,11 +2231,13 @@ export function buildServer({
   /**
    * Whether a move crosses between a workspace and the shared tree, or two
    * workspaces (T343's review): work reaches a shared folder only through a
-   * proposal (F30), and shared work is changed in a copy (AC-278), so with
-   * security on neither moves across. Security off keeps phase 1's moves.
+   * proposal (F30), and shared work is changed in a copy (AC-278), so
+   * neither moves across, with security off too (T359, AC-254), but for
+   * phase 1's server with no store of folders' groups (`itemFor`).
    */
   const crossesWorkspace = async (from: string | null, to: string | null) =>
-    security !== 'off' && (await workspaceRootOf(from)) !== (await workspaceRootOf(to));
+    !(security === 'off' && folderAccess === undefined) &&
+    (await workspaceRootOf(from)) !== (await workspaceRootOf(to));
   const ACROSS_WORKSPACE = {
     error:
       'This moves between your workspace and the shared folders: shared work is changed in a copy in your workspace, and reaches a shared folder through a proposal.',
@@ -2225,9 +2247,14 @@ export function buildServer({
     proposals !== undefined &&
     (kind === 'dashboard' || kind === 'chart' || kind === 'data-source') &&
     (await proposals.openFor(kind, id)) !== null;
-  /** Whether the folder governing an item is a shared one, in no workspace (T502). */
-  const isShared = async (kind: string, item: Stored) =>
-    (await workspaceRootOf(await governingFolder(kind, item))) === null;
+  /**
+   * Whether the folder governing an item is a shared one, in no workspace
+   * (T502): not an item in no folder with sign-in off (`unfiled`).
+   */
+  const isShared = async (kind: string, item: Stored) => {
+    const governing = await governingFolder(kind, item);
+    return !unfiled(governing) && (await workspaceRootOf(governing)) === null;
+  };
   /**
    * The folder an item is read in (T527): a workspace item's target, where
    * its proposal lands it (AC-282); any other, its own. None for a workspace
@@ -2715,9 +2742,7 @@ export function buildServer({
     if (addedTo === undefined) return false;
     if ((await openableDashboard(seen, addedTo)) !== undefined) return true;
     const showing = (await cat?.dashboardsShowingImage?.(imageId)) ?? [];
-    return showing.some(
-      (dashboard) => dashboard.folderId !== null && seen.rights.has(dashboard.folderId),
-    );
+    return showing.some((dashboard) => sees(seen, dashboard.folderId));
   };
   /**
    * A save that puts on a dashboard only images its user may see, or that it
@@ -2858,10 +2883,11 @@ export function buildServer({
     return undefined;
   };
   /**
-   * With security on, a stored item the user must be able to open, and, for a
-   * change, to write: `undefined` when the reply has been sent — 404, as for
-   * an item that isn't there, when they can't open it; 403 when they can open
-   * it but not change it. With security off, the item, or 404.
+   * A stored item the user must be able to open, and, for a change, to
+   * write: `undefined` when the reply has been sent — 404, as for an item
+   * that isn't there, when they can't open it; 403 when they can open it but
+   * not change it. With security off, the single user may do either, and is
+   * held to the rest as a Super-Admin is (T359, AC-254).
    */
   const itemFor = async (
     request: FastifyRequest,
@@ -2870,8 +2896,9 @@ export function buildServer({
     id: string,
     need: 'open' | 'write',
   ): Promise<{ stored: Stored | null; seen: Visibility | undefined } | undefined> => {
-    // Security off: nothing to check, and nothing read, as in phase 1.
-    if (security === 'off') return { stored: null, seen: undefined };
+    // Security off with no store of folders' groups: no tree to hold the
+    // single user to, so nothing to check and nothing read, as in phase 1.
+    if (security === 'off' && folderAccess === undefined) return { stored: null, seen: undefined };
     let stored;
     try {
       stored = await docs?.get?.(kind, id);
@@ -2893,7 +2920,10 @@ export function buildServer({
       await reply.code(404).send(NOT_THERE);
       return undefined;
     }
-    if (need === 'write' && !mayWrite(seen, await governingFolder(kind, stored))) {
+    // An item already in no folder with sign-in off is the single user's own
+    // (`unfiled`): never one a move may put there, which `mayWrite` refuses.
+    const governing = await governingFolder(kind, stored);
+    if (need === 'write' && !unfiled(governing) && !mayWrite(seen, governing)) {
       await reply.code(403).send({ error: READ_ONLY });
       return undefined;
     }
@@ -3218,7 +3248,7 @@ export function buildServer({
     // design 09, state G): someone no grant reaches has no root to be shown.
     // My workspace is each user's own (T343, AC-276), and none of a user with
     // read-only access everywhere (AC-277).
-    const own = workspaceIdOf(userOf(request).key);
+    const own = ownWorkspaceOf(userOf(request).key);
     const counts = await countsOf(seen, [ROOT_FOLDER_ID, own]);
     return {
       ...(seen.rights.has(ROOT_FOLDER_ID)
@@ -3268,7 +3298,7 @@ export function buildServer({
     const seen = await visibilityOf(request);
     if (seen === undefined || !cat)
       return reply.code(404).send({ error: 'Workspaces need sign-in.' });
-    const own = workspaceIdOf(userOf(request).key);
+    const own = ownWorkspaceOf(userOf(request).key);
     if (!seen.rights.has(own)) return [];
     const folderIds = [own, ...(await foldersBeneath(own)).map((folder) => folder.id)];
     const rows = (
@@ -3389,7 +3419,7 @@ export function buildServer({
    * there opened (200, `created: false`). Only for one they may propose back:
    * a read-write member of its folder, who has a workspace (AC-277, AC-284).
    * A local chart goes with its dashboard; what is in a workspace is edited
-   * there. With sign-in off there are no workspaces.
+   * there. With sign-in off, into the single user's, `mine` (T359, AC-254).
    *
    * Each copy goes into a project folder of its own, made with it, which the
    * answer names (`folderId`): the dashboard or chart and the library charts'
@@ -3408,7 +3438,7 @@ export function buildServer({
     if (kind === 'model') return copyModel(request, reply, seen);
     if ((kind !== 'dashboard' && kind !== 'chart') || typeof id !== 'string' || id === '')
       throw new BadRequest('Name the dashboard or chart to copy: { kind, id }.');
-    const own = workspaceIdOf(userOf(request).key);
+    const own = ownWorkspaceOf(userOf(request).key);
     if (!seen.rights.has(own))
       return reply.code(403).send({
         error: 'You have no workspace: only read-write members and Super-Admins have one.',
@@ -3507,7 +3537,7 @@ export function buildServer({
         // With sign-in off, the single user's (design 14, F).
         if (security === 'off') return MY_WORKSPACE_ID;
         // Their own, as T513 takes it: never the single user's (T522's review).
-        const own = workspaceIdOf(userOf(request).key);
+        const own = ownWorkspaceOf(userOf(request).key);
         const seen = await visibilityOf(request);
         if (seen === undefined) return own;
         return seen.rights.has(own) ? own : undefined;
@@ -3570,7 +3600,8 @@ export function buildServer({
   const NO_HISTORY = { error: 'There is no such item, or its history isn’t yours to see.' };
   const historyItem = async (request: FastifyRequest, kind: HistoryKind, id: string) => {
     const seen = await visibilityOf(request);
-    // With sign-in off there are no approvals, so no history (T359 brings the single user's).
+    // None where there's no tree to hold a user to, or no versions kept. With
+    // sign-in off, the single user's, as a Super-Admin's (T359, AC-254).
     if (seen === undefined || versions === undefined) return undefined;
     let folderId: string | null;
     let current: number;
@@ -3709,7 +3740,7 @@ export function buildServer({
      */
     if (kind === 'data-source') {
       if (dataSources === undefined) return reply.code(404).send(NO_HISTORY);
-      const own = workspaceIdOf(userOf(request).key);
+      const own = ownWorkspaceOf(userOf(request).key);
       if (!item.seen.rights.has(own))
         return reply.code(403).send({
           error: 'You have no workspace: only read-write members and Super-Admins have one.',
@@ -3817,7 +3848,7 @@ export function buildServer({
     }
     if (!docs?.get || !docs.createTogether || !docs.withOrigin)
       return reply.code(404).send(NO_HISTORY);
-    const own = workspaceIdOf(userOf(request).key);
+    const own = ownWorkspaceOf(userOf(request).key);
     if (!item.seen.rights.has(own))
       return reply.code(403).send({
         error: 'You have no workspace: only read-write members and Super-Admins have one.',
@@ -3935,7 +3966,7 @@ export function buildServer({
       const isRoot =
         folderId === ROOT_FOLDER_ID ||
         folderId === MY_WORKSPACE_ID ||
-        folderId === workspaceIdOf(userOf(request).key);
+        folderId === ownWorkspaceOf(userOf(request).key);
       return !isRoot && !seen.rights.has(folderId)
         ? reply.code(404).send(NOT_THERE)
         : reply.code(403).send({ error: READ_ONLY });
@@ -3952,7 +3983,7 @@ export function buildServer({
       const targetsWorkspace =
         typeof target === 'string' && target !== '' ? await workspaceRootOf(target) : null;
       // Another's workspace is as a folder that isn't there (T345's review).
-      if (targetsWorkspace !== null && targetsWorkspace !== workspaceIdOf(owner))
+      if (targetsWorkspace !== null && targetsWorkspace !== ownWorkspaceOf(owner))
         return reply.code(404).send(NOT_THERE);
       if (typeof target !== 'string' || target === '' || targetsWorkspace !== null)
         throw new BadRequest(
@@ -4070,9 +4101,13 @@ export function buildServer({
      * a dashboard is where its dashboard is.
      */
     const { place } = request.query as { place?: string };
-    if (seen !== undefined && (kind === 'dashboard' || (kind === 'chart' && place !== undefined))) {
-      const home = await governingFolder(kind, { id, body: found.body });
-      const own = workspaceIdOf(userOf(request).key);
+    const placed =
+      seen !== undefined && (kind === 'dashboard' || (kind === 'chart' && place !== undefined));
+    const home = placed ? await governingFolder(kind, { id, body: found.body }) : null;
+    // An item in no folder with sign-in off has no place: phase 1's, edited
+    // in place (`unfiled`, T359).
+    if (seen !== undefined && placed && !unfiled(home)) {
+      const own = ownWorkspaceOf(userOf(request).key);
       const inWorkspace = (await workspaceRootOf(home)) !== null;
       const local = kind === 'chart' && typeof found.body['localToDashboardId'] === 'string';
       const mayCopy =
@@ -4479,10 +4514,21 @@ export function buildServer({
     // changes that folder too: theirs to change, where it is and where it goes.
     if (found.seen !== undefined) {
       const seen = found.seen;
-      const into = checked
+      const goes = checked
         .filter((chart) => chart.body['localToDashboardId'] === undefined)
-        .map((chart) => folderIdOf(chart.body));
-      if (![...into, ...libraryFolders].every((folder) => mayWrite(seen, folder))) {
+        .every((chart) => {
+          const to = folderIdOf(chart.body);
+          const was = storedCharts.get(chart.id);
+          // An `unfiled` one staying in no folder, the single user's (T359):
+          // never one put there.
+          const stays =
+            unfiled(to) &&
+            was !== undefined &&
+            was['localToDashboardId'] === undefined &&
+            folderIdOf(was) === null;
+          return stays || mayWrite(seen, to);
+        });
+      if (!goes || !libraryFolders.every((folder) => unfiled(folder) || mayWrite(seen, folder))) {
         return reply.code(403).send({ error: READ_ONLY });
       }
       // A chart saved with it, made or moved, stays on its side of the
@@ -4505,7 +4551,7 @@ export function buildServer({
       if (found.stored !== null && (await isShared('dashboard', found.stored)))
         return reply.code(409).send(sharedInPlace('dashboard'));
       for (const folder of libraryFolders)
-        if ((await workspaceRootOf(folder)) === null)
+        if (!unfiled(folder) && (await workspaceRootOf(folder)) === null)
           return reply.code(409).send(sharedInPlace('chart'));
     }
 
@@ -4835,9 +4881,7 @@ export function buildServer({
     // With security on, only the dashboards they may see (T326, AC-264).
     const seen = await visibilityOf(request);
     if (seen === undefined) return using;
-    return using.filter(
-      (dashboard) => dashboard.folderId !== null && seen.rights.has(dashboard.folderId),
-    );
+    return using.filter((dashboard) => sees(seen, dashboard.folderId));
   });
 
   /**
@@ -4897,8 +4941,7 @@ export function buildServer({
     const shared = using.filter((dashboard) => !inAWorkspace(dashboard.folderId));
     const seen = await visibilityOf(request);
     const named = shared.filter(
-      (dashboard) =>
-        seen === undefined || (dashboard.folderId !== null && seen.rights.has(dashboard.folderId)),
+      (dashboard) => seen === undefined || sees(seen, dashboard.folderId),
     );
     const pathOf = await folderPathsOf();
     return {
@@ -5223,8 +5266,9 @@ export function buildServer({
     if (!cat) return [];
     // Nothing to look for: no need to read the tree.
     if ((q ?? '').trim() === '') return [];
-    // With security on, only what the user may see (T325, AC-264).
-    const seen = await visibilityOf(request);
+    // With security on, only what the user may see (T325, AC-264); with it
+    // off, everything, as the single user may, an `unfiled` item included.
+    const seen = security === 'off' ? undefined : await visibilityOf(request);
     return cat.search(q ?? '', most, kind, seen === undefined ? undefined : searchable(seen));
   });
 

@@ -37,7 +37,8 @@ const dashboards = (count: number) => `${String(count)} dashboard${count === 1 ?
 
 /**
  * Design 14's state A: what uses the chart, and what to do. The line on
- * proposals is left out with sign-in off, where dashboards change in place.
+ * proposals is left out where dashboards change in place (`signedIn`
+ * false): a server with no workspaces.
  */
 export function chartRefusal(
   found: ChartDependents,
@@ -105,7 +106,7 @@ export function withdrawnBy(answer: ProposalAnswer): WithdrawnProposal | undefin
 /**
  * The open proposal a workspace item waits in, its own or another item's it
  * goes with, which its delete withdraws (T528, AC-372): none for one never
- * proposed, and none with sign-in off, where nothing is.
+ * proposed, the single user's included with sign-in off (T359).
  */
 export async function openProposalOf(
   kind: 'dashboard' | 'chart' | 'data-source' | 'model',

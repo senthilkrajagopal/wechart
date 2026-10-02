@@ -92,14 +92,19 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
   const me = useQuery({ ...ME_QUERY, retry: false });
   /** Where "Propose again…" proposes it to, while its dialog is open. */
   const [proposingAgain, setProposingAgain] = useState<readonly string[] | null>(null);
+  /**
+   * Shared work is changed through My workspace and a proposal, with its
+   * history and its author's band: signed in, and with sign-in off too, by
+   * the single user, since R52 (T359, AC-254).
+   */
+  const viaWorkspace = me.data !== undefined;
   // Its History (T357, AC-289): offered only where the API shows it.
-  const signedIn = me.data?.security === 'oidc';
-  const history = useQuery({ ...historyQuery('chart', chartId), enabled: signedIn });
-  const mayHistory = signedIn && history.data != null;
+  const history = useQuery({ ...historyQuery('chart', chartId), enabled: viaWorkspace });
+  const mayHistory = viaWorkspace && history.data != null;
   const [historyOpen, setHistoryOpen] = useState(false);
   const restore = useRestore('chart', chartId);
-  // Where it lives and how it's changed, with sign-in on (T348, AC-278).
-  const folders = useQuery({ ...FOLDERS_QUERY, enabled: signedIn });
+  // Where it lives and how it's changed (T348, AC-278; T359).
+  const folders = useQuery({ ...FOLDERS_QUERY, enabled: viaWorkspace });
   const currentVersion = history.data?.versions.find((each) => each.current);
   const place =
     stored.data === undefined
@@ -254,16 +259,17 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
   });
 
   /**
-   * The dashboards it may be added to. With sign-in on, only My workspace's:
-   * a shared dashboard gains a tile only by a proposal (T502, AC-278). All of
-   * them, wherever in it, a copy in its project folder (T523, AC-368).
+   * The dashboards it may be added to: only My workspace's, the single
+   * user's too (T359): a shared dashboard gains a tile only by a proposal
+   * (T502, AC-278). All of them, wherever in it, a copy in its project folder
+   * (T523, AC-368).
    */
   const candidates = useQuery({
-    queryKey: ['search', 'dashboards', signedIn],
+    queryKey: ['search', 'dashboards', viaWorkspace],
     enabled: !me.isPending,
     queryFn: () =>
       getJson<{ id: string; title: string; kind: string }[]>(
-        signedIn ? '/api/workspace/dashboards' : '/api/folders/root/contents',
+        viaWorkspace ? '/api/workspace/dashboards' : '/api/folders/root/contents',
       ),
   });
 
@@ -312,9 +318,10 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
   const mayDelete =
     me.data !== undefined &&
     stored.data !== undefined &&
-    (!signedIn ||
-      place?.kind === 'workspace' ||
-      (place?.kind === 'shared' && place.copy !== undefined));
+    // No place said: a server with no workspaces, as phase 1's was.
+    (place === undefined ||
+      place.kind === 'workspace' ||
+      (place.kind === 'shared' && place.copy !== undefined));
   const title = saved?.title ?? stored.data?.body.title ?? 'Chart';
   const deleted = () => {
     setDeleting(false);
@@ -385,8 +392,8 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
             </StateLine>
           )}
           {/* Its author's band: waiting, or rejected with the reason (T358,
-          AC-290). None for anyone else; none asked for with sign-in off. */}
-          {me.data?.security === 'oidc' ? (
+          AC-290). None for anyone else; the single user's too (T359). */}
+          {viaWorkspace ? (
             <ProposalBand
               kind="chart"
               id={chartId}
@@ -625,8 +632,8 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
             <DeleteDialog
               name={title}
               action="Delete chart"
-              check={checkChart(chartId, signedIn, place?.kind === 'workspace')}
-              remove={removeChart(chartId, signedIn)}
+              check={checkChart(chartId, viaWorkspace, place?.kind === 'workspace')}
+              remove={removeChart(chartId, viaWorkspace)}
               onDeleted={deleted}
               onClose={() => {
                 setDeleting(false);

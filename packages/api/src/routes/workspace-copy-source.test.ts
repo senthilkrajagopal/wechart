@@ -249,22 +249,37 @@ describe('a data source copied into the workspace (T346, AC-280, AC-298)', () =>
     );
   });
 
-  it('has no workspaces to copy into with sign-in off', async () => {
+  /**
+   * With sign-in off since R52 ("Workspace-only now"): the single user
+   * copies it into their own workspace, `mine`, as a signed-in user does
+   * into theirs (T359, AC-254). It had none to copy into until then.
+   */
+  it('copies into the single user’s workspace with sign-in off', async () => {
     const open = buildServer({
       config: { ...secured, security: 'off' as const },
       documents: docs(),
       catalog: catalog(getDb()),
+      folderAccess: folderAccessStore(getDb()),
       dataSources: sources(),
     });
+    const made: { source?: string; folder?: string } = {};
     try {
-      const refused = await open.inject({
+      const answer = await open.inject({
         method: 'POST',
         url: `/api/data-sources/${held.sales}/copy`,
+        payload: { timeZone: 'UTC' },
       });
-      expect(refused.statusCode).toBe(404);
-      expect(refused.json()).toEqual({ error: 'Workspaces need sign-in.' });
+      expect(answer.statusCode, answer.body).toBe(201);
+      made.source = answer.json<{ id: string }>().id;
+      const copied = (await sources().get(made.source))!;
+      made.folder = copied.folderId;
+      expect((await projectOf(copied.folderId)).body['folderId']).toBe('mine');
+      expect(copied.origin?.id).toBe(held.sales);
+      expect(copied.targetFolderId).toBe(folders.sales);
     } finally {
       await open.close();
+      if (made.source !== undefined) await sources().remove(made.source);
+      if (made.folder !== undefined) await docs().remove('folder', made.folder);
     }
   });
 });

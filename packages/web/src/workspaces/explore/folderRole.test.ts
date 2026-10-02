@@ -30,8 +30,8 @@ describe('the right in a shared folder, from its access’s answer (T331)', () =
  * - Rule 69: the header's access chip, Super-Admin, Read-write or View only,
  *   in every shared folder; the workspace has its band instead (rule 72).
  * - Rule 68: a user with no workspace is offered nothing at its address.
- * - With sign-in off, phase 1's Explore: one user, every kind anywhere, and
- *   no chip (as T330 left the Access button out).
+ * - With sign-in off, the single user's: a Super-Admin's, with no chip (as
+ *   T330 left the Access button out), since R52 (T359, AC-254).
  */
 const signedIn = (more: Partial<FolderRoleOf>): FolderRoleOf => ({
   signedIn: true,
@@ -109,12 +109,21 @@ describe('what the open folder offers, by role (T331; AC-192, AC-194, rules 68 a
     }
   });
 
-  it('keeps phase 1’s Explore with sign-in off: every kind anywhere, and no chip', () => {
-    for (const inMyWorkspace of [false, true]) {
-      expect(folderRoleOf(signedIn({ signedIn: false, superAdmin: true, inMyWorkspace }))).toEqual({
-        ...EVERYTHING,
-        inOwnWorkspace: inMyWorkspace,
-      });
-    }
+  /**
+   * With sign-in off since R52 ("Workspace-only now", T359, AC-254): the one
+   * user works as a Super-Admin does, making dashboards and charts in My
+   * workspace and folders anywhere, with no chip: there are no groups.
+   */
+  it('offers the single user, with sign-in off, a Super-Admin’s Explore with no chip', () => {
+    expect(folderRoleOf(signedIn({ signedIn: false, superAdmin: true }))).toEqual({
+      access: undefined,
+      creates: ['folder'],
+      mayRename: true,
+      mayAddFolder: true,
+      inOwnWorkspace: false,
+    });
+    expect(
+      folderRoleOf(signedIn({ signedIn: false, superAdmin: true, inMyWorkspace: true })),
+    ).toEqual({ ...EVERYTHING, inOwnWorkspace: true });
   });
 });

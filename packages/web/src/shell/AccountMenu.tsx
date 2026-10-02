@@ -37,7 +37,9 @@ export function initialsOf(name: string): string {
   return `${words[0]![0]!}${words[words.length - 1]![0]!}`.toUpperCase();
 }
 
-const SINGLE_USER_NOTE = 'Sign-in is off, so wechart runs as one user with every permission.';
+/** references.md, Surface 1: its second sentence came with the single user's Reviews (T359, AC-254). */
+const SINGLE_USER_NOTE =
+  'Sign-in is off, so wechart runs as one user with every permission. Your proposals still wait for your approval in Reviews.';
 
 function isMe(value: unknown): value is Me {
   const me = value as Partial<Me> | null;
