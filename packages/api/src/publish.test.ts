@@ -526,6 +526,90 @@ describe('publishing a refresh key Cube can’t run', () => {
     await app.close();
   });
 
+  it('follows YAML aliases and merges to the key Cube reads, as Problems does (T377)', async () => {
+    const store = memory([ORDERS]);
+    const { cube } = cubeReading();
+    const app = serve({ config, modelFiles: store, cube });
+    const shared = {
+      path: 'cubes/orders.yml',
+      content: [
+        'cubes:',
+        '  - name: orders',
+        '    sql_table: t',
+        '    measures:',
+        '      - name: count',
+        '        type: count',
+        '    pre_aggregations:',
+        '      - name: main',
+        '        measures: [CUBE.count]',
+        '        refresh_key:',
+        '          every: "0 8 * * *"',
+        '      - name: aliased',
+        '        measures: [CUBE.count]',
+        '        refresh_key: &badkey',
+        '          every: &bad "0 * * * 1"',
+        '      - name: again',
+        '        measures: [CUBE.count]',
+        '        refresh_key:',
+        '          every: *bad',
+        '      - name: merged',
+        '        measures: [CUBE.count]',
+        '        refresh_key:',
+        '          <<: *badkey',
+        '          timezone: UTC',
+        '',
+      ].join('\n'),
+    };
+
+    const response = await publish(app, [shared]);
+
+    expect(response.statusCode).toBe(422);
+    const { errors } = response.json() as { errors: { line?: number; message: string }[] };
+    expect(errors.map((error) => error.message.split(':')[0])).toEqual([
+      'Pre-aggregation aliased',
+      'Pre-aggregation again',
+      'Pre-aggregation merged',
+    ]);
+    // Each at its own line: an alias or a merge where it is used.
+    expect(errors.map((error) => error.line)).toEqual([15, 19, 23]);
+    expect(store.files).toEqual([ORDERS]);
+    await app.close();
+  });
+
+  it('follows a rollup merged from defaults kept outside any key (T377’s review)', async () => {
+    const store = memory([ORDERS]);
+    const { cube } = cubeReading();
+    const app = serve({ config, modelFiles: store, cube });
+    const merged = {
+      path: 'cubes/orders.yml',
+      content: [
+        'cubes:',
+        '  - name: orders',
+        '    sql_table: t',
+        '    meta:',
+        '      rollup_defaults: &defaults',
+        '        refresh_key:',
+        '          every: "0 * * * 1"',
+        '    measures:',
+        '      - name: count',
+        '        type: count',
+        '    pre_aggregations:',
+        '      - <<: *defaults',
+        '        name: main',
+        '        measures: [CUBE.count]',
+        '',
+      ].join('\n'),
+    };
+
+    const response = await publish(app, [merged]);
+
+    expect(response.statusCode).toBe(422);
+    const { errors } = response.json() as { errors: { line?: number; message: string }[] };
+    expect(errors.map((error) => error.message.split(':')[0])).toEqual(['Pre-aggregation main']);
+    expect(store.files).toEqual([ORDERS]);
+    await app.close();
+  });
+
   it('publishes a cron Cube runs as written, and an interval', async () => {
     for (const every of ['0 8 * * *', '1 hour']) {
       const store = memory([ORDERS]);

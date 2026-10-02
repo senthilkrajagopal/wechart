@@ -1,5 +1,14 @@
 import { refreshEveryRefusal } from '@wechart/core';
-import { isMap, isScalar, isSeq, LineCounter, parseDocument, type Node } from 'yaml';
+import {
+  isAlias,
+  isMap,
+  isScalar,
+  isSeq,
+  LineCounter,
+  parseDocument,
+  type Document,
+  type Node,
+} from 'yaml';
 
 import { ROOT_FOLDER_ID } from '../repos/catalog';
 import type { ModelFile } from '../server';
@@ -40,6 +49,72 @@ const nameOf = (node: unknown): string | undefined => {
   return isScalar(name) && typeof name.value === 'string' ? name.value : undefined;
 };
 
+/** A merge key, `<<`: the yaml library reads it as a symbol when merges are on. */
+const isMergeKey = (key: unknown) =>
+  isScalar(key) &&
+  (key.value === '<<' || (typeof key.value === 'symbol' && key.value.description === '<<'));
+
+/**
+ * A key's `every` as Cube reads it, through YAML aliases and merges, as
+ * Problems reads the parsed value (T377; T258's review): the value, and the
+ * node where it is written in this key, the alias or the merge where one is
+ * used, for its line. An own `every` wins over a merged one.
+ */
+function everyOf(
+  document: Document,
+  key: Node | undefined,
+  seen: Set<unknown> = new Set(),
+): { value: unknown; at: Node } | undefined {
+  // The whole key an alias: said where the alias is used.
+  if (isAlias(key)) {
+    const found = everyOf(document, key.resolve(document), seen);
+    return found === undefined ? undefined : { value: found.value, at: key };
+  }
+  const map = key;
+  if (!isMap(map) || seen.has(map)) return undefined;
+  seen.add(map);
+  for (const pair of map.items)
+    if (isScalar(pair.key) && pair.key.value === 'every') {
+      const value = isAlias(pair.value) ? pair.value.resolve(document) : pair.value;
+      return isScalar(value) ? { value: value.value, at: pair.value as Node } : undefined;
+    }
+  for (const pair of map.items) {
+    if (!isMergeKey(pair.key)) continue;
+    const sources = isSeq(pair.value) ? pair.value.items : [pair.value];
+    for (const source of sources) {
+      const found = everyOf(document, source as Node, seen);
+      if (found !== undefined) return { value: found.value, at: pair.key as Node };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * A map's key as Cube reads the parsed file, through aliases and merges (T377's
+ * review): the map itself an alias, its own key, else a merged map's.
+ */
+function resolvedGet(
+  document: Document,
+  node: unknown,
+  keys: readonly string[],
+  seen: Set<unknown> = new Set(),
+): Node | undefined {
+  const map = isAlias(node) ? node.resolve(document) : node;
+  if (!isMap(map) || seen.has(map)) return undefined;
+  seen.add(map);
+  const own = get(map, keys);
+  if (own !== undefined) return own;
+  for (const pair of map.items) {
+    if (!isMergeKey(pair.key)) continue;
+    const sources = isSeq(pair.value) ? pair.value.items : [pair.value];
+    for (const source of sources) {
+      const found = resolvedGet(document, source, keys, seen);
+      if (found !== undefined) return found;
+    }
+  }
+  return undefined;
+}
+
 /** Each `every` a refresh key writes that Cube can't run, with who owns it and its line. */
 export function refreshKeyProblemsOf(files: readonly ModelFile[]): CompileError[] {
   const problems: CompileError[] = [];
@@ -48,15 +123,21 @@ export function refreshKeyProblemsOf(files: readonly ModelFile[]): CompileError[
     const lines = new LineCounter();
     const document = parseDocument(file.content, { lineCounter: lines, merge: true });
     if (document.errors.length > 0) continue;
+    const get = (node: unknown, keys: readonly string[]) => resolvedGet(document, node, keys);
+    const nameOf = (node: unknown): string | undefined => {
+      const name = get(node, ['name']);
+      const value = isAlias(name) ? name.resolve(document) : name;
+      return isScalar(value) && typeof value.value === 'string' ? value.value : undefined;
+    };
     const check = (owner: string, key: Node | undefined) => {
-      const every = get(key, ['every']);
-      if (!isScalar(every) || typeof every.value !== 'string') return;
+      const every = everyOf(document, key);
+      if (every === undefined || typeof every.value !== 'string') return;
       const refusal = refreshEveryRefusal(every.value);
       if (refusal === undefined) return;
       const line =
-        every.range === undefined || every.range === null
+        every.at.range === undefined || every.at.range === null
           ? undefined
-          : lines.linePos(every.range[0]).line;
+          : lines.linePos(every.at.range[0]).line;
       problems.push({
         path: file.path,
         ...(line === undefined ? {} : { line }),

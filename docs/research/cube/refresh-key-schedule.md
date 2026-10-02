@@ -210,7 +210,7 @@ const PreAggregationRefreshKeySchema = condition(
 
 **The exact rule.**
 
-- Whitespace is collapsed and the string trimmed. The result must have the shape `[S ]M H * * D`, where each of `S`, `M`, `H` and `D` is `*` or an unsigned integer ([bq-calc]).
+- Runs of spaces are collapsed to one, and one space is dropped at each end. Nothing else is: a tab or a newline stays, and the cron is refused (corrected 2026-10-02; see "Checked 2026-10-02 (T377)"). The result must have the shape `[S ]M H * * D`, where each of `S`, `M`, `H` and `D` is `*` or an unsigned integer ([bq-calc]).
   - Day of month and month must be `*`.
   - Day of week is allowed, as a single integer.
   - No `/`, `-`, `,`, `L`, `?`, `W`, `#`, and no names such as `MON` or `JAN`.
@@ -551,13 +551,22 @@ for i in $(seq 1 24); do date -u +%T; curl -s -G -H "Authorization: $TOKEN" --da
 
 - Expect `refreshKey: {"every":"1 hour"}`, with no `sql`.
 
+## Checked 2026-10-02 (T377)
+
+These were run on compose's Cube (xcube `v1.7.45-6d9673ccda`), on a throwaway model of their own, `probe-t377`, so the e2e model was not touched. Each rollup had `scheduled_refresh: false`. The SQL comes from `/v1/sql` under a query token for that model.
+
+- **(a2), confirmed:** `every: "0 * * * 1"` with no zone generates `SELECT FLOOR((0 + UNIX_TIMESTAMP() - 345600) / 3600) as refresh_key`, with `renewalThreshold: 300`. That is hourly, every day, as derived above, so UNVERIFIED item 5 is settled for this shape.
+- **(b), immediately, confirmed:** `every: "0 8 * * *"` with `timezone: America/Los_Angeles`, in PDT, generates `FLOOR((-25200 + UNIX_TIMESTAMP() - 28800) / 86400)`. The offset is taken when the SQL is generated. The DST half of (b) is still to be run.
+- **An interval of 0:** `every: "0 hour"` passes compile and generates `FLOOR((UNIX_TIMESTAMP()) / 0)`, with `renewalThreshold: 1`. It is a key that divides by zero, so wechart refuses it.
+- **Whitespace, confirmed as "The exact rule" reads:** `"\t0 8 * * *"` passes compile, and a dry-run `/v1/sql` probe answers `400 Your cron string ('\t0 8 * * *') is correct, but we support only equal time intervals.` `" 0 8 * * * "` (spaces) is accepted. Cube collapses spaces and drops one at each end, and nothing else.
+
 ## UNVERIFIED items
 
 1. The end-to-end effects of an unsupported cron: the HTTP 400 body on `/v1/load` and `/v1/sql`, the jobs-API failure, and the worker log text and its level. These are inferred from the code path ([capi-sql], [gw-err], [rs-run]); probe (a) settles them.
 2. That one bad rollup stops a context's whole scheduled run on every tick. Inferred from [rs-rr], [rs-refresh] and [srv-handle]; probe (a3).
 3. That the `utcOffset` snapshot outlives a DST change until the model recompiles or Cube restarts, and what happens to the key when it is regenerated. Inferred from [capi-sql], [cc], [rs-base] and [bq-calc]; probe (b).
 4. That `sql` is missing from `/v1/meta?extended`. Inferred from [cv-pa], [tme] and [mdn-json]; probe (d).
-5. The run-time schedule of regex-accepted shapes such as `0 * * * 1` and `* 9 * * *`. Derived from [bq-parse] and [bq-calc]; probe (a2).
+5. The run-time schedule of regex-accepted shapes such as `0 * * * 1` and `* 9 * * *`. Derived from [bq-parse] and [bq-calc]; probe (a2). *`0 * * * 1` confirmed 2026-10-02 (see "Checked 2026-10-02 (T377)"); the other shapes follow the same code.*
 6. The exact compile-error text for an unparsable cron. The Joi alternatives message may list both the interval and the `CronParser` reasons (`data-modeling.md` notes "Possible reasons (one of):").
 7. Whether cron-parser 4.9 accepts aliases such as `@hourly`. Its README does not mention them ([cp-readme]). The run-time regex refuses them in any case ([bq-calc]).
 8. Which IANA names luxon accepts but moment-timezone 0.5.48 lacks. Such a name would give offset 0 ([mtz]).

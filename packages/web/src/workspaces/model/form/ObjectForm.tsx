@@ -411,7 +411,15 @@ function Control({
         />
       );
     case 'refresh-schedule':
-      return <RefreshSchedule id={id} value={value} onChange={onChange} />;
+      return (
+        <RefreshSchedule
+          id={id}
+          value={value}
+          onChange={onChange}
+          // The worker never runs the key of a rollup that says so (T377).
+          scheduled={owner['scheduled_refresh'] !== false && owner['scheduledRefresh'] !== false}
+        />
+      );
     case 'yaml':
     case 'list':
     case 'object':

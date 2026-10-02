@@ -35,12 +35,25 @@ const RUNS_AS: Readonly<Record<string, string>> = {
 };
 
 /**
+ * A cron's fields as Cube's check reads them: spaces collapsed, and one
+ * dropped at each end, and nothing else, so a tab or a newline stays in a
+ * field and the cron is refused (research, "The exact rule"; seen refused,
+ * T377).
+ */
+const fieldsOf = (every: string) => every.replace(/ +/g, ' ').replace(/^ | $/g, '').split(' ');
+
+/**
  * Why Cube's refresh worker can't run `every` as written, or undefined when
  * it can. The sentence is the user's, in the model editor and at publish.
  */
 export function refreshEveryRefusal(every: string): string | undefined {
-  if (INTERVAL.test(every)) return undefined;
-  const fields = every.replace(/ +/g, ' ').trim().split(' ');
+  const interval = INTERVAL.exec(every);
+  // Cube writes FLOOR(… / 0) for one: it has no length (T377; research, "Checked 2026-10-02").
+  if (interval !== null)
+    return Number(interval[1]) === 0
+      ? `"${every}" has no length: a refresh key every 0 ${interval[2] ?? ''}s never turns over. Give it 1 or more.`
+      : undefined;
+  const fields = fieldsOf(every);
   if (fields.length !== 5 && fields.length !== 6)
     return `Cube’s refresh worker can’t run "${every}": it is neither an interval Cube reads (such as "1 hour" or "30 minute") nor a cron. ${SHAPE}.`;
   const [dayOfMonth, month] = fields.slice(-3, -1);
@@ -86,11 +99,11 @@ const UNIT: Readonly<Record<string, number>> = {
 export function refreshPeriodOf(
   every: string,
 ): { period: number; phase: number; cron: boolean } | undefined {
+  if (refreshEveryRefusal(every) !== undefined) return undefined;
   const interval = INTERVAL.exec(every);
   if (interval !== null)
     return { period: Number(interval[1]) * (UNIT[interval[2] ?? ''] ?? 0), phase: 0, cron: false };
-  if (refreshEveryRefusal(every) !== undefined) return undefined;
-  const fields = every.replace(/ +/g, ' ').trim().split(' ');
+  const fields = fieldsOf(every);
   const own = [...fields.slice(0, -3), fields[fields.length - 1] ?? ''];
   const named = fields.length === 6 ? FIELDS : FIELDS.slice(1);
   const firstStar = own.indexOf('*');
@@ -155,10 +168,55 @@ export function nextRefreshes(
   if (offset === undefined) return [];
   const { period, phase } = read;
   const first = Math.floor((offset + now.getTime() / 1000 - phase) / period) + 1;
-  return Array.from(
-    { length: count },
-    (_, at) => new Date((phase - offset + (first + at) * period) * 1000),
+  return (
+    Array.from(
+      { length: count },
+      (_, at) => new Date((phase - offset + (first + at) * period) * 1000),
+    )
+      // Past what a date can hold: none drawn, rather than a throw (T377).
+      .filter((run) => !Number.isNaN(run.getTime()))
   );
+}
+
+/** A zone's next daylight-saving change: when, and whether the clocks go back. */
+export interface ClockChange {
+  readonly at: Date;
+  readonly back: boolean;
+}
+
+/**
+ * The next runs, as `nextRefreshes`, listed only up to the zone's next
+ * daylight-saving change, with the change (T377, AC-153; design 16's Q3).
+ * Cube keeps the offset the zone had when it generated the key's SQL, so a
+ * run after the change may come an hour off until Cube next compiles the
+ * model (research, "Across a DST change"). An interval, or a cron in UTC,
+ * has no change. Five runs at most a week apart span less than the shortest
+ * time between two changes, so there is at most one among them.
+ */
+export function nextRefreshesBeforeChange(
+  every: string,
+  timezone: string | undefined,
+  now: Date,
+  count: number,
+): { runs: Date[]; change?: ClockChange } {
+  const read = refreshPeriodOf(every);
+  const zone = read?.cron === true ? timezone : undefined;
+  const runs = nextRefreshes(every, zone, now, count);
+  const last = runs[runs.length - 1];
+  if (zone === undefined || last === undefined) return { runs };
+  const before = offsetOf(zone, now);
+  const after = offsetOf(zone, last);
+  if (before === undefined || after === undefined || before === after) return { runs };
+  // The change: the first moment the offset differs, to the millisecond.
+  let lo = now.getTime();
+  let hi = last.getTime();
+  while (hi - lo > 1) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (offsetOf(zone, new Date(mid)) === before) lo = mid;
+    else hi = mid;
+  }
+  const at = new Date(hi);
+  return { runs: runs.filter((run) => run < at), change: { at, back: after < before } };
 }
 
 /**

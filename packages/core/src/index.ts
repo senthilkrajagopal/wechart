@@ -59,9 +59,11 @@ export {
 } from './exportFile';
 export {
   nextRefreshes,
+  nextRefreshesBeforeChange,
   refreshEveryRefusal,
   refreshLagSeconds,
   refreshPeriodOf,
+  type ClockChange,
 } from './refresh-key';
 
 export {

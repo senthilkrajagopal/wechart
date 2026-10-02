@@ -7228,7 +7228,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     6. The row-progress e2e depended on the refresh worker having built the seed rollup. Its last state is now answered in the test too.
   - **Review items left, for the record:** each read loads the tokens of the kept runs (up to 100) of every rollup in view. Without xcube configured, rows show "—" for Status (Helm requires xcube).
   - **Tests:** `xcube/partitions.test.ts`, `jobs/partitions.test.ts` ("each pre-aggregation's row"), `BuildPanel.test.tsx`, and `e2e/jobs.spec.ts`, "a rollup Cube's refresh worker built reads Built, with when, and no starter" (AC-391). AC-149's e2e reads its own build's row as Built by admin.
-- [ ] T377 [P] (AC-153) Fix what T258's and T159's reviews found, with design 16's daylight-saving rule, then tick AC-153 again
+- [x] T377 [P] (AC-153) Fix what T258's and T159's reviews found, with design 16's daylight-saving rule, then tick AC-153 again
   - *Rewritten 2026-10-02:* T160's findings move to T551 (AC-154), and a daylight-saving change among the next runs is now decided (`[R56]`, Q3).
   - Files:
     - `packages/core/src/refresh-key.ts` (+ test);
@@ -7247,6 +7247,26 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - the API's check follows YAML aliases and merges, as Problems does, and probe (a2)'s answer is recorded beside AC-153;
     - next runs stop at the zone's next daylight-saving change, followed by the warning, while a zone with no change ahead lists five (AC-153, Q3).
   - Depends on: none (T426 is done)
+  - **As built (2026-10-02):**
+    - **Daylight saving (Q3):** `nextRefreshesBeforeChange` (core) lists the runs only up to the zone's next change and returns the change, with which way the clocks go. The form shows design 16 D5's warning: "The clocks go back on Sun 1 Nov. Cube may run this key an hour off after that, until it next compiles the model, so later runs aren't listed." When the change comes before the first run, the warning and the note show with no runs. A zone with no change ahead, a cron in UTC and an interval list five.
+    - **`scheduled_refresh: false`:** the form says "Not scheduled: scheduled_refresh is false, so Cube's refresh worker never rebuilds it on this key. Build it from Jobs." and shows no runs.
+    - **Refused, as Cube refuses them:**
+      - an interval of 0 ("has no length"). Cube generates `FLOOR(UNIX_TIMESTAMP() / 0)` for one;
+      - a tab or newline around or inside a cron. Fields are now read as Cube's check reads them: spaces collapsed, one dropped at each end, and nothing else.
+      Both were seen on compose's Cube, as recorded in research `cube/refresh-key-schedule.md`, "Checked 2026-10-02 (T377)". Its "exact rule" line is corrected.
+    - **Clearing an incremental key:** clearing the schedule while `incremental` or `update_window` remain is refused at the field, because Cube's validator needs `every` or `sql`.
+    - **A huge interval** draws no runs, rather than throwing.
+    - **The publish check follows YAML aliases and merges,** as Problems does. That covers a key, its `every`, or a whole rollup merged from defaults. Each problem is placed at the line where the alias or merge is used.
+    - **Probe (a2) was run.** `0 * * * 1` runs hourly every day, as derived, so refusing it stands. This is recorded beside AC-153 and in the research.
+    - **Tests run on a fixed clock:** the form's tests use 2026-09-24 and 2026-10-29, and the e2e uses `page.clock.setFixedTime` at 2026-10-29. There it shows three runs and the warning.
+    - **The e2e's rebuild bound** is now the `* * * * *` key's own check period, 36 s (`refreshLagSeconds`), plus 10 s for the queue and the build. Only the first build under a new key may take the worker's full pass. It passed in all three browsers at once, alongside `jobs`, `preaggregations` and `schedules` (69 passed).
+  - **One review round (spec-reviewer), fixed:**
+    1. With the change before the first run, nothing showed: no runs and no warning. Both the warning and the note now show.
+    2. The publish check missed a rollup merged from defaults kept outside any key. It now follows merges and aliases at every level.
+    3. The 36 s bound had only been seen passing alone. It has now passed under the three-browser run above.
+    4. A weak matcher was tightened, the e2e's quoted AC was updated, and the research's "trimmed" was corrected.
+  - **For the user (T264's last finding):** AC-153 and design 16 D5 say the note reads "up to about five minutes". The note says "up to about 5½ minutes … while the worker keeps up — longer while it is busy". That is research's measured bound (300 s of staleness plus the 30 s beat), and T159 chose it. Options: keep the note and reword AC-153 to "about five and a half minutes", or shorten the note to the spec's words. Recommended: reword the AC, since the note is the research's figure.
+  - **Tests:** `core/src/refresh-key.test.ts`, `RefreshSchedule.test.tsx` ("a refresh schedule, as Cube runs it (T377)"), `validate.test.ts`, `publish.test.ts` (aliases and merges), and `e2e/model-schedule.spec.ts` (AC-153).
 - [ ] T551 (AC-154) Schedules' refresh-key rows as design 16 draws them, every rollup included *(added 2026-10-02, `[R56]`; T160's review findings, moved from T377)*
   - Files:
     - `packages/api/src/jobs/schedules.ts` (+ test): the field list from xcube's `GET …/meta?extended=true&hidden=true` (research `xcube-jobs-schedules-routes.md` §2);

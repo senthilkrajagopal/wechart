@@ -1697,6 +1697,9 @@ fieldset.model-field > legend {
 .rollup-facts dt { color: var(--wc-text-muted); }
 .rollup-facts dd { margin: 0; color: var(--wc-text-secondary); overflow-wrap: anywhere; }
 .model-field__problem { color: var(--wc-status-error); font-size: 12px; }
+/* A refresh key's runs stop at a daylight-saving change, said with its icon (T377; design 16, D5). */
+.refresh-schedule__warn { display: flex; gap: 6px; align-items: flex-start; margin: 6px 0 0; font-size: 12px; color: var(--wc-status-warning); }
+.refresh-schedule__warn > svg { flex: none; margin-top: 1px; }
 .model-member__type { grid-column: 3; color: var(--wc-text-secondary); }
 /* A member's row, collapsed (T236, AC-225), as design 03's .mrow-head (T480):
    the caret, its name and badges, its type on the right, and its SQL on a

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   nextRefreshes,
+  nextRefreshesBeforeChange,
   refreshLagSeconds,
   refreshPeriodOf,
   refreshEveryRefusal,
@@ -76,6 +77,69 @@ describe('nextRefreshes', () => {
   it('shows none for what Cube can’t run', () => {
     expect(nextRefreshes('55 7 * * 1-5', 'UTC', at('2026-09-24T12:00:00Z'), 3)).toEqual([]);
   });
+
+  it('draws an interval too long for a date without throwing, showing no runs (T377)', () => {
+    const runs = nextRefreshes('9999999999999 week', undefined, at('2026-09-24T12:00:00Z'), 5);
+    expect(runs).toEqual([]);
+    expect(() => runs.map((run) => run.toISOString())).not.toThrow();
+  });
+});
+
+/**
+ * T377 / AC-153 (design 16's Q3): Cube keeps the offset its zone had when it
+ * generated the key's SQL (research cube/refresh-key-schedule.md, "Across a
+ * DST change"), so the next runs are listed only up to the zone's next
+ * daylight-saving change, which is said, with which way the clocks go.
+ */
+describe('nextRefreshesBeforeChange', () => {
+  const at = (iso: string) => new Date(iso);
+  const iso = (dates: readonly Date[]) => dates.map((each) => each.toISOString());
+
+  it('stops at the zone’s next change, and says when and which way: Los Angeles in autumn', () => {
+    // The US falls back on Sun 1 Nov 2026, at 02:00 PDT, 09:00 UTC.
+    const { runs, change } = nextRefreshesBeforeChange(
+      '0 8 * * *',
+      'America/Los_Angeles',
+      at('2026-10-29T12:00:00Z'),
+      5,
+    );
+    expect(iso(runs)).toEqual([
+      '2026-10-29T15:00:00.000Z',
+      '2026-10-30T15:00:00.000Z',
+      '2026-10-31T15:00:00.000Z',
+    ]);
+    expect(change).toEqual({ at: at('2026-11-01T09:00:00Z'), back: true });
+  });
+
+  it('says the clocks go forward in spring: Berlin, weekly', () => {
+    // Europe springs forward on Sun 29 Mar 2026, at 01:00 UTC.
+    const { runs, change } = nextRefreshesBeforeChange(
+      '0 7 * * 1',
+      'Europe/Berlin',
+      at('2026-03-10T12:00:00Z'),
+      5,
+    );
+    expect(iso(runs)).toEqual(['2026-03-16T06:00:00.000Z', '2026-03-23T06:00:00.000Z']);
+    expect(change).toEqual({ at: at('2026-03-29T01:00:00Z'), back: false });
+  });
+
+  it('lists five, with no change, when none comes before the fifth', () => {
+    expect(
+      nextRefreshesBeforeChange('0 8 * * *', 'America/Los_Angeles', at('2026-09-24T12:00:00Z'), 5),
+    ).toEqual({
+      runs: nextRefreshes('0 8 * * *', 'America/Los_Angeles', at('2026-09-24T12:00:00Z'), 5),
+    });
+    // A zone with no daylight saving, a cron with none (UTC), and an interval.
+    expect(
+      nextRefreshesBeforeChange('0 8 * * *', 'Asia/Tokyo', at('2026-10-29T12:00:00Z'), 5).runs,
+    ).toHaveLength(5);
+    expect(
+      nextRefreshesBeforeChange('0 8 * * *', undefined, at('2026-10-29T12:00:00Z'), 5).runs,
+    ).toHaveLength(5);
+    expect(
+      nextRefreshesBeforeChange('1 day', 'America/Los_Angeles', at('2026-10-29T12:00:00Z'), 5),
+    ).toEqual({ runs: nextRefreshes('1 day', undefined, at('2026-10-29T12:00:00Z'), 5) });
+  });
 });
 
 describe('refreshLagSeconds', () => {
@@ -133,6 +197,23 @@ describe('refreshEveryRefusal', () => {
     expect(refreshEveryRefusal('0 * * * 1')).toMatch(/every hour, every day/);
     expect(refreshEveryRefusal('* 9 * * *')).toMatch(/every minute, all day/);
     expect(refreshEveryRefusal('* 9 * * 1')).toMatch(/every minute/);
+  });
+
+  it('refuses a tab or a newline around a cron, as Cube’s own check does (T377)', () => {
+    // Cube collapses spaces and drops one at each end, and nothing else
+    // (research, "The exact rule"): seen refused, 2026-10-02 (probe, research).
+    for (const every of ['\t0 8 * * *', '0 8 * * *\n', '0\t8 * * *'])
+      expect(refreshEveryRefusal(every), JSON.stringify(every)).toMatch(/can’t run/);
+    expect(refreshEveryRefusal(' 0 8 * * * ')).toBeUndefined();
+  });
+
+  it('refuses an interval of 0, which has no length (T377)', () => {
+    // Cube writes FLOOR(UNIX_TIMESTAMP() / 0) for one (seen 2026-10-02, research).
+    for (const every of ['0 hour', '0 minute', '0 seconds', '00 day'])
+      expect(refreshEveryRefusal(every), every).toBe(
+        `"${every}" has no length: a refresh key every 0 ${every.replace(/^\d+ |s$/g, '')}s never turns over. Give it 1 or more.`,
+      );
+    expect(refreshPeriodOf('0 hour')).toBeUndefined();
   });
 
   it('refuses a field out of its range, and a string that is neither', () => {

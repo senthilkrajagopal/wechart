@@ -241,4 +241,22 @@ describe('a refresh key Cube can’t run (AC-153)', () => {
   it('lists nothing for crons Cube runs as written, or intervals', () => {
     expect(validationProblems('cubes/orders.yml', withKeys('1 hour', '0 8 * * *'))).toEqual([]);
   });
+
+  it('lists a tab around a cron, and an interval of 0, as Cube refuses them (T377)', () => {
+    const text = withKeys('0 hour', '\\t0 8 * * *');
+    expect(
+      validationProblems('cubes/orders.yml', text).map(({ line, message }) => ({ line, message })),
+    ).toEqual([
+      {
+        line: lineOf(text, 'every: "0 hour"'),
+        message: expect.stringMatching(/^Cube orders: "0 hour" has no length/) as unknown as string,
+      },
+      {
+        line: lineOf(text, 'every: "\\t0 8 * * *"'),
+        message: expect.stringMatching(
+          /^Pre-aggregation main: Cube’s refresh worker can’t run "\t0 8 \* \* \*"/,
+        ) as unknown as string,
+      },
+    ]);
+  });
 });
