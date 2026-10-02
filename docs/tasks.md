@@ -9997,10 +9997,29 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 
 *Design 15 was approved 2026-10-01 with P1–P5 and its answers (R51). AC-373, AC-374, AC-378 … AC-381, AC-383 … AC-385 were amended, and AC-386 and AC-387 added.*
 
-- [ ] T531 [P] (AC-374, AC-373) Switch the runner on and off, for a Super-Admin only, with the read-only confirmation recorded
+- [x] T531 [P] (AC-374, AC-373) Switch the runner on and off, for a Super-Admin only, with the read-only confirmation recorded
   - Files: `packages/api/src/routes/data-sources.ts` (`PUT /api/data-sources/:id/sql-runner`), a migration for the switch and who confirmed it when, `packages/api/src/routes/sql-runner.test.ts`
   - Failing test: `sql-runner.test.ts`: a data source starts off; a Super-Admin's switch without `readOnlyConfirmed: true` is refused (400), and with it the switch is on, recording who and when; a read-write member's answers `403`; switching on and off are audit events (P4); an approved change of the data source's user, host or a secret turns it off (Q4) (AC-374).
   - Depends on: none
+  - **Done 2026-10-01.**
+    - **Store.** `sql_runner_switches` (migration `1758470000000`) is keyed by target: a data source's id, or `cubestore` for T536. A row is the switch on, with who confirmed it and when (`repos/sql-runner-switches.ts`).
+    - **The route.** `PUT /api/data-sources/:id/sql-runner` is for Super-Admins only (`ADMIN`):
+      - `{ on: true }` needs `readOnlyConfirmed: true`;
+      - turning it on or off is an audit event, and turning off one already off records nothing;
+      - a workspace data source is refused, since it needs no switch (T532 settles a repointed copy).
+    - **What GET shows.** `GET /api/data-sources/:id` gives `sqlRunner`: `{ on }`, plus the confirmer's name and the time.
+    - **When it turns off by itself:**
+      - when a change signs it in otherwise (`signsInOtherwise`: the auth method, any field of the old or new way of signing in, the driver's target keys, `database`, `role`, or a replaced secret), in place or at approval. It is turned off before the change is written, so a failure leaves it off;
+      - when the data source is deleted, its switch goes too.
+    - **Tests:** `sql-runner-switch.test.ts` (an approved change of user turns it off, one of description leaves it on) and `repos/sql-runner-switches.test.ts`, plus the route matrix's case.
+    - **AC-374 stays open** for Cube Store's half (T536), and **AC-373** for running SQL (T532, T535).
+    - **Review fixes:**
+      1. the approval path is now tested;
+      2. the switch goes off before the write;
+      3. identity fields now come from the driver's auth methods, so an NTLM domain, an Entra tenant or a client certificate counts;
+      4. turning off one already off isn't recorded;
+      5. a deleted data source's switch goes with it.
+    - **A small decision, overturnable.** A change of database counts as signing in otherwise, so AC-374's wording gains "database".
 - [ ] T532 (AC-373, AC-375, AC-376, AC-377, AC-378, AC-383) Run SQL on a data source through xcube, for those who may
   - Files: `packages/api/src/routes/sql-runner.ts` (+ test), `packages/api/src/xcube/admin.ts` (the run route), `e2e/security/sql-runner.spec.ts`
   - Failing test: `sql-runner.test.ts` against the stub xcube: Super-Admins and the own folder's read-write members run on a switched-on source, an ancestor's member, a reader, another folder's member, and anyone on a switched-off one are refused; a workspace source's owner runs with no switch, and no one else, unless it is a copy pointed at another database, user or role, which needs the switch (AC-373, AC-383); 10,000 rows, 30 seconds and 10 MB go with each run. `sql-runner.spec.ts` against compose's xcube:

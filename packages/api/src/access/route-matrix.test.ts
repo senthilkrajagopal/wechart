@@ -1627,6 +1627,19 @@ const CASES: Record<string, Case> = {
         writes(who, place),
       );
   },
+  // The SQL runner's switch: a Super-Admin's alone (T531, AC-374).
+  'PUT /api/data-sources/:id/sql-runner': async () => {
+    for (const place of PLACES)
+      for (const who of WHO.filter((each) => each !== 'super'))
+        refused(
+          await ask(who, {
+            method: 'PUT',
+            url: `/api/data-sources/${at[place].source}/sql-runner`,
+            payload: { on: true, readOnlyConfirmed: true },
+          }),
+          `${who} switching ${place}'s SQL runner`,
+        );
+  },
   'DELETE /api/data-sources/:id': async () => {
     for (const place of PLACES)
       for (const who of WHO.filter((each) => !writes(each, place))) {

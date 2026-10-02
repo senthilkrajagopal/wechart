@@ -80,6 +80,8 @@ import {
 const OWN_WORKSPACE: FolderRight = Object.freeze({ see: true, write: true, kinds: 'all' });
 import type { ConnectionTestStore } from './repos/connection-tests';
 import { DataSourceRefused, type DataSource, type DataSourceStore } from './repos/data-sources';
+import type { SqlRunnerSwitchStore } from './repos/sql-runner-switches';
+import { signsInOtherwise } from './routes/sql-runner-switch';
 import type { DataSourceLanding } from './routes/data-sources';
 import {
   connectionNameOf,
@@ -186,6 +188,8 @@ export interface BuildOptions {
   readonly now?: () => Date;
   /** Data sources as folder items, their secrets sealed (T335, AC-269). */
   readonly dataSources?: DataSourceStore;
+  /** The SQL runner's switch per data source, and Cube Store's (T531, AC-374). */
+  readonly sqlRunnerSwitches?: SqlRunnerSwitchStore;
   /**
    * Where a data source lands before it is stored, and leaves before it is
    * removed (T442): xcube's connections. Unset without xcube.
@@ -368,6 +372,7 @@ export function buildServer({
   publications,
   folderAccess,
   dataSources,
+  sqlRunnerSwitches,
   dataSourceLanding,
   connectionTest,
   connectionTests,
@@ -920,6 +925,7 @@ export function buildServer({
       store: dataSources,
       // Each change recorded (T368, AC-294).
       ...(audit === undefined ? {} : { audit }),
+      ...(sqlRunnerSwitches === undefined ? {} : { switches: sqlRunnerSwitches }),
       ...(config.seedToken === undefined ? {} : { seedToken: config.seedToken }),
       // Workspaces are signed-in users' (T343): with security off, as the
       // documents' routes, a data source has none (T345's review).
@@ -1140,7 +1146,40 @@ export function buildServer({
                   description: shape.description ?? null,
                 };
                 if (item.replaces !== null) {
+                  const was = await dataSources.withSealed(item.replaces.id);
+                  // Signing in otherwise, its runner waits for a new
+                  // confirmation (T531, AC-374; design 15's Q4): off before
+                  // the change lands, so a failing landing leaves it off.
+                  const relogin =
+                    sqlRunnerSwitches !== undefined &&
+                    was !== undefined &&
+                    signsInOtherwise(
+                      was.source.driver,
+                      {
+                        authMethod: was.source.authMethod,
+                        fields: was.source.fields,
+                        sealed: was.landed.sealed,
+                      },
+                      change,
+                    ) &&
+                    (await sqlRunnerSwitches.of(item.replaces.id)) !== undefined;
+                  if (relogin) await sqlRunnerSwitches!.off(item.replaces.id);
                   const updated = await dataSources.update(item.replaces.id, change, landing);
+                  if (relogin) {
+                    await recordIn(
+                      audit,
+                      {
+                        actor: { key: 'wechart', name: 'wechart' },
+                        event: 'data-source-change',
+                        folderId: updated.folderId,
+                        item: { kind: 'data-source', id: updated.id, title: updated.name },
+                        summary:
+                          'Turned the SQL runner off: how it signs in changed, so its login is to be confirmed read-only again',
+                        details: { sqlRunner: 'off' },
+                      },
+                      app.log,
+                    );
+                  }
                   return { id: updated.id, version: updated.version };
                 }
                 const created = await dataSources.create(

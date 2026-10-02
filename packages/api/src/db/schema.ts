@@ -143,6 +143,15 @@ export interface Database {
   proposals: ProposalTable;
   proposal_items: ProposalItemTable;
   item_versions: ItemVersionTable;
+  sql_runner_switches: SqlRunnerSwitchTable;
+}
+
+/** The SQL runner switched on for a target (T531, AC-374): a data source's id, or `cubestore`. */
+export interface SqlRunnerSwitchTable {
+  target: string;
+  confirmed_by_key: string;
+  confirmed_by_name: string;
+  confirmed_at: Generated<Date>;
 }
 
 /** A version of a shared item wechart landed (T352, AC-288), a copy it holds. */

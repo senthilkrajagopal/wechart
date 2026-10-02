@@ -4,8 +4,10 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createHash, timingSafeEqual } from 'node:crypto';
 
 import { actorOf, dataSourceChange, recordIn } from '../audit/record';
-import { INSTALL, USER } from '../auth/guard';
+import { ADMIN, INSTALL, USER } from '../auth/guard';
 import type { AuditStore } from '../repos/audit';
+import type { SqlRunnerSwitchStore } from '../repos/sql-runner-switches';
+import { signsInOtherwise } from './sql-runner-switch';
 import { MY_WORKSPACE_ID, ROOT_FOLDER_ID } from '../repos/catalog';
 import {
   DataSourceRefused,
@@ -192,9 +194,12 @@ export function registerDataSources(
     audit,
     withdraw,
     projects,
+    switches,
   }: {
     /** Where each change is recorded (T368, AC-294): a secret only said replaced. */
     readonly audit?: Pick<AuditStore, 'record'>;
+    /** The SQL runner's switch on each (T531, AC-374): unset, none is offered. */
+    readonly switches?: SqlRunnerSwitchStore;
     /**
      * For the Data sources page (T364, AC-157): which folders the request's
      * user sees every item of, and each folder's path from the root. Always
@@ -408,12 +413,68 @@ export function registerDataSources(
    * copied from and where it is to go, and whether the user may change it
    * there or only through a copy in their workspace (rule 71).
    */
+  /** Its SQL runner's switch as anyone who sees it may see it: by name, never a key (AC-374). */
+  const runnerOf = async (source: DataSource) => {
+    const on = await switches?.of(source.id);
+    return on === undefined
+      ? { on: false as const }
+      : {
+          on: true as const,
+          confirmedBy: { name: on.confirmedBy.name },
+          confirmedAt: on.confirmedAt.toISOString(),
+        };
+  };
+
+  /**
+   * The SQL runner switched on or off (T531, AC-374; R50, R51): a
+   * Super-Admin's alone, on a shared folder's data source, and on only with
+   * its login confirmed read-only, kept with who and when. Either way an
+   * audit event (design 15's P4). A workspace's needs none: its owner runs
+   * SQL on it (AC-383).
+   */
+  app.put('/api/data-sources/:id/sql-runner', ADMIN, async (request, reply) => {
+    if (switches === undefined)
+      return reply.status(503).send({ error: 'The SQL runner isn’t set up here.' });
+    const value = (request.body ?? {}) as { on?: unknown; readOnlyConfirmed?: unknown };
+    if (typeof value.on !== 'boolean')
+      return reply.status(400).send({ error: 'Say whether to turn it on: { on: true | false }.' });
+    const source = await reached(request, reply, 'read');
+    if (source === undefined) return reply;
+    if (await inAWorkspace(source))
+      return reply.status(400).send({
+        error: 'A data source in My workspace needs no switch: its owner runs SQL on it.',
+      });
+    if (!value.on) {
+      // A change only where there is one to record (T531's review).
+      if ((await switches.of(source.id)) !== undefined) {
+        await switches.off(source.id);
+        await recordChange(request, source, 'Turned the SQL runner off', { sqlRunner: 'off' });
+      }
+      return { on: false };
+    }
+    if (value.readOnlyConfirmed !== true)
+      return reply.status(400).send({
+        error:
+          'Confirm that this data source’s login can only read before turning the SQL runner on.',
+      });
+    const user = request.wechartUser;
+    await switches.on(source.id, { key: user?.key ?? 'single-user', name: user?.name ?? 'You' });
+    await recordChange(
+      request,
+      source,
+      'Turned the SQL runner on, confirming its login can only read',
+      { sqlRunner: 'on' },
+    );
+    return runnerOf(source);
+  });
+
   app.get('/api/data-sources/:id', USER, async (request, reply) => {
     const source = await reached(request, reply, 'read');
     if (source === undefined) return reply;
     const pathOf = await listing.pathOf();
     return {
       ...viewOf(source),
+      ...(switches === undefined ? {} : { sqlRunner: await runnerOf(source) }),
       folderPath: pathOf(source.folderId),
       canWrite: (await access(request, source.folderId, 'write')) === undefined,
       inWorkspace: await inAWorkspace(source),
@@ -831,6 +892,18 @@ export function registerDataSources(
         return reply.status(422).send(UNTESTED_CHANGE);
       taken = { testId, print };
     }
+    /**
+     * Signing in otherwise, its runner waits for a new confirmation (T531,
+     * AC-374; design 15's Q4). A secret sent is one replaced. Turned off
+     * first, so a change that then fails leaves it off, never on over a
+     * login nobody confirmed (T531's review).
+     */
+    const relogin =
+      switches !== undefined &&
+      connects &&
+      signsInOtherwise(source.driver, source, change) &&
+      (await switches.of(source.id)) !== undefined;
+    if (relogin) await switches.off(source.id);
     try {
       // Over the version its test was of, or refused (T461's review): two
       // saves never mix into settings nobody tested.
@@ -863,6 +936,14 @@ export function registerDataSources(
         changes: said.changes,
         ...(taken === undefined ? {} : { testId: taken.testId }),
       });
+      if (relogin) {
+        await recordChange(
+          request,
+          updated,
+          'Turned the SQL runner off: how it signs in changed, so its login is to be confirmed read-only again',
+          { sqlRunner: 'off' },
+        );
+      }
       return viewOf(updated);
     } catch (failure) {
       if (taken !== undefined)
@@ -1007,6 +1088,8 @@ export function registerDataSources(
     } catch (failure) {
       return refused(reply, failure);
     }
+    // Its runner's switch goes with it, so no stale row counts as one on (T531's review).
+    await switches?.off(source.id);
     await recordChange(request, source, 'Removed');
     return reply.status(204).send();
   });
