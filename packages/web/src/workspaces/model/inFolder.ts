@@ -57,7 +57,8 @@ export function rollupHref({
  * - with sign-in on, nobody in place: a model outside the workspace is
  *   shared, changed only in a copy in My workspace. "Edit in my workspace"
  *   is for those who could propose it back — a Super-Admin or read-write
- *   member, with write on the model's folder — and none for a view-only one.
+ *   member, with write on the model's folder; "Use in my workspace" for one
+ *   with a workspace who may only read it (T543, AC-283).
  * - in My workspace, its owner, there: its models are changed in place and
  *   previewed through the workspace's overlay (T347, AC-222).
  *   Until who is signed in is known, nothing is changed in place.
@@ -72,13 +73,24 @@ export function modelAccessOf({
   readonly right: 'write' | 'read' | 'unknown';
   /** Whether the model's folder is My workspace, or one in it. */
   readonly inWorkspace?: boolean;
-}): { readonly readOnly: boolean; readonly editInWorkspace: boolean } {
-  if (me?.security === 'off') return { readOnly: false, editInWorkspace: false };
-  if (inWorkspace) return { readOnly: me?.security !== 'oidc', editInWorkspace: false };
+}): {
+  readonly readOnly: boolean;
+  readonly editInWorkspace: boolean;
+  /**
+   * "Use in my workspace" (T543, AC-283; R53): one with a workspace who may
+   * only read the model's folder copies it in to use, going to a folder they
+   * write as a new model, never proposed back.
+   */
+  readonly useInWorkspace: boolean;
+} {
+  const none = { editInWorkspace: false, useInWorkspace: false };
+  if (me?.security === 'off') return { readOnly: false, ...none };
+  if (inWorkspace) return { readOnly: me?.security !== 'oidc', ...none };
+  const hasWorkspace = me?.security === 'oidc' && (me.superAdmin || me.readWrite === true);
   return {
     readOnly: true,
-    editInWorkspace:
-      me?.security === 'oidc' && (me.superAdmin || me.readWrite === true) && right === 'write',
+    editInWorkspace: hasWorkspace && right === 'write',
+    useInWorkspace: hasWorkspace && right === 'read',
   };
 }
 

@@ -16,13 +16,21 @@ import { browserTimeZone } from '../explore/projectFolder';
 export async function copyModelToWorkspace(
   folderId: string,
   path: string,
+  /** A use-only copy's: the folder the user writes it goes to, as a new model (T543, AC-283). */
+  targetFolderId?: string,
 ): Promise<{ readonly folderId: string; readonly path: string } | { readonly error: string }> {
   let response: Response;
   try {
     response = await fetch('/api/workspace/copies', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ kind: 'model', folderId, path, timeZone: browserTimeZone() }),
+      body: JSON.stringify({
+        kind: 'model',
+        folderId,
+        path,
+        timeZone: browserTimeZone(),
+        ...(targetFolderId === undefined ? {} : { targetFolderId }),
+      }),
     });
   } catch {
     return { error: 'wechart could not be reached, so nothing was copied.' };

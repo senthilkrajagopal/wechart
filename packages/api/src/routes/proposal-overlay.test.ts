@@ -299,12 +299,18 @@ describe('a proposal’s overlay (T440, AC-323)', () => {
    */
   it('says which item doesn’t apply when xcube won’t take it, and asks Cube nothing', async () => {
     const id = await proposedSource('broken');
-    stub.refuseOverlayNext(422, {
-      code: 'invalid_items',
-      error: 'The overlay does not apply',
-      errors: [{ folderId: 'fsales', name: 'broken', kind: 'reference', message: 'Broken here' }],
-      cubeMessage: null,
-    });
+    // The proposal's own push: the writer's workspace pushes its own meanwhile,
+    // after the copy (T543: a race this test lost one run in three).
+    stub.refuseOverlayNext(
+      422,
+      {
+        code: 'invalid_items',
+        error: 'The overlay does not apply',
+        errors: [{ folderId: 'fsales', name: 'broken', kind: 'reference', message: 'Broken here' }],
+        cubeMessage: null,
+      },
+      proposalOverlayIdOf(id),
+    );
     asked.length = 0;
     const answer = await load('writer', id);
     expect(answer.statusCode, answer.body).toBe(409);

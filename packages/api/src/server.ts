@@ -3509,9 +3509,10 @@ export function buildServer({
    * "Edit in my workspace" for a shared model (T347; AC-278, AC-283): a copy
    * of its file, in a project folder of its own (T523), going back to its
    * folder and naming what it was copied from; or their copy already there
-   * (200, `created: false`). Only for one they could propose back: a
-   * read-write member of its folder, who has a workspace, as for a dashboard.
-   * The workspace's overlay takes it first (`routes/workspace-models.ts`).
+   * (200, `created: false`). For a read-write member of its folder, who has a
+   * workspace, as for a dashboard; one with a workspace who may only read the
+   * folder gets a use-only copy (T543, below). The workspace's overlay takes
+   * it first (`routes/workspace-models.ts`).
    */
   const copyModel = async (request: FastifyRequest, reply: FastifyReply, seen: Visibility) => {
     const body = request.body as
@@ -3538,18 +3539,49 @@ export function buildServer({
     if (seen.rights.get(folderId)?.kinds !== 'all') return reply.code(404).send(missing);
     const file = (await modelStore.inFolders([folderId])).find((each) => each.path === path);
     if (file === undefined) return reply.code(404).send(missing);
-    if (!mayWrite(seen, folderId)) return reply.code(403).send({ error: READ_ONLY });
     const timeZone = timeZoneOf(body?.timeZone);
     if (timeZone === undefined) throw new BadRequest(NO_TIME_ZONE);
     return inTurn(own, async () => {
+      /**
+       * One they may only read (T543, AC-283; the user's answer "Yes, use-only
+       * copy", R53): copied to use, going to a folder they write as a new
+       * model, marked so it is never proposed back. Their copy already there
+       * opens. Decided in the workspace's turn, so a copy deleted meanwhile
+       * is never made again unmarked (T543's review).
+       */
+      let useOnly: { targetFolderId: string } | undefined;
+      const held = await modelStore.inFolders(await workspaceFolderIds(own));
+      if (!mayWrite(seen, folderId) && !held.some((each) => each.origin?.id === file.id)) {
+        const target = (request.body as { targetFolderId?: unknown } | undefined)?.targetFolderId;
+        if (target === undefined || target === null || target === '')
+          return reply.code(400).send({
+            error:
+              'You may only read the folder this model is in, so a copy of it can’t go back there. Name a folder you may write for it to go to, as a new model.',
+          });
+        const refused = await targetRefusalOf(request, target);
+        if (refused !== undefined) return reply.code(refused.status).send(refused.body);
+        const name = declaredIn(file.content)[0]?.name;
+        const there = (await modelStore.inFolders([target as string])).some(
+          (each) => name !== undefined && declaredIn(each.content)[0]?.name === name,
+        );
+        if (there) {
+          const title = (await docs.get?.('folder', target as string))?.body['title'];
+          return reply.code(409).send({
+            error: `${typeof title === 'string' ? title : 'That folder'} has a cube or view named “${name ?? path}” already. A use-only copy goes to its folder as a new model: choose another folder.`,
+          });
+        }
+        useOnly = { targetFolderId: target as string };
+      }
       const project = await projectFolderIn(own, userOf(request).key, timeZone, {
         title: path.slice(path.lastIndexOf('/') + 1),
         fromFolderId: folderId,
       });
-      const answer = await wsModels.copy(own, file, {
-        id: project.id,
-        make: () => docs.create(project),
-      });
+      const answer = await wsModels.copy(
+        own,
+        file,
+        { id: project.id, make: () => docs.create(project) },
+        useOnly,
+      );
       return reply.code(answer.status).send(answer.body);
     });
   };

@@ -55,6 +55,7 @@ describe('who may change a model where (rules 70 and 71, AC-222)', () => {
     expect(modelAccessOf({ me: me('off'), right: 'unknown' })).toEqual({
       readOnly: false,
       editInWorkspace: false,
+      useInWorkspace: false,
     });
   });
 
@@ -62,26 +63,38 @@ describe('who may change a model where (rules 70 and 71, AC-222)', () => {
     expect(modelAccessOf({ me: me('oidc', true), right: 'write' })).toEqual({
       readOnly: true,
       editInWorkspace: true,
+      useInWorkspace: false,
     });
     expect(modelAccessOf({ me: me('oidc', false, true), right: 'write' })).toEqual({
       readOnly: true,
       editInWorkspace: true,
+      useInWorkspace: false,
     });
   });
 
-  it('offers a view-only member nothing, nor anyone until their right is known', () => {
+  // T543 (AC-283; R53, "Yes, use-only copy"): one with a workspace who may
+  // only read the folder copies its model in to use, never to propose back.
+  it('offers one who may only read the folder Use in my workspace, and no one anything until their right is known', () => {
     expect(modelAccessOf({ me: me('oidc', false, true), right: 'read' })).toEqual({
       readOnly: true,
       editInWorkspace: false,
+      useInWorkspace: true,
     });
     expect(modelAccessOf({ me: me('oidc', false, true), right: 'unknown' })).toEqual({
       readOnly: true,
       editInWorkspace: false,
+      useInWorkspace: false,
     });
     // No workspace to copy into: a reader everywhere.
     expect(modelAccessOf({ me: me('oidc'), right: 'write' })).toEqual({
       readOnly: true,
       editInWorkspace: false,
+      useInWorkspace: false,
+    });
+    expect(modelAccessOf({ me: me('oidc'), right: 'read' })).toEqual({
+      readOnly: true,
+      editInWorkspace: false,
+      useInWorkspace: false,
     });
   });
 
@@ -89,6 +102,7 @@ describe('who may change a model where (rules 70 and 71, AC-222)', () => {
     expect(modelAccessOf({ me: undefined, right: 'write' })).toEqual({
       readOnly: true,
       editInWorkspace: false,
+      useInWorkspace: false,
     });
   });
 
@@ -96,15 +110,17 @@ describe('who may change a model where (rules 70 and 71, AC-222)', () => {
   it('lets its owner change a model in My workspace, with nothing to copy it into', () => {
     expect(
       modelAccessOf({ me: me('oidc', false, true), right: 'unknown', inWorkspace: true }),
-    ).toEqual({ readOnly: false, editInWorkspace: false });
+    ).toEqual({ readOnly: false, editInWorkspace: false, useInWorkspace: false });
     expect(modelAccessOf({ me: me('oidc', true), right: 'write', inWorkspace: true })).toEqual({
       readOnly: false,
       editInWorkspace: false,
+      useInWorkspace: false,
     });
     // Not before who is signed in is known.
     expect(modelAccessOf({ me: undefined, right: 'unknown', inWorkspace: true })).toEqual({
       readOnly: true,
       editInWorkspace: false,
+      useInWorkspace: false,
     });
   });
 });

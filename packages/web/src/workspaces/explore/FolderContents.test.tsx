@@ -742,6 +742,37 @@ describe('My workspace, as design 04 draws it (T498)', () => {
     expect(onPropose).toHaveBeenCalledWith(model);
   });
 
+  // T543 (AC-283): a use-only copy goes to its folder as a new model.
+  it('says a use-only copy of a model goes as new', () => {
+    render(
+      <FolderContents
+        items={[
+          {
+            kind: 'model',
+            id: 'cubes/regions.yml',
+            title: 'regions.yml',
+            owner: null,
+            updatedAt: at,
+            declares: { cubes: 1, views: 0 },
+            targetFolderId: 'finance',
+            fileId: 'file-2',
+            origin: {
+              kind: 'model',
+              id: 'm-orig',
+              version: 4,
+              folderId: 'sales-emea',
+              useOnly: true,
+            },
+          },
+        ]}
+        workspace={workspace}
+      />,
+    );
+    expect(lineOf('cubes/regions.yml')?.textContent).toBe(
+      'Goes to Finance · new, a copy for use only of version 4',
+    );
+  });
+
   it('says a folder has no target, with how many items it holds', () => {
     render(
       <FolderContents

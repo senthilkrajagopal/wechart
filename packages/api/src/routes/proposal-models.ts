@@ -12,7 +12,8 @@ import { XCUBE_ROOT, xcubeIdOf } from '../xcube/folders';
  * and G).
  *
  * A workspace's previews read its models through its overlay, each placed in
- * its target folder (a copy's is its origin's folder), where it makes the
+ * its target folder (a copy's is its origin's folder, a use-only copy's the
+ * one its maker chose, T543), where it makes the
  * cube `<folder>__<name>` (the root's, `<name>`) in place of any published
  * one of that name (T347). A dashboard or chart naming such a cube was drawn
  * through the workspace, so its proposal holds the model too, and the two are
@@ -119,19 +120,33 @@ function cubesNamedBy(item: ProposedItem): string[] {
   return [source, ...others];
 }
 
+/** Why a workspace model can't be proposed: the proposal is refused, saying so (409). */
+export class ModelRefusal extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ModelRefusal';
+  }
+}
+
 /**
  * A workspace model a proposal needs, whose target xcube doesn't serve now
  * (a folder deleted since, say): there is nowhere to put it, so the item
  * naming its cube can't be proposed without it (T350's review).
  */
-export class UnservedModel extends Error {
-  constructor(readonly path: string) {
-    super(
-      `“${path}”, which goes with it, is to go to a folder xcube doesn’t serve now (it may have been deleted), so it can’t be proposed.`,
-    );
-    this.name = 'UnservedModel';
-  }
-}
+const nowhereFor = (path: string) =>
+  new ModelRefusal(
+    `“${path}”, which goes with it, is to go to a folder xcube doesn’t serve now (it may have been deleted), so it can’t be proposed.`,
+  );
+
+/**
+ * A use-only copy (T543, AC-283) goes to the folder its maker chose, as a
+ * new model, and never back to the one it came from, whoever may write that
+ * one since.
+ */
+const usedOnly = (path: string) =>
+  new ModelRefusal(
+    `“${path}” is a copy for use only of a model in a folder you could only read: it can’t be proposed back there.`,
+  );
 
 const fullNameOf = (folder: string, name: string) =>
   folder === XCUBE_ROOT ? name : `${folder}__${name}`;
@@ -197,7 +212,7 @@ export function proposalModels(deps: ProposalModelDeps) {
       found.push(model);
       const names = namesUsedIn(model.file.content);
       const away = unserved.find((each) => names.has(each.name));
-      if (away !== undefined) throw new UnservedModel(away.file.path);
+      if (away !== undefined) throw nowhereFor(away.file.path);
       for (const other of placed)
         if (names.has(other.name) && !seen.has(other)) {
           seen.add(other);
@@ -210,6 +225,8 @@ export function proposalModels(deps: ProposalModelDeps) {
   /** A model as a proposal holds it: what it is now, where it lands, what it replaces there. */
   const itemOf = async (model: Placed): Promise<ProposedItem> => {
     const landsIn = model.file.targetFolderId!;
+    if (model.file.origin?.useOnly === true && landsIn === model.file.origin.folderId)
+      throw usedOnly(model.file.path);
     const replaced = await replacedIn(landsIn, model.name);
     return {
       kind: 'model',
@@ -238,7 +255,7 @@ export function proposalModels(deps: ProposalModelDeps) {
       if (used.size === 0) return [];
       const held = await placedIn(workspaceId);
       const away = held.unserved.find((model) => used.has(model.fullName));
-      if (away !== undefined) throw new UnservedModel(away.file.path);
+      if (away !== undefined) throw nowhereFor(away.file.path);
       return itemsOf(
         await withWhatTheyName(
           held.placed.filter((model) => used.has(model.fullName)),

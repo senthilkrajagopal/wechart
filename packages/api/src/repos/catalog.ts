@@ -65,6 +65,8 @@ export interface CatalogItem {
     readonly id: string;
     readonly version: number;
     readonly folderId?: string;
+    /** A model's copy to use, never proposed back (T543, AC-283). */
+    readonly useOnly?: true;
   } | null;
 }
 
@@ -333,6 +335,8 @@ export function catalog(db: Kysely<Database>) {
                           id: model.origin.id,
                           version: model.origin.version,
                           folderId: model.origin.folderId,
+                          // A copy to use, never proposed back (T543, AC-283).
+                          ...(model.origin.useOnly === true ? { useOnly: true } : {}),
                         },
                 }),
           };

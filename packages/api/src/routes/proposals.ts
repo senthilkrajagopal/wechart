@@ -19,7 +19,7 @@ import {
   type Replaces,
 } from '../repos/proposals';
 import type { VersionKind, VersionStore } from '../repos/versions';
-import { UnservedModel, type ProposalModels } from './proposal-models';
+import { ModelRefusal, type ProposalModels } from './proposal-models';
 import { withChartsRenamed } from './workspace-copy';
 
 /**
@@ -421,7 +421,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     try {
       found = (await find()) ?? [];
     } catch (failure) {
-      if (failure instanceof UnservedModel) throw new Refused(409, failure.message);
+      if (failure instanceof ModelRefusal) throw new Refused(409, failure.message);
       throw failure;
     }
     for (const model of found)

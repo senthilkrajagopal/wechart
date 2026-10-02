@@ -78,6 +78,11 @@ export interface ModelOrigin {
   readonly folderId: string;
   readonly path: string;
   readonly version: number;
+  /**
+   * A copy of a model in a folder its maker may only read (T543, AC-283):
+   * to use, going to a folder they write as a new model, never proposed back.
+   */
+  readonly useOnly?: true;
 }
 
 /** A data source, a folder item (phase 2). Its secrets are in `data_source_secrets`. */

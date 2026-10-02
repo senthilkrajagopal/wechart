@@ -5905,7 +5905,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - `infra/cube/cube.js` names `overlayClaim: 'wechartOverlay'`.
   - **Small decisions, overturnable:**
     - A workspace model save that xcube refuses is refused, nothing stored, so what the workspace holds is what its previews show.
-    - Copying a model needs read-write access to its folder, as a dashboard's copy does (T344).
+    - Copying a model needs read-write access to its folder, as a dashboard's copy does (T344). *Superseded 2026-10-01 for one who may only read it: a use-only copy (R53, T543).*
     - A model save refused with `409 older_instances` answers `503`; a data source's background push logs it.
   - **Review (one round), fixed:** a workspace model couldn't be deleted from the page or Explore (the dependents check answered `409`); a model whose target had gone was stored and silently left out of the previews; an answer from an older overlay version passed as current; every tile read the whole workspace; the overlay was named only after an open check, not also for the asker's own workspace alone; New cube's name wasn't checked until Save; the tests' order mattered, and the read-only target (`403`) had none.
   - **For the user (AC-281):** a workspace item's stored cube names are full names. A cube new in the workspace with the short name of one on the item's path, but going to another folder, is offered first by the picker; a tile saved earlier on the path's cube keeps querying that one. AC-281's "uses a folder's cube while the workspace defines that name" reads as failing then. Should stored names be rebound to the workspace's own (through `POST …/resolve` with `overlay`, which the client has), or does AC-281 mean names as they are picked? AC-281 stays unticked until answered. The amendment's "workspace pickers resolve through `POST …/resolve` with `overlay`" is met by the field list's marks instead; `resolve` with `overlay` is in the client, unused. *Answered 2026-10-01 (R53, "Rebind in the workspace"), built by T542.*
@@ -5913,7 +5913,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **AC-278's model half**, refusing in-place changes to a shared model file: with T350, once a model can land through an approval (T349's reasoning: refusing now would leave shared models unchangeable).
     - **Sign-in off (R52, AC-254):** workspaces with security off are T359's; overlays are made only with sign-in on, so a workspace model save then answers `409` until T359.
     - A cancelled query's `DELETE /v1/running-query` is sent without the overlay; one with its own orchestrator (data sources in it) likely isn't reached. By reading.
-    - **AC-283** stays open: off-path cubes are reachable only by copying their model into the workspace, which needs write access to its folder. Whether a model a user may only read can be copied for use, never to be proposed, is for the user.
+    - **AC-283** stays open: off-path cubes are reachable only by copying their model into the workspace, which needs write access to its folder. Whether a model a user may only read can be copied for use, never to be proposed, is for the user. *Answered 2026-10-01 (R53, "Yes, use-only copy"), built by T543.*
     - **AC-323** stays open for its proposal half (T440).
     - **AC-329** stays open for T475's picker and T342's question of names against titles.
     - A preview whose overlay no longer applies shows xcube's `409` message, which names the item by xcube's folder id and name; it isn't turned into the folder's path yet. A data source's background push refused (`422 invalid_secret`) is logged, not said to the user.
@@ -10127,10 +10127,49 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
     - **Left:**
       - A rebound tile's titles and formats come from the field list of the name it holds (the folder's cube), while its numbers come from the workspace's. A tile made after the workspace's cube names that cube, and reads both from it.
       - `workspace-rebind.test.ts` runs in order: the tests after the save rely on it.
-- [ ] T543 (AC-283) Copy a model from a folder one may only read into My workspace, to use and never propose back *(added 2026-10-01, `[R53]`: "Yes, use-only copy")*
+- [x] T543 (AC-283) Copy a model from a folder one may only read into My workspace, to use and never propose back *(added 2026-10-01, `[R53]`: "Yes, use-only copy")*
   - Files: the model copy route (`routes/workspace-models.ts`), the model page's "Use in my workspace", the proposal's refusal, tests
   - Failing test: a reader of a folder copies its model into their workspace and previews with it; proposing it back to that folder is refused; proposing it to a folder they write lands it as a new model (AC-283).
   - Depends on: T347, T350
+  - *As built (2026-10-01):*
+    - **Who:** one with a workspace who sees a folder's models but may not write the folder. That is a read-write member of a folder below it, who reads every kind of item above (AC-262).
+      - A read-only member sees no models there (AC-263), so has none to copy.
+      - Anyone else has no workspace (AC-277).
+    - **The copy** (`POST /api/workspace/copies { kind: 'model', folderId, path, timeZone, targetFolderId }`):
+      - It needs `targetFolderId`, a shared folder they write, checked as a new model's target is (AC-282). Without one it answers 400, saying why it can't go back. The model's own folder answers 403. A workspace folder answers 400.
+      - **Small decision, overturnable:** a target that already declares the model's name is refused with 409. A use-only copy goes there "as a new model", and would otherwise replace that folder's cube in previews and proposals.
+      - Stored like any copy, in a project folder of its own (T523), going to that target, with its origin marked `useOnly: true`. Its overlay places it in the target, as a new model there. Copied again, the copy already there opens (200).
+      - A read-write member of the folder gets "Edit in my workspace"'s copy as before (T347).
+    - **Previews use it:** it makes the target's `<folder>__<name>`, and T542 rebinds a stored name of its short name to it, so a workspace tile on the original folder's cube answers from the copy.
+    - **Never proposed back:** a model item whose origin is use-only and which lands in its origin's folder is refused (409), even for one who may write that folder since. No route sets a copy's target to its origin, so this guards the rule rather than a path. Proposed to its target, it is an item with `replaces: null` there. Landing it is T451's.
+    - **The model page:**
+      - offers "Use in my workspace" in place of "Edit in my workspace" to one who may only read the folder (`modelAccessOf`'s `useInWorkspace`);
+      - asks which folder they write it goes to (`UseInWorkspaceDialog`: why it can't go back, the folders they write, one chosen for them where there is one, the API's refusal in an alert);
+      - then opens the copy.
+    - **Explore** says it under its name: "Goes to _folder_ · new, a copy for use only of version _n_" (the catalog's origin carries `useOnly`).
+    - Also files: `packages/api/src/db/schema.ts` (`ModelOrigin.useOnly`), `repos/catalog.ts`, `routes/{workspace-models,proposal-models,proposals}.ts` (`ModelRefusal` in place of `UnservedModel`), `server.ts` (`copyModel`); `packages/web/src/workspaces/model/{inFolder,ModelFilePage,UseInWorkspaceDialog,workspaceModels}.ts(x)`, `explore/FolderContents.tsx`.
+    - Tests:
+      - `routes/use-only-copy.test.ts`:
+        - asked for a target, never its own folder, nor one with a cube of its name, nor by a read-only member;
+        - copied, going to the target, marked, placed there in the overlay, said in Explore's contents, a workspace tile on the original's cube answered from it, opened again;
+        - proposed to its target as new;
+        - refused back into its own folder, even when written since;
+      - web: `ModelInFolder.test.tsx` (`useInWorkspace`), `UseInWorkspaceDialog.test.tsx`, `FolderContents.test.tsx`;
+      - `e2e/security/use-only-copy.spec.ts` in Chrome against compose's xcube: the page offers "Use in my workspace", the dialog offers only folders they write, the copy opens, Explore says it is for use only, a changed copy answers a workspace dashboard's preview, and it is proposed to /Parent/Child alone, as new.
+    - **AC-283's first sentence** (use every model, data source, dashboard and chart of a folder they may see): read as resolving and previewing them, which T347's tests show. AC-283 was left open only for the models question (T347's note), which R53 answered. Copying a read-only folder's dashboard or data source stays refused (`workspace-copy.test.ts`, `routes/data-sources.ts`): the user was asked only about models.
+    - **The UI, a small decision, overturnable:** "Use in my workspace", its dialog's words and Explore's "new, a copy for use only of version _n_" follow design 04's and design 03's patterns (rule 71's button, rule 74's target dialog, pin 3's line). No design draws them yet (AC-343).
+    - T347's decision "Copying a model needs read-write access to its folder" is superseded for those who may only read it.
+    - **Review fixes (one round):**
+      1. The use-only decision is made in the workspace's turn, so a copy deleted meanwhile is never made again unmarked.
+      2. One with a workspace who sees only a folder's dashboards is tested (404), since that check is now the one barrier.
+      3. A failure to read the folders it may go to is said under the button, not left silent.
+      4. Stale comments updated.
+    - Also fixed: `proposal-overlay.test.ts`'s refused overlay push could be taken by the writer's workspace push made meanwhile (one run in three). The stub's `refuseOverlayNext` now takes the overlay it refuses (`xcube/fake.ts`).
+    - **Left:**
+      - A use-only copy is placed in its target, so its joins and data sources resolve along the target's path. The dialog lists every folder they write, and one outside the original's subtree may be refused by xcube (409) where the model names what only that path has.
+      - Asked again with another folder, the copy already there opens, still going to its first one.
+      - The name check compares each file's first declared name, at copy time only: a target gaining that name later makes the proposal replace it.
+      - The project folder's description says "Editing …" for a use-only copy too.
 - [x] T541 (AC-388) Freeze a workspace item while it is in an open proposal *(added 2026-10-01, `[R52]`)*
   - Files: the save routes for dashboards, charts and data sources in `packages/api/src/server.ts` and `routes/data-sources.ts` (models with T350), the editors' notices, `packages/api/src/routes/proposal-freeze.test.ts`
   - Failing test: `proposal-freeze.test.ts`: a dashboard, chart or data source in an open proposal refuses a save (`409`), saying it was submitted and that withdrawing lets it be changed; once withdrawn or decided, it saves (AC-388).

@@ -60,6 +60,7 @@ import {
   namedFileOf,
   targetsOf,
 } from './workspaceModels';
+import { UseInWorkspaceDialog } from './UseInWorkspaceDialog';
 
 /**
  * A model file, opened (T138, T139; direction.md §7b): a form for each cube
@@ -176,6 +177,8 @@ interface Place {
   readonly hrefOf: (path: string) => string;
   readonly readOnly: boolean;
   readonly editInWorkspace: boolean;
+  /** "Use in my workspace" for one who may only read it (T543, AC-283). */
+  readonly useInWorkspace: boolean;
   /** My workspace, or a folder in it (T347): saved through its overlay, never published. */
   readonly inWorkspace: boolean;
   /** The folder as Explore says it: "Sales / EMEA", or "Shared"; none until the folders are read. */
@@ -245,6 +248,81 @@ function EditInWorkspace({
       <PencilIcon />
       {copying ? 'Copying…' : 'Edit in my workspace'}
     </button>
+  );
+}
+
+/**
+ * "Use in my workspace" (T543, AC-283; R53), as one who may only read the
+ * model's folder is offered it: asked which folder they write it goes to,
+ * the file is copied into My workspace for use, or the copy already there
+ * opened there. It is never proposed back to this folder.
+ */
+function UseInWorkspace({
+  folderId,
+  path,
+  words,
+}: {
+  folderId: string;
+  path: string;
+  words: string | undefined;
+}) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [asking, setAsking] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [failure, setFailure] = useState<string>();
+  const targets = useQuery({ queryKey: ['folder-targets'], queryFn: targetsOf, enabled: asking });
+  const button = useRef<HTMLButtonElement>(null);
+  return (
+    <>
+      <button
+        ref={button}
+        type="button"
+        className="btn-sm btn-primary model-editor__copy"
+        onClick={() => {
+          setFailure(undefined);
+          setAsking(true);
+        }}
+      >
+        <PencilIcon />
+        Use in my workspace
+      </button>
+      {/* The folders it may go to couldn't be read: said, not left silent (T543's review). */}
+      {asking && targets.isError ? (
+        <StateLine kind="err" className="model-editor__with model-editor__blocked">
+          {targets.error.message}
+        </StateLine>
+      ) : null}
+      {asking && targets.isSuccess ? (
+        <UseInWorkspaceDialog
+          path={path}
+          folderWords={words}
+          targets={targets.data}
+          busy={copying}
+          failure={failure}
+          onClose={() => {
+            setAsking(false);
+            button.current?.focus();
+          }}
+          onCopy={(target) => {
+            setCopying(true);
+            setFailure(undefined);
+            void copyModelToWorkspace(folderId, path, target).then((copied) => {
+              setCopying(false);
+              if ('error' in copied) {
+                setFailure(copied.error);
+                return;
+              }
+              // Its project folder is new: the tree and the workspace read it afresh.
+              void queryClient.invalidateQueries({ queryKey: ['folders'] });
+              void queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
+              void queryClient.invalidateQueries({ queryKey: ['folder-roots'] });
+              router.history.push(fileHref(copied.path, copied.folderId));
+            });
+          }}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -971,6 +1049,8 @@ function FileEditor({
                 refusalId={copyRefusalId}
                 onRefused={setCopyRefused}
               />
+            ) : where.useInWorkspace ? (
+              <UseInWorkspace folderId={where.folderId} path={path} words={where.words} />
             ) : null
           ) : (
             <>
@@ -1499,7 +1579,7 @@ export function ModelFilePage({
   const inWorkspace =
     me.data?.security === 'oidc' &&
     (isMyWorkspace(folder) || isMyWorkspace(folderChain(folders.data ?? [], folder)[0]?.id ?? ''));
-  const { readOnly, editInWorkspace } = modelAccessOf({
+  const { readOnly, editInWorkspace, useInWorkspace } = modelAccessOf({
     me: me.data,
     right: rightFrom({
       answered: access.isSuccess,
@@ -1515,10 +1595,11 @@ export function ModelFilePage({
       hrefOf,
       readOnly,
       editInWorkspace,
+      useInWorkspace,
       inWorkspace,
       words,
     }),
-    [folder, hrefOf, readOnly, editInWorkspace, inWorkspace, words],
+    [folder, hrefOf, readOnly, editInWorkspace, useInWorkspace, inWorkspace, words],
   );
   const draftsKey = inFolderKey(DRAFTS_KEY, folder);
   const draftsStorage = draftsStorageOf(folder);

@@ -117,7 +117,7 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
   >();
   let overlayVersions = 0;
   /** Overlay pushes to refuse as told, in order: `422 invalid_secret`, say. */
-  const overlayRefusals: { status: number; body: Record<string, unknown> }[] = [];
+  const overlayRefusals: { status: number; body: Record<string, unknown>; id?: string }[] = [];
 
   const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), {
@@ -271,7 +271,8 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
             code: 'conflict',
             currentVersion: stored?.version ?? null,
           });
-        const refused = overlayRefusals.shift();
+        const at = overlayRefusals.findIndex((each) => each.id === undefined || each.id === id);
+        const refused = at < 0 ? undefined : overlayRefusals.splice(at, 1)[0];
         if (refused !== undefined) return answer(refused.status, refused.body);
         const seen = new Map<string, string>();
         for (const item of put.upserts) {
@@ -858,9 +859,13 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
         ? undefined
         : { version: held.version, upserts: held.upserts, connections: held.connections };
     },
-    /** The next overlay push answered so, as xcube refuses one (`422 invalid_secret`, say). */
-    refuseOverlayNext: (status: number, body: Record<string, unknown>) => {
-      overlayRefusals.push({ status, body });
+    /**
+     * The next overlay push answered so, as xcube refuses one (`422
+     * invalid_secret`, say): of the overlay named, where one is, so another's
+     * push meanwhile (a workspace's, after a save) doesn't take it.
+     */
+    refuseOverlayNext: (status: number, body: Record<string, unknown>, id?: string) => {
+      overlayRefusals.push({ status, body, ...(id === undefined ? {} : { id }) });
     },
     /** xcube's schema emptied and made again: a new generation, and no models. */
     recreate: () => {
