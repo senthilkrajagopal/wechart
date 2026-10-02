@@ -260,10 +260,64 @@ test.describe('deciding a proposal in its review view (T356, AC-288)', () => {
       await expect(
         page.getByRole('list', { name: 'In this proposal' }).getByRole('listitem'),
       ).toHaveText([
-        // Version 2: made, then given its tiles by an approval (T502).
-        `${BOARD}Dashboard · replaces version 2`,
-        `${ORDERS}Chart · replaces version 2`,
+        // Version 2: made, then given its tiles by an approval (T502). Each
+        // led by its kind's icon chip (design 05; T544).
+        `▦${BOARD}Dashboard · replaces version 2`,
+        `◢${ORDERS}Chart · replaces version 2`,
       ]);
+
+      // Drawn as design 05's main screen (T544, AC-390): a 52 px head bar,
+      // 240 / fluid / 360 panels, uppercase section labels, the chosen item
+      // tinted as the bundle's note bar is, the author's initials, and
+      // Reject at the footer's start with Approve at its end.
+      const box = async (selector: string) => (await page.locator(selector).boundingBox())!;
+      expect(Math.round((await box('.review-view__head')).height)).toBe(52);
+      expect(Math.round((await box('.review-view__side--items')).width)).toBe(240);
+      const about = await box('.review-view__side--about');
+      expect(Math.round(about.width)).toBe(360);
+      const style = (selector: string, property: string) =>
+        page
+          .locator(selector)
+          .first()
+          .evaluate((element, name) => getComputedStyle(element).getPropertyValue(name), property);
+      expect(await style('.review-view__items h2', 'text-transform')).toBe('uppercase');
+      expect(await style('.review-view__sect h2', 'text-transform')).toBe('uppercase');
+      expect(await style(".review-view__item[aria-current='true']", 'background-color')).toBe(
+        await style('[data-testid="review-bundle"]', 'background-color'),
+      );
+      await expect(page.locator('.review-view__avatar')).toHaveText('WW');
+      const decide = page.getByRole('group', { name: 'Decide' });
+      const reject = (await decide.getByRole('button', { name: 'Reject…' }).boundingBox())!;
+      const approve = (await decide.getByRole('button', { name: 'Approve' }).boundingBox())!;
+      expect(approve.x).toBeGreaterThan(reject.x + reject.width);
+      // At the footer's end: its 16 px padding in from the panel's edge.
+      expect(Math.round(approve.x + approve.width)).toBe(Math.round(about.x + about.width - 16));
+
+      // Each side panel folds to its rail, and the item drawn takes the room
+      // (T544, AC-390).
+      const drawn = page.locator('.review-view__item-pane');
+      await expect(drawn.getByRole('heading', { name: BOARD, exact: true })).toBeVisible();
+      // Drawn without its folder's breadcrumb: the head says where it goes.
+      await expect(drawn.getByRole('navigation', { name: 'Breadcrumb' })).toHaveCount(0);
+      const open = (await drawn.boundingBox())!.width;
+      const itemsToggle = page.getByRole('button', { name: 'Proposal items' });
+      const aboutToggle = page.getByRole('button', { name: 'About this proposal' });
+      await itemsToggle.click();
+      await aboutToggle.click();
+      await expect(itemsToggle).toHaveAttribute('aria-expanded', 'false');
+      await expect(aboutToggle).toHaveAttribute('aria-expanded', 'false');
+      await expect(page.getByRole('list', { name: 'In this proposal' })).toHaveCount(0);
+      await expect(page.getByRole('complementary', { name: 'About this proposal' })).toHaveCount(0);
+      // 200 px from the first rail and 320 px from the second.
+      await expect
+        .poll(async () => Math.round((await drawn.boundingBox())!.width - open))
+        .toBe(520);
+      await itemsToggle.click();
+      await aboutToggle.click();
+      await expect(page.getByRole('list', { name: 'In this proposal' })).toBeVisible();
+      await expect
+        .poll(async () => Math.round((await drawn.boundingBox())!.width))
+        .toBe(Math.round(open));
 
       // The item itself, read-only: proposed with its new tab and tile, its
       // chart drawn from the proposal, since the workspace isn't the

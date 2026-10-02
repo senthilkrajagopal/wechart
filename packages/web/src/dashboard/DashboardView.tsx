@@ -312,6 +312,8 @@ export interface DashboardViewProps {
    * its review view (T356; design 05, pin 3), as readers would see it.
    */
   readonly readOnly?: boolean | undefined;
+  /** Its folder's breadcrumb over it; none where it is drawn in a review (T544, AC-390). */
+  readonly crumbs?: boolean | undefined;
   /** Open or close its History panel (T357); absent, no History is offered. */
   readonly onHistory?: (() => void) | undefined;
   /** Whether its History panel is open, so its button shows pressed. */
@@ -2095,6 +2097,7 @@ export function DashboardView({
   preview,
   onExitPreview,
   readOnly = false,
+  crumbs = true,
   onHistory,
   historyOpen = false,
   onEditingChange,
@@ -4960,7 +4963,7 @@ export function DashboardView({
       <EditChrome
         document={document}
         title={(shown) => shown.title}
-        folderOf={(shown) => shown.folderId}
+        {...(crumbs ? { folderOf: (shown: DashboardDocument) => shown.folderId } : {})}
         /**
          * Never with drafts on it. The save sends the whole document, so a draft
          * left there would be written into the dashboard's own row. The drafts go

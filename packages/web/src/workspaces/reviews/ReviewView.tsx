@@ -25,6 +25,64 @@ import { folderText, KIND_LABEL, REVIEWS_QUERY } from './reviews';
 import { SettingsDiff } from './SettingsDiff';
 import { YamlDiff } from './YamlDiff';
 
+/** Each kind's icon chip, as Explore's New menu draws them (design 05, pin 2). */
+const KIND_ICON: Readonly<
+  Record<keyof typeof KIND_LABEL, { readonly icon: string; readonly chip: string }>
+> = {
+  dashboard: { icon: '▦', chip: 'ic-dash' },
+  chart: { icon: '◢', chip: 'ic-chart' },
+  model: { icon: '◇', chip: 'ic-model' },
+  'data-source': { icon: '◍', chip: 'ic-source' },
+};
+
+/** "WW" for Wren Writer: the avatar's letters (design 05, pin 5). */
+function initialsOf(name: string): string {
+  const words = name
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word !== '');
+  return words
+    .slice(0, 2)
+    .map((word) => word[0]!.toUpperCase())
+    .join('');
+}
+
+/**
+ * A side panel's control (T544, AC-390): a button that says, by
+ * `aria-expanded`, whether its panel is open, and stays on its rail when the
+ * panel is collapsed. The panel stays mounted, hidden, so what is under way
+ * in it — a reason typed, Approve's question — survives a collapse.
+ */
+function PanelToggle({
+  label,
+  open,
+  side,
+  controls,
+  onToggle,
+}: {
+  readonly label: string;
+  readonly open: boolean;
+  /** Which edge the panel is on: its chevron points the way it folds. */
+  readonly side: 'start' | 'end';
+  readonly controls: string;
+  readonly onToggle: () => void;
+}) {
+  const folds = side === 'start' ? (open ? '«' : '»') : open ? '»' : '«';
+  return (
+    <button
+      type="button"
+      className="btn-ghost btn-sm review-view__toggle"
+      aria-label={label}
+      aria-expanded={open}
+      aria-controls={controls}
+      title={open ? `Collapse ${label.toLowerCase()}` : `Expand ${label.toLowerCase()}`}
+      onClick={onToggle}
+    >
+      <span aria-hidden="true">{folds}</span>
+    </button>
+  );
+}
+
 /**
  * A proposal's review view (T356, AC-286, AC-288; design 05's main screen,
  * states G–L; references.md surface 6; rules 77–79, 85; principle 9): the
@@ -54,6 +112,9 @@ export function ReviewView({
   const lists = useQuery({ ...REVIEWS_QUERY, retry: false });
   const [said, setSaid] = useState('');
   const [chosen, setChosen] = useState<string | undefined>(undefined);
+  // Each side panel open or collapsed (T544, AC-390): open as each review opens.
+  const [itemsOpen, setItemsOpen] = useState(true);
+  const [aboutOpen, setAboutOpen] = useState(true);
 
   if (detail.isPending) return <StateLine kind="run">Opening the proposal…</StateLine>;
   if (detail.isError)
@@ -89,8 +150,12 @@ export function ReviewView({
         >
           ← Reviews
         </a>
+        <span className="review-view__divider" aria-hidden="true" />
+        <span className={`itemicon ${KIND_ICON[proposal.kind].chip}`} aria-hidden="true">
+          {KIND_ICON[proposal.kind].icon}
+        </span>
         <h1 id={`review-${proposal.id}`} className="review-view__title">
-          Review · {proposal.title} → {folder}
+          Review · {proposal.title} <span className="review-view__arrow">→</span> {folder}
         </h1>
         <StateOf proposal={proposal} />
         <span className="review-view__spacer" />
@@ -129,34 +194,59 @@ export function ReviewView({
         </StateLine>
       )}
 
-      <div className="review-view__body">
-        <nav className="review-view__items" aria-labelledby={`review-items-${proposal.id}`}>
-          <h2 id={`review-items-${proposal.id}`}>In this proposal</h2>
-          <ul aria-labelledby={`review-items-${proposal.id}`}>
-            {items.map((each) => (
-              <li key={`${each.kind}:${each.id}`}>
-                <button
-                  type="button"
-                  className="review-view__item"
-                  aria-current={each === item ? 'true' : undefined}
-                  onClick={() => {
-                    setChosen(`${each.kind}:${each.id}`);
-                  }}
-                >
-                  <span className="review-view__item-title">{each.title}</span>
-                  <span className="review-view__item-what">
-                    {KIND_LABEL[each.kind]} · {doesText(each, proposal.targetPath)}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-          {items.length > 1 ? (
-            <p className="review-view__bundle" data-testid="review-bundle">
-              {bundleText(proposal.kind, items)}
-            </p>
-          ) : null}
-        </nav>
+      <div
+        className={`review-view__body${itemsOpen ? '' : ' is-items-collapsed'}${aboutOpen ? '' : ' is-about-collapsed'}`}
+      >
+        {/* Each side panel collapses to a rail keeping its control (T544, AC-390). */}
+        <div className="review-view__side review-view__side--items">
+          <PanelToggle
+            label="Proposal items"
+            open={itemsOpen}
+            side="start"
+            controls={`review-items-panel-${proposal.id}`}
+            onToggle={() => {
+              setItemsOpen(!itemsOpen);
+            }}
+          />
+          <nav
+            id={`review-items-panel-${proposal.id}`}
+            className="review-view__items"
+            aria-labelledby={`review-items-${proposal.id}`}
+            hidden={!itemsOpen}
+          >
+            <h2 id={`review-items-${proposal.id}`}>In this proposal</h2>
+            <ul aria-labelledby={`review-items-${proposal.id}`}>
+              {items.map((each) => (
+                <li key={`${each.kind}:${each.id}`}>
+                  <button
+                    type="button"
+                    className="review-view__item"
+                    aria-current={each === item ? 'true' : undefined}
+                    onClick={() => {
+                      setChosen(`${each.kind}:${each.id}`);
+                    }}
+                  >
+                    <span className={`itemicon ${KIND_ICON[each.kind].chip}`} aria-hidden="true">
+                      {KIND_ICON[each.kind].icon}
+                    </span>
+                    <span className="review-view__item-text">
+                      <span className="review-view__item-title">{each.title}</span>
+                      <span className="review-view__item-what">
+                        {KIND_LABEL[each.kind]} · {doesText(each, proposal.targetPath)}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {items.length > 1 ? (
+              <p className="review-view__note" data-testid="review-bundle">
+                <StatusIcon kind="info" />
+                <span>{bundleText(proposal.kind, items)}</span>
+              </p>
+            ) : null}
+          </nav>
+        </div>
 
         <div className="review-view__item-pane">
           {item === undefined ? null : (
@@ -164,57 +254,88 @@ export function ReviewView({
           )}
         </div>
 
-        <aside className="review-view__inspector admin-pane" aria-label="About this proposal">
-          <section className="review-view__sect">
-            <h2>Proposed by</h2>
-            <p data-testid="review-author">
-              {proposal.author.name} · {momentText(proposal.proposedAt)}
-            </p>
-          </section>
-          <section className="review-view__sect">
-            <h2>What changed</h2>
-            <p
-              className={`reviews__description${proposal.description === null ? ' is-empty' : ''}`}
-              data-testid="review-description"
-            >
-              {proposal.description ?? 'No description'}
-            </p>
-          </section>
-          <section className="review-view__sect">
-            <h2>In {folder}</h2>
-            <p data-testid="review-replaces">
-              {proposal.replaces === null
-                ? 'New in this folder'
-                : `Replaces version ${String(proposal.replaces.version)}`}
-            </p>
-            {proposal.replaces !== null && !proposal.replaces.copiedFrom ? (
-              <p className="review-view__warning" role="note">
-                It wasn’t copied from that version: it was made new in the author’s workspace.
-              </p>
-            ) : null}
-            {/* The folder moved on since (pin 6): said, never blocking. */}
-            {movedOn === undefined ? null : (
-              <p className="review-view__warning" data-testid="review-moved-on">
-                Based on version {movedOn.was}; the folder now has version {movedOn.now}. Approving
-                replaces version {movedOn.now}, which stays in History.
-              </p>
-            )}
-          </section>
-          {proposal.status === 'open' ? (
-            <DecisionPanel proposal={proposal} onDecided={setSaid} />
-          ) : (
+        <div className="review-view__side review-view__side--about">
+          <PanelToggle
+            label="About this proposal"
+            open={aboutOpen}
+            side="end"
+            controls={`review-about-${proposal.id}`}
+            onToggle={() => {
+              setAboutOpen(!aboutOpen);
+            }}
+          />
+          <aside
+            id={`review-about-${proposal.id}`}
+            className="review-view__inspector"
+            aria-label="About this proposal"
+            hidden={!aboutOpen}
+          >
             <section className="review-view__sect">
-              <p className="reviews__decision" data-testid="review-decision">
-                {decisionText(proposal)}
-              </p>
-              {proposal.status === 'rejected' || proposal.status === 'withdrawn' ? (
-                <blockquote className="reviews__reason">
-                  {proposal.decision?.reason ?? 'No reason given'}
-                </blockquote>
-              ) : null}
+              <h2>Proposed by</h2>
+              <div className="review-view__author">
+                <span className="review-view__avatar" aria-hidden="true">
+                  {initialsOf(proposal.author.name)}
+                </span>
+                <p data-testid="review-author">
+                  <span className="review-view__author-name">{proposal.author.name}</span>
+                  <span className="review-view__author-when">
+                    {' '}
+                    · {momentText(proposal.proposedAt)}
+                  </span>
+                </p>
+              </div>
             </section>
-          )}
-        </aside>
+            <section className="review-view__sect">
+              <h2>What changed</h2>
+              <p
+                className={`reviews__description${proposal.description === null ? ' is-empty' : ''}`}
+                data-testid="review-description"
+              >
+                {proposal.description ?? 'No description'}
+              </p>
+            </section>
+            <section className="review-view__sect">
+              <h2>In {folder}</h2>
+              <p data-testid="review-replaces">
+                {proposal.replaces === null
+                  ? 'New in this folder'
+                  : `Replaces version ${String(proposal.replaces.version)}`}
+              </p>
+              {proposal.replaces !== null && !proposal.replaces.copiedFrom ? (
+                <p className="review-view__note is-warn" role="note">
+                  <StatusIcon kind="warn" />
+                  <span>
+                    It wasn’t copied from that version: it was made new in the author’s workspace.
+                  </span>
+                </p>
+              ) : null}
+              {/* The folder moved on since (pin 6): said, never blocking. */}
+              {movedOn === undefined ? null : (
+                <p className="review-view__note" data-testid="review-moved-on">
+                  <StatusIcon kind="info" />
+                  <span>
+                    Based on version {movedOn.was}; the folder now has version {movedOn.now}.
+                    Approving replaces version {movedOn.now}, which stays in History.
+                  </span>
+                </p>
+              )}
+            </section>
+            {proposal.status === 'open' ? (
+              <DecisionPanel proposal={proposal} onDecided={setSaid} />
+            ) : (
+              <section className="review-view__sect">
+                <p className="reviews__decision" data-testid="review-decision">
+                  {decisionText(proposal)}
+                </p>
+                {proposal.status === 'rejected' || proposal.status === 'withdrawn' ? (
+                  <blockquote className="reviews__reason">
+                    {proposal.decision?.reason ?? 'No reason given'}
+                  </blockquote>
+                ) : null}
+              </section>
+            )}
+          </aside>
+        </div>
       </div>
       <span hidden>{now.toISOString()}</span>
     </section>
@@ -391,6 +512,7 @@ function ItemPreview({
         ) : (
           <ReviewMarks.Provider value={marks}>
             <ReadOnlyDashboard
+              crumbs={false}
               cacheKey={`proposal:${proposal.id}:${item.id}`}
               dashboardId={item.id}
               document={dashboardOf({ body: item.snapshot } as StoredDocument)}
@@ -451,6 +573,7 @@ function CurrentDashboard({ id, version }: { readonly id: string; readonly versi
   if (stored.isError) return <StateLine kind="err">{stored.error.message}</StateLine>;
   return (
     <ReadOnlyDashboard
+      crumbs={false}
       cacheKey={`current:${id}:${String(version)}`}
       dashboardId={id}
       document={stored.data.document}

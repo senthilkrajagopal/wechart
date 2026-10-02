@@ -542,7 +542,10 @@ export function ReadOnlyDashboard({
   document,
   heldCharts = {},
   item = { kind: 'dashboard', id: dashboardId },
+  crumbs = true,
 }: {
+  /** Its folder's breadcrumb over it; none in a review, which draws it as readers see it (T544, AC-390). */
+  readonly crumbs?: boolean;
   /** What the drawn charts are kept under: a proposal's, or a folder's. */
   readonly cacheKey: string;
   readonly dashboardId: string;
@@ -621,6 +624,7 @@ export function ReadOnlyDashboard({
       loading={charts.isPending}
       answered={charts.data?.answered}
       readOnly
+      crumbs={crumbs}
       onSave={() => undefined}
     />
   );

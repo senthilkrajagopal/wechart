@@ -10170,10 +10170,26 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
       - Asked again with another folder, the copy already there opens, still going to its first one.
       - The name check compares each file's first declared name, at copy time only: a target gaining that name later makes the proposal replace it.
       - The project folder's description says "Editing …" for a use-only copy too.
-- [ ] T544 (AC-390) Make the review's two side panels collapsible, and draw the review as design 05's main screen *(added 2026-10-01, `[R54]`)*
+- [x] T544 (AC-390) Make the review's two side panels collapsible, and draw the review as design 05's main screen *(added 2026-10-01, `[R54]`)*
   - Files: `packages/web/src/workspaces/reviews/{ReviewView,DecisionPanel}.tsx` (+ tests), `packages/web/src/dashboard/{DashboardPage,DashboardView}.tsx` (no breadcrumb in a review), `packages/web/src/shell/styles.ts`, `e2e/security/review-view.spec.ts`
   - Failing test: `ReviewView.test.tsx`: each side panel's control collapses and expands it, says `aria-expanded`, and is a button; collapsed, the panel's content is gone and its rail keeps the control; the drawn dashboard has no breadcrumb; Approve and Reject sit in the panel's footer (AC-390). `review-view.spec.ts`: collapsing both widens the drawn item.
   - Depends on: T356
+  - **Done 2026-10-01.**
+    - **The panels.** Each side panel has a button on its rail: "Proposal items" and "About this proposal". It sets `aria-expanded` and `aria-controls`, and folds its panel to a 40 px rail. The body's grid is `var(--review-items-width) minmax(0, 1fr) var(--review-about-width)`.
+    - **State.** A folded panel stays mounted but hidden, so a reason being typed, or Approve's question, survives a fold. This was the review's medium finding. Each review opens with both panels open; nothing is remembered between reviews, since nothing in the spec asks for it.
+    - **Design 05's main screen.**
+      - The head bar: 52 px, on the surface, with a divider, the kind's icon chip, and the → in secondary ink.
+      - The panels: 240 / fluid / 360, at the window's height, each scrolling on its own.
+      - The items list: the items with icon chips, the chosen one in accent-soft, and uppercase labels.
+      - The note bars, with their icon: info for the bundle and "moved on", warning for "wasn't copied".
+      - The inspector: sections ruled apart, and the author with a 28 px avatar.
+      - The footer: Reject… at its start and Approve at its end, as the group "Decide".
+      - The dashboard is drawn without its folder breadcrumb (`ReadOnlyDashboard crumbs={false}`).
+    - **Below 1,024 px.** The panels stack. That rule also beats `main:has(.dashboard)`'s window height, which came later in the stylesheet (another of the review's findings).
+    - **Tests.**
+      - `ReviewView.test.tsx`, "the review’s side panels": click and keyboard (Enter and Space), `aria-controls`, a reason kept through a fold, the avatar, no breadcrumb, and the footer's order.
+      - `e2e/security/review-view.spec.ts`, Chrome: the head is 52 px; the panels are 240 and 360 px; the labels are uppercase; the chosen item has the note bar's tint; the avatar shows WW; Approve sits at the footer's end; folding both panels widens the item by exactly 520 px, and unfolding restores it.
+      - The item rows' glyphs are updated in `proposal-models.spec.ts`.
 - [x] T541 (AC-388) Freeze a workspace item while it is in an open proposal *(added 2026-10-01, `[R52]`)*
   - Files: the save routes for dashboards, charts and data sources in `packages/api/src/server.ts` and `routes/data-sources.ts` (models with T350), the editors' notices, `packages/api/src/routes/proposal-freeze.test.ts`
   - Failing test: `proposal-freeze.test.ts`: a dashboard, chart or data source in an open proposal refuses a save (`409`), saying it was submitted and that withdrawing lets it be changed; once withdrawn or decided, it saves (AC-388).

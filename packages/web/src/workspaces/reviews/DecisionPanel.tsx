@@ -190,7 +190,12 @@ export function DecisionPanel({
           </div>
         </div>
       ) : (
-        <div className="review-decision__actions">
+        // The panel's footer (design 05, pin 8): Reject at its start, Approve at its end (T544, AC-390).
+        <div
+          role="group"
+          aria-label="Decide"
+          className="review-decision__actions review-decision__foot"
+        >
           {proposal.mayReject ? (
             <button
               type="button"

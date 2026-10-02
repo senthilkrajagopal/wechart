@@ -4015,16 +4015,31 @@ main:has(.dashboard) > .with-panel[data-open='true'] { flex: 1; min-height: 0; p
 }
 .version-band > p { flex: 1; min-width: 0; margin: 0; }
 
-/* A proposal's review view (T356; design 05's main screen): its head, then
-   240 / fluid / 360 — what is in it, the item drawn, and the inspector. */
-.review-view { display: grid; gap: 12px; align-content: start; min-width: 0; }
-.review-view__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
-.review-view__title {
-  margin: 0;
-  font-size: var(--wc-text-md-size);
-  line-height: var(--wc-text-md-line);
-  font-weight: var(--wc-text-md-weight);
+/* A proposal's review view (T356, T544; design 05's main screen): its 52 px
+   head, then 240 / fluid / 360 at the window's height — what is in it, the
+   item drawn, and the inspector, each scrolling on its own. Each side panel
+   folds to a 40 px rail that keeps its control (AC-390). */
+main:has(.review-view) {
+  height: calc(100vh - var(--wc-app-bar-height));
+  display: flex;
+  flex-direction: column;
+  padding: 0;
 }
+.review-view { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+.review-view > .state-line { margin: 0; padding: 8px 16px; border-bottom: 1px solid var(--wc-border-subtle); }
+.review-view__head {
+  min-height: 52px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 0 16px;
+  background: var(--wc-bg-surface);
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
+.review-view__divider { width: 1px; height: 24px; flex: none; background: var(--wc-border-subtle); }
+.review-view__title { margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; }
+.review-view__arrow { font-weight: 400; color: var(--wc-text-secondary); }
 .review-view__spacer { flex: 1; }
 .review-view__queue {
   display: inline-flex;
@@ -4035,42 +4050,118 @@ main:has(.dashboard) > .with-panel[data-open='true'] { flex: 1; min-height: 0; p
   font-variant-numeric: tabular-nums;
 }
 .review-view__body {
+  --review-items-width: 240px;
+  --review-about-width: 360px;
+  flex: 1;
+  min-height: 0;
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr) 360px;
-  gap: 16px;
-  align-items: start;
+  grid-template-columns: var(--review-items-width) minmax(0, 1fr) var(--review-about-width);
+  grid-template-rows: minmax(0, 1fr);
+}
+.review-view__body.is-items-collapsed { --review-items-width: 40px; }
+.review-view__body.is-about-collapsed { --review-about-width: 40px; }
+.review-view__side {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--wc-bg-surface);
+}
+.review-view__side--items { border-right: 1px solid var(--wc-border-subtle); }
+.review-view__side--about { border-left: 1px solid var(--wc-border-subtle); }
+/* Each panel's control beside its first heading; on the rail, at its top. */
+.review-view__toggle {
+  position: absolute;
+  top: 12px;
+  right: 8px;
+  z-index: 1;
+  width: 24px;
+  padding: 0;
+  justify-content: center;
+  color: var(--wc-text-secondary);
+}
+.review-view__side--about > .review-view__toggle { top: 10px; }
+.is-items-collapsed > .review-view__side--items > .review-view__toggle,
+.is-about-collapsed > .review-view__side--about > .review-view__toggle {
+  position: static;
+  margin: 10px auto 0;
+}
+.review-view__items[hidden],
+.review-view__inspector[hidden] { display: none; }
+.review-view__items {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  padding: 12px 8px;
 }
 .review-view__items h2,
 .review-view__sect h2 {
-  margin: 0 0 6px;
+  margin: 0;
   font-size: 12px;
   line-height: 16px;
   font-weight: 600;
   color: var(--wc-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
+.review-view__items h2 { padding: 4px 36px 6px 12px; }
 .review-view__items ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
 .review-view__item {
   width: 100%;
   display: grid;
-  gap: 2px;
-  padding: 6px 8px;
-  border: 1px solid var(--wc-border-subtle);
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 8px 12px;
+  border: 0;
   border-radius: 6px;
-  background: var(--wc-bg-surface);
+  background: none;
   color: var(--wc-text-primary);
+  font: inherit;
   text-align: left;
   cursor: pointer;
 }
-.review-view__item[aria-current='true'] {
-  border-color: var(--wc-accent);
-  box-shadow: 0 0 0 1px var(--wc-accent);
-}
-.review-view__item-title { font-weight: 600; overflow-wrap: anywhere; }
+.review-view__item[aria-current='true'],
+.review-view__item[aria-current='true']:hover:not(:disabled) { background: var(--wc-bg-accent-soft); }
+.review-view__item-text { display: grid; min-width: 0; }
+.review-view__item-title { font-size: 14px; line-height: 20px; font-weight: 600; overflow-wrap: anywhere; }
 .review-view__item-what { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
-.review-view__bundle { margin: 8px 0 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
-.review-view__item-pane { min-width: 0; }
-.review-view__preview { display: grid; gap: 8px; min-width: 0; }
-.review-view__switch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+/* Design 05's note bar, its icon first: why the rest goes with it, and what
+   the folder has; a warning in the warning's tint. */
+.review-view__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-text-primary);
+  font-size: 12px;
+  line-height: 16px;
+}
+.review-view__note > svg { flex: none; margin-top: 1px; }
+.review-view__note.is-warn { background: color-mix(in srgb, var(--wc-status-warning) 14%, var(--wc-bg-surface)); }
+.review-view__items > .review-view__note { margin: 6px 12px 0; }
+.review-view__item-pane { min-width: 0; min-height: 0; overflow: auto; }
+.review-view__item-pane > :not(.review-view__preview) { margin: 16px 20px; }
+.review-view__preview { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 16px 20px; }
+/* Proposed or Current, in a bar across the item's head (design 05). */
+.review-view__switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin: -16px -20px 0;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+  background: var(--wc-bg-surface);
+}
 .review-view__read-only { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
 /* A model's YAML diff (T350; design 05, state G): the code face, line
    numbers, the changes marked + and − beside their tint (YamlDiff.tsx). */
@@ -4092,17 +4183,44 @@ main:has(.dashboard) > .with-panel[data-open='true'] { flex: 1; min-height: 0; p
   border-right: 1px solid var(--wc-border-subtle);
 }
 .yaml-diff__code .cm-focused { outline: 2px solid var(--wc-accent); }
-.review-view__inspector.admin-pane {
+/* The inspector (design 05, pins 5–8): sections ruled apart, and the
+   decision at its foot. */
+.review-view__inspector { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.review-view__sect {
   display: grid;
-  gap: 14px;
-  border: 1px solid var(--wc-border-subtle);
-  border-radius: 8px;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--wc-border-subtle);
 }
+.review-view__sect:first-child h2 { padding-right: 28px; }
 .review-view__sect p { margin: 0; }
-.review-view__warning { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
-.review-decision { display: grid; gap: 10px; }
+.review-view__author { display: flex; align-items: center; gap: 10px; }
+.review-view__avatar {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--wc-bg-role-dimension-soft);
+  color: var(--wc-role-dimension);
+  font-size: 12px;
+  font-weight: 600;
+}
+.review-view__author-name { font-weight: 600; }
+.review-view__author-when { font-size: 12px; color: var(--wc-text-secondary); }
+.review-decision {
+  margin-top: auto;
+  display: grid;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--wc-border-subtle);
+}
 .review-decision__note { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
 .review-decision__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+/* Reject at the footer's start, Approve at its end (pin 8). */
+.review-decision__foot { justify-content: flex-start; }
+.review-decision__foot > .review-decision__anchor { margin-left: auto; }
 .review-decision__anchor { position: relative; display: inline-flex; }
 /* Approve's question, anchored to it (state I). */
 .review-decision__confirm {
@@ -4147,8 +4265,21 @@ main:has(.dashboard) > .with-panel[data-open='true'] { flex: 1; min-height: 0; p
 .review-settings thead th { font-size: 12px; font-weight: 600; color: var(--wc-text-secondary); }
 .review-settings tbody th { font-weight: 600; }
 .review-settings td.is-same { color: var(--wc-text-muted); }
+/* Narrower than 1,024 px the panels stack and the page scrolls down; a
+   folded panel keeps only its control's row. */
 @media (max-width: 1023px) {
-  .review-view__body { grid-template-columns: minmax(0, 1fr); }
+  /* Over main:has(.dashboard)'s window height, later in this sheet, when the
+     item drawn is a dashboard (T544's review). */
+  main:has(.review-view),
+  main:has(.review-view):has(.dashboard) { height: auto; }
+  .review-view__body { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
+  .review-view__side--items { border-right: 0; border-bottom: 1px solid var(--wc-border-subtle); }
+  .review-view__side--about { border-left: 0; border-top: 1px solid var(--wc-border-subtle); }
+  .review-view__items,
+  .review-view__inspector,
+  .review-view__item-pane { overflow: visible; }
+  .is-items-collapsed > .review-view__side--items > .review-view__toggle,
+  .is-about-collapsed > .review-view__side--about > .review-view__toggle { margin: 8px 8px 8px auto; }
 }
 /* A screen that needs a Cube API scope wechart lacks (T176, AC-170): said as
    a state, in secondary ink, as an empty tile is — not as a failure. */

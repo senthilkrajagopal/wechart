@@ -196,9 +196,10 @@ test.describe('a dashboard proposed with the workspace model it resolves through
       await page.goto(`/reviews/${made.proposal}`);
       const items = page.getByRole('list', { name: 'In this proposal' });
       await expect(items.getByRole('listitem')).toHaveText([
-        `${BOARD}Dashboard · new in this folder`,
-        `${CHART}Chart · new in this folder`,
-        `${PATH}Model · replaces version 1`,
+        // Each led by its kind's icon chip (design 05; T544).
+        `▦${BOARD}Dashboard · new in this folder`,
+        `◢${CHART}Chart · new in this folder`,
+        `◇${PATH}Model · replaces version 1`,
       ]);
       await expect(page.getByTestId('review-bundle')).toHaveText(
         `The chart it shows from the author’s workspace goes with it. The model goes with the dashboard: its cubes resolve only through the author’s ${PATH}. They’re approved or rejected together.`,

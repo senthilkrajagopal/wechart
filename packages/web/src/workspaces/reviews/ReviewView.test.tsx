@@ -16,13 +16,19 @@ vi.mock('../../dashboard/DashboardPage', async (importOriginal) => {
     ReadOnlyDashboard: function Drawn({
       cacheKey,
       document,
+      crumbs,
     }: {
       cacheKey: string;
       document: { title: string };
+      crumbs?: boolean;
     }) {
       const marks = useContext(ReviewMarks);
       return (
-        <p data-testid="drawn" data-marks={JSON.stringify(marks)}>
+        <p
+          data-testid="drawn"
+          data-marks={JSON.stringify(marks)}
+          data-crumbs={String(crumbs ?? true)}
+        >
           {cacheKey} · {document.title}
         </p>
       );
@@ -158,7 +164,11 @@ describe('the review view (T356)', () => {
       within(list)
         .getAllByRole('listitem')
         .map((item) => item.textContent),
-    ).toEqual(['Revenue overviewDashboard · replaces version 7', 'MarginChart · new in Sales']);
+    ).toEqual([
+      // Each led by its kind's icon chip (design 05, pin 2; T544).
+      '▦Revenue overviewDashboard · replaces version 7',
+      '◢MarginChart · new in Sales',
+    ]);
     expect(screen.getByTestId('review-bundle').textContent).toBe(
       'These go with the dashboard, which shows them from the author’s workspace. They’re approved or rejected together.',
     );
@@ -309,9 +319,9 @@ describe('the review view (T356)', () => {
         .getAllByRole('listitem')
         .map((item) => item.textContent),
     ).toEqual([
-      'Revenue overviewDashboard · replaces version 7',
-      'cubes/sales.ymlModel · replaces version 3',
-      'cubes/regions.ymlModel · new in this folder',
+      '▦Revenue overviewDashboard · replaces version 7',
+      '◇cubes/sales.ymlModel · replaces version 3',
+      '◇cubes/regions.ymlModel · new in this folder',
     ]);
     expect(screen.getByTestId('review-bundle').textContent).toBe(
       'The models go with the dashboard: its cubes resolve only through the author’s cubes/sales.yml and cubes/regions.yml. They’re approved or rejected together.',
@@ -368,5 +378,82 @@ describe('the review view (T356)', () => {
       </QueryClientProvider>,
     );
     expect(await screen.findByText('There is no such proposal.')).toBeTruthy();
+  });
+});
+
+/**
+ * T544 (AC-390; R54, the user: "Make both side panels collapsible. And also
+ * match styles with 05 design"): each side panel collapses to a rail keeping
+ * its control, which says whether it is open; the dashboard is drawn without
+ * its folder breadcrumb; Approve and Reject are in the panel's footer.
+ */
+describe('the review’s side panels (T544, AC-390)', () => {
+  it('collapses and expands what is in the proposal, by a button saying whether it is open', async () => {
+    shown(proposal({}));
+    const toggle = await screen.findByRole('button', { name: 'Proposal items' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    // The button names the panel it opens and closes.
+    expect(screen.getByRole('navigation', { name: 'In this proposal' }).id).toBe(
+      toggle.getAttribute('aria-controls'),
+    );
+
+    await userEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('navigation', { name: 'In this proposal' })).toBeNull();
+
+    await userEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('navigation', { name: 'In this proposal' }).id).toBe(
+      toggle.getAttribute('aria-controls'),
+    );
+  });
+
+  it('collapses and expands the panel about the proposal from the keyboard', async () => {
+    shown(proposal({}));
+    const toggle = await screen.findByRole('button', { name: 'About this proposal' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('complementary', { name: 'About this proposal' }).id).toBe(
+      toggle.getAttribute('aria-controls'),
+    );
+
+    toggle.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('heading', { name: 'Proposed by' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+    // The control keeps the focus, on its rail.
+    expect(document.activeElement).toBe(toggle);
+
+    await userEvent.keyboard(' ');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('heading', { name: 'Proposed by' }).textContent).toBe('Proposed by');
+    // The author with their initials (design 05, pin 5).
+    expect(document.querySelector('.review-view__avatar')?.textContent).toBe('WW');
+  });
+
+  it('keeps a reason being typed through a collapse of its panel', async () => {
+    shown(proposal({}));
+    await userEvent.click(await screen.findByRole('button', { name: 'Reject…' }));
+    await userEvent.type(screen.getByRole('textbox', { name: /Reason/ }), 'Not this quarter.');
+    const toggle = screen.getByRole('button', { name: 'About this proposal' });
+
+    await userEvent.click(toggle);
+    expect(screen.queryByRole('textbox', { name: /Reason/ })).toBeNull();
+    await userEvent.click(toggle);
+    expect((screen.getByRole('textbox', { name: /Reason/ }) as HTMLTextAreaElement).value).toBe(
+      'Not this quarter.',
+    );
+  });
+
+  it('draws the dashboard without its folder breadcrumb, and decides in the panel’s footer', async () => {
+    shown(proposal({}));
+    expect((await screen.findByTestId('drawn')).dataset['crumbs']).toBe('false');
+    const footer = screen.getByRole('group', { name: 'Decide' });
+    // Reject at the footer's start, Approve at its end (design 05, pin 8).
+    expect(
+      within(footer)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Reject…', 'Approve']);
   });
 });
