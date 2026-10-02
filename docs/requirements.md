@@ -950,6 +950,32 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R56 — design 16 approved: Jobs and Schedules** (2026-10-02, the user)
+- Q: Approve design 16 (`docs/design/reviews/2026-10-01/designs/16-jobs-schedules.html`, T504)? A: "Approve as drawn (Recommended)".
+- Q: Which of its proposals P1–P5 should be built? A: "All five (Recommended)". *The five:*
+  - *P1: Stop a build that is already building, for builds wechart started.*
+  - *P2: Run now on a wechart schedule.*
+  - *P3: Pause and resume a wechart schedule by hand.*
+  - *P4: Schedules' owner filter, with counts.*
+  - *P5: Jobs' header summary, each count linking to its tab.*
+- Q: Its 12 questions each have a drawn default. Accept them? A: "Accept all defaults (Recommended)". *Each question is built as drawn:*
+  - *Q1: only builds wechart started can be cancelled.*
+  - *Q2: a refresh key and a wechart schedule on one rollup both run, one row each, and nothing offers `scheduled_refresh: false`.*
+  - *Q3: a refresh key's next runs are listed up to a daylight-saving change, then a warning; a wechart schedule's runs are listed across it in local time.*
+  - *Q4: one refresh-worker badge for everyone; modules' errors go to Super-Admins only.*
+  - *Q5: "—" for the token of a build Cube started, with who started it.*
+  - *Q6: one Run history record per start, listing its partitions.*
+  - *Q7: a scheduled run builds every partition.*
+  - *Q8: a missed run is a choice on each schedule, defaulting to "run it once when wechart is back".*
+  - *Q9: a run counts as failed when Cube refuses it, or when any partition ends Failed or Missing; the limit is a whole number of 1 or more, with no "Never".*
+  - *Q10: any read-write member of the folder, or a Super-Admin, may change a schedule; it belongs to the folder and keeps running if its maker loses access.*
+  - *Q11: a cron a refresh key could run is accepted, with a note.*
+  - *Q12: a suspension is recorded as a schedule change by "wechart's scheduler"; scheduled runs aren't recorded; a person's actions are.*
+
+**R55 — where a member's references are listed, and a SQL runner gap left for later** (2026-10-02, the user)
+- Q (from T451): models now land only through My workspace and a proposal, and with sign-in off that is true for the single user too. So AC-141 has no surface left: a measure renamed in a copy lands silently and breaks shared charts. Where should the warning live? A: "Workspace Save warns (Recommended)". *Saving a workspace model lists the shared charts and dashboards that landing it would change. AC-141 amended.*
+- Q (from T532's review): an unchanged workspace copy runs SQL on its original's login even while the original's runner is off. On Snowflake, SQL Server and Dremio, the attestation is the only guard against a writing function. A: "Not a problem. Ignore this for now. Track it in a backlog.. it will not be addressed in this phase or in phase 3". *`docs/phase-2/backlog.md` §8.*
+
 **R54 — the review view's side panels, and design 05** (2026-10-01, the user, with a screenshot of a proposal's review)
 - The user: "Make both side panels collapsible. And also match styles with 05 design". *AC-390, T544.*
 

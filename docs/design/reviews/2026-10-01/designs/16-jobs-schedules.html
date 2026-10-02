@@ -1,0 +1,1319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Design 16 · Jobs and Schedules</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap" />
+<style>
+  :root {
+    --bg-page: #f4f4f2; --bg-surface: #ffffff; --bg-raised: #ffffff; --bg-subtle: #f0efec; --bg-hover: #efeeea;
+    --border-subtle: #e3e2de; --border-strong: #c9c7c1;
+    --text-primary: #1f1f1e; --text-secondary: #5c5b57; --text-muted: #6e6c67; --text-on-accent: #ffffff;
+    --accent: #1f6f86; --accent-soft: #e3f0f4; --accent-ring: rgba(31,111,134,.35);
+    --crossfilter: #7a3fb0; --crossfilter-soft: #f1e9f8;
+    --role-dim: #2d6ab4; --role-dim-soft: #e6eef8;
+    --ok: #1d7a3f; --ok-icon: #0ca30c; --warn: #8a5a00; --warn-icon: #fab219; --err: #c2362f; --err-icon: #d03b3b;
+    --shadow-pop: 0 8px 24px rgba(20,20,18,.14), 0 1px 3px rgba(20,20,18,.1);
+    --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-code: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    --note: #c8176b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #dcdad4; color: var(--text-primary); font: 400 14px/20px var(--font-ui); -webkit-font-smoothing: antialiased; min-width: 1440px; }
+  .doc { width: 1440px; margin: 0 auto; }
+  .doc-head { background: #1f1f1e; color: #f2f2f0; padding: 28px 32px 22px; }
+  .doc-head .k { font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; color: #b4b3ab; }
+  .doc-head h1 { margin: 6px 0; font-size: 24px; line-height: 32px; font-weight: 600; }
+  .doc-head p { margin: 0 0 6px; color: #d6d5cf; max-width: 1160px; }
+  .doc-head ul { margin: 0 0 6px; padding-left: 20px; color: #d6d5cf; max-width: 1160px; }
+  .doc-head .ids { margin-top: 10px; font: 400 12px/16px var(--font-code); color: #b4b3ab; }
+  .doc-head code { color: #f2f2f0; background: #333; padding: 0 4px; border-radius: 3px; font: 400 12px var(--font-code); }
+  .screen { position: relative; width: 1440px; height: 900px; overflow: hidden; background: var(--bg-page); }
+  .screen-label { background: #2b2b29; color: #e8e7e2; padding: 10px 32px; font: 600 12px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; }
+  .pin { position: absolute; z-index: 300; width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.35); }
+  .notes { background: #fff; padding: 28px 32px 40px; }
+  .notes h2, .states h2 { margin: 0 0 4px; font-size: 20px; line-height: 26px; font-weight: 600; }
+  .notes > p, .states > p { margin: 0 0 18px; color: var(--text-secondary); max-width: 1120px; }
+  .notelist { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 40px; margin: 0; padding: 0; list-style: none; }
+  .notelist li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
+  .notelist .n { width: 24px; height: 24px; border-radius: 50%; background: var(--note); color: #fff; font: 600 12px/24px var(--font-ui); text-align: center; }
+  .notelist li > div > b { display: block; font-weight: 600; }
+  .notelist .t { color: var(--text-secondary); }
+  .fix { display: block; margin-top: 2px; font: 600 12px/16px var(--font-code); color: var(--note); }
+  .bnote { display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 6px; border: 1px dashed var(--note); border-radius: 4px; color: var(--note); font: 600 12px/16px var(--font-ui); white-space: nowrap; vertical-align: 1px; }
+  .notes code, .states code, .decision code { font: 400 12px var(--font-code); background: var(--bg-subtle); padding: 0 4px; border-radius: 3px; }
+  .states { background: #f7f6f3; padding: 28px 32px 40px; border-top: 1px solid var(--border-subtle); }
+  .stategrid { display: grid; grid-template-columns: repeat(2, 676px); gap: 32px 24px; align-items: start; }
+  .state { display: grid; gap: 8px; align-content: start; }
+  .state.wide { grid-column: 1 / -1; }
+  .state > h3 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; }
+  .state > p { margin: 0; font-size: 12px; line-height: 16px; color: var(--text-secondary); max-width: 1180px; }
+  .row3 { display: grid; grid-template-columns: repeat(3, 440px); gap: 24px; align-items: start; }
+  .row2 { display: grid; grid-template-columns: repeat(2, 676px); gap: 24px; align-items: start; }
+  .row4 { display: grid; grid-template-columns: repeat(4, 326px); gap: 24px; align-items: start; }
+  .frame { border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; background: var(--bg-page); box-shadow: 0 1px 2px rgba(0,0,0,.06); position: relative; }
+  .cap { font-size: 12px; line-height: 16px; color: var(--text-secondary); margin: 0 0 6px; }
+  .decision { margin: 22px 0 0; padding: 16px 20px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-page); max-width: 1376px; }
+  .decision h3 { margin: 0 0 8px; font-size: 16px; line-height: 22px; font-weight: 600; }
+  .decision > p { margin: 0 0 10px; color: var(--text-secondary); font-size: 13px; line-height: 18px; }
+  .decision table { border-collapse: collapse; width: 100%; font-size: 13px; line-height: 18px; }
+  .decision th, .decision td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--border-subtle); }
+  .decision th { font-size: 12px; color: var(--text-secondary); font-weight: 600; background: var(--bg-subtle); }
+  .decision td.w { white-space: nowrap; font: 600 12px/18px var(--font-code); color: var(--note); }
+  .decision td.pick { background: color-mix(in srgb, var(--accent-soft) 60%, var(--bg-page)); }
+  .decision s { color: var(--text-muted); }
+
+  /* app */
+  svg.i { width: 16px; height: 16px; flex: none; }
+  svg.s { width: 14px; height: 14px; flex: none; }
+  svg.xs { width: 10px; height: 10px; flex: none; }
+  .topbar { height: 48px; display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-mark { width: 22px; height: 22px; border-radius: 5px; background: var(--accent); color: var(--text-on-accent); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+  .wsnav { display: flex; gap: 2px; height: 100%; }
+  .wsnav span { display: flex; align-items: center; padding: 0 12px; height: 100%; color: var(--text-secondary); border-bottom: 2px solid transparent; }
+  .wsnav span.on { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--accent); }
+  .spacer { flex: 1; }
+  .search { display: flex; align-items: center; gap: 8px; width: 260px; height: 32px; padding: 0 10px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--bg-subtle); color: var(--text-muted); font-size: 13px; }
+  .search kbd { margin-left: auto; font: 600 12px/16px var(--font-ui); border: 1px solid var(--border-strong); border-radius: 4px; padding: 0 4px; }
+  .reviews { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border-radius: 6px; color: var(--text-secondary); }
+  .count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--text-on-accent); font: 600 12px/18px var(--font-ui); text-align: center; font-variant-numeric: tabular-nums; }
+  .count.soft { background: var(--bg-subtle); color: var(--text-secondary); }
+  .iconbtn { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 6px; color: var(--text-secondary); flex: none; }
+  .iconbtn.sm { width: 24px; height: 24px; }
+  .acct { display: inline-flex; align-items: center; gap: 8px; font: 600 12px/16px var(--font-ui); }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--role-dim-soft); color: var(--role-dim); display: grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; }
+  .chipwarn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--warn); font-size: 12px; font-weight: 600; background: var(--bg-surface); white-space: nowrap; }
+  .btn { height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--bg-surface); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 14px; color: var(--text-primary); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+  .btn.danger { color: var(--err); }
+  .btn.danger.solid { background: var(--err); border-color: var(--err); color: #fff; font-weight: 600; }
+  .btn.dis { opacity: .45; }
+  .btn.ghost { border-color: transparent; background: none; }
+  .btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
+  .btn.link { border: 0; background: none; padding: 0; height: auto; color: var(--accent); font-size: 12px; font-weight: 600; }
+  .ring { box-shadow: 0 0 0 3px var(--accent-ring); }
+  .input { height: 32px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg-surface); padding: 0 8px; width: 100%; display: flex; align-items: center; gap: 6px; font-size: 14px; min-width: 0; white-space: nowrap; overflow: hidden; }
+  .input.ph { color: var(--text-muted); }
+  .input.mono { font: 400 13px var(--font-code); }
+  .input.bad { border-color: var(--err-icon); }
+  .input.focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+  .input.num { width: 56px; justify-content: flex-end; font-variant-numeric: tabular-nums; }
+  .help { font-size: 12px; line-height: 16px; color: var(--text-secondary); margin: 0; }
+  .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 4px; overflow: hidden; background: var(--bg-surface); }
+  .seg span { height: 26px; padding: 0 8px; font-size: 12px; display: flex; align-items: center; gap: 5px; background: var(--bg-surface); border-left: 1px solid var(--border-subtle); white-space: nowrap; color: var(--text-primary); }
+  .seg span:first-child { border-left: 0; }
+  .seg span.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .seg span .c { color: var(--text-secondary); font-weight: 400; font-variant-numeric: tabular-nums; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; background: var(--bg-subtle); color: var(--text-secondary); white-space: nowrap; }
+  .badge.sm { height: 18px; padding: 0 6px; }
+  .badge.line { background: none; border: 1px solid var(--border-strong); }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .status.ok { color: var(--ok); } .status.err { color: var(--err); } .status.warn { color: var(--warn); } .status.run { color: var(--accent); } .status.idle { color: var(--text-secondary); }
+  .status .t { font-weight: 400; color: var(--text-secondary); }
+  .xs { font-size: 12px; line-height: 16px; } .muted { color: var(--text-muted); } .sec { color: var(--text-secondary); } .strong { font-weight: 600; }
+  .mono { font-family: var(--font-code); font-size: 12px; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  .notebar { display: flex; gap: 8px; align-items: flex-start; padding: 8px 12px; border-radius: 6px; font-size: 12px; line-height: 16px; background: var(--accent-soft); color: var(--text-primary); border: 1px solid var(--border-subtle); }
+  .notebar.warn { background: color-mix(in srgb, var(--warn-icon) 14%, var(--bg-surface)); border-color: color-mix(in srgb, var(--warn-icon) 45%, var(--bg-surface)); }
+  .notebar.err { background: color-mix(in srgb, var(--err-icon) 9%, var(--bg-surface)); }
+  .notebar.plain { background: var(--bg-subtle); }
+  .notebar b { font-weight: 600; }
+  .code { font: 400 12px/18px var(--font-code); background: var(--bg-subtle); border: 1px solid var(--border-subtle); border-radius: 4px; padding: 6px 8px; white-space: pre-wrap; word-break: break-word; margin: 0; }
+  .card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; overflow: hidden; }
+  .grid-table { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .grid-table th { background: var(--bg-subtle); text-align: left; font-weight: 600; height: 28px; padding: 0 10px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .grid-table td { height: 34px; padding: 0 10px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .grid-table td.wrap { white-space: normal; padding-top: 6px; padding-bottom: 6px; line-height: 16px; }
+  .grid-table td.two { white-space: normal; padding-top: 5px; padding-bottom: 5px; line-height: 16px; }
+  .grid-table td .sub { display: block; font-size: 12px; line-height: 16px; color: var(--text-secondary); font-weight: 400; }
+  .grid-table td .sub.mono { font-family: var(--font-code); }
+  .grid-table td.num, .grid-table th.num { text-align: right; }
+  .grid-table tr:last-child td { border-bottom: 0; }
+  .grid-table tr.hover td { background: var(--bg-hover); }
+  .grid-table tr.sel td { background: var(--accent-soft); }
+  .grid-table tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  .grid-table tr.picked td { background: color-mix(in srgb, var(--accent-soft) 70%, var(--bg-surface)); }
+  .grid-table tr.gone td { opacity: .5; }
+  .grid-table a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .grid-table.tight th, .grid-table.tight td { padding-left: 8px; padding-right: 8px; }
+  .grid-table.compact td { height: 28px; }
+  .grid-table.compact th { height: 26px; }
+  .head { display: flex; align-items: center; gap: 10px; min-height: 32px; }
+  .head h1 { margin: 0; font-size: 20px; line-height: 26px; font-weight: 600; white-space: nowrap; }
+  .sect { padding: 14px 16px; border-bottom: 1px solid var(--border-subtle); display: grid; gap: 8px; }
+  .sect:last-child { border-bottom: 0; }
+  .sect > h3 { margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; display: flex; align-items: center; gap: 8px; }
+  .kv { display: grid; grid-template-columns: 110px 1fr; gap: 6px 12px; font-size: 12px; line-height: 16px; margin: 0; }
+  .kv dt { color: var(--text-secondary); }
+  .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  .tabs { display: flex; gap: 2px; padding: 0 16px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface); height: 37px; }
+  .tabs span { height: 36px; padding: 0 10px; font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .tabs span.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .tabs.page { padding: 0; background: none; }
+  .check { width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--border-strong); background: var(--bg-surface); flex: none; display: inline-grid; place-items: center; vertical-align: -3px; }
+  .check.on { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+  .check.mixed { background: var(--accent); border-color: var(--accent); }
+  .check.mixed::after { content: ''; width: 8px; height: 2px; background: #fff; }
+  .radio { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--bg-surface); flex: none; display: inline-grid; place-items: center; }
+  .radio.on { border-color: var(--accent); }
+  .radio.on::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .switch { width: 30px; height: 18px; border-radius: 999px; background: var(--accent); position: relative; flex: none; display: inline-block; }
+  .switch::after { content: ''; position: absolute; top: 2px; left: 14px; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
+  .switch.off { background: var(--border-strong); }
+  .switch.off::after { left: 2px; }
+  .empty { display: grid; place-items: center; text-align: center; gap: 6px; padding: 28px 16px; color: var(--text-secondary); font-size: 12px; line-height: 16px; }
+  .empty b { color: var(--text-primary); font-size: 14px; line-height: 20px; }
+  .skel { height: 10px; border-radius: 3px; background: var(--bg-subtle); }
+  .dialog { position: absolute; z-index: 60; background: var(--bg-surface); border-radius: 6px; box-shadow: var(--shadow-pop); display: grid; gap: 12px; padding: 20px; border: 1px solid var(--border-subtle); }
+  .dialog h2 { margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; display: flex; gap: 8px; align-items: center; }
+  .dialog p { margin: 0; color: var(--text-secondary); }
+  .dialog p b { color: var(--text-primary); font-weight: 600; }
+  .acts { display: flex; justify-content: flex-end; gap: 8px; }
+  .menu { position: absolute; z-index: 70; background: var(--bg-raised); border: 1px solid var(--border-subtle); border-radius: 6px; box-shadow: var(--shadow-pop); padding: 4px; }
+  .mi { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 4px; font-size: 14px; white-space: nowrap; }
+  .mi.hl { background: var(--bg-hover); }
+  .mi.sel { font-weight: 600; }
+  .mhead { padding: 6px 8px 2px; font-size: 12px; line-height: 16px; color: var(--text-secondary); font-weight: 600; }
+  .msep { height: 1px; background: var(--border-subtle); margin: 4px 0; }
+  .toast { position: absolute; z-index: 80; display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: var(--text-primary); color: var(--bg-surface); border-radius: 6px; font-size: 14px; line-height: 20px; box-shadow: var(--shadow-pop); }
+  .toast .btn.link { color: #9fd3e4; font-size: 14px; }
+  .fbtn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg-surface); font-size: 12px; white-space: nowrap; }
+  .fbtn b { font-weight: 600; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 4px 0 10px; border-radius: 999px; font-size: 12px; background: var(--accent-soft); color: var(--text-primary); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); white-space: nowrap; }
+  .chip b { font-weight: 600; }
+  .chip .x { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; color: var(--text-secondary); }
+  .ev { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
+  .ev svg { color: var(--text-secondary); }
+  .legend { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 24px; }
+  .legend div { display: flex; gap: 10px; align-items: center; min-height: 34px; border-bottom: 1px solid var(--border-subtle); font-size: 12px; line-height: 16px; }
+  .legend div > span:last-child { margin-left: auto; color: var(--text-secondary); text-align: right; }
+  .who td { height: 30px; }
+  kbd.k { font: 600 12px/16px var(--font-ui); border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--bg-surface); color: var(--text-primary); white-space: nowrap; }
+
+  /* design 16: Jobs and Schedules */
+  .ws { display: grid; grid-template-columns: 1fr 400px; }
+  .wsmain { min-width: 0; padding: 16px 24px; display: flex; flex-direction: column; gap: 12px; }
+  .hbadge { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px 0 10px; border: 1px solid var(--border-subtle); border-radius: 999px; background: var(--bg-surface); font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .hbadge .t { font-weight: 400; color: var(--text-secondary); }
+  .filters { display: flex; gap: 8px; align-items: center; }
+  .filters .find { display: flex; align-items: center; gap: 6px; width: 220px; height: 28px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg-surface); color: var(--text-muted); font-size: 12px; }
+  .foot { font-size: 12px; line-height: 16px; color: var(--text-secondary); margin: 0; }
+  .nm { font: 600 12px/16px var(--font-code); color: var(--text-primary); }
+  .owner { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; white-space: nowrap; }
+  .owner svg { color: var(--text-secondary); }
+  .pane { background: var(--bg-surface); border-left: 1px solid var(--border-subtle); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .panehead { height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 16px; border-bottom: 1px solid var(--border-subtle); flex: none; }
+  .panehead h2 { margin: 0; font: 600 14px/20px var(--font-code); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .panehead h2.ui { font-family: var(--font-ui); }
+  .panesub { font-size: 12px; line-height: 16px; color: var(--text-secondary); padding: 8px 16px 0; }
+  .pacts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .fld { display: grid; gap: 4px; }
+  .fld > .lbl { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-primary); display: flex; gap: 6px; align-items: center; }
+  .fld > .lbl .req { font-weight: 400; color: var(--text-secondary); }
+  .runs { display: grid; grid-template-columns: 112px 52px 1fr; gap: 2px 10px; font-size: 12px; line-height: 18px; font-variant-numeric: tabular-nums; margin: 0; padding: 0; }
+  .runs .u { color: var(--text-secondary); }
+  .runs .dst { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; color: var(--warn); font-weight: 600; border-top: 1px dashed color-mix(in srgb, var(--warn-icon) 60%, var(--bg-surface)); border-bottom: 1px dashed color-mix(in srgb, var(--warn-icon) 60%, var(--bg-surface)); padding: 2px 0; margin: 2px 0; }
+  .reading { display: flex; gap: 6px; align-items: flex-start; font-size: 12px; line-height: 16px; color: var(--text-primary); }
+  .reading.err { color: var(--err); }
+  .opt { display: flex; gap: 8px; align-items: center; font-size: 12px; line-height: 16px; }
+  .log { font: 400 12px/18px var(--font-code); background: var(--bg-subtle); border: 1px solid var(--border-subtle); border-radius: 4px; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; overflow: hidden; color: var(--text-primary); }
+  .log .tm { color: var(--text-secondary); }
+  .log .bad { color: var(--err); }
+  .log .gap { color: var(--text-muted); font-style: italic; }
+  .popover { position: absolute; z-index: 70; background: var(--bg-raised); border: 1px solid var(--border-subtle); border-radius: 6px; box-shadow: var(--shadow-pop); }
+  .notfound { display: grid; place-items: center; text-align: center; gap: 8px; padding: 40px 24px; }
+  .notfound b { font-size: 16px; line-height: 22px; }
+  .sheet { background: var(--bg-surface); display: flex; flex-direction: column; }
+  .mrow { display: grid; gap: 2px; padding: 8px 14px; border-bottom: 1px solid var(--border-subtle); }
+  .mrow .top { display: flex; gap: 8px; align-items: center; }
+  .prop { outline: 1px dashed var(--note); outline-offset: 2px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.5 10.5l3 3" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 16 16"><path d="M2 9.5l1.6-5.2A1 1 0 0 1 4.6 3.6h6.8a1 1 0 0 1 1 .7L14 9.5v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z M2 9.5h3.5l1 1.5h3l1-1.5H14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-person" viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 13.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-unlock" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 4.9-.7" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--accent)"/><path d="M8 7v4.2M8 4.6v.4" style="stroke:var(--bg-surface)" stroke-width="1.7"/></symbol>
+  <symbol id="i-chevd" viewBox="0 0 16 16"><path d="M3.5 6L8 10.5 12.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="1.3" fill="currentColor"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="12.5" cy="8" r="1.3" fill="currentColor"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 16 16"><path d="M10.8 2.7l2.5 2.5-7.6 7.6-3.1.6.6-3.1z" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-hist" viewBox="0 0 16 16"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.3 2.5v2.8h2.8" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3.2l2.2 1.4" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 16 16"><path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 16 16"><path d="M8 1.8l5 1.9v4c0 3.1-2.1 5.5-5 6.5-2.9-1-5-3.4-5-6.5v-4z" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5.6 8.1l1.7 1.7 3.2-3.4" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-play" viewBox="0 0 16 16"><path d="M5 3.2v9.6L12.6 8z" fill="currentColor"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1.2" fill="currentColor"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.7"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 16 16"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 16 16"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 9h5.8l.6-9" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 16 16"><path d="M13 5.5A5.5 5.5 0 1 0 13.5 9M13.2 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-cube" viewBox="0 0 16 16"><path d="M8 1.8l5.5 3v6.4L8 14.2l-5.5-3V4.8z M2.5 4.8L8 7.8l5.5-3M8 7.8v6.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 16 16"><rect x="2.2" y="3.2" width="11.6" height="10.6" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2.2 6.5h11.6M5.3 1.8v2.8M10.7 1.8v2.8" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="10" r="1.3" fill="currentColor"/></symbol>
+  <symbol id="i-file" viewBox="0 0 16 16"><path d="M4 1.8h5.2L12 4.6v9.6H4z M9 1.8v3h3M6 8h4M6 10.5h4" fill="none" stroke="currentColor" stroke-width="1.3"/></symbol>
+  <symbol id="s-ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--ok-icon)"/><path d="M4.7 8.2l2.2 2.2 4.4-4.7" stroke="#fff" stroke-width="1.8" fill="none"/></symbol>
+  <symbol id="s-err" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--err-icon)"/><path d="M5.4 5.4l5.2 5.2M10.6 5.4l-5.2 5.2" stroke="#fff" stroke-width="1.8"/></symbol>
+  <symbol id="s-warn" viewBox="0 0 16 16"><path d="M8 1.5l7 12.5H1z" style="fill:var(--warn-icon)"/><path d="M8 6v4M8 11.6v.4" stroke="#1f1f1e" stroke-width="1.6"/></symbol>
+  <symbol id="s-idle" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5V8l2.4 1.5" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="s-cancel" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3.8 12.2l8.4-8.4" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="s-off" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.2 8h5.6" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="s-run" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" style="stroke:var(--border-strong)" stroke-width="2"/><path d="M8 1.8a6.2 6.2 0 0 1 6.2 6.2" fill="none" style="stroke:var(--accent)" stroke-width="2"/></symbol>
+  <symbol id="s-susp" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" style="fill:var(--err-icon)"/><path d="M6.2 5v6M9.8 5v6" stroke="#fff" stroke-width="1.8"/></symbol>
+  <symbol id="s-part" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" style="stroke:var(--warn-icon)" stroke-width="1.6"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" style="fill:var(--warn-icon)"/></symbol>
+</svg>
+
+<div class="doc">
+  <header class="doc-head">
+    <div class="k">wechart · UI design 2026-10-01 · Design 16 · for approval</div>
+    <h1>Jobs and Schedules — partitions, Run history, the queue, wechart's own schedules and when they suspend, folder by folder</h1>
+    <p>Task T504, asked for by R40.4 ("Draw new designs first"). It is drawn from what's built today:</p>
+    <ul>
+      <li><b>Jobs</b> (<code>JobsPage</code>, <code>BuildPanel</code>): two tabs, Pre-aggregations and Queries. It has a docked pane (T469) and the Cube and refresh-worker badges (AC-156). Each row says only what the current browser session started.</li>
+      <li><b>Schedules</b> (<code>SchedulesPage</code>): every refresh key, read-only, with a note that scheduling from wechart "isn't available yet".</li>
+      <li>T371 already limits both to Super-Admins, and to read-write members for their own folders.</li>
+      <li>No approved design draws AC-145, AC-150, AC-151, AC-155 or AC-234 (the 2026-09-28 sync check, H2).</li>
+    </ul>
+    <p>This design adds:</p>
+    <ul>
+      <li><b>A rollup's partitions</b> in the pane, each with its state and when Cube last built it, and <b>Rebuild selected</b> (AC-145).</li>
+      <li><b>Run history and a build's log</b>, for the builds wechart starts: from Jobs, and from wechart's own schedules (AC-150).</li>
+      <li><b>The queue</b>, with Cancel for a queued build (AC-151).</li>
+      <li><b>wechart's own schedules</b> on Schedules: a cron and a time zone, with the next runs. Each schedule sets how many failed runs in a row suspend it, 3 unless changed, and offers Resume (AC-234, AC-155).</li>
+      <li><b>The refresh worker's status</b> from xcube: the revision each worker serves, when it last ran, and each module's last error.</li>
+      <li><b>The Folder column and filter, and the scope note</b>, on every tab and on Schedules (AC-297), and <b>three audit events</b> (AC-294).</li>
+    </ul>
+    <p><b>Screen 1</b> shows Wren Writer, a read-write member of Sales / EMEA (group <code>sales-emea-rw</code>), on Jobs. She has a partitioned rollup open and two of its partitions selected. <b>Screen 2</b> shows Ada Admin, a Super-Admin, making a wechart schedule on Schedules. Sign-in is on for both. States A–J follow the brief's order, and each names its criteria. State J reconciles designs 10 and 07.</p>
+    <p><b>What R41 leaves out:</b> the refresh worker's build history comes in the next phase. So nothing here says a build Cube started on its own failed, how long it took against the average, or that a schedule started it, and no list of recent builds includes such builds. Built states and last-built times come from xcube's partitions route, and Building and Queued from its queue route, whoever started the build.</p>
+    <p><b>What doesn't change:</b> the Queries tab (a member's own queries, R42.6); Data as of on tiles (R42.7); the refresh-key form in the model editor (AC-153, T159); and the audit trail's filters, table and inspector (design 08).</p>
+    <div class="ids">For T504 · AC-145, AC-150, AC-151, AC-155, AC-234, AC-297 · with AC-149, AC-152, AC-154, AC-156, AC-229, AC-233, AC-294 · R40, R41, R42.2–R42.8, R47 · rules 3, 17, 18, 22, 34, 67, 70, 82, 84, 85 · designs 07 (2026-09-24 and 2026-09-27), 08, 10 · research xcube-jobs-schedules-routes.md, xcube-slice-6.md, cube/system-partitions.md, cube/job-records.md, cube/refresh-key-schedule.md, scheduler.md · as built: JobsPage, BuildPanel, Health, StateBadge, SchedulesPage, AuditTrail · rollups, people, times, tokens and errors are illustrative</div>
+  </header>
+
+  <!-- ======================= SCREEN 1 ======================= -->
+  <div class="screen-label">Screen 1 · Jobs › Pre-aggregations, as a read-write member of Sales / EMEA sees it, with a partitioned rollup open and two partitions selected</div>
+  <div class="screen" id="s1">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span>Explore</span><span>Data sources</span><span class="on">Jobs</span><span>Schedules</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<kbd class="k">⌘K</kbd></div>
+      <span class="reviews"><svg class="i"><use href="#i-inbox"/></svg>Reviews<span class="count">2</span></span>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="acct"><span class="avatar">WW</span>Wren Writer</span>
+    </div>
+    <div class="ws" style="height:852px">
+      <main class="wsmain">
+        <div class="head" id="s1-head"><h1>Jobs</h1>
+          <span class="hbadge"><svg class="s"><use href="#s-ok"/></svg><span style="color:var(--ok)">Cube healthy</span></span>
+          <span class="hbadge" id="s1-worker"><svg class="s"><use href="#s-ok"/></svg><span style="color:var(--ok)">Refresh worker running</span><span class="t">· last run 14:38</span><svg class="s" style="color:var(--text-secondary)"><use href="#i-chevd"/></svg></span>
+        </div>
+        <div class="tabs page" id="s1-tabs"><span class="on">Pre-aggregations</span><span>Run history</span><span>Queue <span class="count soft">4</span></span><span>Queries</span></div>
+        <div class="notebar plain" id="s1-scope"><svg class="s" style="margin-top:1px"><use href="#i-info"/></svg><span>Showing pre-aggregations of models in the folders where you have read-write access.</span></div>
+        <div class="filters" id="s1-filters">
+          <span class="fbtn">Folder <b>All of mine</b><svg class="s"><use href="#i-chevd"/></svg></span>
+          <span class="fbtn">Status <b>Any</b><svg class="s"><use href="#i-chevd"/></svg></span>
+          <span class="find"><svg class="s"><use href="#i-search"/></svg>Search pre-aggregations</span>
+          <span class="spacer"></span><span class="xs sec">6 pre-aggregations</span>
+        </div>
+        <div class="card" id="s1-table">
+          <table class="grid-table tight">
+            <thead><tr><th style="width:172px">Pre-aggregation</th><th style="width:132px" id="s1-th-folder">Folder</th><th style="width:178px" id="s1-th-status">Status</th><th style="width:108px" id="s1-th-built">Last built</th><th style="width:140px" id="s1-th-by">Started by</th><th id="s1-th-trig">Trigger</th><th class="num" style="width:72px">Partitions</th></tr></thead>
+            <tbody>
+              <tr class="sel"><td><span class="nm">orders_emea.by_month</span></td><td>Sales / EMEA</td><td><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed <span class="t">· Aug 2026</span></span></td><td>Today 14:01</td><td class="muted">—</td><td>Every 30 minutes</td><td class="num">10</td></tr>
+              <tr><td><span class="nm">orders_emea.by_country</span></td><td>Sales / EMEA</td><td><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Queued</span></td><td>Today 02:00</td><td class="muted">—</td><td>Every day</td><td class="num muted">—</td></tr>
+              <tr class="hover"><td><span class="nm">returns_emea.daily</span></td><td>Sales / EMEA</td><td><span class="status run"><svg class="s"><use href="#s-run"/></svg>Building <span class="t">· 1 Oct 2026</span></span></td><td>Today 14:31</td><td class="muted">—</td><td>Every 15 minutes</td><td class="num">31</td></tr>
+              <tr><td><span class="nm">pipeline_emea.by_stage</span></td><td>Sales / EMEA</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td><td>Yesterday 16:20</td><td><span class="owner"><svg class="s"><use href="#i-person"/></svg>Ada Admin</span></td><td>Mondays at 06:00, Berlin</td><td class="num muted">—</td></tr>
+              <tr><td><span class="nm">dach.orders_daily</span></td><td>Sales / EMEA / DACH</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td><td>Today 07:55</td><td><span class="owner"><svg class="s"><use href="#i-cal"/></svg>Weekday mornings</span></td><td><span class="status idle"><svg class="s"><use href="#s-off"/></svg>Not scheduled</span></td><td class="num">30</td></tr>
+              <tr><td><span class="nm">dach.returns_weekly</span></td><td>Sales / EMEA / DACH</td><td><span class="status warn"><svg class="s"><use href="#s-warn"/></svg>Stalled <span class="t">· week of 28 Sep</span></span></td><td>Today 06:00</td><td class="muted">—</td><td>Every week</td><td class="num">12</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="foot" id="s1-foot"><b style="color:var(--text-primary)">Last built</b> is when Cube started the newest build of one of the rollup's partitions, whoever started it. <b style="color:var(--text-primary)">Started by</b> names who started that build from wechart: a person, or a wechart schedule. "—" means wechart didn't start it. Builds by Cube's refresh worker name no starter until their history comes, in the next phase. Times are your local time; hover one for UTC.</p>
+      </main>
+      <aside class="pane" id="s1-pane">
+        <div class="panehead"><h2>orders_emea.by_month</h2><span class="spacer"></span><span class="iconbtn sm"><svg class="s"><use href="#i-x"/></svg></span></div>
+        <div class="sect" id="s1-facts" style="gap:6px;padding:10px 16px">
+          <span class="xs sec">Shared / Sales / EMEA</span>
+          <dl class="kv" style="grid-template-columns:100px 1fr;gap:4px 10px">
+            <dt>Status</dt><dd><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed <span class="t">· Aug 2026, at 14:05</span></span></dd>
+            <dt>Partitions</dt><dd>10 by month · 7 built, 1 building, 1 failed, 1 not built</dd>
+            <dt>Trigger</dt><dd>Every 30 minutes <span class="sec">· its refresh key</span></dd>
+            <dt id="s1-also">Also rebuilt by</dt><dd><span class="owner"><svg class="s"><use href="#i-cal"/></svg><a class="btn link">Month-end close</a><span class="sec">· wechart</span></span></dd>
+            <dt>Model</dt><dd><span class="mono">sales.yml</span> <span class="sec">· read-only in Sales / EMEA</span></dd>
+          </dl>
+        </div>
+        <div class="sect" id="s1-acts" style="padding:10px 16px"><div class="pacts"><span class="btn primary sm ring"><svg class="s"><use href="#i-refresh"/></svg>Rebuild selected (2)</span><span class="btn sm">Build all 10</span><span class="btn sm">Open in Model</span></div></div>
+        <div class="sect" id="s1-parts" style="padding:10px 16px 8px;gap:6px">
+          <h3>Partitions <span class="sec" style="text-transform:none;letter-spacing:0;font-weight:400">· UTC, newest first</span></h3>
+          <table class="grid-table compact" style="margin:0 -6px;width:calc(100% + 12px)">
+            <thead><tr><th style="width:30px"><span class="check mixed"></span></th><th style="width:76px">Period</th><th>State</th><th style="width:92px">Last built</th></tr></thead>
+            <tbody>
+              <tr><td><span class="check"></span></td><td>Oct 2026</td><td><span class="status run"><svg class="s"><use href="#s-run"/></svg>Building <span class="t">· since 14:31</span></span></td><td>Today 14:01</td></tr>
+              <tr class="picked"><td><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span></td><td>Sep 2026</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td><td>Today 14:01</td></tr>
+              <tr class="picked" id="s1-aug"><td><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span></td><td>Aug 2026</td><td class="two"><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed <span class="t">· 14:05</span></span><span class="sub">Serving the build of 14:01</span></td><td>Today 14:01</td></tr>
+              <tr><td><span class="check"></span></td><td>Jul 2026</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td><td>Today 14:01</td></tr>
+              <tr><td><span class="check"></span></td><td>Jun 2026</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td><td>Today 14:01</td></tr>
+              <tr><td><span class="check"></span></td><td>May 2026</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td><td>Today 14:01</td></tr>
+              <tr><td><span class="check"></span></td><td>Apr 2026</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td><td>Today 14:01</td></tr>
+              <tr><td><span class="check"></span></td><td>Mar 2026</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td><td>Today 14:01</td></tr>
+              <tr><td><span class="check"></span></td><td>Feb 2026</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td><td>Today 14:01</td></tr>
+              <tr><td><span class="check"></span></td><td>Jan 2026</td><td><span class="status idle"><svg class="s"><use href="#s-off"/></svg>Not built</span></td><td class="muted">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="sect" id="s1-recent" style="gap:4px;padding:10px 16px">
+          <h3>Builds started from wechart</h3>
+          <table class="grid-table compact" style="margin:0 -6px;width:calc(100% + 12px)">
+            <tbody>
+              <tr><td style="width:84px">Today 14:05</td><td>Aug 2026</td><td><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed</span></td><td><span class="owner"><svg class="s"><use href="#i-person"/></svg>Wren Writer</span></td></tr>
+              <tr><td>Today 05:00</td><td>All 10</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Done</span></td><td><span class="owner"><svg class="s"><use href="#i-cal"/></svg>Month-end close</span></td></tr>
+              <tr><td>28 Sep 09:12</td><td>All 10</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Done</span></td><td><span class="owner"><svg class="s"><use href="#i-person"/></svg>Wren Writer</span></td></tr>
+            </tbody>
+          </table>
+          <span class="btn link">All its builds in Run history</span>
+        </div>
+        <div class="sect" id="s1-note" style="border-bottom:0;padding:10px 16px"><p class="help">Building and wechart schedules need no proposal. The refresh key is part of the model: to change it, edit the model in My workspace and propose it.</p></div>
+      </aside>
+    </div>
+
+    <span class="pin" style="left:396px;top:114px">1</span>
+    <span class="pin" style="left:502px;top:68px">2</span>
+    <span class="pin" style="left:0;top:162px">3</span>
+    <span class="pin" style="left:0;top:205px">4</span>
+    <span class="pin" style="left:390px;top:246px">5</span>
+    <span class="pin" style="left:582px;top:246px">6</span>
+    <span class="pin" style="left:700px;top:246px">7</span>
+    <span class="pin" style="left:826px;top:246px">8</span>
+    <span class="pin" style="left:0;top:501px">9</span>
+    <span class="pin" style="left:1412px;top:263px">10</span>
+    <span class="pin" style="left:1262px;top:304px">11</span>
+    <span class="pin" style="left:1290px;top:404px">12</span>
+    <span class="pin" style="left:1412px;top:200px">13</span>
+    <span class="pin" style="left:1286px;top:669px">14</span>
+    <span class="pin" style="left:1412px;top:799px">15</span>
+  </div>
+
+  <section class="notes">
+    <h2>Screen 1: what changes, and why</h2>
+    <p>Jobs keeps its built shape: a list of the rollups in Wren's folders beside a docked pane. The list now says what state each rollup is in, whoever built it, rather than what this browser session started. The pane now lists the rollup's partitions, so one or several can be rebuilt. Run history and the queue become tabs. Every number and state here comes from xcube's partitions and queue routes, or from builds wechart started and recorded.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>Run history and Queue join the tabs</b><span class="t">They sit between Pre-aggregations and Queries, each at its own address (<code>/jobs?tab=history</code>, <code>?tab=queue</code>), as <code>?tab=queries</code> is today. Queue shows how many entries are in your folders. Every tab's panel stays mounted, as built, so looking at another tab doesn't drop a build being followed.</span><span class="fix">AC-150 · AC-151 · T155's review</span></div></li>
+      <li><span class="n">2</span><div><b>The refresh worker, as xcube reports it</b><span class="t">The badge now gives the worker's last run, read from xcube's refresh-worker route. It opens a panel listing each worker and module (state F). "Cube healthy" is as built.</span><span class="fix">AC-156 · R41 · research xcube-jobs-schedules-routes.md §3 · Q4</span></div></li>
+      <li><span class="n">3</span><div><b>The scope note</b><span class="t">In surface 10's words, for read-write members who aren't Super-Admins. It names no other folder. A Super-Admin sees every folder and no note (state H1).</span><span class="fix">AC-297 · rule 84</span></div></li>
+      <li><span class="n">4</span><div><b>The Folder column and filter</b><span class="t">The column shows the path of the folder each rollup's cube is published in, after the name, since two folders may hold cubes of the same name. The filter's "All of mine" offers each of Wren's read-write folders (state H2).</span><span class="fix">AC-297 · rule 84 · AC-274</span></div></li>
+      <li><span class="n">5</span><div><b>Status: one vocabulary, failures first</b><span class="t">Built, Partly built, Not built, Building, Queued, Stalled and Failed, each an icon and a label. Built states come from xcube's partitions route, Building and Queued from its queue route, and Failed only from builds wechart started and recorded (R41). A row shows the state that most needs attention: Failed, then Building, Queued, Stalled, Partly built, then Built (Partly built is in state H1). Cube's <code>scheduled</code> and <code>processing</code> read Queued and Building everywhere; the pane says Scheduled and Processing today.</span><span class="fix">AC-145 · AC-152 · AC-229 · R41 · rule 3</span></div></li>
+      <li><span class="n">6</span><div><b>Last built</b><span class="t">When Cube started its newest build of any partition, whoever started it: the newest version the partitions route lists. That's when Cube made the version, not when the build ended, so the column is "Last built" rather than design 10's "Last success".</span><span class="fix">AC-145 · research cube/system-partitions.md</span></div></li>
+      <li><span class="n">7</span><div><b>Started by</b><span class="t">Who started that newest build from wechart: a person, or a wechart schedule with the schedule icon. It shows "—" when wechart didn't start it.</span><span class="fix">R42.2 · R41</span></div></li>
+      <li><span class="n">8</span><div><b>Trigger stays the refresh key</b><span class="t">The refresh key in words, as built. "Not scheduled" has its icon. A wechart schedule isn't a trigger here: the pane lists it (pin 13).</span><span class="fix">AC-229 · R42.2</span></div></li>
+      <li><span class="n">9</span><div><b>What the two columns mean</b><span class="t">A line under the table explains Last built and Started by, so "—" isn't read as "never built".</span><span class="fix">R41</span></div></li>
+      <li><span class="n">10</span><div><b>Rebuild selected, Build all, Open in Model</b><span class="t">Rebuild selected (2) sends one build request per selected partition, each for that partition's start in UTC, so only those are built. Build all 10 is today's Build now. Open in Model opens <code>sales.yml</code> read-only in Sales / EMEA, at this pre-aggregation (R47). Nothing asks for a proposal.</span><span class="fix">AC-145 · AC-149 · AC-229 · research cube/system-partitions.md, "Jobs-API rebuild"</span></div></li>
+      <li><span class="n">11</span><div><b>Every partition, with its state and when it was last built</b><span class="t">Every partition Cube derives from the build range, newest first, in UTC. wechart builds in UTC, and no other zone is configured. Each row has a checkbox, its period, its state and when Cube last built it. The header's checkbox selects them all, and shows a dash when only some are selected. Selected rows are tinted and counted on the button.</span><span class="fix">AC-145</span></div></li>
+      <li><span class="n">12</span><div><b>A failed partition still serving an older build</b><span class="t">Wren's rebuild of Aug 2026 failed at 14:05. The partition still answers from the build Cube made at 14:01, and says so. A failed upload leaves the previous version in place (Cube 1.7.43 and later).</span><span class="fix">AC-145 · research cube/system-partitions.md, "Build state and versions"</span></div></li>
+      <li><span class="n">13</span><div><b>Also rebuilt by</b><span class="t">The rollup's refresh key, run by Cube's refresh worker, and any wechart schedule on it, each with its owner. Both run (Q2). The schedule's name opens it on Schedules.</span><span class="fix">AC-154 · Q2</span></div></li>
+      <li><span class="n">14</span><div><b>Builds started from wechart, then Run history</b><span class="t">The last three builds started from wechart, with their outcome and who started them, and a link to all of them in Run history (state B). The refresh worker's builds aren't listed (R41).</span><span class="fix">AC-150 · R41</span></div></li>
+      <li><span class="n">15</span><div><b>The note, reworded</b><span class="t">"Building and wechart schedules need no proposal." It then says how to change the refresh key: edit the model in My workspace and propose it. This rewords design 10's pane note and its pin 6 (state J).</span><span class="fix">AC-297 · R40.2</span></div></li>
+    </ol>
+    <p class="xs sec" style="margin:14px 0 0"><span class="bnote">Build note</span> Every xcube route this needs is in the image compose pins (<code>89628a0e88</code>): the partitions route (<code>917402f945</code>), the queue and its cancel, hidden cubes on the admin meta, and the refresh worker's status (<code>84aaad4a9f</code>). See research <code>xcube-jobs-schedules-routes.md</code> and <code>xcube-slice-6.md</code>. None has been checked against compose's running xcube yet, so the task that first uses each route checks it there. Run history (T372), wechart's schedules (T378, pg-boss 12.33.2) and suspension (T379) are wechart's own. The partitions route can drop a module that's still working out its partitions ("Continue wait", slice 6, Gotcha 11), so the pane asks again rather than show none (state A).</p>
+  </section>
+
+  <!-- ======================= SCREEN 2 ======================= -->
+  <div class="screen-label">Screen 2 · Schedules, as a Super-Admin sees it, making a wechart schedule</div>
+  <div class="screen" id="s2">
+    <div class="topbar">
+      <div class="brand"><span class="brand-mark">we</span>wechart</div>
+      <nav class="wsnav"><span>Explore</span><span>Data sources</span><span>Jobs</span><span class="on">Schedules</span><span>Security</span></nav>
+      <span class="spacer"></span>
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search wechart<kbd class="k">⌘K</kbd></div>
+      <span class="reviews"><svg class="i"><use href="#i-inbox"/></svg>Reviews<span class="count">5</span></span>
+      <span class="iconbtn"><svg class="i"><use href="#i-theme"/></svg></span>
+      <span class="acct"><span class="avatar">AA</span>Ada Admin</span>
+    </div>
+    <div class="ws" style="height:852px">
+      <main class="wsmain">
+        <div class="head"><h1>Schedules</h1><span class="spacer"></span><span class="btn primary" id="s2-new"><svg class="s"><use href="#i-plus"/></svg>New schedule</span></div>
+        <div class="notebar plain" id="s2-note"><svg class="s" style="margin-top:1px"><use href="#i-info"/></svg><span>Cube's refresh worker rebuilds each pre-aggregation on its refresh key, which is part of the model: to change one, edit the model in My workspace and propose it. wechart's own schedules are made here. They build pre-aggregations at times a refresh key can't express, and need no proposal.</span></div>
+        <div class="filters">
+          <span class="fbtn" id="s2-folder">Folder <b>All folders</b><svg class="s"><use href="#i-chevd"/></svg></span>
+          <span class="seg" id="s2-owner"><span class="on">All <span class="c">13</span></span><span><svg class="s"><use href="#i-cube"/></svg>Cube's refresh worker <span class="c">10</span></span><span><svg class="s"><use href="#i-cal"/></svg>wechart <span class="c">3</span></span></span>
+          <span class="find"><svg class="s"><use href="#i-search"/></svg>Search schedules</span>
+        </div>
+        <div class="card" id="s2-table">
+          <table class="grid-table tight">
+            <thead><tr><th style="width:164px">Pre-aggregation</th><th style="width:132px">Folder</th><th id="s2-th-sched">Schedule</th><th style="width:132px">Next run</th><th style="width:136px" id="s2-th-last">Last run</th><th style="width:156px">Owner</th></tr></thead>
+            <tbody>
+              <tr><td><span class="nm">dach.orders_daily</span></td><td>Sales / EMEA / DACH</td><td class="two"><span class="status idle"><svg class="s"><use href="#s-off"/></svg>Not scheduled</span><span class="sub mono">scheduled_refresh: false</span></td><td class="muted">—</td><td class="sec">Built today 07:55</td><td><span class="owner"><svg class="s"><use href="#i-cube"/></svg>Cube's refresh worker</span></td></tr>
+              <tr><td><span class="nm">dach.orders_daily</span></td><td>Sales / EMEA / DACH</td><td class="two"><b>Weekday mornings</b> · 07:55, Mon–Fri<span class="sub mono">55 7 * * 1-5 · Europe/Berlin</span></td><td class="two">Fri 2 Oct, 07:55<span class="sub">in 17 h</span></td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Done <span class="t">· today 07:55</span></span></td><td class="two"><span class="owner"><svg class="s"><use href="#i-cal"/></svg>wechart</span><span class="sub">by Wren Writer</span></td></tr>
+              <tr><td><span class="nm">fx.rates_hourly</span></td><td>Finance</td><td class="two"><span class="status idle"><svg class="s"><use href="#s-off"/></svg>Not scheduled</span><span class="sub mono">scheduled_refresh: false</span></td><td class="muted">—</td><td class="sec">Built today 08:00</td><td><span class="owner"><svg class="s"><use href="#i-cube"/></svg>Cube's refresh worker</span></td></tr>
+              <tr id="s2-susp"><td><span class="nm">fx.rates_hourly</span></td><td>Finance</td><td class="two"><b>Trading hours</b> · hourly, 08:00–18:00, Mon–Fri<span class="sub mono">0 8-18 * * 1-5 · Europe/Berlin</span></td><td class="two"><span class="status err"><svg class="s"><use href="#s-susp"/></svg>Suspended</span><span class="sub">after 3 failures</span></td><td><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed <span class="t">· today 11:00</span></span></td><td class="two"><span class="owner"><svg class="s"><use href="#i-cal"/></svg>wechart</span><span class="sub">by Ada Admin</span></td></tr>
+              <tr><td><span class="nm">gl.monthly</span></td><td>Finance</td><td class="two">Daily at 02:00 UTC<span class="sub mono">every: "0 2 * * *"</span></td><td class="two">Fri 2 Oct, 04:00<span class="sub">02:00 UTC · in 13 h</span></td><td class="sec">Built today 04:01</td><td><span class="owner"><svg class="s"><use href="#i-cube"/></svg>Cube's refresh worker</span></td></tr>
+              <tr><td><span class="nm">orders.monthly</span></td><td>Shared</td><td class="two">Cube's default<span class="sub">no refresh_key declared</span></td><td class="two sec">Depends on the cube's keys</td><td class="sec">Built today 14:00</td><td><span class="owner"><svg class="s"><use href="#i-cube"/></svg>Cube's refresh worker</span></td></tr>
+              <tr><td><span class="nm">orders_emea.by_month</span></td><td>Sales / EMEA</td><td class="two">Every 30 minutes<span class="sub mono">every: 30 minute</span></td><td class="two">Today 15:00<span class="sub">in 20 min</span></td><td class="sec">Built today 14:01</td><td><span class="owner"><svg class="s"><use href="#i-cube"/></svg>Cube's refresh worker</span></td></tr>
+              <tr><td><span class="nm">orders_emea.by_month</span></td><td>Sales / EMEA</td><td class="two"><b>Month-end close</b> · 05:00 on the 1st<span class="sub mono">0 5 1 * * · Europe/Berlin</span></td><td class="two">Sun 1 Nov, 05:00<span class="sub">in 31 days</span></td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Done <span class="t">· today 05:00</span></span></td><td class="two"><span class="owner"><svg class="s"><use href="#i-cal"/></svg>wechart</span><span class="sub">by Wren Writer</span></td></tr>
+              <tr><td><span class="nm">pipeline.by_stage</span></td><td>Sales</td><td class="two">Every hour<span class="sub mono">every: 1 hour</span></td><td class="two">Today 15:00<span class="sub">in 20 min</span></td><td class="sec">Built today 14:02</td><td><span class="owner"><svg class="s"><use href="#i-cube"/></svg>Cube's refresh worker</span></td></tr>
+              <tr><td colspan="6" class="sec">4 more below: refresh keys in Sales / EMEA and DACH</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="foot">Times are your local time, Europe/Berlin, unless a schedule names its own zone. For a refresh key, Last run is when Cube last built the rollup; who started it and how it ended come with the refresh worker's history, in the next phase.</p>
+      </main>
+      <aside class="pane" id="s2-pane">
+        <div class="panehead"><h2 class="ui">New schedule</h2><span class="spacer"></span><span class="iconbtn sm"><svg class="s"><use href="#i-x"/></svg></span></div>
+        <div style="padding:12px 16px;display:grid;gap:11px;overflow:hidden">
+          <div class="fld" id="s2-pick"><span class="lbl">Pre-aggregation</span><span class="input"><svg class="s" style="color:var(--text-secondary)"><use href="#i-cube"/></svg><span class="mono" style="font-size:13px">gl.monthly</span><span class="sec xs">· Finance</span><span class="spacer"></span><svg class="s"><use href="#i-chevd"/></svg></span><p class="help">From the folders where you have read-write access.</p></div>
+          <div class="fld"><span class="lbl">Name <span class="req">· names its runs in Run history</span></span><span class="input">Quarter-end close</span></div>
+          <div class="fld" id="s2-cron"><span class="lbl">Cron expression</span><span class="input mono focus">0 4 1 1,4,7,10 *</span><p class="help">minute · hour · day of month · month · day of week</p><div class="reading"><svg class="s" style="margin-top:1px"><use href="#s-ok"/></svg><span>At 04:00 on day 1 of January, April, July and October.</span></div></div>
+          <div class="fld" id="s2-tz"><span class="lbl">Time zone</span><span class="input">Europe/Berlin<span class="spacer"></span><svg class="s"><use href="#i-chevd"/></svg></span></div>
+          <div class="fld" id="s2-next"><span class="lbl">Next runs <span class="req">· Europe/Berlin, then UTC</span></span>
+            <div class="runs">
+              <span>Fri 1 Jan 2027</span><span>04:00</span><span class="u">03:00 UTC</span>
+              <span>Thu 1 Apr 2027</span><span>04:00</span><span class="u">02:00 UTC</span>
+              <span>Thu 1 Jul 2027</span><span>04:00</span><span class="u">02:00 UTC</span>
+              <span>Fri 1 Oct 2027</span><span>04:00</span><span class="u">02:00 UTC</span>
+              <span>Sat 1 Jan 2028</span><span>04:00</span><span class="u">03:00 UTC</span>
+            </div>
+          </div>
+          <div class="notebar plain" id="s2-both"><svg class="s" style="margin-top:1px;color:var(--text-secondary)"><use href="#i-cube"/></svg><span><b>Its refresh key also runs:</b> Cube's refresh worker rebuilds gl.monthly daily at 02:00 UTC. Both run; this schedule adds builds.</span></div>
+          <div class="fld" id="s2-what"><p class="help" style="color:var(--text-primary)"><b>Each run</b> builds every partition, as Build all does.</p>
+            <span class="lbl" style="margin-top:4px">If wechart was stopped when a run was due</span>
+            <span class="opt"><span class="radio on"></span>Run it once, when wechart is back</span>
+            <span class="opt"><span class="radio"></span>Skip it</span>
+          </div>
+          <div class="fld" id="s2-limit"><span class="lbl">On failure</span><span class="opt" style="white-space:nowrap">Suspend after <span class="input num">3</span> failed runs in a row</span><p class="help">It then stops running until someone resumes it.</p></div>
+        </div>
+        <div style="margin-top:auto;border-top:1px solid var(--border-subtle);padding:10px 16px;display:grid;gap:8px" id="s2-foot">
+          <p class="help">Applies at once, with no proposal. Recorded in the audit trail.</p>
+          <div class="acts"><span class="btn">Cancel</span><span class="btn primary">Create schedule</span></div>
+        </div>
+      </aside>
+    </div>
+
+    <span class="pin" style="left:846px;top:68px">1</span>
+    <span class="pin" style="left:0;top:121px">2</span>
+    <span class="pin" style="left:0;top:172px">3</span>
+    <span class="pin" style="left:552px;top:148px">4</span>
+    <span class="pin" style="left:908px;top:214px">5</span>
+    <span class="pin" style="left:394px;top:214px">6</span>
+    <span class="pin" style="left:666px;top:383px">7</span>
+    <span class="pin" style="left:760px;top:214px">8</span>
+    <span class="pin" style="left:1160px;top:100px">9</span>
+    <span class="pin" style="left:1166px;top:246px">10</span>
+    <span class="pin" style="left:1276px;top:413px">11</span>
+    <span class="pin" style="left:1030px;top:566px">12</span>
+    <span class="pin" style="left:1030px;top:630px">13</span>
+    <span class="pin" style="left:1030px;top:725px">14</span>
+    <span class="pin" style="left:1030px;top:840px">15</span>
+  </div>
+
+  <section class="notes">
+    <h2>Screen 2: what changes, and why</h2>
+    <p>Schedules today lists the refresh keys and says scheduling from wechart isn't available. Now it lists both kinds of schedule, each labelled with its owner, and makes wechart's own in the pane. A refresh key stays read-only here: it's part of the model, and changing it is a model change, by proposal (R40.2). A wechart schedule isn't part of the model, so it's made, changed and resumed here, at once. Ada, a Super-Admin, sees every folder.</p>
+    <ol class="notelist">
+      <li><span class="n">1</span><div><b>New schedule</b><span class="t">For Super-Admins, and for read-write members over the pre-aggregations of the folders they write. It opens the form in the pane.</span><span class="fix">AC-234 · AC-297</span></div></li>
+      <li><span class="n">2</span><div><b>The page's note, rewritten</b><span class="t">It says who runs each kind of schedule, where each is changed, and that wechart's need no proposal. It drops "isn't available yet" and the cache warm-ups (R42.3).</span><span class="fix">AC-233 · R40.2 · R42.3</span></div></li>
+      <li><span class="n">3</span><div><b>The Folder column and filter</b><span class="t">"All folders" for a Super-Admin, with no scope note. A read-write member sees "All of mine" and the note (state H3).</span><span class="fix">AC-297 · rule 84</span></div></li>
+      <li><span class="n">4</span><div><b>The owner filter, with counts</b><span class="t">All, Cube's refresh worker, or wechart. It's design 07's filter, kept, now with schedules in wechart's count. Proposal P4.</span><span class="fix">rule 34 · P4</span></div></li>
+      <li><span class="n">5</span><div><b>One row per schedule, each with its owner</b><span class="t">A rollup with both a refresh key and a wechart schedule gets two rows: Cube's refresh worker's, and wechart's, which names who made it. Each owner has its own icon as well as its label.</span><span class="fix">AC-154 · AC-152 · rule 34 · Q2</span></div></li>
+      <li><span class="n">6</span><div><b>The schedule in words, then as written</b><span class="t">A wechart schedule's name comes first, then the schedule in words, then the cron and its zone in the code face. A refresh key reads as design 07 has it, "Cube's default" and "Not scheduled" included.</span><span class="fix">AC-154 · design 07 pins 3–4</span></div></li>
+      <li><span class="n">7</span><div><b>Suspended after 3 failures</b><span class="t">Shown where the next run would be, with its icon. Selecting the row opens its failures and Resume (state E).</span><span class="fix">AC-155 · R42.4</span></div></li>
+      <li><span class="n">8</span><div><b>Last run</b><span class="t">For a wechart schedule, how its last run ended, from Run history. For a refresh key, only when Cube last built the rollup, from the partitions route. Who started that build and how it ended wait for the refresh worker's history (R41).</span><span class="fix">AC-150 · R41</span></div></li>
+      <li><span class="n">9</span><div><b>The pre-aggregation</b><span class="t">A combobox of the pre-aggregations in folders where you have read-write access, each with its folder. A Super-Admin's lists every folder.</span><span class="fix">AC-297 · AC-234</span></div></li>
+      <li><span class="n">10</span><div><b>The cron, read back in words, and its zone</b><span class="t">Five fields, from minute to day of week, as wechart's scheduler takes them. Ranges, lists, steps, days of the month and months are all allowed: these are what a refresh key can't express. The words update as you type, and a mistake is named under the field (state D3). The time zone is required, and starts empty.</span><span class="fix">AC-234 · research scheduler.md · cube/refresh-key-schedule.md</span></div></li>
+      <li><span class="n">11</span><div><b>The next five runs</b><span class="t">In the schedule's zone and in UTC. They're computed by the scheduler's own preview (pg-boss <code>previewSchedule</code>), so what's shown is what it runs. State D4 shows a daylight-saving change among them (Q3).</span><span class="fix">AC-234 · research scheduler.md</span></div></li>
+      <li><span class="n">12</span><div><b>The refresh key runs too</b><span class="t">When the rollup has a refresh key the worker runs, the form says so, and that both run (Q2). Nothing here changes the key.</span><span class="fix">AC-154 · Q2</span></div></li>
+      <li><span class="n">13</span><div><b>What a run builds, and a run missed while wechart was stopped</b><span class="t">Every partition, as Build all does (Q7). A run that fell due while wechart was stopped is run once when it's back, or skipped, chosen per schedule (Q8).</span><span class="fix">AC-234 · Q7 · Q8 · research scheduler.md, "Restart and crash recovery"</span></div></li>
+      <li><span class="n">14</span><div><b>Suspend after 3 failed runs in a row</b><span class="t">Set on each schedule, and 3 unless changed. What counts as a failed run is Q9.</span><span class="fix">AC-155 · R42.4 · Q9</span></div></li>
+      <li><span class="n">15</span><div><b>Create, at once</b><span class="t">There's no proposal, since a wechart schedule isn't part of the model (R40.2). Creating it is recorded in the audit trail (state I). Cancel loses only what's typed in the form. Create waits for a pre-aggregation, a name, a cron it can read and a zone.</span><span class="fix">AC-234 · AC-294 · R40.2 · R42.8</span></div></li>
+    </ol>
+  </section>
+
+  <!-- ======================= STATES ======================= -->
+  <section class="states">
+    <h2>States A–J</h2>
+    <p>One state for each part of the brief, in its order, each naming the criteria it shows. Frames show the part of the page that changes, and are drawn narrower than the screens where two or three share a row. Unless a frame says otherwise, the viewer is Wren, a read-write member of Sales / EMEA.</p>
+    <div class="stategrid">
+
+      <!-- A -->
+      <div class="state wide">
+        <h3>A · A rollup's partitions: every state, Rebuild selected, and rollups that list one partition or none (AC-145)</h3>
+        <p>The pane lists every partition Cube derives from the rollup's build range, in UTC, with its period, its state and when Cube last built it. Built and Not built come from xcube's partitions route. Building and Queued come from its queue route. Failed comes from wechart's own record, and only for a build wechart started (R41). Rebuild selected sends one build request per selected partition, so only those are built.</p>
+        <div class="row2">
+          <div><p class="cap">A1 · Just after Rebuild selected: both partitions queued, with Wren as their starter</p>
+            <div class="frame" style="background:var(--bg-surface);height:392px">
+              <div class="sect" style="padding:12px 14px"><div class="pacts"><span class="btn primary sm dis"><svg class="s"><use href="#i-refresh"/></svg>Rebuild selected</span><span class="btn sm">Build all 10</span><span class="btn sm">Open in Model</span></div></div>
+              <div class="sect" style="padding:10px 14px">
+                <table class="grid-table compact">
+                  <thead><tr><th style="width:30px"><span class="check"></span></th><th style="width:80px">Period</th><th>State</th><th style="width:96px">Last built</th></tr></thead>
+                  <tbody>
+                    <tr><td><span class="check"></span></td><td>Oct 2026</td><td><span class="status run"><svg class="s"><use href="#s-run"/></svg>Building <span class="t">· since 14:31</span></span></td><td>Today 14:01</td></tr>
+                    <tr><td><span class="check"></span></td><td>Sep 2026</td><td><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Queued <span class="t">· Wren Writer, 14:38</span></span></td><td>Today 14:01</td></tr>
+                    <tr><td><span class="check"></span></td><td>Aug 2026</td><td><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Queued <span class="t">· Wren Writer, 14:38</span></span></td><td>Today 14:01</td></tr>
+                    <tr><td><span class="check"></span></td><td>Jul 2026</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td><td>Today 14:01</td></tr>
+                    <tr><td><span class="check"></span></td><td>Jun 2026</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td><td>Today 14:01</td></tr>
+                    <tr><td><span class="check"></span></td><td>Jan 2026</td><td><span class="status idle"><svg class="s"><use href="#s-off"/></svg>Not built</span></td><td class="muted">—</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="toast" style="left:14px;bottom:14px;right:14px"><svg class="s" style="color:var(--ok-icon);margin-top:3px"><use href="#s-ok"/></svg><span>Rebuilding Sep 2026 and Aug 2026 of orders_emea.by_month. <span class="btn link">Follow them in Queue</span></span></div>
+            </div>
+          </div>
+          <div><p class="cap">What each state says, and where it comes from</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <table class="grid-table">
+                <thead><tr><th style="width:150px">State</th><th>Means</th><th style="width:120px">From</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td><td class="wrap">Cube holds a version of it built for the current model. Last built is when Cube started that version.</td><td class="wrap sec">partitions route</td></tr>
+                  <tr><td><span class="status idle"><svg class="s"><use href="#s-off"/></svg>Not built</span></td><td class="wrap">No version yet, such as a new period, or one added when the build range grew.</td><td class="wrap sec">partitions route</td></tr>
+                  <tr><td><span class="status run"><svg class="s"><use href="#s-run"/></svg>Building</span></td><td class="wrap">In the queue and being built, by anyone.</td><td class="wrap sec">queue route</td></tr>
+                  <tr><td><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Queued</span></td><td class="wrap">Waiting in the queue, with its starter when wechart started it.</td><td class="wrap sec">queue route</td></tr>
+                  <tr><td><span class="status warn"><svg class="s"><use href="#s-warn"/></svg>Stalled</span></td><td class="wrap">Cube found the entry stalled or orphaned, and removes it at the queue's next check.</td><td class="wrap sec">queue route</td></tr>
+                  <tr><td><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed</span></td><td class="wrap">The latest build wechart started failed, and nothing has built it since. It shows which build it still serves, if any.</td><td class="wrap sec">wechart's Run history</td></tr>
+                </tbody>
+              </table>
+              <div class="sect" style="border-top:1px solid var(--border-subtle)"><p class="help"><b style="color:var(--text-primary)">How Rebuild selected asks Cube:</b> one jobs request per partition, each for its start as a UTC wall-clock time with no offset, as the research found matches exactly one partition. <b style="color:var(--text-primary)">Build all</b> is one request for the whole rollup. Neither waits for a proposal. Each is a build started from Jobs in the audit trail (state I).</p></div>
+            </div>
+          </div>
+        </div>
+        <div class="row3" style="margin-top:16px">
+          <div><p class="cap">A2 · A rollup that isn't partitioned: one row, and Build now</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="panehead"><h2>pipeline_emea.by_stage</h2></div>
+              <div class="sect" style="padding:12px 14px"><div class="pacts"><span class="btn primary sm">Build now</span><span class="btn sm">Open in Model</span></div></div>
+              <div class="sect" style="padding:10px 14px"><h3>Partitions</h3>
+                <table class="grid-table compact"><tbody><tr><td>Whole pre-aggregation</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td><td>Yesterday 16:20</td></tr></tbody></table>
+                <p class="help">Not partitioned, so it's always built whole.</p></div>
+            </div>
+          </div>
+          <div><p class="cap">A3 · A lambda or a rollup join: no partitions of its own</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="panehead"><h2>orders_emea.recent_lambda</h2></div>
+              <div class="sect" style="padding:12px 14px"><div class="pacts"><span class="btn sm">Open in Model</span></div></div>
+              <div class="sect" style="padding:12px 14px;gap:6px"><h3>Partitions</h3>
+                <p class="help">It has no partitions of its own. Cube answers it from the rollups it combines, so build those:</p>
+                <span class="xs"><span class="nm">orders_emea.by_month</span> <span class="sec">· Sales / EMEA</span> <span class="btn link">Open</span></span>
+              </div>
+            </div>
+          </div>
+          <div><p class="cap">A4 · Cube is still working out the partitions: asked again, never shown empty</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="panehead"><h2>returns_emea.daily</h2></div>
+              <div class="sect" style="padding:12px 14px;gap:10px"><h3>Partitions</h3>
+                <span class="status run"><svg class="s"><use href="#s-run"/></svg>Cube is still working out its partitions. Asking again…</span>
+                <div class="skel" style="width:90%"></div><div class="skel" style="width:76%"></div><div class="skel" style="width:84%"></div>
+                <p class="help">Cube answers "Continue wait" while it's still reading a build range, and xcube's partitions route drops that module rather than say so (slice 6, Gotcha 11). So a missing answer is asked for again. Rebuild selected waits for the list; Build all doesn't need it.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- B -->
+      <div class="state wide">
+        <h3>B · Run history and a build's log, for the builds wechart starts (AC-150)</h3>
+        <p>Every build started from Jobs or by a wechart schedule is recorded by wechart's API. The API follows the build to its end with no browser open, and records it even after Cube's own record, kept for 24 hours, has gone. Each pre-aggregation keeps its latest 100 records. One start is one record (Q6). Builds Cube's refresh worker starts on its own aren't listed: their history comes in the next phase (R41). Rows aren't counted, since Cube's jobs API reports none.</p>
+        <div class="frame" style="background:var(--bg-page)">
+          <div style="display:grid;grid-template-columns:1fr 400px">
+            <main style="min-width:0;padding:14px 24px 16px;display:flex;flex-direction:column;gap:10px">
+              <div class="tabs page"><span>Pre-aggregations</span><span class="on">Run history</span><span>Queue <span class="count soft">6</span></span><span>Queries</span></div>
+              <div class="notebar plain"><svg class="s" style="margin-top:1px"><use href="#i-info"/></svg><span>Showing builds of pre-aggregations in the folders where you have read-write access.</span></div>
+              <div class="filters">
+                <span class="fbtn">Outcome <b>Any</b><svg class="s"><use href="#i-chevd"/></svg></span>
+                <span class="fbtn">Started by <b>Anyone</b><svg class="s"><use href="#i-chevd"/></svg></span>
+                <span class="fbtn">Folder <b>All of mine</b><svg class="s"><use href="#i-chevd"/></svg></span>
+                <span class="fbtn">Time <b>Last 7 days</b><svg class="s"><use href="#i-chevd"/></svg></span>
+                <span class="spacer"></span><span class="xs sec">8 builds · newest first</span>
+              </div>
+              <div class="card">
+                <table class="grid-table tight">
+                  <thead><tr><th style="width:118px">Started</th><th>Pre-aggregation</th><th style="width:118px">Folder</th><th style="width:96px">Partitions</th><th style="width:150px">Outcome</th><th class="num" style="width:76px">Duration</th><th style="width:136px">Started by</th></tr></thead>
+                  <tbody>
+                    <tr><td>Today 14:38:41</td><td><span class="nm">orders_emea.by_month</span></td><td>Sales / EMEA</td><td>Sep, Aug 2026</td><td><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Queued <span class="t">· 0 of 2</span></span></td><td class="num muted">—</td><td><span class="owner"><svg class="s"><use href="#i-person"/></svg>Wren Writer</span></td></tr>
+                    <tr class="sel"><td>Today 14:05:12</td><td><span class="nm">orders_emea.by_month</span></td><td>Sales / EMEA</td><td>Aug 2026</td><td><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed</span></td><td class="num">41 s</td><td><span class="owner"><svg class="s"><use href="#i-person"/></svg>Wren Writer</span></td></tr>
+                    <tr><td>Today 07:55:00</td><td><span class="nm">dach.orders_daily</span></td><td>…/ EMEA / DACH</td><td>All 30</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Done</span></td><td class="num">2 min 4 s</td><td><span class="owner"><svg class="s"><use href="#i-cal"/></svg>Weekday mornings</span></td></tr>
+                    <tr><td>Today 05:00:00</td><td><span class="nm">orders_emea.by_month</span></td><td>Sales / EMEA</td><td>All 10</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Done</span></td><td class="num">3 min 12 s</td><td><span class="owner"><svg class="s"><use href="#i-cal"/></svg>Month-end close</span></td></tr>
+                    <tr><td>Yesterday 16:20:31</td><td><span class="nm">pipeline_emea.by_stage</span></td><td>Sales / EMEA</td><td>Whole</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Done</span></td><td class="num">6 s</td><td><span class="owner"><svg class="s"><use href="#i-person"/></svg>Ada Admin</span></td></tr>
+                    <tr><td>29 Sep 07:55:00</td><td><span class="nm">dach.orders_daily</span></td><td>…/ EMEA / DACH</td><td>All 30</td><td><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed <span class="t">· 2 of 30</span></span></td><td class="num">1 min 50 s</td><td><span class="owner"><svg class="s"><use href="#i-cal"/></svg>Weekday mornings</span></td></tr>
+                    <tr><td>28 Sep 09:12:44</td><td><span class="nm">orders_emea.by_month</span></td><td>Sales / EMEA</td><td>All 10</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Done</span></td><td class="num">2 min 58 s</td><td><span class="owner"><svg class="s"><use href="#i-person"/></svg>Wren Writer</span></td></tr>
+                    <tr><td>26 Sep 03:00:02</td><td><span class="nm">returns_emea.daily</span></td><td>Sales / EMEA</td><td>25 Sep 2026</td><td><span class="status warn"><svg class="s"><use href="#s-warn"/></svg>Cube's record expired</span></td><td class="num muted">—</td><td><span class="owner"><svg class="s"><use href="#i-person"/></svg>Ada Admin</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div style="display:flex;gap:10px;align-items:center"><span class="btn sm dis">Newer</span><span class="btn sm">Older</span><span class="xs sec">50 at a time. Each pre-aggregation keeps its latest 100 builds. Builds Cube's refresh worker starts on its own aren't listed until their history comes, in the next phase.</span></div>
+            </main>
+            <aside class="pane">
+              <div class="panehead"><h2 class="ui">Build of <span class="mono" style="font-size:13px">orders_emea.by_month</span></h2><span class="spacer"></span><span class="iconbtn sm"><svg class="s"><use href="#i-x"/></svg></span></div>
+              <div class="sect" style="gap:6px"><dl class="kv" style="grid-template-columns:84px 1fr">
+                <dt>Outcome</dt><dd><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed</span></dd>
+                <dt>Partition</dt><dd>Aug 2026 <span class="sec">· UTC</span></dd>
+                <dt>Folder</dt><dd>Shared / Sales / EMEA</dd>
+                <dt>Started</dt><dd>Today 14:05:12 by Wren Writer, with Rebuild selected in Jobs</dd>
+                <dt>Ended</dt><dd>14:05:53 · 41 s, as wechart saw it</dd>
+              </dl></div>
+              <div class="sect" style="gap:6px"><h3>Cube's error</h3><pre class="code">failure: canceling statement due to statement timeout</pre></div>
+              <div class="sect" style="gap:6px"><h3>Log · what Cube reported, when wechart saw it</h3>
+<pre class="log"><span class="tm">14:05:12.204</span>  Asked Cube to build Aug 2026
+              dateRange 2026-08-01T00:00:00.000
+<span class="tm">14:05:12.391</span>  1 job · token 9f2c41e0…a41e
+<span class="tm">14:05:13.902</span>  scheduled
+<span class="tm">14:05:16.418</span>  processing
+              table …by_month20260801_1d4k…
+<span class="tm">14:05:53.117</span>  <span class="bad">failure: canceling statement due
+              to statement timeout</span></pre>
+                <span class="btn link">Show orders_emea.by_month in Pre-aggregations</span>
+              </div>
+            </aside>
+          </div>
+        </div>
+        <div class="row3" style="margin-top:16px">
+          <div><p class="cap">B2 · Cube's record expired before wechart saw the end</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="sect" style="gap:6px"><span class="status warn"><svg class="s"><use href="#s-warn"/></svg>Cube's record expired</span><span class="xs sec">returns_emea.daily · 25 Sep 2026 · started 26 Sep 03:00:02 by Ada Admin</span></div>
+              <div class="sect">
+<pre class="log"><span class="tm">26 Sep 03:00:02</span>  Asked Cube to build 25 Sep 2026
+<span class="tm">26 Sep 03:00:03</span>  1 job · token 41aa…7d02
+<span class="tm">26 Sep 03:00:06</span>  processing
+<span class="gap">                 wechart's API was stopped</span>
+<span class="tm">27 Sep 03:14:40</span>  not_found</pre>
+                <p class="help">Cube no longer knew this job when wechart asked again: it keeps a job's record for 24 hours. How the build ended can't be known, so it isn't counted as Done or Failed.</p>
+              </div>
+            </div>
+          </div>
+          <div><p class="cap">B3 · One start of 30 partitions: one record, each partition in its log (Q6)</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="sect" style="gap:6px"><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed <span class="t">· 2 of 30 partitions</span></span><span class="xs sec">dach.orders_daily · 29 Sep 07:55 · Weekday mornings</span></div>
+              <div class="sect" style="padding:8px 14px">
+                <table class="grid-table compact"><tbody>
+                  <tr><td>29 Sep 2026</td><td><span class="status err"><svg class="s"><use href="#s-err"/></svg>Missing partition</span></td><td class="mono">c41e…1b07</td></tr>
+                  <tr><td>28 Sep 2026</td><td><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed</span></td><td class="mono">77a0…e9c2</td></tr>
+                  <tr><td>27 Sep 2026</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Done</span></td><td class="mono">0b3d…44f1</td></tr>
+                  <tr><td colspan="3" class="sec">…27 more, all Done</td></tr>
+                </tbody></table>
+              </div>
+            </div>
+          </div>
+          <div><p class="cap">B4 · Nothing to list yet</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="empty" style="padding:40px 20px"><svg class="i" style="color:var(--text-muted)"><use href="#i-hist"/></svg><b>No builds in the last 7 days</b><span>Builds you or others start from Jobs, and builds wechart's schedules start, in your folders, are listed here. Cube's refresh worker's own builds aren't listed yet: their history comes in the next phase.</span><span class="btn link">Show all time</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- C -->
+      <div class="state wide">
+        <h3>C · The queue, with Cancel (AC-151)</h3>
+        <p>What xcube's queue route lists for the model, in the queue's order: every build waiting or running in your folders, whoever started it. Each entry shows its pre-aggregation, partition, state, who started it and its token. A queued build wechart started has Cancel. Cube's refresh worker queues a build it lost to a cancel again at its next run, every 30 seconds, until its refresh key turns over. So the worker's entries are drawn without Cancel, and so are those a query started (Q1). The tab updates while it's open.</p>
+        <div class="frame" style="background:var(--bg-page)">
+          <div style="padding:14px 24px 16px;display:flex;flex-direction:column;gap:10px">
+            <div class="tabs page"><span>Pre-aggregations</span><span>Run history</span><span class="on">Queue <span class="count soft">6</span></span><span>Queries</span></div>
+            <div class="filters"><span class="fbtn">Folder <b>All of mine</b><svg class="s"><use href="#i-chevd"/></svg></span><span class="fbtn">Started by <b>Anyone</b><svg class="s"><use href="#i-chevd"/></svg></span><span class="spacer"></span><span class="xs sec">6 entries · in queue order, oldest first</span></div>
+            <div class="card">
+              <table class="grid-table">
+                <thead><tr><th style="width:96px">Added</th><th style="width:190px">Pre-aggregation</th><th style="width:150px">Folder</th><th style="width:110px">Partition</th><th style="width:210px">State</th><th style="width:180px">Started by</th><th style="width:120px">Token</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td>14:12:30</td><td><span class="nm">dach.returns_weekly</span></td><td>Sales / EMEA / DACH</td><td>Week of 28 Sep</td><td class="two"><span class="status warn"><svg class="s"><use href="#s-warn"/></svg>Stalled</span><span class="sub">Cube takes it out at its next check</span></td><td><span class="owner"><svg class="s"><use href="#i-cube"/></svg>Cube's refresh worker</span></td><td class="muted">—</td><td></td></tr>
+                  <tr><td>14:31:02</td><td><span class="nm">orders_emea.by_month</span></td><td>Sales / EMEA</td><td>Oct 2026</td><td><span class="status run"><svg class="s"><use href="#s-run"/></svg>Building <span class="t">· for 9 min</span></span></td><td><span class="owner"><svg class="s"><use href="#i-cube"/></svg>Cube's refresh worker</span></td><td class="muted">—</td><td></td></tr>
+                  <tr><td>14:36:10</td><td><span class="nm">returns_emea.daily</span></td><td>Sales / EMEA</td><td>1 Oct 2026</td><td><span class="status run"><svg class="s"><use href="#s-run"/></svg>Building <span class="t">· for 4 min</span></span></td><td><span class="owner"><svg class="s"><use href="#i-search"/></svg>A query</span></td><td class="muted">—</td><td></td></tr>
+                  <tr><td>14:37:15</td><td><span class="nm">orders_emea.by_country</span></td><td>Sales / EMEA</td><td>Whole</td><td><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Queued</span></td><td><span class="owner"><svg class="s"><use href="#i-search"/></svg>A query</span></td><td class="muted">—</td><td></td></tr>
+                  <tr><td>14:38:41</td><td><span class="nm">orders_emea.by_month</span></td><td>Sales / EMEA</td><td>Sep 2026</td><td><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Queued</span></td><td><span class="owner"><svg class="s"><use href="#i-person"/></svg>Wren Writer</span></td><td class="mono">3f90…b2d4</td><td><span class="btn sm">Cancel</span></td></tr>
+                  <tr class="hover"><td>14:38:41</td><td><span class="nm">orders_emea.by_month</span></td><td>Sales / EMEA</td><td>Aug 2026</td><td><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Queued</span></td><td><span class="owner"><svg class="s"><use href="#i-person"/></svg>Wren Writer</span></td><td class="mono">7c1e…09ab</td><td><span class="btn sm ring">Cancel</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="foot">Only queued builds wechart started, from Jobs or a schedule, can be cancelled here (Q1). Cube's refresh worker would queue its own again within 30 seconds, until its refresh key turns over, and a query's build is one Cube started to answer a query. A token is the one Cube's jobs API gave wechart; the worker's and queries' builds have none (Q5). Hover a token to see it whole, or copy it.</p>
+          </div>
+        </div>
+        <div class="row3" style="margin-top:16px">
+          <div><p class="cap">C2 · Cancelled: out of the queue at once</p>
+            <div class="frame" style="background:var(--bg-surface);height:196px">
+              <div class="sect" style="gap:4px"><span class="xs sec">The Aug 2026 entry has left the list. In Run history the build reads:</span><span class="status idle"><svg class="s"><use href="#s-cancel"/></svg>Cancelled <span class="t">· by Wren Writer, 14:39</span></span></div>
+              <div class="toast" style="left:14px;bottom:14px;right:14px"><svg class="s" style="color:var(--ok-icon);margin-top:3px"><use href="#s-ok"/></svg><span>Cancelled the Aug 2026 build of orders_emea.by_month. Build it again from Pre-aggregations.</span></div>
+            </div>
+          </div>
+          <div><p class="cap">C3 · Not cancelled: it had started, or had already gone</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="sect" style="gap:10px">
+                <div class="notebar err"><svg class="s" style="margin-top:1px"><use href="#s-err"/></svg><span><b>Not cancelled: it had started building.</b> Only a queued build can be cancelled. It's now Building, and the list shows it.</span></div>
+                <div class="notebar plain"><svg class="s" style="margin-top:1px"><use href="#i-info"/></svg><span><b>It had already left the queue.</b> It finished or was taken out before the cancel reached Cube. Run history says how it ended.</span></div>
+              </div>
+            </div>
+          </div>
+          <div><p class="cap">C4 · Nothing queued or building</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="empty" style="padding:40px 20px"><svg class="i" style="color:var(--text-muted)"><use href="#s-idle"/></svg><b>Nothing is queued or building</b><span>Builds of pre-aggregations in your folders show here while they wait and while they run, whoever started them.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- D -->
+      <div class="state wide">
+        <h3>D · A wechart schedule: changing one, its rows, a mistake, a daylight-saving change, a refresh key's pane, and deleting (AC-234)</h3>
+        <p>Screen 2 makes a schedule. Here Wren changes one she made. A wechart schedule is changed, deleted and resumed in the pane, applied at once and recorded. A refresh key's pane stays read-only, as design 07 drew it, with Open in Model in place of Edit in Model (R40.2).</p>
+        <div class="row3">
+          <div><p class="cap">D1 · Changing "Month-end close"</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="panehead"><h2 class="ui">Month-end close</h2><span class="spacer"></span><span class="iconbtn sm"><svg class="s"><use href="#i-x"/></svg></span></div>
+              <div style="padding:12px 14px;display:grid;gap:12px">
+                <dl class="kv" style="grid-template-columns:86px 1fr"><dt>State</dt><dd><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Active <span class="t">· next Sun 1 Nov, 05:00</span></span></dd><dt>Builds</dt><dd><span class="nm">orders_emea.by_month</span> <span class="sec">· Sales / EMEA</span></dd><dt>Made by</dt><dd>Wren Writer, 2 Sep · changed yesterday 17:10</dd><dt>Last run</dt><dd><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Done</span> <span class="sec">· today 05:00 ·</span> <span class="btn link">Run history</span></dd></dl>
+                <div class="fld"><span class="lbl">Cron expression</span><span class="input mono">0 5 1 * *</span><div class="reading"><svg class="s" style="margin-top:1px"><use href="#s-ok"/></svg><span>At 05:00 on day 1 of every month.</span></div></div>
+                <div class="fld"><span class="lbl">Time zone</span><span class="input">Europe/Berlin<span class="spacer"></span><svg class="s"><use href="#i-chevd"/></svg></span></div>
+                <div class="fld"><span class="lbl">On failure</span><span class="opt">Suspend after <span class="input num">3</span> failed runs in a row</span></div>
+                <div class="pacts"><span class="btn sm dis">Save changes</span><span class="btn sm danger"><svg class="s"><use href="#i-trash"/></svg>Delete…</span><span class="spacer"></span><span class="btn sm prop"><svg class="s"><use href="#i-play"/></svg>Run now</span><span class="bnote">P2</span></div>
+              </div>
+            </div>
+          </div>
+          <div><p class="cap">D2 · A cron a refresh key could run (Q11)</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div style="padding:14px;display:grid;gap:12px">
+                <div class="fld"><span class="lbl">Cron expression</span><span class="input mono focus">0 6 * * *</span><div class="reading"><svg class="s" style="margin-top:1px"><use href="#s-ok"/></svg><span>At 06:00 every day.</span></div></div>
+                <div class="notebar plain"><svg class="s" style="margin-top:1px"><use href="#i-info"/></svg><span><b>A refresh key could run this.</b> Set in the model as <span class="mono">every: "0 6 * * *"</span> with <span class="mono">timezone: Europe/Berlin</span>, Cube's refresh worker runs it, and it changes by proposal. This schedule works too.</span></div>
+              </div>
+            </div>
+            <p class="cap" style="margin-top:16px">D3 · A cron wechart can't read: named, and Save waits</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div style="padding:14px;display:grid;gap:12px">
+                <div class="fld"><span class="lbl">Cron expression</span><span class="input mono bad">0 25 * * 1-5</span><div class="reading err"><svg class="s" style="margin-top:1px"><use href="#s-err"/></svg><span>The hour is 25; it must be 0 to 23.</span></div></div>
+                <div class="fld"><span class="lbl">Cron expression</span><span class="input mono bad">0 0 7 * * 1</span><div class="reading err"><svg class="s" style="margin-top:1px"><use href="#s-err"/></svg><span>That's six fields. wechart's schedules take five: minute, hour, day of month, month, day of week.</span></div></div>
+                <p class="help">No next runs are shown until it reads. Save and Create stay disabled.</p>
+              </div>
+            </div>
+          </div>
+          <div><p class="cap">D4 · Next runs across a daylight-saving change (Q3)</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div style="padding:14px;display:grid;gap:10px">
+                <div class="fld"><span class="lbl">Cron expression</span><span class="input mono">0 7 * 10,11 1</span><div class="reading"><svg class="s" style="margin-top:1px"><use href="#s-ok"/></svg><span>At 07:00 every Monday in October and November.</span></div></div>
+                <div class="fld"><span class="lbl">Next runs <span class="req">· Europe/Berlin, then UTC</span></span>
+                  <div class="runs">
+                    <span>Mon 5 Oct</span><span>07:00</span><span class="u">05:00 UTC</span>
+                    <span>Mon 12 Oct</span><span>07:00</span><span class="u">05:00 UTC</span>
+                    <span>Mon 19 Oct</span><span>07:00</span><span class="u">05:00 UTC</span>
+                    <span class="dst"><svg class="s"><use href="#s-warn"/></svg>Sun 25 Oct: clocks go back an hour</span>
+                    <span>Mon 26 Oct</span><span>07:00</span><span class="u">06:00 UTC</span>
+                    <span>Mon 2 Nov</span><span>07:00</span><span class="u">06:00 UTC</span>
+                  </div>
+                </div>
+                <p class="help">wechart's schedules follow the zone's clock, so 07:00 stays 07:00. This is to be tested across the change before it ships (research scheduler.md).</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row2" style="margin-top:16px">
+          <div><p class="cap">D5 · A refresh key's pane: read-only, its next runs up to a daylight-saving change (Q3)</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="panehead"><h2>gl.weekly</h2><span class="sec xs">· Finance</span><span class="spacer"></span><span class="owner" style="padding-right:8px"><svg class="s"><use href="#i-cube"/></svg>Cube's refresh worker</span></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr">
+                <div class="sect" style="border-right:1px solid var(--border-subtle);border-bottom:0"><h3>Schedule</h3><span class="xs">At 07:00 every Monday, Berlin</span>
+<pre class="code">refresh_key:
+  every: "0 7 * * 1"
+  timezone: Europe/Berlin</pre>
+                  <p class="help">Set in <span class="mono">gl.yml</span> in Finance, so it's read-only here. To change it, edit the model in My workspace and propose it.</p>
+                  <div class="pacts"><span class="btn sm">Open in Model</span><span class="btn sm">Open in Jobs</span></div></div>
+                <div class="sect" style="border-bottom:0"><h3>Next runs · Europe/Berlin</h3>
+                  <div class="runs" style="grid-template-columns:84px 44px 1fr"><span>Mon 5 Oct</span><span>07:00</span><span class="u">05:00 UTC</span><span>Mon 12 Oct</span><span>07:00</span><span class="u">05:00 UTC</span><span>Mon 19 Oct</span><span>07:00</span><span class="u">05:00 UTC</span></div>
+                  <div class="notebar warn"><svg class="s" style="margin-top:1px"><use href="#s-warn"/></svg><span>The clocks go back on Sun 25 Oct. Cube may run this key an hour off after that, until it next compiles the model, so later runs aren't listed.</span></div>
+                  <p class="help">Cube's refresh worker checks the key on its own cadence, so a run can start up to about five minutes after its time.</p></div>
+              </div>
+            </div>
+          </div>
+          <div><p class="cap">D6 · Deleting a schedule</p>
+            <div class="frame" style="background:var(--bg-page);height:300px">
+              <div class="dialog" style="left:78px;top:40px;width:520px" role="dialog">
+                <h2>Delete "Weekday mornings"?</h2>
+                <p>Its runs stop. The builds it started stay in Run history. dach.orders_daily keeps its refresh key, which is Not scheduled, so nothing will rebuild it until someone builds it or schedules it again.</p>
+                <p>You can't undo this.</p>
+                <div class="acts"><span class="btn ring">Cancel</span><span class="btn danger solid">Delete schedule</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- E -->
+      <div class="state wide">
+        <h3>E · Suspended after its failures in a row, and Resume (AC-155)</h3>
+        <p>Only wechart's own schedules suspend (R42.4). Each sets how many failed runs in a row suspend it, 3 unless changed. A refresh key keeps Cube's own retry, which backs off and carries on. Before the limit, the row says how many runs have failed in a row. At the limit the schedule stops starting runs, says so on its row and in its pane, and offers Resume.</p>
+        <div class="row2">
+          <div><p class="cap">E1 · "Trading hours", suspended after 3 failures</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="panehead"><h2 class="ui">Trading hours</h2><span class="spacer"></span><span class="iconbtn sm"><svg class="s"><use href="#i-x"/></svg></span></div>
+              <div class="sect" style="gap:10px">
+                <div class="notebar err"><svg class="s" style="margin-top:1px"><use href="#s-susp"/></svg><span><b>Suspended after 3 failed runs in a row,</b> at 11:00:41 today. It won't run again until it's resumed.</span></div>
+                <div class="pacts"><span class="btn primary sm ring"><svg class="s"><use href="#i-play"/></svg>Resume</span><span class="xs sec">Its next run would be today at 15:00. The count of failures starts again from 0.</span></div>
+              </div>
+              <div class="sect" style="gap:6px"><h3>The failed runs</h3>
+                <table class="grid-table compact"><tbody>
+                  <tr><td style="width:96px">Today 11:00</td><td><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed</span></td><td class="sec">3 of 3</td><td><span class="btn link">Log</span></td></tr>
+                  <tr><td>Today 10:00</td><td><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed</span></td><td class="sec">2 of 3</td><td><span class="btn link">Log</span></td></tr>
+                  <tr><td>Today 09:00</td><td><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed</span></td><td class="sec">1 of 3</td><td><span class="btn link">Log</span></td></tr>
+                  <tr><td>Today 08:00</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Done</span></td><td></td><td></td></tr>
+                </tbody></table>
+                <span class="xs sec">Cube's error on the last one:</span>
+                <pre class="code">failure: Error: connect ETIMEDOUT 10.20.4.17:5432</pre>
+              </div>
+              <div class="sect"><dl class="kv" style="grid-template-columns:86px 1fr"><dt>Builds</dt><dd><span class="nm">fx.rates_hourly</span> <span class="sec">· Finance</span></dd><dt>When</dt><dd>On the hour, 08:00–18:00, Mon–Fri, Berlin <span class="mono sec">· 0 8-18 * * 1-5</span></dd><dt>On failure</dt><dd>Suspend after 3 failed runs in a row</dd></dl></div>
+            </div>
+          </div>
+          <div style="display:grid;gap:16px">
+            <div><p class="cap">E2 · Before the limit: the row counts the failures in a row</p>
+              <div class="frame" style="background:var(--bg-surface)">
+                <table class="grid-table"><thead><tr><th>Pre-aggregation</th><th>Schedule</th><th>Next run</th><th>Last run</th></tr></thead><tbody>
+                  <tr><td><span class="nm">fx.rates_hourly</span></td><td class="two"><b>Trading hours</b><span class="sub mono">0 8-18 * * 1-5</span></td><td class="two">Today 11:00<span class="sub" style="color:var(--warn);font-weight:600">2 failed in a row · suspends after 3</span></td><td><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed <span class="t">· 10:00</span></span></td></tr>
+                </tbody></table>
+              </div>
+            </div>
+            <div><p class="cap">E3 · Resumed</p>
+              <div class="frame" style="background:var(--bg-surface);height:150px">
+                <table class="grid-table"><tbody>
+                  <tr><td><span class="nm">fx.rates_hourly</span></td><td class="two"><b>Trading hours</b><span class="sub mono">0 8-18 * * 1-5</span></td><td class="two">Today 15:00<span class="sub">in 20 min</span></td><td><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed <span class="t">· 11:00</span></span></td></tr>
+                </tbody></table>
+                <div class="toast" style="left:14px;bottom:14px;right:14px"><svg class="s" style="color:var(--ok-icon);margin-top:3px"><use href="#s-ok"/></svg><span>Resumed "Trading hours". Its next run is today at 15:00.</span></div>
+              </div>
+            </div>
+            <div><p class="cap">E4 · Its pre-aggregation was removed from the model: its runs fail, and it suspends</p>
+              <div class="frame" style="background:var(--bg-surface)">
+                <div class="sect" style="gap:6px"><span class="status err"><svg class="s"><use href="#s-susp"/></svg>Suspended <span class="t">· after 3 failures</span></span><pre class="code">A user's selector doesn't match any of the pre-aggregations defined in the data model.</pre><p class="help">Cube's answer when the pre-aggregation it names no longer exists. Delete the schedule, or resume it once the pre-aggregation is back.</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- F -->
+      <div class="state wide">
+        <h3>F · The refresh worker's status, as xcube reports it (AC-156, R41)</h3>
+        <p>xcube's refresh-worker route gives, for the model: each worker, the revision it last refreshed against the model's current one, and when it last ran. For each module it gives the last run, the last good run and the last error. The badge sums that up; it opens a panel. A rollup's failed build isn't a failed run: Cube backs it off and carries on, and build failures wait for the refresh worker's history (R41).</p>
+        <div class="row3">
+          <div><p class="cap">F1 · The badge, in each state</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="sect" style="gap:10px">
+                <span class="hbadge"><svg class="s"><use href="#s-ok"/></svg><span style="color:var(--ok)">Refresh worker running</span><span class="t">· last run 14:39</span></span>
+                <span class="hbadge"><svg class="s"><use href="#s-warn"/></svg><span style="color:var(--warn)">Refresh worker behind</span><span class="t">· on revision 11 of 12</span></span>
+                <span class="hbadge"><svg class="s"><use href="#s-err"/></svg><span style="color:var(--err)">Refresh runs failing</span><span class="t">· 1 module</span></span>
+                <span class="hbadge"><svg class="s"><use href="#s-off"/></svg><span style="color:var(--text-secondary)">No refresh worker has run this model</span></span>
+                <span class="hbadge"><svg class="s"><use href="#s-err"/></svg><span style="color:var(--err)">Refresh worker down</span><span class="t">· as built</span></span>
+                <p class="help">Behind: the worker is still refreshing an older revision of the model than the one published. Failing: a module's last error is later than its last good run. A worker that stopped stays listed for a day.</p>
+              </div>
+            </div>
+          </div>
+          <div><p class="cap">F2 · A Super-Admin's panel: each worker and module, with Cube's error</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="panehead"><h2 class="ui">Refresh worker</h2><span class="spacer"></span><span class="xs sec" style="padding-right:8px">Model revision 12</span></div>
+              <div class="sect" style="padding:10px 14px;gap:6px"><h3>Workers</h3>
+                <table class="grid-table compact"><tbody><tr><td class="mono">cube-refresh-0</td><td>revision 12</td><td>last run 14:39:52</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Finished</span></td></tr></tbody></table></div>
+              <div class="sect" style="padding:10px 14px;gap:6px"><h3>Modules</h3>
+                <table class="grid-table compact"><thead><tr><th>Module</th><th>Last run</th><th>State</th></tr></thead><tbody>
+                  <tr><td class="mono">commons</td><td>14:39</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>OK</span></td></tr>
+                  <tr><td class="mono">m3f9a01c2be</td><td>14:39</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>OK</span></td></tr>
+                  <tr><td class="mono">m8be41d07a2</td><td>14:39</td><td><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failing <span class="t">· OK at 13:52</span></span></td></tr>
+                </tbody></table>
+                <pre class="code">Refresh Scheduler Error: connect ETIMEDOUT 10.20.4.17:5432</pre></div>
+            </div>
+          </div>
+          <div><p class="cap">F3 · A read-write member's panel: the same, without module errors (Q4)</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="panehead"><h2 class="ui">Refresh worker</h2></div>
+              <div class="sect" style="padding:10px 14px;gap:6px"><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Running <span class="t">· last run 14:39:52, on the current revision</span></span></div>
+              <div class="sect" style="padding:10px 14px;gap:6px"><span class="status err"><svg class="s"><use href="#s-err"/></svg>1 module's last run failed <span class="t">· 14:39</span></span><p class="help">A module can hold cubes from several folders, so its error can name some you can't see. A Super-Admin can see it.</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- G -->
+      <div class="state wide">
+        <h3>G · Every state: loading, error, empty, refused, access lost, out of scope, sign-in off, below 1,024 px (AC-297, rules 18, 67)</h3>
+        <p>Drawn on Jobs' Pre-aggregations tab. Run history, Queue and Schedules follow the same patterns with their own words. Every message is an icon and a label, and every error has Retry and Details (rule 18).</p>
+        <div class="row4">
+          <div><p class="cap">G1 · Loading: skeleton rows</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <table class="grid-table"><thead><tr><th>Pre-aggregation</th><th>Folder</th><th>Status</th></tr></thead><tbody>
+                <tr><td><div class="skel" style="width:110px"></div></td><td><div class="skel" style="width:70px"></div></td><td><div class="skel" style="width:60px"></div></td></tr>
+                <tr><td><div class="skel" style="width:90px"></div></td><td><div class="skel" style="width:70px"></div></td><td><div class="skel" style="width:50px"></div></td></tr>
+                <tr><td><div class="skel" style="width:120px"></div></td><td><div class="skel" style="width:80px"></div></td><td><div class="skel" style="width:64px"></div></td></tr>
+              </tbody></table>
+              <div class="sect" style="border-top:1px solid var(--border-subtle)"><span class="status run"><svg class="s"><use href="#s-run"/></svg>Reading the pre-aggregations…</span></div>
+            </div>
+          </div>
+          <div><p class="cap">G2 · Couldn't read them</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="sect" style="gap:10px"><span class="status err"><svg class="s"><use href="#s-err"/></svg>Couldn't read the pre-aggregations.</span><p class="help">xcube didn't answer. Your builds carry on; this list will show them once it's read.</p><div class="pacts"><span class="btn sm">Retry</span><span class="btn sm ghost"><svg class="s"><use href="#i-chevd"/></svg>Details</span></div><pre class="code">502 Bad Gateway · GET …/models/dev/meta?extended=true&amp;hidden=true · 14:40:02</pre></div>
+            </div>
+          </div>
+          <div><p class="cap">G3 · Empty: nothing in your folders yet</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="empty" style="padding:28px 16px"><svg class="i" style="color:var(--text-muted)"><use href="#i-cube"/></svg><b>No pre-aggregations in your folders</b><span>None of the models in the folders where you have read-write access defines one yet. Add one to a model in My workspace and propose it.</span></div>
+            </div>
+          </div>
+          <div><p class="cap">G4 · Refused by the API, in its words</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="sect" style="gap:10px"><div class="pacts"><span class="btn primary sm">Rebuild selected (2)</span><span class="btn sm">Build all 10</span></div><div class="notebar err"><svg class="s" style="margin-top:1px"><use href="#s-err"/></svg><span><b>Not started.</b> You may build only the pre-aggregations of folders where you have read-write access.</span></div><p class="help">The API's own words, as built (T371). Nothing reached Cube.</p></div>
+            </div>
+          </div>
+        </div>
+        <div class="row4" style="margin-top:16px">
+          <div><p class="cap">G5 · Access lost while the page is open</p>
+            <div class="frame" style="background:var(--bg-surface);height:300px">
+              <table class="grid-table"><thead><tr><th>Pre-aggregation</th><th>Folder</th></tr></thead><tbody>
+                <tr><td><span class="nm">dach.orders_daily</span></td><td>…/ EMEA / DACH</td></tr>
+                <tr><td><span class="nm">dach.returns_weekly</span></td><td>…/ EMEA / DACH</td></tr>
+              </tbody></table>
+              <p class="help" style="padding:10px 12px">Sales / EMEA's rows went when the list was read again. The pane closed.</p>
+              <div class="toast" style="left:12px;bottom:12px;right:12px"><svg class="s" style="color:#ff9a8f;margin-top:3px"><use href="#s-err"/></svg><span>You no longer have access to do this.</span></div>
+            </div>
+          </div>
+          <div><p class="cap">G5b · No read-write folder left</p>
+            <div class="frame" style="background:var(--bg-surface);height:300px">
+              <div class="empty" style="padding:48px 18px"><svg class="i" style="color:var(--text-muted)"><use href="#i-lock"/></svg><b>Jobs is for read-write members of a folder</b><span>You no longer have read-write access to any folder, so there's nothing here for you. Your dashboards are in Explore.</span><span class="btn sm">Open Explore</span></div>
+            </div>
+          </div>
+          <div><p class="cap">G6 · Out of scope: a link to another folder's rollup or build</p>
+            <div class="frame" style="background:var(--bg-surface);height:300px">
+              <div class="sect" style="gap:4px"><span class="xs sec mono">/jobs?preagg=fx.rates_hourly</span></div>
+              <div class="notfound"><svg class="i" style="width:24px;height:24px;color:var(--text-muted)"><use href="#i-search"/></svg><b>Not found</b><span class="xs sec">There's no pre-aggregation by that name in your folders.</span></div>
+              <p class="help" style="padding:0 14px">The same words for one that doesn't exist. A build's log at <span class="mono">/jobs/builds/…</span> of another folder, and Jobs or Schedules opened by a read-only user, render the app's Not found page (rule 67).</p>
+            </div>
+          </div>
+          <div><p class="cap">G7 · Sign-in off: single-user mode</p>
+            <div class="frame" style="background:var(--bg-page);height:300px">
+              <div class="topbar" style="gap:10px"><div class="brand"><span class="brand-mark">we</span></div><span class="spacer"></span><span class="chipwarn"><svg class="s"><use href="#i-unlock"/></svg>Single-user mode</span></div>
+              <div style="padding:10px 12px;display:grid;gap:8px">
+                <div class="filters"><span class="fbtn">Folder <b>All folders</b><svg class="s"><use href="#i-chevd"/></svg></span></div>
+                <div class="card"><table class="grid-table"><tbody>
+                  <tr><td><span class="nm">orders.monthly</span></td><td>Shared</td><td><span class="owner"><svg class="s"><use href="#i-person"/></svg>You</span></td></tr>
+                  <tr><td><span class="nm">gl.monthly</span></td><td>Finance</td><td class="muted">—</td></tr>
+                </tbody></table></div>
+                <p class="help">The one user is a Super-Admin (AC-254): every folder, no scope note, every action. Builds name them "You". Security stays phase 1's page, so the audit trail isn't shown (as built, T369).</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row2" style="margin-top:16px">
+          <div><p class="cap">G8 · Below 1,024 px (drawn at 390): the list, then the pane as a full-screen sheet</p>
+            <div style="display:flex;gap:24px">
+              <div class="frame" style="width:300px;height:520px;background:var(--bg-page)">
+                <div class="topbar" style="gap:8px"><span class="iconbtn"><svg class="i"><use href="#i-menu"/></svg></span><div class="brand"><span class="brand-mark">we</span>Jobs</div><span class="spacer"></span><span class="avatar">WW</span></div>
+                <div class="tabs" style="padding:0 6px;overflow:hidden"><span class="on">Pre-aggregations</span><span>History</span><span>Queue 4</span></div>
+                <div style="padding:8px 10px;display:grid;gap:8px"><span class="fbtn">Folder <b>All of mine</b><svg class="s"><use href="#i-chevd"/></svg></span></div>
+                <div class="sheet" style="border-top:1px solid var(--border-subtle)">
+                  <div class="mrow" style="background:var(--accent-soft)"><div class="top"><span class="nm">orders_emea.by_month</span></div><span class="xs sec">Sales / EMEA</span><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed <span class="t">· Aug 2026</span></span></div>
+                  <div class="mrow"><div class="top"><span class="nm">orders_emea.by_country</span></div><span class="xs sec">Sales / EMEA</span><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Queued</span></div>
+                  <div class="mrow"><div class="top"><span class="nm">returns_emea.daily</span></div><span class="xs sec">Sales / EMEA</span><span class="status run"><svg class="s"><use href="#s-run"/></svg>Building</span></div>
+                  <div class="mrow"><div class="top"><span class="nm">pipeline_emea.by_stage</span></div><span class="xs sec">Sales / EMEA</span><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></div>
+                </div>
+              </div>
+              <div class="frame" style="width:300px;height:520px;background:var(--bg-surface);display:flex;flex-direction:column">
+                <div class="panehead"><span class="iconbtn sm"><svg class="s"><use href="#i-x"/></svg></span><h2>orders_emea.by_month</h2></div>
+                <div class="sect" style="gap:4px"><span class="xs sec">Shared / Sales / EMEA</span><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed <span class="t">· Aug 2026</span></span><span class="xs">Every 30 minutes · last built 14:01</span></div>
+                <div class="sect" style="padding:6px 10px;flex:1;align-content:start"><table class="grid-table compact"><tbody>
+                  <tr><td><span class="check"></span></td><td>Oct 2026</td><td><span class="status run"><svg class="s"><use href="#s-run"/></svg>Building</span></td></tr>
+                  <tr class="picked"><td><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span></td><td>Sep 2026</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td></tr>
+                  <tr class="picked"><td><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span></td><td>Aug 2026</td><td><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed</span></td></tr>
+                  <tr><td><span class="check"></span></td><td>Jul 2026</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td></tr>
+                  <tr><td><span class="check"></span></td><td>Jun 2026</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td></tr>
+                </tbody></table></div>
+                <div style="border-top:1px solid var(--border-subtle);padding:10px;display:flex;gap:8px"><span class="btn primary sm">Rebuild selected (2)</span><span class="btn sm">Build all</span></div>
+              </div>
+            </div>
+          </div>
+          <div><p class="cap">What changes below 1,024 px</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <div class="sect" style="gap:8px">
+                <span class="xs"><b>The switcher</b> folds into the menu button, as built (AC-304, design 09 state H).</span>
+                <span class="xs"><b>The list</b> keeps name, folder and state, one row each. Last built, Started by and Trigger move into the sheet.</span>
+                <span class="xs"><b>The pane</b> becomes a full-screen sheet, as designs 01, 11 and 13 do. × goes back to the list, and its actions stay pinned at the bottom.</span>
+                <span class="xs"><b>Run history and Queue</b> list in the same way. A build's log opens as a sheet, its lines wrapped.</span>
+                <span class="xs"><b>Schedules</b> lists name, owner and next run. Its form becomes a sheet too.</span>
+                <span class="xs"><b>Nothing is taken away:</b> building, cancelling and scheduling all stay possible.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- H -->
+      <div class="state wide">
+        <h3>H · A Super-Admin's view, and a read-write member's, limited to their folders (AC-297, rule 84)</h3>
+        <p>A read-write member sees and acts on the pre-aggregations, partitions, builds, queue entries and schedules of the models in the folders they write, and in every folder below them. They don't see an ancestor's, though they may see its models view-only in Explore. A Super-Admin sees every folder, with no scope note. The API applies the same rule to every list and every action (T371).</p>
+        <div class="row2">
+          <div><p class="cap">H1 · Jobs as a Super-Admin: every folder, the root's included, and no note</p>
+            <div class="frame" style="background:var(--bg-page)">
+              <div style="padding:12px 14px;display:grid;gap:10px">
+                <div class="filters"><span class="fbtn">Folder <b>All folders</b><svg class="s"><use href="#i-chevd"/></svg></span><span class="fbtn">Status <b>Any</b><svg class="s"><use href="#i-chevd"/></svg></span><span class="spacer"></span><span class="xs sec">10 pre-aggregations</span></div>
+                <div class="card"><table class="grid-table">
+                  <thead><tr><th>Pre-aggregation</th><th>Folder</th><th>Status</th><th>Last built</th></tr></thead>
+                  <tbody>
+                    <tr><td><span class="nm">fx.rates_hourly</span></td><td>Finance</td><td><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed <span class="t">· whole</span></span></td><td>Today 08:00</td></tr>
+                    <tr><td><span class="nm">gl.monthly</span></td><td>Finance</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td><td>Today 04:01</td></tr>
+                    <tr><td><span class="nm">pipeline.by_stage</span></td><td>Sales</td><td><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span></td><td>Today 14:02</td></tr>
+                    <tr><td><span class="nm">orders_emea.by_month</span></td><td>Sales / EMEA</td><td><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed <span class="t">· Aug 2026</span></span></td><td>Today 14:01</td></tr>
+                    <tr><td><span class="nm">orders.monthly</span></td><td>Shared</td><td><span class="status warn"><svg class="s"><use href="#s-part"/></svg>Partly built <span class="t">· 11 of 12</span></span></td><td>Today 14:00</td></tr>
+                    <tr><td colspan="4" class="sec">…5 more, in Sales / EMEA and below</td></tr>
+                  </tbody></table></div>
+              </div>
+            </div>
+          </div>
+          <div><p class="cap">H2 · The Folder filter: a member's own folders, and a Super-Admin's every folder, with Include subfolders as the audit trail's filter has it</p>
+            <div class="frame" style="background:var(--bg-page);height:300px">
+              <div class="menu" style="left:16px;top:16px;width:300px">
+                <div class="mhead">Wren · read-write</div>
+                <div class="mi sel hl"><svg class="s"><use href="#i-check"/></svg>All of mine</div>
+                <div class="msep"></div>
+                <div class="mi"><span style="width:14px"></span>Sales / EMEA</div>
+                <div class="mi"><span style="width:28px"></span>Sales / EMEA / DACH</div>
+                <div class="mi"><span style="width:14px"></span><span class="opt"><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span>Include subfolders</span></div>
+              </div>
+              <div class="menu" style="left:340px;top:16px;width:300px">
+                <div class="mhead">Ada · Super-Admin</div>
+                <div class="mi sel hl"><svg class="s"><use href="#i-check"/></svg>All folders</div>
+                <div class="msep"></div>
+                <div class="mi"><span style="width:14px"></span>Shared <span class="sec xs">· the root</span></div>
+                <div class="mi"><span style="width:28px"></span>Finance</div>
+                <div class="mi"><span style="width:28px"></span>Sales</div>
+                <div class="mi"><span style="width:42px"></span>EMEA</div>
+                <div class="mi"><span style="width:56px"></span>DACH</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row2" style="margin-top:16px">
+          <div><p class="cap">H3 · Schedules as a read-write member: her folders' schedules, both owners, and the note</p>
+            <div class="frame" style="background:var(--bg-page)">
+              <div style="padding:12px 14px;display:grid;gap:10px">
+                <div class="notebar plain"><svg class="s" style="margin-top:1px"><use href="#i-info"/></svg><span>Showing schedules of pre-aggregations in the folders where you have read-write access.</span></div>
+                <div class="card"><table class="grid-table">
+                  <thead><tr><th>Pre-aggregation</th><th>Schedule</th><th>Owner</th></tr></thead>
+                  <tbody>
+                    <tr><td><span class="nm">dach.orders_daily</span></td><td><b>Weekday mornings</b> <span class="mono sec">· 55 7 * * 1-5</span></td><td><span class="owner"><svg class="s"><use href="#i-cal"/></svg>wechart · Wren Writer</span></td></tr>
+                    <tr><td><span class="nm">orders_emea.by_month</span></td><td>Every 30 minutes</td><td><span class="owner"><svg class="s"><use href="#i-cube"/></svg>Cube's refresh worker</span></td></tr>
+                    <tr><td><span class="nm">orders_emea.by_month</span></td><td><b>Month-end close</b> <span class="mono sec">· 0 5 1 * *</span></td><td><span class="owner"><svg class="s"><use href="#i-cal"/></svg>wechart · Wren Writer</span></td></tr>
+                    <tr><td colspan="3" class="sec">…5 more, all in Sales / EMEA or below</td></tr>
+                  </tbody></table></div>
+              </div>
+            </div>
+          </div>
+          <div><p class="cap">H4 · Who sees and does what</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <table class="grid-table who">
+                <thead><tr><th>Who</th><th>Sees</th><th>May</th></tr></thead>
+                <tbody>
+                  <tr><td class="wrap">A Super-Admin</td><td class="wrap">Every folder's pre-aggregations, builds, queue and schedules; everyone's queries</td><td class="wrap">Build, rebuild, cancel; make, change, resume and delete any wechart schedule</td></tr>
+                  <tr><td class="wrap">A read-write member of Sales / EMEA</td><td class="wrap">Sales / EMEA's and DACH's, whoever started a build; their own queries (R42.6)</td><td class="wrap">The same, over those folders (Q10)</td></tr>
+                  <tr><td class="wrap">A read-write member of DACH only</td><td class="wrap">DACH's only, not Sales / EMEA's above it</td><td class="wrap">The same, over DACH</td></tr>
+                  <tr><td class="wrap">A read-only member</td><td class="wrap sec" colspan="2">No Jobs or Schedules (AC-001). Data as of shows a tile's freshness only (R42.7)</td></tr>
+                  <tr><td class="wrap">The single user, sign-in off</td><td class="wrap sec" colspan="2">As a Super-Admin (AC-254)</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- I -->
+      <div class="state wide">
+        <h3>I · Builds, cancels and schedule changes in the audit trail (AC-294, R42.8)</h3>
+        <p>Three new kinds of event join design 08's trail: <b>Build started</b>, <b>Build cancelled</b> and <b>Schedule change</b>, each with its own icon. Each records who, what, the pre-aggregation's folder and when. A schedule change records what it changed: made, changed, suspended, resumed or deleted. The page is design 08's, for Super-Admins only, and its Event filter gains the three kinds.</p>
+        <div class="frame" style="background:var(--bg-page)">
+          <div style="display:grid;grid-template-columns:1fr 400px">
+            <main style="min-width:0;padding:14px 24px 16px;display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:center;gap:10px"><span style="font:600 20px/26px var(--font-ui)">Security</span></div>
+              <div class="tabs page"><span>Policies</span><span>Preview as groups</span><span class="on">Audit trail</span></div>
+              <div class="filters">
+                <span class="fbtn">User <b>Anyone</b><svg class="s"><use href="#i-chevd"/></svg></span>
+                <span class="fbtn">Event <b>3 kinds</b><svg class="s"><use href="#i-chevd"/></svg></span>
+                <span class="fbtn">Folder <b>Any</b><svg class="s"><use href="#i-chevd"/></svg></span>
+                <span class="fbtn">Time <b>Last 24 hours</b><svg class="s"><use href="#i-chevd"/></svg></span>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <span class="chip">Event: <b>Build started, Build cancelled, Schedule change</b><span class="x"><svg class="s"><use href="#i-x"/></svg></span></span>
+                <span class="btn link">Clear filters</span><span class="spacer"></span><span class="xs sec">6 records · newest first</span>
+              </div>
+              <div class="card">
+                <table class="grid-table tight">
+                  <thead><tr><th>Time</th><th>User</th><th>Event</th><th>Folder</th><th>Item</th><th>Details</th></tr></thead>
+                  <tbody>
+                    <tr><td>Today 14:41:20</td><td class="mono">ada@corp.example</td><td><span class="ev"><svg class="s"><use href="#i-cal"/></svg>Schedule change</span></td><td>Finance</td><td>Schedule · Quarter-end close</td><td>Made · 0 4 1 1,4,7,10 *</td></tr>
+                    <tr><td>Today 14:39:02</td><td class="mono">wren@corp.example</td><td><span class="ev"><svg class="s"><use href="#s-cancel"/></svg>Build cancelled</span></td><td>Sales / EMEA</td><td>Pre-aggregation · orders_emea.by_month</td><td>Queued · Aug 2026</td></tr>
+                    <tr><td>Today 14:38:41</td><td class="mono">wren@corp.example</td><td><span class="ev"><svg class="s"><use href="#i-play"/></svg>Build started</span></td><td>Sales / EMEA</td><td>Pre-aggregation · orders_emea.by_month</td><td>Rebuild selected · Sep, Aug</td></tr>
+                    <tr><td>Today 11:00:41</td><td class="sec">wechart's scheduler</td><td><span class="ev"><svg class="s"><use href="#i-cal"/></svg>Schedule change</span></td><td>Finance</td><td>Schedule · Trading hours</td><td>Suspended after 3 failures</td></tr>
+                    <tr class="sel"><td>Yesterday 17:10:12</td><td class="mono">wren@corp.example</td><td><span class="ev"><svg class="s"><use href="#i-cal"/></svg>Schedule change</span></td><td>Sales / EMEA</td><td>Schedule · Month-end close</td><td>Changed · cron</td></tr>
+                    <tr><td>Yesterday 16:20:31</td><td class="mono">ada@corp.example</td><td><span class="ev"><svg class="s"><use href="#i-play"/></svg>Build started</span></td><td>Sales / EMEA</td><td>Pre-aggregation · pipeline_emea.by_stage</td><td>Build now · whole</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="xs sec" style="margin:0">Records older than 1 year are removed. The deployment sets this period (<span class="mono">audit.retention: 365d</span>).</p>
+            </main>
+            <aside style="background:var(--bg-surface);border-left:1px solid var(--border-subtle)">
+              <div class="sect" style="gap:4px"><span class="ev strong" style="font-size:14px"><svg class="s"><use href="#i-cal"/></svg>Schedule change · Changed</span><span class="xs sec">Sales / EMEA · Month-end close · Yesterday 17:10:12 (15:10:12 UTC)</span></div>
+              <div class="sect"><dl class="kv" style="grid-template-columns:96px 1fr"><dt>By</dt><dd class="mono">wren@corp.example</dd><dt>Role</dt><dd>Read-write in Sales / EMEA</dd><dt>Schedule</dt><dd>Month-end close · wechart</dd><dt>Builds</dt><dd><span class="mono">orders_emea.by_month</span></dd><dt>Folder</dt><dd>Shared / Sales / EMEA</dd></dl></div>
+              <div class="sect"><h3>What changed</h3>
+                <table class="grid-table compact"><thead><tr><th></th><th>Before</th><th>After</th></tr></thead><tbody>
+                  <tr><td class="sec">Cron</td><td class="mono">0 6 1 * *</td><td class="mono">0 5 1 * *</td></tr>
+                  <tr><td class="sec">Time zone</td><td colspan="2" class="sec">Europe/Berlin, unchanged</td></tr>
+                  <tr><td class="sec">Suspend after</td><td colspan="2" class="sec">3, unchanged</td></tr>
+                </tbody></table></div>
+              <div class="sect" style="border:0"><span class="xs sec">Records can't be edited or deleted here. They're removed only by the retention period.</span></div>
+            </aside>
+          </div>
+        </div>
+        <div class="row2" style="margin-top:16px">
+          <div><p class="cap">I2 · What goes in the trail, and what doesn't</p>
+            <div class="frame" style="background:var(--bg-surface)">
+              <table class="grid-table">
+                <thead><tr><th>Action</th><th>Event</th><th>Details</th></tr></thead>
+                <tbody>
+                  <tr><td class="wrap">Build now, Build all, Rebuild selected</td><td><span class="ev"><svg class="s"><use href="#i-play"/></svg>Build started</span></td><td class="wrap">which, and the partitions</td></tr>
+                  <tr><td class="wrap">Cancel in the queue</td><td><span class="ev"><svg class="s"><use href="#s-cancel"/></svg>Build cancelled</span></td><td class="wrap">the partition, and its state then</td></tr>
+                  <tr><td class="wrap">Make, change, resume or delete a wechart schedule</td><td><span class="ev"><svg class="s"><use href="#i-cal"/></svg>Schedule change</span></td><td class="wrap">what changed, before and after</td></tr>
+                  <tr><td class="wrap">A suspension, by wechart's scheduler</td><td><span class="ev"><svg class="s"><use href="#i-cal"/></svg>Schedule change</span></td><td class="wrap">after how many failures (Q12)</td></tr>
+                  <tr><td class="wrap sec">A run a wechart schedule starts</td><td class="sec" colspan="2">Not recorded here: it's in Run history (Q12)</td></tr>
+                  <tr><td class="wrap sec">A build Cube's refresh worker starts</td><td class="sec" colspan="2">Not recorded: no one started it from wechart</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div><p class="cap">I3 · The Event filter, with the three new kinds</p>
+            <div class="frame" style="background:var(--bg-page);height:262px">
+              <div class="menu" style="left:16px;top:12px;width:300px">
+                <div class="mi"><span class="check"></span>Sign-in</div>
+                <div class="mi"><span class="check"></span>Access change</div>
+                <div class="mi sec" style="white-space:normal;height:auto;padding:4px 8px;font-size:12px;line-height:16px">…Proposal, Approval, Rejection, Restore, Data-source change, Publish refused</div>
+                <div class="msep"></div>
+                <div class="mi"><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span><svg class="s"><use href="#i-play"/></svg>Build started</div>
+                <div class="mi"><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span><svg class="s"><use href="#s-cancel"/></svg>Build cancelled</div>
+                <div class="mi"><span class="check on"><svg class="xs"><use href="#i-check"/></svg></span><svg class="s"><use href="#i-cal"/></svg>Schedule change</div>
+              </div>
+              <p class="help" style="position:absolute;left:340px;top:16px;width:300px">Design 15's SQL run, when it's built, is a kind of its own beside these. With sign-in off there's no audit trail page (as built, T369).</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- J -->
+      <div class="state wide">
+        <h3>J · Reconciling designs 10 and 07 (R40.2, R41, R42.2, R47)</h3>
+        <p>What design 16 keeps, changes or drops from design 10 (2026-09-27, Jobs and Schedules by folder), design 07 (2026-09-24, Schedules) and design 07 (2026-09-27, the Access panel). Where they differ, design 16 follows the user's answers since they were drawn.</p>
+        <div class="decision" style="margin-top:0;max-width:none">
+          <table>
+            <thead><tr><th style="width:190px">Design and part</th><th style="width:330px">What it said</th><th>Design 16</th><th style="width:150px">Why</th></tr></thead>
+            <tbody>
+              <tr><td class="pick">10 · pin 6</td><td class="pick"><s>"Build now, with no proposal. Building and scheduling are direct for the folder's read-write members (AC-297)."</s></td><td class="pick"><b>Reworded:</b> "Build now, with no proposal. Building, and wechart's own schedules, are direct for the folder's read-write members (AC-297). A refresh key is Cube's schedule and part of the model: changing it is a model change, made in My workspace and proposed (AC-278)."</td><td class="pick">R40.2 · references.md surface 10, already reworded</td></tr>
+              <tr><td>10 · the pane's note</td><td><s>"Building needs no proposal (AC-297)."</s></td><td>"Building and wechart schedules need no proposal. The refresh key is part of the model: to change it, edit the model in My workspace and propose it." (screen 1, pin 15)</td><td>R40.2</td></tr>
+              <tr><td>10 · Status</td><td>Built, Running, Failed, Not built yet</td><td>Built, Partly built, Not built, Building, Queued, Stalled; Failed only for a build wechart started</td><td>R41 · partitions and queue routes · sync check L1</td></tr>
+              <tr><td>10 · Last success</td><td>"12 min ago"</td><td>Last built: when Cube started its newest version, whoever started it</td><td>Cube expert M1</td></tr>
+              <tr><td>10 · Duration vs average</td><td>A bar against the average</td><td>Dropped from the list. Run history gives each wechart build's duration, in words</td><td>R41 · sync check M9</td></tr>
+              <tr><td>10 · Trigger</td><td>Who started the last build ("Schedule", "Wren Writer")</td><td>Trigger is the refresh key in words. Started by names a person or a wechart schedule, or "—"</td><td>AC-229 · R42.2</td></tr>
+              <tr><td>10 · Model column, the name a link</td><td><span class="mono">sales.yml</span> per row</td><td>In the pane, with Open in Model. A row click only selects</td><td>R47 · AC-229</td></tr>
+              <tr><td>10 · Recent builds</td><td>The pane's last three, any builder</td><td>Kept, for builds started from wechart only, linking to Run history</td><td>R41 · AC-150</td></tr>
+              <tr><td>10 · Tabs</td><td>Pre-aggregations, Queries</td><td>Pre-aggregations, Run history, Queue, Queries</td><td>AC-150 · AC-151</td></tr>
+              <tr><td>10 · "Refresh worker running"</td><td>Up or down</td><td>Last run, behind, failing, or none; with a panel</td><td>AC-156 · R41 · Q4</td></tr>
+              <tr><td>10 · state A, Schedules</td><td>Folder, Schedule, Next run, Owner; no note, no icons</td><td>Folder column and filter kept. Design 07's note (rewritten), icons, owner filter (P4), zone-named next run and pane come back. Last run and a wechart row are added</td><td>AC-233 · AC-152 · AC-154 · AC-234 · sync check M3, M4</td></tr>
+              <tr><td>07 (09-24) · the note</td><td><s>"Schedules run by wechart itself are not part of this phase."</s></td><td>Who runs each kind, where it changes, and that wechart's need no proposal (screen 2, pin 2)</td><td>R16 · R40.2 · R42.3</td></tr>
+              <tr><td>07 (09-24) · Edit in Model</td><td>Opens Model › Pre-aggs</td><td>Open in Model: it opens the model read-only in its folder, where Edit in my workspace leads to a proposal</td><td>R40.2 · AC-278 · rule 70</td></tr>
+              <tr><td>07 (09-24) · Last build, and Builds in the pane</td><td>"Today 06:03", "Not built here"</td><td>A refresh key's row gives when Cube last built the rollup, with no outcome or starter. A wechart schedule's row gives its last run's outcome</td><td>R41 · Cube expert M1</td></tr>
+              <tr><td>07 (09-24) · owner filter</td><td>wechart counts 0</td><td>Kept, with wechart's schedules counted (P4)</td><td>rule 34 · P4</td></tr>
+              <tr><td>07 (09-24) · next five runs and the note</td><td>"up to about five minutes after its time"</td><td>Kept for refresh keys, listed up to a daylight-saving change (D5, Q3). A wechart schedule shows its own runs with no such note</td><td>AC-153 · AC-234 · Q3</td></tr>
+              <tr><td>07 (09-27) · Access panel, read-write help</td><td>"Propose changes, create subfolders, set access and run this folder's builds. They also see every folder above, view-only."</td><td><b>Reworded:</b> "Propose changes, create subfolders, set access, and build and schedule this folder's pre-aggregations. They also see every folder above, view-only, but not its pre-aggregations in Jobs."</td><td>R40.2 · AC-297</td></tr>
+              <tr><td>direction.md rule 34</td><td>wechart's schedules are "builds, deliveries, warm-ups"</td><td>Builds only. Deliveries are a non-goal, and warm-ups were dropped</td><td>R42.3 · Cube expert L5</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======================= KEYBOARD ======================= -->
+  <section class="notes">
+    <h2>Keyboard and accessibility</h2>
+    <p>Rule 85 and principle 5, applied to the new tabs, pane parts, form and dialogs. Every control is a native button, link, checkbox, radio, select or text field, so each takes the same focus ring. No key builds, cancels, resumes or deletes anything by itself unless it's named below.</p>
+    <div class="decision" style="margin-top:0">
+      <table>
+        <thead><tr><th style="width:190px">Moment</th><th style="width:250px">Keys</th><th>What happens</th></tr></thead>
+        <tbody>
+          <tr><td>Jobs' tabs</td><td><kbd class="k">←</kbd> <kbd class="k">→</kbd> in the tab list</td><td>The APG tabs pattern, as built, now with four tabs. Each tab's address is its own, so Back returns to it.</td></tr>
+          <tr><td>A row in a list</td><td><kbd class="k">Tab</kbd> · <kbd class="k">↑</kbd> <kbd class="k">↓</kbd> · <kbd class="k">Enter</kbd> / <kbd class="k">Space</kbd></td><td>The row selects and opens the pane, as built. Its name is a button inside the row, so screen readers announce it as one: "orders_emea.by_month, Sales / EMEA, Failed, Aug 2026". T239 recorded that <code>aria-selected</code> on a plain table row is thinly supported.</td></tr>
+          <tr><td>Partitions</td><td><kbd class="k">Tab</kbd> · <kbd class="k">Space</kbd></td><td>Each checkbox is labelled with its period and state: "Aug 2026, Failed at 14:05". The header's checkbox reads "Select all 10 partitions", and is mixed when only some are selected. Rebuild selected names its count: "Rebuild 2 selected partitions of orders_emea.by_month".</td></tr>
+          <tr><td>Starting a build</td><td><kbd class="k">Enter</kbd> on Rebuild selected or Build all</td><td>A polite live region says "Rebuilding 2 partitions", and then each partition's state as it changes. Focus stays on the button.</td></tr>
+          <tr><td>Cancel in the queue</td><td><kbd class="k">Tab</kbd> to it · <kbd class="k">Enter</kbd></td><td>It's labelled "Cancel the Aug 2026 build of orders_emea.by_month", with no confirmation. The toast is announced. Focus moves to the next row's Cancel, or to the table when there's none.</td></tr>
+          <tr><td>The schedule form</td><td><kbd class="k">Tab</kbd> · typing</td><td>The cron field is described by its format line and its reading in words, which a polite live region announces after typing pauses. A mistake is announced, and the field is marked invalid. The next runs are a list named "Next 5 runs, Europe/Berlin". The time zone is a combobox.</td></tr>
+          <tr><td>Resume</td><td><kbd class="k">Enter</kbd></td><td>The pane opens with focus on Resume when a suspended schedule is selected. Afterwards a polite toast gives the next run, and focus stays on the row.</td></tr>
+          <tr><td>Delete a schedule</td><td><kbd class="k">Tab</kbd> · <kbd class="k">Esc</kbd></td><td>A modal dialog labelled by its heading, with focus starting on Cancel. Esc cancels. Focus then returns to the list.</td></tr>
+          <tr><td>The refresh worker's badge</td><td><kbd class="k">Enter</kbd> · <kbd class="k">Esc</kbd></td><td>A button that opens its panel as a non-modal popover, and Esc closes it. Its state is a <code>status</code> region, read when it changes, as built.</td></tr>
+          <tr><td>A build's log</td><td><kbd class="k">Tab</kbd> into it</td><td>A labelled region that scrolls and takes focus, as <code>TableScroll</code> does. Each line is read with its time.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="decision">
+      <h3>Every new state as an icon and a label</h3>
+      <div class="legend">
+        <div><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Built</span><span></span><span>a partition, or a rollup</span></div>
+        <div><span class="status warn"><svg class="s"><use href="#s-part"/></svg>Partly built</span><span></span><span>some partitions not built</span></div>
+        <div><span class="status idle"><svg class="s"><use href="#s-off"/></svg>Not built</span><span></span><span>no version yet</span></div>
+        <div><span class="status run"><svg class="s"><use href="#s-run"/></svg>Building</span><span></span><span>Cube's <span class="mono">processing</span></span></div>
+        <div><span class="status idle"><svg class="s"><use href="#s-idle"/></svg>Queued</span><span></span><span>Cube's <span class="mono">scheduled</span></span></div>
+        <div><span class="status warn"><svg class="s"><use href="#s-warn"/></svg>Stalled</span><span></span><span>Cube removes it</span></div>
+        <div><span class="status err"><svg class="s"><use href="#s-err"/></svg>Failed</span><span></span><span>a build wechart started</span></div>
+        <div><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Done</span><span></span><span>a build's outcome</span></div>
+        <div><span class="status warn"><svg class="s"><use href="#s-warn"/></svg>Cube's record expired</span><span></span><span>its end unknown</span></div>
+        <div><span class="status idle"><svg class="s"><use href="#s-cancel"/></svg>Cancelled</span><span></span><span>taken out of the queue</span></div>
+        <div><span class="status ok"><svg class="s"><use href="#s-ok"/></svg>Active</span><span></span><span>a wechart schedule</span></div>
+        <div><span class="status err"><svg class="s"><use href="#s-susp"/></svg>Suspended</span><span></span><span>after <i>n</i> failures in a row</span></div>
+        <div><span class="status warn">2 failed in a row</span><span></span><span>before the limit, with its words</span></div>
+        <div><span class="owner"><svg class="s"><use href="#i-cube"/></svg>Cube's refresh worker</span><span></span><span>owner, and a starter in Queue</span></div>
+        <div><span class="owner"><svg class="s"><use href="#i-cal"/></svg>wechart</span><span></span><span>owner, and a schedule as starter</span></div>
+        <div><span class="status warn"><svg class="s"><use href="#s-warn"/></svg>Refresh worker behind</span><span></span><span>on an older revision</span></div>
+        <div><span class="status err"><svg class="s"><use href="#s-err"/></svg>Refresh runs failing</span><span></span><span>a module's last error</span></div>
+        <div><span class="ev"><svg class="s"><use href="#i-play"/></svg>Build started</span> · <span class="ev"><svg class="s"><use href="#s-cancel"/></svg>Build cancelled</span> · <span class="ev"><svg class="s"><use href="#i-cal"/></svg>Schedule change</span><span></span><span>audit events</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= PROPOSALS AND QUESTIONS ======================= -->
+  <section class="notes" style="border-top:1px solid var(--border-subtle)">
+    <h2>Proposals, and questions for you</h2>
+    <p>The states above draw what AC-145, AC-150, AC-151, AC-155, AC-234 and AC-297 ask for, with the answers R40–R42 gave. The proposals are suggestions beyond them, to adopt or not, and nothing above depends on them. The questions are gaps in the decisions, three of them from <code>docs/phase-2/backlog.md</code> §6. Each is drawn one way so the design is complete, and the way drawn is only a default until you decide.</p>
+    <div class="decision" style="margin-top:0">
+      <h3>Proposals: adopt or not</h3>
+      <table>
+        <thead><tr><th style="width:36px">#</th><th>Proposal</th><th>Why</th><th style="width:120px">Where</th></tr></thead>
+        <tbody>
+          <tr><td>P1</td><td>Stop on a Building entry in the queue, for builds wechart started. It uses xcube's cancel with <code>processing: true</code>, and the build stops at the queue's next heartbeat, within 8 seconds.</td><td>AC-151 asks only to cancel a queued entry. A build started by mistake, or one holding up a queue, can only be waited out. xcube already supports this (research <code>xcube-jobs-schedules-routes.md</code> §1).</td><td class="w">C1</td></tr>
+          <tr><td>P2</td><td>Run now on a wechart schedule. It starts the schedule's build at once, outside its times. Run history names it "Run now · Month-end close, by Wren Writer", and the trail records it as a build started.</td><td>The prototype had it. After a fix, such as a data source back up after E1's timeouts, it checks that the schedule works without waiting for its next time.</td><td class="w">D1</td></tr>
+          <tr><td>P3</td><td>Pause and resume a wechart schedule by hand, with an On switch on its row and in its pane. A paused schedule reads "Paused · by Ada Admin" with the idle icon, and each pause is a schedule change in the trail.</td><td>AC-155 offers Resume only after a suspension. Without a pause, stopping a schedule for a while means deleting it and making it again. The prototype had the switch.</td><td class="w">screen 2, D1</td></tr>
+          <tr><td>P4</td><td>Keep design 07's owner filter on Schedules, with counts: All, Cube's refresh worker, wechart.</td><td>No AC asks for it (sync check §2), and design 10's state A dropped it. With both kinds now listed, it's the quickest way to see only wechart's schedules, which are the only ones changed here.</td><td class="w">screen 2 pin 4</td></tr>
+          <tr><td>P5</td><td>A summary in Jobs' header for your folders: "1 building · 3 queued · 1 failed · 1 suspended schedule". Each count is a link to its tab, filtered. Failed counts only builds wechart started (R41).</td><td>The prototype led with these counts, and the references' Jobs pages filter by status (Looker, Tableau). With many folders, it shows what needs attention first (sync check §5).</td><td class="w">screen 1</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="decision">
+      <h3>Questions — your decision</h3>
+      <table>
+        <thead><tr><th style="width:36px">#</th><th>Question</th><th>Drawn as</th><th style="width:120px">Where</th></tr></thead>
+        <tbody>
+          <tr><td>Q1</td><td>Cancelling a build Cube's refresh worker queued. Cancelled, it comes back under the same key at the worker's next run, every 30 seconds, while its refresh key hasn't turned over. A jobs build doesn't come back (research <code>xcube-jobs-schedules-routes.md</code> §1).</td><td>Only builds wechart started can be cancelled. The worker's entries, and a query's, are shown without Cancel, and the list says why. The alternative: ask xcube for a cancel that holds until the refresh key turns over, with the worker backing that rollup off meanwhile (from 1 second, doubling to 10 minutes).</td><td class="w">C1</td></tr>
+          <tr><td>Q2</td><td>A rollup with both a refresh key and a wechart schedule (backlog §6). Does wechart offer to stop the refresh key's runs (<code>scheduled_refresh: false</code>, a model change by proposal)? And how does Schedules label the owner?</td><td>Both run. Schedules lists one row per schedule, each with its own owner. The form and the pane say the refresh key runs too. Nothing offers <code>scheduled_refresh: false</code>. The alternatives: a link that opens the model in My workspace at <code>scheduled_refresh</code>, to propose; or refusing a wechart schedule on a rollup whose refresh key runs.</td><td class="w">screen 1 pin 13, screen 2 pins 5, 12</td></tr>
+          <tr><td>Q3</td><td>Next runs across a daylight-saving change (backlog §6). Cube runs a refresh key at the offset its zone had when it generated the SQL, which may outlast the change until the model compiles again (research <code>cube/refresh-key-schedule.md</code>, unverified). wechart's own schedules follow the zone's clock (research <code>scheduler.md</code>; to be tested across the change).</td><td>A refresh key's next runs are listed up to the change, then a warning says later runs may be an hour off. A wechart schedule's runs are listed across the change in local time, with the change marked. The alternative for a refresh key: list runs past the change at today's offset, with the same caveat.</td><td class="w">D4, D5</td></tr>
+          <tr><td>Q4</td><td>The refresh worker's indicator (backlog §6). xcube now reports the revision each worker serves, its last run and each module's last error. What does wechart show, and to whom? A module can hold cubes from several folders, and its error can name them.</td><td>One badge in Jobs' header: running with its last run, behind, failing, or none. Its panel lists each worker and module, with Cube's error, to Super-Admins. A read-write member sees the badge and that a module failed, without the error. The alternatives: members see the errors too; or members see only the badge.</td><td class="w">screen 1 pin 2, F</td></tr>
+          <tr><td>Q5</td><td>AC-151 asks for each queue entry's token. Builds Cube's refresh worker or a query started have none (xcube gives <code>job: null</code>).</td><td>"—" in Token, with "Cube's refresh worker" or "A query" under Started by. The alternatives: show xcube's queue key in its place; or amend AC-151 to "its token, where wechart started it".</td><td class="w">C1</td></tr>
+          <tr><td>Q6</td><td>Is a Run history record one build (everything one start asked for) or one partition's build? AC-150 keeps "the latest 100 records of each pre-aggregation". One build of a 30-partition rollup would be 30 records.</td><td>One record per start. It lists its partitions, has one outcome (Failed when any partition failed, saying how many), and its log holds every partition's token. The alternative: one record per partition.</td><td class="w">B1, B3</td></tr>
+          <tr><td>Q7</td><td>What does a scheduled run build?</td><td>Every partition, as Build all does. The alternative: a chosen set, such as the newest <i>n</i> partitions, with one jobs request per partition.</td><td class="w">screen 2 pin 13</td></tr>
+          <tr><td>Q8</td><td>A run that fell due while wechart was stopped. wechart's scheduler can skip it or run it once when it's back (pg-boss's <code>missed</code>, research <code>scheduler.md</code>).</td><td>A choice on each schedule, with "Run it once, when wechart is back" selected. The alternative: one rule for every schedule, either way.</td><td class="w">screen 2 pin 13</td></tr>
+          <tr><td>Q9</td><td>What counts as a failed run toward the suspension limit? And may a schedule set no limit?</td><td>A run fails when Cube refuses to start it, or when any of its partitions ends Failed or Missing partition. "Cube's record expired" counts neither way. The limit is a whole number from 1 up, with no "Never". The alternatives: count only runs where every partition failed; or allow "Never".</td><td class="w">screen 2 pin 14, E</td></tr>
+          <tr><td>Q10</td><td>Who may change, resume or delete a wechart schedule? And what happens to it when the person who made it loses access?</td><td>Any read-write member of its pre-aggregation's folder, and any Super-Admin. A schedule belongs to the folder, so it keeps running, and still names who made it. The alternatives: only the person who made it and Super-Admins; or the schedule pauses when that person loses access.</td><td class="w">D1, H4</td></tr>
+          <tr><td>Q11</td><td>A cron a refresh key could express. AC-234 speaks of "a schedule … that a refresh key cannot express".</td><td>Accepted, with a note that a refresh key could run it, in the model, by proposal. The alternatives: refused, with that reason; or accepted with no note.</td><td class="w">D2</td></tr>
+          <tr><td>Q12</td><td>Which of the scheduler's own actions go in the audit trail? AC-294 names builds started from Jobs, cancels and changes to a wechart-owned schedule, each "with who".</td><td>A suspension is recorded as a schedule change by "wechart's scheduler". The runs it starts aren't recorded there, since Run history has them. A person's Resume, changes and Run now (P2) are recorded. The alternatives: scheduled runs as Build started too; or suspensions left out.</td><td class="w">I1, I2</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+</body>
+</html>
