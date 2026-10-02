@@ -57,8 +57,10 @@ async function make(kind: DocumentKind, body: Record<string, unknown>): Promise<
   return id;
 }
 
+let folder = '';
+
 beforeAll(async () => {
-  const folder = await make('folder', { title: 'Bookmarks T366', folderId: 'root' });
+  folder = await make('folder', { title: 'Bookmarks T366', folderId: 'root' });
   // writer's group writes here, reader's reads (infra/dex/test-users.json).
   await folderAccessStore(getDb()).set(folder, {
     readOnly: ['sales-ro'],
@@ -73,13 +75,16 @@ beforeAll(async () => {
     folderAccess: folderAccessStore(getDb()),
     bookmarks: bookmarkStore(getDb()),
   });
-  for (const who of ['super', 'writer', 'reader']) cookies[who] = await signIn(app, USERS[who]!);
+  // `manager` and `nobody` may not open the dashboard (T367).
+  for (const who of ['super', 'writer', 'reader', 'manager', 'nobody'])
+    cookies[who] = await signIn(app, USERS[who]!);
 });
 
 afterAll(async () => {
   if (app !== undefined) await app.close();
   // A dashboard's bookmarks go with it.
-  await bookmarkStore(getDb()).removeFor(dashboard);
+  for (const { kind, id } of made)
+    if (kind === 'dashboard') await bookmarkStore(getDb()).removeFor(id);
   for (const { kind, id } of made.reverse()) await docs().remove(kind, id);
   await closeDb();
 });
@@ -116,6 +121,222 @@ describe('each bookmark its saver’s own, signed in (T366, AC-292)', () => {
     expect((await listed('writer')).map((each) => [each.name, each.state.page])).toEqual([
       ['My view', 'p1'],
     ]);
+  });
+});
+
+/**
+ * T367, AC-293: WHEN a user shares a bookmark, THE SYSTEM SHALL list it for
+ * everyone who may see the dashboard, labelled with who shared it. Only its
+ * owner SHALL be able to change or unshare it.
+ * `Fails when: someone who may see the dashboard doesn't see a shared
+ * bookmark, or someone other than its owner can change or unshare it.`
+ *
+ * Rule 81: Mine before Shared, newest first within each; a new one "Only me".
+ * After the tests above, `writer` and `reader` each have "My view", unshared.
+ * `writer` is Dex's "Wren Writer" (infra/dex/config.yaml).
+ */
+describe('shared bookmarks, signed in (T367, AC-293)', () => {
+  interface Listed {
+    id: string;
+    dashboardId: string;
+    name: string;
+    state: Record<string, unknown>;
+    shared: boolean;
+    mine: boolean;
+    sharedBy?: string;
+  }
+  const url = (id: string, on = dashboard) => `/api/dashboards/${on}/bookmarks/${id}`;
+  const all = async (who: string): Promise<Listed[]> => {
+    const response = await as(who, {
+      method: 'GET',
+      url: `/api/dashboards/${dashboard}/bookmarks`,
+    });
+    expect(response.statusCode, `${who} lists`).toBe(200);
+    return response.json<{ bookmarks: Listed[] }>().bookmarks;
+  };
+  const named = (listed: readonly Listed[]) => listed.map((each) => [each.name, each.mine]);
+  const own = async (who: string, name: string) => {
+    const found = (await all(who)).find((each) => each.name === name && each.mine);
+    expect(found?.name, `${who}'s ${name}`).toBe(name);
+    return found!;
+  };
+  const change = (who: string, id: string, payload: Record<string, unknown>, on = dashboard) =>
+    as(who, { method: 'PATCH', url: url(id, on), payload });
+  const remove = (who: string, id: string) => as(who, { method: 'DELETE', url: url(id) });
+  const NOT_OWNER = { error: 'Only its owner can change a bookmark.' };
+  const NO_SUCH = { error: 'No such bookmark.' };
+
+  it('saves a new one as "Only me", whatever the save says', async () => {
+    const saved = await as('writer', {
+      method: 'POST',
+      url: `/api/dashboards/${dashboard}/bookmarks`,
+      payload: { name: 'Shared later', state: STATE, shared: true },
+    });
+
+    expect(saved.statusCode).toBe(201);
+    const { id } = saved.json<{ id: string }>();
+    expect(saved.json()).toEqual({
+      id,
+      dashboardId: dashboard,
+      name: 'Shared later',
+      state: STATE,
+      shared: false,
+      mine: true,
+    });
+    expect(named(await all('reader'))).toEqual([['My view', true]]);
+  });
+
+  it('shared by its owner, is listed for everyone who may open the dashboard, after their own, labelled with who shared it', async () => {
+    const { id } = await own('writer', 'Shared later');
+
+    const shared = await change('writer', id, { shared: true });
+
+    expect([shared.statusCode, shared.json()]).toEqual([
+      200,
+      { id, dashboardId: dashboard, name: 'Shared later', state: STATE, shared: true, mine: true },
+    ]);
+    const asOthers = {
+      id,
+      dashboardId: dashboard,
+      name: 'Shared later',
+      state: STATE,
+      shared: true,
+      mine: false,
+      sharedBy: 'Wren Writer',
+    };
+    const readers = await all('reader');
+    expect(named(readers)).toEqual([
+      ['My view', true],
+      ['Shared later', false],
+    ]);
+    expect(readers[1]).toEqual(asOthers);
+    // A Super-Admin may open every dashboard; not their own, so under Shared.
+    expect(await all('super')).toEqual([asOthers]);
+    // Its owner's still, under Mine, newest first.
+    expect(named(await all('writer'))).toEqual([
+      ['Shared later', true],
+      ['My view', true],
+    ]);
+    // Nobody who may not open the dashboard: as a dashboard that isn't there.
+    for (const who of ['manager', 'nobody'])
+      expect(
+        (await as(who, { method: 'GET', url: `/api/dashboards/${dashboard}/bookmarks` }))
+          .statusCode,
+        who,
+      ).toBe(404);
+  });
+
+  it('lists each part newest first', async () => {
+    expect((await save('writer', 'Shared second')).statusCode).toBe(201);
+    const { id } = await own('writer', 'Shared second');
+    expect((await change('writer', id, { shared: true })).statusCode).toBe(200);
+    expect((await save('reader', 'Reader’s second')).statusCode).toBe(201);
+
+    expect(named(await all('reader'))).toEqual([
+      ['Reader’s second', true],
+      ['My view', true],
+      ['Shared second', false],
+      ['Shared later', false],
+    ]);
+  });
+
+  it('lets nobody but its owner change, unshare or delete it, Super-Admins included', async () => {
+    const { id } = await own('writer', 'Shared later');
+    const before = (await all('reader')).find((each) => each.id === id);
+
+    for (const who of ['reader', 'super']) {
+      for (const payload of [
+        { shared: false },
+        { name: 'Taken over' },
+        { state: { ...STATE, page: 'p9' } },
+      ]) {
+        const refused = await change(who, id, payload);
+        expect([refused.statusCode, refused.json()], `${who} ${JSON.stringify(payload)}`).toEqual([
+          403,
+          NOT_OWNER,
+        ]);
+      }
+      const deleting = await remove(who, id);
+      expect([deleting.statusCode, deleting.json()], `${who} deleting`).toEqual([403, NOT_OWNER]);
+    }
+    // Those who may not open the dashboard are told it isn't there.
+    for (const who of ['manager', 'nobody']) {
+      expect((await change(who, id, { shared: false })).statusCode, who).toBe(404);
+      expect((await remove(who, id)).statusCode, who).toBe(404);
+    }
+
+    expect((await all('reader')).find((each) => each.id === id)).toEqual(before);
+    expect((await all('super')).find((each) => each.id === id)).toEqual(before);
+  });
+
+  it('answers one another hasn’t shared, one that isn’t there, and one of another dashboard, as not there', async () => {
+    const hidden = (await own('writer', 'My view')).id;
+    for (const id of [hidden, randomUUID()]) {
+      const refused = await change('reader', id, { shared: true });
+      expect([refused.statusCode, refused.json()]).toEqual([404, NO_SUCH]);
+      const deleting = await remove('reader', id);
+      expect([deleting.statusCode, deleting.json()]).toEqual([404, NO_SUCH]);
+    }
+    // Its owner's own, asked through a dashboard it isn't of.
+    const other = await make('dashboard', { title: 'Another', folderId: folder });
+    const elsewhere = await change('writer', hidden, { name: 'Moved' }, other);
+    expect([elsewhere.statusCode, elsewhere.json()]).toEqual([404, NO_SUCH]);
+    expect((await own('writer', 'My view')).id).toBe(hidden);
+  });
+
+  it('lets its owner rename it, update it, stop sharing it and delete it', async () => {
+    const { id } = await own('writer', 'Shared second');
+
+    const renamed = await change('writer', id, { name: '  Renamed  ' });
+    expect([renamed.statusCode, renamed.json<Listed>().name]).toEqual([200, 'Renamed']);
+    const updated = await change('writer', id, { state: { ...STATE, page: 'p7' } });
+    expect([updated.statusCode, updated.json<Listed>().state]).toEqual([
+      200,
+      { ...STATE, page: 'p7' },
+    ]);
+    expect((await all('reader')).find((each) => each.id === id)).toEqual({
+      id,
+      dashboardId: dashboard,
+      name: 'Renamed',
+      state: { ...STATE, page: 'p7' },
+      shared: true,
+      mine: false,
+      sharedBy: 'Wren Writer',
+    });
+
+    const unshared = await change('writer', id, { shared: false });
+    expect([unshared.statusCode, unshared.json<Listed>().shared]).toEqual([200, false]);
+    expect((await all('reader')).map((each) => each.id)).not.toContain(id);
+    expect((await own('writer', 'Renamed')).shared).toBe(false);
+
+    const deleted = await remove('writer', id);
+    expect(deleted.statusCode).toBe(204);
+    expect((await all('writer')).map((each) => each.id)).not.toContain(id);
+  });
+
+  it('refuses a rename to a name its owner has there already, and a change that isn’t one', async () => {
+    const { id } = await own('writer', 'Shared later');
+
+    const taken = await change('writer', id, { name: 'My view' });
+    expect([taken.statusCode, taken.json()]).toEqual([
+      409,
+      { error: 'You already have a bookmark of that name on this dashboard.' },
+    ]);
+    for (const [payload, error] of [
+      [{}, 'Nothing to change: give a name, a state, or whether it is shared.'],
+      [{ name: '   ' }, 'A bookmark needs a name.'],
+      [{ shared: 'yes' }, 'Shared is true or false.'],
+      [{ state: { page: 'p1' } }, 'A bookmark holds a page tab, filter values and marks.'],
+    ] as const) {
+      const refused = await change('writer', id, payload);
+      expect([refused.statusCode, refused.json()], JSON.stringify(payload)).toEqual([
+        400,
+        { error },
+      ]);
+    }
+    // Its own name again is no clash.
+    expect((await change('writer', id, { name: 'Shared later' })).statusCode).toBe(200);
+    expect((await own('writer', 'Shared later')).shared).toBe(true);
   });
 });
 

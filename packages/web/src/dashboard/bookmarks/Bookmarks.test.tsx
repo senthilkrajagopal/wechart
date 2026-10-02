@@ -23,18 +23,32 @@ const STATE: ViewState = {
   from: { 'marking-1': 'tile-status' },
 };
 
-function api(answer: (body: unknown) => Response, listed: () => unknown[] = () => []) {
-  const asked: { url: string; method: string; body?: unknown }[] = [];
+interface Asked {
+  url: string;
+  method: string;
+  body?: unknown;
+}
+
+/**
+ * The API, in memory: GET lists `listed()`; everything else is answered by
+ * `answer`. Every request asked is recorded.
+ */
+function api(
+  answer: (body: unknown, asked: Asked) => Response,
+  listed: () => unknown[] = () => [],
+) {
+  const asked: Asked[] = [];
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const body = init?.body === undefined ? undefined : JSON.parse(String(init.body));
-      asked.push({
+      const one = {
         url: String(input),
         method: init?.method ?? 'GET',
         ...(body === undefined ? {} : { body }),
-      });
-      if (init?.method === 'POST') return answer(body);
+      };
+      asked.push(one);
+      if (one.method !== 'GET') return answer(body, one);
       return new Response(JSON.stringify({ bookmarks: listed() }));
     }),
   );
@@ -45,15 +59,34 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const saveAs = async (name: string) => {
+/** `text` said in the status line, where a screen reader hears it. */
+const assertSaid = async (text: string) =>
+  expect((await screen.findByText(text)).getAttribute('role')).toBe('status');
+
+const open = async () => {
   const user = userEvent.setup();
   await user.click(screen.getByRole('button', { name: 'Bookmarks' }));
-  await user.click(screen.getByRole('menuitem', { name: 'Save bookmark…' }));
+  return screen.getByRole('dialog', { name: 'Bookmarks' });
+};
+
+const saveAs = async (name: string) => {
+  const user = userEvent.setup();
+  await user.click(within(await open()).getByRole('button', { name: 'Save bookmark…' }));
   const dialog = screen.getByRole('dialog', { name: 'Save a bookmark' });
   await user.type(within(dialog).getByRole('textbox', { name: 'Name' }), name);
   await user.click(within(dialog).getByRole('button', { name: 'Save' }));
   return dialog;
 };
+
+/** One of mine, unshared, as the API lists it. */
+const mine = (id: string, name: string, state: unknown = STATE) => ({
+  id,
+  dashboardId: 'd1',
+  name,
+  state,
+  shared: false,
+  mine: true,
+});
 
 describe('Save bookmark…', () => {
   it('sends the page tab, the filters’ values and the marks under the name given', async () => {
@@ -93,8 +126,7 @@ describe('Save bookmark…', () => {
     const user = userEvent.setup();
     render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
 
-    await user.click(screen.getByRole('button', { name: 'Bookmarks' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Save bookmark…' }));
+    await user.click(within(await open()).getByRole('button', { name: 'Save bookmark…' }));
     const dialog = screen.getByRole('dialog', { name: 'Save a bookmark' });
 
     expect(within(dialog).getByRole('button', { name: 'Save' })).toHaveProperty('disabled', true);
@@ -107,17 +139,18 @@ describe('Save bookmark…', () => {
  * that state without changing the dashboard's saved definition.
  * Fails when: applying a bookmark modifies the dashboard for other users.
  *
- * The menu lists the dashboard's bookmarks; choosing one hands its state, as
- * read back (`viewStateFrom`), to the dashboard to restore. It writes nothing.
+ * The popover lists the dashboard's bookmarks; choosing one hands its state,
+ * as read back (`viewStateFrom`), to the dashboard to restore. It writes
+ * nothing.
  */
-describe('a bookmark in the menu', () => {
+describe('a bookmark in the list', () => {
   it('is listed by name, and choosing it hands its state on, writing nothing', async () => {
     const asked = api(
       () => new Response('{}', { status: 201 }),
       () => [
-        { id: 'b1', dashboardId: 'd1', name: 'Shipped', state: STATE },
+        mine('b1', 'Shipped'),
         // Read back as a view: its marks dropped, being no predicate.
-        { id: 'b2', dashboardId: 'd1', name: 'Odd', state: { ...STATE, marks: { m: 'x' } } },
+        mine('b2', 'Odd', { ...STATE, marks: { m: 'x' } }),
       ],
     );
     const applied: [string, unknown][] = [];
@@ -130,14 +163,14 @@ describe('a bookmark in the menu', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Bookmarks' }));
-    const menu = screen.getByRole('menu', { name: 'Bookmarks' });
-    expect((await within(menu).findAllByRole('menuitem')).map((item) => item.textContent)).toEqual([
-      'Shipped',
-      'Odd',
-      'Save bookmark…',
-    ]);
-    await user.click(within(menu).getByRole('menuitem', { name: 'Odd' }));
+    const popover = await open();
+    const list = await within(popover).findByRole('list', { name: 'Mine' });
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map((row) => within(row).getAllByRole('button')[0]?.textContent),
+    ).toEqual(['Shipped', 'Odd']);
+    await user.click(within(list).getByRole('button', { name: 'Odd' }));
 
     expect(applied).toEqual([['Odd', { ...STATE, marks: {} }]]);
     expect((await screen.findByRole('status')).textContent).toBe('Applied the bookmark “Odd”.');
@@ -148,33 +181,332 @@ describe('a bookmark in the menu', () => {
     const saved: unknown[] = [];
     api(
       (body) => {
-        saved.push({ id: 'b1', dashboardId: 'd1', ...(body as object) });
+        saved.push(mine('b1', (body as { name: string }).name));
         return new Response(JSON.stringify(saved[0]), { status: 201 });
       },
       () => saved,
     );
-    const user = userEvent.setup();
     render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
 
     await saveAs('Shipped');
     await screen.findByText('Saved the bookmark “Shipped”.');
-    await user.click(screen.getByRole('button', { name: 'Bookmarks' }));
 
-    expect(
-      await within(screen.getByRole('menu', { name: 'Bookmarks' })).findByRole('menuitem', {
-        name: 'Shipped',
-      }),
-    ).toBeTruthy();
+    expect((await within(await open()).findByRole('button', { name: 'Shipped' })).textContent).toBe(
+      'Shipped',
+    );
   });
 
   it('says so when there are none', async () => {
     api(() => new Response('{}', { status: 201 }));
+    render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
+
+    const popover = await open();
+
+    expect((await within(popover).findByText('No bookmarks yet')).tagName).toBe('P');
+    expect(within(popover).queryByRole('list')).toBeNull();
+  });
+});
+
+/**
+ * T367, AC-293: WHEN a user shares a bookmark, THE SYSTEM SHALL list it for
+ * everyone who may see the dashboard, labelled with who shared it. Only its
+ * owner SHALL be able to change or unshare it.
+ * `Fails when: someone who may see the dashboard doesn't see a shared
+ * bookmark, or someone other than its owner can change or unshare it.`
+ *
+ * Rule 81 (design 10, states B and C): Mine before Shared, newest first
+ * within each — the order the API gives; a new one "Only me"; each row's
+ * visibility an icon and a label, a shared row naming who shared it. Update,
+ * Rename, Stop sharing and Delete are its owner's alone; anyone else's
+ * "Save a copy to mine".
+ */
+describe('Mine and Shared (T367, AC-293)', () => {
+  const ours = { ...mine('b2', 'Top 5'), shared: true };
+  const theirs = {
+    id: 'b3',
+    dashboardId: 'd1',
+    name: 'Board pack',
+    state: { ...STATE, page: 'page-9' },
+    shared: true,
+    mine: false,
+    sharedBy: 'Ada Admin',
+  };
+  const LISTED = [mine('b1', 'EMEA'), ours, theirs];
+  const ok = (body: unknown, asked: Asked) =>
+    new Response(
+      asked.method === 'DELETE' ? null : JSON.stringify({ ...ours, ...(body as object) }),
+      { status: asked.method === 'DELETE' ? 204 : 200 },
+    );
+  const rowOf = (popover: HTMLElement, section: 'Mine' | 'Shared', name: string) =>
+    within(within(popover).getByRole('list', { name: section }))
+      .getAllByRole('listitem')
+      // A string name matches the whole name (Testing Library), so "Actions for …" doesn't.
+      .find((row) => within(row).queryByRole('button', { name }) !== null)!;
+  const actionsOf = async (popover: HTMLElement, section: 'Mine' | 'Shared', name: string) => {
+    await userEvent
+      .setup()
+      .click(
+        within(rowOf(popover, section, name)).getByRole('button', { name: `Actions for ${name}` }),
+      );
+    return screen.getByRole('menu', { name: `Actions for ${name}` });
+  };
+  const offered = (menu: HTMLElement) =>
+    within(menu)
+      .getAllByRole('menuitem')
+      .map((item) => item.textContent);
+
+  it('lists Mine before Shared, each in the order the API gives, with its visibility as an icon and a label', async () => {
+    // Another's listed first: grouped all the same.
+    api(ok, () => [theirs, mine('b1', 'EMEA'), ours]);
+    render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
+
+    const popover = await open();
+    await within(popover).findByRole('list', { name: 'Mine' });
+
+    expect(
+      within(popover)
+        .getAllByRole('heading')
+        .map((each) => each.textContent),
+    ).toEqual(['Mine', 'Shared']);
+    // The icon, hidden from assistive technology beside its label, by what it
+    // draws (design 10): one person for "Only me", two for Shared (T367's review).
+    const visibility = (section: 'Mine' | 'Shared', name: string) => {
+      const label = rowOf(popover, section, name).querySelector('.bookmarks__visibility');
+      const icon = label?.querySelector('svg[aria-hidden="true"]');
+      return [icon?.querySelectorAll('circle').length, label?.textContent];
+    };
+    expect(visibility('Mine', 'EMEA')).toEqual([1, 'Only me']);
+    expect(visibility('Mine', 'Top 5')).toEqual([2, 'Shared']);
+    expect(visibility('Shared', 'Board pack')).toEqual([2, 'Shared by Ada Admin']);
+    expect(
+      within(within(popover).getByRole('list', { name: 'Mine' }))
+        .getAllByRole('listitem')
+        .map((row) => within(row).getAllByRole('button')[0]?.textContent),
+    ).toEqual(['EMEA', 'Top 5']);
+  });
+
+  it('offers its owner Apply, Update, Rename, Share and Delete, and Stop sharing once it is shared', async () => {
+    api(ok, () => LISTED);
+    render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
+    let popover = await open();
+    await within(popover).findByRole('list', { name: 'Mine' });
+
+    expect(offered(await actionsOf(popover, 'Mine', 'EMEA'))).toEqual([
+      'Apply',
+      'Update',
+      'Rename…',
+      'Share with everyone who can see this dashboard…',
+      'Delete',
+    ]);
+    await userEvent.setup().keyboard('{Escape}');
+    popover = screen.getByRole('dialog', { name: 'Bookmarks' });
+    expect(offered(await actionsOf(popover, 'Mine', 'Top 5'))).toEqual([
+      'Apply',
+      'Update',
+      'Rename…',
+      'Stop sharing',
+      'Delete',
+    ]);
+  });
+
+  it('offers anyone else’s only Apply and Save a copy to mine', async () => {
+    const applied: [string, unknown][] = [];
+    api(ok, () => LISTED);
+    render(
+      <Bookmarks
+        dashboardId="d1"
+        current={STATE}
+        onApply={(state, name) => applied.push([name, state])}
+      />,
+    );
+    const popover = await open();
+    await within(popover).findByRole('list', { name: 'Shared' });
+
+    const menu = await actionsOf(popover, 'Shared', 'Board pack');
+    expect(offered(menu)).toEqual(['Apply', 'Save a copy to mine…']);
+    await userEvent.setup().click(within(menu).getByRole('menuitem', { name: 'Apply' }));
+
+    expect(applied).toEqual([['Board pack', { ...STATE, page: 'page-9' }]]);
+    expect(screen.queryByRole('dialog', { name: 'Bookmarks' })).toBeNull();
+  });
+
+  it('shares one only once asked, saying who will see it', async () => {
+    const asked = api(ok, () => LISTED);
+    const user = userEvent.setup();
+    render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
+    const share = async () => {
+      const popover = await open();
+      await within(popover).findByRole('list', { name: 'Mine' });
+      await user.click(
+        within(await actionsOf(popover, 'Mine', 'EMEA')).getByRole('menuitem', {
+          name: 'Share with everyone who can see this dashboard…',
+        }),
+      );
+      return screen.getByRole('dialog', { name: 'Share “EMEA”?' });
+    };
+
+    let dialog = await share();
+    expect(dialog.textContent).toContain(
+      'Everyone who can see this dashboard will see it under Shared, labelled with your name. You can stop sharing at any time.',
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(asked.filter((each) => each.method !== 'GET')).toEqual([]);
+
+    dialog = await share();
+    await user.click(within(dialog).getByRole('button', { name: 'Share' }));
+
+    expect(asked.filter((each) => each.method !== 'GET')).toEqual([
+      { url: '/api/dashboards/d1/bookmarks/b1', method: 'PATCH', body: { shared: true } },
+    ]);
+    expect((await screen.findByRole('status')).textContent).toBe('Shared the bookmark “EMEA”.');
+    expect(screen.queryByRole('dialog', { name: 'Share “EMEA”?' })).toBeNull();
+  });
+
+  it('stops sharing one, updates one to what the dashboard shows now, and deletes one', async () => {
+    const asked = api(ok, () => LISTED);
+    const user = userEvent.setup();
+    render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
+    const choose = async (name: string, action: string) => {
+      const popover = await open();
+      await within(popover).findByRole('list', { name: 'Mine' });
+      await user.click(
+        within(await actionsOf(popover, 'Mine', name)).getByRole('menuitem', { name: action }),
+      );
+    };
+
+    await choose('Top 5', 'Stop sharing');
+    await assertSaid('Stopped sharing the bookmark “Top 5”.');
+    await choose('EMEA', 'Update');
+    await assertSaid('Updated the bookmark “EMEA”.');
+    await choose('EMEA', 'Delete');
+    await assertSaid('Deleted the bookmark “EMEA”.');
+
+    expect(asked.filter((each) => each.method !== 'GET')).toEqual([
+      { url: '/api/dashboards/d1/bookmarks/b2', method: 'PATCH', body: { shared: false } },
+      { url: '/api/dashboards/d1/bookmarks/b1', method: 'PATCH', body: { state: STATE } },
+      { url: '/api/dashboards/d1/bookmarks/b1', method: 'DELETE' },
+    ]);
+  });
+
+  it('renames one under the name given, and says why one was not', async () => {
+    let refuse = true;
+    const asked = api(
+      (body, one) =>
+        refuse
+          ? new Response(
+              JSON.stringify({
+                error: 'You already have a bookmark of that name on this dashboard.',
+              }),
+              { status: 409 },
+            )
+          : ok(body, one),
+      () => LISTED,
+    );
+    const user = userEvent.setup();
+    render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
+    const popover = await open();
+    await within(popover).findByRole('list', { name: 'Mine' });
+    await user.click(
+      within(await actionsOf(popover, 'Mine', 'EMEA')).getByRole('menuitem', { name: 'Rename…' }),
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'Rename the bookmark' });
+    const field = within(dialog).getByRole('textbox', { name: 'Name' });
+    expect(field).toHaveProperty('value', 'EMEA');
+    await user.clear(field);
+    await user.type(field, 'Top 5');
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect((await within(dialog).findByRole('alert')).textContent).toBe(
+      'The bookmark was not renamed: You already have a bookmark of that name on this dashboard.',
+    );
+
+    refuse = false;
+    await user.clear(field);
+    await user.type(field, 'EMEA, last quarter');
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await assertSaid('Renamed the bookmark “EMEA” to “EMEA, last quarter”.');
+    expect(screen.queryByRole('dialog', { name: 'Rename the bookmark' })).toBeNull();
+    expect(asked.filter((each) => each.method !== 'GET')).toEqual([
+      { url: '/api/dashboards/d1/bookmarks/b1', method: 'PATCH', body: { name: 'Top 5' } },
+      {
+        url: '/api/dashboards/d1/bookmarks/b1',
+        method: 'PATCH',
+        body: { name: 'EMEA, last quarter' },
+      },
+    ]);
+  });
+
+  it('saves a copy of another’s to mine, under a name given, holding what theirs holds', async () => {
+    const asked = api(
+      (body) =>
+        new Response(JSON.stringify(mine('b4', (body as { name: string }).name)), { status: 201 }),
+      () => LISTED,
+    );
+    const user = userEvent.setup();
+    render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
+    const popover = await open();
+    await within(popover).findByRole('list', { name: 'Shared' });
+    await user.click(
+      within(await actionsOf(popover, 'Shared', 'Board pack')).getByRole('menuitem', {
+        name: 'Save a copy to mine…',
+      }),
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'Save a copy to mine' });
+    expect(within(dialog).getByRole('textbox', { name: 'Name' })).toHaveProperty(
+      'value',
+      'Board pack',
+    );
+    // Yours alone when new; one of yours of its name stays as shared as it was
+    // (T367's review: it isn't always "for you alone").
+    expect(dialog.textContent).toContain(
+      'Keeps what “Board pack” holds. A new bookmark is yours alone until you share it; one of yours of the same name on this dashboard is replaced, and stays shared if it was.',
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    expect(asked.filter((each) => each.method !== 'GET')).toEqual([
+      {
+        url: '/api/dashboards/d1/bookmarks',
+        method: 'POST',
+        body: { name: 'Board pack', state: theirs.state },
+      },
+    ]);
+    await assertSaid('Saved the bookmark “Board pack”.');
+  });
+
+  it('reads the list again each time it opens, so one shared since is listed (T367’s review)', async () => {
+    let listed: unknown[] = [mine('b1', 'EMEA')];
+    api(ok, () => listed);
+    const user = userEvent.setup();
+    render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
+    let popover = await open();
+    await within(popover).findByRole('list', { name: 'Mine' });
+    expect(within(popover).queryByRole('list', { name: 'Shared' })).toBeNull();
+    await user.keyboard('{Escape}');
+
+    // Shared by someone else while the dashboard is open.
+    listed = [mine('b1', 'EMEA'), theirs];
+    popover = await open();
+
+    const shared = await within(popover).findByRole('list', { name: 'Shared' });
+    expect(
+      within(shared)
+        .getAllByRole('listitem')
+        .map((row) => row.textContent),
+    ).toEqual(['Board packShared by Ada Admin⋯']);
+  });
+
+  it('takes focus as it opens, and gives it back to Bookmarks on Escape (rule 85)', async () => {
+    api(ok, () => LISTED);
     const user = userEvent.setup();
     render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
 
-    await user.click(screen.getByRole('button', { name: 'Bookmarks' }));
+    const popover = await open();
+    expect(popover.contains(document.activeElement)).toBe(true);
+    await user.keyboard('{Escape}');
 
-    const none = await screen.findByRole('menuitem', { name: 'No bookmarks yet' });
-    expect(none.getAttribute('aria-disabled')).toBe('true');
+    expect(screen.queryByRole('dialog', { name: 'Bookmarks' })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Bookmarks' }));
   });
 });

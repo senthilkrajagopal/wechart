@@ -1142,7 +1142,7 @@ Traces to: §P2.6 F, `[R12]`.
 
 - [x] AC-292 WHEN a user saves a bookmark, THE SYSTEM SHALL keep it theirs, listed on the dashboard for them alone.
       Fails when: another user sees a bookmark its owner hasn't shared.
-- [ ] AC-293 WHEN a user shares a bookmark, THE SYSTEM SHALL list it for everyone who may see the dashboard, labelled with who shared it. Only its owner SHALL be able to change or unshare it.
+- [x] AC-293 WHEN a user shares a bookmark, THE SYSTEM SHALL list it for everyone who may see the dashboard, labelled with who shared it. Only its owner SHALL be able to change or unshare it.
       Fails when: someone who may see the dashboard doesn't see a shared bookmark, or someone other than its owner can change or unshare it.
 
 ## F32. Audit trail

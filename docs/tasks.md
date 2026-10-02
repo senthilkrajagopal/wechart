@@ -6793,10 +6793,53 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - the save dialog saying the bookmark is "for you alone", and that one of your own of the same name is replaced.
     - **For the user:** once sign-in is on, phase 1's bookmarks are listed for nobody, Super-Admins included. The reviewer reads AC-267 as about the shared tree, which bookmarks aren't in. Should they be kept like that, or shown to Super-Admins?
     - AC-292 is ticked.
-- [ ] T367 (AC-293) Share a bookmark with everyone who may see the dashboard; only its owner changes it
-  - Files: `packages/api/src/repos/bookmarks.ts`, `packages/web/src/dashboard/bookmarks/Bookmarks.tsx` (+ test), `e2e/security/bookmarks.spec.ts`
+- [x] T367 (AC-293) Share a bookmark with everyone who may see the dashboard; only its owner changes it
+  - Files: `packages/api/src/repos/bookmarks.ts`, `packages/web/src/dashboard/bookmarks/Bookmarks.tsx` (+ test), `e2e/security/bookmarks.spec.ts`; also `packages/api/src/server.ts`, `packages/api/src/repos/bookmarks.test.ts`, `packages/api/src/access/bookmarks.test.ts`, `packages/api/src/bookmarks.test.ts`, `packages/api/src/access/route-matrix.test.ts`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/shell/styles.ts`, `e2e/markings.spec.ts`
   - Failing test: `bookmarks.spec.ts`: a shared bookmark appears under "Shared" for `reader`, labelled with who shared it; `reader` can apply it and "Save a copy to mine" but not change or unshare it; Mine is listed before Shared, newest first (AC-293; rule 81).
   - Depends on: T366, T320
+  - **Done 2026-10-02.**
+    - **The store.** A bookmark's document now holds `shared` (false when new) and its owner's name as they last saved or changed it, for "Shared by". A dashboard's list for a viewer is their own, newest first, then those others share, newest first. Newest is when it was first saved (`created_at`): Update, Rename and sharing don't move it. Saving one of your own under its name again replaces it and keeps it as shared as it was. Only its owner changes or removes one.
+    - **The routes.**
+      - `GET` and `POST /api/dashboards/:id/bookmarks` answer each bookmark as `{ id, dashboardId, name, state, shared, mine, sharedBy? }`. `sharedBy` is the owner's name, on another's. Nobody's key goes to anyone else. `POST` makes a new one unshared, whatever its body says.
+      - New: `PATCH /api/dashboards/:id/bookmarks/:bookmarkId` changes any of `name`, `state` (Update) and `shared`. New: `DELETE` on the same path. Both are the owner's alone:
+        - another's shared one answers 403, "Only its owner can change a bookmark.";
+        - another's unshared one, one that isn't there, or one of another dashboard answers 404;
+        - a dashboard the asker may not open answers 404, through `itemFor(…, 'open')` as the list does.
+      - A rename to a name its owner has on that dashboard answers 409.
+      - Both routes have cases in `route-matrix.test.ts`. The matrix's world now holds a shared bookmark per owner, as a secret seen by everyone who may open its dashboard.
+    - **The popover** (design 10, state B; rule 81). Bookmarks is now a popover, a dialog named "Bookmarks", where it was a menu.
+      - It lists Mine, then Shared, under headings, in the API's order. Each row's name applies it. Its visibility is an icon and a label: a person with "Only me", or people with "Shared" on one's own and "Shared by _name_" on another's.
+      - Each row's ⋯ offers its owner Apply, Update, Rename…, Share with everyone who can see this dashboard… or Stop sharing, and Delete. Anyone else gets Apply and Save a copy to mine… only.
+      - Share asks first, saying who will see it (design 10, state C). Rename asks for the name. Save a copy to mine… opens the save dialog with the shared one's name and what it holds.
+      - The list is read again each time the popover opens. It takes focus as it opens, and Escape closes it, giving focus back to Bookmarks (rule 85).
+      - The dashboard's Escape, which clears what is marked, leaves it be while it is open (`DashboardView`'s guard, now naming `.bookmarks`).
+      - The phase-1 e2e (`markings.spec.ts`) now saves and applies through the popover.
+    - **The cold review (FAIL), fixed:**
+      1. Each row's ⋯ menu was clipped by the popover's scroll box, hiding Share, Stop sharing and Delete. The popover is no longer a scroll box, and its menus are as wide as their longest item, on one line.
+      2. The save dialog said a bookmark was kept "for you alone", but one replaced under its name stays shared. It now says a new one is yours alone until you share it, and one replaced stays shared if it was.
+      3. The list was read only on mount, so one shared since didn't show until a reload. Now tested and read again on opening.
+      4. The test of each row's icon now tells the person from the people by what each draws.
+    - **Left as the app's other dialogs do:** Rename and Save a copy close on Escape without asking, as Save bookmark…, New and Propose do. Rule 85 asks first when there are unsaved changes.
+    - **Tests:**
+      - `e2e/security/bookmarks.spec.ts` (Chrome, 15 tests):
+        - `writer` saves two, listed newest first as "Only me", and shares both after the dialog asks;
+        - `reader` sees their own under Mine, then both under Shared, newest first, "Shared by Wren Writer";
+        - `reader` applies one by its ⋯ and one by its name, saves a copy to theirs, and is offered only Apply and Save a copy to mine;
+        - `reader`'s PATCH (sharing, name, state) and DELETE answer 403, and the bookmark is as it was;
+        - `super` sees them under Shared too, with the same two actions;
+        - `writer` stops sharing one, and `reader` no longer sees it.
+      - `access/bookmarks.test.ts` (signed in, 7 new), `bookmarks.test.ts` (sign-in off), `repos/bookmarks.test.ts` (5 new), `route-matrix.test.ts` and `Bookmarks.test.tsx` (15).
+      - The phase-1 bookmark e2e in `markings.spec.ts` (Chrome).
+      - The full API (140 files) and web (237 files, 2,138 tests) suites.
+    - **Proposed spec changes (design 10 draws them; no AC or rule says them):**
+      - each row's date, "Only me · today", "Shared by Ada Admin · 20 Sep": not built, and which date it would be (saved first, or last changed) is open;
+      - the footer's "＋ Bookmark this view": "Save bookmark…" is kept.
+    - **For the user:**
+      1. Newest first is by when a bookmark was first saved. Should Update or sharing move one to the top?
+      2. Deleting a bookmark, even a shared one, asks nothing and has no undo. Should it ask, or offer Undo?
+      3. An owner who loses access to the dashboard can't stop sharing or delete their bookmark, and nobody else can, Super-Admins included. It stays listed "Shared by" them until the dashboard goes. Should a Super-Admin be able to remove it, or should it stop being listed?
+      4. A shared bookmark holds its owner's filter values and marks as they are. Everyone who opens it receives them, including a viewer whose Cube rules hide those members (AC-008, AC-326). Their queries still run as them. Should sharing keep only what each viewer may see?
+    - AC-293 is ticked.
 
 ## P2.9 Audit trail (F32)
 

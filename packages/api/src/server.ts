@@ -68,7 +68,7 @@ import { registerModelPublishing } from './model/publish';
 import { referencesOf, usersOfCubes, type ReferenceDocument } from './model/references';
 import { searchable, visibleCounts, type Visibility } from './access/visible';
 import { aliasIn, aliasOut } from './access/workspace-alias';
-import type { BookmarkStore } from './repos/bookmarks';
+import type { Bookmark, BookmarkStore } from './repos/bookmarks';
 import {
   isWorkspaceId,
   MY_WORKSPACE_ID,
@@ -5454,6 +5454,30 @@ export function buildServer({
   });
 
   /**
+   * A bookmark as its viewer is told it (T367, AC-293): whether it is theirs
+   * and whether it is shared, and, on another's shared one, who shared it by
+   * name. Nobody's key goes to anyone else.
+   */
+  const bookmarkFor = (viewer: string, bookmark: Bookmark) => ({
+    id: bookmark.id,
+    dashboardId: bookmark.dashboardId,
+    name: bookmark.name,
+    state: bookmark.state,
+    shared: bookmark.shared,
+    mine: bookmark.owner === viewer,
+    ...(bookmark.owner === viewer ? {} : { sharedBy: bookmark.ownerName }),
+  });
+  const isBookmarkState = (state: unknown): state is Record<string, unknown> => {
+    const record = (value: unknown): value is Record<string, unknown> =>
+      typeof value === 'object' && value !== null && !Array.isArray(value);
+    return record(state) && record(state['filters']) && record(state['marks']);
+  };
+  const NO_BOOKMARK_NAME = { error: 'A bookmark needs a name.' };
+  const NO_BOOKMARK_STATE = { error: 'A bookmark holds a page tab, filter values and marks.' };
+  const NO_SUCH_BOOKMARK = { error: 'No such bookmark.' };
+  const NOT_BOOKMARK_OWNER = { error: 'Only its owner can change a bookmark.' };
+
+  /**
    * A dashboard's bookmarks (T127, AC-121): the page tab, the filters' values
    * and the marks, under a name. Beside the dashboard, never in it (AC-122).
    * The state is the browser's to check as it applies it, as a URL is; here
@@ -5463,11 +5487,17 @@ export function buildServer({
     const { dashboardId } = request.params as { dashboardId: string };
     if (bookmarks === undefined)
       return reply.code(503).send({ error: 'Bookmarks cannot be kept here.' });
-    // With security on, a dashboard they may open (T326, AC-266).
+    // With security on, a dashboard they may open (T326, AC-266): so a shared
+    // one is listed for everyone who may see it, and nobody else (T367).
     if ((await itemFor(request, reply, 'dashboard', dashboardId, 'open')) === undefined)
       return reply;
-    // Theirs alone (T366, AC-292).
-    return { bookmarks: await bookmarks.list(dashboardId, userOf(request).key) };
+    // Theirs (T366, AC-292), then those others share (T367, AC-293).
+    const viewer = userOf(request).key;
+    return {
+      bookmarks: (await bookmarks.list(dashboardId, viewer)).map((each) =>
+        bookmarkFor(viewer, each),
+      ),
+    };
   });
 
   app.post('/api/dashboards/:dashboardId/bookmarks', USER, async (request, reply) => {
@@ -5476,14 +5506,9 @@ export function buildServer({
     if (bookmarks === undefined)
       return reply.code(503).send({ error: 'Bookmarks cannot be kept here.' });
     const name = typeof body?.name === 'string' ? body.name.trim() : '';
-    if (name === '') return reply.code(400).send({ error: 'A bookmark needs a name.' });
+    if (name === '') return reply.code(400).send(NO_BOOKMARK_NAME);
     const state = body?.state;
-    const record = (value: unknown): value is Record<string, unknown> =>
-      typeof value === 'object' && value !== null && !Array.isArray(value);
-    if (!record(state) || !record(state['filters']) || !record(state['marks']))
-      return reply
-        .code(400)
-        .send({ error: 'A bookmark holds a page tab, filter values and marks.' });
+    if (!isBookmarkState(state)) return reply.code(400).send(NO_BOOKMARK_STATE);
     // With security on, a dashboard they may open: bookmarking changes nothing
     // of it (T326, AC-266). Asked first, so a missing one and a hidden one
     // answer alike (T326's review).
@@ -5491,9 +5516,84 @@ export function buildServer({
       return reply;
     if (docs?.get !== undefined && (await docs.get('dashboard', dashboardId)) === null)
       return reply.code(404).send({ error: 'No such dashboard.' });
-    return reply
-      .code(201)
-      .send(await bookmarks.save({ dashboardId, name, state, owner: userOf(request).key }));
+    const user = userOf(request);
+    // "Only me" when new, whatever the body says (T367, rule 81).
+    const saved = await bookmarks.save({
+      dashboardId,
+      name,
+      state,
+      owner: user.key,
+      ownerName: user.name,
+    });
+    return reply.code(201).send(bookmarkFor(user.key, saved));
+  });
+
+  /**
+   * A bookmark changed by its owner, and by nobody else (T367, AC-293): its
+   * name, its state (Update) and whether it is shared, any of them at once.
+   * Another's shared one is refused 403; one the asker can't see, or of a
+   * dashboard they may not open, is answered as not there.
+   */
+  app.patch('/api/dashboards/:dashboardId/bookmarks/:id', USER, async (request, reply) => {
+    const { dashboardId, id } = request.params as { dashboardId: string; id: string };
+    const body = (request.body ?? {}) as { name?: unknown; state?: unknown; shared?: unknown };
+    if (bookmarks === undefined)
+      return reply.code(503).send({ error: 'Bookmarks cannot be kept here.' });
+    if (body.name === undefined && body.state === undefined && body.shared === undefined)
+      return reply
+        .code(400)
+        .send({ error: 'Nothing to change: give a name, a state, or whether it is shared.' });
+    const name = typeof body.name === 'string' ? body.name.trim() : body.name;
+    if (name !== undefined && (typeof name !== 'string' || name === ''))
+      return reply.code(400).send(NO_BOOKMARK_NAME);
+    if (body.state !== undefined && !isBookmarkState(body.state))
+      return reply.code(400).send(NO_BOOKMARK_STATE);
+    if (body.shared !== undefined && typeof body.shared !== 'boolean')
+      return reply.code(400).send({ error: 'Shared is true or false.' });
+    if ((await itemFor(request, reply, 'dashboard', dashboardId, 'open')) === undefined)
+      return reply;
+    const user = userOf(request);
+    const found = await bookmarks.get(dashboardId, id);
+    if (found === undefined || (found.owner !== user.key && !found.shared))
+      return reply.code(404).send(NO_SUCH_BOOKMARK);
+    if (found.owner !== user.key) return reply.code(403).send(NOT_BOOKMARK_OWNER);
+    // Names are each owner's own on a dashboard (T366).
+    if (
+      typeof name === 'string' &&
+      name !== found.name &&
+      (await bookmarks.list(dashboardId, user.key)).some(
+        (each) => each.owner === user.key && each.name === name,
+      )
+    )
+      return reply
+        .code(409)
+        .send({ error: 'You already have a bookmark of that name on this dashboard.' });
+    const changed = await bookmarks.change(dashboardId, id, user.key, {
+      ...(typeof name === 'string' ? { name } : {}),
+      ...(isBookmarkState(body.state) ? { state: body.state } : {}),
+      ...(typeof body.shared === 'boolean' ? { shared: body.shared } : {}),
+      // Who "Shared by" names, as they are called now.
+      ownerName: user.name,
+    });
+    if (changed === undefined) return reply.code(404).send(NO_SUCH_BOOKMARK);
+    return bookmarkFor(user.key, changed);
+  });
+
+  app.delete('/api/dashboards/:dashboardId/bookmarks/:id', USER, async (request, reply) => {
+    const { dashboardId, id } = request.params as { dashboardId: string; id: string };
+    if (bookmarks === undefined)
+      return reply.code(503).send({ error: 'Bookmarks cannot be kept here.' });
+    if ((await itemFor(request, reply, 'dashboard', dashboardId, 'open')) === undefined)
+      return reply;
+    const user = userOf(request);
+    const found = await bookmarks.get(dashboardId, id);
+    if (found === undefined || (found.owner !== user.key && !found.shared))
+      return reply.code(404).send(NO_SUCH_BOOKMARK);
+    if (found.owner !== user.key) return reply.code(403).send(NOT_BOOKMARK_OWNER);
+    // A delete of its own from elsewhere, first, leaves nothing for this one.
+    if (!(await bookmarks.remove(dashboardId, id, user.key)))
+      return reply.code(404).send(NO_SUCH_BOOKMARK);
+    return reply.code(204).send();
   });
 
   app.get('/api/search', USER, async (request) => {

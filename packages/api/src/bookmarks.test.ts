@@ -23,16 +23,38 @@ const config: Config = {
   modelDir: '',
 };
 
+/** In memory, as the store keeps them (`repos/bookmarks.ts`): newest last here, first listed. */
 function memoryBookmarks(): BookmarkStore & { saved: Bookmark[] } {
   const saved: Bookmark[] = [];
+  const of = (dashboardId: string, id: string) =>
+    saved.find((each) => each.dashboardId === dashboardId && each.id === id);
   return {
     saved,
-    list: async (dashboardId, owner) =>
-      saved.filter((each) => each.dashboardId === dashboardId && each.owner === owner),
-    save: async (bookmark) => {
-      const kept = { id: `b${String(saved.length + 1)}`, ...bookmark };
+    list: async (dashboardId, viewer) => {
+      const here = saved.filter((each) => each.dashboardId === dashboardId).reverse();
+      return [
+        ...here.filter((each) => each.owner === viewer),
+        ...here.filter((each) => each.owner !== viewer && each.shared),
+      ];
+    },
+    save: async ({ ownerName = '', ...bookmark }) => {
+      const kept = { id: `b${String(saved.length + 1)}`, ...bookmark, ownerName, shared: false };
       saved.push(kept);
       return kept;
+    },
+    get: async (dashboardId, id) => of(dashboardId, id),
+    change: async (dashboardId, id, owner, changes) => {
+      const found = of(dashboardId, id);
+      if (found?.owner !== owner) return undefined;
+      const changed = { ...found, ...changes };
+      saved.splice(saved.indexOf(found), 1, changed);
+      return changed;
+    },
+    remove: async (dashboardId, id, owner) => {
+      const found = of(dashboardId, id);
+      if (found?.owner !== owner) return false;
+      saved.splice(saved.indexOf(found), 1);
+      return true;
     },
     removeFor: async (dashboardId) => {
       saved.splice(0, saved.length, ...saved.filter((each) => each.dashboardId !== dashboardId));
@@ -66,10 +88,70 @@ describe('a dashboard’s bookmarks', () => {
     });
     const listed = await app.inject({ method: 'GET', url: '/api/dashboards/d1/bookmarks' });
 
-    // Phase 1's one user's (T366, AC-292).
-    const bookmark = { id: 'b1', dashboardId: 'd1', name: 'Shipped', state: STATE, owner: 'admin' };
+    // Phase 1's one user's (T366, AC-292), and "Only me" (T367, rule 81).
+    const bookmark = {
+      id: 'b1',
+      dashboardId: 'd1',
+      name: 'Shipped',
+      state: STATE,
+      shared: false,
+      mine: true,
+    };
     expect([saved.statusCode, saved.json()]).toEqual([201, bookmark]);
     expect(listed.json()).toEqual({ bookmarks: [bookmark] });
+    expect(bookmarks.saved).toEqual([
+      {
+        id: 'b1',
+        dashboardId: 'd1',
+        name: 'Shipped',
+        state: STATE,
+        owner: 'admin',
+        ownerName: 'admin',
+        shared: false,
+      },
+    ]);
+    await app.close();
+  });
+
+  /**
+   * T367 (AC-293), with sign-in off: the one user is every bookmark's owner,
+   * and shares, renames, updates and deletes their own. Signed in, others'
+   * are refused them (`access/bookmarks.test.ts`).
+   */
+  it('are shared, renamed, updated and deleted by their owner, the one user', async () => {
+    const bookmarks = memoryBookmarks();
+    const app = buildServer({ config, bookmarks, documents: oneDashboard });
+    const change = (payload: Record<string, unknown>) =>
+      app.inject({ method: 'PATCH', url: '/api/dashboards/d1/bookmarks/b1', payload });
+    await app.inject({
+      method: 'POST',
+      url: '/api/dashboards/d1/bookmarks',
+      payload: { name: 'Shipped', state: STATE },
+    });
+
+    const shared = await change({ shared: true });
+    const renamed = await change({ name: 'Shipped, shared' });
+    const updated = await change({ state: { ...STATE, page: 'page-3' } });
+
+    const after = {
+      id: 'b1',
+      dashboardId: 'd1',
+      name: 'Shipped, shared',
+      state: { ...STATE, page: 'page-3' },
+      shared: true,
+      mine: true,
+    };
+    expect([shared.statusCode, renamed.statusCode, updated.statusCode]).toEqual([200, 200, 200]);
+    expect(updated.json()).toEqual(after);
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/dashboards/d1/bookmarks' })).json(),
+    ).toEqual({ bookmarks: [after] });
+
+    const deleted = await app.inject({ method: 'DELETE', url: '/api/dashboards/d1/bookmarks/b1' });
+    expect(deleted.statusCode).toBe(204);
+    expect(bookmarks.saved).toEqual([]);
+    const again = await app.inject({ method: 'DELETE', url: '/api/dashboards/d1/bookmarks/b1' });
+    expect([again.statusCode, again.json()]).toEqual([404, { error: 'No such bookmark.' }]);
     await app.close();
   });
 
@@ -98,9 +180,10 @@ describe('a dashboard’s bookmarks', () => {
 
   it('go with their dashboard when it is deleted (T127’s review)', async () => {
     const bookmarks = memoryBookmarks();
+    const kept = { state: STATE, owner: 'admin', ownerName: 'admin', shared: false };
     bookmarks.saved.push(
-      { id: 'b1', dashboardId: 'd1', name: 'x', state: STATE, owner: 'admin' },
-      { id: 'b2', dashboardId: 'd2', name: 'y', state: STATE, owner: 'admin' },
+      { id: 'b1', dashboardId: 'd1', name: 'x', ...kept },
+      { id: 'b2', dashboardId: 'd2', name: 'y', ...kept },
     );
     const app = buildServer({ config, bookmarks, documents: oneDashboard });
 

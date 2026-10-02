@@ -1170,8 +1170,12 @@ test('a bookmark keeps the page tab, the filters’ values and the marks, and re
   await page.getByRole('tab', { name: 'Second' }).click();
   await expect(tile(page, 'tile-elsewhere').getByTestId('mark-badge')).toContainText('1 marked');
 
+  // The Bookmarks popover (T367): Mine, then Shared, and Save bookmark….
   await page.getByRole('button', { name: 'Bookmarks' }).click();
-  await page.getByRole('menuitem', { name: 'Save bookmark…' }).click();
+  await page
+    .getByRole('dialog', { name: 'Bookmarks' })
+    .getByRole('button', { name: 'Save bookmark…' })
+    .click();
   const dialog = page.getByRole('dialog', { name: 'Save a bookmark' });
   await dialog.getByRole('textbox', { name: 'Name' }).fill('Shipped, on Second');
   await dialog.getByRole('button', { name: 'Save' }).click();
@@ -1188,7 +1192,11 @@ test('a bookmark keeps the page tab, the filters’ values and the marks, and re
   expect(inUrl()).toEqual(null);
 
   await page.getByRole('button', { name: 'Bookmarks' }).click();
-  await page.getByRole('menuitem', { name: 'Shipped, on Second' }).click();
+  await page
+    .getByRole('dialog', { name: 'Bookmarks' })
+    .getByRole('list', { name: 'Mine' })
+    .getByRole('button', { name: 'Shipped, on Second', exact: true })
+    .click();
 
   // Its page tab, its marks there and on the other tab, its filter's values.
   await expect(page.getByRole('tab', { name: 'Second', selected: true })).toBeVisible();

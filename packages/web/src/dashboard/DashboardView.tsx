@@ -2890,15 +2890,20 @@ export function DashboardView({
 
   /**
    * Escape takes them all back, as the prototype's "Clear (Esc)" says it
-   * does. Not while something is open over the dashboard — a dialog, a menu
-   * or a filter's popover — where Escape means "close this".
+   * does. Not while something is open over the dashboard — a dialog, a menu,
+   * a filter's popover or the Bookmarks popover (T367) — where Escape means
+   * "close this".
    */
   useEffect(() => {
     if (!crossFiltering || crossSelections.length === 0) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       const doc = window.document;
-      if (doc.querySelector('[aria-modal="true"], [role="menu"], .filter-popover') !== null) return;
+      if (
+        doc.querySelector('[aria-modal="true"], [role="menu"], .filter-popover, .bookmarks') !==
+        null
+      )
+        return;
       setCrossSelections([]);
     };
     window.document.addEventListener('keydown', onKeyDown);

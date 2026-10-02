@@ -5227,8 +5227,80 @@ main:has(.dashboard) {
 /* Copy link with marks, said beside the chips (T129). */
 .mark-chip-note { color: var(--wc-text-secondary); font-size: var(--wc-text-xs-size); white-space: nowrap; }
 /* Bookmarks (T127): a reader's control, before the gear. */
-.dashboard__bookmarks { flex: none; }
+.dashboard__bookmarks { flex: none; position: relative; }
 .dashboard__bookmarks-button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; }
+/* Its popover (T367; design 10, state B): 320 px from the button's right
+   edge, Mine then Shared under 12/600 capitals, each row its name in 14/600
+   and its visibility, icon and label, in 12 px secondary under it, with the
+   row's ⋯ beside both. */
+.bookmarks {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  width: min(320px, calc(100vw - 32px));
+  /* Not a scroll box: a row's ⋯ menu hangs out of it, as design 10 draws it,
+     and a scroll box would clip it (T367's review). A long list grows the
+     page instead. */
+  padding: 4px 0;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 6px;
+  background: var(--wc-bg-raised);
+  box-shadow: var(--wc-shadow-pop);
+  font-size: var(--wc-text-sm-size);
+  line-height: var(--wc-text-sm-line);
+}
+.bookmarks:focus { outline: none; }
+.bookmarks:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 2px; }
+.bookmarks__note { margin: 0; padding: 8px 12px; color: var(--wc-text-secondary); }
+.bookmarks__section + .bookmarks__section { margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--wc-border-subtle); }
+.bookmarks__heading {
+  margin: 0;
+  padding: 8px 12px 4px;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--wc-text-secondary);
+}
+.bookmarks__list { margin: 0; padding: 0; list-style: none; }
+.bookmarks__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  align-items: center;
+  padding: 6px 8px 6px 12px;
+}
+.bookmarks__row:hover { background: var(--wc-bg-hover); }
+.bookmarks__name {
+  grid-column: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-weight: 600;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.bookmarks__name:hover:not(:disabled) { background: none; text-decoration: underline; }
+.bookmarks__visibility {
+  grid-column: 1;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  color: var(--wc-text-secondary);
+}
+.bookmarks__visibility svg { flex: none; }
+.bookmarks__row > .menu-button { grid-column: 2; grid-row: 1 / span 2; }
+/* Its menu as wide as its longest item, on one line (design 10 draws 318 px). */
+.bookmarks__row .menu-button__menu { width: max-content; max-width: calc(100vw - 32px); }
+.bookmarks__row .menu-button__item { white-space: nowrap; }
+.bookmarks__foot { margin-top: 4px; padding: 8px 12px 4px; border-top: 1px solid var(--wc-border-subtle); }
+.dialog.share-bookmark { width: min(440px, calc(100vw - 32px)); }
+.share-bookmark__who { margin: 0 0 12px; color: var(--wc-text-secondary); }
 .dialog.save-bookmark { width: min(420px, calc(100vw - 32px)); }
 .save-bookmark form { display: grid; gap: 12px; }
 .save-bookmark__name { display: grid; gap: 4px; }

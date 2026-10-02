@@ -171,6 +171,8 @@ interface Workspace {
   proposed: string;
   proposal: string;
   bookmark: string;
+  /** Shared with everyone who may open its dashboard (T367). */
+  sharedBookmark: string;
   requestId: string;
 }
 const ws = {} as Record<'writer' | 'manager', Workspace>;
@@ -690,6 +692,22 @@ beforeAll(async () => {
       payload: { name: `${MARK} ${owner}'s bookmark`, state: BOOKMARKED },
     });
     expect(bookmarking.statusCode, bookmarking.body).toBeLessThan(300);
+    // And one shared, with everyone who may open the dashboard (T367, AC-293).
+    const sharing = await app.inject({
+      method: 'POST',
+      url: `/api/dashboards/${at[target].dashboard}/bookmarks`,
+      headers: { cookie: cookies[owner] },
+      payload: { name: `${MARK} ${owner}'s shared bookmark`, state: BOOKMARKED },
+    });
+    expect(sharing.statusCode, sharing.body).toBeLessThan(300);
+    const sharedBookmark = sharing.json<{ id: string }>().id;
+    const shared = await app.inject({
+      method: 'PATCH',
+      url: `/api/dashboards/${at[target].dashboard}/bookmarks/${sharedBookmark}`,
+      headers: { cookie: cookies[owner] },
+      payload: { shared: true },
+    });
+    expect(shared.statusCode, shared.body).toBe(200);
     const key = root.replace(/^ws:/, '');
     const requestId = `${MARK}-request-${owner}`;
     await queryLog(getDb()).record({
@@ -707,6 +725,7 @@ beforeAll(async () => {
       proposed,
       proposal: proposing.json<{ id: string }>().id,
       bookmark: bookmarking.json<{ id: string }>().id,
+      sharedBookmark,
       requestId,
     };
   }
@@ -808,6 +827,13 @@ beforeAll(async () => {
       (who) => who === owner,
       held.bookmark,
       `${MARK} ${owner}'s bookmark`,
+    );
+    // One shared: everyone's who may open its dashboard (AC-293).
+    secret(
+      `${owner}'s shared bookmark`,
+      (who) => opens(who, target),
+      held.sharedBookmark,
+      `${MARK} ${owner}'s shared bookmark`,
     );
     // A query in the log: its user's, and a Super-Admin's (R42.6, T371).
     secret(
@@ -1353,6 +1379,61 @@ const CASES: Record<string, Case> = {
       await openedOnlyBy(`/api/dashboards/${at[place].dashboard}/bookmarks`, (who) =>
         opens(who, place),
       );
+    // A shared one, to everyone who may open its dashboard (T367, AC-293).
+    for (const [owner, target] of OWNERS)
+      await openedOnlyBy(
+        `/api/dashboards/${at[target].dashboard}/bookmarks`,
+        (who) => opens(who, target),
+        `${MARK} ${owner}'s shared bookmark`,
+      );
+  },
+  /**
+   * Changed by its owner alone (T367, AC-293): asked of each owner's own and
+   * shared one, by everyone. The owner's change is undone at once, so what
+   * every other case sees is as the world says.
+   */
+  'PATCH /api/dashboards/:dashboardId/bookmarks/:id': async () => {
+    for (const [owner, target] of OWNERS)
+      for (const [id, shared] of [
+        [ws[owner].bookmark, false],
+        [ws[owner].sharedBookmark, true],
+      ] as const) {
+        const url = `/api/dashboards/${at[target].dashboard}/bookmarks/${id}`;
+        for (const who of WHO) {
+          const response = await ask(who, { method: 'PATCH', url, payload: { shared: !shared } });
+          const where = `${who} sharing ${owner}'s ${shared ? 'shared ' : ''}bookmark`;
+          if (who !== owner) {
+            refused(response, where);
+            continue;
+          }
+          answered(response, where);
+          const back = await ask(who, { method: 'PATCH', url, payload: { shared } });
+          answered(back, `${where}, back`);
+        }
+      }
+  },
+  'DELETE /api/dashboards/:dashboardId/bookmarks/:id': async () => {
+    for (const [owner, target] of OWNERS) {
+      const bookmarksOf = `/api/dashboards/${at[target].dashboard}/bookmarks`;
+      // One of its owner's, made to be deleted.
+      const made_ = await ask(owner, {
+        method: 'POST',
+        url: bookmarksOf,
+        payload: { name: `${MARK} ${owner}'s doomed one`, state: BOOKMARKED },
+      });
+      answered(made_, `${owner} making one to delete`);
+      const doomed = made_.json<{ id: string }>().id;
+      for (const id of [ws[owner].bookmark, ws[owner].sharedBookmark, doomed])
+        for (const who of WHO)
+          if (who !== owner)
+            refused(
+              await ask(who, { method: 'DELETE', url: `${bookmarksOf}/${id}` }),
+              `${who} deleting ${owner}'s bookmark`,
+            );
+      expect(
+        (await ask(owner, { method: 'DELETE', url: `${bookmarksOf}/${doomed}` })).statusCode,
+      ).toBe(204);
+    }
   },
   'POST /api/dashboards/:dashboardId/bookmarks': async () => {
     for (const place of PLACES)
