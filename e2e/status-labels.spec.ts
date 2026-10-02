@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { seedDashboardCopy } from './workspace';
+
 /**
  * T183 / AC-177: THE SYSTEM SHALL pair every status, validation and job state
  * with an icon and a text label (direction.md rule 3).
@@ -105,7 +107,8 @@ for (const surface of SURFACES) {
 
 /** An edit's states: a heading added, then a save the API fails. */
 test('every state of a dashboard save that fails has an icon and words', async ({ page }) => {
-  await page.goto('/explore/dashboards/seed-root-dashboard-1');
+  // Edited in the single user's copy (T359, AC-254).
+  await page.goto(await seedDashboardCopy());
   await page.waitForLoadState('networkidle');
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page
@@ -130,7 +133,7 @@ test('every state of a dashboard save that fails has an icon and words', async (
 
 /** A tile deleted in an edit: the toast that offers it back. */
 test('every state of a deletion has an icon and words', async ({ page }) => {
-  await page.goto('/explore/dashboards/seed-root-dashboard-1');
+  await page.goto(await seedDashboardCopy());
   await page.waitForLoadState('networkidle');
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page.getByTestId('tile-menu-tile-status').click();

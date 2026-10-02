@@ -2,6 +2,8 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { CATEGORICAL } from '@wechart/ui';
 
+import { IN_MY_WORKSPACE, myCopyOf } from './workspace';
+
 /**
  * AC-004: THE SYSTEM SHALL render every text node at a computed font size of at
  * least 12 px. Fails when: any rendered text node has a computed font-size
@@ -112,8 +114,11 @@ for (const theme of THEMES) {
 for (const theme of THEMES) {
   test(`the dashboard settings page meets AA contrast and the 12 px floor in ${theme} (AC-005, AC-004)`, async ({
     page,
+    request,
   }) => {
-    await openInTheme(page, '/explore/dashboards/seed-root-dashboard-1', theme);
+    // Its settings are changed in the single user's copy (T359, AC-254).
+    const copy = await myCopyOf(request, 'dashboard', 'seed-root-dashboard-1');
+    await openInTheme(page, `/explore/dashboards/${copy}`, theme);
     await page.getByRole('button', { name: 'Dashboard settings' }).click();
     const settings = page.getByTestId('dashboard-settings');
     const nav = settings.getByRole('navigation', { name: 'Settings sections' });
@@ -126,7 +131,9 @@ for (const theme of THEMES) {
         .analyze();
       expect(
         results.violations.flatMap((violation) =>
-          violation.nodes.map((node) => `${section}: ${node.target.join(' ')}: ${node.failureSummary ?? ''}`),
+          violation.nodes.map(
+            (node) => `${section}: ${node.target.join(' ')}: ${node.failureSummary ?? ''}`,
+          ),
         ),
       ).toEqual([]);
       expect(await page.evaluate(FONT_SIZE_SWEEP)).toEqual([]);
@@ -164,8 +171,12 @@ test('renders no text below 12 px with a problem listed in the Model (AC-004)', 
  */
 test('renders no text below 12 px while a dashboard is edited: Add, Outline and Properties (AC-004)', async ({
   page,
+  request,
 }) => {
-  await page.goto('/explore/dashboards/seed-root-dashboard-1');
+  // Edited in the single user's copy (T359, AC-254).
+  await page.goto(
+    `/explore/dashboards/${await myCopyOf(request, 'dashboard', 'seed-root-dashboard-1')}`,
+  );
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
   await expect(sidebar).toBeVisible();
@@ -300,13 +311,13 @@ test('a pie, a trellis and a heatmap are drawn in the dark palette too (AC-211)'
   const API = 'http://localhost:4100/api';
   const dashboard = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'dashboard', title: `Dark ${String(Date.now())}`, folderId: 'root' },
+      data: { kind: 'dashboard', title: `Dark ${String(Date.now())}`, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   const chart = async (chartType: string, dimensions: string[], encoding?: object) => {
     const created = (await (
       await request.post(`${API}/documents`, {
-        data: { kind: 'chart', title: chartType, folderId: 'root' },
+        data: { kind: 'chart', title: chartType, ...IN_MY_WORKSPACE },
       })
     ).json()) as { id: string };
     await request.put(`${API}/documents/chart/${created.id}`, {
@@ -343,7 +354,7 @@ test('a pie, a trellis and a heatmap are drawn in the dark palette too (AC-211)'
       body: {
         schemaVersion: 1,
         title: 'Dark types',
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         pages: [
           {

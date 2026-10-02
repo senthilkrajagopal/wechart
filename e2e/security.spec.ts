@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
+import { IN_MY_WORKSPACE } from './workspace';
+
 const API = 'http://localhost:4100/api';
 
 /** A dashboard of its own, with one table chart of the secured view's count by status. */
@@ -7,11 +9,13 @@ async function securedDashboard(request: APIRequestContext) {
   const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const title = `Secured ${unique}`;
   const dashboard = (await (
-    await request.post(`${API}/documents`, { data: { kind: 'dashboard', title, folderId: 'root' } })
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
   ).json()) as { id: string };
   const chart = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'chart', title: 'Secured by status', folderId: 'root' },
+      data: { kind: 'chart', title: 'Secured by status', ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   await request.put(`${API}/documents/chart/${chart.id}`, {
@@ -40,7 +44,7 @@ async function securedDashboard(request: APIRequestContext) {
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [

@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Locator } from '@playwright/test';
 
+import { IN_MY_WORKSPACE } from './workspace';
+
 const API = 'http://localhost:4100';
 
 /**
@@ -15,7 +17,7 @@ const API = 'http://localhost:4100';
  */
 async function splitChart(request: APIRequestContext): Promise<string> {
   const created = await request.post(`${API}/api/documents`, {
-    data: { kind: 'chart', title: `Series order ${String(Date.now())}`, folderId: 'root' },
+    data: { kind: 'chart', title: `Series order ${String(Date.now())}`, ...IN_MY_WORKSPACE },
   });
   expect(created.status()).toBe(201);
   const { id } = (await created.json()) as { id: string };

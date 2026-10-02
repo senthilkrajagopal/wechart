@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
+import { madeIn, sharedIn } from './workspace';
+
 /**
  * AC-017: WHEN the user opens Explore, THE SYSTEM SHALL show a folder tree and
  * the contents of the selected folder, listing dashboards and library charts
@@ -133,7 +135,10 @@ test('a folder is named by its heading, under a breadcrumb of its ancestors', as
 });
 
 test('creating is offered through one New menu: Dashboard, Chart and Folder', async ({ page }) => {
-  await openFinance(page);
+  // In My workspace, where the single user makes all three: a shared
+  // folder's New makes a folder alone, as with sign-in on (T331; T359, AC-254).
+  await page.goto('/explore?folder=mine');
+  await expect(heading(page)).toHaveText('My workspace');
 
   // No separate create buttons beside it. Scoped to the header row: folders
   // called "New folder", which other tests make, are buttons in the tree.
@@ -145,7 +150,15 @@ test('creating is offered through one New menu: Dashboard, Chart and Folder', as
   await contentsOf(page).getByRole('button', { name: 'New', exact: true }).click();
   const menu = page.getByRole('menu', { name: 'New' });
   // By label: each item leads with its type's icon chip, which is decorative.
-  await expect(menu.getByRole('menuitem')).toHaveText([/Dashboard$/, /Chart$/, /Folder$/]);
+  // My workspace's New offers a data source and an import as well (T363;
+  // AC-192).
+  await expect(menu.getByRole('menuitem')).toHaveText([
+    /Dashboard$/,
+    /Chart$/,
+    /Data source$/,
+    /Folder$/,
+    /Import a dashboard…from a file$/,
+  ]);
 
   // Escape puts it away without creating anything.
   await page.keyboard.press('Escape');
@@ -185,35 +198,18 @@ test('Rename beside the heading renames the folder in place', async ({ page, req
  * the item's own folder or, for a folder, itself or a folder inside it.`
  *
  * The prototype's `browse()` table (docs/design/prototype/explore.js).
+ *
+ * A shared folder's dashboards and charts are put there as the single user
+ * puts them, through My workspace and a proposal they approve (T359, AC-254).
  */
-async function documentIn(
-  request: APIRequestContext,
-  kind: 'dashboard' | 'chart',
-  folderId: string,
-  body: Record<string, unknown>,
-) {
-  const title = body['title'] as string;
-  const created = (await (
-    await request.post(`${API}/documents`, { data: { kind, title, folderId } })
-  ).json()) as { id: string };
-  const stored = (await (await request.get(`${API}/documents/${kind}/${created.id}`)).json()) as {
-    version: number;
-    body: Record<string, unknown>;
-  };
-  await request.put(`${API}/documents/${kind}/${created.id}`, {
-    data: { version: stored.version, body: { ...stored.body, ...body } },
-  });
-  return created.id;
-}
-
 async function listed(request: APIRequestContext) {
   const unique = String(Date.now());
   const home = await folderIn(request, 'root', `Listed ${unique}`);
   const sub = await folderIn(request, home, `Sub ${unique}`);
   const inner = await folderIn(request, sub, `Inner ${unique}`);
-  await documentIn(request, 'dashboard', sub, { title: `In sub ${unique}` });
-  await documentIn(request, 'chart', inner, { title: `In inner ${unique}` });
-  const dashboard = await documentIn(request, 'dashboard', home, {
+  await sharedIn(request, 'dashboard', sub, { title: `In sub ${unique}` });
+  await sharedIn(request, 'chart', inner, { title: `In inner ${unique}` });
+  const dashboard = await sharedIn(request, 'dashboard', home, {
     title: `Board ${unique}`,
     description: 'What the board is for',
     pages: [
@@ -223,11 +219,11 @@ async function listed(request: APIRequestContext) {
     ],
   });
   const wells = { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] };
-  const typed = await documentIn(request, 'chart', home, {
+  const typed = await sharedIn(request, 'chart', home, {
     title: `A typed ${unique}`,
     chart: { source: { cube: 'orders' }, wells, chartType: 'hbar' },
   });
-  const auto = await documentIn(request, 'chart', home, {
+  const auto = await sharedIn(request, 'chart', home, {
     title: `B auto ${unique}`,
     chart: {
       source: { cube: 'order_summary' },
@@ -350,8 +346,9 @@ test('a saved automatic chart is listed by its drawn type, and its row opens fro
   request,
 }) => {
   const unique = String(Date.now());
-  const home = await folderIn(request, 'root', `Drawn ${unique}`);
-  const chart = await documentIn(request, 'chart', home, {
+  // In My workspace, where the single user saves a chart (T359, AC-254).
+  const home = await folderIn(request, 'mine', `Drawn ${unique}`);
+  const chart = await madeIn(request, 'chart', home, {
     title: `Drawn ${unique}`,
     chart: {
       source: { cube: 'orders' },
@@ -473,8 +470,8 @@ test('the tree is a pane headed Folders, with the shared root and My workspace, 
   const unique = String(Date.now());
   const drafts = await folderIn(request, 'mine', `Drafts ${unique}`);
   const deeper = await folderIn(request, drafts, `Deeper ${unique}`);
-  await documentIn(request, 'dashboard', drafts, { title: `Draft board ${unique}` });
-  await documentIn(request, 'chart', deeper, { title: `Draft chart ${unique}` });
+  await madeIn(request, 'dashboard', drafts, { title: `Draft board ${unique}` });
+  await madeIn(request, 'chart', deeper, { title: `Draft chart ${unique}` });
 
   await page.goto('/explore');
   await expect(pane(page).getByRole('heading', { level: 2 })).toHaveText('Folders');
@@ -514,21 +511,35 @@ test('+ Folder in the pane makes a folder in the open one', async ({ page }) => 
   await expect(heading(page)).toHaveText(unique);
 });
 
-test("a root's count is shown, and follows a move into it", async ({ page, request }) => {
+/**
+ * A shared dashboard no longer moves into My workspace, with sign-in off as
+ * with it on (T359, AC-254: workspace-only), so the move is between two
+ * shared folders, and the count that follows it is the folder's it went to.
+ */
+test("a root's count is shown, and a folder's follows a move into it", async ({
+  page,
+  request,
+}) => {
   const unique = String(Date.now());
   const home = await folderIn(request, 'root', `Counted home ${unique}`);
-  const board = await documentIn(request, 'dashboard', home, { title: `Counted ${unique}` });
+  const there = await folderIn(request, 'root', `Counted there ${unique}`);
+  const board = await sharedIn(request, 'dashboard', home, { title: `Counted ${unique}` });
+  await sharedIn(request, 'dashboard', there, { title: `Already there ${unique}` });
 
   await page.goto('/explore');
   const mine = pane(page).getByRole('treeitem', { name: 'My workspace', exact: true });
-  const count = mine.locator('.folder-tree__count').first();
-  const shown = async () => Number(await count.textContent());
   const before = (
     (await (await request.get(`${API}/folder-roots`)).json()) as Record<string, number>
   )['mine'];
-  await expect(count).toHaveText(String(before));
+  await expect(mine.locator('.folder-tree__count').first()).toHaveText(String(before));
 
-  // Moved into My workspace from the row's menu: its count goes up by one.
+  const count = pane(page)
+    .getByRole('treeitem', { name: `Counted there ${unique}`, exact: true })
+    .locator('.folder-tree__count')
+    .first();
+  await expect(count).toHaveText('1');
+
+  // Moved there from the row's menu: its count goes up by one.
   await page
     .getByRole('tree')
     .getByRole('button', { name: `Counted home ${unique}` })
@@ -541,8 +552,8 @@ test("a root's count is shown, and follows a move into it", async ({ page, reque
   await page
     .getByTestId(`item-${board}`)
     .getByRole('combobox')
-    .selectOption({ label: 'My workspace' });
-  await expect.poll(shown).toBeGreaterThan(before ?? 0);
+    .selectOption({ label: `Shared / Counted there ${unique}` });
+  await expect(count).toHaveText('2');
 });
 
 test('the tree is a full-height pane that stays put while the contents scroll', async ({

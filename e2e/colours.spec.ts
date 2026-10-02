@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Locator } from '@playwright/test';
 
+import { IN_MY_WORKSPACE } from './workspace';
+
 const API = 'http://localhost:4100/api';
 
 /**
@@ -32,7 +34,7 @@ async function dashboardOf(request: APIRequestContext, tiles: readonly Tile[]): 
   const created = async (kind: string, title: string) =>
     (
       (await (
-        await request.post(`${API}/documents`, { data: { kind, title, folderId: 'root' } })
+        await request.post(`${API}/documents`, { data: { kind, title, ...IN_MY_WORKSPACE } })
       ).json()) as { id: string }
     ).id;
   const id = await created('dashboard', `Colours ${stamp}`);
@@ -70,7 +72,7 @@ async function dashboardOf(request: APIRequestContext, tiles: readonly Tile[]): 
       body: {
         schemaVersion: 1,
         title: `Colours ${stamp}`,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [{ id: 'only', title: 'Only', items }],

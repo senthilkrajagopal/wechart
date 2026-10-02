@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
+import { IN_MY_WORKSPACE } from './workspace';
+
 /**
  * T389 / AC-116: WHEN a text tile contains a marking token, THE SYSTEM SHALL
  * render the marking's summary or count, and a measure token limited by a
@@ -18,12 +20,12 @@ async function tokenDashboard(request: APIRequestContext) {
   const title = `Tokens ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const dashboard = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'dashboard', title, folderId: 'root' },
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   const chart = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'chart', title: 'By status', folderId: 'root' },
+      data: { kind: 'chart', title: 'By status', ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   await request.put(`${API}/documents/chart/${chart.id}`, {
@@ -48,7 +50,7 @@ async function tokenDashboard(request: APIRequestContext) {
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed', interactions: { mode: 'markings' } },
         markings: [{ id: 'm1', name: 'Picks', slot: 'mk1', isDefault: true }],

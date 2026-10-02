@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
+import { IN_MY_WORKSPACE, seedDashboardCopy, sharedIn } from './workspace';
+
 /**
  * T182 / AC-176: THE SYSTEM SHALL make every action reachable from the
  * keyboard: navigation, authoring, marking, filtering and every dialog, with
@@ -16,7 +18,7 @@ const API = 'http://localhost:4100';
 
 async function create(request: APIRequestContext, kind: 'dashboard' | 'chart', title: string) {
   const response = await request.post(`${API}/api/documents`, {
-    data: { kind, title, folderId: 'root' },
+    data: { kind, title, ...IN_MY_WORKSPACE },
   });
   return (await response.json()) as { id: string };
 }
@@ -26,10 +28,19 @@ test('a delete dialog takes focus on its safe choice, closes on Escape, and give
   request,
 }) => {
   const unique = `kb-${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
-  const chart = await create(request, 'chart', `Chart ${unique}`);
-  const dashboard = await create(request, 'dashboard', `Uses ${unique}`);
-  await request.post(`${API}/api/dashboards/${dashboard.id}/charts`, {
-    data: { chartId: chart.id },
+  // Shared, on a shared dashboard: only a shared dashboard keeps a chart from
+  // being deleted (T517), and the single user shares both through My
+  // workspace and their own approval (T359, AC-254).
+  const chart = { id: await sharedIn(request, 'chart', 'root', { title: `Chart ${unique}` }) };
+  await sharedIn(request, 'dashboard', 'root', {
+    title: `Uses ${unique}`,
+    pages: [
+      {
+        id: 'only',
+        title: 'Only',
+        items: [{ id: 'tile', kind: 'chart', w: 6, h: 30, chartId: chart.id }],
+      },
+    ],
   });
 
   await page.goto(`/explore/charts/${chart.id}`);
@@ -50,7 +61,11 @@ test('a delete dialog takes focus on its safe choice, closes on Escape, and give
   await expect(more).toBeFocused();
 });
 
-const DASHBOARD = '/explore/dashboards/seed-root-dashboard-1';
+/** The seeded dashboard as the single user edits it: their copy (T359, AC-254). */
+let DASHBOARD = '';
+test.beforeAll(async () => {
+  DASHBOARD = await seedDashboardCopy();
+});
 
 async function editSeedDashboard(page: Page) {
   await page.goto(DASHBOARD);
@@ -165,7 +180,7 @@ async function filteredDashboard(request: APIRequestContext) {
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [{ id: 'only', title: 'Only', items: [] }],

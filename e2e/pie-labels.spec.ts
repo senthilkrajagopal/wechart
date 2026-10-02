@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Locator } from '@playwright/test';
 
+import { IN_MY_WORKSPACE } from './workspace';
+
 const API = 'http://localhost:4100/api';
 
 /**
@@ -26,13 +28,15 @@ const SIDE_PX = 120;
 async function pieDashboard(request: APIRequestContext): Promise<string> {
   const title = `Pie labels ${String(Date.now())}`;
   const dashboard = (await (
-    await request.post(`${API}/documents`, { data: { kind: 'dashboard', title, folderId: 'root' } })
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
   ).json()) as { id: string };
   const chart = async ({ chartType, legend }: (typeof TILES)[number]) => {
     const chartTitle = `Amount by status, ${chartType}, legend ${legend}`;
     const created = (await (
       await request.post(`${API}/documents`, {
-        data: { kind: 'chart', title: chartTitle, folderId: 'root' },
+        data: { kind: 'chart', title: chartTitle, ...IN_MY_WORKSPACE },
       })
     ).json()) as { id: string };
     await request.put(`${API}/documents/chart/${created.id}`, {
@@ -67,7 +71,7 @@ async function pieDashboard(request: APIRequestContext): Promise<string> {
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [{ id: 'only', title: 'Only', items }],

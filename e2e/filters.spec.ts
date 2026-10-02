@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
+import { IN_MY_WORKSPACE } from './workspace';
+
 /**
  * F9 — dashboard filters.
  *
@@ -17,7 +19,7 @@ async function makeDashboard(request: APIRequestContext) {
   const title = `Filters ${unique}`;
   const dashboard = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'dashboard', title, folderId: 'root' },
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
@@ -26,7 +28,7 @@ async function makeDashboard(request: APIRequestContext) {
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [{ id: 'only', title: 'Only', items: [] }],
@@ -49,7 +51,7 @@ async function makeTwoTabDashboard(
   const chartOn = async (chartTitle: string) => {
     const chart = (await (
       await request.post(`${API}/documents`, {
-        data: { kind: 'chart', title: chartTitle, folderId: 'root' },
+        data: { kind: 'chart', title: chartTitle, ...IN_MY_WORKSPACE },
       })
     ).json()) as { id: string };
     await request.put(`${API}/documents/chart/${chart.id}`, {
@@ -82,7 +84,7 @@ async function makeTwoTabDashboard(
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [
@@ -119,7 +121,7 @@ async function makeChartsDashboard(
   for (const each of charts) {
     const chart = (await (
       await request.post(`${API}/documents`, {
-        data: { kind: 'chart', title: each.tile, folderId: 'root' },
+        data: { kind: 'chart', title: each.tile, ...IN_MY_WORKSPACE },
       })
     ).json()) as { id: string };
     await request.put(`${API}/documents/chart/${chart.id}`, {
@@ -146,7 +148,7 @@ async function makeChartsDashboard(
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [{ id: 'overview', title: 'Overview', items }],

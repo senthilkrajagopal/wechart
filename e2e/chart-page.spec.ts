@@ -1,6 +1,8 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
 import { chooseChartType } from './chartType';
+import { psql } from './store';
+import { IN_MY_WORKSPACE } from './workspace';
 
 const API = 'http://localhost:4100/api';
 
@@ -35,7 +37,7 @@ async function localChart(
   const created = async (kind: string, title: string) =>
     (
       (await (
-        await request.post(`${API}/documents`, { data: { kind, title, folderId: 'root' } })
+        await request.post(`${API}/documents`, { data: { kind, title, ...IN_MY_WORKSPACE } })
       ).json()) as { id: string }
     ).id;
   const dashboardTitle = `Home ${unique}`;
@@ -64,7 +66,7 @@ async function localChart(
       body: {
         schemaVersion: 1,
         title: dashboardTitle,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [
@@ -148,7 +150,9 @@ test('Save to folders on a local chart page opens its dashboard ready to choose 
   const folderId = (
     (await (
       await request.post(`${API}/documents`, {
-        data: { kind: 'folder', title: folderTitle, folderId: 'root' },
+        // In My workspace, where its dashboard is: a workspace's save puts no
+        // chart in a shared folder (T502; T359).
+        data: { kind: 'folder', title: folderTitle, folderId: 'mine' },
       })
     ).json()) as { id: string }
   ).id;
@@ -175,10 +179,13 @@ test('Save to folders on a local chart page opens its dashboard ready to choose 
   expect(stored.localToDashboardId).toBeUndefined();
   expect(stored.folderId).toBe(folderId);
 
-  // Now a library chart, its page offers Edit chart again, and no home.
+  // Now a library chart, its page offers Edit chart again, and no home. In
+  // My workspace, its way back, the proposal, is the primary and Edit is
+  // beside it (design 04, state F; T359, AC-254).
   await page.goto(`/explore/charts/${made.chartId}`);
   const head = page.locator('.chart-page__head');
-  await expect(head.getByRole('link', { name: /Edit chart/ })).toHaveClass(/btn-primary/);
+  await expect(head.getByRole('link', { name: /Edit chart/ })).toHaveClass('btn btn-sm');
+  await expect(head.getByRole('button', { name: /^Propose to / })).toHaveClass('btn-primary');
   await expect(head.getByTestId('chart-home')).toHaveCount(0);
 });
 
@@ -227,17 +234,14 @@ test('a local chart whose dashboard cannot be opened says so, on its page and in
 }) => {
   const made = await localChart(request);
   // Its dashboard can't be opened: one that never existed. A dashboard's
-  // delete takes its own charts with it (T518, AC-363), so no local chart
-  // outlives its dashboard that way any more.
-  const read = await request.get(`${API}/documents/chart/${made.chartId}`);
-  const stored = (await read.json()) as { body: Record<string, unknown>; version: number };
-  const orphaned = await request.put(`${API}/documents/chart/${made.chartId}`, {
-    data: {
-      version: stored.version,
-      body: { ...stored.body, localToDashboardId: `never-${made.unique}` },
-    },
-  });
-  expect(orphaned.status(), await orphaned.text()).toBe(200);
+  // delete takes its own charts with it (T518, AC-363), and no save moves a
+  // chart off its dashboard's workspace (T359, R52), so no local chart comes
+  // to this through the API any more: it is set so in the store.
+  expect(
+    psql(
+      `UPDATE documents SET body = jsonb_set(body, '{localToDashboardId}', to_jsonb('never-${made.unique}'::text)) WHERE kind = 'chart' AND id = '${made.chartId}' RETURNING id;`,
+    ).split('\n')[0],
+  ).toBe(made.chartId);
 
   await page.goto(`/explore/charts/${made.chartId}`);
   await expect(page.locator('.chart-page__head')).toContainText(

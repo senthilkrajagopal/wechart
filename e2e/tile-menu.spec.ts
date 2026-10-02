@@ -1,5 +1,8 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
+import { chartGone } from './store';
+import { IN_MY_WORKSPACE } from './workspace';
+
 const API = 'http://localhost:4100/api';
 
 /**
@@ -15,12 +18,14 @@ const API = 'http://localhost:4100/api';
 async function emptyChartDashboard(request: APIRequestContext) {
   const title = `No fields yet ${String(Date.now())}`;
   const dashboard = (await (
-    await request.post(`${API}/documents`, { data: { kind: 'dashboard', title, folderId: 'root' } })
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
   ).json()) as { id: string };
   const chartTitle = 'Not yet built';
   const chart = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'chart', title: chartTitle, folderId: 'root' },
+      data: { kind: 'chart', title: chartTitle, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   await request.put(`${API}/documents/chart/${chart.id}`, {
@@ -46,7 +51,7 @@ async function emptyChartDashboard(request: APIRequestContext) {
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [
@@ -133,7 +138,7 @@ async function localChart(
   chartType?: string,
 ) {
   const created = (await (
-    await request.post(`${API}/documents`, { data: { kind: 'chart', title, folderId: 'root' } })
+    await request.post(`${API}/documents`, { data: { kind: 'chart', title, ...IN_MY_WORKSPACE } })
   ).json()) as { id: string };
   await request.put(`${API}/documents/chart/${created.id}`, {
     data: {
@@ -168,7 +173,9 @@ test('Shift+F10 opens every other chart tile’s menu too, each saying why nothi
 }) => {
   const title = `Every state ${String(Date.now())}`;
   const { id } = (await (
-    await request.post(`${API}/documents`, { data: { kind: 'dashboard', title, folderId: 'root' } })
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
   ).json()) as { id: string };
   // A time alone: no type the recommender can place.
   const untyped = await localChart(request, id, 'No type yet', {
@@ -183,13 +190,20 @@ test('Shift+F10 opens every other chart tile’s menu too, each saying why nothi
     { measures: ['orders.count'], dimensions: [], timeDimensions: [] },
     'kpi',
   );
-  await request.put(`${API}/documents/dashboard/${id}`, {
+  // There when the dashboard is saved, then gone: a save adds only a chart
+  // that is there (T359, AC-254).
+  const goes = await localChart(request, id, 'Soon gone', {
+    measures: ['orders.count'],
+    dimensions: [],
+    timeDimensions: [],
+  });
+  const saved = await request.put(`${API}/documents/dashboard/${id}`, {
     data: {
       version: 1,
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [
@@ -199,13 +213,15 @@ test('Shift+F10 opens every other chart tile’s menu too, each saying why nothi
             items: [
               { id: 'tile-untyped', kind: 'chart', w: 3, h: 30, chartId: untyped },
               { id: 'tile-unread', kind: 'chart', w: 3, h: 30, chartId: unread },
-              { id: 'tile-gone', kind: 'chart', w: 3, h: 30, chartId: 'no-such-chart' },
+              { id: 'tile-gone', kind: 'chart', w: 3, h: 30, chartId: goes },
             ],
           },
         ],
       },
     },
   });
+  expect(saved.status(), await saved.text()).toBe(200);
+  chartGone(goes);
   // The unread chart's document never arrives.
   await page.route(`**/api/documents/chart/${unread}`, (route) => route.abort('failed'));
   await page.goto(`/explore/dashboards/${id}`);
@@ -260,7 +276,7 @@ test('Shift+F10 opens every other chart tile’s menu too, each saying why nothi
   const waitingTitle = `Still asking ${String(Date.now())}`;
   const waiting = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'dashboard', title: waitingTitle, folderId: 'root' },
+      data: { kind: 'dashboard', title: waitingTitle, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   const slow = await localChart(
@@ -276,7 +292,7 @@ test('Shift+F10 opens every other chart tile’s menu too, each saying why nothi
       body: {
         schemaVersion: 1,
         title: waitingTitle,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [

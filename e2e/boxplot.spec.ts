@@ -3,6 +3,7 @@ import { expect, test, type APIRequestContext, type Locator } from '@playwright/
 import { chooseChartType, expectChartType } from './chartType';
 import { ownCubeFile, PUBLISHED } from './model-files';
 import { wellPicker } from './wells';
+import { IN_MY_WORKSPACE, newInMyWorkspace } from './workspace';
 
 const API = 'http://localhost:4100';
 
@@ -20,13 +21,7 @@ const API = 'http://localhost:4100';
 test('a box plot of order amounts by status draws a box per status from the rows', async ({
   page,
 }) => {
-  await page.goto('/explore?folder=seed-folder-0');
-  const contents = page.getByTestId('explore-contents');
-  await contents.getByRole('button', { name: 'New', exact: true }).click();
-  await page
-    .getByRole('menu', { name: 'New' })
-    .getByRole('menuitem', { name: /Chart$/ })
-    .click();
+  await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
   await expect(page).toHaveURL(/\/edit\?new=true$/);
 
   await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
@@ -71,7 +66,7 @@ async function boxPlot(
   eachPointIs?: string,
 ): Promise<string> {
   const created = await request.post(`${API}/api/documents`, {
-    data: { kind: 'chart', title: `Box plot ${String(Date.now())}`, folderId: 'root' },
+    data: { kind: 'chart', title: `Box plot ${String(Date.now())}`, ...IN_MY_WORKSPACE },
   });
   expect(created.status()).toBe(201);
   const { id } = (await created.json()) as { id: string };
@@ -278,7 +273,7 @@ test('a box plot past Cube’s row limit says it was computed from 50,000 of 50,
   const title = `Box rows ${String(Date.now())}`;
   const chart = (await (
     await request.post(`${API}/api/documents`, {
-      data: { kind: 'chart', title, folderId: 'root' },
+      data: { kind: 'chart', title, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   const saved = await request.put(`${API}/api/documents/chart/${chart.id}`, {
@@ -288,6 +283,7 @@ test('a box plot past Cube’s row limit says it was computed from 50,000 of 50,
         schemaVersion: 1,
         title,
         owner: 'admin',
+        ...IN_MY_WORKSPACE,
         chart: {
           source: { cube },
           wells: { measures: [`${cube}.v`], dimensions: [`${cube}.grp`], timeDimensions: [] },
@@ -299,7 +295,7 @@ test('a box plot past Cube’s row limit says it was computed from 50,000 of 50,
   expect(saved.ok(), await saved.text()).toBe(true);
   const dashboard = (await (
     await request.post(`${API}/api/documents`, {
-      data: { kind: 'dashboard', title, folderId: 'root' },
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   const placed = await request.put(`${API}/api/documents/dashboard/${dashboard.id}`, {
@@ -308,7 +304,7 @@ test('a box plot past Cube’s row limit says it was computed from 50,000 of 50,
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         pages: [
           {

@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
+import { IN_MY_WORKSPACE } from './workspace';
+
 const API = 'http://localhost:4100/api';
 
 /**
@@ -19,7 +21,7 @@ async function kpiRow(request: APIRequestContext): Promise<string> {
   const created = async (kind: string, title: string) =>
     (
       (await (
-        await request.post(`${API}/documents`, { data: { kind, title, folderId: 'root' } })
+        await request.post(`${API}/documents`, { data: { kind, title, ...IN_MY_WORKSPACE } })
       ).json()) as { id: string }
     ).id;
   const id = await created('dashboard', `KPI row ${stamp}`);
@@ -51,7 +53,7 @@ async function kpiRow(request: APIRequestContext): Promise<string> {
       body: {
         schemaVersion: 1,
         title: `KPI row ${stamp}`,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [

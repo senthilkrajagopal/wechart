@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
+import { IN_MY_WORKSPACE } from './workspace';
+
 /**
  * Image, link and markdown tiles, on the running app.
  *
@@ -25,7 +27,7 @@ async function makeDashboard(request: APIRequestContext) {
   const title = `Tiles ${unique}`;
   const dashboard = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'dashboard', title, folderId: 'root' },
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
@@ -34,7 +36,7 @@ async function makeDashboard(request: APIRequestContext) {
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [{ id: 'only', title: 'Only', items: [] }],
@@ -152,7 +154,7 @@ async function putDashboard(
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [{ id: 'only', title: 'Only', items }],
@@ -169,7 +171,7 @@ test('a link tile opens another dashboard carrying the filters, and a web addres
   const target = await makeDashboard(request);
   const chart = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'chart', title: 'Orders by status', folderId: 'root' },
+      data: { kind: 'chart', title: 'Orders by status', ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   await request.put(`${API}/documents/chart/${chart.id}`, {

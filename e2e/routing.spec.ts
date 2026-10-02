@@ -12,7 +12,6 @@ import { expect, test } from '@playwright/test';
  */
 const WORKSPACES = [
   { path: '/explore', label: 'Explore' },
-  { path: '/model', label: 'Model' },
   { path: '/data-sources', label: 'Data sources' },
   { path: '/jobs', label: 'Jobs' },
   { path: '/schedules', label: 'Schedules' },
@@ -38,6 +37,21 @@ test.describe('workspaces survive a reload', () => {
       );
     });
   }
+
+  /**
+   * The Model workspace keeps its address, though the switcher lists it no
+   * more (AC-001; T331): known by its heading, before and after a reload.
+   */
+  test('Model at /model', async ({ page }) => {
+    const heading = page.getByRole('heading', { name: 'Model', level: 1 });
+    await page.goto('/model');
+    await expect(heading).toBeVisible();
+
+    await page.reload();
+
+    await expect(page).toHaveURL(/\/model$/);
+    await expect(heading).toBeVisible();
+  });
 });
 
 test('navigating the switcher changes the URL', async ({ page }) => {

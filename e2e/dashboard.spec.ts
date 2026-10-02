@@ -1,5 +1,8 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
+import { chartGone } from './store';
+import { IN_MY_WORKSPACE, landedAs, seedDashboardCopy, shared } from './workspace';
+
 /**
  * T023. The seeded dashboard, opened for real.
  *
@@ -16,7 +19,14 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
  * the colour it was assigned. That is what this file is for — and it is why
  * these criteria were left unticked at T059 and T060.
  */
-const DASHBOARD = '/explore/dashboards/seed-root-dashboard-1';
+/**
+ * The seeded dashboard as the single user edits it: their copy in My
+ * workspace, the seeded one being shared (T359, AC-254).
+ */
+let DASHBOARD = '';
+test.beforeAll(async () => {
+  DASHBOARD = await seedDashboardCopy();
+});
 
 const open = async (page: Page) => {
   await page.goto(DASHBOARD);
@@ -210,12 +220,12 @@ test('a tile with no fields yet, or a chart that is gone, has no failure menu (T
   const name = `Menus ${String(Date.now())}`;
   const { id } = (await (
     await request.post(`${api}/documents`, {
-      data: { kind: 'dashboard', title: name, folderId: 'root' },
+      data: { kind: 'dashboard', title: name, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   const empty = (await (
     await request.post(`${api}/documents`, {
-      data: { kind: 'chart', title: 'Not built yet', folderId: 'root' },
+      data: { kind: 'chart', title: 'Not built yet', ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   await request.put(`${api}/documents/chart/${empty.id}`, {
@@ -234,13 +244,20 @@ test('a tile with no fields yet, or a chart that is gone, has no failure menu (T
       },
     },
   });
-  await request.put(`${api}/documents/dashboard/${id}`, {
+  // A chart there when the dashboard is saved, then gone: a save adds only a
+  // chart that is there (T359, AC-254).
+  const goes = (await (
+    await request.post(`${api}/documents`, {
+      data: { kind: 'chart', title: 'Soon gone', ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  const saved = await request.put(`${api}/documents/dashboard/${id}`, {
     data: {
       version: 1,
       body: {
         schemaVersion: 1,
         title: name,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [
@@ -249,13 +266,15 @@ test('a tile with no fields yet, or a chart that is gone, has no failure menu (T
             title: 'Only',
             items: [
               { id: 'tile-empty', kind: 'chart', w: 6, h: 30, chartId: empty.id },
-              { id: 'tile-gone', kind: 'chart', w: 6, h: 30, chartId: 'no-such-chart' },
+              { id: 'tile-gone', kind: 'chart', w: 6, h: 30, chartId: goes.id },
             ],
           },
         ],
       },
     },
   });
+  expect(saved.status(), await saved.text()).toBe(200);
+  chartGone(goes.id);
   await page.goto(`/explore/dashboards/${id}`);
   await expect(
     page.locator('[data-tile="tile-empty"]').getByTestId('tile-empty-chart'),
@@ -749,7 +768,7 @@ test('the Add panel offers every element type and inserts one', async ({ page })
 test('saving a dashboard keeps the fields the editor never shows', async ({ page, request }) => {
   const unique = `keeps-${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const created = await request.post('http://localhost:4100/api/documents', {
-    data: { kind: 'dashboard', title: `Keeper ${unique}`, folderId: 'root' },
+    data: { kind: 'dashboard', title: `Keeper ${unique}`, ...IN_MY_WORKSPACE },
   });
   const { id } = (await created.json()) as { id: string };
 
@@ -759,7 +778,7 @@ test('saving a dashboard keeps the fields the editor never shows', async ({ page
       body: {
         schemaVersion: 1,
         title: `Keeper ${unique}`,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [{ id: 'only', title: 'Only', items: [{ id: 't1', kind: 'chart', w: 6, h: 40 }] }],
@@ -776,8 +795,13 @@ test('saving a dashboard keeps the fields the editor never shows', async ({ page
   await expect(page.getByRole('heading', { name: `Keeper ${unique}` })).toBeVisible();
 
   const after = await request.get(`http://localhost:4100/api/documents/dashboard/${id}`);
-  const stored = (await after.json()) as { body: { folderId?: string; owner?: string } };
-  expect(stored.body.folderId).toBe('root');
+  const stored = (await after.json()) as {
+    body: { folderId?: string; targetFolderId?: string; owner?: string };
+  };
+  // Made in My workspace, as the single user makes one (T359, AC-254); its
+  // target is a field the editor never shows too.
+  expect(stored.body.folderId).toBe(IN_MY_WORKSPACE.folderId);
+  expect(stored.body.targetFolderId).toBe(IN_MY_WORKSPACE.targetFolderId);
   expect(stored.body.owner).toBe('admin');
 });
 
@@ -800,7 +824,7 @@ test('the dashboard is painted at the width the setting asks for', async ({ page
 
   const unique = `width-${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const created = await request.post('http://localhost:4100/api/documents', {
-    data: { kind: 'dashboard', title: `Wide ${unique}`, folderId: 'root' },
+    data: { kind: 'dashboard', title: `Wide ${unique}`, ...IN_MY_WORKSPACE },
   });
   const { id } = (await created.json()) as { id: string };
 
@@ -842,26 +866,52 @@ test('General settings move a dashboard and describe it, and Explore shows both'
   page,
   request,
 }) => {
+  /**
+   * As the single user changes one (T359, AC-254), as with sign-in on: in My
+   * workspace, going to Finance. It moves within My workspace, its way to
+   * Finance being its proposal, and Explore shows the description beneath its
+   * name once it is there.
+   */
+  const unique = String(Date.now());
   const created = (await (
     await request.post('http://localhost:4100/api/documents', {
-      data: { kind: 'dashboard', title: `Settled ${String(Date.now())}`, folderId: 'root' },
+      data: {
+        kind: 'dashboard',
+        title: `Settled ${unique}`,
+        folderId: 'mine',
+        targetFolderId: 'seed-folder-0',
+      },
     })
   ).json()) as { id: string };
+  const home = await request.post('http://localhost:4100/api/documents', {
+    data: { kind: 'folder', title: `Settled home ${unique}`, folderId: 'mine' },
+  });
+  expect(home.status()).toBe(201);
+  const homeId = ((await home.json()) as { id: string }).id;
   await page.goto(`/explore/dashboards/${created.id}`);
   await page.getByRole('button', { name: 'Dashboard settings' }).click();
 
   const panel = page.getByRole('region', { name: 'General settings' });
-  await panel.getByLabel('Folder').selectOption({ label: 'Finance' });
+  await panel.getByLabel('Folder').selectOption(homeId);
   await panel.getByLabel('Description').fill('Revenue and orders since July 1996');
   await page.getByRole('button', { name: 'Save settings' }).click();
   // Saved before leaving: the page closes once the save has landed, and
   // navigating while it is still out could cancel it.
   await expect(page.getByTestId('dashboard-settings')).toBeHidden();
 
-  // In Finance now, not at the root, with its description beneath its name.
+  // In its folder now, not at My workspace's top.
+  await page.goto('/explore');
+  await page
+    .getByRole('tree')
+    .getByRole('button', { name: `Settled home ${unique}` })
+    .click();
+  await expect(page.getByTestId(`item-${created.id}`)).toContainText(`Settled ${unique}`);
+
+  // Proposed and approved, in Finance, with its description beneath its name.
+  const landed = landedAs(await shared(request, 'dashboard', created.id), 'dashboard');
   await page.goto('/explore');
   await page.getByRole('tree').getByRole('button', { name: 'Finance' }).click();
-  await expect(page.getByTestId(`item-${created.id}`)).toContainText(
+  await expect(page.getByTestId(`item-${landed}`)).toContainText(
     'Revenue and orders since July 1996',
   );
 });
@@ -1045,7 +1095,7 @@ test('a saved dashboard comes back the way it was left', async ({ page, request 
    */
   const unique = `save-${String(Date.now())}`;
   const created = await request.post('http://localhost:4100/api/documents', {
-    data: { kind: 'dashboard', title: `Saveable ${unique}`, folderId: 'root' },
+    data: { kind: 'dashboard', title: `Saveable ${unique}`, ...IN_MY_WORKSPACE },
   });
   const { id } = (await created.json()) as { id: string };
 
@@ -1055,7 +1105,7 @@ test('a saved dashboard comes back the way it was left', async ({ page, request 
       body: {
         schemaVersion: 1,
         title: `Saveable ${unique}`,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [
@@ -1225,13 +1275,13 @@ test('a member keeps one colour between a donut of it and a bar split by it, aft
   const title = `Colours ${stamp}`;
   const { id } = (await (
     await request.post(`${api}/documents`, {
-      data: { kind: 'dashboard', title, folderId: 'root' },
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   const chartOn = async (name: string, chartType: string, dimensions: string[]) => {
     const chart = (await (
       await request.post(`${api}/documents`, {
-        data: { kind: 'chart', title: name, folderId: 'root' },
+        data: { kind: 'chart', title: name, ...IN_MY_WORKSPACE },
       })
     ).json()) as { id: string };
     await request.put(`${api}/documents/chart/${chart.id}`, {
@@ -1264,7 +1314,7 @@ test('a member keeps one colour between a donut of it and a bar split by it, aft
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [
@@ -1397,14 +1447,14 @@ test('a save failure does not hand the scrollbar back to the window', async ({ p
   // every other spec in this file and across the three browser projects.
   const unique = `alert-${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const created = await request.post('http://localhost:4100/api/documents', {
-    data: { kind: 'dashboard', title: `Alerted ${unique}`, folderId: 'root' },
+    data: { kind: 'dashboard', title: `Alerted ${unique}`, ...IN_MY_WORKSPACE },
   });
   const { id } = (await created.json()) as { id: string };
 
   const body = {
     schemaVersion: 1,
     title: `Alerted ${unique}`,
-    folderId: 'root',
+    ...IN_MY_WORKSPACE,
     owner: 'admin',
     settings: { width: 'fixed' },
     pages: [
@@ -1633,13 +1683,13 @@ test('a settings save that fails keeps the page, the entry and the reason', asyn
 }) => {
   const unique = `settings-${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const created = await request.post('http://localhost:4100/api/documents', {
-    data: { kind: 'dashboard', title: `Settings ${unique}`, folderId: 'root' },
+    data: { kind: 'dashboard', title: `Settings ${unique}`, ...IN_MY_WORKSPACE },
   });
   const { id } = (await created.json()) as { id: string };
   const body = {
     schemaVersion: 1,
     title: `Settings ${unique}`,
-    folderId: 'root',
+    ...IN_MY_WORKSPACE,
     owner: 'admin',
     settings: { width: 'fixed' },
     pages: [{ id: 'only', title: 'Only', items: [] }],
@@ -1724,7 +1774,7 @@ test('an empty dashboard says so, with its tab strip and a way to start editing'
   const unique = String(Date.now());
   const created = (await (
     await request.post('http://localhost:4100/api/documents', {
-      data: { kind: 'dashboard', title: `Empty ${unique}`, folderId: 'root' },
+      data: { kind: 'dashboard', title: `Empty ${unique}`, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   await page.goto(`/explore/dashboards/${created.id}`);
@@ -1798,7 +1848,7 @@ test('a markdown tile renders its headings, emphasis, lists and breaks, and no r
   const API = 'http://localhost:4100/api';
   const created = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'dashboard', title: `Markdown ${unique}`, folderId: 'root' },
+      data: { kind: 'dashboard', title: `Markdown ${unique}`, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   const stored = (await (await request.get(`${API}/documents/dashboard/${created.id}`)).json()) as {
@@ -1964,13 +2014,13 @@ test('a narrow donut with its legend at the right draws its ring clear of the le
   const title = `Donut legend ${stamp}`;
   const { id } = (await (
     await request.post(`${api}/documents`, {
-      data: { kind: 'dashboard', title, folderId: 'root' },
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   const chartTitle = `Orders by product, legend right ${stamp}`;
   const chart = (await (
     await request.post(`${api}/documents`, {
-      data: { kind: 'chart', title: chartTitle, folderId: 'root' },
+      data: { kind: 'chart', title: chartTitle, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   await request.put(`${api}/documents/chart/${chart.id}`, {
@@ -1996,7 +2046,7 @@ test('a narrow donut with its legend at the right draws its ring clear of the le
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [

@@ -6,6 +6,8 @@ import {
   type Page,
 } from '@playwright/test';
 
+import { IN_MY_WORKSPACE } from '../workspace';
+
 const API = 'http://localhost:4100/api';
 
 /**
@@ -97,13 +99,13 @@ async function markingDashboard(request: APIRequestContext) {
   const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const title = `Ten charts marking ${unique}`;
   const dashboard = await ok<{ id: string }>(
-    request.post(`${API}/documents`, { data: { kind: 'dashboard', title, folderId: 'root' } }),
+    request.post(`${API}/documents`, { data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE } }),
   );
   const items = [];
   for (const [index, chart] of [MASTER, ...CHARTS].entries()) {
     const created = await ok<{ id: string }>(
       request.post(`${API}/documents`, {
-        data: { kind: 'chart', title: chart.title, folderId: 'root' },
+        data: { kind: 'chart', title: chart.title, ...IN_MY_WORKSPACE },
       }),
     );
     await ok(
@@ -137,7 +139,7 @@ async function markingDashboard(request: APIRequestContext) {
         body: {
           schemaVersion: 1,
           title,
-          folderId: 'root',
+          ...IN_MY_WORKSPACE,
           owner: 'admin',
           settings: { width: 'full', interactions: { mode: 'markings' } },
           markings: [{ id: 'm1', name: 'Marking', slot: 'mk1', isDefault: true }],

@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
 import { ownCubeFile } from './model-files';
+import { IN_MY_WORKSPACE } from './workspace';
 
 /**
  * T190: the marking subsystem, connected to the rendering path.
@@ -53,7 +54,7 @@ async function markingDashboard(
   const title = `Markings ${unique}`;
   const dashboard = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'dashboard', title, folderId: 'root' },
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
 
@@ -66,7 +67,7 @@ async function markingDashboard(
   ) => {
     const chart = (await (
       await request.post(`${API}/documents`, {
-        data: { kind: 'chart', title: chartTitle, folderId: 'root' },
+        data: { kind: 'chart', title: chartTitle, ...IN_MY_WORKSPACE },
       })
     ).json()) as { id: string };
     await request.put(`${API}/documents/chart/${chart.id}`, {
@@ -142,7 +143,7 @@ async function markingDashboard(
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed', interactions: { mode: 'markings' } },
         markings: [
@@ -2844,7 +2845,7 @@ test('Copy puts the marked values and the chart’s image on the clipboard, and 
   const targetTitle = `Copy target ${unique}`;
   const target = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'dashboard', title: targetTitle, folderId: 'root' },
+      data: { kind: 'dashboard', title: targetTitle, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   type Stored = { version: number; body: Record<string, unknown> };
@@ -3167,12 +3168,12 @@ test('a shape over more than 1,000 items marks 1,000 and says why, and Mark all 
   const title = `Many ${unique}`;
   const dashboard = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'dashboard', title, folderId: 'root' },
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   const chart = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'chart', title: 'Every item', folderId: 'root' },
+      data: { kind: 'chart', title: 'Every item', ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   await request.put(`${API}/documents/chart/${chart.id}`, {
@@ -3197,7 +3198,7 @@ test('a shape over more than 1,000 items marks 1,000 and says why, and Mark all 
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed', interactions: { mode: 'markings' } },
         markings: [{ id: 'm1', name: 'Marking', slot: 'mk1', isDefault: true }],
@@ -3303,12 +3304,12 @@ test('in range mode a drag along the time axis marks its buckets, striped on the
   const title = `Ranges ${unique}`;
   const dashboard = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'dashboard', title, folderId: 'root' },
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   const chart = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'chart', title: 'By month', folderId: 'root' },
+      data: { kind: 'chart', title: 'By month', ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   await request.put(`${API}/documents/chart/${chart.id}`, {
@@ -3338,7 +3339,7 @@ test('in range mode a drag along the time axis marks its buckets, striped on the
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed', interactions: { mode: 'markings' } },
         markings: [{ id: 'm1', name: 'Periods', slot: 'mk1', isDefault: true, mode: 'range' }],

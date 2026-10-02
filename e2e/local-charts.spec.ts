@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { IN_MY_WORKSPACE } from './workspace';
+
 const API = 'http://localhost:4100/api';
 
 /**
@@ -21,7 +23,7 @@ test('a chart added to a dashboard is its own, local, and in no folder or search
   const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const dashboard = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'dashboard', title: `Local ${unique}`, folderId: 'root' },
+      data: { kind: 'dashboard', title: `Local ${unique}`, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
@@ -30,7 +32,7 @@ test('a chart added to a dashboard is its own, local, and in no folder or search
       body: {
         schemaVersion: 1,
         title: `Local ${unique}`,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [{ id: 'only', title: 'Only', items: [] }],

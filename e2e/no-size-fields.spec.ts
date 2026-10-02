@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { wellPicker } from './wells';
+import { seedDashboardCopy } from './workspace';
 
 /**
  * T061 / AC-055, second half: THE SYSTEM SHALL offer no numeric width or
@@ -14,7 +15,11 @@ import { wellPicker } from './wells';
  * worth anything if nothing anywhere offers one, which a component test cannot
  * establish and a sweep can.
  */
-const DASHBOARD = '/explore/dashboards/seed-root-dashboard-1';
+/** The seeded dashboard as the single user edits it: their copy (T359, AC-254). */
+let DASHBOARD = '';
+test.beforeAll(async () => {
+  DASHBOARD = await seedDashboardCopy();
+});
 
 /** Anything that would let a size be typed or stepped. */
 async function sizeFields(page: Page): Promise<string[]> {

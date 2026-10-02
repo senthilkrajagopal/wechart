@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
+import { IN_MY_WORKSPACE } from './workspace';
+
 /**
  * T123 / AC-117: WHILE a dashboard is in cross-filter mode, WHEN the user
  * clicks a mark, THE SYSTEM SHALL apply the action set for that source and
@@ -33,14 +35,14 @@ async function crossFilterDashboard(
   const title = `Cross ${unique}`;
   const dashboard = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'dashboard', title, folderId: 'root' },
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
 
   const chartOn = async (chartTitle: string, dimension: string, cube = 'orders') => {
     const chart = (await (
       await request.post(`${API}/documents`, {
-        data: { kind: 'chart', title: chartTitle, folderId: 'root' },
+        data: { kind: 'chart', title: chartTitle, ...IN_MY_WORKSPACE },
       })
     ).json()) as { id: string };
     await request.put(`${API}/documents/chart/${chart.id}`, {
@@ -78,7 +80,7 @@ async function crossFilterDashboard(
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: {
           width: 'fixed',

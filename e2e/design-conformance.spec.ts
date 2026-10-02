@@ -1,5 +1,15 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
+import { IN_MY_WORKSPACE, newInMyWorkspace, seedDashboardCopy, sharedIn } from './workspace';
+
+/**
+ * The seeded dashboard where a test edits it or opens its settings: the
+ * single user's copy in My workspace, the seeded one being shared (T359,
+ * AC-254). Asked once in a worker.
+ */
+let seedCopy: Promise<string> | undefined;
+const editableSeed = (): Promise<string> => (seedCopy ??= seedDashboardCopy());
+
 /**
  * AC-187: THE SYSTEM SHALL draw the app bar, workspace navigation, buttons and
  * inputs, the dashboard header and page tabs, the filter bar, tiles, and the
@@ -95,7 +105,8 @@ test.describe('T202: the app bar, workspace navigation, buttons and inputs', () 
     // .wsnav button[aria-current="page"] { color: var(--text-primary); border-bottom-color: var(--accent); font-weight: 600 }
     const nav = page.getByRole('navigation', { name: 'Workspaces' });
     const current = nav.getByRole('link', { name: 'Explore' });
-    const other = nav.getByRole('link', { name: 'Model' });
+    // One of the rest: the switcher lists no Model (AC-001; T331).
+    const other = nav.getByRole('link', { name: 'Jobs' });
     expect(
       await style(
         current,
@@ -235,7 +246,8 @@ const tileActionStyle = (action: Locator) =>
 
 test.describe('T203: the dashboard header, page tabs and tiles', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    // The copy, where Edit is offered: the shared one offers Edit in my workspace.
+    await page.goto(await editableSeed());
     await expect(
       page.getByRole('heading', { name: 'Company dashboard 01', level: 1 }),
     ).toBeVisible();
@@ -252,18 +264,9 @@ test.describe('T203: the dashboard header, page tabs and tiles', () => {
       'font-weight': '600',
     });
 
-    // <button class="btn primary" data-edit>${PENCIL} Edit</button>
-    const edit = page.getByRole('button', { name: 'Edit', exact: true });
-    await expect(edit.locator('svg')).toHaveCount(1);
-    expect(await style(edit, 'background-color', 'color', 'height', 'border-radius')).toEqual({
-      'background-color': await token(page, 'accent'),
-      color: await token(page, 'text-on-accent'),
-      height: '32px',
-      'border-radius': '6px',
-    });
-
     // <button class="iconbtn" data-settings aria-label="Dashboard settings">${GEAR}</button>,
-    // the header's last control.
+    // the header's last control: on the copy, the dashboard the single user
+    // may change (T359, AC-254).
     const gear = page.getByRole('button', { name: 'Dashboard settings' });
     await expect(gear.locator('svg')).toHaveCount(1);
     expect(await style(gear, 'width', 'height', 'border-radius', 'background-color')).toEqual({
@@ -272,12 +275,37 @@ test.describe('T203: the dashboard header, page tabs and tiles', () => {
       'border-radius': '6px',
       'background-color': 'rgba(0, 0, 0, 0)',
     });
-    const last = await page
+    // Followed only by the ⋯ that holds Export… (T511; design 13, pin 1): the
+    // header's last two controls, above the line saying where it is from
+    // (design 04, state F).
+    const last = await page.locator('.dashboard__header').evaluate((header) =>
+      [...header.children]
+        .map(
+          (child) =>
+            child.getAttribute('aria-label') ??
+            child.querySelector('[aria-label]')?.getAttribute('aria-label') ??
+            null,
+        )
+        .filter((label) => label !== null)
+        .slice(-2),
+    );
+    expect(last).toEqual(['Dashboard settings', 'More']);
+
+    // <button class="btn primary" data-edit>${PENCIL} Edit</button>: on the
+    // shared one, the way to change it is that primary with its pencil, "Edit
+    // in my workspace", or "Open my copy" once there is one (design 04,
+    // state E; T359, AC-254).
+    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    const edit = page
       .locator('.dashboard__header')
-      .evaluate((header) =>
-        header.querySelector(':scope > :last-child')?.getAttribute('aria-label'),
-      );
-    expect(last).toBe('Dashboard settings');
+      .getByRole('button', { name: /^(Edit in my workspace|Open my copy)$/ });
+    await expect(edit.locator('svg')).toHaveCount(1);
+    expect(await style(edit, 'background-color', 'color', 'height', 'border-radius')).toEqual({
+      'background-color': await token(page, 'accent'),
+      color: await token(page, 'text-on-accent'),
+      height: '32px',
+      'border-radius': '6px',
+    });
   });
 
   test('page tabs: underlined in the accent when selected, on a subtle rule', async ({ page }) => {
@@ -458,7 +486,7 @@ test.describe('T204: the filter bar', () => {
     const title = `Pills ${String(Date.now())}`;
     const { id } = (await (
       await request.post(`${api}/documents`, {
-        data: { kind: 'dashboard', title, folderId: 'root' },
+        data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
       })
     ).json()) as { id: string };
     await request.put(`${api}/documents/dashboard/${id}`, {
@@ -467,7 +495,7 @@ test.describe('T204: the filter bar', () => {
         body: {
           schemaVersion: 1,
           title,
-          folderId: 'root',
+          ...IN_MY_WORKSPACE,
           owner: 'admin',
           settings: { width: 'fixed' },
           pages: [
@@ -620,7 +648,7 @@ test.describe('T205: the edit sidebar', () => {
     const title = `Sidebar ${String(Date.now())}`;
     const { id } = (await (
       await request.post(`${api}/documents`, {
-        data: { kind: 'dashboard', title, folderId: 'root' },
+        data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
       })
     ).json()) as { id: string };
     await request.put(`${api}/documents/dashboard/${id}`, {
@@ -629,7 +657,7 @@ test.describe('T205: the edit sidebar', () => {
         body: {
           schemaVersion: 1,
           title,
-          folderId: 'root',
+          ...IN_MY_WORKSPACE,
           owner: 'admin',
           settings: { width: 'fixed' },
           pages: [{ id: 'only', title: 'Only', items: [] }],
@@ -778,6 +806,11 @@ test.describe('T205: the edit sidebar', () => {
  */
 test.describe('T244: Explore’s tree, header and table', () => {
   const api = 'http://localhost:4100/api';
+  /**
+   * A folder, made where it is asked for; a dashboard or chart, put in its
+   * shared folder as the single user puts one there: through My workspace and
+   * a proposal they approve (T359, AC-254).
+   */
   const make = async (
     request: APIRequestContext,
     kind: 'folder' | 'dashboard' | 'chart',
@@ -785,19 +818,10 @@ test.describe('T244: Explore’s tree, header and table', () => {
     title: string,
     body: Record<string, unknown> = {},
   ) => {
-    const { id } = (await (
-      await request.post(`${api}/documents`, { data: { kind, title, folderId } })
-    ).json()) as { id: string };
-    if (kind !== 'folder' && Object.keys(body).length > 0) {
-      const stored = (await (await request.get(`${api}/documents/${kind}/${id}`)).json()) as {
-        version: number;
-        body: Record<string, unknown>;
-      };
-      await request.put(`${api}/documents/${kind}/${id}`, {
-        data: { version: stored.version, body: { ...stored.body, ...body } },
-      });
-    }
-    return id;
+    if (kind !== 'folder') return sharedIn(request, kind, folderId, { ...body, title });
+    const made = await request.post(`${api}/documents`, { data: { kind, title, folderId } });
+    expect(made.status()).toBe(201);
+    return ((await made.json()) as { id: string }).id;
   };
   const folders = (page: Page) => page.getByRole('complementary', { name: 'Folders' });
   const contents = (page: Page) => page.getByTestId('explore-contents');
@@ -1093,8 +1117,10 @@ test.describe('T244: Explore’s tree, header and table', () => {
     });
 
     // The footnote under the card: <p class="xs muted"> (F22, mismatch 23).
+    // A shared folder's says where the rest is made (design 04, state C;
+    // T331), with sign-in off too (T359, AC-254).
     const note = contents(page).getByText(
-      'Charts are shared: a chart used on several dashboards is edited once, and every dashboard shows the change.',
+      'To add a dashboard, chart, model or data source here, create it in My workspace with this folder as its target.',
     );
     expect(await style(note, 'font-size', 'line-height', 'color')).toEqual({
       'font-size': '12px',
@@ -1171,7 +1197,7 @@ test.describe('T244: Explore’s tree, header and table', () => {
         'Actions',
       ]);
       // <tr><td colspan="5" style="height:120px;text-align:center" class="sec">
-      const cell = table.getByRole('cell', { name: text });
+      const cell = table.getByRole('cell', { name: text, exact: true });
       expect((await cell.boundingBox())?.height).toBeCloseTo(120, 0);
       expect(await style(cell, 'text-align', 'font-size', 'color')).toEqual({
         'text-align': 'center',
@@ -1179,7 +1205,9 @@ test.describe('T244: Explore’s tree, header and table', () => {
         color: await token(page, 'text-secondary'),
       });
     };
-    await said('This folder is empty. Use ＋ New to add a dashboard or chart.');
+    // A shared folder's: New makes no dashboard or chart there (T331), with
+    // sign-in off too (T359, AC-254).
+    await said('This folder is empty.');
     await main
       .getByRole('searchbox', { name: 'Search dashboards and charts' })
       .fill(`nothing called ${unique}`);
@@ -1292,15 +1320,9 @@ test.describe('T245: the app bar’s search and avatar, the palette, and a new d
   });
 
   test('New › Dashboard opens the new dashboard ready to edit', async ({ page }) => {
-    await page.goto('/explore?folder=seed-folder-0');
-    await page
-      .getByTestId('explore-contents')
-      .getByRole('button', { name: 'New', exact: true })
-      .click();
-    await page
-      .getByRole('menu', { name: 'New' })
-      .getByRole('menuitem', { name: 'Dashboard' })
-      .click();
+    // In My workspace, to go to Finance: where the single user makes one
+    // (T359, AC-254; a shared folder's New makes a folder alone, T331).
+    await newInMyWorkspace(page, 'Dashboard', 'seed-folder-0');
 
     // explore.js: S.editNew = true — straight into edit mode (N15).
     await expect(page).toHaveURL(/\/explore\/dashboards\//);
@@ -1342,8 +1364,17 @@ test.describe('T246: the dashboard header and the filter band', () => {
     page,
   }) => {
     // .dash-head { padding: 12px 24px 0; gap: 12px }: the breadcrumb's 24 px
-    // row, then the 32 px title (mismatch 1).
-    expect((await title(page).locator('..').boundingBox())?.height).toBe(80);
+    // row, then the 32 px title (mismatch 1). To the title's foot: below it
+    // now is the line saying where the dashboard is (design 04, state E),
+    // which sign-in off shows too (T359, AC-254).
+    const head = await title(page).locator('..').boundingBox();
+    const titled = await title(page).boundingBox();
+    expect((titled?.y ?? 0) + (titled?.height ?? 0) - (head?.y ?? 0)).toBe(80);
+    await expect(
+      title(page)
+        .locator('..')
+        .getByText(/^In Shared · version \d+$/),
+    ).toBeVisible();
     const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
     // <button class="btn ghost sm" data-back>← Explore</button> (mismatches 1–2)
     expect(
@@ -1373,6 +1404,9 @@ test.describe('T246: the dashboard header and the filter band', () => {
   test('editing: a 20 px title after a muted "Editing", 14 px Undo and Redo, and "+ Page tab" 12/600 secondary', async ({
     page,
   }) => {
+    // Edited in the single user's copy.
+    await page.goto(await editableSeed());
+    await expect(title(page)).toBeVisible();
     await page.getByRole('button', { name: 'Edit', exact: true }).click();
     const bar = page.getByRole('toolbar', { name: 'Dashboard editing' });
     await expect(bar).toBeVisible();
@@ -1410,6 +1444,9 @@ test.describe('T246: the dashboard header and the filter band', () => {
   test('the filter band: 53 px whatever it holds, its hint 12/16 muted, and full width while editing', async ({
     page,
   }) => {
+    // In the single user's copy, which they may edit.
+    await page.goto(await editableSeed());
+    await expect(title(page)).toBeVisible();
     // .filterbar { padding: 10px 24px } around a 32 px pill, ruled off: 53 px
     // with only its hint as with a pill (N8, mismatch 6).
     await expect(band(page)).toBeVisible();
@@ -1445,7 +1482,7 @@ test.describe('T246: the dashboard header and the filter band', () => {
     const name = `Tabs ${String(Date.now())}`;
     const { id } = (await (
       await request.post(`${api}/documents`, {
-        data: { kind: 'dashboard', title: name, folderId: 'root' },
+        data: { kind: 'dashboard', title: name, ...IN_MY_WORKSPACE },
       })
     ).json()) as { id: string };
     await request.put(`${api}/documents/dashboard/${id}`, {
@@ -1454,7 +1491,7 @@ test.describe('T246: the dashboard header and the filter band', () => {
         body: {
           schemaVersion: 1,
           title: name,
-          folderId: 'root',
+          ...IN_MY_WORKSPACE,
           owner: 'admin',
           settings: { width: 'fixed' },
           pages: Array.from({ length: 16 }, (_, index) => ({
@@ -1494,7 +1531,7 @@ test.describe('T247: the tab group, the Header, Markdown and the section band', 
     const title = `Elements ${String(Date.now())}`;
     const { id } = (await (
       await request.post(`${api}/documents`, {
-        data: { kind: 'dashboard', title, folderId: 'root' },
+        data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
       })
     ).json()) as { id: string };
     await request.put(`${api}/documents/dashboard/${id}`, {
@@ -1503,7 +1540,7 @@ test.describe('T247: the tab group, the Header, Markdown and the section band', 
         body: {
           schemaVersion: 1,
           title,
-          folderId: 'root',
+          ...IN_MY_WORKSPACE,
           owner: 'admin',
           settings: { width: 'fixed' },
           pages: [
@@ -1879,12 +1916,12 @@ test.describe('T252: a chart tile’s badges, head and incomplete state', () => 
     const name = `Incomplete ${String(Date.now())}`;
     const { id } = (await (
       await request.post(`${api}/documents`, {
-        data: { kind: 'dashboard', title: name, folderId: 'root' },
+        data: { kind: 'dashboard', title: name, ...IN_MY_WORKSPACE },
       })
     ).json()) as { id: string };
     const chart = (await (
       await request.post(`${api}/documents`, {
-        data: { kind: 'chart', title: 'Revenue KPI', folderId: 'root' },
+        data: { kind: 'chart', title: 'Revenue KPI', ...IN_MY_WORKSPACE },
       })
     ).json()) as { id: string };
     await request.put(`${api}/documents/chart/${chart.id}`, {
@@ -1909,7 +1946,7 @@ test.describe('T252: a chart tile’s badges, head and incomplete state', () => 
         body: {
           schemaVersion: 1,
           title: name,
-          folderId: 'root',
+          ...IN_MY_WORKSPACE,
           owner: 'admin',
           settings: { width: 'fixed' },
           pages: [
@@ -1955,7 +1992,8 @@ test.describe('T252: a chart tile’s badges, head and incomplete state', () => 
  */
 test.describe('T253: tile menus, the grip and the edit grid', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    // The copy, which its tests edit.
+    await page.goto(await editableSeed());
     await expect(firstChart(page).getByTestId('chart-canvas')).toBeVisible();
   });
 
@@ -2084,7 +2122,7 @@ test.describe('T253’s review: menus, the grip and the bands', () => {
     dimension: string,
   ) {
     const chart = (await (
-      await request.post(`${api}/documents`, { data: { kind: 'chart', title, folderId: 'root' } })
+      await request.post(`${api}/documents`, { data: { kind: 'chart', title, ...IN_MY_WORKSPACE } })
     ).json()) as { id: string };
     await request.put(`${api}/documents/chart/${chart.id}`, {
       data: {
@@ -2109,7 +2147,7 @@ test.describe('T253’s review: menus, the grip and the bands', () => {
     const title = `Review ${String(Date.now())}`;
     const { id } = (await (
       await request.post(`${api}/documents`, {
-        data: { kind: 'dashboard', title, folderId: 'root' },
+        data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
       })
     ).json()) as { id: string };
     const narrow = await chartOn(request, id, 'Narrow', 'orders', 'orders.count', 'orders.status');
@@ -2127,7 +2165,7 @@ test.describe('T253’s review: menus, the grip and the bands', () => {
         body: {
           schemaVersion: 1,
           title,
-          folderId: 'root',
+          ...IN_MY_WORKSPACE,
           owner: 'admin',
           settings: { width: 'fixed' },
           filters: [{ id: 'f-category', widget: 'checkbox', member: 'products.category' }],
@@ -2249,6 +2287,10 @@ test.describe('T253’s review: menus, the grip and the bands', () => {
     for (const id of ['tile-narrow', 'el-notes', 'el-header', 'el-divider', 'el-image']) {
       const tile = page.locator(`[data-tile="${id}"]`);
       const grip = page.getByTestId(`grip-${id}`);
+      // In view: under My workspace's band and the line saying where it goes
+      // (T359, AC-254), the last ones sit at the window's foot, where a point
+      // past its edge finds nothing.
+      await grip.scrollIntoViewIfNeeded();
       const reached = await grip.evaluate((element) => {
         const box = element.getBoundingClientRect();
         const [x, y] = [box.left + box.width / 2, box.top + box.height / 2];
@@ -2421,7 +2463,7 @@ test.describe('T253’s review: menus, the grip and the bands', () => {
 test.describe('T248: the edit sidebar', () => {
   const sidebar = (page: Page) => page.getByRole('complementary', { name: 'Edit sidebar' });
   test.beforeEach(async ({ page }) => {
-    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    await page.goto(await editableSeed());
     await expect(firstChart(page).getByTestId('chart-canvas')).toBeVisible();
     await page.getByRole('button', { name: 'Edit', exact: true }).click();
     await expect(sidebar(page)).toBeVisible();
@@ -2532,7 +2574,7 @@ test.describe('T248: the edit sidebar', () => {
     const title = `Last tile ${String(Date.now())}`;
     const { id } = (await (
       await request.post(`${api}/documents`, {
-        data: { kind: 'dashboard', title, folderId: 'root' },
+        data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
       })
     ).json()) as { id: string };
     await request.put(`${api}/documents/dashboard/${id}`, {
@@ -2541,7 +2583,7 @@ test.describe('T248: the edit sidebar', () => {
         body: {
           schemaVersion: 1,
           title,
-          folderId: 'root',
+          ...IN_MY_WORKSPACE,
           owner: 'admin',
           settings: { width: 'fixed' },
           pages: [
@@ -2581,7 +2623,7 @@ test.describe('T248: the edit sidebar', () => {
     const title = `Empty section ${String(Date.now())}`;
     const { id } = (await (
       await request.post(`${api}/documents`, {
-        data: { kind: 'dashboard', title, folderId: 'root' },
+        data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
       })
     ).json()) as { id: string };
     await request.put(`${api}/documents/dashboard/${id}`, {
@@ -2590,7 +2632,7 @@ test.describe('T248: the edit sidebar', () => {
         body: {
           schemaVersion: 1,
           title,
-          folderId: 'root',
+          ...IN_MY_WORKSPACE,
           owner: 'admin',
           settings: { width: 'fixed' },
           pages: [
@@ -3161,7 +3203,7 @@ test.describe('T257: the chart editor', () => {
   test('Actual size and Fit are the prototype’s segmented control, the chosen one on the accent’s tint', async ({
     page,
   }) => {
-    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    await page.goto(await editableSeed());
     await page.getByRole('button', { name: 'Edit', exact: true }).click();
     await page.getByTestId('edit-chart-tile-status').click();
     const sizes = page.getByRole('group', { name: 'Preview size' });
@@ -3240,7 +3282,8 @@ test.describe('T257: the chart editor', () => {
 test.describe('T249: the dashboard settings page', () => {
   const openSettings = async (page: Page) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    // The copy's settings, which the single user may change.
+    await page.goto(await editableSeed());
     await page.getByRole('button', { name: 'Dashboard settings' }).click();
     const settings = page.getByTestId('dashboard-settings');
     await expect(settings.getByRole('heading', { name: 'General', level: 2 })).toBeVisible();
@@ -3600,7 +3643,7 @@ test.describe('T300 and T304: KPI, table and pivot tiles', () => {
     wells: { measures: string[]; dimensions: string[] },
   ) {
     const chart = (await (
-      await request.post(`${api}/documents`, { data: { kind: 'chart', title, folderId: 'root' } })
+      await request.post(`${api}/documents`, { data: { kind: 'chart', title, ...IN_MY_WORKSPACE } })
     ).json()) as { id: string };
     await request.put(`${api}/documents/chart/${chart.id}`, {
       data: {
@@ -3626,7 +3669,7 @@ test.describe('T300 and T304: KPI, table and pivot tiles', () => {
     const title = `DOM tiles ${stamp}`;
     const { id } = (await (
       await request.post(`${api}/documents`, {
-        data: { kind: 'dashboard', title, folderId: 'root' },
+        data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
       })
     ).json()) as { id: string };
     const kpi = await chartOn(request, id, `Order count ${stamp}`, 'kpi', {
@@ -3647,7 +3690,7 @@ test.describe('T300 and T304: KPI, table and pivot tiles', () => {
         body: {
           schemaVersion: 1,
           title,
-          folderId: 'root',
+          ...IN_MY_WORKSPACE,
           owner: 'admin',
           settings: { width: 'fixed' },
           pages: [

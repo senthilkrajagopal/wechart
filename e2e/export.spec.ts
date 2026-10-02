@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises';
 
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
+import { IN_MY_WORKSPACE } from './workspace';
+
 const API = 'http://localhost:4100/api';
 
 /** A dashboard of its own: a table of order count by status, with a status filter. */
@@ -9,11 +11,13 @@ async function ordersDashboard(request: APIRequestContext) {
   const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const title = `Export ${unique}`;
   const dashboard = (await (
-    await request.post(`${API}/documents`, { data: { kind: 'dashboard', title, folderId: 'root' } })
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
   ).json()) as { id: string };
   const chart = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'chart', title: 'Orders by status', folderId: 'root' },
+      data: { kind: 'chart', title: 'Orders by status', ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   await request.put(`${API}/documents/chart/${chart.id}`, {
@@ -45,7 +49,7 @@ async function ordersDashboard(request: APIRequestContext) {
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         filters: [{ id: 'f-status', widget: 'checkbox', member: 'orders.status' }],

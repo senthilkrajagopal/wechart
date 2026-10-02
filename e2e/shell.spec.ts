@@ -128,10 +128,11 @@ test.describe('at 390 pixels wide', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(menu).toHaveAttribute('aria-expanded', 'false');
 
-    // Navigation, from the menu: it goes.
+    // Navigation, from the menu: it goes. To Jobs: the switcher lists no
+    // Model (AC-001; T331).
     await menu.click();
-    await nav.getByRole('link', { name: 'Model' }).click();
-    await expect(page).toHaveURL(/\/model$/);
+    await nav.getByRole('link', { name: 'Jobs' }).click();
+    await expect(page).toHaveURL(/\/jobs$/);
   });
 });
 

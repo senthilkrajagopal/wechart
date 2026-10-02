@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
 import { wellPicker } from './wells';
+import { IN_MY_WORKSPACE } from './workspace';
 
 /**
  * T403 / AC-220: THE SYSTEM SHALL name every member by its title from the
@@ -112,7 +113,9 @@ async function titledDashboard(request: APIRequestContext) {
   const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const title = `Titles ${unique}`;
   const dashboard = (await (
-    await request.post(`${API}/documents`, { data: { kind: 'dashboard', title, folderId: 'root' } })
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
   ).json()) as { id: string };
   const tiles = [
     {
@@ -133,7 +136,7 @@ async function titledDashboard(request: APIRequestContext) {
   for (const each of tiles) {
     const chart = (await (
       await request.post(`${API}/documents`, {
-        data: { kind: 'chart', title: `${each.id} ${unique}`, folderId: 'root' },
+        data: { kind: 'chart', title: `${each.id} ${unique}`, ...IN_MY_WORKSPACE },
       })
     ).json()) as { id: string };
     await request.put(`${API}/documents/chart/${chart.id}`, {
@@ -160,7 +163,7 @@ async function titledDashboard(request: APIRequestContext) {
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [{ id: 'only', title: 'Only', items }],
@@ -210,7 +213,7 @@ test('a library chart’s page draws a one-source legend by short titles', async
 }) => {
   const title = `Titles library ${String(Date.now())}`;
   const chart = (await (
-    await request.post(`${API}/documents`, { data: { kind: 'chart', title, folderId: 'root' } })
+    await request.post(`${API}/documents`, { data: { kind: 'chart', title, ...IN_MY_WORKSPACE } })
   ).json()) as { id: string };
   await request.put(`${API}/documents/chart/${chart.id}`, {
     data: {
@@ -218,6 +221,7 @@ test('a library chart’s page draws a one-source legend by short titles', async
       body: {
         schemaVersion: 1,
         title,
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         chart: {
           source: { cube: 'orders' },

@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
+import { myCopyOf } from './workspace';
+
 /**
  * T466 (AC-187; UX-106, UX-109, UX-111): one page frame and one dialog
  * pattern across the workspaces, as the 2026-09-27 re-check of the phase-1
@@ -136,8 +138,14 @@ test.describe('one dialog pattern (UX-106)', () => {
     await expect(foot.getByRole('button', { name: /^Next: Tables/ })).toHaveClass(/btn-primary/);
   });
 
-  test('a dashboard’s settings discard question: a 16/600 title, 14 px body', async ({ page }) => {
-    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+  test('a dashboard’s settings discard question: a 16/600 title, 14 px body', async ({
+    page,
+    request,
+  }) => {
+    // Its settings are changed in the single user's copy (T359, AC-254).
+    await page.goto(
+      `/explore/dashboards/${await myCopyOf(request, 'dashboard', 'seed-root-dashboard-1')}`,
+    );
     await page.getByRole('button', { name: 'Dashboard settings' }).click();
     const settings = page.getByTestId('dashboard-settings');
     await settings.getByLabel('Description', { exact: true }).fill('Changed');

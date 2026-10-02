@@ -1,4 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type APIRequestContext } from '@playwright/test';
+
+import { newInMyWorkspace } from './workspace';
 
 /**
  * AC-020: WHEN the user creates a folder, dashboard or chart from Explore, THE
@@ -32,36 +34,48 @@ async function listedIn(page: import('@playwright/test').Page, folder: string, i
   await expect(page.getByTestId(`item-${id}`)).toBeVisible();
 }
 
-test('creates a dashboard in the selected folder and opens it', async ({ page }) => {
-  await page.goto('/explore');
-  await page.getByRole('tree').getByRole('button', { name: 'Finance' }).click();
-  await expect(page.getByTestId('explore-contents').getByRole('table')).toBeVisible();
+/**
+ * A folder of the test's own in My workspace, where the single user makes
+ * dashboards and charts (T359, AC-254; a shared folder's New makes a folder
+ * alone, T331): its id and title.
+ */
+async function ownFolder(request: APIRequestContext) {
+  const title = `Made here ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const made = await request.post('http://localhost:4100/api/documents', {
+    data: { kind: 'folder', title, folderId: 'mine' },
+  });
+  expect(made.status()).toBe(201);
+  return { id: ((await made.json()) as { id: string }).id, title };
+}
 
-  await createIn(page, 'Dashboard');
+test('creates a dashboard in the selected folder and opens it', async ({ page, request }) => {
+  const folder = await ownFolder(request);
+
+  // New › Dashboard there, named and going to Finance.
+  await newInMyWorkspace(page, 'Dashboard', 'seed-folder-0', folder.id);
 
   // Opened: the URL names the new object and the surface shows it, by the
   // dashboard's own title — what a reader sees.
   await expect(page).toHaveURL(/\/explore\/dashboards\//);
   await expect(page.getByRole('heading', { name: 'Untitled dashboard' })).toBeVisible();
 
-  // Landed in Finance, not at the root: this one, by its id — the title is
-  // shared by every dashboard created this way.
+  // Landed in the folder, not at My workspace's top: this one, by its id —
+  // the title is shared by every dashboard created this way.
   // By the path alone: the address carries `?editing=true` until edit mode
   // has begun (T245's review).
   const id = decodeURIComponent(new URL(page.url()).pathname.split('/').pop() ?? '');
-  await listedIn(page, 'Finance', id);
+  await listedIn(page, folder.title, id);
 });
 
-test('creates a chart in the selected folder and opens it', async ({ page }) => {
-  await page.goto('/explore');
-  await page.getByRole('tree').getByRole('button', { name: 'Finance' }).click();
+test('creates a chart in the selected folder and opens it', async ({ page, request }) => {
+  const folder = await ownFolder(request);
 
-  await createIn(page, 'Chart');
+  await newInMyWorkspace(page, 'Chart', 'seed-folder-0', folder.id);
 
   // Opened in the chart editor, to be built (AC-213).
   await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit\?new=true$/);
   const id = decodeURIComponent(page.url().split('/').at(-2) ?? '');
-  await listedIn(page, 'Finance', id);
+  await listedIn(page, folder.title, id);
 });
 
 test('creates a folder and selects it, empty, with its name ready to type', async ({ page }) => {

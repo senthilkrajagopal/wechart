@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
 import { PUBLISHED } from './model-files';
+import { sharedIn } from './workspace';
 
 /**
  * T342, with sign-in off: one user, who changes a model in place in any
@@ -53,7 +54,11 @@ async function xcubeIdOf(request: APIRequestContext, folderId: string): Promise<
   return xcubeId!;
 }
 
-/** A chart saved in a folder on one measure, bound there as a save binds it (AC-272); its id. */
+/**
+ * A chart in a folder on one measure, bound there as an approval binds it
+ * (AC-272): put there as the single user shares one, through My workspace
+ * and a proposal they approve (T359, AC-254). Its id.
+ */
 async function chartOn(
   request: APIRequestContext,
   folderId: string,
@@ -61,30 +66,20 @@ async function chartOn(
   cube: string,
   measure: string,
 ): Promise<string> {
-  const created = await request.post('/api/documents', {
-    data: { kind: 'chart', title, folderId },
-  });
-  expect(created.status()).toBe(201);
-  const { id } = (await created.json()) as { id: string };
-  const stored = (await (await request.get(`/api/documents/chart/${id}`)).json()) as {
-    version: number;
-    body: Record<string, unknown>;
-  };
-  const saved = await request.put(`/api/documents/chart/${id}`, {
-    data: {
-      version: stored.version,
-      body: {
-        ...stored.body,
-        chart: {
-          source: { cube },
-          wells: { measures: [`${cube}.${measure}`], dimensions: [], timeDimensions: [] },
-          chartType: 'kpi',
-          filters: [],
-        },
-      },
+  // `sharedIn` holds the make, the save and the approval to their statuses.
+  const id = await sharedIn(request, 'chart', folderId, {
+    title,
+    chart: {
+      source: { cube },
+      wells: { measures: [`${cube}.${measure}`], dimensions: [], timeDimensions: [] },
+      chartType: 'kpi',
+      filters: [],
     },
   });
-  expect(saved.ok(), await saved.text()).toBe(true);
+  // Landed in the folder itself, not left in My workspace.
+  const stored = await request.get(`/api/documents/chart/${id}`);
+  expect(stored.status()).toBe(200);
+  expect(((await stored.json()) as { body: { folderId?: string } }).body.folderId).toBe(folderId);
   return id;
 }
 

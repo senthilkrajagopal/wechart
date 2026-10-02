@@ -22,7 +22,15 @@ test('the app shell renders in this browser', async ({ page }) => {
   // script fails here.
   const switcher = page.getByRole('navigation', { name: /workspace/i });
   await expect(switcher).toBeVisible();
-  await expect(switcher.getByRole('link')).toHaveCount(6);
+  // Every workspace the single user may use, and no Model entry (AC-001;
+  // T331): with sign-in off they hold every permission (AC-254).
+  await expect(switcher.getByRole('link')).toHaveText([
+    'Explore',
+    'Data sources',
+    'Jobs',
+    'Schedules',
+    'Security',
+  ]);
   await expect(page).toHaveTitle('wechart');
 
   expect(pageErrors.map((e) => e.message)).toEqual([]);

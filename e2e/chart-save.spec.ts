@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Page, type Route } from '@playwright/test';
 
 import { chooseChartType, expectChartType } from './chartType';
+import { IN_MY_WORKSPACE } from './workspace';
 
 /**
  * T192 / AC-183: WHEN a chart edited from a dashboard tile is applied, THE
@@ -40,12 +41,12 @@ async function makeDashboard(request: APIRequestContext, library = false) {
 
   const dashboard = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'dashboard', title: `Chart save ${unique}`, folderId: 'root' },
+      data: { kind: 'dashboard', title: `Chart save ${unique}`, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   const chart = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'chart', title: `Chart ${unique}`, folderId: 'root' },
+      data: { kind: 'chart', title: `Chart ${unique}`, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
 
@@ -56,7 +57,7 @@ async function makeDashboard(request: APIRequestContext, library = false) {
         schemaVersion: 1,
         title: `Chart ${unique}`,
         owner: 'admin',
-        ...(library ? { folderId: 'root' } : { localToDashboardId: dashboard.id }),
+        ...(library ? { ...IN_MY_WORKSPACE } : { localToDashboardId: dashboard.id }),
         chart: definition,
       },
     },
@@ -67,7 +68,7 @@ async function makeDashboard(request: APIRequestContext, library = false) {
       body: {
         schemaVersion: 1,
         title: `Chart save ${unique}`,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [
@@ -297,7 +298,7 @@ async function alsoOn(request: APIRequestContext, chartId: string) {
   const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const dashboard = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'dashboard', title: `Also ${unique}`, folderId: 'root' },
+      data: { kind: 'dashboard', title: `Also ${unique}`, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
@@ -306,7 +307,7 @@ async function alsoOn(request: APIRequestContext, chartId: string) {
       body: {
         schemaVersion: 1,
         title: `Also ${unique}`,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [
@@ -357,10 +358,11 @@ test('the editor says a library chart is shared and on how many dashboards, and 
   await expect(page.getByTestId('save-failed')).toHaveCount(0);
   await expect(canvas(page)).toHaveAttribute('data-chart-type', 'stackedBar');
   await expect.poll(() => storedType(request, chartId)).toBe('stackedBar');
-  // Still the shared chart, in its folder: changed, not taken over.
+  // Still the library chart, in its folder: changed, not taken over. Its
+  // folder is My workspace, where the single user makes it (T359, AC-254).
   const after = await stored(request, chartId);
   expect(after.body['localToDashboardId']).toBeUndefined();
-  expect(after.body['folderId']).toBe('root');
+  expect(after.body['folderId']).toBe(IN_MY_WORKSPACE.folderId);
   // The other dashboard that uses it draws it changed.
   await page.goto(`/explore/dashboards/${other}`);
   await expect(canvas(page)).toHaveAttribute('data-chart-type', 'stackedBar');

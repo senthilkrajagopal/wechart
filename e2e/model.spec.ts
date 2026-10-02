@@ -346,7 +346,14 @@ test('a save that edits a member charts use lists them first, and saves only if 
 
   const warning = page.getByRole('alert').filter({ hasText: 'This save changes members that' });
   // The seed charts on orders.count, each a link to it, saying what it uses.
-  const charts = warning.getByRole('list', { name: 'Charts' }).getByRole('listitem');
+  // The seeded dashboard's own, by where they link: the single user's copy
+  // of that dashboard has charts and a title of the same names (T359, AC-254).
+  const seeded = (list: string) =>
+    warning
+      .getByRole('list', { name: list })
+      .getByRole('listitem')
+      .filter({ has: page.locator('a[href="/explore/dashboards/seed-root-dashboard-1"]') });
+  const charts = seeded('Charts');
   await expect(charts.filter({ hasText: 'Orders by category and status' })).toHaveText(
     'Orders by category and status — uses orders.count',
   );
@@ -354,16 +361,14 @@ test('a save that edits a member charts use lists them first, and saves only if 
     'Orders over time by status — uses orders.count',
   );
   // Kept on its dashboard, it opens there.
-  await expect(
-    warning.getByRole('link', { name: 'Orders by category and status' }),
-  ).toHaveAttribute('href', '/explore/dashboards/seed-root-dashboard-1');
+  await expect(charts.getByRole('link', { name: 'Orders by category and status' })).toHaveAttribute(
+    'href',
+    '/explore/dashboards/seed-root-dashboard-1',
+  );
   // And the dashboard drawing it on a tile.
-  await expect(
-    warning
-      .getByRole('list', { name: 'Dashboards' })
-      .getByRole('listitem')
-      .filter({ hasText: 'Company dashboard 01' }),
-  ).toHaveText('Company dashboard 01 — uses orders.count');
+  await expect(seeded('Dashboards').filter({ hasText: 'Company dashboard 01' })).toHaveText(
+    'Company dashboard 01 — uses orders.count',
+  );
   // Nothing saved yet: the stored file is as it was.
   const stored = async () =>
     (

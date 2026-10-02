@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { IN_MY_WORKSPACE } from './workspace';
+
 const API = 'http://localhost:4100/api';
 
 /**
@@ -15,7 +17,7 @@ test('a new dashboard, as created, takes a tile added to it, and keeps it', asyn
 }) => {
   const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const created = await request.post(`${API}/documents`, {
-    data: { kind: 'dashboard', title: `New ${unique}`, folderId: 'root' },
+    data: { kind: 'dashboard', title: `New ${unique}`, ...IN_MY_WORKSPACE },
   });
   expect(created.ok()).toBe(true);
   const { id } = (await created.json()) as { id: string };

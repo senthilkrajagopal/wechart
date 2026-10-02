@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { IN_MY_WORKSPACE, seedDashboardCopy } from './workspace';
+
 /**
  * T184 / AC-179: THE SYSTEM SHALL render dashboards, the chart editor and the
  * model editor without horizontal scrolling at a viewport width of 1,280
@@ -37,7 +39,8 @@ const drawnTile = (page: Page, tile: string) =>
 
 test('a dashboard does not scroll sideways at 1,280 px, viewed or edited', async ({ page }) => {
   // The seeded company dashboard: charts, notes and a section.
-  await page.goto('/explore/dashboards/seed-root-dashboard-1');
+  // The single user's copy, which they edit (T359, AC-254).
+  await page.goto(await seedDashboardCopy());
   await expect(drawnTile(page, 'tile-status')).toBeVisible({ timeout: 15_000 });
   expect(await overflowOf(page)).toEqual(NONE);
 
@@ -57,7 +60,8 @@ test('the chart editor does not scroll sideways at 1,280 px', async ({ page }) =
 
 test('the chart editor over a dashboard does not scroll the page sideways', async ({ page }) => {
   // The widest tile the seed has, so its preview at Actual size is wide.
-  await page.goto('/explore/dashboards/seed-root-dashboard-1');
+  // The single user's copy, which they edit (T359, AC-254).
+  await page.goto(await seedDashboardCopy());
   await expect(drawnTile(page, 'tile-region')).toBeVisible({ timeout: 15_000 });
   await page.locator('[data-tile="tile-region"]').hover();
   await page.locator('[data-tile="tile-region"] [data-edit-chart]').click();
@@ -113,7 +117,8 @@ test.describe('T250: below 1,024 px, a dashboard is for reading', () => {
   test('at 390 × 844 its tiles stack to one column, each keeps its title, and Edit is not offered', async ({
     page,
   }) => {
-    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    // The single user's copy, which they edit (T359, AC-254).
+    await page.goto(await seedDashboardCopy());
     await expect(drawnTile(page, 'tile-status')).toBeVisible({ timeout: 15_000 });
 
     // One column: every element on the page as wide as the grid.
@@ -167,7 +172,8 @@ test.describe('T250: below 1,024 px, a dashboard is for reading', () => {
   test('widened past 1,024 px, the dashboard is its grid again, and Edit comes back', async ({
     page,
   }) => {
-    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    // The single user's copy, which they edit (T359, AC-254).
+    await page.goto(await seedDashboardCopy());
     await expect(drawnTile(page, 'tile-status')).toBeVisible({ timeout: 15_000 });
     await page.setViewportSize({ width: 1280, height: 844 });
     const status = (await page.locator('[data-tile="tile-status"]').boundingBox())!;
@@ -218,12 +224,12 @@ test('a three-column chart tile keeps its title beside its badges at 1,440 px (T
   const chartTitle = `Narrow tile chart ${String(Date.now())}`;
   const { id } = (await (
     await request.post(`${api}/documents`, {
-      data: { kind: 'dashboard', title: name, folderId: 'root' },
+      data: { kind: 'dashboard', title: name, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   const chart = (await (
     await request.post(`${api}/documents`, {
-      data: { kind: 'chart', title: chartTitle, folderId: 'root' },
+      data: { kind: 'chart', title: chartTitle, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   await request.put(`${api}/documents/chart/${chart.id}`, {
@@ -248,7 +254,7 @@ test('a three-column chart tile keeps its title beside its badges at 1,440 px (T
       body: {
         schemaVersion: 1,
         title: name,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [

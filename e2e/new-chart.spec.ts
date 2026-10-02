@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { wellPicker } from './wells';
+import { newInMyWorkspace } from './workspace';
 
 /**
  * T227 / AC-213: WHEN the user chooses New › Chart in Explore, THE SYSTEM SHALL
@@ -11,19 +12,15 @@ import { wellPicker } from './wells';
  *
  * The critique found New › Chart landing on the chart's empty page instead
  * (docs/design/critiques/2026-09-24-chart-editor.md, F2).
+ *
+ * The open folder is My workspace, where the single user makes a chart, to
+ * go to Finance (T359, AC-254; a shared folder's New makes a folder alone,
+ * T331).
  */
 test('New › Chart opens the editor on an untitled chart, and saving it opens its page in the folder', async ({
   page,
 }) => {
-  await page.goto('/explore?folder=seed-folder-0');
-  const contents = page.getByTestId('explore-contents');
-  await expect(contents.getByRole('heading', { level: 1 })).toHaveText('Finance');
-
-  await contents.getByRole('button', { name: 'New', exact: true }).click();
-  await page
-    .getByRole('menu', { name: 'New' })
-    .getByRole('menuitem', { name: /Chart$/ })
-    .click();
+  await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
 
   // The editor, on the new chart.
   await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit\?new=true$/);
@@ -36,7 +33,7 @@ test('New › Chart opens the editor on an untitled chart, and saving it opens i
   await wellPicker(page, 'measures').selectOption('orders.count');
   await page.getByRole('button', { name: 'Save chart' }).click();
 
-  // Its page, and it is in Finance.
+  // Its page, and it is in My workspace.
   await expect(page).toHaveURL(new RegExp(`/explore/charts/${id}$`));
   await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText(
     'Untitled chart',
@@ -47,8 +44,14 @@ test('New › Chart opens the editor on an untitled chart, and saving it opens i
       .getByRole('complementary', { name: 'Chart details' })
       .getByRole('region', { name: 'Metrics' }),
   ).toContainText('Orders Count');
-  await page.goto('/explore?folder=seed-folder-0');
+  await page.goto('/explore?folder=mine');
   await expect(page.getByTestId(`item-${id}`)).toBeVisible();
+  // Stored there, going to Finance, the target it was made with.
+  const stored = (await (await page.request.get(`/api/documents/chart/${id}`)).json()) as {
+    body: { folderId?: string; targetFolderId?: string };
+  };
+  expect(stored.body.folderId).toBe('mine');
+  expect(stored.body.targetFolderId).toBe('seed-folder-0');
 });
 
 /**
@@ -61,13 +64,7 @@ test('a title typed and saved at once, without leaving the field, is the one sav
   page,
 }) => {
   const title = `Typed and saved ${String(Date.now())}`;
-  await page.goto('/explore?folder=seed-folder-0');
-  const contents = page.getByTestId('explore-contents');
-  await contents.getByRole('button', { name: 'New', exact: true }).click();
-  await page
-    .getByRole('menu', { name: 'New' })
-    .getByRole('menuitem', { name: /Chart$/ })
-    .click();
+  await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
   await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit\?new=true$/);
 
   await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });

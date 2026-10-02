@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
+import { IN_MY_WORKSPACE } from './workspace';
+
 /**
  * T154 / AC-148: WHEN the user asks to refresh a chart's data, THE SYSTEM
  * SHALL re-query Cube bypassing wechart's cached result and show the new
@@ -52,11 +54,13 @@ async function filteredDashboard(request: APIRequestContext) {
   const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const title = `Refresh ${unique}`;
   const dashboard = (await (
-    await request.post(`${API}/documents`, { data: { kind: 'dashboard', title, folderId: 'root' } })
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
   ).json()) as { id: string };
   const chart = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'chart', title: 'Orders by status', folderId: 'root' },
+      data: { kind: 'chart', title: 'Orders by status', ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   await request.put(`${API}/documents/chart/${chart.id}`, {
@@ -81,7 +85,7 @@ async function filteredDashboard(request: APIRequestContext) {
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [

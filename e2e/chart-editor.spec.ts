@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 
 import { chooseChartType, expectChartType } from './chartType';
 import { wellPicker } from './wells';
+import { IN_MY_WORKSPACE, myCopyOf, newInMyWorkspace } from './workspace';
 
 /**
  * AC-026: WHEN the user drags a field onto a well, or adds it with the well's
@@ -945,9 +946,13 @@ test('the editor is three panes under one header row, its preview in view at 144
  */
 test('over a dashboard, the editor’s one header row holds Back and Save dashboard', async ({
   page,
+  request,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/explore/dashboards/seed-root-dashboard-1');
+  // Edited in the single user's copy (T359, AC-254).
+  await page.goto(
+    `/explore/dashboards/${await myCopyOf(request, 'dashboard', 'seed-root-dashboard-1')}`,
+  );
   const tile = page.locator('[data-tile="tile-status"]');
   await expect(tile.getByTestId('chart-canvas')).toBeVisible();
   await tile.hover();
@@ -1325,8 +1330,10 @@ test('a manual combo, or a pie of too many slices, warns why and offers the reco
  */
 test.describe('T256: the library-chart editor’s way back and ownership note', () => {
   const api = 'http://localhost:4100/api';
+  /** In My workspace, to go to Finance: the single user's (T359, AC-254). */
+  const TO_FINANCE = { folderId: 'mine', targetFolderId: 'seed-folder-0' } as const;
 
-  /** A saved library chart in Finance, on `dashboards` dashboards of its own. */
+  /** A saved library chart going to Finance, on `dashboards` dashboards of its own. */
   async function savedChart(
     request: import('@playwright/test').APIRequestContext,
     dashboards: number,
@@ -1334,7 +1341,7 @@ test.describe('T256: the library-chart editor’s way back and ownership note', 
     const title = `Shared orders ${String(Date.now())}`;
     const { id } = (await (
       await request.post(`${api}/documents`, {
-        data: { kind: 'chart', title, folderId: 'seed-folder-0' },
+        data: { kind: 'chart', title, ...TO_FINANCE },
       })
     ).json()) as { id: string };
     await request.put(`${api}/documents/chart/${id}`, {
@@ -1344,7 +1351,7 @@ test.describe('T256: the library-chart editor’s way back and ownership note', 
           schemaVersion: 1,
           title,
           owner: 'admin',
-          folderId: 'seed-folder-0',
+          ...TO_FINANCE,
           chart: {
             source: { cube: 'orders' },
             wells: {
@@ -1361,7 +1368,7 @@ test.describe('T256: the library-chart editor’s way back and ownership note', 
       const name = `${title} board ${String(each)}`;
       const board = (await (
         await request.post(`${api}/documents`, {
-          data: { kind: 'dashboard', title: name, folderId: 'root' },
+          data: { kind: 'dashboard', title: name, ...IN_MY_WORKSPACE },
         })
       ).json()) as { id: string };
       await request.put(`${api}/documents/dashboard/${board.id}`, {
@@ -1370,7 +1377,7 @@ test.describe('T256: the library-chart editor’s way back and ownership note', 
           body: {
             schemaVersion: 1,
             title: name,
-            folderId: 'root',
+            ...IN_MY_WORKSPACE,
             owner: 'admin',
             settings: { width: 'fixed' },
             pages: [
@@ -1390,13 +1397,8 @@ test.describe('T256: the library-chart editor’s way back and ownership note', 
   test('a new chart: "← Back to Explore" first in the header, and the folder it is new in', async ({
     page,
   }) => {
-    await page.goto('/explore?folder=seed-folder-0');
-    const contents = page.getByTestId('explore-contents');
-    await contents.getByRole('button', { name: 'New', exact: true }).click();
-    await page
-      .getByRole('menu', { name: 'New' })
-      .getByRole('menuitem', { name: /Chart$/ })
-      .click();
+    // New in My workspace, to go to Finance (T359, AC-254).
+    await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
     await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit\?new=true$/);
 
     const head = page.getByTestId('editor-bar');
@@ -1409,11 +1411,13 @@ test.describe('T256: the library-chart editor’s way back and ownership note', 
       ),
     );
     expect(first).toBe('← Back to Explore');
-    await expect(head.getByTestId('editor-ownership')).toHaveText('New shared chart in Finance');
+    await expect(head.getByTestId('editor-ownership')).toHaveText(
+      'New shared chart in My workspace',
+    );
 
     // Nothing changed: back to the folder it was made in.
     await back.click();
-    await expect(page).toHaveURL(/\/explore\?folder=seed-folder-0$/);
+    await expect(page).toHaveURL(/\/explore\?folder=mine$/);
   });
 
   test('a saved chart: "← Back to chart", the dashboards it is on, and Back keeps the edit', async ({
@@ -1448,15 +1452,7 @@ test.describe('T256: the library-chart editor’s way back and ownership note', 
   // T256's review: Back on a changed new chart saves it, so it lands where
   // Save chart does — the chart's page (AC-213), as the prototype's does.
   test('a new chart changed, then Back: saved, and on its page', async ({ page }) => {
-    await page.goto('/explore?folder=seed-folder-0');
-    await page
-      .getByTestId('explore-contents')
-      .getByRole('button', { name: 'New', exact: true })
-      .click();
-    await page
-      .getByRole('menu', { name: 'New' })
-      .getByRole('menuitem', { name: /Chart$/ })
-      .click();
+    await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
     await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit\?new=true$/);
     const id = /\/explore\/charts\/([^/]+)\/edit/.exec(page.url())?.[1] ?? '';
 
@@ -1515,7 +1511,7 @@ test.describe('T256: the library-chart editor’s way back and ownership note', 
   }) => {
     const { id } = (await (
       await request.post(`${api}/documents`, {
-        data: { kind: 'chart', title: `Unbuilt ${String(Date.now())}`, folderId: 'seed-folder-0' },
+        data: { kind: 'chart', title: `Unbuilt ${String(Date.now())}`, ...TO_FINANCE },
       })
     ).json()) as { id: string };
     await page.goto(`/explore/charts/${id}/edit`);

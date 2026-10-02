@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type APIResponse } from '@playwright/test';
 
+import { IN_MY_WORKSPACE } from '../workspace';
+
 const API = 'http://localhost:4100/api';
 
 /**
@@ -81,14 +83,14 @@ async function tenChartDashboard(request: APIRequestContext) {
   const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const dashboard = await ok<{ id: string }>(
     request.post(`${API}/documents`, {
-      data: { kind: 'dashboard', title: `Ten charts ${unique}`, folderId: 'root' },
+      data: { kind: 'dashboard', title: `Ten charts ${unique}`, ...IN_MY_WORKSPACE },
     }),
   );
   const items = [];
   for (const [index, chart] of CHARTS.entries()) {
     const created = await ok<{ id: string }>(
       request.post(`${API}/documents`, {
-        data: { kind: 'chart', title: chart.title, folderId: 'root' },
+        data: { kind: 'chart', title: chart.title, ...IN_MY_WORKSPACE },
       }),
     );
     await ok(
@@ -120,7 +122,7 @@ async function tenChartDashboard(request: APIRequestContext) {
         body: {
           schemaVersion: 1,
           title: `Ten charts ${unique}`,
-          folderId: 'root',
+          ...IN_MY_WORKSPACE,
           owner: 'admin',
           settings: { width: 'full' },
           pages: [{ id: 'only', title: 'Only', items }],

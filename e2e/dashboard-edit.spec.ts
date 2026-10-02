@@ -1,12 +1,17 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
+import { myCopyOf } from './workspace';
+
 /**
- * The dashboard's edit mode, against the prototype (F22).
+ * The dashboard's edit mode, against the prototype (F22): on the seeded
+ * dashboard's copy in My workspace, where the single user edits it (T359,
+ * AC-254), the seeded one being shared.
  */
-const DASHBOARD = '/explore/dashboards/seed-root-dashboard-1';
+const dashboardOf = async (page: Page) =>
+  `/explore/dashboards/${await myCopyOf(page.request, 'dashboard', 'seed-root-dashboard-1')}`;
 
 const edit = async (page: Page) => {
-  await page.goto(DASHBOARD);
+  await page.goto(await dashboardOf(page));
   await expect(page.getByRole('heading', { name: 'Company dashboard 01' })).toBeVisible();
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();
@@ -236,7 +241,7 @@ test('adding a filter selects it: Properties, its field picker focused; its pill
 test('while editing, a chart tile’s head names its kind, not its freshness or Table view', async ({
   page,
 }) => {
-  await page.goto(DASHBOARD);
+  await page.goto(await dashboardOf(page));
   const tile = page.locator('[data-tile="tile-status"]');
   await expect(tile.getByTestId('tile-freshness')).toBeVisible();
   await expect(tile.getByTestId('toggle-table-view')).toBeVisible();

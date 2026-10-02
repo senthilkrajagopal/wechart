@@ -1,6 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
 import { chooseChartType, expectChartType } from './chartType';
+import { seedDashboardCopy } from './workspace';
 
 /**
  * T032 / AC-034: WHEN the editor is opened from a dashboard tile, THE SYSTEM
@@ -16,7 +17,11 @@ import { chooseChartType, expectChartType } from './chartType';
  * The seeded chart on `tile-status` saves `bar`, with one measure and two
  * dimensions, so `stackedBar` is a change it can legally take.
  */
-const DASHBOARD = '/explore/dashboards/seed-root-dashboard-1';
+/** The seeded dashboard as the single user edits it: their copy (T359, AC-254). */
+let DASHBOARD = '';
+test.beforeAll(async () => {
+  DASHBOARD = await seedDashboardCopy();
+});
 const TILE = '[data-tile="tile-status"]';
 
 async function open(page: Page) {

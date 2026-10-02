@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { IN_MY_WORKSPACE } from './workspace';
+
 const API = 'http://localhost:4100/api';
 
 /**
@@ -22,7 +24,7 @@ test('a local chart saved to a folder becomes a library chart there, and the pag
   const created = async (kind: string, title: string) =>
     (
       (await (
-        await request.post(`${API}/documents`, { data: { kind, title, folderId: 'root' } })
+        await request.post(`${API}/documents`, { data: { kind, title, ...IN_MY_WORKSPACE } })
       ).json()) as { id: string }
     ).id;
   const folderTitle = `Shared charts ${unique}`;
@@ -51,7 +53,7 @@ test('a local chart saved to a folder becomes a library chart there, and the pag
       body: {
         schemaVersion: 1,
         title: `Publish ${unique}`,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [

@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
+import { IN_MY_WORKSPACE, landedAs, shared } from './workspace';
+
 /**
  * AC-362 (T517; design 14, state A), which retires AC-023's
  * confirm-then-delete: WHEN a user deletes a library chart that a dashboard in
@@ -20,10 +22,21 @@ async function create(
   folderId = 'root',
 ) {
   const response = await request.post(`${API}/api/documents`, {
-    data: { kind, title, folderId },
+    // Made in My workspace, it names the shared folder it is to go to (T345).
+    data: { kind, title, ...(folderId === 'mine' ? IN_MY_WORKSPACE : { folderId }) },
   });
   expect(response.status()).toBe(201);
   return (await response.json()) as { id: string };
+}
+
+/**
+ * A dashboard in the shared root showing a chart, as the single user makes
+ * one (T359, AC-254): drafted in My workspace, then proposed and approved.
+ */
+async function sharedShowing(request: APIRequestContext, title: string, chartId: string) {
+  const draft = await create(request, 'dashboard', title, 'mine');
+  await showOn(request, draft.id, chartId);
+  return { id: landedAs(await shared(request, 'dashboard', draft.id), 'dashboard') };
 }
 
 async function showOn(request: APIRequestContext, dashboardId: string, chartId: string) {
@@ -45,9 +58,8 @@ test('refuses a chart shared dashboards use, naming them, with Close alone, and 
 }) => {
   const unique = `del-${String(Date.now())}`;
   const chart = await create(request, 'chart', `Chart ${unique}`);
-  const first = await create(request, 'dashboard', `First ${unique}`);
-  const second = await create(request, 'dashboard', `Second ${unique}`);
-  for (const dashboard of [first, second]) await showOn(request, dashboard.id, chart.id);
+  const first = await sharedShowing(request, `First ${unique}`, chart.id);
+  const second = await sharedShowing(request, `Second ${unique}`, chart.id);
 
   await page.goto(`/explore/charts/${chart.id}`);
   // The details pane's Delete section is gone (design 14, pin 1).
@@ -101,13 +113,19 @@ test('deletes a chart no dashboard uses once confirmed, back in its folder', asy
   expect((await request.get(`${API}/api/documents/chart/${chart.id}`)).status()).toBe(404);
 });
 
-test('refuses a dashboard’s own chart while its dashboard shows it, as AC-023 kept it', async ({
+/**
+ * With sign-in off since R52 (T359, AC-254), as with it on (T502): a shared
+ * dashboard's own chart goes only as its dashboard changes, by a proposal.
+ * Its page offers no Delete, and the service refuses one. Until then it was
+ * refused only while its dashboard showed it, as AC-023 kept it.
+ */
+test('refuses a shared dashboard’s own chart, which goes only with its dashboard', async ({
   page,
   request,
 }) => {
   const unique = `own-${String(Date.now())}`;
-  const dashboard = await create(request, 'dashboard', `Home ${unique}`);
-  const chart = await create(request, 'chart', `Own ${unique}`);
+  const dashboard = await create(request, 'dashboard', `Home ${unique}`, 'mine');
+  const chart = await create(request, 'chart', `Own ${unique}`, 'mine');
   const owned = await request.put(`${API}/api/documents/chart/${chart.id}`, {
     data: {
       version: 1,
@@ -127,7 +145,7 @@ test('refuses a dashboard’s own chart while its dashboard shows it, as AC-023 
       body: {
         schemaVersion: 1,
         title: `Home ${unique}`,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         pages: [
           {
@@ -140,14 +158,15 @@ test('refuses a dashboard’s own chart while its dashboard shows it, as AC-023 
     },
   });
   expect(shown.status(), await shown.text()).toBe(200);
+  // Shared: proposed and approved, its own chart with it.
+  const own = landedAs(await shared(request, 'dashboard', dashboard.id), 'chart');
 
-  await page.goto(`/explore/charts/${chart.id}`);
-  await askToDelete(page, `Own ${unique}`);
-  const dialog = page.getByRole('alertdialog', { name: `Can’t delete “Own ${unique}”` });
-  await expect(
-    dialog.getByRole('list', { name: 'Dashboards that use it, 1' }).getByRole('link'),
-  ).toHaveAttribute('href', `/explore/dashboards/${dashboard.id}`);
-  expect((await request.get(`${API}/api/documents/chart/${chart.id}`)).status()).toBe(200);
+  await page.goto(`/explore/charts/${own}`);
+  await expect(page.getByRole('heading', { name: `Own ${unique}` })).toBeVisible();
+  await expect(page.getByRole('button', { name: `More actions for Own ${unique}` })).toHaveCount(0);
+  const refused = await request.delete(`${API}/api/documents/chart/${own}`);
+  expect(refused.status(), await refused.text()).toBe(409);
+  expect((await request.get(`${API}/api/documents/chart/${own}`)).status()).toBe(200);
 });
 
 test('is held back by no draft in My workspace, whose tile then finds the chart gone', async ({
@@ -194,8 +213,7 @@ test('the service refuses the delete without the dialog, and "confirm" no longer
 }) => {
   const unique = `del3-${String(Date.now())}`;
   const chart = await create(request, 'chart', `Chart ${unique}`);
-  const dashboard = await create(request, 'dashboard', `Uses ${unique}`);
-  await showOn(request, dashboard.id, chart.id);
+  await sharedShowing(request, `Uses ${unique}`, chart.id);
 
   for (const query of ['', '?confirm=true']) {
     const response = await request.delete(`${API}/api/documents/chart/${chart.id}${query}`);

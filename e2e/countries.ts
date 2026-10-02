@@ -2,6 +2,7 @@ import { expect, type APIRequestContext, type Page } from '@playwright/test';
 
 import { ownCubeFile, PUBLISHED } from './model-files';
 import { wellPicker } from './wells';
+import { newInMyWorkspace } from './workspace';
 
 /**
  * A cube of ISO-3 country codes, of a browser's own (T398): the sample model
@@ -55,15 +56,8 @@ export async function newChartOnCountries(
 ): Promise<string> {
   const cube = countryCubeFor(project);
   await ownCubeFile(request, cube, model(cube));
-  await page.goto('/explore?folder=seed-folder-0');
-  await page
-    .getByTestId('explore-contents')
-    .getByRole('button', { name: 'New', exact: true })
-    .click();
-  await page
-    .getByRole('menu', { name: 'New' })
-    .getByRole('menuitem', { name: /Chart$/ })
-    .click();
+  // New in My workspace, to go to Finance, as the single user makes one (T359).
+  await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
   await expect(page).toHaveURL(/\/edit\?new=true$/);
   await expect(page.getByLabel('Cube or view').locator(`option[value="${cube}"]`)).toHaveCount(
     1,

@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
+import { IN_MY_WORKSPACE } from './workspace';
+
 /**
  * T014 / AC-013: WHEN a result is served from a pre-aggregation, THE SYSTEM
  * SHALL mark the tile as accelerated and show the age of the data; otherwise
@@ -40,13 +42,15 @@ async function dashboardOn(request: APIRequestContext, cubes: readonly string[])
   const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const title = `Acceleration ${unique}`;
   const dashboard = (await (
-    await request.post(`${API}/documents`, { data: { kind: 'dashboard', title, folderId: 'root' } })
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
   ).json()) as { id: string };
   const items = [];
   for (const cube of cubes) {
     const chart = (await (
       await request.post(`${API}/documents`, {
-        data: { kind: 'chart', title: `${cube} by status`, folderId: 'root' },
+        data: { kind: 'chart', title: `${cube} by status`, ...IN_MY_WORKSPACE },
       })
     ).json()) as { id: string };
     await request.put(`${API}/documents/chart/${chart.id}`, {
@@ -77,7 +81,7 @@ async function dashboardOn(request: APIRequestContext, cubes: readonly string[])
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [{ id: 'only', title: 'Only', items }],

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { chooseChartType } from './chartType';
+import { IN_MY_WORKSPACE } from './workspace';
 
 const API = 'http://localhost:4100/api';
 
@@ -22,7 +23,7 @@ test('a duplicated chart tile has a chart of its own, and editing it leaves the 
   const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const library = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'chart', title: `Shared ${unique}`, folderId: 'root' },
+      data: { kind: 'chart', title: `Shared ${unique}`, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   await request.put(`${API}/documents/chart/${library.id}`, {
@@ -31,6 +32,7 @@ test('a duplicated chart tile has a chart of its own, and editing it leaves the 
       body: {
         schemaVersion: 1,
         title: `Shared ${unique}`,
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         chart: {
           source: { cube: 'orders' },
@@ -42,7 +44,7 @@ test('a duplicated chart tile has a chart of its own, and editing it leaves the 
   });
   const dashboard = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'dashboard', title: `Duplicate ${unique}`, folderId: 'root' },
+      data: { kind: 'dashboard', title: `Duplicate ${unique}`, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
@@ -51,7 +53,7 @@ test('a duplicated chart tile has a chart of its own, and editing it leaves the 
       body: {
         schemaVersion: 1,
         title: `Duplicate ${unique}`,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [

@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Page, type Request } from '@playwright/test';
 
 import { ownCubeFile, PUBLISHED } from './model-files';
+import { IN_MY_WORKSPACE } from './workspace';
 
 /**
  * T388 / AC-104: WHEN a tile needs the marked share and the marking's members
@@ -22,13 +23,13 @@ async function shareDashboard(request: APIRequestContext, { average = false } = 
   const title = `Marked share ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const dashboard = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'dashboard', title, folderId: 'root' },
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   const chartOn = async (chartTitle: string, dimension: string, measure = 'orders.count') => {
     const chart = (await (
       await request.post(`${API}/documents`, {
-        data: { kind: 'chart', title: chartTitle, folderId: 'root' },
+        data: { kind: 'chart', title: chartTitle, ...IN_MY_WORKSPACE },
       })
     ).json()) as { id: string };
     await request.put(`${API}/documents/chart/${chart.id}`, {
@@ -61,7 +62,7 @@ async function shareDashboard(request: APIRequestContext, { average = false } = 
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed', interactions: { mode: 'markings' } },
         markings: [{ id: 'm1', name: 'Marking', slot: 'mk1', isDefault: true }],
@@ -294,14 +295,14 @@ async function dashboardOf(request: APIRequestContext, tiles: readonly Tile[]) {
   const title = `Marked share ${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const dashboard = (await (
     await request.post(`${API}/documents`, {
-      data: { kind: 'dashboard', title, folderId: 'root' },
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
     })
   ).json()) as { id: string };
   const items = [];
   for (const tile of tiles) {
     const chart = (await (
       await request.post(`${API}/documents`, {
-        data: { kind: 'chart', title: tile.title, folderId: 'root' },
+        data: { kind: 'chart', title: tile.title, ...IN_MY_WORKSPACE },
       })
     ).json()) as { id: string };
     const saved = await request.put(`${API}/documents/chart/${chart.id}`, {
@@ -334,7 +335,7 @@ async function dashboardOf(request: APIRequestContext, tiles: readonly Tile[]) {
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed', interactions: { mode: 'markings' } },
         markings: [{ id: 'm1', name: 'Marking', slot: 'mk1', isDefault: true }],

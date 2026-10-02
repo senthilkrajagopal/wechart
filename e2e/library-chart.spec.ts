@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
+import { IN_MY_WORKSPACE } from './workspace';
+
 /**
  * AC-022: WHEN the user opens a library chart's page, THE SYSTEM SHALL list
  * every dashboard that uses it and offer to add it to another dashboard.
@@ -11,13 +13,14 @@ import { expect, test, type APIRequestContext } from '@playwright/test';
  */
 const API = 'http://localhost:4100';
 
-async function create(
-  request: APIRequestContext,
-  kind: 'folder' | 'dashboard' | 'chart',
-  title: string,
-  folderId = 'root',
-) {
-  const response = await request.post(`${API}/api/documents`, { data: { kind, title, folderId } });
+/**
+ * In My workspace, going to the shared root: where the single user makes a
+ * chart and its dashboards, and changes them in place (T359, AC-254).
+ */
+async function create(request: APIRequestContext, kind: 'dashboard' | 'chart', title: string) {
+  const response = await request.post(`${API}/api/documents`, {
+    data: { kind, title, ...IN_MY_WORKSPACE },
+  });
   expect(response.status()).toBe(201);
   return (await response.json()) as { id: string };
 }

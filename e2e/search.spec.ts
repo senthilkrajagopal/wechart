@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { IN_MY_WORKSPACE } from './workspace';
+
 /**
  * AC-019: WHEN the user types in the Explore search box, THE SYSTEM SHALL list
  * every dashboard and library chart whose title contains the text, and no
@@ -44,7 +46,7 @@ test('lists every dashboard and library chart whose title contains the text, and
   const create = async (kind: 'dashboard' | 'chart', title: string) =>
     (
       (await (
-        await request.post(`${API}/documents`, { data: { kind, title, folderId: 'root' } })
+        await request.post(`${API}/documents`, { data: { kind, title, ...IN_MY_WORKSPACE } })
       ).json()) as { id: string }
     ).id;
   const dashboard = await create('dashboard', `Sales ${word} dashboard`);

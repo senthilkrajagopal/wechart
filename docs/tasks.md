@@ -6361,12 +6361,12 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     3. An Explore row missed a proposal its item went into with another item.
     4. The e2e's Dismiss-after-reload check could pass before the band had loaded. It now waits for the lookup's answer.
     5. The band kept a cached "Waiting" for up to 5 minutes after a rejection. It now asks each time its page opens.
-- [ ] T359 (AC-254) With security off, the single user works through a workspace and approves their own proposals *(2026-10-01, `[R52]`: "Workspace-only now". With security off, shared items are changed only through the workspace, as with sign-in on, and the phase-1 suite's in-place editing steps are rewritten to go through the workspace and a self-approved proposal: AC-308's rewrite, pulled forward)*
+- [x] T359 (AC-254) With security off, the single user works through a workspace and approves their own proposals *(2026-10-01, `[R52]`: "Workspace-only now". With security off, shared items are changed only through the workspace, as with sign-in on, and the phase-1 suite's in-place editing steps are rewritten to go through the workspace and a self-approved proposal: AC-308's rewrite, pulled forward)*
   - Files: `e2e/workspace-single-user.spec.ts` (the phase-1 configuration)
   - Failing test: `workspace-single-user.spec.ts`: with security off, editing a dashboard goes through "Edit in my workspace", a proposal and "Approve my own proposal", and nothing asks for a sign-in or refuses a permission (AC-254).
   - Depends on: T356, T358
   - Also (T319's review): the Single-user mode chip's menu gains its second sentence from references.md › Surface 1, "Your proposals still wait for your approval in Reviews.", once proposals and Reviews exist.
-  - **Built 2026-10-01; the phase-1 suite's rewrite follows in its own commit. AC-254 stays open for models (T347), as AC-278 does.**
+  - **Built 2026-10-01; the phase-1 suite's rewrite followed in its own commit (2026-10-02, below). AC-254 stays open for models (T347), as AC-278 does.**
     - **The server** (`server.ts`). With security off, the single user is held as a signed-in Super-Admin is, and their workspace is `mine` (`ownWorkspaceOf`):
       - `visibilityOf` gives them every folder and My workspace;
       - `itemFor` reads and checks items, so T502's `409` applies, and moves can't cross the workspace's edge (`crossesWorkspace`);
@@ -6400,6 +6400,31 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - the e2e changed the copy through the API and asserted the missing Edit before the page was ready;
       - several comments were stale.
     - **Left:** web unit tests for the pages' sign-in-off branches (the e2e covers the dashboard's); a data source proposed and approved with sign-in off; a reject with sign-in off.
+  - **The phase-1 suite, rewritten 2026-10-02.**
+    - **Helpers:**
+      - `e2e/workspace.ts`: `IN_MY_WORKSPACE`, `madeIn`, `shared`, `sharedIn`, `myCopyOf`, `seedDashboardCopy`, `newInMyWorkspace`, `landedAs`;
+      - `e2e/store.ts`: `psql`, and `chartGone`, because a save adds only a chart that is there.
+    - **How the specs now work:**
+      - a spec's own dashboards and charts are made in My workspace;
+      - a shared one is made there and put in its folder by a proposal the single user approves;
+      - an edit of the seeded shared dashboard edits the single user's copy;
+      - New is used in My workspace.
+    - **Assertions moved to the workspace's design:**
+      - a workspace chart's page and dashboard header (design 04, states E and F);
+      - a shared folder's footnote and empty text (state C; T331);
+      - My workspace's New menu;
+      - the model warning, where the copy's charts share the seed's names;
+      - AC-197, through a proposal;
+      - Explore's count, after a move between shared folders, since a move into My workspace crosses its edge;
+      - the delete dialog, on a chart a shared dashboard shows (T517).
+    - **Also fixed, not T359's:**
+      - the switcher's Model entry, gone since T331 (`smoke`, `routing`, `shell`, T202);
+      - the header's ⋯ after the gear (T511).
+    - **Chrome: 701 passed, 6 failed, none from T359:**
+      - `acceleration` "Data as of", `shell` at 390 px on a model file, and `admin`'s Query log rows, all known;
+      - T244's header: T524's description and T525's kind filter now sit between the head and the table;
+      - `editor-preview`'s resized tile: an edit head is 20 px and a view head 22, the same on a phase-1 dashboard in no folder;
+      - `folder-models`' Schedules row: it now names the short member (AC-329).
 
 ## P2.7 Data sources and connections (F18, returned)
 

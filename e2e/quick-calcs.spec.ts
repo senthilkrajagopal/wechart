@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { wellPicker } from './wells';
+import { newInMyWorkspace } from './workspace';
 
 /**
  * Quick calculations (F6), in the chart editor as it is served.
@@ -57,14 +58,9 @@ test.describe('the menu on a measure (AC-047)', () => {
   test('keeps the calculation chosen when the chart is saved and opened again', async ({
     page,
   }) => {
-    // A chart of this test's own: New › Chart in Finance.
-    await page.goto('/explore?folder=seed-folder-0');
-    const contents = page.getByTestId('explore-contents');
-    await contents.getByRole('button', { name: 'New', exact: true }).click();
-    await page
-      .getByRole('menu', { name: 'New' })
-      .getByRole('menuitem', { name: /Chart$/ })
-      .click();
+    // A chart of this test's own: New › Chart in My workspace, to go to
+    // Finance, as the single user makes one (T359, AC-254).
+    await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
     await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit\?new=true$/);
     const id = /\/explore\/charts\/([^/]+)\/edit\?new=true$/.exec(page.url())?.[1] ?? '';
 

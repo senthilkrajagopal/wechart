@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
 import { chooseChartType } from './chartType';
+import { IN_MY_WORKSPACE } from './workspace';
 
 const API = 'http://localhost:4100/api';
 
@@ -23,7 +24,7 @@ const DEFINITION = {
 async function created(request: APIRequestContext, kind: 'chart' | 'dashboard', title: string) {
   return (
     (await (
-      await request.post(`${API}/documents`, { data: { kind, title, folderId: 'root' } })
+      await request.post(`${API}/documents`, { data: { kind, title, ...IN_MY_WORKSPACE } })
     ).json()) as { id: string }
   ).id;
 }
@@ -41,7 +42,7 @@ async function dashboardShowing(
       body: {
         schemaVersion: 1,
         title,
-        folderId: 'root',
+        ...IN_MY_WORKSPACE,
         owner: 'admin',
         settings: { width: 'fixed' },
         pages: [
@@ -67,7 +68,8 @@ async function chartOf(request: APIRequestContext, title: string, localTo?: stri
         schemaVersion: 1,
         title,
         owner: 'admin',
-        ...(localTo === undefined ? {} : { localToDashboardId: localTo }),
+        // A library one stays in My workspace, where it was made (T359, AC-254).
+        ...(localTo === undefined ? IN_MY_WORKSPACE : { localToDashboardId: localTo }),
         chart: DEFINITION,
       },
     },
