@@ -189,6 +189,17 @@ describe('the review view (T356)', () => {
     expect(screen.getByTestId('drawn').getAttribute('data-marks')).toBe('{}');
   });
 
+  // T440 (AC-323): a proposed item's field list is the proposal's overlay's.
+  it('reads a proposed chart’s field list from the proposal', async () => {
+    shown(proposal({}));
+    await userEvent.click(await screen.findByRole('button', { name: /Margin/ }));
+    await vi.waitFor(() => {
+      expect(vi.mocked(fetch).mock.calls.map(([url]) => String(url))).toContain(
+        `/api/meta?for=${encodeURIComponent('proposal:p1')}`,
+      );
+    });
+  });
+
   it('says where the folder moved on since, and that approving replaces what it has now', async () => {
     const detail = proposal({});
     shown({

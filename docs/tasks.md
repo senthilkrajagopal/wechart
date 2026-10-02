@@ -8571,13 +8571,28 @@ Every step leaves both suites working. The slice-4 image takes HS256 tokens unti
 
 T347 (above) pushes workspace overlays, with the workspace's data sources.
 
-- [ ] T440 (AC-323) Let a proposal's overlay be queried only by its author, the target folder's read-write members and Super-Admins, and drop it once decided *(amended 2026-09-26 to slice 5 as built, `[X5]`)*
+- [x] T440 (AC-323) Let a proposal's overlay be queried only by its author, the target folder's read-write members and Super-Admins, and drop it once decided *(amended 2026-09-26 to slice 5 as built, `[X5]`)*
   - Files: `packages/api/src/xcube/overlays.ts`, `packages/api/src/routes/proposals.ts`, `e2e/security/proposal-overlay.spec.ts`
   - Failing test: `proposal-overlay.spec.ts`, against compose's xcube:
     - the proposal is pushed as the overlay `<proposal id>`; the author, a read-write member of the target folder and a Super-Admin get its data, their tokens naming it in `wechartOverlay`;
     - a read-only member's and anyone else's tokens never name it, and a token naming it that wechart didn't sign for them is refused by Cube;
     - after approval or rejection the overlay is deleted, and a query naming it answers an error, never the published model (AC-323).
   - Depends on: T347, T352
+  - **Done 2026-10-01, after one review round. AC-323 stays open** (below). Tested in:
+    - `e2e/security/proposal-overlay.spec.ts` (Chrome, against compose's xcube): a data source copied into the writer's workspace and pointed at `postgres` is proposed; its review answers `postgres` for its author and for `super`; `reader`, a read-only member of its folder, is refused (`404`) before Cube is asked; a token naming the overlay signed with Cube's own secret is refused by Cube; withdrawn, the review answers `sample` from the published model, and a token wechart signed naming the overlay gets `410`;
+    - `routes/proposal-overlay.test.ts` (5, the stub xcube and a stub Cube recording each token): the overlay named for the author, another read-write member (`manager`) and `super`, and refused for `reader` and `many`; dropped once withdrawn, and once approved, and named no more; one xcube won't take says which item, and Cube is asked nothing; none for a proposal holding nothing xcube holds;
+    - `ReviewView.test.tsx`: a proposed chart's field list is the proposal's;
+    - `xcube/overlays.test.ts`: a proposal's content, and its own id;
+    - `routes/workspace-overlay.test.ts`: a preview whose overlay no longer applies says xcube's `409`, naming the item, never the published model's answer (AC-323's last clause, T347's surface).
+  - *As built:*
+    - The proposal's overlay is `p-<proposal id>`, holding what it would land, each in the folder it lands in: its data sources as connections (a copy under its original's name replaces it in the preview), its models as items (T350); its dashboards and charts are wechart's and only name it. A proposal holding none has no overlay.
+    - It is pushed when its review first queries (`proposalScope`, through `ensure`), and named in the tokens of those `proposalScope` lets open it: its author, the read-write members of every folder it lands in, Super-Admins (T351's rule). Anyone else is refused before Cube is asked, so their tokens never name it.
+    - Once decided it holds nothing, so it is dropped and named no more: an approval or rejection (withdrawal included) drops it as answered, and so do a workspace's clear and an item's delete for the author's proposals withdrawn with them (T522, T528).
+    - The review view reads a proposed item's field list from the proposal (`/api/meta?for=proposal:<id>`), the overlay's; the folder's current version keeps the model's.
+    - A proposal's overlay is never pushed until reviewed; the propose-time check stays T451's changeset dry run (AC-321 as amended). One xcube won't take then — a publish since left it no longer applying — answers `409`, "This proposal can't be previewed as it is: `<folder>/<item>: <why>`", and is never named (a workspace's likewise); Cube would say only that it is gone.
+  - **Review (one round), fixed:** an overlay xcube refused was still named, so its previews said only "gone", never the item; the approval's drop had no test; the review's Current side read the proposal's field list; the decision hook was skipped where workspace models aren't stored; the client's refusals spoke of "your workspace" to a proposal's reviewer.
+  - **Left:** a drop that fails is logged, and another replica never retries it; the overlay then lasts out its day in xcube, named by no token (research Gotcha 3).
+  - **AC-323 stays open:** its "a name resolves outside the overlay while the overlay defines it" waits on the user's answer on AC-281 (T347's note).
 - [ ] T456 (AC-321) Refuse an approval when any item would bind otherwise than in the proposal's preview *(added 2026-09-26, `[R31]`)*
   - **Why.** In an overlay, names resolve among its items first, whatever their folder; landed, nearest-first along each item's path (`xcube-slice-5.md` Gotcha 5). The user chose to refuse the approval, naming the items, so that what lands is what was previewed.
   - **xcube first.** `GET …/overlays/{id}` doesn't report an item's bindings, and a changeset's dry run may not either (to be checked in `xcube-slice-3a.md` and the fork). Where they don't, ask xcube, through the Cube-expert agent and `~/Work/xcube-exchange/to-xcube/`, to report each item's bindings in both. Build this once that image is published.

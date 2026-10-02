@@ -8,7 +8,7 @@ import { ReviewMarks } from '../../dashboard/grid/reviewMarks';
 import { tileChangesOf } from './tileChanges';
 import { allMembers } from '../../filters/FilterBar';
 import { formatsFrom } from '../../dashboard/chartSpec';
-import { META_QUERY } from '../../query/meta';
+import { metaQueryOf } from '../../query/meta';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { ChartTile } from '../../tiles/ChartTile';
 import { TileError } from '../../tiles/TileError';
@@ -356,6 +356,9 @@ function ItemPreview({
       ) : (
         <ChartPreview
           key={showing}
+          // The proposed one's field list is the proposal's overlay's (T440,
+          // AC-323); the folder's current one's, the model's.
+          {...(showing === 'current' && against !== null ? {} : { proposalId: proposal.id })}
           cacheKey={
             showing === 'current' && against !== null
               ? `current:${against.id}:${String(nowVersion)}`
@@ -412,12 +415,19 @@ function CurrentDashboard({ id, version }: { readonly id: string; readonly versi
 function ChartPreview({
   cacheKey,
   draw,
+  proposalId,
 }: {
   readonly cacheKey: string;
   readonly draw: () => ReturnType<typeof drawChartBody>;
+  /** The proposal it is drawn from: its field list is the proposal's (T440). */
+  readonly proposalId?: string;
 }) {
   const drawn = useQuery({ queryKey: ['review-chart', cacheKey], queryFn: draw });
-  const meta = useQuery(META_QUERY);
+  const meta = useQuery(
+    metaQueryOf(
+      proposalId === undefined ? undefined : { item: { kind: 'proposal', id: proposalId } },
+    ),
+  );
   const chart = drawn.data?.chart;
   const spec = chart !== undefined && 'spec' in chart ? chart.spec : undefined;
   const formatted = useMemo(

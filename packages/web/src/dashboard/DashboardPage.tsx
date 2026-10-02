@@ -4,7 +4,7 @@ import { readChartDocument, type ChartDocument, type RenderSpec } from '@wechart
 
 import { answerMetaOf, type AnswerMeta } from '../query/answerMeta';
 import { loadTile } from '../query/loadTile';
-import { META_QUERY, metaQueryOf, useWorkspaceItem, WorkspaceItemContext } from '../query/meta';
+import { metaQueryOf, useWorkspaceItem, WorkspaceItemContext } from '../query/meta';
 import { reachFrom } from '../filters/coverage';
 import { primaryKeyOf } from './markings/primaryKey';
 import { allMembers } from '../filters/FilterBar';
@@ -577,7 +577,9 @@ export function ReadOnlyDashboard({
       return { specs, errors, documents, answered };
     },
   });
-  const meta = useQuery(META_QUERY);
+  // A proposal's review reads its overlay's field list (T440, AC-323); a
+  // version kept, or the folder's current one, the model's.
+  const meta = useQuery(metaQueryOf(item?.kind === 'proposal' ? { item } : undefined));
   const formats = useMemo(() => formatsFrom(meta.data), [meta.data]);
   const reach = useMemo(() => reachFrom(meta.data), [meta.data]);
   const primaryKey = useMemo(() => {

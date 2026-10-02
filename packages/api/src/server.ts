@@ -122,6 +122,9 @@ import { workspaceModels } from './routes/workspace-models';
 import {
   overlayContentOf,
   overlaySync,
+  proposalContentOf,
+  proposalOverlayIdOf,
+  type EnsuredOverlay,
   type OverlayModel,
   type OverlaySource,
 } from './xcube/overlays';
@@ -372,7 +375,8 @@ interface QueryScope {
   readonly allowed: ReadonlySet<string> | 'all';
   readonly overlay?: {
     readonly id: string;
-    readonly workspaceId: string;
+    /** Pushes it again: a workspace's, or a proposal's (T440). */
+    readonly pushAgain: () => Promise<unknown>;
     /** Its own cubes and views, by full name: what the workspace's models add or replace. */
     readonly names: ReadonlySet<string>;
     /** The version xcube took here, which an answer must be from at least. */
@@ -466,15 +470,38 @@ export function buildServer({
    * (`overlays.ensure`), so nothing waits for this one.
    */
   app.addHook('onResponse', async (request, reply) => {
-    if (overlays === undefined || reply.statusCode >= 300) return;
+    if (reply.statusCode >= 300) return;
     if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) return;
     const url = request.routeOptions.url ?? '';
-    if (!url.startsWith('/api/data-sources') && url !== '/api/workspace/clear') return;
     const user = request.wechartUser;
     if (user === null || user === undefined) return;
-    void overlays.push(workspaceIdOf(user.key)).catch((error: unknown) => {
-      app.log.warn({ err: error }, 'could not push a workspace’s overlay to xcube');
-    });
+    const warn = (error: unknown) => {
+      app.log.warn({ err: error }, 'could not push or drop an overlay in xcube');
+    };
+    /**
+     * A proposal decided — approved, rejected or withdrawn — has its overlay
+     * dropped (T440, AC-323), and so does one withdrawn with its item's
+     * delete or the workspace's clear (T528, T522): its author's decided in
+     * the last minutes. Its review names it no more either way.
+     */
+    if (proposalOverlays !== undefined) {
+      const decided = /^\/api\/proposals\/:id\/(approve|reject)$/.test(url);
+      if (decided) void proposalOverlays.drop((request.params as { id: string }).id).catch(warn);
+      else if (
+        url === '/api/workspace/clear' ||
+        (request.method === 'DELETE' &&
+          (url.startsWith('/api/data-sources') || url.startsWith('/api/documents')))
+      )
+        void (async () => {
+          const since = Date.now() - 10 * 60_000;
+          for (const each of (await proposals?.byAuthor(user.key)) ?? [])
+            if (each.decision !== null && each.decision.at.getTime() >= since)
+              await proposalOverlays.drop(each.id);
+        })().catch(warn);
+    }
+    if (overlays === undefined) return;
+    if (!url.startsWith('/api/data-sources') && url !== '/api/workspace/clear') return;
+    void overlays.push(workspaceIdOf(user.key)).catch(warn);
   });
   const security = config.security ?? 'off';
   // Before any route: every route declares who may call it (T318, AC-251).
@@ -846,6 +873,28 @@ export function buildServer({
                 await modelStore.inFolders(await workspaceFolderIds(workspaceId)),
               )
             ).content,
+          log: (message, details) => {
+            app.log.warn({ details }, message);
+          },
+        });
+  /**
+   * A proposal's overlay (T440, AC-323): what it would land, in the folders
+   * it lands in, while it is open; none once decided, when it is dropped.
+   * Its review's queries name it (`proposalScope`).
+   */
+  const proposalOverlays =
+    security === 'off' || xcube === undefined || proposals === undefined
+      ? undefined
+      : overlaySync({
+          xcube,
+          idOf: proposalOverlayIdOf,
+          contentOf: async (proposalId) => {
+            const proposal = await proposals.get(proposalId);
+            if (proposal === null || proposal.status !== 'open')
+              return { upserts: [], connections: [] };
+            const published = (folders === undefined ? ROOT_ONLY : await folders()).ids;
+            return proposalContentOf(proposal.items, published);
+          },
           log: (message, details) => {
             app.log.warn({ details }, message);
           },
@@ -2932,21 +2981,19 @@ export function buildServer({
       workspace !== workspaceIdOf(userOf(request).key)
         ? undefined
         : await overlays.ensure(workspace);
-    const own = (ensured?.content.upserts ?? []).map((each) =>
-      each.folderId === XCUBE_ROOT ? each.name : `${each.folderId}__${each.name}`,
-    );
-    scope.names(own);
+    // One xcube took none of: what it said, naming each item (T440's review).
+    if (ensured?.problem !== undefined) {
+      await reply.code(409).send({
+        error: `Your workspace can’t be previewed as it is: ${ensured.problem}`,
+        source: 'xcube',
+      });
+      return undefined;
+    }
     const overlay =
-      ensured === undefined || workspace === null
+      ensured === undefined || workspace === null || overlays === undefined
         ? {}
-        : {
-            overlay: {
-              id: ensured.id,
-              workspaceId: workspace,
-              names: new Set(own),
-              ...(ensured.version === undefined ? {} : { version: ensured.version }),
-            },
-          };
+        : { overlay: overlayScopeOf(ensured, () => overlays.push(workspace)) };
+    scope.names([...(overlay.overlay?.names ?? [])]);
     if (item.kind === 'chart') {
       await addChart(scope, stored);
       return { allowed: scope.allowed, ...overlay };
@@ -2977,13 +3024,23 @@ export function buildServer({
    */
   const cubeIn = (request: FastifyRequest, scope: QueryScope): CubeClient => {
     const overlay = scope.overlay;
-    if (overlay === undefined || overlays === undefined) return cubeFor(request);
-    return cubeFor(request).inOverlay(
-      overlay.id,
-      () => overlays.push(overlay.workspaceId),
-      overlay.version,
-    );
+    if (overlay === undefined) return cubeFor(request);
+    return cubeFor(request).inOverlay(overlay.id, overlay.pushAgain, overlay.version);
   };
+  /** A scope's overlay: its id, its own cubes and views by full name, its version. */
+  const overlayScopeOf = (
+    ensured: EnsuredOverlay,
+    pushAgain: () => Promise<unknown>,
+  ): NonNullable<QueryScope['overlay']> => ({
+    id: ensured.id,
+    pushAgain,
+    names: new Set(
+      ensured.content.upserts.map((each) =>
+        each.folderId === XCUBE_ROOT ? each.name : `${each.folderId}__${each.name}`,
+      ),
+    ),
+    ...(ensured.version === undefined ? {} : { version: ensured.version }),
+  });
   /**
    * A proposal's review queries (T340, T356): what it holds, which its
    * reviewer can't open. Opened by its author, the read-write members of
@@ -2996,7 +3053,7 @@ export function buildServer({
     request: FastifyRequest,
     reply: FastifyReply,
     id: string,
-  ): Promise<{ readonly allowed: ReadonlySet<string> } | undefined> => {
+  ): Promise<QueryScope | undefined> => {
     const proposal = await proposals?.get(id);
     const user = userOf(request);
     const seen =
@@ -3023,7 +3080,24 @@ export function buildServer({
         if (chart !== null) await addChart(scope, chart);
       }
     }
-    return { allowed: scope.allowed };
+    /**
+     * Answered from its overlay while it is open (T440, AC-323), named in the
+     * tokens of those who may open it — its author, the read-write members of
+     * every folder it lands in, Super-Admins — and no one else's, refused
+     * above. Decided, it has none, and its overlay is dropped.
+     */
+    const ensured = await proposalOverlays?.ensure(id);
+    if (ensured?.problem !== undefined) {
+      await reply.code(409).send({
+        error: `This proposal can’t be previewed as it is: ${ensured.problem}`,
+        source: 'xcube',
+      });
+      return undefined;
+    }
+    if (ensured === undefined || proposalOverlays === undefined) return { allowed: scope.allowed };
+    const overlay = overlayScopeOf(ensured, () => proposalOverlays.push(id));
+    scope.names([...overlay.names]);
+    return { allowed: scope.allowed, overlay };
   };
   /** A query's first cube outside what its item may use: refused with a 403 (T340). */
   const refusedOutside = async (

@@ -575,8 +575,9 @@ describe('an overlay in a query token (T347, AC-323)', () => {
       );
     expect(failure).toBeInstanceOf(CubeError);
     expect((failure as CubeError).status).toBe(503);
+    // In words for a workspace's preview and a proposal's alike (T440).
     expect((failure as CubeError).message).toBe(
-      'Cube answered this preview without your workspace’s changes, so it isn’t shown. Try again.',
+      'Cube answered this preview without the changes it previews, so it isn’t shown. Try again.',
     );
     // Without an overlay, the same answer is the answer.
     expect(await cube.load({ measures: ['orders.count'] })).toEqual({ data: [{ n: 42 }] });

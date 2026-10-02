@@ -47,6 +47,8 @@ const sealed = (tag: string): SealedV1 => ({
 
 /** Each token Cube was sent, decoded, with the path it was sent to. */
 const asked: { path: string; claims: Record<string, unknown> }[] = [];
+/** The next answer Cube gives in place of its own, as xcube answers a broken overlay. */
+let refusing: { status: number; error: string } | undefined;
 let cubeServer: Server;
 let cubeApiUrl = '';
 /** /Viewing the writer only reads; /Unserved one xcube's tree doesn't hold. */
@@ -68,6 +70,13 @@ beforeAll(async () => {
       Buffer.from(token.split('.')[1] ?? '', 'base64url').toString() || '{}',
     ) as Record<string, unknown>;
     asked.push({ path: request.url ?? '', claims });
+    if (refusing !== undefined) {
+      const { status, error } = refusing;
+      refusing = undefined;
+      response.writeHead(status, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ error }));
+      return;
+    }
     const overlay = claims['wechartOverlay'];
     const own =
       typeof overlay === 'string'
@@ -447,6 +456,25 @@ describe('a workspace item’s previews (T347, AC-323, AC-281, AC-283)', () => {
       expect.arrayContaining([`fops__${cubeName('widgets')}`, `fsales__${cubeName('orders')}`]),
     );
     expect(marked.sort()).toEqual(own.sort());
+  });
+
+  /**
+   * A publish since that leaves the overlay no longer applying: xcube answers
+   * `409`, naming the item (research `xcube-slice-5.md`, "Answers"), which
+   * the preview says, never the published model's answer.
+   */
+  it('say which item no longer applies, rather than answer from the published model', async () => {
+    const { folderId } = await copied();
+    const board = await dashboardIn('writer', folderId, folders.sales);
+    const said = `Overlay "x" of model "${MODEL}" doesn't apply to what is published now: fsales/${cubeName('orders')}: Cube ${cubeName('customers')} doesn't exist`;
+    refusing = { status: 409, error: said };
+    const answer = await load('writer', board, `fsales__${cubeName('orders')}.count`);
+    // Taken by this one's request, or never left for the next test's.
+    const unused = refusing as { status: number; error: string } | undefined;
+    refusing = undefined;
+    expect(unused).toBeUndefined();
+    expect(answer.statusCode, answer.body).toBe(409);
+    expect(answer.json()).toEqual({ error: said, source: 'cube' });
   });
 
   it('bring a copied data source under its original’s folder and name, its envelopes as stored (AC-280)', async () => {

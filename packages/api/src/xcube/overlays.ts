@@ -100,6 +100,58 @@ export function overlayContentOf({
   };
 }
 
+/** A proposal's item as its overlay reads it: what it is, where it lands, and what it holds. */
+export interface ProposalOverlayItem {
+  readonly kind: string;
+  readonly landsIn: string;
+  readonly snapshot: Record<string, unknown>;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/**
+ * A proposal's overlay (T440, AC-323): what it would land, each in the folder
+ * it lands in — its data sources as connections, its models (T350) as items,
+ * as its approval would publish them. Its dashboards and charts are
+ * wechart's, not xcube's: their previews only name the overlay. One whose
+ * folder xcube's tree doesn't hold has nowhere to go, and is left out.
+ */
+export function proposalContentOf(
+  items: readonly ProposalOverlayItem[],
+  folders: ReadonlyMap<string, string>,
+): OverlayContent {
+  const sources: OverlaySource[] = items.flatMap((item) => {
+    const s = item.snapshot;
+    if (item.kind !== 'data-source' || typeof s['name'] !== 'string') return [];
+    return [
+      {
+        name: s['name'],
+        driver: String(s['driver']),
+        authMethod: String(s['authMethod']),
+        fields: (isRecord(s['fields']) ? s['fields'] : {}) as Record<string, FieldValue>,
+        sealed: (isRecord(s['sealed']) ? s['sealed'] : {}) as Record<string, SealedV1>,
+        targetFolderId: item.landsIn,
+        origin: null,
+      },
+    ];
+  });
+  const models: OverlayModel[] = items.flatMap((item) =>
+    item.kind === 'model' &&
+    typeof item.snapshot['path'] === 'string' &&
+    typeof item.snapshot['content'] === 'string'
+      ? [
+          {
+            path: item.snapshot['path'],
+            content: item.snapshot['content'],
+            targetFolderId: item.landsIn,
+          },
+        ]
+      : [],
+  );
+  return overlayContentOf({ models, sources, folders });
+}
+
 const isEmpty = (content: OverlayContent) =>
   content.upserts.length === 0 && content.connections.length === 0;
 const hashOf = (content: OverlayContent) =>
@@ -117,7 +169,27 @@ export interface EnsuredOverlay {
   readonly content: OverlayContent;
   /** None where this server never had a push of it taken. */
   readonly version?: number;
+  /**
+   * Why xcube took none of it, where it holds none (T440's review): each
+   * item it names and why, as `folderId/name: message`. Such an overlay is
+   * never named: Cube would answer only that it is gone.
+   */
+  readonly problem?: string;
 }
+
+/** What xcube said of a push it refused, naming each item where it names one. */
+const problemOf = (result: Exclude<PushResult, { kind: 'stored' } | { kind: 'empty' }>) =>
+  result.kind === 'refused'
+    ? result.errors
+        .map((error) =>
+          error.folderId === null || error.name === null
+            ? error.message
+            : `${error.folderId}/${error.name}: ${error.message}`,
+        )
+        .join('; ') || 'xcube refused it'
+    : result.kind === 'older'
+      ? 'an older xcube is still running, which can’t preview its data sources'
+      : result.error;
 
 /**
  * How long one reading of a workspace answers the previews asked with it: a
@@ -155,12 +227,15 @@ export interface OverlaySync {
 export function overlaySync({
   xcube,
   contentOf,
+  idOf = workspaceOverlayIdOf,
   now = Date.now,
   log = () => undefined,
 }: {
   readonly xcube: Pick<XcubeAdmin, 'putOverlay' | 'dropOverlay'>;
-  /** The workspace's content as it is stored now. */
+  /** The workspace's content as it is stored now; a proposal's, for its overlays (T440). */
   readonly contentOf: (workspaceId: string) => Promise<OverlayContent>;
+  /** Its overlay's id: a workspace's by default, `proposalOverlayIdOf` for proposals (T440). */
+  readonly idOf?: (key: string) => string;
   readonly now?: () => number;
   readonly log?: (message: string, details?: unknown) => void;
 }): OverlaySync {
@@ -189,7 +264,7 @@ export function overlaySync({
     workspaceId: string,
     candidate: OverlayContent | undefined,
   ): Promise<PushResult> => {
-    const id = workspaceOverlayIdOf(workspaceId);
+    const id = idOf(workspaceId);
     let content = candidate ?? (await contentOf(workspaceId));
     if (isEmpty(content)) {
       if (held.get(id) !== 'none') await dropNow(id);
@@ -232,7 +307,7 @@ export function overlaySync({
 
   return {
     push: (workspaceId, candidate) => {
-      const id = workspaceOverlayIdOf(workspaceId);
+      const id = idOf(workspaceId);
       return inTurn(id, () => {
         ensured.delete(id);
         return pushNow(workspaceId, candidate);
@@ -240,7 +315,7 @@ export function overlaySync({
     },
 
     ensure: (workspaceId) => {
-      const id = workspaceOverlayIdOf(workspaceId);
+      const id = idOf(workspaceId);
       return inTurn(id, async () => {
         const recent = ensured.get(id);
         if (recent !== undefined && now() - recent.at < ENSURED_FOR_MS) return recent.answer;
@@ -261,12 +336,20 @@ export function overlaySync({
           // Named either way: refused now, xcube still holds what it last
           // took, and one it never took answers that it is gone, never the
           // published model (AC-323).
-          if (!fresh) await pushNow(workspaceId, content);
+          const pushed = fresh ? undefined : await pushNow(workspaceId, content);
           const taken = held.get(id);
+          const holds = taken !== undefined && taken !== 'none';
           answer = {
             id,
             content,
-            ...(taken === undefined || taken === 'none' ? {} : { version: taken.version }),
+            ...(holds ? { version: taken.version } : {}),
+            // Refused, with nothing taken before: said, never named.
+            ...(!holds &&
+            pushed !== undefined &&
+            pushed.kind !== 'stored' &&
+            pushed.kind !== 'empty'
+              ? { problem: problemOf(pushed) }
+              : {}),
           };
         }
         ensured.set(id, { at: now(), answer });
@@ -275,7 +358,7 @@ export function overlaySync({
     },
 
     drop: (workspaceId) => {
-      const id = workspaceOverlayIdOf(workspaceId);
+      const id = idOf(workspaceId);
       return inTurn(id, () => {
         ensured.delete(id);
         return dropNow(id);

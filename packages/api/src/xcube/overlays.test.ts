@@ -4,6 +4,7 @@ import type { OverlayAnswer, OverlayPush, XcubeAdmin } from './client';
 import {
   overlayContentOf,
   overlaySync,
+  proposalContentOf,
   proposalOverlayIdOf,
   workspaceOverlayIdOf,
   type OverlayContent,
@@ -95,6 +96,71 @@ describe('a workspace’s overlay (T347)', () => {
         sealed,
       },
     ]);
+  });
+});
+
+/**
+ * T440 (AC-323): a proposal's overlay holds what it would land, each in the
+ * folder it lands in: its data sources as connections, its models (T350) as
+ * items, and nothing of its dashboards and charts, which xcube doesn't hold.
+ */
+describe('a proposal’s overlay (T440)', () => {
+  it('holds its data sources and models in the folders they land in, and nothing else', () => {
+    const content = proposalContentOf(
+      [
+        { kind: 'dashboard', landsIn: 'sales', snapshot: { title: 'Revenue' } },
+        {
+          kind: 'data-source',
+          landsIn: 'sales',
+          snapshot: {
+            name: 'warehouse',
+            driver: 'postgres',
+            authMethod: 'password',
+            fields: { host: 'other-db', port: 5432 },
+            sealed,
+            revisions: { password: 'r1' },
+            description: 'Not sent',
+          },
+        },
+        {
+          kind: 'model',
+          landsIn: 'ops',
+          snapshot: { path: 'cubes/widgets.yml', content: cube('widgets') },
+        },
+        // Somewhere xcube's tree doesn't hold: nowhere to put it.
+        { kind: 'model', landsIn: 'gone', snapshot: { path: 'a.yml', content: cube('a') } },
+      ],
+      FOLDERS,
+    );
+    expect(content).toEqual({
+      upserts: [{ folderId: 'fops', name: 'widgets', kind: 'cube', yaml: cube('widgets') }],
+      connections: [
+        {
+          folderId: 'fsales',
+          name: 'warehouse',
+          driver: 'postgres',
+          authMethod: 'password',
+          fields: { host: 'other-db', port: 5432 },
+          sealed,
+        },
+      ],
+    });
+  });
+
+  it('is kept under the proposal’s own id', async () => {
+    const { admin, pushed } = stubXcube();
+    const sync = overlaySync({
+      xcube: admin,
+      contentOf: async () => one,
+      idOf: proposalOverlayIdOf,
+    });
+    const id = '8f0e8c52-6d7a-4b8e-9c55-0d2f1f6f3a11';
+    expect(await sync.ensure(id)).toEqual({
+      id: `p-${id}`,
+      content: one,
+      version: 1,
+    });
+    expect(pushed.map((each) => each.id)).toEqual([`p-${id}`]);
   });
 });
 

@@ -470,13 +470,13 @@ export class CubeClient {
     // as the preview's (AC-323).
     if (response.ok && fromOverlay && response.headers.get('x-xcube-overlay') === null)
       throw new CubeError(
-        'Cube answered this preview without your workspace’s changes, so it isn’t shown. Try again.',
+        'Cube answered this preview without the changes it previews, so it isn’t shown. Try again.',
         503,
       );
     // Still an older version after asking again (T347).
     if (fromOverlay && this.#fromOlderOverlay(response))
       throw new CubeError(
-        'Cube hasn’t caught up with your workspace’s latest save yet, so this preview isn’t shown. Try again.',
+        'Cube hasn’t caught up with the latest changes this previews yet, so it isn’t shown. Try again.',
         503,
       );
     if (response.ok) return parsed;
