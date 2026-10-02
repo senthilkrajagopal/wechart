@@ -26,8 +26,11 @@ export type Starter =
 /** How it was started: Build all (Build now, when not partitioned), Rebuild selected, or a schedule's run. */
 export type BuildVia = 'build-all' | 'rebuild-selected' | 'schedule';
 
-/** How a build ended: done; failed; or Cube's record expired before its end was seen. */
-export type BuildOutcome = 'done' | 'failed' | 'expired';
+/**
+ * How a build ended: done; failed; cancelled from the queue (T376); or Cube's
+ * record expired before its end was seen.
+ */
+export type BuildOutcome = 'done' | 'failed' | 'cancelled' | 'expired';
 
 export interface NewBuild {
   /** Its published name, as the jobs API names it. */
@@ -89,6 +92,9 @@ export interface BuildRecord {
   readonly failedCount: number | null;
   /** Cube's error, as Cube said it. */
   readonly error: string | null;
+  /** Who cancelled it from the queue, and when (T376); none otherwise. */
+  readonly cancelledBy: { readonly key: string; readonly name: string } | null;
+  readonly cancelledAt: Date | null;
   readonly tokens: readonly TokenRecord[];
 }
 
@@ -160,6 +166,15 @@ type RunRow = {
   error: string | null;
 };
 
+/** Who cancelled a build from the queue (T376), or none. */
+const cancellerOf = (row: {
+  readonly cancelled_by_key: string | null;
+  readonly cancelled_by_name: string | null;
+}) =>
+  row.cancelled_by_key === null
+    ? null
+    : { key: row.cancelled_by_key, name: row.cancelled_by_name ?? '' };
+
 const starterOf = (
   row: Pick<
     RunRow,
@@ -179,18 +194,35 @@ const starterOf = (
 export function endOf(status: string): BuildOutcome {
   if (status === 'done') return 'done';
   if (status === 'not_found') return 'expired';
+  // wechart's own state for a job taken out of the queue (T376).
+  if (status === 'cancelled') return 'cancelled';
   return 'failed';
 }
 
 /**
  * A build's outcome from its jobs' ends: failed when any partition failed;
- * otherwise Cube's record expired when any job's end wasn't seen, which is
- * neither done nor failed; otherwise done.
+ * otherwise cancelled when any job was cancelled (T376); otherwise Cube's
+ * record expired when any job's end wasn't seen, which is neither done nor
+ * failed; otherwise done.
  */
 export function outcomeOf(ends: readonly BuildOutcome[]): BuildOutcome {
   if (ends.includes('failed')) return 'failed';
+  if (ends.includes('cancelled')) return 'cancelled';
   if (ends.includes('expired')) return 'expired';
   return 'done';
+}
+
+/** The start a queue entry came from (T376): its run, starter, folder and jobs. */
+export interface StartFound {
+  readonly runId: string;
+  readonly requestId: string;
+  readonly folderId: string | null;
+  readonly starter: Starter;
+  readonly tokens: readonly {
+    readonly token: string;
+    readonly table: string | null;
+    readonly finished: boolean;
+  }[];
 }
 
 export function buildHistory(db: Kysely<Database>) {
@@ -346,6 +378,8 @@ export function buildHistory(db: Kysely<Database>) {
         outcome: run.outcome as BuildOutcome | null,
         failedCount: run.failed_count,
         error: run.error,
+        cancelledBy: cancellerOf(run),
+        cancelledAt: run.cancelled_at,
         tokens: tokens.map((each) => ({
           token: each.token,
           status: each.status,
@@ -497,6 +531,137 @@ export function buildHistory(db: Kysely<Database>) {
     },
 
     /**
+     * A job taken out of the queue (T376, AC-150, AC-151): it ends,
+     * `cancelled`, at `at`, and its build names who cancelled it; the build
+     * closes once its other jobs have ended. Says whether the job was still
+     * open to cancel: one already ended takes nothing.
+     */
+    async cancelled({
+      runId,
+      token,
+      by,
+      at,
+      askedAt,
+    }: {
+      readonly runId: string;
+      readonly token: string;
+      readonly by: { readonly key: string; readonly name: string };
+      readonly at: Date;
+      /**
+       * When the cancel was asked of xcube: once taken out of the queue, Cube
+       * reads the job's partition missing, or no longer knows it, and a
+       * follower can end the job so before this is written (T376's review).
+       * Such an end, seen after the ask, was the cancel's.
+       */
+      readonly askedAt?: Date;
+    }): Promise<boolean> {
+      const entry = JSON.stringify([{ at: at.toISOString(), status: 'cancelled' }]);
+      const marked = await db
+        .updateTable('build_tokens')
+        .set({
+          status: 'cancelled',
+          finished: true,
+          finished_at: at,
+          log: sql`log || ${entry}::jsonb`,
+        })
+        .where('run_id', '=', runId)
+        .where('token', '=', token)
+        .where((where) =>
+          askedAt === undefined
+            ? where('finished', '=', false)
+            : where.or([
+                where('finished', '=', false),
+                where.and([
+                  where('status', 'in', ['missing_partition', 'not_found']),
+                  where(sql<Date>`(log -> -1 ->> 'at')::timestamptz`, '>=', askedAt),
+                ]),
+              ]),
+        )
+        .returning('token')
+        .executeTakeFirst();
+      if (marked === undefined) return false;
+      await db
+        .updateTable('build_runs')
+        .set({
+          cancelled_by_key: by.key,
+          cancelled_by_name: by.name,
+          cancelled_at: at,
+          // Closed again, should a round have closed it on the follower's end.
+          outcome: null,
+          failed_count: null,
+          error: null,
+          ended_at: null,
+        })
+        .where('id', '=', runId)
+        .where('cancelled_by_key', 'is', null)
+        .execute();
+      await close(runId);
+      return true;
+    },
+
+    /**
+     * The starts that made these queue entries (T376): by the request id a
+     * post carried, or by a job's token, each with its jobs. xcube gives an
+     * entry the request id of the post that made it, and the job's token.
+     */
+    async startsFor({
+      requestIds,
+      tokens,
+    }: {
+      readonly requestIds: readonly string[];
+      readonly tokens: readonly string[];
+    }): Promise<StartFound[]> {
+      if (requestIds.length === 0 && tokens.length === 0) return [];
+      const runs = await db
+        .selectFrom('build_runs')
+        .select([
+          'id',
+          'request_id',
+          'folder_id',
+          'starter_kind',
+          'starter_key',
+          'starter_name',
+          'schedule_id',
+          'schedule_name',
+        ])
+        .where((where) =>
+          where.or([
+            ...(requestIds.length === 0 ? [] : [where('request_id', 'in', requestIds)]),
+            ...(tokens.length === 0
+              ? []
+              : [
+                  where(
+                    'id',
+                    'in',
+                    db.selectFrom('build_tokens').select('run_id').where('token', 'in', tokens),
+                  ),
+                ]),
+          ]),
+        )
+        .execute();
+      if (runs.length === 0) return [];
+      const jobs = await db
+        .selectFrom('build_tokens')
+        .select(['run_id', 'token', 'target_table', 'finished'])
+        .where(
+          'run_id',
+          'in',
+          runs.map((run) => run.id),
+        )
+        .orderBy('position')
+        .execute();
+      return runs.map((run) => ({
+        runId: run.id,
+        requestId: run.request_id,
+        folderId: run.folder_id,
+        starter: starterOf(run),
+        tokens: jobs
+          .filter((job) => job.run_id === run.id)
+          .map((job) => ({ token: job.token, table: job.target_table, finished: job.finished })),
+      }));
+    },
+
+    /**
      * Run history (T374, AC-150): the builds in `within`'s folders — every
      * folder's, given none — newest first, a page at a time, narrowed by
      * `filters`; the next page starts after `before`, the last build of this
@@ -533,6 +698,9 @@ export function buildHistory(db: Kysely<Database>) {
           'r.outcome',
           'r.failed_count',
           'r.error',
+          'r.cancelled_by_key',
+          'r.cancelled_by_name',
+          'r.cancelled_at',
         ])
         .select((eb) => [
           eb
@@ -598,6 +766,8 @@ export function buildHistory(db: Kysely<Database>) {
         outcome: row.outcome as BuildOutcome | null,
         failedCount: row.failed_count,
         error: row.error,
+        cancelledBy: cancellerOf(row),
+        cancelledAt: row.cancelled_at,
         jobs: Number(row.jobs ?? 0),
         progress: { done: Number(row.done ?? 0), building: Number(row.building ?? 0) },
       }));

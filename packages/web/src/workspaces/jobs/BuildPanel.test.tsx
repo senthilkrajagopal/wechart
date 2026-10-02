@@ -32,6 +32,8 @@ function api(states: string[], tokens: string[], leftOut: string[] = []) {
       const url = String(input);
       asked.push(url);
       if (url === '/api/preaggregations') return new Response(JSON.stringify(BUILDABLE));
+      // The queue's entries, for the Queue tab's count (T376), answered and not counted.
+      if (url === '/api/jobs/queue') return Response.json({ entries: [], everyFolder: true });
       // A page of the query log, as the API answers one (T240).
       if (url.startsWith('/api/jobs/queries/page'))
         return new Response(JSON.stringify({ records: [], total: 0 }));

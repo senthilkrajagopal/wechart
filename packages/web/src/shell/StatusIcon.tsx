@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
  * rule 3): every status, validation and job state shows an icon and words,
  * never colour alone.
  */
-export type StateKind = 'ok' | 'run' | 'idle' | 'warn' | 'err' | 'info' | 'draft';
+export type StateKind = 'ok' | 'run' | 'idle' | 'warn' | 'err' | 'info' | 'draft' | 'cancel';
 
 export function StatusIcon({ kind }: { kind: StateKind }) {
   const common = {
@@ -77,6 +77,14 @@ export function StatusIcon({ kind }: { kind: StateKind }) {
             strokeWidth="1.5"
             strokeDasharray="2.6 2"
           />
+        </svg>
+      );
+    // Taken out before it ran: a slashed circle (design 16's s-cancel; T376).
+    case 'cancel':
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M3.8 12.2l8.4-8.4" stroke="currentColor" strokeWidth="1.5" />
         </svg>
       );
     // A note, not a state: the prototype's "i" (T466, UX-109).

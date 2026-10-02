@@ -21,6 +21,7 @@ import { sqlRuns } from './repos/sql-runs';
 import { buildHistory } from './repos/build-history';
 import { CubeClient } from './cube/client';
 import { buildFollower, startFollowingBuilds } from './jobs/follow';
+import { xcubeQueue } from './xcube/queue';
 import { AUDIT_RETENTION_DAYS, startAuditRetention } from './audit/retention';
 import { readModelDir } from './model/read-dir';
 import { startModel } from './model/split';
@@ -225,6 +226,16 @@ async function main(): Promise<void> {
     // Each user's SQL runs, one going at a time (T533, AC-379), kept as their history (T534).
     sqlRuns: runStore,
     buildHistory: builds,
+    // xcube's build queue and its cancel (T376, AC-151).
+    ...(config.xcube === undefined || service === undefined
+      ? {}
+      : {
+          buildQueue: xcubeQueue({
+            cubeApiUrl: config.cubeApiUrl,
+            model: config.xcube.model,
+            token: () => service.token(),
+          }),
+        }),
     // Read-only SQL run by xcube, on a data source's connection (T532, AC-373).
     ...(config.xcube === undefined || service === undefined
       ? {}

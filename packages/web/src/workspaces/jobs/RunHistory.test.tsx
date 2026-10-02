@@ -164,6 +164,12 @@ describe('Run history (T374, AC-150)', () => {
         summary({ id: 'whole', granularity: null, jobs: 1, durationMs: 6_000 }),
         summary({ id: 'sched', starter: close, via: 'schedule', durationMs: 124_000 }),
         summary({ id: 'gone', outcome: 'expired', endedAt: null, durationMs: null }),
+        summary({
+          id: 'off',
+          outcome: 'cancelled',
+          cancelledBy: { key: 'wren', name: 'Wren Writer' },
+          cancelledAt: '2026-10-02T12:39:00.000Z',
+        }),
       ]),
     );
     shown();
@@ -179,6 +185,15 @@ describe('Run history (T374, AC-150)', () => {
     // Its own outcome, neither done nor failed (B2), and no duration.
     expect(text(within(row('gone')).getByTestId('build-outcome'))).toBe('Cube’s record expired');
     expect(text(row('gone'))).toContain('—');
+    // Cancelled from the queue, by whom and when (T376; design 16, C2), with its icon.
+    const cancelled = within(row('off')).getByTestId('build-outcome');
+    const at = new Date('2026-10-02T12:39:00.000Z').toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    expect(text(cancelled)).toBe(`Cancelled · by Wren Writer, ${at}`);
+    expect(cancelled.querySelector('svg')?.getAttribute('data-icon')).toBe('cancel');
     // Each starter with its icon (rule 3).
     expect(within(row('sched')).getByTestId('starter').querySelectorAll('svg')).toHaveLength(1);
   });

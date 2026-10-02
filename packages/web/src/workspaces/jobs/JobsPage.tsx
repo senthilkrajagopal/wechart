@@ -5,6 +5,7 @@ import { titlesOf } from '../../editor/fields';
 import { META_QUERY } from '../../query/meta';
 import { StateLine } from '../../shell/StatusIcon';
 import { BuildPanel } from './BuildPanel';
+import { BuildQueue, QUEUE_EVERY_MS, QUEUE_QUERY_KEY, readQueue } from './BuildQueue';
 import { Health } from './Health';
 import { FIRST_ASK, QueryLog, queryStringOf, type QueryLogAsk, type QueryRecord } from './QueryLog';
 import { RunHistory } from './RunHistory';
@@ -12,12 +13,14 @@ import { RunHistory } from './RunHistory';
 /**
  * The Jobs workspace, in the prototype's tabs: the pre-aggregations, each
  * built on request and followed to its end (T155, AC-149); Run history, the
- * builds wechart started (T374, AC-150; design 16, pin 1); and the queries
- * wechart has issued, newest first (AC-016).
+ * builds wechart started (T374, AC-150; design 16, pin 1); the queue, its
+ * count on its tab (T376, AC-151); and the queries wechart has issued,
+ * newest first (AC-016).
  */
 const TABS = [
   ['preaggs', 'Pre-aggregations'],
   ['history', 'Run history'],
+  ['queue', 'Queue'],
   ['queries', 'Queries'],
 ] as const;
 type Tab = (typeof TABS)[number][0];
@@ -75,6 +78,14 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
   if (!opened.has(open)) setOpened(new Set([...opened, open]));
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const base = useId();
+  // How many entries the queue holds in the user's folders, on its tab (design
+  // 16, pin 1): the queue's own read, shared with its panel.
+  const queue = useQuery({
+    queryKey: QUEUE_QUERY_KEY,
+    queryFn: ({ signal }) => readQueue(signal),
+    refetchInterval: QUEUE_EVERY_MS,
+  });
+  const queued = queue.data?.entries.length ?? 0;
   return (
     <div className="jobs-workspace">
       <div className="jobs-workspace__head">
@@ -109,6 +120,12 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
             }}
           >
             {label}
+            {key === 'queue' && queued > 0 ? (
+              <>
+                {' '}
+                <span className="jobs-workspace__count">{queued}</span>
+              </>
+            ) : null}
           </button>
         ))}
       </div>
@@ -136,6 +153,14 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
         hidden={open !== 'history'}
       >
         <RunHistory enabled={opened.has('history')} />
+      </div>
+      <div
+        role="tabpanel"
+        id={`${base}-queue-panel`}
+        aria-labelledby={`${base}-queue`}
+        hidden={open !== 'queue'}
+      >
+        <BuildQueue />
       </div>
       <div
         role="tabpanel"

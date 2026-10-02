@@ -1,0 +1,274 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+
+import { ExportedToast } from '../../dashboard/export/ExportedToast';
+import { StateLine, StatusIcon } from '../../shell/StatusIcon';
+import { TableScroll } from '../../shell/TableScroll';
+import { clockOf, folderTextOf, periodOf, shortToken, StarterLabel, type Starter } from './builds';
+import { Status } from './StateBadge';
+
+/**
+ * The build queue (T376, AC-151; design 16, state C): every build waiting or
+ * running in the user's folders, whoever started it, in the queue's order,
+ * oldest first, read again while it is open. A queued build wechart started
+ * can be cancelled; Cube's refresh worker would queue its own again at its
+ * next run, and a query's build is Cube's own, so neither has Cancel (Q1),
+ * and neither has a token (Q5).
+ */
+export interface QueueRow {
+  readonly key: string;
+  readonly preAggregation: string;
+  readonly name: string;
+  readonly folderId: string | null;
+  readonly folderPath: readonly string[];
+  readonly partition: { readonly start: string; readonly end: string } | null;
+  readonly granularity: string | null;
+  readonly state: 'queued' | 'building' | 'stalled';
+  readonly addedAt: string;
+  readonly starter:
+    | Starter
+    | { readonly kind: 'refresh-worker' }
+    | { readonly kind: 'query' }
+    /** A jobs post wechart has no record of. */
+    | { readonly kind: 'jobs' };
+  /** The token Cube's jobs API gave wechart; none for a build wechart didn't start. */
+  readonly token: string | null;
+  readonly runId: string | null;
+  readonly cancellable: boolean;
+}
+
+export const QUEUE_QUERY_KEY = ['jobs', 'queue'] as const;
+
+/** The queue, as Jobs reads it for this tab and its count (design 16, pin 1). */
+export async function readQueue(signal?: AbortSignal): Promise<{ entries: QueueRow[] }> {
+  const response = await fetch('/api/jobs/queue', signal === undefined ? undefined : { signal });
+  const body = (await response.json().catch(() => null)) as {
+    entries?: QueueRow[];
+    error?: unknown;
+  } | null;
+  if (!response.ok || body === null || !Array.isArray(body.entries))
+    throw new Error(
+      typeof body?.error === 'string'
+        ? body.error
+        : `The queue could not be read (${String(response.status)}).`,
+    );
+  return { entries: body.entries };
+}
+
+/** How often an open Jobs page reads the queue again. */
+export const QUEUE_EVERY_MS = 5_000;
+
+/** A partition by its period, or the whole pre-aggregation. */
+const partitionOf = (row: QueueRow) =>
+  row.partition === null ? 'Whole' : periodOf(row.partition.start, row.granularity);
+
+/** "the Aug 2026 build of orders_emea.by_month", "the build of pipeline.by_stage". */
+const buildOf = (row: QueueRow) =>
+  `the ${row.partition === null ? '' : `${partitionOf(row)} `}build of ${row.name}`;
+
+function StartedBy({ starter }: { starter: QueueRow['starter'] }) {
+  if (starter.kind === 'person' || starter.kind === 'schedule')
+    return <StarterLabel starter={starter} />;
+  return (
+    <span className="owner" data-testid="starter">
+      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" data-icon={starter.kind}>
+        {starter.kind === 'refresh-worker' ? (
+          <path
+            d="M8 1.8l5.5 3v6.4L8 14.2l-5.5-3V4.8z M2.5 4.8L8 7.8l5.5-3M8 7.8v6.4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            strokeLinejoin="round"
+          />
+        ) : (
+          <>
+            <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+            <path d="M10.5 10.5l3 3" stroke="currentColor" strokeWidth="1.6" />
+          </>
+        )}
+      </svg>
+      {starter.kind === 'refresh-worker'
+        ? 'Cube’s refresh worker'
+        : starter.kind === 'query'
+          ? 'A query'
+          : 'Cube’s jobs API'}
+    </span>
+  );
+}
+
+function StateOf({ row }: { row: QueueRow }) {
+  if (row.state === 'stalled')
+    return (
+      <>
+        <Status kind="warn" label="Stalled" testId="queue-state" state="stalled" />
+        <span className="build-queue__sub">Cube takes it out at its next check</span>
+      </>
+    );
+  return row.state === 'building' ? (
+    <Status kind="run" label="Building" testId="queue-state" state="building" />
+  ) : (
+    <Status kind="idle" label="Queued" testId="queue-state" state="queued" />
+  );
+}
+
+/** Why a cancel didn't happen, in design 16's words (state C3). */
+const REFUSED: Record<
+  string,
+  { readonly bold: string; readonly rest: string; readonly err: boolean }
+> = {
+  processing: {
+    bold: 'Not cancelled: it had started building.',
+    rest: 'Only a queued build can be cancelled. It’s now Building, and the list shows it.',
+    err: true,
+  },
+  gone: {
+    bold: 'It had already left the queue.',
+    rest: 'It finished or was taken out before the cancel reached Cube. Run history says how it ended.',
+    err: false,
+  },
+};
+
+export function BuildQueue({ enabled = true }: { enabled?: boolean }) {
+  const client = useQueryClient();
+  const queue = useQuery({
+    queryKey: QUEUE_QUERY_KEY,
+    queryFn: ({ signal }) => readQueue(signal),
+    refetchInterval: QUEUE_EVERY_MS,
+    enabled,
+  });
+  const [said, setSaid] = useState('');
+  const [refused, setRefused] = useState<{ reason: string; message: string } | null>(null);
+  const cancel = useMutation({
+    mutationFn: async (row: QueueRow) => {
+      const response = await fetch('/api/jobs/queue/cancel', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ key: row.key }),
+      });
+      const body = (await response.json().catch(() => null)) as {
+        cancelled?: boolean;
+        reason?: string;
+        message?: string;
+        error?: string;
+      } | null;
+      if (!response.ok || body === null)
+        throw new Error(body?.error ?? `The cancel failed (status ${String(response.status)}).`);
+      return { row, body };
+    },
+    onSuccess: ({ row, body }) => {
+      if (body.cancelled === true) {
+        setRefused(null);
+        setSaid(`Cancelled ${buildOf(row)}. Build it again from Pre-aggregations.`);
+      } else {
+        setRefused({ reason: body.reason ?? 'gone', message: body.message ?? '' });
+      }
+      void client.invalidateQueries({ queryKey: QUEUE_QUERY_KEY });
+    },
+  });
+
+  if (queue.isPending) return <StateLine kind="run">Reading the queue…</StateLine>;
+  if (queue.isError) return <StateLine kind="err">{queue.error.message}</StateLine>;
+  const rows = queue.data.entries;
+  // A reason design 16 doesn't word: the API's own words (T376's review).
+  const why =
+    refused === null
+      ? undefined
+      : (REFUSED[refused.reason] ?? { bold: refused.message, rest: '', err: true });
+
+  return (
+    <div className="build-queue">
+      <p className="run-history__count" role="status">
+        {`${String(rows.length)} ${rows.length === 1 ? 'entry' : 'entries'} · in queue order, oldest first`}
+      </p>
+      {why === undefined ? null : (
+        <div className={`notebar${why.err ? ' notebar--err' : ''}`} role="alert">
+          <StatusIcon kind={why.err ? 'err' : 'info'} />
+          <span>
+            <b>{why.bold}</b> {why.rest}
+          </span>
+        </div>
+      )}
+      {cancel.isError ? <StateLine kind="err">{cancel.error.message}</StateLine> : null}
+      {rows.length === 0 ? (
+        // Nothing queued or building (state C4).
+        <div className="run-history__empty">
+          <b>Nothing is queued or building</b>
+          <span>
+            Builds of pre-aggregations in your folders show here while they wait and while they run,
+            whoever started them.
+          </span>
+        </div>
+      ) : (
+        <TableScroll label="Build queue">
+          <table className="query-log build-queue__table" aria-label="Build queue">
+            <thead>
+              <tr>
+                {[
+                  'Added',
+                  'Pre-aggregation',
+                  'Folder',
+                  'Partition',
+                  'State',
+                  'Started by',
+                  'Token',
+                ].map((column) => (
+                  <th key={column} scope="col">
+                    {column}
+                  </th>
+                ))}
+                <th scope="col">
+                  <span className="visually-hidden">Cancel</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.key} data-key={row.key}>
+                  <td>
+                    <time dateTime={row.addedAt}>{clockOf(row.addedAt)}</time>
+                  </td>
+                  <td className="run-history__name">{row.name}</td>
+                  <td>{folderTextOf(row.folderPath)}</td>
+                  <td>{partitionOf(row)}</td>
+                  <td className="build-queue__state">
+                    <StateOf row={row} />
+                  </td>
+                  <td>
+                    <StartedBy starter={row.starter} />
+                  </td>
+                  <td data-testid="queue-token">
+                    {row.token === null ? (
+                      '—'
+                    ) : (
+                      <code title={row.token}>{shortToken(row.token)}</code>
+                    )}
+                  </td>
+                  <td>
+                    {row.cancellable && row.state === 'queued' ? (
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        aria-label={`Cancel ${buildOf(row)}`}
+                        disabled={cancel.isPending}
+                        onClick={() => cancel.mutate(row)}
+                      >
+                        Cancel
+                      </button>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableScroll>
+      )}
+      <p className="run-history__note" data-testid="queue-foot">
+        Only queued builds wechart started, from Jobs or a schedule, can be cancelled here. Cube’s
+        refresh worker would queue its own again within 30 seconds, until its refresh key turns
+        over, and a query’s build is one Cube started to answer a query. A token is the one Cube’s
+        jobs API gave wechart; the worker’s and queries’ builds have none.
+      </p>
+      <ExportedToast message={said} onDismiss={() => setSaid('')} />
+    </div>
+  );
+}

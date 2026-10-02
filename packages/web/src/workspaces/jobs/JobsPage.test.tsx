@@ -13,13 +13,14 @@ import { JobsPage } from './JobsPage';
  */
 const asked: string[] = [];
 
-function serve() {
+function serve(queued: unknown[] = []) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       asked.push(url);
       if (url === '/api/preaggregations') return Response.json([]);
+      if (url === '/api/jobs/queue') return Response.json({ entries: queued, everyFolder: true });
       if (url.startsWith('/api/jobs/builds'))
         return Response.json({ records: [], starters: [], folders: [], everyFolder: true });
       if (url.startsWith('/api/jobs/queries/page')) return Response.json({ records: [], total: 0 });
@@ -48,15 +49,48 @@ afterEach(() => {
 });
 
 describe('Jobs’ tabs (T374, design 16 pin 1)', () => {
-  it('has Run history between Pre-aggregations and Queries', () => {
+  it('has Run history and Queue between Pre-aggregations and Queries', () => {
     serve();
     shown();
 
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
       'Pre-aggregations',
       'Run history',
+      'Queue',
       'Queries',
     ]);
+  });
+
+  it('counts the queue’s entries in the user’s folders on its tab (T376, pin 1)', async () => {
+    const entry = (key: string) => ({
+      key,
+      preAggregation: 'orders.main',
+      name: 'orders.main',
+      folderId: 'root',
+      folderPath: ['Shared'],
+      partition: null,
+      granularity: null,
+      state: 'queued',
+      addedAt: '2026-10-02T12:00:00.000Z',
+      starter: { kind: 'refresh-worker' },
+      token: null,
+      runId: null,
+      cancellable: false,
+    });
+    serve([entry('a'), entry('b'), entry('c')]);
+    shown();
+
+    await vi.waitFor(() => {
+      expect(screen.getByRole('tab', { name: /^Queue/ }).textContent).toBe('Queue 3');
+    });
+  });
+
+  it('opens the queue at ?tab=queue', async () => {
+    serve();
+    shown('?tab=queue');
+
+    expect(screen.getByRole('tab', { name: /^Queue/ }).getAttribute('aria-selected')).toBe('true');
+    expect((await screen.findByText('Nothing is queued or building')).tagName).toBe('B');
   });
 
   it('opens Run history at ?tab=history, and keeps every panel mounted', async () => {

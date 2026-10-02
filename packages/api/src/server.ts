@@ -48,6 +48,8 @@ import { registerSignIn, signInOptionsOf } from './auth/routes';
 import { Forbidden, registerUser, Unauthenticated, userOf } from './auth/user';
 import { registerBuilds } from './jobs/build';
 import { registerBuildHistory } from './jobs/history';
+import { registerQueue } from './jobs/queue';
+import type { XcubeQueue } from './xcube/queue';
 import { registerSchedules } from './jobs/schedules';
 import { NO_JOBS, type JobsAccess } from './jobs/scope';
 import {
@@ -227,6 +229,8 @@ export interface BuildOptions {
   readonly sqlRuns?: SqlRunStore;
   /** The builds wechart starts, one record per start (T372, AC-150). */
   readonly buildHistory?: BuildHistory;
+  /** xcube's build queue and its cancel (T376, AC-151). Unset without xcube: no Queue. */
+  readonly buildQueue?: XcubeQueue;
   /**
    * Where a data source lands before it is stored, and leaves before it is
    * removed (T442): xcube's connections. Unset without xcube.
@@ -450,6 +454,7 @@ export function buildServer({
   sqlRunner,
   sqlRuns,
   buildHistory,
+  buildQueue,
   dataSourceLanding,
   connectionTest,
   connectionTests,
@@ -1134,6 +1139,16 @@ export function buildServer({
   // Run history and each build's log, scoped as Jobs is (T374, AC-150).
   if (buildHistory !== undefined)
     registerBuildHistory(app, { store: buildHistory, access: jobsAccess, now });
+  // The build queue, and cancelling what wechart started (T376, AC-151).
+  if (buildQueue !== undefined)
+    registerQueue(app, {
+      queue: buildQueue,
+      ...(buildHistory === undefined ? {} : { history: buildHistory }),
+      client,
+      ...(modelFiles === undefined ? {} : { modelFiles }),
+      access: jobsAccess,
+      now,
+    });
   // With the model's files: a key's SQL is read there (T273's review).
   // And each folder's, under its prefixed names (T450's review).
   registerSchedules(app, client, modelFiles, folders, jobsAccess);

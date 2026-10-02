@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { ownCubeFile } from './model-files';
 import { psql } from './store';
 
 /**
@@ -139,6 +140,96 @@ test('Run history lists a build started from Jobs, its log naming its token and 
   // Started more than a day ago, as the page now says.
   const startedAt = Date.parse((await moved.locator('time').getAttribute('datetime')) ?? '');
   expect(Date.now() - startedAt).toBeGreaterThan(25 * 3_600_000);
+});
+
+/**
+ * T376 / AC-151: a build wechart started waits in the queue with its token;
+ * Cancel takes it out, and Run history reads Cancelled.
+ *
+ * Its own cube, month-partitioned, its SQL slowed three seconds a query and
+ * left alone by the refresh worker (`scheduled_refresh: false`): Build all
+ * starts eight jobs, Cube builds two at a time (Postgres's queue concurrency,
+ * research cube/per-folder-models.md), so the rest wait long enough to be
+ * cancelled.
+ */
+const slowCube = (cube: string) => `cubes:
+  - name: ${cube}
+    sql: SELECT o.* FROM public.orders o, pg_sleep(3)
+    dimensions:
+      - name: status
+        sql: status
+        type: string
+      - name: ordered_at
+        sql: ordered_at
+        type: time
+    measures:
+      - name: count
+        type: count
+    pre_aggregations:
+      - name: by_month
+        measures: [CUBE.count]
+        dimensions: [CUBE.status]
+        time_dimension: CUBE.ordered_at
+        granularity: day
+        partition_granularity: month
+        scheduled_refresh: false
+`;
+
+test('a build wechart queued waits with its token, Cancel takes it out, and Run history reads Cancelled', async ({
+  page,
+  request,
+  browserName,
+}) => {
+  test.setTimeout(240_000);
+  const cube = `queued_${browserName}`;
+  const rollup = `${cube}.by_month`;
+  const path = await ownCubeFile(request, cube, slowCube(cube));
+  try {
+    await page.goto('/jobs');
+    const answered = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/builds') && response.request().method() === 'POST',
+    );
+    await page
+      .getByRole('table', { name: 'Pre-aggregations' })
+      .getByRole('button', { name: `Build ${rollup}` })
+      .click({ timeout: 60_000 });
+    const { tokens, runId } = (await (await answered).json()) as {
+      tokens: string[];
+      runId: string;
+    };
+    expect(tokens).toHaveLength(8);
+
+    // The queue: this build's entries, each with its token, wechart's to cancel.
+    await page.getByRole('tab', { name: /^Queue/ }).click();
+    const queue = page.getByRole('table', { name: 'Build queue' });
+    const waiting = queue
+      .getByRole('row')
+      .filter({ hasText: rollup })
+      .filter({ has: page.getByRole('button', { name: /^Cancel the/ }) });
+    await expect(waiting.first()).toBeVisible({ timeout: 30_000 });
+    const entry = waiting.last();
+    const key = await entry.getAttribute('data-key');
+    const token = (await entry.getByTestId('queue-token').locator('code').getAttribute('title'))!;
+    expect(tokens).toContain(token);
+
+    await entry.getByRole('button', { name: /^Cancel the/ }).click();
+    await expect(page.getByRole('status').filter({ hasText: /^Cancelled the / })).toContainText(
+      `build of ${rollup}. Build it again from Pre-aggregations.`,
+    );
+    await expect(queue.locator(`[data-key="${key}"]`)).toHaveCount(0);
+
+    // Run history: the start reads Cancelled, by whom, once its other jobs end.
+    await page.getByRole('tab', { name: 'Run history' }).click();
+    await expect(page.getByTestId(`build-row-${runId}`).getByTestId('build-outcome')).toHaveText(
+      /^Cancelled · by admin, \d{2}:\d{2}$/,
+      { timeout: 120_000 },
+    );
+  } finally {
+    await request.post('/api/model/publish', {
+      data: { files: [{ path, content: slowCube(cube).replace('pg_sleep(3)', 'pg_sleep(0)') }] },
+    });
+  }
 });
 
 /**

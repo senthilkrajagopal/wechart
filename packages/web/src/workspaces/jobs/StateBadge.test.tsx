@@ -25,6 +25,8 @@ describe('a job’s state', () => {
     ],
     ['not_found', 'warn', 'Not found'],
     ['pre_agg_not_found', 'err', 'Pre-aggregation not found'],
+    // wechart's own: taken out of the queue (T376), with design 16's slashed circle.
+    ['cancelled', 'cancel', 'Cancelled'],
     // A raw queue state Cube passes through, as it is.
     ['toProcess', 'idle', 'toProcess'],
     // Before Cube has answered at all: asking, under way (T183's review).

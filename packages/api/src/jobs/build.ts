@@ -160,6 +160,26 @@ export function buildablesFrom(
   );
 }
 
+/**
+ * The pre-aggregations wechart offers to build, each with its folder: the
+ * whole model's, xcube's own, whose folder gate filters no own read (T436),
+ * with every folder's files, so a folder's rollup finds its own (T530's
+ * review). Jobs' list, and the queue's entries' folders (T376).
+ */
+export async function listedBuildables(
+  client: CubeClient,
+  modelFiles: ModelFileStore | undefined,
+  access: JobsAccess | undefined,
+  /** Cubes marked `public: false` too: the queue's, which the refresh worker builds (T376's review). */
+  { hidden = false }: { readonly hidden?: boolean } = {},
+): Promise<Buildable[]> {
+  return buildablesFrom(
+    await client.modelMeta({ hidden }),
+    modelFiles === undefined ? [] : await (modelFiles.all?.() ?? modelFiles.list()),
+    access === undefined ? undefined : await placements(access),
+  );
+}
+
 export function registerBuilds(
   app: FastifyInstance,
   client: CubeClient,
@@ -171,14 +191,7 @@ export function registerBuilds(
 ): void {
   const scopeOf = (request: FastifyRequest) =>
     access === undefined ? Promise.resolve(EVERYTHING) : access.scope(request);
-  const listed = async () =>
-    buildablesFrom(
-      // The whole model's, xcube's own: the folder gate filters no own read (T436).
-      await client.modelMeta(),
-      // Every folder's files, so a folder's rollup finds its own (T530's review).
-      modelFiles === undefined ? [] : await (modelFiles.all?.() ?? modelFiles.list()),
-      access === undefined ? undefined : await placements(access),
-    );
+  const listed = () => listedBuildables(client, modelFiles, access);
 
   // A read-write member's own folders' only (T371).
   app.get('/api/preaggregations', USER, async (request, reply) => {

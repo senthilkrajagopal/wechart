@@ -31,6 +31,9 @@ export function stateOf(status: string): { kind: StateKind; label: string } {
       return { kind: 'warn', label: 'Not found' };
     case 'pre_agg_not_found':
       return { kind: 'err', label: 'Pre-aggregation not found' };
+    // wechart's own state for a job taken out of the queue (T376).
+    case 'cancelled':
+      return { kind: 'cancel', label: 'Cancelled' };
     default:
       // A raw queue state Cube passes through: shown as it is, still waiting.
       return { kind: 'idle', label: status };

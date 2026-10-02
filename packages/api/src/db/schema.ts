@@ -191,6 +191,10 @@ export interface BuildRunTable {
   outcome: string | null;
   failed_count: number | null;
   error: string | null;
+  /** Who cancelled it from the queue, and when (T376). */
+  cancelled_by_key: Generated<string | null>;
+  cancelled_by_name: Generated<string | null>;
+  cancelled_at: Generated<Date | null>;
 }
 
 /** One job Cube made for a build, a partition's (T372): its states, as wechart saw them. */

@@ -330,14 +330,17 @@ export class CubeClient {
    * an instance catches up is waited out as a query's is. Without xcube,
    * Cube's own, as before.
    */
-  async modelMeta(): Promise<unknown> {
+  async modelMeta({ hidden = false }: { readonly hidden?: boolean } = {}): Promise<unknown> {
     const { service, model } = this.#options;
     if (service === undefined || model === undefined) return this.metaExtended();
     const revision = await model.revision();
     // No revision recorded yet: none asked, which xcube refuses as 0 (Gotcha 1).
     const at = revision !== undefined && revision > 0 ? `&revision=${String(revision)}` : '';
+    // Cubes marked `public: false` too, where asked (T376's review; research
+    // xcube-jobs-schedules-routes.md §2): what the model holds, not what it shows.
+    const all = hidden ? '&hidden=true' : '';
     return this.#answer(
-      `/v1/semantic/models/${encodeURIComponent(model.id)}/meta?extended=true${at}`,
+      `/v1/semantic/models/${encodeURIComponent(model.id)}/meta?extended=true${at}${all}`,
       { method: 'GET' },
       service,
     );

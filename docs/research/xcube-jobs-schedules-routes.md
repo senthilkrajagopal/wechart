@@ -23,6 +23,12 @@ researched: 2026-10-01
 
 Not yet checked against compose's running xcube: the routes come with compose's pin of `89628a0e88` (T532). The task that first uses each route checks it there.
 
+**Checked 2026-10-02 (T376), against compose's running xcube** (then `v1.7.45-6d9673ccda`, a later image than the pin), model `e2e`, with the service credential:
+- `GET …/pre-aggregations/queue` answered `{ "model": "e2e", "queue": [] }`, and, right after a jobs post with `x-request-id: wechart-probe-t376`, one entry `{ key, dataSource: "default", preAggregation: "monthly_orders.by_status_month", table, targetTable, partition: { start: "2026-01-01T00:00:00.000", end: "2026-08-29T00:00:00.000" }, status: "processing", stalled: false, addedAt: "2026-10-02T09:54:26.066Z", requestId: "wechart-probe-t376", startedBy: "jobs", job: "<the post's token>" }`, as §1 has it.
+- `POST …/queue/cancel` with a key no longer queued answered `200 { "model": "e2e", "cancelled": [], "notCancelled": [{ key, reason: "gone" }] }`.
+- `GET …/refresh-worker` answered §3's shape, a stopped instance at an older revision still listed.
+- **An inference wechart acts on (T376's review):** once an entry is taken out of the queue, Cube's jobs `get` works the job's status out afresh: no table and no build record read `missing_partition` (`cube/job-records.md`, "Status values"). So a follower can end a cancelled job as `missing_partition` before wechart records the cancel; wechart lets the cancel win over such an end seen after it was asked.
+
 **All three routes are admin routes:** the service credential for its model, or an admin token. A user's token gets `401`. None filters by folder, so wechart scopes them by `meta.xcube.folderId` (AC-297) [answer, intro].
 
 ## 1. The build queue (AC-151)

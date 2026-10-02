@@ -39,6 +39,9 @@ export interface BuildSummary {
   readonly outcome: BuildOutcome | null;
   readonly failedCount: number | null;
   readonly error: string | null;
+  /** Who cancelled it from the queue, and when (T376). */
+  readonly cancelledBy?: { readonly key: string; readonly name: string } | null;
+  readonly cancelledAt?: string | null;
   /** While it is open: its jobs done, and building. */
   readonly progress: { readonly done: number; readonly building: number };
 }
@@ -149,7 +152,10 @@ export function partitionsOf(
 export function BuildOutcomeStatus({
   build,
 }: {
-  build: Pick<BuildSummary, 'outcome' | 'failedCount' | 'jobs' | 'progress'>;
+  build: Pick<
+    BuildSummary,
+    'outcome' | 'failedCount' | 'jobs' | 'progress' | 'cancelledBy' | 'cancelledAt'
+  >;
 }) {
   const ofAll = (n: number) => ` · ${String(n)} of ${String(build.jobs)}`;
   switch (build.outcome) {
@@ -164,8 +170,26 @@ export function BuildOutcomeStatus({
           state="failed"
         />
       );
-    case 'cancelled':
-      return <Status kind="idle" label="Cancelled" testId="build-outcome" state="cancelled" />;
+    case 'cancelled': {
+      // By whom and when (design 16, C2): "Cancelled · by Wren Writer, 14:39".
+      const by = build.cancelledBy?.name;
+      const at =
+        typeof build.cancelledAt === 'string'
+          ? new Date(build.cancelledAt).toLocaleTimeString('en-GB', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            })
+          : undefined;
+      return (
+        <Status
+          kind="cancel"
+          label={`Cancelled${by === undefined ? '' : ` · by ${by}${at === undefined ? '' : `, ${at}`}`}`}
+          testId="build-outcome"
+          state="cancelled"
+        />
+      );
+    }
     case 'expired':
       return (
         <Status kind="warn" label="Cube’s record expired" testId="build-outcome" state="expired" />

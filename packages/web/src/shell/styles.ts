@@ -3776,6 +3776,36 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 .build-log__gap { color: var(--wc-text-muted); font-style: italic; }
 .build-log__help { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
 .build-log__starter { margin: 0; }
+/* The build queue (T376; design 16, state C), and its count on its tab (pin 1). */
+.jobs-workspace__count {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.build-queue { display: grid; gap: 10px; }
+.build-queue__sub { display: block; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.build-queue__table code { font-size: 12px; }
+.notebar {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 12px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-subtle);
+  font-size: 12px;
+  line-height: 16px;
+}
+.notebar--err { background: color-mix(in srgb, var(--wc-status-error) 9%, var(--wc-bg-surface)); }
+.notebar b { font-weight: 600; }
 /* The Security workspace (T171): its policies' table, and the note on phase 2. */
 /* One column as wide as the page leaves it, not as its widest table: an
    implicit column took the tables' width, and the title and notes ran past a
@@ -4929,6 +4959,7 @@ main:has(.review-view) {
 .status--err { color: var(--wc-status-error); }
 .status--run { color: var(--wc-accent); }
 .status--idle { color: var(--wc-text-secondary); }
+.status--cancel { color: var(--wc-text-secondary); }
 /* A line of state — loading, failed, done, a warning — with its icon (T183,
    AC-177; direction.md rule 3): the icon at the words' first line, the words
    wrapping beside it in the line's own colour, the icon in its state's. */

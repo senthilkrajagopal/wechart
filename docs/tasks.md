@@ -7112,8 +7112,33 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - a build started from Jobs is listed, its log naming its token and its end state, Done. This carries AC-149's e2e (the token, followed to its end) onto the new surface;
       - a record whose finish is moved back 25 hours in the suite's database is still listed (AC-150).
   - Depends on: T372
-- [ ] T376 (AC-151) Show the build queue, and cancel a queued build wechart started
+- [x] T376 (AC-151) Show the build queue, and cancel a queued build wechart started
   - *Rewritten 2026-10-02 to design 16's state C, against xcube's queue route as built (`89628a0e88`; research `xcube-jobs-schedules-routes.md` §1).* Of xcube's two ways, the user chose to cancel only builds wechart started (Q1). Cube's refresh worker queues a build it lost to a cancel again at its next run.
+  - **As built (2026-10-02):**
+    - The routes were checked against compose's running xcube first (then `6d9673ccda`, later than the pin; recorded in the research doc).
+    - `xcube/queue.ts`: the queue and its cancel, with the service credential.
+    - `GET /api/jobs/queue` (`jobs/queue.ts`): the user's folders' entries, oldest first. Each has its short name, folder, partition, state (queued, building or stalled), starter and token. A start is found in wechart's history by the job's token, else the post's request id. Otherwise the starter is Cube's refresh worker (`scheduler`) or a query, with no token. A cube's folder comes from the model's meta with `hidden=true`, so a `public: false` cube's builds are listed in its own folder.
+    - `POST /api/jobs/queue/cancel { key }`: `403` before xcube is asked for another folder's entry, or one wechart didn't start. A key no longer queued is said gone without asking. xcube's `processing` and `gone` read "Not cancelled: it had started building." and "Not cancelled: it had already left the queue."
+    - Migration `1758530001000_build-cancels.cjs`: who cancelled a build and when, and the lookups by request id and token. A cancelled job reads `cancelled`, wechart's own state.
+    - The Queue tab at `?tab=queue`, its count on the tab when there are entries, read every 5 s; `BuildQueue.tsx` as design 16's C1–C4, with Cancel only on a queued build wechart started and the foot saying why. Run history reads "Cancelled · by <name>, HH:MM" with design 16's slashed circle.
+  - **Implementer's calls, for the user to confirm or change:**
+    - A build's outcome is failed when any job failed, else cancelled when any was cancelled, else Cube's record expired, else done. Failed hides who cancelled.
+    - A jobs build wechart has no record of reads "Cube's jobs API" under Started by, a fifth starter design 16 doesn't draw.
+  - **One review round (spec-reviewer), fixed:**
+    1. A `public: false` cube's entries were missing for its folder's members, and read "A folder no longer there" for Super-Admins. The queue now reads the meta with `hidden=true`.
+    2. A race: the follower could end a cancelled job as `missing_partition` before the cancel was recorded, so Run history read Failed. A cancel now wins over such an end seen after it was asked, and the build is closed again.
+    3. An entry xcube knew only by its request id showed "—" for its token. It now shows the token wechart's history has for it.
+    4. Indexes for the lookups by request id and token.
+    5. A build's partition table showed a cancelled job as raw "cancelled". It now reads Cancelled, with its icon.
+    6. A refusal reason the design doesn't word is shown in the API's own words.
+    7. The "by whom" assertion checks the user's name.
+  - **Left as found (minor), for the user:** after a Cancel, focus isn't moved to the next row's Cancel (design 16's keyboard table); no "· for 9 min" on a Building entry (xcube gives when an entry was added, not when it started building); no copy affordance for a token, and no icon in the empty state; no "Started by" filter on Queue (no task has it); without xcube, the Queue tab reads "The queue could not be read (404)"; the log's "cancelled" line sits under "what Cube reported" though wechart wrote it.
+  - **AC-151 ticked.** Shown by:
+    - `e2e/jobs.spec.ts` "a build wechart queued waits with its token, Cancel takes it out, and Run history reads Cancelled" (Chrome, against compose's xcube);
+    - `BuildQueue.test.tsx`: no Cancel on the refresh worker's and queries' entries, with the foot saying why; refusals said;
+    - `jobs/queue.test.ts`: oldest first, scope, hidden cubes, the 403s before xcube is asked, the refusals, the race;
+    - the route matrix's queue cases.
+  - **AC-150 stays open** until a build started by a wechart schedule exists (T378, T552).
   - Files:
     - `packages/api/src/xcube/queue.ts` (+ test): `GET …/models/{model}/pre-aggregations/queue` and `POST …/queue/cancel`, under the service credential;
     - `packages/api/src/jobs/queue.ts` (+ test);

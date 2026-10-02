@@ -31,6 +31,7 @@ import { xcubeAdmin } from '../xcube/client';
 import { connectionNameOf } from '../xcube/connections';
 import { fakeXcube, FAKE_ADMIN_TOKEN } from '../xcube/fake';
 import { itemsOf } from '../xcube/items';
+import { xcubeQueue } from '../xcube/queue';
 import { xcubeSqlRunner } from '../xcube/sql-runner';
 
 /**
@@ -165,6 +166,8 @@ interface Held {
 const at = {} as Record<Place, Held>;
 /** The build recorded in each place (T374). */
 const builds = {} as Record<Place, string>;
+/** Its entry in xcube's queue (T376): ends where no other place's does. */
+const queueKeyOf = (place: Place) => `${MARK}-queue-${place}-k`;
 /** Each owner's workspace and what it holds. */
 interface Workspace {
   key: string;
@@ -610,6 +613,38 @@ beforeAll(async () => {
     sqlRuns: sqlRuns(getDb()),
     // The builds wechart started, and Run history (T372, T374).
     buildHistory: buildHistory(getDb()),
+    // xcube's queue: one entry wechart started in each place (T376).
+    buildQueue: xcubeQueue({
+      cubeApiUrl: secured.cubeApiUrl,
+      model: 'dev',
+      token: async () => FAKE_ADMIN_TOKEN,
+      fetch: (async (url: string, init?: RequestInit) =>
+        new URL(url).pathname.endsWith('/cancel')
+          ? Response.json({
+              model: 'dev',
+              cancelled: [],
+              notCancelled: (JSON.parse(String(init?.body)) as { keys: string[] }).keys.map(
+                (key) => ({ key, reason: 'gone' }),
+              ),
+            })
+          : Response.json({
+              model: 'dev',
+              queue: PLACES.map((place) => ({
+                key: queueKeyOf(place),
+                dataSource: 'default',
+                preAggregation: `${fullName(place)}.${rollupOf(place)}`,
+                table: 't',
+                targetTable: 't_a_b_c',
+                partition: null,
+                status: 'queued',
+                stalled: false,
+                addedAt: new Date().toISOString(),
+                requestId: `${MARK}-build-${place}`,
+                startedBy: 'jobs',
+                job: `${MARK}-history-${place}-t`,
+              })),
+            })) as typeof fetch,
+    }),
     sqlRunner: xcubeSqlRunner({
       cubeApiUrl: secured.cubeApiUrl,
       model: 'dev',
@@ -768,6 +803,8 @@ beforeAll(async () => {
       `${MARK} starter in ${place}.`,
       `${MARK}-history-${place}-t`,
     );
+    // Its entry in the queue, to the same (T376, AC-297).
+    secret(`queue entry in ${place}`, (who) => writes(who, place), queueKeyOf(place));
     if (place !== 'root') {
       secret(`folder ${place}`, (who) => opens(who, place), held.folder, `${MARK} folder ${place}`);
       secret(`groups of ${place}`, (who) => opens(who, place), groupOf(place));
@@ -2026,6 +2063,23 @@ const CASES: Record<string, Case> = {
         (who) => writes(who, place),
         builds[place],
       );
+  },
+  // The queue, and cancelling: the folders they build in (T376, AC-297).
+  'GET /api/jobs/queue': listed({ method: 'GET', url: '/api/jobs/queue' }, (who) =>
+    inPlaces(who, writes, queueKeyOf),
+  ),
+  'POST /api/jobs/queue/cancel': async () => {
+    for (const place of PLACES)
+      for (const who of WHO) {
+        const response = await ask(who, {
+          method: 'POST',
+          url: '/api/jobs/queue/cancel',
+          payload: { key: queueKeyOf(place) },
+        });
+        const where = `${who} cancelling in ${place}`;
+        if (writes(who, place)) answered(response, where);
+        else refused(response, where);
+      }
   },
   // Schedules: a read-write member's own folders' rollups.
   'GET /api/schedules': listed({ method: 'GET', url: '/api/schedules' }, (who) =>

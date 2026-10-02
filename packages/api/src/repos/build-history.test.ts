@@ -75,6 +75,8 @@ describe('a build’s record (T372, AC-150)', () => {
       outcome: null,
       failedCount: null,
       error: null,
+      cancelledBy: null,
+      cancelledAt: null,
       tokens: started.tokens.map((token) => ({
         token,
         status: null,
@@ -384,6 +386,77 @@ describe('a build’s end (T372, AC-150)', () => {
       outcome: 'expired',
       endedAt: null,
       durationMs: null,
+    });
+  });
+
+  it('is cancelled when a job was cancelled and none failed, saying who cancelled it (T376)', async () => {
+    const started = build(preAggOf('cancelled'));
+    const id = await history().start(started);
+    const at = new Date('2026-10-02T14:39:02Z');
+    await history().seen({
+      runId: id,
+      token: started.tokens[0]!,
+      previous: null,
+      status: 'done',
+      at,
+      final: true,
+    });
+
+    expect(await history().cancelled({ runId: id, token: started.tokens[1]!, by: wren, at })).toBe(
+      true,
+    );
+    // Once ended, a job can't be cancelled again.
+    expect(await history().cancelled({ runId: id, token: started.tokens[1]!, by: wren, at })).toBe(
+      false,
+    );
+
+    const record = await history().get(id);
+    expect(record).toMatchObject({
+      outcome: 'cancelled',
+      cancelledBy: { key: wren.key, name: wren.name },
+      cancelledAt: at,
+    });
+    expect(record?.tokens[1]).toMatchObject({
+      status: 'cancelled',
+      finished: true,
+      log: [{ at, status: 'cancelled' }],
+    });
+  });
+
+  it('is failed, not cancelled, when another job failed', async () => {
+    const started = build(preAggOf('cancelled-failed'));
+    const id = await history().start(started);
+    const at = new Date('2026-10-02T14:39:02Z');
+    await history().seen({
+      runId: id,
+      token: started.tokens[0]!,
+      previous: null,
+      status: 'failure: boom',
+      at,
+      final: true,
+    });
+    await history().cancelled({ runId: id, token: started.tokens[1]!, by: wren, at });
+
+    expect((await history().get(id))?.outcome).toBe('failed');
+  });
+
+  it('finds the starts a queue’s entries came from, by request id or job token', async () => {
+    const one = build(preAggOf('found'));
+    const two = build(preAggOf('found-too'));
+    const first = await history().start(one);
+    const second = await history().start(two);
+
+    const found = await history().startsFor({
+      requestIds: [one.requestId, 'wechart-unknown'],
+      tokens: [two.tokens[1]!, 'unknown-token'],
+    });
+
+    expect(found.map((each) => each.runId).sort()).toEqual([first, second].sort());
+    expect(found.find((each) => each.runId === first)).toMatchObject({
+      requestId: one.requestId,
+      folderId: 'emea',
+      starter: wren,
+      tokens: one.tokens.map((token) => ({ token, table: null, finished: false })),
     });
   });
 
