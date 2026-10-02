@@ -98,6 +98,14 @@ export interface FolderContentsProps {
   readonly folderNames?: ReadonlyMap<string, string>;
   /** What an empty list says: a folder's, or a search's (AC-019). */
   readonly emptyText?: string;
+  /** The table's caption: the kind shown, where one is (T525, AC-370). */
+  readonly caption?: string;
+  /**
+   * Shown by kind, where the folder holds none of it (T525; design 14, I2):
+   * a last row saying so, after its subfolders, with Show all; in place of
+   * `emptyText`.
+   */
+  readonly kindEmpty?: { readonly text: string; readonly onShowAll: () => void } | undefined;
   /**
    * Whether a row opens: every row unless said. One that doesn't shows its
    * name as text, not as a control that does nothing (T334).
@@ -293,6 +301,8 @@ export function FolderContents({
   sourceKinds = new Map(),
   folderNames,
   emptyText = 'This folder is empty.',
+  caption = 'Contents of this folder',
+  kindEmpty,
   opens = () => true,
   workspace,
   onExport,
@@ -403,6 +413,8 @@ export function FolderContents({
     setSelected(clamped);
     rowRefs.current[clamped]?.focus();
   };
+  /** The row in the Tab order: the selected one, or the last where fewer are listed (T525's review). */
+  const tabbed = Math.max(0, Math.min(selected, items.length - 1));
 
   const onKeyDown = (event: React.KeyboardEvent, index: number) => {
     // The row's own keys only: those pressed in its rename field, its
@@ -439,7 +451,7 @@ export function FolderContents({
 
   return (
     <table className="folder-contents">
-      <caption className="visually-hidden">Contents of this folder</caption>
+      <caption className="visually-hidden">{caption}</caption>
       <thead>
         {/* In the workspace, Status takes Built on's and Owner's places:
             everything there is the user's (design 04, pins 3 and 4). */}
@@ -457,7 +469,7 @@ export function FolderContents({
       <tbody>
         {/* Empty, the header stays and a row says so, as the prototype's
             (recheck-shell-explore F24, F25). */}
-        {items.length === 0 ? (
+        {items.length === 0 && kindEmpty === undefined ? (
           <tr className="folder-contents__empty-row">
             <td colSpan={workspace === undefined ? 6 : 5} className="folder-contents__empty">
               {emptyText}
@@ -476,7 +488,7 @@ export function FolderContents({
               // The selection is the row in the tab order, shown when it has
               // the focus: a plain table's rows take no `aria-selected`
               // (recheck-shell-explore F27, N12).
-              tabIndex={index === selected ? 0 : -1}
+              tabIndex={index === tabbed ? 0 : -1}
               onKeyDown={(event) => onKeyDown(event, index)}
               onFocus={() => setSelected(index)}
               // The whole row opens it, as the prototype's does, but not
@@ -645,6 +657,17 @@ export function FolderContents({
             </tr>
           );
         })}
+        {/* Shown by kind, none of it here: said after the subfolders (T525; design 14, I2). */}
+        {kindEmpty === undefined ? null : (
+          <tr className="folder-contents__empty-row">
+            <td colSpan={workspace === undefined ? 6 : 5} className="folder-contents__empty">
+              {kindEmpty.text}{' '}
+              <button type="button" className="btn-link" onClick={kindEmpty.onShowAll}>
+                Show all
+              </button>
+            </td>
+          </tr>
+        )}
       </tbody>
     </table>
   );

@@ -431,6 +431,79 @@ test.describe('Explore and the top bar by role (T331; AC-001, AC-192, AC-194)', 
         '⤒Import a dashboard…from a file',
       ]);
     });
+
+    /**
+     * T525 (AC-370; design 14, state I and P2): the Show filter lists the
+     * open folder's items of one kind, its subfolders still listed, the tree
+     * as it was; the kind in the address, kept as a subfolder opens and on a
+     * reload; All when Explore opens afresh; none while searching.
+     */
+    test('shows the open folder by kind, its subfolders still listed, keeping the kind as one opens', async ({
+      page,
+    }) => {
+      await explore(page, made.roles);
+      const show = contents(page).getByRole('radiogroup', { name: 'Show' });
+      await expect(show.getByRole('radio', { name: 'All' })).toBeChecked();
+      const rows = contents(page).locator('tbody tr');
+      await expect(rows).toHaveCount(3);
+      const counted = await countOf(page, names.roles).textContent();
+
+      // Models: Inner, then the model file alone.
+      await show.getByRole('radio', { name: 'Models' }).check();
+      await expect(page).toHaveURL(new RegExp(`[?&]folder=${made.roles}&kind=models$`));
+      await expect(
+        contents(page).getByRole('table', { name: 'Contents of this folder: models only' }),
+      ).toBeVisible();
+      await expect(rows).toHaveCount(2);
+      await expect(rows.nth(0)).toContainText(names.inner);
+      await expect(rows.nth(1)).toContainText(`${CUBE}.yml`);
+      await expect(page.getByText('Models: 1, and 1 folder')).toBeAttached();
+
+      // Data sources: none here, said after Inner, with Show all; the tree as it was.
+      await show.getByRole('radio', { name: 'Data sources' }).check();
+      await expect(rows).toHaveCount(2);
+      await expect(rows.nth(0)).toContainText(names.inner);
+      await expect(rows.nth(1)).toHaveText('No data sources in this folder. Show all');
+      await expect(countOf(page, names.roles)).toHaveText(counted ?? '');
+
+      // Opened from the list, Inner keeps the kind: its data source alone.
+      await rows.nth(0).getByRole('button', { name: names.inner, exact: true }).click();
+      await expect(contents(page).getByRole('heading', { level: 1 })).toHaveText(names.inner);
+      await expect(page).toHaveURL(new RegExp(`[?&]folder=${made.inner}&kind=data-sources$`));
+      await expect(rows).toHaveCount(1);
+      await expect(rows.nth(0)).toContainText(`roles_${RUN}`);
+      // And on a reload.
+      await page.reload();
+      await expect(show.getByRole('radio', { name: 'Data sources' })).toBeChecked();
+      await expect(rows).toHaveCount(1);
+
+      // One Tab stop, whose arrows move and choose: Dashboards and charts.
+      await show.getByRole('radio', { name: 'Data sources' }).focus();
+      await page.keyboard.press('ArrowLeft');
+      await expect(show.getByRole('radio', { name: 'Dashboards and charts' })).toBeChecked();
+      await expect(show.getByRole('radio', { name: 'Dashboards and charts' })).toBeFocused();
+      await expect(rows).toHaveCount(1);
+      await expect(rows.nth(0)).toContainText(`Inner board ${RUN}`);
+
+      // Hidden while searching, which lists from every folder.
+      await contents(page)
+        .getByRole('searchbox', { name: 'Search dashboards and charts' })
+        .fill('Inner');
+      await expect(show).toHaveCount(0);
+
+      // Show all from the line puts All back, and the address with it.
+      await explore(page, `${made.roles}&kind=data-sources`);
+      await contents(page).getByRole('button', { name: 'Show all' }).click();
+      await expect(show.getByRole('radio', { name: 'All' })).toBeChecked();
+      // Focus on the choice it made, not lost with the line (T525's review).
+      await expect(show.getByRole('radio', { name: 'All' })).toBeFocused();
+      await expect(page).toHaveURL(new RegExp(`[?&]folder=${made.roles}$`));
+      await expect(rows).toHaveCount(3);
+
+      // Explore opened afresh starts on All.
+      await explore(page, made.roles);
+      await expect(show.getByRole('radio', { name: 'All' })).toBeChecked();
+    });
   });
 
   test.describe('as reader, a read-only member of Roles', () => {
@@ -488,6 +561,19 @@ test.describe('Explore and the top bar by role (T331; AC-001, AC-192, AC-194)', 
         .click();
       await expect(page.getByRole('menu').getByRole('menuitem')).toHaveText(['Export…']);
       await page.keyboard.press('Escape');
+    });
+
+    test('is offered no Show filter, seeing dashboards alone, whatever the address asks (T525, AC-370)', async ({
+      page,
+    }) => {
+      await explore(page, `${made.roles}&kind=models`);
+      await expect(contents(page).getByRole('heading', { level: 1 })).toHaveText(names.roles);
+      // All of what they see, the list drawn: Inner and the dashboard, never "No models…".
+      const rows = contents(page).locator('tbody tr');
+      await expect(rows).toHaveCount(2);
+      await expect(rows.nth(0)).toContainText(names.inner);
+      await expect(rows.nth(1)).toContainText(`Roles board ${RUN}`);
+      await expect(contents(page).getByRole('radiogroup', { name: 'Show' })).toHaveCount(0);
     });
 
     test('is offered nothing at My workspace’s address, having none', async ({ page }) => {

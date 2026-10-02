@@ -3849,6 +3849,48 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
   line-height: 16px;
   color: var(--wc-text-secondary);
 }
+/* Explore's Show filter (T525; design 14, state I): a segmented
+   radio group on its own row above the list, as the prototype's .seg. Its
+   radios are native, out of sight: the chosen choice in the accent, the
+   focused one ringed as every control is. */
+.kind-filter { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.kind-filter__label { font-size: 12px; font-weight: 600; color: var(--wc-text-secondary); }
+.kind-filter__choices {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 4px;
+}
+.kind-filter__choice {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border-left: 1px solid var(--wc-border-subtle);
+  background: var(--wc-bg-surface);
+  font-size: 12px;
+  cursor: pointer;
+}
+.kind-filter__choice:first-child { border-left: 0; border-radius: 3px 0 0 3px; }
+.kind-filter__choice:last-child { border-radius: 0 3px 3px 0; }
+.kind-filter__choice input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.kind-filter__choice.is-chosen {
+  background: color-mix(in srgb, var(--wc-accent) 12%, var(--wc-bg-surface));
+  color: var(--wc-accent);
+  font-weight: 600;
+}
+.kind-filter__choice:has(input:focus-visible) {
+  outline: 2px solid var(--wc-accent);
+  outline-offset: 2px;
+  z-index: 1;
+}
 /* Edit in my workspace, for a dashboard (T348; design 04, state D). */
 .dialog.edit-in-workspace { width: min(520px, calc(100vw - 32px)); max-width: none; gap: 10px; }
 .dialog .edit-in-workspace__always { color: var(--wc-text-primary); }

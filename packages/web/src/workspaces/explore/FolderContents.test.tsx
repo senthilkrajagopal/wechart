@@ -843,3 +843,55 @@ describe('Delete… in a row’s ⋯ (design 14, pin 8; T517)', () => {
     ).toEqual(['Rename']);
   });
 });
+
+describe('a folder shown by kind (T525, AC-370; design 14, I2)', () => {
+  const folder = items.filter((item) => item.kind === 'folder');
+
+  it('captions the table with the kind shown', () => {
+    render(<FolderContents items={items} caption="Contents of this folder: models only" />);
+    expect(
+      screen.getByRole('table', { name: 'Contents of this folder: models only' }).tagName,
+    ).toBe('TABLE');
+  });
+
+  it('lists the subfolders, then says the folder holds none of the kind, with Show all', async () => {
+    const onShowAll = vi.fn();
+    render(
+      <FolderContents
+        items={folder}
+        kindEmpty={{ text: 'No data sources in this folder.', onShowAll }}
+      />,
+    );
+    // The header, the subfolder, and the line.
+    expect(screen.getAllByRole('row')).toHaveLength(3);
+    expect(screen.getAllByRole('row')[1]).toBe(rowFor('f1'));
+    const line = screen.getAllByRole('row')[2]!;
+    expect(line.textContent).toBe('No data sources in this folder. Show all');
+    await userEvent.click(within(line).getByRole('button', { name: 'Show all' }));
+    expect(onShowAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a row in the Tab order once fewer are listed (T525’s review)', async () => {
+    const { rerender } = render(<FolderContents items={items} />);
+    rowFor('d1').focus();
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}');
+    expect(document.activeElement).toBe(rowFor('f1'));
+    // Shown by kind: one row left, still reached by Tab.
+    rerender(<FolderContents items={folder} />);
+    expect(rowFor('f1').tabIndex).toBe(0);
+    rerender(<FolderContents items={items.filter((item) => item.kind === 'dashboard')} />);
+    expect(rowFor('d1').tabIndex).toBe(0);
+  });
+
+  it('says only that where there is no subfolder either, never that the folder is empty', () => {
+    render(
+      <FolderContents
+        items={[]}
+        kindEmpty={{ text: 'No models in this folder.', onShowAll: vi.fn() }}
+      />,
+    );
+    expect(screen.getAllByRole('row')).toHaveLength(2);
+    expect(screen.getAllByRole('row')[1]!.textContent).toBe('No models in this folder. Show all');
+    expect(screen.queryByText('This folder is empty.')).toBeNull();
+  });
+});

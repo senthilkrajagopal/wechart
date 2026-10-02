@@ -9956,10 +9956,29 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
     - Tests: `routes/folder-description.test.ts`, `FolderDescription.test.tsx`, `FolderContents.test.tsx`; `e2e/security/deleting.spec.ts` ("a folder’s description").
     - **Review:** fixed a folder's `PUT` storing any description, of any length; line breaks; More measured again as the column changes and closed for a new text. The T528 tests' clean-up the diff carried went in its own commit.
     - **For the user:** in My workspace a folder with a description shows no item count on its row any more (P1's "in place of"); the tree still counts it.
-- [ ] T525 (AC-370) Filter Explore's open folder by kind
+- [x] T525 (AC-370) Filter Explore's open folder by kind
   - Files: `packages/web/src/workspaces/explore/{ExplorePage,FolderContents}.tsx` (+ tests), `e2e/security/explore-roles.spec.ts` or `deleting.spec.ts`
   - Failing test: with All, Dashboards and charts, Data sources and Models, the list shows only that kind and the subfolders, starts on All, and leaves the tree as it is (AC-370).
   - Depends on: design 14
+  - **Done 2026-10-01. AC-370 ticked.**
+    - **Web.**
+      - `KindFilter.tsx` is a radio group labelled "Show": All, Dashboards and charts, Data sources, Models (design 14, state I). Its radios are native, so the group is one Tab stop, and the arrows move and choose. It sits on its own row above the list, styled as the prototype's `.seg` (`.kind-filter`).
+      - The list shows the open folder's subfolders, then only its items of the kind (`shownOf`). The tree and its counts are untouched.
+      - Where the folder holds none of the kind, a last row says so: "No dashboards or charts in this folder.", "No data sources…" or "No models…", with Show all, which also takes focus back to All (I2).
+      - The table's caption becomes "Contents of this folder: models only", and a polite live region says "Models: 1, and 2 folders".
+    - **The address (P2).** The kind is `?kind=dashboards|data-sources|models`; All is none. `exploreHref(folderId, kind)` keeps it as a folder opens from the list or the tree, and on a reload or Back. A choice replaces the address's entry rather than adding one. Explore opened afresh starts on All.
+    - **Who gets it (Q3).** Nobody gets it while searching. A read-only user gets none, and their list ignores the address's kind. A read-only user is taken as one with no workspace, read-only everywhere (AC-277; AC-263's "has only read-only access"), because the page can't tell a folder showing dashboards alone from one showing every kind. Everyone else gets it; with sign-in off, the single user does.
+    - **Tests.**
+      - `KindFilter.test.tsx`: each kind's list, the address, the words, the radio group and its arrows.
+      - `FolderContents.test.tsx`: the caption, the empty line after the subfolders and with none, and a row kept in the Tab order.
+      - `e2e/security/explore-roles.spec.ts`. As writer, in Roles and Inner: Models, Data sources with its line, the tree's count, opening Inner keeping the kind, a reload, the arrows, the search hiding it, Show all, and afresh on All. As reader: no filter, even at `?kind=models`.
+      - Phase 1's Explore and keyboard specs still pass.
+    - **Review:** fixed the following.
+      - The reader test could pass before the list was drawn, or with the kind applied.
+      - The row in the Tab order was lost when fewer rows were listed; it is now clamped.
+      - Show all lost focus.
+      - A reload with a kind showed every kind for a moment; the list now waits until who is asking is known.
+    - **For the user:** a read-write member, in a folder where they see dashboards alone, is offered the filter, whose other choices are then empty. Q3 left no filter only for readers.
 - [ ] T530 (AC-222) Point Schedules', Jobs', "Data as of"'s and search's model links at the file's own folder *(added 2026-10-01, from T342's report)*
   - Files: the links to `/model/files/…` in `packages/web/src/workspaces/{schedules,jobs}/`, the tile's "Data as of", and search, `e2e/folder-models.spec.ts`
   - Failing test: `folder-models.spec.ts`: a folder rollup's "Edit in Model" opens `/explore/folders/<its folder>/models/<path>` with that file open, and a root rollup's opens the root's (AC-222). The same spec's "Schedules reads a folder rollup's key SQL" expects the short name Schedules now shows.

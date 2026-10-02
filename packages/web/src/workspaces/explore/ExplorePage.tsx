@@ -32,6 +32,15 @@ import { FolderDescription } from './FolderDescription';
 import { DeleteDialog, type Checked, type Confirmation, type Refusal } from './DeleteDialog';
 import { ClearWorkspaceDialog } from './ClearWorkspaceDialog';
 import {
+  KindFilter,
+  captionOf,
+  emptyTextOf,
+  kindFrom,
+  sayShown,
+  shownOf,
+  type ShownKind,
+} from './KindFilter';
+import {
   checkChart,
   checkDashboard,
   checkModel,
@@ -102,9 +111,15 @@ export function ExplorePage() {
   // id arrives as a number; ids are strings.
   const folderId =
     asked['folder'] === undefined || asked['folder'] === '' ? ROOT : String(asked['folder']);
+  /**
+   * The kind the list shows (T525, AC-370; design 14, P2): the address's,
+   * so a reload and Back keep it, and kept as another folder opens from the
+   * list or the tree. Explore opened afresh shows All.
+   */
+  const kind = kindFrom(asked['kind']);
   const setFolderId = (id: string) => {
     // The folder already open is no new place for Back to step through.
-    if (id !== folderId) router.history.push(exploreHref(id));
+    if (id !== folderId) router.history.push(exploreHref(id, kind));
   };
   /**
    * The Explore search box (AC-019), and the open folder's name while it is
@@ -351,6 +366,30 @@ export function ExplorePage() {
    */
   const inOwnWorkspace =
     signedIn && inMyWorkspace && !searching && roots.some((root) => isMyWorkspace(root.id));
+  /**
+   * The Show filter (T525, AC-370; design 14, state I): over the open
+   * folder's list, never a search's, which lists dashboards and charts from
+   * every folder (AC-019). A read-only user, who sees dashboards alone, has
+   * none (Q3): one with no workspace, read-only everywhere (AC-277). With
+   * sign-in off, the one user has it.
+   */
+  const mayFilter =
+    !searching &&
+    me.data !== undefined &&
+    (!signedIn || (rootCounts.isSuccess && roots.some((root) => isMyWorkspace(root.id))));
+  const shownKind: ShownKind = mayFilter ? kind : 'all';
+  /**
+   * A kind asked for, until who is asking is known: the list waits, rather
+   * than showing every kind and then narrowing (T525's review).
+   */
+  const kindPending =
+    kind !== 'all' && !searching && (me.isPending || (signedIn && rootCounts.isPending));
+  const setKind = (next: ShownKind) => {
+    router.history.replace(exploreHref(folderId, next));
+    // Said politely, as the list follows: "Models: 1, and 2 folders".
+    if (contents.isSuccess) setKindSaid(sayShown(next, shownOf(contents.data, next)));
+  };
+  const [kindSaid, setKindSaid] = useState('');
   // What is being proposed (T358), and each item's latest proposal, for its
   // status past Draft (design 04; design 05, state M).
   const [proposing, setProposing] = useState<CatalogItem | null>(null);
@@ -601,7 +640,8 @@ export function ExplorePage() {
     void queryClient.invalidateQueries({ queryKey: ['proposal-of'] });
   };
   const rowDeleted = (item: CatalogItem) => {
-    const listed = shown.data ?? [];
+    // The rows as listed: of the kind shown (T525).
+    const listed = searching ? (shown.data ?? []) : shownOf(shown.data ?? [], shownKind);
     const at = listed.findIndex((each) => each.kind === item.kind && each.id === item.id);
     const next = listed[at + 1] ?? listed[at - 1];
     setDeletingItem(null);
@@ -978,17 +1018,42 @@ export function ExplorePage() {
             the search.
           </StateLine>
         ) : null}
-        {shown.isPending ? <StateLine kind="run">Loading…</StateLine> : null}
+        {shown.isPending || kindPending ? <StateLine kind="run">Loading…</StateLine> : null}
         {shown.isError ? (
           <StateLine kind="err">
             {searching ? 'Could not search: ' : 'Could not load this folder: '}
             {(shown.error as Error).message}
           </StateLine>
         ) : null}
-        {shown.isSuccess ? (
+        {/* Its own row above the list (design 14, state I). */}
+        {mayFilter && shown.isSuccess ? <KindFilter kind={shownKind} onChange={setKind} /> : null}
+        <p className="visually-hidden" aria-live="polite">
+          {kindSaid}
+        </p>
+        {shown.isSuccess && !kindPending ? (
           <div className="explore__scroll">
             <FolderContents
-              items={searching ? shown.data.slice(0, SEARCH_SHOWN) : shown.data}
+              items={searching ? shown.data.slice(0, SEARCH_SHOWN) : shownOf(shown.data, shownKind)}
+              caption={captionOf(searching ? 'all' : shownKind)}
+              // The folder holds none of the kind: said after its subfolders, with Show all (I2).
+              kindEmpty={
+                !searching &&
+                shownKind !== 'all' &&
+                shownOf(shown.data, shownKind).every((item) => item.kind === 'folder')
+                  ? {
+                      text: emptyTextOf(shownKind),
+                      onShowAll: () => {
+                        setKind('all');
+                        // On the choice it made: the line, and its button, go (T525's review).
+                        requestAnimationFrame(() => {
+                          document
+                            .querySelector<HTMLInputElement>('.kind-filter input[value="all"]')
+                            ?.focus();
+                        });
+                      },
+                    }
+                  : undefined
+              }
               // Both roots are somewhere to move to as well (AC-193, AC-194).
               folders={[
                 ...ROOT_FOLDERS.map((root) => ({ ...root, parentId: null })),

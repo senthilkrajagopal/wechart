@@ -1,4 +1,5 @@
 import type { FolderNode } from './FolderTree';
+import type { ShownKind } from './KindFilter';
 import { isMyWorkspace, MY_WORKSPACE, ROOT_FOLDERS, SHARED_ROOT } from './roots';
 
 /**
@@ -59,9 +60,14 @@ export function targetPathOf(folders: readonly FolderNode[], id: string): string
     .join(' / ');
 }
 
-/** Explore, open on a folder: the address a breadcrumb leads back to (AC-195). */
-export function exploreHref(folderId: string): string {
-  return folderId === SHARED_ROOT.id
-    ? '/explore'
-    : `/explore?folder=${encodeURIComponent(folderId)}`;
+/**
+ * Explore, open on a folder: the address a breadcrumb leads back to (AC-195);
+ * with the kind it shows, where one is chosen (T525, AC-370; design 14, P2).
+ */
+export function exploreHref(folderId: string, kind: ShownKind = 'all'): string {
+  const asked = [
+    ...(folderId === SHARED_ROOT.id ? [] : [`folder=${encodeURIComponent(folderId)}`]),
+    ...(kind === 'all' ? [] : [`kind=${kind}`]),
+  ];
+  return asked.length === 0 ? '/explore' : `/explore?${asked.join('&')}`;
 }
