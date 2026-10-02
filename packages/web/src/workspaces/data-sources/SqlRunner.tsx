@@ -6,6 +6,7 @@ import type { Me } from '../../shell/AccountMenu';
 import { ME_QUERY } from '../../shell/me';
 import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
+import { SchemaBrowser } from './SchemaBrowser';
 import { csvFileName, csvOf } from './sqlCsv';
 import { SqlEditor } from './SqlEditor';
 import { loginOf, readOnlyLayers } from './sqlLogin';
@@ -23,8 +24,10 @@ import { refusalSentence, SqlResult, type SqlOutcome } from './SqlResult';
  *   SQL mode, with Run and ⌘/Ctrl+Enter, the selection run alone where there
  *   is one (P2, Q1, AC-387); the limits; the result, its grid headed by each
  *   column's name and database type, with Download CSV of exactly its rows
- *   (AC-380, Q5); Run held back while a run goes, with Cancel (AC-379); and
- *   My runs beside it, this data source's by default (AC-381, Q2).
+ *   (AC-380, Q5); Run held back while a run goes, with Cancel (AC-379); the
+ *   schema browser beside the editor, a name chosen there put in at the
+ *   cursor (P3, AC-386); and My runs beside it all, this data source's by
+ *   default (AC-381, Q2).
  * - **In My workspace,** its owner runs it with no switch (AC-383), unless a
  *   copy is pointed elsewhere, which needs one (Q8).
  *
@@ -49,6 +52,8 @@ export interface SqlRunnerState {
 
 export interface SqlSource {
   readonly id: string;
+  /** Its settings' version: the schema browser reads it again at another (T539's review). */
+  readonly version: number;
   readonly name: string;
   readonly driver: DriverType;
   readonly fields: Readonly<Record<string, FieldValue>>;
@@ -409,6 +414,8 @@ function Runner({
   const [cancelFailed, setCancelFailed] = useState<string | null>(null);
   /** Focus asked of the editor: on showing after Turn on, at a run's end, on a run picked. */
   const [focusing, setFocusing] = useState<object | undefined>(() => (turnedOn ? {} : undefined));
+  /** A name chosen in the schema browser, for the editor's cursor (T539). */
+  const [insertion, setInsertion] = useState<{ readonly text: string } | undefined>(undefined);
   const bar = useRef<HTMLDivElement>(null);
   const warningId = useId();
   const limitsId = useId();
@@ -580,48 +587,60 @@ function Runner({
             </button>
           </p>
         )}
-        <div className="sql-runner__editor">
-          <SqlEditor
-            value={text}
-            onChange={edit}
-            onRun={(sql) => void run(sql)}
-            onSelection={setSelected}
-            label={`SQL for ${source.name}`}
-            describedBy={`${warningId} ${limitsId}`}
-            focusing={focusing}
-          />
-          <div className="sql-runner__bar" ref={bar}>
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={running !== null || elsewhere !== null || toRun.trim() === ''}
-              onClick={() => void run(toRun)}
-            >
-              {running !== null ? 'Running…' : selected === '' ? 'Run' : 'Run selection'}
-            </button>
-            {/* ⌘↵ on a Mac, Ctrl+Enter elsewhere, as CodeMirror's Mod reads it (pin 6). */}
-            <span className="sql-runner__keys" aria-hidden="true">
-              <kbd>
-                {/Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '') ? '⌘' : 'Ctrl'}
-              </kbd>
-              <kbd>↵</kbd>
-            </span>
-            {running === null ? null : (
-              <>
-                <button type="button" className="btn" onClick={() => void cancel()}>
-                  Cancel
-                </button>
-                <span className="status status--run">
-                  <StatusIcon kind="run" />
-                  Running {String(Math.floor((now - running.getTime()) / 1000))} s · stops at 30 s
-                </span>
-              </>
-            )}
-            <span className="sql-runner__spacer" />
-            <span id={limitsId} className="sql-runner__limits">
-              {LIMITS}
-            </span>
+        {/* The editor, and the schema browser beside it, after it in the tab order (T539). */}
+        <div className="sql-runner__work">
+          <div className="sql-runner__editor">
+            <SqlEditor
+              value={text}
+              onChange={edit}
+              onRun={(sql) => void run(sql)}
+              onSelection={setSelected}
+              label={`SQL for ${source.name}`}
+              describedBy={`${warningId} ${limitsId}`}
+              insertion={insertion}
+              focusing={focusing}
+            />
+            <div className="sql-runner__bar" ref={bar}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={running !== null || elsewhere !== null || toRun.trim() === ''}
+                onClick={() => void run(toRun)}
+              >
+                {running !== null ? 'Running…' : selected === '' ? 'Run' : 'Run selection'}
+              </button>
+              {/* ⌘↵ on a Mac, Ctrl+Enter elsewhere, as CodeMirror's Mod reads it (pin 6). */}
+              <span className="sql-runner__keys" aria-hidden="true">
+                <kbd>
+                  {/Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '') ? '⌘' : 'Ctrl'}
+                </kbd>
+                <kbd>↵</kbd>
+              </span>
+              {running === null ? null : (
+                <>
+                  <button type="button" className="btn" onClick={() => void cancel()}>
+                    Cancel
+                  </button>
+                  <span className="status status--run">
+                    <StatusIcon kind="run" />
+                    Running {String(Math.floor((now - running.getTime()) / 1000))} s · stops at 30 s
+                  </span>
+                </>
+              )}
+              <span className="sql-runner__spacer" />
+              <span id={limitsId} className="sql-runner__limits">
+                {LIMITS}
+              </span>
+            </div>
           </div>
+          <SchemaBrowser
+            sourceId={source.id}
+            sourceVersion={source.version}
+            sourceName={source.name}
+            onChoose={(name) => {
+              setInsertion({ text: name });
+            }}
+          />
         </div>
         {cancelFailed === null ? null : (
           <p className="sql-runner__failed" role="alert" data-testid="sql-cancel-failed">

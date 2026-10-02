@@ -552,6 +552,46 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
       await expect(panel.locator('.sql-editor .cm-content')).toBeFocused();
     });
 
+    test('lists the database’s schemas, tables and columns with their types beside the editor, and puts a name chosen there into it (T539, AC-386)', async ({
+      browser,
+    }) => {
+      const { context, page, panel } = await onTab(browser);
+      try {
+        await typeSql(page, 'SELECT * FROM ');
+        const tree = panel.getByRole('region', { name: 'Tables in warehouse' });
+        const publicSchema = tree.getByRole('treeitem', { name: 'public', exact: true });
+        await publicSchema.getByTestId('sql-schema-caret').click();
+        // The sample's tables, and the one this spec made, as introspection lists them.
+        await expect(tree.getByRole('group', { name: 'Tables in public' })).toContainText(TABLE);
+        // By the keyboard, as a tree: down to `orders`, → opens its columns.
+        const orders = tree.getByRole('treeitem', { name: 'orders', exact: true });
+        await orders.focus();
+        await page.keyboard.press('ArrowRight');
+        await expect(
+          tree.getByRole('group', { name: 'Columns of public.orders' }).getByRole('treeitem'),
+        ).toHaveText([
+          'idinteger',
+          'customer_idinteger',
+          'product_idinteger',
+          'statustext',
+          'amountnumeric',
+          'ordered_attimestamp with time zone',
+        ]);
+        // Enter chooses it: in at the editor's cursor.
+        await page.keyboard.press('Enter');
+        await expect(panel.locator('.sql-editor .cm-content')).toHaveText(
+          'SELECT * FROM public.orders',
+        );
+        await expect(panel.locator('.sql-editor .cm-content')).toBeFocused();
+        // At the cursor, and the editor keeps focus: on to run it.
+        await page.keyboard.type(' LIMIT 1');
+        await page.keyboard.press('ControlOrMeta+Enter');
+        await expect(panel.getByRole('table', { name: 'Result: 1 row, 6 columns' })).toBeVisible();
+      } finally {
+        await context.close();
+      }
+    });
+
     test('runs on its owner’s copy in My workspace with no switch, saying it is theirs (AC-383)', async ({
       browser,
     }) => {
@@ -573,6 +613,13 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
         await expect(
           panel.getByRole('table', { name: 'Result' }).getByRole('cell').nth(1),
         ).toHaveText('sample');
+        // Its schema browser lists its original's catalog: it connects as its original does (T539).
+        const tree = panel.getByRole('region', { name: 'Tables in warehouse' });
+        await tree
+          .getByRole('treeitem', { name: 'public', exact: true })
+          .getByTestId('sql-schema-caret')
+          .click();
+        await expect(tree.getByRole('treeitem', { name: 'orders', exact: true })).toBeVisible();
 
         // And one made new there, to go to the folder: its owner runs it too.
         const fresh = await page.request.post('/api/data-sources', {
@@ -603,6 +650,13 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
           await expect(
             freshPanel.getByRole('table', { name: 'Result' }).getByRole('cell').nth(1),
           ).toHaveText('42');
+          // Until xcube's introspection takes a workspace's overlay (T547), its
+          // browser says its tables show once landed, and lists no other's.
+          await expect(
+            freshPanel.getByRole('region', { name: `Tables in fresh_${RUN}` }),
+          ).toContainText(
+            'Its tables show here once it’s landed: for now, this list holds landed data sources’ tables only.',
+          );
         } finally {
           await page.request.delete(`/api/data-sources/${freshId}`);
         }

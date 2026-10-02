@@ -10922,10 +10922,61 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - `data-sources.spec.ts`: its writer's tab list gains SQL.
     - **Checked by eye** against design 15 in Chrome at 1440 × 900: the off panel, the dialog, a result and a refusal.
     - **ACs ticked:** AC-373, AC-377, AC-380, AC-381, AC-383, AC-385, AC-387. **AC-378 and AC-379** stay open for the rows that arrive before a stop or a cancel, which wait on xcube's next image (T545).
-- [ ] T539 (AC-386) A schema browser beside the SQL editor
+- [x] T539 (AC-386) A schema browser beside the SQL editor
   - Files: `packages/web/src/workspaces/data-sources/SchemaBrowser.tsx` (+ test), the introspection routes wechart already calls (`packages/api/src/model/introspection.ts`), for a data source by its id
   - Failing test: the browser lists the data source's schemas, tables and columns with types, as introspection answers, only to those who may run SQL on it; choosing one puts its name in the editor at the cursor (AC-386).
   - Depends on: T535
+  - **Done 2026-10-02.**
+    - **The API:** three routes, by the data source's id, each asking Cube's introspection with wechart's own token, as the model's Generate cubes does (`catalogOf`, from `introspection.ts`'s asking, waits included):
+      - `GET /api/data-sources/:id/catalog/schemas`;
+      - `GET …/catalog/tables?schema=…`, its query passed on;
+      - `POST …/catalog/columns` `{ tables }`.
+    - **Who may browse:** only those who may run SQL on it, by the run's own rule (`mayRunSql`). Nobody may while the runner is off; then its folder's writers and Super-Admins may. Nothing reaches Cube for anyone else.
+    - **Which catalog:** asked by the name xcube serves the data source under (`<folder>__<name>`).
+      - **A copy in My workspace** that connects just as its original does (same driver, sign-in method, fields and envelopes) is browsed as its original: the same database, as the same login.
+      - **Any other copy, and one made new there,** answers `409`: "its tables show here once it's landed". wechart asks introspection with xcube's service credential, which names no workspace overlay. Introspection then lists the model's landed connections (research `xcube-slice-6.md`, "Serving"), so it would otherwise show another database's tables. Whether xcube's introspection could read an overlay's connections is xcube's to say: asked (`to-xcube/2026-10-02-1000-introspection-overlay.md`), and T547 waits on it.
+    - **The browser** (`SchemaBrowser.tsx`), beside the editor and after it in the tab order:
+      - **a tree,** one stop in the tab order (WAI-ARIA's tree view): ↑ and ↓ move, → opens and goes in, ← goes up and closes, Home and End, and Enter chooses. The mouse opens a row by its caret and chooses it by its name;
+      - its schemas; a schema opens to its tables, 100 at a time, with "Show N more tables" (introspection's `limit` has no cap). A view is marked;
+      - a table opens to its columns, each with the type its database names (`rawType`, as the result grid heads columns);
+      - choosing a name puts it in the editor at the cursor, which keeps focus: a schema's and a column's as listed, a table's as `schema.table`;
+      - what it read is kept per the data source's version, so a change to its settings reads it again, never showing the old catalog; ↻ reads it again at once;
+      - the API's words when it can't list them, with Try again at each level. The `409` of one not landed is said as a note, not an alert.
+    - **Small decisions, overturnable:**
+      - names go in unquoted, as listed, since each database quotes its own way;
+      - 100 tables at a time, and what was read kept for five minutes;
+      - the browser sits on the editor's right, after it in the tab order, so Tab reaches the editor first;
+      - a long column type gives way to its name, whole in its tooltip.
+    - **Fixed after the review** (one round):
+      1. **AC-386 stays open.** It holds for landed data sources and for unchanged copies. A data source made new in My workspace, and a copy that connects otherwise, need xcube's introspection to take an overlay: T547. The user is asked whether to scope the AC instead. Its words no longer claim what Cube does.
+      2. **The cache is keyed by the data source's version,** so a repointed copy is read again.
+      3. **The tree** replaces two buttons per row: a 100-table page no longer means 200 Tab presses before the result.
+      4. **Try again** at the table and column levels. Focus goes up to the row being read for, or on to the first table a "more" row read.
+      5. **More tests:**
+         - a copy with the same fields but a secret entered again;
+         - nothing reaching Cube for one refused while the runner is on (here and in the matrix);
+         - a folder not yet in xcube;
+         - the columns body read only after access.
+    - **Tests:**
+      - `routes/sql-catalog.test.ts` (8), against a stub Cube and xcube:
+        - refused while off, and to a member below and a reader while on, with nothing reaching Cube;
+        - lists schemas, tables and columns as introspection does, to a Super-Admin and the writer;
+        - the columns body read only once the user may browse;
+        - a folder not yet in xcube;
+        - an unchanged copy browsed as its original;
+        - a copy with a secret entered again, a moved one and a new one answer `409`.
+      - The route matrix covers the three routes.
+      - `SchemaBrowser.test.tsx` (8): the tree, its keys, paging, errors and Try again, the note, a new version, and ↻. `SqlRunner.test.tsx`: a table chosen goes in at the cursor.
+      - `e2e/security/sql-runner.spec.ts` (Chrome, compose's xcube):
+        - the sample's `public` tables, and `orders`' six columns with their types, opened by → on the keyboard;
+        - `orders` chosen with Enter into `SELECT * FROM `, then run with ⌘/Ctrl+Enter;
+        - a copy's browser lists its original's tables, and a new data source says they show once landed.
+    - **Checked by eye** in Chrome at 1440 × 900: the browser open on `public.orders` beside the editor.
+    - **AC-386 stays open** for a workspace data source not landed (T547).
+- [ ] T547 (AC-386) Browse a workspace data source not yet landed through its workspace's overlay *(added 2026-10-02, from T539's review)*
+  - Files: `packages/api/src/model/introspection.ts`, `packages/api/src/routes/sql-runner.ts`, `routes/sql-catalog.test.ts`, `e2e/security/sql-runner.spec.ts`, and a research doc for xcube's image
+  - Failing test: a data source made new in My workspace, and a copy that connects otherwise than its original, list their own schemas, tables and columns, read through their workspace's overlay (AC-386).
+  - Depends on: T539, xcube's introspection taking `?overlay=` (`to-xcube/2026-10-02-1000-introspection-overlay.md`), published by digest
 - [ ] T536 (AC-384, AC-374) Cube Store: its switch, its listing, and read-only SQL on it
   - Files: `packages/api/src/routes/sql-runner.ts`, the root's data sources listing, `SqlRunner.tsx`, tests and `e2e/security/sql-runner.spec.ts`
   - Failing test: switched off, no one sees Cube Store listed, and a Super-Admin finds Turn on… in Data sources' header ⋯ (P5); its confirmation says everyone allowed reads every folder's rollups (Q9). Switched on:
@@ -11021,7 +11072,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-376 | T532 | AC-377 | T532, T535 | AC-378 | T532, T535, T545 |
 | AC-379 | T533, T535, T545 | AC-380 | T535 | AC-381 | T534, T535 |
 | AC-382 | T534 | AC-383 | T532, T535 | AC-384 | T536 |
-| AC-385 | T535 | AC-386 | T539 | AC-387 | T535 |
+| AC-385 | T535 | AC-386 | T539, T547 | AC-387 | T535 |
 | AC-388 | T541 | AC-389 | T540 | AC-390 | T544 |
 | AC-391 | T550 | AC-392 | T552 | AC-393 | T553 |
 | AC-394 | T554 | AC-395 | T555 | AC-396 | T556 |

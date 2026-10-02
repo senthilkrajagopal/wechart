@@ -26,6 +26,7 @@ const OFF: SqlRunnerState = {
 };
 const SOURCE: SqlSource = {
   id: 'ds-1',
+  version: 1,
   name: 'emea_replica',
   driver: 'postgres',
   fields: { host: 'pg-replica-1', port: 5432, database: 'sales', user: 'cube_reader' },
@@ -88,6 +89,13 @@ function serve({
         return Response.json(sent, { status });
       }
       if (url.startsWith('/api/sql-runs')) return Response.json({ runs });
+      // The schema browser's catalog (T539).
+      if (url.endsWith('/catalog/schemas')) return Response.json({ schemas: [{ name: 'public' }] });
+      if (url.includes('/catalog/tables?'))
+        return Response.json({
+          tables: [{ schema: 'public', name: 'orders', type: 'table', rawType: 'BASE TABLE' }],
+          total: 1,
+        });
       if (url.endsWith('/sql-runner') && method === 'PUT') {
         const next = switched.shift();
         if (next === undefined) return Response.json({ on: (body as { on: boolean }).on });
@@ -466,6 +474,32 @@ describe('the SQL tab, the runner on (T535)', () => {
     await userEvent.keyboard('{ArrowUp}{Enter}');
     expect(editorView(container).state.doc.toString()).toBe('SELECT b');
     expect(document.activeElement).toBe(editorView(container).contentDOM);
+  });
+
+  it('puts a name chosen in the schema browser beside the editor into it at the cursor (T539, AC-386)', async () => {
+    serve();
+    const { container } = open();
+    typeSql(container, 'SELECT * FROM  LIMIT 5');
+    const view = editorView(container);
+    act(() => {
+      view.dispatch({ selection: { anchor: 14 } });
+    });
+    const browser = screen.getByRole('region', { name: 'Tables in emea_replica' });
+    // Beside the editor, after the warning.
+    expect(
+      screen.getByTestId('sql-warning').compareDocumentPosition(browser) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    await userEvent.click(
+      within(await within(browser).findByRole('treeitem', { name: 'public' })).getByTestId(
+        'sql-schema-caret',
+      ),
+    );
+    await userEvent.click(
+      within(await within(browser).findByRole('treeitem', { name: 'orders' })).getByText('orders'),
+    );
+    expect(view.state.doc.toString()).toBe('SELECT * FROM public.orders LIMIT 5');
+    expect(document.activeElement).toBe(view.contentDOM);
   });
 
   it('says another run of the user’s is going elsewhere, and offers to cancel it (AC-379, D2)', async () => {

@@ -1673,6 +1673,11 @@ const CASES: Record<string, Case> = {
       }
     }
   },
+  // A data source's catalog beside the SQL editor (T539, AC-386): as running
+  // SQL is, nobody's while off, and then its own folder's writers' alone.
+  'GET /api/data-sources/:id/catalog/schemas': () => sqlCatalog('schemas'),
+  'GET /api/data-sources/:id/catalog/tables': () => sqlCatalog('tables?schema=public'),
+  'POST /api/data-sources/:id/catalog/columns': () => sqlCatalog('columns', 'POST'),
   // A user's own run going, and its cancel (T533, AC-379): anyone's own,
   // never another's. None goes here, so each says so.
   'GET /api/sql-runs/going': async () => {
@@ -1994,6 +1999,36 @@ async function decided(how: 'approve' | 'reject' | 'dismiss') {
       );
       expect((await proposalStore(getDb()).get(ws[owner].proposal))?.status).toBe('open');
     }
+}
+
+/**
+ * A data source's catalog by its id, beside the SQL editor (T539): refused to
+ * everyone while its runner is off, and on, to all but its folder's writers,
+ * none of those refused reaching Cube.
+ */
+async function sqlCatalog(what: string, method: 'GET' | 'POST' = 'GET') {
+  const switches = sqlRunnerSwitches(getDb());
+  const asked = {
+    method,
+    ...(method === 'POST' ? { payload: { tables: [{ schema: 'public', table: 'orders' }] } } : {}),
+  };
+  for (const place of PLACES) {
+    const url = `/api/data-sources/${at[place].source}/catalog/${what}`;
+    const before = cubeAsked.length;
+    for (const who of WHO)
+      refused(await ask(who, { ...asked, url }), `${who} browsing ${place}'s, off`);
+    expect(cubeAsked.length, `${place}'s catalog reached Cube while off`).toBe(before);
+    await switches.on(at[place].source, { key: 'super', name: 'Super' });
+    try {
+      const on = cubeAsked.length;
+      for (const who of WHO.filter((each) => !writes(each, place)))
+        refused(await ask(who, { ...asked, url }), `${who} browsing ${place}'s, on`);
+      expect(cubeAsked.length, `${place}'s catalog reached Cube for one refused`).toBe(on);
+      await openedOnlyBy(url, (who) => writes(who, place), undefined, asked);
+    } finally {
+      await switches.off(at[place].source);
+    }
+  }
 }
 
 /** A data source's catalog through Cube: only of one they may see. */

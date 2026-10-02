@@ -3790,6 +3790,41 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
   background: var(--wc-bg-subtle); border: 1px solid var(--wc-border-subtle);
 }
 .sql-runner__failed { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-status-error); }
+/* The editor, and the schema browser beside it (T539, design 15's P3). */
+.sql-runner__work { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 10px; align-items: start; }
+.sql-schema {
+  display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow: auto;
+  padding: 10px 8px; border-radius: 6px;
+  background: var(--wc-bg-surface); border: 1px solid var(--wc-border-subtle);
+}
+.sql-schema__top { display: flex; align-items: center; justify-content: space-between; margin: 0 4px; }
+.sql-schema__head { margin: 0; font-size: 13px; line-height: 18px; font-weight: 600; }
+.sql-schema__again { font-size: 14px; line-height: 18px; color: var(--wc-text-secondary); }
+.sql-schema__sub, .sql-schema__none { margin: 0 4px; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.sql-schema ul { list-style: none; margin: 0; padding: 0; }
+.sql-schema ul[role="group"] { padding-left: 14px; }
+/* A tree, one stop in the tab order (T539's review): the row takes focus. */
+.sql-schema [role="treeitem"] { outline: none; cursor: pointer; }
+.sql-schema__row { display: flex; align-items: center; gap: 2px; min-height: 24px; padding: 0 4px 0 0; border-radius: 4px; }
+.sql-schema__row:hover { background: var(--wc-bg-hover); }
+.sql-schema [role="treeitem"]:focus-visible > .sql-schema__row { outline: 2px solid var(--wc-accent); outline-offset: -2px; }
+.sql-schema__caret { flex: none; width: 16px; text-align: center; color: var(--wc-text-muted); }
+.sql-schema__name {
+  min-width: 0; padding: 2px; color: var(--wc-text-primary); font: 12px/16px var(--wc-font-code);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sql-schema__kind { flex: none; margin-left: auto; font: 11px/14px var(--wc-font-code); color: var(--wc-text-muted); }
+/* A column's name keeps its room; a long type gives way, whole in its title. */
+.sql-schema__type {
+  flex: 0 1 auto; min-width: 0; margin-left: auto; padding-left: 6px;
+  font: 11px/14px var(--wc-font-code); color: var(--wc-text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+[role="treeitem"][aria-level="3"] .sql-schema__name { flex: none; max-width: 100%; }
+.sql-schema__link { color: var(--wc-accent); text-decoration: underline; }
+.sql-schema__state { font-size: 12px; line-height: 20px; color: var(--wc-text-secondary); }
+.sql-schema__failed-text { font-size: 12px; line-height: 16px; color: var(--wc-status-error); white-space: normal; }
+.sql-schema__failed { display: grid; gap: 4px; justify-items: start; }
 .sql-runner__editor {
   display: grid; gap: 10px; padding: 12px; border-radius: 6px;
   background: var(--wc-bg-surface); border: 1px solid var(--wc-border-subtle);
@@ -3903,6 +3938,9 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 }
 @media (max-width: 1024px) {
   .sql-runner { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .sql-runner__work { grid-template-columns: minmax(0, 1fr); }
 }
 .audit-trail__subfolders { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; color: var(--wc-text-secondary); }
 .audit-trail__range { display: inline-flex; gap: 8px; font-size: 12px; }

@@ -546,6 +546,7 @@ function Settings({ source }: { source: StoredSource }) {
             <SqlTab
               source={{
                 id: source.id,
+                version: source.version,
                 name: source.name,
                 driver: source.driver,
                 fields: source.fields,

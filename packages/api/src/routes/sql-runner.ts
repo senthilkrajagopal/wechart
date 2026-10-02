@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
@@ -11,6 +12,7 @@ import type { GoingRun, LostRun, SqlRunStore } from '../repos/sql-runs';
 import { XcubeError } from '../xcube/client';
 import { connectionNameOf } from '../xcube/connections';
 import type { SqlAnswer, SqlTarget, XcubeSqlRunner } from '../xcube/sql-runner';
+import { queryOf, tablesOf, type Catalog } from '../model/introspection';
 import type { DataSourceAccess } from './data-sources';
 import { copyRepointed } from './sql-runner-switch';
 
@@ -64,6 +66,8 @@ export interface SqlRunnerOptions {
   readonly overlayOf?: (
     workspaceId: string,
   ) => Promise<{ readonly id: string } | { readonly problem: string } | undefined>;
+  /** Cube's introspection of a data source, for the schema browser beside the editor (T539). */
+  readonly catalog?: Catalog;
 }
 
 /** Why a user may not run SQL on a data source, said as an answer; none where they may. */
@@ -214,7 +218,8 @@ export function registerSqlRunner(
     readonly runner: SqlRunnerOptions | undefined;
     /** Each user's runs, one going at a time (T533); unset, none is held back. */
     readonly runs: SqlRunStore | undefined;
-    readonly store: Pick<DataSourceStore, 'get'>;
+    /** Its envelopes too, to tell a workspace copy that connects as its original (T539). */
+    readonly store: Pick<DataSourceStore, 'get' | 'sealedOf'>;
     readonly switches: SqlRunnerSwitchStore | undefined;
     readonly access: DataSourceAccess;
     /** The data source, where the user may see it; else the answer already sent. */
@@ -491,6 +496,95 @@ export function registerSqlRunner(
     }
     return page.next === undefined ? { runs: out } : { runs: out, next: page.next };
   });
+
+  /**
+   * The schema browser beside the editor (T539, AC-386; design 15's P3): the
+   * data source's schemas, a schema's tables and a table's columns with their
+   * types, as Cube's introspection lists them, by the name xcube serves it
+   * under; only to those who may run SQL on it, by the run's own rule.
+   *
+   * Introspection is asked with xcube's service credential, which names no
+   * workspace overlay (`CubeClient.introspect`): it lists the model's landed
+   * connections (research xcube-slice-6.md, "Serving"). Whether it could read
+   * an overlay's is xcube's to say, and asked (T547). Until then, a workspace
+   * copy that connects as its original does is browsed as its original, the
+   * same database as the same login; any other copy, and one made new there,
+   * shows its tables once landed, never another's.
+   */
+  const browse = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    read: (catalog: Catalog, name: string) => Promise<{ status: number; body: unknown }>,
+  ) => {
+    const source = await reached(request, reply, 'read');
+    if (source === undefined) return reply;
+    const workspace = (await workspaceOf?.(source.folderId)) ?? null;
+    const refusal = await mayRunSql(request, source, { workspace, access, switches, store });
+    if (refusal !== undefined) return reply.status(refusal.status).send({ error: refusal.error });
+    if (runner?.catalog === undefined)
+      return reply.status(503).send({
+        error:
+          'Its tables are read through Cube’s introspection, which this deployment doesn’t offer.',
+      });
+    const landed = workspace === null ? source : await landedAs(source);
+    if (landed === undefined)
+      return reply.status(409).send({
+        error:
+          source.origin === null
+            ? 'Its tables show here once it’s landed: for now, this list holds landed data sources’ tables only.'
+            : 'This copy connects otherwise than its original, and for now this list holds landed data sources’ tables only: its own show here once it’s landed.',
+      });
+    const xcubeId = (await runner.folders()).get(landed.folderId);
+    if (xcubeId === undefined)
+      return reply.status(409).send({
+        error: 'This data source’s folder isn’t in xcube yet, so its tables can’t be read.',
+      });
+    const { status, body } = await read(runner.catalog, connectionNameOf(xcubeId, landed.name));
+    return reply.status(status).send(body);
+  };
+  /** A workspace copy's original, where the copy connects just as it does: the same catalog. */
+  const landedAs = async (copy: DataSource): Promise<DataSource | undefined> => {
+    if (copy.origin === null) return undefined;
+    const original = await store.get(copy.origin.id);
+    if (
+      original === undefined ||
+      original.driver !== copy.driver ||
+      original.authMethod !== copy.authMethod ||
+      !isDeepStrictEqual(original.fields, copy.fields)
+    )
+      return undefined;
+    const [mine, theirs] = await Promise.all([
+      store.sealedOf(copy.id),
+      store.sealedOf(original.id),
+    ]);
+    const fields = Object.keys(mine.sealed);
+    const same =
+      fields.length === Object.keys(theirs.sealed).length &&
+      fields.every(
+        (field) =>
+          mine.sealed[field]?.ct === theirs.sealed[field]?.ct &&
+          mine.sealed[field]?.enc === theirs.sealed[field]?.enc,
+      );
+    return same ? original : undefined;
+  };
+  app.get('/api/data-sources/:id/catalog/schemas', USER, (request, reply) =>
+    browse(request, reply, (catalog, name) => catalog.schemas(name, queryOf(request.url))),
+  );
+  app.get('/api/data-sources/:id/catalog/tables', USER, (request, reply) =>
+    browse(request, reply, (catalog, name) => catalog.tables(name, queryOf(request.url))),
+  );
+  // Its body read once the user may browse, as introspection's own route does.
+  app.post('/api/data-sources/:id/catalog/columns', USER, (request, reply) =>
+    browse(request, reply, async (catalog, name) => {
+      const tables = tablesOf(request.body);
+      return tables === undefined
+        ? {
+            status: 400,
+            body: { error: 'Name the tables as a list, each with its schema and table.' },
+          }
+        : catalog.columns(name, tables);
+    }),
+  );
 
   /** The run going, as its user is shown it: on which data source, since when. */
   const goingView = async (going: GoingRun) => {

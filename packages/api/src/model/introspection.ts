@@ -42,6 +42,7 @@ interface Table {
   readonly table: string;
 }
 
+/** The tables a request names, each with its schema; none where it names them otherwise. */
 function tablesOf(body: unknown): Table[] | undefined {
   const tables = (body as { tables?: unknown } | null)?.tables;
   if (!Array.isArray(tables)) return undefined;
@@ -58,28 +59,43 @@ function queryOf(url: string): string {
   return at < 0 ? '' : url.slice(at);
 }
 
-export function registerIntrospection(
-  app: FastifyInstance,
-  client: CubeClient,
-  {
-    retryMs = 1000,
-    seesSource,
-  }: {
-    retryMs?: number;
-    /**
-     * Which of Cube's data sources this user may browse (T408, AC-268): one
-     * that is a wechart data source they may see (AC-263), and one Cube has
-     * from its own settings as the shared root's. Every one where not given
-     * (sign-in off).
-     */
-    seesSource?: (request: FastifyRequest) => Promise<(source: string) => boolean>;
-  } = {},
-): void {
-  const seesOf = async (request: FastifyRequest) => (await seesSource?.(request)) ?? (() => true);
-  const base = '/v1/introspection/data-sources';
+const BASE = '/v1/introspection/data-sources';
 
+/** One of Cube's data sources' catalog, by its name (T539): what the schema browser reads. */
+export interface Catalog {
+  schemas(source: string, query: string): Promise<Answer>;
+  tables(source: string, query: string): Promise<Answer>;
+  columns(source: string, tables: readonly Table[]): Promise<Answer>;
+}
+
+/**
+ * A data source's catalog as Cube's introspection gives it, asked with
+ * wechart's own token, waits taken (T539; the same asking as the routes
+ * below). `query` is a query string as asked, `?…` or empty.
+ */
+export function catalogOf(
+  client: CubeClient,
+  { retryMs = 1000 }: { retryMs?: number } = {},
+): Catalog {
+  const askCube = askerOf(client, retryMs);
+  const sourcePath = (source: string) => `${BASE}/${encodeURIComponent(source)}`;
+  return {
+    schemas: (source, query) => askCube(`${sourcePath(source)}/schemas${query}`),
+    tables: (source, query) => askCube(`${sourcePath(source)}/tables${query}`),
+    columns: (source, tables) =>
+      askCube(`${sourcePath(source)}/columns`, {
+        method: 'POST',
+        body: JSON.stringify({ tables }),
+      }),
+  };
+}
+
+// A request's tables and query string, read as the routes below read them (T539).
+export { tablesOf, queryOf };
+
+function askerOf(client: CubeClient, retryMs: number) {
   /** Cube's answer, asked again while it says to wait; a refusal in the API's words. */
-  async function askCube(
+  return async function askCube(
     path: string,
     init: { method?: string; body?: string } = {},
   ): Promise<Answer> {
@@ -121,7 +137,29 @@ export function registerIntrospection(
         };
       return { status: 200, body };
     }
-  }
+  };
+}
+
+export function registerIntrospection(
+  app: FastifyInstance,
+  client: CubeClient,
+  {
+    retryMs = 1000,
+    seesSource,
+  }: {
+    retryMs?: number;
+    /**
+     * Which of Cube's data sources this user may browse (T408, AC-268): one
+     * that is a wechart data source they may see (AC-263), and one Cube has
+     * from its own settings as the shared root's. Every one where not given
+     * (sign-in off).
+     */
+    seesSource?: (request: FastifyRequest) => Promise<(source: string) => boolean>;
+  } = {},
+): void {
+  const seesOf = async (request: FastifyRequest) => (await seesSource?.(request)) ?? (() => true);
+  const base = BASE;
+  const askCube = askerOf(client, retryMs);
 
   const send = (reply: FastifyReply, { status, body }: Answer) => reply.status(status).send(body);
   const sourcePath = (source: string) => `${base}/${encodeURIComponent(source)}`;

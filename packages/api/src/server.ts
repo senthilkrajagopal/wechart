@@ -56,7 +56,7 @@ import {
   cubesOfDashboard,
   dashboardRenamed,
 } from './model/bind';
-import { registerIntrospection } from './model/introspection';
+import { catalogOf, registerIntrospection } from './model/introspection';
 import type { Config } from './config';
 import type { Changeset } from './xcube/changesets';
 import { XcubeError, type XcubeAdmin } from './xcube/client';
@@ -1208,6 +1208,10 @@ export function buildServer({
             sqlRunner: {
               xcube: sqlRunner,
               folders: async () => (folders === undefined ? ROOT_ONLY : await folders()).ids,
+              // The schema browser's catalog, by introspection (T539).
+              catalog: catalogOf(client, {
+                ...(introspectionRetryMs === undefined ? {} : { retryMs: introspectionRetryMs }),
+              }),
               ...(overlays === undefined
                 ? {}
                 : {
