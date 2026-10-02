@@ -10170,6 +10170,10 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
       - Asked again with another folder, the copy already there opens, still going to its first one.
       - The name check compares each file's first declared name, at copy time only: a target gaining that name later makes the proposal replace it.
       - The project folder's description says "Editing …" for a use-only copy too.
+- [ ] T544 (AC-390) Make the review's two side panels collapsible, and draw the review as design 05's main screen *(added 2026-10-01, `[R54]`)*
+  - Files: `packages/web/src/workspaces/reviews/{ReviewView,DecisionPanel}.tsx` (+ tests), `packages/web/src/dashboard/{DashboardPage,DashboardView}.tsx` (no breadcrumb in a review), `packages/web/src/shell/styles.ts`, `e2e/security/review-view.spec.ts`
+  - Failing test: `ReviewView.test.tsx`: each side panel's control collapses and expands it, says `aria-expanded`, and is a button; collapsed, the panel's content is gone and its rail keeps the control; the drawn dashboard has no breadcrumb; Approve and Reject sit in the panel's footer (AC-390). `review-view.spec.ts`: collapsing both widens the drawn item.
+  - Depends on: T356
 - [x] T541 (AC-388) Freeze a workspace item while it is in an open proposal *(added 2026-10-01, `[R52]`)*
   - Files: the save routes for dashboards, charts and data sources in `packages/api/src/server.ts` and `routes/data-sources.ts` (models with T350), the editors' notices, `packages/api/src/routes/proposal-freeze.test.ts`
   - Failing test: `proposal-freeze.test.ts`: a dashboard, chart or data source in an open proposal refuses a save (`409`), saying it was submitted and that withdrawing lets it be changed; once withdrawn or decided, it saves (AC-388).
@@ -10470,7 +10474,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-379 | T533, T535 | AC-380 | T535 | AC-381 | T534 |
 | AC-382 | T534 | AC-383 | T532 | AC-384 | T536 |
 | AC-385 | T535 | AC-386 | T539 | AC-387 | T535 |
-| AC-388 | T541 | AC-389 | T540 | | |
+| AC-388 | T541 | AC-389 | T540 | AC-390 | T544 |
 | AC-281 (again, rebinding) | T542 | AC-283 (again, use-only copies) | T543 | | |
 | AC-354 (again, copy on use) | T538 | | | | |
 | AC-296 | T370 | AC-297 | T371, T504 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441 |

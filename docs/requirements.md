@@ -950,6 +950,9 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R54 — the review view's side panels, and design 05** (2026-10-01, the user, with a screenshot of a proposal's review)
+- The user: "Make both side panels collapsible. And also match styles with 05 design". *AC-390, T544.*
+
 **R53 — names in the workspace, and models one may only read** (2026-10-01, the user)
 - Q (from T347): a chart stores the full name of the cube it was bound to. A workspace cube of the same short name, landing elsewhere, isn't used by tiles saved before it was made. Rebind stored names in the workspace? A: "Rebind in the workspace (Recommended)". *AC-281 amended.*
 - Q (from T347): may someone who may only read a folder copy its model into their workspace just to use it? A: "Yes, use-only copy (Recommended)". *A use-only copy can't be proposed back to that folder. AC-283 amended.*
