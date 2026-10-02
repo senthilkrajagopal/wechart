@@ -50,6 +50,24 @@ export async function copyModelToWorkspace(
   };
 }
 
+/**
+ * The shared folder a model saved in My workspace goes to (T347, AC-282), as
+ * its folder's contents list it; none where none is stored for it. Thrown
+ * where the folder couldn't be read (T546).
+ */
+export async function savedTargetOf(folderId: string, path: string): Promise<string | undefined> {
+  const response = await fetch(`/api/folders/${encodeURIComponent(folderId)}/contents`);
+  if (!response.ok)
+    throw new Error(`Could not read where the model goes (${String(response.status)}).`);
+  const rows = (await response.json()) as {
+    kind?: unknown;
+    id?: unknown;
+    targetFolderId?: unknown;
+  }[];
+  const target = rows.find((row) => row.kind === 'model' && row.id === path)?.targetFolderId;
+  return typeof target === 'string' && target !== '' ? target : undefined;
+}
+
 /** The shared folders a new workspace item may go to: those the user writes (T345). */
 export async function targetsOf(): Promise<readonly Target[]> {
   const response = await fetch('/api/folders/targets');

@@ -46,11 +46,18 @@ function Item({
 
 export function ReferencesWarning({
   found,
+  landsIn,
   onSave,
   onCancel,
   nameOf = (member) => member,
 }: {
   found: MemberReferences;
+  /**
+   * Saved in My workspace, the folder it goes to, by its path ("Sales /
+   * EMEA"): the save changes nothing shared, its landing there does (T546,
+   * AC-141 amended, R55). None for a save in place.
+   */
+  landsIn?: string | undefined;
   onSave: () => void;
   onCancel: () => void;
   /**
@@ -82,8 +89,9 @@ export function ReferencesWarning({
       <StatusIcon kind="warn" />
       <div className="model-editor__warnbar-text">
         <p className="model-references__lead">
-          This save changes members that {count(charts.length, 'chart')} and{' '}
-          {count(dashboards.length, 'dashboard')} use.
+          {landsIn === undefined ? 'This save changes' : `Landed in ${landsIn}, this changes`}{' '}
+          members that {count(charts.length, 'chart')} and {count(dashboards.length, 'dashboard')}{' '}
+          use.
         </p>
         {charts.length === 0 ? null : (
           <>

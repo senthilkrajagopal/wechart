@@ -76,4 +76,25 @@ describe('the warning before a save that edits members in use', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save anyway' }));
     expect(onSave).toHaveBeenCalledTimes(1);
   });
+
+  /**
+   * T546 (AC-141 amended, R55): saved in My workspace, the model changes
+   * nothing shared until it lands; the warning says where it lands, by the
+   * folder's path, and what landing it there would change.
+   */
+  it('names the folder a workspace model goes to by its path, as landing it there would change them', () => {
+    render(
+      <ReferencesWarning
+        found={FOUND}
+        landsIn="Sales / EMEA"
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('alert').querySelector('.model-references__lead')?.textContent).toBe(
+      'Landed in Sales / EMEA, this changes members that 2 charts and 1 dashboard use.',
+    );
+    expect(screen.getByRole('button', { name: 'Save anyway' })).toBeTruthy();
+  });
 });

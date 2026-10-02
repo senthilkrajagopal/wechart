@@ -234,3 +234,67 @@ export function editedMembersOf(
   if (was === undefined || is === undefined) return [];
   return [...was].filter(([name, definition]) => is.get(name) !== definition).map(([name]) => name);
 }
+
+/** The cubes and views a file declares, by name; none from one that doesn't parse. */
+const declaredIn = (content: string): string[] => {
+  const { model } = modelOf(content);
+  return model === undefined
+    ? []
+    : [...objects(model.cubes), ...objects(model.views)]
+        .map((object) => object['name'])
+        .filter((name): name is string => typeof name === 'string');
+};
+
+/**
+ * The model with a file landed in `folderId` at `path`, as an approval lands
+ * it (T451): over the folder's file of that path, and over each file there
+ * declaring a name it declares.
+ */
+const landedIn = (
+  every: readonly File[],
+  folderId: string,
+  path: string,
+  content: string,
+): File[] => {
+  const names = new Set(declaredIn(content));
+  return [
+    ...every.filter(
+      (file) =>
+        folderOf(file) !== folderId ||
+        (file.path !== path && !declaredIn(file.content).some((name) => names.has(name))),
+    ),
+    { folderId, path, content },
+  ];
+};
+
+/**
+ * The members landing a model saved in My workspace would edit (T546, AC-141
+ * amended, R55): the folder it goes to as it is now, against that folder with
+ * the model landed in it. Nothing of a workspace is published, so no chart is
+ * bound to its own folder's items; the shared charts and dashboards its
+ * landing would change are those using the folder's members, by their full
+ * names there, and those its views and extending cubes along paths through
+ * it expose.
+ *
+ * Every member the landing would change, not only this save's: until it
+ * lands, a member an earlier save changed is still one it would change, and a
+ * chart may have started using it since.
+ */
+export function landedEditsOf(
+  /** Every folder's files the user may see, as they are now. */
+  every: readonly File[],
+  {
+    landsIn,
+    path,
+    content,
+  }: {
+    /** The shared folder it goes to (T347, AC-282). */
+    readonly landsIn: string;
+    readonly path: string;
+    /** The file as it is to be saved. */
+    readonly content: string;
+  },
+  places: Places = ROOT_ONLY,
+): string[] {
+  return editedMembersOf(every, landedIn(every, landsIn, path, content), places);
+}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { FolderNode } from '../explore/FolderTree';
-import { editedMembersOf, placesOf } from './editedMembers';
+import { editedMembersOf, landedEditsOf, placesOf } from './editedMembers';
 
 /**
  * T147 / AC-141: WHEN the user edits a member that charts use, THE SYSTEM
@@ -262,6 +262,112 @@ describe('the members a save edits, with models in folders (T342)', () => {
         [{ path: 'cubes/orders.yml', content: TOTAL_DOUBLED }, broken],
         places,
       ),
+    ).toEqual(['orders.total']);
+  });
+});
+
+/**
+ * T546 (AC-141 amended, R55): a model saved in My workspace lists the shared
+ * charts and dashboards that landing it would change. Its edits are read as
+ * it would land in the folder it goes to (T451): over that folder's file of
+ * its path, and over the file there declaring its name, against that folder
+ * as it is. Its folder in the workspace is published to by nothing, so no
+ * chart is bound there.
+ */
+describe('the members landing a workspace model would edit (T546)', () => {
+  const folders: FolderNode[] = [
+    { id: 'sales', title: 'Sales', parentId: null, xcubeId: 'fsales' },
+    { id: 'emea', title: 'EMEA', parentId: 'sales', xcubeId: 'femea' },
+    // A project folder in My workspace: no xcube id, as none is published to.
+    { id: 'project', title: 'Project', parentId: 'mine', xcubeId: null },
+  ];
+  const places = placesOf(folders);
+  const inFolder = (folderId: string, path: string, content: string) => ({
+    folderId,
+    path,
+    content,
+  });
+  const PATH = 'cubes/orders.yml';
+  const TOTAL_DOUBLED = ORDERS.replace('        sql: amount\n', '        sql: amount * 2\n');
+  // Every folder's files as the API lists them, the copy among them in its project folder.
+  const every = [
+    { folderId: 'root', path: 'cubes/customers.yml', content: 'cubes:\n  - name: customers\n' },
+    inFolder('sales', PATH, ORDERS),
+    inFolder('project', PATH, ORDERS),
+  ];
+
+  it('are the folder it goes to’s, by their full names there, though it is saved in My workspace', () => {
+    expect(
+      landedEditsOf(every, { landsIn: 'sales', path: PATH, content: TOTAL_DOUBLED }, places),
+    ).toEqual(['fsales__orders.total']);
+    // Saved in place, the workspace's own folder's would be none: nothing is bound there.
+    expect(
+      editedMembersOf(
+        every,
+        [...every.slice(0, 2), inFolder('project', PATH, TOTAL_DOUBLED)],
+        places,
+      ),
+    ).toEqual([]);
+  });
+
+  it('are every member of the cube a rename takes away from that folder', () => {
+    const renamed = ORDERS.replace('name: orders', 'name: orders_v2');
+
+    expect(
+      landedEditsOf(every, { landsIn: 'sales', path: PATH, content: renamed }, places),
+    ).toEqual([
+      'fsales__orders.count',
+      'fsales__orders.total',
+      'fsales__orders.status',
+      'fsales__orders.shipped',
+    ]);
+  });
+
+  it('are a view’s on a path through that folder, by the view’s folder’s name', () => {
+    const withView = [...every, inFolder('emea', 'views/summary.yml', SUMMARY)];
+    const countDistinct = ORDERS.replace('type: count', 'type: count_distinct\n        sql: id');
+
+    expect(
+      landedEditsOf(withView, { landsIn: 'sales', path: PATH, content: countDistinct }, places),
+    ).toEqual(['fsales__orders.count', 'femea__summary.count']);
+  });
+
+  it('are every member the landing would change, an earlier save’s edits too', () => {
+    const both = TOTAL_DOUBLED.replace('type: count', 'type: count_distinct\n        sql: id');
+    // The copy as an earlier save left it, `total` changed already: still unlanded.
+    const saved = [...every.slice(0, 2), inFolder('project', PATH, TOTAL_DOUBLED)];
+
+    expect(landedEditsOf(saved, { landsIn: 'sales', path: PATH, content: both }, places)).toEqual([
+      'fsales__orders.count',
+      'fsales__orders.total',
+    ]);
+  });
+
+  it('are none for a new file of a new name, which nothing uses yet', () => {
+    expect(
+      landedEditsOf(
+        every,
+        { landsIn: 'sales', path: 'cubes/returns.yml', content: 'cubes:\n  - name: returns\n' },
+        places,
+      ),
+    ).toEqual([]);
+  });
+
+  it('are the folder’s file’s, for a new file at another path declaring a name it has', () => {
+    expect(
+      landedEditsOf(
+        every,
+        { landsIn: 'sales', path: 'cubes/orders_again.yml', content: TOTAL_DOUBLED },
+        places,
+      ),
+    ).toEqual(['fsales__orders.total']);
+  });
+
+  it('are the root’s by their bare names, for a model going to the shared root', () => {
+    const rootOrders = [...every, { folderId: 'root', path: PATH, content: ORDERS }];
+
+    expect(
+      landedEditsOf(rootOrders, { landsIn: 'root', path: PATH, content: TOTAL_DOUBLED }, places),
     ).toEqual(['orders.total']);
   });
 });

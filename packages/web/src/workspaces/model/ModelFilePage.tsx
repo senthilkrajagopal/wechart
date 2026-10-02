@@ -42,7 +42,7 @@ import { LossWarning } from './LossWarning';
 import { problemsOf, type Problem } from './problems';
 import { ProblemsPanel, type CubeProblem } from './ProblemsPanel';
 import { draftJoinsOf } from './draftJoins';
-import { editedMembersOf, placesOf } from './editedMembers';
+import { editedMembersOf, landedEditsOf, placesOf } from './editedMembers';
 import { ReadOnlyFile } from './ReadOnlyFile';
 import { ReferencesWarning, type MemberReferences } from './ReferencesWarning';
 import { publishModel, referencesTo, refusedText } from './publish';
@@ -59,6 +59,7 @@ import {
   draftTargetOf,
   keepDraftTarget,
   namedFileOf,
+  savedTargetOf,
   targetsOf,
 } from './workspaceModels';
 import { UseInWorkspaceDialog } from './UseInWorkspaceDialog';
@@ -523,6 +524,11 @@ function FileEditor({
     found: MemberReferences;
     /** The text they were found for: what "Save anyway" saves. */
     text: string;
+    /**
+     * Saved in My workspace: the shared folder it lands in, whose members it
+     * edits, and that folder's path as the warning says it (T546, R55).
+     */
+    landing?: { readonly folderId: string; readonly words: string };
   } | null>(null);
   /** Where the focus goes back to when the warning closes. */
   const saveButton = useRef<HTMLButtonElement>(null);
@@ -908,9 +914,7 @@ function FileEditor({
     const sent = checked ?? text;
     setPublishing(true);
     setOutcome(null);
-    // In My workspace nothing is published: what uses the shared members is
-    // untouched until a proposal lands (T347).
-    if (checked === undefined && !where.inWorkspace) {
+    if (checked === undefined) {
       const unchecked = () => {
         setPublishing(false);
         setOutcome({
@@ -918,32 +922,49 @@ function FileEditor({
           text: 'What uses the changed members could not be checked, so nothing was saved.',
         });
       };
+      // In My workspace nothing is published: the shared charts and
+      // dashboards its landing would change, in the folder it goes to, are
+      // what is listed (T546, AC-141, R55). One going nowhere lands nowhere.
+      let landsIn: string | undefined;
+      if (where.inWorkspace)
+        try {
+          landsIn = published
+            ? await savedTargetOf(where.folderId, path)
+            : draftTargetOf(where.folderId, path);
+        } catch {
+          unchecked();
+          return;
+        }
       // Across the whole model: a view in another file exposes a cube's
       // member by a name of its own (T147's review) — and a view or an
       // extending cube in another folder, by that folder's (T342). Every
       // folder's files the user may see, as they are now.
-      let every: readonly (ModelFile & { readonly folderId?: string })[];
-      let places: ReturnType<typeof placesOf>;
-      try {
-        const [files, known] = await Promise.all([
-          queryClient.fetchQuery(ALL_MODEL_FILES_QUERY),
-          queryClient.fetchQuery(FOLDERS_QUERY),
-        ]);
-        every = files;
-        places = placesOf(known);
-      } catch {
-        unchecked();
-        return;
-      }
-      const own = { folderId: where.folderId, path };
-      const others = every.filter(
-        (file) => (file.folderId ?? ROOT) !== where.folderId || file.path !== path,
-      );
-      const edited = editedMembersOf(
-        [...others, { ...own, content: saved }],
-        [...others, { ...own, content: sent }],
-        places,
-      );
+      let every: readonly (ModelFile & { readonly folderId?: string })[] = [];
+      let known: Awaited<ReturnType<(typeof FOLDERS_QUERY)['queryFn']>> = [];
+      if (!where.inWorkspace || landsIn !== undefined)
+        try {
+          [every, known] = await Promise.all([
+            queryClient.fetchQuery(ALL_MODEL_FILES_QUERY),
+            queryClient.fetchQuery(FOLDERS_QUERY),
+          ]);
+        } catch {
+          unchecked();
+          return;
+        }
+      const places = placesOf(known);
+      let edited: string[] = [];
+      if (!where.inWorkspace) {
+        const own = { folderId: where.folderId, path };
+        const others = every.filter(
+          (file) => (file.folderId ?? ROOT) !== where.folderId || file.path !== path,
+        );
+        edited = editedMembersOf(
+          [...others, { ...own, content: saved }],
+          [...others, { ...own, content: sent }],
+          places,
+        );
+      } else if (landsIn !== undefined)
+        edited = landedEditsOf(every, { landsIn, path, content: sent }, places);
       if (edited.length > 0) {
         const found = await referencesTo(edited);
         if (found === undefined) {
@@ -952,7 +973,18 @@ function FileEditor({
         }
         if (found.charts.length + found.dashboards.length > 0) {
           setPublishing(false);
-          setReferences({ found, text: sent });
+          setReferences({
+            found,
+            text: sent,
+            ...(landsIn === undefined
+              ? {}
+              : {
+                  landing: {
+                    folderId: landsIn,
+                    words: folderWordsOf(landsIn, known) ?? SHARED_ROOT.title,
+                  },
+                }),
+          });
           setShown('form');
           return;
         }
@@ -1157,6 +1189,7 @@ function FileEditor({
           {references === null ? null : (
             <ReferencesWarning
               found={references.found}
+              landsIn={references.landing?.words}
               onSave={() => {
                 const { text: checked } = references;
                 setReferences(null);
@@ -1169,8 +1202,15 @@ function FileEditor({
                 saveButton.current?.focus();
               }}
               // A folder's members by the names its files give them, never
-              // their prefixed ones (T342, AC-329).
-              nameOf={(member) => shownMemberOf(member, where.folderId, folders.data ?? [])}
+              // their prefixed ones (T342, AC-329): short in the folder the
+              // model lands in, from My workspace (T546).
+              nameOf={(member) =>
+                shownMemberOf(
+                  member,
+                  references.landing?.folderId ?? where.folderId,
+                  folders.data ?? [],
+                )
+              }
             />
           )}
           {pending === null ? null : (

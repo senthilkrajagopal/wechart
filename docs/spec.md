@@ -499,8 +499,8 @@ Traces to: `[docs/inputs §4b]`, direction.md §7b, rules 20, 26–28; `[researc
       Fails when: a user's token is granted `introspection`, or a response to the browser carries a credential that has it.
 - [x] AC-140 WHEN a model file uses Jinja, Python or JavaScript generation, THE SYSTEM SHALL open it read-only in the code view and say why it cannot be edited as a form. (Phase 2: such a file can't be published into a folder, AC-332.)
       Fails when: such a file opens in an editable form, or gives no reason.
-- [x] AC-141 WHEN the user edits a member that charts use, THE SYSTEM SHALL list the charts and dashboards that reference it before saving.
-      Fails when: a referencing chart is missing from that list.
+- [x] AC-141 WHEN the user edits a member that charts use, THE SYSTEM SHALL list the charts and dashboards that reference it before saving. A model saved in My workspace SHALL list, before it is saved, the shared charts and dashboards that landing it would change in the folder it goes to, and name that folder by its path (amended 2026-10-02, `[R55]`: a shared model changes only through a copy in My workspace and a proposal, so the workspace save is where a member's references are listed).
+      Fails when: a referencing chart is missing from that list; or a save in My workspace of a model whose landing would change a member a shared chart or dashboard uses, in the folder the model goes to or through a view or an extending cube on a path through it, lists nothing, or doesn't name that folder.
 
 ## F16. Pre-aggregations
 

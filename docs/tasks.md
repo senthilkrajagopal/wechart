@@ -10547,6 +10547,23 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
       - `ReviewView.test.tsx`, "the review’s side panels": click and keyboard (Enter and Space), `aria-controls`, a reason kept through a fold, the avatar, no breadcrumb, and the footer's order.
       - `e2e/security/review-view.spec.ts`, Chrome: the head is 52 px; the panels are 240 and 360 px; the labels are uppercase; the chosen item has the note bar's tint; the avatar shows WW; Approve sits at the footer's end; folding both panels widens the item by exactly 520 px, and unfolding restores it.
       - The item rows' glyphs are updated in `proposal-models.spec.ts`.
+- [x] T546 (AC-141) List, at a workspace model's save, the shared charts and dashboards that landing it would change *(added 2026-10-02, `[R55]`)*
+  - **Why.** A shared model changes only through a copy in My workspace and a proposal (T451), and the in-place save was AC-141's only surface: a member renamed in a copy landed with no warning. The user chose the workspace save (R55).
+  - Files: `packages/web/src/workspaces/model/editedMembers.ts`, `ReferencesWarning.tsx`, `ModelFilePage.tsx` (+ tests), `e2e/security/workspace-references.spec.ts`
+  - Failing test:
+    - `editedMembers.test.ts`: landing a workspace file edits its target folder's members, by their full names there, as it would land over the folder's file of its path or its name; a rename takes every member away; a view on a path through the folder lists its own; an earlier save's edits are listed still; a new file of a new name edits nothing (AC-141).
+    - `ReferencesWarning.test.tsx`: the warning names the folder the model goes to by its path.
+    - `workspace-references.spec.ts`, with security on: a member a shared chart uses, renamed in a copy in My workspace, is listed with that chart and the folder's path before the save, which Cancel leaves unsaved.
+  - Depends on: T451, T347
+  - **Done 2026-10-02. AC-141 amended (R55) and ticked:** the in-place save's list is still shown by `model.spec.ts` and `model-in-folder.spec.ts` (sign-in off, until T451's sign-in-off half), and the workspace save's by `workspace-references.spec.ts`.
+    - **Where it lands** (`ModelFilePage.tsx`, `publish`): a model saved in My workspace is read as it would land in the folder it goes to, which its folder's contents list (`savedTargetOf`), or, for a file not yet saved, the folder chosen when it was made (`draftTargetOf`).
+    - **What it edits** (`editedMembers.ts`, `landedEditsOf`): that folder as it is, against the folder with the file landed there as an approval lands it (T451): over the folder's file of its path and each file there declaring a name it declares. So a save lists every member landing it would change, as R55 says, not only that save's edits: until it lands, a member an earlier save changed is still one it would change, and a chart may have started using it since (the review's finding; a first draft listed a save's own edits only, as an in-place save does, and would never have warned of such a chart). Each save of a copy whose landing breaks a chart therefore asks again, until the change is taken back. Members are named as charts are bound to them there: the folder's by its full name, and those of views and extending cubes on paths through it by theirs (T342).
+      - It may list more than the landing would change, never less: where the folder's file at the path declares another name and isn't the copy's origin, the approval refuses the landing (`planLanding`), and for a file of several cubes the approval replaces only the first name's file.
+    - **The warning** (`ReferencesWarning.tsx`): "Landed in Sales / EMEA, this changes members that _n_ charts and _m_ dashboards use.", with the folder's path from `folderWordsOf` ("Shared" for the root), and each member by its short name in that folder (AC-329). Save anyway and Cancel as before. Its words are a small decision, overturnable: no design draws this warning.
+    - Where the folder it goes to, or the model's files, can't be read, nothing is saved and the page says what uses the changed members couldn't be checked, as an in-place save does. A workspace file with no folder to go to is saved unchecked, with nothing read: it can't land anywhere.
+    - **Tests:** `editedMembers.test.ts` (7), `ReferencesWarning.test.tsx` (1), and `e2e/security/workspace-references.spec.ts` (3, Chrome, against compose's xcube): `super` lands a cube and shares a chart on its `count`; `writer` renames `count` in a copy and Save lists the chart, by `t546_….count`, under "Landed in Refs …"; Cancel saves nothing; saved anyway, a later save of an edit to `total` lists it again; with the rename taken back, a save lists nothing. The spec failed without the page's wiring (the warning never showed).
+    - **Review (one round, PASS), fixed:** the list was of a save's own edits, narrower than R55's "that landing it would change" (above); and a workspace file with no target read the model's files before saving, so their failure stopped its save.
+    - **Left:** no page-level test of an unreadable target, or of a never-saved draft's target (the unit tests cover the comparison).
 - [x] T541 (AC-388) Freeze a workspace item while it is in an open proposal *(added 2026-10-01, `[R52]`)*
   - Files: the save routes for dashboards, charts and data sources in `packages/api/src/server.ts` and `routes/data-sources.ts` (models with T350), the editors' notices, `packages/api/src/routes/proposal-freeze.test.ts`
   - Failing test: `proposal-freeze.test.ts`: a dashboard, chart or data source in an open proposal refuses a save (`409`), saying it was submitted and that withdrawing lets it be changed; once withdrawn or decided, it saves (AC-388).
@@ -11095,7 +11112,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-047 | T380 | AC-048 | T382 | AC-049 | T381 |
 | AC-050 | T383 | AC-051 | T384 | AC-052 | T385 |
 | AC-093 | T386 | AC-097 | T387, T453 | AC-104 | T388 |
-| AC-116 | T389 | AC-131 | T334, T342 | AC-141 | T342 |
+| AC-116 | T389 | AC-131 | T334, T342 | AC-141 | T342, T546 |
 | AC-145 | T375, T504 | | | | |
 | AC-150 | T372, ~~T373~~ (next phase, R41), T374, T376, T504 | AC-151 | T376, T504 | AC-153 | T377 |
 | AC-154 | ~~T377~~ T551, T552 | AC-155 | T379, T504 | AC-157 | T364, T459 |
