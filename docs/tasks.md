@@ -6273,7 +6273,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     3. An Explore row missed a proposal its item went into with another item.
     4. The e2e's Dismiss-after-reload check could pass before the band had loaded. It now waits for the lookup's answer.
     5. The band kept a cached "Waiting" for up to 5 minutes after a rejection. It now asks each time its page opens.
-- [ ] T359 (AC-254) With security off, the single user works through a workspace and approves their own proposals
+- [ ] T359 (AC-254) With security off, the single user works through a workspace and approves their own proposals *(2026-10-01, `[R52]`: "Workspace-only now". With security off, shared items are changed only through the workspace, as with sign-in on, and the phase-1 suite's in-place editing steps are rewritten to go through the workspace and a self-approved proposal: AC-308's rewrite, pulled forward)*
   - Files: `e2e/workspace-single-user.spec.ts` (the phase-1 configuration)
   - Failing test: `workspace-single-user.spec.ts`: with security off, editing a dashboard goes through "Edit in my workspace", a proposal and "Approve my own proposal", and nothing asks for a sign-in or refuses a permission (AC-254).
   - Depends on: T356, T358
@@ -9852,6 +9852,17 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
     - moving a dashboard, or a folder above it, gives it copies of the charts now off its path;
     - each move's answer names the dashboards that got copies (AC-371).
   - Depends on: T527
+- [ ] T540 (AC-389) Recreate a deleted target folder when its proposal is approved *(added 2026-10-01, `[R52]`)*
+  - Files: `packages/api/src/server.ts` (a folder's delete keeps a record of it), a migration for deleted folders' records, `packages/api/src/routes/proposals.ts` (`land`), `packages/api/src/routes/folder-recreate.test.ts`
+  - Failing test: `folder-recreate.test.ts`:
+    - a proposal whose target folder, and that folder's empty parent, were deleted is approved;
+    - both come back with their ids, names, parents, descriptions and groups, and the items land in the folder;
+    - a same-named folder made meanwhile leaves the recreated one "<name> (2)" (AC-389).
+  - Depends on: T521
+- [ ] T541 (AC-388) Freeze a workspace item while it is in an open proposal *(added 2026-10-01, `[R52]`)*
+  - Files: the save routes for dashboards, charts and data sources in `packages/api/src/server.ts` and `routes/data-sources.ts` (models with T350), the editors' notices, `packages/api/src/routes/proposal-freeze.test.ts`
+  - Failing test: `proposal-freeze.test.ts`: a dashboard, chart or data source in an open proposal refuses a save (`409`), saying it was submitted and that withdrawing lets it be changed; once withdrawn or decided, it saves (AC-388).
+  - Depends on: T349
 - [x] T528 (AC-372) Withdraw an item's open proposal when the item is deleted from My workspace, naming it in the confirmation *(added 2026-09-30, `[R49]`, design 14's Q2)*
   - Files: the delete routes in `packages/api/src/server.ts` and `routes/data-sources.ts`, the delete dialogs (design 14), `packages/api/src/routes/delete-dependents.test.ts`
   - Failing test: deleting a workspace dashboard, chart or data source waiting in an open proposal withdraws that proposal; the dialog names it before (AC-372).
@@ -10122,6 +10133,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-379 | T533, T535 | AC-380 | T535 | AC-381 | T534 |
 | AC-382 | T534 | AC-383 | T532 | AC-384 | T536 |
 | AC-385 | T535 | AC-386 | T539 | AC-387 | T535 |
+| AC-388 | T541 | AC-389 | T540 | | |
 | AC-354 (again, copy on use) | T538 | | | | |
 | AC-296 | T370 | AC-297 | T371, T504 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441 |
 | AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |

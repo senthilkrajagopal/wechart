@@ -950,6 +950,16 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R52 — design 5's approval questions, and security off** (2026-10-01, the user)
+- Asked while T451, T456 and T359 were planned:
+  - Q: A proposal can bring a data source with the models that use it, and xcube's dry run binds only to landed data sources. What then? A: "Land data sources first". *A refused approval leaves them landed; AC-321 amended.*
+  - Q: AC-321 compares bindings with the proposal's preview: at approval, or as the approver saw it? A: "No edits on something that was submitted.. if it has to change revert the submission, make changes and submit again". *A workspace item in an open proposal is frozen (AC-388), and an approval is judged against the bindings recorded when it was proposed (AC-321 amended).*
+  - Q: An empty shared folder can be deleted while a workspace item or an open proposal still targets it. Block the delete? A: "Dont block.. when approved create the folder again and land the files (will that work)?"
+    - *Claude answered that it works if wechart keeps a record of each deleted folder: its id, name, parent, description and groups. xcube never reuses a folder's id, so the same id maps back. A deleted parent is recreated the same way.*
+    - *Claude's call, overturnable: a same-named folder made since leaves the recreated one a numbered name. AC-389.*
+  - Q: With security off, shared items are edited in place today, though R19 chose phase 2's flows (AC-308). Switch now, or at the end of phase 2? A: "Workspace-only now". *AC-254 amended. The phase-1 suite's editing steps are rewritten to go through the workspace now, in T359.*
+- From T531's review, Claude's call, overturnable: a change of a data source's database also turns its SQL runner off (AC-374), since grants are per database.
+
 **R51 — design 15 approved; copy on move; its questions** (2026-10-01, the user)
 - T527's review found a dashboard can still come to show a library chart off its folder's path: by a move, or by approving a copy no save judged. Asked what then: "Copy on move + approval (Recommended)". *AC-371 amended; T537.*
 - Design 15 (`docs/design/reviews/2026-10-01/designs/15-sql-runner.html`): "Approve (Recommended)".
