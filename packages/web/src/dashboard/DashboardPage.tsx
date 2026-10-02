@@ -292,7 +292,6 @@ export function DashboardPage({
         <ProposalBand
           kind="dashboard"
           id={dashboardId}
-          currentVersion={saved.data?.version}
           onProposeAgain={(path) => {
             setProposingAgain(path);
           }}

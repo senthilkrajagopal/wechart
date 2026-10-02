@@ -9859,10 +9859,25 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
     - both come back with their ids, names, parents, descriptions and groups, and the items land in the folder;
     - a same-named folder made meanwhile leaves the recreated one "<name> (2)" (AC-389).
   - Depends on: T521
-- [ ] T541 (AC-388) Freeze a workspace item while it is in an open proposal *(added 2026-10-01, `[R52]`)*
+- [x] T541 (AC-388) Freeze a workspace item while it is in an open proposal *(added 2026-10-01, `[R52]`)*
   - Files: the save routes for dashboards, charts and data sources in `packages/api/src/server.ts` and `routes/data-sources.ts` (models with T350), the editors' notices, `packages/api/src/routes/proposal-freeze.test.ts`
   - Failing test: `proposal-freeze.test.ts`: a dashboard, chart or data source in an open proposal refuses a save (`409`), saying it was submitted and that withdrawing lets it be changed; once withdrawn or decided, it saves (AC-388).
   - Depends on: T349
+  - **Done 2026-10-01.**
+    - **The refusal.** `409 { error: "This was submitted for review, so it can’t be changed. Withdraw its proposal to change it, then propose it again.", code: 'submitted' }` (`routes/submitted.ts`), from the proposal store's `openFor`, which covers an item going with another's proposal. It applies to:
+      - the document PUT and PATCH (rename or move);
+      - the dashboard save, for the dashboard and each chart sent with it;
+      - Add to dashboard;
+      - the data source's PUT.
+    - **Order.** Each refusal comes after the 404/403 checks, so a hidden item answers as missing. In the dashboard save, a chart is asked only once it is known to be one the user may open (the review's bug).
+    - **Unfrozen.** A withdrawal, a reviewer's rejection or an approval frees the item.
+    - **The author's band** says "It can’t be changed while it waits: withdraw its proposal to change it, then propose it again". This replaces design 05 state M's "changed since proposing" note, and its `currentVersion` prop is gone.
+    - **One test changed for the new rule:** `proposals.test.ts` now expects the later save to be refused (R52).
+    - **Tests:** `proposal-freeze.test.ts` (5 cases: dashboard, its own chart, chart, data source; withdrawn and rejected; hidden items answer 404) and `ProposalBand.test.tsx`.
+    - **AC-388 stays open for models** (T350).
+    - **Left:**
+      - The data-source freeze is wired only with sign-in on, where proposals run. T359 brings proposals to sign-in off and must wire it there too.
+      - If an approval lands but its settle then fails, its items stay frozen under an approved proposal, which can't be withdrawn. Unlikely, and left under the breadth rule.
 - [x] T528 (AC-372) Withdraw an item's open proposal when the item is deleted from My workspace, naming it in the confirmation *(added 2026-09-30, `[R49]`, design 14's Q2)*
   - Files: the delete routes in `packages/api/src/server.ts` and `routes/data-sources.ts`, the delete dialogs (design 14), `packages/api/src/routes/delete-dependents.test.ts`
   - Failing test: deleting a workspace dashboard, chart or data source waiting in an open proposal withdraws that proposal; the dialog names it before (AC-372).

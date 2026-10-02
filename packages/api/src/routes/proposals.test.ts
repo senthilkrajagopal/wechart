@@ -299,7 +299,9 @@ describe('proposing a workspace item (T349, AC-284)', () => {
       ['chart', local.id, local.version, ids.sales, ids.local, true],
     ]);
 
-    // As it was when proposed: a later save isn't in it (design 05, state M).
+    // As it was when proposed: ~~a later save isn't in it (design 05, state
+    // M)~~ no later save is taken while it waits (R52, the user's answer: a
+    // submitted item is frozen until withdrawn; T541, AC-388).
     const saved = await as('writer', {
       method: 'PUT',
       url: `/api/documents/dashboard/${copy}`,
@@ -308,7 +310,9 @@ describe('proposing a workspace item (T349, AC-284)', () => {
         version: stored.version,
       },
     });
-    expect(saved.statusCode, saved.body).toBe(200);
+    expect(saved.statusCode, saved.body).toBe(409);
+    expect(saved.json<{ code: string }>().code).toBe('submitted');
+    expect((await docs().get('dashboard', copy))!.body['title']).toBe(`Revenue ${MARK}`);
     const kept = (await proposalStore(getDb()).get(proposal.id))!;
     expect(kept.items[0]!.snapshot['title']).toBe(`Revenue ${MARK}`);
     expect(kept.author.name).not.toBe('');

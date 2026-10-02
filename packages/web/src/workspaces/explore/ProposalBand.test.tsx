@@ -31,7 +31,7 @@ const proposal = (over: Record<string, unknown>) => ({
 
 let lastClient: QueryClient | undefined;
 
-function shown(latest: unknown, status = 200, currentVersion = 3) {
+function shown(latest: unknown, status = 200) {
   // As the API keeps it: dismissed once Dismiss is sent.
   let current = latest;
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
@@ -54,7 +54,6 @@ function shown(latest: unknown, status = 200, currentVersion = 3) {
       <ProposalBand
         kind="dashboard"
         id="d1"
-        currentVersion={currentVersion}
         onProposeAgain={onProposeAgain}
         now={new Date(2026, 8, 27, 18, 0)}
       />
@@ -80,11 +79,11 @@ describe('the band on the author’s item (T358, AC-290)', () => {
     expect(band.textContent).not.toContain('changed it since');
   });
 
-  it('says changes made since proposing aren’t in the proposal', async () => {
-    shown(proposal({}), 200, 4);
+  it('says it can’t be changed while it waits, and how to change it (T541, AC-388)', async () => {
+    shown(proposal({}));
     const band = await screen.findByRole('status', { name: 'Proposal' });
     expect(band.textContent).toContain(
-      'You’ve changed it since proposing; those changes aren’t in the proposal.',
+      'It can’t be changed while it waits: withdraw its proposal to change it, then propose it again.',
     );
   });
 
@@ -162,8 +161,8 @@ describe('the band on the author’s item (T358, AC-290)', () => {
     );
     const band = await screen.findByRole('status', { name: 'Proposal' });
     expect(band.textContent).toContain('proposed to Sales / EMEA.');
-    // Version 3 is d1's own, proposed as it is now: nothing changed since.
-    expect(band.textContent).not.toContain('changed it since');
+    // Going with another's proposal, it is frozen as its own would be (T541, AC-388).
+    expect(band.textContent).toContain('It can’t be changed while it waits');
     expect(onProposeAgain).not.toHaveBeenCalled();
   });
 

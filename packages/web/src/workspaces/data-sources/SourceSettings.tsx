@@ -241,7 +241,6 @@ function Settings({ source }: { source: StoredSource }) {
         <ProposalBand
           kind="data-source"
           id={source.id}
-          currentVersion={source.version}
           onProposeAgain={(path) => {
             setProposingAgain(path);
           }}

@@ -97,6 +97,7 @@ import { registerAudit } from './routes/audit';
 import { registerDataSources } from './routes/data-sources';
 import { registerExport } from './routes/export';
 import { sharedInPlace } from './routes/shared-in-place';
+import { SUBMITTED } from './routes/submitted';
 import { registerImport } from './routes/import';
 import { registerProposals, withdrawWithDelete } from './routes/proposals';
 import type { ProposalStore } from './repos/proposals';
@@ -945,6 +946,9 @@ export function buildServer({
               : {
                   withdraw: (request: FastifyRequest, id: string) =>
                     withdrawWithDelete({ store: proposals, audit }, request, 'data-source', id),
+                  // Frozen while it waits in one (T541, AC-388).
+                  submitted: async (id: string) =>
+                    (await proposals.openFor('data-source', id)) !== null,
                 }),
             // A copy's project folder (T523, AC-368), as a dashboard's copy makes one.
             ...(docs === undefined
@@ -1922,6 +1926,11 @@ export function buildServer({
     error:
       'This moves between your workspace and the shared folders: shared work is changed in a copy in your workspace, and reaches a shared folder through a proposal.',
   };
+  /** Whether an item waits in an open proposal, and so is frozen (T541, AC-388). */
+  const submitted = async (kind: string, id: string) =>
+    proposals !== undefined &&
+    (kind === 'dashboard' || kind === 'chart' || kind === 'data-source') &&
+    (await proposals.openFor(kind, id)) !== null;
   /** Whether the folder governing an item is a shared one, in no workspace (T502). */
   const isShared = async (kind: string, item: Stored) =>
     (await workspaceRootOf(await governingFolder(kind, item))) === null;
@@ -3440,6 +3449,8 @@ export function buildServer({
     // they may not (T326, AC-266).
     const found = await itemFor(request, reply, kind, id, 'write');
     if (found === undefined) return reply;
+    // Not while it waits in a proposal (T541, AC-388).
+    if (await submitted(kind, id)) return reply.code(409).send(SUBMITTED);
     if (found.seen !== undefined && found.stored !== null) {
       const { seen, stored } = found;
       // Where the item goes, by the folder that governs it — a local chart's
@@ -3634,6 +3645,9 @@ export function buildServer({
     // saved with it are checked below.
     const found = await itemFor(request, reply, 'dashboard', dashboardId, 'write');
     if (found === undefined) return reply;
+    // Not while it waits in a proposal (T541, AC-388); a chart saved with it,
+    // below, once it is known to be one they may open (T541's review).
+    if (await submitted('dashboard', dashboardId)) return reply.code(409).send(SUBMITTED);
     if (found.seen !== undefined && found.stored !== null) {
       const { seen, stored } = found;
       const into = folderIdOf(dashboard.body as Record<string, unknown>);
@@ -3736,6 +3750,8 @@ export function buildServer({
           document: { kind: 'chart', id: chart.id },
         });
       }
+      // Not while it waits in a proposal (T541, AC-388): asked only of one they may open.
+      if (await submitted('chart', chart.id)) return reply.code(409).send(SUBMITTED);
       storedCharts.set(chart.id, stored.body);
       const owner = stored.body['localToDashboardId'];
       /**
@@ -3951,6 +3967,8 @@ export function buildServer({
     // too (T326, AC-266).
     const found = await itemFor(request, reply, kind, id, 'write');
     if (found === undefined) return reply;
+    // Not renamed or moved while it waits in a proposal (T541, AC-388).
+    if (await submitted(kind, id)) return reply.code(409).send(SUBMITTED);
     if (
       found.seen !== undefined &&
       body?.folderId !== undefined &&
@@ -4271,6 +4289,8 @@ export function buildServer({
     // (T326, AC-266).
     const board = await itemFor(request, reply, 'dashboard', dashboardId, 'write');
     if (board === undefined) return reply;
+    // No tile added while it waits in a proposal (T541, AC-388).
+    if (await submitted('dashboard', dashboardId)) return reply.code(409).send(SUBMITTED);
     const chart = await itemFor(request, reply, 'chart', body.chartId, 'open');
     if (chart === undefined) return reply;
     // A dashboard's own chart is part of it, and goes when it goes (T518's

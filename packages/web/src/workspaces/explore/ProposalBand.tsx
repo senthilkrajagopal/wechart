@@ -5,8 +5,9 @@ import { StatusIcon } from '../../shell/StatusIcon';
 /**
  * The band on the author's workspace item (T358, AC-290, AC-284; design 05,
  * state M; rule 79), from the item's latest proposal:
- * - waiting: since when and where to, with a link to it, and a note when the
- *   item has changed since, since those changes aren't in it (decision 2);
+ * - waiting: since when and where to, with a link to it, and that it can't
+ *   be changed while it waits (R52; T541, AC-388), which replaces design 05
+ *   state M's "changed since proposing" note;
  * - rejected: who and when, the reason as a quote (or "No reason given"),
  *   with Propose again… and Dismiss, which lasts until the item is proposed
  *   again (R42.1).
@@ -52,14 +53,11 @@ function whenText(iso: string, now: Date): string {
 export function ProposalBand({
   kind,
   id,
-  currentVersion,
   onProposeAgain,
   now = new Date(),
 }: {
   readonly kind: 'dashboard' | 'chart' | 'data-source';
   readonly id: string;
-  /** The item's version now: a later one than proposed is said (decision 2). */
-  readonly currentVersion?: number | undefined;
   /** Propose it again, to where it lands (from Shared down). */
   readonly onProposeAgain: (targetPath: readonly string[]) => void;
   readonly now?: Date;
@@ -102,17 +100,15 @@ export function ProposalBand({
   const landsIn = own?.landsInPath ?? proposal.targetPath;
 
   if (proposal.status === 'open') {
-    const changed =
-      currentVersion !== undefined && own !== undefined && currentVersion > own.version;
+    // Frozen while it waits (R52; T541, AC-388): ~~changes since proposing
+    // aren't in it (decision 2)~~ none can be made until it is withdrawn.
     return (
       <div role="status" aria-label="Proposal" className="proposal-band">
         <StatusIcon kind="run" />
         <p>
           Waiting for review since {whenText(proposal.proposedAt, now)} · proposed to{' '}
-          {folderText(landsIn)}.
-          {changed
-            ? ' You’ve changed it since proposing; those changes aren’t in the proposal.'
-            : ''}
+          {folderText(landsIn)}. It can’t be changed while it waits: withdraw its proposal to change
+          it, then propose it again.
         </p>
         <a
           className="btn btn-sm"

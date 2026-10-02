@@ -382,7 +382,6 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
             <ProposalBand
               kind="chart"
               id={chartId}
-              currentVersion={stored.data?.version}
               onProposeAgain={(path) => {
                 setProposingAgain(path);
               }}

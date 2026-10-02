@@ -30,6 +30,7 @@ import { cubeStateOf } from '../xcube/cube-state';
 import type { CubeUsing } from '../xcube/used-by';
 
 import { sharedInPlace } from './shared-in-place';
+import { SUBMITTED } from './submitted';
 import { NO_TIME_ZONE, timeZoneOf } from './project-folder';
 
 /**
@@ -193,6 +194,7 @@ export function registerDataSources(
     listing,
     audit,
     withdraw,
+    submitted,
     projects,
     switches,
   }: {
@@ -242,6 +244,8 @@ export function registerDataSources(
      * deleted (T528, AC-372). Unset with sign-in off, where none is proposed.
      */
     readonly withdraw?: (request: FastifyRequest, id: string) => Promise<unknown>;
+    /** Whether one waits in an open proposal, and so is frozen (T541, AC-388). */
+    readonly submitted?: (id: string) => Promise<boolean>;
     /**
      * "Edit in my workspace"'s project folders (T523, AC-368). Set with
      * `ownWorkspace`.
@@ -809,6 +813,8 @@ export function registerDataSources(
     if (value === undefined) return reply.status(400).send({ error });
     const source = await reached(request, reply, 'write');
     if (source === undefined) return reply;
+    // Not while it waits in a proposal (T541, AC-388).
+    if ((await submitted?.(source.id)) === true) return reply.status(409).send(SUBMITTED);
     const change: DataSourceChange = {
       ...(typeof value['name'] === 'string' ? { name: value['name'] } : {}),
       ...(typeof value['driver'] === 'string' ? { driver: value['driver'] } : {}),
