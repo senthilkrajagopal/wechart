@@ -401,6 +401,8 @@ describe('deleting a model (T428)', () => {
       );
     } finally {
       await withXcube.close();
+      // Its own cube out of /A/B again: T427's tests find /A/B's files as they were.
+      await files().remove(ids.b, paths.stock);
     }
   });
 });
