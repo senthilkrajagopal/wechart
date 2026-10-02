@@ -14,8 +14,9 @@ import { StateBadge, stateOf } from './StateBadge';
  */
 describe('a job’s state', () => {
   it.each([
-    ['scheduled', 'idle', 'Scheduled'],
-    ['processing', 'run', 'Processing'],
+    // Design 16's words, pin 5 (T375): Cube's `scheduled` waits, `processing` builds.
+    ['scheduled', 'idle', 'Queued'],
+    ['processing', 'run', 'Building'],
     ['done', 'ok', 'Done'],
     ['missing_partition', 'err', 'Missing partition'],
     [

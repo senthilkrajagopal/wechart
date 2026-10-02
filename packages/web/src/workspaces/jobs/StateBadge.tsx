@@ -19,10 +19,12 @@ export function stateOf(status: string): { kind: StateKind; label: string } {
       return { kind: 'run', label: 'Asking Cube…' };
     case 'done':
       return { kind: 'ok', label: 'Done' };
+    // Design 16's words (pin 5; T375): Cube's `processing` is building, its
+    // `scheduled` is waiting in the queue.
     case 'processing':
-      return { kind: 'run', label: 'Processing' };
+      return { kind: 'run', label: 'Building' };
     case 'scheduled':
-      return { kind: 'idle', label: 'Scheduled' };
+      return { kind: 'idle', label: 'Queued' };
     // "the job has failed" (research §B): its table is missing, with no error.
     case 'missing_partition':
       return { kind: 'err', label: 'Missing partition' };

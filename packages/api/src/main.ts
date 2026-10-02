@@ -21,6 +21,7 @@ import { sqlRuns } from './repos/sql-runs';
 import { buildHistory } from './repos/build-history';
 import { CubeClient } from './cube/client';
 import { buildFollower, startFollowingBuilds } from './jobs/follow';
+import { xcubePartitions } from './xcube/partitions';
 import { xcubeQueue } from './xcube/queue';
 import { AUDIT_RETENTION_DAYS, startAuditRetention } from './audit/retention';
 import { readModelDir } from './model/read-dir';
@@ -231,6 +232,12 @@ async function main(): Promise<void> {
       ? {}
       : {
           buildQueue: xcubeQueue({
+            cubeApiUrl: config.cubeApiUrl,
+            model: config.xcube.model,
+            token: () => service.token(),
+          }),
+          // And its partitions route (T375, AC-145).
+          buildPartitions: xcubePartitions({
             cubeApiUrl: config.cubeApiUrl,
             model: config.xcube.model,
             token: () => service.token(),

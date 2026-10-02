@@ -269,6 +269,13 @@ describe('Run history’s order, pages and filters (T374, AC-150)', () => {
     // Last 24 hours, Last 7 days, or all of it.
     expect(await idsOf('?within=day')).not.toContain(twoDaysAgo);
     expect(await idsOf('?within=week')).toContain(twoDaysAgo);
+    // One pre-aggregation's, for its pane's "Builds started from wechart" (T375).
+    const other = await recorded(ids.a, 65, { name: 'returns' });
+    const ofOrders = await idsOf(
+      `?within=all&preagg=${encodeURIComponent(`f${ids.a.replaceAll('-', '')}__orders.main`)}`,
+    );
+    expect(ofOrders).toContain(done);
+    expect(ofOrders).not.toContain(other);
   });
 
   it('says how far an open build has got, and offers the starters and folders in scope', async () => {

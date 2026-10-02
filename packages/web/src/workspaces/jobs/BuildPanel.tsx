@@ -1,17 +1,31 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 
+import { ExportedToast } from '../../dashboard/export/ExportedToast';
 import { missingScopeOf, ScopeUnavailable, useScopes } from '../../query/scopes';
 import { StateLine } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { rollupHref } from '../model/inFolder';
-import { StateBadge, stateOf, Status } from './StateBadge';
+import {
+  BuildOutcomeStatus,
+  partitionsOf,
+  StarterLabel,
+  whenOf,
+  type BuildSummary,
+} from './builds';
+import { Partitions, type Started } from './Partitions';
+import { stateOf, Status } from './StateBadge';
 
 /**
  * Building a pre-aggregation (T155, AC-149), as the prototype's Jobs page lists
  * them: every pre-aggregation Cube compiled, each with Build. A build is
  * Cube's own job — started through its jobs API, one token per partition —
  * and each token is followed until it reports a state it will not leave.
+ *
+ * Its pane (T375; design 16, screen 1): its partitions, rebuilt by the
+ * selected ones or all (AC-145), and the builds started from wechart, with
+ * the way to all of them in Run history. A build's tokens are in Queue and
+ * in Run history's log (T374, T376).
  */
 interface Buildable {
   /** Its published name, `cube.preAggregation`, which a build names. */
@@ -28,6 +42,8 @@ interface Buildable {
   readonly fileName?: string;
   /** That file's folder, where it isn't the root (T530). */
   readonly fileFolderId?: string;
+  /** A lambda or a rollup join: nothing of its own to build (T375, A3). */
+  readonly buildable?: false;
 }
 
 /**
@@ -91,7 +107,7 @@ async function send<T>(url: string, init?: { body: unknown; signal?: AbortSignal
 
 /**
  * A build's jobs, followed until each has finished. One definition, under one
- * key, so the row's state and the pane's list of jobs share one poll.
+ * key, so the row's state and the pane's share one poll.
  */
 function useBuildStatus(tokens: readonly string[], pollMs: number) {
   return useQuery({
@@ -156,62 +172,103 @@ function BuildState({
   return <Status kind={kind} label={label} testId={testId} state={state} />;
 }
 
-/** One build's jobs, followed until each has finished. */
-function BuildJobs({
+/** How many of its builds the pane lists (design 16, pin 14). */
+const RECENT = 3;
+
+/**
+ * The builds of one pre-aggregation started from wechart, its last three,
+ * with their outcome and who started them, and the way to all of them in Run
+ * history (design 16, pin 14; state B). The refresh worker's builds aren't
+ * listed (R41).
+ */
+function RecentBuilds({
   id,
-  tokens,
-  pollMs,
-  name = id,
+  name,
+  onOpenHistory,
 }: {
   id: string;
-  tokens: readonly string[];
-  pollMs: number;
-  /** How it is shown: a folder's by its short name, never its prefixed one (T371). */
-  name?: string;
+  name: string;
+  onOpenHistory?: ((preAggregation: { id: string; name: string }) => void) | undefined;
 }) {
-  const jobs = useBuildStatus(tokens, pollMs);
-  const byToken = new Map((jobs.data ?? []).map((job) => [job.token, job]));
+  const recent = useQuery({
+    queryKey: ['jobs', 'builds', 'of', id],
+    queryFn: async ({ signal }) => {
+      const response = await fetch(
+        `/api/jobs/builds?${new URLSearchParams({ preagg: id, within: 'all' }).toString()}`,
+        { signal },
+      );
+      const body = (await response.json().catch(() => null)) as {
+        records?: BuildSummary[];
+        error?: unknown;
+      } | null;
+      if (!response.ok || body === null)
+        throw new Error(
+          typeof body?.error === 'string'
+            ? body.error
+            : `Its builds could not be read (${String(response.status)}).`,
+        );
+      return (body.records ?? []).slice(0, RECENT);
+    },
+    // Builds end while the pane is open: read again now and then, as Run history is.
+    refetchInterval: 5_000,
+  });
+  const href = `/jobs?${new URLSearchParams({ tab: 'history', preagg: id }).toString()}`;
   return (
-    <li className="build-jobs">
-      <span className="build-jobs__id">{name}</span>
-      {tokens.length === 0 ? (
-        <StateLine kind="warn" testId="build-empty">
-          Cube started no job: no partition of {name} was built.
-        </StateLine>
+    <section className="build-log__section" aria-labelledby={`${id}-recent`}>
+      <h3 id={`${id}-recent`}>Builds started from wechart</h3>
+      {recent.isPending ? <StateLine kind="run">Reading its builds…</StateLine> : null}
+      {recent.isError ? <StateLine kind="err">{recent.error.message}</StateLine> : null}
+      {recent.data?.length === 0 ? (
+        <p className="help build-log__help">
+          None yet. Builds started here, or by a wechart schedule, are listed here.
+        </p>
       ) : null}
-      {!jobs.isError ? null : missingScopeOf(jobs.error) === undefined ? (
-        <StateLine kind="err">{jobs.error.message}</StateLine>
-      ) : (
-        // Refused its scope since the build started (T176, AC-170).
-        <ScopeUnavailable
-          scope={missingScopeOf(jobs.error) ?? 'jobs'}
-          what="Following this build"
-        />
+      {recent.data === undefined || recent.data.length === 0 ? null : (
+        <table className="query-log build-panel__recent" aria-label="Builds started from wechart">
+          <tbody>
+            {recent.data.map((build) => {
+              const when = whenOf(build.startedAt);
+              return (
+                <tr key={build.id}>
+                  <td>
+                    <time dateTime={build.startedAt} title={when.utc}>
+                      {when.shown}
+                    </time>
+                  </td>
+                  <td>{partitionsOf(build)}</td>
+                  <td>
+                    <BuildOutcomeStatus build={build} />
+                  </td>
+                  <td>
+                    <StarterLabel starter={build.starter} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       )}
-      <ul className="build-jobs__list" aria-label={`Jobs building ${name}`}>
-        {tokens.map((token) => {
-          const job = byToken.get(token);
-          return (
-            <li key={token} data-testid={`job-${token}`} className="build-jobs__job">
-              <code data-testid="job-token">{token}</code>
-              {/* Its icon and its words (T158, AC-152); "Asking Cube…" until the first answer. */}
-              <StateBadge status={job?.status ?? ''} />
-              {job?.table === undefined ? null : (
-                <code className="build-jobs__table" data-testid="job-table">
-                  {job.table}
-                </code>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </li>
+      <a
+        className="link-button"
+        href={href}
+        onClick={(event) => {
+          // In Jobs, its own tab, without leaving the page.
+          if (onOpenHistory === undefined) return;
+          event.preventDefault();
+          onOpenHistory({ id, name });
+        }}
+      >
+        All its builds in Run history
+      </a>
+    </section>
   );
 }
 
 export function BuildPanel({
   pollMs = 1500,
   selectedFirst = null,
+  onOpenHistory,
+  onOpenQueue,
 }: {
   pollMs?: number;
   /**
@@ -219,8 +276,13 @@ export function BuildPanel({
    * of › Open in Jobs names, `?preagg=` in the address.
    */
   selectedFirst?: string | null;
+  /** Opens Run history on one pre-aggregation's builds: Jobs' own tab (T375). */
+  onOpenHistory?: (preAggregation: { id: string; name: string }) => void;
+  /** Opens the queue: Jobs' own tab (T375; design 16, A1). */
+  onOpenQueue?: () => void;
 }) {
   const scopes = useScopes();
+  const client = useQueryClient();
   const buildable = useQuery({
     queryKey: ['preaggregations'],
     queryFn: ({ signal }) =>
@@ -247,15 +309,22 @@ export function BuildPanel({
   const [selected, setSelected] = useState<string | null>(selectedFirst);
   const latestOf = (id: string) => builds.find((build) => build.id === id);
   const started = useRef(0);
+  /** A build started: followed in its row, and listed in its pane once recorded. */
+  const follow = (id: string, tokens: readonly string[]) => {
+    started.current += 1;
+    const n = started.current;
+    setBuilds((before) => [{ id, tokens: [...tokens], n }, ...before]);
+    void client.invalidateQueries({ queryKey: ['jobs', 'builds', 'of', id] });
+  };
   const start = useMutation({
     mutationFn: (id: string) =>
       send<{ tokens: string[] }>('/api/builds', { body: { preAggregation: id } }),
     onSuccess: ({ tokens }, id) => {
-      started.current += 1;
-      const n = started.current;
-      setBuilds((before) => [{ id, tokens, n }, ...before]);
+      follow(id, tokens);
     },
   });
+  /** What the pane started, said in a toast with the way to the queue (design 16, A1). */
+  const [toast, setToast] = useState<{ said: string; jobs: number } | null>(null);
 
   /**
    * Without Cube's `jobs` scope no build can start (T176, AC-170): said as
@@ -274,7 +343,7 @@ export function BuildPanel({
     );
   }
   const shown = buildable.data.find((each) => each.id === selected);
-  const shownBuilds = builds.filter((build) => build.id === selected);
+  const openQueue = onOpenQueue ?? (() => window.location.assign('/jobs?tab=queue'));
 
   return (
     <div className="build-panel">
@@ -339,19 +408,22 @@ export function BuildPanel({
                       <td>{trigger ?? '—'}</td>
                       <td>{partitionGranularity ?? 'none'}</td>
                       <td>
-                        <button
-                          type="button"
-                          className="btn-sm"
-                          aria-label={`Build ${said}`}
-                          // One start at a time, so each start's answer — a refusal
-                          // included — is the one shown (T155's review).
-                          disabled={start.isPending}
-                          onClick={() => {
-                            start.mutate(id);
-                          }}
-                        >
-                          Build
-                        </button>
+                        {/* A lambda or a rollup join has nothing of its own to build (A3). */}
+                        {row.buildable === false ? null : (
+                          <button
+                            type="button"
+                            className="btn-sm"
+                            aria-label={`Build ${said}`}
+                            // One start at a time, so each start's answer — a refusal
+                            // included — is the one shown (T155's review).
+                            disabled={start.isPending}
+                            onClick={() => {
+                              start.mutate(id);
+                            }}
+                          >
+                            Build
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -399,48 +471,58 @@ export function BuildPanel({
               <dt>Partition granularity</dt>
               <dd>{shown.partitionGranularity ?? 'none'}</dd>
             </dl>
-            <div className="admin-pane__actions">
-              {/* 24 px actions, the prototype's btn sm (T469, UX-081). */}
-              <button
-                type="button"
-                className="btn-primary btn-sm"
-                disabled={start.isPending}
-                onClick={() => {
-                  start.mutate(shown.id);
-                }}
-              >
-                Build now
-              </button>
+            {/*
+              Its partitions, with Rebuild selected and Build all, or Build now
+              for one not partitioned (T375, AC-145; design 16, pins 10–12):
+              24 px actions, the prototype's btn sm (T469, UX-081). Keyed by
+              it, so another's selection is never carried over.
+            */}
+            <Partitions
+              key={shown.id}
+              id={shown.id}
+              name={shownOf(shown).name}
+              pollMs={Math.max(pollMs, 5_000)}
+              onStarted={(begun: Started) => {
+                follow(shown.id, begun.tokens);
+                // A start that made no job is said in the pane, not toasted (T375's review).
+                setToast(
+                  begun.tokens.length === 0
+                    ? null
+                    : { said: begun.said, jobs: begun.tokens.length },
+                );
+              }}
+            >
               {shown.fileName === undefined ? null : (
                 <a className="btn btn-sm" href={memberHref({ ...shown, fileName: shown.fileName })}>
                   Open in Model
                 </a>
               )}
-            </div>
-            {shownBuilds.length === 0 ? null : (
-              <section aria-label="Builds">
-                <h3 className="build-panel__head">Builds</h3>
-                <ul className="build-panel__builds">
-                  {shownBuilds.map((build) => (
-                    <BuildJobs
-                      key={build.n}
-                      id={build.id}
-                      name={shownOf(shown).name}
-                      tokens={build.tokens}
-                      pollMs={pollMs}
-                    />
-                  ))}
-                </ul>
-                {/* research/cube/refresh-jobs-caching.md, gotcha 3. */}
-                <p className="build-panel__note">
-                  States are Cube&rsquo;s own. Cube 1.7.42 reports <code>done</code> once the
-                  partition&rsquo;s table exists, which a failed import can leave behind.
-                </p>
-              </section>
-            )}
+            </Partitions>
+            <RecentBuilds
+              key={`recent-${shown.id}`}
+              id={shown.id}
+              name={shownOf(shown).name}
+              onOpenHistory={onOpenHistory}
+            />
+            <p className="help build-log__help">
+              Building and wechart schedules need no proposal. The refresh key is part of the model:
+              to change it, edit the model in My workspace and propose it.
+            </p>
           </>
         )}
       </aside>
+      <ExportedToast
+        message={toast === null ? '' : `${toast.said}.`}
+        action={
+          toast === null
+            ? undefined
+            : {
+                label: toast.jobs > 1 ? 'Follow them in Queue' : 'Follow it in Queue',
+                onSelect: openQueue,
+              }
+        }
+        onDismiss={() => setToast(null)}
+      />
     </div>
   );
 }

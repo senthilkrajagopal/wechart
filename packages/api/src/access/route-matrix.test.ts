@@ -31,6 +31,7 @@ import { xcubeAdmin } from '../xcube/client';
 import { connectionNameOf } from '../xcube/connections';
 import { fakeXcube, FAKE_ADMIN_TOKEN } from '../xcube/fake';
 import { itemsOf } from '../xcube/items';
+import { xcubePartitions } from '../xcube/partitions';
 import { xcubeQueue } from '../xcube/queue';
 import { xcubeSqlRunner } from '../xcube/sql-runner';
 
@@ -613,6 +614,25 @@ beforeAll(async () => {
     sqlRuns: sqlRuns(getDb()),
     // The builds wechart started, and Run history (T372, T374).
     buildHistory: buildHistory(getDb()),
+    // xcube's partitions: each place's rollup, one partition (T375).
+    buildPartitions: xcubePartitions({
+      cubeApiUrl: secured.cubeApiUrl,
+      model: 'dev',
+      token: async () => FAKE_ADMIN_TOKEN,
+      askAgainAfterMs: 0,
+      fetch: (async (_url: string, init?: RequestInit) => {
+        const asked = (
+          JSON.parse(String(init?.body)) as { query: { preAggregations: { id: string }[] } }
+        ).query.preAggregations.map((each) => each.id);
+        return Response.json({
+          preAggregationPartitions: asked.map((id) => ({
+            errors: [],
+            preAggregation: { id, preAggregation: { type: 'rollup' } },
+            partitions: [{ tableName: `t_${id}`, versionEntries: [] }],
+          })),
+        });
+      }) as typeof fetch,
+    }),
     // xcube's queue: one entry wechart started in each place (T376).
     buildQueue: xcubeQueue({
       cubeApiUrl: secured.cubeApiUrl,
@@ -2062,6 +2082,15 @@ const CASES: Record<string, Case> = {
         `/api/jobs/builds/${builds[place]}`,
         (who) => writes(who, place),
         builds[place],
+      );
+  },
+  // A rollup's partitions: the folders they build in, else Not found (T375, AC-297).
+  'GET /api/jobs/partitions': async () => {
+    for (const place of PLACES)
+      await openedOnlyBy(
+        `/api/jobs/partitions?preagg=${encodeURIComponent(`${fullName(place)}.${rollupOf(place)}`)}`,
+        (who) => writes(who, place),
+        rollupOf(place),
       );
   },
   // The queue, and cancelling: the folders they build in (T376, AC-297).

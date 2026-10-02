@@ -39,38 +39,43 @@ test('the Jobs workspace lists the queries a dashboard issued, with duration and
  * Fails when: the job's terminal state is never shown, or the token is absent.
  *
  * On the real Cube, with the seed rollup: Build, its token, and its state
- * followed to done — which Cube's own jobs API then confirms for that token.
+ * followed to done in its row — which Cube's own jobs API then confirms for
+ * that token. Since T375 the pane lists the builds started from wechart, and
+ * a build's token is shown in Queue and in Run history's log (the tests
+ * below); here it is the one Cube answered the start with.
  */
-test('building a pre-aggregation shows its job token and follows it to done', async ({ page }) => {
+test('building a pre-aggregation follows its job to done, and Cube’s record of its token agrees', async ({
+  page,
+}) => {
   await page.goto('/jobs');
   const row = page
     .getByRole('table', { name: 'Pre-aggregations' })
     .getByRole('row')
     .filter({ hasText: 'monthly_orders.by_status_month' });
   await expect(row).toContainText('year');
+  const started = page.waitForResponse(
+    (response) => response.url().endsWith('/api/builds') && response.request().method() === 'POST',
+  );
   await row.getByRole('button', { name: 'Build monthly_orders.by_status_month' }).click();
+  const { tokens } = (await (await started).json()) as { tokens: string[] };
+  expect(tokens[0]).toMatch(/^[0-9a-f]{16,}$/);
 
-  const jobs = page.getByRole('list', { name: 'Jobs building monthly_orders.by_status_month' });
-  const job = jobs.locator(':scope > li').first();
-  const token = (await job.getByTestId('job-token').textContent()) ?? '';
-  expect(token).toMatch(/^[0-9a-f]{16,}$/);
   // Followed while Cube builds it, to its end — a build takes a second or two.
-  await expect(job.getByTestId('job-state')).toHaveAttribute('data-state', 'done', {
-    timeout: 30_000,
-  });
+  const state = row.getByTestId('row-state');
+  await expect(state).toHaveAttribute('data-state', 'done', { timeout: 30_000 });
   // T158 / AC-152: in words, with its icon — never colour alone.
-  await expect(job.getByTestId('job-state')).toHaveText('Done');
-  await expect(job.getByTestId('job-state').locator('svg[data-icon="ok"]')).toHaveCount(1);
-  // In the model's own rollup schema, `<schema>_<model>_<hash>`, from slice 6
-  // (T420; research xcube-slice-6.md, "Pre-aggregation schemas").
-  await expect(job.getByTestId('job-table')).toContainText(
+  await expect(state).toHaveText('Done');
+  await expect(state.locator('svg[data-icon="ok"]')).toHaveCount(1);
+
+  // Cube's own record of that token agrees, its table in the model's own
+  // rollup schema, `<schema>_<model>_<hash>`, from slice 6 (T420; research
+  // xcube-slice-6.md, "Pre-aggregation schemas").
+  const answered = (await (
+    await page.request.post('/api/builds/status', { data: { tokens: [tokens[0]] } })
+  ).json()) as { status: string; table?: string }[];
+  expect(answered[0]?.table).toMatch(
     /^prod_pre_aggregations_e2e_[0-9a-f]+\.monthly_orders_by_status_month/,
   );
-
-  // Cube's own record of that token agrees.
-  const answered = (await (
-    await page.request.post('/api/builds/status', { data: { tokens: [token] } })
-  ).json()) as { status: string }[];
   expect(answered.map((each) => each.status)).toEqual(['done']);
 });
 
@@ -233,6 +238,106 @@ test('a build wechart queued waits with its token, Cancel takes it out, and Run 
 });
 
 /**
+ * T375 / AC-145: WHEN the user opens a rollup in Jobs, THE SYSTEM SHALL list
+ * every partition Cube derives from its build range, in UTC, and rebuild the
+ * ones selected, one jobs request each.
+ *
+ * Its own cube, month-partitioned over the seed's orders and left alone by
+ * the refresh worker: its partitions listed newest first, as Cube lists
+ * them; two selected and rebuilt start two jobs, whose tables, once built,
+ * name exactly those two partitions; and Run history has one start of them.
+ */
+test('rebuilding two of a month-partitioned rollup’s partitions starts jobs whose tables name exactly those two', async ({
+  page,
+  request,
+  browserName,
+}) => {
+  test.setTimeout(240_000);
+  const cube = `parts_${browserName}`;
+  const rollup = `${cube}.by_month`;
+  const path = await ownCubeFile(
+    request,
+    cube,
+    slowCube(cube).replace('pg_sleep(3)', 'pg_sleep(0)'),
+  );
+  expect(path).toBe(`cubes/${cube}.yml`);
+
+  // Cube's own list, asked again while it still works it out (A4).
+  let listed: { partitions: { tableName: string; start: string }[] } = { partitions: [] };
+  await expect
+    .poll(
+      async () => {
+        const answer = await request.get(
+          `/api/jobs/partitions?preagg=${encodeURIComponent(rollup)}`,
+        );
+        if (answer.status() === 200) listed = (await answer.json()) as typeof listed;
+        return answer.status();
+      },
+      { timeout: 90_000 },
+    )
+    .toBe(200);
+  expect(listed.partitions.length).toBeGreaterThan(2);
+  const starts = listed.partitions.map((partition) => partition.start);
+  expect(starts).toEqual([...starts].sort().reverse());
+
+  await page.goto(`/jobs?preagg=${encodeURIComponent(rollup)}`);
+  const pane = page.getByRole('complementary', { name: 'Pre-aggregation details' });
+  const rows = pane.getByRole('table', { name: `Partitions of ${rollup}` }).locator('tbody tr');
+  await expect(rows).toHaveCount(listed.partitions.length, { timeout: 60_000 });
+  await rows.nth(1).getByRole('checkbox').check();
+  await rows.nth(2).getByRole('checkbox').check();
+
+  const started = page.waitForResponse(
+    (response) => response.url().endsWith('/api/builds') && response.request().method() === 'POST',
+  );
+  await pane.getByRole('button', { name: `Rebuild 2 selected partitions of ${rollup}` }).click();
+  const answer = await started;
+  expect(answer.request().postDataJSON()).toEqual({
+    preAggregation: rollup,
+    partitions: [starts[1], starts[2]],
+  });
+  const { tokens, runId } = (await answer.json()) as { tokens: string[]; runId: string };
+  expect(tokens).toHaveLength(2);
+  // The toast, with the way to the queue (design 16, A1).
+  await expect(page.getByRole('status').filter({ hasText: 'Follow them in Queue' })).toContainText(
+    new RegExp(`^Rebuilding \\w{3} \\d{4} and \\w{3} \\d{4} of ${rollup.replace('.', '\\.')}\\.`),
+  );
+
+  // Once built, each job's table is one of the two partitions', and both are there.
+  const tableOf = (table: string | undefined) =>
+    listed.partitions.find((partition) => table?.startsWith(`${partition.tableName}_`))
+      ?.tableName ?? `none: ${String(table)}`;
+  await expect
+    .poll(
+      async () => {
+        const jobs = (await (
+          await request.post('/api/builds/status', { data: { tokens } })
+        ).json()) as { status: string; table?: string; finished: boolean }[];
+        return jobs.length === 2 && jobs.every((job) => job.finished)
+          ? jobs.map((job) => `${job.status} ${tableOf(job.table)}`).sort()
+          : 'building';
+      },
+      { timeout: 120_000 },
+    )
+    .toEqual(
+      [listed.partitions[1]!.tableName, listed.partitions[2]!.tableName]
+        .map((table) => `done ${table}`)
+        .sort(),
+    );
+
+  // One start of the two (T372), in Run history, opened on this rollup's builds.
+  const record = (await (await request.get(`/api/jobs/builds/${runId}`)).json()) as {
+    partitions: string[];
+    via: string;
+  };
+  expect(record).toMatchObject({ partitions: [starts[1], starts[2]], via: 'rebuild-selected' });
+  await page.goto(`/jobs?tab=history&preagg=${encodeURIComponent(rollup)}`);
+  const built = page.getByTestId(`build-row-${runId}`);
+  await expect(built.getByTestId('build-outcome')).toHaveText('Done', { timeout: 30_000 });
+  await expect(page.getByText(`Only ${rollup}`)).toBeVisible();
+});
+
+/**
  * T162 / AC-156: THE SYSTEM SHALL show the refresh worker's state and the
  * Cube deployment's health, and mark the deployment as down when Cube's
  * health endpoint does not report healthy.
@@ -327,8 +432,9 @@ test('each pre-aggregation’s row has its state, its trigger, and its name lead
     });
   });
   await row.getByRole('button', { name: `Build ${ROLLUP}` }).click();
-  await expect(state).toHaveText('Processing');
-  await expect(state).toHaveText('Scheduled');
+  // Cube's `processing` and `scheduled`, in design 16's words (pin 5; T375).
+  await expect(state).toHaveText('Building');
+  await expect(state).toHaveText('Queued');
   await expect(state).toHaveAttribute('data-state', 'done');
   await expect(state).toHaveText('Done');
   await expect(state.locator('svg[data-icon="ok"]')).toHaveCount(1);
@@ -390,21 +496,26 @@ test('selecting a pre-aggregation fills the full-height pane with its state, tri
   expect((list?.x ?? 0) + (list?.width ?? 0)).toBeLessThanOrEqual(box?.x ?? 0);
   expect((await pane.getByTestId('pane-head').boundingBox())?.height).toBe(44);
   // Its actions 24 px, the prototype's btn sm: "Open in Model" a button too,
-  // not an underlined link (T469's review).
-  expect((await pane.getByRole('button', { name: 'Build now' }).boundingBox())?.height).toBe(24);
+  // not an underlined link (T469's review). Partitioned by year, it is built
+  // with Build all, or by the partitions selected (T375).
+  const buildAll = pane.getByRole('button', { name: /^Build all \d+$/ });
+  expect((await buildAll.boundingBox())?.height).toBe(24);
   const open = pane.getByRole('link', { name: 'Open in Model' });
   expect((await open.boundingBox())?.height).toBe(24);
   await expect(open).toHaveCSS('text-decoration-line', 'none');
   await expect(open).toHaveCSS('border-top-style', 'solid');
 
-  // Build now starts a build of it, followed in the pane (answered here, as above).
+  // Build all starts a build of it, followed in the pane (answered here, as above).
   await page.route('**/api/builds', (route) => route.fulfill({ json: { tokens: ['t-pane'] } }));
   await page.route('**/api/builds/status', (route) =>
     route.fulfill({ json: [{ token: 't-pane', status: 'done', finished: true }] }),
   );
-  await pane.getByRole('button', { name: 'Build now' }).click();
+  await buildAll.click();
   await expect(pane.getByTestId('pane-state')).toHaveText('Done');
-  await expect(pane.getByRole('list', { name: `Jobs building ${ROLLUP}` })).toContainText('t-pane');
+  // Said in a toast, with the way to the queue (design 16, A1).
+  await expect(page.getByRole('status').filter({ hasText: 'Follow it in Queue' })).toContainText(
+    new RegExp(`^Building all \\d+ partitions? of ${ROLLUP}\\.`),
+  );
 });
 
 /**

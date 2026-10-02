@@ -48,7 +48,9 @@ import { registerSignIn, signInOptionsOf } from './auth/routes';
 import { Forbidden, registerUser, Unauthenticated, userOf } from './auth/user';
 import { registerBuilds } from './jobs/build';
 import { registerBuildHistory } from './jobs/history';
+import { registerPartitions } from './jobs/partitions';
 import { registerQueue } from './jobs/queue';
+import type { XcubePartitions } from './xcube/partitions';
 import type { XcubeQueue } from './xcube/queue';
 import { registerSchedules } from './jobs/schedules';
 import { NO_JOBS, type JobsAccess } from './jobs/scope';
@@ -231,6 +233,8 @@ export interface BuildOptions {
   readonly buildHistory?: BuildHistory;
   /** xcube's build queue and its cancel (T376, AC-151). Unset without xcube: no Queue. */
   readonly buildQueue?: XcubeQueue;
+  /** xcube's partitions route (T375, AC-145). Unset without xcube: no partitions. */
+  readonly buildPartitions?: XcubePartitions;
   /**
    * Where a data source lands before it is stored, and leaves before it is
    * removed (T442): xcube's connections. Unset without xcube.
@@ -455,6 +459,7 @@ export function buildServer({
   sqlRuns,
   buildHistory,
   buildQueue,
+  buildPartitions,
   dataSourceLanding,
   connectionTest,
   connectionTests,
@@ -1148,6 +1153,16 @@ export function buildServer({
       ...(modelFiles === undefined ? {} : { modelFiles }),
       access: jobsAccess,
       now,
+    });
+  // A rollup's partitions, with their states (T375, AC-145).
+  if (buildPartitions !== undefined)
+    registerPartitions(app, {
+      partitions: buildPartitions,
+      ...(buildQueue === undefined ? {} : { queue: buildQueue }),
+      ...(buildHistory === undefined ? {} : { history: buildHistory }),
+      client,
+      ...(modelFiles === undefined ? {} : { modelFiles }),
+      access: jobsAccess,
     });
   // With the model's files: a key's SQL is read there (T273's review).
   // And each folder's, under its prefixed names (T450's review).

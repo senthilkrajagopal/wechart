@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,13 +13,27 @@ import { JobsPage } from './JobsPage';
  */
 const asked: string[] = [];
 
-function serve(queued: unknown[] = []) {
+function serve(queued: unknown[] = [], preaggregations: unknown[] = []) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       asked.push(url);
-      if (url === '/api/preaggregations') return Response.json([]);
+      if (url === '/api/preaggregations') return Response.json(preaggregations);
+      // One not partitioned, built with Build now (T375, A2).
+      if (url.startsWith('/api/jobs/partitions'))
+        return Response.json({
+          id: 'orders.main',
+          name: 'orders.main',
+          kind: 'whole',
+          granularity: null,
+          partitions: [
+            { tableName: 't', start: null, end: null, state: 'built', lastBuiltAt: null },
+          ],
+        });
+      if (url === '/api/builds') return Response.json({ tokens: ['t1'], runId: 'run-1' });
+      if (url === '/api/builds/status')
+        return Response.json([{ token: 't1', status: 'scheduled', finished: false }]);
       if (url === '/api/jobs/queue') return Response.json({ entries: queued, everyFolder: true });
       if (url.startsWith('/api/jobs/builds'))
         return Response.json({ records: [], starters: [], folders: [], everyFolder: true });
@@ -109,6 +123,61 @@ describe('Jobs’ tabs (T374, design 16 pin 1)', () => {
     );
     expect(panel?.hidden).toBe(true);
     expect(panel?.textContent).toContain('No builds in the last 7 days');
+  });
+
+  /** T375 (design 16, pin 14 and A1): the pane's ways to Run history and to Queue. */
+  it('opens Run history on the open pre-aggregation’s builds, of all time, from its pane', async () => {
+    serve([], [{ id: 'orders.main', type: 'rollup' }]);
+    shown('?preagg=orders.main');
+    const itsBuilds = () =>
+      asked.filter((url) => url === '/api/jobs/builds?preagg=orders.main&within=all').length;
+
+    // The pane's own read of its last builds, and none yet of Run history's.
+    await screen.findByText(/^None yet\./);
+    expect(itsBuilds()).toBe(1);
+    await userEvent.click(screen.getByRole('link', { name: 'All its builds in Run history' }));
+    expect(screen.getByRole('tab', { name: 'Run history' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    const panel = document.getElementById(
+      screen.getByRole('tab', { name: 'Run history' }).getAttribute('aria-controls') ?? '',
+    ) as HTMLElement;
+    const only = await within(panel).findByRole('button', {
+      name: 'Show every pre-aggregation’s builds',
+    });
+    expect(only.parentElement?.textContent).toContain('Only orders.main');
+    expect(within(panel).getByRole<HTMLSelectElement>('combobox', { name: 'Time' }).value).toBe(
+      'all',
+    );
+    // Run history's, narrowed to it.
+    await vi.waitFor(() => {
+      expect(itsBuilds()).toBe(2);
+    });
+
+    await userEvent.click(only);
+    expect(
+      within(panel).queryAllByRole('button', { name: 'Show every pre-aggregation’s builds' }),
+    ).toHaveLength(0);
+
+    // Back to the pane, and the same link again: narrowed to it again (T375's review).
+    await userEvent.click(screen.getByRole('tab', { name: 'Pre-aggregations' }));
+    await userEvent.click(screen.getByRole('link', { name: 'All its builds in Run history' }));
+    expect(
+      (await within(panel).findByRole('button', { name: 'Show every pre-aggregation’s builds' }))
+        .parentElement?.textContent,
+    ).toContain('Only orders.main');
+  });
+
+  it('says what it started, and Follow it in Queue opens the queue', async () => {
+    serve([], [{ id: 'orders.main', type: 'rollup' }]);
+    shown('?preagg=orders.main');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Build now' }));
+    const toast = await screen.findByText('Building orders.main.');
+    expect(toast.textContent).toBe('Building orders.main.');
+    // One job, so "it"; "them" for several (design 16, A1).
+    await userEvent.click(screen.getByRole('button', { name: 'Follow it in Queue' }));
+    expect(screen.getByRole('tab', { name: /^Queue/ }).getAttribute('aria-selected')).toBe('true');
   });
 
   it('reads Run history only once its tab is opened', async () => {

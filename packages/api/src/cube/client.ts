@@ -275,7 +275,19 @@ export class CubeClient {
    */
   async buildPreAggregations(
     ids: readonly string[],
-    { requestId }: { readonly requestId?: string } = {},
+    {
+      requestId,
+      dateRange,
+    }: {
+      readonly requestId?: string;
+      /**
+       * Only the partitions it meets (T375): `[S, S]` at a partition's own
+       * start, a wall-clock UTC string as the partitions route gives it, is
+       * that partition alone (research cube/system-partitions.md, "Jobs-API
+       * rebuild of one partition").
+       */
+      readonly dateRange?: readonly [string, string];
+    } = {},
   ): Promise<unknown> {
     return this.#serviceRequest('/v1/pre-aggregations/jobs', {
       method: 'POST',
@@ -294,6 +306,7 @@ export class CubeClient {
           ],
           timezones: ['UTC'],
           preAggregations: ids,
+          ...(dateRange === undefined ? {} : { dateRange }),
         },
       }),
     });

@@ -138,6 +138,8 @@ export interface BuildListFilters {
   readonly folderIds?: readonly string[];
   /** Started then or later. */
   readonly since?: Date;
+  /** One pre-aggregation's, by its published name (T375: its pane's builds). */
+  readonly preAggregation?: string;
 }
 
 /** A build as Run history lists it: its record without its jobs, with how many there are and how far they've got. */
@@ -600,6 +602,46 @@ export function buildHistory(db: Kysely<Database>) {
     },
 
     /**
+     * A pre-aggregation's jobs wechart started, newest start first, each with
+     * the table it built (T375): a partition's failed state comes from the
+     * latest of them (AC-145).
+     */
+    async jobsOf(preAggregation: string): Promise<
+      {
+        readonly runId: string;
+        readonly startedAt: Date;
+        readonly table: string | null;
+        readonly status: string | null;
+        readonly finished: boolean;
+        readonly finishedAt: Date | null;
+      }[]
+    > {
+      const rows = await db
+        .selectFrom('build_tokens as t')
+        .innerJoin('build_runs as r', 'r.id', 't.run_id')
+        .select([
+          't.run_id',
+          'r.started_at',
+          't.target_table',
+          't.status',
+          't.finished',
+          't.finished_at',
+        ])
+        .where('r.pre_aggregation', '=', preAggregation)
+        .orderBy('r.started_at', 'desc')
+        .orderBy('t.position')
+        .execute();
+      return rows.map((row) => ({
+        runId: row.run_id,
+        startedAt: row.started_at,
+        table: row.target_table,
+        status: row.status,
+        finished: row.finished,
+        finishedAt: row.finished_at,
+      }));
+    },
+
+    /**
      * The starts that made these queue entries (T376): by the request id a
      * post carried, or by a job's token, each with its jobs. xcube gives an
      * entry the request id of the post that made it, and the job's token.
@@ -738,6 +780,8 @@ export function buildHistory(db: Kysely<Database>) {
       if (filters.starter?.kind === 'schedule')
         query = query.where('r.schedule_id', '=', filters.starter.id);
       if (filters.since !== undefined) query = query.where('r.started_at', '>=', filters.since);
+      if (filters.preAggregation !== undefined)
+        query = query.where('r.pre_aggregation', '=', filters.preAggregation);
       // Paged from a build of `within`'s folders only: from another's, nothing
       // (T374's review), so its start can't be learnt by paging.
       if (before !== undefined)

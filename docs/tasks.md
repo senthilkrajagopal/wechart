@@ -7154,7 +7154,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - `BuildQueue.test.tsx`: an entry wechart didn't start has no Cancel, and the list says why.
     - `e2e/jobs.spec.ts`, against compose's xcube: a build queued from Jobs appears with its token; Cancel takes it out, and Run history reads Cancelled (AC-151).
   - Depends on: T372. The first call checks the routes against compose's xcube.
-- [ ] T375 (AC-145) List a rollup's partitions with their states, and rebuild the selected ones or all
+- [x] T375 (AC-145) List a rollup's partitions with their states, and rebuild the selected ones or all
   - *Rewritten 2026-10-02 to design 16's screen 1 and state A (`[R56]`).* The list comes from xcube's `POST …/pre-aggregations/partitions` under the service credential (T420), since `/cubejs-system/*` isn't served under xcube (`[X4, X6]`). That route can drop a module that answers "Continue wait" (`xcube-slice-6.md`, Gotcha 11), so it is asked again, never shown empty.
   - Files:
     - `packages/api/src/xcube/partitions.ts` (+ test);
@@ -7172,6 +7172,25 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - `e2e/jobs.spec.ts`, against compose's Cube, on a month-partitioned cube the test brings: rebuilding two of its partitions starts jobs whose tables name exactly those two (AC-145).
   - **Also in this commit:** StateBadge reads Cube's `scheduled` and `processing` as Queued and Building (design 16, pin 5). Its own tests and the e2e's words change with it. The pane's per-session list of tokens gives way to "Builds started from wechart", so AC-149's e2e follows the build in Queue and Run history (T374, T376).
   - Depends on: T372, T376
+  - **As built (2026-10-02):**
+    - `xcube/partitions.ts`: xcube's partitions route with the service credential, in UTC, each partition's versions newest first. An answer that leaves the pre-aggregation out is asked for again, four times in all, then said to be still pending (Gotcha 11).
+    - `GET /api/jobs/partitions?preagg=` (`jobs/partitions.ts`): scoped as the rest of Jobs (`403` with no Jobs, `404` for another folder's). Each partition has its period, its state and its newest version's time. Building, queued and stalled come from the queue route, with who started it where wechart did. Failed comes from wechart's history only. While Cube still works the list out, it answers `503 { pending: true }`. One that isn't partitioned is one partition, `kind: 'whole'`. A lambda or rollup join is `kind: 'combined'`, naming the rollups it combines, read from wechart's own copy of the model, since the extended meta's shape for them isn't researched.
+    - `POST /api/builds { preAggregation, partitions }`: one jobs post per start, `dateRange: [start, start]`, under one request id, and one record (`via: 'rebuild-selected'`). A start named twice is asked for once. A lambda or join is refused (`400`), as is a start not written as the partitions route writes one.
+    - In Jobs' pane (`Partitions.tsx`, `BuildPanel.tsx`): Rebuild selected (n), Build all N, or Build now for a whole one. The table has a select-all checkbox (mixed when some are picked), each checkbox labelled with its period and state, and the states in design 16's words with their icons. "Builds started from wechart" lists its last three, with "All its builds in Run history", which opens Run history on its builds, of all time, with a chip to clear that. A start is said in a toast, "Rebuilding Sep 2026 and Aug 2026 of <name>. Follow them in Queue", and in a polite live region, "Rebuilding 2 partitions". The row's Build is hidden for a lambda or join. `GET /api/jobs/builds` takes `preagg`.
+  - **Implementer's calls, for the user to confirm or change:**
+    - A partition reads Failed only after a build that ended `failure: …`. A wechart build that ended `missing_partition` doesn't make it read Failed, because Cube's queue reports that for a job it merged into a build already queued, which goes on to make the partition's version (research `cube/job-records.md`, "Queue de-duplication"). Run history still reads such a build Failed (AC-150).
+    - If Cube refuses some of the partitions asked for (for example, a start no partition meets after the build range moved), the rest are still asked for. What started is recorded, and the pane says which didn't start, with Cube's words. If Cube refuses all of them, nothing is recorded and Cube's refusal is the answer.
+    - Build all stays offered while the partitions are read, can't be read, or are still being worked out, since it needs no list (A4).
+  - **One review round (spec-reviewer), fixed:**
+    1. A rebuild that Cube refused part-way left the builds it had started running with no record. They're now recorded, and the refused ones are named.
+    2. A partition read Failed when Cube's queue merged wechart's build into another one, as above.
+    3. The pane had no Build action while the partitions were loading or couldn't be read, or when xcube isn't configured (AC-228). Build all is now offered.
+    4. "All its builds in Run history" didn't narrow again once the chip was cleared. It now does.
+    5. A cap of 500 partitions per rebuild was invented. It's removed.
+    6. The toast said a build had started when Cube started no job. The pane now says "Cube started no job", as it used to, and there's no toast.
+    7. Tests were added for the latest-build rule, the merged build, the `503` while pending, and a part-refused rebuild.
+  - **Review items left, for the record:** there's no rollup-join case in the tests (it takes the lambda's path). Each poll of an open pane reads the tokens of a pre-aggregation's kept runs (up to 100). Pin 11's "since 14:31" and "Queued · Wren Writer, 14:38" times aren't shown; T550 and AC-399 cover the row and the drawing.
+  - **Tests:** `xcube/partitions.test.ts`, `jobs/partitions.test.ts`, `jobs/build.test.ts`, `jobs/history.test.ts`, `Partitions.test.tsx`, `BuildPanel.test.tsx`, `JobsPage.test.tsx`, `RunHistory.test.tsx`, `StateBadge.test.tsx`. `e2e/jobs.spec.ts`, "rebuilding two of a month-partitioned rollup's partitions starts jobs whose tables name exactly those two", runs against compose's Cube on its own cube (AC-145).
 - [ ] T550 (AC-391) Each pre-aggregation's row: its state, when it was last built, who started that build, and its partitions *(added 2026-10-02, `[R56]`: design 16's screen 1)*
   - Files:
     - `packages/api/src/jobs/build.ts` (+ test): `GET /api/preaggregations` gains each row's state, last built, starter and partition count;

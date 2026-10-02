@@ -64,11 +64,11 @@ const listOf = (records: BuildSummary[], more: Record<string, unknown> = {}) => 
   ...more,
 });
 
-function shown() {
+function shown(preAggregation?: { id: string; name: string }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <RunHistory />
+      <RunHistory {...(preAggregation === undefined ? {} : { preAggregation })} />
     </QueryClientProvider>,
   );
 }
@@ -130,6 +130,23 @@ describe('Run history (T374, AC-150)', () => {
     await userEvent.selectOptions(screen.getByLabelText('Time'), 'Last 24 hours');
     expect(asked.at(-1)?.get('within')).toBe('day');
     await userEvent.selectOptions(screen.getByLabelText('Time'), 'All time');
+    expect(asked.at(-1)?.get('within')).toBe('all');
+  });
+
+  /** T375 (design 16, pin 14): a pre-aggregation's "All its builds in Run history". */
+  it('lists one pre-aggregation’s builds of all time when opened on it, until that is cleared', async () => {
+    const asked = api(() => listOf([summary()]));
+    shown({ id: 'femea__orders_emea.by_month', name: 'orders_emea.by_month' });
+
+    await screen.findByRole('table', { name: 'Run history' });
+    expect(asked.at(-1)?.get('preagg')).toBe('femea__orders_emea.by_month');
+    expect(asked.at(-1)?.get('within')).toBe('all');
+    const clear = button('Show every pre-aggregation’s builds');
+    expect(text(clear.parentElement)).toContain('Only orders_emea.by_month');
+
+    await userEvent.click(clear);
+    expect(asked.at(-1)?.get('preagg')).toBe(null);
+    // Its other filters stay as they were.
     expect(asked.at(-1)?.get('within')).toBe('all');
   });
 

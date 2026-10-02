@@ -71,8 +71,21 @@ function tabOfUrl(): Tab {
   return TABS.some(([key]) => key === asked) ? (asked as Tab) : 'preaggs';
 }
 
+/**
+ * `?tab=history&preagg=` opens Run history on one pre-aggregation's builds
+ * (T375): its name as people see it, without a folder's prefix (T371).
+ */
+function historyForUrl(): { id: string; name: string; opened: number } | undefined {
+  const asked = new URLSearchParams(window.location.search);
+  const id = asked.get('preagg');
+  if (asked.get('tab') !== 'history' || id === null || id === '') return undefined;
+  return { id, name: id.replace(/^f[0-9a-z]+__/, ''), opened: 0 };
+}
+
 export function JobsPage({ pollMs }: { pollMs?: number }) {
   const [open, setOpen] = useState<Tab>(tabOfUrl);
+  /** The pre-aggregation Run history was opened on, from its pane (T375; design 16, pin 14). */
+  const [historyFor, setHistoryFor] = useState(historyForUrl);
   /** The tabs opened so far: Run history is read once its tab first opens, then kept. */
   const [opened, setOpened] = useState<ReadonlySet<Tab>>(() => new Set([tabOfUrl()]));
   if (!opened.has(open)) setOpened(new Set([...opened, open]));
@@ -144,6 +157,15 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
           {...(pollMs === undefined ? {} : { pollMs })}
           // `?preagg=`, from a tile's Data as of › Open in Jobs (T273, AC-245).
           selectedFirst={new URLSearchParams(window.location.search).get('preagg')}
+          // Its pane's ways on: to its builds in Run history, and to the queue (T375).
+          onOpenHistory={(preAggregation) => {
+            // Opened anew each time, so a cleared narrowing comes back (T375's review).
+            setHistoryFor((was) => ({ ...preAggregation, opened: (was?.opened ?? 0) + 1 }));
+            setOpen('history');
+          }}
+          onOpenQueue={() => {
+            setOpen('queue');
+          }}
         />
       </div>
       <div
@@ -152,7 +174,12 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
         aria-labelledby={`${base}-history`}
         hidden={open !== 'history'}
       >
-        <RunHistory enabled={opened.has('history')} />
+        {/* Opened anew on each pre-aggregation it's asked for, its filters with it. */}
+        <RunHistory
+          key={historyFor === undefined ? '' : `${historyFor.id}-${String(historyFor.opened)}`}
+          enabled={opened.has('history')}
+          preAggregation={historyFor}
+        />
       </div>
       <div
         role="tabpanel"

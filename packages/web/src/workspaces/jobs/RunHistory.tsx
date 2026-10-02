@@ -46,9 +46,11 @@ interface Filters {
   readonly starter: string;
   readonly folder: string;
   readonly within: Within;
+  /** One pre-aggregation's builds, by its published name; '' for every one's (T375). */
+  readonly preAggregation: string;
 }
 /** As design 16 opens it: everything of the last 7 days. */
-const FIRST: Filters = { outcome: '', starter: '', folder: '', within: 'week' };
+const FIRST: Filters = { outcome: '', starter: '', folder: '', within: 'week', preAggregation: '' };
 
 interface Page {
   readonly records: readonly BuildSummary[];
@@ -70,6 +72,7 @@ function queryOf(filters: Filters, before: string | undefined): string {
   if (filters.outcome !== '') query.set('outcome', filters.outcome);
   if (filters.starter !== '') query.set('starter', filters.starter);
   if (filters.folder !== '') query.set('folder', filters.folder);
+  if (filters.preAggregation !== '') query.set('preagg', filters.preAggregation);
   query.set('within', filters.within);
   if (before !== undefined) query.set('before', before);
   return query.toString();
@@ -86,8 +89,22 @@ function Pill({ label, children }: { label: string; children: (id: string) => Re
   );
 }
 
-export function RunHistory({ enabled = true }: { enabled?: boolean }) {
-  const [filters, setFilters] = useState<Filters>(FIRST);
+export function RunHistory({
+  enabled = true,
+  preAggregation,
+}: {
+  enabled?: boolean;
+  /**
+   * Opened on one pre-aggregation's builds, of all time: its pane's "All its
+   * builds in Run history" (T375; design 16, pin 14).
+   */
+  preAggregation?: { readonly id: string; readonly name: string } | undefined;
+}) {
+  const [filters, setFilters] = useState<Filters>(() =>
+    preAggregation === undefined
+      ? FIRST
+      : { ...FIRST, preAggregation: preAggregation.id, within: 'all' },
+  );
   /** Where each page seen began, the first's none: Newer is one step back. */
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -123,12 +140,29 @@ export function RunHistory({ enabled = true }: { enabled?: boolean }) {
   const records = page.data?.records ?? [];
   const opened = records.find((record) => record.id === openId);
   const time = TIMES.find(([value]) => value === filters.within) ?? TIMES[1];
-  const narrowed = filters.outcome !== '' || filters.starter !== '' || filters.folder !== '';
+  const narrowed =
+    filters.outcome !== '' ||
+    filters.starter !== '' ||
+    filters.folder !== '' ||
+    filters.preAggregation !== '';
 
   return (
     <div className="build-panel run-history">
       <div className="build-panel__list">
         <div className="sources-filters run-history__filters">
+          {filters.preAggregation === '' || preAggregation === undefined ? null : (
+            <span className="select-pill run-history__only">
+              Only {preAggregation.name}
+              <button
+                type="button"
+                className="link-button"
+                aria-label="Show every pre-aggregation’s builds"
+                onClick={() => narrow({ preAggregation: '' })}
+              >
+                ×
+              </button>
+            </span>
+          )}
           <Pill label="Outcome">
             {(id) => (
               <select

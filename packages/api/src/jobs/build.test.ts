@@ -187,8 +187,9 @@ describe('what can be built (AC-149)', () => {
                   partitionGranularity: 'year',
                 },
                 { name: 'cached', type: 'originalSql' },
-                // Made of other rollups, and an authoring Non-goal: its build
-                // through the jobs API is not researched, so it is not offered.
+                // Made of other rollups: listed, so its pane names them (T375,
+                // design 16 A3), but never offered to build, its build through
+                // the jobs API not researched.
                 { name: 'combined', type: 'rollupLambda' },
               ],
             },
@@ -221,6 +222,17 @@ describe('what can be built (AC-149)', () => {
         folderPath: ['Shared'],
         type: 'originalSql',
         trigger: 'Every 1 hour (Cube’s default)',
+      },
+      {
+        id: 'monthly_orders.combined',
+        folderId: 'root',
+        shortName: 'monthly_orders',
+        folderPath: ['Shared'],
+        type: 'rollupLambda',
+        trigger: 'Every 1 hour (Cube’s default)',
+        // Not built itself; no stored file names what it combines here.
+        buildable: false,
+        builtFrom: [],
       },
     ]);
     await app.close();

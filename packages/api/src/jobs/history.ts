@@ -123,6 +123,9 @@ export function registerBuildHistory(
         ? {}
         : { folderIds: [asked['folder']] }),
       ...(span === undefined ? {} : { since: new Date(now().getTime() - span) }),
+      ...(asked['preagg'] === undefined || asked['preagg'] === ''
+        ? {}
+        : { preAggregation: asked['preagg'] }),
     };
     const within = await foldersOf(scope);
     const page = await store.list({
