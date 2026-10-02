@@ -762,6 +762,24 @@ With security on, a deployment that names no Super-Admin group refuses to start 
   - **A CSV holds the rows the run returned.** The query isn't run again, unlike Superset's export.
   - **Cube Store is listed** as one more entry in the root's data sources, only for those who may run SQL on it.
   - **Run history is kept as long as audit records are** (a deployment setting, one year by default, R18-6), and only its user sees it.
+- **Design 15, approved 2026-10-01** `[R51]`, with all five proposals and the answers to its nine questions:
+  - **While the runner is off,** the SQL tab shows a panel saying so, to Super-Admins (with Turn on…) and to the folder's own read-write members, and to nobody else. Never a greyed-out tab (P1).
+  - **The editor** is the app's CodeMirror in SQL mode (P2). With text selected, ⌘/Ctrl+Enter runs the selection, and Run reads "Run selection" (Q1).
+  - **A schema browser** sits beside the editor: schemas, tables and columns with their types, from xcube's introspection routes (P3).
+  - **The switch:**
+    - turning it on or off is an audit event, with the confirmation given (P4);
+    - a later approved change to how the data source signs in (its user, host or password) turns it off until a Super-Admin confirms again (Q4).
+  - **Cube Store:**
+    - It is switched on from the Data sources page's header ⋯ while it's off (P5).
+    - Its confirmation is that everyone allowed may read every folder's rollups, with wechart's SELECT/EXPLAIN check the only guard (Q9).
+    - Those allowed are Super-Admins and those allowed on a data source in a switched-on folder. A My workspace owner doesn't count (Q7).
+    - It runs SELECT and EXPLAIN only: Cube Store 1.7.45 has no SHOW TABLES or DESCRIBE, and its other SHOW statements return every row uncapped (xcube's answer).
+  - **A My workspace copy whose database, user or role differs from its original's** needs a Super-Admin's switch, like a shared data source. Unchanged copies, and data sources made new there, stay always open to their owner (Q8, refining R50-6).
+  - **Results:**
+    - columns are headed by the database's own type names (Q5);
+    - rows that arrived before a run was stopped at 30 seconds, or cancelled, are shown, marked as cut (Q6).
+  - **My runs** shows this data source's runs by default, with All, newest first, 50 at a time (Q2).
+  - **The warning** is always shown above the editor, and can't be hidden (Q3).
 
 ## P2.7 Non-goals for phase 2
 
@@ -931,6 +949,21 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: How should wechart decide that a dimension holds ISO-3 country codes? A: "Values, plus a model override (Recommended)"
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
+
+**R51 — design 15 approved; copy on move; its questions** (2026-10-01, the user)
+- T527's review found a dashboard can still come to show a library chart off its folder's path: by a move, or by approving a copy no save judged. Asked what then: "Copy on move + approval (Recommended)". *AC-371 amended; T537.*
+- Design 15 (`docs/design/reviews/2026-10-01/designs/15-sql-runner.html`): "Approve (Recommended)".
+  - P1, while off: "Tab with an off panel (Recommended)".
+  - Proposals: "P2 CodeMirror SQL editor, P3 Schema browser, P4 Audit the switch, P5 Cube Store switch in ⋯".
+  - Q4, a change of login: "Turns off until reconfirmed (Recommended)".
+  - Q1: "The selection (Recommended)".
+  - Q2: "This source's, 50 at a time (Recommended)".
+  - Q3: "Always above the editor (Recommended)".
+  - Q5: "The database's own (Recommended)".
+  - Q6, rows before a stop: "Show them, marked cut".
+  - Q7, Cube Store and workspace owners: "No, switched-on folders only (Recommended)".
+  - Q8, a repointed copy: "Needs the switch if repointed (Recommended)".
+  - Q9, Cube Store's confirmation: "That everyone allowed reads all rollups (Recommended)".
 
 **R50 — the SQL runner** (2026-09-30 to 2026-10-01, the user)
 - The user: "3. Build a SQL runner into wechart through xcube. This would be a guarded admin route that runs read-only SQL on a model's connection, like Cube Cloud's SQL Runner. have any independent agent do analysis on on Cube Cloud's SQL Runner and Superset SQL Lab. You can use superset instance on localhost:8088. (This is a dev instance so you can get the password from the config files if required)"

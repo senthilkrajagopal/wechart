@@ -9942,15 +9942,24 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
 
 ## P2.21 The SQL runner (F40, added 2026-10-01, `[R50]`)
 
-Read-only SQL on a data source's own connection, or on Cube Store, through xcube, which alone opens the credential. Asked of xcube in `~/Work/xcube-exchange/to-xcube/2026-10-01-0057-sql-runner.md`. Every task that runs SQL starts once that image is published (the standing rule). The UI follows design 15 once approved.
+Read-only SQL on a data source's own connection, or on Cube Store, through xcube, which alone opens the credential. Asked of xcube in `~/Work/xcube-exchange/to-xcube/2026-10-01-0057-sql-runner.md`.
+
+*xcube answered with `ghcr.io/senthilkrajagopal/xcube:v1.7.45-89628a0e88@sha256:155d204c…7a4d17` (`to-wechart/2026-10-01-1200-sql-runner-built.md`). It provides:*
+- *`POST …/connections/{name}/sql`, with `?overlay=<id>` for a workspace's own data source, named `<folderId>__<name>`;*
+- *`POST …/cubestore/sql`, SELECT and EXPLAIN only;*
+- *`POST …/sql/cancel`, which reaches the instance running the run.*
+
+*Things to know: many drivers return numbers as strings, every SQL Server number among them; column types are the database's own names, and null on Cube Store; a database's error can quote the SQL's values.*
+
+*Design 15 was approved 2026-10-01 with P1–P5 and its answers (R51). AC-373, AC-374, AC-378 … AC-381, AC-383 … AC-385 were amended, and AC-386 and AC-387 added.*
 
 - [ ] T531 [P] (AC-374, AC-373) Switch the runner on and off, for a Super-Admin only, with the read-only confirmation recorded
   - Files: `packages/api/src/routes/data-sources.ts` (`PUT /api/data-sources/:id/sql-runner`), a migration for the switch and who confirmed it when, `packages/api/src/routes/sql-runner.test.ts`
-  - Failing test: `sql-runner.test.ts`: a data source starts off; a Super-Admin's switch without `readOnlyConfirmed: true` is refused (400), and with it the switch is on, recording who and when; a read-write member's answers `403` (AC-374).
+  - Failing test: `sql-runner.test.ts`: a data source starts off; a Super-Admin's switch without `readOnlyConfirmed: true` is refused (400), and with it the switch is on, recording who and when; a read-write member's answers `403`; switching on and off are audit events (P4); an approved change of the data source's user, host or a secret turns it off (Q4) (AC-374).
   - Depends on: none
 - [ ] T532 (AC-373, AC-375, AC-376, AC-377, AC-378, AC-383) Run SQL on a data source through xcube, for those who may
   - Files: `packages/api/src/routes/sql-runner.ts` (+ test), `packages/api/src/xcube/admin.ts` (the run route), `e2e/security/sql-runner.spec.ts`
-  - Failing test: `sql-runner.test.ts` against the stub xcube: Super-Admins and the own folder's read-write members run on a switched-on source, an ancestor's member, a reader, another folder's member, and anyone on a switched-off one are refused; a workspace source's owner runs with no switch, and no one else (AC-373, AC-383); 10,000 rows, 30 seconds and 10 MB go with each run. `sql-runner.spec.ts` against compose's xcube:
+  - Failing test: `sql-runner.test.ts` against the stub xcube: Super-Admins and the own folder's read-write members run on a switched-on source, an ancestor's member, a reader, another folder's member, and anyone on a switched-off one are refused; a workspace source's owner runs with no switch, and no one else, unless it is a copy pointed at another database, user or role, which needs the switch (AC-373, AC-383); 10,000 rows, 30 seconds and 10 MB go with each run. `sql-runner.spec.ts` against compose's xcube:
     - an INSERT, `SELECT … INTO`, `EXPLAIN ANALYZE` and two statements are refused, changing nothing (AC-375);
     - `SELECT nextval(…)` leaves the sequence as it was (AC-376);
     - 10,001 rows come back as 10,000, said so (AC-377);
@@ -9964,14 +9973,34 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
   - Files: `packages/api/src/routes/sql-runner.ts`, a migration for the runs, `packages/api/src/audit/*`, tests
   - Failing test: a run is listed to its user alone, with its SQL, source, time, outcome and rows; the audit event has who, the source and its folder, when, the outcome, the rows, the duration, and `redactedSql` with no literal from the SQL (AC-381, AC-382).
   - Depends on: T532
-- [ ] T535 (AC-373, AC-377, AC-379, AC-380, AC-385) The SQL tab on a data source's page
-  - Files: `packages/web/src/workspaces/data-sources/SqlRunner.tsx` (+ test), `SourceSettings.tsx`, `e2e/security/sql-runner.spec.ts`
-  - Failing test: the tab says SQL runs past folder permissions and access policies (AC-385); a run shows each column's name and type, the row count and the duration, and its CSV holds exactly those rows without a second run (AC-380); a cut result says which limit (AC-377); Run is held back while one goes, with Cancel (AC-379); only allowed users find the tab (AC-373).
-  - Depends on: T532, T533, T534, design 15
+- [ ] T535 (AC-373, AC-377, AC-378, AC-379, AC-380, AC-381, AC-385, AC-387) The SQL tab on a data source's page, as design 15 draws it
+  - Files: `packages/web/src/workspaces/data-sources/SqlRunner.tsx` (+ test, the app's CodeMirror in SQL mode, P2), `SourceSettings.tsx`, `e2e/security/sql-runner.spec.ts`
+  - Failing test:
+    - the warning sits above the editor and can't be hidden (AC-385);
+    - a run shows each column's name and its database type, the row count and the duration, and its CSV holds exactly those rows without a second run (AC-380);
+    - a cut result says which limit, and a stopped or cancelled run shows the rows that arrived, marked cut (AC-377, AC-378);
+    - Run is held back while one goes, with Cancel (AC-379);
+    - with text selected, Run reads "Run selection" and runs only it (AC-387);
+    - My runs lists this source's runs by default, with All (AC-381);
+    - allowed users find the tab, with the off panel while it's off (AC-373).
+  - Depends on: T532, T533, T534, design 15 (approved)
+- [ ] T539 (AC-386) A schema browser beside the SQL editor
+  - Files: `packages/web/src/workspaces/data-sources/SchemaBrowser.tsx` (+ test), the introspection routes wechart already calls (`packages/api/src/model/introspection.ts`), for a data source by its id
+  - Failing test: the browser lists the data source's schemas, tables and columns with types, as introspection answers, only to those who may run SQL on it; choosing one puts its name in the editor at the cursor (AC-386).
+  - Depends on: T535
 - [ ] T536 (AC-384, AC-374) Cube Store: its switch, its listing, and read-only SQL on it
   - Files: `packages/api/src/routes/sql-runner.ts`, the root's data sources listing, `SqlRunner.tsx`, tests and `e2e/security/sql-runner.spec.ts`
-  - Failing test: switched off, no one sees Cube Store listed; switched on, a Super-Admin and a user who may run SQL on some source see it and run a `SELECT` on a rollup table, a reader doesn't, and a cache command is refused (AC-384).
+  - Failing test: switched off, no one sees Cube Store listed, and a Super-Admin finds Turn on… in Data sources' header ⋯ (P5); its confirmation says everyone allowed reads every folder's rollups (Q9). Switched on:
+    - a Super-Admin, and a user allowed on a switched-on folder's data source, see it and run a `SELECT` on a rollup table;
+    - a My workspace owner allowed only on their own source doesn't (Q7), nor does a reader;
+    - a SHOW and a cache command are refused (AC-384, AC-374).
   - Depends on: T531, T535, xcube's image
+- [ ] T538 (AC-354) Set export-import's hidden dependencies up as copy-on-use allows *(added 2026-10-01, from T527)*
+  - Files: `e2e/security/export-import.spec.ts`
+  - Failing test:
+    - Its setup put /Hidden's "Margin trend" on a /Sales dashboard. Under copy-on-use, the approval copies it as the dashboard's own and binds it on /Sales's path, which has no `…_margin` cube, so the approval is refused (`422`), rightly (AC-371).
+    - The spec needs another way to show AC-354's dependencies "not offered, in a folder you can't see". For example, export as a user who sees the dashboard but not every item of the folders it depends on.
+  - Depends on: T527
 
 ## Phase 2 coverage: acceptance criterion → task
 
@@ -10018,7 +10047,8 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-376 | T532 | AC-377 | T532, T535 | AC-378 | T532 |
 | AC-379 | T533, T535 | AC-380 | T535 | AC-381 | T534 |
 | AC-382 | T534 | AC-383 | T532 | AC-384 | T536 |
-| AC-385 | T535 | | | | |
+| AC-385 | T535 | AC-386 | T539 | AC-387 | T535 |
+| AC-354 (again, copy on use) | T538 | | | | |
 | AC-296 | T370 | AC-297 | T371, T504 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441 |
 | AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |
 | AC-302 | T394 | AC-303 | T395 | AC-304 | T396 |
