@@ -10020,12 +10020,23 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - a My workspace owner allowed only on their own source doesn't (Q7), nor does a reader;
     - a SHOW and a cache command are refused (AC-384, AC-374).
   - Depends on: T531, T535, xcube's image
-- [ ] T538 (AC-354) Set export-import's hidden dependencies up as copy-on-use allows *(added 2026-10-01, from T527)*
+- [x] T538 (AC-354) Set export-import's hidden dependencies up as copy-on-use allows *(added 2026-10-01, from T527)*
   - Files: `e2e/security/export-import.spec.ts`
   - Failing test:
     - Its setup put /Hidden's "Margin trend" on a /Sales dashboard. Under copy-on-use, the approval copies it as the dashboard's own and binds it on /Sales's path, which has no `…_margin` cube, so the approval is refused (`422`), rightly (AC-371).
     - The spec needs another way to show AC-354's dependencies "not offered, in a folder you can't see". For example, export as a user who sees the dashboard but not every item of the folders it depends on.
   - Depends on: T527
+  - **Done 2026-10-01.**
+    - **Why the old layout can't be made now.** With copy-on-use, a dashboard's dependencies all sit on its folder's path. A read-write member sees everything in the folders above theirs (`VIEW_ALL`), so for a writer the "not offered" case arises only from:
+      - a dashboard saved before copy on use;
+      - one saved with sign-in off, where nothing is copied;
+      - until T537, a move.
+    - **Fidelity (review note).** The fixture is faithful in `documents` only. The version its approval kept in `item_versions` has three tiles, where a real earlier approval's would have four.
+    - **Open question for the user.** With AC-263's "opens wherever it is kept" struck, the spec no longer says whether such a chart, shown on a dashboard the writer sees, is one they "may see" for AC-354. `mayOpen` still says yes, and the spec offers it.
+    - **The fix.** The spec makes one as such a save left it:
+      1. Revenue overview lands by its approval without Margin trend.
+      2. `addTileAsBeforeCopyOnUse` adds that tile to the stored body in the suite's `wechart_security` database, through `psql` in compose's `wechart-meta`, with the values as psql variables.
+    - The spec's assertions are unchanged, and it passes 9 of 9 on Chrome. A reader's export (no models or data sources offered) was already its own case.
 
 ## Phase 2 coverage: acceptance criterion → task
 

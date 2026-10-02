@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 import type { APIRequestContext, APIResponse, Page } from '@playwright/test';
@@ -24,6 +25,13 @@ import { changeShared, changeSharedSource } from './shared-change';
  *   /Hidden <run>  (`managers` alone)
  *     data source <run>_hid, the model cubes/<run>_margin.yml bound to it,
  *     and the library chart "Margin trend"
+ *
+ * Margin trend sits beside /Sales, off its path, so the API no longer puts it
+ * on Revenue overview: it would make the dashboard its own copy, which binds
+ * on /Sales's path, where no `<run>_margin` is (T527, AC-371). A dashboard
+ * saved before copy on use may still show such a chart, and export must
+ * still count what it can't offer (AC-354). So that tile is written into the
+ * suite's database as such a save left it (T538).
  */
 const RUN = `x${Math.random().toString(36).slice(2, 7)}`;
 const KEY = JSON.parse(
@@ -144,6 +152,40 @@ async function chart(request: APIRequestContext, title: string, folderId: string
   return id;
 }
 
+/**
+ * A tile added to a stored dashboard as a save before copy on use left it
+ * (T538): in the suite's own database, at the version it has, through psql
+ * in compose's metadata Postgres. Values go in as psql variables, never
+ * spliced into the SQL.
+ */
+function addTileAsBeforeCopyOnUse(dashboardId: string, tile: Record<string, unknown>) {
+  execFileSync(
+    'docker',
+    [
+      'exec',
+      '-i',
+      'wechart-meta',
+      'psql',
+      '-U',
+      'wechart',
+      '-d',
+      'wechart_security',
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-v',
+      `id=${dashboardId}`,
+      '-v',
+      `tile=${JSON.stringify(tile)}`,
+    ],
+    {
+      input: `UPDATE documents
+        SET body = jsonb_set(body, '{pages,0,items}', (body #> '{pages,0,items}') || jsonb_build_array(:'tile'::jsonb))
+        WHERE kind = 'dashboard' AND id = :'id';`,
+      stdio: ['pipe', 'ignore', 'inherit'],
+    },
+  );
+}
+
 async function setUp(request: APIRequestContext) {
   ids.sales = await folder(request, `Sales ${RUN}`, {
     readOnly: ['sales-ro'],
@@ -174,12 +216,7 @@ async function setUp(request: APIRequestContext) {
         {
           id: 'overview',
           title: 'Overview',
-          items: [
-            tile('t-revenue', revenue!),
-            tile('t-orders', orders!),
-            tile('t-top', ids.top),
-            tile('t-margin', ids.margin),
-          ],
+          items: [tile('t-revenue', revenue!), tile('t-orders', orders!), tile('t-top', ids.top)],
         },
       ],
       charts: [revenue, orders],
@@ -204,6 +241,14 @@ async function setUp(request: APIRequestContext) {
     if (body.title === 'Orders') ids.orders = id;
   }
   expect([ids.revenue, ids.orders]).not.toContain('');
+  // Margin trend, off /Sales's path, as a save before copy on use left it (T538).
+  addTileAsBeforeCopyOnUse(ids.board, tile('t-margin', ids.margin));
+  const read = await request.get(`/api/documents/dashboard/${ids.board}`);
+  expect(read.status(), await read.text()).toBe(200);
+  const shown = (await read.json()) as {
+    body: { pages: { items: { chartId?: string }[] }[] };
+  };
+  expect(shown.body.pages[0]!.items.map((item) => item.chartId)).toContain(ids.margin);
 }
 
 /** The Export pane, opened from the ⋯ in the dashboard's header. */
