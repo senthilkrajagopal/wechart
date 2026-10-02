@@ -6843,8 +6843,8 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
 ## P2.9 Audit trail (F32)
 
-- [ ] T368 (AC-294, AC-298) Record every sign-in, permission change, proposal, approval, rejection, restore and data-source change
-  - Files: a migration `…_audit.cjs`, `packages/api/src/repos/audit.ts` (+ test), the routes that emit each event
+- [x] T368 (AC-294, AC-298) Record every sign-in, permission change, proposal, approval, rejection, restore and data-source change
+  - Files: a migration `…_audit.cjs`, `packages/api/src/repos/audit.ts` (+ test), the routes that emit each event; *(2026-10-02)* `packages/api/src/access/audit.test.ts`, `e2e/security/credential-canary.spec.ts`
   - Failing test: `audit.test.ts`: each of the seven kinds of event is recorded with who, what, which folder and when, and a data-source record shows credentials only as "replaced" (AC-294).
   - Depends on: T316, T314, T349, T352, T353, T354, T335
   - *2026-09-28, moved from T356 (AC-298):* a browser test proposes and approves a data source whose password is a canary sealed in the browser, then greps a `pg_dump` of the security database for the canary in raw, hex, base64 and base64url form, as `data-source-secrets.test.ts` does.
@@ -6873,6 +6873,44 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - no record holds an envelope's key id, or any 16-character stretch of its ciphertext or key (`access/audit.test.ts`).
     - The install Job's record is shown by ~~T369's e2e, where the root's default is seeded~~ `access/root-default.test.ts`, as T369's trail lists it (2026-09-27).
   - **Open question, not decided here:** a folder moved elsewhere inherits other groups. Nothing records that as a permission change.
+  - **Done 2026-10-02: the seven kinds checked, and AC-298's canary. AC-294 and AC-298 stay open.**
+    - **The seven kinds, each recorded with who, what, which folder and when** (`access/audit.test.ts`, 2 new tests):
+      - Through their routes: `writer` proposes a dashboard into the audited folder, and `super` approves it. `super` rejects a chart with a reason. `writer` withdraws another. `writer` restores the landed dashboard to version 1.
+      - Each gives exactly one record, with its actor, the folder, the item (kind, id, title) and its line: "Proposed to Audited …, as new", "Approved “…” as version 1", "Rejected “…”: Not yet", "Withdrew “…”", "Restoring “…” to version 1, as a draft to propose".
+      - Then all the file's records together hold a sign-in, an access change, a proposal, an approval, a rejection, a restore and a data-source change. Each record has who (key and name), its line, and its time within the file's run. Each but a sign-in has its folder and its item; a sign-in has neither.
+      - Both passed on their first run: T349, T352, T353 and T354 each recorded their kind as they landed. No kind was missing, so no code changed.
+      - Every route that changes a folder's groups, a data source or a proposal was read for a write that records nothing. None was found:
+        - a folder's groups change only through `PUT /api/folders/:id/access`; a folder's save keeps its stored groups;
+        - every data-source write records itself, the clearing of My workspace's included;
+        - only an empty folder is deleted;
+        - an import makes no data source.
+    - **AC-298's canary** (`e2e/security/credential-canary.spec.ts`, Chrome, 5 tests), moved here from T352 and T356:
+      - **A password that connects:** a login made for the run in compose's sample database, whose password is a random canary. xcube's test of it passes, so the source can be made and landed. The login is dropped after.
+      - **Round one:** `writer` types the canary into the new data source wizard, where the browser seals it. The source is tested, made in My workspace and proposed from its row. `super` approves it from the review view, which lands it in the folder.
+      - **Round two:** the login's password changes to a second canary. `writer` replaces the workspace source's password with it, tests and saves, and proposes again. `super` approves, landing it over the folder's as version 2.
+      - **The dump:** a plain `pg_dump` of the suite's whole metadata database holds neither canary in raw, hex (either case), base64 or base64url form, at each of the three byte alignments a longer value could hold it at. Nor does it hold the development private key in any of those encodings.
+      - **Not an empty pass:** each source, the workspace's and the folder's, holds its password as one envelope sealed to the development key's `kid`. The folder's landed byte for byte as the workspace's was sealed, and the dump holds that ciphertext. It also holds both sources, the login, both proposals' descriptions and the approval's audit line.
+      - **The traffic:** nothing the page sent wechart's API, by address, headers or body, holds any form of either canary. Nor does any answer it read, or the answers the test read itself (the round-two proposal, the approval, the source list).
+      - The wizard's test and create, and the workspace source's test and save, each carried the password as an envelope: `v`, `kid`, `enc` and `ct`, and no more.
+      - The forms' alignment logic was checked on its own: each catches the canary embedded at every offset in a longer base64 or base64url value, and in hex.
+    - **The cold review (FAIL), fixed:**
+      1. AC-298 had been ticked on less than research `credential-sealing.md`'s "AC-298 and AC-325 tests" ask. It is unticked (below).
+      2. The traffic check looked for the raw canary only, in bodies only. It missed answers read outside the page and could look before an answer was read. It now looks for every form, in address, headers and body, after every answer is read, those read outside the page included.
+      3. The check that the test and the save carried the password was met by answers alone, which say `password: { stored: true }`. It now reads those four requests' bodies for the envelope.
+      4. The dump's "not empty" check named no envelope. It now finds both, sealed to the development key.
+      5. The cleanup now fails when a removal fails, and drops the login whatever happens.
+    - **AC-298 stays open.** The research's plan for the tick (`credential-sealing.md`, "AC-298 and AC-325 tests") asks for more than this e2e does:
+      - item 1:
+        - every secret field of every driver's form, where this covers a PostgreSQL password;
+        - the flows this doesn't drive: a failing test, an edit of a field that isn't a secret, a copy made in the browser, propose and reject, restore a version, and a change of target;
+      - item 3: open the dumped envelopes with the development private key, which must give the canary back, and fail with a random key. That needs `hpke` in the e2e package, or a test helper elsewhere: core has, and should have, no opener;
+      - item 4: the canary in neither wechart's API log nor xcube's. This is AC-325's open clause too.
+      - What it rests on otherwise: no request carries the plaintext, so wechart never has it, and wechart holds no private key (T441, AC-324).
+      - **For the user:** does "no request carries it" stand for the logs, for both AC-298 and AC-325? Or must a test read the logs before either is ticked?
+    - **AC-294 stays open.** R42 added three kinds, T505's: builds started from Jobs, cancels, and changes to wechart-owned schedules.
+      - `POST /api/builds` (`jobs/build.ts`) starts a build today and records nothing.
+      - Cancels (T376) and wechart-owned schedules (T378) aren't built yet.
+      - AC-294 waits for T505, and for the user's answer to the open question above: a folder's move changes the groups that reach it, and isn't recorded as a permission change. T505 now says so too.
 - [x] T369 (AC-295) Show the audit trail to Super-Admins only, newest first, filtered by user, event and folder
   - Files: `packages/web/src/workspaces/security/AuditTrail.tsx` (+ test), `packages/api/src/routes/audit.ts` (+ test), `e2e/security/audit.spec.ts`
   - Failing test: `audit.spec.ts`: `super` sees the records newest first; the User, Event, Folder and Time filters combine and every row matches them; `writer` gets Not found for the page and 403 from the API (AC-295; rule 82).
@@ -7244,6 +7282,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **Schedule change.** Making, changing, resuming and deleting a schedule record it, each with before and after. A suspension records it with "wechart's scheduler" as who.
     - **Not recorded:** a run that a schedule starts.
   - Depends on: T376, T379. AC-294 stays open until T368's other kinds land (T349 … T354).
+  - *2026-10-02, from T368's review:* T368 showed the seven kinds AC-294 first named. AC-294 is ticked with this task, but also waits for the user's answer to T368's open question: a folder moved elsewhere inherits other groups, and nothing records that as a permission change.
 - [ ] T553 [P] (AC-393) The refresh worker's badge and panel, from xcube's refresh-worker route *(added 2026-10-02, `[R56]`: design 16's state F and Q4)*
   - Files:
     - `packages/api/src/xcube/refresh-worker.ts` (+ test): `GET …/models/{model}/refresh-worker`, research `xcube-jobs-schedules-routes.md` §3;

@@ -13,6 +13,8 @@ import { connectionTestStore } from '../repos/connection-tests';
 import { dataSourceStore } from '../repos/data-sources';
 import { documents } from '../repos/documents';
 import { folderAccessStore } from '../repos/folder-access';
+import { proposalStore } from '../repos/proposals';
+import { versionStore } from '../repos/versions';
 import { removeProjectFolders, TEST_TIME_ZONE } from '../routes/project-folder.fixture';
 import { buildServer } from '../server';
 
@@ -21,8 +23,10 @@ import { buildServer } from '../server';
  * access changed, and a data source made, changed or removed are each
  * recorded with who, what, which folder and when. A data-source change says
  * what changed, a secret only "replaced", never its value or its envelope.
- * (Proposals, approvals, rejections and restores are recorded as each is
- * built: T349, T352, T353, T354.)
+ * A proposal, its approval, a rejection, a withdrawal and a restore, which
+ * T349, T352, T353 and T354 record, are driven here too, so the seven kinds
+ * AC-294 named first are shown together (2026-10-02). R42's three, builds,
+ * cancels and schedule changes, are T505's.
  */
 const secured = {
   cubeApiUrl: 'http://cube.invalid/cubejs-api',
@@ -83,15 +87,28 @@ beforeAll(async () => {
     connectionTests: connectionTestStore(getDb()),
     connectionTest: async () => PASSING as never,
     audit: audit(),
+    // Proposals, their decisions and restores, with their versions (T349–T354).
+    proposals: proposalStore(getDb()),
+    versions: versionStore(getDb()),
   });
   for (const who of ['super', 'writer']) cookies[who] = await signIn(app, USERS[who]!);
 });
 
 afterAll(async () => {
   if (app !== undefined) await app.close();
-  await getDb().deleteFrom('data_sources').where('name', 'like', `${MARK}%`).execute();
+  const db = getDb();
+  await db.deleteFrom('data_sources').where('name', 'like', `${MARK}%`).execute();
   await removeProjectFolders();
-  await getDb().deleteFrom('audit_records').where('folder_id', '=', folderId).execute();
+  // What the proposals made: their records, the versions kept, and what landed
+  // in the folder or was drafted in writer's workspace.
+  await db.deleteFrom('proposals').where('target_folder_id', '=', folderId).execute();
+  await db.deleteFrom('item_versions').where('folder_id', '=', folderId).execute();
+  await db
+    .deleteFrom('documents')
+    .where('kind', 'in', ['dashboard', 'chart'])
+    .where('title', 'like', `${MARK}%`)
+    .execute();
+  await db.deleteFrom('audit_records').where('folder_id', '=', folderId).execute();
   // And the sign-ins this file made, which name no folder.
   await getDb()
     .deleteFrom('audit_records')
@@ -270,5 +287,159 @@ describe('what the audit trail records (T368, AC-294)', () => {
       for (const part of [sealed(tag).ct, sealed(tag).enc])
         for (let at = 0; at + 16 <= part.length; at += 16)
           expect(kept).not.toContain(part.slice(at, at + 16));
+  });
+
+  /**
+   * The rest of the seven, through their routes (T349, T352, T353, T354):
+   * `writer` proposes a dashboard from their workspace into the audited
+   * folder and `super` approves it; a chart `super` rejects with a reason; one
+   * its author withdraws; and the landed dashboard restored to its version 1.
+   */
+  it('records a proposal, an approval, a rejection, a withdrawal and a restore, in the folder they are of', async () => {
+    const draft = async (kind: 'dashboard' | 'chart', title: string) => {
+      const made = await as('writer', {
+        method: 'POST',
+        url: '/api/documents',
+        payload: { kind, title, folderId: 'mine', targetFolderId: folderId },
+      });
+      expect(made.statusCode, made.body).toBe(201);
+      return made.json<{ id: string }>().id;
+    };
+    const propose = async (kind: 'dashboard' | 'chart', id: string) => {
+      const proposed = await as('writer', {
+        method: 'POST',
+        url: '/api/proposals',
+        payload: { kind, id, description: `${MARK} proposed` },
+      });
+      expect(proposed.statusCode, proposed.body).toBe(201);
+      return proposed.json<{ id: string }>().id;
+    };
+    const board = await draft('dashboard', `${MARK} board`);
+    const approved = await as('super', {
+      method: 'POST',
+      url: `/api/proposals/${await propose('dashboard', board)}/approve`,
+      payload: {},
+    });
+    expect(approved.statusCode, approved.body).toBe(200);
+    const landed = approved.json<{ landed: { kind: string; id: string }[] }>().landed[0]!.id;
+    const chart = await draft('chart', `${MARK} rejected chart`);
+    const rejected = await as('super', {
+      method: 'POST',
+      url: `/api/proposals/${await propose('chart', chart)}/reject`,
+      payload: { reason: 'Not yet' },
+    });
+    expect(rejected.statusCode, rejected.body).toBe(200);
+    const withdrawnChart = await draft('chart', `${MARK} withdrawn chart`);
+    const withdrawn = await as('writer', {
+      method: 'POST',
+      url: `/api/proposals/${await propose('chart', withdrawnChart)}/reject`,
+      payload: {},
+    });
+    expect(withdrawn.statusCode, withdrawn.body).toBe(200);
+    const restored = await as('writer', {
+      method: 'POST',
+      url: `/api/history/dashboard/${landed}/restore`,
+      // writer's copy, the one proposed, is replaced by the restore's draft.
+      payload: { version: 1, replaceCopy: true },
+    });
+    expect(restored.statusCode, restored.body).toBe(201);
+
+    const records = await recorded(['proposal', 'approval', 'rejection', 'restore']);
+    const of = (event: AuditRecord['event'], id: string) =>
+      records
+        .filter((record) => record.event === event && record.item?.id === id)
+        .map(({ actor, folderId: folder, item, summary }) => ({
+          who: actor?.identity,
+          folder,
+          item,
+          summary,
+        }));
+    const writer = USERS['writer']!.email;
+    const decider = USERS['super']!.email;
+    expect(of('proposal', board)).toEqual([
+      {
+        who: writer,
+        folder: folderId,
+        item: { kind: 'dashboard', id: board, title: `${MARK} board` },
+        summary: `Proposed to Audited ${MARK}, as new`,
+      },
+    ]);
+    expect(of('approval', board)).toEqual([
+      {
+        who: decider,
+        folder: folderId,
+        item: { kind: 'dashboard', id: board, title: `${MARK} board` },
+        summary: `Approved “${MARK} board” as version 1`,
+      },
+    ]);
+    expect(of('rejection', chart)).toEqual([
+      {
+        who: decider,
+        folder: folderId,
+        item: { kind: 'chart', id: chart, title: `${MARK} rejected chart` },
+        summary: `Rejected “${MARK} rejected chart”: Not yet`,
+      },
+    ]);
+    expect(of('rejection', withdrawnChart)).toEqual([
+      {
+        who: writer,
+        folder: folderId,
+        item: { kind: 'chart', id: withdrawnChart, title: `${MARK} withdrawn chart` },
+        summary: `Withdrew “${MARK} withdrawn chart”`,
+      },
+    ]);
+    expect(of('restore', landed)).toEqual([
+      {
+        who: writer,
+        folder: folderId,
+        item: { kind: 'dashboard', id: landed, title: `${MARK} board` },
+        summary: `Restoring “${MARK} board” to version 1, as a draft to propose`,
+      },
+    ]);
+  });
+
+  /**
+   * AC-294 whole, for the seven kinds this task names: one of each was
+   * recorded by the tests above, each with who did it, what it was done to
+   * and what was done, the folder it was in, and when. A sign-in alone is of
+   * no folder or item.
+   */
+  it('has each of the seven kinds, every record with who, what, which folder and when', async () => {
+    const until = new Date();
+    const records = (await audit().list({ since: started, limit: 500 })).records.filter((record) =>
+      record.event === 'sign-in'
+        ? [USERS['super']!.email, USERS['writer']!.email].includes(record.actor?.identity ?? '')
+        : record.folderId === folderId || record.item?.title.startsWith(MARK) === true,
+    );
+    const kinds = [
+      'sign-in',
+      'access-change',
+      'proposal',
+      'approval',
+      'rejection',
+      'restore',
+      'data-source-change',
+    ] as const;
+    expect(kinds.filter((kind) => !records.some((record) => record.event === kind))).toEqual([]);
+    for (const record of records) {
+      const where = `${record.event}: ${record.summary}`;
+      // Who.
+      expect(typeof record.actor?.key, where).toBe('string');
+      expect(record.actor!.name.length, where).toBeGreaterThan(0);
+      // What: the item, and what was done, in words.
+      expect(record.summary.length, where).toBeGreaterThan(0);
+      // When: as it was done, while this file ran.
+      expect(record.at.getTime(), where).toBeGreaterThanOrEqual(started.getTime());
+      expect(record.at.getTime(), where).toBeLessThanOrEqual(until.getTime());
+      if (record.event === 'sign-in') {
+        expect([record.folderId, record.item], where).toEqual([null, null]);
+        continue;
+      }
+      // Which folder, and what it was done to.
+      expect(typeof record.folderId, where).toBe('string');
+      expect(record.folderId!.length, where).toBeGreaterThan(0);
+      expect(typeof record.item?.id, where).toBe('string');
+      expect(record.item!.title.length, where).toBeGreaterThan(0);
+    }
   });
 });
