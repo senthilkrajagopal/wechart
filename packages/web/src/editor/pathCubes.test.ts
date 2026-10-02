@@ -62,6 +62,41 @@ describe('the cubes on an item’s folder path (T429, AC-329)', () => {
     ]);
   });
 
+  /**
+   * T347 (AC-329's workspace path, AC-281): for an item in My workspace, the
+   * path is the workspace, then its target's. The workspace's own cubes come
+   * first, wherever its overlay places them, and hide a cube of the same
+   * short name on the path, as names resolve in the overlay first.
+   */
+  it('offers a workspace item its workspace’s cubes first, then its target’s path, each name once', () => {
+    const inWorkspace: FolderNode[] = [
+      ...folders,
+      { id: 'w', title: 'project-2026-10-01-0900', parentId: 'mine', itemCount: 0, xcubeId: null },
+    ];
+    const own = (folderId: string, shortName: string, title: string): CubeSummary => ({
+      ...cube(folderId, shortName, title),
+      inWorkspace: true,
+    });
+    const withWorkspace = [
+      ...cubes,
+      own('fab', 'sales', 'Sales (mine)'),
+      own('fad', 'gadgets', 'Gadgets'),
+    ];
+
+    expect(cubesOnPath(withWorkspace, 'w', inWorkspace, 'b')).toEqual([
+      { ...own('fab', 'sales', 'Sales (mine)'), folderPath: 'My workspace' },
+      { ...own('fad', 'gadgets', 'Gadgets'), folderPath: 'My workspace' },
+      { ...cube('froot', 'customers', 'Customers'), folderPath: 'Shared' },
+    ]);
+    // With no target, the shared root's path, after the workspace's own,
+    // whose `sales` hides the root's.
+    expect(cubesOnPath(withWorkspace, 'w', inWorkspace)).toEqual([
+      { ...own('fab', 'sales', 'Sales (mine)'), folderPath: 'My workspace' },
+      { ...own('fad', 'gadgets', 'Gadgets'), folderPath: 'My workspace' },
+      { ...cube('froot', 'customers', 'Customers'), folderPath: 'Shared' },
+    ]);
+  });
+
   it('offers every cube, as it was, where the model says nothing of folders or the item’s folder is unknown', () => {
     const plain = { name: 'orders', title: 'Orders', isView: false };
 

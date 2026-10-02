@@ -51,7 +51,7 @@ import {
 } from './chartTypeState';
 import { OPENED_WITH, type EditorState } from './openChart';
 import { PreviewFrame, type TileSize } from './PreviewFrame';
-import { META_QUERY } from '../query/meta';
+import { metaQueryOf, useWorkspaceItem } from '../query/meta';
 import { countryMarkingsOf, signatureOf, topTypeOf } from '../query/signature';
 import { canRedo, canUndo, discard, historyOf, isDirty, push, redo, undo } from './history';
 import { FieldList } from './FieldList';
@@ -262,7 +262,8 @@ function EditorBody({
   const [dragging, setDragging] = useState<Member | null>(null);
 
   // Shared with the dashboard, which takes its number formats from it (AC-046).
-  const meta = useQuery(META_QUERY);
+  // A workspace item's from its overlay (T347, AC-323).
+  const meta = useQuery(metaQueryOf(useWorkspaceItem()));
 
   const available = useMemo(
     () => (cubeName ? membersOf(meta.data, cubeName) : []),

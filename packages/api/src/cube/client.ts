@@ -66,7 +66,17 @@ export type NamedGroups = () => Promise<ReadonlySet<string>>;
  * (Gotcha 2; `to-wechart/2026-09-28-0400-bc18f82c01-follow-ups.md`).
  */
 const CATCHING_UP =
-  /is not active on this instance yet|is not loaded on this instance yet|has no revision that compiles on this instance yet|connection settings this request was pinned to changed|changed to new settings on this instance/;
+  /is not active on this instance yet|is not loaded on this instance yet|has no revision that compiles on this instance yet|connection settings this request was pinned to changed|changed to new settings on this instance|Cube is busy compiling; try again|is no longer compiled here; try again/;
+/**
+ * And an overlay's (T347; research `xcube-slice-5.md`, "Querying a preview"):
+ * its first query waits for the compile lane, `503` "Cube is busy compiling;
+ * try again", and one pinned to a version retired mid-request answers `503`
+ * "…no longer compiled here; try again" — never the published model in its
+ * place (`xcube-overlay-data-sources.md`, Gotcha 16). Both are in the pattern
+ * above. One gone (expired or dropped) answers `410`: pushed again once, then
+ * asked again (Gotcha 3, "Expiry").
+ */
+const OVERLAY_GONE = 410;
 /**
  * Three asks: each can take xcube's 10 s of catching up, so the last answer
  * comes about 34 s in, inside a proxy's usual 60 s read timeout (T421's review).
@@ -127,6 +137,17 @@ export class CubeClient {
   #userGroups: readonly string[] | undefined;
   /** The groups their tokens may carry, when `as` was given them. */
   #named: NamedGroups | undefined;
+  /**
+   * The overlay its queries' tokens name (`inOverlay`), how it is pushed
+   * again once gone, and the version it must be answered from at least.
+   */
+  #overlay:
+    | {
+        readonly id: string;
+        readonly pushAgain?: () => Promise<unknown>;
+        readonly atLeast?: number;
+      }
+    | undefined;
 
   constructor(options: CubeClientOptions) {
     this.#options = options;
@@ -154,6 +175,37 @@ export class CubeClient {
     client.#userGroups = [...user.groups];
     client.#named = named;
     return client;
+  }
+
+  /**
+   * This client with its queries answered from an overlay (T347, AC-323;
+   * research `xcube-slice-5.md`, "Query tokens"): every query token names it
+   * in `wechartOverlay`, set last, so no preview's context can name one, and
+   * no call of wechart's own carries it. Asked for a workspace's owner, or a
+   * proposal's allowed reviewers (T440), and for no one else. `pushAgain` is
+   * called once a request finds it gone, and the request asked again. Given
+   * `atLeast`, the version this server last pushed, an answer from an older
+   * one — an instance not yet told of the push — is asked again, and then
+   * refused (research `xcube-slice-5.md`, Gotcha 17).
+   */
+  inOverlay(id: string, pushAgain?: () => Promise<unknown>, atLeast?: number): CubeClient {
+    const client = new CubeClient({ ...this.#options, securityContext: this.#securityContext });
+    client.#userGroups = this.#userGroups;
+    client.#named = this.#named;
+    client.#overlay = {
+      id,
+      ...(pushAgain === undefined ? {} : { pushAgain }),
+      ...(atLeast === undefined ? {} : { atLeast }),
+    };
+    return client;
+  }
+
+  /** Whether an answer came from an older version of its overlay than it must. */
+  #fromOlderOverlay(response: Response): boolean {
+    const atLeast = this.#overlay?.atLeast;
+    if (atLeast === undefined || !response.ok) return false;
+    const version = /@(\d+)$/.exec(response.headers.get('x-xcube-overlay') ?? '')?.[1];
+    return version !== undefined && Number(version) < atLeast;
   }
 
   /** `/v1/meta`: the cubes, views and members the model exposes. */
@@ -369,9 +421,15 @@ export class CubeClient {
     context?: Record<string, unknown>,
     preview?: Record<string, unknown>,
   ): Promise<unknown> {
-    // AC-008: every request, not only the first.
-    return this.#answer(path, init, async () =>
-      this.#token(context, preview, this.#ttl, await this.#modelClaims()),
+    // AC-008: every request, not only the first. Its overlay too, beside the
+    // model, set last (T347).
+    const overlay = this.#overlay === undefined ? {} : { wechartOverlay: this.#overlay.id };
+    return this.#answer(
+      path,
+      init,
+      async () =>
+        this.#token(context, preview, this.#ttl, { ...(await this.#modelClaims()), ...overlay }),
+      this.#overlay !== undefined,
     );
   }
 
@@ -385,7 +443,13 @@ export class CubeClient {
   }
 
   /** One request, carrying the token `bearer` gives for each ask, and Cube's answer read. */
-  async #answer(path: string, init: RequestInit, bearer: () => Promise<string>): Promise<unknown> {
+  async #answer(
+    path: string,
+    init: RequestInit,
+    bearer: () => Promise<string>,
+    /** Its token names an overlay, so the answer must say it came from one (T347). */
+    fromOverlay = false,
+  ): Promise<unknown> {
     const { response, text } = await this.#send(
       path,
       async () => ({
@@ -401,6 +465,20 @@ export class CubeClient {
       },
     );
     const parsed: unknown = text ? safeJson(text) : null;
+    // An instance from before overlays ignores the claim and answers from the
+    // published model (research xcube-slice-5.md, Gotcha 2): never passed on
+    // as the preview's (AC-323).
+    if (response.ok && fromOverlay && response.headers.get('x-xcube-overlay') === null)
+      throw new CubeError(
+        'Cube answered this preview without your workspace’s changes, so it isn’t shown. Try again.',
+        503,
+      );
+    // Still an older version after asking again (T347).
+    if (fromOverlay && this.#fromOlderOverlay(response))
+      throw new CubeError(
+        'Cube hasn’t caught up with your workspace’s latest save yet, so this preview isn’t shown. Try again.',
+        503,
+      );
     if (response.ok) return parsed;
     throw new CubeError(
       cubeMessage(parsed) ?? `Cube returned ${String(response.status)}`,
@@ -419,6 +497,7 @@ export class CubeClient {
     initFor: () => Promise<RequestInit>,
     onFailure?: (failure: unknown) => void,
   ): Promise<{ response: Response; text: string }> {
+    let pushedAgain = false;
     for (let ask = 1; ; ask += 1) {
       // Signed before asking: a token that can't be made is wechart's fault, not Cube away.
       const init = await initFor();
@@ -432,6 +511,20 @@ export class CubeClient {
         throw failure;
       }
       const message = cubeMessage(text ? safeJson(text) : null) ?? '';
+      // Its overlay gone, expired or dropped: pushed again once, and asked again (T347).
+      const pushAgain = this.#overlay?.pushAgain;
+      if (response.status === OVERLAY_GONE && pushAgain !== undefined && !pushedAgain) {
+        pushedAgain = true;
+        await pushAgain();
+        continue;
+      }
+      // An instance answering an older version of the overlay catches up as one
+      // behind the revision does: asked again (T347).
+      const lagging = this.#fromOlderOverlay(response);
+      if (lagging && ask < CATCH_UP_ASKS) {
+        await new Promise((resolve) => setTimeout(resolve, this.#catchUpDelayMs(2)));
+        continue;
+      }
       if (response.status !== 503 || !CATCHING_UP.test(message) || ask >= CATCH_UP_ASKS)
         return { response, text };
       const after = Number(response.headers.get('retry-after') ?? '2');
@@ -499,13 +592,17 @@ export class CubeClient {
           ...(typeof model['wechartRevision'] === 'number'
             ? { wechartRevision: model['wechartRevision'] }
             : {}),
+          // Only where this client was asked for one (T347, AC-323).
+          ...(typeof model['wechartOverlay'] === 'string'
+            ? { wechartOverlay: model['wechartOverlay'] }
+            : {}),
         },
         ttl,
       );
     }
     const issuedAt = Math.floor(Date.now() / 1000);
     const header = { alg: 'HS256', typ: 'JWT' };
-    const payload = {
+    const payload: Record<string, unknown> = {
       /**
        * A previewed context (T172) is asked as itself, in place of the
        * configured one — a configured claim it did not name would otherwise
@@ -519,6 +616,10 @@ export class CubeClient {
       iat: issuedAt,
       exp: issuedAt + ttl,
     };
+    // An overlay only where this client was asked for one (T347, AC-323):
+    // never one the configured context names, nor xcube's own claim's.
+    if (typeof model['wechartOverlay'] !== 'string') delete payload['wechartOverlay'];
+    delete payload['xcubeOverlay'];
 
     const unsigned = `${base64Url(JSON.stringify(header))}.${base64Url(JSON.stringify(payload))}`;
     const signature = createHmac('sha256', this.#apiSecret).update(unsigned).digest('base64url');

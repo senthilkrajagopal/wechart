@@ -26,7 +26,8 @@ import { exploreHref, folderChain, FOLDERS_QUERY, targetPathOf } from '../explor
 import { DeleteDialog } from '../explore/DeleteDialog';
 import { checkModel, removeModel } from '../explore/deleteChecks';
 import { sayOnExplore } from '../explore/deletedToast';
-import { SHARED_ROOT } from '../explore/roots';
+import { NewItemDialog, type Target } from '../explore/NewItemDialog';
+import { isMyWorkspace, SHARED_ROOT } from '../explore/roots';
 import { ALL_MODEL_FILES_QUERY, FileList, modelFilesQuery, ModelFilesNotFound } from './FileList';
 import { GenerateCubes } from './GenerateCubes';
 import { FileTree } from './FileTree';
@@ -52,6 +53,13 @@ import { YamlEditor } from './YamlEditor';
 import { annotationsOf } from './annotations';
 import { AnnotationsBar } from './AnnotationsBar';
 import { memberLines } from './memberLines';
+import {
+  copyModelToWorkspace,
+  draftTargetOf,
+  keepDraftTarget,
+  namedFileOf,
+  targetsOf,
+} from './workspaceModels';
 
 /**
  * A model file, opened (T138, T139; direction.md §7b): a form for each cube
@@ -168,6 +176,8 @@ interface Place {
   readonly hrefOf: (path: string) => string;
   readonly readOnly: boolean;
   readonly editInWorkspace: boolean;
+  /** My workspace, or a folder in it (T347): saved through its overlay, never published. */
+  readonly inWorkspace: boolean;
   /** The folder as Explore says it: "Sales / EMEA", or "Shared"; none until the folders are read. */
   readonly words: string | undefined;
 }
@@ -175,14 +185,6 @@ interface Place {
 /** The files whose notes bar was hidden, by where each is: one path in two folders is two files. */
 const notesKeyOf = (folderId: string, path: string) =>
   folderId === ROOT ? path : `${folderId}/${path}`;
-
-/**
- * Why a shared model can't be edited in a copy yet: My workspace holds no
- * model until xcube serves workspaces (T347), so the copy it would make
- * can't be published or previewed.
- */
-const NO_MODEL_COPY =
-  'Models can’t be copied into My workspace yet, so this one is read-only here.';
 
 /**
  * A read-only model's word for where it is, with the eye (design 03 of
@@ -198,20 +200,50 @@ function ReadOnlyBadge({ words }: { words: string | undefined }) {
 }
 
 /**
- * "Edit in my workspace" (rule 71), as a read-write member of a shared
- * folder is offered it: not yet to be pressed, the reason said under the
- * head, which the button names as its description.
+ * "Edit in my workspace" (rule 71; T347, AC-278), as a read-write member of
+ * a shared folder is offered it: the file copied into My workspace, or the
+ * copy already there, opened there. A refusal is said under the head, which
+ * the button then names as its description.
  */
-function EditInWorkspace({ reason }: { reason: string }) {
+function EditInWorkspace({
+  folderId,
+  path,
+  refusalId,
+  onRefused,
+}: {
+  folderId: string;
+  path: string;
+  refusalId: string;
+  onRefused: (why: string | undefined) => void;
+}) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [copying, setCopying] = useState(false);
   return (
     <button
       type="button"
       className="btn-sm btn-primary model-editor__copy"
-      disabled
-      aria-describedby={reason}
+      disabled={copying}
+      aria-describedby={refusalId}
+      onClick={() => {
+        setCopying(true);
+        onRefused(undefined);
+        void copyModelToWorkspace(folderId, path).then((copied) => {
+          if ('error' in copied) {
+            setCopying(false);
+            onRefused(copied.error);
+            return;
+          }
+          // Its project folder is new: the tree and the workspace read it afresh.
+          void queryClient.invalidateQueries({ queryKey: ['folders'] });
+          void queryClient.invalidateQueries({ queryKey: ['folder-contents'] });
+          void queryClient.invalidateQueries({ queryKey: ['folder-roots'] });
+          router.history.push(fileHref(copied.path, copied.folderId));
+        });
+      }}
     >
       <PencilIcon />
-      Edit in my workspace
+      {copying ? 'Copying…' : 'Edit in my workspace'}
     </button>
   );
 }
@@ -278,10 +310,11 @@ function DeleteModelMenu({ path, where }: { path: string; where: Place }) {
   );
 }
 
-function NoCopyYet({ id }: { id: string }) {
+/** Why the copy wasn't made, under the head, in the API's words. */
+function CopyRefused({ id, why }: { id: string; why: string }) {
   return (
-    <p id={id} className="model-editor__with model-editor__blocked">
-      {NO_MODEL_COPY}
+    <p id={id} role="alert" className="model-editor__with model-editor__blocked">
+      {why}
     </p>
   );
 }
@@ -676,7 +709,9 @@ function FileEditor({
     return paths.flatMap((each) => drafts.filter((draft) => draft.path === each));
   }, [path, read, allFiles.data, drafts]);
   const withId = useId();
-  const noCopyId = useId();
+  const copyRefusalId = useId();
+  /** Why "Edit in my workspace" made no copy, until it is pressed again (T347). */
+  const [copyRefused, setCopyRefused] = useState<string>();
 
   const reportChanged = useRef(onChanged);
   useEffect(() => {
@@ -780,7 +815,9 @@ function FileEditor({
     const sent = checked ?? text;
     setPublishing(true);
     setOutcome(null);
-    if (checked === undefined) {
+    // In My workspace nothing is published: what uses the shared members is
+    // untouched until a proposal lands (T347).
+    if (checked === undefined && !where.inWorkspace) {
       const unchecked = () => {
         setPublishing(false);
         setOutcome({
@@ -830,10 +867,13 @@ function FileEditor({
     }
     // With the drafts it joins, in one publish, so the joins compile (AC-346);
     // each new file refused over a file or a name the model has (AC-249).
+    // A new file in My workspace goes where it was asked to when made (T347, AC-282).
+    const target = where.inWorkspace ? draftTargetOf(where.folderId, path) : undefined;
     const result = await publishModel([{ path, content: sent }, ...joined], {
       created: [...(published ? [] : [path]), ...joined.map((each) => each.path)],
       // Into its own folder (T452, T342).
       folderId: where.folderId === ROOT ? undefined : where.folderId,
+      ...(published || target === undefined ? {} : { targetFolderId: target }),
     });
     setPublishing(false);
     if (result.kind === 'published') {
@@ -842,7 +882,13 @@ function FileEditor({
       onPublished?.([{ path, content: sent }, ...joined]);
       setCubeProblems([]);
       setRefusedRollups(keepRefusedRollups([]));
-      setOutcome({ ok: true, text: 'Published. Cube is reading the new model.' });
+      setOutcome({
+        ok: true,
+        text: where.inWorkspace
+          ? 'Saved. Previews in My workspace use it now.'
+          : 'Published. Cube is reading the new model.',
+      });
+      void queryClient.invalidateQueries({ queryKey: modelFilesQuery(where.folderId).queryKey });
       // The listing, every folder's, and every field list, read the model afresh (AC-137).
       void queryClient.invalidateQueries({ queryKey: modelFilesQuery(ROOT).queryKey });
       void queryClient.invalidateQueries({ queryKey: META_QUERY.queryKey });
@@ -892,11 +938,18 @@ function FileEditor({
               className={`model-editor__state${published && !changed ? ' model-editor__state--ok' : ''}`}
             >
               <StatusIcon kind={published && !changed ? 'ok' : 'idle'} />
-              {!published
-                ? 'New file · not published'
-                : changed
-                  ? 'Unpublished changes'
-                  : 'Published · no changes'}
+              {where.inWorkspace
+                ? // Saved in My workspace, never published (T347).
+                  !published
+                  ? 'New file · not saved'
+                  : changed
+                    ? 'Unsaved changes'
+                    : 'Saved · no changes'
+                : !published
+                  ? 'New file · not published'
+                  : changed
+                    ? 'Unpublished changes'
+                    : 'Published · no changes'}
             </span>
           )}
           {/* Edited since: "Published" no longer holds, and only the state is said. */}
@@ -912,7 +965,12 @@ function FileEditor({
           {where.readOnly ? (
             // No change in place: a copy in My workspace, for those who may make one (rule 71).
             where.editInWorkspace ? (
-              <EditInWorkspace reason={noCopyId} />
+              <EditInWorkspace
+                folderId={where.folderId}
+                path={path}
+                refusalId={copyRefusalId}
+                onRefused={setCopyRefused}
+              />
             ) : null
           ) : (
             <>
@@ -942,6 +1000,9 @@ function FileEditor({
                     <StatusIcon kind="run" />
                     Saving…
                   </>
+                ) : where.inWorkspace ? (
+                  // Nothing is published from My workspace (T347).
+                  'Save'
                 ) : (
                   'Save & reload Cube'
                 )}
@@ -955,7 +1016,9 @@ function FileEditor({
             <DeleteModelMenu path={path} where={where} />
           ) : null}
         </div>
-        {where.readOnly && where.editInWorkspace ? <NoCopyYet id={noCopyId} /> : null}
+        {where.readOnly && where.editInWorkspace && copyRefused !== undefined ? (
+          <CopyRefused id={copyRefusalId} why={copyRefused} />
+        ) : null}
         {/* What Save publishes besides this file, said under it before it is
             pressed, whole on its own line (AC-346; T488's review). */}
         {joined.length === 0 ? null : (
@@ -1309,6 +1372,28 @@ const draftsStorageOf = (folderId: string) =>
   folderId === ROOT ? DRAFTS_STORAGE : `${DRAFTS_STORAGE}.${folderId}`;
 
 /**
+ * A cube or view made from Explore's New in My workspace (T347; AC-192,
+ * AC-282): its file made as New cube makes one, kept with the folder it is
+ * to go to, for the model page to open as its draft. Gives its path, free in
+ * `taken`.
+ */
+export function startModelDraft(
+  queryClient: ReturnType<typeof useQueryClient>,
+  folderId: string,
+  kind: 'cube' | 'view',
+  name: string,
+  target: string,
+  taken: ReadonlySet<string>,
+): string {
+  const named = namedFileOf(kind, name);
+  let path = named.path;
+  for (let n = 2; taken.has(path); n += 1) path = named.path.replace(/\.yml$/, `_${String(n)}.yml`);
+  keepDraftTarget(folderId, path, target);
+  queryClient.setQueryData(inFolderKey(MADE_KEY, folderId), { path, content: named.content });
+  return path;
+}
+
+/**
  * The files New cube or New view made whose Name has had its first focus
  * (T484) — each made file, not its path: a discarded draft's path is the next
  * one's (T484's review).
@@ -1409,12 +1494,18 @@ export function ModelFilePage({
     enabled: me.data?.security === 'oidc',
     retry: false,
   });
+  // My workspace, or a folder in it (T347): its models are its owner's to
+  // change there. A signed-in user's: with sign-in off there is none.
+  const inWorkspace =
+    me.data?.security === 'oidc' &&
+    (isMyWorkspace(folder) || isMyWorkspace(folderChain(folders.data ?? [], folder)[0]?.id ?? ''));
   const { readOnly, editInWorkspace } = modelAccessOf({
     me: me.data,
     right: rightFrom({
       answered: access.isSuccess,
       refusedWith: access.error instanceof AccessRefused ? access.error.status : undefined,
     }),
+    inWorkspace,
   });
   const hrefOf = useCallback((each: string) => fileHref(each, folderId), [folderId]);
   const words = folderWordsOf(folder, folders.data ?? []);
@@ -1424,9 +1515,10 @@ export function ModelFilePage({
       hrefOf,
       readOnly,
       editInWorkspace,
+      inWorkspace,
       words,
     }),
-    [folder, hrefOf, readOnly, editInWorkspace, words],
+    [folder, hrefOf, readOnly, editInWorkspace, inWorkspace, words],
   );
   const draftsKey = inFolderKey(DRAFTS_KEY, folder);
   const draftsStorage = draftsStorageOf(folder);
@@ -1537,10 +1629,45 @@ export function ModelFilePage({
       else page.current?.querySelector<HTMLElement>('.model-tree__generate')?.focus();
     }, 0);
   };
+  /**
+   * A cube or view made in My workspace asks first for its name and the
+   * shared folder it is to go to (T347; AC-282, AC-222), from the folders
+   * read afresh, as a dashboard made there does (T345).
+   */
+  const [askingNew, setAskingNew] = useState<{
+    readonly kind: 'cube' | 'view';
+    readonly targets: readonly Target[];
+  }>();
+  const [targetsFailed, setTargetsFailed] = useState<string>();
   const makeNew = (kind: 'cube' | 'view') => {
+    if (where.inWorkspace) {
+      setTargetsFailed(undefined);
+      void targetsOf().then(
+        (targets) => {
+          setAskingNew({ kind, targets });
+        },
+        (error: unknown) => {
+          setTargetsFailed((error as Error).message);
+        },
+      );
+      return;
+    }
     const next = newFileOf(kind, new Set(all.map((each) => each.path)));
     setMade(next);
     open(next.path);
+  };
+  /** Named, with where it is to go: made as a draft here, kept with its target until saved. */
+  const makeNamed = (kind: 'cube' | 'view', name: string, target: string) => {
+    open(
+      startModelDraft(
+        queryClient,
+        folder,
+        kind,
+        name,
+        target,
+        new Set(all.map((each) => each.path)),
+      ),
+    );
   };
   /**
    * Generate cubes opened; already open, pressed again, it takes you to the
@@ -1861,6 +1988,26 @@ export function ModelFilePage({
           />
         ) : null}
       </div>
+      {targetsFailed === undefined ? null : (
+        <StateLine kind="err">Could not list the folders it may go to: {targetsFailed}</StateLine>
+      )}
+      {askingNew === undefined ? null : (
+        <NewItemDialog
+          kind={askingNew.kind}
+          defaultTitle={newFileOf(askingNew.kind, new Set(all.map((each) => each.path)))
+            .path.split('/')
+            .at(-1)!
+            .replace(/\.yml$/, '')}
+          targets={askingNew.targets}
+          onClose={() => {
+            setAskingNew(undefined);
+          }}
+          onCreate={(name, target) => {
+            setAskingNew(undefined);
+            makeNamed(askingNew.kind, name, target);
+          }}
+        />
+      )}
     </>
   );
 }

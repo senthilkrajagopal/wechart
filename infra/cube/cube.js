@@ -20,7 +20,11 @@
 // its groups, its revision and its role, and nothing else.
 
 module.exports = require('xcube').config(
-  { modelClaim: 'wechartModel', revisionClaim: 'wechartRevision' },
+  // A workspace's or proposal's previews name their overlay in
+  // `wechartOverlay`; xcube's default claim is `xcubeOverlay`, under which
+  // every preview would answer from the published model (T347; research
+  // xcube-slice-5.md, Gotcha 1). A token without it is served as before.
+  { modelClaim: 'wechartModel', revisionClaim: 'wechartRevision', overlayClaim: 'wechartOverlay' },
   {
     // The defaults, and `jobs` for a model that takes HS256 tokens still,
     // until its first key push (T155, AC-149; docs/research/cube/

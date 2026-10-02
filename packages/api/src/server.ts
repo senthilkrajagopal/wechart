@@ -59,7 +59,7 @@ import { registerIntrospection } from './model/introspection';
 import type { Config } from './config';
 import type { Changeset } from './xcube/changesets';
 import { XcubeError, type XcubeAdmin } from './xcube/client';
-import { ROOT_ONLY, type PublishedFolders } from './xcube/folders';
+import { ROOT_ONLY, XCUBE_ROOT, type PublishedFolders } from './xcube/folders';
 import { cubesUsing, extendsIn } from './xcube/used-by';
 import { declaredIn } from './model/split';
 import type { PublicationStore } from './xcube/publications';
@@ -117,6 +117,14 @@ import {
   timeZoneOf,
 } from './routes/project-folder';
 import type { QueryLogEntry, QueryLogPageAsk } from './repos/query-log';
+import type { StoredModelFile, WorkspaceModelFile } from './repos/model-files';
+import { workspaceModels } from './routes/workspace-models';
+import {
+  overlayContentOf,
+  overlaySync,
+  type OverlayModel,
+  type OverlaySource,
+} from './xcube/overlays';
 
 /**
  * The wechart API. The browser talks only to this, and this is the only thing
@@ -233,8 +241,16 @@ export interface ModelFileStore {
   remove?(folderId: string, path: string): Promise<unknown>;
   /** Stores each file whose path is not stored yet; never writes over one that is. */
   seed(files: readonly ModelFile[]): Promise<unknown>;
-  /** Stores each file, over the one at its path if there is one: a publish (T142). */
-  write(files: readonly ModelFile[]): Promise<unknown>;
+  /**
+   * Stores each file, over the one at its path if there is one: a publish
+   * (T142). A workspace model's target and origin are taken when it is first
+   * stored, and kept by every write after (T347).
+   */
+  write(files: readonly WorkspaceModelFile[]): Promise<unknown>;
+  /** The files in these folders, each as stored, with its id, version, target and origin (T347). */
+  inFolders?(folderIds: readonly string[]): Promise<readonly StoredModelFile[]>;
+  /** One file by its id (T347, T350). */
+  byId?(id: string): Promise<StoredModelFile | undefined>;
 }
 
 /** Where image tiles' images are kept: bytes, and the type they were accepted as. */
@@ -348,6 +364,22 @@ export interface QueryLogWriter {
   page?(ask: QueryLogPageAsk): Promise<{ records: unknown[]; total: number }>;
 }
 
+/**
+ * What a query may name for the item it serves (T340, AC-268), and, for a
+ * workspace item, the overlay it is answered from (T347, AC-323).
+ */
+interface QueryScope {
+  readonly allowed: ReadonlySet<string> | 'all';
+  readonly overlay?: {
+    readonly id: string;
+    readonly workspaceId: string;
+    /** Its own cubes and views, by full name: what the workspace's models add or replace. */
+    readonly names: ReadonlySet<string>;
+    /** The version xcube took here, which an answer must be from at least. */
+    readonly version?: number;
+  };
+}
+
 /** The query log's time ranges, in seconds (AC-230). */
 const WITHIN_SECONDS = { hour: 3_600, day: 86_400, week: 604_800 } as const;
 /** A folder's description's limit, in characters, as code points (T524, AC-369). */
@@ -426,6 +458,24 @@ export function buildServer({
         app.log.warn({ err: error }, 'could not put the folder tree to xcube');
       });
     });
+  /**
+   * A data source changed in My workspace, or the workspace cleared: its
+   * overlay is pushed once the answer is sent (T347, AC-323, AC-280), so
+   * xcube holds the workspace's data sources as stored, and drops an overlay
+   * left with nothing. A preview pushes it first anyway when it is stale
+   * (`overlays.ensure`), so nothing waits for this one.
+   */
+  app.addHook('onResponse', async (request, reply) => {
+    if (overlays === undefined || reply.statusCode >= 300) return;
+    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) return;
+    const url = request.routeOptions.url ?? '';
+    if (!url.startsWith('/api/data-sources') && url !== '/api/workspace/clear') return;
+    const user = request.wechartUser;
+    if (user === null || user === undefined) return;
+    void overlays.push(workspaceIdOf(user.key)).catch((error: unknown) => {
+      app.log.warn({ err: error }, 'could not push a workspace’s overlay to xcube');
+    });
+  });
   const security = config.security ?? 'off';
   // Before any route: every route declares who may call it (T318, AC-251).
   registerRouteAccess(app);
@@ -619,12 +669,32 @@ export function buildServer({
     if (item === null || item === undefined) throw new BadRequest();
     const scope = await queryScope(request, reply, item);
     if (scope === undefined) return reply;
-    const meta = (await metaFor(request).meta()) as { cubes?: { name?: unknown }[] } | null;
+    // A workspace item's is its overlay's, never a cache kept for the
+    // published model (T347, AC-323; research xcube-slice-5.md, Gotcha 18).
+    const meta = (
+      scope.overlay === undefined
+        ? await metaFor(request).meta()
+        : await cubeIn(request, scope).meta()
+    ) as { cubes?: { name?: unknown; meta?: unknown }[] } | null;
     if (scope.allowed === 'all' || !Array.isArray(meta?.cubes)) return meta;
     const allowed = scope.allowed;
+    const own = scope.overlay?.names;
     return {
       ...meta,
-      cubes: meta.cubes.filter((cube) => typeof cube.name === 'string' && allowed.has(cube.name)),
+      cubes: meta.cubes
+        .filter((cube) => typeof cube.name === 'string' && allowed.has(cube.name))
+        // The workspace's own marked, for its picker to offer first (T347, AC-329).
+        .map((cube) =>
+          own?.has(cube.name as string) === true
+            ? {
+                ...cube,
+                meta: {
+                  ...(cube.meta !== null && typeof cube.meta === 'object' ? cube.meta : {}),
+                  wechart: { workspace: true },
+                },
+              }
+            : cube,
+        ),
     };
   });
 
@@ -715,9 +785,96 @@ export function buildServer({
     return answered(modelFiles ? await modelFiles.list(folderId) : []);
   });
 
+  /**
+   * My workspace's overlay in xcube (T347; AC-281, AC-323, AC-280): its
+   * models and data sources, placed where they go, pushed before a model of
+   * it is stored and before a preview names it (`xcube/overlays.ts`). With
+   * sign-in on and xcube configured: workspaces are signed-in users'.
+   */
+  const workspaceFolderIds = async (workspaceId: string) => [
+    workspaceId,
+    ...(await foldersBeneath(workspaceId)).map((folder) => folder.id),
+  ];
+  const workspaceSources = async (folderIds: readonly string[]): Promise<OverlaySource[]> => {
+    if (dataSources === undefined) return [];
+    const held = (await Promise.all(folderIds.map((id) => dataSources.inFolder(id)))).flat();
+    // Each with its envelopes as of one moment, never opened (AC-298).
+    const read = await Promise.all(held.map((source) => dataSources.withSealed(source.id)));
+    return read.flatMap((each) =>
+      each === undefined
+        ? []
+        : [
+            {
+              name: each.source.name,
+              driver: each.source.driver,
+              authMethod: each.source.authMethod,
+              fields: each.source.fields,
+              sealed: each.landed.sealed,
+              targetFolderId: each.source.targetFolderId,
+              origin: each.source.origin,
+            },
+          ],
+    );
+  };
+  const overlayContentWith = async (workspaceId: string, models: readonly OverlayModel[]) => {
+    const published = (folders === undefined ? ROOT_ONLY : await folders()).ids;
+    const sources = await workspaceSources(await workspaceFolderIds(workspaceId));
+    return {
+      content: overlayContentOf({ models, sources, folders: published }),
+      folders: published,
+    };
+  };
+  const modelStore =
+    modelFiles?.inFolders === undefined
+      ? undefined
+      : {
+          inFolders: modelFiles.inFolders.bind(modelFiles),
+          write: modelFiles.write.bind(modelFiles),
+          ...(modelFiles.remove === undefined
+            ? {}
+            : { remove: modelFiles.remove.bind(modelFiles) }),
+        };
+  const overlays =
+    security === 'off' || xcube === undefined || modelStore === undefined
+      ? undefined
+      : overlaySync({
+          xcube,
+          contentOf: async (workspaceId) =>
+            (
+              await overlayContentWith(
+                workspaceId,
+                await modelStore.inFolders(await workspaceFolderIds(workspaceId)),
+              )
+            ).content,
+          log: (message, details) => {
+            app.log.warn({ details }, message);
+          },
+        });
+  const wsModels =
+    overlays === undefined || modelStore === undefined
+      ? undefined
+      : workspaceModels({
+          files: modelStore,
+          overlays,
+          foldersOf: workspaceFolderIds,
+          contentWith: overlayContentWith,
+        });
+
   registerModelPublishing(app, {
     config,
     client,
+    // My workspace's models, through its overlay (T347).
+    ...(wsModels === undefined
+      ? {}
+      : {
+          workspace: {
+            rootOf: (folderId: string) => workspaceRootOf(folderId),
+            targetRefusal: (request: FastifyRequest, target: unknown) =>
+              targetRefusalOf(request, target),
+            save: wsModels.save,
+            remove: wsModels.remove,
+          },
+        }),
     // A publish is seen at once by every set of groups too (T322).
     meta: {
       invalidate: () => {
@@ -1527,7 +1684,7 @@ export function buildServer({
     const startedAt = performance.now();
 
     try {
-      const result = await cubeFor(request).load(
+      const result = await cubeIn(request, scope).load(
         body.query,
         cache as CachePolicy | undefined,
         context,
@@ -1572,7 +1729,7 @@ export function buildServer({
     // One plan, or — for a query Cube runs as several — one per query; a
     // match only if a rollup serves every one, Cube's matching being
     // all-or-nothing (research/cube/pre-aggregations.md §2).
-    const cube = cubeFor(request);
+    const cube = cubeIn(request, scope);
     const planned = await cube.sql(query);
     const usedBy = (Array.isArray(planned) ? planned : [planned]).map((plan) =>
       (
@@ -1618,7 +1775,7 @@ export function buildServer({
     // The item it serves, checked before Cube is asked (T340, AC-268).
     const scope = await queryScope(request, reply, queryItemOf(body.for));
     if (scope === undefined || (await refusedOutside(reply, scope, body.query))) return reply;
-    const planned = await cubeFor(request).sql(body.query, context);
+    const planned = await cubeIn(request, scope).sql(body.query, context);
     const queries = (Array.isArray(planned) ? planned : [planned]).map((plan) => {
       const [sql, params] = (plan as { sql?: { sql?: [unknown, unknown] } } | null)?.sql?.sql ?? [];
       return { sql, params: Array.isArray(params) ? params : [] };
@@ -2594,6 +2751,35 @@ export function buildServer({
   const READ_ONLY =
     'You can view this, but not change it: only its folder’s read-write members can.';
   /**
+   * Why an item made in the workspace may not go to this target (T345, T347;
+   * AC-282), as the answer to send: it goes to a shared folder its author may
+   * write. Another's workspace is as a folder that isn't there; nothing where
+   * it may go.
+   */
+  const targetRefusalOf = async (
+    request: FastifyRequest,
+    target: unknown,
+  ): Promise<{ status: number; body: unknown } | undefined> => {
+    const seen = await visibilityOf(request);
+    if (seen === undefined) return undefined;
+    const inWorkspace =
+      typeof target === 'string' && target !== '' ? await workspaceRootOf(target) : null;
+    if (inWorkspace !== null && inWorkspace !== workspaceIdOf(userOf(request).key))
+      return { status: 404, body: NOT_THERE };
+    if (typeof target !== 'string' || target === '' || inWorkspace !== null)
+      return {
+        status: 400,
+        body: {
+          error: 'Name the shared folder it is to go to: one where you have read-write access.',
+        },
+      };
+    if (!mayWrite(seen, target))
+      return seen.rights.has(target)
+        ? { status: 403, body: { error: READ_ONLY } }
+        : { status: 404, body: NOT_THERE };
+    return undefined;
+  };
+  /**
    * With security on, a stored item the user must be able to open, and, for a
    * change, to write: `undefined` when the reply has been sent — 404, as for
    * an item that isn't there, when they can't open it; 403 when they can open
@@ -2709,14 +2895,14 @@ export function buildServer({
    * the same of each chart a dashboard shows. A workspace item's body is its
    * author's to write and bound to nothing, so it reaches only the cubes on
    * the shared root's path and its target folder's, as its picker offers
-   * them (AC-329), and is answered from the published model until T347's
-   * overlays.
+   * them (AC-329), and its workspace's own, from its workspace's overlay
+   * (T347, AC-323).
    */
   const queryScope = async (
     request: FastifyRequest,
     reply: FastifyReply,
     item: QueryItem | undefined | null,
-  ): Promise<{ readonly allowed: ReadonlySet<string> | 'all' } | undefined> => {
+  ): Promise<QueryScope | undefined> => {
     if (security === 'off') return { allowed: 'all' };
     if (item === undefined && userOf(request).superAdmin) return { allowed: 'all' };
     if (item === undefined || item === null) {
@@ -2732,9 +2918,38 @@ export function buildServer({
     const stored = found.stored;
     if (stored === null) return { allowed: 'all' };
     const scope = await scopeBuilder();
+    /**
+     * A workspace item's previews are answered from its workspace's overlay
+     * (T347, AC-323), which only its owner may open: they name it, and may
+     * name its cubes, wherever it places them, as its names resolve in it
+     * first (AC-281). A workspace with nothing to overlay has none.
+     */
+    const workspace = await workspaceRootOf(await governingFolder(item.kind, stored));
+    // Only ever the asker's own: whatever else let them open the item.
+    const ensured =
+      workspace === null ||
+      overlays === undefined ||
+      workspace !== workspaceIdOf(userOf(request).key)
+        ? undefined
+        : await overlays.ensure(workspace);
+    const own = (ensured?.content.upserts ?? []).map((each) =>
+      each.folderId === XCUBE_ROOT ? each.name : `${each.folderId}__${each.name}`,
+    );
+    scope.names(own);
+    const overlay =
+      ensured === undefined || workspace === null
+        ? {}
+        : {
+            overlay: {
+              id: ensured.id,
+              workspaceId: workspace,
+              names: new Set(own),
+              ...(ensured.version === undefined ? {} : { version: ensured.version }),
+            },
+          };
     if (item.kind === 'chart') {
       await addChart(scope, stored);
-      return { allowed: scope.allowed };
+      return { allowed: scope.allowed, ...overlay };
     }
     const governing = await governingFolder('dashboard', stored);
     const inWorkspace = (await workspaceRootOf(governing)) !== null;
@@ -2753,7 +2968,21 @@ export function buildServer({
       ...((await docs?.localTo?.(stored.id)) ?? []),
     ];
     for (const chart of charts) await addChart(scope, chart);
-    return { allowed: scope.allowed };
+    return { allowed: scope.allowed, ...overlay };
+  };
+  /**
+   * Cube as a request's user asks it for an item (T347, AC-323): from the
+   * workspace's overlay where its scope names one — pushed again once, should
+   * xcube find it gone — else as `cubeFor`.
+   */
+  const cubeIn = (request: FastifyRequest, scope: QueryScope): CubeClient => {
+    const overlay = scope.overlay;
+    if (overlay === undefined || overlays === undefined) return cubeFor(request);
+    return cubeFor(request).inOverlay(
+      overlay.id,
+      () => overlays.push(overlay.workspaceId),
+      overlay.version,
+    );
   };
   /**
    * A proposal's review queries (T340, T356): what it holds, which its
@@ -3003,6 +3232,55 @@ export function buildServer({
   };
 
   /**
+   * "Edit in my workspace" for a shared model (T347; AC-278, AC-283): a copy
+   * of its file, in a project folder of its own (T523), going back to its
+   * folder and naming what it was copied from; or their copy already there
+   * (200, `created: false`). Only for one they could propose back: a
+   * read-write member of its folder, who has a workspace, as for a dashboard.
+   * The workspace's overlay takes it first (`routes/workspace-models.ts`).
+   */
+  const copyModel = async (request: FastifyRequest, reply: FastifyReply, seen: Visibility) => {
+    const body = request.body as
+      { folderId?: unknown; path?: unknown; timeZone?: unknown } | undefined;
+    const folderId = body?.folderId;
+    const path = body?.path;
+    if (typeof folderId !== 'string' || folderId === '' || typeof path !== 'string' || path === '')
+      throw new BadRequest(
+        'Name the model to copy by its folder and path: { kind, folderId, path }.',
+      );
+    if (wsModels === undefined || modelStore === undefined || docs === undefined)
+      return reply
+        .code(409)
+        .send({ error: 'Models can’t be copied into My workspace here: xcube isn’t configured.' });
+    const own = workspaceIdOf(userOf(request).key);
+    if (!seen.rights.has(own))
+      return reply.code(403).send({
+        error: 'You have no workspace: only read-write members and Super-Admins have one.',
+      });
+    if ((await workspaceRootOf(folderId)) !== null)
+      throw new BadRequest('It is in a workspace already: edit it there.');
+    const missing = { error: `There’s no model file ${path} here, or it isn’t yours to see.` };
+    // Its folder's models are seen by those who see its every kind (AC-263).
+    if (seen.rights.get(folderId)?.kinds !== 'all') return reply.code(404).send(missing);
+    const file = (await modelStore.inFolders([folderId])).find((each) => each.path === path);
+    if (file === undefined) return reply.code(404).send(missing);
+    if (!mayWrite(seen, folderId)) return reply.code(403).send({ error: READ_ONLY });
+    const timeZone = timeZoneOf(body?.timeZone);
+    if (timeZone === undefined) throw new BadRequest(NO_TIME_ZONE);
+    return inTurn(own, async () => {
+      const project = await projectFolderIn(own, userOf(request).key, timeZone, {
+        title: path.slice(path.lastIndexOf('/') + 1),
+        fromFolderId: folderId,
+      });
+      const answer = await wsModels.copy(own, file, {
+        id: project.id,
+        make: () => docs.create(project),
+      });
+      return reply.code(answer.status).send(answer.body);
+    });
+  };
+
+  /**
    * "Edit in my workspace" (T344; AC-278, AC-279): a shared dashboard or
    * library chart copied into the user's own workspace, or their copy already
    * there opened (200, `created: false`). Only for one they may propose back:
@@ -3023,6 +3301,8 @@ export function buildServer({
     const body = request.body as { kind?: unknown; id?: unknown; timeZone?: unknown } | undefined;
     const kind = body?.kind;
     const id = body?.id;
+    // A shared model, by its folder and path (T347): its own route's.
+    if (kind === 'model') return copyModel(request, reply, seen);
     if ((kind !== 'dashboard' && kind !== 'chart') || typeof id !== 'string' || id === '')
       throw new BadRequest('Name the dashboard or chart to copy: { kind, id }.');
     const own = workspaceIdOf(userOf(request).key);

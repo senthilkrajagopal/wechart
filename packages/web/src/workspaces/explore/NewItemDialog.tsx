@@ -17,6 +17,9 @@ export interface Target {
   readonly path: readonly string[];
 }
 
+/** A cube's or view's name, as xcube takes an item's (its `SHORT_NAME`; the API's `misnamedIn`). */
+const ITEM_NAME = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
+
 export const targetLabel = (target: Target) =>
   target.path.length === 0 ? SHARED_ROOT.title : target.path.join(' / ');
 
@@ -28,7 +31,8 @@ export function NewItemDialog({
   onClose,
   busy = false,
 }: {
-  kind: 'dashboard' | 'chart';
+  /** A cube or view is a model's (T347, AC-282): its name is the one its file gives it. */
+  kind: 'dashboard' | 'chart' | 'cube' | 'view';
   defaultTitle: string;
   targets: readonly Target[];
   onCreate: (title: string, targetFolderId: string) => void;
@@ -41,6 +45,12 @@ export function NewItemDialog({
   useFocusTrap(box);
   const [title, setTitle] = useState(defaultTitle);
   const [chosen, setChosen] = useState(targets.length === 1 ? targets[0]!.id : '');
+  /** A cube's or view's name is one xcube takes for an item (T347's review), said before Create. */
+  const named = title.trim();
+  const misnamed =
+    (kind === 'cube' || kind === 'view') &&
+    named !== '' &&
+    !(ITEM_NAME.test(named) && named.length <= 40);
 
   // Escape closes it, as every dialog here closes; focus starts on the name.
   const closing = useRef(onClose);
@@ -74,10 +84,17 @@ export function NewItemDialog({
             id={`${heading}-name`}
             ref={naming}
             value={title}
+            aria-invalid={misnamed ? 'true' : undefined}
+            aria-describedby={misnamed ? `${heading}-name-rule` : undefined}
             onChange={(event) => {
               setTitle(event.target.value);
             }}
           />
+          {misnamed ? (
+            <p id={`${heading}-name-rule`} className="field__error">
+              Lower-case letters, digits and single underscores, starting with a letter: at most 40.
+            </p>
+          ) : null}
         </div>
         {targets.length === 0 ? (
           <InfoBar>
@@ -114,7 +131,7 @@ export function NewItemDialog({
           <button
             type="button"
             className="btn btn-primary"
-            disabled={chosen === '' || title.trim() === '' || busy}
+            disabled={chosen === '' || title.trim() === '' || misnamed || busy}
             onClick={() => {
               onCreate(title.trim(), chosen);
             }}

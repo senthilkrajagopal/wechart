@@ -62,6 +62,22 @@ export interface ModelFileTable {
   path: string;
   content: string;
   updated_at: Generated<Date>;
+  /** Its id, which a proposal names it by (T347, T350). */
+  id: Generated<string>;
+  /** Raised by each write over it (T347): what a proposal replaces is "version n". */
+  version: Generated<number>;
+  /** A workspace model's shared folder to go to (T347, AC-282); none elsewhere. */
+  target_folder_id: Generated<string | null>;
+  /** What a workspace copy was copied from: `{ id, folderId, path, version }` (T347). */
+  origin: JSONColumnType<ModelOrigin | null, string | null | undefined, string | null>;
+}
+
+/** The shared model file a workspace copy was copied from (T347). */
+export interface ModelOrigin {
+  readonly id: string;
+  readonly folderId: string;
+  readonly path: string;
+  readonly version: number;
 }
 
 /** A data source, a folder item (phase 2). Its secrets are in `data_source_secrets`. */

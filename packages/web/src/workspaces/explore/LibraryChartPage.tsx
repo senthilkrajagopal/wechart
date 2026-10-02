@@ -8,7 +8,7 @@ import { PencilIcon } from '../../dashboard/edit/EditChrome';
 import { NOTHING_CHOSEN } from '../../dashboard/edit/templates';
 import { specFor } from '../../dashboard/DashboardPage';
 import { allMembers } from '../../filters/FilterBar';
-import { META_QUERY } from '../../query/meta';
+import { metaQueryOf } from '../../query/meta';
 import { ME_QUERY } from '../../shell/me';
 import { ProposalBand } from './ProposalBand';
 import { ProposeFlow } from './ProposeFlow';
@@ -144,7 +144,15 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
     queryKey: ['library-chart', chartId],
     queryFn: () => specFor(chartId),
   });
-  const meta = useQuery(META_QUERY);
+  /** In My workspace, its field list is its overlay's (T347, AC-323). */
+  const workspaceItem =
+    stored.data?.workspace?.inWorkspace === true
+      ? {
+          item: { kind: 'chart' as const, id: chartId },
+          targetFolderId: stored.data.body.targetFolderId,
+        }
+      : undefined;
+  const meta = useQuery(metaQueryOf(workspaceItem));
   const titles = new Map(allMembers(meta.data).map((member) => [member.name, member.title]));
   const titleOf = (member: string) => titles.get(member) ?? member;
   const kindOf = (source: string) => {

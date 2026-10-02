@@ -137,6 +137,85 @@ describe('model files in folders', () => {
     expect(await store().list(b)).toEqual([{ folderId: b, path: file, content: 'b, changed\n' }]);
   });
 
+  /**
+   * T347 (AC-281, AC-282): a model in a workspace says where it is to go, and
+   * a copy what it was copied from, as the workspace's dashboards and data
+   * sources do; and every file has an id and a version, which a proposal
+   * names it by (T350).
+   */
+  it('gives each file an id and a version, which a write over it raises', async () => {
+    const folder = `folder-${randomUUID()}`;
+    const file = path('orders');
+    await store().write([{ folderId: folder, path: file, content: cube('orders') }]);
+    const [first] = await store().inFolders([folder]);
+    expect(first).toMatchObject({ folderId: folder, path: file, version: 1 });
+    expect(first?.id).toMatch(/^[0-9a-f-]{36}$/);
+
+    await store().write([{ folderId: folder, path: file, content: cube('orders_v2') }]);
+
+    const [second] = await store().inFolders([folder]);
+    expect(second).toMatchObject({ id: first?.id, version: 2, content: cube('orders_v2') });
+    expect(await store().byId(first!.id)).toEqual(second);
+  });
+
+  it('keeps a workspace model’s target and origin as first stored, whatever a later write says', async () => {
+    const [workspace, inside] = [`ws:test-${randomUUID()}`, `folder-${randomUUID()}`];
+    const [mine, copied] = [path('mine'), path('copied')];
+    const origin = { id: randomUUID(), folderId: 'sales', path: 'cubes/orders.yml', version: 3 };
+    await store().write([
+      { folderId: workspace, path: mine, content: cube('mine'), targetFolderId: 'sales' },
+      {
+        folderId: inside,
+        path: copied,
+        content: cube('orders'),
+        targetFolderId: 'sales',
+        origin,
+      },
+    ]);
+    await store().write([
+      { folderId: workspace, path: mine, content: cube('mine_v2'), targetFolderId: 'ops' },
+      { folderId: inside, path: copied, content: cube('orders_v2') },
+    ]);
+
+    const files = await store().inFolders([workspace, inside]);
+    expect(
+      files.map(({ folderId, path: at, content, targetFolderId, origin: from }) => ({
+        folderId,
+        path: at,
+        content,
+        targetFolderId,
+        origin: from,
+      })),
+    ).toEqual([
+      {
+        folderId: inside,
+        path: copied,
+        content: cube('orders_v2'),
+        targetFolderId: 'sales',
+        origin,
+      },
+      {
+        folderId: workspace,
+        path: mine,
+        content: cube('mine_v2'),
+        targetFolderId: 'sales',
+        origin: null,
+      },
+    ]);
+    // And Explore says so under each one's name (T498, design 04 pin 3).
+    const listed = await catalog(getDb()).contents(inside);
+    expect(listed).toEqual([
+      expect.objectContaining({
+        kind: 'model',
+        id: copied,
+        targetFolderId: 'sales',
+        origin: { kind: 'model', id: origin.id, version: 3, folderId: 'sales' },
+      }),
+    ]);
+    // A shared folder's own have neither.
+    expect(await store().byId(randomUUID())).toBeUndefined();
+  });
+
   it('lists a folder’s model files in its contents, each a model with the cubes and views it declares', async () => {
     const folder = `folder-${randomUUID()}`;
     // In one directory, so their order is their names' (T334's review).

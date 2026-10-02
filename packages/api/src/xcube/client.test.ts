@@ -396,3 +396,177 @@ describe('xcube’s answers (T419, AC-333)', () => {
     ]);
   });
 });
+
+/**
+ * T347 (AC-323, AC-280): a workspace's overlay, and a proposal's (T440),
+ * through xcube's slice 5 (research `xcube-slice-5.md`, "PUT …/overlays/{id}",
+ * "GET", "DELETE"; `xcube-overlay-data-sources.md`, its `connections`).
+ */
+describe('overlays (T347)', () => {
+  const recording = (status: number, body: Record<string, unknown>) => {
+    const asked: { method: string; url: string; body: unknown }[] = [];
+    const admin = xcubeAdmin({
+      cubeApiUrl: 'http://cube.invalid/cubejs-api',
+      model: 'dev',
+      token: 'x'.repeat(40),
+      fetch: async (input, init) => {
+        asked.push({
+          method: String(init?.method),
+          url: String(input),
+          body: init?.body === undefined ? undefined : JSON.parse(String(init.body)),
+        });
+        return status === 204
+          ? new Response(null, { status })
+          : new Response(JSON.stringify(body), {
+              status,
+              headers: { 'content-type': 'application/json' },
+            });
+      },
+    });
+    return { admin, asked };
+  };
+  const pushed = {
+    upserts: [{ folderId: 'fsales', name: 'orders', kind: 'cube' as const, yaml: 'cubes: []\n' }],
+    deletes: [],
+    connections: [
+      {
+        folderId: 'froot',
+        name: 'default',
+        driver: 'postgres',
+        authMethod: 'password',
+        fields: { host: 'db', port: 5432 },
+        sealed: { password: { v: 1 as const, kid: 'k', enc: 'e', ct: 'c' } },
+      },
+    ],
+    baseVersion: null,
+  };
+
+  it('pushes the whole overlay, its items and its data sources, by id, and reads what it stored', async () => {
+    const { admin, asked } = recording(201, {
+      model: 'dev',
+      id: 'ws-1',
+      version: 7,
+      created: true,
+      revision: 12,
+      expiresAt: '2026-10-02T10:00:00.000Z',
+      items: [{ folderId: 'fsales', name: 'orders', fullName: 'fsales__orders' }],
+    });
+
+    expect(await admin.putOverlay('ws-1', pushed)).toEqual({
+      kind: 'stored',
+      version: 7,
+      created: true,
+      revision: 12,
+      expiresAt: '2026-10-02T10:00:00.000Z',
+    });
+    expect(asked).toEqual([
+      {
+        method: 'PUT',
+        url: 'http://cube.invalid/cubejs-api/v1/semantic/models/dev/overlays/ws-1',
+        // Exactly the six keys a data source takes (research, Gotcha 4).
+        body: pushed,
+      },
+    ]);
+  });
+
+  it('reads a stale base, items that don’t apply, a secret that won’t open, a bad data source and an older xcube', async () => {
+    expect(
+      await recording(409, {
+        code: 'conflict',
+        error: 'stale',
+        currentVersion: 9,
+      }).admin.putOverlay('ws-1', pushed),
+    ).toEqual({ kind: 'conflict', currentVersion: 9 });
+    expect(
+      await recording(422, {
+        code: 'invalid_items',
+        error: 'The overlay does not apply',
+        errors: [{ folderId: 'fsales', name: 'orders', kind: 'compile', message: 'bad' }],
+        cubeMessage: 'Cube: bad',
+      }).admin.putOverlay('ws-1', pushed),
+    ).toEqual({
+      kind: 'refused',
+      errors: [{ folderId: 'fsales', name: 'orders', kind: 'compile', message: 'bad' }],
+      cubeMessage: 'Cube: bad',
+    });
+    expect(
+      await recording(422, {
+        code: 'invalid_secret',
+        error:
+          'Data source froot/default: password: the stored secret can’t be used for this connection target; enter it again',
+      }).admin.putOverlay('ws-1', pushed),
+    ).toEqual({
+      kind: 'secret',
+      error:
+        'Data source froot/default: password: the stored secret can’t be used for this connection target; enter it again',
+    });
+    expect(
+      await recording(400, {
+        code: 'invalid_connection',
+        error: 'Data source froot/default: host is required',
+        problems: ['host'],
+      }).admin.putOverlay('ws-1', pushed),
+    ).toEqual({
+      kind: 'connection',
+      error: 'Data source froot/default: host is required',
+    });
+    expect(
+      await recording(409, {
+        code: 'older_instances',
+        error: 'older',
+        instances: ['xcube:v6:abc'],
+      }).admin.putOverlay('ws-1', pushed),
+    ).toEqual({ kind: 'older', instances: ['xcube:v6:abc'] });
+    await expect(
+      recording(409, { code: 'too_many_overlays', error: 'too many' }).admin.putOverlay(
+        'ws-1',
+        pushed,
+      ),
+    ).rejects.toBeInstanceOf(XcubeError);
+  });
+
+  it('drops an overlay, reads one that is gone as none, and resolves names through it', async () => {
+    const dropped = recording(204, {});
+    await dropped.admin.dropOverlay('ws-1');
+    expect(dropped.asked).toEqual([
+      {
+        method: 'DELETE',
+        url: 'http://cube.invalid/cubejs-api/v1/semantic/models/dev/overlays/ws-1',
+        body: undefined,
+      },
+    ]);
+    expect(
+      await recording(404, { code: 'unknown_overlay', error: 'gone' }).admin.overlay('ws-1'),
+    ).toBeUndefined();
+    const status = {
+      model: 'dev',
+      id: 'ws-1',
+      version: 7,
+      expiresAt: '2026-10-02T10:00:00.000Z',
+      validatedRevision: 12,
+      upserts: [{ folderId: 'fsales', name: 'orders', kind: 'cube' }],
+      deletes: [],
+      instance: { revision: 12, state: 'broken', errors: [], cubeMessage: null },
+    };
+    expect(await recording(200, status).admin.overlay('ws-1')).toEqual(status);
+
+    const resolving = recording(200, {
+      model: 'dev',
+      revision: 12,
+      folderId: 'fsales',
+      overlay: 'ws-1',
+      names: { orders: 'fsales__orders', widgets: 'fops__widgets' },
+    });
+    expect(await resolving.admin.resolve('fsales', ['orders', 'widgets'], 'ws-1')).toEqual(
+      new Map([
+        ['orders', 'fsales__orders'],
+        ['widgets', 'fops__widgets'],
+      ]),
+    );
+    expect(resolving.asked[0]?.body).toEqual({
+      folderId: 'fsales',
+      names: ['orders', 'widgets'],
+      overlay: 'ws-1',
+    });
+  });
+});

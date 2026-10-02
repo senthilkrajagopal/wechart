@@ -6,7 +6,7 @@ import { cubesFrom, membersOf, type Member } from '../editor/fields';
 import { cubesOnPath } from '../editor/pathCubes';
 import { FOLDERS_QUERY } from '../workspaces/explore/folders';
 import { loadTile } from '../query/loadTile';
-import { META_QUERY } from '../query/meta';
+import { metaQueryOf, useWorkspaceItem } from '../query/meta';
 import { SecurityPreview } from '../query/securityPreview';
 import { summaryOf } from './describe';
 import {
@@ -197,15 +197,20 @@ export function FilterBar(props: FilterBarProps) {
 export function usePickableFields(
   dashboard: DashboardDocument,
 ): readonly { readonly label: string; readonly members: readonly Member[] }[] {
-  const meta = useQuery(META_QUERY);
+  // A workspace dashboard's from its overlay, its target's path after its own (T347).
+  const workspace = useWorkspaceItem();
+  const meta = useQuery(metaQueryOf(workspace));
   const folders = useQuery({ ...FOLDERS_QUERY, enabled: dashboard.folderId !== undefined });
+  const target = workspace?.targetFolderId;
   return useMemo(
     () =>
-      cubesOnPath(cubesFrom(meta.data), dashboard.folderId, folders.data ?? []).map((cube) => ({
-        label: cube.folderPath === undefined ? cube.title : `${cube.title} · ${cube.folderPath}`,
-        members: membersOf(meta.data, cube.name),
-      })),
-    [meta.data, dashboard.folderId, folders.data],
+      cubesOnPath(cubesFrom(meta.data), dashboard.folderId, folders.data ?? [], target).map(
+        (cube) => ({
+          label: cube.folderPath === undefined ? cube.title : `${cube.title} · ${cube.folderPath}`,
+          members: membersOf(meta.data, cube.name),
+        }),
+      ),
+    [meta.data, dashboard.folderId, folders.data, target],
   );
 }
 
@@ -227,7 +232,7 @@ function Filters({
   onSelect,
   chips,
 }: FilterBarProps) {
-  const meta = useQuery(META_QUERY);
+  const meta = useQuery(metaQueryOf(useWorkspaceItem()));
   const members = useMemo(() => allMembers(meta.data), [meta.data]);
 
   /**

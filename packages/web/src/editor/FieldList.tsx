@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { META_QUERY } from '../query/meta';
+import { metaQueryOf, useWorkspaceItem } from '../query/meta';
 import { FOLDERS_QUERY } from '../workspaces/explore/folders';
 import { cubesOnPath } from './pathCubes';
 import { missingScopeOf, ScopeUnavailable } from '../query/scopes';
@@ -139,7 +139,10 @@ export function FieldList({
   // read afresh each time a builder opens: a model published since — in
   // this tab or another — is in its field list (AC-137; research/
   // data-layer.md, "Refetch on mount"). wechart's own cache answers it.
-  const meta = useQuery({ ...META_QUERY, refetchOnMount: 'always' });
+  // A workspace item's is its overlay's, and its picker its target's path
+  // after its own cubes (T347; AC-323, AC-329).
+  const workspace = useWorkspaceItem();
+  const meta = useQuery({ ...metaQueryOf(workspace), refetchOnMount: 'always' });
   // The folders, for the path the picker offers (T429, AC-329).
   const folders = useQuery({ ...FOLDERS_QUERY, enabled: folderId !== undefined });
 
@@ -157,7 +160,7 @@ export function FieldList({
   const cubes = cubesFrom(meta.data);
   // Only those on the chart's folder path, each name's nearest (AC-329); the
   // chart's own cube too, so the picker still says what it is built on.
-  const onPath = cubesOnPath(cubes, folderId, folders.data ?? []);
+  const onPath = cubesOnPath(cubes, folderId, folders.data ?? [], workspace?.targetFolderId);
   const offered = onPath.some((cube) => cube.name === cubeName)
     ? onPath
     : [...onPath, ...cubes.filter((cube) => cube.name === cubeName)];

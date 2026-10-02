@@ -37,8 +37,9 @@ import { SchedulesPage } from '../workspaces/schedules/SchedulesPage';
 import { ModelFilePage } from '../workspaces/model/ModelFilePage';
 import { LibraryChartPage } from '../workspaces/explore/LibraryChartPage';
 import { LocalChartActions, useChartHome } from '../workspaces/explore/LocalChartHome';
-import { exploreHref } from '../workspaces/explore/folders';
-import { SHARED_ROOT } from '../workspaces/explore/roots';
+import { exploreHref, folderChain, FOLDERS_QUERY } from '../workspaces/explore/folders';
+import { isMyWorkspace, SHARED_ROOT } from '../workspaces/explore/roots';
+import { WorkspaceItemContext } from '../query/meta';
 import { WORKSPACES, type WorkspaceId } from '../shell/WorkspaceSwitcher';
 
 /**
@@ -482,6 +483,23 @@ function ChartEditorSurface() {
    * chart is saved with that dashboard, so it goes back there as it is.
    */
   const folderId = chart.data?.document.folderId;
+  /**
+   * In My workspace, its field list is its overlay's, and its picker offers
+   * its target's path after the workspace's own cubes (T347; AC-323, AC-329).
+   * A dashboard's own chart is where its dashboard is.
+   */
+  const folders = useQuery(FOLDERS_QUERY);
+  const keptIn = local ? home.data?.folderId : folderId;
+  const inWorkspace =
+    keptIn !== undefined &&
+    (isMyWorkspace(keptIn) || isMyWorkspace(folderChain(folders.data ?? [], keptIn)[0]?.id ?? ''));
+  const target = (chart.data?.document as { targetFolderId?: unknown } | undefined)?.targetFolderId;
+  const workspaceItem = inWorkspace
+    ? {
+        item: { kind: 'chart' as const, id: chartId },
+        ...(typeof target === 'string' ? { targetFolderId: target } : {}),
+      }
+    : undefined;
   const back = local
     ? { label: '← Back to dashboard', to: `/explore/dashboards/${encodeURIComponent(owner)}` }
     : fresh
@@ -517,66 +535,68 @@ function ChartEditorSurface() {
       ) : (
         // Keyed by chart id: the editor reads `initial` once, to seed its
         // history, so a different chart has to be a different editor.
-        <ChartEditor
-          key={chartId}
-          // Its queries are for this chart (T340, AC-268).
-          item={{ kind: 'chart', id: chartId }}
-          initial={view.initial}
-          onChange={setEdited}
-          // Its folder's path, for the picker (T429, AC-329): a local chart's
-          // is its dashboard's.
-          folderId={local ? home.data?.folderId : folderId}
-          // An edit made while it is written would be lost as the page goes.
-          busy={leaving}
-          head={{
-            start: (
-              <button
-                type="button"
-                className="btn-sm"
-                data-testid="editor-back"
-                disabled={leaving}
-                // Said before it is pressed: Back writes a changed chart.
-                title={changed ? 'Saves the change, then opens the chart' : undefined}
-                onClick={() => {
-                  if (changed) save.mutate(page);
-                  else globalThis.location.assign(back.to);
-                }}
-              >
-                {back.label}
-              </button>
-            ),
-            // Whose it is (AC-214), in the prototype's words (T256): new in its
-            // folder, or shared and on how many dashboards.
-            badges: local ? (
-              <span className="badge" data-testid="editor-ownership">
-                Local to a dashboard
-              </span>
-            ) : (
-              <LibraryChartNote chartId={chartId} folderId={folderId} fresh={fresh} />
-            ),
-            end: (
-              <>
-                {save.isError ? <StateLine kind="err">{save.error.message}</StateLine> : null}
-                {local ? (
-                  // A chart of one dashboard's is saved with that dashboard, in
-                  // its edit session — never on its own here (T227's review).
-                  // So the way there, or to folders, in place of a Save (T463,
-                  // UX-040).
-                  <LocalChartActions dashboardId={owner} home={home} small />
-                ) : (
-                  <button
-                    type="button"
-                    className="btn-primary btn-sm"
-                    disabled={leaving || edited === undefined}
-                    onClick={() => save.mutate(page)}
-                  >
-                    {save.isPending ? 'Saving…' : 'Save chart'}
-                  </button>
-                )}
-              </>
-            ),
-          }}
-        />
+        <WorkspaceItemContext.Provider value={workspaceItem}>
+          <ChartEditor
+            key={chartId}
+            // Its queries are for this chart (T340, AC-268).
+            item={{ kind: 'chart', id: chartId }}
+            initial={view.initial}
+            onChange={setEdited}
+            // Its folder's path, for the picker (T429, AC-329): a local chart's
+            // is its dashboard's.
+            folderId={local ? home.data?.folderId : folderId}
+            // An edit made while it is written would be lost as the page goes.
+            busy={leaving}
+            head={{
+              start: (
+                <button
+                  type="button"
+                  className="btn-sm"
+                  data-testid="editor-back"
+                  disabled={leaving}
+                  // Said before it is pressed: Back writes a changed chart.
+                  title={changed ? 'Saves the change, then opens the chart' : undefined}
+                  onClick={() => {
+                    if (changed) save.mutate(page);
+                    else globalThis.location.assign(back.to);
+                  }}
+                >
+                  {back.label}
+                </button>
+              ),
+              // Whose it is (AC-214), in the prototype's words (T256): new in its
+              // folder, or shared and on how many dashboards.
+              badges: local ? (
+                <span className="badge" data-testid="editor-ownership">
+                  Local to a dashboard
+                </span>
+              ) : (
+                <LibraryChartNote chartId={chartId} folderId={folderId} fresh={fresh} />
+              ),
+              end: (
+                <>
+                  {save.isError ? <StateLine kind="err">{save.error.message}</StateLine> : null}
+                  {local ? (
+                    // A chart of one dashboard's is saved with that dashboard, in
+                    // its edit session — never on its own here (T227's review).
+                    // So the way there, or to folders, in place of a Save (T463,
+                    // UX-040).
+                    <LocalChartActions dashboardId={owner} home={home} small />
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn-primary btn-sm"
+                      disabled={leaving || edited === undefined}
+                      onClick={() => save.mutate(page)}
+                    >
+                      {save.isPending ? 'Saving…' : 'Save chart'}
+                    </button>
+                  )}
+                </>
+              ),
+            }}
+          />
+        </WorkspaceItemContext.Provider>
       )}
     </AppShell>
   );

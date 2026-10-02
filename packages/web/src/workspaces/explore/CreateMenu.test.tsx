@@ -72,6 +72,23 @@ describe('the New menu (AC-192, T331)', () => {
     ).toBeTruthy();
   });
 
+  // T347 (AC-192's Model entry, AC-282's model half): between Chart and Data source.
+  it('offers Model in the workspace, after Chart, and calls for one when chosen', async () => {
+    const onNewModel = vi.fn();
+    render(
+      <CreateMenu
+        offers={['dashboard', 'chart', 'folder']}
+        onCreate={vi.fn()}
+        onNewModel={onNewModel}
+        onNewSource={vi.fn()}
+      />,
+    );
+
+    expect(await offered()).toEqual(['▦Dashboard', '◢Chart', '◇Model', '◍Data source', '▣Folder']);
+    await userEvent.click(screen.getByRole('menuitem', { name: /Model/ }));
+    expect(onNewModel).toHaveBeenCalledTimes(1);
+  });
+
   it('offers every kind when none is named, as phase 1 did', async () => {
     render(<CreateMenu onCreate={vi.fn()} />);
 

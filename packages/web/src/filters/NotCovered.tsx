@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useId } from 'react';
 
-import { META_QUERY } from '../query/meta';
+import { metaQueryOf, useWorkspaceItem } from '../query/meta';
 import { StatusIcon } from '../shell/StatusIcon';
 import { allMembers } from './FilterBar';
 
@@ -11,7 +11,7 @@ import { allMembers } from './FilterBar';
  * as the filter bar names it, by its title in the model.
  */
 export function NotCovered({ members }: { members: readonly string[] }) {
-  const meta = useQuery(META_QUERY);
+  const meta = useQuery(metaQueryOf(useWorkspaceItem()));
   const all = allMembers(meta.data);
   const names = members.map((name) => all.find((member) => member.name === name)?.title ?? name);
   const why = useId();

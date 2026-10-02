@@ -90,6 +90,57 @@ describe('the folder a new workspace item is to go to (T345, AC-282)', () => {
     expect(screen.getByRole('button', { name: 'Create' })).toHaveProperty('disabled', true);
   });
 
+  /**
+   * T347 (AC-282's model half, AC-222): a cube or view made in My workspace
+   * asks where it is to go as a dashboard does, its name being the one the
+   * model gives it.
+   */
+  it('asks a new cube or view for its name and the folder it is to go to', async () => {
+    const user = userEvent.setup();
+    const onCreate = vi.fn();
+    render(
+      <NewItemDialog
+        kind="cube"
+        defaultTitle="new_cube_1"
+        targets={targets}
+        onCreate={onCreate}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('dialog', { name: 'New cube in My workspace' })).toBeDefined();
+    await user.clear(screen.getByRole('textbox', { name: 'Name' }));
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'orders_emea');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Target folder' }), 'f-sales');
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+    expect(onCreate).toHaveBeenCalledWith('orders_emea', 'f-sales');
+  });
+
+  // Only a name xcube takes for an item (T347's review): said before Create, not at Save.
+  it('takes only a name a cube can have', async () => {
+    const user = userEvent.setup();
+    render(
+      <NewItemDialog
+        kind="view"
+        defaultTitle="new_view_1"
+        targets={[targets[1]!]}
+        onCreate={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    const name = screen.getByRole('textbox', { name: 'Name' });
+    await user.clear(name);
+    await user.type(name, 'My Sales');
+    expect(screen.getByRole('button', { name: 'Create' })).toHaveProperty('disabled', true);
+    // Said beside the field, as its description.
+    const rule = document.getElementById(name.getAttribute('aria-describedby') ?? '');
+    expect(rule?.textContent).toBe(
+      'Lower-case letters, digits and single underscores, starting with a letter: at most 40.',
+    );
+    await user.clear(name);
+    await user.type(name, 'my_sales');
+    expect(screen.getByRole('button', { name: 'Create' })).toHaveProperty('disabled', false);
+  });
+
   it('closes on Cancel and Escape', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();

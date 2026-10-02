@@ -4,7 +4,7 @@ import { readChartDocument, type ChartDocument, type RenderSpec } from '@wechart
 
 import { answerMetaOf, type AnswerMeta } from '../query/answerMeta';
 import { loadTile } from '../query/loadTile';
-import { META_QUERY } from '../query/meta';
+import { META_QUERY, metaQueryOf, useWorkspaceItem, WorkspaceItemContext } from '../query/meta';
 import { reachFrom } from '../filters/coverage';
 import { primaryKeyOf } from './markings/primaryKey';
 import { allMembers } from '../filters/FilterBar';
@@ -281,8 +281,20 @@ export function DashboardPage({
       </StateLine>
     );
 
+  /**
+   * In My workspace, its field list is its overlay's, and its pickers offer
+   * its target's path after the workspace's own cubes (T347; AC-323, AC-329).
+   */
+  const workspaceItem =
+    saved.data?.workspace?.inWorkspace === true
+      ? {
+          item: { kind: 'dashboard' as const, id: dashboardId },
+          targetFolderId: saved.data.targetFolderId,
+        }
+      : undefined;
+
   return (
-    <>
+    <WorkspaceItemContext.Provider value={workspaceItem}>
       {/* In My workspace, the place says it is theirs alone (T348; design
           04, pin 2 and state F). */}
       {saved.data?.workspace?.inWorkspace === true ? <WorkspaceBand /> : null}
@@ -445,7 +457,7 @@ export function DashboardPage({
           />
         ) : null}
       </div>
-    </>
+    </WorkspaceItemContext.Provider>
   );
 }
 
@@ -942,8 +954,10 @@ function LoadedDashboard({
    * chart edited from a tile replaces the saved one (T032). Applied here, they
    * reached only the saved charts, and a drafted tile read "76,900" where the
    * editor's preview had just shown "$76,900.00".
+   *
+   * A workspace dashboard's from its overlay (T347, AC-323).
    */
-  const meta = useQuery(META_QUERY);
+  const meta = useQuery(metaQueryOf(useWorkspaceItem()));
   const formats = useMemo(() => formatsFrom(meta.data), [meta.data]);
   // Which fields reach which cubes and views, for filters (AC-079). Until the
   // model arrives it cannot say, and no filter is applied or marked.

@@ -278,7 +278,7 @@ export function catalog(db: Kysely<Database>) {
       // Then its models, one to a model file, by path (T334, AC-269).
       const models = await db
         .selectFrom('model_files')
-        .select(['path', 'content', 'updated_at'])
+        .select(['path', 'content', 'updated_at', 'target_folder_id', 'origin'])
         .where('folder_id', '=', folderId)
         .orderBy(sql`path collate "C"`)
         .execute();
@@ -316,6 +316,21 @@ export function catalog(db: Kysely<Database>) {
               cubes: objects.filter((object) => object.kind === 'cube').length,
               views: objects.filter((object) => object.kind === 'view').length,
             },
+            // A workspace model's target, and a copy's origin (T347; design 04 pin 3).
+            ...(model.target_folder_id === null
+              ? {}
+              : {
+                  targetFolderId: model.target_folder_id,
+                  origin:
+                    model.origin === null
+                      ? null
+                      : {
+                          kind: 'model',
+                          id: model.origin.id,
+                          version: model.origin.version,
+                          folderId: model.origin.folderId,
+                        },
+                }),
           };
         }),
         ...sources.map((source): CatalogItem => ({

@@ -50,10 +50,16 @@ afterEach(() => {
 });
 
 describe('Cube’s configuration, xcube’s (T447)', () => {
-  it('names the claims wechart’s tokens carry for the model and its revision', () => {
+  it('names the claims wechart’s tokens carry for the model, its revision and an overlay', () => {
     const { options } = load();
 
-    expect(options).toEqual({ modelClaim: 'wechartModel', revisionClaim: 'wechartRevision' });
+    // The overlay's claim is named, or xcube reads `xcubeOverlay` and every
+    // preview answers from the published model (T347; xcube-slice-5.md, Gotcha 1).
+    expect(options).toEqual({
+      modelClaim: 'wechartModel',
+      revisionClaim: 'wechartRevision',
+      overlayClaim: 'wechartOverlay',
+    });
   });
 
   it('leaves the model to xcube: no store, no draft, no version, no compiler-cache settings', () => {

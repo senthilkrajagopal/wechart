@@ -66,6 +66,8 @@ export async function removeProjectFolders(): Promise<void> {
       .execute();
   await db.deleteFrom('documents').where('folder_id', 'in', folders).execute();
   await db.deleteFrom('data_sources').where('folder_id', 'in', folders).execute();
+  // And the models copied into them (T347).
+  await db.deleteFrom('model_files').where('folder_id', 'in', folders).execute();
   await db
     .deleteFrom('documents')
     .where('kind', '=', 'folder')

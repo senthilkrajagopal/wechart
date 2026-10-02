@@ -64,6 +64,7 @@ export async function publishModel(
   {
     created = [],
     folderId,
+    targetFolderId,
   }: {
     /**
      * The new files among them (drafts, T488): the API refuses any over a file
@@ -72,6 +73,11 @@ export async function publishModel(
     created?: readonly string[];
     /** The folder whose files they are (T452, T342): the shared root's unless named. */
     folderId?: string | undefined;
+    /**
+     * In My workspace, where a new file is to go (T347, AC-282): a shared
+     * folder the user writes. A stored one keeps its own.
+     */
+    targetFolderId?: string | undefined;
   } = {},
 ): Promise<PublishOutcome> {
   let response: Response;
@@ -83,6 +89,7 @@ export async function publishModel(
         ...(folderId === undefined ? {} : { folderId }),
         files,
         ...(created.length > 0 ? { create: created } : {}),
+        ...(targetFolderId === undefined ? {} : { targetFolderId }),
       }),
     });
   } catch {

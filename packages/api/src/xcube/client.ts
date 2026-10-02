@@ -1,3 +1,5 @@
+import type { FieldValue, SealedV1 } from '@wechart/core';
+
 import type { ModelFile } from '../server';
 import type { TreeFolder } from './folders';
 import type { Item } from './items';
@@ -110,7 +112,26 @@ export interface XcubeAdmin {
    * publish: each one's full name, or `null` where no folder on the path
    * holds it (T429, AC-272; research 3a, "POST …/resolve").
    */
-  resolve(folderId: string, names: readonly string[]): Promise<Map<string, string | null>>;
+  resolve(
+    folderId: string,
+    names: readonly string[],
+    /**
+     * Through an overlay (T347, AC-329; research `xcube-slice-5.md`, "POST
+     * …/resolve with overlay"): its items first, by short name, whatever
+     * their folder, then the folder's path. One gone answers `410`, thrown.
+     */
+    overlay?: string,
+  ): Promise<Map<string, string | null>>;
+  /**
+   * A workspace's or a proposal's overlay, pushed whole (T347, T440; research
+   * `xcube-slice-5.md`, "PUT …/overlays/{id}"; `xcube-overlay-data-sources.md`):
+   * its items, placed in their folders, and every data source it brings.
+   */
+  putOverlay(id: string, overlay: OverlayPush): Promise<OverlayAnswer>;
+  /** An overlay's state, or none where it expired, was dropped or was never pushed. */
+  overlay(id: string): Promise<OverlayStatus | undefined>;
+  /** An overlay dropped: its previews answer `410` from then on. Whether or not it was there. */
+  dropOverlay(id: string): Promise<void>;
   /** A changeset applied on a base revision (T426; research 3a, "POST …/changesets"). */
   applyChangeset(input: {
     readonly baseRevision: number | null;
@@ -118,6 +139,69 @@ export interface XcubeAdmin {
     readonly deletes: readonly { readonly folderId: string; readonly name: string }[];
     readonly source?: Record<string, unknown>;
   }): Promise<SnapshotAnswer>;
+}
+
+/**
+ * A data source as an overlay brings it (research `xcube-overlay-data-sources.md`,
+ * "Init / auth pattern"): by its short name in the folder it would land in,
+ * with exactly these six keys, its envelopes byte for byte (Gotcha 4).
+ */
+export interface OverlayConnection {
+  readonly folderId: string;
+  readonly name: string;
+  readonly driver: string;
+  readonly authMethod: string;
+  readonly fields: Readonly<Record<string, FieldValue>>;
+  readonly sealed: Readonly<Record<string, SealedV1>>;
+}
+
+/** An overlay pushed whole: its items, its deletes and every data source it brings. */
+export interface OverlayPush {
+  readonly upserts: readonly Item[];
+  readonly deletes: readonly { readonly folderId: string; readonly name: string }[];
+  readonly connections: readonly OverlayConnection[];
+  /** The version it replaces: `null` for a new one (research, `baseVersion`). */
+  readonly baseVersion: number | null;
+  /** Its life from this push, clamped to xcube's longest (Gotcha 11). */
+  readonly ttlSeconds?: number;
+}
+
+/** xcube's answer to an overlay's push. */
+export type OverlayAnswer =
+  | {
+      readonly kind: 'stored';
+      readonly version: number;
+      readonly created: boolean;
+      /** The head it was checked against. */
+      readonly revision: number;
+      readonly expiresAt: string;
+    }
+  /** Not over the version it holds: `currentVersion`, null for none. */
+  | { readonly kind: 'conflict'; readonly currentVersion: number | null }
+  /** It doesn't apply, or a changed module doesn't compile: nothing stored. */
+  | {
+      readonly kind: 'refused';
+      readonly errors: readonly ItemError[];
+      readonly cubeMessage: unknown;
+    }
+  /** An envelope that doesn't open for its target: its secret is entered again. */
+  | { readonly kind: 'secret'; readonly error: string }
+  /** A data source xcube won't take as a connection. */
+  | { readonly kind: 'connection'; readonly error: string }
+  /** An xcube before overlay data sources still connected: pushed again later. */
+  | { readonly kind: 'older'; readonly instances: readonly string[] };
+
+/** An overlay's state (research `xcube-slice-5.md`, "GET …/overlays/{id}"). */
+export interface OverlayStatus {
+  readonly id: string;
+  readonly version: number;
+  readonly expiresAt: string;
+  readonly upserts: readonly { readonly folderId: string; readonly name: string }[];
+  readonly instance?: {
+    readonly state: string;
+    readonly errors?: readonly ItemError[];
+    readonly cubeMessage?: string | null;
+  };
 }
 
 /** An item xcube holds (research 3a, "GET …/items"). */
@@ -220,7 +304,7 @@ export function xcubeAdmin({
   const credential = typeof token === 'string' ? async () => token : token;
 
   const call = async (
-    method: 'GET' | 'PUT' | 'POST',
+    method: 'GET' | 'PUT' | 'POST' | 'DELETE',
     path: string,
     body?: unknown,
     wait = timeoutMs,
@@ -377,13 +461,86 @@ export function xcubeAdmin({
         });
     },
 
-    async resolve(folderId, names) {
-      const { status, answer } = await call('POST', '/resolve', { folderId, names });
+    async resolve(folderId, names, overlay) {
+      const { status, answer } = await call('POST', '/resolve', {
+        folderId,
+        names,
+        ...(overlay === undefined ? {} : { overlay }),
+      });
       if (status !== 200) throw failed(status, answer);
       const found = (answer['names'] ?? {}) as Record<string, unknown>;
       return new Map(
         names.map((name) => [name, typeof found[name] === 'string' ? found[name] : null]),
       );
+    },
+
+    async putOverlay(id, { upserts, deletes, connections, baseVersion, ttlSeconds }) {
+      const { status, answer } = await call('PUT', `/overlays/${encodeURIComponent(id)}`, {
+        upserts: upserts.map(({ folderId, name, kind, yaml }) => ({ folderId, name, kind, yaml })),
+        deletes: deletes.map(({ folderId, name }) => ({ folderId, name })),
+        // Exactly the six keys: any other is refused (research, Gotcha 4).
+        connections: connections.map(({ folderId, name, driver, authMethod, fields, sealed }) => ({
+          folderId,
+          name,
+          driver,
+          authMethod,
+          fields,
+          sealed,
+        })),
+        baseVersion,
+        ...(ttlSeconds === undefined ? {} : { ttlSeconds }),
+      });
+      const code = answer['code'];
+      const error = String(answer['error'] ?? code ?? '');
+      if (status === 200 || status === 201)
+        return {
+          kind: 'stored',
+          version: Number(answer['version']),
+          created: answer['created'] === true,
+          revision: Number(answer['revision']),
+          expiresAt: String(answer['expiresAt']),
+        };
+      if (status === 409 && code === 'conflict')
+        return {
+          kind: 'conflict',
+          currentVersion:
+            typeof answer['currentVersion'] === 'number' ? answer['currentVersion'] : null,
+        };
+      if (status === 409 && code === 'older_instances')
+        return {
+          kind: 'older',
+          instances: Array.isArray(answer['instances'])
+            ? (answer['instances'] as unknown[]).map(String)
+            : [],
+        };
+      if (status === 422 && code === 'invalid_secret') return { kind: 'secret', error };
+      if (status === 400 && code === 'invalid_connection') return { kind: 'connection', error };
+      if (status === 422)
+        return {
+          kind: 'refused',
+          errors: Array.isArray(answer['errors']) ? (answer['errors'] as ItemError[]) : [],
+          cubeMessage: answer['cubeMessage'],
+        };
+      // A size or a tree xcube will never take: refused as surely (as a changeset's).
+      if ((status === 400 || status === 413) && REFUSED_ITEMS_CODES.has(String(code)))
+        return {
+          kind: 'refused',
+          errors: [{ folderId: null, name: null, kind: 'item', message: error }],
+          cubeMessage: null,
+        };
+      throw failed(status, answer);
+    },
+
+    async overlay(id) {
+      const { status, answer } = await call('GET', `/overlays/${encodeURIComponent(id)}`);
+      if (status === 404 && answer['code'] === 'unknown_overlay') return undefined;
+      if (status !== 200) throw failed(status, answer);
+      return answer as unknown as OverlayStatus;
+    },
+
+    async dropOverlay(id) {
+      const { status, answer } = await call('DELETE', `/overlays/${encodeURIComponent(id)}`);
+      if (status !== 204 && status !== 200) throw failed(status, answer);
     },
 
     async applyChangeset({ baseRevision, upserts, deletes, source }) {

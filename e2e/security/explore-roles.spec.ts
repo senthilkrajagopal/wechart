@@ -302,11 +302,11 @@ test.describe('Explore and the top bar by role (T331; AC-001, AC-192, AC-194)', 
       await open(page, 'My workspace');
       // The band says whose it is: no chip.
       await expect(chip(page)).toHaveCount(0);
-      // AC-192's Model, between Chart and Data source, is T347's: a model
-      // made in the workspace needs its target and its overlay first.
+      // AC-192's Model, between Chart and Data source (T347).
       expect(await offered(page)).toEqual([
         '▦Dashboard',
         '◢Chart',
+        '◇Model',
         '◍Data source',
         '▣Folder',
         '⤒Import a dashboard…from a file',
@@ -426,6 +426,7 @@ test.describe('Explore and the top bar by role (T331; AC-001, AC-192, AC-194)', 
       expect(await offered(page)).toEqual([
         '▦Dashboard',
         '◢Chart',
+        '◇Model',
         '◍Data source',
         '▣Folder',
         '⤒Import a dashboard…from a file',

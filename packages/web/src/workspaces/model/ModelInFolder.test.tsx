@@ -91,6 +91,22 @@ describe('who may change a model where (rules 70 and 71, AC-222)', () => {
       editInWorkspace: false,
     });
   });
+
+  // T347 (AC-222): My workspace's models are its owner's to change, there.
+  it('lets its owner change a model in My workspace, with nothing to copy it into', () => {
+    expect(
+      modelAccessOf({ me: me('oidc', false, true), right: 'unknown', inWorkspace: true }),
+    ).toEqual({ readOnly: false, editInWorkspace: false });
+    expect(modelAccessOf({ me: me('oidc', true), right: 'write', inWorkspace: true })).toEqual({
+      readOnly: false,
+      editInWorkspace: false,
+    });
+    // Not before who is signed in is known.
+    expect(modelAccessOf({ me: undefined, right: 'unknown', inWorkspace: true })).toEqual({
+      readOnly: true,
+      editInWorkspace: false,
+    });
+  });
 });
 
 describe('a member as the model page names it (AC-329)', () => {

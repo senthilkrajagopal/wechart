@@ -1,0 +1,287 @@
+import { declaredIn } from '../model/split';
+import type { CompileError } from '../model/validate';
+import type { ModelOrigin } from '../db/schema';
+import type { StoredModelFile, WorkspaceModelFile } from '../repos/model-files';
+import type { ModelFile } from '../server';
+import type { ItemError } from '../xcube/client';
+import type { OverlayContent, OverlayModel, OverlaySync, PushResult } from '../xcube/overlays';
+
+/**
+ * Models in My workspace (T347; AC-222, AC-281, AC-282, AC-323): saved,
+ * removed and copied in only as the workspace's overlay takes them.
+ *
+ * A workspace model is never published: it is the workspace's, previewed
+ * through its overlay, where it is placed in its target folder (a copy's is
+ * its origin's folder) and its names resolve in the overlay first, then along
+ * that folder's path (AC-281). Every change to one is pushed to xcube with the
+ * rest of the workspace, its data sources included, before it is stored: xcube
+ * takes an overlay only if it applies and every module it changes compiles
+ * (research `xcube-slice-5.md`, "PUT …/overlays/{id}"), and a change it
+ * refuses is refused here, its errors on the files they are about, with
+ * nothing stored. So what the workspace holds is what its previews show.
+ */
+
+/** An answer for the route to send. */
+export interface Answer {
+  readonly status: number;
+  readonly body: unknown;
+}
+
+export interface WorkspaceModelDeps {
+  readonly files: {
+    inFolders(folderIds: readonly string[]): Promise<readonly StoredModelFile[]>;
+    write(files: readonly WorkspaceModelFile[]): Promise<unknown>;
+    remove?(folderId: string, path: string): Promise<unknown>;
+  };
+  readonly overlays: Pick<OverlaySync, 'push'>;
+  /** The workspace's folders: its root and every folder in it. */
+  readonly foldersOf: (workspaceId: string) => Promise<readonly string[]>;
+  /** The overlay the workspace would have with these models, its data sources as stored. */
+  readonly contentWith: (
+    workspaceId: string,
+    models: readonly OverlayModel[],
+  ) => Promise<{ readonly content: OverlayContent; readonly folders: ReadonlyMap<string, string> }>;
+}
+
+const NEEDS_TARGET =
+  'Name the shared folder this model is to go to: one where you have read-write access.';
+
+/** A workspace model file where its overlay puts it: its folder, its text, where it is to go. */
+type Placed = {
+  readonly folderId: string;
+  readonly path: string;
+  readonly content: string;
+  readonly targetFolderId: string | null;
+};
+
+/** What a workspace file is, in its overlay: its text, where it is to go. */
+const modelOf = (file: { path: string; content: string; targetFolderId: string | null }) => ({
+  path: file.path,
+  content: file.content,
+  targetFolderId: file.targetFolderId,
+});
+
+/**
+ * xcube's refusal of an overlay as the model page shows a publish's (AC-136):
+ * each error on the workspace file whose item it names, by the item's folder
+ * — its target — and name, in the workspace folder holding it; one naming no
+ * item, on each file the change touched.
+ */
+function errorsOf(
+  errors: readonly ItemError[],
+  files: readonly Placed[],
+  changed: readonly { folderId: string; path: string }[],
+  folders: ReadonlyMap<string, string>,
+): CompileError[] {
+  const byItem = new Map<string, { path: string; folderId: string }>();
+  for (const file of files) {
+    const xcubeId = folders.get(file.targetFolderId ?? '');
+    if (xcubeId === undefined) continue;
+    for (const { name } of declaredIn(file.content))
+      byItem.set(`${xcubeId}/${name}`, { path: file.path, folderId: file.folderId });
+  }
+  return errors.flatMap((error): CompileError[] => {
+    const placed =
+      error.folderId === null || error.name === null
+        ? undefined
+        : byItem.get(`${error.folderId}/${error.name}`);
+    // Only a YAML error's line is the author's (AC-136, research 3b).
+    const at =
+      error.kind === 'yaml'
+        ? {
+            ...(error.line === undefined ? {} : { line: error.line }),
+            ...(error.column === undefined ? {} : { column: error.column }),
+          }
+        : {};
+    return placed !== undefined
+      ? [{ path: placed.path, folderId: placed.folderId, ...at, message: error.message }]
+      : changed.map((file) => ({
+          path: file.path,
+          folderId: file.folderId,
+          message: error.message,
+        }));
+  });
+}
+
+/** A refused push, answered: its errors on files, or why a data source can't be brought. */
+function refusalOf(
+  result: Exclude<PushResult, { kind: 'stored' } | { kind: 'empty' }>,
+  files: Parameters<typeof errorsOf>[1],
+  changed: Parameters<typeof errorsOf>[2],
+  folders: ReadonlyMap<string, string>,
+): Answer {
+  if (result.kind === 'refused')
+    return { status: 422, body: { errors: errorsOf(result.errors, files, changed, folders) } };
+  if (result.kind === 'older')
+    return {
+      status: 503,
+      body: {
+        error:
+          'An older xcube is still running, which can’t preview a workspace’s data sources. Try again once it has been replaced.',
+      },
+    };
+  // A data source xcube won't bring: its secret, or its connection, in xcube's words.
+  return { status: 422, body: { error: result.error } };
+}
+
+export function workspaceModels({ files, overlays, foldersOf, contentWith }: WorkspaceModelDeps) {
+  /**
+   * The workspace's models now, with these changed, as the overlay would
+   * hold them, pushed. A changed file whose target xcube's tree doesn't hold
+   * (a folder deleted since, say) has nowhere to go in the overlay: refused,
+   * rather than stored and silently left out of the previews.
+   */
+  const pushWith = async (
+    workspaceId: string,
+    models: readonly Placed[],
+    changed: readonly Placed[],
+  ): Promise<
+    | { readonly result: PushResult; readonly folders: ReadonlyMap<string, string> }
+    | { readonly lost: Answer }
+  > => {
+    const { content, folders } = await contentWith(workspaceId, models.map(modelOf));
+    const unplaced = changed.find((file) => !folders.has(file.targetFolderId ?? ''));
+    if (unplaced !== undefined)
+      return {
+        lost: {
+          status: 409,
+          body: {
+            error: `${unplaced.path} is to go to a folder xcube doesn’t serve now (it may have been deleted), so it can’t be previewed in your workspace.`,
+          },
+        },
+      };
+    return { result: await overlays.push(workspaceId, content), folders };
+  };
+
+  return {
+    /**
+     * A save in the workspace (T347, AC-282): each file over the one at its
+     * path in the folder, keeping where that one is to go; a new one goes to
+     * the target named, which the caller has checked the user may write.
+     */
+    async save(
+      workspaceId: string,
+      folderId: string,
+      changed: readonly ModelFile[],
+      /** The target for a new file, checked: undefined where none was named. */
+      target: string | undefined,
+    ): Promise<Answer> {
+      const held = await files.inFolders(await foldersOf(workspaceId));
+      const writes: WorkspaceModelFile[] = [];
+      const after: Placed[] = held.filter(
+        (file) => !(file.folderId === folderId && changed.some((each) => each.path === file.path)),
+      );
+      for (const file of changed) {
+        const stored = held.find((each) => each.folderId === folderId && each.path === file.path);
+        // Where it is to go is kept as stored (as a workspace dashboard's is).
+        const goesTo = stored === undefined ? (target ?? null) : stored.targetFolderId;
+        if (goesTo === null) return { status: 400, body: { error: NEEDS_TARGET } };
+        writes.push({
+          folderId,
+          path: file.path,
+          content: file.content,
+          ...(stored === undefined ? { targetFolderId: goesTo } : {}),
+        });
+        after.push({ folderId, path: file.path, content: file.content, targetFolderId: goesTo });
+      }
+      const pushed = await pushWith(
+        workspaceId,
+        after,
+        after.filter(
+          (file) => file.folderId === folderId && changed.some((each) => each.path === file.path),
+        ),
+      );
+      if ('lost' in pushed) return pushed.lost;
+      const { result, folders } = pushed;
+      if (result.kind !== 'stored' && result.kind !== 'empty')
+        return refusalOf(
+          result,
+          after,
+          writes.map((each) => ({ folderId, path: each.path })),
+          folders,
+        );
+      await files.write(writes);
+      return {
+        status: 200,
+        body: { version: result.kind === 'stored' ? String(result.version) : '0' },
+      };
+    },
+
+    /** A file removed from the workspace (T347): the overlay without it, then the store. */
+    async remove(workspaceId: string, folderId: string, path: string): Promise<Answer> {
+      const held = await files.inFolders(await foldersOf(workspaceId));
+      const file = held.find((each) => each.folderId === folderId && each.path === path);
+      if (file === undefined || files.remove === undefined)
+        return { status: 404, body: { error: `There’s no model file ${path} here.` } };
+      const after = held.filter((each) => each !== file);
+      const pushed = await pushWith(workspaceId, after, []);
+      if ('lost' in pushed) return pushed.lost;
+      const { result, folders } = pushed;
+      if (result.kind !== 'stored' && result.kind !== 'empty')
+        return refusalOf(result, held, [{ folderId, path }], folders);
+      await files.remove(folderId, path);
+      return {
+        status: 200,
+        body: { version: result.kind === 'stored' ? String(result.version) : '0' },
+      };
+    },
+
+    /**
+     * "Edit in my workspace" for a shared model (T347, AC-278, AC-283): a
+     * copy of its file, at its path in a project folder of its own (T523),
+     * going back to its folder, naming what it was copied from; or the copy
+     * already there. The overlay takes it first: one whose short name another
+     * of the workspace's models has is refused, naming it.
+     */
+    async copy(
+      workspaceId: string,
+      original: StoredModelFile,
+      project: { readonly id: string; readonly make: () => Promise<unknown> },
+    ): Promise<Answer> {
+      const held = await files.inFolders(await foldersOf(workspaceId));
+      const existing = held.find((file) => file.origin?.id === original.id);
+      if (existing !== undefined)
+        return {
+          status: 200,
+          body: { kind: 'model', created: false, folderId: existing.folderId, path: existing.path },
+        };
+      const origin: ModelOrigin = {
+        id: original.id,
+        folderId: original.folderId,
+        path: original.path,
+        version: original.version,
+      };
+      const copied = {
+        folderId: project.id,
+        path: original.path,
+        content: original.content,
+        targetFolderId: original.folderId,
+      };
+      const pushed = await pushWith(workspaceId, [...held, copied], [copied]);
+      if ('lost' in pushed) return pushed.lost;
+      const { result, folders } = pushed;
+      if (result.kind !== 'stored' && result.kind !== 'empty') {
+        const refused = refusalOf(result, [...held, copied], [copied], folders);
+        return refused.status === 422
+          ? { status: 409, body: { ...(refused.body as object), error: clashOf(result) } }
+          : refused;
+      }
+      await project.make();
+      await files.write([{ ...copied, origin }]);
+      return {
+        status: 201,
+        body: { kind: 'model', created: true, folderId: project.id, path: original.path },
+      };
+    },
+  };
+}
+
+/** Why a copy can't come into the workspace, in a line. */
+const clashOf = (result: Exclude<PushResult, { kind: 'stored' } | { kind: 'empty' }>) =>
+  result.kind === 'refused'
+    ? `It can’t be previewed in your workspace with what is there: ${
+        result.errors.map((error) => error.message).join(' ') || 'xcube refused it'
+      }`
+    : 'error' in result
+      ? result.error
+      : 'xcube refused it.';

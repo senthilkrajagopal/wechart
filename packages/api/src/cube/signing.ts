@@ -26,6 +26,12 @@ export interface QueryClaims {
   readonly groups: readonly string[];
   readonly wechartModel?: string;
   readonly wechartRevision?: number;
+  /**
+   * The overlay a workspace's or proposal's preview is answered from (T347,
+   * AC-323; research `xcube-slice-5.md`, "Query tokens"): named only in the
+   * tokens of those it allows.
+   */
+  readonly wechartOverlay?: string;
 }
 
 /** xcube takes RSA keys of 2048 bits or more. */
@@ -59,13 +65,14 @@ export async function querySigner({
   return {
     kid,
     publicJwk: { kty: 'RSA', n, e, kid, alg: 'RS256', use: 'sig' },
-    async sign({ groups, wechartModel, wechartRevision }, ttlSeconds) {
+    async sign({ groups, wechartModel, wechartRevision, wechartOverlay }, ttlSeconds) {
       const at = Math.floor(now() / 1000);
       return new SignJWT({
         role: 'user',
         groups: [...groups],
         ...(wechartModel === undefined ? {} : { wechartModel }),
         ...(wechartRevision === undefined ? {} : { wechartRevision }),
+        ...(wechartOverlay === undefined ? {} : { wechartOverlay }),
       })
         .setProtectedHeader({ alg: 'RS256', kid, typ: 'JWT' })
         .setAudience('xcube')

@@ -58,17 +58,23 @@ export function rollupHref({
  *   shared, changed only in a copy in My workspace. "Edit in my workspace"
  *   is for those who could propose it back — a Super-Admin or read-write
  *   member, with write on the model's folder — and none for a view-only one.
+ * - in My workspace, its owner, there: its models are changed in place and
+ *   previewed through the workspace's overlay (T347, AC-222).
  *   Until who is signed in is known, nothing is changed in place.
  */
 export function modelAccessOf({
   me,
   right,
+  inWorkspace = false,
 }: {
   readonly me: Me | undefined;
   /** Their right in the model's folder, as its access answered them (`rightFrom`). */
   readonly right: 'write' | 'read' | 'unknown';
+  /** Whether the model's folder is My workspace, or one in it. */
+  readonly inWorkspace?: boolean;
 }): { readonly readOnly: boolean; readonly editInWorkspace: boolean } {
   if (me?.security === 'off') return { readOnly: false, editInWorkspace: false };
+  if (inWorkspace) return { readOnly: me?.security !== 'oidc', editInWorkspace: false };
   return {
     readOnly: true,
     editInWorkspace:

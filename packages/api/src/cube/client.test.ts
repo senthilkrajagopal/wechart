@@ -30,7 +30,11 @@ interface RecordedRequest {
 let server: Server;
 let baseUrl: string;
 let received: RecordedRequest[] = [];
-let respond: (req: IncomingMessage) => { status: number; body: string } = () => ({
+let respond: (req: IncomingMessage) => {
+  status: number;
+  body: string;
+  headers?: Record<string, string>;
+} = () => ({
   status: 200,
   body: JSON.stringify({ cubes: [] }),
 });
@@ -46,8 +50,8 @@ beforeAll(async () => {
         headers: req.headers,
         body,
       });
-      const { status, body: responseBody } = respond(req);
-      res.writeHead(status, { 'content-type': 'application/json' });
+      const { status, body: responseBody, headers = {} } = respond(req);
+      res.writeHead(status, { 'content-type': 'application/json', ...headers });
       res.end(responseBody);
     });
   });
@@ -409,6 +413,251 @@ describe('RS256 query tokens (T437, AC-326)', () => {
     await cube.buildPreAggregations(['orders.daily']);
     await cube.introspect('/v1/introspection/data-sources');
     expect(received.map(bearerOf)).toEqual(['the-service-token', 'the-service-token']);
+  });
+});
+
+/**
+ * T347 (AC-323): a workspace item's previews name its overlay in the signed
+ * token, `wechartOverlay`, and only the tokens wechart signs for them do
+ * (research `xcube-slice-5.md`, "Query tokens"). A preview never names it
+ * itself, and wechart's own calls never carry it.
+ */
+describe('an overlay in a query token (T347, AC-323)', () => {
+  const signed = async () => {
+    const { generateKeyPairSync } = await import('node:crypto');
+    const { querySigner } = await import('./signing');
+    return querySigner({
+      privateKeyPem: generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({
+        type: 'pkcs8',
+        format: 'pem',
+      }) as string,
+      issuer: 'wechart',
+    });
+  };
+
+  /** As xcube answers a preview: saying which overlay, at which version, answered. */
+  const fromOverlay = (request: IncomingMessage) => {
+    const token = String(request.headers.authorization ?? '').replace(/^Bearer /, '');
+    // The service credential here is no JWT: it names no overlay.
+    const payload = Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8');
+    const overlay =
+      payload === ''
+        ? undefined
+        : (JSON.parse(payload) as Record<string, unknown>)['wechartOverlay'];
+    return typeof overlay === 'string' ? { 'x-xcube-overlay': `${overlay}@1` } : undefined;
+  };
+
+  it('names it in a user’s RS256 token, set last, and in no preview’s own claims or service call', async () => {
+    const signer = await signed();
+    received = [];
+    respond = (request) => ({
+      status: 200,
+      body: JSON.stringify({ cubes: [] }),
+      ...(fromOverlay(request) === undefined ? {} : { headers: fromOverlay(request)! }),
+    });
+    const cube = new CubeClient({
+      apiUrl: baseUrl,
+      apiSecret: 'test-secret-do-not-leak',
+      securityContext: {},
+      model: { id: 'e2e', revision: async () => 7 },
+      service: async () => 'the-service-token',
+      signer: () => signer,
+    });
+    const user = cube.as({ groups: ['g-sales'] });
+    await user.inOverlay('ws-1').load({ measures: ['orders.count'] });
+    await user.inOverlay('ws-1').meta();
+    // A preview's context can't name one for itself.
+    await user.load({ measures: ['orders.count'] }, undefined, {
+      groups: ['g-hr'],
+      wechartOverlay: 'p-other',
+      xcubeOverlay: 'p-other',
+    });
+    await user.inOverlay('ws-1').buildPreAggregations(['orders.daily']);
+    // The client it came from names none.
+    await user.load({ measures: ['orders.count'] });
+
+    const { iat: _iat, exp: _exp, ...rest } = payloadOf(received[0]!);
+    void [_iat, _exp];
+    expect(rest).toEqual({
+      aud: 'xcube',
+      iss: 'wechart',
+      role: 'user',
+      groups: ['g-sales'],
+      wechartModel: 'e2e',
+      wechartRevision: 7,
+      wechartOverlay: 'ws-1',
+    });
+    expect(payloadOf(received[1]!)['wechartOverlay']).toBe('ws-1');
+    expect(payloadOf(received[2]!)).not.toHaveProperty('wechartOverlay');
+    expect(payloadOf(received[2]!)).not.toHaveProperty('xcubeOverlay');
+    expect(bearerOf(received[3]!)).toBe('the-service-token');
+    expect(payloadOf(received[4]!)).not.toHaveProperty('wechartOverlay');
+  });
+
+  it('names it in an HS256 token too, after the configured context, so nothing configured names another', async () => {
+    received = [];
+    respond = (request) => ({
+      status: 200,
+      body: JSON.stringify({ cubes: [] }),
+      headers: fromOverlay(request) ?? {},
+    });
+    const cube = new CubeClient({
+      apiUrl: baseUrl,
+      apiSecret: 'test-secret-do-not-leak',
+      securityContext: { wechartOverlay: 'configured' },
+    });
+    await cube.inOverlay('ws-2').meta();
+    expect(payloadOf(received[0]!)['wechartOverlay']).toBe('ws-2');
+  });
+
+  it('asks again while Cube compiles it, and pushes it again once, when xcube says it is gone', async () => {
+    received = [];
+    const answers = [
+      { status: 503, body: JSON.stringify({ error: 'Cube is busy compiling; try again' }) },
+      {
+        status: 503,
+        body: JSON.stringify({
+          error: 'The overlay this request was pinned to is no longer compiled here; try again',
+        }),
+      },
+      {
+        status: 410,
+        body: JSON.stringify({
+          error: 'Overlay "ws-3" of model "e2e" is gone: it expired, or was dropped',
+        }),
+      },
+      {
+        status: 200,
+        body: JSON.stringify({ data: [{ n: 7 }] }),
+        headers: { 'x-xcube-overlay': 'ws-3@2' },
+      },
+    ];
+    respond = () => answers.shift()!;
+    let pushed = 0;
+    const cube = new CubeClient({
+      apiUrl: baseUrl,
+      apiSecret: 'test-secret-do-not-leak',
+      securityContext: {},
+      catchUpDelayMs: () => 0,
+    });
+
+    const answer = await cube
+      .inOverlay('ws-3', async () => {
+        pushed += 1;
+      })
+      .load({ measures: ['orders.count'] });
+
+    expect(answer).toEqual({ data: [{ n: 7 }] });
+    expect(pushed).toBe(1);
+    expect(received).toHaveLength(4);
+  });
+
+  /**
+   * An instance from before overlays ignores the claim and answers from the
+   * published model, with 200 (research `xcube-slice-5.md`, Gotcha 2): an
+   * answer that doesn't say it came from the overlay is never passed on as
+   * the preview's.
+   */
+  it('refuses an answer that doesn’t say it came from the overlay', async () => {
+    received = [];
+    respond = () => ({ status: 200, body: JSON.stringify({ data: [{ n: 42 }] }) });
+    const cube = new CubeClient({
+      apiUrl: baseUrl,
+      apiSecret: 'test-secret-do-not-leak',
+      securityContext: {},
+    });
+    const failure = await cube
+      .inOverlay('ws-5')
+      .load({ measures: ['orders.count'] })
+      .then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+    expect(failure).toBeInstanceOf(CubeError);
+    expect((failure as CubeError).status).toBe(503);
+    expect((failure as CubeError).message).toBe(
+      'Cube answered this preview without your workspace’s changes, so it isn’t shown. Try again.',
+    );
+    // Without an overlay, the same answer is the answer.
+    expect(await cube.load({ measures: ['orders.count'] })).toEqual({ data: [{ n: 42 }] });
+  });
+
+  /**
+   * An instance not yet told of the latest push answers the version before
+   * it, for up to 30 s with notices down (research `xcube-slice-5.md`,
+   * Gotcha 17; "check `x-xcube-overlay` equals `<id>@<version>`"): asked
+   * again, then refused, never passed on as the preview of what was saved.
+   */
+  it('asks again while an instance answers an older version of it, and refuses one that stays older', async () => {
+    received = [];
+    const versions = ['ws-6@3', 'ws-6@4'];
+    respond = () => ({
+      status: 200,
+      body: JSON.stringify({ data: [{ n: 4 }] }),
+      headers: { 'x-xcube-overlay': versions.shift() ?? 'ws-6@3' },
+    });
+    const cube = new CubeClient({
+      apiUrl: baseUrl,
+      apiSecret: 'test-secret-do-not-leak',
+      securityContext: {},
+      catchUpDelayMs: () => 0,
+    });
+    expect(await cube.inOverlay('ws-6', undefined, 4).load({ measures: ['orders.count'] })).toEqual(
+      { data: [{ n: 4 }] },
+    );
+    expect(received).toHaveLength(2);
+
+    received = [];
+    respond = () => ({
+      status: 200,
+      body: JSON.stringify({ data: [{ n: 3 }] }),
+      headers: { 'x-xcube-overlay': 'ws-6@3' },
+    });
+    const failure = await cube
+      .inOverlay('ws-6', undefined, 4)
+      .load({ measures: ['orders.count'] })
+      .then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+    expect(failure).toBeInstanceOf(CubeError);
+    expect((failure as CubeError).status).toBe(503);
+    expect(received).toHaveLength(3);
+    // A newer one is newer than what this server saved: as current, or more.
+    respond = () => ({
+      status: 200,
+      body: JSON.stringify({ data: [{ n: 5 }] }),
+      headers: { 'x-xcube-overlay': 'ws-6@5' },
+    });
+    expect(await cube.inOverlay('ws-6', undefined, 4).load({ measures: ['orders.count'] })).toEqual(
+      { data: [{ n: 5 }] },
+    );
+  });
+
+  it('says it is gone when pushing it again doesn’t bring it back', async () => {
+    received = [];
+    respond = () => ({
+      status: 410,
+      body: JSON.stringify({
+        error: 'Overlay "ws-4" of model "e2e" is gone: it expired, or was dropped',
+      }),
+    });
+    const cube = new CubeClient({
+      apiUrl: baseUrl,
+      apiSecret: 'test-secret-do-not-leak',
+      securityContext: {},
+      catchUpDelayMs: () => 0,
+    });
+    const failure = await cube
+      .inOverlay('ws-4', async () => undefined)
+      .load({ measures: ['orders.count'] })
+      .then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+    expect(failure).toBeInstanceOf(CubeError);
+    expect((failure as CubeError).status).toBe(410);
+    expect(received).toHaveLength(2);
   });
 });
 

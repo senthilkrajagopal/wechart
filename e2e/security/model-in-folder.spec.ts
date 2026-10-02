@@ -254,7 +254,7 @@ test.describe('a model in its folder, read-only when shared (T342; AC-222, AC-13
       );
     });
 
-    test('is read-only in its shared folder: no New cube or New view, and Edit in my workspace not yet pressable, saying why', async ({
+    test('is read-only in its shared folder: no New cube or New view, and Edit in my workspace offered', async ({
       page,
     }) => {
       await page.goto(fileUrl(made.emea, ORDERS));
@@ -267,13 +267,12 @@ test.describe('a model in its folder, read-only when shared (T342; AC-222, AC-13
       for (const name of [/New cube/, /New view/, /Generate/])
         await expect(tree(page).getByRole('button', { name })).toHaveCount(0);
 
-      // A Super-Admin could propose it back: offered, but a model can't be
-      // copied into My workspace until T347, which it says.
+      // A Super-Admin could propose it back: offered, to be pressed (T347;
+      // workspace-overlay.spec.ts presses it).
       const copy = form.getByRole('button', { name: 'Edit in my workspace' });
-      await expect(copy).toBeDisabled();
-      await expect(copy).toHaveAccessibleDescription(
-        'Models can’t be copied into My workspace yet, so this one is read-only here.',
-      );
+      await expect(copy).toBeEnabled();
+      // Nothing refused yet: no reason said beside it.
+      await expect(copy).toHaveAccessibleDescription('');
 
       // Its overview offers nothing to make either.
       await page.goto(`/explore/folders/${made.emea}/models`);
@@ -349,7 +348,8 @@ test.describe('a model in its folder, read-only when shared (T342; AC-222, AC-13
       await page.goto(fileUrl(made.emea, ORDERS));
       const form = page.getByRole('region', { name: 'Form editor' });
       await expect(yaml(page, ORDERS)).toHaveAttribute('aria-readonly', 'true');
-      await expect(form.getByRole('button', { name: 'Edit in my workspace' })).toBeDisabled();
+      // Offered, to be pressed (T347).
+      await expect(form.getByRole('button', { name: 'Edit in my workspace' })).toBeEnabled();
       await expect(tree(page).getByRole('button', { name: /New cube/ })).toHaveCount(0);
 
       // Sales' model, which writer only views (AC-262): read-only, with neither action (rule 71).

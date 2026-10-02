@@ -33,6 +33,11 @@ export interface CreateMenuProps {
    */
   readonly onNewSource?: () => void;
   /**
+   * A model, offered in My workspace (T347; AC-192, AC-282): a new cube, which
+   * asks for its name and the folder it is to go to.
+   */
+  readonly onNewModel?: () => void;
+  /**
    * Importing a dashboard from an export file, offered in My workspace where
    * it lands (T513, AC-192, AC-356; design 13, state G): under a divider,
    * after the kinds, so creating stays what New is.
@@ -52,6 +57,7 @@ export function CreateMenu({
   offers,
   onCreate,
   onNewSource,
+  onNewModel,
   onImport,
   busy = false,
 }: CreateMenuProps) {
@@ -72,8 +78,23 @@ export function CreateMenu({
       onCreate(option.kind);
     },
   }));
+  if (onNewModel !== undefined)
+    // AC-192's order in the workspace: Dashboard, Chart, Model, Data source, Folder.
+    items.splice(items.length - 1, 0, {
+      key: 'model',
+      label: (
+        <>
+          <span className="itemicon ic-model" aria-hidden="true">
+            ◇
+          </span>
+          Model
+        </>
+      ),
+      disabled: busy,
+      onSelect: onNewModel,
+    });
   if (onNewSource !== undefined)
-    // AC-192's order in the workspace: Dashboard, Chart, (Model,) Data source, Folder.
+    // AC-192's order in the workspace: Dashboard, Chart, Model, Data source, Folder.
     items.splice(items.length - 1, 0, {
       key: 'data-source',
       label: (

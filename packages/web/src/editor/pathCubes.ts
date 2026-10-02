@@ -1,6 +1,6 @@
 import type { FolderNode } from '../workspaces/explore/FolderTree';
 import { folderChain } from '../workspaces/explore/folders';
-import { SHARED_ROOT } from '../workspaces/explore/roots';
+import { MY_WORKSPACE, SHARED_ROOT } from '../workspaces/explore/roots';
 import type { CubeSummary } from './fields';
 
 /** The shared root's id in xcube (research `xcube-slice-3a.md`, "Names"). */
@@ -20,12 +20,35 @@ export function cubesOnPath(
   cubes: readonly CubeSummary[],
   folderId: string | undefined,
   folders: readonly FolderNode[],
+  /**
+   * For an item in My workspace, the shared folder it is to go to (T347,
+   * AC-281): its path is the workspace's own cubes, then that folder's.
+   */
+  targetFolderId?: string,
 ): readonly CubeSummary[] {
   if (folderId === undefined || !cubes.some((cube) => cube.xcube !== undefined)) return cubes;
-  const crumbs = folderChain(folders, folderId);
+  const chain = folderChain(folders, folderId);
+  /**
+   * In My workspace (T347; AC-329, AC-281): the workspace's own cubes first,
+   * wherever its overlay places them, each hiding a cube of its short name
+   * on the path, as names resolve in the overlay first; then its target's
+   * path, or the shared root's where it has none.
+   */
+  if (chain[0]?.id === MY_WORKSPACE.id) {
+    const own = cubes
+      .filter((cube) => cube.inWorkspace === true)
+      .map((cube) => ({ ...cube, folderPath: MY_WORKSPACE.title }));
+    const hidden = new Set(own.flatMap((cube) => (cube.xcube ? [cube.xcube.shortName] : [])));
+    const shared = cubesOnPath(
+      cubes.filter((cube) => cube.inWorkspace !== true),
+      targetFolderId ?? SHARED_ROOT.id,
+      folders,
+    ).filter((cube) => cube.xcube === undefined || !hidden.has(cube.xcube.shortName));
+    return [...own, ...shared];
+  }
+  const crumbs = chain;
   // From the root down: each folder's xcube id and the path to it in words.
-  // An item under My workspace reaches the shared root's cubes alone: xcube
-  // serves no workspace until slice 5 (T429's review).
+  // An item under My workspace reaches its own and its target's path, above.
   const path =
     crumbs[0]?.id === SHARED_ROOT.id
       ? crumbs.map((crumb, at) => ({

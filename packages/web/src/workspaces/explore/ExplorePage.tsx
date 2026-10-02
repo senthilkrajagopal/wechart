@@ -28,6 +28,7 @@ import { ExportPane } from '../../dashboard/export/ExportPane';
 import { ExportedToast } from '../../dashboard/export/ExportedToast';
 import { ImportPane } from './import/ImportPane';
 import { fileHref } from '../model/inFolder';
+import { startModelDraft } from '../model/ModelFilePage';
 import { FolderDescription } from './FolderDescription';
 import { DeleteDialog, type Checked, type Confirmation, type Refusal } from './DeleteDialog';
 import { ClearWorkspaceDialog } from './ClearWorkspaceDialog';
@@ -304,13 +305,14 @@ export function ExplorePage() {
    * review).
    */
   const [askingTarget, setAskingTarget] = useState<{
-    kind: 'dashboard' | 'chart' | 'data-source';
+    /** A model is a new cube, opened in the model page as a draft (T347). */
+    kind: 'dashboard' | 'chart' | 'data-source' | 'model';
     targets: readonly Target[];
     /** The folder it is made in: the one open when it was asked for. */
     folderId: string;
   } | null>(null);
   const [targetsFailed, setTargetsFailed] = useState<string | null>(null);
-  const askTarget = async (kind: 'dashboard' | 'chart' | 'data-source') => {
+  const askTarget = async (kind: 'dashboard' | 'chart' | 'data-source' | 'model') => {
     setTargetsFailed(null);
     const asked = folderId;
     try {
@@ -327,9 +329,11 @@ export function ExplorePage() {
   };
   /** A dashboard or chart being asked for: made at once, once its target is chosen. */
   const askingItem =
-    askingTarget === null || askingTarget.kind === 'data-source'
+    askingTarget === null || askingTarget.kind === 'data-source' || askingTarget.kind === 'model'
       ? null
       : { kind: askingTarget.kind, targets: askingTarget.targets };
+  /** A model being asked for (T347): a new cube, named, to go to the folder chosen. */
+  const askingModel = askingTarget?.kind === 'model' ? askingTarget : null;
   /** A data source being added: the folders it may go to, and where it is made. */
   const addingSource = askingTarget?.kind === 'data-source' ? askingTarget.targets : null;
   const addingIn = askingTarget?.folderId ?? folderId;
@@ -975,9 +979,40 @@ export function ExplorePage() {
               else create.mutate({ kind });
             }}
             {...(signedIn && role.inOwnWorkspace
-              ? { onNewSource: () => void askTarget('data-source') }
+              ? {
+                  onNewSource: () => void askTarget('data-source'),
+                  // A model, previewed through the workspace's overlay (T347, AC-282).
+                  onNewModel: () => void askTarget('model'),
+                }
               : {})}
           />
+          {askingModel === null ? null : (
+            <NewItemDialog
+              kind="cube"
+              defaultTitle="new_cube_1"
+              targets={askingModel.targets}
+              onClose={() => {
+                setAskingTarget(null);
+              }}
+              onCreate={(name, targetFolderId) => {
+                const taken = new Set(
+                  (contents.data ?? [])
+                    .filter((item) => item.kind === 'model')
+                    .map((item) => item.id),
+                );
+                const path = startModelDraft(
+                  queryClient,
+                  askingModel.folderId,
+                  'cube',
+                  name,
+                  targetFolderId,
+                  taken,
+                );
+                setAskingTarget(null);
+                router.history.push(fileHref(path, askingModel.folderId));
+              }}
+            />
+          )}
           {askingItem === null ? null : (
             <NewItemDialog
               kind={askingItem.kind}

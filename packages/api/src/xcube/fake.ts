@@ -62,6 +62,16 @@ interface Model {
   security?: boolean;
 }
 
+/** A data source as an overlay push brings it (T347). */
+interface OverlayConnectionBody {
+  readonly folderId: string;
+  readonly name: string;
+  readonly driver: string;
+  readonly authMethod: string;
+  readonly fields: Record<string, unknown>;
+  readonly sealed: Record<string, unknown>;
+}
+
 export interface FakeCall {
   readonly method: string;
   readonly path: string;
@@ -94,6 +104,20 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
   let wrongTreeHash: number = 0;
   /** Tree puts to refuse `409 older_instances`, as with an older xcube connected. */
   let olderInstances = 0;
+  /** Overlays held, by `<model>/<id>` (T347), and the sequence their versions come from. */
+  const overlays = new Map<
+    string,
+    {
+      version: number;
+      content: string;
+      upserts: Item[];
+      connections: OverlayConnectionBody[];
+      expiresAt: string;
+    }
+  >();
+  let overlayVersions = 0;
+  /** Overlay pushes to refuse as told, in order: `422 invalid_secret`, say. */
+  const overlayRefusals: { status: number; body: Record<string, unknown> }[] = [];
 
   const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), {
@@ -189,6 +213,110 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
     if (given === undefined || !tokens.includes(given))
       return answer(401, { error: 'A valid xcube admin token is required', code: 'unauthorized' });
 
+    /**
+     * An overlay (T347; research `xcube-slice-5.md`, "PUT …/overlays/{id}",
+     * `xcube-overlay-data-sources.md`): `404 unknown_model` with no head;
+     * `409 conflict` with `currentVersion` when `baseVersion` isn't what it
+     * holds; `422 invalid_items` for two items of one short name, or when
+     * told to refuse; else stored at a new version (the same one for the same
+     * content), `201` for a new id. `GET` answers its state or `404
+     * unknown_overlay`; `DELETE` answers `204` whether or not it was there.
+     */
+    const overlayRoute = /\/v1\/semantic\/models\/([^/]+)\/overlays\/([^/]+)$/.exec(url.pathname);
+    if (overlayRoute !== null) {
+      const model = decodeURIComponent(overlayRoute[1]!);
+      const id = decodeURIComponent(overlayRoute[2]!);
+      const key = `${model}/${id}`;
+      const stored = overlays.get(key);
+      if (method === 'DELETE') {
+        overlays.delete(key);
+        call.answered = 204;
+        return new Response(null, { status: 204 });
+      }
+      if (method === 'GET') {
+        if (stored === undefined)
+          return answer(404, { error: `Unknown overlay "${id}"`, code: 'unknown_overlay' });
+        return answer(200, {
+          model,
+          id,
+          version: stored.version,
+          expiresAt: stored.expiresAt,
+          upserts: stored.upserts.map(({ folderId, name, kind }) => ({
+            folderId,
+            name,
+            kind,
+            fullName: fullNameOf({ folderId, name }),
+          })),
+          deletes: [],
+          connections: stored.connections.map(({ folderId, name, driver }) => ({
+            folderId,
+            name,
+            fullName: fullNameOf({ folderId, name }),
+            driver,
+          })),
+          instance: { revision: headOf(model)?.revision ?? null, state: 'idle' },
+        });
+      }
+      if (method === 'PUT') {
+        if (headOf(model) === undefined)
+          return answer(404, { error: `Unknown model "${model}"`, code: 'unknown_model' });
+        const put = body as {
+          upserts: Item[];
+          connections?: OverlayConnectionBody[];
+          baseVersion?: number | null;
+        };
+        if (put.baseVersion !== undefined && put.baseVersion !== (stored?.version ?? null))
+          return answer(409, {
+            error: 'The overlay has moved on',
+            code: 'conflict',
+            currentVersion: stored?.version ?? null,
+          });
+        const refused = overlayRefusals.shift();
+        if (refused !== undefined) return answer(refused.status, refused.body);
+        const seen = new Map<string, string>();
+        for (const item of put.upserts) {
+          const other = seen.get(item.name);
+          if (other !== undefined)
+            return answer(422, {
+              error: 'The overlay does not apply',
+              code: 'invalid_items',
+              errors: [
+                {
+                  folderId: item.folderId,
+                  name: item.name,
+                  kind: 'item',
+                  message: `The overlay holds two items named "${item.name}" (in ${other} and ${item.folderId}); names in it resolve to its own items first, so they must differ`,
+                },
+              ],
+              cubeMessage: null,
+            });
+          seen.set(item.name, item.folderId);
+        }
+        const content = JSON.stringify([put.upserts, put.connections ?? []]);
+        const version = stored?.content === content ? stored.version : (overlayVersions += 1);
+        overlays.set(key, {
+          version,
+          content,
+          upserts: put.upserts,
+          connections: put.connections ?? [],
+          expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+        });
+        return answer(stored === undefined ? 201 : 200, {
+          model,
+          id,
+          version,
+          created: stored === undefined,
+          revision: headOf(model)?.revision ?? null,
+          expiresAt: overlays.get(key)!.expiresAt,
+          items: put.upserts.map(({ folderId, name }) => ({
+            folderId,
+            name,
+            fullName: fullNameOf({ folderId, name }),
+          })),
+        });
+      }
+    }
+
     const route =
       /\/v1\/semantic\/models\/([^/]+)\/(revision|snapshot|folders|changesets|items|resolve)$/.exec(
         url.pathname,
@@ -256,8 +384,33 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
     /** Names resolved nearest first from a folder (research 3a, "POST …/resolve"). */
     if (route[2] === 'resolve' && method === 'POST') {
       const known = models.get(model);
-      const { folderId, names } = body as { folderId: string; names: string[] };
+      const { folderId, names, overlay } = body as {
+        folderId: string;
+        names: string[];
+        overlay?: string;
+      };
       const tree = known?.tree ?? [];
+      // Through an overlay (T347): its items first by short name, whatever
+      // their folder; one gone is a 410 (research `xcube-slice-5.md`).
+      const through = overlay === undefined ? undefined : overlays.get(`${model}/${overlay}`);
+      if (overlay !== undefined && through === undefined)
+        return answer(410, { error: `Overlay "${overlay}" of model "${model}" is gone` });
+      if (through !== undefined && head !== undefined)
+        return answer(200, {
+          model,
+          revision: head.revision,
+          folderId,
+          overlay,
+          names: Object.fromEntries(
+            names.map((name) => {
+              const own = through.upserts.find((item) => item.name === name);
+              return [
+                name,
+                own === undefined ? resolveIn(head.items, tree, folderId, name) : fullNameOf(own),
+              ];
+            }),
+          ),
+        });
       // A model with no revision is answered as an unknown one (research 3a).
       if (
         known === undefined ||
@@ -697,6 +850,17 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
     ) => {
       refusal = errors;
       refusalMessage = cubeMessage;
+    },
+    /** An overlay as xcube holds it (T347): its version, items and data sources; none once dropped. */
+    overlay: (model: string, id: string) => {
+      const held = overlays.get(`${model}/${id}`);
+      return held === undefined
+        ? undefined
+        : { version: held.version, upserts: held.upserts, connections: held.connections };
+    },
+    /** The next overlay push answered so, as xcube refuses one (`422 invalid_secret`, say). */
+    refuseOverlayNext: (status: number, body: Record<string, unknown>) => {
+      overlayRefusals.push({ status, body });
     },
     /** xcube's schema emptied and made again: a new generation, and no models. */
     recreate: () => {

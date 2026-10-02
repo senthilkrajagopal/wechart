@@ -170,7 +170,36 @@ export function registerModelPublishing(
     dependentsOf,
     seesModelsIn,
     audit,
+    workspace,
   }: {
+    /**
+     * Models in My workspace (T347; AC-222, AC-282): saved and removed
+     * through the workspace's overlay, never published. Without it, a
+     * workspace's folder isn't one xcube serves, and nothing goes into it.
+     */
+    workspace?: {
+      /** The workspace a folder is in, at any depth; null for a shared one. */
+      readonly rootOf: (folderId: string) => Promise<string | null>;
+      /**
+       * Why a new model may not go to this target, as the answer to send:
+       * the user's read-write access to a shared folder (AC-282).
+       */
+      readonly targetRefusal: (
+        request: FastifyRequest,
+        target: unknown,
+      ) => Promise<{ status: number; body: unknown } | undefined>;
+      readonly save: (
+        workspaceId: string,
+        folderId: string,
+        changed: readonly ModelFile[],
+        target: string | undefined,
+      ) => Promise<{ status: number; body: unknown }>;
+      readonly remove: (
+        workspaceId: string,
+        folderId: string,
+        path: string,
+      ) => Promise<{ status: number; body: unknown }>;
+    };
     /**
      * Whether this user may see a folder's models (T427, AC-322): a refused
      * publish names the breaks there and counts the rest. Every folder where
@@ -410,6 +439,26 @@ export function registerModelPublishing(
       return reply.status(400).send({ error: 'Name the model file by its path.' });
     const refusal = await refusalIn?.(request, folderId);
     if (refusal !== undefined) return reply.status(refusal.status).send(refusal.body);
+    /**
+     * My workspace's (T347): nothing published depends on it, since nothing
+     * of a workspace is published. What in the workspace uses it is xcube's
+     * to refuse as its overlay is pushed without it, which the delete says.
+     */
+    if (workspace !== undefined && (await workspace.rootOf(folderId)) !== null) {
+      const own = (await modelFiles?.list(folderId))?.find((each) => each.path === path);
+      if (own === undefined)
+        return reply.status(404).send({ error: `There’s no model file ${path} here.` });
+      return {
+        declares: declaredIn(own.content)
+          .filter(({ name }) => name !== '')
+          .map(({ kind, name }) => ({ kind, name })),
+        views: [],
+        cubes: [],
+        charts: [],
+        dashboards: [],
+        hidden: 0,
+      };
+    }
     // Refused here as the delete refuses them (T526's review).
     const xcubeId = ((await folders?.()) ?? ROOT_ONLY).ids.get(folderId);
     if (modelFiles?.remove === undefined || xcubeId === undefined)
@@ -470,6 +519,12 @@ export function registerModelPublishing(
         return reply.status(400).send({ error: 'Name the model file to delete by its path.' });
       const refusal = await refusalIn?.(request, folderId);
       if (refusal !== undefined) return reply.status(refusal.status).send(refusal.body);
+      // My workspace's: removed from its overlay first, then its store (T347).
+      const inWorkspace = await workspace?.rootOf(folderId);
+      if (workspace !== undefined && inWorkspace != null) {
+        const answer = await workspace.remove(inWorkspace, folderId, path);
+        return reply.status(answer.status).send(answer.body);
+      }
       const served = (await folders?.()) ?? ROOT_ONLY;
       const xcubeId = served.ids.get(folderId);
       if (modelFiles?.remove === undefined || xcubeId === undefined)
@@ -547,10 +602,11 @@ export function registerModelPublishing(
       const refusal = await refusalIn?.(request, folderId);
       if (refusal !== undefined) return reply.status(refusal.status).send(refusal.body);
       // Published as the folder's items, under its xcube id (T452, AC-328). A
-      // folder xcube's tree doesn't hold (a workspace's, until slice 5) is
-      // served by none, so nothing is published into it.
+      // folder xcube's tree doesn't hold is served by none, so nothing is
+      // published into it; My workspace's are saved through its overlay (T347).
+      const inWorkspace = (await workspace?.rootOf(folderId)) ?? null;
       const served = (await folders?.()) ?? ROOT_ONLY;
-      if (!served.ids.has(folderId))
+      if (inWorkspace === null && !served.ids.has(folderId))
         return reply.status(409).send({
           error:
             'This folder isn’t one xcube serves (a workspace’s, say), so its models can’t be published.',
@@ -601,6 +657,28 @@ export function registerModelPublishing(
       // Names xcube's items refuse, which the files dry run would pass (T449's review).
       const misnamed = changed.flatMap(misnamedIn);
       if (misnamed.length > 0) return reply.status(422).send({ errors: misnamed });
+      /**
+       * In My workspace (T347; AC-222, AC-282): saved through its overlay,
+       * never published. A new file goes to the shared folder named, one the
+       * user may write; a stored one keeps where it is to go.
+       */
+      if (workspace !== undefined && inWorkspace !== null) {
+        const sent = (body as { targetFolderId?: unknown } | undefined)?.targetFolderId;
+        let target: string | undefined;
+        if (sent !== undefined) {
+          const refused = await workspace.targetRefusal(request, sent);
+          if (refused !== undefined) return reply.status(refused.status).send(refused.body);
+          target = sent as string;
+        }
+        // One cube or view of a name to a folder, as anywhere (T426's review).
+        const own = (modelFiles === undefined ? [] : await modelFiles.list(folderId)).filter(
+          (file) => !changed.some((each) => each.path === file.path),
+        );
+        const again = redeclaredIn(changed, own);
+        if (again.length > 0) return reply.status(422).send({ errors: again });
+        const answer = await workspace.save(inWorkspace, folderId, changed, target);
+        return reply.status(answer.status).send(answer.body);
+      }
       // xcube checks a change and serves it (T445, T447); without it, neither happens.
       if (modelFiles === undefined || xcube === undefined)
         return reply.status(409).send({

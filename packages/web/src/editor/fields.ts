@@ -38,6 +38,11 @@ export interface CubeSummary {
    * where the model says nothing of folders.
    */
   readonly xcube?: { readonly folderId: string; readonly shortName: string };
+  /**
+   * One of My workspace's own, its overlay's (T347): the API marks them in a
+   * workspace item's field list (`meta.wechart.workspace`).
+   */
+  readonly inWorkspace?: boolean;
   /** The folders from the root to its own, for the picker (T429, AC-329). */
   readonly folderPath?: string;
 }
@@ -60,7 +65,7 @@ interface RawCube {
   isVisible?: boolean;
   public?: boolean;
   description?: string;
-  meta?: { xcube?: { folderId?: unknown; shortName?: unknown } };
+  meta?: { xcube?: { folderId?: unknown; shortName?: unknown }; wechart?: { workspace?: unknown } };
   measures?: RawMember[];
   dimensions?: RawMember[];
   segments?: RawMember[];
@@ -88,6 +93,7 @@ export function cubesFrom(meta: unknown): CubeSummary[] {
       ...(typeof xcube?.folderId === 'string' && typeof xcube.shortName === 'string'
         ? { xcube: { folderId: xcube.folderId, shortName: xcube.shortName } }
         : {}),
+      ...(cube.meta?.wechart?.workspace === true ? { inWorkspace: true } : {}),
     };
   });
 }
