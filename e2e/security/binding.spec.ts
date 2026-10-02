@@ -1,5 +1,6 @@
 import type { APIRequestContext } from '@playwright/test';
 
+import { inMyWorkspace, landed, proposedModel } from '../model-files';
 import { expect, test } from './fixtures';
 import { changeShared } from './shared-change';
 
@@ -55,6 +56,10 @@ const cubeYaml = (name: string, joins: readonly string[] = [], empty = false) =>
     '',
   ].join('\n');
 
+/**
+ * A cube put in a shared folder as a model changes now: through My workspace
+ * and a proposal `super` approves (T451, AC-278), never published in place.
+ */
 async function publish(
   request: APIRequestContext,
   folderId: string,
@@ -62,13 +67,8 @@ async function publish(
   joins: string[] = [],
   empty = false,
 ) {
-  const published = await request.post('/api/model/publish', {
-    data: {
-      folderId,
-      files: [{ path: `cubes/${name}.yml`, content: cubeYaml(name, joins, empty) }],
-    },
-  });
-  expect(published.status(), await published.text()).toBe(200);
+  const file = { path: `cubes/${name}.yml`, content: cubeYaml(name, joins, empty) };
+  expect(await landed(request, folderId, [file])).toEqual([file]);
 }
 
 /**
@@ -174,17 +174,21 @@ test.describe('published items stay bound until published again (T428, AC-275)',
     page,
   }) => {
     const request = page.request;
-    // Renaming /A/B's `binding_orders`, which the chart now names, is refused.
-    const renamed = await request.post('/api/model/publish', {
-      data: {
-        folderId: ids.b,
-        files: [{ path: 'cubes/binding_orders.yml', content: cubeYaml('binding_renamed') }],
-      },
-    });
-    expect(renamed.status()).toBe(409);
-    expect(((await renamed.json()) as { error: string }).error).toBe(
-      `“binding_orders” is still used by the chart “Bound ${RUN}”.`,
-    );
+    // Renaming /A/B's `binding_orders`, which the chart now names, is
+    // refused: its copy renamed in My workspace isn't proposed (T451).
+    const path = 'cubes/binding_orders.yml';
+    const copy = await inMyWorkspace(request, ids.b, [
+      { path, content: cubeYaml('binding_renamed') },
+    ]);
+    try {
+      const renamed = await proposedModel(request, copy.folderOf(path), path);
+      expect(renamed.status()).toBe(409);
+      expect(((await renamed.json()) as { error: string }).error).toBe(
+        `“binding_orders” is still used by the chart “Bound ${RUN}”.`,
+      );
+    } finally {
+      await copy.drop();
+    }
 
     // /A's `binding_lines` joins /A's `binding_orders`: its delete is refused,
     // naming the cube from xcube's bindings (T520, AC-365).

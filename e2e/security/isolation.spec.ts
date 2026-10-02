@@ -1,6 +1,7 @@
 import type { APIRequestContext } from '@playwright/test';
 
 import { serviceToken } from '../api-process';
+import { landed } from '../model-files';
 import { expect, test } from './fixtures';
 import { seedRootDefault } from './root-default';
 import { changeShared } from './shared-change';
@@ -59,11 +60,10 @@ const salesYaml = (source: string) =>
     '',
   ].join('\n');
 
+/** Through My workspace and a proposal `super` approves (T451, AC-278). */
 async function publish(request: APIRequestContext, folderId: string, source: string) {
-  const published = await request.post('/api/model/publish', {
-    data: { folderId, files: [{ path: 'cubes/iso_sales.yml', content: salesYaml(source) }] },
-  });
-  expect(published.status(), await published.text()).toBe(200);
+  const file = { path: 'cubes/iso_sales.yml', content: salesYaml(source) };
+  expect(await landed(request, folderId, [file])).toEqual([file]);
 }
 
 /** A chart made in a folder and saved on `iso_sales`, as the editor saves one; its id. */
@@ -276,20 +276,13 @@ test.describe('two folders’ same-named cubes, kept apart (T341, AC-274, AC-328
       c: await chartCount(request, charts.c),
     };
     // Something only /C holds: /A reaches it once xcube has /A beneath /C.
-    const onlyC = await request.post('/api/model/publish', {
-      data: {
-        folderId: ids.c,
-        files: [
-          {
-            path: 'cubes/iso_only_c.yml',
-            // A measure, so the field list has something to list it by.
-            content:
-              'cubes:\n  - name: iso_only_c\n    sql_table: public.orders\n    measures:\n      - name: count\n        type: count\n',
-          },
-        ],
-      },
-    });
-    expect(onlyC.status(), await onlyC.text()).toBe(200);
+    const onlyC = {
+      path: 'cubes/iso_only_c.yml',
+      // A measure, so the field list has something to list it by.
+      content:
+        'cubes:\n  - name: iso_only_c\n    sql_table: public.orders\n    measures:\n      - name: count\n        type: count\n',
+    };
+    expect(await landed(request, ids.c, [onlyC])).toEqual([onlyC]);
     const onlyCFull = `${xcubeIdOf(ids.c)}__iso_only_c`;
     const resolvedFromA = async () =>
       (

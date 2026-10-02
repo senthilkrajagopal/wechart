@@ -21,6 +21,7 @@ import type { Changeset } from '../xcube/changesets';
 import { itemsOf } from '../xcube/items';
 import type { HeldItem } from '../xcube/client';
 import { chainOf, ROOT_ONLY, XCUBE_ROOT, type PublishedFolders } from '../xcube/folders';
+import { sharedInPlace } from '../routes/shared-in-place';
 import { planLanding, type LandingModel, type LandingWrite } from './landing';
 import { declaredIn, misnamedIn, redeclaredIn, severalIn, unreadableIn } from './split';
 import type { CompileError } from './validate';
@@ -184,6 +185,11 @@ export function registerModelPublishing(
     workspace?: {
       /** The workspace a folder is in, at any depth; null for a shared one. */
       readonly rootOf: (folderId: string) => Promise<string | null>;
+      /**
+       * Whether a proposal lands a workspace's models (T451): then a shared
+       * folder's are changed only that way, never published in place (AC-278).
+       */
+      readonly proposed: boolean;
       /**
        * Why a new model may not go to this target, as the answer to send:
        * the user's read-write access to a shared folder (AC-282).
@@ -617,6 +623,14 @@ export function registerModelPublishing(
       // folder xcube's tree doesn't hold is served by none, so nothing is
       // published into it; My workspace's are saved through its overlay (T347).
       const inWorkspace = (await workspace?.rootOf(folderId)) ?? null;
+      /**
+       * A shared folder's model changes only through a proposal (T451,
+       * AC-278), as a dashboard does: copied into My workspace, changed and
+       * proposed. Wherever workspaces hold models and proposals land them:
+       * with sign-in on (with it off, the single user has no overlay yet).
+       */
+      if (workspace?.proposed === true && inWorkspace === null)
+        return reply.status(409).send(sharedInPlace('model'));
       const served = (await folders?.()) ?? ROOT_ONLY;
       if (inWorkspace === null && !served.ids.has(folderId))
         return reply.status(409).send({

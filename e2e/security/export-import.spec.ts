@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import type { APIRequestContext, APIResponse, Page } from '@playwright/test';
 import { sealSecretV1, type SealedV1, type XcubeKey } from '@wechart/core';
 
+import { landed } from '../model-files';
 import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtures';
 import { changeShared, changeSharedSource } from './shared-change';
 
@@ -121,12 +122,11 @@ async function dataSource(request: APIRequestContext, folderId: string, name: st
   return id;
 }
 
+/** Through My workspace and a proposal its author approves (T451, AC-278). */
 async function publish(request: APIRequestContext, folderId: string, name: string, source: string) {
-  const answer = await request.post('/api/model/publish', {
-    data: { folderId, files: [{ path: modelPath(name), content: cubeYaml(name, source) }] },
-  });
-  expect(answer.status(), await answer.text()).toBe(200);
   published.push({ folderId, name });
+  const file = { path: modelPath(name), content: cubeYaml(name, source) };
+  expect(await landed(request, folderId, [file])).toEqual([file]);
 }
 
 /** A chart's definition, on `cube`. */

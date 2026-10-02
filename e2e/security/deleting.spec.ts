@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import type { Browser, Page } from '@playwright/test';
 import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
+import { landed } from '../model-files';
 import { BASE_URL, expect, signInThroughDex, test, testedSource, type Role } from './fixtures';
 import { changeShared } from './shared-change';
 
@@ -421,11 +422,11 @@ test.describe('deleting a data source and a model file (T526, AC-364, AC-365)', 
       });
       expect(source.status(), await source.text()).toBe(201);
       modeled.source = ((await source.json()) as { id: string }).id;
+      // Through My workspace and a proposal `super` approves (T451, AC-278).
       const publish = async (path: string, content: string) => {
-        const answer = await request.post('/api/model/publish', {
-          data: { folderId: modeled.folder, files: [{ path, content }] },
-        });
-        expect(answer.status(), await answer.text()).toBe(200);
+        expect(await landed(request, modeled.folder, [{ path, content }])).toEqual([
+          { path, content },
+        ]);
       };
       await publish(
         cubePath,

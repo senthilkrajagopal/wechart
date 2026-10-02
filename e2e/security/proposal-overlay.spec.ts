@@ -5,6 +5,7 @@ import type { APIRequestContext } from '@playwright/test';
 import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
 import { querySigner } from '../../packages/api/src/cube/signing';
+import { landed } from '../model-files';
 import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtures';
 
 /**
@@ -125,19 +126,12 @@ test.describe('a proposal’s overlay (T440, AC-323)', () => {
       });
       expect(source.status(), await source.text()).toBe(201);
       made.source = ((await source.json()) as { id: string }).id;
-      const published = await request.post('/api/model/publish', {
-        data: {
-          folderId: made.folder,
-          files: [
-            {
-              path: `cubes/${CUBE}.yml`,
-              content: `cubes:\n  - name: ${CUBE}\n    sql: SELECT current_database()::text AS db, 1 AS n\n    data_source: ${SOURCE}\n    dimensions:\n      - name: db\n        sql: db\n        type: string\n    measures:\n      - name: n\n        sql: n\n        type: sum\n`,
-            },
-          ],
-        },
-        timeout: 90_000,
-      });
-      expect(published.status(), await published.text()).toBe(200);
+      // Through My workspace and a proposal `super` approves (T451, AC-278).
+      const file = {
+        path: `cubes/${CUBE}.yml`,
+        content: `cubes:\n  - name: ${CUBE}\n    sql: SELECT current_database()::text AS db, 1 AS n\n    data_source: ${SOURCE}\n    dimensions:\n      - name: db\n        sql: db\n        type: string\n    measures:\n      - name: n\n        sql: n\n        type: sum\n`,
+      };
+      expect(await landed(request, made.folder, [file])).toEqual([file]);
     });
   });
 

@@ -967,6 +967,7 @@ export function buildServer({
       : {
           workspace: {
             rootOf: (folderId: string) => workspaceRootOf(folderId),
+            proposed: proposals !== undefined,
             targetRefusal: (request: FastifyRequest, target: unknown) =>
               targetRefusalOf(request, target),
             save: wsModels.save,

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import type { APIRequestContext } from '@playwright/test';
 import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
+import { landed } from '../model-files';
 import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtures';
 
 /**
@@ -47,12 +48,9 @@ const made = {
 };
 const full = (name: string) => `${made.xcubeId}__${name}`;
 
+/** Through My workspace and a proposal `super` approves (T451, AC-278). */
 async function publish(request: APIRequestContext, path: string, content: string) {
-  const answer = await request.post('/api/model/publish', {
-    data: { folderId: made.folder, files: [{ path, content }] },
-    timeout: 90_000,
-  });
-  expect(answer.status(), await answer.text()).toBe(200);
+  expect(await landed(request, made.folder, [{ path, content }])).toEqual([{ path, content }]);
 }
 
 /** A query of the item, as its tiles ask: the rows Cube answered. */

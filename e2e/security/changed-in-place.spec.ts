@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import type { APIRequestContext } from '@playwright/test';
 import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
+import { landed } from '../model-files';
 import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtures';
 import { changeSharedSource } from './shared-change';
 
@@ -241,11 +242,10 @@ test.describe('a data source changed in place (T501, AC-161)', () => {
     });
     expect(made.status(), await made.text()).toBe(201);
     sourceId = ((await made.json()) as { id: string }).id;
-    const publish = await request.post('/api/model/publish', {
-      data: { folderId: 'root', files: [{ path: `cubes/${CUBE}.yml`, content: cubeYaml }] },
-    });
-    expect(publish.status(), await publish.text()).toBe(200);
+    // Through My workspace and a proposal `super` approves (T451, AC-278).
+    const file = { path: `cubes/${CUBE}.yml`, content: cubeYaml };
     published = true;
+    expect(await landed(request, 'root', [file])).toEqual([file]);
 
     // Built over its first target, and answered from it: through its rollup,
     // and by Cube itself, whose answer it now holds in its cache.

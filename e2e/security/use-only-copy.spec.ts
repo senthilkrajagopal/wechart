@@ -1,3 +1,4 @@
+import { landed } from '../model-files';
 import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
 
 /**
@@ -75,11 +76,9 @@ test.describe('a model of a folder one may only read, used in My workspace (T543
         const answer = await request.put(`/api/folders/${id}/access`, { data: access });
         expect(answer.status(), await answer.text()).toBe(200);
       }
-      const published = await request.post('/api/model/publish', {
-        data: { folderId: made.parent, files: [{ path: PATH, content: cubeOf(3) }] },
-        timeout: 90_000,
-      });
-      expect(published.status(), await published.text()).toBe(200);
+      // Through My workspace and a proposal `super` approves (T451, AC-278).
+      const file = { path: PATH, content: cubeOf(3) };
+      expect(await landed(request, made.parent, [file])).toEqual([file]);
     });
   });
 

@@ -1,5 +1,6 @@
 import type { APIRequestContext, Response } from '@playwright/test';
 
+import { landed } from '../model-files';
 import { expect, test } from './fixtures';
 import { changeShared } from './shared-change';
 
@@ -101,10 +102,9 @@ test.describe('copy on use (T527, AC-371)', () => {
       const set = await request.put(`/api/folders/${folderId}/access`, { data: access });
       expect(set.status(), await set.text()).toBe(200);
     }
-    const published = await request.post('/api/model/publish', {
-      data: { folderId: ids.g, files: [{ path: 'cubes/orders.yml', content: cubeYaml('orders') }] },
-    });
-    expect(published.status(), await published.text()).toBe(200);
+    // Through My workspace and a proposal `super` approves (T451, AC-278).
+    const file = { path: 'cubes/orders.yml', content: cubeYaml('orders') };
+    expect(await landed(request, ids.g, [file])).toEqual([file]);
 
     ids.chart = await made(request, {
       kind: 'chart',

@@ -4,6 +4,7 @@ import type { APIRequestContext, APIResponse } from '@playwright/test';
 import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
 import { CUBE, serviceToken } from '../api-process';
+import { landed } from '../model-files';
 import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtures';
 
 /**
@@ -92,32 +93,20 @@ const cubeYaml = (name: string, { dataSource, extends: parent, title }: CubeOpti
   ].join('\n');
 type CubeOptions = { dataSource?: string; extends?: string; title?: string };
 
-/** Published, and kept to remove after: whatever it answers. */
-async function publish(
-  request: APIRequestContext,
-  folderId: string,
-  name: string,
-  options?: CubeOptions,
-) {
-  const answer = await request.post('/api/model/publish', {
-    data: { folderId, files: [{ path: `cubes/${name}.yml`, content: cubeYaml(name, options) }] },
-  });
-  if (
-    answer.status() === 200 &&
-    !published.some((each) => each.folderId === folderId && each.name === name)
-  )
-    published.push({ folderId, name });
-  return answer;
-}
-
+/**
+ * Published, and kept to remove after: through My workspace and a proposal
+ * `super` approves, as a shared folder's model changes now (T451, AC-278).
+ */
 async function published200(
   request: APIRequestContext,
   folderId: string,
   name: string,
   options?: CubeOptions,
 ) {
-  const answer = await publish(request, folderId, name, options);
-  expect(answer.status(), await answer.text()).toBe(200);
+  if (!published.some((each) => each.folderId === folderId && each.name === name))
+    published.push({ folderId, name });
+  const file = { path: `cubes/${name}.yml`, content: cubeYaml(name, options) };
+  expect(await landed(request, folderId, [file])).toEqual([file]);
 }
 
 /** The database a published cube reads, by its full name. */
@@ -208,13 +197,37 @@ test.describe('data sources bound at publish, nearest first (T435, AC-273, AC-31
   });
 
   test('refuses a name found nowhere on the model’s path, naming it', async ({ page }) => {
-    const refused = await publish(page.request, ids.n, `${RUN}_lost`, { dataSource: 'warehouse' });
-    expect(refused.status()).toBe(422);
-    // xcube's refusal at binding, not a driver's for a name bound to nothing.
-    const { errors } = (await refused.json()) as { errors: { message: string }[] };
-    expect(errors.map((error) => error.message)).toEqual([
-      'It uses the data source "warehouse", which no folder on this item\'s path holds',
-    ]);
+    // Written in My workspace to go there (T451, AC-278): its overlay binds
+    // it as the folder would, so the save says it.
+    const { request } = page;
+    const project = await request.post('/api/documents', {
+      data: { kind: 'folder', title: `Lost ${RUN}`, folderId: 'mine' },
+    });
+    expect(project.status(), await project.text()).toBe(201);
+    const projectId = ((await project.json()) as { id: string }).id;
+    try {
+      const refused = await request.post('/api/model/publish', {
+        data: {
+          folderId: projectId,
+          targetFolderId: ids.n,
+          files: [
+            {
+              path: `cubes/${RUN}_lost.yml`,
+              content: cubeYaml(`${RUN}_lost`, { dataSource: 'warehouse' }),
+            },
+          ],
+        },
+        timeout: 90_000,
+      });
+      expect(refused.status()).toBe(422);
+      // xcube's refusal at binding, not a driver's for a name bound to nothing.
+      const { errors } = (await refused.json()) as { errors: { message: string }[] };
+      expect(errors.map((error) => error.message)).toEqual([
+        'It uses the data source "warehouse", which no folder on this item\'s path holds',
+      ]);
+    } finally {
+      await request.delete(`/api/documents/folder/${projectId}`);
+    }
   });
 
   test('reports the connection a cube queried live on every instance serving it (AC-161)', async ({

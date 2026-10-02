@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 
 import type { APIRequestContext, Page } from '@playwright/test';
 
+import { landed } from '../model-files';
 import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
 
 /**
@@ -185,29 +186,18 @@ test.describe('a model in its folder, read-only when shared (T342; AC-222, AC-13
         readOnly: ['sales-ro'],
         readWrite: ['sales-rw'],
       });
-      // One at a time, each what the next joins or includes.
+      // One at a time, each what the next joins or includes: through My
+      // workspace and a proposal `super` approves (T451, AC-278).
       for (const file of FILES) {
-        const published = await request.post('/api/model/publish', {
-          data: { folderId: made.emea, files: [file] },
-          timeout: 90_000,
-        });
-        expect(published.status(), await published.text()).toBe(200);
         made.files.push(file.path);
+        expect(await landed(request, made.emea, [file])).toEqual([file]);
       }
-      const region = await request.post('/api/model/publish', {
-        data: {
-          folderId: made.sales,
-          files: [
-            {
-              path: REGION,
-              content: CUSTOMERS_YAML.replace('name: t342_customers', 'name: t342_region'),
-            },
-          ],
-        },
-        timeout: 90_000,
-      });
-      expect(region.status(), await region.text()).toBe(200);
+      const region = {
+        path: REGION,
+        content: CUSTOMERS_YAML.replace('name: t342_customers', 'name: t342_region'),
+      };
       made.region = true;
+      expect(await landed(request, made.sales, [region])).toEqual([region]);
     });
 
     test('opens a model row from Explore in its folder, never the root’s file of the same path', async ({

@@ -1,5 +1,6 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 
+import { landed } from '../model-files';
 import { expect, test } from './fixtures';
 
 /**
@@ -43,10 +44,9 @@ async function folderWith(
   expect(made.status()).toBe(201);
   const id = ((await made.json()) as { id: string }).id;
   expect((await request.put(`/api/folders/${id}/access`, { data: access })).status()).toBe(200);
-  const published = await request.post('/api/model/publish', {
-    data: { folderId: id, files: [{ path: `cubes/${cube}.yml`, content: cubeYaml(cube) }] },
-  });
-  expect(published.status(), await published.text()).toBe(200);
+  // Through My workspace and a proposal `super` approves (T451, AC-278).
+  const file = { path: `cubes/${cube}.yml`, content: cubeYaml(cube) };
+  expect(await landed(request, id, [file])).toEqual([file]);
   return id;
 }
 

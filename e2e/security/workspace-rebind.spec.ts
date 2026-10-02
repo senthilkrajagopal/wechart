@@ -1,5 +1,6 @@
 import type { APIRequestContext } from '@playwright/test';
 
+import { landed } from '../model-files';
 import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
 
 /**
@@ -90,11 +91,9 @@ test.describe('a workspace tile’s stored name, rebound to the workspace’s ow
         expect(access.status()).toBe(200);
       }
       made.xcubeId = `f${made.first.replaceAll('-', '')}`;
-      const published = await request.post('/api/model/publish', {
-        data: { folderId: made.first, files: [{ path: PATH, content: cubeOf(1) }] },
-        timeout: 90_000,
-      });
-      expect(published.status(), await published.text()).toBe(200);
+      // Through My workspace and a proposal `super` approves (T451, AC-278).
+      const file = { path: PATH, content: cubeOf(1) };
+      expect(await landed(request, made.first, [file])).toEqual([file]);
       const shared = await request.post('/api/documents', {
         data: { kind: 'dashboard', title: `Shared ${RUN}`, folderId: made.first },
       });

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import type { APIRequestContext } from '@playwright/test';
 import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
+import { landed } from '../model-files';
 import {
   BASE_URL,
   expect,
@@ -58,12 +59,11 @@ async function cube(
     '        type: count',
     '',
   ].join('\n');
-  const answer = await request.post('/api/model/publish', {
-    data: { folderId, files: [{ path: `cubes/${name}.yml`, content }] },
-  });
-  expect(answer.status(), await answer.text()).toBe(200);
   if (!made.cubes.some((each) => each.folderId === folderId && each.name === name))
     made.cubes.push({ folderId, name });
+  // Through My workspace and a proposal its author approves (T451, AC-278).
+  const file = { path: `cubes/${name}.yml`, content };
+  expect(await landed(request, folderId, [file])).toEqual([file]);
 }
 
 async function folder(request: APIRequestContext, title: string, parent: string) {

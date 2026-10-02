@@ -1,5 +1,6 @@
 import type { APIRequestContext } from '@playwright/test';
 
+import { landed } from '../model-files';
 import { expect, test } from './fixtures';
 import { changeShared, proposeShared } from './shared-change';
 
@@ -25,19 +26,13 @@ async function folder(request: APIRequestContext, title: string, parent: string)
   return ((await made.json()) as { id: string }).id;
 }
 
+/** Through My workspace and a proposal `super` approves (T451, AC-278). */
 async function publish(request: APIRequestContext, folderId: string, name: string) {
-  const published = await request.post('/api/model/publish', {
-    data: {
-      folderId,
-      files: [
-        {
-          path: `cubes/${name}.yml`,
-          content: `cubes:\n  - name: ${name}\n    sql_table: public.orders\n    measures:\n      - name: count\n        type: count\n`,
-        },
-      ],
-    },
-  });
-  expect(published.status(), await published.text()).toBe(200);
+  const file = {
+    path: `cubes/${name}.yml`,
+    content: `cubes:\n  - name: ${name}\n    sql_table: public.orders\n    measures:\n      - name: count\n        type: count\n`,
+  };
+  expect(await landed(request, folderId, [file])).toEqual([file]);
 }
 
 /** A chart made in a folder, as New › Chart makes one. */
@@ -274,8 +269,6 @@ async function publishYaml(
   name: string,
   content: string,
 ) {
-  const published = await request.post('/api/model/publish', {
-    data: { folderId, files: [{ path: `cubes/${name}.yml`, content }] },
-  });
-  expect(published.status(), await published.text()).toBe(200);
+  const file = { path: `cubes/${name}.yml`, content };
+  expect(await landed(request, folderId, [file])).toEqual([file]);
 }

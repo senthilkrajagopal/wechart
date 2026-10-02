@@ -1,6 +1,7 @@
 import type { APIRequestContext } from '@playwright/test';
 
 import { CUBE } from '../api-process';
+import { inMyWorkspace, landed, proposedModel } from '../model-files';
 import { queryToken } from '../tokens';
 import { expect, test } from './fixtures';
 import { changeShared } from './shared-change';
@@ -77,11 +78,10 @@ const cubeYaml = (name: string, extra: readonly string[] = []) =>
     '',
   ].join('\n');
 
+/** Put in a shared folder through My workspace and a proposal `super` approves (T451, AC-278). */
 async function publish(request: APIRequestContext, folderId: string, name: string, yaml: string) {
-  const published = await request.post('/api/model/publish', {
-    data: { folderId, files: [{ path: `cubes/${name}.yml`, content: yaml }] },
-  });
-  expect(published.status(), await published.text()).toBe(200);
+  const file = { path: `cubes/${name}.yml`, content: yaml };
+  expect(await landed(request, folderId, [file])).toEqual([file]);
 }
 
 interface Answer {
@@ -316,17 +316,22 @@ test.describe('Cube refuses what wechart refuses (T436, AC-320)', () => {
       ]);
     await publish(request, ids.a, summary, joined(true));
 
-    // The join taken away: the rollup can no longer be planned. Every name
-    // it uses is still in the model, so only the check's probe, run as the
-    // Super-Admin group that /A admits, can tell.
-    const broken = await request.post('/api/model/publish', {
-      data: { folderId: ids.a, files: [{ path: `cubes/${summary}.yml`, content: joined(false) }] },
-    });
-    expect(broken.status(), await broken.text()).toBe(422);
-    const { errors } = (await broken.json()) as { errors?: { message: string }[] };
-    expect(errors?.[0]?.message).toMatch(
-      /^Pre-aggregation by_status can't be built: Cube cannot join its cubes\. Can't find join path/,
-    );
+    // The join taken away in a copy in My workspace: the rollup can no longer
+    // be planned. Every name it uses is still in the model, so only the
+    // check's probe, run as the Super-Admin group that /A admits, can tell:
+    // the proposal's dry run (T451).
+    const path = `cubes/${summary}.yml`;
+    const copy = await inMyWorkspace(request, ids.a, [{ path, content: joined(false) }]);
+    try {
+      const broken = await proposedModel(request, copy.folderOf(path), path);
+      expect(broken.status(), await broken.text()).toBe(422);
+      const { errors } = (await broken.json()) as { errors?: { message: string }[] };
+      expect(errors?.[0]?.message).toMatch(
+        /^Pre-aggregation by_status can't be built: Cube cannot join its cubes\. Can't find join path/,
+      );
+    } finally {
+      await copy.drop();
+    }
   });
 });
 

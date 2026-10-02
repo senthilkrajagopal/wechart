@@ -1,5 +1,6 @@
 import type { APIRequestContext } from '@playwright/test';
 
+import { landed } from '../model-files';
 import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
 
 /**
@@ -93,11 +94,9 @@ test.describe('a dashboard proposed with the workspace model it resolves through
         data: { readOnly: [], readWrite: ['sales-rw'] },
       });
       expect(access.status()).toBe(200);
-      const published = await page.request.post('/api/model/publish', {
-        data: { folderId: made.folder, files: [{ path: PATH, content: PUBLISHED }] },
-        timeout: 90_000,
-      });
-      expect(published.status(), await published.text()).toBe(200);
+      // Through My workspace and a proposal `super` approves (T451, AC-278).
+      const file = { path: PATH, content: PUBLISHED };
+      expect(await landed(page.request, made.folder, [file])).toEqual([file]);
     });
   });
 

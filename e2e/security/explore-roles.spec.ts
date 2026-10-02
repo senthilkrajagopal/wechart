@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
+import { landed } from '../model-files';
 import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtures';
 
 /**
@@ -180,27 +181,21 @@ test.describe('Explore and the top bar by role (T331; AC-001, AC-192, AC-194)', 
       await board(request, `Inner board ${RUN}`, made.inner);
       // A model in Roles, and a data source in Inner: folder items that a
       // read-only member may not see (AC-263).
-      const published = await request.post('/api/model/publish', {
-        data: {
-          folderId: made.roles,
-          files: [
-            {
-              path: MODEL,
-              content: [
-                'cubes:',
-                `  - name: ${CUBE}`,
-                '    sql_table: public.orders',
-                '    measures:',
-                '      - name: count',
-                '        type: count',
-                '',
-              ].join('\n'),
-            },
-          ],
-        },
-      });
-      expect(published.status(), await published.text()).toBe(200);
+      // Through My workspace and a proposal `super` approves (T451, AC-278).
+      const file = {
+        path: MODEL,
+        content: [
+          'cubes:',
+          `  - name: ${CUBE}`,
+          '    sql_table: public.orders',
+          '    measures:',
+          '      - name: count',
+          '        type: count',
+          '',
+        ].join('\n'),
+      };
       made.model = true;
+      expect(await landed(request, made.roles, [file])).toEqual([file]);
       const source = await request.post('/api/data-sources', {
         data: await testedSource(request, {
           folderId: made.inner,

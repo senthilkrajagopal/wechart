@@ -1,5 +1,6 @@
 import type { APIRequestContext } from '@playwright/test';
 
+import { landed } from '../model-files';
 import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
 
 /**
@@ -31,11 +32,9 @@ const filesOf = async (request: APIRequestContext) => {
   expect(answer.status(), await answer.text()).toBe(200);
   return ((await answer.json()) as { files: { path: string; content: string }[] }).files;
 };
+/** Through My workspace and a proposal `super` approves (T451, AC-278): the folder's files of it. */
 const publish = (request: APIRequestContext, path: string, content: string) =>
-  request.post('/api/model/publish', {
-    data: { folderId: made.folder, files: [{ path, content }] },
-    timeout: 90_000,
-  });
+  landed(request, made.folder, [{ path, content }]);
 
 test.describe.configure({ mode: 'serial' });
 
@@ -88,8 +87,9 @@ test.describe('a proposal’s model, checked when proposed and at approval (T451
         [PATH, CUBE],
         [OTHER_PATH, OTHER],
       ] as const) {
-        const published = await publish(page.request, path, cubeOf(name));
-        expect(published.status(), await published.text()).toBe(200);
+        expect(await publish(page.request, path, cubeOf(name))).toEqual([
+          { path, content: cubeOf(name) },
+        ]);
       }
     });
   });
@@ -172,8 +172,9 @@ test.describe('a proposal’s model, checked when proposed and at approval (T451
     test.use({ role: 'super' });
 
     test('publishes the other cube again', async ({ page }) => {
-      const published = await publish(page.request, OTHER_PATH, cubeOf(OTHER));
-      expect(published.status(), await published.text()).toBe(200);
+      expect(await publish(page.request, OTHER_PATH, cubeOf(OTHER))).toEqual([
+        { path: OTHER_PATH, content: cubeOf(OTHER) },
+      ]);
     });
   });
 
