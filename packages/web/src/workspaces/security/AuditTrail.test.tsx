@@ -431,6 +431,115 @@ describe('the audit trail (T369, AC-295)', () => {
     );
   });
 
+  it('shows a SQL run as a kind of its own, with its outcome, rows, time and SQL, its literals replaced (T534, AC-382; design 15, state J)', async () => {
+    serve({
+      first: {
+        records: [
+          {
+            id: 'q2',
+            at: today(14, 47, 30),
+            actor: { key: 'wren', name: 'Wren', identity: 'wren@corp.example' },
+            event: 'sql-run',
+            folderId: 'emea',
+            folderPath: EMEA,
+            item: { kind: 'data-source', id: 'ds-1', title: 'emea_replica' },
+            summary: 'Not run · couldn’t be read as SQL',
+            details: {
+              outcome: 'refused',
+              rowCount: null,
+              durationMs: null,
+              sql: null,
+              inWorkspace: false,
+            },
+          },
+          {
+            id: 'q1',
+            at: today(14, 32, 5),
+            actor: { key: 'wren', name: 'Wren', identity: 'wren@corp.example' },
+            event: 'sql-run',
+            folderId: 'emea',
+            folderPath: EMEA,
+            item: { kind: 'data-source', id: 'ds-1', title: 'emea_replica' },
+            summary: 'Finished · 1,284 rows · 0.84 s',
+            details: {
+              outcome: 'finished',
+              rowCount: 1284,
+              durationMs: 840,
+              truncated: null,
+              statement: 'select',
+              sql: 'SELECT o.order_id FROM sales.orders o WHERE o.region = ?',
+              inWorkspace: false,
+            },
+          },
+        ],
+        total: 2,
+        retentionDays: 365,
+      },
+    });
+    open();
+    await screen.findByRole('table', { name: 'Audit trail' });
+
+    const row = within(table()).getAllByRole('row')[2]!;
+    expect(within(row).getByText('SQL run').previousElementSibling?.tagName).toBe('svg');
+    await userEvent.click(screen.getByRole('button', { name: /^Event/ }));
+    expect(screen.getByRole('checkbox', { name: 'SQL run' })).toBeTruthy();
+    await userEvent.keyboard('{Escape}');
+
+    await userEvent.click(
+      within(table()).getByRole('button', { name: 'Finished · 1,284 rows · 0.84 s' }),
+    );
+    const inspector = screen.getByRole('region', { name: /^SQL run/ });
+    const rows = within(inspector)
+      .getAllByRole('definition')
+      .map((each) => each.textContent);
+    expect(rows).toEqual(expect.arrayContaining(['Finished', '1,284', '0.84 s']));
+    expect(within(inspector).getByTestId('audit-sql').textContent).toBe(
+      'SELECT o.order_id FROM sales.orders o WHERE o.region = ?',
+    );
+
+    await userEvent.click(
+      within(table()).getByRole('button', { name: 'Not run · couldn’t be read as SQL' }),
+    );
+    const unread = screen.getByRole('region', { name: /^SQL run/ });
+    expect(within(unread).getByTestId('audit-sql').textContent).toBe(
+      'Not kept: it couldn’t be read, so its literals couldn’t be found and replaced.',
+    );
+  });
+
+  it('names a run on a copy in My workspace as the copy’s (T534’s review; design 15, state J)', async () => {
+    serve({
+      first: {
+        records: [
+          {
+            id: 'q3',
+            at: today(11, 5, 47),
+            actor: { key: 'wren', name: 'Wren', identity: 'wren@corp.example' },
+            event: 'sql-run',
+            folderId: 'emea',
+            folderPath: EMEA,
+            item: { kind: 'data-source', id: 'ds-2', title: 'emea_replica' },
+            summary: 'Finished · 38 rows · 0.09 s',
+            details: {
+              outcome: 'finished',
+              rowCount: 38,
+              durationMs: 90,
+              sql: 'SELECT ?',
+              inWorkspace: true,
+            },
+          },
+        ],
+        total: 1,
+        retentionDays: 365,
+      },
+    });
+    open();
+    await screen.findByRole('table', { name: 'Audit trail' });
+    const row = within(table()).getAllByRole('row')[1]!;
+    expect(within(row).getAllByRole('cell')[4]?.textContent).toBe(
+      'Data source · emea_replica · copy in My workspace',
+    );
+  });
+
   it('pages to older records and back (pin 9)', async () => {
     const asked = serve({
       first: { records: RECORDS.slice(0, 2), next: 'c1', total: 3, retentionDays: 365 },

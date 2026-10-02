@@ -2,10 +2,12 @@ import { randomUUID } from 'node:crypto';
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
+import { actorOf, recordIn } from '../audit/record';
 import { USER } from '../auth/guard';
+import type { AuditStore } from '../repos/audit';
 import type { DataSource, DataSourceStore } from '../repos/data-sources';
 import type { SqlRunnerSwitchStore } from '../repos/sql-runner-switches';
-import type { GoingRun, SqlRunStore } from '../repos/sql-runs';
+import type { GoingRun, LostRun, SqlRunStore } from '../repos/sql-runs';
 import { XcubeError } from '../xcube/client';
 import { connectionNameOf } from '../xcube/connections';
 import type { SqlAnswer, SqlTarget, XcubeSqlRunner } from '../xcube/sql-runner';
@@ -199,7 +201,15 @@ export function registerSqlRunner(
     reached,
     workspaceOf,
     runs,
+    audit,
+    paths,
   }: {
+    /** Where each run is recorded (T534, AC-382). */
+    readonly audit: Pick<AuditStore, 'record'> | undefined;
+    /** Each folder's path from the root, for a run's data source (T534). */
+    readonly paths: () => Promise<
+      (folderId: string) => readonly { readonly id: string; readonly title: string }[]
+    >;
     /** Unset where xcube isn't run: a run then says so. */
     readonly runner: SqlRunnerOptions | undefined;
     /** Each user's runs, one going at a time (T533); unset, none is held back. */
@@ -260,6 +270,46 @@ export function registerSqlRunner(
     return { connection: connectionNameOf(placed, source.name), overlay: overlay.id };
   };
 
+  /** A run its instance never finished, recorded once it is counted lost (T534's review). */
+  const recordLost = async (request: FastifyRequest, lost: LostRun) => {
+    const source = lost.dataSourceId === null ? undefined : await store.get(lost.dataSourceId);
+    const workspace =
+      source === undefined ? null : ((await workspaceOf?.(source.folderId)) ?? null);
+    await recordIn(
+      audit,
+      {
+        at: lost.startedAt,
+        actor: actorOf(request.wechartUser),
+        event: 'sql-run',
+        folderId:
+          source === undefined
+            ? null
+            : workspace === null
+              ? source.folderId
+              : (source.origin?.folderId ?? source.targetFolderId ?? source.folderId),
+        item:
+          lost.dataSourceId === null
+            ? { kind: 'cube-store', id: 'cubestore', title: 'Cube Store' }
+            : {
+                kind: 'data-source',
+                id: lost.dataSourceId,
+                title: source?.name ?? lost.dataSourceName ?? lost.dataSourceId,
+              },
+        summary: 'Not finished · its server stopped mid-run',
+        details: {
+          outcome: 'lost',
+          rowCount: null,
+          durationMs: null,
+          truncated: null,
+          statement: null,
+          sql: null,
+          inWorkspace: workspace !== null,
+        },
+      },
+      request.log,
+    );
+  };
+
   app.post('/api/data-sources/:id/sql', USER, async (request, reply) => {
     const source = await reached(request, reply, 'read');
     if (source === undefined) return reply;
@@ -285,10 +335,14 @@ export function registerSqlRunner(
     // One run going at a time for its user, across every API instance (T533, AC-379).
     const runId = randomUUID();
     if (runs !== undefined) {
+      // Their runs an instance stopped mid-run never finished: recorded now (T534's review).
+      for (const lost of await runs.markLost(userKeyOf(request))) await recordLost(request, lost);
       const started = await runs.start({
         runId,
         userKey: userKeyOf(request),
         dataSourceId: source.id,
+        sql,
+        dataSourceName: source.name,
       });
       if (!started.started) {
         const going = await goingView(started.going);
@@ -299,32 +353,143 @@ export function registerSqlRunner(
         });
       }
     }
+    let answer: SqlAnswer | undefined;
     let said: RunReply;
+    /** Why there is no answer of xcube's: it refused the request, didn't answer in time, or wasn't reached. */
+    let unanswered: 'refused' | 'late' | 'away' | undefined;
     try {
-      said = replyOf(await runner.xcube.run(target, { sql, runId, ...SQL_CAPS }));
+      answer = await runner.xcube.run(target, { sql, runId, ...SQL_CAPS });
+      said = replyOf(answer);
     } catch (error) {
-      if (!(error instanceof XcubeError))
+      unanswered =
+        error instanceof XcubeError
+          ? 'refused'
+          : (error as { name?: unknown } | null)?.name === 'TimeoutError'
+            ? 'late'
+            : 'away';
+      if (unanswered !== 'refused')
         request.log.warn({ err: error }, 'could not ask xcube to run SQL');
       said =
-        error instanceof XcubeError
+        unanswered === 'refused'
           ? {
               status: 502,
-              body: { outcome: 'failed', error: `xcube refused the run: ${error.message}` },
-            }
-          : {
-              status: 503,
               body: {
                 outcome: 'unavailable',
-                error: 'xcube can’t be reached to run the SQL. Try again once it’s back.',
+                error: `xcube refused the run: ${(error as Error).message}`,
+              },
+            }
+          : {
+              status: unanswered === 'late' ? 504 : 503,
+              body: {
+                outcome: 'unavailable',
+                error:
+                  unanswered === 'late'
+                    ? 'xcube didn’t answer in time, so whether it ran isn’t known. Try again.'
+                    : 'xcube can’t be reached to run the SQL. Try again once it’s back.',
               },
             };
     }
+    const outcome = said.body.outcome;
+    const ran = answer?.kind === 'ran' ? answer : undefined;
+    const done = {
+      outcome,
+      rowCount: ran?.rowCount ?? null,
+      durationMs:
+        answer !== undefined && 'durationMs' in answer ? (answer.durationMs ?? null) : null,
+      truncated: ran?.truncated ?? null,
+      statement: answer !== undefined && 'statement' in answer ? answer.statement : null,
+    };
     // Done before it is answered, so the next run never overlaps it (T533's review).
-    await runs?.finish(runId, said.body.outcome).catch((error: unknown) => {
+    await runs?.finish(runId, done).catch((error: unknown) => {
       request.log.warn({ err: error }, 'could not note a SQL run as done');
     });
+    /**
+     * Every run, an audit event (T534, AC-382; design 15's J): who, the data
+     * source and its folder, when, the outcome, the rows and the time, and
+     * the SQL with every literal replaced, by xcube. Never the SQL as
+     * written, nor the database's words, which may quote a literal.
+     */
+    await recordIn(
+      audit,
+      {
+        actor: actorOf(request.wechartUser),
+        event: 'sql-run',
+        // A copy's where its original is, as its other records are (T368's review).
+        folderId:
+          workspace === null
+            ? source.folderId
+            : (source.origin?.folderId ?? source.targetFolderId ?? source.folderId),
+        item: { kind: 'data-source', id: source.id, title: source.name },
+        summary: summaryOf(answer, done, unanswered),
+        details: {
+          ...done,
+          sql: answer !== undefined && 'redactedSql' in answer ? answer.redactedSql : null,
+          inWorkspace: workspace !== null,
+        },
+      },
+      request.log,
+    );
     if (said.retryAfter !== undefined) void reply.header('retry-after', said.retryAfter);
     return reply.status(said.status).send(said.body);
+  });
+
+  /**
+   * A user's own past runs (T534, AC-381; design 15's F and Q2): theirs
+   * alone, newest first, 50 at a time; one data source's with `?dataSource=`,
+   * else all. Each names its data source, with its folder where they still
+   * see it.
+   */
+  app.get('/api/sql-runs', USER, async (request, reply) => {
+    if (runs === undefined) return { runs: [] };
+    const { dataSource, after } = request.query as { dataSource?: unknown; after?: unknown };
+    if (
+      (dataSource !== undefined && typeof dataSource !== 'string') ||
+      (after !== undefined && typeof after !== 'string')
+    )
+      return reply.status(400).send({ error: 'Name one data source, and one page to follow.' });
+    const page = await runs.list({
+      userKey: userKeyOf(request),
+      ...(dataSource === undefined ? {} : { dataSourceId: dataSource }),
+      ...(after === undefined ? {} : { after }),
+    });
+    const pathOf = await paths();
+    const sourceView = async (id: string, name: string | null) => {
+      const source = await store.get(id);
+      const seen =
+        source !== undefined && (await access(request, source.folderId, 'read')) === undefined;
+      const inWorkspace = source !== undefined && (await workspaceOf?.(source.folderId)) != null;
+      return {
+        id,
+        // Its name now only to one who still sees it; else the name it had (T534's review).
+        name: (seen ? source?.name : undefined) ?? name ?? id,
+        folderPath: seen && !inWorkspace ? pathOf(source.folderId) : null,
+        inWorkspace,
+      };
+    };
+    const viewed = new Map<string, Awaited<ReturnType<typeof sourceView>>>();
+    const out = [];
+    for (const run of page.runs) {
+      let view = null;
+      if (run.dataSourceId !== null) {
+        view = viewed.get(run.dataSourceId);
+        if (view === undefined) {
+          view = await sourceView(run.dataSourceId, run.dataSourceName);
+          viewed.set(run.dataSourceId, view);
+        }
+      }
+      out.push({
+        id: run.id,
+        sql: run.sql,
+        dataSource: view,
+        startedAt: run.startedAt.toISOString(),
+        outcome: run.outcome,
+        rowCount: run.rowCount,
+        durationMs: run.durationMs,
+        truncated: run.truncated,
+        statement: run.statement,
+      });
+    }
+    return page.next === undefined ? { runs: out } : { runs: out, next: page.next };
   });
 
   /** The run going, as its user is shown it: on which data source, since when. */
@@ -375,6 +540,63 @@ export function registerSqlRunner(
 
 /** Whose runs: the signed-in user's, or with sign-in off its one user's. */
 const userKeyOf = (request: FastifyRequest) => request.wechartUser?.key ?? 'single-user';
+
+const rowsText = (n: number) => (n === 1 ? '1 row' : `${n.toLocaleString('en')} rows`);
+const secondsText = (ms: number) =>
+  `${(ms / 1000).toLocaleString('en', { maximumFractionDigits: 2 })} s`;
+const article = (word: string) => (/^[AEIOU]/.test(word) ? 'an' : 'a');
+
+/**
+ * A run's line in the audit trail, as design 15's state J words it: never a
+ * literal, nor the database's words.
+ */
+function summaryOf(
+  answer: SqlAnswer | undefined,
+  done: {
+    readonly outcome: string;
+    readonly rowCount: number | null;
+    readonly durationMs: number | null;
+    readonly truncated: 'rows' | 'bytes' | null;
+  },
+  unanswered?: 'refused' | 'late' | 'away',
+): string {
+  switch (answer?.kind) {
+    case 'ran': {
+      const head =
+        done.truncated === 'rows'
+          ? 'Limited to 10,000 rows'
+          : done.truncated === 'bytes'
+            ? 'Limited to 10 MB'
+            : 'Finished';
+      return `${head} · ${rowsText(answer.rowCount)} · ${secondsText(answer.durationMs)}`;
+    }
+    case 'refused': {
+      const kind = answer.statement;
+      if (kind === null)
+        return answer.code === 'several_statements'
+          ? 'Not run · more than one statement'
+          : 'Not run · couldn’t be read as SQL';
+      if (kind === 'select') return 'Not run · a SELECT that writes or locks';
+      if (kind === 'explain') return 'Not run · EXPLAIN ANALYZE';
+      return `Not run · ${article(kind.toUpperCase())} ${kind.toUpperCase()}`;
+    }
+    case 'stopped':
+      return answer.how === 'timeout' ? 'Stopped at 30 seconds' : 'Cancelled';
+    case 'failed':
+      return answer.code === 'connect_failed' ? 'Not run · couldn’t connect' : 'Database error';
+    case 'busy':
+      return 'Not run · xcube was busy';
+    case 'missing':
+      return 'Not run · xcube doesn’t hold its connection';
+    default:
+      // No answer of xcube's (T534's review).
+      return unanswered === 'refused'
+        ? 'Not run · xcube refused it'
+        : unanswered === 'late'
+          ? 'No answer from xcube in time · it may have run'
+          : 'Not run · xcube couldn’t be reached';
+  }
+}
 
 /** A cancel asked again while xcube doesn't know the run yet: up to 5 s. */
 const CANCEL_TRIES = 20;

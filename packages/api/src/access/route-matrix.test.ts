@@ -822,6 +822,10 @@ beforeAll(async () => {
 afterAll(async () => {
   if (app !== undefined) await app.close();
   const db = getDb();
+  // The SQL runs the matrix made (T533, T534).
+  const sourced = PLACES.map((place) => at[place]?.source).filter((id) => id !== undefined);
+  if (sourced.length > 0)
+    await db.deleteFrom('sql_runs').where('data_source_id', 'in', sourced).execute();
   if (models.length > 0) await db.deleteFrom('model_files').where('path', 'in', models).execute();
   await db.deleteFrom('data_sources').where('name', 'like', `${mark}%`).execute();
   for (const id of extraSources) await db.deleteFrom('data_sources').where('id', '=', id).execute();
@@ -1676,6 +1680,23 @@ const CASES: Record<string, Case> = {
       const answer = await ask(who, { method: 'GET', url: '/api/sql-runs/going' });
       answered(answer, `${who} asking for their run going`);
       expect(answer.json(), who).toEqual({ going: null });
+    }
+  },
+  // A user's own past runs (T534, AC-381): theirs alone. The runs the case
+  // above made are each listed to its own runner, and to nobody else.
+  'GET /api/sql-runs': async () => {
+    for (const who of WHO) {
+      const answer = await ask(who, { method: 'GET', url: '/api/sql-runs' });
+      answered(answer, `${who} listing their runs`);
+      const runs = answer.json<{ runs: { dataSource: { id: string } | null }[] }>().runs;
+      // Of this world's data sources, theirs alone: the places they write,
+      // where the run case ran theirs, and not another's. Other suites' runs
+      // by the same test users are theirs too.
+      for (const place of PLACES)
+        expect(
+          runs.some((run) => run.dataSource?.id === at[place].source),
+          `${who}'s runs on ${place}'s`,
+        ).toBe(writes(who, place));
     }
   },
   'POST /api/sql-runs/cancel': async () => {

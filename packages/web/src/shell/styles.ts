@@ -3714,6 +3714,13 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 .audit-trail { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
 .audit-trail--open { grid-template-columns: minmax(0, 1fr) 360px; }
 .audit-trail__list { display: grid; gap: 10px; min-width: 0; }
+/* A SQL run's SQL, its literals replaced (T534; design 15, state J1): the code face, wrapped. */
+.audit-trail__sql {
+  margin: 0; padding: 6px 8px; font: 400 12px/18px var(--wc-font-code);
+  background: var(--wc-bg-subtle); border: 1px solid var(--wc-border-subtle); border-radius: 4px;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.audit-trail__note { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
 .audit-trail__subfolders { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; color: var(--wc-text-secondary); }
 .audit-trail__range { display: inline-flex; gap: 8px; font-size: 12px; }
 .audit-trail__events { position: relative; }

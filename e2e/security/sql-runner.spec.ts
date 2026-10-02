@@ -267,6 +267,59 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
     expect(await (await page.request.get('/api/sql-runs/going')).json()).toEqual({ going: null });
   });
 
+  test('keeps each run in its user’s own history, and records it with its literals replaced (T534, AC-381, AC-382)', async ({
+    page,
+    browser,
+  }) => {
+    const literal = `lit_${RUN}`;
+    const writer = await signedIn(browser, 'writer');
+    try {
+      const ran = await runOn(
+        writer.page.request,
+        world.sourceId,
+        `SELECT '${literal}' AS v, 7 AS n`,
+      );
+      expect(ran.status(), await ran.text()).toBe(200);
+
+      // The writer's own, on this data source's list, newest first, as they wrote it.
+      const mine = await writer.page.request.get(`/api/sql-runs?dataSource=${world.sourceId}`);
+      expect(mine.status()).toBe(200);
+      const [newest] = ((await mine.json()) as { runs: Record<string, unknown>[] }).runs;
+      expect(newest).toMatchObject({
+        sql: `SELECT '${literal}' AS v, 7 AS n`,
+        dataSource: { id: world.sourceId, name: 'warehouse', inWorkspace: false },
+        outcome: 'finished',
+        rowCount: 1,
+      });
+      // Nobody else's list holds it.
+      expect(await (await page.request.get('/api/sql-runs')).text()).not.toContain(literal);
+
+      // The audit event: who, which data source and folder, when, the outcome,
+      // the rows and the time, and the SQL with its literals replaced.
+      const trail = await page.request.get(
+        `/api/audit?events=sql-run&folder=${world.folderId}&limit=10`,
+      );
+      expect(trail.status(), await trail.text()).toBe(200);
+      const body = await trail.text();
+      const [event] = (JSON.parse(body) as { records: Record<string, unknown>[] }).records;
+      expect(event).toMatchObject({
+        event: 'sql-run',
+        actor: { name: 'Wren Writer' },
+        folderId: world.folderId,
+        item: { kind: 'data-source', id: world.sourceId, title: 'warehouse' },
+        details: {
+          outcome: 'finished',
+          rowCount: 1,
+          durationMs: expect.any(Number),
+          sql: 'SELECT ? AS v, ? AS n',
+        },
+      });
+      expect(body).not.toContain(literal);
+    } finally {
+      await writer.context.close();
+    }
+  });
+
   test('runs for its owner on a copy in My workspace, with no switch, in their workspace’s preview (AC-383)', async ({
     page,
     browser,

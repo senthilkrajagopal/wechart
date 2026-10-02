@@ -10566,10 +10566,37 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       4. A run that can't go to xcube now says `outcome: 'unavailable'` with its `409`, so the tab tells it from `going` by outcome.
       5. The route tests mark runs a test cut short as lost before they start.
     - **AC-379 stays open** for its rows that arrived before a cancel, which wait on xcube (T532's note), and for the tab's Cancel (T535).
-- [ ] T534 (AC-381, AC-382) Keep each user's run history, and audit every run with its SQL's literals replaced
+- [x] T534 (AC-381, AC-382) Keep each user's run history, and audit every run with its SQL's literals replaced
   - Files: `packages/api/src/routes/sql-runner.ts`, a migration for the runs, `packages/api/src/audit/*`, tests
   - Failing test: a run is listed to its user alone, with its SQL, source, time, outcome and rows; the audit event has who, the source and its folder, when, the outcome, the rows, the duration, and `redactedSql` with no literal from the SQL (AC-381, AC-382).
   - Depends on: T532
+  - **Done 2026-10-02.**
+    - **History, on T533's rows:** migration `1758490534000` adds to `sql_runs` the SQL as written, the data source's name then, and the rows, time, cut and statement. An index serves "newest first per user".
+      - A run's row takes them at its start and its end (`repos/sql-runs.ts`).
+      - `list` gives a user's own finished runs, newest first, 50 at a time, a data source's alone with `dataSourceId`. Its cursor is the last run's id, read back only among the user's own runs.
+    - **`GET /api/sql-runs`:** `?dataSource=` and `?after=`. Each run comes with its SQL, its data source (its name, its folder's path where they still see it, and whether it is in My workspace; `null` for Cube Store), when, the outcome, the rows, the time, the cut and the statement.
+    - **Kept as long as audit records are:** `removeBefore` runs on the audit retention's period and timer (`main.ts`). A run still going is never removed.
+    - **The audit event, `sql-run`** (`AUDIT_EVENTS`):
+      - It is written once the run's row is finished, before the run is answered, for every run that went to xcube: refused, stopped and failed ones too.
+      - It holds the actor, the data source as its item, and when.
+      - Its folder is the data source's own. A workspace copy's is its original's folder, or its target's, as its other records are (T368's review).
+      - The summary is in design 15's state J words: "Finished · 1,284 rows · 0.84 s", "Not run · a DELETE", "Stopped at 30 seconds", "Database error".
+      - Its details: the outcome, rows, time, cut, statement, `inWorkspace`, and `sql`: xcube's `redactedSql`. It is `null` where xcube read none.
+      - Never the SQL as written, nor the database's words, which may quote a literal.
+    - **The audit trail page:** "SQL run" is an eighth kind, with an icon, in the Event filter. Its inspector shows the outcome, rows and duration, and the SQL with its literals replaced, or "Not kept: it couldn't be read…" (design 15, J1–J2).
+    - **Tests:**
+      - `repos/sql-runs-history.test.ts` (6): their own alone, newest first; one data source's; 50 then the rest; none going, and the retention; a row left unfinished past it; runs counted lost once;
+      - `routes/sql-runner-history.test.ts` (7, the stub xcube): listed to its user alone with its data source's path; a data source's alone; the event with every field and no literal; a refused and a failed run recorded without the database's words; a stopped one, and one xcube refused; a lost one; a data source no longer seen, by its old name;
+      - `AuditTrail.test.tsx` (the kind, its filter and inspector);
+      - the route matrix's case: of the matrix's data sources, each user's list holds runs on the places they write, and no others;
+      - `e2e/security/sql-runner.spec.ts` (Chrome, compose's xcube): the writer's run is on their list as written and on nobody else's, and its audit event holds `SELECT ? AS v, ? AS n` with no literal.
+    - **Review fixes:**
+      1. **A run its server stopped mid-run is recorded:** the user's rows left going are counted lost (`markLost`) at their next run, and each is recorded then, at its start, as "Not finished · its server stopped mid-run", with no SQL. *A user who never runs again leaves such a run unrecorded; the API's grace on shutdown (15 s) is shorter than a run.*
+      2. **Retention removes a row left unfinished** past it too, its SQL with it.
+      3. **Summaries say what happened:** "Not run · xcube doesn't hold its connection", "Not run · xcube refused it" (its answer is now `outcome: 'unavailable'`, not a database error), and "No answer from xcube in time · it may have run" (`504`).
+      4. **A run on a data source one no longer sees** is listed under the name it had, not a later one.
+      5. **The audit trail page** names a run on a copy as "copy in My workspace", and wraps its SQL in the code face.
+    - **AC-381 waits for T535's My runs,** its page's list. **AC-382 is ticked:** its event is on the real stack.
 - [ ] T535 (AC-373, AC-377, AC-378, AC-379, AC-380, AC-381, AC-383, AC-385, AC-387) The SQL tab on a data source's page, as design 15 draws it
   - Files: `packages/web/src/workspaces/data-sources/SqlRunner.tsx` (+ test, the app's CodeMirror in SQL mode, P2), `SourceSettings.tsx`, `e2e/security/sql-runner.spec.ts`
   - Failing test:

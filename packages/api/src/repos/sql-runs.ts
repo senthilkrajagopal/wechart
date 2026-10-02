@@ -41,7 +41,15 @@ export function sqlRuns(db: Kysely<Database>) {
   };
 
   const start = async (
-    run: { readonly runId: string; readonly userKey: string; readonly dataSourceId: string | null },
+    run: {
+      readonly runId: string;
+      readonly userKey: string;
+      readonly dataSourceId: string | null;
+      /** As its user wrote it, for their history alone (T534). */
+      readonly sql?: string;
+      /** Its data source's name now, kept should it go (T534). */
+      readonly dataSourceName?: string | null;
+    },
     tries = 2,
   ): Promise<StartAnswer> => {
     // A run its instance never finished holds no one up.
@@ -54,7 +62,13 @@ export function sqlRuns(db: Kysely<Database>) {
       .execute();
     const taken = await db
       .insertInto('sql_runs')
-      .values({ id: run.runId, user_key: run.userKey, data_source_id: run.dataSourceId })
+      .values({
+        id: run.runId,
+        user_key: run.userKey,
+        data_source_id: run.dataSourceId,
+        sql: run.sql ?? '',
+        data_source_name: run.dataSourceName ?? null,
+      })
       .onConflict((conflict) =>
         conflict.column('user_key').where('finished_at', 'is', null).doNothing(),
       )
@@ -73,16 +87,141 @@ export function sqlRuns(db: Kysely<Database>) {
     start,
     /** The user's run going, if any. */
     going,
-    /** Its outcome, once done: it goes no more. */
-    async finish(runId: string, outcome: string): Promise<void> {
+    /**
+     * The user's runs left going past any run's time, counted lost now, once,
+     * and said, so each can be recorded (T534's review): an API instance
+     * stopped mid-run never recorded it.
+     */
+    async markLost(userKey: string): Promise<LostRun[]> {
+      const rows = await db
+        .updateTable('sql_runs')
+        .set({ finished_at: sql<Date>`now()`, outcome: 'lost' })
+        .where('user_key', '=', userKey)
+        .where('finished_at', 'is', null)
+        .where('started_at', '<', LOST_AFTER)
+        .returning(['id', 'data_source_id', 'data_source_name', 'started_at'])
+        .execute();
+      return rows.map((row) => ({
+        runId: row.id,
+        dataSourceId: row.data_source_id,
+        dataSourceName: row.data_source_name,
+        startedAt: row.started_at,
+      }));
+    },
+    /** Its outcome, and its rows and time where it ran, once done: it goes no more. */
+    async finish(runId: string, done: FinishedRun): Promise<void> {
       await db
         .updateTable('sql_runs')
-        .set({ finished_at: sql<Date>`now()`, outcome })
+        .set({
+          finished_at: sql<Date>`now()`,
+          outcome: done.outcome,
+          row_count: done.rowCount ?? null,
+          duration_ms: done.durationMs ?? null,
+          truncated: done.truncated ?? null,
+          statement: done.statement ?? null,
+        })
         .where('id', '=', runId)
         .where('finished_at', 'is', null)
         .execute();
     },
+
+    /**
+     * A user's own past runs, newest first, a page at a time (T534, AC-381;
+     * design 15's Q2): a data source's alone, or all of them. One still going
+     * isn't past.
+     */
+    async list({
+      userKey,
+      dataSourceId,
+      limit = PAGE,
+      after,
+    }: {
+      readonly userKey: string;
+      readonly dataSourceId?: string;
+      readonly limit?: number;
+      /** The page after the one that gave this; none for the first. */
+      readonly after?: string | undefined;
+    }): Promise<{ runs: PastRun[]; next?: string }> {
+      let query = db
+        .selectFrom('sql_runs')
+        .selectAll()
+        .where('user_key', '=', userKey)
+        .where('finished_at', 'is not', null);
+      if (dataSourceId !== undefined) query = query.where('data_source_id', '=', dataSourceId);
+      if (after !== undefined)
+        query = query.where(
+          sql<boolean>`(started_at, id) < (SELECT started_at, id FROM sql_runs WHERE id = ${after} AND user_key = ${userKey})`,
+        );
+      const rows = await query
+        .orderBy('started_at', 'desc')
+        .orderBy('id', 'desc')
+        .limit(limit + 1)
+        .execute();
+      const page = rows.slice(0, limit).map((row): PastRun => ({
+        id: row.id,
+        sql: row.sql,
+        dataSourceId: row.data_source_id,
+        dataSourceName: row.data_source_name,
+        startedAt: row.started_at,
+        outcome: row.outcome ?? 'lost',
+        rowCount: row.row_count,
+        durationMs: row.duration_ms,
+        truncated: row.truncated === 'rows' || row.truncated === 'bytes' ? row.truncated : null,
+        statement: row.statement,
+      }));
+      return rows.length > limit ? { runs: page, next: page.at(-1)!.id } : { runs: page };
+    },
+
+    /**
+     * Runs from before `cutoff` forgotten, as audit records are (AC-296): says
+     * how many. One left unfinished that long goes too, its SQL with it
+     * (T534's review); the retention is a day at least, so none still going.
+     */
+    async removeBefore(cutoff: Date): Promise<number> {
+      const removed = await db
+        .deleteFrom('sql_runs')
+        .where('started_at', '<', cutoff)
+        .where((where) =>
+          where.or([where('finished_at', 'is not', null), where('started_at', '<', LOST_AFTER)]),
+        )
+        .executeTakeFirst();
+      return Number(removed.numDeletedRows);
+    },
   };
+}
+
+/** A user's runs, a page at a time (design 15's Q2). */
+const PAGE = 50;
+
+/** How a run ended: its outcome, and where it ran, its rows and time. */
+export interface FinishedRun {
+  readonly outcome: string;
+  readonly rowCount?: number | null;
+  readonly durationMs?: number | null;
+  readonly truncated?: 'rows' | 'bytes' | null;
+  readonly statement?: string | null;
+}
+
+/** A run counted lost: its instance never finished it. */
+export interface LostRun {
+  readonly runId: string;
+  readonly dataSourceId: string | null;
+  readonly dataSourceName: string | null;
+  readonly startedAt: Date;
+}
+
+/** A past run, as its user's history keeps it (T534, AC-381). */
+export interface PastRun {
+  readonly id: string;
+  readonly sql: string;
+  readonly dataSourceId: string | null;
+  readonly dataSourceName: string | null;
+  readonly startedAt: Date;
+  readonly outcome: string;
+  readonly rowCount: number | null;
+  readonly durationMs: number | null;
+  readonly truncated: 'rows' | 'bytes' | null;
+  readonly statement: string | null;
 }
 
 export type SqlRunStore = ReturnType<typeof sqlRuns>;

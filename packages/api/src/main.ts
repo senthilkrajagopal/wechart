@@ -171,6 +171,7 @@ async function main(): Promise<void> {
           folders: () => folderIds.published(),
           pushTree: () => sync.pushTree('folder'),
         });
+  const runStore = sqlRuns(db);
   const app = buildServer({
     config,
     queryLog: queryLog(db),
@@ -216,8 +217,8 @@ async function main(): Promise<void> {
     dataSources,
     // The SQL runner's switch per data source, and Cube Store's (T531, AC-374).
     sqlRunnerSwitches: sqlRunnerSwitches(db),
-    // Each user's SQL runs, one going at a time (T533, AC-379).
-    sqlRuns: sqlRuns(db),
+    // Each user's SQL runs, one going at a time (T533, AC-379), kept as their history (T534).
+    sqlRuns: runStore,
     // Read-only SQL run by xcube, on a data source's connection (T532, AC-373).
     ...(config.xcube === undefined || service === undefined
       ? {}
@@ -325,6 +326,13 @@ async function main(): Promise<void> {
       app.log.warn({ err: error }, 'could not remove audit records past the retention');
     },
   });
+  // And each user's SQL runs, kept as long as audit records are (T534, AC-381).
+  const stopRunRetention = startAuditRetention(runStore, {
+    days: config.auditRetentionDays ?? AUDIT_RETENTION_DAYS,
+    onError: (error) => {
+      app.log.warn({ err: error }, 'could not remove SQL runs past the retention');
+    },
+  });
 
   // Stopped, it finishes the requests under way, taking no new ones (Fastify's
   // `close()`), for up to 15 s: past a query's 10 s long-poll on Cube, which
@@ -332,6 +340,7 @@ async function main(): Promise<void> {
   // grace period is longer.
   closeWithGrace({ delay: 15_000 }, async () => {
     stopRetention();
+    stopRunRetention();
     clearInterval(sweeping);
     if (reconciling !== undefined) clearInterval(reconciling);
     await app.close();

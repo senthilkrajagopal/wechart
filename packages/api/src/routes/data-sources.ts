@@ -360,6 +360,8 @@ export function registerDataSources(
   registerSqlRunner(app, {
     runner: sqlRunner,
     runs: sqlRuns,
+    audit,
+    paths: () => listing.pathOf(),
     store,
     switches,
     access,

@@ -185,6 +185,13 @@ export interface SqlRunTable {
   started_at: Generated<Date>;
   finished_at: Date | null;
   outcome: string | null;
+  /** As its user wrote it, for their history alone (T534, AC-381). */
+  sql: Generated<string>;
+  data_source_name: string | null;
+  row_count: number | null;
+  duration_ms: number | null;
+  truncated: string | null;
+  statement: string | null;
 }
 
 /** A version of a shared item wechart landed (T352, AC-288), a copy it holds. */

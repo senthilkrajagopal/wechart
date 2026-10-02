@@ -23,6 +23,8 @@ export const EVENTS = [
   ['data-source-change', 'Data-source change'],
   // A publish the check refused, with every break (T427, AC-322; state B).
   ['publish-refused', 'Publish refused'],
+  // A SQL run, its literals replaced (T534, AC-382; design 15, state J).
+  ['sql-run', 'SQL run'],
 ] as const;
 export type AuditEvent = (typeof EVENTS)[number][0];
 const EVENT_LABEL = Object.fromEntries(EVENTS) as Record<AuditEvent, string>;
@@ -219,6 +221,8 @@ function EventIcon({ event }: { event: AuditEvent }) {
     'data-source-change':
       'M3 4c0-1.1 2.2-2 5-2s5 .9 5 2v8c0 1.1-2.2 2-5 2s-5-.9-5-2zM3 4c0 1.1 2.2 2 5 2s5-.9 5-2',
     'publish-refused': 'M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2zM3.8 3.8l8.4 8.4',
+    // A terminal's prompt, as design 15 draws the SQL tab's.
+    'sql-run': 'M2.5 3.5h11v9h-11zM5 6.5 7 8l-2 1.5M8.5 10h2.5',
   };
   return (
     <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -550,6 +554,10 @@ export function AuditTrail({
                         {record.item === null
                           ? '—'
                           : `${KIND_LABEL[record.item.kind] ?? record.item.kind} · ${record.item.title}`}
+                        {/* A run on a workspace copy, recorded at its original's folder (state J). */}
+                        {record.event === 'sql-run' && record.details?.['inWorkspace'] === true
+                          ? ' · copy in My workspace'
+                          : null}
                       </td>
                       <td>
                         {/* The whole record, in the inspector (pin 7). */}
@@ -773,6 +781,8 @@ function Inspector({ id, record, onClose }: { id: string; record: Record_; onClo
         <Settings changes={details['changes']} tested={typeof details['testId'] === 'string'} />
       ) : record.event === 'publish-refused' && Array.isArray(details['breaks']) ? (
         <Breaks breaks={details['breaks']} shown={details['shown']} actor={record.actor} />
+      ) : record.event === 'sql-run' ? (
+        <SqlRun details={details} />
       ) : (
         <p>{record.summary}</p>
       )}
@@ -780,6 +790,68 @@ function Inspector({ id, record, onClose }: { id: string; record: Record_; onClo
         Records can’t be edited or deleted here. They’re removed only by the retention period.
       </p>
     </section>
+  );
+}
+
+const SQL_OUTCOMES: Readonly<Record<string, string>> = {
+  finished: 'Finished',
+  refused: 'Not run',
+  timeout: 'Stopped at 30 seconds',
+  cancelled: 'Cancelled',
+  failed: 'Database error',
+  busy: 'Not run · xcube was busy',
+  unavailable: 'Not run · xcube couldn’t run it',
+  lost: 'Not finished · its server stopped mid-run',
+};
+
+/**
+ * A SQL run's record (T534, AC-382; design 15, state J): its outcome, rows
+ * and time, and its SQL with every literal replaced by `?`; none where it
+ * couldn't be read, so its literals couldn't be found. Never the database's
+ * own words, which may quote one.
+ */
+function SqlRun({ details }: { details: Record<string, unknown> }) {
+  const outcome = typeof details['outcome'] === 'string' ? details['outcome'] : '';
+  const cut =
+    details['truncated'] === 'rows'
+      ? 'Limited to 10,000 rows'
+      : details['truncated'] === 'bytes'
+        ? 'Limited to 10 MB'
+        : undefined;
+  const rows = typeof details['rowCount'] === 'number' ? details['rowCount'] : null;
+  const ms = typeof details['durationMs'] === 'number' ? details['durationMs'] : null;
+  const sql = typeof details['sql'] === 'string' ? details['sql'] : null;
+  return (
+    <>
+      <dl className="source-settings__rows">
+        <dt>Outcome</dt>
+        <dd>{cut ?? SQL_OUTCOMES[outcome] ?? outcome}</dd>
+        <dt>Rows</dt>
+        <dd>{rows === null ? '—' : rows.toLocaleString('en')}</dd>
+        <dt>Duration</dt>
+        <dd>
+          {ms === null
+            ? '—'
+            : `${(ms / 1000).toLocaleString('en', { maximumFractionDigits: 2 })} s`}
+        </dd>
+      </dl>
+      <h4>SQL, literals replaced</h4>
+      {sql === null ? (
+        <p data-testid="audit-sql">
+          Not kept: it couldn’t be read, so its literals couldn’t be found and replaced.
+        </p>
+      ) : (
+        <>
+          <pre className="audit-trail__sql" data-testid="audit-sql">
+            {sql}
+          </pre>
+          <p className="audit-trail__note">
+            Each string, number and date is replaced by ?. Names of tables and columns stay. The SQL
+            as written is only in its author’s own runs.
+          </p>
+        </>
+      )}
+    </>
   );
 }
 

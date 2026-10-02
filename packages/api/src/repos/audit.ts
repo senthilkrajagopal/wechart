@@ -22,6 +22,8 @@ export const AUDIT_EVENTS = [
   'data-source-change',
   // A publish the check refused, every break in it (T427, AC-322).
   'publish-refused',
+  // A SQL run, its SQL's literals replaced (T534, AC-382; R50-13).
+  'sql-run',
 ] as const;
 export type AuditEvent = (typeof AUDIT_EVENTS)[number];
 
