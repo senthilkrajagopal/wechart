@@ -215,6 +215,7 @@ describe('building a pre-aggregation', () => {
               folderPath: ['Shared', 'Sales'],
               type: 'rollup',
               fileName: 'cubes/sales.yml',
+              fileFolderId: 'a1',
             },
           ]);
         if (url === '/api/cube-scopes') return Response.json({ jobs: 'granted' });
@@ -246,9 +247,10 @@ describe('building a pre-aggregation', () => {
       ['SPAN', null],
     ]);
 
+    // A folder's opens its own file in its folder (T530, AC-222).
     await userEvent.click(screen.getByTestId('preagg-folder').closest('tr') as HTMLElement);
     expect(within(pane).getByRole('link', { name: 'Open in Model' }).getAttribute('href')).toBe(
-      '/model/files/cubes%2Fsales.yml?cube=sales&tab=pre_aggregations&member=main',
+      '/explore/folders/a1/models/cubes%2Fsales.yml?cube=sales&tab=pre_aggregations&member=main',
     );
   });
 

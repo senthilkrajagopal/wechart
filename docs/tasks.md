@@ -10043,10 +10043,21 @@ Every surface here follows design 14 (R48), drawn before the UI tasks start. The
       - Show all lost focus.
       - A reload with a kind showed every kind for a moment; the list now waits until who is asking is known.
     - **For the user:** a read-write member, in a folder where they see dashboards alone, is offered the filter, whose other choices are then empty. Q3 left no filter only for readers.
-- [ ] T530 (AC-222) Point Schedules', Jobs', "Data as of"'s and search's model links at the file's own folder *(added 2026-10-01, from T342's report)*
+- [x] T530 (AC-222) Point Schedules', Jobs', "Data as of"'s and search's model links at the file's own folder *(added 2026-10-01, from T342's report)*
   - Files: the links to `/model/files/…` in `packages/web/src/workspaces/{schedules,jobs}/`, the tile's "Data as of", and search, `e2e/folder-models.spec.ts`
   - Failing test: `folder-models.spec.ts`: a folder rollup's "Edit in Model" opens `/explore/folders/<its folder>/models/<path>` with that file open, and a root rollup's opens the root's (AC-222). The same spec's "Schedules reads a folder rollup's key SQL" expects the short name Schedules now shows.
   - Depends on: T342
+  - **Done 2026-10-01.**
+    - **API.** Schedules' and Jobs' rows name their cube's file in its own folder, by the short name it declares (`filesInFolders` in `model/split.ts`, read once a request). A folder's file carries `fileFolderId`. A root cube no longer takes a folder's file of the same name. Jobs now reads every folder's files, as Schedules did.
+    - **Web.** One link, `rollupHref` in `workspaces/model/inFolder.ts`, for Schedules, Jobs' Open in Model and "Data as of": a folder's goes to `/explore/folders/<id>/models/<path>?cube=<short>&tab=pre_aggregations[&member=…]`, whose route now takes those parameters. Search's field of a folder cube opens its folder's model overview, since search holds only the root's files.
+    - **Tests:** `schedules.test.ts`, `build.test.ts`, `inFolder.test.ts`, `BuildPanel.test.tsx`, `dataAsOf.test.ts`, `globalSearch.test.ts`; `folder-models.spec.ts` clicks Schedules' link and lands on the folder's file, its Pre-aggs tab chosen. The root's link stays shown by `schedules.spec.ts`.
+    - **Review fixes:**
+      1. Jobs read only the root's files, so a folder rollup lost its link.
+      2. Jobs' and "Data as of"'s folder links had no test, and one test asserted the old root link.
+      3. The e2e's row filter wasn't unique on a rerun.
+      4. The schedules test couldn't tell which file the root cube took.
+      5. Each file was parsed once per row.
+    - **Left:** a cube whose folder wechart no longer knows (a Super-Admin's row only) still gets xcube's file name.
 
 ## P2.21 The SQL runner (F40, added 2026-10-01, `[R50]`)
 

@@ -160,9 +160,10 @@ describe('schedulesFrom', () => {
    * taken from the root's cube of the same short name.
    */
   it('reads a folder rollup’s key SQL from that folder’s file, under its prefixed name', () => {
+    // Paths of their own, so which file each link names can be told apart (T530's review).
     const file = (folderId: string, sql: string) => ({
       folderId,
-      path: 'cubes/orders.yml',
+      path: `cubes/${folderId}_orders.yml`,
       content: [
         'cubes:',
         '  - name: orders',
@@ -191,11 +192,23 @@ describe('schedulesFrom', () => {
       new Map([['sales', 'fsales']]),
     );
 
-    // The root's link names its stored file; the folder's names none, since
-    // Model opens only the root's files until T342.
-    expect(schedules.map(({ id, sql, fileName }) => ({ id, sql, fileName }))).toEqual([
-      { id: 'orders.main', sql: 'SELECT 1', fileName: 'cubes/orders.yml' },
-      { id: 'fsales__orders.main', sql: 'SELECT 2', fileName: undefined },
+    // Each link names its own folder's file: the root's as it always has, a
+    // folder's with that folder, whose model page opens it (T342; T530, AC-222).
+    expect(
+      schedules.map(({ id, sql, fileName, fileFolderId }) => ({ id, sql, fileName, fileFolderId })),
+    ).toEqual([
+      {
+        id: 'orders.main',
+        sql: 'SELECT 1',
+        fileName: 'cubes/root_orders.yml',
+        fileFolderId: undefined,
+      },
+      {
+        id: 'fsales__orders.main',
+        sql: 'SELECT 2',
+        fileName: 'cubes/sales_orders.yml',
+        fileFolderId: 'sales',
+      },
     ]);
   });
 });

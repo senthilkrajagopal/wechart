@@ -4,6 +4,7 @@ import { InfoBar } from '../../shell/InfoBar';
 import { StateLine } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { shownOf } from '../jobs/BuildPanel';
+import { rollupHref } from '../model/inFolder';
 
 /**
  * Schedules (T160, AC-154): every pre-aggregation's refresh schedule, labelled
@@ -21,6 +22,8 @@ interface Schedule {
   readonly cube: string;
   readonly name: string;
   readonly fileName?: string;
+  /** That file's folder, where it isn't the root (T530). */
+  readonly fileFolderId?: string;
   readonly owner: 'cube';
   readonly scheduled: boolean;
   readonly when: string;
@@ -30,11 +33,12 @@ const OWNERS: Readonly<Record<Schedule['owner'], string>> = {
   cube: 'Cube’s refresh worker',
 };
 
-/** Its file in Model, open on its cube's pre-aggregations. */
-const modelHref = ({ fileName, cube }: Schedule) =>
-  fileName === undefined
-    ? undefined
-    : `/model/files/${encodeURIComponent(fileName)}?cube=${encodeURIComponent(cube)}&tab=pre_aggregations`;
+/**
+ * Its file, open on its cube's pre-aggregations: a folder's in its folder, by
+ * the name its file declares (T530, AC-222).
+ */
+const modelHref = ({ fileName, fileFolderId, cube, shortName }: Schedule) =>
+  rollupHref({ fileName, fileFolderId, cube: shortName ?? cube });
 
 export function SchedulesPage() {
   const schedules = useQuery({

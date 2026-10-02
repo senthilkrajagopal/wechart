@@ -155,6 +155,12 @@ describe('a folder’s fields (T450)', () => {
     );
   });
 
+  // T530 (AC-222): opened in its folder's model, never the root's Model workspace.
+  it('opens a folder cube’s field in its folder’s model', () => {
+    const [found] = globalResults('count', { catalog: [], meta: inFolder, files: [], folders });
+    expect(found?.href).toBe('/explore/folders/s/models');
+  });
+
   // Every item xcube serves carries `meta.xcube`; the root's is `froot`,
   // named as it was before folders (T450's review).
   it('names a root item’s fields as before', () => {

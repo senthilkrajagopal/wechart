@@ -1,6 +1,7 @@
 import { nextRefreshes, refreshLagSeconds } from '@wechart/core';
 
 import type { AnswerMeta } from '../query/answerMeta';
+import { rollupHref } from '../workspaces/model/inFolder';
 import type { MenuEntry } from '../shell/Menu';
 
 /**
@@ -29,6 +30,8 @@ export interface ScheduleSaid {
   /** False for one who may not open it in Jobs (T371; R42.7): a reader. */
   readonly mayOpen?: boolean;
   readonly fileName?: string;
+  /** That file's folder, where it isn't the root (T530). */
+  readonly fileFolderId?: string;
   readonly when: string;
   readonly every?: string;
   readonly timezone?: string;
@@ -103,10 +106,15 @@ export function dataAsOf(
   const schedule = Array.isArray(schedules)
     ? (schedules as readonly ScheduleSaid[]).find((each) => each.id === used.id)
     : undefined;
+  // Its file, a folder's in its folder by the name its file declares (T530, AC-222).
   const edit =
-    schedule?.fileName === undefined
+    schedule === undefined
       ? undefined
-      : `/model/files/${encodeURIComponent(schedule.fileName)}?cube=${encodeURIComponent(schedule.cube)}&tab=pre_aggregations`;
+      : rollupHref({
+          fileName: schedule.fileName,
+          fileFolderId: schedule.fileFolderId,
+          cube: schedule.shortName ?? schedule.cube,
+        });
   const text = (key: string, words: string): MenuEntry => ({ kind: 'text', key, text: words });
   // A folder's rollup by its short name, never its prefixed one (§P2.6 D).
   const name =

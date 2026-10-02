@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { missingScopeOf, ScopeUnavailable, useScopes } from '../../query/scopes';
 import { StateLine } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
+import { rollupHref } from '../model/inFolder';
 import { StateBadge, stateOf, Status } from './StateBadge';
 
 /**
@@ -25,6 +26,8 @@ interface Buildable {
   readonly trigger?: string;
   /** The model file its cube is defined in (AC-229). */
   readonly fileName?: string;
+  /** That file's folder, where it isn't the root (T530). */
+  readonly fileFolderId?: string;
 }
 
 /**
@@ -43,20 +46,21 @@ export function shownOf(row: {
   return below.length === 0 ? { name } : { name, folder: below.join(' / ') };
 }
 
-/** Where a pre-aggregation is defined, in the Model workspace (AC-229). */
-const modelHref = (fileName: string) => `/model/files/${encodeURIComponent(fileName)}`;
-
 /**
- * The same file open on its cube's Pre-aggs tab with this pre-aggregation
- * open (T469, UX-080): the cube by the name its file declares — a folder's by
- * its short name, not its prefixed published one — and the member by its own.
+ * The file where a pre-aggregation is defined (AC-229), open on its cube's
+ * Pre-aggs tab with this pre-aggregation open (T469, UX-080): the cube by the
+ * name its file declares — a folder's by its short name, not its prefixed
+ * published one — and the member by its own; a folder's file in its folder
+ * (T530, AC-222).
  */
 function memberHref(row: Buildable & { readonly fileName: string }): string {
   const dot = row.id.lastIndexOf('.');
-  const cube = row.shortName ?? row.id.slice(0, dot);
-  const member = row.id.slice(dot + 1);
-  const search = new URLSearchParams({ cube, tab: 'pre_aggregations', member });
-  return `${modelHref(row.fileName)}?${search.toString()}`;
+  return rollupHref({
+    fileName: row.fileName,
+    fileFolderId: row.fileFolderId,
+    cube: row.shortName ?? row.id.slice(0, dot),
+    member: row.id.slice(dot + 1),
+  })!;
 }
 
 interface JobStatus {

@@ -74,6 +74,50 @@ describe('what Data as of says', () => {
     ]);
   });
 
+  // T530 (AC-222): a folder's rollup's schedule opens in its own folder's file.
+  it('opens a folder rollup’s schedule in its folder’s file, by its short name', () => {
+    const opened: string[] = [];
+    const said = dataAsOf(
+      {
+        answered: {
+          usedPreAggregations: {
+            'prod.fsales__orders_main': {
+              preAggregationId: 'fsales__orders.main',
+              lastUpdatedAt: at('2026-09-25T09:15:00Z').getTime(),
+              type: 'rollup',
+            },
+          },
+        },
+        schedules: [
+          {
+            id: 'fsales__orders.main',
+            cube: 'fsales__orders',
+            shortName: 'orders',
+            mayOpen: true,
+            fileName: 'cubes/orders.yml',
+            fileFolderId: 'sales',
+            when: 'Every 1 hour',
+            every: '1 hour',
+          },
+        ],
+        onRefresh: vi.fn(),
+        onWhyNot: vi.fn(),
+        onOpen: (href) => {
+          opened.push(href);
+        },
+      },
+      NOW,
+      (date) => date.toISOString().slice(11, 16),
+    );
+    const edit = (said?.entries ?? []).find(
+      (entry) => entry.kind === 'item' && entry.label === 'Edit schedule in Model',
+    );
+    if (edit?.kind === 'item') edit.onSelect();
+    expect(opened).toEqual([
+      '/explore/folders/sales/models/cubes%2Forders.yml?cube=orders&tab=pre_aggregations',
+    ]);
+  });
+
   it('says a database answer is the database’s, with Refresh now and Why not accelerated', () => {
     const said = dataAsOf(
       {

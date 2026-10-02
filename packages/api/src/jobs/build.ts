@@ -2,7 +2,8 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { USER } from '../auth/guard';
 import type { CubeClient } from '../cube/client';
-import { fileOf, pathsByName } from '../model/split';
+import { filesInFolders, fileOf } from '../model/split';
+import { ROOT_FOLDER_ID } from '../repos/catalog';
 import type { ModelFile, ModelFileStore } from '../server';
 import { EVERYTHING, NO_JOBS, placements, reaches, type JobsAccess, type Placement } from './scope';
 
@@ -62,6 +63,8 @@ export interface Buildable {
   readonly trigger: string;
   /** The model file its cube is defined in, for the link to Model (AC-229). */
   readonly fileName?: string;
+  /** That file's folder, where it isn't the root: the link opens it there (T530, AC-222). */
+  readonly fileFolderId?: string;
 }
 
 /**
@@ -112,8 +115,19 @@ export function buildablesFrom(
 ): Buildable[] {
   const cubes = (meta as { cubes?: unknown } | null)?.cubes;
   if (!Array.isArray(cubes)) return [];
-  // The stored file declaring each cube, over Cube's `fileName` (T449).
-  const stored = pathsByName(files);
+  /**
+   * The stored file declaring each cube, over Cube's `fileName` (T449): in
+   * its own folder, by the name its file declares (T530, AC-222), so a
+   * folder's opens there, and a root cube never takes a folder's file of the
+   * same name. A root cube no stored file declares keeps Cube's name.
+   */
+  const fileIn = filesInFolders(files);
+  const fileFor = (cube: { name: string; fileName?: unknown }, where: Placement | undefined) => {
+    if (where?.folderId != null && where.folderId !== ROOT_FOLDER_ID)
+      return fileIn(where.folderId, where.shortName);
+    const own = fileIn(ROOT_FOLDER_ID, cube.name);
+    return 'fileName' in own ? own : fileOf(new Map(), cube.name, cube.fileName);
+  };
   return (cubes as { name?: unknown; fileName?: unknown; preAggregations?: unknown }[]).flatMap(
     (cube) =>
       typeof cube.name === 'string' && Array.isArray(cube.preAggregations)
@@ -133,7 +147,10 @@ export function buildablesFrom(
                 ? { partitionGranularity: each['partitionGranularity'] }
                 : {}),
               trigger: triggerOf(each),
-              ...fileOf(stored, String(cube.name), cube.fileName),
+              ...fileFor(
+                { name: String(cube.name), fileName: cube.fileName },
+                placed?.(cube as Record<string, unknown>),
+              ),
             }))
         : [],
   );
@@ -152,7 +169,8 @@ export function registerBuilds(
     buildablesFrom(
       // The whole model's, xcube's own: the folder gate filters no own read (T436).
       await client.modelMeta(),
-      modelFiles ? await modelFiles.list() : [],
+      // Every folder's files, so a folder's rollup finds its own (T530's review).
+      modelFiles === undefined ? [] : await (modelFiles.all?.() ?? modelFiles.list()),
       access === undefined ? undefined : await placements(access),
     );
 

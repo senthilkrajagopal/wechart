@@ -655,15 +655,32 @@ const folderModelRoute = createRoute({
 const folderModelFileRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/explore/folders/$folderId/models/$path',
+  /**
+   * A cube's tab, and a member of it, to open on, as the root's file takes
+   * them: Schedules', Jobs' and "Data as of"'s links to a folder's rollup
+   * (T530, AC-222).
+   */
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { cube?: string | undefined; tab?: string | undefined; member?: string | undefined } => ({
+    cube: typeof search['cube'] === 'string' && search['cube'] !== '' ? search['cube'] : undefined,
+    tab: typeof search['tab'] === 'string' && search['tab'] !== '' ? search['tab'] : undefined,
+    member:
+      typeof search['member'] === 'string' && search['member'] !== ''
+        ? search['member']
+        : undefined,
+  }),
   component: function FolderModelFileSurface() {
     const params = useParams({ strict: false }) as { folderId?: string; path?: string };
     const folderId = decodeURIComponent(params.folderId ?? '');
+    const { cube, tab, member } = folderModelFileRoute.useSearch();
     return (
       <AppShell workspace="explore">
         <ModelFilePage
           key={folderId}
           folderId={folderId}
           path={decodeURIComponent(params.path ?? '')}
+          {...(cube === undefined || tab === undefined ? {} : { openOn: { cube, tab, member } })}
         />
       </AppShell>
     );

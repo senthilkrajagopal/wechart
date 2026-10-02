@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { USER } from '../auth/guard';
 import type { CubeClient } from '../cube/client';
 import { refreshKeySqlOf } from '../model/refreshKeys';
-import { fileOf, pathsByName } from '../model/split';
+import { filesInFolders, fileOf, pathsByName } from '../model/split';
 import { ROOT_FOLDER_ID } from '../repos/catalog';
 import type { ModelFile } from '../server';
 import type { PublishedFolders } from '../xcube/folders';
@@ -31,6 +31,8 @@ export interface Schedule {
   readonly type: string;
   /** The model file its cube is in, for the link to Model. */
   readonly fileName?: string;
+  /** That file's folder, where it isn't the root: the link opens it there (T530, AC-222). */
+  readonly fileFolderId?: string;
   /** Whose schedule it is: Cube's refresh worker's, for now always. */
   readonly owner: 'cube';
   /** Whether Cube's refresh worker refreshes it at all. */
@@ -140,16 +142,36 @@ export function schedulesFrom(
   const stored = pathsByName(
     files.filter((file) => (file.folderId ?? ROOT_FOLDER_ID) === ROOT_FOLDER_ID),
   );
+  // A folder's cube is `<xcubeId>__<name>` (T450's review): its folder, and the name its file declares.
+  const folderOfXcube = new Map([...folders].map(([folderId, xcubeId]) => [xcubeId, folderId]));
+  const fileIn = filesInFolders(files);
+  const homeOf = (name: string) => {
+    const at = name.indexOf('__');
+    const folderId = at > 0 ? folderOfXcube.get(name.slice(0, at)) : undefined;
+    return folderId === undefined
+      ? { folderId: ROOT_FOLDER_ID, shortName: name }
+      : { folderId, shortName: name.slice(at + 2) };
+  };
   return cubes.flatMap((cube: unknown) => {
     const value = asValue(cube);
     const all = value?.['preAggregations'];
     if (value === undefined || !Array.isArray(all)) return [];
     const where = placed === undefined ? {} : placed(value);
+    // Its own folder's file, which that folder's model page opens (T530, AC-222).
+    const home = homeOf(typeof value['name'] === 'string' ? value['name'] : '');
+    const own = fileIn(home.folderId, home.shortName);
     return all.flatMap((each: unknown) => {
       const found = asValue(each);
       const unplaced = found === undefined ? undefined : scheduleOf(value, found, stored);
       if (unplaced === undefined) return [];
-      const schedule = { ...unplaced, ...where };
+      // A folder's never takes the root's file, nor xcube's own file name.
+      const { fileName: _cubes, ...rest } = unplaced;
+      void _cubes;
+      const schedule = {
+        ...(home.folderId === ROOT_FOLDER_ID ? unplaced : rest),
+        ...own,
+        ...where,
+      };
       const sql = sqlOf.get(schedule.id);
       if (sql === undefined || !schedule.scheduled) return [schedule];
       return [

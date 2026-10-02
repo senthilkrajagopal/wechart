@@ -263,6 +263,38 @@ describe('where a pre-aggregation is defined, in items mode (T449)', () => {
       'elsewhere.yml',
     ]);
   });
+
+  /**
+   * T530 (AC-222): a folder's rollup names its own folder's file, with that
+   * folder, whose model page opens it; a root cube never takes a folder's
+   * file of the same name.
+   */
+  it('names a folder cube’s file in its own folder, and a root cube’s in the root', () => {
+    const orders = 'cubes:\n  - name: orders\n';
+    const listed = buildablesFrom(
+      {
+        cubes: [
+          { name: 'fsales__orders', preAggregations: [{ name: 'main', type: 'rollup' }] },
+          { name: 'orders', preAggregations: [{ name: 'main', type: 'rollup' }] },
+        ],
+      },
+      [
+        { folderId: 'sales', path: 'cubes/sales_orders.yml', content: orders },
+        { path: 'cubes/orders.yml', content: orders },
+      ],
+      (cube) =>
+        cube['name'] === 'fsales__orders'
+          ? { folderId: 'sales', shortName: 'orders', folderPath: ['Shared', 'Sales'] }
+          : { folderId: 'root', shortName: 'orders', folderPath: ['Shared'] },
+    );
+
+    expect(
+      listed.map(({ id, fileName, fileFolderId }) => ({ id, fileName, fileFolderId })),
+    ).toEqual([
+      { id: 'fsales__orders.main', fileName: 'cubes/sales_orders.yml', fileFolderId: 'sales' },
+      { id: 'orders.main', fileName: 'cubes/orders.yml', fileFolderId: undefined },
+    ]);
+  });
 });
 
 describe('what triggers a pre-aggregation, and where it is defined (AC-229)', () => {

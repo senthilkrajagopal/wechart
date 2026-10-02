@@ -1,5 +1,6 @@
 import { folderChain } from '../workspaces/explore/folders';
 import type { FolderNode } from '../workspaces/explore/FolderTree';
+import { modelHref } from '../workspaces/model/inFolder';
 import { objectsOf } from '../workspaces/model/objects';
 
 /**
@@ -125,7 +126,9 @@ export function globalResults(text: string, sources: SearchSources): SearchResul
         type,
         title: member.title ?? shown(member.name),
         detail: `${shown(member.name)} · ${owner}`,
-        href: openFile(fileOf.get(cube.name)),
+        // A folder's cube, in its folder's model, whose files search doesn't
+        // hold: never the root's Model workspace (T530, AC-222).
+        href: folder ? modelHref(folder.id) : openFile(fileOf.get(cube.name)),
       });
     }
   }

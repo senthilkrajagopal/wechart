@@ -26,6 +26,32 @@ export function fileHref(path: string, folderId?: string): string {
 }
 
 /**
+ * A pre-aggregation's file, opened on its cube's Pre-aggregations tab, and on
+ * the member where one is named (T160, T469): a folder's in its folder, by
+ * the name its file declares; the root's in the Model workspace (T530,
+ * AC-222). None where no file is known.
+ */
+export function rollupHref({
+  fileName,
+  fileFolderId,
+  cube,
+  member,
+}: {
+  readonly fileName?: string | undefined;
+  readonly fileFolderId?: string | undefined;
+  readonly cube: string;
+  readonly member?: string | undefined;
+}): string | undefined {
+  if (fileName === undefined) return undefined;
+  const search = new URLSearchParams({
+    cube,
+    tab: 'pre_aggregations',
+    ...(member === undefined ? {} : { member }),
+  });
+  return `${fileHref(fileName, fileFolderId)}?${search.toString()}`;
+}
+
+/**
  * Who may change a model, and how (rules 70 and 71, AC-222, AC-278):
  * - with sign-in off, its one user, in place, as phase 1 had it;
  * - with sign-in on, nobody in place: a model outside the workspace is

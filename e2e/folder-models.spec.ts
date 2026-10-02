@@ -72,12 +72,9 @@ test('a cube published into a new folder is served under the folder’s id, and 
 test('Schedules reads a folder rollup’s key SQL from its folder’s file', async ({
   page,
 }, testInfo) => {
+  const folderTitle = `T450 schedules ${testInfo.project.name} ${String(Date.now())}`;
   const made = await page.request.post('/api/documents', {
-    data: {
-      kind: 'folder',
-      title: `T450 schedules ${testInfo.project.name} ${String(Date.now())}`,
-      folderId: 'root',
-    },
+    data: { kind: 'folder', title: folderTitle, folderId: 'root' },
   });
   expect(made.status()).toBe(201);
   const { id } = (await made.json()) as { id: string };
@@ -111,9 +108,30 @@ test('Schedules reads a folder rollup’s key SQL from its folder’s file', asy
 
   await page.goto('/schedules');
   const table = page.getByRole('main').getByRole('table', { name: 'Refresh schedules' });
-  await expect(
-    table.getByRole('row').filter({ hasText: `${id.replaceAll('-', '')}__${cube}.main` }),
-  ).toContainText('When its SQL returns a new value, checked every 1 hour', PUBLISHED);
+  // Said by its short name, with its folder (T371; §P2.6 D), never the prefixed one.
+  // This run's: a rerun makes another folder holding a cube of the same name (T530's review).
+  const row = table
+    .getByRole('row')
+    .filter({ hasText: `${cube}.main` })
+    .filter({ hasText: folderTitle });
+  await expect(row).toContainText(
+    'When its SQL returns a new value, checked every 1 hour',
+    PUBLISHED,
+  );
+  await expect(row).not.toContainText(`${id.replaceAll('-', '')}__`);
+
+  // Edit in Model opens its own folder's file, on its pre-aggregations (T530, AC-222).
+  await row.getByRole('link', { name: `Edit ${cube}.main in Model` }).click();
+  await expect(page).toHaveURL(
+    new RegExp(
+      `/explore/folders/${id}/models/${encodeURIComponent(`cubes/${cube}.yml`)}\\?cube=${cube}&tab=pre_aggregations$`,
+    ),
+  );
+  await expect(page.getByRole('heading', { name: `cubes/${cube}.yml`, level: 1 })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Pre-aggs 1' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
 });
 
 /**
