@@ -18,6 +18,9 @@ import { folderAccessStore } from './repos/folder-access';
 import { auditStore } from './repos/audit';
 import { sqlRunnerSwitches } from './repos/sql-runner-switches';
 import { sqlRuns } from './repos/sql-runs';
+import { buildHistory } from './repos/build-history';
+import { CubeClient } from './cube/client';
+import { buildFollower, startFollowingBuilds } from './jobs/follow';
 import { AUDIT_RETENTION_DAYS, startAuditRetention } from './audit/retention';
 import { readModelDir } from './model/read-dir';
 import { startModel } from './model/split';
@@ -172,6 +175,8 @@ async function main(): Promise<void> {
           pushTree: () => sync.pushTree('folder'),
         });
   const runStore = sqlRuns(db);
+  // The builds wechart starts, one record per start (T372, AC-150).
+  const builds = buildHistory(db);
   const app = buildServer({
     config,
     queryLog: queryLog(db),
@@ -219,6 +224,7 @@ async function main(): Promise<void> {
     sqlRunnerSwitches: sqlRunnerSwitches(db),
     // Each user's SQL runs, one going at a time (T533, AC-379), kept as their history (T534).
     sqlRuns: runStore,
+    buildHistory: builds,
     // Read-only SQL run by xcube, on a data source's connection (T532, AC-373).
     ...(config.xcube === undefined || service === undefined
       ? {}
@@ -334,6 +340,29 @@ async function main(): Promise<void> {
     },
   });
 
+  /**
+   * Each build wechart started followed to its end on the server, whether or
+   * not a browser has Jobs open, by whichever replica takes it (T372, AC-150,
+   * AC-319). The jobs API with the service credential, as the server's own
+   * client asks it (T420).
+   */
+  const stopFollowing = startFollowingBuilds(
+    buildFollower({
+      history: builds,
+      cube: new CubeClient({
+        apiUrl: config.cubeApiUrl,
+        apiSecret: config.cubeApiSecret,
+        securityContext: config.securityContext,
+        ...(service === undefined ? {} : { service: () => service.token() }),
+      }),
+    }),
+    {
+      onError: (error) => {
+        app.log.warn({ err: error }, 'could not follow the builds wechart started');
+      },
+    },
+  );
+
   // Stopped, it finishes the requests under way, taking no new ones (Fastify's
   // `close()`), for up to 15 s: past a query's 10 s long-poll on Cube, which
   // 5 s cut off (T423, AC-319; research cube/ha-topology.md §4). The chart's
@@ -341,6 +370,7 @@ async function main(): Promise<void> {
   closeWithGrace({ delay: 15_000 }, async () => {
     stopRetention();
     stopRunRetention();
+    stopFollowing();
     clearInterval(sweeping);
     if (reconciling !== undefined) clearInterval(reconciling);
     await app.close();

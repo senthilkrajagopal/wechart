@@ -1,8 +1,12 @@
+import { randomUUID } from 'node:crypto';
+
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { USER } from '../auth/guard';
+import { userOf } from '../auth/user';
 import type { CubeClient } from '../cube/client';
 import { filesInFolders, fileOf } from '../model/split';
+import type { BuildHistory } from '../repos/build-history';
 import { ROOT_FOLDER_ID } from '../repos/catalog';
 import type { ModelFile, ModelFileStore } from '../server';
 import { EVERYTHING, NO_JOBS, placements, reaches, type JobsAccess, type Placement } from './scope';
@@ -162,6 +166,8 @@ export function registerBuilds(
   modelFiles?: ModelFileStore,
   /** Who may build what (T371, AC-297); none, and everything is everyone's (sign-in off). */
   access?: JobsAccess,
+  /** Where each start is recorded, and the clock it is recorded by (T372, AC-150). */
+  history?: { readonly store: BuildHistory; readonly now: () => Date },
 ): void {
   const scopeOf = (request: FastifyRequest) =>
     access === undefined ? Promise.resolve(EVERYTHING) : access.scope(request);
@@ -188,9 +194,10 @@ export function registerBuilds(
       return reply.status(400).send({ error: 'Name the pre-aggregation as cube.name.' });
     // Another folder's is refused before Cube is asked (T371, AC-297).
     const scope = await scopeOf(request);
+    let row: Buildable | undefined;
     if (!scope.all) {
       if (!scope.writesAny) return reply.status(403).send(NO_JOBS);
-      const row = (await listed()).find((each) => each.id === preAggregation);
+      row = (await listed()).find((each) => each.id === preAggregation);
       if (row === undefined)
         return reply.status(404).send({ error: 'There is no such pre-aggregation.' });
       if (!reaches(scope, row.folderId ?? null))
@@ -199,10 +206,34 @@ export function registerBuilds(
             'You can build only the pre-aggregations of folders you have read-write access to.',
         });
     }
-    const tokens = await client.buildPreAggregations([preAggregation]);
-    return {
-      tokens: Array.isArray(tokens) ? tokens.filter((each) => typeof each === 'string') : [],
-    };
+    // Its folder found before Cube is asked, so nothing that fails after the
+    // post can leave a build running unrecorded (T372's review).
+    if (history !== undefined) row ??= (await listed()).find((each) => each.id === preAggregation);
+    // wechart's own request id (T372): xcube's queue gives it back on each
+    // entry the post made (research xcube-jobs-schedules-routes.md, Gotcha 3).
+    const requestId = `wechart-${randomUUID()}`;
+    const startedAt = history?.now() ?? new Date();
+    const answered = await client.buildPreAggregations([preAggregation], { requestId });
+    const tokens = Array.isArray(answered)
+      ? answered.filter((each): each is string => typeof each === 'string')
+      : [];
+    // A start that made no job built nothing, and is said so, not recorded.
+    if (history === undefined || tokens.length === 0) return { tokens };
+    // One record for the start, followed to its end on the server (T372, AC-150).
+    const user = userOf(request);
+    const runId = await history.store.start({
+      preAggregation,
+      folderId: row?.folderId ?? null,
+      partitions: null,
+      granularity: row?.partitionGranularity ?? null,
+      via: 'build-all',
+      starter: { kind: 'person', key: user.key, name: user.name },
+      requestId,
+      tokens,
+      startedAt,
+      answeredAt: history.now(),
+    });
+    return { tokens, runId };
   });
 
   app.post('/api/builds/status', USER, async (request, reply) => {

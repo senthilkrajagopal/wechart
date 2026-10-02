@@ -7041,8 +7041,19 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       8. the folder views and the design's states (T559, T560).
 
       Each commit leaves the unit and e2e suites passing: a task that renames what a test finds changes that test in the same commit.
-- [ ] T372 [P] (AC-150) Record each build wechart starts, one record per start, and follow it to its end on the server
+- [x] T372 [P] (AC-150) Record each build wechart starts, one record per start, and follow it to its end on the server
   - *Rewritten 2026-10-02 to design 16 (`[R56]`):* one record per start (Q6), its four outcomes, and starters that include wechart's schedules.
+  - **As built (2026-10-02):**
+    - Migration `1758530000000_build-history.cjs`: `build_runs`, one row per start (pre-aggregation, folder, partitions asked, partition granularity, how it was started, a person or a schedule as starter, request id, when wechart asked and when Cube answered, end, outcome, failed count, Cube's error), and `build_tokens`, one row per job (last state, table, end, a jsonb log of each state with when wechart saw it, and a lease).
+    - `repos/build-history.ts`; `jobs/follow.ts`, started by `main.ts` every 2 s and stopped with the process; `POST /api/builds` sends `x-request-id: wechart-<uuid>` and answers the record's `runId`.
+    - **Following across replicas:** a follower takes open jobs on a 30 s lease (an `UPDATE … WHERE` the lease has run out, which a concurrent taker re-checks and passes by, research `db-access.md` §3), least lately asked first, asks Cube, writes each new state only if the job still holds the state it was taken in, and hands the jobs back to be asked again a second on, only if it still holds them. Each round also closes every open build whose jobs have all ended.
+    - **The first moments:** within 30 s of Cube's answer to the post, `not_found` and `missing_partition` aren't taken as a job's end (research `cube/job-records.md`, "Statuses that can flip…", an inference). After that, a state seen again and now taken as the end keeps the time it was first seen. The 30 s is the implementer's call that research leaves open.
+    - **Outcomes:** failed when any job failed (`failure: …`, `missing_partition`, `pre_agg_not_found`), its error the first `failure: …` text; else Cube's record expired when any job read `not_found`, with no end or duration, since how it ended isn't known; else done.
+    - **Not recorded:** a start for which Cube made no job (the browser is told no job started, as before). The pre-aggregation's folder is found before Cube is asked, so a failure there starts nothing.
+    - A batch Cube refuses is asked again job by job, so one job whose context no longer compiles holds up no other.
+    - The cap: each start locks its pre-aggregation's oldest record first, so two starts at once trim in turn.
+  - **One review round (spec-reviewer), fixed:** a build never closed when a round stopped between a job's end and its build's close; the folder read after the post; tokens past the first 100 never asked; the cap racing two starts; a start with no job recorded as Done; one bad job failing its batch; the first moments counted from before the post; an expired build given an end and a duration; a status kept as Cube's error; a late follower handing back another's hold. Tests added for each, and for `startFollowingBuilds`.
+  - AC-150 stays open: Run history (T374) and the cancelled outcome (T376) are still to come.
   - Files:
     - a migration `packages/api/src/db/migrations/…_build-history.cjs`;
     - `packages/api/src/repos/build-history.ts` (+ test);

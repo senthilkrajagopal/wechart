@@ -166,6 +166,44 @@ export interface Database {
   item_versions: ItemVersionTable;
   sql_runner_switches: SqlRunnerSwitchTable;
   sql_runs: SqlRunTable;
+  build_runs: BuildRunTable;
+  build_tokens: BuildTokenTable;
+}
+
+/** A build wechart started through Cube's jobs API (T372, AC-150): one row per start. */
+export interface BuildRunTable {
+  id: string;
+  pre_aggregation: string;
+  folder_id: string | null;
+  /** The partitions asked for, by their starts; null for every partition. */
+  partitions: JSONColumnType<string[] | null, string | null, string | null>;
+  partition_granularity: string | null;
+  via: string;
+  starter_kind: string;
+  starter_key: string | null;
+  starter_name: string | null;
+  schedule_id: string | null;
+  schedule_name: string | null;
+  request_id: string;
+  started_at: Date;
+  answered_at: Date;
+  ended_at: Date | null;
+  outcome: string | null;
+  failed_count: number | null;
+  error: string | null;
+}
+
+/** One job Cube made for a build, a partition's (T372): its states, as wechart saw them. */
+export interface BuildTokenTable {
+  run_id: string;
+  token: string;
+  position: number;
+  status: string | null;
+  target_table: string | null;
+  finished: Generated<boolean>;
+  finished_at: Date | null;
+  log: JSONColumnType<{ at: string; status: string; table?: string }[], string | undefined, string>;
+  lease_until: Date | null;
 }
 
 /** The SQL runner switched on for a target (T531, AC-374): a data source's id, or `cubestore`. */

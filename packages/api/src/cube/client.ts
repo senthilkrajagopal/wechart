@@ -267,11 +267,22 @@ export class CubeClient {
    * build is of the model Cube answers wechart from — in UTC, the zone the
    * refresh worker builds in by default. One token per partition built
    * (T155; research/cube/refresh-jobs-caching.md §B).
+   *
+   * Given a `requestId`, it is the post's `x-request-id`: Cube keeps it as
+   * the job's request id (research cube/job-records.md, finding 4), and
+   * xcube's queue gives it back on each entry the post made (T372; research
+   * xcube-jobs-schedules-routes.md, Gotcha 3).
    */
-  async buildPreAggregations(ids: readonly string[]): Promise<unknown> {
+  async buildPreAggregations(
+    ids: readonly string[],
+    { requestId }: { readonly requestId?: string } = {},
+  ): Promise<unknown> {
     return this.#serviceRequest('/v1/pre-aggregations/jobs', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        ...(requestId === undefined ? {} : { 'x-request-id': requestId }),
+      },
       body: JSON.stringify({
         action: 'post',
         selector: {

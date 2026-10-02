@@ -84,6 +84,7 @@ import { DataSourceRefused, type DataSource, type DataSourceStore } from './repo
 import type { SqlRunnerSwitchStore } from './repos/sql-runner-switches';
 import type { XcubeSqlRunner } from './xcube/sql-runner';
 import type { SqlRunStore } from './repos/sql-runs';
+import type { BuildHistory } from './repos/build-history';
 import { signsInOtherwise } from './routes/sql-runner-switch';
 import type { DataSourceLanding } from './routes/data-sources';
 import {
@@ -223,6 +224,8 @@ export interface BuildOptions {
   readonly sqlRunner?: XcubeSqlRunner;
   /** Each user's SQL runs, one going at a time (T533, AC-379). */
   readonly sqlRuns?: SqlRunStore;
+  /** The builds wechart starts, one record per start (T372, AC-150). */
+  readonly buildHistory?: BuildHistory;
   /**
    * Where a data source lands before it is stored, and leaves before it is
    * removed (T442): xcube's connections. Unset without xcube.
@@ -445,6 +448,7 @@ export function buildServer({
   sqlRunnerSwitches,
   sqlRunner,
   sqlRuns,
+  buildHistory,
   dataSourceLanding,
   connectionTest,
   connectionTests,
@@ -1118,7 +1122,14 @@ export function buildServer({
       }[],
   };
   // With the model's files: each rollup's link names its stored file (T449).
-  registerBuilds(app, client, modelFiles, jobsAccess);
+  // Each start recorded in wechart's history (T372, AC-150).
+  registerBuilds(
+    app,
+    client,
+    modelFiles,
+    jobsAccess,
+    buildHistory === undefined ? undefined : { store: buildHistory, now },
+  );
   // With the model's files: a key's SQL is read there (T273's review).
   // And each folder's, under its prefixed names (T450's review).
   registerSchedules(app, client, modelFiles, folders, jobsAccess);
