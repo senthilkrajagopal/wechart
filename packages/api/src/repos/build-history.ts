@@ -602,13 +602,16 @@ export function buildHistory(db: Kysely<Database>) {
     },
 
     /**
-     * A pre-aggregation's jobs wechart started, newest start first, each with
-     * the table it built (T375): a partition's failed state comes from the
-     * latest of them (AC-145).
+     * Pre-aggregations' jobs wechart started, newest start first, each with
+     * the table it built and who started it (T375, T550): a partition's
+     * failed state comes from the latest of them (AC-145), and a row's
+     * starter from the one that made its newest version (AC-391).
      */
-    async jobsOf(preAggregation: string): Promise<
+    async jobsOf(preAggregations: string | readonly string[]): Promise<
       {
         readonly runId: string;
+        readonly preAggregation: string;
+        readonly starter: Starter;
         readonly startedAt: Date;
         readonly table: string | null;
         readonly status: string | null;
@@ -616,23 +619,33 @@ export function buildHistory(db: Kysely<Database>) {
         readonly finishedAt: Date | null;
       }[]
     > {
+      const ids = typeof preAggregations === 'string' ? [preAggregations] : [...preAggregations];
+      if (ids.length === 0) return [];
       const rows = await db
         .selectFrom('build_tokens as t')
         .innerJoin('build_runs as r', 'r.id', 't.run_id')
         .select([
           't.run_id',
+          'r.pre_aggregation',
+          'r.starter_kind',
+          'r.starter_key',
+          'r.starter_name',
+          'r.schedule_id',
+          'r.schedule_name',
           'r.started_at',
           't.target_table',
           't.status',
           't.finished',
           't.finished_at',
         ])
-        .where('r.pre_aggregation', '=', preAggregation)
+        .where('r.pre_aggregation', 'in', ids)
         .orderBy('r.started_at', 'desc')
         .orderBy('t.position')
         .execute();
       return rows.map((row) => ({
         runId: row.run_id,
+        preAggregation: row.pre_aggregation,
+        starter: starterOf(row),
         startedAt: row.started_at,
         table: row.target_table,
         status: row.status,

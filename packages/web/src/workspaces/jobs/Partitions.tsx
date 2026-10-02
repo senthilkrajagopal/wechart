@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { StateLine } from '../../shell/StatusIcon';
-import { folderTextOf, periodOf, type Starter } from './builds';
+import { BuiltWhen, folderTextOf, periodOf, type Starter } from './builds';
 import { Status } from './StateBadge';
 
 /**
@@ -51,15 +51,6 @@ class StillWorking extends Error {}
 const hourOf = (iso: string) =>
   new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
 
-/** "Today 14:01", else the day and time: when Cube last built it. */
-function builtAtOf(iso: string): string {
-  const at = new Date(iso);
-  const today = new Date().toDateString() === at.toDateString();
-  return today
-    ? `Today ${hourOf(iso)}`
-    : `${at.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} ${hourOf(iso)}`;
-}
-
 /** A state in design 16's words, with its icon (pins 5, 12; the legend). */
 function StateOf({ row }: { row: PartitionRow }) {
   switch (row.state) {
@@ -95,7 +86,8 @@ function StateOf({ row }: { row: PartitionRow }) {
         </>
       );
     default:
-      return <Status kind="cancel" label="Not built" testId="partition-state" state="not-built" />;
+      // No version yet: design 16's s-off, as its legend draws it.
+      return <Status kind="off" label="Not built" testId="partition-state" state="not-built" />;
   }
 }
 
@@ -448,7 +440,7 @@ export function Partitions({
                   <td className="build-queue__state">
                     <StateOf row={row} />
                   </td>
-                  <td>{row.lastBuiltAt === null ? '—' : builtAtOf(row.lastBuiltAt)}</td>
+                  <td>{row.lastBuiltAt === null ? '—' : <BuiltWhen iso={row.lastBuiltAt} />}</td>
                 </tr>
               );
             })}

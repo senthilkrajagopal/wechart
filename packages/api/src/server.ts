@@ -48,7 +48,7 @@ import { registerSignIn, signInOptionsOf } from './auth/routes';
 import { Forbidden, registerUser, Unauthenticated, userOf } from './auth/user';
 import { registerBuilds } from './jobs/build';
 import { registerBuildHistory } from './jobs/history';
-import { registerPartitions } from './jobs/partitions';
+import { registerPartitions, rowStates } from './jobs/partitions';
 import { registerQueue } from './jobs/queue';
 import type { XcubePartitions } from './xcube/partitions';
 import type { XcubeQueue } from './xcube/queue';
@@ -1140,6 +1140,14 @@ export function buildServer({
     modelFiles,
     jobsAccess,
     buildHistory === undefined ? undefined : { store: buildHistory, now },
+    // Each row's state from AC-145's sources (T550, AC-391).
+    buildPartitions === undefined
+      ? undefined
+      : rowStates({
+          partitions: buildPartitions,
+          ...(buildQueue === undefined ? {} : { queue: buildQueue }),
+          ...(buildHistory === undefined ? {} : { history: buildHistory }),
+        }),
   );
   // Run history and each build's log, scoped as Jobs is (T374, AC-150).
   if (buildHistory !== undefined)

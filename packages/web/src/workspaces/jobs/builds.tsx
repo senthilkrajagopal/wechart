@@ -77,6 +77,20 @@ export function whenOf(iso: string, now: Date = new Date()): { shown: string; ut
   return { shown: `${date} ${clockOf(iso)}`, utc: `${iso.slice(0, 19).replace('T', ' ')} UTC` };
 }
 
+/**
+ * When Cube last built something, to the minute — "Today 14:01", "Yesterday
+ * 16:20", "28 Sep 09:12" — your local time, UTC on hover (design 16, pins 6
+ * and 11, and its footnote).
+ */
+export function BuiltWhen({ iso }: { iso: string }) {
+  const when = whenOf(iso);
+  return (
+    <time dateTime={iso} title={when.utc}>
+      {when.shown.replace(/(\d{2}:\d{2}):\d{2}$/, '$1')}
+    </time>
+  );
+}
+
 /** "6 s", "41 s", "2 min 4 s", "1 h 3 min": how long, in words. */
 export function durationOf(ms: number): string {
   const seconds = Math.round(ms / 1000);

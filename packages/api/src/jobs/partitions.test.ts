@@ -67,6 +67,9 @@ let queued: QueueEntry[] = [];
 const posted: { selector: Record<string, unknown>; requestId: string | null }[] = [];
 /** Starts Cube's jobs API refuses: no partition meets them any more. */
 let refusedStarts: string[] = [];
+/** Pre-aggregations the partitions route answers 500 for; and the queue route down. */
+let unreadable: string[] = [];
+let queueDown = false;
 
 const byMonth = () => `${xcubeA}__orders.by_month`;
 const whole = () => `${xcubeA}__orders.whole`;
@@ -190,10 +193,23 @@ beforeAll(async () => {
       return Response.json({}, { status: 404 });
     }) as typeof fetch,
   });
-  const stub = (async (url: string) =>
-    new URL(url).pathname.endsWith('/partitions')
-      ? Response.json({ preAggregationPartitions: items })
-      : Response.json({ model: 'dev', queue: queued })) as typeof fetch;
+  const stub = (async (url: string, init?: RequestInit) => {
+    if (new URL(url).pathname.endsWith('/partitions')) {
+      // A module's error answered as it is, for every id asked with it
+      // (research xcube-slice-6.md, "POST …/pre-aggregations/partitions").
+      const asked = (
+        JSON.parse(String(init?.body ?? '{}')) as {
+          query?: { preAggregations?: { id: string }[] };
+        }
+      ).query?.preAggregations?.map((each) => each.id);
+      return asked?.some((id) => unreadable.includes(id)) === true
+        ? Response.json({ error: 'Too many partitions' }, { status: 500 })
+        : Response.json({ preAggregationPartitions: items });
+    }
+    return queueDown
+      ? Response.json({ error: 'xcube is restarting' }, { status: 503 })
+      : Response.json({ model: 'dev', queue: queued });
+  }) as typeof fetch;
   app = buildServer({
     config: secured,
     cube: client,
@@ -250,6 +266,33 @@ const partitionsOf = async (who: string, id: string) => {
     url: `/api/jobs/partitions?preagg=${encodeURIComponent(id)}`,
   });
   return { status: answer.statusCode, body: answer.json<Record<string, unknown>>() };
+};
+
+/** A start of one partition from Jobs, seen by the follower 40 s on in `status`. */
+const ran = async (month: string, startedAt: string, status: string, final = true) => {
+  const token = `${MARK}-ran-${month}-${startedAt}`;
+  const runId = await history().start({
+    preAggregation: byMonth(),
+    folderId: folderA,
+    partitions: [`2026-${month}-01T00:00:00.000`],
+    granularity: 'month',
+    via: 'rebuild-selected',
+    starter: { kind: 'person', key: 'wren', name: 'Wren Writer' },
+    requestId: `wechart-${token}`,
+    tokens: [token],
+    startedAt: new Date(startedAt),
+    answeredAt: new Date(startedAt),
+  });
+  await history().seen({
+    runId,
+    token,
+    previous: null,
+    status,
+    table: `${table(month)}_x_y_${String(at(startedAt))}`,
+    at: new Date(new Date(startedAt).getTime() + 40_000),
+    final,
+  });
+  return { runId, token };
 };
 
 describe('a rollup’s partitions (T375, AC-145)', () => {
@@ -374,33 +417,6 @@ describe('a rollup’s partitions (T375, AC-145)', () => {
     });
   });
 
-  /** A start of one partition from Jobs, seen by the follower at `endedAt` in `status`. */
-  const ran = async (month: string, startedAt: string, status: string, final = true) => {
-    const token = `${MARK}-ran-${month}-${startedAt}`;
-    const runId = await history().start({
-      preAggregation: byMonth(),
-      folderId: folderA,
-      partitions: [`2026-${month}-01T00:00:00.000`],
-      granularity: 'month',
-      via: 'rebuild-selected',
-      starter: { kind: 'person', key: 'wren', name: 'Wren Writer' },
-      requestId: `wechart-${token}`,
-      tokens: [token],
-      startedAt: new Date(startedAt),
-      answeredAt: new Date(startedAt),
-    });
-    await history().seen({
-      runId,
-      token,
-      previous: null,
-      status,
-      table: `${table(month)}_x_y_${String(at(startedAt))}`,
-      at: new Date(new Date(startedAt).getTime() + 40_000),
-      final,
-    });
-    return { runId, token };
-  };
-
   it('reads neither a build Cube merged into another, nor one a later build of wechart’s followed, as failed', async () => {
     items = [
       itemOf(
@@ -491,6 +507,281 @@ describe('a rollup’s partitions (T375, AC-145)', () => {
     expect((await partitionsOf('many', byMonth())).status).toBe(404);
     expect((await partitionsOf('writer', `${xcubeA}__orders.nothing`)).status).toBe(404);
     expect((await partitionsOf('reader', byMonth())).status).toBe(403);
+  });
+});
+
+/**
+ * T550 / AC-391: each pre-aggregation's row in Jobs reads the state of its
+ * partitions that most needs attention — failed, then building, queued,
+ * stalled, partly built (n of N), not built, built — from AC-145's sources,
+ * whoever started the builds; when Cube last built any of them, the newest
+ * version; who started that build from wechart, or none; and how many
+ * partitions it has.
+ */
+describe('each pre-aggregation’s row (T550, AC-391)', () => {
+  interface Row {
+    id: string;
+    state: string | null;
+    stateAt?: string | null;
+    built?: number;
+    partitions?: number | null;
+    lastBuiltAt?: string | null;
+    startedBy?: { kind: string; name: string } | null;
+    pending?: boolean;
+    unreadable?: string;
+  }
+  const rowsOf = async () => {
+    const answer = await as('writer', { method: 'GET', url: '/api/preaggregations' });
+    expect(answer.statusCode, answer.body).toBe(200);
+    return answer.json<Row[]>();
+  };
+  const rowOf = async (id: string) => (await rowsOf()).find((row) => row.id === id);
+  /** A queue entry for one of October to December's partitions. */
+  const entry = (month: string, status: 'queued' | 'processing', stalled = false): QueueEntry => ({
+    key: `k-${month}-${status}-${String(stalled)}`,
+    dataSource: 'default',
+    preAggregation: byMonth(),
+    table: table(month),
+    targetTable: `${table(month)}_a_b_c`,
+    partition: { start: `2026-${month}-01T00:00:00.000`, end: `2026-${month}-28T23:59:59.999` },
+    status,
+    stalled,
+    addedAt: '2026-10-02T14:31:00.000Z',
+    requestId: null,
+    startedBy: 'scheduler',
+    job: null,
+  });
+  const quarter = (versions: Record<string, string[]>) => [
+    itemOf(
+      byMonth(),
+      'rollup',
+      ['12', '11', '10'].map((month) => partition(month, versions[month] ?? [])),
+      'month',
+    ),
+    itemOf(whole(), 'rollup', [
+      {
+        tableName: 'prod_pre_aggregations.orders_whole',
+        timezone: 'UTC',
+        versionEntries: [{ last_updated_at: at('2026-10-01T16:20:00Z') }],
+      },
+    ]),
+  ];
+  const all = ['2026-10-02T14:01:00Z'];
+
+  it('reads the state that most needs attention, from Cube’s partitions and its queue', async () => {
+    const cases: [string, Record<string, string[]>, QueueEntry[], Partial<Row>][] = [
+      ['every one built', { '10': all, '11': all, '12': all }, [], { state: 'built' }],
+      ['some built', { '10': all, '12': all }, [], { state: 'partly', built: 2, partitions: 3 }],
+      ['none built', {}, [], { state: 'not-built', lastBuiltAt: null }],
+      [
+        'one stalled',
+        { '10': all },
+        [entry('11', 'queued', true)],
+        { state: 'stalled', stateAt: '2026-11-01T00:00:00.000' },
+      ],
+      [
+        'one queued, one stalled',
+        { '10': all, '11': all, '12': all },
+        [entry('11', 'queued', true), entry('12', 'queued')],
+        { state: 'queued', stateAt: '2026-12-01T00:00:00.000' },
+      ],
+      [
+        'one building, one queued',
+        { '10': all, '11': all, '12': all },
+        [entry('12', 'queued'), entry('10', 'processing')],
+        { state: 'building', stateAt: '2026-10-01T00:00:00.000' },
+      ],
+    ];
+    for (const [named, versions, entries, expected] of cases) {
+      items = quarter(versions);
+      queued = entries;
+      expect({ named, ...(await rowOf(byMonth())) }).toMatchObject({ named, ...expected });
+    }
+  });
+
+  it('reads failed above all else, only for a build wechart started that nothing has replaced', async () => {
+    items = quarter({ '10': all, '11': all, '12': all });
+    queued = [entry('10', 'processing')];
+    expect(await rowOf(byMonth())).toMatchObject({ state: 'building' });
+
+    // November rebuilt from Jobs at 14:20, failed; its version is still 14:01's.
+    await ran(
+      '11',
+      '2026-10-02T14:20:00Z',
+      'failure: canceling statement due to statement timeout',
+    );
+
+    expect(await rowOf(byMonth())).toMatchObject({
+      state: 'failed',
+      stateAt: '2026-11-01T00:00:00.000',
+    });
+  });
+
+  it('gives when Cube last built it, the newest version of any partition, and who started that build from wechart', async () => {
+    // December's newest version, 15:00, made by a build Wren started from Jobs;
+    // its table's last part is that version's time, base-32 seconds (research
+    // cube/system-partitions.md, "Build state and versions").
+    const madeAt = '2026-10-02T15:00:00Z';
+    const stamp = Math.floor(at(madeAt) / 1000).toString(32);
+    const token = `${MARK}-dec-${stamp}`;
+    const runId = await history().start({
+      preAggregation: byMonth(),
+      folderId: folderA,
+      partitions: ['2026-12-01T00:00:00.000'],
+      granularity: 'month',
+      via: 'rebuild-selected',
+      starter: { kind: 'person', key: 'wren', name: 'Wren Writer' },
+      requestId: `wechart-${token}`,
+      tokens: [token],
+      startedAt: new Date(madeAt),
+      answeredAt: new Date(madeAt),
+    });
+    await history().seen({
+      runId,
+      token,
+      previous: null,
+      status: 'done',
+      table: `${table('12')}_c_s_${stamp}`,
+      at: new Date('2026-10-02T15:00:30Z'),
+      final: true,
+    });
+    // November built again since its failed build above.
+    const rebuilt = ['2026-10-02T14:30:00Z'];
+    items = quarter({ '10': all, '11': rebuilt, '12': [madeAt, '2026-10-02T14:01:00Z'] });
+    queued = [];
+
+    expect(await rowOf(byMonth())).toMatchObject({
+      state: 'built',
+      lastBuiltAt: '2026-10-02T15:00:00.000Z',
+      startedBy: { kind: 'person', name: 'Wren Writer' },
+      partitions: 3,
+    });
+
+    // A newer version of October, made by Cube's refresh worker: no starter.
+    items = quarter({ '10': ['2026-10-02T16:00:00Z'], '11': rebuilt, '12': [madeAt] });
+    expect(await rowOf(byMonth())).toMatchObject({
+      lastBuiltAt: '2026-10-02T16:00:00.000Z',
+      startedBy: null,
+    });
+  });
+
+  it('names no starter for a version a build of wechart’s didn’t make, though its job’s table has that version’s name', async () => {
+    // October's newest version, 17:00, made by the refresh worker; a build of
+    // wechart's in the same second took the same name and failed (Cube
+    // Store's unique constraint; research xcube-jobs-schedules-routes.md,
+    // "Checked 2026-10-02 (T550)").
+    const madeAt = '2026-10-02T17:00:00Z';
+    const stamp = Math.floor(at(madeAt) / 1000).toString(32);
+    const token = `${MARK}-oct-${stamp}`;
+    const runId = await history().start({
+      preAggregation: byMonth(),
+      folderId: folderA,
+      partitions: ['2026-10-01T00:00:00.000'],
+      granularity: 'month',
+      via: 'rebuild-selected',
+      starter: { kind: 'person', key: 'wren', name: 'Wren Writer' },
+      requestId: `wechart-${token}`,
+      tokens: [token],
+      startedAt: new Date(madeAt),
+      answeredAt: new Date(madeAt),
+    });
+    await history().seen({
+      runId,
+      token,
+      previous: null,
+      status: 'failure: Unique constraint violation',
+      table: `${table('10')}_c_s_${stamp}`,
+      at: new Date('2026-10-02T17:00:05Z'),
+      final: true,
+    });
+    items = quarter({ '10': [madeAt], '11': all, '12': all });
+    queued = [];
+
+    expect(await rowOf(byMonth())).toMatchObject({
+      lastBuiltAt: '2026-10-02T17:00:00.000Z',
+      startedBy: null,
+    });
+  });
+
+  it('names a wechart schedule as the starter of the build it started', async () => {
+    const madeAt = '2026-10-02T18:00:00Z';
+    const stamp = Math.floor(at(madeAt) / 1000).toString(32);
+    const token = `${MARK}-sched-${stamp}`;
+    const runId = await history().start({
+      preAggregation: byMonth(),
+      folderId: folderA,
+      partitions: null,
+      granularity: 'month',
+      via: 'schedule',
+      starter: { kind: 'schedule', id: 's-close', name: 'Month-end close' },
+      requestId: `wechart-${token}`,
+      tokens: [token],
+      startedAt: new Date(madeAt),
+      answeredAt: new Date(madeAt),
+    });
+    await history().seen({
+      runId,
+      token,
+      previous: null,
+      status: 'done',
+      table: `${table('11')}_c_s_${stamp}`,
+      at: new Date('2026-10-02T18:00:30Z'),
+      final: true,
+    });
+    items = quarter({ '10': all, '11': [madeAt], '12': all });
+    queued = [];
+
+    expect(await rowOf(byMonth())).toMatchObject({
+      startedBy: { kind: 'schedule', id: 's-close', name: 'Month-end close' },
+    });
+  });
+
+  it('keeps every row when xcube can’t say a state, saying which it couldn’t read', async () => {
+    // Built since the failed builds above.
+    const since = ['2026-10-02T19:00:00Z'];
+    items = quarter({ '10': since, '11': since, '12': all });
+    queued = [];
+    // One rollup Cube answers 500 for (over its partitions' limit, say): the
+    // others still read, each asked alone.
+    unreadable = [whole()];
+    try {
+      const rows = await rowsOf();
+      expect(rows.find((row) => row.id === byMonth())).toMatchObject({ state: 'built' });
+      expect(rows.find((row) => row.id === whole())).toMatchObject({
+        state: null,
+        unreadable: expect.stringContaining('500'),
+      });
+
+      // The queue down: no state can be said, every row kept.
+      unreadable = [];
+      queueDown = true;
+      const kept = await rowsOf();
+      expect(kept.map((row) => row.id).sort()).toEqual([byMonth(), recent(), whole()].sort());
+      expect(kept.find((row) => row.id === byMonth())).toMatchObject({
+        state: null,
+        unreadable: expect.stringContaining('503'),
+      });
+    } finally {
+      unreadable = [];
+      queueDown = false;
+    }
+  });
+
+  it('counts no partitions for one that isn’t partitioned, says none for a lambda, and never reads one Cube is still working out as not built', async () => {
+    items = quarter({ '10': all, '11': all, '12': all });
+    queued = [];
+    const rows = await rowsOf();
+    expect(rows.find((row) => row.id === whole())).toMatchObject({
+      state: 'built',
+      partitions: null,
+      lastBuiltAt: '2026-10-01T16:20:00.000Z',
+    });
+    // Made of other rollups: no partitions of its own (A3).
+    expect(rows.find((row) => row.id === recent())).toMatchObject({ state: null });
+
+    // Cube's "Continue wait" for the month rollup: missing from every answer.
+    items = quarter({}).slice(1);
+    expect(await rowOf(byMonth())).toMatchObject({ state: null, pending: true });
   });
 });
 

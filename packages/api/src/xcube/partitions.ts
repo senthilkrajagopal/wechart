@@ -41,10 +41,22 @@ export class PartitionsPending extends Error {
 
 export interface XcubePartitions {
   of(id: string): Promise<PartitionsOf>;
+  /**
+   * Every one named, in one ask (T550, AC-391): one missing is asked for
+   * once more, and still missing is left out, for its caller to say Cube is
+   * still working it out. If the one ask fails, each is asked alone, and
+   * those that fail alone are said with xcube's words (T550's review).
+   */
+  ofEach(ids: readonly string[]): Promise<{
+    readonly found: Map<string, PartitionsOf>;
+    readonly failed: Map<string, string>;
+  }>;
 }
 
 /** Asks before saying it is still waiting: a slow build range comes in a few tries. */
 const ASKS = 4;
+/** Jobs' list asks again on its next read, so it waits for one more ask only. */
+const ASKS_FOR_EACH = 2;
 const CALL_TIMEOUT_MS = 60_000;
 
 const text = (value: unknown): string | null => (typeof value === 'string' ? value : null);
@@ -100,42 +112,69 @@ export function xcubePartitions({
   readonly askAgainAfterMs?: number;
 }): XcubePartitions {
   const url = `${cubeApiUrl.replace(/\/$/, '')}/v1/semantic/models/${encodeURIComponent(model)}/pre-aggregations/partitions`;
+  /** One ask for these, answered with the ones that came back. */
+  const ask = async (ids: readonly string[]): Promise<PartitionsOf[]> => {
+    const response = await send(url, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${await token()}`,
+        'content-type': 'application/json',
+      },
+      signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+      body: JSON.stringify({
+        query: {
+          preAggregations: ids.map((id) => ({ id })),
+          timezones: ['UTC'],
+          expand: ['partitions.details', 'partitions.versions'],
+        },
+      }),
+    });
+    const answer = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!response.ok)
+      throw new XcubeError(
+        response.status,
+        text(answer['code']) ?? undefined,
+        `xcube answered ${String(response.status)}: ${text(answer['error']) ?? 'no reason given'}`,
+      );
+    return (
+      Array.isArray(answer['preAggregationPartitions'])
+        ? (answer['preAggregationPartitions'] as Record<string, unknown>[])
+        : []
+    ).flatMap((item) => {
+      const found = partitionsOf(item);
+      return found === undefined || !ids.includes(found.id) ? [] : [found];
+    });
+  };
+  const pause = () => new Promise((resolve) => setTimeout(resolve, askAgainAfterMs));
   return {
     async of(id) {
-      for (let ask = 1; ask <= ASKS; ask += 1) {
-        const response = await send(url, {
-          method: 'POST',
-          headers: {
-            authorization: `Bearer ${await token()}`,
-            'content-type': 'application/json',
-          },
-          signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-          body: JSON.stringify({
-            query: {
-              preAggregations: [{ id }],
-              timezones: ['UTC'],
-              expand: ['partitions.details', 'partitions.versions'],
-            },
-          }),
-        });
-        const answer = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-        if (!response.ok)
-          throw new XcubeError(
-            response.status,
-            text(answer['code']) ?? undefined,
-            `xcube answered ${String(response.status)}: ${text(answer['error']) ?? 'no reason given'}`,
-          );
-        const found = (
-          Array.isArray(answer['preAggregationPartitions'])
-            ? (answer['preAggregationPartitions'] as Record<string, unknown>[])
-            : []
-        )
-          .map(partitionsOf)
-          .find((each) => each?.id === id);
+      for (let asked = 1; asked <= ASKS; asked += 1) {
+        const found = (await ask([id]))[0];
         if (found !== undefined) return found;
-        if (ask < ASKS) await new Promise((resolve) => setTimeout(resolve, askAgainAfterMs));
+        if (asked < ASKS) await pause();
       }
       throw new PartitionsPending(id);
+    },
+    async ofEach(ids) {
+      const found = new Map<string, PartitionsOf>();
+      const failed = new Map<string, string>();
+      for (let asked = 1; asked <= ASKS_FOR_EACH; asked += 1) {
+        const missing = ids.filter((id) => !found.has(id) && !failed.has(id));
+        if (missing.length === 0) break;
+        if (asked > 1) await pause();
+        try {
+          for (const each of await ask(missing)) found.set(each.id, each);
+        } catch {
+          // A module's error fails the whole ask (xcube-slice-6.md): each alone.
+          for (const id of missing)
+            try {
+              for (const each of await ask([id])) found.set(each.id, each);
+            } catch (error) {
+              failed.set(id, error instanceof Error ? error.message : String(error));
+            }
+        }
+      }
+      return { found, failed };
     },
   };
 }

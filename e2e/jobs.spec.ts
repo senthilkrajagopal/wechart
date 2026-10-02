@@ -38,33 +38,66 @@ test('the Jobs workspace lists the queries a dashboard issued, with duration and
  * reports done, missing partition, failure or not found.
  * Fails when: the job's terminal state is never shown, or the token is absent.
  *
- * On the real Cube, with the seed rollup: Build, its token, and its state
- * followed to done in its row — which Cube's own jobs API then confirms for
- * that token. Since T375 the pane lists the builds started from wechart, and
- * a build's token is shown in Queue and in Run history's log (the tests
+ * On the real Cube, with a rollup of its own: Build, its token, and its row
+ * read again until the version it made is the newest, built from wechart by
+ * admin (T550, AC-391) — which Cube's own jobs API then confirms for that
+ * token. Since T375 the pane lists the builds started from wechart, and a
+ * build's token is shown in Queue and in Run history's log (the tests
  * below); here it is the one Cube answered the start with.
+ *
+ * Each test that builds for real builds its own rollup, left alone by the
+ * refresh worker: two builds of one partition in the same second get one
+ * table name, and Cube Store refuses the second as a duplicate (Cube's log,
+ * "Unique constraint violation", seen 2026-10-02 when two of these tests
+ * built the seed rollup at once; research cube/job-records.md, "Queue
+ * de-duplication…", on the one-second names).
  */
+const ownRollup = (cube: string) => `cubes:
+  - name: ${cube}
+    sql_table: public.orders
+    dimensions:
+      - name: status
+        sql: status
+        type: string
+    measures:
+      - name: count
+        type: count
+    pre_aggregations:
+      - name: main
+        measures: [CUBE.count]
+        dimensions: [CUBE.status]
+        scheduled_refresh: false
+`;
+
 test('building a pre-aggregation follows its job to done, and Cube’s record of its token agrees', async ({
   page,
+  request,
+  browserName,
 }) => {
+  const cube = `jobs_${browserName}`;
+  const rollup = `${cube}.main`;
+  expect(await ownCubeFile(request, cube, ownRollup(cube))).toBe(`cubes/${cube}.yml`);
   await page.goto('/jobs');
   const row = page
     .getByRole('table', { name: 'Pre-aggregations' })
     .getByRole('row')
-    .filter({ hasText: 'monthly_orders.by_status_month' });
-  await expect(row).toContainText('year');
+    .filter({ hasText: rollup });
+  // Not partitioned: no count of partitions (T550).
+  await expect(row.getByRole('cell').nth(5)).toHaveText('—', { timeout: 30_000 });
   const started = page.waitForResponse(
     (response) => response.url().endsWith('/api/builds') && response.request().method() === 'POST',
   );
-  await row.getByRole('button', { name: 'Build monthly_orders.by_status_month' }).click();
+  await row.getByRole('button', { name: `Build ${rollup}` }).click();
   const { tokens } = (await (await started).json()) as { tokens: string[] };
   expect(tokens[0]).toMatch(/^[0-9a-f]{16,}$/);
 
-  // Followed while Cube builds it, to its end — a build takes a second or two.
+  // Its row read again while Cube builds it, to its end — a build takes a
+  // second or two — its newest version now the one admin's build made.
   const state = row.getByTestId('row-state');
-  await expect(state).toHaveAttribute('data-state', 'done', { timeout: 30_000 });
+  await expect(row.getByTestId('starter')).toHaveText('admin', { timeout: 30_000 });
+  await expect(state).toHaveAttribute('data-state', 'built');
   // T158 / AC-152: in words, with its icon — never colour alone.
-  await expect(state).toHaveText('Done');
+  await expect(state).toHaveText('Built');
   await expect(state.locator('svg[data-icon="ok"]')).toHaveCount(1);
 
   // Cube's own record of that token agrees, its table in the model's own
@@ -74,7 +107,7 @@ test('building a pre-aggregation follows its job to done, and Cube’s record of
     await page.request.post('/api/builds/status', { data: { tokens: [tokens[0]] } })
   ).json()) as { status: string; table?: string }[];
   expect(answered[0]?.table).toMatch(
-    /^prod_pre_aggregations_e2e_[0-9a-f]+\.monthly_orders_by_status_month/,
+    new RegExp(`^prod_pre_aggregations_e2e_[0-9a-f]+\\.${cube}_main`),
   );
   expect(answered.map((each) => each.status)).toEqual(['done']);
 });
@@ -85,20 +118,25 @@ test('building a pre-aggregation follows its job to done, and Cube’s record of
  * history, its log naming its token and Cube's end state, Done. This carries
  * AC-149's test, the token followed to its end, onto the new surface. A
  * record whose end is moved back 25 hours, past Cube's own record of the
- * job, is still listed.
+ * job, is still listed. On a rollup of its own, as AC-149's test says why.
  */
 test('Run history lists a build started from Jobs, its log naming its token and Done, a day on too', async ({
   page,
+  request,
+  browserName,
 }) => {
+  const cube = `history_${browserName}`;
+  const rollup = `${cube}.main`;
+  expect(await ownCubeFile(request, cube, ownRollup(cube))).toBe(`cubes/${cube}.yml`);
   await page.goto('/jobs');
   const row = page
     .getByRole('table', { name: 'Pre-aggregations' })
     .getByRole('row')
-    .filter({ hasText: ROLLUP });
+    .filter({ hasText: rollup });
   const answered = page.waitForResponse(
     (response) => response.url().endsWith('/api/builds') && response.request().method() === 'POST',
   );
-  await row.getByRole('button', { name: `Build ${ROLLUP}` }).click();
+  await row.getByRole('button', { name: `Build ${rollup}` }).click({ timeout: 30_000 });
   const { tokens, runId } = (await (await answered).json()) as {
     tokens: string[];
     runId: string;
@@ -109,13 +147,13 @@ test('Run history lists a build started from Jobs, its log naming its token and 
   // the API with no page asking Cube after it.
   await page.goto('/jobs?tab=history');
   const built = page.getByTestId(`build-row-${runId}`);
-  await expect(built).toContainText(ROLLUP);
+  await expect(built).toContainText(rollup);
   await expect(built.getByTestId('build-outcome')).toHaveText('Done', { timeout: 30_000 });
   await expect(built.getByTestId('starter')).toHaveText('admin');
 
   // Its log: the token, whole in its title, and Cube's end state.
-  await built.getByRole('button', { name: ROLLUP }).click();
-  const pane = page.getByRole('complementary', { name: `Build of ${ROLLUP}` });
+  await built.getByRole('button', { name: rollup }).click();
+  const pane = page.getByRole('complementary', { name: `Build of ${rollup}` });
   const log = pane.getByRole('region', { name: 'Log · what Cube reported, when wechart saw it' });
   await expect(pane.getByTitle(tokens[0]!)).toBeVisible();
   await expect(log.getByRole('listitem').last()).toContainText('done');
@@ -338,6 +376,64 @@ test('rebuilding two of a month-partitioned rollup’s partitions starts jobs wh
 });
 
 /**
+ * T550 / AC-391: each pre-aggregation's row reads the state of its
+ * partitions, whoever built them, when Cube last built it, and who started
+ * that build from wechart — "—" when wechart didn't.
+ *
+ * Its own cube with a rollup that isn't partitioned, left to Cube's refresh
+ * worker, which builds it at its next run (it checks every 30 s; research
+ * cube/refresh-key-schedule.md): read Built, with when, and "—" for its
+ * starter and its partitions. (The seed rollup won't do: the tests above
+ * build it from Jobs.)
+ */
+const workerCube = (cube: string) => `cubes:
+  - name: ${cube}
+    sql_table: public.orders
+    dimensions:
+      - name: status
+        sql: status
+        type: string
+    measures:
+      - name: count
+        type: count
+    pre_aggregations:
+      - name: main
+        measures: [CUBE.count]
+        dimensions: [CUBE.status]
+`;
+
+test('a rollup Cube’s refresh worker built reads Built, with when, and no starter', async ({
+  page,
+  request,
+  browserName,
+}) => {
+  test.setTimeout(240_000);
+  const cube = `worker_${browserName}`;
+  const rollup = `${cube}.main`;
+  expect(await ownCubeFile(request, cube, workerCube(cube))).toBe(`cubes/${cube}.yml`);
+
+  await page.goto('/jobs');
+  const row = page
+    .getByRole('table', { name: 'Pre-aggregations' })
+    .getByRole('row')
+    .filter({ has: page.getByTestId('preagg-name').getByText(rollup, { exact: true }) });
+  const state = row.getByTestId('row-state');
+  // Read again now and then: reloaded here rather than waited for.
+  await expect(async () => {
+    await page.reload();
+    await expect(state).toHaveText('Built', { timeout: 5_000 });
+  }).toPass({ timeout: 180_000 });
+  await expect(state.locator('svg[data-icon="ok"]')).toHaveCount(1);
+  const cells = row.getByRole('cell');
+  await expect(cells.nth(2)).toHaveText(/^(Today|Yesterday) \d{2}:\d{2}$/);
+  await expect(cells.nth(2).locator('time')).toHaveAttribute('title', /UTC$/);
+  // Not started from wechart, and not partitioned.
+  await expect(cells.nth(3)).toHaveText('—');
+  await expect(cells.nth(5)).toHaveText('—');
+  await expect(page.getByTestId('jobs-foot')).toContainText('“—” means wechart didn’t start it.');
+});
+
+/**
  * T162 / AC-156: THE SYSTEM SHALL show the refresh worker's state and the
  * Cube deployment's health, and mark the deployment as down when Cube's
  * health endpoint does not report healthy.
@@ -398,46 +494,48 @@ test('each pre-aggregation’s row has its state, its trigger, and its name lead
     .getByRole('row')
     .filter({ hasText: ROLLUP });
   await expect(row).toBeVisible();
-  // Its state, as an icon and a label: not started from here yet.
+  // Its state, as an icon and a label, from Cube's partitions (T550, AC-391).
   const state = row.getByTestId('row-state');
-  await expect(state).toHaveText('Not built here');
+  await expect(state).toHaveAttribute('data-state', /^(built|partly|not-built|building|queued)$/);
   await expect(state.locator('svg[data-icon]')).toHaveCount(1);
   // What rebuilds it: the model's refresh key, as the seed declares it.
-  await expect(row.getByRole('cell').nth(2)).toHaveText('Every 1 hour');
+  await expect(row.getByRole('cell').nth(4)).toHaveText('Every 1 hour');
 
-  // A build's progress is said in its own row: processing, then done — over
-  // two partitions, the second behind the first, so "Done" waits for both.
-  // Cube's build is answered here, not asked for: the real build is AC-149's
-  // test's, and another build of this one rollup at once makes Cube report a
-  // partition missing to one of them (meta-extended-pre-aggregations.md).
-  let asked = 0;
+  // A build's progress is said in its own row, read again while it goes:
+  // queued, building, then built. Cube's build and the row's states are
+  // answered here, not asked for: the real build is AC-149's test's, and
+  // another build of this one rollup at once makes Cube report a partition
+  // missing to one of them (meta-extended-pre-aggregations.md).
   await page.route('**/api/builds', (route) =>
-    route.fulfill({ json: { tokens: ['t-2025', 't-2026'] } }),
+    route.fulfill({ json: { tokens: ['t-2026'], runId: 'r-row' } }),
   );
-  await page.route('**/api/builds/status', (route) => {
-    asked += 1;
-    return route.fulfill({
-      json:
-        asked < 2
-          ? [{ token: 't-2025', status: 'processing', finished: false }]
-          : asked < 3
-            ? [
-                { token: 't-2025', status: 'done', finished: true },
-                { token: 't-2026', status: 'scheduled', finished: false },
-              ]
-            : [
-                { token: 't-2025', status: 'done', finished: true },
-                { token: 't-2026', status: 'done', finished: true },
-              ],
+  let read = 0;
+  const builtAt = new Date().toISOString();
+  await page.route('**/api/preaggregations', async (route) => {
+    read += 1;
+    const rows = (await (await route.fetch()).json()) as Record<string, unknown>[];
+    const phase =
+      read <= 2
+        ? { state: 'queued', stateAt: '2026-01-01T00:00:00.000' }
+        : read <= 4
+          ? { state: 'building', stateAt: '2026-01-01T00:00:00.000' }
+          : {
+              state: 'built',
+              lastBuiltAt: builtAt,
+              startedBy: { kind: 'person', key: 'admin', name: 'admin' },
+            };
+    await route.fulfill({
+      json: rows.map((each) => (each['id'] !== ROLLUP ? each : { ...each, ...phase })),
     });
   });
   await row.getByRole('button', { name: `Build ${ROLLUP}` }).click();
-  // Cube's `processing` and `scheduled`, in design 16's words (pin 5; T375).
-  await expect(state).toHaveText('Building');
-  await expect(state).toHaveText('Queued');
-  await expect(state).toHaveAttribute('data-state', 'done');
-  await expect(state).toHaveText('Done');
+  // Cube's `scheduled` and `processing`, in design 16's words (pin 5; T375).
+  await expect(state).toHaveText('Queued · 2026', { timeout: 15_000 });
+  await expect(state).toHaveText('Building · 2026', { timeout: 15_000 });
+  await expect(state).toHaveAttribute('data-state', 'built', { timeout: 15_000 });
+  await expect(state).toHaveText('Built');
   await expect(state.locator('svg[data-icon="ok"]')).toHaveCount(1);
+  await expect(row.getByTestId('starter')).toHaveText('admin');
 
   // Its name is plain text, and the row selects it; its pane's Open in Model
   // opens its definition, on this pre-aggregation (the user, 2026-09-28:
@@ -474,7 +572,10 @@ test('selecting a pre-aggregation fills the full-height pane with its state, tri
 
   const pane = page.getByRole('complementary', { name: 'Pre-aggregation details' });
   await expect(pane.getByRole('heading', { level: 2 })).toHaveText(ROLLUP);
-  await expect(pane.getByTestId('pane-state')).toHaveText('Not built here');
+  // Its state as its row has it (T550, AC-391).
+  await expect(pane.getByTestId('pane-state')).toHaveText(
+    (await row.getByTestId('row-state').textContent()) ?? '',
+  );
   await expect(pane.locator('dd').nth(1)).toHaveText('Every 1 hour');
   // Deep into Model: its file, on its cube's Pre-aggs tab, this one open (T469, UX-080).
   await expect(pane.getByRole('link', { name: 'Open in Model' })).toHaveAttribute(
@@ -505,17 +606,14 @@ test('selecting a pre-aggregation fills the full-height pane with its state, tri
   await expect(open).toHaveCSS('text-decoration-line', 'none');
   await expect(open).toHaveCSS('border-top-style', 'solid');
 
-  // Build all starts a build of it, followed in the pane (answered here, as above).
+  // Build all starts a build of it (answered here, as above), said in a
+  // toast with the way to the queue (design 16, A1).
   await page.route('**/api/builds', (route) => route.fulfill({ json: { tokens: ['t-pane'] } }));
-  await page.route('**/api/builds/status', (route) =>
-    route.fulfill({ json: [{ token: 't-pane', status: 'done', finished: true }] }),
-  );
   await buildAll.click();
-  await expect(pane.getByTestId('pane-state')).toHaveText('Done');
-  // Said in a toast, with the way to the queue (design 16, A1).
-  await expect(page.getByRole('status').filter({ hasText: 'Follow it in Queue' })).toContainText(
-    new RegExp(`^Building all \\d+ partitions? of ${ROLLUP}\\.`),
-  );
+  const toast = page.getByRole('status').filter({ hasText: 'Follow it in Queue' });
+  await expect(toast).toContainText(new RegExp(`^Building all \\d+ partitions? of ${ROLLUP}\\.`));
+  await toast.getByRole('button', { name: 'Follow it in Queue' }).click();
+  await expect(page.getByRole('tab', { name: /^Queue/ })).toHaveAttribute('aria-selected', 'true');
 });
 
 /**

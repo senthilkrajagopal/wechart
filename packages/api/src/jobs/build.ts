@@ -10,6 +10,7 @@ import { filesInFolders, fileOf } from '../model/split';
 import type { BuildHistory } from '../repos/build-history';
 import { ROOT_FOLDER_ID } from '../repos/catalog';
 import type { ModelFile, ModelFileStore } from '../server';
+import type { RowState } from './partitions';
 import { EVERYTHING, NO_JOBS, placements, reaches, type JobsAccess, type Placement } from './scope';
 
 /**
@@ -265,6 +266,8 @@ export function registerBuilds(
   access?: JobsAccess,
   /** Where each start is recorded, and the clock it is recorded by (T372, AC-150). */
   history?: { readonly store: BuildHistory; readonly now: () => Date },
+  /** Each row's state, last build and starter, where xcube's routes are there (T550, AC-391). */
+  states?: (rows: readonly Buildable[]) => Promise<Map<string, RowState>>,
 ): void {
   const scopeOf = (request: FastifyRequest) =>
     access === undefined ? Promise.resolve(EVERYTHING) : access.scope(request);
@@ -274,7 +277,10 @@ export function registerBuilds(
   app.get('/api/preaggregations', USER, async (request, reply) => {
     const scope = await scopeOf(request);
     if (!scope.all && !scope.writesAny) return reply.status(403).send(NO_JOBS);
-    return (await listed()).filter((row) => reaches(scope, row.folderId ?? null));
+    const rows = (await listed()).filter((row) => reaches(scope, row.folderId ?? null));
+    if (states === undefined) return rows;
+    const found = await states(rows);
+    return rows.map((row) => ({ ...row, ...found.get(row.id) }));
   });
 
   app.post('/api/builds', USER, async (request, reply) => {

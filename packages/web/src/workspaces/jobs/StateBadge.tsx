@@ -48,15 +48,23 @@ export function Status({
   label,
   testId,
   state,
+  title,
 }: {
   kind: StateKind;
   label: string;
   testId: string;
   /** The state as its source gave it, kept for a reader of the page. */
   state?: string;
+  /** More, on hover: the words of what couldn't be read (T550). */
+  title?: string;
 }) {
   return (
-    <span className={`status status--${kind}`} data-testid={testId} data-state={state}>
+    <span
+      className={`status status--${kind}`}
+      data-testid={testId}
+      data-state={state}
+      title={title}
+    >
       <StatusIcon kind={kind} />
       {label}
     </span>

@@ -4960,6 +4960,12 @@ main:has(.review-view) {
 .status--run { color: var(--wc-accent); }
 .status--idle { color: var(--wc-text-secondary); }
 .status--cancel { color: var(--wc-text-secondary); }
+/* Not built, idle; Partly built, a warning (design 16's legend; T550). */
+.status--off { color: var(--wc-text-secondary); }
+.status--part { color: var(--wc-status-warning); }
+/* What Last built and Started by mean, under Jobs' table (design 16, pin 9). */
+.jobs-foot { margin: 8px 0 0; color: var(--wc-text-secondary); font-size: 12px; line-height: 16px; max-width: 72ch; }
+.jobs-foot b { color: var(--wc-text-primary); font-weight: 600; }
 /* A line of state — loading, failed, done, a warning — with its icon (T183,
    AC-177; direction.md rule 3): the icon at the words' first line, the words
    wrapping beside it in the line's own colour, the icon in its state's. */

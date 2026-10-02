@@ -6,7 +6,8 @@ import type { ReactNode } from 'react';
  * rule 3): every status, validation and job state shows an icon and words,
  * never colour alone.
  */
-export type StateKind = 'ok' | 'run' | 'idle' | 'warn' | 'err' | 'info' | 'draft' | 'cancel';
+export type StateKind =
+  'ok' | 'run' | 'idle' | 'warn' | 'err' | 'info' | 'draft' | 'cancel' | 'off' | 'part';
 
 export function StatusIcon({ kind }: { kind: StateKind }) {
   const common = {
@@ -85,6 +86,29 @@ export function StatusIcon({ kind }: { kind: StateKind }) {
         <svg {...common}>
           <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.5" />
           <path d="M3.8 12.2l8.4-8.4" stroke="currentColor" strokeWidth="1.5" />
+        </svg>
+      );
+    // No version yet: a circle with a bar (design 16's s-off; T550).
+    case 'off':
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M5.2 8h5.6" stroke="currentColor" strokeWidth="1.6" />
+        </svg>
+      );
+    // Some partitions built: a half-filled circle (design 16's s-part; T550).
+    case 'part':
+      return (
+        <svg {...common}>
+          <circle
+            cx="8"
+            cy="8"
+            r="6.2"
+            fill="none"
+            stroke="var(--wc-status-warning-icon)"
+            strokeWidth="1.6"
+          />
+          <path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="var(--wc-status-warning-icon)" />
         </svg>
       );
     // A note, not a state: the prototype's "i" (T466, UX-109).

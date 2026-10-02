@@ -7191,7 +7191,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     7. Tests were added for the latest-build rule, the merged build, the `503` while pending, and a part-refused rebuild.
   - **Review items left, for the record:** there's no rollup-join case in the tests (it takes the lambda's path). Each poll of an open pane reads the tokens of a pre-aggregation's kept runs (up to 100). Pin 11's "since 14:31" and "Queued · Wren Writer, 14:38" times aren't shown; T550 and AC-399 cover the row and the drawing.
   - **Tests:** `xcube/partitions.test.ts`, `jobs/partitions.test.ts`, `jobs/build.test.ts`, `jobs/history.test.ts`, `Partitions.test.tsx`, `BuildPanel.test.tsx`, `JobsPage.test.tsx`, `RunHistory.test.tsx`, `StateBadge.test.tsx`. `e2e/jobs.spec.ts`, "rebuilding two of a month-partitioned rollup's partitions starts jobs whose tables name exactly those two", runs against compose's Cube on its own cube (AC-145).
-- [ ] T550 (AC-391) Each pre-aggregation's row: its state, when it was last built, who started that build, and its partitions *(added 2026-10-02, `[R56]`: design 16's screen 1)*
+- [x] T550 (AC-391) Each pre-aggregation's row: its state, when it was last built, who started that build, and its partitions *(added 2026-10-02, `[R56]`: design 16's screen 1)*
   - Files:
     - `packages/api/src/jobs/build.ts` (+ test): `GET /api/preaggregations` gains each row's state, last built, starter and partition count;
     - `packages/web/src/workspaces/jobs/BuildPanel.tsx` (+ test);
@@ -7204,6 +7204,30 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - `BuildPanel.test.tsx`: the row shows these with the footnote under the table. The session-only "Not built here" is gone.
     - `e2e/jobs.spec.ts`: the seed rollup, built by the refresh worker, reads Built, with a time and "—" (AC-391).
   - Depends on: T375
+  - **As built (2026-10-02):**
+    - `GET /api/preaggregations` adds each row's `state` (failed, building, queued, stalled, partly, not-built or built), `stateAt` (the newest partition in that state; `null` for one not partitioned), `built` (when partly built), `partitions` (the count; `null` for one not partitioned), `lastBuiltAt` (the newest version of any partition) and `startedBy`. It does this when xcube's partitions route is configured.
+    - These come from AC-145's sources in one pass. xcube's partitions route is asked for every rollup at once. The route takes a list: this was checked against compose's xcube and recorded in research `xcube-jobs-schedules-routes.md`, "Checked 2026-10-02 (T550)". The queue is read once, and so is wechart's history.
+    - **Started by** is the build of wechart's whose job's table names that partition, whose last part (base-32 seconds) is that version's time, and that didn't fail. That rule is checked against Cube's own names (research note above). Otherwise it is "—".
+    - **When xcube can't say a state,** the rows stay, and so does their Build:
+      - A rollup missing from the answer is asked for once more. If it is still missing, the row reads "Asking Cube…" (A4).
+      - If Cube refuses one rollup, the others are asked for one at a time, and that rollup's row reads "Couldn't read its state", with xcube's words on hover.
+      - If the queue or the history can't be read, every row reads that.
+    - **The row,** as screen 1 draws it: Pre-aggregation, Status, Last built (your time, to the minute; UTC on hover), Started by (a person's or a schedule's icon; "—" otherwise), Trigger, Partitions (or "—"), and Build. Pin 9's footnote sits under the table.
+    - **States:** each has design 16's icon. The new `off` (Not built) and `part` (Partly built) icons are added to `StatusIcon`. The pane's Not built uses `off` too. A lambda reads "No partitions of its own".
+    - **The session-only following is gone,** and so are "Not built here" and `buildStateOf`. A Build that starts no job still says "Cube started no job…".
+    - **e2e:** AC-149's and T374's tests now each build a rollup of their own. When two of these tests built the seed rollup in the same second, the two builds got the same table name, and Cube Store refused the second (research note above).
+  - **Implementer's calls, for the user to confirm or change:**
+    - The list is read again at Jobs' poll (1.5 s) while a build started in this tab is awaited (up to a minute) or under way. It is read every 5 s while Cube still works a rollup's partitions out, and every 30 s otherwise, so others' builds show within half a minute.
+    - A rollup missing from xcube's answer is asked for twice in one read, then said to be still worked out.
+  - **One review round (spec-reviewer), fixed:**
+    1. One failure of xcube's partitions or queue route, or one rollup Cube refused, failed the whole list. Each case now keeps the rows, as above.
+    2. A row Build that started no job said nothing. It says "Cube started no job…" again.
+    3. The list was read every 1.5 s while any row, including the refresh worker's, was under way. Now only builds started here are read that often.
+    4. Started by could name a build of wechart's that failed under the same table name. Failed jobs are now skipped.
+    5. No test showed a wechart schedule as the starter. There are now API and web tests for it.
+    6. The row-progress e2e depended on the refresh worker having built the seed rollup. Its last state is now answered in the test too.
+  - **Review items left, for the record:** each read loads the tokens of the kept runs (up to 100) of every rollup in view. Without xcube configured, rows show "—" for Status (Helm requires xcube).
+  - **Tests:** `xcube/partitions.test.ts`, `jobs/partitions.test.ts` ("each pre-aggregation's row"), `BuildPanel.test.tsx`, and `e2e/jobs.spec.ts`, "a rollup Cube's refresh worker built reads Built, with when, and no starter" (AC-391). AC-149's e2e reads its own build's row as Built by admin.
 - [ ] T377 [P] (AC-153) Fix what T258's and T159's reviews found, with design 16's daylight-saving rule, then tick AC-153 again
   - *Rewritten 2026-10-02:* T160's findings move to T551 (AC-154), and a daylight-saving change among the next runs is now decided (`[R56]`, Q3).
   - Files:

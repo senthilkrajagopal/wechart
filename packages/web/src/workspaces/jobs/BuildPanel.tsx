@@ -3,18 +3,21 @@ import { useRef, useState } from 'react';
 
 import { ExportedToast } from '../../dashboard/export/ExportedToast';
 import { missingScopeOf, ScopeUnavailable, useScopes } from '../../query/scopes';
-import { StateLine } from '../../shell/StatusIcon';
+import { StateLine, type StateKind } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { rollupHref } from '../model/inFolder';
 import {
   BuildOutcomeStatus,
+  BuiltWhen,
   partitionsOf,
+  periodOf,
   StarterLabel,
   whenOf,
   type BuildSummary,
+  type Starter,
 } from './builds';
 import { Partitions, type Started } from './Partitions';
-import { stateOf, Status } from './StateBadge';
+import { Status } from './StateBadge';
 
 /**
  * Building a pre-aggregation (T155, AC-149), as the prototype's Jobs page lists
@@ -44,7 +47,25 @@ interface Buildable {
   readonly fileFolderId?: string;
   /** A lambda or a rollup join: nothing of its own to build (T375, A3). */
   readonly buildable?: false;
+  /**
+   * Its row's state (T550, AC-391): the state of its partitions that most
+   * needs attention, and the partition it is of (none, whole); how many are
+   * built when partly; how many it has (none, not partitioned); when Cube
+   * made its newest version; and who started that build from wechart (none,
+   * wechart didn't). None known without xcube's routes.
+   */
+  readonly state?: RowState | null;
+  readonly stateAt?: string | null;
+  readonly built?: number;
+  readonly partitions?: number | null;
+  readonly lastBuiltAt?: string | null;
+  readonly startedBy?: Starter | null;
+  /** Cube is still working its partitions out (A4). */
+  readonly pending?: boolean;
+  /** xcube couldn't say its state: its words (T550's review). */
+  readonly unreadable?: string;
 }
+type RowState = 'failed' | 'building' | 'queued' | 'stalled' | 'partly' | 'not-built' | 'built';
 
 /**
  * How a pre-aggregation is shown (T371; §P2.6 D): a folder's cube by its
@@ -79,14 +100,6 @@ function memberHref(row: Buildable & { readonly fileName: string }): string {
   })!;
 }
 
-interface JobStatus {
-  readonly token: string;
-  readonly status: string;
-  /** Said by the API, by its one tested rule (`isFinished`). */
-  readonly finished: boolean;
-  readonly table?: string;
-}
-
 async function send<T>(url: string, init?: { body: unknown; signal?: AbortSignal }): Promise<T> {
   const response = await fetch(
     url,
@@ -105,71 +118,74 @@ async function send<T>(url: string, init?: { body: unknown; signal?: AbortSignal
   return body;
 }
 
-/**
- * A build's jobs, followed until each has finished. One definition, under one
- * key, so the row's state and the pane's share one poll.
- */
-function useBuildStatus(tokens: readonly string[], pollMs: number) {
-  return useQuery({
-    queryKey: ['build-status', tokens],
-    queryFn: ({ signal }) => send<JobStatus[]>('/api/builds/status', { body: { tokens }, signal }),
-    // Stopped once every token asked about has finished — not merely every
-    // answer, which may leave a token out (T155's review).
-    refetchInterval: (query) => {
-      const answered = new Map((query.state.data ?? []).map((job) => [job.token, job]));
-      return tokens.every((token) => answered.get(token)?.finished === true) ? false : pollMs;
-    },
-    // A build that started no job has nothing to follow.
-    enabled: tokens.length > 0,
-  });
-}
+/** States a build is under way in: the row is read again soon (AC-229). */
+const UNDER_WAY = new Set(['building', 'queued', 'stalled']);
+/** How often the list is read with nothing started here under way: others' builds go on. */
+const NOW_AND_THEN_MS = 30_000;
+/** How often while Cube still works a rollup's partitions out (A4). */
+const PENDING_MS = 5_000;
+/** How long a start is awaited in its row before it's read only now and then. */
+const AWAITED_MS = 60_000;
 
 /**
- * A build as one state, for its pre-aggregation's row (AC-229, rule 22):
- * failed if any partition failed, done when every one is, processing while
- * any is, and otherwise what the first says — "Asking Cube…" before any
- * answer.
+ * A pre-aggregation's state as its row and pane show it (T550, AC-391;
+ * design 16, pin 5 and its legend): the state of its partitions that most
+ * needs attention, with the partition it is of, as an icon and words.
  */
-export function buildStateOf(
-  tokens: readonly string[],
-  jobs: readonly JobStatus[] | undefined,
-): string {
-  const answered = new Map((jobs ?? []).map((job) => [job.token, job.status]));
-  const states = tokens.map((token) => answered.get(token) ?? '');
-  const failed = states.find(
-    (state) =>
-      state.startsWith('failure') || state === 'missing_partition' || state === 'pre_agg_not_found',
+function RowStatus({ row, testId }: { row: Buildable; testId: string }) {
+  const at =
+    row.stateAt === undefined
+      ? ''
+      : row.stateAt === null
+        ? ' · whole'
+        : ` · ${periodOf(row.stateAt, row.partitionGranularity ?? null)}`;
+  const shown = (kind: StateKind, label: string, state: string) => (
+    <Status kind={kind} label={label} testId={testId} state={state} />
   );
-  if (failed !== undefined) return failed;
-  if (states.length > 0 && states.every((state) => state === 'done')) return 'done';
-  if (states.includes('processing')) return 'processing';
-  // Otherwise the first partition not done — not merely the first answered,
-  // which read "Done" while another was unanswered or waiting (T239's
-  // review); `''` is "Asking Cube…".
-  return states.find((state) => state !== 'done') ?? '';
-}
-
-/** A pre-aggregation's state: its latest build's here, or none started. */
-function BuildState({
-  build,
-  pollMs,
-  testId,
-}: {
-  build: { tokens: string[] } | undefined;
-  pollMs: number;
-  testId: string;
-}) {
-  const jobs = useBuildStatus(build?.tokens ?? [], pollMs);
-  if (build === undefined)
-    return <Status kind="idle" label="Not built here" testId={testId} state="none" />;
-  if (build.tokens.length === 0)
-    return <Status kind="warn" label="No job started" testId={testId} state="empty" />;
-  // Following it failed: said in the row, not only in the pane (T239's review).
-  if (jobs.isError && jobs.data === undefined)
-    return <Status kind="err" label="Could not follow the build" testId={testId} state="unknown" />;
-  const state = buildStateOf(build.tokens, jobs.data);
-  const { kind, label } = stateOf(state);
-  return <Status kind={kind} label={label} testId={testId} state={state} />;
+  switch (row.state) {
+    case 'failed':
+      return shown('err', `Failed${at}`, 'failed');
+    // A whole one's building, queued or stall says no period (screen 1).
+    case 'building':
+      return shown('run', `Building${row.stateAt === null ? '' : at}`, 'building');
+    case 'queued':
+      return shown('idle', `Queued${row.stateAt === null ? '' : at}`, 'queued');
+    case 'stalled':
+      return shown('warn', `Stalled${row.stateAt === null ? '' : at}`, 'stalled');
+    case 'partly':
+      return shown(
+        'part',
+        `Partly built · ${String(row.built ?? 0)} of ${String(row.partitions ?? 0)}`,
+        'partly',
+      );
+    case 'not-built':
+      return shown('off', 'Not built', 'not-built');
+    case 'built':
+      return shown('ok', 'Built', 'built');
+    default:
+      // Made of other rollups (A3); or Cube still working its partitions out
+      // (A4), never read as not built; or, with xcube's routes not there, nothing known.
+      return row.buildable === false ? (
+        <span className="muted" data-testid={testId}>
+          No partitions of its own
+        </span>
+      ) : row.unreadable !== undefined ? (
+        // xcube couldn't say: its words on hover; the row and its Build stay.
+        <Status
+          kind="warn"
+          label="Couldn’t read its state"
+          testId={testId}
+          state="unreadable"
+          title={row.unreadable}
+        />
+      ) : row.pending === true ? (
+        shown('run', 'Asking Cube…', 'pending')
+      ) : (
+        <span className="muted" data-testid={testId}>
+          —
+        </span>
+      );
+  }
 }
 
 /** How many of its builds the pane lists (design 16, pin 14). */
@@ -283,6 +299,30 @@ export function BuildPanel({
 }) {
   const scopes = useScopes();
   const client = useQueryClient();
+  /**
+   * Builds started here, by their pre-aggregation, with its last build then
+   * and when: followed in its row, read again soon, until it is neither
+   * awaited — not yet under way or built anew, for up to a minute — nor
+   * under way (AC-229). Others' builds are read now and then (T550's review).
+   */
+  const followed = useRef(
+    new Map<string, { lastBuiltAt: string | null; at: number; seen: boolean }>(),
+  );
+  /** Whether a build started here is still to follow in these rows; those that ended, let go. */
+  const following = (rows: readonly Buildable[]): boolean => {
+    for (const [id, was] of followed.current) {
+      const row = rows.find((each) => each.id === id);
+      const underWay = row !== undefined && UNDER_WAY.has(row.state ?? '');
+      if (underWay) was.seen = true;
+      const awaited =
+        !was.seen &&
+        row !== undefined &&
+        (row.lastBuiltAt ?? null) === was.lastBuiltAt &&
+        Date.now() - was.at <= AWAITED_MS;
+      if (!underWay && !awaited) followed.current.delete(id);
+    }
+    return followed.current.size > 0;
+  };
   const buildable = useQuery({
     queryKey: ['preaggregations'],
     queryFn: ({ signal }) =>
@@ -301,26 +341,37 @@ export function BuildPanel({
       }),
     // Read again each time: a publish adds or removes pre-aggregations.
     refetchOnMount: 'always',
+    // A started build's progress in its row (AC-229): read again soon while
+    // a build started here goes on; sooner than now and then while Cube
+    // still works partitions out (A4); now and then otherwise, as others'
+    // builds go on.
+    refetchInterval: (query) => {
+      const rows = query.state.data ?? [];
+      if (following(rows)) return pollMs;
+      return rows.some((row) => row.pending === true) ? PENDING_MS : NOW_AND_THEN_MS;
+    },
   });
-  // Newest first, as a run history reads; numbered, not timed, so two builds
-  // started together are still two.
-  const [builds, setBuilds] = useState<{ id: string; tokens: string[]; n: number }[]>([]);
   /** The pre-aggregation whose details the pane shows (AC-228). */
   const [selected, setSelected] = useState<string | null>(selectedFirst);
-  const latestOf = (id: string) => builds.find((build) => build.id === id);
-  const started = useRef(0);
-  /** A build started: followed in its row, and listed in its pane once recorded. */
-  const follow = (id: string, tokens: readonly string[]) => {
-    started.current += 1;
-    const n = started.current;
-    setBuilds((before) => [{ id, tokens: [...tokens], n }, ...before]);
+  /** A build started: its row followed until it ends, and listed in its pane once recorded. */
+  const follow = (id: string) => {
+    const row = buildable.data?.find((each) => each.id === id);
+    followed.current.set(id, {
+      lastBuiltAt: row?.lastBuiltAt ?? null,
+      at: Date.now(),
+      seen: false,
+    });
+    void client.invalidateQueries({ queryKey: ['preaggregations'] });
     void client.invalidateQueries({ queryKey: ['jobs', 'builds', 'of', id] });
   };
+  /** A Build that made no job, said by its name, as the API leaves it to say (T550's review). */
+  const [noJob, setNoJob] = useState<string | null>(null);
   const start = useMutation({
     mutationFn: (id: string) =>
       send<{ tokens: string[] }>('/api/builds', { body: { preAggregation: id } }),
     onSuccess: ({ tokens }, id) => {
-      follow(id, tokens);
+      setNoJob(tokens.length === 0 ? id : null);
+      if (tokens.length > 0) follow(id);
     },
   });
   /** What the pane started, said in a toast with the way to the queue (design 16, A1). */
@@ -357,8 +408,12 @@ export function BuildPanel({
                 <tr>
                   <th scope="col">Pre-aggregation</th>
                   <th scope="col">Status</th>
+                  <th scope="col">Last built</th>
+                  <th scope="col">Started by</th>
                   <th scope="col">Trigger</th>
-                  <th scope="col">Partition granularity</th>
+                  <th scope="col" className="num">
+                    Partitions
+                  </th>
                   <th scope="col">
                     <span className="visually-hidden">Build</span>
                   </th>
@@ -366,7 +421,7 @@ export function BuildPanel({
               </thead>
               <tbody>
                 {buildable.data.map((row) => {
-                  const { id, partitionGranularity, trigger } = row;
+                  const { id, trigger } = row;
                   const shownAs = shownOf(row);
                   const said =
                     shownAs.folder === undefined
@@ -402,11 +457,32 @@ export function BuildPanel({
                         )}
                       </td>
                       <td>
-                        {/* Its latest build's state here, in its own row (rule 22). */}
-                        <BuildState build={latestOf(id)} pollMs={pollMs} testId="row-state" />
+                        {/* The state of its partitions that most needs attention (AC-391, rule 22). */}
+                        <RowStatus row={row} testId="row-state" />
+                      </td>
+                      <td>
+                        {row.lastBuiltAt == null ? (
+                          <span className="muted">—</span>
+                        ) : (
+                          <BuiltWhen iso={row.lastBuiltAt} />
+                        )}
+                      </td>
+                      <td>
+                        {/* Who started that build from wechart; "—" when wechart didn't (pin 7). */}
+                        {row.startedBy == null ? (
+                          <span className="muted">—</span>
+                        ) : (
+                          <StarterLabel starter={row.startedBy} />
+                        )}
                       </td>
                       <td>{trigger ?? '—'}</td>
-                      <td>{partitionGranularity ?? 'none'}</td>
+                      <td className="num">
+                        {row.partitions == null ? (
+                          <span className="muted">—</span>
+                        ) : (
+                          String(row.partitions)
+                        )}
+                      </td>
                       <td>
                         {/* A lambda or a rollup join has nothing of its own to build (A3). */}
                         {row.buildable === false ? null : (
@@ -432,8 +508,23 @@ export function BuildPanel({
             </table>
           </TableScroll>
         )}
+        {/* What Last built and Started by mean, so "—" isn't read as never built (pin 9). */}
+        <p className="jobs-foot" data-testid="jobs-foot">
+          <b>Last built</b> is when Cube started the newest build of one of the rollup’s partitions,
+          whoever started it. <b>Started by</b> names who started that build from wechart: a person,
+          or a wechart schedule. “—” means wechart didn’t start it. Builds by Cube’s refresh worker
+          name no starter until their history comes, in the next phase. Times are your local time;
+          hover one for UTC.
+        </p>
         {/* Starting, in words with its icon, not only by the buttons fading (AC-177). */}
         {start.isPending ? <StateLine kind="run">Asking Cube to start the build…</StateLine> : null}
+        {noJob === null ? null : (
+          <StateLine kind="warn" testId="build-empty">
+            Cube started no job: no partition of{' '}
+            {shownOf(buildable.data.find((each) => each.id === noJob) ?? { id: noJob }).name} was
+            built.
+          </StateLine>
+        )}
         {start.isError ? <StateLine kind="err">{start.error.message}</StateLine> : null}
       </div>
 
@@ -460,9 +551,9 @@ export function BuildPanel({
               </p>
             )}
             <dl className="admin-pane__facts">
-              <dt>State</dt>
+              <dt>Status</dt>
               <dd>
-                <BuildState build={latestOf(shown.id)} pollMs={pollMs} testId="pane-state" />
+                <RowStatus row={shown} testId="pane-state" />
               </dd>
               <dt>Trigger</dt>
               <dd>{shown.trigger ?? '—'}</dd>
@@ -483,7 +574,7 @@ export function BuildPanel({
               name={shownOf(shown).name}
               pollMs={Math.max(pollMs, 5_000)}
               onStarted={(begun: Started) => {
-                follow(shown.id, begun.tokens);
+                follow(shown.id);
                 // A start that made no job is said in the pane, not toasted (T375's review).
                 setToast(
                   begun.tokens.length === 0
