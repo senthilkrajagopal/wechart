@@ -298,7 +298,10 @@ test.describe('My workspace’s overlay (T347, AC-323)', () => {
       await page.goto(`/explore/charts/${made.chart}/edit?new=true`);
 
       const picker = page.getByRole('combobox', { name: 'Cube or view' });
-      const mine = picker.locator('optgroup[label="My workspace"] option');
+      // This run's own, by its full name: other specs, running beside this
+      // one, add cubes of their own to the same writer's workspace (T543's
+      // report), so the group's count isn't this test's to know.
+      const mine = picker.locator(`optgroup[label="My workspace"] option[value="${full(CUBE)}"]`);
       await expect(mine).toHaveCount(1);
       await expect(mine).toHaveAttribute('value', full(CUBE));
     });
