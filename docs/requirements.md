@@ -950,6 +950,13 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R59 — Run now, pausing, and the schema browser's scope** (2026-10-02, the user)
+- Q: When a Run now on a wechart schedule fails, does it count toward the schedule's suspension limit? A: "No, scheduled runs only (Recommended)". *A Run now neither counts nor resets the count (AC-155, AC-395).*
+- Q: Is Run now offered on a schedule that is paused or suspended? A: "Yes, on both (Recommended)". *A Run now is a one-off build; it doesn't resume the schedule (AC-395).*
+- Q: When a paused schedule is resumed, does its count of consecutive failed runs go back to zero? A: "No, keep the count". *Pausing and resuming leave the count as it was. Resuming a suspended schedule still resets it, as AC-155 says (AC-396).*
+- Q: The SQL runner's schema browser can't yet list a data source made new in My workspace, or a copy pointed elsewhere. Keep AC-386 as written, or scope it to landed data sources? A: "Keep it, wait for xcube (Recommended)". *xcube's overlay introspection was published on 2026-10-02 (`v1.7.45-93a5f7a73b`); T547 finishes AC-386.*
+- *Claude's call, overturnable:* AC-153's note says "about five and a half minutes", research's figure (`cube/refresh-key-schedule.md`, Lateness), rather than "about five minutes".
+
 **R58 — a bigger YAML and join diagram** (2026-10-02, the user)
 - The user: "can you add functionality to see join diagram and yaml in a bigger model screen... you should be able to popout into modal and closing should pop back into place..". *AC-420, T600.*
 - *Claude's calls, overturnable:*
