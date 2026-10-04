@@ -217,8 +217,14 @@ export function TileViewMenu({
   parts?:
     | {
         readonly verb: 'mark' | 'filter';
-        readonly series: readonly string[];
-        readonly panels: readonly string[];
+        /** Each by its label as the legend writes it, handed back by its value (T632). */
+        readonly series: readonly { readonly value: string; readonly label: string }[];
+        /** Each by its header's words, handed back by its place among the panels drawn (T632). */
+        readonly panels: readonly {
+          readonly value: string;
+          readonly label: string;
+          readonly index: number;
+        }[];
         readonly onSeries: (value: string) => void;
         readonly onPanel: (index: number) => void;
       }
@@ -590,12 +596,12 @@ export function TileViewMenu({
                   kind: 'submenu' as const,
                   key: 'part-series',
                   label: parts.verb === 'mark' ? 'Mark series' : 'Filter by series',
-                  entries: parts.series.map((value) => ({
+                  entries: parts.series.map((one) => ({
                     kind: 'item' as const,
-                    key: `series-${value}`,
-                    label: value,
+                    key: `series-${one.value}`,
+                    label: one.label,
                     onSelect: () => {
-                      parts.onSeries(value);
+                      parts.onSeries(one.value);
                     },
                   })),
                 },
@@ -607,12 +613,12 @@ export function TileViewMenu({
                   kind: 'submenu' as const,
                   key: 'part-panel',
                   label: parts.verb === 'mark' ? 'Mark panel' : 'Filter by panel',
-                  entries: parts.panels.map((value, index) => ({
+                  entries: parts.panels.map((panel) => ({
                     kind: 'item' as const,
-                    key: `panel-${String(index)}`,
-                    label: value,
+                    key: `panel-${String(panel.index)}`,
+                    label: panel.label,
                     onSelect: () => {
-                      parts.onPanel(index);
+                      parts.onPanel(panel.index);
                     },
                   })),
                 },

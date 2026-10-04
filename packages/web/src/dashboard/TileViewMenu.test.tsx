@@ -695,10 +695,21 @@ describe('the CSV file’s name', () => {
  * click on a series or a panel filters there.
  */
 describe('a series or a panel from the tile’s menu (T631, R63)', () => {
+  /**
+   * Each by its label, as the legend or the header writes it, and handed
+   * back by its value; a panel by its place among those drawn (T632).
+   */
   const parts = (verb: 'mark' | 'filter') => ({
     verb,
-    series: ['completed', 'shipped'],
-    panels: ['North', 'South'],
+    series: [
+      { value: 'completed', label: 'completed' },
+      { value: '2026-01-01T00:00:00.000', label: 'Jan 2026' },
+    ],
+    panels: [
+      { value: 'n', label: 'North', index: 0 },
+      // A blank panel between them, drawn and not offered.
+      { value: 's', label: 'South', index: 2 },
+    ],
     onSeries: vi.fn(),
     onPanel: vi.fn(),
   });
@@ -723,9 +734,9 @@ describe('a series or a panel from the tile’s menu (T631, R63)', () => {
       within(series)
         .getAllByRole('menuitem')
         .map((item) => item.textContent),
-    ).toEqual(['completed', 'shipped']);
-    await userEvent.click(within(series).getByRole('menuitem', { name: 'shipped' }));
-    expect(byPart.onSeries).toHaveBeenCalledWith('shipped');
+    ).toEqual(['completed', 'Jan 2026']);
+    await userEvent.click(within(series).getByRole('menuitem', { name: 'Jan 2026' }));
+    expect(byPart.onSeries).toHaveBeenCalledWith('2026-01-01T00:00:00.000');
 
     await userEvent.click(screen.getByRole('button', { name: 'Actions for By status' }));
     await userEvent.click(screen.getByRole('menuitem', { name: /^Mark panel/ }));
@@ -734,7 +745,7 @@ describe('a series or a panel from the tile’s menu (T631, R63)', () => {
         name: 'South',
       }),
     );
-    expect(byPart.onPanel).toHaveBeenCalledWith(1);
+    expect(byPart.onPanel).toHaveBeenCalledWith(2);
   });
 
   it('filters by a series or a panel in cross-filter mode, with no marked group', async () => {

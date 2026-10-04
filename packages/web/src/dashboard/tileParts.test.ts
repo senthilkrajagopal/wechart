@@ -9,12 +9,17 @@ import { tilePartsOf } from './tileParts';
  * tile's ⋯ menu offers are those a pointer could reach. A series is a legend
  * entry naming the colour split, so a chart whose legend names something
  * else, or that draws none, offers none. A panel is one the trellis draws, as
- * the filters leave it, each carrying its place among the chart's own panels,
- * which is how a header's click is read (`clickedValue`).
+ * the filters leave it.
+ *
+ * T632: each panel carries its place among the panels as drawn, which is how
+ * a header's click now names it too; and each series and panel is labelled
+ * as the legend and the panel's header write it, a value of time by its
+ * granularity (AC-188).
  */
 const STATUS = 'orders.status';
 const CATEGORY = 'products.category';
 const COUNT = 'orders.count';
+const MONTH = 'orders.created_at.month';
 
 const split = (chartType: RenderSpec['chartType'], categories: readonly string[]): RenderSpec => ({
   chartType,
@@ -25,14 +30,19 @@ const split = (chartType: RenderSpec['chartType'], categories: readonly string[]
   ]),
 });
 
-describe('the series and panels a tile’s menu offers (T631’s review)', () => {
+const values = (parts: readonly { value: string }[]) => parts.map((part) => part.value);
+
+describe('the series and panels a tile’s menu offers (T631’s review, T632)', () => {
   it('offers a split chart’s series as its legend lists them, in the order set, without Other or a blank', () => {
     const spec: RenderSpec = {
       ...split('groupedBar', ['Toys', 'Books', '', 'Other (3)']),
       // Customize's order, as the legend draws it (T392).
       options: { seriesOrder: ['Books'] },
     };
-    expect(tilePartsOf(spec, spec).series).toEqual(['Books', 'Toys']);
+    expect(tilePartsOf(spec).series).toEqual([
+      { value: 'Books', label: 'Books' },
+      { value: 'Toys', label: 'Toys' },
+    ]);
   });
 
   it('offers no series where the legend names something else, or there is none', () => {
@@ -45,15 +55,13 @@ describe('the series and panels a tile’s menu offers (T631’s review)', () =>
         { [STATUS]: 'returned', [CATEGORY]: 'Books', [COUNT]: 7 },
       ],
     };
-    expect(tilePartsOf(heatmap, heatmap).series).toEqual([]);
+    expect(tilePartsOf(heatmap).series).toEqual([]);
     // A table marks rows by key; a pie's legend lists its slices.
     for (const chartType of ['table', 'kpi', 'pie', 'donut', 'treemap'] as const) {
-      const spec = split(chartType, ['Toys', 'Books']);
-      expect(tilePartsOf(spec, spec).series, chartType).toEqual([]);
+      expect(tilePartsOf(split(chartType, ['Toys', 'Books'])).series, chartType).toEqual([]);
     }
     // One series draws no legend.
-    const one = split('groupedBar', ['Toys']);
-    expect(tilePartsOf(one, one).series).toEqual([]);
+    expect(tilePartsOf(split('groupedBar', ['Toys'])).series).toEqual([]);
   });
 
   it('offers a scatter’s series, as a click on a point means its series', () => {
@@ -65,21 +73,23 @@ describe('the series and panels a tile’s menu offers (T631’s review)', () =>
         { [COUNT]: 2, 'orders.amount': 20, [CATEGORY]: 'Books' },
       ],
     };
-    expect(tilePartsOf(scatter, scatter).series).toEqual(['Toys', 'Books']);
+    expect(values(tilePartsOf(scatter).series)).toEqual(['Toys', 'Books']);
   });
 
-  it('offers the panels the trellis draws as the filters leave it, each at its place among the chart’s own', () => {
-    const facet = (values: readonly string[]): RenderSpec => ({
+  it('offers the panels the trellis draws, each at its place among them, as a header’s click names it', () => {
+    const shown: RenderSpec = {
       chartType: 'trellis',
       encoding: { x: [STATUS], y: [COUNT], facet: [CATEGORY] },
-      rows: values.map((value, at) => ({ [STATUS]: 'shipped', [CATEGORY]: value, [COUNT]: at })),
-    });
-    const own = facet(['Toys', 'Books', 'Games', '']);
-    // A filter left Books and the blank out.
-    const shown = facet(['Toys', 'Games']);
-    expect(tilePartsOf(own, shown).panels).toEqual([
-      { value: 'Toys', index: 0 },
-      { value: 'Games', index: 2 },
+      // As the filters leave it: Toys, a blank panel, then Games.
+      rows: ['Toys', '', 'Games'].map((value, at) => ({
+        [STATUS]: 'shipped',
+        [CATEGORY]: value,
+        [COUNT]: at,
+      })),
+    };
+    expect(tilePartsOf(shown).panels).toEqual([
+      { value: 'Toys', label: 'Toys', index: 0 },
+      { value: 'Games', label: 'Games', index: 2 },
     ]);
   });
 
@@ -90,8 +100,33 @@ describe('the series and panels a tile’s menu offers (T631’s review)', () =>
       encoding: { x: [STATUS], y: [COUNT], facet: [CATEGORY] },
       rows: many.map((value) => ({ [STATUS]: 'shipped', [CATEGORY]: value, [COUNT]: 1 })),
     };
-    const panels = tilePartsOf(spec, spec).panels;
+    const panels = tilePartsOf(spec).panels;
     expect(panels).toHaveLength(20);
-    expect(panels.at(-1)).toEqual({ value: 'Panel 20', index: 19 });
+    expect(panels.at(-1)).toEqual({ value: 'Panel 20', label: 'Panel 20', index: 19 });
+  });
+
+  // T632: as the legend and the panel's header write them (AC-188).
+  it('labels a value of time by its granularity, as the legend and the header write it', () => {
+    const months = ['2026-01-01T00:00:00.000', '2026-02-01T00:00:00.000'];
+    const bySeries: RenderSpec = {
+      chartType: 'multiLine',
+      encoding: { x: [STATUS], y: [COUNT], color: [MONTH] },
+      granularities: { 'orders.created_at': 'month' },
+      rows: months.map((month, at) => ({ [STATUS]: 'shipped', [MONTH]: month, [COUNT]: at })),
+    };
+    expect(tilePartsOf(bySeries).series).toEqual([
+      { value: months[0], label: 'Jan 2026' },
+      { value: months[1], label: 'Feb 2026' },
+    ]);
+    const byPanel: RenderSpec = {
+      chartType: 'trellis',
+      encoding: { x: [STATUS], y: [COUNT], facet: [MONTH] },
+      granularities: { 'orders.created_at': 'month' },
+      rows: months.map((month, at) => ({ [STATUS]: 'shipped', [MONTH]: month, [COUNT]: at })),
+    };
+    expect(tilePartsOf(byPanel).panels).toEqual([
+      { value: months[0], label: 'Jan 2026', index: 0 },
+      { value: months[1], label: 'Feb 2026', index: 1 },
+    ]);
   });
 });

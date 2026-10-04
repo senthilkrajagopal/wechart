@@ -8654,11 +8654,30 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       3. A tile waiting for a marking, or showing its filtered answer's error, offered entries. It offers none.
       - Also from it: `tileParts.test.ts` tests the logic the menu reads (each failing first against the first version); the menu test asserts the Filter entries come first; and `markings.spec.ts` marks a trellis panel from the menu in Markings mode.
     - **Found by the review, left for the user:**
-      - *An older pointer bug, not T631's:* a header click passes its index among the panels drawn, which `clickedValue` resolves against the chart as saved. When a filter drops an earlier panel, the click marks or filters the wrong panel. The menu resolves its own panels correctly.
-      - *Two ways the menu differs from the legend:* values of time are listed raw, where the legend writes them by granularity. And there's still no keyboard way to add a further legend category, as Ctrl-click does (AC-090): the menu replaces the marking. AC-176 stays open.
+      - *An older pointer bug, not T631's:* a header click passes its index among the panels drawn, which `clickedValue` resolves against the chart as saved. When a filter drops an earlier panel, the click marks or filters the wrong panel. The menu resolves its own panels correctly. *Fixed by T632.*
+      - *Two ways the menu differs from the legend:* values of time are listed raw, where the legend writes them by granularity (*fixed by T632*). And there's still no keyboard way to add a further legend category, as Ctrl-click does (AC-090): the menu replaces the marking. AC-176 stays open (*answered by R64, 2026-10-04: Ctrl+Enter on an entry adds to the marking; to be planned as T634*).
     - **Tests:**
       - unit: `TileViewMenu.test.tsx`, `tileParts.test.ts`;
       - e2e, Chrome: `crossfilter.spec.ts`, `keyboard-coverage.spec.ts`, `markings.spec.ts`, `tile-menu.spec.ts`, 98/98. The folder tree's arrow-key test failed once on focus, and passed on its rerun.
+- [ ] T632 (AC-091, AC-117, AC-188) A trellis header's click names its own panel once a filter has dropped others; the tile menu writes values of time as the legend does *(added 2026-10-04, from T631's review; the coordinator)*
+  - Files: `dashboard/DashboardView.tsx`, `dashboard/crossfilter/clicked.ts`, `dashboard/tileParts.ts`, `dashboard/TileViewMenu.tsx`, `@wechart/charts`' index (`nameWriter` exported)
+  - Failing test:
+    - `crossfilter.spec.ts`: on a trellis cross-filtered down to a later category's panel, a click on its header filters by that category. Before the fix the chip named the trellis's first panel as saved ("Products Category = Components", for Instruments).
+    - `tileParts.test.ts`: each series and panel the menu offers is labelled as the legend and the panel's header write it ("Jan 2026"), and a panel carries its place among those drawn.
+    - `TileViewMenu.test.tsx`: the menu shows each by its label, and hands back the series' value and the panel's place among those drawn.
+  - Depends on: T631
+  - **Built 2026-10-04.**
+    - A click is now read against the spec the tile draws, as the filters leave it (`withFiltered`), in Markings and in cross-filter mode alike. Before, it was read against the chart as saved. A header's click carries its place among the panels drawn (ECharts' `componentIndex`), so it named the wrong panel once a filter had dropped an earlier one. A bar's, a legend entry's and a point's click name their value, so they read the same either way.
+    - The tile menu's series and panels are read from the tile as drawn, with the model's formats (`formatted`). Each is labelled as the legend (`nameWriter`) and the panel's header write it, a value of time by its granularity (AC-188), and handed back by its value. A panel goes by its place among those drawn, as a header's click names it.
+    - In cross-filter mode the announcer says the label too ("Filtering the other tiles by Jan 2026.").
+  - **The cold review (PASS) found one gap, now filled:** no test failed if the Markings half of the fix was taken back. `markings.spec.ts` now marks a panel from its header after "Filter to marked" has left a later category's panel alone. With `onMarkClick` back on the chart as saved, it failed for the right reason ("Products Category: Components" for Instruments).
+    - **Left, from the review:**
+      - The menu's time labels are tested in units only, not on a dashboard.
+      - A lasso, the Markings keys and Space's "Stopped filtering" check still read the chart as saved. They differ from a click only on an Automatic chart whose filtered rows draw another type. That predates T632.
+      - The menu offers a series Customize has hidden (T631's).
+  - **Tests:**
+    - unit: web 2,443 and charts 517, all passing;
+    - e2e, Chrome: `crossfilter.spec.ts`, `keyboard-coverage.spec.ts`, `markings.spec.ts`, `tile-menu.spec.ts`, `marked-share.spec.ts`, 107/107 before the Markings test was added, and both T632 tests after. Each T632 test failed for the right reason before its fix, as above.
 - [ ] T406 (AC-187) Re-run the design critique on every surface and tick AC-187 only on measured conformance
   - Files and failing test: as T225 (above), with the phase-2 surfaces added (AC-187).
   - Depends on: T330, T348, T356, T364, T369

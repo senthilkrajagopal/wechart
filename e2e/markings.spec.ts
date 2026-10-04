@@ -623,6 +623,51 @@ test('a trellis panel marks from the tile’s menu, by the keyboard alone (T631)
 });
 
 /**
+ * T632 (AC-091): a header marks its own panel once a filter has left out the
+ * panels before it. The click carries the header's place among the panels
+ * drawn, which was read against the chart as saved, so it marked whichever
+ * panel came first there.
+ */
+test('a trellis header marks its own panel once a filter has dropped the panels before it (T632)', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request, { trellis: true });
+  await open(page, id, title);
+  const panels = tile(page, 'tile-trellis');
+  const category = tile(page, 'tile-category');
+  await expect(panels.getByTestId('chart-canvas')).toBeVisible();
+  // The first panel as saved: the category of the trellis's first row.
+  const toggle = panels.getByTestId('toggle-table-view');
+  await toggle.click();
+  const firstRow = await panels.getByTestId('table-row').first().innerText();
+  await toggle.click();
+  await expect(panels.getByTestId('chart-canvas')).toBeVisible();
+  const chosen = ['Components', 'Instruments'].find((name) => !firstRow.includes(name));
+  const first = ['Components', 'Instruments'].find((name) => firstRow.includes(name));
+  expect(chosen, `a category other than the first panel's, in ${firstRow}`).toBeDefined();
+  const headerOf = (name: string) =>
+    panels.locator('svg text', { hasText: new RegExp(`^${name}$`) });
+
+  // Filtered to the one category: the trellis draws its panel alone, first.
+  await clickBar(page, category, chosen ?? '');
+  await category.getByRole('button', { name: /^Actions for / }).click();
+  await category
+    .getByRole('menu', { name: /^Actions for / })
+    .getByRole('group', { name: /marked$/ })
+    .getByRole('menuitem', { name: 'Filter to marked' })
+    .click();
+  await expect(page.getByTestId('mark-filter-chip')).toContainText(chosen ?? '');
+  await expect(headerOf(first ?? '')).toHaveCount(0);
+  const header = headerOf(chosen ?? '').first();
+  await expect(header).toBeVisible();
+  await header.click();
+
+  await expect(panels.getByTestId('mark-badge')).toContainText('1 marked');
+  await expect(page.getByTestId('mark-chip')).toContainText(chosen ?? '');
+});
+
+/**
  * AC-092: WHEN the user clicks a row in a table tile, THE SYSTEM SHALL mark
  * it; Shift-click SHALL mark the range from the anchor row; and rows SHALL be
  * markable only when the cube's primary key is available.

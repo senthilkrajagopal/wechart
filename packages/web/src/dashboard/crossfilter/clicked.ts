@@ -53,7 +53,9 @@ export interface ClickedItem {
   /**
    * The trellis panel whose header was clicked, by its place among the
    * panels (AC-091). Its index rather than its title, because a panel of
-   * time is titled by its granularity and that is not the value.
+   * time is titled by its granularity and that is not the value. The panels
+   * as drawn, so read against the spec the tile draws, as the filters leave
+   * it (T632).
    */
   readonly panelIndex?: number | undefined;
 }

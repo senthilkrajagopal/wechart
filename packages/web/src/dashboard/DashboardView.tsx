@@ -2887,7 +2887,9 @@ export function DashboardView({
    */
   const onItemClick = useCallback(
     (tileId: string, chartId: string, item: ClickedItem) => {
-      const spec = drawn.specs[chartId];
+      // Read against what the tile draws: a header's panel is its place among
+      // the panels as the filters leave them (T632).
+      const spec = withFiltered.specs[chartId] ?? drawn.specs[chartId];
       const value = spec === undefined ? undefined : clickedValue(spec, item);
       setCrossSelections((before) => {
         const others = before.filter((each) => each.from !== tileId);
@@ -2897,7 +2899,7 @@ export function DashboardView({
         return same ? others : [...others, { from: tileId, ...value }];
       });
     },
-    [drawn.specs, setCrossSelections],
+    [withFiltered.specs, drawn.specs, setCrossSelections],
   );
 
   /** One cross-filter, or all of them, taken back (AC-119). */
@@ -2950,7 +2952,8 @@ export function DashboardView({
     const markingId = marksWithOf(tile);
     if (markingId === undefined) return;
 
-    const spec = drawn.specs[chartId];
+    // Read against what the tile draws, as a cross-filter's click is (T632).
+    const spec = withFiltered.specs[chartId] ?? drawn.specs[chartId];
     const clicked = spec === undefined ? undefined : clickedValue(spec, item);
     // A tile marked whole (Mark all), as its items again, so a Ctrl-click
     // takes one of them away rather than doing nothing (AC-115).
@@ -4301,18 +4304,17 @@ export function DashboardView({
             const chartId = element.chartId;
             if (limitedStates[chartId] !== undefined) return undefined;
             if (withFiltered.errors[chartId] !== undefined) return undefined;
-            const own = drawn.specs[chartId];
-            const shown = withFiltered.specs[chartId];
-            if (own === undefined || shown === undefined) return undefined;
-            const { series, panels: drawnPanels } = tilePartsOf(own, shown);
-            const panels = drawnPanels.map((panel) => panel.value);
+            // As the tile draws it: filtered, with the model's formats (T632).
+            const shown = formatted[chartId];
+            if (shown === undefined) return undefined;
+            const { series, panels } = tilePartsOf(shown);
             if (series.length === 0 && panels.length === 0) return undefined;
             const pick = (item: ClickedItem, said: string) => {
               if (marking) {
                 onMarkClick(tileId, chartId, item, false);
                 return;
               }
-              const value = clickedValue(own, item);
+              const value = clickedValue(shown, item);
               const had = crossSelections.some(
                 (each) =>
                   each.from === tileId &&
@@ -4328,13 +4330,14 @@ export function DashboardView({
               verb: marking ? ('mark' as const) : ('filter' as const),
               series,
               panels,
+              // Said by its label, as the legend writes it (T632).
               onSeries: (value: string) => {
-                pick({ legend: value }, value);
+                pick({ legend: value }, series.find((one) => one.value === value)?.label ?? value);
               },
-              // By its place among the chart's own panels, as `clickedValue` reads one.
-              onPanel: (at: number) => {
-                const panel = drawnPanels[at];
-                if (panel !== undefined) pick({ panelIndex: panel.index }, panel.value);
+              // By its place among the panels drawn, as a header's click names one.
+              onPanel: (index: number) => {
+                const panel = panels.find((one) => one.index === index);
+                if (panel !== undefined) pick({ panelIndex: index }, panel.label);
               },
             };
           },

@@ -489,6 +489,45 @@ for (const [split, entry] of [
 }
 
 /**
+ * T632 (AC-091, AC-117): a trellis panel's header names its own panel once a
+ * filter has left out panels before it. The click carries the header's place
+ * among the panels drawn, which was read against the chart as saved, so it
+ * named whichever panel came first there.
+ */
+test('a trellis header filters by its own panel once a filter has dropped the panels before it (T632)', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await crossFilterDashboard(request, { statusSplit: 'trellis' });
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+  const category = tile(page, 'tile-category');
+  // The first panel as saved: the category of the trellis's first row.
+  const firstRow = (await valuesIn(status))[0] ?? '';
+  const categories = (await valuesIn(category)).map((row) => row.split('\t')[0]?.trim() ?? '');
+  const first = categories.find((name) => name !== '' && firstRow.includes(name));
+  const later = categories.find((name) => name !== '' && !firstRow.includes(name));
+  expect(first, `the first panel's category, in ${firstRow}`).toBeDefined();
+  expect(later, `a category other than the first panel's, in ${firstRow}`).toBeDefined();
+  const chosen = later ?? '';
+  const headerOf = (name: string) =>
+    status.locator('svg text', { hasText: new RegExp(`^${name}$`) });
+
+  // Filtered to the one category, the trellis draws its panel alone, first:
+  // the first panel as saved is gone.
+  await clickBar(page, category, chosen);
+  await expect(page.getByTestId('cross-filter-chip')).toHaveCount(1);
+  await expect(headerOf(first ?? '')).toHaveCount(0);
+  const header = headerOf(chosen).first();
+  await expect(header).toBeVisible();
+  await header.click();
+
+  const fromStatus = page.getByTestId('cross-filter-chip').filter({ hasText: 'By status' });
+  await expect(fromStatus).toHaveCount(1);
+  await expect(fromStatus).toContainText(chosen);
+});
+
+/**
  * T077 / AC-071, the cross-filter half: WHEN the interaction mode changes and
  * the settings are saved, THE SYSTEM SHALL clear current marks and
  * cross-filters. The marks half is `e2e/markings.spec.ts`, "switching the
