@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -128,6 +128,33 @@ describe('restoring a version (T357)', () => {
     // Esc closes it (rule 85).
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).toBeNull();
+    // T405 (rule 85): focus goes back to what asked for the restore.
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Restore 7' })),
+    );
+  });
+
+  // T405 (rule 85): through the copy question and the Propose dialog, focus
+  // goes back to what asked for the restore once it is all closed.
+  it('gives focus back to what asked for it, after the Propose dialog it led to', async () => {
+    shown([
+      {
+        status: 409,
+        body: { error: 'You have a copy of it in your workspace.', id: 'copy', replaceable: true },
+      },
+      { status: 201, body: { kind: 'dashboard', id: 'draft' } },
+    ]);
+    await userEvent.click(screen.getByRole('button', { name: 'Restore 7' }));
+    const ask = await screen.findByRole('dialog', { name: 'Replace your copy?' });
+    await userEvent.click(within(ask).getByRole('button', { name: 'Replace my copy' }));
+    const propose = await screen.findByRole('dialog', {
+      name: 'Propose restoring version 7 to Sales / EMEA',
+    });
+    await userEvent.click(within(propose).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Restore 7' })),
+    );
   });
 });
 

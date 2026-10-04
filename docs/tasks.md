@@ -8437,6 +8437,34 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 - [ ] T405 (AC-176) Reach the remaining pointer-only actions from the keyboard
   - Files and failing test: as T307 and T182 (above), extended to every phase-2 panel, dialog and popover (rule 85) (AC-176).
   - Depends on: T330, T356, T357, T367
+  - **Partly built 2026-10-04. Left unticked, and AC-176 open,** for the parts below that wait on the user or on other agents.
+    - **Rule 85, from a read-only audit of every phase-2 panel, dialog and popover.** Each item has a unit test that failed first.
+      - `ProposeDialog`: Escape or Cancel asks "Discard your changes?" when a description was typed. Focus goes back to the opener.
+      - `EditInWorkspaceDialog`: focus goes into it on open, and back to the opener.
+      - `NewItemDialog`: asks before a typed name is lost, and gives focus back.
+      - Restore: focus goes back to what started it (`useRestore` keeps it), through the copy question and the Propose dialog alike.
+      - `ExportPane`: Escape, Cancel and × ask when the file name was typed. Ticked boxes still close at once.
+      - The audit trail's record inspector closes on Escape. Its Event picker takes focus on its first kind as it opens.
+      - Generate cubes' Type filter takes focus on its first choice as it opens. `GenerateCubes.test.tsx` now opens it and then focuses the pill to test Escape from there.
+      - Shared pieces: `shell/useReturnFocus.ts`, which gives focus back to the opener only where it fell to the page, and `shell/DiscardQuestion.tsx`, in the wording the dashboard settings page already uses.
+      - **Follow-ups, left while their agents work there:** the Bookmarks name dialog (Save, Save a copy, Rename) closes on Escape without asking; DecisionPanel's Reject takes Escape only from its text box.
+    - **T307's chart actions:**
+      - **Cross-filtering from the keyboard,** on a chart whose click means a category (bar, line, area, pie, donut, treemap, heatmap, map). On a focused tile, the arrows move between its categories without filtering. The move is said in its own polite region, `cross-filter-announcer`: a cross-filtering dashboard says nothing of markings (AC-120). Space filters the other tiles by the focused item, as a click does, and on the item it filters by takes it back. Escape clears, as before. The ring is T306's, and the tile's name lists the keys.
+      - **A table tile's rows** (`DataTable.tsx`), where they can be marked (a primary key). From the table's region the arrows, Home and End take focus to a row and move it, marking nothing. Space marks it as a click does; Shift and Space mark the range from the anchor, as a Shift-click does. The focused row has a 2 px accent ring, distinct from a marked row's rule.
+      - **Waiting on the user (asked 2026-10-04):** how the keyboard reaches a legend category (AC-090) and a trellis panel (AC-091). Options: the tile menu's "Mark series ›" and "Mark panel ›"; Alt+arrows; or Up/Down between series. Two more follow the same answer:
+        - a scatter: a click there marks the point's series, by `clickedValue`'s BY_SERIES;
+        - cross-filtering on charts whose click means a series or a panel.
+    - **The cold review (FAIL) found six things, all fixed:**
+      1. In cross-filter mode the item the keyboard was on wasn't drawn, since `keyboardFocusOn` was given in Markings only. It is now given in both, and the e2e asserts T306's dashed ring.
+      2. The cross-filter keys stepped through the chart as saved, not as the filters left it. They now read `withFiltered`, as `tileItemsOf` does.
+      3. End or Home to a row outside the drawn window could lose focus. The row is now focused once the virtualizer draws it, and the e2e presses End and Home on the orders table.
+      4. Markdown and image tiles became tab stops in cross-filter mode. Only chart tiles are, as outside Markings (T266's rule).
+      5. `useReturnFocus` took the dialog's own field for its opener under StrictMode. The opener is now read as the dialog first renders (`useReturnFocus.test.tsx`, failing first against the first version).
+      6. A focus index left from before the items narrowed could clear the filter and say "Filtering the other tiles by .". It is now kept within the items.
+      - Also from it: the table's region now says its keys.
+    - **Tests:**
+      - unit: `ProposeDialog`, `EditInWorkspaceDialog`, `NewItemDialog`, `restore`, `ExportPane`, `AuditTrail`, `GenerateCubes`, `rowMarking` and `useReturnFocus`;
+      - e2e: `crossfilter.spec.ts` "cross-filters from the keyboard…" and `markings.spec.ts` "a table's rows mark from the keyboard…".
 - [ ] T406 (AC-187) Re-run the design critique on every surface and tick AC-187 only on measured conformance
   - Files and failing test: as T225 (above), with the phase-2 surfaces added (AC-187).
   - Depends on: T330, T348, T356, T364, T369

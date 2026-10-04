@@ -605,6 +605,61 @@ test('a table’s rows mark, and a Shift-click marks the range', async ({ page, 
 });
 
 /**
+ * T405 (AC-176; T307's fourth pointer-only action): the same rows marked
+ * from the keyboard. From the table's region the arrows take focus to a row
+ * and move it, marking nothing; Space marks it, and Shift and Space the range
+ * from the anchor. The row the keyboard is on is ringed in the accent.
+ */
+test('a table’s rows mark from the keyboard: arrows move, Space marks, Shift and Space extend', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request, { table: true });
+  await open(page, id, title);
+  const table = tile(page, 'tile-table');
+  const rows = table.getByTestId('table-row');
+  await expect(rows.first()).toBeVisible();
+
+  const region = table.getByTestId('data-table');
+  await region.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(rows.nth(0)).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(rows.nth(1)).toBeFocused();
+  await expect(table.getByTestId('mark-badge')).toHaveCount(0);
+  // Its ring: 2 px in the accent, not a marking's 3 px rule in its ink.
+  expect(
+    await rows.nth(1).evaluate((row) => {
+      const style = getComputedStyle(row);
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--wc-accent)';
+      document.body.append(probe);
+      const accent = getComputedStyle(probe).color;
+      probe.remove();
+      return [style.outlineStyle, style.outlineWidth, style.outlineColor === accent];
+    }),
+  ).toEqual(['solid', '2px', true]);
+
+  await page.keyboard.press('Space');
+  await expect(table.getByTestId('mark-badge')).toContainText('1 marked');
+  await expect(rows.nth(1)).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Shift+Space');
+  await expect(table.getByTestId('mark-badge')).toContainText('3 marked');
+  await expect(rows.nth(2)).toHaveAttribute('aria-selected', 'true');
+  await expect(rows.nth(0)).toHaveAttribute('aria-selected', 'false');
+
+  // End and Home reach rows outside the drawn window, scrolled to and focused
+  // (T405's review): focus never falls to the page.
+  const count = Number(await region.locator('table').getAttribute('aria-rowcount'));
+  await page.keyboard.press('End');
+  await expect(table.locator(`tr[aria-rowindex="${String(count + 1)}"]`)).toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(table.locator('tr[aria-rowindex="2"]')).toBeFocused();
+});
+
+/**
  * AC-103: WHEN a tile's cube or view cannot resolve every member of a
  * marking's predicate, THE SYSTEM SHALL leave that tile unmarked and label it
  * as not linked to that marking.

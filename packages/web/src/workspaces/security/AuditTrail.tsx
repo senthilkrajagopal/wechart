@@ -675,6 +675,8 @@ function EventPicker({
   const panelId = useId();
   useEffect(() => {
     if (!open) return undefined;
+    // Focus into it as it opens, on its first kind (T405, rule 85).
+    box.current?.querySelector<HTMLInputElement>('fieldset input')?.focus();
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       setOpen(false);
@@ -744,8 +746,26 @@ function Inspector({ id, record, onClose }: { id: string; record: Record_; onClo
   // Focus to the record as it opens, since it follows the whole table (T369's review).
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => heading.current?.focus(), [record.id]);
+  // Escape in it closes it, as its × does (T405, rule 85).
+  const section = useRef<HTMLElement>(null);
+  const closing = useRef(onClose);
+  useEffect(() => {
+    closing.current = onClose;
+  }, [onClose]);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (!(event.target instanceof Node) || section.current?.contains(event.target) !== true)
+        return;
+      event.preventDefault();
+      closing.current();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
   return (
     <section
+      ref={section}
       id={id}
       className="audit-trail__inspector"
       aria-label={`${label} ${folderText(record, false)} · ${when.shown}`}

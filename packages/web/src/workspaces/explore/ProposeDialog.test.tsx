@@ -1,5 +1,6 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ProposeDialog, type ProposalCheck } from './ProposeDialog';
@@ -145,7 +146,10 @@ describe('the Propose dialog (T358, AC-284)', () => {
     expect(onPropose).toHaveBeenLastCalledWith('Monthly view');
     await userEvent.keyboard('{Control>}{Enter}{/Control}');
     expect(onPropose).toHaveBeenCalledTimes(2);
+    // With a description typed, Escape asks first (T405, rule 85).
     await userEvent.keyboard('{Escape}');
+    expect(onClose).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -195,6 +199,63 @@ describe('the Propose dialog (T358, AC-284)', () => {
     expect(screen.getByRole('alert').textContent).toBe(
       'It changed since you opened it. Try again.',
     );
+  });
+});
+
+/**
+ * T405 (AC-176; direction.md rule 85): the dialog takes focus on open, closes
+ * on Escape, asking first when a description is typed, and gives focus back
+ * to what opened it.
+ */
+describe('the Propose dialog from the keyboard (T405, rule 85)', () => {
+  function Opener() {
+    const [open, setOpen] = useState(false);
+    return (
+      <>
+        <button type="button" onClick={() => setOpen(true)}>
+          Propose to…
+        </button>
+        {open ? (
+          <ProposeDialog check={READY} onPropose={vi.fn()} onClose={() => setOpen(false)} />
+        ) : null}
+      </>
+    );
+  }
+
+  it('closes on Escape with nothing typed, giving focus back to its opener', async () => {
+    render(<Opener />);
+    const opener = screen.getByRole('button', { name: 'Propose to…' });
+    await userEvent.click(opener);
+    expect(document.activeElement).toBe(screen.getByLabelText(/What changed/));
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+  });
+
+  it('asks before Escape or Cancel loses a typed description', async () => {
+    render(<Opener />);
+    const opener = screen.getByRole('button', { name: 'Propose to…' });
+    await userEvent.click(opener);
+    const text = screen.getByLabelText(/What changed/);
+    await userEvent.type(text, 'Adds EMEA');
+    await userEvent.keyboard('{Escape}');
+    const asking = screen.getByRole('alertdialog', { name: 'Discard your changes?' });
+    expect(asking.textContent).toContain('The description you typed isn’t kept.');
+    expect(document.activeElement).toBe(
+      within(asking).getByRole('button', { name: 'Keep editing' }),
+    );
+    // Escape answers it as Keep editing does: the dialog and its text stay.
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect((screen.getByLabelText(/What changed/) as HTMLTextAreaElement).value).toBe('Adds EMEA');
+    expect(document.activeElement).toBe(screen.getByLabelText(/What changed/));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }),
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(opener));
   });
 });
 

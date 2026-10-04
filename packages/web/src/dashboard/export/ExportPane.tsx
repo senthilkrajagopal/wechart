@@ -2,6 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { DRIVERS, type DriverType, type FieldValue } from '@wechart/core';
 import { useEffect, useId, useRef, useState, type FocusEvent, type ReactNode } from 'react';
 
+import { DiscardQuestion } from '../../shell/DiscardQuestion';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { fieldLabel, methodLabel } from '../../workspaces/data-sources/ConnectionForm';
 
@@ -169,15 +170,27 @@ export function ExportPane({
     heading.current?.focus();
   }, []);
   /**
-   * Escape closes it at once, ticked boxes being no work to lose (rule 85):
-   * one pressed in it, or with focus on nothing, not one a menu or a field
-   * elsewhere has taken (as the New data source pane has it).
+   * Escape closes it at once, ticked boxes being no work to lose (rule 85),
+   * but a file name typed is: then Escape, Cancel and × ask first (T405).
+   * Escape pressed in it, or with focus on nothing, not one a menu or a field
+   * elsewhere has taken (as the New data source pane has it); over the
+   * question, it keeps editing.
    */
   const pane = useRef<HTMLElement>(null);
-  const closing = useRef(onClose);
+  const [asking, setAsking] = useState(false);
+  const typedName = fileName !== null && fileName !== (offered?.fileName ?? '');
+  const keepEditing = () => {
+    setAsking(false);
+    pane.current?.querySelector<HTMLInputElement>('.export-pane__file input')?.focus();
+  };
+  const requestClose = () => {
+    if (typedName) setAsking(true);
+    else onClose();
+  };
+  const closing = useRef(requestClose);
   useEffect(() => {
-    closing.current = onClose;
-  }, [onClose]);
+    closing.current = asking ? keepEditing : requestClose;
+  });
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
@@ -350,7 +363,12 @@ export function ExportPane({
         <h2 id={`${ids}-heading`} ref={heading} tabIndex={-1}>
           Export dashboard
         </h2>
-        <button type="button" className="source-pane__close" aria-label="Close" onClick={onClose}>
+        <button
+          type="button"
+          className="source-pane__close"
+          aria-label="Close"
+          onClick={requestClose}
+        >
           ×
         </button>
       </header>
@@ -638,7 +656,7 @@ export function ExportPane({
             <span className="source-pane__foot-note">Export waits for the list</span>
           )}
           <span className="source-pane__spacer" />
-          <button type="button" className="btn btn-ghost" onClick={onClose}>
+          <button type="button" className="btn btn-ghost" onClick={requestClose}>
             Cancel
           </button>
           <button
@@ -654,6 +672,13 @@ export function ExportPane({
           </button>
         </div>
       </footer>
+      {asking ? (
+        <DiscardQuestion
+          body="The file name you typed isn’t kept."
+          onKeep={keepEditing}
+          onDiscard={onClose}
+        />
+      ) : null}
     </aside>
   );
 }

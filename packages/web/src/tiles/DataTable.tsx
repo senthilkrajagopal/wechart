@@ -11,7 +11,7 @@ import {
   type RenderSpec,
 } from '@wechart/core';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react';
 
 /**
  * The table (AC-037), and the table view every chart can switch to (AC-178).
@@ -69,6 +69,19 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
    */
   const [anchor, setAnchor] = useState<number | null>(null);
   const markable = rowsMarkable(marking?.primaryKey);
+  const keysId = useId();
+  /** A row the keys went to before it was drawn: focused as soon as it is. */
+  const focusOnceDrawn = useRef<number | null>(null);
+  useEffect(() => {
+    const index = focusOnceDrawn.current;
+    if (index === null) return;
+    const row = scroller.current?.querySelector<HTMLElement>(
+      `[data-row-index="${String(index)}"]`,
+    );
+    if (row === null || row === undefined) return;
+    focusOnceDrawn.current = null;
+    row.focus();
+  });
 
   const clickRow = (index: number, shift: boolean) => {
     if (marking === undefined || !markable) return;
@@ -148,6 +161,59 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
   // The columns its CSV heads too (T177): one definition for both, in the
   // wells' order (T393, AC-301).
   const columns = tableColumnsOf(rows, spec.fields);
+
+  /**
+   * Rows marked from the keyboard (T405, AC-176; AC-092), where they can be
+   * marked at all: from the table's region the arrows take focus to a row
+   * and move it, Home and End to the first and last, marking nothing; Space
+   * marks the focused row as a click does, Shift and Space the range from
+   * the anchor as a Shift-click does. A row out of the drawn window is
+   * scrolled to, then focused.
+   */
+  const rowAt = (index: number) =>
+    scroller.current?.querySelector<HTMLElement>(`[data-row-index="${String(index)}"]`) ?? null;
+  const goTo = (index: number) => {
+    const drawnRow = rowAt(index);
+    if (drawnRow !== null) {
+      drawnRow.focus();
+      return;
+    }
+    // Out of the drawn window: scrolled to, and focused once it is drawn
+    // (below), whenever the virtualizer gets there (T405's review).
+    focusOnceDrawn.current = index;
+    virtualizer.scrollToIndex(index);
+  };
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (marking === undefined || !markable) return;
+    const on =
+      event.target instanceof HTMLElement ? event.target.closest('[data-row-index]') : null;
+    const at = on === null ? null : Number(on.getAttribute('data-row-index'));
+    const last = rows.length - 1;
+    let next: number;
+    switch (event.key) {
+      case 'ArrowDown':
+        next = at === null ? 0 : Math.min(at + 1, last);
+        break;
+      case 'ArrowUp':
+        next = at === null ? 0 : Math.max(at - 1, 0);
+        break;
+      case 'Home':
+        next = 0;
+        break;
+      case 'End':
+        next = last;
+        break;
+      case ' ':
+        if (at === null) return;
+        event.preventDefault();
+        clickRow(at, event.shiftKey);
+        return;
+      default:
+        return;
+    }
+    event.preventDefault();
+    goTo(next);
+  };
   // A measure's figures are set right, as the prototype's `td.num` (T304).
   const measures = new Set(spec.measures ?? membersOn(spec.encoding, 'y'));
   const align = (column: string) => (measures.has(column) ? 'num' : undefined);
@@ -160,6 +226,9 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
   const below = virtualizer.getTotalSize() - (last === undefined ? 0 : last.end);
 
   return (
+    // The keys are the table's rows' (T405): heard on the focusable region
+    // that holds them, as the APG table pattern has no role of its own for it.
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <div
       ref={scroller}
       className="data-table"
@@ -180,7 +249,15 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
       tabIndex={0}
       role="region"
       aria-label={label === undefined ? 'Table' : `${label}, table`}
+      // Its keys said, where its rows can be marked (T405's review).
+      {...(markable && marking !== undefined ? { 'aria-describedby': keysId } : {})}
+      onKeyDown={onKeyDown}
     >
+      {markable && marking !== undefined ? (
+        <span id={keysId} hidden>
+          Arrow keys move between its rows. Space marks. Shift and Space mark the range.
+        </span>
+      ) : null}
       {/* The header counts as a row, so the body starts at 2. */}
       {/* The prototype's table in a tile, charts.js tableHtml (T304). */}
       <table className="grid-table comfy" aria-rowcount={rows.length}>
@@ -209,6 +286,8 @@ export function DataTable({ spec, height = DEFAULT_HEIGHT, marking, label }: Dat
                 key={item.key}
                 data-testid="table-row"
                 aria-rowindex={item.index + 2}
+                // Reached by the arrows, where rows can be marked (T405).
+                {...(markable ? { tabIndex: -1, 'data-row-index': item.index } : {})}
                 {...(mark === undefined ? {} : { 'data-marked': mark.state })}
                 /**
                  * `aria-selected` only where rows can actually be marked: on a

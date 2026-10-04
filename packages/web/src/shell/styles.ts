@@ -6031,6 +6031,11 @@ main:has(.dashboard) {
 }
 .data-table tr[data-marked='none'] > td,
 .pivot-table td[data-marked='none'] { opacity: 0.45; }
+/* The row the keyboard is on (T405, AC-176): the app's 2 px accent ring,
+   drawn inside the scrolling table, distinct from a marked row's 3 px rule
+   down its left in the marking's colour. */
+.data-table tbody tr[data-row-index]:focus { outline: none; }
+.data-table tbody tr[data-row-index]:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: -2px; }
 /* The prototype's .select.sm, at this table's own 24 px row height rather
    than its 28 px, so a select does not stretch the row it sits in. */
 .select-sm {

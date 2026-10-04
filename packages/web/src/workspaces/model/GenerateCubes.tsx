@@ -511,6 +511,8 @@ export function GenerateCubes({
   const typesBox = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!typesOpen) return undefined;
+    // Focus into it as it opens, on its first choice (T405, rule 85).
+    typesBox.current?.querySelector<HTMLInputElement>('.generate-pane__menu input')?.focus();
     const onOutside = (event: Event) => {
       if (event.target instanceof Node && typesBox.current?.contains(event.target) === true) return;
       setTypesOpen(false);

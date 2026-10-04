@@ -27,6 +27,7 @@ class Refused extends Error {
 
 export function useRestore(kind: 'dashboard' | 'chart' | 'data-source', itemId: string) {
   const [asked, setAsked] = useState<RestoringVersion | undefined>(undefined);
+  const opener = useRef<HTMLElement | null>(null);
   const mutation = useMutation({
     mutationFn: async ({
       version,
@@ -59,6 +60,9 @@ export function useRestore(kind: 'dashboard' | 'chart' | 'data-source', itemId: 
     refused: mutation.error instanceof Refused ? mutation.error : undefined,
     busy: mutation.isPending,
     start: (version: RestoringVersion) => {
+      // What asked for it, to have focus back once its dialogs close (T405, rule 85).
+      opener.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setAsked(version);
       mutation.mutate({ version, replaceCopy: false });
     },
@@ -68,6 +72,13 @@ export function useRestore(kind: 'dashboard' | 'chart' | 'data-source', itemId: 
     close: () => {
       setAsked(undefined);
       mutation.reset();
+      // Back to what asked for it, through the copy question and the Propose
+      // dialog alike, where focus fell to the page with them.
+      const back = opener.current;
+      requestAnimationFrame(() => {
+        const now = document.activeElement;
+        if (back?.isConnected === true && (now === null || now === document.body)) back.focus();
+      });
     },
   };
 }

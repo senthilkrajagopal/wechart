@@ -94,5 +94,55 @@ describe('clicking a row in a table tile', () => {
 
       expect(screen.getAllByTestId('table-row')[0]?.hasAttribute('aria-selected')).toBe(false);
     });
+
+    it('takes no row into the keyboard either', async () => {
+      show(undefined);
+      screen.getByRole('region').focus();
+      await userEvent.keyboard('{ArrowDown}');
+      expect(document.activeElement).toBe(screen.getByRole('region'));
+    });
+  });
+});
+
+/**
+ * T405 (AC-176; T307's fourth pointer-only action): a table tile's rows are
+ * marked from the keyboard as by the pointer. From the table's region the
+ * arrows take focus to a row and move it, without marking; Space marks the
+ * focused row as a click does, and Shift and Space the range from the
+ * anchor, as a Shift-click does.
+ */
+describe('marking a table tile’s rows from the keyboard (T405)', () => {
+  it('moves between rows with the arrows, Home and End, marking nothing', async () => {
+    const onMark = show('orders.id');
+    const rows = () => screen.getAllByTestId('table-row');
+    // Its keys said with it (T405's review).
+    expect(
+      document.getElementById(screen.getByRole('region').getAttribute('aria-describedby') ?? '')
+        ?.textContent,
+    ).toBe('Arrow keys move between its rows. Space marks. Shift and Space mark the range.');
+    screen.getByRole('region').focus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(rows()[0]);
+    await userEvent.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(rows()[1]);
+    await userEvent.keyboard('{End}');
+    expect(document.activeElement).toBe(rows()[2]);
+    await userEvent.keyboard('{Home}');
+    expect(document.activeElement).toBe(rows()[0]);
+    await userEvent.keyboard('{ArrowUp}');
+    expect(document.activeElement).toBe(rows()[0]);
+    expect(onMark).not.toHaveBeenCalled();
+  });
+
+  it('marks the focused row on Space, and the range from it on Shift and Space', async () => {
+    const onMark = show('orders.id');
+    screen.getByRole('region').focus();
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}');
+    await userEvent.keyboard(' ');
+    expect(markedIds((onMark.mock.calls[0] as [MarkingPredicate])[0])).toEqual([2]);
+    await userEvent.keyboard('{ArrowDown}');
+    await userEvent.keyboard('{Shift>} {/Shift}');
+    expect(markedIds((onMark.mock.calls[1] as [MarkingPredicate])[0])).toEqual([2, 3]);
+    expect(onMark).toHaveBeenCalledTimes(2);
   });
 });

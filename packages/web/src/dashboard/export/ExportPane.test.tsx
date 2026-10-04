@@ -271,6 +271,27 @@ describe('the Export pane (T511, AC-354)', () => {
     fireEvent.keyDown(pane, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  // T405 (AC-176; rule 85): a file name typed is work to lose, so it asks first.
+  it('asks before Escape or Cancel loses a file name typed', async () => {
+    const { onClose } = shown(offering);
+    const pane = await screen.findByRole('dialog', { name: 'Export dashboard' });
+    const file = await within(pane).findByLabelText('File name');
+    await userEvent.clear(file);
+    await userEvent.type(file, 'q3.wechart.json');
+    await userEvent.keyboard('{Escape}');
+    const asking = screen.getByRole('alertdialog', { name: 'Discard your changes?' });
+    expect(asking.textContent).toContain('The file name you typed isn’t kept.');
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+    expect((within(pane).getByLabelText('File name') as HTMLInputElement).value).toBe(
+      'q3.wechart.json',
+    );
+    await userEvent.click(within(pane).getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('outlining the tiles a dependency is used on (T511, AC-360)', () => {

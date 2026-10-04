@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { EditInWorkspaceDialog } from './EditInWorkspaceDialog';
@@ -170,6 +171,42 @@ describe('Edit in my workspace, for a dashboard (T348, AC-279)', () => {
     const { onClose } = shown();
     await userEvent.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  // T405 (AC-176; rule 85): focus goes into it as it opens, and back to its opener after.
+  it('takes focus as it opens, and gives it back to what opened it', async () => {
+    // Its answers stubbed as for the others; drawn below from an opener instead.
+    shown();
+    function Opener() {
+      const [open, setOpen] = useState(false);
+      return (
+        <QueryClientProvider
+          client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+        >
+          <button type="button" onClick={() => setOpen(true)}>
+            Edit in my workspace…
+          </button>
+          {open ? (
+            <EditInWorkspaceDialog
+              dashboardId="d1"
+              title="Revenue overview"
+              targetPath="Sales / EMEA"
+              onCopied={vi.fn()}
+              onClose={() => setOpen(false)}
+            />
+          ) : null}
+        </QueryClientProvider>
+      );
+    }
+    cleanup();
+    render(<Opener />);
+    const opener = screen.getByRole('button', { name: 'Edit in my workspace…' });
+    await userEvent.click(opener);
+    const dialog = screen.getByRole('dialog', { name: 'Edit in my workspace' });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await vi.waitFor(() => expect(document.activeElement).toBe(opener));
   });
 
   it('copies a ticked data source too, into the folder the dashboard’s copy made (T523, AC-368)', async () => {

@@ -620,6 +620,35 @@ describe('the audit trail (T369, AC-295)', () => {
   });
 });
 
+/** T405 (AC-176; direction.md rule 85): the inspector and the Event picker from the keyboard. */
+describe('the audit trail from the keyboard (T405, rule 85)', () => {
+  it('closes the inspector on Escape, giving focus back to its row', async () => {
+    serve();
+    open();
+    await screen.findByRole('table', { name: 'Audit trail' });
+    const summary = within(table()).getByRole('button', {
+      name: 'Added read-write group emea-analysts',
+    });
+    await userEvent.click(summary);
+    expect(screen.getByRole('region', { name: /^Access change/ }).tagName).toBe('SECTION');
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('region', { name: /^Access change/ })).toBeNull();
+    expect(document.activeElement).toBe(summary);
+  });
+
+  it('takes focus into the Event picker as it opens, and back to its button on Escape', async () => {
+    serve();
+    open();
+    await screen.findByRole('table', { name: 'Audit trail' });
+    const button = screen.getByRole('button', { name: /^Event/ });
+    await userEvent.click(button);
+    expect(document.activeElement).toBe(screen.getByRole('checkbox', { name: 'Sign-in' }));
+    await userEvent.keyboard('{Escape}');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(button);
+  });
+});
+
 /** T474's review (design 08, state C; direction.md rule 18): an error has Retry and Details. */
 describe('the audit trail, unread', () => {
   it('says it couldn’t be read, with Retry and Details', async () => {

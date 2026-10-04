@@ -1,5 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { NewItemDialog } from './NewItemDialog';
@@ -156,5 +157,46 @@ describe('the folder a new workspace item is to go to (T345, AC-282)', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     await user.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * T405 (AC-176; rule 85): a name typed is asked about before Escape or
+   * Cancel loses it, and focus goes back to what opened the dialog.
+   */
+  it('asks before losing a typed name, and gives focus back to its opener', async () => {
+    const user = userEvent.setup();
+    function Opener() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            New
+          </button>
+          {open ? (
+            <NewItemDialog
+              kind="dashboard"
+              defaultTitle="Untitled dashboard"
+              targets={targets}
+              onCreate={vi.fn()}
+              onClose={() => setOpen(false)}
+            />
+          ) : null}
+        </>
+      );
+    }
+    render(<Opener />);
+    const opener = screen.getByRole('button', { name: 'New' });
+    await user.click(opener);
+    await user.type(screen.getByLabelText('Name'), 'Revenue');
+    await user.keyboard('{Escape}');
+    const asking = screen.getByRole('alertdialog', { name: 'Discard your changes?' });
+    expect(asking.textContent).toContain('The name you typed isn’t kept.');
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByLabelText('Name'));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(screen.getByRole('button', { name: 'Discard changes' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(opener));
   });
 });

@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 
+import { DiscardQuestion } from '../../shell/DiscardQuestion';
 import { useFocusTrap } from '../../shell/useFocusTrap';
+import { useReturnFocus } from '../../shell/useReturnFocus';
 
 /**
  * The Propose dialog (T358, AC-284; design 05 of 2026-09-27, states A, B
@@ -131,15 +133,30 @@ export function ProposeDialog({
   const ready = check.state === 'ready';
   const mayPropose = ready && !over && !busy;
 
-  // Escape closes it, as every dialog here closes; focus starts in the text.
-  const closing = useRef(onClose);
+  // Focus goes back to what opened it (T405, rule 85).
+  useReturnFocus();
+  /**
+   * Escape and Cancel close it, asking first where a description was typed
+   * (T405, rule 85); Escape over the question keeps editing.
+   */
+  const [asking, setAsking] = useState(false);
+  const typed = description !== (restoring?.description ?? '');
+  const keepEditing = () => {
+    setAsking(false);
+    text.current?.focus();
+  };
+  const requestClose = () => {
+    if (typed) setAsking(true);
+    else onClose();
+  };
+  const escape = useRef(requestClose);
   useEffect(() => {
-    closing.current = onClose;
-  }, [onClose]);
+    escape.current = asking ? keepEditing : requestClose;
+  });
   useEffect(() => {
     text.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closing.current();
+      if (event.key === 'Escape') escape.current();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {
@@ -268,7 +285,7 @@ export function ProposeDialog({
           </p>
         )}
         <div className="dialog__actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <button type="button" className="btn" onClick={requestClose}>
             {check.state === 'refused' ? 'Close' : 'Cancel'}
           </button>
           <button
@@ -283,6 +300,13 @@ export function ProposeDialog({
           </button>
         </div>
       </div>
+      {asking ? (
+        <DiscardQuestion
+          body="The description you typed isn’t kept."
+          onKeep={keepEditing}
+          onDiscard={onClose}
+        />
+      ) : null}
     </div>
   );
 }

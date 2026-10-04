@@ -383,6 +383,49 @@ test('Escape clears the cross-filters, as the bar says it does', async ({ page, 
 });
 
 /**
+ * T405 (AC-176; T307's first pointer-only action): a mark cross-filters from
+ * the keyboard as a click does. On a focused tile the arrows move between its
+ * categories without filtering (said politely), Space filters the others by
+ * the one focused and again takes it back, and Escape clears, as direction.md
+ * §7 has it for the pointer.
+ */
+test('cross-filters from the keyboard: arrows move, Space filters by the item, Escape clears', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await crossFilterDashboard(request, { defaultAction: 'filter' });
+  await open(page, id, title);
+  const status = tile(page, 'tile-status');
+  const said = page.getByTestId('cross-filter-announcer');
+
+  await status.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(said).toHaveText(/^.+, 2 of \d+\. Space filters the other tiles by it\.$/);
+  // The item the keyboard is on, drawn: T306's dashed ring (T405's review).
+  await expect(status.locator('svg path[stroke-dasharray]')).toHaveCount(1);
+  const second = (await said.textContent())!.split(',')[0]!;
+  await expect(page.getByTestId('cross-filter-chip')).toHaveCount(0);
+
+  await page.keyboard.press('Space');
+  await expect(page.getByTestId('cross-filter-chip')).toHaveCount(1);
+  await expect(page.getByTestId('cross-filter-chip')).toContainText(second);
+  await expect(said).toHaveText(`Filtering the other tiles by ${second}.`);
+
+  await page.keyboard.press('Space');
+  await expect(page.getByTestId('cross-filter-chip')).toHaveCount(0);
+  await expect(said).toHaveText(`Stopped filtering by ${second}.`);
+
+  await page.keyboard.press('Space');
+  await expect(page.getByTestId('cross-filter-chip')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('cross-filter-chip')).toHaveCount(0);
+  // Named for its keys, as a marking tile is (AC-176).
+  await expect(status).toHaveAccessibleName(
+    /Arrow keys move between its items\. Space filters the other tiles by it\. Escape clears\./,
+  );
+});
+
+/**
  * T077 / AC-071, the cross-filter half: WHEN the interaction mode changes and
  * the settings are saved, THE SYSTEM SHALL clear current marks and
  * cross-filters. The marks half is `e2e/markings.spec.ts`, "switching the

@@ -877,9 +877,11 @@ describe('generating cubes from a data source (AC-139)', () => {
     await userEvent.keyboard('{Escape}');
     expect(menu()).toBeNull();
     expect(document.activeElement).toBe(pill);
-    // Escape on the pill while it is open: the menu closes, the pane stays, nothing asked.
+    // Opened, focus goes into it, on its first choice (T405, rule 85).
     await userEvent.click(pill);
-    expect(document.activeElement).toBe(pill);
+    expect(document.activeElement).toBe(within(dialog).getByRole('checkbox', { name: 'All' }));
+    // Escape on the pill while it is open: the menu closes, the pane stays, nothing asked.
+    pill.focus();
     await userEvent.keyboard('{Escape}');
     expect(menu()).toBeNull();
     expect(within(dialog).queryByRole('alertdialog')).toBeNull();

@@ -2394,6 +2394,11 @@ export function DashboardView({
    */
   /** The last marking change, for the polite live region (AC-101). */
   const [markSaid, setMarkSaid] = useState('');
+  /**
+   * What the keyboard's cross-filtering came to (T405, AC-176), in a region
+   * of its own: a cross-filtering dashboard says nothing of markings (AC-120).
+   */
+  const [crossSaid, setCrossSaid] = useState('');
   /** Which item a tile's keyboard is on, and where a Shift-extend began. */
   const [markFocus, setMarkFocus] = useState<
     Readonly<Record<string, { readonly focused: number; readonly anchor: number | null }>>
@@ -3096,6 +3101,76 @@ export function DashboardView({
       return [];
     }
   };
+
+  /**
+   * The items a tile's keyboard cross-filters by (T405, AC-176; T307): in
+   * cross-filter mode, on a chart whose click means its category, its
+   * categories in the order drawn, none blank and not Top N's "Other". A
+   * drilled view cross-filters nothing, by the pointer either. Charts whose
+   * click means a series or a panel wait on how the keyboard reaches those
+   * (the user's question, with a legend's and a panel's marking).
+   */
+  const crossItemsOf = (tileId: string): readonly string[] => {
+    if (!crossFiltering) return [];
+    const element = elementAt(live, tileId);
+    if (element === null || !isTile(element) || element.chartId === undefined) return [];
+    if (drillShown(tileId) !== undefined) return [];
+    // As drawn: what the filters, and the other tiles' cross-filters, leave
+    // of it, as `tileItemsOf` reads it (T405's review).
+    const spec = withFiltered.specs[element.chartId] ?? drawn.specs[element.chartId];
+    if (spec === undefined || memberOn(spec.encoding, 'x') === undefined) return [];
+    if (!clickMarksCategory(spec.chartType)) return [];
+    try {
+      return seriesOf(spec).categories.filter(
+        (value) => value !== '' && !value.startsWith(`${OTHER_LABEL} (`),
+      );
+    } catch {
+      return [];
+    }
+  };
+
+  /**
+   * A focused tile's keys in cross-filter mode (T405): the arrows move
+   * between its items without filtering, said politely, since each filter
+   * asks the other tiles again; Space filters the others by the one focused,
+   * as a click on it does, and on the item it filters by takes it back.
+   * Escape is the dashboard's, which clears them all (AC-119).
+   */
+  const onTileCrossKey = (event: React.KeyboardEvent, tileId: string) => {
+    const element = elementAt(live, tileId);
+    if (element === null || !isTile(element) || element.chartId === undefined) return;
+    const chartId = element.chartId;
+    const items = crossItemsOf(tileId);
+    if (items.length === 0) return;
+    // Within what the tile now draws, should its items have narrowed since
+    // (T405's review).
+    const held = markFocus[tileId];
+    const state = { focused: Math.min(held?.focused ?? 0, items.length - 1), anchor: null };
+    const result = keyToMarking(event.key, { shift: false, toggle: false }, state, items.length);
+    if (!result.handled) return;
+    event.preventDefault();
+    setMarkFocus((now) => ({ ...now, [tileId]: { focused: result.focused, anchor: null } }));
+    setKeyShownOn(tileId);
+    const item = items[result.focused];
+    if (item === undefined) return;
+    if (result.action === 'none') {
+      setCrossSaid(
+        `${item}, ${String(result.focused + 1)} of ${String(items.length)}. Space filters the other tiles by it.`,
+      );
+      return;
+    }
+    const spec = drawn.specs[chartId];
+    const value = spec === undefined ? undefined : clickedValue(spec, { name: item });
+    const had = crossSelections.some(
+      (each) => each.from === tileId && each.member === value?.member && each.value === value.value,
+    );
+    onItemClick(tileId, chartId, { name: item });
+    setCrossSaid(had ? `Stopped filtering by ${item}.` : `Filtering the other tiles by ${item}.`);
+  };
+
+  /** The items a focused tile's keys move between, in the dashboard's mode. */
+  const keyItemsOf = (tileId: string) =>
+    crossFiltering ? crossItemsOf(tileId) : markableItemsOf(tileId);
 
   /**
    * The items a tile draws, each as a click on it marks it (AC-115): its x
@@ -4150,11 +4225,6 @@ export function DashboardView({
               );
             };
           },
-          // The item its keyboard is on, while it has the keyboard (T306).
-          keyboardFocusOn: (tileId: string) =>
-            keyShownOn === tileId
-              ? markableItemsOf(tileId)[markFocus[tileId]?.focused ?? 0]
-              : undefined,
           markingOn: (tileId: string) => {
             const element = elementAt(live, tileId);
             if (element === null || !isTile(element)) return undefined;
@@ -4200,6 +4270,20 @@ export function DashboardView({
               onTile,
             };
           },
+        }
+      : {}),
+    /**
+     * The item its keyboard is on, while it has the keyboard (T306): a
+     * marking's item, or in cross-filter mode the one Space filters by (T405).
+     */
+    ...(marking || crossFiltering
+      ? {
+          keyboardFocusOn: (tileId: string) =>
+            keyShownOn === tileId
+              ? keyItemsOf(tileId)[
+                  Math.min(markFocus[tileId]?.focused ?? 0, keyItemsOf(tileId).length - 1)
+                ]
+              : undefined,
         }
       : {}),
     pending: withFiltered.pending,
@@ -5644,7 +5728,20 @@ export function DashboardView({
               charts={charts}
               canEdit={preview === undefined && !readOnly && !editsElsewhere && !narrow}
               markSaid={markSaid}
-              {...(marking ? { markKeys: { onKey: onTileMarkKey, itemsOn: markableItemsOf } } : {})}
+              crossSaid={crossSaid}
+              {...(marking
+                ? { markKeys: { onKey: onTileMarkKey, itemsOn: markableItemsOf } }
+                : crossFiltering
+                  ? {
+                      // A mark cross-filters from the keyboard too (T405, AC-176).
+                      markKeys: {
+                        onKey: onTileCrossKey,
+                        itemsOn: crossItemsOf,
+                        chartsOnly: true,
+                        keys: 'Arrow keys move between its items. Space filters the other tiles by it. Escape clears.',
+                      },
+                    }
+                  : {})}
               // A duplicate's chart is made from the stored one and what it
               // draws; the session's drafts are read inside (T068, AC-062).
               duplicateFrom={{
@@ -5845,6 +5942,7 @@ function DashboardPages({
   onDeleted,
   duplicateFrom,
   markSaid = '',
+  crossSaid = '',
   markKeys,
   canEdit = true,
   outlinedBy,
@@ -5855,6 +5953,8 @@ function DashboardPages({
   outlinedBy?: ((chartId: string) => string | undefined) | undefined;
   /** The last marking change, for the dashboard's polite live region (AC-101). */
   markSaid?: string;
+  /** What the keyboard's cross-filtering came to, for its own polite region (T405). */
+  crossSaid?: string;
   /**
    * The marking keys a focused tile answers in view mode (AC-100): what each
    * key does is the dashboard's, since the marking is held there. Absent in
@@ -5864,6 +5964,13 @@ function DashboardPages({
     | {
         readonly onKey: (event: React.KeyboardEvent, tileId: string) => void;
         readonly itemsOn: (tileId: string) => readonly string[];
+        /** What the keys do, said with the tile: the marking's unless given (T405). */
+        readonly keys?: string;
+        /**
+         * Only a chart tile answers them, so only it is a tab stop: in
+         * cross-filter mode, as outside Markings (T266's review; T405's).
+         */
+        readonly chartsOnly?: boolean;
       }
     | undefined;
   /**
@@ -6211,9 +6318,10 @@ function DashboardPages({
             }
             markKeys?.onKey(event, tile.id);
           },
-    // Outside Markings only a chart tile answers a key — its menu's — so only
-    // it is a tab stop there (T266's review).
-    ...(editing || markKeys !== undefined
+    // Outside Markings only a chart tile answers a key — its menu's, or in
+    // cross-filter mode the filtering ones — so only it is a tab stop there
+    // (T266's review; T405's).
+    ...(editing || (markKeys !== undefined && markKeys.chartsOnly !== true)
       ? {}
       : { takesKeys: (id: string) => chartIdOf(document, id) !== undefined }),
     /**
@@ -6440,7 +6548,7 @@ function DashboardPages({
             }
             return {
               role: 'dashboard tile',
-              keys: `Arrow keys move between its items. Space marks. Ctrl and Space toggle. Shift and arrow keys extend. Escape unmarks.${menu}`,
+              keys: `${markKeys.keys ?? 'Arrow keys move between its items. Space marks. Ctrl and Space toggle. Shift and arrow keys extend. Escape unmarks.'}${menu}`,
             };
           }
         : undefined,
@@ -6527,6 +6635,16 @@ function DashboardPages({
       {/* What a marking change came to, said politely (AC-101). Its own
           region, so a marking and a drag cannot talk over each other. */}
       <MarkingAnnouncer message={markSaid} />
+      {/* What the keyboard's cross-filtering came to (T405), said politely. */}
+      <p
+        className="visually-hidden"
+        data-testid="cross-filter-announcer"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {crossSaid}
+      </p>
 
       {/**
        * Both ways back, as AC-060 asks: this toast, and the edit bar's Undo.

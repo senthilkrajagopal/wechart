@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 
 import { StateLine } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
+import { useReturnFocus } from '../../shell/useReturnFocus';
 import { browserTimeZone, projectNameAt } from './projectFolder';
 
 /**
@@ -61,7 +62,10 @@ export function EditInWorkspaceDialog({
   useEffect(() => {
     closing.current = onClose;
   }, [onClose]);
+  // Focus into it as it opens, and back to its opener after (T405, rule 85).
+  useReturnFocus();
   useEffect(() => {
+    box.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') closing.current();
     };
@@ -166,6 +170,8 @@ export function EditInWorkspaceDialog({
         aria-modal="true"
         aria-labelledby={`${ids}-heading`}
         className="dialog edit-in-workspace"
+        // Focused itself as it opens: its words first, then Tab to its choices.
+        tabIndex={-1}
       >
         <h2 id={`${ids}-heading`}>Edit in my workspace</h2>
         <p>

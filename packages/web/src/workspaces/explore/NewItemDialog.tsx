@@ -1,7 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react';
 
+import { DiscardQuestion } from '../../shell/DiscardQuestion';
 import { InfoBar } from '../../shell/InfoBar';
 import { useFocusTrap } from '../../shell/useFocusTrap';
+import { useReturnFocus } from '../../shell/useReturnFocus';
 import { SHARED_ROOT } from './roots';
 
 /**
@@ -52,15 +54,29 @@ export function NewItemDialog({
     named !== '' &&
     !(ITEM_NAME.test(named) && named.length <= 40);
 
-  // Escape closes it, as every dialog here closes; focus starts on the name.
-  const closing = useRef(onClose);
+  // Focus goes back to what opened it (T405, rule 85).
+  useReturnFocus();
+  /**
+   * Escape and Cancel close it, asking first where a name was typed (T405,
+   * rule 85); Escape over the question keeps editing. Focus starts on the name.
+   */
+  const [asking, setAsking] = useState(false);
+  const keepEditing = () => {
+    setAsking(false);
+    naming.current?.focus();
+  };
+  const requestClose = () => {
+    if (title !== defaultTitle) setAsking(true);
+    else onClose();
+  };
+  const escape = useRef(requestClose);
   useEffect(() => {
-    closing.current = onClose;
-  }, [onClose]);
+    escape.current = asking ? keepEditing : requestClose;
+  });
   useEffect(() => {
     naming.current?.select();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closing.current();
+      if (event.key === 'Escape') escape.current();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {
@@ -125,7 +141,7 @@ export function NewItemDialog({
           It stays private in My workspace until you propose it to this folder.
         </p>
         <div className="dialog__actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <button type="button" className="btn" onClick={requestClose}>
             Cancel
           </button>
           <button
@@ -140,6 +156,13 @@ export function NewItemDialog({
           </button>
         </div>
       </div>
+      {asking ? (
+        <DiscardQuestion
+          body="The name you typed isn’t kept."
+          onKeep={keepEditing}
+          onDiscard={onClose}
+        />
+      ) : null}
     </div>
   );
 }
