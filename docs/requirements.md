@@ -950,6 +950,15 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R64 — views' requests, the filter bar's picker, adding by keyboard, and Cube Store's router queries** (2026-10-04, the user)
+- Q (from T385): a request on a view can't be resolved by R63's rule. A: "Resolve via the view's cubes (Recommended)". *A taker's approved measure on any cube on the view's join paths resolves it. T590.*
+- Q (from T475): should the dashboard filter bar's field picker be design 10's grouped picker? A: "Yes, same picker (Recommended)". *T633.*
+- Q (from T631): how does a keyboard user add a series or category to a marking? A: "Ctrl+Enter adds (Recommended)". *On a "Mark series ›" or "Mark panel ›" entry. T634.*
+- Q (from T548): refuse, before it runs, a Cube Store query with a join outside its select workers? A: "Yes, refuse them (Recommended)". *Asked of xcube (`to-xcube/2026-10-04-2200-cube-store-refuse-router-joins.md`). T650 waits on its image.*
+- Q (from T548): Cancel on Cube Store's page? A: "No Cancel on Cube Store (Recommended)". *AC-379 is amended.*
+- *Claude's calls, overturnable:* design 08 E's preview opens the dashboard at its own address under the banner (T630). A stopped refresh worker's newer error counts as failing until a worker on the current revision has a good run (T553).
+- **Paused 2026-10-04 at the user's word:** "complete for all research that you already have response for and then pause .. running out of tokens.. os will need to stop for couple of days".
+
 **R63 — keyboard paths to a series or panel, and resolving a calculation request** (2026-10-04, the user)
 - Q (from T405): marking a whole legend category or trellis panel is pointer-only. Which keyboard path? A: "Tile ⋯ menu entries (Recommended)". *The tile's ⋯ menu (Shift+F10) gains "Mark series ›" and "Mark panel ›". The same path serves a scatter's points and cross-filtering by series or panel, where a click means the series or panel (`clickedValue`'s BY_SERIES).*
 - Q (from T385): a request is free text. What resolves it? A: "The member who took it up (Recommended)". *An approved proposal from the member who opened the request in their workspace, adding a measure to the request's cube, resolves it, naming those measures. AC-052 is amended.*
