@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashboardView } from '../dashboard/DashboardView';
 import type { DashboardDocument } from '../dashboard/model/document';
+import { ME_QUERY } from '../shell/me';
 import { openFilter } from './testing';
 
 /**
@@ -81,5 +82,28 @@ describe('a dashboard previewed as a security context', () => {
       expect(loads.length).toBeGreaterThan(0);
     });
     for (const body of loads) expect(body).toMatchObject({ context });
+  });
+
+  // T630 (AC-166; design 08, state E, as drawn): with sign-in on, the banner
+  // names the groups and then the dashboard.
+  it('names the dashboard after the groups, with sign-in on', () => {
+    const client = new QueryClient();
+    client.setQueryData(ME_QUERY.queryKey, { name: 'Super Admin', security: 'oidc' });
+    render(
+      <QueryClientProvider client={client}>
+        <DashboardView
+          dashboardId="d1"
+          document={DOC}
+          specs={{}}
+          onSave={vi.fn()}
+          preview={{ groups: ['sales-ro', 'emea-viewers'] }}
+          onExitPreview={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByTestId('preview-banner').textContent).toContain(
+      'Previewing as sales-ro and emea-viewers · Sales',
+    );
   });
 });

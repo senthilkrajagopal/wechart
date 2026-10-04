@@ -10932,7 +10932,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
   - No AC changes: AC-165, AC-166 and AC-295 were already ticked, and AC-343 stays open for the other surfaces.
   - **There was no red run.** The new checks passed at once, since the behaviour was built. The cold review read each against the code it guards, and found that each would fail if its gate broke: the bar, Not found, the picker, the tab, its columns.
   - **The cold review (PASS) found one gap, now fixed:** the Audit trail's error had Retry but no Details (state C; direction.md rule 18). It now says "Couldn't read the audit trail." with Retry and a Details disclosure holding the reason (`AuditTrail.test.tsx`, failing first).
-  - **Two differences from design 08's state E, built by T438 and not recorded until now.** They are for the user, not decided here:
+  - **Two differences from design 08's state E, built by T438 and not recorded until now.** They are for the user, not decided here. *(Settled by R63: drawn as designed in T630.)*
     - The banner reads "Previewing as _a_ and _b_. This dashboard's queries run as exactly these groups.". The design has "Previewing as _a_ and _b_ · _dashboard_" with Stop preview.
     - What the groups reach is two sections: the folders, then "What the model gives them" for the cubes. The design has one list holding both.
   - **Left, as status.md has it:** tiles a previewed group doesn't reach (xcube's folder gate, T437 → T436); the Folder filter as a tree picker.
@@ -10966,6 +10966,39 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
       - `security/picker.spec.ts`: AC-329 rewritten for the list, and AC-342 new;
       - `security/workspace-overlay.spec.ts`: My workspace's group first, and the folder's original "hidden by your copy".
     - **Left unticked, with AC-342,** until the two security specs have run: they wait for wechart_security's stale migration row to be cleared.
+- [ ] T630 (AC-166, AC-343) Preview as groups as design 08's state E draws it: the banner, and one list of what the groups reach *(added 2026-10-04, R63: "drawn as designed, since AC-343 binds the design")*
+  - Files: `dashboard/PreviewBanner.tsx`, `dashboard/DashboardView.tsx` (the dashboard's title to the banner), `workspaces/security/GroupsPreview.tsx`, `shell/styles.ts`, `e2e/security/preview-as.spec.ts`
+  - Failing test:
+    - `PreviewBanner.test.tsx`: with sign-in on, the banner reads "Previewing as _a_ and _b_ · _dashboard_", with the eye, each group bold in the code face, and Stop preview as a button.
+    - `previewOptions.test.tsx`: the dashboard names itself in the banner.
+    - `GroupsPreview.test.tsx`: one "What these groups reach" list holds the folders granted, each with its eye or pencil, then those seen from above, "(above)", then the model's cubes and views. There's no second section.
+    - `preview-as.spec.ts`: the same on the real surface, with the banner on the accent (AC-343).
+  - Depends on: T438, T474
+  - **Built 2026-10-04: the two differences T474's note recorded,** as drawn.
+    - **The banner, with sign-in on:**
+      - The eye, then "Previewing as **sales-ro** and **emea-viewers** · Revenue overview", and Stop preview as a 24 px button outlined in the banner's ink, on the accent at 12 px. The sentence "This dashboard's queries run as exactly these groups." is gone, as the design has none.
+      - Stop preview stays a link, so it can be opened as one. On the accent its focus ring is drawn in the banner's ink, since an accent ring would vanish there (AC-176).
+      - With sign-in off, phase 1's bar and its words are kept.
+    - **What these groups reach, as one list (design 08 index, note 4: "folders, then policies"):**
+      - First the folders granted, each with its eye (view only) or pencil (read-write), as the Access chip draws them.
+      - Then those seen from above, in secondary with no icon: "Shared / Sales (above) · its dashboards, view only".
+      - Then each cube and view: "orders · everything · No access policy: open to every context.", with its status icon and the file declaring its policy.
+  - **Kept, where the design can't be followed word for word (overturnable):**
+    - The design's "policy emea_only" names a policy, but Cube's access policies have no names. The row links the file that declares it.
+    - Each row keeps policies.ts's own sentence (the design has "no policy", "rows where region = 'EMEA'") and its status icon (direction.md rule 3), which the design draws without.
+  - **Open, for the user:** the design draws the previewed dashboard beside the pane on the Security page, under the banner, with "Dashboard to preview" holding the chosen one ("Revenue overview · Sales / EMEA"). Today the dashboard opens at its own address under the banner, from a list of "Preview _title_" links. Whether the frame shows one page or the two steps side by side isn't settled by its notes.
+  - **Left, as status.md has it:** state E's unavailable tile ("Not available to these groups: …", backlog §6(c), with xcube's folder gate).
+  - **The cold review (PASS) found two small bugs and three differences from the design, all fixed:**
+    - The banner's group names were in the browser's monospace, not the code face (`--wc-font-code`).
+    - The pane's "Groups" heading no longer matched "What these groups reach". Both are now design 08's section heading: 12/600, secondary, in capitals.
+    - Cube and view names are in the UI face, bold, as drawn. Stop preview has the design's 12 px padding. The cubes start 12 px below the folders.
+    - The list isn't drawn while it has nothing in it.
+    - `preview-as.spec.ts` now also checks the code face, and Stop preview's focus ring in the banner's ink. The sign-in-off banner test checks that no title enters phase 1's words.
+    - Left as nits: an "unknown" row reads "Cube decides · Cube decides: …"; a cube with two applying policies joins them with the same " · ". Granted folders now come before those seen from above, as drawn, in place of T438's tree order.
+  - **Tests so far:**
+    - web unit: 2,427, all passing;
+    - phase-1 `security.spec.ts`, sign-in off, in Chrome: 5/5. One test lost its browser at launch, and passed on its rerun.
+    - `security/preview-as.spec.ts` waits for wechart_security, with T475's two specs. T630 is unticked until it passes.
 - *The designs of the phase-2 tasks already planned:*
   - T462: design 03 (a data source's settings);
   - T331: design 09, and design 04's shared-folder and read-only states (UX-230, UX-231, UX-237);

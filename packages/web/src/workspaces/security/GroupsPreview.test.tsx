@@ -136,16 +136,27 @@ describe('previewing as groups (T438, AC-166; design 08, state E)', () => {
         .map((chip) => chip.textContent),
     ).toEqual(['emea-viewers']);
     // Looked up each time: the list is drawn anew as each answer comes.
-    const reached = () =>
-      within(screen.getByRole('list', { name: 'What these groups reach' }))
-        .getAllByRole('listitem')
-        .map((row) => row.textContent);
+    const rows = () =>
+      within(screen.getByRole('list', { name: 'What these groups reach' })).getAllByRole(
+        'listitem',
+      );
+    const reached = () => rows().map((row) => row.textContent);
+    /**
+     * T630 (AC-343; design 08, state E, as drawn): one list. The folders
+     * granted, each with its eye or pencil, then those seen from above,
+     * "(above)", with none; then the model's cubes and views.
+     */
     await waitFor(() =>
       expect(reached()).toEqual([
-        'Shared / Sales · its dashboards, view only',
         'Shared / Sales / EMEA · view only',
+        'Shared / Sales (above) · its dashboards, view only',
+        expect.stringMatching(/^customers · some members or rows/),
+        expect.stringMatching(/^orders · everything/),
       ]),
     );
+    expect(
+      rows().map((row) => row.querySelector('[data-icon]')?.getAttribute('data-icon')),
+    ).toEqual(['eye', undefined, 'warn', 'ok']);
 
     await addGroup('finance');
     // Each group its own parameter (T438's review).
@@ -159,7 +170,14 @@ describe('previewing as groups (T438, AC-166; design 08, state E)', () => {
     );
     // Removed as a chip, and asked again without it; focus to the chip in its place.
     await userEvent.click(screen.getByRole('button', { name: 'Remove emea-viewers' }));
-    await waitFor(() => expect(reached()).toEqual(['Shared / Finance · read-write']));
+    await waitFor(() =>
+      expect(reached()).toEqual([
+        'Shared / Finance · read-write',
+        expect.stringMatching(/^customers · nothing/),
+        expect.stringMatching(/^orders · everything/),
+      ]),
+    );
+    expect(rows()[0]?.querySelector('[data-icon]')?.getAttribute('data-icon')).toBe('pencil');
     await waitFor(() =>
       expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Remove finance' })),
     );
@@ -179,7 +197,12 @@ describe('previewing as groups (T438, AC-166; design 08, state E)', () => {
         within(screen.getByRole('list', { name: 'What these groups reach' }))
           .getAllByRole('listitem')
           .map((row) => row.textContent),
-      ).toEqual(['Shared / Finance · view only', 'Shared / Finance / Budgets · read-write']),
+      ).toEqual([
+        'Shared / Finance / Budgets · read-write',
+        'Shared / Finance (above) · view only',
+        expect.stringMatching(/^customers · nothing/),
+        expect.stringMatching(/^orders · everything/),
+      ]),
     );
   });
 
@@ -202,18 +225,30 @@ describe('previewing as groups (T438, AC-166; design 08, state E)', () => {
     expect(screen.queryByRole('group', { name: 'Groups the policies name' })).toBeNull();
   });
 
-  it('says what the model’s policies give them', async () => {
+  // T630: in the same list as the folders, after them (design 08, state E).
+  it('says what the model’s policies give them, in what these groups reach', async () => {
     serve();
     open();
     await addGroup('emea-viewers');
-    const cubes = await screen.findByRole('region', { name: 'What the model gives them' });
-    expect(within(cubes).getByTestId('access-customers').textContent).toContain(
-      'Some members or rows',
+    const reach = await screen.findByRole('list', { name: 'What these groups reach' });
+    await waitFor(() =>
+      expect(within(reach).getByTestId('access-customers').textContent).toContain(
+        'customers · some members or rows',
+      ),
     );
-    expect(within(cubes).getByTestId('access-customers').textContent).toContain(
-      'cubes/customers.yml',
+    expect(within(reach).getByTestId('access-customers').textContent).toContain(
+      'emea-viewers: all; ',
     );
-    expect(within(cubes).getByTestId('access-orders').textContent).toContain('Everything');
+    expect(
+      within(within(reach).getByTestId('access-customers'))
+        .getByRole('link', { name: 'cubes/customers.yml' })
+        .getAttribute('href'),
+    ).toContain('customers.yml');
+    expect(within(reach).getByTestId('access-orders').textContent).toContain(
+      'orders · everything · No access policy: open to every context.',
+    );
+    // One section, as drawn: no second heading for the model.
+    expect(screen.queryByRole('region', { name: 'What the model gives them' })).toBeNull();
   });
 
   it('opens a dashboard as exactly those groups, never as none', async () => {

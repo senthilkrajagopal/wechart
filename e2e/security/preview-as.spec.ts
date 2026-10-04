@@ -74,6 +74,10 @@ test.describe('Preview as groups (T438, AC-166)', () => {
         `Shared / Previewed ${RUN} · view only`,
         `Shared / Previewed ${RUN} / EMEA · view only`,
       ]);
+      // T630 (design 08, state E, as drawn): the model's cubes in the same
+      // list, after the folders, and no second section for them.
+      await expect(reach.getByTestId('access-orders')).toContainText(/^orders · /);
+      await expect(pane.getByRole('region', { name: 'What the model gives them' })).toHaveCount(0);
 
       // Every query the previewed dashboard makes carries exactly those groups.
       const contexts: unknown[] = [];
@@ -87,7 +91,36 @@ test.describe('Preview as groups (T438, AC-166)', () => {
       await pane.getByRole('link', { name: `Preview Preview board ${RUN}` }).click();
       await expect(page).toHaveURL(new RegExp(`/dashboards/${board}`));
       const banner = page.getByTestId('preview-banner');
-      await expect(banner).toContainText(`Previewing as sales-ro and ${EMEA}.`);
+      // T630 (design 08, state E, as drawn): the groups and the dashboard, on the accent.
+      await expect(banner).toContainText(
+        `Previewing as sales-ro and ${EMEA} · Preview board ${RUN}`,
+      );
+      const accent = await page.evaluate(() => {
+        const probe = document.createElement('div');
+        probe.style.background = 'var(--wc-accent)';
+        document.body.append(probe);
+        const said = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return said;
+      });
+      await expect(banner).toHaveCSS('background-color', accent);
+      // Each group in the code face (direction.md §3; T630's review).
+      await expect(banner.locator('b > code').first()).toHaveCSS('font-family', /IBM Plex Mono/);
+      // Stop preview's focus ring in the banner's ink, not the accent it sits on (AC-176).
+      const stop = banner.getByRole('link', { name: 'Stop preview' });
+      await stop.focus();
+      await page.keyboard.press('Shift+Tab');
+      await page.keyboard.press('Tab');
+      await expect(stop).toBeFocused();
+      const ink = await page.evaluate(() => {
+        const probe = document.createElement('div');
+        probe.style.color = 'var(--wc-text-on-accent)';
+        document.body.append(probe);
+        const said = getComputedStyle(probe).color;
+        probe.remove();
+        return said;
+      });
+      await expect(stop).toHaveCSS('outline-color', ink);
       // Its tile asked, and every ask carried the groups and nothing else.
       await expect.poll(() => contexts.length).toBeGreaterThan(0);
       for (const context of contexts) expect(context).toEqual({ groups: ['sales-ro', EMEA] });

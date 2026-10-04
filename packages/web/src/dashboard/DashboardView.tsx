@@ -5031,7 +5031,10 @@ export function DashboardView({
 
   return (
     <QueriesAs preview={preview} item={item}>
-      {preview === undefined ? null : <PreviewBanner context={preview} onExit={onExitPreview} />}
+      {preview === undefined ? null : (
+        // Named after the groups, as design 08's state E has it (T630).
+        <PreviewBanner context={preview} onExit={onExitPreview} title={document.title} />
+      )}
       {queryFor === undefined || viewedQuery === undefined ? null : (
         <ViewQuery
           title={chartTitleOf(queryFor.chartId) ?? 'this chart'}

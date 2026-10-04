@@ -3,7 +3,8 @@ import { Fragment, useId, useRef, useState } from 'react';
 
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { DASHBOARD_LIMIT, modelHref, previewHref, useDashboards, VERDICTS } from './ContextPreview';
-import { effectiveAccess, type AccessModel } from './policies';
+import { AccessIcon } from '../explore/AccessChip';
+import { effectiveAccess, type Access, type AccessModel } from './policies';
 
 const NO_MODEL: AccessModel = { declared: [], open: [], reaches: {} };
 
@@ -48,6 +49,14 @@ const reachOf = (folder: Reached) =>
     : folder.reach === 'above' && folder.kinds === 'dashboards'
       ? 'its dashboards, view only'
       : 'view only';
+
+/** What a cube or view gives them, mid-line as design 08 says it ("orders · everything"). */
+const GIVES: Record<Access['access'], string> = {
+  full: 'everything',
+  limited: 'some members or rows',
+  denied: 'nothing',
+  unknown: 'Cube decides',
+};
 
 async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url);
@@ -204,64 +213,82 @@ export function GroupsPreview({
         )}
       </div>
 
-      {/* What these groups reach: the folder check's answer, by path (state E). */}
-      {/* Said as it changes (T438's review). */}
+      {/*
+        What these groups reach, in one list as design 08 draws it (state E;
+        T630): the folders the folder check lets them into, by path and how,
+        those granted first, each with its eye or pencil, then those seen from
+        above; then what the model's own policies give them within that
+        (AC-232). Said as it changes (T438's review).
+      */}
       <section
-        className="groups-preview__reach"
+        className="groups-preview__reach context-preview__access"
         aria-labelledby={`${ids.group}-reach`}
         aria-live="polite"
       >
         <h3 id={`${ids.group}-reach`}>What these groups reach</h3>
         {groups.length === 0 ? (
           <p className="context-preview__note">Choose one or more AD groups to preview as.</p>
-        ) : reach.isError ? (
-          <StateLine kind="err">
-            What they reach couldn’t be read ({reach.error.message}).
-          </StateLine>
-        ) : reach.data === undefined ? (
-          <p className="context-preview__note">Reading what they reach…</p>
-        ) : reach.data.folders.length === 0 ? (
-          <p className="context-preview__note">These groups reach no folder.</p>
         ) : (
-          <ul aria-label="What these groups reach">
-            {reach.data.folders.map((folder) => (
-              <li key={folder.id}>
-                {folder.path.join(' / ')} · {reachOf(folder)}
-              </li>
-            ))}
-          </ul>
+          <>
+            {reach.isError ? (
+              <StateLine kind="err">
+                What they reach couldn’t be read ({reach.error.message}).
+              </StateLine>
+            ) : reach.data === undefined ? (
+              <p className="context-preview__note">Reading what they reach…</p>
+            ) : reach.data.folders.length === 0 ? (
+              <p className="context-preview__note">These groups reach no folder.</p>
+            ) : null}
+            {(reach.data?.folders.length ?? 0) === 0 && access.length === 0 ? null : (
+              <ul aria-label="What these groups reach">
+                {[
+                  ...(reach.data?.folders ?? []).filter((folder) => folder.reach !== 'above'),
+                  ...(reach.data?.folders ?? []).filter((folder) => folder.reach === 'above'),
+                ].map((folder) =>
+                  folder.reach === 'above' ? (
+                    <li key={folder.id} className="groups-preview__above">
+                      {folder.path.join(' / ')} (above) · {reachOf(folder)}
+                    </li>
+                  ) : (
+                    <li key={folder.id}>
+                      <AccessIcon name={folder.reach === 'write' ? 'pencil' : 'eye'} />
+                      {folder.path.join(' / ')} · {reachOf(folder)}
+                    </li>
+                  ),
+                )}
+                {access.map((each, at) => (
+                  <li
+                    key={each.object}
+                    data-testid={`access-${each.object}`}
+                    className={at === 0 ? 'groups-preview__first-object' : undefined}
+                  >
+                    <StatusIcon kind={VERDICTS[each.access].icon} />
+                    {/* On one line, as drawn: "orders · everything · no policy". */}
+                    <span>
+                      <span className="context-preview__object">{each.object}</span> ·{' '}
+                      <span className="context-preview__verdict">{GIVES[each.access]}</span> ·{' '}
+                      <span className="groups-preview__why">{each.why}</span>
+                      {each.paths.map((path) => (
+                        <Fragment key={path}>
+                          {' · '}
+                          <a className="context-preview__source" href={modelHref(path)}>
+                            {path}
+                          </a>
+                        </Fragment>
+                      ))}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {unread.length === 0 ? null : (
+              <p className="context-preview__note">
+                Not read here: {unread.join('; ')}. Cubes and views defined there are not listed.
+              </p>
+            )}
+          </>
         )}
       </section>
-
-      {/* What the model's own policies give them, within that (AC-232). */}
-      {groups.length === 0 ? null : (
-        <section className="context-preview__access" aria-label="What the model gives them">
-          <h3>What the model gives them</h3>
-          <ul>
-            {access.map((each) => (
-              <li key={each.object} data-testid={`access-${each.object}`}>
-                <StatusIcon kind={VERDICTS[each.access].icon} />
-                <span className="context-preview__object">{each.object}</span>{' '}
-                <span className="context-preview__verdict">{VERDICTS[each.access].said}</span>{' '}
-                <span className="context-preview__why">{each.why}</span>
-                {each.paths.map((path) => (
-                  <Fragment key={path}>
-                    {' '}
-                    <a className="context-preview__source" href={modelHref(path)}>
-                      {path}
-                    </a>
-                  </Fragment>
-                ))}
-              </li>
-            ))}
-          </ul>
-          {unread.length === 0 ? null : (
-            <p className="context-preview__note">
-              Not read here: {unread.join('; ')}. Cubes and views defined there are not listed.
-            </p>
-          )}
-        </section>
-      )}
 
       {/* The dashboard to open as them. */}
       <div className="field">

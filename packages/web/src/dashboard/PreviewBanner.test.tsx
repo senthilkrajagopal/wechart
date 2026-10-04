@@ -11,27 +11,42 @@ import { PreviewBanner } from './PreviewBanner';
  * preview as groups says them in words, with "Stop preview"; any other
  * context, and sign-in off, keep phase 1's words and the context itself.
  */
-function banner(security: 'oidc' | 'off', context: Record<string, unknown>) {
+function banner(security: 'oidc' | 'off', context: Record<string, unknown>, title?: string) {
   const client = new QueryClient();
   client.setQueryData(ME_QUERY.queryKey, { name: 'Super Admin', security });
   render(
     <QueryClientProvider client={client}>
-      <PreviewBanner context={context} onExit={undefined} />
+      <PreviewBanner context={context} onExit={undefined} title={title} />
     </QueryClientProvider>,
   );
   return screen.getByTestId('preview-banner');
 }
 
 describe('the preview banner (T438, AC-166)', () => {
-  it('names the groups in words, with sign-in on', () => {
-    const shown = banner('oidc', { groups: ['sales-ro', 'emea-viewers'] });
-    expect(shown.textContent).toContain('Previewing as sales-ro and emea-viewers.');
-    expect(shown.querySelector('a')?.textContent).toBe('Stop preview');
+  /**
+   * T630 (AC-166, AC-343; design 08, state E, as drawn): the eye, "Previewing
+   * as sales-ro and emea-viewers · Revenue overview", each group in the code
+   * face and bold, and Stop preview as a button.
+   */
+  it('names the groups and the dashboard, with sign-in on, as design 08 draws it', () => {
+    const shown = banner('oidc', { groups: ['sales-ro', 'emea-viewers'] }, 'Revenue overview');
+    expect(shown.textContent).toBe(
+      'Previewing as sales-ro and emea-viewers · Revenue overviewStop preview',
+    );
+    expect(shown.className).toContain('preview-banner--groups');
+    expect(shown.querySelector('svg')?.getAttribute('data-icon')).toBe('eye');
+    expect([...shown.querySelectorAll('b > code')].map((code) => code.textContent)).toEqual([
+      'sales-ro',
+      'emea-viewers',
+    ]);
+    const stop = shown.querySelector('a');
+    expect(stop?.textContent).toBe('Stop preview');
+    expect(stop?.className).toContain('btn');
   });
 
   it('keeps each group’s name whole, whatever it says (T438’s review)', () => {
-    const shown = banner('oidc', { groups: ['Sales and Marketing', 'emea', 'finance'] });
-    expect(shown.textContent).toContain('Previewing as Sales and Marketing, emea and finance.');
+    const shown = banner('oidc', { groups: ['Sales and Marketing', 'emea', 'finance'] }, 'Q3');
+    expect(shown.textContent).toContain('Previewing as Sales and Marketing, emea and finance · Q3');
     expect([...shown.querySelectorAll('code')].map((code) => code.textContent)).toEqual([
       'Sales and Marketing',
       'emea',
@@ -45,9 +60,12 @@ describe('the preview banner (T438, AC-166)', () => {
   });
 
   it('keeps phase 1’s context, word for word, with sign-in off', () => {
-    const shown = banner('off', { groups: ['sales'] });
+    const shown = banner('off', { groups: ['sales'] }, 'Revenue overview');
     expect(shown.textContent).toContain('Previewing as {"groups":["sales"]}.');
     expect(shown.querySelector('a')?.textContent).toBe('Exit preview');
+    // Phase 1's bar, not design 08's, its words as they were (T630's review).
+    expect(shown.className).not.toContain('preview-banner--groups');
+    expect(shown.textContent).not.toContain('Revenue overview');
   });
 
   it('shows any other context as it is, even signed in', () => {

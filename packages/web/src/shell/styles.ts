@@ -5057,8 +5057,59 @@ main:has(.review-view) {
   font-size: 13px;
   font-weight: 600;
 }
-.preview-banner code { overflow-wrap: anywhere; font-weight: 400; }
+.preview-banner code { overflow-wrap: anywhere; font-family: var(--wc-font-code); font-weight: 400; }
 .preview-banner a { margin-left: auto; color: var(--wc-text-primary); }
+/* A preview as groups, with sign-in on (T630; design 08, state E, as drawn):
+   on the accent, 12 px, the eye, each group bold in the code face, and Stop
+   preview as a 24 px button outlined in the banner's own ink. */
+.preview-banner--groups {
+  gap: 10px;
+  padding: 8px 24px;
+  border-bottom-color: var(--wc-accent);
+  background: var(--wc-accent);
+  color: var(--wc-text-on-accent);
+  font-size: var(--wc-text-xs-size);
+  line-height: 16px;
+  font-weight: 400;
+}
+.preview-banner--groups .preview-banner__said { flex: 1; min-width: 0; }
+.preview-banner--groups b code { font-weight: 600; }
+.preview-banner--groups a.btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  height: 24px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--wc-text-on-accent) 60%, transparent);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--wc-text-on-accent);
+  text-decoration: none;
+}
+.preview-banner--groups a.btn:hover { background: color-mix(in srgb, var(--wc-text-on-accent) 12%, transparent); }
+/* The accent ring would vanish on the accent: in the banner's ink (AC-176). */
+.preview-banner--groups a.btn:focus-visible { outline-color: var(--wc-text-on-accent); }
+/* What these groups reach, in one list (T630; design 08, state E): 12 px rows
+   4 px apart, the folders' icons and those seen from above in secondary, and
+   the model's cubes after the folders, each on one line. */
+.groups-preview__reach ul { gap: 4px; }
+.groups-preview__reach li > svg[data-icon='eye'],
+.groups-preview__reach li > svg[data-icon='pencil'] { flex: none; color: var(--wc-text-secondary); }
+.groups-preview__above { color: var(--wc-text-secondary); }
+.groups-preview__first-object { margin-top: 8px; }
+/* Each cube or view by its name in the UI face, bold, as drawn. */
+.groups-preview__reach .context-preview__object { font-family: inherit; }
+/* The pane's section headings alike, as design 08's .sect > h3. */
+.groups-preview h3 {
+  margin: 0 0 6px;
+  font-size: var(--wc-text-xs-size);
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--wc-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.groups-preview__why { color: var(--wc-text-secondary); overflow-wrap: anywhere; }
 /* A chart's SQL as the previewed context (T174, AC-168): Cube's text as it
    wrote it, scrolling within the dialog rather than widening it. */
 .dialog.generated-sql { width: min(760px, calc(100vw - 32px)); max-width: none; max-height: calc(100vh - 64px); overflow: auto; }
