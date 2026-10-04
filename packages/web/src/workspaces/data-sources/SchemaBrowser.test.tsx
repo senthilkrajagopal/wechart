@@ -222,20 +222,21 @@ describe('the schema browser (T539, AC-386)', () => {
     expect(within(region()).queryByRole('treeitem', { name: /more tables/ })).toBeNull();
   });
 
-  it('says a data source not yet landed shows its tables once landed, as a note, not an alert', async () => {
+  it('says what a data source waits on before its tables can be read, as a note, not an alert', async () => {
+    // As the API says it of one made new in My workspace with nowhere to go (T547).
     serve({
       schemas: () => ({
         status: 409,
         body: {
           error:
-            'Its tables show here once it’s landed: for now, this list holds landed data sources’ tables only.',
+            'Choose the folder it is to go to first: its tables are read in your workspace’s preview, which places it there.',
         },
       }),
     });
     open();
-    const note = await within(region()).findByText(/Its tables show here once it’s landed/);
+    const note = await within(region()).findByText(/Choose the folder it is to go to first/);
     expect(note.textContent).toBe(
-      'Its tables show here once it’s landed: for now, this list holds landed data sources’ tables only.',
+      'Choose the folder it is to go to first: its tables are read in your workspace’s preview, which places it there.',
     );
     expect(within(region()).queryByRole('alert')).toBeNull();
   });

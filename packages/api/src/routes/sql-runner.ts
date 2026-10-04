@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { isDeepStrictEqual } from 'node:util';
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
@@ -257,8 +256,7 @@ export function registerSqlRunner(
     readonly runner: SqlRunnerOptions | undefined;
     /** Each user's runs, one going at a time (T533); unset, none is held back. */
     readonly runs: SqlRunStore | undefined;
-    /** Its envelopes too, to tell a workspace copy that connects as its original (T539). */
-    readonly store: Pick<DataSourceStore, 'get' | 'sealedOf'>;
+    readonly store: Pick<DataSourceStore, 'get'>;
     readonly switches: SqlRunnerSwitchStore | undefined;
     readonly access: DataSourceAccess;
     /** The data source, where the user may see it; else the answer already sent. */
@@ -699,18 +697,21 @@ export function registerSqlRunner(
    * types, as Cube's introspection lists them, by the name xcube serves it
    * under; only to those who may run SQL on it, by the run's own rule.
    *
-   * Introspection is asked with xcube's service credential, which names no
-   * workspace overlay (`CubeClient.introspect`): it lists the model's landed
-   * connections (research xcube-slice-6.md, "Serving"). Whether it could read
-   * an overlay's is xcube's to say, and asked (T547). Until then, a workspace
-   * copy that connects as its original does is browsed as its original, the
-   * same database as the same login; any other copy, and one made new there,
-   * shows its tables once landed, never another's.
+   * A workspace's data source is read as its SQL runs, in its workspace's
+   * overlay: xcube's introspection of an overlay's own data source,
+   * `?overlay=` under wechart's service credential (T547; xcube 93a5f7a73b,
+   * research xcube-93a5f7a73b.md). So a copy, a copy pointed elsewhere and
+   * one made new there each list their own catalog, never a landed one's.
+   * Only wechart names the overlay: `queryOf` drops any the browser sends.
    */
   const browse = async (
     request: FastifyRequest,
     reply: FastifyReply,
-    read: (catalog: Catalog, name: string) => Promise<{ status: number; body: unknown }>,
+    read: (
+      catalog: Catalog,
+      name: string,
+      overlay: string | undefined,
+    ) => Promise<{ status: number; body: unknown }>,
   ) => {
     const source = await reached(request, reply, 'read');
     if (source === undefined) return reply;
@@ -722,63 +723,70 @@ export function registerSqlRunner(
         error:
           'Its tables are read through Cube’s introspection, which this deployment doesn’t offer.',
       });
-    const landed = workspace === null ? source : await landedAs(source);
-    if (landed === undefined)
+    const ids = await runner.folders();
+    if (workspace === null) {
+      const xcubeId = ids.get(source.folderId);
+      if (xcubeId === undefined)
+        return reply.status(409).send({
+          error: 'This data source’s folder isn’t in xcube yet, so its tables can’t be read.',
+        });
+      const { status, body } = await read(
+        runner.catalog,
+        connectionNameOf(xcubeId, source.name),
+        undefined,
+      );
+      return reply.status(status).send(body);
+    }
+    // In its workspace's overlay, a copy stands in its original's folder, a
+    // new one in its target's (T347), under its own name: as its SQL runs.
+    const placed = ids.get(source.origin?.folderId ?? source.targetFolderId ?? '');
+    if (runner.overlayOf === undefined || placed === undefined)
       return reply.status(409).send({
         error:
-          source.origin === null
-            ? 'Its tables show here once it’s landed: for now, this list holds landed data sources’ tables only.'
-            : 'This copy connects otherwise than its original, and for now this list holds landed data sources’ tables only: its own show here once it’s landed.',
+          runner.overlayOf === undefined
+            ? 'Its tables are read in your workspace’s preview, which this deployment doesn’t have.'
+            : 'Choose the folder it is to go to first: its tables are read in your workspace’s preview, which places it there.',
       });
-    const xcubeId = (await runner.folders()).get(landed.folderId);
-    if (xcubeId === undefined)
+    const overlay = await runner.overlayOf(workspace);
+    if (overlay === undefined || 'problem' in overlay)
       return reply.status(409).send({
-        error: 'This data source’s folder isn’t in xcube yet, so its tables can’t be read.',
+        error: `Your workspace can’t be previewed as it is, so its tables can’t be read: ${
+          overlay === undefined ? 'it holds nothing to preview' : overlay.problem
+        }`,
       });
-    const { status, body } = await read(runner.catalog, connectionNameOf(xcubeId, landed.name));
+    const { status, body } = await read(
+      runner.catalog,
+      connectionNameOf(placed, source.name),
+      overlay.id,
+    );
+    // xcube's 404 here is the overlay, or its data source in it, gone since it
+    // was made sure of: said as a run says it, never with its id (T547's review).
+    if (status === 404)
+      return reply
+        .status(404)
+        .send({ error: 'xcube no longer holds your workspace’s preview. Open the SQL tab again.' });
     return reply.status(status).send(body);
   };
-  /** A workspace copy's original, where the copy connects just as it does: the same catalog. */
-  const landedAs = async (copy: DataSource): Promise<DataSource | undefined> => {
-    if (copy.origin === null) return undefined;
-    const original = await store.get(copy.origin.id);
-    if (
-      original === undefined ||
-      original.driver !== copy.driver ||
-      original.authMethod !== copy.authMethod ||
-      !isDeepStrictEqual(original.fields, copy.fields)
-    )
-      return undefined;
-    const [mine, theirs] = await Promise.all([
-      store.sealedOf(copy.id),
-      store.sealedOf(original.id),
-    ]);
-    const fields = Object.keys(mine.sealed);
-    const same =
-      fields.length === Object.keys(theirs.sealed).length &&
-      fields.every(
-        (field) =>
-          mine.sealed[field]?.ct === theirs.sealed[field]?.ct &&
-          mine.sealed[field]?.enc === theirs.sealed[field]?.enc,
-      );
-    return same ? original : undefined;
-  };
   app.get('/api/data-sources/:id/catalog/schemas', USER, (request, reply) =>
-    browse(request, reply, (catalog, name) => catalog.schemas(name, queryOf(request.url))),
+    browse(request, reply, (catalog, name, overlay) =>
+      catalog.schemas(name, queryOf(request.url), overlay),
+    ),
   );
   app.get('/api/data-sources/:id/catalog/tables', USER, (request, reply) =>
-    browse(request, reply, (catalog, name) => catalog.tables(name, queryOf(request.url))),
+    browse(request, reply, (catalog, name, overlay) =>
+      catalog.tables(name, queryOf(request.url), overlay),
+    ),
   );
   // Its body read once the user may browse, as introspection's own route does.
   app.post('/api/data-sources/:id/catalog/columns', USER, (request, reply) =>
-    browse(request, reply, async (catalog, name) => {
+    browse(request, reply, async (catalog, name, overlay) => {
       const tables = tablesOf(request.body);
       return tables === undefined
         ? {
             status: 400,
             body: { error: 'Name the tables as a list, each with its schema and table.' },
           }
-        : catalog.columns(name, tables);
+        : catalog.columns(name, tables, overlay);
     }),
   );
 

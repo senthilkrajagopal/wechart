@@ -76,6 +76,54 @@ describe('browsing a data source through wechart (AC-139)', () => {
     await app.close();
   });
 
+  it('never passes on an overlay the browser names: xcube would read another workspace’s data source by it (T547)', async () => {
+    const { app, sent } = cubeAnswering((path) =>
+      path.includes('/tables')
+        ? json({ tables: [], total: 0 })
+        : json({ schemas: [{ name: 'public' }] }),
+    );
+    for (const url of [
+      '/api/introspection/sources/default/schemas?overlay=ws-theirs',
+      '/api/introspection/sources/default/tables?schema=public&overlay=ws-theirs&limit=5',
+      '/api/introspection/sources/default/tables?overlay=a&overlay=b&schema=public',
+    ])
+      expect((await app.inject({ url })).statusCode, url).toBe(200);
+    for (const route of ['columns', 'scaffold'])
+      await app.inject({
+        method: 'POST',
+        url: `/api/introspection/sources/default/${route}?overlay=ws-theirs`,
+        payload: { tables: [{ schema: 'public', table: 'orders' }] },
+      });
+    expect(sent.map(({ path }) => path).filter((path) => path.includes('overlay'))).toEqual([]);
+    expect(sent.slice(0, 3).map(({ path }) => path)).toEqual([
+      `${BASE}/default/schemas`,
+      `${BASE}/default/tables?schema=public&limit=5`,
+      `${BASE}/default/tables?schema=public`,
+    ]);
+    await app.close();
+  });
+
+  it('passes on only the parameters the catalog routes take, as written, whatever else is sent (T547’s review)', async () => {
+    const { app, sent } = cubeAnswering(() => json({ tables: [], total: 0 }));
+    // Express's query parser reads each of these as `overlay` (qs: brackets,
+    // percent-encoding), or as a parameter xcube's routes don't take.
+    for (const smuggled of [
+      '%5Boverlay%5D=ws-theirs',
+      '[overlay]=ws-theirs',
+      'ov%65rlay=ws-theirs',
+      'overlay[]=ws-theirs',
+      'Overlay=ws-theirs',
+      'other=1',
+    ])
+      await app.inject({
+        url: `/api/introspection/sources/default/tables?schema=public&${smuggled}&search=ord&type=view&limit=5&offset=10`,
+      });
+    expect(new Set(sent.map(({ path }) => path))).toEqual(
+      new Set([`${BASE}/default/tables?schema=public&search=ord&type=view&limit=5&offset=10`]),
+    );
+    await app.close();
+  });
+
   it('reads tables’ columns, and generates their cubes as YAML', async () => {
     const { app, sent } = cubeAnswering((path) =>
       path.endsWith('/columns')

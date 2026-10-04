@@ -43,9 +43,13 @@ import { describe, expect, it } from 'vitest';
  * T545, AC-378, AC-379: `6d9673ccda` answers a run stopped at its time cap
  * or cancelled with the rows it read before, `truncated: "stopped"`; no
  * migration (research xcube-6d9673ccda.md).
+ *
+ * T547, AC-386: `93a5f7a73b` reads a workspace overlay's own data source's
+ * catalog, `?overlay=` on the introspection routes, under the service
+ * credential alone; no migration (research xcube-93a5f7a73b.md).
  */
 const IMAGE =
-  'ghcr.io/senthilkrajagopal/xcube:v1.7.45-6d9673ccda@sha256:b876ef9e8f9a401a77bb759f9d054aadb412b91ad5ea4425d10c918fc8fd89f4';
+  'ghcr.io/senthilkrajagopal/xcube:v1.7.45-93a5f7a73b@sha256:3b8530173a367ae2c41cb22dc9430bd651f7cb5ae909f86a3912c6b84e86f9cd';
 /** Slice 2's image, built locally: only the way back names it. */
 const SLICE_2_IMAGE = 'xcube:v1.7.45-83cb9f0888';
 
@@ -75,7 +79,7 @@ describe('docs/deploy.md pulls the fork’s published image by digest (T449, AC-
 
   it('names the image the release runs, and slice 2’s only for the way back, with how to build it', () => {
     // No other xcube tag, and no build of the package under its old name.
-    expect(deploy).not.toMatch(/xcube:v1\.7\.45-(?!6d9673ccda@|83cb9f0888|feat-xcube|\$|<)/);
+    expect(deploy).not.toMatch(/xcube:v1\.7\.45-(?!93a5f7a73b@|83cb9f0888|feat-xcube|\$|<)/);
     expect(deploy).not.toContain('cube:v1.7.45-introspection-');
     // Slice 2's image was built locally and never published: the way back says how.
     const back = deploy.slice(deploy.indexOf('### Items mode, and the way back'));

@@ -17,6 +17,7 @@ import { sqlRunnerSwitches } from '../repos/sql-runner-switches';
 import { buildServer } from '../server';
 import { xcubeAdmin } from '../xcube/client';
 import { fakeXcube, FAKE_ADMIN_TOKEN } from '../xcube/fake';
+import { workspaceOverlayIdOf } from '../xcube/overlays';
 import { xcubeSqlRunner } from '../xcube/sql-runner';
 import { removeProjectFolders, TEST_TIME_ZONE } from './project-folder.fixture';
 
@@ -30,10 +31,8 @@ import { removeProjectFolders, TEST_TIME_ZONE } from './project-folder.fixture';
  * `writer` (`sales-rw`) writes /Sales; `reader` (`sales-ro`) reads it;
  * `manager` writes /Sales/Sub, below it; `super` is a Super-Admin.
  *
- * A copy in My workspace isn't in Cube's catalog: introspection lists the
- * model's own connections for the service token, which names no overlay. One
- * that connects as its original does has its original's catalog; any other
- * shows its tables once landed.
+ * A data source in My workspace is read in its workspace's overlay, as its
+ * SQL runs (T547; xcube 93a5f7a73b's `?overlay=`), named by wechart alone.
  */
 const MARK = `sqlc${randomUUID().replaceAll('-', '').slice(0, 8)}`;
 const MODEL = `sqlc-${MARK}`;
@@ -101,6 +100,20 @@ beforeAll(async () => {
       });
       if (!parsed.pathname.startsWith(`${BASE}/${connection}`))
         return json({ error: `Unknown data source: '${parsed.pathname}'` }, 404);
+      // A workspace overlay's own data source, as xcube 93a5f7a73b reads it (T547):
+      // its own catalog, never a landed one's.
+      const overlay = parsed.searchParams.get('overlay');
+      // An overlay gone from xcube, as 93a5f7a73b answers it.
+      if (overlay !== null && parsed.pathname.includes(`__expired_`))
+        return json(
+          {
+            error: `No overlay "${overlay}": it expired, was dropped, or never was`,
+            code: 'unknown_overlay',
+          },
+          404,
+        );
+      if (overlay !== null && parsed.pathname.endsWith('/schemas'))
+        return json({ schemas: [{ name: `own_${overlay.slice(-6)}` }] });
       if (parsed.pathname.endsWith('/schemas'))
         return json({ schemas: [{ name: 'public' }, { name: 'sales' }] });
       if (parsed.pathname.endsWith('/tables'))
@@ -237,6 +250,13 @@ describe('the schema browser of a data source (T539, AC-386)', () => {
       expect(schemas.statusCode, schemas.body).toBe(200);
       expect(schemas.json()).toEqual({ schemas: [{ name: 'public' }, { name: 'sales' }] });
     }
+    // An overlay the browser names isn't passed on: only wechart names one (T547).
+    const before = asked.length;
+    const named = await browse('writer', 'tables', '?schema=sales&overlay=ws-theirs');
+    expect(named.statusCode, named.body).toBe(200);
+    expect(asked.slice(before).map((each) => each.path)).toEqual([
+      `${BASE}/fsales__warehouse_${MARK}/tables?schema=sales`,
+    ]);
     const tables = await browse('writer', 'tables', '?schema=sales');
     expect(tables.statusCode, tables.body).toBe(200);
     expect(tables.json()).toEqual({
@@ -349,52 +369,143 @@ async function copied(tag: string) {
 }
 const schemasOf = (who: string, id: string) =>
   as(who, { method: 'GET', url: `/api/data-sources/${id}/catalog/schemas` });
+/** The workspace a folder is in: its top folder below the root. */
+const workspaceOf = async (folderId: string): Promise<string> => {
+  let at = folderId;
+  for (let hops = 0; hops < 10; hops += 1) {
+    const folder = await docs().get('folder', at);
+    const parent = folder?.body['folderId'];
+    if (typeof parent !== 'string' || parent === 'root' || parent === '') return at;
+    at = parent;
+  }
+  return at;
+};
 
-describe('the schema browser in My workspace (T539, AC-386, AC-383)', () => {
-  it('lists an unchanged copy’s catalog to its owner as its original’s, which Cube holds', async () => {
+/**
+ * T547 (AC-386; R59, AC-386 kept whole): a workspace data source is browsed
+ * as its SQL runs, in its workspace's overlay, through xcube's introspection
+ * of an overlay's own data source (`?overlay=`, xcube 93a5f7a73b; research
+ * xcube-93a5f7a73b.md): a copy, a copy pointed elsewhere, and one made new
+ * there, each its own catalog, never a landed one's.
+ */
+describe('the schema browser in My workspace (T539, T547, AC-386, AC-383)', () => {
+  it('lists an unchanged copy’s catalog to its owner, read in their workspace’s overlay', async () => {
     const { copy } = await copied('same');
+    const overlay = workspaceOverlayIdOf(await workspaceOf(copy.folderId));
     const before = asked.length;
     const schemas = await schemasOf('writer', copy.id);
     expect(schemas.statusCode, schemas.body).toBe(200);
     expect(asked.slice(before).map((each) => each.path)).toEqual([
-      `${BASE}/fsales__same_${MARK}/schemas`,
+      `${BASE}/fsales__same_${MARK}/schemas?overlay=${overlay}`,
     ]);
     expect((await schemasOf('super', copy.id)).statusCode).toBe(404);
   });
 
-  it('doesn’t browse as its original a copy whose secret was entered again, though its fields are the same', async () => {
-    const { copy } = await copied('resealed');
-    await sources().update(copy.id, { sealed: { password: sealed('resealed-again') } });
-    const before = asked.length;
-    const refused = await schemasOf('writer', copy.id);
-    expect(refused.statusCode, refused.body).toBe(409);
-    expect(refused.json<{ error: string }>().error).toBe(
-      'This copy connects otherwise than its original, and for now this list holds landed data sources’ tables only: its own show here once it’s landed.',
-    );
-    expect(asked).toHaveLength(before);
-  });
-
-  it('shows a copy pointed elsewhere, and one made new there, their tables once landed, never another’s', async () => {
-    const { copy } = await copied('moved');
-    // Another host: no switch needed (a new secret is), but not its original's catalog.
-    await sources().update(copy.id, {
+  it('lists its own catalog for a copy pointed elsewhere, and one whose secret was entered again, never its original’s', async () => {
+    const moved = (await copied('moved')).copy;
+    // Another host: no switch needed (a new secret is), and not its original's catalog.
+    await sources().update(moved.id, {
       fields: { ...FIELDS, host: 'sales-db-2' },
       sealed: { password: sealed('moved-again') },
     });
+    const resealed = (await copied('resealed')).copy;
+    await sources().update(resealed.id, { sealed: { password: sealed('resealed-again') } });
+    const overlay = workspaceOverlayIdOf(await workspaceOf(moved.folderId));
+    for (const [id, name] of [
+      [moved.id, `moved_${MARK}`],
+      [resealed.id, `resealed_${MARK}`],
+    ] as const) {
+      const before = asked.length;
+      const schemas = await schemasOf('writer', id);
+      expect(schemas.statusCode, schemas.body).toBe(200);
+      expect(schemas.json()).toEqual({ schemas: [{ name: `own_${overlay.slice(-6)}` }] });
+      expect(asked.slice(before).map((each) => each.path)).toEqual([
+        `${BASE}/fsales__${name}/schemas?overlay=${overlay}`,
+      ]);
+    }
+  });
+
+  it('lists the tables and columns of one made new there, under its target, in its overlay', async () => {
+    const { copy } = await copied('beside');
     const made = await sources().create({
       folderId: copy.folderId,
+      targetFolderId: folders.sales,
       name: `fresh_${MARK}`,
       driver: 'postgres',
       authMethod: 'password',
       fields: FIELDS,
       sealed: { password: sealed('fresh') },
     });
+    const overlay = workspaceOverlayIdOf(await workspaceOf(copy.folderId));
     const before = asked.length;
-    for (const id of [copy.id, made.id]) {
-      const refused = await schemasOf('writer', id);
-      expect(refused.statusCode, refused.body).toBe(409);
-      expect(refused.json<{ error: string }>().error).toMatch(/once it’s landed/);
-    }
+    const tables = await as('writer', {
+      method: 'GET',
+      url: `/api/data-sources/${made.id}/catalog/tables?schema=sales`,
+    });
+    expect(tables.statusCode, tables.body).toBe(200);
+    const columns = await as('writer', {
+      method: 'POST',
+      url: `/api/data-sources/${made.id}/catalog/columns`,
+      payload: { tables: [{ schema: 'sales', table: 'orders' }] },
+    });
+    expect(columns.statusCode, columns.body).toBe(200);
+    expect(asked.slice(before).map((each) => [each.method, each.path, each.body])).toEqual([
+      // wechart's overlay first: a padded query can't push it past a parser's
+      // limit on parameters (T547's review).
+      ['GET', `${BASE}/fsales__fresh_${MARK}/tables?overlay=${overlay}&schema=sales`, undefined],
+      [
+        'POST',
+        `${BASE}/fsales__fresh_${MARK}/columns?overlay=${overlay}`,
+        { tables: [{ schema: 'sales', table: 'orders' }] },
+      ],
+    ]);
+  });
+
+  it('names its own overlay first, whatever the browser pads its query with, and none of the browser’s (T547’s review)', async () => {
+    const { copy } = await copied('padded');
+    const overlay = workspaceOverlayIdOf(await workspaceOf(copy.folderId));
+    const before = asked.length;
+    const padding = Array.from({ length: 1000 }, () => 'schema=sales').join('&');
+    const answer = await as('writer', {
+      method: 'GET',
+      url: `/api/data-sources/${copy.id}/catalog/tables?${padding}&=&%5Boverlay%5D=ws-theirs`,
+    });
+    expect(answer.statusCode, answer.body).toBe(200);
+    const [path] = asked.slice(before).map((each) => each.path);
+    expect(
+      path?.startsWith(`${BASE}/fsales__padded_${MARK}/tables?overlay=${overlay}&schema=sales&`),
+    ).toBe(true);
+    expect(path).not.toContain('ws-theirs');
+    expect(path).not.toContain('&=');
+  });
+
+  it('says xcube no longer holds the workspace’s preview, in wechart’s words, where xcube finds no overlay (T547’s review)', async () => {
+    const { copy } = await copied('expired');
+    const before = asked.length;
+    const answer = await schemasOf('writer', copy.id);
+    expect(answer.statusCode, answer.body).toBe(404);
+    expect(answer.json()).toEqual({
+      error: 'xcube no longer holds your workspace’s preview. Open the SQL tab again.',
+    });
+    expect(asked.slice(before)).toHaveLength(1);
+  });
+
+  it('asks where one made new there is to go before reading it, as its SQL does, asking Cube nothing', async () => {
+    const { copy } = await copied('aside');
+    const made = await sources().create({
+      folderId: copy.folderId,
+      name: `untargeted_${MARK}`,
+      driver: 'postgres',
+      authMethod: 'password',
+      fields: FIELDS,
+      sealed: { password: sealed('untargeted') },
+    });
+    const before = asked.length;
+    const refused = await schemasOf('writer', made.id);
+    expect(refused.statusCode, refused.body).toBe(409);
+    expect(refused.json<{ error: string }>().error).toBe(
+      'Choose the folder it is to go to first: its tables are read in your workspace’s preview, which places it there.',
+    );
     expect(asked).toHaveLength(before);
   });
 });

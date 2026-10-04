@@ -11284,10 +11284,40 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
         - a copy's browser lists its original's tables, and a new data source says they show once landed.
     - **Checked by eye** in Chrome at 1440 × 900: the browser open on `public.orders` beside the editor.
     - **AC-386 stays open** for a workspace data source not landed (T547).
-- [ ] T547 (AC-386) Browse a workspace data source not yet landed through its workspace's overlay *(added 2026-10-02, from T539's review)*
+- [x] T547 (AC-386) Browse a workspace data source not yet landed through its workspace's overlay *(added 2026-10-02, from T539's review)*
   - Files: `packages/api/src/model/introspection.ts`, `packages/api/src/routes/sql-runner.ts`, `routes/sql-catalog.test.ts`, `e2e/security/sql-runner.spec.ts`, and a research doc for xcube's image
   - Failing test: a data source made new in My workspace, and a copy that connects otherwise than its original, list their own schemas, tables and columns, read through their workspace's overlay (AC-386).
   - Depends on: T539, xcube's introspection taking `?overlay=` (`to-xcube/2026-10-02-1000-introspection-overlay.md`), published by digest
+  - **Done 2026-10-04** (R59: AC-386 kept whole, waiting for xcube).
+    - **The pin:** `ghcr.io/senthilkrajagopal/xcube:v1.7.45-93a5f7a73b@sha256:3b853017…` in compose (Cube and its refresh worker), both Helm values files, `docs/deploy.md` (no migration; upgrade the API with it or first) and `cube-image.test.ts`.
+      - Compose's two Cube containers were recreated on it under the e2e lock, with the main checkout's compose file and project directory and only `CUBE_IMAGE` set. Each container's config-hash equals the main checkout's, and both came up healthy with revision `93a5f7a73b`.
+    - **Research:** `xcube-93a5f7a73b.md`. It records:
+      - the routes and refusals as built, read in the fork's one commit after `6d9673ccda`;
+      - the check against compose's image: the refusals answered, an overlay's own data source read end to end, and 6d9673ccda's stopped rows still holding;
+      - the 401 seen at an API's start as Docker Desktop's clock, not the image or the environment.
+    - **The browser, as the SQL runs:** a workspace data source is read in its workspace's overlay (`?overlay=`), its copy in its original's folder and a new one in its target's, under its own name. A copy, a copy pointed elsewhere and one made new there each list their own catalog. One with nowhere to go is told to choose its folder first. T539's "once it's landed" refusals, and its reading of an unchanged copy as its original, are gone.
+    - **Security:** under the service credential, xcube reads any overlay of the model by `?overlay=`, and overlay ids derive from workspace ids. wechart forwarded the browser's query string to introspection, both Generate cubes' routes and the schema browser's.
+      - `queryOf` now passes on only the catalog routes' own parameters, named as written: `schema`, `search`, `type`, `limit` and `offset`.
+      - wechart names its own overlay, first in the query.
+      - xcube's 404 for an overlay gone is said in wechart's words, as a run says it, never with the overlay's id.
+    - **Tests:**
+      - `routes/sql-catalog.test.ts`:
+        - an unchanged copy read in its overlay;
+        - a copy pointed elsewhere, and one with its secret entered again, each listing its own catalog;
+        - one made new under its target, its tables and columns read in its overlay;
+        - one with no target told to choose it first;
+        - a browser-named overlay not passed on;
+        - wechart's overlay first, after a query padded with a thousand parameters;
+        - an overlay gone, in wechart's words.
+      - `model/introspection.test.ts`: Generate cubes' routes pass on only the catalog's own parameters. A browser-named `overlay` is dropped in every spelling Express reads as one: `[overlay]`, `%5Boverlay%5D`, `ov%65rlay` and `overlay[]`.
+    - **Fixed after the review** (one round). The review found the first filter, on the literal key, could be bypassed with bracket notation. It also found an overlay at the query's end could be pushed past qs's limit on parameters. Both are fixed as above, with tests.
+    - **Left as found:**
+      - a copy whose original's folder isn't in xcube is told to choose its folder, as its SQL's refusal already says;
+      - `browse` keeps its own resolution of where a workspace data source stands, beside the run's `targetOf`.
+      - `SchemaBrowser.test.tsx`: the note shows the API's current words.
+      - `cube-image.test.ts`.
+      - `e2e/security/sql-runner.spec.ts` (Chrome, compose's 93a5f7a73b): a data source made new in My workspace lists the sample's `public` tables and `orders`' six columns, though nothing landed bears its name. The whole spec passes, 17 of 17.
+    - **AC ticked:** AC-386.
 - [x] T536 (AC-384, AC-374) Cube Store: its switch, its listing, and read-only SQL on it
   - Files: `packages/api/src/routes/sql-runner.ts`, the root's data sources listing, `SqlRunner.tsx`, tests and `e2e/security/sql-runner.spec.ts`
   - Failing test: switched off, no one sees Cube Store listed, and a Super-Admin finds Turn on… in Data sources' header ⋯ (P5); its confirmation says everyone allowed reads every folder's rollups (Q9). Switched on:

@@ -166,7 +166,8 @@ services:
   # 89628a0e88, the read-only SQL runner on a data source's connection and on
   # Cube Store, with its cancel (T532, R50; xcube-sql-runner.md); from
   # 6d9673ccda, a run stopped or cancelled answers the rows it read before
-  # (T545; xcube-6d9673ccda.md). The
+  # (T545; xcube-6d9673ccda.md); from 93a5f7a73b, introspection of a
+  # workspace overlay's own data source (T547; xcube-93a5f7a73b.md). The
   # stored root `default` matches CUBEJS_DB_* above exactly, so the root's
   # cubes keep their names. The fork's CI publishes the image for amd64 and
   # arm64, pulled here by digest: its moving tag isn't a version.
@@ -174,7 +175,7 @@ services:
   # `command`, or Cube starts without the routes. Cube and its refresh worker
   # run the same image.
   cube:
-    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-6d9673ccda@sha256:b876ef9e8f9a401a77bb759f9d054aadb412b91ad5ea4425d10c918fc8fd89f4}
+    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-93a5f7a73b@sha256:3b8530173a367ae2c41cb22dc9430bd651f7cb5ae909f86a3912c6b84e86f9cd}
     container_name: wechart-cube
     depends_on: &cube-depends-on
       sample-db:
@@ -209,7 +210,7 @@ services:
   # "Topology"; pre-aggregations.md, "Observed locally"). A build asked for
   # through the jobs API runs in the API instance, though (upgrade-1.7.43.md).
   cube-refresh-worker:
-    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-6d9673ccda@sha256:b876ef9e8f9a401a77bb759f9d054aadb412b91ad5ea4425d10c918fc8fd89f4}
+    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-93a5f7a73b@sha256:3b8530173a367ae2c41cb22dc9430bd651f7cb5ae909f86a3912c6b84e86f9cd}
     container_name: wechart-cube-refresh-worker
     depends_on: *cube-depends-on
     environment:

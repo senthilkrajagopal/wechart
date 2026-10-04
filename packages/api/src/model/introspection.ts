@@ -53,25 +53,55 @@ function tablesOf(body: unknown): Table[] | undefined {
   return read.every((each) => each !== undefined) ? (read as Table[]) : undefined;
 }
 
-/** The query string as asked, its repeated parameters kept (`schema=a&schema=b`). */
+/**
+ * The parameters Cube's catalog routes take (research
+ * cube/introspection-api.md: `search` on schemas; `schema`, `search`, `type`,
+ * `limit`, `offset` on tables), named as written. Nothing else is passed on.
+ * Above all no `overlay`, in any spelling Express's parser reads as one
+ * (`[overlay]`, `%5Boverlay%5D`, `ov%65rlay`): xcube reads an overlay's own
+ * data source by it under wechart's service credential (xcube 93a5f7a73b,
+ * research xcube-93a5f7a73b.md), so only wechart names one (T547's review).
+ */
+const CATALOG_PARAMETERS = new Set(['schema', 'search', 'type', 'limit', 'offset']);
+
+/** The query string as asked, its catalog parameters alone, repeats kept (`schema=a&schema=b`). */
 function queryOf(url: string): string {
   const at = url.indexOf('?');
-  return at < 0 ? '' : url.slice(at);
+  if (at < 0) return '';
+  const kept = url
+    .slice(at + 1)
+    .split('&')
+    .filter((part) => CATALOG_PARAMETERS.has(part.split('=')[0] ?? ''));
+  return kept.length === 0 ? '' : `?${kept.join('&')}`;
 }
+
+/**
+ * A query string with the overlay wechart reads a workspace's data source in,
+ * where there is one: first, so no number of parameters after it can push it
+ * past a parser's limit (T547's review).
+ */
+const inOverlay = (query: string, overlay: string | undefined): string =>
+  overlay === undefined
+    ? query
+    : `?overlay=${encodeURIComponent(overlay)}${query === '' ? '' : `&${query.slice(1)}`}`;
 
 const BASE = '/v1/introspection/data-sources';
 
-/** One of Cube's data sources' catalog, by its name (T539): what the schema browser reads. */
+/**
+ * One of Cube's data sources' catalog, by its name (T539): what the schema
+ * browser reads. With `overlay`, one of that workspace overlay's own data
+ * sources, read in it (T547).
+ */
 export interface Catalog {
-  schemas(source: string, query: string): Promise<Answer>;
-  tables(source: string, query: string): Promise<Answer>;
-  columns(source: string, tables: readonly Table[]): Promise<Answer>;
+  schemas(source: string, query: string, overlay?: string): Promise<Answer>;
+  tables(source: string, query: string, overlay?: string): Promise<Answer>;
+  columns(source: string, tables: readonly Table[], overlay?: string): Promise<Answer>;
 }
 
 /**
  * A data source's catalog as Cube's introspection gives it, asked with
  * wechart's own token, waits taken (T539; the same asking as the routes
- * below). `query` is a query string as asked, `?…` or empty.
+ * below). `query` is a query string as `queryOf` reads it, `?…` or empty.
  */
 export function catalogOf(
   client: CubeClient,
@@ -80,10 +110,12 @@ export function catalogOf(
   const askCube = askerOf(client, retryMs);
   const sourcePath = (source: string) => `${BASE}/${encodeURIComponent(source)}`;
   return {
-    schemas: (source, query) => askCube(`${sourcePath(source)}/schemas${query}`),
-    tables: (source, query) => askCube(`${sourcePath(source)}/tables${query}`),
-    columns: (source, tables) =>
-      askCube(`${sourcePath(source)}/columns`, {
+    schemas: (source, query, overlay) =>
+      askCube(`${sourcePath(source)}/schemas${inOverlay(query, overlay)}`),
+    tables: (source, query, overlay) =>
+      askCube(`${sourcePath(source)}/tables${inOverlay(query, overlay)}`),
+    columns: (source, tables, overlay) =>
+      askCube(`${sourcePath(source)}/columns${inOverlay('', overlay)}`, {
         method: 'POST',
         body: JSON.stringify({ tables }),
       }),

@@ -1343,7 +1343,7 @@ Traces to: `[R50]`; research `docs/research/sql-runner.md`.
       Fails when: another user sees Cube Store listed or runs SQL on it; it runs any other command; or it is listed while switched off.
 - [x] AC-385 THE SYSTEM SHALL say on the SQL tab, always above the editor and with no way to hide it, that the SQL runs on the database directly, past folder permissions and access policies (`[R50]`, research §5 S3; its place, design 15's Q3, `[R51]`).
       Fails when: the tab shows no such sentence, or it can be hidden.
-- [ ] AC-386 WHILE the SQL tab is open, THE SYSTEM SHALL show beside the editor the data source's schemas, tables and columns with their types, as xcube's introspection lists them, and put a name chosen there into the editor (`[R51]`, design 15's P3).
+- [x] AC-386 WHILE the SQL tab is open, THE SYSTEM SHALL show beside the editor the data source's schemas, tables and columns with their types, as xcube's introspection lists them, and put a name chosen there into the editor (`[R51]`, design 15's P3).
       Fails when: a table or column the data source has is missing from the browser, or choosing one doesn't put its name in the editor.
 - [x] AC-387 WHEN text is selected in the SQL editor, THE SYSTEM SHALL run only the selection, with Run reading "Run selection", from Run and from ⌘/Ctrl+Enter; with none selected, the whole text (`[R51]`, design 15's Q1).
       Fails when: a run with text selected runs anything but the selection, or Run doesn't say so.

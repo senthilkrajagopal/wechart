@@ -15,7 +15,7 @@ import {
 } from './fixtures';
 
 /**
- * F40, the SQL runner, against compose's xcube (`6d9673ccda`) and its sample
+ * F40, the SQL runner, against compose's xcube (`93a5f7a73b`) and its sample
  * PostgreSQL. A folder read-write for `sales-rw` (writer) and read-only for
  * `sales-ro` (reader), with a data source on the sample database, made by
  * `super`, who switches its runner on.
@@ -666,7 +666,7 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
         await expect(
           panel.getByRole('table', { name: 'Result' }).getByRole('cell').nth(1),
         ).toHaveText('sample');
-        // Its schema browser lists its original's catalog: it connects as its original does (T539).
+        // Its schema browser lists its own catalog, read in its workspace's overlay (T539, T547).
         const tree = panel.getByRole('region', { name: 'Tables in warehouse' });
         await tree
           .getByRole('treeitem', { name: 'public', exact: true })
@@ -703,13 +703,23 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
           await expect(
             freshPanel.getByRole('table', { name: 'Result' }).getByRole('cell').nth(1),
           ).toHaveText('42');
-          // Until xcube's introspection takes a workspace's overlay (T547), its
-          // browser says its tables show once landed, and lists no other's.
-          await expect(
-            freshPanel.getByRole('region', { name: `Tables in fresh_${RUN}` }),
-          ).toContainText(
-            'Its tables show here once it’s landed: for now, this list holds landed data sources’ tables only.',
+          // Its browser lists its own catalog, read in the workspace's overlay,
+          // where alone it is: nothing landed bears its name (T547, AC-386).
+          const freshTree = freshPanel.getByRole('region', { name: `Tables in fresh_${RUN}` });
+          await freshTree
+            .getByRole('treeitem', { name: 'public', exact: true })
+            .getByTestId('sql-schema-caret')
+            .click();
+          await expect(freshTree.getByRole('group', { name: 'Tables in public' })).toContainText(
+            TABLE,
           );
+          await freshTree.getByRole('treeitem', { name: 'orders', exact: true }).focus();
+          await page.keyboard.press('ArrowRight');
+          await expect(
+            freshTree
+              .getByRole('group', { name: 'Columns of public.orders' })
+              .getByRole('treeitem'),
+          ).toHaveCount(6);
         } finally {
           await page.request.delete(`/api/data-sources/${freshId}`);
         }
