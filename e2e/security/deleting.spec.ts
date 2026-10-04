@@ -493,7 +493,11 @@ test.describe('deleting a data source and a model file (T526, AC-364, AC-365)', 
         .getByTestId(`item-${modeled.source}`)
         .getByRole('button', { name: `Actions for ${SOURCE}` })
         .click();
-      await expect(page.getByRole('menu').getByRole('menuitem')).toHaveText(['Delete…']);
+      // Generate cubes… before it, for one who may make a model (T492, AC-350).
+      await expect(page.getByRole('menu').getByRole('menuitem')).toHaveText([
+        'Generate cubes…',
+        'Delete…',
+      ]);
       await page.getByRole('menuitem', { name: 'Delete…' }).click();
       await expect(
         page.getByRole('alertdialog', { name: `Can’t delete “${SOURCE}”` }),

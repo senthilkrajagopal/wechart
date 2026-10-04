@@ -470,9 +470,10 @@ test('T482: a file’s comment said upfront and shown in the YAML, the open memb
     }),
   ).toEqual(['0px', '0px', '12px', '16px']);
   const code = await editor.boundingBox();
+  // The pane's own head row, in the element that pops out with it (T600).
   const head = await page
     .getByRole('region', { name: 'YAML and join diagram' })
-    .locator(':scope > .model-editor__head')
+    .locator('.model-editor__popped > .model-editor__head')
     .boundingBox();
   expect([Math.round(code?.x ?? 0), Math.round(code?.width ?? 0)]).toEqual([
     Math.round(head?.x ?? 0),
@@ -560,7 +561,7 @@ test('T482: a file’s comment said upfront and shown in the YAML, the open memb
   // Across the pane inside its rule, as its head row is.
   const pane = await page
     .getByRole('region', { name: 'YAML and join diagram' })
-    .locator(':scope > .model-editor__head')
+    .locator('.model-editor__popped > .model-editor__head')
     .boundingBox();
   const problems = page.getByRole('region', { name: 'Problems' });
   const box = await problems.boundingBox();
