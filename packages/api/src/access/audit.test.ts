@@ -2,12 +2,18 @@ import { randomUUID } from 'node:crypto';
 
 import type { SealedV1 } from '@wechart/core';
 import type { FastifyInstance, InjectOptions } from 'fastify';
+import { sql } from 'kysely';
+import { PgBoss, TestClock } from 'pg-boss';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { pgSessionStore } from '../auth/session-store';
 import { PUBLIC_URL, signIn, USERS } from '../auth/sign-in.fixture';
-import { closeDb, getDb } from '../db/client';
+import { CubeClient } from '../cube/client';
+import { closeDb, databaseUrl, getDb } from '../db/client';
 import { auditStore, type AuditRecord } from '../repos/audit';
+import { buildHistory } from '../repos/build-history';
+import { scheduleStore, wechartScheduler, type WechartScheduler } from '../scheduler/schedules';
+import { xcubeQueue, type QueueEntry } from '../xcube/queue';
 import { catalog } from '../repos/catalog';
 import { connectionTestStore } from '../repos/connection-tests';
 import { dataSourceStore } from '../repos/data-sources';
@@ -443,3 +449,411 @@ describe('what the audit trail records (T368, AC-294)', () => {
     }
   });
 });
+
+/**
+ * T505 (AC-294; design 16, state I, Q12; R42.8): builds started from Jobs,
+ * cancels in the queue and changes to wechart's own schedules are recorded,
+ * each with who, what, the pre-aggregation's folder and when; a suspension
+ * by "wechart's scheduler". A run a schedule starts isn't: Run history has it.
+ *
+ * On a stub Cube and xcube queue, and pg-boss in a schema of this file's own.
+ */
+describe(
+  'builds, cancels and schedule changes in the trail (T505, AC-294)',
+  { timeout: 120_000 },
+  () => {
+    const SCHEMA = `pgboss_${MARK}`;
+    const clock = new TestClock(new Date('2026-10-05T03:00:00Z'));
+    const ids = { folder: '', xcube: '' };
+    const rollup = () => `${ids.xcube}__orders.by_month`;
+    const whole = () => `${ids.xcube}__orders.by_status`;
+    const REMOVED =
+      "A user's selector doesn't match any of the pre-aggregations defined in the data model.";
+    const refusing = new Set<string>();
+    /** xcube's queue: entries wechart started, as each test lays them. */
+    let queued: QueueEntry[] = [];
+    let built: FastifyInstance;
+    let boss: PgBoss;
+    let scheduler: WechartScheduler;
+    const signedIn: Record<string, string> = {};
+    const asWriter = (options: InjectOptions) =>
+      built.inject({ ...options, headers: { ...options.headers, cookie: signedIn['writer']! } });
+    /** The records of these events in this describe's folder, oldest first. */
+    const kept = async (events: AuditRecord['event'][]) =>
+      (await recorded(events)).filter((record) => record.folderId === ids.folder).reverse();
+    /** Who, as the trail names them: the identity the provider sent, else the name. */
+    const WRITER = USERS['writer']!.email;
+    const brief = (record: AuditRecord) => ({
+      who: record.actor?.identity ?? record.actor?.name ?? null,
+      event: record.event,
+      item: record.item,
+      summary: record.summary,
+    });
+
+    beforeAll(async () => {
+      ids.folder = randomUUID();
+      ids.xcube = `f${ids.folder.replaceAll('-', '')}`;
+      await docs().create({
+        kind: 'folder',
+        id: ids.folder,
+        body: {
+          owner: 'admin',
+          title: `Built ${MARK}`,
+          folderId: 'root',
+          access: { readOnly: [], readWrite: ['sales-rw'] },
+        },
+      });
+      const client = new CubeClient({
+        apiUrl: secured.cubeApiUrl,
+        apiSecret: secured.cubeApiSecret,
+        securityContext: {},
+        service: async () => 'service-token',
+        model: { id: 'dev', revision: async () => undefined },
+        fetchImpl: (async (url: string, init?: RequestInit) => {
+          const path = new URL(url).pathname;
+          if (path.endsWith('/models/dev/meta'))
+            return Response.json({
+              cubes: [
+                {
+                  name: `${ids.xcube}__orders`,
+                  meta: { xcube: { folderId: ids.xcube, shortName: 'orders' } },
+                  preAggregations: [
+                    { name: 'by_month', type: 'rollup', partitionGranularity: 'month' },
+                    { name: 'by_status', type: 'rollup' },
+                  ],
+                },
+              ],
+            });
+          if (path.endsWith('/v1/pre-aggregations/jobs')) {
+            const body = JSON.parse(String(init?.body)) as {
+              selector: { preAggregations: string[] };
+            };
+            if (body.selector.preAggregations.some((each) => refusing.has(each)))
+              return Response.json({ error: REMOVED }, { status: 400 });
+            return Response.json([`${MARK}-token-${randomUUID()}`]);
+          }
+          return Response.json({}, { status: 404 });
+        }) as typeof fetch,
+      });
+      boss = new PgBoss({
+        connectionString: databaseUrl(),
+        schema: SCHEMA,
+        clock,
+        cronMonitorIntervalSeconds: 1,
+        cronWorkerIntervalSeconds: 1,
+        supervise: false,
+      });
+      scheduler = wechartScheduler({
+        boss,
+        store: scheduleStore(getDb(), { named: MARK }),
+        history: buildHistory(getDb()),
+        cube: client,
+        audit: audit(),
+        now: () => new Date(clock.now()),
+        pollingIntervalSeconds: 0.5,
+      });
+      await scheduler.start();
+      built = buildServer({
+        config: secured,
+        cube: client,
+        sessions: pgSessionStore(getDb()),
+        documents: docs(),
+        catalog: catalog(getDb()),
+        folderAccess: folderAccessStore(getDb()),
+        folders: async () => ({
+          ids: new Map([
+            ['root', 'froot'],
+            [ids.folder, ids.xcube],
+          ]),
+          parents: new Map([
+            ['root', null],
+            [ids.folder, 'root'],
+          ]),
+        }),
+        audit: audit(),
+        buildHistory: buildHistory(getDb()),
+        buildQueue: xcubeQueue({
+          cubeApiUrl: secured.cubeApiUrl,
+          model: 'dev',
+          token: async () => 'service-token',
+          fetch: (async (url: string, init?: RequestInit) => {
+            if (new URL(url).pathname.endsWith('/queue/cancel')) {
+              const { keys } = JSON.parse(String(init?.body)) as { keys: string[] };
+              return Response.json({
+                model: 'dev',
+                cancelled: keys.map((key) => ({ key, preAggregation: rollup(), status: 'queued' })),
+                notCancelled: [],
+              });
+            }
+            return Response.json({ model: 'dev', queue: queued });
+          }) as typeof fetch,
+        }),
+        schedules: scheduler,
+        now: () => new Date(clock.now()),
+      });
+      signedIn['writer'] = await signIn(built, USERS['writer']!);
+    });
+
+    afterAll(async () => {
+      if (built !== undefined) await built.close();
+      if (boss !== undefined) await boss.stop({ graceful: false, close: true });
+      const db = getDb();
+      await db.deleteFrom('schedules').where('name', 'like', `%${MARK}%`).execute();
+      await db
+        .deleteFrom('build_runs')
+        .where('pre_aggregation', 'in', [rollup(), whole()])
+        .execute();
+      await db.deleteFrom('audit_records').where('folder_id', '=', ids.folder).execute();
+      await sql`DROP SCHEMA IF EXISTS ${sql.id(SCHEMA)} CASCADE`.execute(db);
+      await docs().remove('folder', ids.folder);
+    });
+
+    it('records Build now, Build all and Rebuild selected as Build started, with the pre-aggregation, its folder and the partitions', async () => {
+      const runIds: string[] = [];
+      for (const payload of [
+        { preAggregation: whole() },
+        { preAggregation: rollup() },
+        {
+          preAggregation: rollup(),
+          partitions: ['2026-09-01T00:00:00.000', '2026-08-01T00:00:00.000'],
+        },
+      ]) {
+        const started = await asWriter({ method: 'POST', url: '/api/builds', payload });
+        expect(started.statusCode, started.body).toBe(200);
+        runIds.push(started.json<{ runId: string }>().runId);
+      }
+
+      const records = await kept(['build-started']);
+      expect(records.map((record) => record.folderId)).toEqual([
+        ids.folder,
+        ids.folder,
+        ids.folder,
+      ]);
+      expect(records.map(brief)).toEqual([
+        {
+          who: WRITER,
+          event: 'build-started',
+          item: { kind: 'pre-aggregation', id: whole(), title: 'orders.by_status' },
+          summary: 'Build now · whole',
+        },
+        {
+          who: WRITER,
+          event: 'build-started',
+          item: { kind: 'pre-aggregation', id: rollup(), title: 'orders.by_month' },
+          summary: 'Build all · every partition',
+        },
+        {
+          who: WRITER,
+          event: 'build-started',
+          item: { kind: 'pre-aggregation', id: rollup(), title: 'orders.by_month' },
+          // Months of one year say the year once, as Run history does (design 16, B1).
+          summary: 'Rebuild selected · Sep, Aug 2026',
+        },
+      ]);
+      expect(records.map((record) => record.details)).toEqual([
+        {
+          preAggregation: whole(),
+          via: 'build-all',
+          partitions: null,
+          granularity: null,
+          runId: runIds[0],
+        },
+        {
+          preAggregation: rollup(),
+          via: 'build-all',
+          partitions: null,
+          granularity: 'month',
+          runId: runIds[1],
+        },
+        {
+          preAggregation: rollup(),
+          via: 'rebuild-selected',
+          partitions: ['2026-09-01T00:00:00.000', '2026-08-01T00:00:00.000'],
+          granularity: 'month',
+          runId: runIds[2],
+        },
+      ]);
+      // Each start its own run in Run history, which its record names.
+      expect(new Set(runIds).size).toBe(3);
+    });
+
+    it('records a cancel as Build cancelled, with the partition and its state then', async () => {
+      const answer = await asWriter({
+        method: 'POST',
+        url: '/api/builds',
+        payload: { preAggregation: rollup(), partitions: ['2026-08-01T00:00:00.000'] },
+      });
+      const { runId, tokens } = answer.json<{ runId: string; tokens: string[] }>();
+      const run = await buildHistory(getDb()).get(runId);
+      const key = `${MARK}-key-${randomUUID()}`;
+      queued = [
+        {
+          key,
+          dataSource: 'default',
+          preAggregation: rollup(),
+          table: 'prod_pre_aggregations.orders_by_month20260801',
+          targetTable: 'prod_pre_aggregations.orders_by_month20260801_aaaa_bbbb_cccc',
+          partition: { start: '2026-08-01T00:00:00.000', end: '2026-08-31T23:59:59.999' },
+          status: 'queued',
+          stalled: false,
+          addedAt: new Date(clock.now()).toISOString(),
+          requestId: run!.requestId,
+          startedBy: 'jobs',
+          job: tokens[0]!,
+        },
+      ];
+
+      const cancel = await asWriter({
+        method: 'POST',
+        url: '/api/jobs/queue/cancel',
+        payload: { key },
+      });
+
+      expect(cancel.json()).toEqual({ cancelled: true });
+      const [record] = (await kept(['build-cancelled'])).reverse();
+      expect(brief(record!)).toEqual({
+        who: WRITER,
+        event: 'build-cancelled',
+        item: { kind: 'pre-aggregation', id: rollup(), title: 'orders.by_month' },
+        summary: 'Queued · Aug 2026',
+      });
+      expect(record?.details).toEqual({
+        preAggregation: rollup(),
+        partition: '2026-08-01T00:00:00.000',
+        state: 'queued',
+        runId,
+      });
+    });
+
+    it('records making, changing, suspending, resuming and deleting a schedule as Schedule change, a suspension by wechart’s scheduler; a run it starts isn’t recorded', async () => {
+      const made = await asWriter({
+        method: 'POST',
+        url: '/api/wechart-schedules',
+        payload: {
+          name: `Morning ${MARK}`,
+          preAggregation: rollup(),
+          cron: '0 5 * * *',
+          timezone: 'UTC',
+          suspendAfter: 1,
+        },
+      });
+      const { id } = made.json<{ id: string }>();
+      expect(
+        (
+          await asWriter({
+            method: 'PUT',
+            url: `/api/wechart-schedules/${id}`,
+            payload: {
+              name: `Morning ${MARK}`,
+              preAggregation: rollup(),
+              cron: '0 6 * * *',
+              timezone: 'UTC',
+            },
+          })
+        ).statusCode,
+      ).toBe(200);
+      // A run it starts: Run history's, not the trail's.
+      const before = (await kept(['build-started'])).length;
+      await scheduler.run(id, `job-${MARK}-ran`);
+      // It started a build, which Run history has (T505's review)…
+      const ran = await buildHistory(getDb()).startsFor({
+        requestIds: [`wechart-schedule-job-${MARK}-ran`],
+        tokens: [],
+      });
+      expect(ran.map((start) => start.starter)).toEqual([
+        { kind: 'schedule', id, name: `Morning ${MARK}` },
+      ]);
+      // …and the trail doesn't.
+      expect((await kept(['build-started'])).length).toBe(before);
+      // Refused once, at its number: suspended by wechart's scheduler.
+      refusing.add(rollup());
+      await clock.setTime(clock.now() + 60_000);
+      const suspendedAt = new Date(clock.now()).toISOString();
+      await scheduler.run(id, `job-${MARK}-refused`).catch(() => undefined);
+      refusing.delete(rollup());
+      expect(
+        (await asWriter({ method: 'POST', url: `/api/wechart-schedules/${id}/resume` })).statusCode,
+      ).toBe(200);
+      expect(
+        (await asWriter({ method: 'DELETE', url: `/api/wechart-schedules/${id}` })).statusCode,
+      ).toBe(204);
+
+      const records = await kept(['schedule-change']);
+      const item = { kind: 'schedule', id, title: `Morning ${MARK}` };
+      expect(records.map(brief)).toEqual([
+        { who: WRITER, event: 'schedule-change', item, summary: 'Made · 0 5 * * *' },
+        { who: WRITER, event: 'schedule-change', item, summary: 'Changed · cron' },
+        {
+          who: 'wechart’s scheduler',
+          event: 'schedule-change',
+          item,
+          summary: 'Suspended after 1 failure',
+        },
+        { who: WRITER, event: 'schedule-change', item, summary: 'Resumed' },
+        { who: WRITER, event: 'schedule-change', item, summary: 'Deleted' },
+      ]);
+      expect(records.map((record) => record.folderId)).toEqual(Array(5).fill(ids.folder));
+      // Each with its settings before and after, and what changed.
+      const settings = (cron: string) => ({
+        name: `Morning ${MARK}`,
+        preAggregation: rollup(),
+        cron,
+        timezone: 'UTC',
+        missed: 'once',
+        suspendAfter: 1,
+      });
+      /** Each setting as the inspector's "What changed" shows it, before and after. */
+      const rows = (before: string | null, after: string | null) => {
+        const shown = (cron: string | null) =>
+          cron === null
+            ? [null, null, null, null, null, null]
+            : [`Morning ${MARK}`, 'orders.by_month', cron, 'UTC', 'Run once', '1'];
+        const [was, is] = [shown(before), shown(after)];
+        return [
+          'Name',
+          'Pre-aggregation',
+          'Cron',
+          'Time zone',
+          'A missed run',
+          'Suspend after',
+        ].map((setting, at) => ({ setting, before: was[at], after: is[at] }));
+      };
+      const what = { preAggregation: rollup(), shownName: 'orders.by_month' };
+      expect(records[0]?.details).toEqual({
+        change: 'made',
+        ...what,
+        before: null,
+        after: settings('0 5 * * *'),
+        settings: rows(null, '0 5 * * *'),
+      });
+      expect(records[1]?.details).toEqual({
+        change: 'changed',
+        ...what,
+        before: settings('0 5 * * *'),
+        after: settings('0 6 * * *'),
+        settings: rows('0 5 * * *', '0 6 * * *'),
+      });
+      // After how many failures, with Cube's last words (Q12).
+      expect(records[2]?.details).toEqual({
+        change: 'suspended',
+        ...what,
+        failures: 1,
+        error: REMOVED,
+      });
+      // Resumed from its suspension: since when, and with what error (T505's review).
+      expect(records[3]?.details).toEqual({
+        change: 'resumed',
+        ...what,
+        suspendedAt,
+        error: REMOVED,
+      });
+      expect(records[4]?.details).toEqual({
+        change: 'deleted',
+        ...what,
+        before: settings('0 6 * * *'),
+        after: null,
+        settings: rows('0 6 * * *', null),
+      });
+    });
+  },
+);

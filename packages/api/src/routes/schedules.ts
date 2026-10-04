@@ -1,10 +1,18 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
+import {
+  actorOf,
+  recordIn,
+  scheduleChangeEntry,
+  scheduleSettingsOf,
+  type ScheduleChange,
+} from '../audit/record';
 import { USER } from '../auth/guard';
 import { userOf } from '../auth/user';
 import type { CubeClient } from '../cube/client';
 import { listedBuildables, type Buildable } from '../jobs/build';
 import { EVERYTHING, NO_JOBS, reaches, type JobsAccess } from '../jobs/scope';
+import type { AuditStore } from '../repos/audit';
 import type { BuildHistory, LastRun } from '../repos/build-history';
 import { cronPreview } from '../scheduler/cron';
 import {
@@ -89,6 +97,7 @@ export function registerWechartSchedules(
     modelFiles,
     access,
     history,
+    audit,
     now = () => new Date(),
   }: {
     readonly scheduler: WechartScheduler;
@@ -98,6 +107,8 @@ export function registerWechartSchedules(
     readonly access?: JobsAccess;
     /** Each schedule's last run (T552); none, and none is shown. */
     readonly history?: BuildHistory;
+    /** Where each change is recorded with who made it (T505, AC-294); none, and it isn't. */
+    readonly audit?: Pick<AuditStore, 'record'>;
     /** Next runs are counted from it. */
     readonly now?: () => Date;
   },
@@ -160,6 +171,13 @@ export function registerWechartSchedules(
     return { key: user.key, name: user.name };
   };
 
+  /**
+   * A schedule made, changed, resumed or deleted, in the audit trail by whom
+   * (T505, AC-294; design 16, state I), in its pre-aggregation's folder.
+   */
+  const recorded = (request: FastifyRequest, schedule: Schedule, done: ScheduleChange) =>
+    recordIn(audit, scheduleChangeEntry(actorOf(userOf(request)), schedule, done), request.log);
+
   // Those of the folders they write, a Super-Admin's every folder's (AC-297).
   app.get('/api/wechart-schedules', USER, async (request, reply) => {
     const scope = await scopeOf(request);
@@ -208,6 +226,7 @@ export function registerWechartSchedules(
     if (!asked.ok) return reply.status(asked.status).send(asked.body);
     try {
       const made = await scheduler.create(asked.fields, byOf(request));
+      await recorded(request, made, { change: 'made', after: scheduleSettingsOf(made) });
       // As the list has it (T552's review): the page shows it at once.
       return reply.status(201).send(listedRow(made, asked.row, undefined, now()));
     } catch (error) {
@@ -238,6 +257,11 @@ export function registerWechartSchedules(
     try {
       const changed = await scheduler.change(id, asked.fields, byOf(request));
       if (changed === undefined) return reply.status(404).send(NO_SUCH_SCHEDULE);
+      await recorded(request, changed, {
+        change: 'changed',
+        before: scheduleSettingsOf(found.schedule),
+        after: scheduleSettingsOf(changed),
+      });
       const last = (await history?.lastRunsOf([id]))?.get(id);
       return listedRow(changed, asked.row, last, now());
     } catch (error) {
@@ -257,6 +281,13 @@ export function registerWechartSchedules(
     if (!found.ok) return reply.status(found.status).send(found.body);
     const resumed = await scheduler.resume(id, byOf(request));
     if (resumed === undefined) return reply.status(404).send(NO_SUCH_SCHEDULE);
+    // Recorded where it was suspended and now runs: one already running is answered as it is.
+    if (found.schedule.suspendedAt !== null && resumed.suspendedAt === null)
+      await recorded(request, resumed, {
+        change: 'resumed',
+        suspendedAt: found.schedule.suspendedAt,
+        error: found.schedule.suspendedError,
+      });
     const rows = await listedBuildables(client, modelFiles, access).catch(() => undefined);
     const last = (await history?.lastRunsOf([id]))?.get(id);
     return listedRow(
@@ -272,7 +303,11 @@ export function registerWechartSchedules(
     const { id } = request.params as { id: string };
     const found = await theirs(request, id);
     if (!found.ok) return reply.status(found.status).send(found.body);
-    await scheduler.remove(id);
+    if (await scheduler.remove(id))
+      await recorded(request, found.schedule, {
+        change: 'deleted',
+        before: scheduleSettingsOf(found.schedule),
+      });
     return reply.status(204).send();
   });
 }

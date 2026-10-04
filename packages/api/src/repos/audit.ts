@@ -24,6 +24,12 @@ export const AUDIT_EVENTS = [
   'publish-refused',
   // A SQL run, its SQL's literals replaced (T534, AC-382; R50-13).
   'sql-run',
+  // Build now, Build all or Rebuild selected from Jobs; a cancel in the queue;
+  // a wechart schedule made, changed, suspended, resumed or deleted (T505,
+  // AC-294; design 16, state I). A run a schedule starts is Run history's (Q12).
+  'build-started',
+  'build-cancelled',
+  'schedule-change',
 ] as const;
 export type AuditEvent = (typeof AUDIT_EVENTS)[number];
 

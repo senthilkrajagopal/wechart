@@ -208,6 +208,8 @@ async function main(): Promise<void> {
     store: scheduleStore(db),
     history: builds,
     cube: serviceCube,
+    // A suspension in the audit trail, by wechart's scheduler (T505, Q12).
+    audit: auditStore(db),
     onError: (error) => {
       app.log.warn({ err: error }, 'wechart’s scheduler failed');
     },

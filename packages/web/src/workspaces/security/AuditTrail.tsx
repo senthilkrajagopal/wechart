@@ -25,6 +25,11 @@ export const EVENTS = [
   ['publish-refused', 'Publish refused'],
   // A SQL run, its literals replaced (T534, AC-382; design 15, state J).
   ['sql-run', 'SQL run'],
+  // Builds started from Jobs, cancels, and wechart schedules' changes (T505,
+  // AC-294; design 16, state I).
+  ['build-started', 'Build started'],
+  ['build-cancelled', 'Build cancelled'],
+  ['schedule-change', 'Schedule change'],
 ] as const;
 export type AuditEvent = (typeof EVENTS)[number][0];
 const EVENT_LABEL = Object.fromEntries(EVENTS) as Record<AuditEvent, string>;
@@ -134,6 +139,17 @@ const KIND_LABEL: Record<string, string> = {
   chart: 'Chart',
   model: 'Model',
   'data-source': 'Data source',
+  'pre-aggregation': 'Pre-aggregation',
+  schedule: 'Schedule',
+};
+
+/** What was done to a wechart schedule, as its record's heading says it (design 16, I1). */
+const SCHEDULE_CHANGES: Readonly<Record<string, string>> = {
+  made: 'Made',
+  changed: 'Changed',
+  suspended: 'Suspended',
+  resumed: 'Resumed',
+  deleted: 'Deleted',
 };
 
 /** Who, as the trail names them: the identity the provider sent, else the name. */
@@ -223,6 +239,10 @@ function EventIcon({ event }: { event: AuditEvent }) {
     'publish-refused': 'M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2zM3.8 3.8l8.4 8.4',
     // A terminal's prompt, as design 15 draws the SQL tab's.
     'sql-run': 'M2.5 3.5h11v9h-11zM5 6.5 7 8l-2 1.5M8.5 10h2.5',
+    // Design 16's: play, a struck circle, and a calendar (state I).
+    'build-started': 'M5 3.2v9.6L12.6 8z',
+    'build-cancelled': 'M8 1.8a6.2 6.2 0 1 0 0 12.4A6.2 6.2 0 0 0 8 1.8zM3.8 12.2l8.4-8.4',
+    'schedule-change': 'M2.2 3.2h11.6v10.6H2.2zM2.2 6.5h11.6M5.3 1.8v2.8M10.7 1.8v2.8M7.4 10h1.2',
   };
   return (
     <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -740,8 +760,13 @@ function EventPicker({
 /** The full record (pin 7; states A and B): never edited or deleted here. */
 function Inspector({ id, record, onClose }: { id: string; record: Record_; onClose: () => void }) {
   const when = whenOf(record.at);
-  const label = EVENT_LABEL[record.event] ?? record.event;
   const details = record.details ?? {};
+  // A schedule change says what it was: "Schedule change · Changed" (design 16, I1).
+  const change =
+    record.event === 'schedule-change' && typeof details['change'] === 'string'
+      ? SCHEDULE_CHANGES[details['change']]
+      : undefined;
+  const label = `${EVENT_LABEL[record.event] ?? record.event}${change === undefined ? '' : ` · ${change}`}`;
   const role = typeof details['role'] === 'string' ? details['role'] : undefined;
   // Focus to the record as it opens, since it follows the whole table (T369's review).
   const heading = useRef<HTMLHeadingElement>(null);
@@ -797,10 +822,46 @@ function Inspector({ id, record, onClose }: { id: string; record: Record_; onClo
             <dd>{role}</dd>
           </>
         )}
+        {record.event === 'schedule-change' ? (
+          <>
+            <dt>Schedule</dt>
+            <dd>{record.item?.title ?? '—'} · wechart</dd>
+            <dt>Builds</dt>
+            <dd>
+              <code>{typeof details['shownName'] === 'string' ? details['shownName'] : '—'}</code>
+            </dd>
+          </>
+        ) : null}
         <dt>Folder</dt>
         <dd>{folderText(record, true)}</dd>
+        {/* By wechart's scheduler: after how many failures, with Cube's last error (Q12). */}
+        {record.event === 'schedule-change' && details['change'] === 'suspended' ? (
+          <>
+            <dt>Failures in a row</dt>
+            <dd>{typeof details['failures'] === 'number' ? String(details['failures']) : '—'}</dd>
+            <dt>Last error</dt>
+            <dd>{typeof details['error'] === 'string' ? details['error'] : '—'}</dd>
+          </>
+        ) : null}
+        {/* Resumed from its suspension: since when, and the error then (T505's review). */}
+        {record.event === 'schedule-change' &&
+        details['change'] === 'resumed' &&
+        typeof details['suspendedAt'] === 'string' ? (
+          <>
+            <dt>Suspended since</dt>
+            <dd>
+              <time dateTime={details['suspendedAt']} title={whenOf(details['suspendedAt']).utc}>
+                {whenOf(details['suspendedAt']).shown}
+              </time>
+            </dd>
+            <dt>Last error then</dt>
+            <dd>{typeof details['error'] === 'string' ? details['error'] : '—'}</dd>
+          </>
+        ) : null}
       </dl>
-      {record.event === 'access-change' ? (
+      {record.event === 'schedule-change' && Array.isArray(details['settings']) ? (
+        <ScheduleSettings settings={details['settings']} />
+      ) : record.event === 'access-change' ? (
         <>
           <Groups name="Read-write groups" change={details['readWrite']} />
           <Groups name="Read-only groups" change={details['readOnly']} />
@@ -1007,6 +1068,52 @@ function Breaks({
         </>
       )}
     </dl>
+  );
+}
+
+/**
+ * A wechart schedule's settings, before and after it was made, changed or
+ * deleted (T505; design 16, state I): one that kept its value says so.
+ */
+function ScheduleSettings({ settings }: { settings: readonly unknown[] }) {
+  const rows = settings.filter(
+    (each): each is { setting: string; before: string | null; after: string | null } =>
+      typeof each === 'object' &&
+      each !== null &&
+      typeof (each as { setting?: unknown }).setting === 'string',
+  );
+  return (
+    <>
+      <h4>What changed</h4>
+      <table className="query-log" aria-label="What changed">
+        <thead>
+          <tr>
+            <th scope="col">
+              <span className="visually-hidden">Setting</span>
+            </th>
+            <th scope="col">Before</th>
+            <th scope="col">After</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.setting}>
+              <td>{row.setting}</td>
+              {row.before !== null && row.before === row.after ? (
+                <td colSpan={2} className="audit-trail__unchanged">
+                  {row.before}, unchanged
+                </td>
+              ) : (
+                <>
+                  <td>{row.before ?? '—'}</td>
+                  <td>{row.after ?? '—'}</td>
+                </>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
   );
 }
 

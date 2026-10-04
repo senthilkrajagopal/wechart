@@ -3,8 +3,10 @@ import { randomUUID } from 'node:crypto';
 import type { Kysely, Selectable } from 'kysely';
 import type { PgBoss } from 'pg-boss';
 
+import { scheduleChangeEntry, WECHART_SCHEDULER } from '../audit/record';
 import type { CubeClient } from '../cube/client';
 import type { Database, ScheduleTable } from '../db/schema';
+import type { AuditStore } from '../repos/audit';
 import type { BuildHistory } from '../repos/build-history';
 import { buildablesFrom } from '../jobs/build';
 import { previewOf, readCron, unknownZone, zoneNamed, type Preview } from './cron';
@@ -257,6 +259,7 @@ export function wechartScheduler({
   store,
   history,
   cube,
+  audit,
   now = () => new Date(),
   pollingIntervalSeconds = 2,
   onError = () => undefined,
@@ -265,6 +268,11 @@ export function wechartScheduler({
   readonly store: ScheduleStore;
   /** Where each run is recorded (T372); none, and runs aren't recorded. */
   readonly history?: BuildHistory;
+  /**
+   * Where a suspension is recorded, by wechart's scheduler (T505, Q12); none,
+   * and it isn't. The runs it starts aren't: Run history has them.
+   */
+  readonly audit?: Pick<AuditStore, 'record'>;
   /** With the service credential, as Jobs builds (T420). */
   readonly cube: CubeClient;
   readonly now?: () => Date;
@@ -313,8 +321,20 @@ export function wechartScheduler({
     if (schedule.suspendedAt !== null) return true;
     const { count, lastError } = await failuresOf(history, schedule);
     if (count < schedule.suspendAfter) return false;
-    if (await store.suspend(schedule.id, now(), lastError))
+    if (await store.suspend(schedule.id, now(), lastError)) {
       await boss.unschedule(RUN_QUEUE, schedule.id);
+      // In the audit trail, by wechart's scheduler, after how many failures (T505, Q12).
+      await audit
+        ?.record(
+          scheduleChangeEntry(WECHART_SCHEDULER, schedule, {
+            change: 'suspended',
+            failures: count,
+            error: lastError,
+          }),
+        )
+        // Suspended either way: the miss said.
+        .catch(onError);
+    }
     return true;
   };
 

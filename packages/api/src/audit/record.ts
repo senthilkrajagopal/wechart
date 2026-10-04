@@ -1,7 +1,15 @@
-import { DRIVERS, type DriverType, type FieldValue, type FolderAccessSetting } from '@wechart/core';
+import {
+  DRIVERS,
+  periodOf,
+  periodsOf,
+  type DriverType,
+  type FieldValue,
+  type FolderAccessSetting,
+} from '@wechart/core';
 import type { FastifyBaseLogger } from 'fastify';
 
 import type { WechartUser } from '../auth/user';
+import { shownNameOf } from '../jobs/history';
 import type { AuditActor, AuditEntry, AuditStore } from '../repos/audit';
 
 /**
@@ -73,6 +81,179 @@ export function accessChangeSummary(
     if (removed.length > 0) parts.push(`removed ${groups(removed)}`);
   }
   return parts.length === 0 ? 'No change' : capital(parts.join('; '));
+}
+
+/**
+ * A pre-aggregation as the trail names it (T505; design 16, state I): its
+ * cube's short name and its own, as Jobs and Run history show it.
+ */
+export const preAggregationItem = (preAggregation: string) => ({
+  kind: 'pre-aggregation',
+  id: preAggregation,
+  title: shownNameOf(preAggregation),
+});
+
+/**
+ * A build started from Jobs in one line (T505, AC-294; design 16, I1):
+ * "Build now · whole" for a rollup that isn't partitioned, "Build all ·
+ * every partition", "Rebuild selected · Sep, Aug 2026".
+ */
+export function buildStartedSummary(
+  partitions: readonly string[] | null,
+  granularity: string | null,
+): string {
+  if (partitions !== null) return `Rebuild selected · ${periodsOf(partitions, granularity)}`;
+  return granularity === null ? 'Build now · whole' : 'Build all · every partition';
+}
+
+/** A cancel in the queue in one line, with the partition's state then: "Queued · Aug 2026" (I1). */
+export function buildCancelledSummary(
+  state: string,
+  partition: string | null,
+  granularity: string | null,
+): string {
+  return `${capital(state)} · ${partition === null ? 'whole' : periodOf(partition, granularity)}`;
+}
+
+/** wechart's own scheduler, as the trail names it when it suspends a schedule (Q12). */
+export const WECHART_SCHEDULER: AuditActor = {
+  key: 'wechart:scheduler',
+  name: 'wechart’s scheduler',
+};
+
+/** A wechart schedule's settings as a record keeps them, before and after a change. */
+export interface ScheduleSettings {
+  readonly name: string;
+  readonly preAggregation: string;
+  readonly cron: string;
+  readonly timezone: string;
+  readonly missed: 'once' | 'skip';
+  readonly suspendAfter: number;
+}
+
+export const scheduleSettingsOf = (schedule: ScheduleSettings): ScheduleSettings => ({
+  name: schedule.name,
+  preAggregation: schedule.preAggregation,
+  cron: schedule.cron,
+  timezone: schedule.timezone,
+  missed: schedule.missed,
+  suspendAfter: schedule.suspendAfter,
+});
+
+/** Each setting by its label, its word in a summary, and its value as the trail shows it. */
+const SCHEDULE_SETTINGS: readonly {
+  readonly key: keyof ScheduleSettings;
+  readonly label: string;
+  readonly word: string;
+  readonly shown: (settings: ScheduleSettings) => string;
+}[] = [
+  { key: 'name', label: 'Name', word: 'name', shown: (each) => each.name },
+  {
+    key: 'preAggregation',
+    label: 'Pre-aggregation',
+    word: 'pre-aggregation',
+    shown: (each) => shownNameOf(each.preAggregation),
+  },
+  { key: 'cron', label: 'Cron', word: 'cron', shown: (each) => each.cron },
+  { key: 'timezone', label: 'Time zone', word: 'time zone', shown: (each) => each.timezone },
+  {
+    key: 'missed',
+    label: 'A missed run',
+    word: 'missed run',
+    shown: (each) => (each.missed === 'skip' ? 'Skipped' : 'Run once'),
+  },
+  {
+    key: 'suspendAfter',
+    label: 'Suspend after',
+    word: 'suspend after',
+    shown: (each) => String(each.suspendAfter),
+  },
+];
+
+/**
+ * A wechart schedule made, changed or deleted (T505, AC-294; design 16,
+ * state I): each of its settings before and after as the inspector's "What
+ * changed" shows them, none before it was made or after it was deleted.
+ */
+export function scheduleSettingRows(
+  before: ScheduleSettings | null,
+  after: ScheduleSettings | null,
+): { setting: string; before: string | null; after: string | null }[] {
+  return SCHEDULE_SETTINGS.map((each) => ({
+    setting: each.label,
+    before: before === null ? null : each.shown(before),
+    after: after === null ? null : each.shown(after),
+  }));
+}
+
+/** A schedule's change in one line: "Changed · cron", by the settings that changed. */
+export function scheduleChangeSummary(before: ScheduleSettings, after: ScheduleSettings): string {
+  const changed = SCHEDULE_SETTINGS.filter((each) => before[each.key] !== after[each.key]);
+  return changed.length === 0
+    ? 'Saved unchanged'
+    : `Changed · ${changed.map((each) => each.word).join(', ')}`;
+}
+
+/** What was done to a wechart schedule, with what the record keeps of it. */
+export type ScheduleChange =
+  | { readonly change: 'made'; readonly after: ScheduleSettings }
+  | {
+      readonly change: 'changed';
+      readonly before: ScheduleSettings;
+      readonly after: ScheduleSettings;
+    }
+  | { readonly change: 'deleted'; readonly before: ScheduleSettings }
+  /** By wechart's scheduler, after how many failures, with Cube's last words (Q12). */
+  | { readonly change: 'suspended'; readonly failures: number; readonly error: string | null }
+  /** From its suspension: since when, and with Cube's error then (T505's review). */
+  | { readonly change: 'resumed'; readonly suspendedAt: Date; readonly error: string | null };
+
+/**
+ * A wechart schedule's change as the trail records it (T505, AC-294; design
+ * 16, state I): in its pre-aggregation's folder, with what it builds, its
+ * settings before and after where they changed, and the line the trail shows.
+ */
+export function scheduleChangeEntry(
+  actor: AuditActor | null,
+  schedule: {
+    readonly id: string;
+    readonly name: string;
+    readonly folderId: string | null;
+    readonly preAggregation: string;
+  },
+  done: ScheduleChange,
+): AuditEntry {
+  const settings = (before: ScheduleSettings | null, after: ScheduleSettings | null) => ({
+    before,
+    after,
+    settings: scheduleSettingRows(before, after),
+  });
+  const [summary, kept] =
+    done.change === 'made'
+      ? [`Made · ${done.after.cron}`, settings(null, done.after)]
+      : done.change === 'changed'
+        ? [scheduleChangeSummary(done.before, done.after), settings(done.before, done.after)]
+        : done.change === 'deleted'
+          ? ['Deleted', settings(done.before, null)]
+          : done.change === 'suspended'
+            ? [
+                `Suspended after ${String(done.failures)} ${done.failures === 1 ? 'failure' : 'failures'}`,
+                { failures: done.failures, error: done.error },
+              ]
+            : ['Resumed', { suspendedAt: done.suspendedAt.toISOString(), error: done.error }];
+  return {
+    actor,
+    event: 'schedule-change',
+    folderId: schedule.folderId,
+    item: { kind: 'schedule', id: schedule.id, title: schedule.name },
+    summary,
+    details: {
+      change: done.change,
+      preAggregation: schedule.preAggregation,
+      shownName: shownNameOf(schedule.preAggregation),
+      ...kept,
+    },
+  };
 }
 
 /** A setting's value as the trail shows it. */

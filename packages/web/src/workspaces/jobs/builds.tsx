@@ -1,3 +1,5 @@
+import { periodOf, periodsOf } from '@wechart/core';
+
 import { Status } from './StateBadge';
 
 /**
@@ -107,35 +109,11 @@ export function durationOf(ms: number): string {
   return rest === 0 ? `${String(hours)} h` : `${String(hours)} h ${String(rest)} min`;
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
 /**
- * A partition by its period (research cube/system-partitions.md, "Derivation
- * of partitions"): its start, a UTC wall-clock `YYYY-MM-DDTHH:mm:ss.SSS`, as
- * its granularity names it — "Aug 2026", "29 Sep 2026", "Q3 2026", "Week of
- * 28 Sep 2026", "2026", "29 Sep 2026, 14:00".
+ * A partition by its period: "Aug 2026", "29 Sep 2026", "Q3 2026", as the
+ * audit trail's records say it too (T505), by the one function.
  */
-export function periodOf(start: string, granularity: string | null): string {
-  const [date = '', time = ''] = start.split('T');
-  const [year = '', month = '01', day = '01'] = date.split('-');
-  const monthName = MONTHS[Number(month) - 1] ?? month;
-  const dayName = `${String(Number(day))} ${monthName} ${year}`;
-  switch (granularity) {
-    case 'year':
-      return year;
-    case 'quarter':
-      return `Q${String(Math.floor((Number(month) - 1) / 3) + 1)} ${year}`;
-    case 'month':
-      return `${monthName} ${year}`;
-    case 'week':
-      return `Week of ${dayName}`;
-    case 'hour':
-    case 'minute':
-      return `${dayName}, ${time.slice(0, 5)}`;
-    default:
-      return dayName;
-  }
-}
+export { periodOf };
 
 /** The partition a job's table builds, from the name Cube gives it (research cube/job-records.md, "Table names"). */
 export function periodOfTable(table: string | null, granularity: string | null): string | null {
@@ -156,12 +134,8 @@ export function partitionsOf(
 ): string {
   if (build.partitions === null)
     return build.granularity === null ? 'Whole' : `All ${String(build.jobs)}`;
-  const starts = build.partitions;
-  const years = new Set(starts.map((start) => start.slice(0, 4)));
   // Months of one year say the year once (design 16, B1).
-  if (build.granularity === 'month' && years.size === 1)
-    return `${starts.map((start) => MONTHS[Number(start.slice(5, 7)) - 1] ?? '').join(', ')} ${[...years][0]!}`;
-  return starts.map((start) => periodOf(start, build.granularity)).join(', ');
+  return periodsOf(build.partitions, build.granularity);
 }
 
 /** How a build ended, or how far it has got while open, as an icon and words. */

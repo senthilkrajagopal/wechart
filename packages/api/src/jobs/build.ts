@@ -3,10 +3,12 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { parse as parseYaml } from 'yaml';
 
+import { actorOf, buildStartedSummary, preAggregationItem, recordIn } from '../audit/record';
 import { USER } from '../auth/guard';
 import { userOf } from '../auth/user';
 import type { CubeClient } from '../cube/client';
 import { filesInFolders, fileOf } from '../model/split';
+import type { AuditStore } from '../repos/audit';
 import type { BuildHistory } from '../repos/build-history';
 import { ROOT_FOLDER_ID } from '../repos/catalog';
 import type { ModelFile, ModelFileStore } from '../server';
@@ -245,6 +247,8 @@ export function registerBuilds(
   history?: { readonly store: BuildHistory; readonly now: () => Date },
   /** Each row's state, last build and starter, where xcube's routes are there (T550, AC-391). */
   states?: (rows: readonly Buildable[]) => Promise<Map<string, RowState>>,
+  /** Where each start is recorded with who started it (T505, AC-294); none, and it isn't. */
+  audit?: Pick<AuditStore, 'record'>,
 ): void {
   const scopeOf = (request: FastifyRequest) =>
     access === undefined ? Promise.resolve(EVERYTHING) : access.scope(request);
@@ -294,8 +298,9 @@ export function registerBuilds(
         });
     }
     // Its folder found before Cube is asked, so nothing that fails after the
-    // post can leave a build running unrecorded (T372's review).
-    if (history !== undefined || partitions !== undefined)
+    // post can leave a build running unrecorded (T372's review), in Run
+    // history or the audit trail (T505).
+    if (history !== undefined || audit !== undefined || partitions !== undefined)
       row ??= (await listed()).find((each) => each.id === preAggregation);
     // Made of other rollups: built through them, never itself (T375, A3).
     if (row?.buildable === false)
@@ -348,22 +353,45 @@ export function registerBuilds(
             })),
           };
     // A start that made no job built nothing, and is said so, not recorded.
-    if (history === undefined || tokens.length === 0) return { tokens, ...refused };
-    // One record for the start, followed to its end on the server (T372, AC-150).
+    if (tokens.length === 0) return { tokens, ...refused };
     const user = userOf(request);
-    const runId = await history.store.start({
+    const folderId = row?.folderId ?? null;
+    const startedPartitions = partitions === undefined ? null : took;
+    const granularity = row?.partitionGranularity ?? null;
+    const via = partitions === undefined ? 'build-all' : 'rebuild-selected';
+    // One record for the start, followed to its end on the server (T372, AC-150).
+    const runId = await history?.store.start({
       preAggregation,
-      folderId: row?.folderId ?? null,
-      partitions: partitions === undefined ? null : took,
-      granularity: row?.partitionGranularity ?? null,
-      via: partitions === undefined ? 'build-all' : 'rebuild-selected',
+      folderId,
+      partitions: startedPartitions,
+      granularity,
+      via,
       starter: { kind: 'person', key: user.key, name: user.name },
       requestId,
       tokens,
       startedAt,
       answeredAt: history.now(),
     });
-    return { tokens, runId, ...refused };
+    // And in the audit trail, by whom, with what it asked (T505, AC-294; design 16, I).
+    await recordIn(
+      audit,
+      {
+        actor: actorOf(user),
+        event: 'build-started',
+        folderId,
+        item: preAggregationItem(preAggregation),
+        summary: buildStartedSummary(startedPartitions, granularity),
+        details: {
+          preAggregation,
+          via,
+          partitions: startedPartitions,
+          granularity,
+          ...(runId === undefined ? {} : { runId }),
+        },
+      },
+      request.log,
+    );
+    return { tokens, ...(runId === undefined ? {} : { runId }), ...refused };
   });
 
   app.post('/api/builds/status', USER, async (request, reply) => {

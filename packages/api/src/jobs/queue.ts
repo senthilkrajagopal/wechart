@@ -1,8 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
+import { actorOf, buildCancelledSummary, preAggregationItem, recordIn } from '../audit/record';
 import { USER } from '../auth/guard';
 import { userOf } from '../auth/user';
 import type { CubeClient } from '../cube/client';
+import type { AuditStore } from '../repos/audit';
 import type { BuildHistory, StartFound, Starter } from '../repos/build-history';
 import type { ModelFileStore } from '../server';
 import type { QueueEntry, XcubeQueue } from '../xcube/queue';
@@ -79,6 +81,7 @@ export function registerQueue(
     client,
     modelFiles,
     access,
+    audit,
     now,
   }: {
     readonly queue: XcubeQueue;
@@ -86,6 +89,8 @@ export function registerQueue(
     readonly client: CubeClient;
     readonly modelFiles?: ModelFileStore;
     readonly access?: JobsAccess;
+    /** Where each cancel is recorded with who made it (T505, AC-294); none, and it isn't. */
+    readonly audit?: Pick<AuditStore, 'record'>;
     readonly now: () => Date;
   },
 ): void {
@@ -207,6 +212,26 @@ export function registerQueue(
     // xcube cancelled it either way: said so, and the miss logged.
     if (!recorded)
       request.log.warn({ key, runId: found.start.runId }, 'a cancel xcube made was not recorded');
+    // And in the audit trail, with the partition and its state then (T505, AC-294; design 16, I).
+    const shown = rowOf(found);
+    const partition = found.entry.partition?.start ?? null;
+    await recordIn(
+      audit,
+      {
+        actor: actorOf(user),
+        event: 'build-cancelled',
+        folderId: shown.folderId,
+        item: preAggregationItem(found.entry.preAggregation),
+        summary: buildCancelledSummary(shown.state, partition, shown.granularity),
+        details: {
+          preAggregation: found.entry.preAggregation,
+          partition,
+          state: shown.state,
+          runId: found.start.runId,
+        },
+      },
+      request.log,
+    );
     return { cancelled: true };
   });
 }

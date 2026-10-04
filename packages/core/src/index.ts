@@ -283,4 +283,5 @@ export {
   type SealedV1,
 } from './data-sources/validate';
 export { INFO_V1, isSealedDriver, padV1, secretAadV1 } from './data-sources/aad';
+export { periodOf, periodsOf } from './periods';
 export { sealSecretV1, type XcubeKey } from './data-sources/seal';

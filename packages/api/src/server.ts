@@ -1154,6 +1154,8 @@ export function buildServer({
     jobsAccess,
     buildHistory === undefined ? undefined : { store: buildHistory, now },
     statesOfRows,
+    // Each start in the audit trail, by whom (T505, AC-294).
+    audit,
   );
   // Run history and each build's log, scoped as Jobs is (T374, AC-150).
   if (buildHistory !== undefined)
@@ -1166,6 +1168,8 @@ export function buildServer({
       client,
       ...(modelFiles === undefined ? {} : { modelFiles }),
       access: jobsAccess,
+      // Each cancel in the audit trail, by whom (T505, AC-294).
+      ...(audit === undefined ? {} : { audit }),
       now,
     });
   // A rollup's partitions, with their states (T375, AC-145).
@@ -1190,6 +1194,8 @@ export function buildServer({
       access: jobsAccess,
       // Each one's last run, and its next from now (T552, AC-154).
       ...(buildHistory === undefined ? {} : { history: buildHistory }),
+      // Each change in the audit trail, by whom (T505, AC-294).
+      ...(audit === undefined ? {} : { audit }),
       now,
     });
   // A data source's catalog, through Cube's introspection API (T145, AC-139).

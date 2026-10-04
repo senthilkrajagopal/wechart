@@ -1,3 +1,4 @@
+import { landed } from '../model-files';
 import { expect, test } from './fixtures';
 
 /**
@@ -92,6 +93,122 @@ test.describe('the audit trail, as a Super-Admin sees it', () => {
 
       // The retention said (pin 8).
       await expect(main).toContainText('Records older than 1 year are removed.');
+    } finally {
+      await page.request.delete(`/api/documents/folder/${folderId}`);
+    }
+  });
+});
+
+/**
+ * T505 (AC-294; design 16, state I): a build started from Jobs and a wechart
+ * schedule made and deleted are recorded with who, what, the folder and
+ * when, each its own kind with its icon, and the Event filter finds them.
+ */
+test.describe('builds and schedule changes in the trail', () => {
+  test.use({ role: 'super' });
+
+  test('records Build now and a schedule made and deleted, and opens what the schedule was made with', async ({
+    page,
+  }) => {
+    // A model landed and read by Cube, then a build: longer than a page's test.
+    test.setTimeout(180_000);
+    const cube = `audited_${RUN}`;
+    const made = await page.request.post('/api/documents', {
+      data: { kind: 'folder', title: `Built ${RUN}`, folderId: 'root' },
+    });
+    expect(made.status()).toBe(201);
+    const folderId = ((await made.json()) as { id: string }).id;
+    try {
+      // A rollup that isn't partitioned, through a proposal `super` approves (T451).
+      const file = {
+        path: `cubes/${cube}.yml`,
+        content: [
+          'cubes:',
+          `  - name: ${cube}`,
+          '    sql_table: public.orders',
+          '    measures:',
+          '      - name: count',
+          '        type: count',
+          '    dimensions:',
+          '      - name: status',
+          '        sql: status',
+          '        type: string',
+          '    pre_aggregations:',
+          '      - name: main',
+          '        measures: [count]',
+          '        dimensions: [status]',
+          '',
+        ].join('\n'),
+      };
+      expect(await landed(page.request, folderId, [file])).toEqual([file]);
+      const preAggregation = `f${folderId.replaceAll('-', '')}__${cube}.main`;
+      // Build now, once Cube serves the model it landed in.
+      await expect
+        .poll(
+          async () =>
+            (await page.request.post('/api/builds', { data: { preAggregation } })).status(),
+          {
+            timeout: 60_000,
+          },
+        )
+        .toBe(200);
+      const schedule = await page.request.post('/api/wechart-schedules', {
+        data: { name: `Nightly ${RUN}`, preAggregation, cron: '0 5 * * *', timezone: 'UTC' },
+      });
+      expect(schedule.status(), await schedule.text()).toBe(201);
+      const scheduleId = ((await schedule.json()) as { id: string }).id;
+      expect((await page.request.delete(`/api/wechart-schedules/${scheduleId}`)).status()).toBe(
+        204,
+      );
+
+      await page.goto(`/security/audit?folder=${folderId}`);
+      const main = page.getByRole('main');
+      await main.getByRole('button', { name: /^Event/ }).click();
+      for (const kind of ['Build started', 'Build cancelled', 'Schedule change'])
+        await main.getByRole('checkbox', { name: kind }).check();
+      await page.keyboard.press('Escape');
+      await expect(page).toHaveURL(
+        new RegExp(
+          `\\?event=build-started%2Cbuild-cancelled%2Cschedule-change&folder=${folderId}$`,
+        ),
+      );
+      await expect(main.getByRole('list', { name: 'Active filters' })).toContainText(
+        'Event: Build started, Build cancelled, Schedule change',
+      );
+      const table = main.getByRole('table', { name: 'Audit trail' });
+      // Newest first: the schedule deleted, made, then the build.
+      const rows = table.getByRole('row');
+      await expect(rows).toHaveCount(4);
+      const expected = [
+        ['Schedule change', `Schedule · Nightly ${RUN}`, 'Deleted'],
+        ['Schedule change', `Schedule · Nightly ${RUN}`, 'Made · 0 5 * * *'],
+        ['Build started', `Pre-aggregation · ${cube}.main`, 'Build now · whole'],
+      ];
+      for (const [at, [kind, item, summary]] of expected.entries())
+        await expect(rows.nth(at + 1).getByRole('cell')).toHaveText([
+          /^Today \d\d:\d\d:\d\d$/,
+          'super@wechart.test',
+          kind!,
+          `Built ${RUN}`,
+          item!,
+          summary!,
+        ]);
+      // Each kind with its icon beside its label (rule 3).
+      for (const at of [1, 3])
+        await expect(rows.nth(at).getByRole('cell').nth(2).locator('svg path')).toHaveCount(1);
+
+      // What it was made with, in the inspector (I1).
+      await rows.nth(2).getByRole('button', { name: 'Made · 0 5 * * *' }).click();
+      const inspector = main.getByRole('region', { name: /^Schedule change · Made/ });
+      await expect(inspector.getByRole('definition').nth(1)).toHaveText(`Nightly ${RUN} · wechart`);
+      await expect(inspector.getByRole('definition').nth(2)).toHaveText(`${cube}.main`);
+      await expect(
+        inspector
+          .getByRole('table', { name: 'What changed' })
+          .getByRole('row')
+          .nth(3)
+          .getByRole('cell'),
+      ).toHaveText(['Cron', '—', '0 5 * * *']);
     } finally {
       await page.request.delete(`/api/documents/folder/${folderId}`);
     }

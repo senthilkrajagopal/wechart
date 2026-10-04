@@ -140,8 +140,9 @@ describe('New schedule (T552, AC-234)', () => {
     });
     expect(radio(missed, 'Run it once, when wechart is back').checked).toBe(true);
     expect(radio(missed, 'Skip it').checked).toBe(false);
+    // Recorded, now that the trail records it (T505; design 16, screen 2).
     expect(text(within(pane).getByTestId('applies-at-once'))).toBe(
-      'Applies at once, with no proposal.',
+      'Applies at once, with no proposal. Recorded in the audit trail.',
     );
     const create = button(pane, 'Create schedule');
     // It waits for a pre-aggregation, a name, a cron it can read and a zone (pin 15).

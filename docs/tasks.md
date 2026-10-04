@@ -7681,7 +7681,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - `ScheduleForm.test.tsx`, `SchedulePane.test.tsx`, `SchedulesPage.test.tsx`;
     - `e2e/schedules.spec.ts` (Chrome): a schedule whose rollup the model no longer has is suspended after 1, says so on its row and pane with Cube's words, offers Resume focused, and is resumed once the rollup is back (E4).
   - AC-155 ticked.
-- [ ] T505 (AC-294) Record builds started from Jobs, cancels, and changes to wechart-owned schedules in the audit trail, a suspension by "wechart's scheduler" *(added 2026-09-28, R42.8; rewritten and moved here 2026-10-02 to design 16's state I and Q12, `[R56]`)*
+- [x] T505 (AC-294) Record builds started from Jobs, cancels, and changes to wechart-owned schedules in the audit trail, a suspension by "wechart's scheduler" *(added 2026-09-28, R42.8; rewritten and moved here 2026-10-02 to design 16's state I and Q12, `[R56]`)*
   - Files:
     - `packages/api/src/audit/record.ts` (+ test);
     - `packages/api/src/jobs/{build,queue}.ts`;
@@ -7696,6 +7696,34 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **Not recorded:** a run that a schedule starts.
   - Depends on: T376, T379. AC-294 stays open until T368's other kinds land (T349 … T354).
   - *2026-10-02, from T368's review:* T368 showed the seven kinds AC-294 first named. AC-294 is ticked with this task, but also waits for the user's answer to T368's open question: a folder moved elsewhere inherits other groups, and nothing records that as a permission change.
+  - *Done 2026-10-04.* AC-294 stays open: its amended text also names Run now, a stopped build and a paused schedule, which T554, T555 and T556 record.
+    - Where each is recorded:
+      - Build started: `POST /api/builds`, once Cube took the start.
+      - Build cancelled: `POST /api/jobs/queue/cancel`, once xcube cancelled it.
+      - Schedule change: the schedules routes, and a suspension in `scheduler/schedules.ts`, where it happens. `suspend.ts` only counts failures.
+    - Each names its pre-aggregation's folder. A build or cancel names the pre-aggregation by its cube's short name, as Run history does.
+    - `e2e/security/audit.spec.ts` draws Build now, and a schedule made and deleted, on the trail, filtered to the three kinds. It opens what the schedule was made with.
+    - A partition's period moved to `@wechart/core` (`periods.ts`, + test), so Jobs and the trail say it by one function.
+    - The schedule form's foot now says "Recorded in the audit trail." as design 16 does (T552's call).
+  - **Implementer's calls, for the user to confirm or change:**
+    - **Build all of a partitioned rollup** reads "Build all · every partition". Design 16 draws only "Build now · whole" and "Rebuild selected · Sep, Aug".
+    - **Rebuild selected** says its partitions as Run history does (B1): "Sep, Aug 2026", the year once for months of one year. State I's row has "Sep, Aug".
+    - **A cancel** reads its state then and its partition: "Queued · Aug 2026", or "· whole".
+    - **What changed** lists each of a schedule's six settings, with before and after:
+      - one kept is "Europe/Berlin, unchanged", as I1 draws it;
+      - for one made, before is "—";
+      - for one deleted, after is "—".
+    - **A save that changed nothing** is recorded as "Saved unchanged", as a data source's is.
+    - **Resume** is recorded only when it resumed a suspended schedule.
+    - **wechart's scheduler** is the actor `wechart:scheduler`, with no identity, so the trail's User column and filter show "wechart’s scheduler".
+    - **A suspension's record** also says the failures in a row and Cube's last error, in the inspector.
+  - **One review round (spec-reviewer), fixed:**
+    1. The test that a schedule's run isn't recorded now also shows the run started a build, in Run history.
+    2. A Resume's record now says what it resumed from: since when the schedule was suspended, and Cube's error then.
+  - **Left as they are:**
+    - Two Resumes at once can both be recorded: concurrent saves aren't hardened further.
+    - I1's "Role" row isn't recorded for a schedule change.
+    - A schedule moved to another folder's pre-aggregation is recorded in its new folder only.
 - [ ] T553 [P] (AC-393) The refresh worker's badge and panel, from xcube's refresh-worker route *(added 2026-10-02, `[R56]`: design 16's state F and Q4)*
   - Files:
     - `packages/api/src/xcube/refresh-worker.ts` (+ test): `GET …/models/{model}/refresh-worker`, research `xcube-jobs-schedules-routes.md` §3;

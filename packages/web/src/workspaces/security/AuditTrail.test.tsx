@@ -572,6 +572,297 @@ describe('the audit trail (T369, AC-295)', () => {
     expect(within(row).getAllByRole('cell')[4]?.textContent).toBe('Cube Store');
   });
 
+  describe('builds, cancels and schedule changes (T505, AC-294; design 16, state I)', () => {
+    const WREN = { key: 'wren', name: 'Wren', identity: 'wren@corp.example' };
+    const SCHEDULE = { kind: 'schedule', id: 's-1', title: 'Month-end close' };
+    const BY_MONTH = {
+      kind: 'pre-aggregation',
+      id: 'f9a1__orders_emea.by_month',
+      title: 'orders_emea.by_month',
+    };
+    const settings = (cron: string) => ({
+      name: 'Month-end close',
+      preAggregation: BY_MONTH.id,
+      cron,
+      timezone: 'Europe/Berlin',
+      missed: 'once',
+      suspendAfter: 3,
+    });
+    const rows = (before: string | null, after: string | null) => {
+      const shown = (cron: string | null) =>
+        cron === null
+          ? [null, null, null, null, null, null]
+          : ['Month-end close', 'orders_emea.by_month', cron, 'Europe/Berlin', 'Run once', '3'];
+      const [was, is] = [shown(before), shown(after)];
+      return ['Name', 'Pre-aggregation', 'Cron', 'Time zone', 'A missed run', 'Suspend after'].map(
+        (setting, at) => ({ setting, before: was[at], after: is[at] }),
+      );
+    };
+    const what = { preAggregation: BY_MONTH.id, shownName: 'orders_emea.by_month' };
+    const STATE_I = [
+      {
+        id: 'i1',
+        at: today(14, 41, 20),
+        actor: WREN,
+        event: 'schedule-change',
+        folderId: 'emea',
+        folderPath: EMEA,
+        item: SCHEDULE,
+        summary: 'Made · 0 6 1 * *',
+        details: {
+          change: 'made',
+          ...what,
+          before: null,
+          after: settings('0 6 1 * *'),
+          settings: rows(null, '0 6 1 * *'),
+        },
+      },
+      {
+        id: 'i2',
+        at: today(14, 39, 2),
+        actor: WREN,
+        event: 'build-cancelled',
+        folderId: 'emea',
+        folderPath: EMEA,
+        item: BY_MONTH,
+        summary: 'Queued · Aug 2026',
+        details: {
+          preAggregation: BY_MONTH.id,
+          partition: '2026-08-01T00:00:00.000',
+          state: 'queued',
+          runId: 'run-1',
+        },
+      },
+      {
+        id: 'i3',
+        at: today(14, 38, 41),
+        actor: WREN,
+        event: 'build-started',
+        folderId: 'emea',
+        folderPath: EMEA,
+        item: BY_MONTH,
+        summary: 'Rebuild selected · Sep, Aug 2026',
+        details: {
+          preAggregation: BY_MONTH.id,
+          via: 'rebuild-selected',
+          partitions: ['2026-09-01T00:00:00.000', '2026-08-01T00:00:00.000'],
+          granularity: 'month',
+          runId: 'run-1',
+        },
+      },
+      {
+        id: 'i4',
+        at: today(11, 0, 41),
+        actor: { key: 'wechart:scheduler', name: 'wechart’s scheduler' },
+        event: 'schedule-change',
+        folderId: 'emea',
+        folderPath: EMEA,
+        item: SCHEDULE,
+        summary: 'Suspended after 3 failures',
+        details: {
+          change: 'suspended',
+          ...what,
+          failures: 3,
+          error: 'Cube refused it.',
+        },
+      },
+      {
+        id: 'i5',
+        at: today(10, 10, 12),
+        actor: WREN,
+        event: 'schedule-change',
+        folderId: 'emea',
+        folderPath: EMEA,
+        item: SCHEDULE,
+        summary: 'Changed · cron',
+        details: {
+          change: 'changed',
+          ...what,
+          before: settings('0 6 1 * *'),
+          after: settings('0 5 1 * *'),
+          settings: rows('0 6 1 * *', '0 5 1 * *'),
+        },
+      },
+    ];
+    const cells = (row: HTMLElement) =>
+      within(row)
+        .queryAllByRole('cell')
+        .map((cell) => cell.textContent);
+
+    it('shows each as its kind, with its icon, by whom, and the pre-aggregation or schedule', async () => {
+      serve({ first: { records: STATE_I, total: 5, retentionDays: 365 } });
+      open();
+      await screen.findByRole('table', { name: 'Audit trail' });
+
+      const body = within(table()).getAllByRole('row').slice(1);
+      expect(body.map((row) => cells(row).slice(1))).toEqual([
+        [
+          'wren@corp.example',
+          'Schedule change',
+          'Sales / EMEA',
+          'Schedule · Month-end close',
+          'Made · 0 6 1 * *',
+        ],
+        [
+          'wren@corp.example',
+          'Build cancelled',
+          'Sales / EMEA',
+          'Pre-aggregation · orders_emea.by_month',
+          'Queued · Aug 2026',
+        ],
+        [
+          'wren@corp.example',
+          'Build started',
+          'Sales / EMEA',
+          'Pre-aggregation · orders_emea.by_month',
+          'Rebuild selected · Sep, Aug 2026',
+        ],
+        [
+          'wechart’s scheduler',
+          'Schedule change',
+          'Sales / EMEA',
+          'Schedule · Month-end close',
+          'Suspended after 3 failures',
+        ],
+        [
+          'wren@corp.example',
+          'Schedule change',
+          'Sales / EMEA',
+          'Schedule · Month-end close',
+          'Changed · cron',
+        ],
+      ]);
+      // Each kind with its own icon beside its label (rule 3).
+      const iconOf = (row: HTMLElement, label: string) =>
+        within(row)
+          .getByText(label)
+          .previousElementSibling?.querySelector('path')
+          ?.getAttribute('d') ?? null;
+      const icons = [
+        iconOf(body[0]!, 'Schedule change'),
+        iconOf(body[1]!, 'Build cancelled'),
+        iconOf(body[2]!, 'Build started'),
+      ];
+      expect(icons.every((path) => path !== null && path !== '')).toBe(true);
+      expect(new Set(icons).size).toBe(3);
+    });
+
+    it('offers the three kinds in the Event filter, and asks for them', async () => {
+      const asked = serve({ first: { records: STATE_I, total: 5, retentionDays: 365 } });
+      open();
+      await screen.findByRole('table', { name: 'Audit trail' });
+
+      await userEvent.click(screen.getByRole('button', { name: /^Event/ }));
+      for (const label of ['Build started', 'Build cancelled', 'Schedule change'])
+        await userEvent.click(screen.getByRole('checkbox', { name: label }));
+      await waitFor(() =>
+        expect(lastQuery(asked).get('events')).toBe(
+          'build-started,build-cancelled,schedule-change',
+        ),
+      );
+      expect(screen.getByRole('list', { name: 'Active filters' }).textContent).toContain(
+        'Event: Build started, Build cancelled, Schedule change',
+      );
+    });
+
+    it('opens a schedule change with what it builds and what changed, before and after (I1)', async () => {
+      serve({ first: { records: STATE_I, total: 5, retentionDays: 365 } });
+      open();
+      await screen.findByRole('table', { name: 'Audit trail' });
+
+      await userEvent.click(within(table()).getByRole('button', { name: 'Changed · cron' }));
+      const inspector = screen.getByRole('region', { name: /^Schedule change · Changed/ });
+      expect(within(inspector).getByRole('heading', { level: 3 }).textContent).toBe(
+        ' Schedule change · Changed',
+      );
+      const terms = within(inspector)
+        .getAllByRole('term')
+        .map((term) => [term.textContent, term.nextElementSibling?.textContent]);
+      expect(terms).toEqual([
+        ['By', 'wren@corp.example'],
+        ['Schedule', 'Month-end close · wechart'],
+        ['Builds', 'orders_emea.by_month'],
+        ['Folder', 'Shared / Sales / EMEA'],
+      ]);
+      const changed = within(inspector).getByRole('table', { name: 'What changed' });
+      expect(within(changed).getAllByRole('row').map(cells)).toEqual([
+        [],
+        ['Name', 'Month-end close, unchanged'],
+        ['Pre-aggregation', 'orders_emea.by_month, unchanged'],
+        ['Cron', '0 6 1 * *', '0 5 1 * *'],
+        ['Time zone', 'Europe/Berlin, unchanged'],
+        ['A missed run', 'Run once, unchanged'],
+        ['Suspend after', '3, unchanged'],
+      ]);
+
+      // Made: every setting as it was set.
+      await userEvent.click(within(table()).getByRole('button', { name: 'Made · 0 6 1 * *' }));
+      const made = screen.getByRole('region', { name: /^Schedule change · Made/ });
+      expect(
+        within(within(made).getByRole('table', { name: 'What changed' }))
+          .getAllByRole('row')
+          .map(cells)[3],
+      ).toEqual(['Cron', '—', '0 6 1 * *']);
+    });
+
+    it('opens a suspension by wechart’s scheduler with after how many failures, and Cube’s last error (Q12)', async () => {
+      serve({ first: { records: STATE_I, total: 5, retentionDays: 365 } });
+      open();
+      await screen.findByRole('table', { name: 'Audit trail' });
+
+      await userEvent.click(
+        within(table()).getByRole('button', { name: 'Suspended after 3 failures' }),
+      );
+      const inspector = screen.getByRole('region', { name: /^Schedule change · Suspended/ });
+      const terms = within(inspector)
+        .getAllByRole('term')
+        .map((term) => [term.textContent, term.nextElementSibling?.textContent]);
+      expect(terms).toEqual([
+        ['By', 'wechart’s scheduler'],
+        ['Schedule', 'Month-end close · wechart'],
+        ['Builds', 'orders_emea.by_month'],
+        ['Folder', 'Shared / Sales / EMEA'],
+        ['Failures in a row', '3'],
+        ['Last error', 'Cube refused it.'],
+      ]);
+    });
+
+    it('opens a resume with since when it was suspended, and Cube’s error then (T505’s review)', async () => {
+      const suspendedAt = today(11, 0, 41);
+      serve({
+        first: {
+          records: [
+            {
+              id: 'i6',
+              at: today(15, 2, 0),
+              actor: WREN,
+              event: 'schedule-change',
+              folderId: 'emea',
+              folderPath: EMEA,
+              item: SCHEDULE,
+              summary: 'Resumed',
+              details: { change: 'resumed', ...what, suspendedAt, error: 'Cube refused it.' },
+            },
+          ],
+          total: 1,
+          retentionDays: 365,
+        },
+      });
+      open();
+      await screen.findByRole('table', { name: 'Audit trail' });
+
+      await userEvent.click(within(table()).getByRole('button', { name: 'Resumed' }));
+      const inspector = screen.getByRole('region', { name: /^Schedule change · Resumed/ });
+      const terms = within(inspector)
+        .getAllByRole('term')
+        .map((term) => [term.textContent, term.nextElementSibling?.textContent]);
+      expect(terms.slice(-2)).toEqual([
+        ['Suspended since', 'Today 11:00:41'],
+        ['Last error then', 'Cube refused it.'],
+      ]);
+    });
+  });
+
   it('pages to older records and back (pin 9)', async () => {
     const asked = serve({
       first: { records: RECORDS.slice(0, 2), next: 'c1', total: 3, retentionDays: 365 },
