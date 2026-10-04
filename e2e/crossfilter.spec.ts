@@ -29,7 +29,15 @@ async function crossFilterDashboard(
     pairs,
     unreachable = false,
     markings = false,
-  }: { defaultAction?: string; pairs?: Pairs; unreachable?: boolean; markings?: boolean } = {},
+    statusSplit,
+  }: {
+    defaultAction?: string;
+    pairs?: Pairs;
+    unreachable?: boolean;
+    markings?: boolean;
+    /** "By status" split by category: as a grouped bar's series, or a trellis's panels (T631). */
+    statusSplit?: 'groupedBar' | 'trellis';
+  } = {},
 ) {
   const unique = `${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
   const title = `Cross ${unique}`;
@@ -39,7 +47,12 @@ async function crossFilterDashboard(
     })
   ).json()) as { id: string };
 
-  const chartOn = async (chartTitle: string, dimension: string, cube = 'orders') => {
+  const chartOn = async (
+    chartTitle: string,
+    dimension: string,
+    cube = 'orders',
+    split?: 'groupedBar' | 'trellis',
+  ) => {
     const chart = (await (
       await request.post(`${API}/documents`, {
         data: { kind: 'chart', title: chartTitle, ...IN_MY_WORKSPACE },
@@ -55,8 +68,13 @@ async function crossFilterDashboard(
           localToDashboardId: dashboard.id,
           chart: {
             source: { cube },
-            wells: { measures: [`${cube}.count`], dimensions: [dimension], timeDimensions: [] },
-            chartType: 'bar',
+            wells: {
+              measures: [`${cube}.count`],
+              // Its second dimension the series, or the panels (compile.ts).
+              dimensions: split === undefined ? [dimension] : [dimension, 'products.category'],
+              timeDimensions: [],
+            },
+            chartType: split ?? 'bar',
           },
         },
       },
@@ -64,7 +82,7 @@ async function crossFilterDashboard(
     return chart.id;
   };
 
-  const status = await chartOn('By status', 'orders.status');
+  const status = await chartOn('By status', 'orders.status', 'orders', statusSplit);
   const category = await chartOn('By category', 'products.category');
   /**
    * A tile on a cube with no joins at all (`infra/cube/model/cubes/
@@ -424,6 +442,51 @@ test('cross-filters from the keyboard: arrows move, Space filters by the item, E
     /Arrow keys move between its items\. Space filters the other tiles by it\. Escape clears\./,
   );
 });
+
+/** Down the open menu to `item`, from the keyboard alone. */
+async function arrowTo(page: Page, item: Locator) {
+  for (let step = 0; step < 30; step += 1) {
+    if (await item.evaluate((element) => element === document.activeElement)) return;
+    await page.keyboard.press('ArrowDown');
+  }
+  await expect(item).toBeFocused();
+}
+
+/**
+ * T631 (AC-176; R63, the user: "Tile ⋯ menu entries"): where a click on a
+ * mark means its series — a grouped bar's — or its panel — a trellis's — the
+ * keyboard filters by it through the tile's menu: Shift+F10, "Filter by
+ * series ›" or "Filter by panel ›", then the one, as a click on it does.
+ */
+for (const [split, entry] of [
+  ['groupedBar', 'Filter by series'],
+  ['trellis', 'Filter by panel'],
+] as const) {
+  test(`cross-filters by a ${split === 'groupedBar' ? 'series' : 'panel'} from the tile’s menu, by the keyboard alone`, async ({
+    page,
+    request,
+  }) => {
+    const { id, title } = await crossFilterDashboard(request, { statusSplit: split });
+    await open(page, id, title);
+    const status = tile(page, 'tile-status');
+    await status.focus();
+    await page.keyboard.press('Shift+F10');
+    const menu = page.getByRole('menu', { name: /^Actions for / });
+    await expect(menu.getByRole('menuitem').first()).toBeFocused();
+    await arrowTo(page, menu.getByRole('menuitem', { name: new RegExp(`^${entry}`) }));
+    await page.keyboard.press('ArrowRight');
+    const parts = page.getByRole('menu', { name: new RegExp(`^${entry}`) });
+    const first = parts.getByRole('menuitem').first();
+    await expect(first).toBeFocused();
+    const value = ((await first.textContent()) ?? '').trim();
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('cross-filter-chip')).toHaveCount(1);
+    await expect(page.getByTestId('cross-filter-chip')).toContainText(value);
+    await expect(page.getByTestId('cross-filter-announcer')).toHaveText(
+      `Filtering the other tiles by ${value}.`,
+    );
+  });
+}
 
 /**
  * T077 / AC-071, the cross-filter half: WHEN the interaction mode changes and

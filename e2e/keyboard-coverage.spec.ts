@@ -692,6 +692,39 @@ test.describe('T306: the item the keyboard is on', () => {
 });
 
 /**
+ * T631 (AC-176, AC-090; R63, the user: "Tile ⋯ menu entries"): a whole
+ * series, marked from the keyboard as a click on its legend entry marks it:
+ * Shift+F10 on the tile, then "Mark series ›" in its marked group, then the
+ * series.
+ */
+test('marks a whole series from the tile’s menu, by the keyboard alone (T631)', async ({
+  page,
+}) => {
+  await page.goto(DASHBOARD);
+  // Categories across, split by status: each status a series.
+  const tile = page.locator('[data-tile="tile-status"]');
+  await expect(tile.getByTestId('chart-canvas')).toBeVisible();
+  await tile.focus();
+  await page.keyboard.press('Shift+F10');
+  const menu = page.getByRole('menu', { name: /^Actions for / });
+  await expect(menu.getByRole('menuitem').first()).toBeFocused();
+  const markSeries = menu.getByRole('menuitem', { name: /^Mark series/ });
+  for (let step = 0; step < 30; step += 1) {
+    if (await markSeries.evaluate((element) => element === document.activeElement)) break;
+    await page.keyboard.press('ArrowDown');
+  }
+  await expect(markSeries).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  const series = page.getByRole('menu', { name: /^Mark series/ });
+  const first = series.getByRole('menuitem').first();
+  await expect(first).toBeFocused();
+  const value = ((await first.textContent()) ?? '').trim();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.mark-chip')).toHaveCount(1);
+  await expect(page.locator('.mark-chip')).toContainText(value);
+});
+
+/**
  * The model's code editor is no keyboard trap: CodeMirror leaves Tab alone
  * unless told to indent with it (research/code-editor.md), and ours is not —
  * so Tab moves on, as from any field, and needs no Escape-then-Tab hint.

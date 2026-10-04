@@ -51,6 +51,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentProps,
   type ReactNode,
 } from 'react';
 
@@ -92,6 +93,7 @@ import { openSidebarPanel } from './edit/EditSidebar';
 import { MoveToMenu } from './edit/MoveToMenu';
 import { NOTHING_CHOSEN, needsOf, templateElements } from './edit/templates';
 import { PreviewBanner } from './PreviewBanner';
+import { tilePartsOf } from './tileParts';
 import { NO_CLIPBOARD, pageClipboard, TileViewMenu } from './TileViewMenu';
 import { linkWithMarks } from './markings/shareLink';
 import { SettingsPage, type SettingsSection } from './settings/SettingsPage';
@@ -940,6 +942,11 @@ interface TileCharts {
   /** The item a tile's keyboard is on, while the tile has the keyboard (T306, AC-176). */
   readonly keyboardFocusOn?: ((tileId: string) => string | undefined) | undefined;
   /**
+   * A tile's series and panels for its menu's "Mark series ›" and "Mark
+   * panel ›", or "Filter by…" in cross-filter mode (T631, R63).
+   */
+  readonly partsOn?: ((tileId: string) => ComponentProps<typeof TileViewMenu>['parts']) | undefined;
+  /**
    * Why a marking-limited tile is showing something other than its chart
    * (AC-109, AC-111), by chart. A limited tile that has data to show is not
    * here — it draws its limited answer like any other chart.
@@ -1421,6 +1428,8 @@ function Elements({
                       }
                 }
                 openAt={charts.menuRequestOn?.(element.id)}
+                // A series or a panel, from the keyboard (T631, R63).
+                parts={charts.partsOn?.(element.id)}
                 marked={(() => {
                   const shown = charts.markingOn?.(element.id);
                   const markItems = charts.markItemsOn?.(element.id);
@@ -4268,6 +4277,65 @@ export function DashboardView({
                   (wholeTile) => drawnMarkedItemsOf(wholeTile, predicate),
                 ),
               onTile,
+            };
+          },
+        }
+      : {}),
+    /**
+     * A tile's series and panels for its menu (T631, AC-176; R63, the user:
+     * "Tile ⋯ menu entries"): each read as a click on its legend entry or
+     * panel header reads it, so the menu and the pointer reach the same
+     * marking or cross-filter. A scatter's points are its series, as a click
+     * on one means. Only those the tile draws (`tilePartsOf`), and none on a
+     * tile drawing something else: a drill, a marking limit's waiting state,
+     * or its filtered answer's error (T631's review).
+     */
+    ...(marking || crossFiltering
+      ? {
+          partsOn: (tileId: string) => {
+            const element = elementAt(live, tileId);
+            if (element === null || !isTile(element) || element.chartId === undefined)
+              return undefined;
+            if (marking && marksWithOf(element) === undefined) return undefined;
+            if (drillShown(tileId) !== undefined) return undefined;
+            const chartId = element.chartId;
+            if (limitedStates[chartId] !== undefined) return undefined;
+            if (withFiltered.errors[chartId] !== undefined) return undefined;
+            const own = drawn.specs[chartId];
+            const shown = withFiltered.specs[chartId];
+            if (own === undefined || shown === undefined) return undefined;
+            const { series, panels: drawnPanels } = tilePartsOf(own, shown);
+            const panels = drawnPanels.map((panel) => panel.value);
+            if (series.length === 0 && panels.length === 0) return undefined;
+            const pick = (item: ClickedItem, said: string) => {
+              if (marking) {
+                onMarkClick(tileId, chartId, item, false);
+                return;
+              }
+              const value = clickedValue(own, item);
+              const had = crossSelections.some(
+                (each) =>
+                  each.from === tileId &&
+                  each.member === value?.member &&
+                  each.value === value.value,
+              );
+              onItemClick(tileId, chartId, item);
+              setCrossSaid(
+                had ? `Stopped filtering by ${said}.` : `Filtering the other tiles by ${said}.`,
+              );
+            };
+            return {
+              verb: marking ? ('mark' as const) : ('filter' as const),
+              series,
+              panels,
+              onSeries: (value: string) => {
+                pick({ legend: value }, value);
+              },
+              // By its place among the chart's own panels, as `clickedValue` reads one.
+              onPanel: (at: number) => {
+                const panel = drawnPanels[at];
+                if (panel !== undefined) pick({ panelIndex: panel.index }, panel.value);
+              },
             };
           },
         }

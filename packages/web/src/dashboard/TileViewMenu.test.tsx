@@ -1,5 +1,5 @@
 import type { RenderSpec } from '@wechart/core';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -683,5 +683,101 @@ describe('the CSV file’s name', () => {
   it('is the chart’s title, without characters a file system refuses', () => {
     expect(csvFileName('Sales / region: 2026?')).toBe('Sales - region- 2026-.csv');
     expect(csvFileName('   ')).toBe('chart.csv');
+  });
+});
+
+/**
+ * T631 (AC-176, AC-090, AC-091; R63, the user: "Tile ⋯ menu entries"): a
+ * whole series, as a click on its legend entry marks it, and a trellis panel,
+ * as a click on its header does, reached from the keyboard through the tile's
+ * menu (Shift+F10): "Mark series ›" and "Mark panel ›" in its marked group;
+ * in cross-filter mode "Filter by series ›" and "Filter by panel ›", as a
+ * click on a series or a panel filters there.
+ */
+describe('a series or a panel from the tile’s menu (T631, R63)', () => {
+  const parts = (verb: 'mark' | 'filter') => ({
+    verb,
+    series: ['completed', 'shipped'],
+    panels: ['North', 'South'],
+    onSeries: vi.fn(),
+    onPanel: vi.fn(),
+  });
+
+  it('marks a series or a panel from its marked group', async () => {
+    const byPart = parts('mark');
+    render(
+      <TileViewMenu
+        tileId="t1"
+        title="By status"
+        spec={SPEC}
+        save={vi.fn()}
+        marked={{ name: 'Marking', count: 0, onUnmark: vi.fn() }}
+        parts={byPart}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By status' }));
+    const group = screen.getByRole('group', { name: /^Marking/ });
+    await userEvent.click(within(group).getByRole('menuitem', { name: /^Mark series/ }));
+    const series = screen.getByRole('menu', { name: /^Mark series/ });
+    expect(
+      within(series)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['completed', 'shipped']);
+    await userEvent.click(within(series).getByRole('menuitem', { name: 'shipped' }));
+    expect(byPart.onSeries).toHaveBeenCalledWith('shipped');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By status' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Mark panel/ }));
+    await userEvent.click(
+      within(screen.getByRole('menu', { name: /^Mark panel/ })).getByRole('menuitem', {
+        name: 'South',
+      }),
+    );
+    expect(byPart.onPanel).toHaveBeenCalledWith(1);
+  });
+
+  it('filters by a series or a panel in cross-filter mode, with no marked group', async () => {
+    const byPart = parts('filter');
+    render(
+      <TileViewMenu tileId="t1" title="By status" spec={SPEC} save={vi.fn()} parts={byPart} />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By status' }));
+    expect(screen.queryByRole('menuitem', { name: /^Mark/ })).toBeNull();
+    // First in the menu, as the task says (T631's review).
+    const items = within(screen.getByRole('menu', { name: /^Actions for / })).getAllByRole(
+      'menuitem',
+    );
+    expect(items[0]?.textContent).toMatch(/^Filter by series/);
+    expect(items[1]?.textContent).toMatch(/^Filter by panel/);
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Filter by series/ }));
+    await userEvent.click(
+      within(screen.getByRole('menu', { name: /^Filter by series/ })).getByRole('menuitem', {
+        name: 'completed',
+      }),
+    );
+    expect(byPart.onSeries).toHaveBeenCalledWith('completed');
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By status' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Filter by panel/ }));
+    await userEvent.click(
+      within(screen.getByRole('menu', { name: /^Filter by panel/ })).getByRole('menuitem', {
+        name: 'North',
+      }),
+    );
+    expect(byPart.onPanel).toHaveBeenCalledWith(0);
+  });
+
+  it('offers neither where the tile has no series or no panels', async () => {
+    render(
+      <TileViewMenu
+        tileId="t1"
+        title="By status"
+        spec={SPEC}
+        save={vi.fn()}
+        parts={{ ...parts('filter'), series: [], panels: [] }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By status' }));
+    expect(screen.queryByRole('menuitem', { name: /^Filter by/ })).toBeNull();
   });
 });

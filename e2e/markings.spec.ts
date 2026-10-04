@@ -581,6 +581,48 @@ test('a trellis panel header marks the whole panel', async ({ page, request }) =
 });
 
 /**
+ * T631 (AC-176, AC-091; R63, the user: "Tile ⋯ menu entries"): the same
+ * panel marked from the keyboard alone, through the tile's menu (Shift+F10),
+ * "Mark panel ›", as a click on its header marks it.
+ */
+test('a trellis panel marks from the tile’s menu, by the keyboard alone (T631)', async ({
+  page,
+  request,
+}) => {
+  const { id, title } = await markingDashboard(request, { trellis: true });
+  await open(page, id, title);
+  const panels = tile(page, 'tile-trellis');
+  await expect(panels.getByTestId('chart-canvas')).toBeVisible();
+  await panels.focus();
+  await page.keyboard.press('Shift+F10');
+  const menu = page.getByRole('menu', { name: /^Actions for / });
+  await expect(menu.getByRole('menuitem').first()).toBeFocused();
+  const markPanel = menu.getByRole('menuitem', { name: /^Mark panel/ });
+  for (let step = 0; step < 30; step += 1) {
+    if (await markPanel.evaluate((element) => element === document.activeElement)) break;
+    await page.keyboard.press('ArrowDown');
+  }
+  await expect(markPanel).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  const components = page
+    .getByRole('menu', { name: /^Mark panel/ })
+    .getByRole('menuitem', { name: 'Components', exact: true });
+  for (let step = 0; step < 30; step += 1) {
+    if (await components.evaluate((element) => element === document.activeElement)) break;
+    await page.keyboard.press('ArrowDown');
+  }
+  await expect(components).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  // As the header's click: the panel's category, the other panel faded.
+  await expect(panels.getByTestId('mark-badge')).toContainText('1 marked');
+  await expect(page.getByTestId('mark-chip')).toContainText('Components');
+  await expect
+    .poll(async () => (await opacities(panels)).filter((value) => value < 1).length)
+    .toBeGreaterThan(0);
+});
+
+/**
  * AC-092: WHEN the user clicks a row in a table tile, THE SYSTEM SHALL mark
  * it; Shift-click SHALL mark the range from the anchor row; and rows SHALL be
  * markable only when the cube's primary key is available.

@@ -29,6 +29,7 @@ export {
 export { assignColours, OTHER_COLOUR, type ColourAssignment } from './colorAssignment';
 export { colouredMembersOf, coloursMembers, singleSeriesOf } from './colouredMembers';
 export { legendFor, seriesCount } from './legend';
+export { MAX_PANELS } from './layout/trellis';
 export { isOneSource, labelOf } from './modelWriter';
 export { echarts } from './echarts';
 export { DEFAULT_PALETTE, DEFAULT_SURFACE, MARK, type EChartsOption } from './theme';

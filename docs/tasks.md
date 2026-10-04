@@ -8602,9 +8602,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **T307's chart actions:**
       - **Cross-filtering from the keyboard,** on a chart whose click means a category (bar, line, area, pie, donut, treemap, heatmap, map). On a focused tile, the arrows move between its categories without filtering. The move is said in its own polite region, `cross-filter-announcer`: a cross-filtering dashboard says nothing of markings (AC-120). Space filters the other tiles by the focused item, as a click does, and on the item it filters by takes it back. Escape clears, as before. The ring is T306's, and the tile's name lists the keys.
       - **A table tile's rows** (`DataTable.tsx`), where they can be marked (a primary key). From the table's region the arrows, Home and End take focus to a row and move it, marking nothing. Space marks it as a click does; Shift and Space mark the range from the anchor, as a Shift-click does. The focused row has a 2 px accent ring, distinct from a marked row's rule.
-      - **Waiting on the user (asked 2026-10-04):** how the keyboard reaches a legend category (AC-090) and a trellis panel (AC-091). Options: the tile menu's "Mark series ›" and "Mark panel ›"; Alt+arrows; or Up/Down between series. Two more follow the same answer:
-        - a scatter: a click there marks the point's series, by `clickedValue`'s BY_SERIES;
-        - cross-filtering on charts whose click means a series or a panel.
+      - **Asked 2026-10-04, answered by R63 ("Tile ⋯ menu entries"):** how the keyboard reaches a legend category (AC-090) and a trellis panel (AC-091). Two more follow the same answer: a scatter, where a click marks the point's series (`clickedValue`'s BY_SERIES), and cross-filtering on charts whose click means a series or a panel. Built as T631.
     - **The cold review (FAIL) found six things, all fixed:**
       1. In cross-filter mode the item the keyboard was on wasn't drawn, since `keyboardFocusOn` was given in Markings only. It is now given in both, and the e2e asserts T306's dashed ring.
       2. The cross-filter keys stepped through the chart as saved, not as the filters left it. They now read `withFiltered`, as `tileItemsOf` does.
@@ -8616,6 +8614,27 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **Tests:**
       - unit: `ProposeDialog`, `EditInWorkspaceDialog`, `NewItemDialog`, `restore`, `ExportPane`, `AuditTrail`, `GenerateCubes`, `rowMarking` and `useReturnFocus`;
       - e2e: `crossfilter.spec.ts` "cross-filters from the keyboard…" and `markings.spec.ts` "a table's rows mark from the keyboard…".
+- [ ] T631 (AC-176, AC-090, AC-091) Mark or cross-filter a series or a trellis panel from the tile's ⋯ menu *(added 2026-10-04, R63)*
+  - Files: `dashboard/TileViewMenu.tsx`, `dashboard/DashboardView.tsx`
+  - Failing test: `TileViewMenu.test.tsx`: the tile's menu offers "Mark series ›" and "Mark panel ›" in its marked group, or "Filter by series ›" and "Filter by panel ›" first in cross-filter mode, each listing the tile's series or panels, and none where it has none. e2e: `keyboard-coverage.spec.ts` marks a whole series from the menu by the keyboard alone; `crossfilter.spec.ts` cross-filters by a series and by a panel the same way (AC-176).
+  - Depends on: T405
+  - **Built 2026-10-04.** Each entry acts as a click on that legend entry or panel header does (`onMarkClick` or `onItemClick` with `{ legend }` or `{ panelIndex }`), so the menu and the pointer reach the same marking or cross-filter.
+    - `dashboard/tileParts.ts` decides what is offered: only what a pointer could reach on the tile as drawn.
+      - The series are the legend's entries where the legend names the colour split, in its order (Customize's first), as the filters leave the tile, without a blank or "Other (…)". A scatter's points are its series, as a click on one means.
+      - The panels are those the trellis draws (at most `MAX_PANELS`, now exported by `@wechart/charts`), each carrying its place among the chart's own, which is how `clickedValue` reads a header's index.
+    - In cross-filter mode, the choice is said in `cross-filter-announcer` ("Filtering the other tiles by Shipped.", or "Stopped filtering by …" when it takes one back).
+    - None is offered on a tile that doesn't mark, while a drill shows, in a marking limit's waiting state, or where its filtered answer failed.
+    - **The cold review (FAIL) found three things, all fixed:**
+      1. Series were offered wherever the encoding had a colour channel. A heatmap's colour is its measure, so its menu listed measure values to mark or filter by. A table, KPI, pie, donut or treemap also offered its split, which no legend lists. Series now come only where the legend names the split, and only when it draws one (two or more).
+      2. Panels came from the chart as saved, uncapped, while the tile draws the filtered answer and at most 20 panels. They now come from what is drawn, each still resolved by its place among the chart's own.
+      3. A tile waiting for a marking, or showing its filtered answer's error, offered entries. It offers none.
+      - Also from it: `tileParts.test.ts` tests the logic the menu reads (each failing first against the first version); the menu test asserts the Filter entries come first; and `markings.spec.ts` marks a trellis panel from the menu in Markings mode.
+    - **Found by the review, left for the user:**
+      - *An older pointer bug, not T631's:* a header click passes its index among the panels drawn, which `clickedValue` resolves against the chart as saved. When a filter drops an earlier panel, the click marks or filters the wrong panel. The menu resolves its own panels correctly.
+      - *Two ways the menu differs from the legend:* values of time are listed raw, where the legend writes them by granularity. And there's still no keyboard way to add a further legend category, as Ctrl-click does (AC-090): the menu replaces the marking. AC-176 stays open.
+    - **Tests:**
+      - unit: `TileViewMenu.test.tsx`, `tileParts.test.ts`;
+      - e2e, Chrome: `crossfilter.spec.ts`, `keyboard-coverage.spec.ts`, `markings.spec.ts`, `tile-menu.spec.ts`, 98/98. The folder tree's arrow-key test failed once on focus, and passed on its rerun.
 - [ ] T406 (AC-187) Re-run the design critique on every surface and tick AC-187 only on measured conformance
   - Files and failing test: as T225 (above), with the phase-2 surfaces added (AC-187).
   - Depends on: T330, T348, T356, T364, T369

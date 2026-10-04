@@ -145,6 +145,7 @@ export function TileViewMenu({
   onEditChart,
   onViewRows,
   marked,
+  parts,
   openAt,
   clipboard,
   onCopyToDashboard,
@@ -205,6 +206,23 @@ export function TileViewMenu({
   onTableView?: ((showing: boolean) => void) | undefined;
   /** The Cube query and SQL behind the tile (AC-199). */
   onViewQuery?: (() => void) | undefined;
+  /**
+   * A whole series, as a click on its legend entry reaches it, and a trellis
+   * panel, as a click on its header does, from the keyboard (T631, AC-176;
+   * R63, the user: "Tile ⋯ menu entries"): "Mark series ›" and "Mark panel ›"
+   * in the marked group, or in cross-filter mode "Filter by series ›" and
+   * "Filter by panel ›". The scatter's points are its series here, as a click
+   * on one means its series.
+   */
+  parts?:
+    | {
+        readonly verb: 'mark' | 'filter';
+        readonly series: readonly string[];
+        readonly panels: readonly string[];
+        readonly onSeries: (value: string) => void;
+        readonly onPanel: (index: number) => void;
+      }
+    | undefined;
   /** The chart editor, on this tile's chart (AC-199). */
   onEditChart?: (() => void) | undefined;
   /**
@@ -556,8 +574,57 @@ export function TileViewMenu({
     };
   }, [open]);
 
+  /**
+   * "Mark series ›" and "Mark panel ›", or "Filter by series ›" and "Filter
+   * by panel ›" (T631, R63): each series or panel the tile draws, by its
+   * value. None where it has none.
+   */
+  const partEntries: MenuEntry[] =
+    parts === undefined
+      ? []
+      : [
+          ...(parts.series.length === 0
+            ? []
+            : [
+                {
+                  kind: 'submenu' as const,
+                  key: 'part-series',
+                  label: parts.verb === 'mark' ? 'Mark series' : 'Filter by series',
+                  entries: parts.series.map((value) => ({
+                    kind: 'item' as const,
+                    key: `series-${value}`,
+                    label: value,
+                    onSelect: () => {
+                      parts.onSeries(value);
+                    },
+                  })),
+                },
+              ]),
+          ...(parts.panels.length === 0
+            ? []
+            : [
+                {
+                  kind: 'submenu' as const,
+                  key: 'part-panel',
+                  label: parts.verb === 'mark' ? 'Mark panel' : 'Filter by panel',
+                  entries: parts.panels.map((value, index) => ({
+                    kind: 'item' as const,
+                    key: `panel-${String(index)}`,
+                    label: value,
+                    onSelect: () => {
+                      parts.onPanel(index);
+                    },
+                  })),
+                },
+              ]),
+        ];
+
   /** Runs one of its actions; the menu closes itself after (`Menu`). */
   const entries: MenuEntry[] = [
+    // In cross-filter mode, filtering by a series or a panel first (T631).
+    ...(parts?.verb === 'filter' && partEntries.length > 0
+      ? [...partEntries, { kind: 'separator' as const, key: 'after-parts' }]
+      : []),
     // The marked-rows group first, as the prototype's: under the heading
     // naming the tile's marking and how much it holds (AC-199). Shown with
     // nothing marked too: Unmark is then unavailable, while Invert, Mark all
@@ -658,6 +725,8 @@ export function TileViewMenu({
                       onSelect: marked.onMarkAll,
                     },
                   ]),
+              // A series or a panel, as its legend entry or header marks it (T631).
+              ...(parts?.verb === 'mark' ? partEntries : []),
               {
                 kind: 'item' as const,
                 key: 'unmark',
