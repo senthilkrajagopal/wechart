@@ -26,6 +26,7 @@ import { CubeClient } from './cube/client';
 import { buildFollower, startFollowingBuilds } from './jobs/follow';
 import { xcubePartitions } from './xcube/partitions';
 import { xcubeQueue } from './xcube/queue';
+import { xcubeRefreshWorker } from './xcube/refresh-worker';
 import { calcRequestStore } from './repos/calc-requests';
 import { AUDIT_RETENTION_DAYS, startAuditRetention } from './audit/retention';
 import { readModelDir } from './model/read-dir';
@@ -275,6 +276,12 @@ async function main(): Promise<void> {
           }),
           // And its partitions route (T375, AC-145).
           buildPartitions: xcubePartitions({
+            cubeApiUrl: config.cubeApiUrl,
+            model: config.xcube.model,
+            token: () => service.token(),
+          }),
+          // And the refresh worker's state (T553, AC-393).
+          refreshWorker: xcubeRefreshWorker({
             cubeApiUrl: config.cubeApiUrl,
             model: config.xcube.model,
             token: () => service.token(),

@@ -7724,7 +7724,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - Two Resumes at once can both be recorded: concurrent saves aren't hardened further.
     - I1's "Role" row isn't recorded for a schedule change.
     - A schedule moved to another folder's pre-aggregation is recorded in its new folder only.
-- [ ] T553 [P] (AC-393) The refresh worker's badge and panel, from xcube's refresh-worker route *(added 2026-10-02, `[R56]`: design 16's state F and Q4)*
+- [x] T553 [P] (AC-393) The refresh worker's badge and panel, from xcube's refresh-worker route *(added 2026-10-02, `[R56]`: design 16's state F and Q4)*
   - Files:
     - `packages/api/src/xcube/refresh-worker.ts` (+ test): `GET …/models/{model}/refresh-worker`, research `xcube-jobs-schedules-routes.md` §3;
     - `packages/api/src/cube/health.ts` (+ test);
@@ -7741,6 +7741,26 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - `Health.test.tsx`: the badge in each state, as an icon and a label, opening the panel; Cube's health as built (AC-156).
     - `e2e/jobs.spec.ts`, against compose's xcube: the badge names the worker's last run.
   - Depends on: none. The first call checks the route against compose's xcube.
+  - *Done 2026-10-04.*
+    - **Checked against compose's xcube** (model `e2e`, service credential): `GET …/refresh-worker` answered §3's shape. It listed three workers, two stopped at older revisions (1972, 2083) and one on the model's 2140, each with one module, `all`.
+    - **The route** is `GET /api/jobs/refresh-worker` (`jobs/refresh-worker.ts`), for those who may use Jobs (T371), with a case in the route matrix. A module's error is in a Super-Admin's answer only. The matrix holds it as a secret only `super` may see.
+    - **The route test** is `jobs/refresh-worker.test.ts`, signed in as super, writer and reader, rather than in `health.test.ts`. `health.test.ts` tests the states.
+    - **The panel** is tested through `Health.test.tsx`.
+  - **Implementer's calls, for the user to confirm or change:**
+    - **Which runs count.** Each module is read by its latest run, from whichever worker made it. A stopped worker is still listed for a day, and a restart is another instance, so neither's old error keeps the badge failing.
+    - **Behind** means the newest worker's revision is below the model's.
+    - **Order of states.** Failing comes before behind, and behind before running.
+    - **The badge's last run** is the latest any worker made.
+    - **The worker's own probes still win.** When `/readyz` or `/livez` says it is down, the badge reads "Refresh worker down", as built (F1's last badge). A server with no xcube keeps the probes' badge, as built.
+    - **A member's panel** lists the same workers and modules as a Super-Admin's, without errors, plus F3's note on why. F3 draws only the summary lines, but AC-393 says the panel lists each worker and module for everyone.
+    - **A worker whose run stopped waiting on builds** reads "Waiting on builds". One whose run ended reads "Finished".
+    - **A module never good** reads "Failing · never OK".
+  - **One review round (spec-reviewer), fixed:**
+    1. The badge fell back to the probes' "Refresh worker running" while xcube's report was being asked, or couldn't be read. It now reads "Asking xcube…" while asked, and "Refresh worker unknown" when unread. The probes alone are used only where the server has no report (no xcube). A probe's "down" still wins.
+    2. The route now requires Jobs' access. A route without it would have given every caller a module's error.
+  - **Left for the user or a later task:**
+    - **Each module by its latest run.** A restarted worker whose first run is still waiting on builds has no good run and no error. If a stopped worker's error is that module's latest, the badge reads running. Reading "a module's last error later than its last good run" across workers would read failing instead. This is the user's call, listed above.
+    - **F3's member panel** draws two lines, the worker running and "1 module's last run failed". The panel's summary is one line, by the state. This is for T560's conformance pass.
 - [ ] T554 (AC-394) Stop a building build that wechart started *(added 2026-10-02, `[R56]`: design 16's P1)*
   - Files: `packages/api/src/jobs/queue.ts` (+ test), `packages/web/src/workspaces/jobs/BuildQueue.tsx` (+ test), `e2e/jobs.spec.ts`
   - Failing test:

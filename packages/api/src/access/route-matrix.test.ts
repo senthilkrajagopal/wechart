@@ -36,6 +36,7 @@ import { fakeXcube, FAKE_ADMIN_TOKEN } from '../xcube/fake';
 import { itemsOf } from '../xcube/items';
 import { xcubePartitions } from '../xcube/partitions';
 import { xcubeQueue } from '../xcube/queue';
+import { xcubeRefreshWorker } from '../xcube/refresh-worker';
 import { xcubeSqlRunner } from '../xcube/sql-runner';
 
 /**
@@ -119,6 +120,8 @@ const writes = (who: Who, place: Place) => RIGHTS[who][place] === 'write';
 const hasWorkspace = (who: Who) => Object.values(RIGHTS[who]).includes('write');
 
 const MARK = `matrix${randomUUID().slice(0, 8)}`;
+/** Cube's error on the refresh worker's one module (T553). */
+const WORKER_ERROR = `Refresh Scheduler Error: ${MARK}-worker-error`;
 /** A name Cube and xcube take: lower case, letters, digits and `_`. */
 const mark = MARK.toLowerCase();
 const cubeOf = (place: Place) => `${mark}_${place.toLowerCase()}`;
@@ -686,6 +689,35 @@ beforeAll(async () => {
               })),
             })) as typeof fetch,
     }),
+    // The refresh worker's state, one module failing with Cube's error (T553).
+    refreshWorker: xcubeRefreshWorker({
+      cubeApiUrl: secured.cubeApiUrl,
+      model: 'dev',
+      token: async () => FAKE_ADMIN_TOKEN,
+      fetch: (async () =>
+        Response.json({
+          model: 'dev',
+          revision: 2,
+          workers: [
+            {
+              instance: `${MARK}-worker`,
+              revision: 2,
+              servedKey: 'k',
+              lastTickAt: new Date().toISOString(),
+              modules: [
+                {
+                  module: 'all',
+                  revision: 2,
+                  lastTickAt: new Date().toISOString(),
+                  finished: true,
+                  lastOkAt: null,
+                  lastError: { message: WORKER_ERROR, at: new Date().toISOString() },
+                },
+              ],
+            },
+          ],
+        })) as typeof fetch,
+    }),
     // Calculation requests (T383).
     calcRequests: calcRequestStore(getDb()),
     sqlRunner: xcubeSqlRunner({
@@ -933,6 +965,8 @@ beforeAll(async () => {
   // Cube's own `default`, the shared root's; one wechart doesn't know, a Super-Admin's.
   secret('the default source', (who) => seesAll(who, 'root'), `${MARK}-default-catalog`);
   secret('an unknown source', (who) => who === 'super', UNKNOWN_SOURCE, `${MARK}-unknown-catalog`);
+  // A refresh-worker module's error can name any folder's cubes: a Super-Admin's (T553, Q4).
+  secret('a refresh-worker module’s error', (who) => who === 'super', WORKER_ERROR);
   secret(
     'the shared chart',
     (who) => seesAll(who, 'root') || SHOWN_ON.some((place) => opens(who, place)),
@@ -2251,6 +2285,13 @@ const CASES: Record<string, Case> = {
         rollupOf(place),
       );
   },
+  // The refresh worker's state: those who may use Jobs, its errors a Super-Admin's (T553, Q4).
+  'GET /api/jobs/refresh-worker': () =>
+    openedOnlyBy(
+      '/api/jobs/refresh-worker',
+      (who) => who === 'super' || PLACES.some((place) => writes(who, place)),
+      `${MARK}-worker`,
+    ),
   // The queue, and cancelling: the folders they build in (T376, AC-297).
   'GET /api/jobs/queue': listed({ method: 'GET', url: '/api/jobs/queue' }, (who) =>
     inPlaces(who, writes, queueKeyOf),

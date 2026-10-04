@@ -50,8 +50,10 @@ import { registerBuilds } from './jobs/build';
 import { registerBuildHistory } from './jobs/history';
 import { registerPartitions, rowStates } from './jobs/partitions';
 import { registerQueue } from './jobs/queue';
+import { registerRefreshWorker } from './jobs/refresh-worker';
 import type { XcubePartitions } from './xcube/partitions';
 import type { XcubeQueue } from './xcube/queue';
+import type { XcubeRefreshWorker } from './xcube/refresh-worker';
 import { registerSchedules } from './jobs/schedules';
 import { registerWechartSchedules } from './routes/schedules';
 import { deploymentModel } from './cube/deployment-model';
@@ -243,6 +245,8 @@ export interface BuildOptions {
   readonly buildQueue?: XcubeQueue;
   /** xcube's partitions route (T375, AC-145). Unset without xcube: no partitions. */
   readonly buildPartitions?: XcubePartitions;
+  /** xcube's refresh-worker route (T553, AC-393). Unset without xcube: Jobs shows the probes alone. */
+  readonly refreshWorker?: XcubeRefreshWorker;
   /** wechart's own schedules, run by pg-boss (T378, AC-234). Unset: none are offered. */
   readonly schedules?: WechartScheduler;
   /** Calculations the quick calculations menu can't express, asked of a model's folder (T383, AC-050). */
@@ -472,6 +476,7 @@ export function buildServer({
   buildHistory,
   buildQueue,
   buildPartitions,
+  refreshWorker,
   schedules,
   calcRequests,
   dataSourceLanding,
@@ -1172,6 +1177,9 @@ export function buildServer({
       ...(audit === undefined ? {} : { audit }),
       now,
     });
+  // The refresh worker's state, as xcube reports it, for Jobs' header (T553, AC-393).
+  if (refreshWorker !== undefined)
+    registerRefreshWorker(app, { worker: refreshWorker, access: jobsAccess });
   // A rollup's partitions, with their states (T375, AC-145).
   if (buildPartitions !== undefined)
     registerPartitions(app, {

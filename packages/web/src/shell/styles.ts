@@ -3583,6 +3583,43 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 /* Its header: the title, then Cube's health and the refresh worker's (T162). */
 .jobs-workspace__head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
 .jobs-health { display: flex; flex-wrap: wrap; gap: 12px; }
+/* The refresh worker's badge opens its panel (T553; design 16, state F). */
+.jobs-health__worker {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--wc-text-secondary);
+  cursor: pointer;
+}
+.jobs-health__worker:hover { background: var(--wc-bg-subtle); }
+.refresh-worker-panel {
+  flex-basis: 100%;
+  max-width: 560px;
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-surface);
+}
+.refresh-worker-panel__head { display: flex; align-items: baseline; gap: 8px; }
+.refresh-worker-panel__head h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.refresh-worker-panel__revision { margin-left: auto; font-size: 12px; color: var(--wc-text-secondary); }
+.refresh-worker-panel__summary { margin: 0; font-size: 12px; }
+.refresh-worker-panel h3 { margin: 4px 0 0; font-size: 12px; font-weight: 600; }
+.refresh-worker-panel__error {
+  margin: 0;
+  padding: 8px;
+  border-radius: 4px;
+  background: var(--wc-bg-subtle);
+  font: 12px/16px var(--wc-font-code);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 /* The list beside the prototype's docked 400 px pane (AC-228), which is
    placed below (T469, UX-081): it runs the window's height under the app bar,
    stays put while the list scrolls, and scrolls on its own. */

@@ -449,16 +449,83 @@ test('a rollup Cube’s refresh worker built reads Built, with when, and no star
 test('the Jobs header shows Cube’s health and the refresh worker’s, and a deployment down', async ({
   page,
 }) => {
+  // The worker may first have to catch up with the model (below), and the
+  // header asks again every 10 s for each state routed after it.
+  test.setTimeout(180_000);
+  // xcube's report of the refresh worker (T553, AC-393): running once it has
+  // caught up with the model's revision, which other tests' publishes move on.
+  type Report = {
+    status: { state: string; lastRunAt?: string };
+    modelRevision: number;
+    workers: { instance: string }[];
+  };
+  const report = async () =>
+    (await (await page.request.get('/api/jobs/refresh-worker')).json()) as Report;
+  await expect.poll(async () => (await report()).status.state, { timeout: 90_000 }).toBe('running');
   await page.goto('/jobs');
   const cube = page.getByTestId('cube-health');
   const worker = page.getByTestId('worker-health');
   await expect(cube).toHaveText('Cube healthy', { timeout: 15_000 });
   await expect(cube.locator('svg[data-icon="ok"]')).toHaveCount(1);
-  await expect(worker).toHaveText('Refresh worker running');
+  // The badge names the worker's last run, as xcube recorded it, in local time.
+  await expect(worker).toHaveText(/^Refresh worker running · last run \d\d:\d\d$/, {
+    timeout: 15_000,
+  });
+  const said = (await worker.textContent())!.slice(-5);
+  const { status, modelRevision, workers } = await report();
+  const minutesOf = (clock: string) => Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 5));
+  const recorded = await page.evaluate(
+    (at) =>
+      new Date(at).toLocaleTimeString('en-GB', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }),
+    status.lastRunAt!,
+  );
+  // It ticks every few seconds: the page's read and this one may be a minute apart.
+  const apart = Math.abs(minutesOf(recorded) - minutesOf(said));
+  expect(Math.min(apart, 24 * 60 - apart)).toBeLessThanOrEqual(2);
   expect(await (await page.request.get('/api/cube-health')).json()).toEqual({
     cube: 'healthy',
     worker: 'healthy',
   });
+
+  // It opens the panel of each worker, on the model's revision (F2).
+  await page.getByRole('button', { name: /^Refresh worker running/ }).click();
+  const panel = page.getByRole('region', { name: 'Refresh worker' });
+  await expect(panel.getByTestId('model-revision')).toHaveText(new RegExp(`^Model revision \\d+$`));
+  expect(modelRevision).toBeGreaterThan(0);
+  await expect(
+    panel.getByRole('table', { name: 'Workers' }).getByRole('row').first(),
+  ).toBeVisible();
+  expect(workers.length).toBeGreaterThan(0);
+  await page.keyboard.press('Escape');
+  await expect(panel).toBeHidden();
+
+  // Never running while xcube says the worker is behind, or a module failing
+  // (AC-393): the page left open, asking again on its own.
+  const answer = { ...(await report()), workers: [], modules: [] };
+  await page.route('**/api/jobs/refresh-worker', (route) =>
+    route.fulfill({
+      json: {
+        ...answer,
+        status: { state: 'behind', lastRunAt: status.lastRunAt, revision: 11, of: 12 },
+      },
+    }),
+  );
+  await expect(worker).toHaveText('Refresh worker behind · on revision 11 of 12', {
+    timeout: 15_000,
+  });
+  await expect(worker.locator('svg[data-icon="warn"]')).toHaveCount(1);
+  await page.unroute('**/api/jobs/refresh-worker');
+  await page.route('**/api/jobs/refresh-worker', (route) =>
+    route.fulfill({
+      json: { ...answer, status: { state: 'failing', lastRunAt: status.lastRunAt, modules: 1 } },
+    }),
+  );
+  await expect(worker).toHaveText('Refresh runs failing · 1 module', { timeout: 15_000 });
+  await expect(worker.locator('svg[data-icon="err"]')).toHaveCount(1);
 
   // The page left open, as the header asks again on its own every 10 s — not
   // reloaded, which would prove only a first answer (T162's review).
