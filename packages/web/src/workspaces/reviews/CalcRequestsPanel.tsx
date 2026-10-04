@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { StateLine, StatusIcon, type StateKind } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
+import { openRequest } from '../model/RequestPane';
 import { CALC_REQUESTS_QUERY, shortName, type CalcRequestRow } from './calcRequests';
 import { folderText, proposedText } from './reviews';
 
@@ -108,16 +109,21 @@ export function CalcRequestSummary({
   selected,
   onClose,
   now = new Date(),
+  go = (href) => {
+    globalThis.location.assign(href);
+  },
 }: {
   readonly id: string;
   readonly selected: string | undefined;
   readonly onClose: () => void;
   readonly now?: Date;
+  /** Where opening a request goes: its model's copy in the editor (T384). */
+  readonly go?: (href: string) => void;
 }) {
   const listed = useQuery(CALC_REQUESTS_QUERY);
   const chosen = listed.data?.find((row) => row.id === selected);
   return chosen === undefined ? null : (
-    <RequestSummary id={id} row={chosen} now={now} onClose={onClose} />
+    <RequestSummary key={chosen.id} id={id} row={chosen} now={now} onClose={onClose} go={go} />
   );
 }
 
@@ -149,12 +155,16 @@ function RequestSummary({
   row,
   now,
   onClose,
+  go,
 }: {
   id: string;
   row: CalcRequestRow;
   now: Date;
   onClose: () => void;
+  go: (href: string) => void;
 }) {
+  /** Opening it into My workspace (T384): under way, or why it couldn't be. */
+  const [opening, setOpening] = useState<{ busy: boolean; failure?: string }>({ busy: false });
   // Focus to the summary as it opens, since it follows the whole table.
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => heading.current?.focus(), [row.id]);
@@ -189,6 +199,29 @@ function RequestSummary({
           ×
         </button>
       </header>
+      {row.status === 'open' ? (
+        // Its cube's model, copied into My workspace, with the request beside
+        // it (T384, AC-051); the copy there already, where there is one.
+        <button
+          type="button"
+          className="btn btn-sm btn-primary"
+          disabled={opening.busy}
+          onClick={() => {
+            setOpening({ busy: true });
+            void openRequest(row).then((opened) => {
+              if ('href' in opened) go(opened.href);
+              else setOpening({ busy: false, failure: opened.error });
+            });
+          }}
+        >
+          {opening.busy ? 'Opening…' : 'Open in My workspace'}
+        </button>
+      ) : null}
+      {opening.failure === undefined ? null : (
+        <p role="alert" className="field__error">
+          {opening.failure}
+        </p>
+      )}
       <p className="reviews__by" data-testid="request-by">
         Asked by {row.requestedBy} · {proposedText(row.requestedAt, now)} · model {row.modelPath}
       </p>

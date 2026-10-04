@@ -688,18 +688,28 @@ const folderModelFileRoute = createRoute({
    */
   validateSearch: (
     search: Record<string, unknown>,
-  ): { cube?: string | undefined; tab?: string | undefined; member?: string | undefined } => ({
+  ): {
+    cube?: string | undefined;
+    tab?: string | undefined;
+    member?: string | undefined;
+    request?: string | undefined;
+  } => ({
     cube: typeof search['cube'] === 'string' && search['cube'] !== '' ? search['cube'] : undefined,
     tab: typeof search['tab'] === 'string' && search['tab'] !== '' ? search['tab'] : undefined,
     member:
       typeof search['member'] === 'string' && search['member'] !== ''
         ? search['member']
         : undefined,
+    // A calculation request it was opened for, shown beside it (T384, AC-051).
+    request:
+      typeof search['request'] === 'string' && search['request'] !== ''
+        ? search['request']
+        : undefined,
   }),
   component: function FolderModelFileSurface() {
     const params = useParams({ strict: false }) as { folderId?: string; path?: string };
     const folderId = decodeURIComponent(params.folderId ?? '');
-    const { cube, tab, member } = folderModelFileRoute.useSearch();
+    const { cube, tab, member, request } = folderModelFileRoute.useSearch();
     return (
       <AppShell workspace="explore">
         <ModelFilePage
@@ -707,6 +717,7 @@ const folderModelFileRoute = createRoute({
           folderId={folderId}
           path={decodeURIComponent(params.path ?? '')}
           {...(cube === undefined || tab === undefined ? {} : { openOn: { cube, tab, member } })}
+          {...(request === undefined ? {} : { request })}
         />
       </AppShell>
     );

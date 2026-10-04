@@ -130,6 +130,8 @@ const rollupOf = (place: Place) => `${mark}_rollup_${place.toLowerCase()}_r`;
 const tokenOf = (place: Place) => `${MARK}-token-${place}-t`;
 /** A place's calculation request (T383), ended so /A's is never found inside /A/B's. */
 const requestMark = (place: Place) => `${MARK} calc request in ${place}-q`;
+/** One calculation request asked of each place, by the POST case (T383), for T384's take. */
+const calcRequestIds: Partial<Record<Place, string>> = {};
 /** A group set on each folder beside the real one: none of the users is in it. */
 const groupOf = (place: Place) => `${MARK}-group-${place}`;
 
@@ -2011,8 +2013,11 @@ const CASES: Record<string, Case> = {
       for (const who of WHO) {
         const response = await ask(who, asking(at[place].libraryChart, place, `by ${who}`));
         const where = `${who} asking a calculation of ${place}`;
-        if (seesAll(who, place)) expect(response.statusCode, where).toBe(201);
-        else refused(response, where);
+        if (seesAll(who, place)) {
+          expect(response.statusCode, where).toBe(201);
+          // One of each place's, for taking it up (T384).
+          calcRequestIds[place] ??= response.json<{ id: string }>().id;
+        } else refused(response, where);
       }
     }
     // From a workspace chart: its own owner's to ask, and named to them alone (AC-276).
@@ -2043,6 +2048,20 @@ const CASES: Record<string, Case> = {
       }>().toReview.length;
       const counted = await ask(who, { method: 'GET', url: '/api/reviews/count' });
       expect(counted.json<{ waiting: number }>().waiting, `${who}'s count`).toBe(toReview + open);
+    }
+  },
+  /**
+   * Taking a request up (T384, AC-051): its folder's read-write members
+   * alone; anyone else finds none. The answer names its folder and model
+   * file, theirs to see.
+   */
+  'POST /api/calc-requests/:id/take': async () => {
+    for (const place of PLACES) {
+      const id = calcRequestIds[place] ?? '';
+      expect(id, `a request asked of ${place}`).toMatch(/^[0-9a-f-]{36}$/);
+      await openedOnlyBy(`/api/calc-requests/${id}/take`, (who) => writes(who, place), undefined, {
+        method: 'POST',
+      });
     }
   },
   'DELETE /api/data-sources/:id': async () => {

@@ -4,6 +4,7 @@ import type { Visibility } from '../access/visible';
 import { USER } from '../auth/guard';
 import type { WechartUser } from '../auth/user';
 import type { CalcRequestFields } from '../db/schema';
+import { shortOf } from '../model/bind';
 import type { CalcRequest, CalcRequestStore } from '../repos/calc-requests';
 
 /**
@@ -119,6 +120,34 @@ export function registerCalcRequests(app: FastifyInstance, routes: CalcRequestRo
       requestedBy: { key: user.key, name: user.name },
     });
     return reply.code(201).send({ id: recorded.id });
+  });
+
+  /**
+   * A read-write member takes a request up, opening it into their workspace
+   * (T384, AC-051): recorded with it, so that approving their proposal of the
+   * measure resolves it (T385, AC-052). It answers the file that defines the
+   * cube now, to copy it, since that file may have moved since the request
+   * was made. Anyone else finds no such request. An open request only, of a
+   * cube some model still defines; otherwise no one is recorded.
+   */
+  app.post('/api/calc-requests/:id/take', USER, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const asked = await store.get(id);
+    const seen = await visibilityOf(request);
+    if (
+      asked === undefined ||
+      (seen !== undefined && seen.rights.get(asked.folderId)?.write !== true)
+    )
+      return reply.code(404).send({ error: 'There’s no such request, or it isn’t asked of you.' });
+    if (asked.status !== 'open') return reply.code(409).send({ error: 'It is resolved already.' });
+    const defined = await definedBy(asked.cube);
+    if (defined?.folderId !== asked.folderId)
+      return reply.code(409).send({
+        error: `No model in its folder defines ${shortOf(asked.cube)} now, so there is nothing to open.`,
+      });
+    const user = userOf(request);
+    await store.take(asked.id, { key: user.key, name: user.name });
+    return { folderId: defined.folderId, modelPath: defined.modelPath, cube: asked.cube };
   });
 
   app.get('/api/calc-requests', USER, async (request) => {

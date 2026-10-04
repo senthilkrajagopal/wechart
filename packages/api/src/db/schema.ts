@@ -170,6 +170,15 @@ export interface Database {
   build_tokens: BuildTokenTable;
   schedules: ScheduleTable;
   calc_requests: CalcRequestTable;
+  calc_request_takers: CalcRequestTakerTable;
+}
+
+/** A member who took a calculation request up, opening it into their workspace (T384, AC-051). */
+export interface CalcRequestTakerTable {
+  request_id: string;
+  user_key: string;
+  user_name: string;
+  taken_at: Generated<Date>;
 }
 
 /** A wechart schedule (T378, AC-234): every partition of one pre-aggregation, at its times. */

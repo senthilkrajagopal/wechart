@@ -35,6 +35,10 @@ export interface CalcRequestStore {
   /** How many open requests are asked of any of these folders; of every one, for `'all'` (R60). */
   openCount(folderIds: readonly string[] | 'all'): Promise<number>;
   get(id: string): Promise<CalcRequest | undefined>;
+  /** A member takes the request up, opening it into their workspace (T384); twice is once. */
+  take(id: string, by: { readonly key: string; readonly name: string }): Promise<void>;
+  /** Who took it up, first first. */
+  takersOf(id: string): Promise<readonly { readonly key: string; readonly name: string }[]>;
 }
 
 const requestOf = (row: Selectable<CalcRequestTable>): CalcRequest => ({
@@ -100,6 +104,24 @@ export function calcRequestStore(db: Kysely<Database>): CalcRequestStore {
         .orderBy('id', 'desc')
         .execute();
       return rows.map(requestOf);
+    },
+    async take(id, by) {
+      await db
+        .insertInto('calc_request_takers')
+        .values({ request_id: id, user_key: by.key, user_name: by.name })
+        .onConflict((conflict) => conflict.columns(['request_id', 'user_key']).doNothing())
+        .execute();
+    },
+    async takersOf(id) {
+      if (!UUID.test(id)) return [];
+      const rows = await db
+        .selectFrom('calc_request_takers')
+        .select(['user_key', 'user_name'])
+        .where('request_id', '=', id)
+        .orderBy('taken_at')
+        .orderBy('user_key')
+        .execute();
+      return rows.map((row) => ({ key: row.user_key, name: row.user_name }));
     },
     async get(id) {
       if (!UUID.test(id)) return undefined;

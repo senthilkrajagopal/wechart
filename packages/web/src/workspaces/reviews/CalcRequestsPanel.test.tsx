@@ -132,6 +132,89 @@ describe('calculation requests on the Reviews page (T383, AC-050)', () => {
     );
   });
 
+  /**
+   * T384 / AC-051: a read-write member opens it: its cube's model copied
+   * into My workspace and taken up, then the model editor on the copy, the
+   * request beside it (`RequestPane.tsx`).
+   */
+  it('opens an open request in My workspace, where its model is copied and it is taken up', async () => {
+    const asked: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        asked.push(url);
+        return Promise.resolve(
+          url === '/api/calc-requests'
+            ? new Response(JSON.stringify({ requests: [REQUEST] }), { status: 200 })
+            : url === '/api/workspace/copies'
+              ? new Response(JSON.stringify({ folderId: 'ws-p', path: 'cubes/orders.yml' }), {
+                  status: 201,
+                })
+              : new Response(
+                  JSON.stringify({
+                    folderId: 'sales',
+                    modelPath: 'cubes/orders.yml',
+                    cube: 'fsales__orders',
+                  }),
+                  { status: 200 },
+                ),
+        );
+      }),
+    );
+    const go = vi.fn();
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <CalcRequestSummary id="s" selected="r1" now={NOW} onClose={vi.fn()} go={go} />
+      </QueryClientProvider>,
+    );
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Open in My workspace' }));
+
+    await vi.waitFor(() => {
+      expect(go).toHaveBeenCalledWith('/explore/folders/ws-p/models/cubes%2Forders.yml?request=r1');
+    });
+    expect(asked).toContain('/api/calc-requests/r1/take');
+  });
+
+  it('says why it couldn’t be opened, and lets it be tried again', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        url === '/api/calc-requests'
+          ? Promise.resolve(new Response(JSON.stringify({ requests: [REQUEST] }), { status: 200 }))
+          : Promise.reject(new TypeError('Failed to fetch')),
+      ),
+    );
+    const go = vi.fn();
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <CalcRequestSummary id="s" selected="r1" now={NOW} onClose={vi.fn()} go={go} />
+      </QueryClientProvider>,
+    );
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Open in My workspace' }));
+
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'It couldn’t be opened: Failed to fetch.',
+    );
+    expect(
+      (screen.getByRole('button', { name: 'Open in My workspace' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+    expect(go).not.toHaveBeenCalled();
+  });
+
+  it('offers no opening of a resolved request', async () => {
+    serve([{ ...REQUEST, status: 'resolved' }]);
+    shown();
+    await userEvent.click(await screen.findByRole('button', { name: 'orders' }));
+
+    expect(screen.queryByRole('button', { name: 'Open in My workspace' })).toBeNull();
+  });
+
   it('says when there is nothing to do', async () => {
     serve([]);
     shown();

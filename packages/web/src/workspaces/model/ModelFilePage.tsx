@@ -51,6 +51,7 @@ import { ProblemsPanel, type CubeProblem } from './ProblemsPanel';
 import { draftJoinsOf } from './draftJoins';
 import { editedMembersOf, landedEditsOf, placesOf } from './editedMembers';
 import { ReadOnlyFile } from './ReadOnlyFile';
+import { RequestPane } from './RequestPane';
 import { ReferencesWarning, type MemberReferences } from './ReferencesWarning';
 import { publishModel, referencesTo, refusedText } from './publish';
 import { modelOf, withObject } from './sync';
@@ -1697,9 +1698,15 @@ export function ModelFilePage({
   path,
   openOn,
   folderId,
+  request,
 }: {
   path?: string | undefined;
   openOn?: OpenOn | undefined;
+  /**
+   * The calculation request the file is opened for (T384, AC-051): shown
+   * beside the editor, by its id.
+   */
+  request?: string | undefined;
   /**
    * The folder whose model this is, opened from Explore under its
    * breadcrumb (T342, AC-222); none is the Model workspace's, the root's.
@@ -2070,7 +2077,13 @@ export function ModelFilePage({
       )}
       <div
         ref={page}
-        className={`model-workspace model-page${docked ? ' model-page--generating' : ''}`}
+        className={`model-workspace model-page${
+          docked
+            ? ' model-page--generating'
+            : request !== undefined && path !== undefined
+              ? ' model-page--request'
+              : ''
+        }`}
       >
         <FileTree
           files={all}
@@ -2212,6 +2225,10 @@ export function ModelFilePage({
             />
           )}
         </div>
+        {/* The calculation request it was opened for, beside the editor (T384, AC-051). */}
+        {request === undefined || path === undefined || docked ? null : (
+          <RequestPane requestId={request} />
+        )}
         {/* Docked beside the model, as design 01's pane is (design 11): on a
           file's page it takes the code's place, and the form widens. */}
         {docked ? (

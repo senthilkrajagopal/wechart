@@ -7885,10 +7885,50 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **Claude's call, overturnable:** the description's limit is the Propose dialog's 1,000 characters, with its counter (rule 75). No criterion sets one for requests.
     - **Where requests are listed** was asked of the user, since design 05 and direction.md (binding, AC-343) gave the Reviews page two tabs and nothing placed requests. R60 answered: a third Reviews tab, counted in the top bar. AC-287, rule 76 and design 05's notes are amended to it.
     - **The shared test databases:** node-pg-migrate checks that the migrations already applied match the files on disk, position by position. So this migration, applied before another agent's not-yet-applied one, breaks that agent's run. Each run here took it back out of the test databases straight after. It is numbered 1758560000000, after the 1758530000000s now on feat/xcube.
-- [ ] T384 (AC-051) Open a request's cube in the member's workspace model editor, with the request beside it
+- [x] T384 (AC-051) Open a request's cube in the member's workspace model editor, with the request beside it
   - Files: `packages/web/src/workspaces/model/RequestPane.tsx` (+ test)
   - Failing test: `RequestPane.test.tsx`: opening a request copies the model into the member's workspace (or opens the copy) on the cube it names, with the request text beside the editor (AC-051).
   - Depends on: T383, T344, T342
+  - **As built:**
+    - api: `packages/api/src/db/migrations/1758610000000_calc-request-takers.cjs`, `packages/api/src/db/schema.ts`, `packages/api/src/repos/calc-requests.ts`, `packages/api/src/routes/calc-requests.ts` (+ test), `packages/api/src/access/route-matrix.test.ts`;
+    - web: `packages/web/src/workspaces/model/{RequestPane.tsx,ModelFilePage.tsx}` (+ RequestPane test), `packages/web/src/workspaces/reviews/CalcRequestsPanel.tsx` (+ test), `packages/web/src/router/routes.tsx`, `packages/web/src/shell/styles.ts`;
+    - `e2e/security/calc-request-resolve.spec.ts`.
+  - **Done 2026-10-04.**
+    - **Opening.** An open request's summary, under Reviews › Calculation requests, has "Open in My workspace". It takes the request up, which answers the model file that declares the request's cube now (the file may have moved since the request was made). It copies that file into the member's workspace (`POST /api/workspace/copies`, as "Edit in my workspace" does; their copy already there is reused). Then it goes to the copy's editor, with the request named in the address (`/explore/folders/<copy>/models/<file>?request=<id>`). Each model file holds one cube or view (T448), so the file is the cube. A resolved request offers no opening. A take-up or copy refused, or wechart not reached, says why, and the button can be pressed again.
+    - **Beside it.** With `?request=`, the model file's page gains a third column, the request: the cube and its asker, when, what they need, the fields in use, the chart where the viewer may open it, and that approving the proposal of the measure resolves it. It is direction.md's right inspector, 320 px, and goes under the editor below 1024 px. A request the viewer isn't shown (another folder's, or none) says so in the pane. Generate cubes' pane, docked, takes the column instead.
+    - **Taken up** (`POST /api/calc-requests/:id/take`): the read-write members of the request's folder, Super-Admins among them, may; twice is once. Anyone else gets 404, as for a request that isn't there. It answers the file in that folder that defines the cube now, and records who took it up and when. Refused, with no one recorded (409): a resolved request ("It is resolved already."), and a cube no model in its folder defines now.
+    - **Open for T385, asked of the user:** what ties an approved measure to a request? AC-052 says "a requested measure", and the request is free text. Opening records who took a request up, so T385 can resolve it on the approval of a taker's proposal that adds a measure to its cube. That is the option recommended to the user. The alternatives are any measure added to the cube by any approved proposal, or a proposal that names the request it answers. Under either alternative, T385 drops the takers.
+    - **Tests:**
+      - `calc-requests.test.ts`:
+        - taken up by writer and super, twice once, with their names;
+        - refused to reader, manager, nobody and an unknown id (404);
+        - the file answered where the cube's file has moved since;
+        - refused once no model defines the cube, and once resolved, recording no one (409).
+      - The route matrix: the take route as every user, in every place, opened only by that place's read-write members.
+      - `RequestPane.test.tsx`:
+        - the take-up, then the copy of the file it answers, and the address;
+        - nothing copied when the take-up is refused;
+        - a refused copy;
+        - wechart not reached;
+        - the pane's text;
+        - a request not shown.
+      - `CalcRequestsPanel.test.tsx`:
+        - an open request opens into My workspace;
+        - a failure is said and the button works again;
+        - a resolved one offers no opening.
+      - `e2e/security/calc-request-resolve.spec.ts` (Chrome, 3 of 3): super makes /Resolve with two cubes, the other cube's file first; manager asks on the second; writer opens it from Reviews. The address is that cube's file in a My workspace folder, not /Resolve, with the request; the breadcrumb says My workspace and the file; the editor heads it with that file; the pane, right of the editor, names the cube, the asker, the description and the fields. Opened again, it is the same copy. **AC-051 ticked.**
+      - Before the review's fixes, the full web suite (2329) and the full API suite (1570) passed.
+      - After the fixes, `calc-requests.test.ts` passed (12 of 12). The route matrix's run had seven 5-second timeouts on routes this task doesn't touch (`/api/meta`, `/api/load`, `/api/sql` and others) while the machine was loaded.
+      - After the rebase onto feat/xcube at 52c0f63, these passed: the full web suite (2359), the e2e above with T383's (8 of 8), and the api, web and e2e typechecks.
+      - The API suite couldn't run after the rebase: wechart_test holds another agent's uncommitted migration (1758565480000_sql-run-ends-by) twice, so every run without its file fails node-pg-migrate's order check. Reported to the coordinator.
+    - **The cold review (PASS)** found these, now fixed and tested:
+      - the take-up answered the file stored with the request, which the client didn't use: the copy came from that stored path, which can be stale. The take-up now comes first and answers the file defining the cube now, and the copy is of that file;
+      - a rejected fetch left the button on "Opening…" with nothing said;
+      - no test of a refused take-up;
+      - a resolved request could be taken up.
+      
+      Left as found: the take route and the takers serve T385's open question (above), not AC-051 itself.
+    - **The shared test databases:** the takers' migration is numbered 1758610000000, above the Jobs agent's 1758600000000s (the coordinator's rule, 2026-10-04). It was taken back out after each run. T383's 1758560000000 is on feat/xcube and stays.
 - [ ] T385 (AC-052) Resolve a request when its measure is approved into the folder, naming the member
   - Files: `packages/api/src/repos/calc-requests.ts`, `packages/api/src/repos/calc-resolution.test.ts`
   - Failing test: `calc-resolution.test.ts`: approving a model proposal that adds the requested measure marks the request resolved and records the member (AC-052).

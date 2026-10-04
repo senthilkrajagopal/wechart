@@ -328,3 +328,121 @@ describe('a calculation request (T383, AC-050)', () => {
     );
   });
 });
+
+/**
+ * T384 / AC-051: WHEN a read-write member of that folder opens a calculation
+ * request, THE SYSTEM SHALL open the target cube's model in the model editor,
+ * in their workspace, with the request visible beside it.
+ *
+ * Opening one takes it up (`POST /api/calc-requests/:id/take`): the member
+ * is recorded with it, so that approving their proposal of the measure
+ * resolves it (T385). It answers where the cube's model is, to copy it.
+ */
+describe('a calculation request taken up (T384, AC-051)', () => {
+  const take = (who: string, id: string) =>
+    as(who, { method: 'POST', url: `/api/calc-requests/${id}/take` });
+
+  it('is taken up by a read-write member of its folder, and answers where its model is', async () => {
+    const asked = await ask('manager', {
+      chartId: ids.chart,
+      cube: FULL,
+      fields: FIELDS,
+      description: `Taken (${MARK})`,
+    });
+    const { id } = asked.json<{ id: string }>();
+
+    const taken = await take('writer', id);
+    expect(taken.statusCode, taken.body).toBe(200);
+    expect(taken.json()).toEqual({ folderId: ids.sales, modelPath: PATH, cube: FULL });
+    // Twice is once.
+    expect((await take('writer', id)).statusCode).toBe(200);
+    expect((await take('super', id)).statusCode).toBe(200);
+    const nameOf = async (who: string) =>
+      (await as(who, { method: 'GET', url: '/api/me' })).json<{ name: string }>().name;
+    expect((await calcRequestStore(getDb()).takersOf(id)).map((taker) => taker.name)).toEqual([
+      await nameOf('writer'),
+      await nameOf('super'),
+    ]);
+  });
+
+  it('is refused to anyone else, as a request that isn’t there', async () => {
+    const asked = await ask('manager', {
+      chartId: ids.chart,
+      cube: FULL,
+      fields: FIELDS,
+      description: `Not taken (${MARK})`,
+    });
+    const { id } = asked.json<{ id: string }>();
+
+    for (const who of ['reader', 'manager', 'nobody'])
+      expect((await take(who, id)).statusCode, who).toBe(404);
+    expect((await take('writer', randomUUID())).statusCode).toBe(404);
+    expect(await calcRequestStore(getDb()).takersOf(id)).toEqual([]);
+  });
+
+  /** A cube of its own, asked of /Sales from the file it was in then. */
+  const askedOn = async (name: string) => {
+    const cube = `${MARK}_${name}`;
+    await modelFileStore(getDb()).write([
+      {
+        folderId: ids.sales,
+        path: `cubes/${cube}.yml`,
+        content: MODEL_YAML.replaceAll(CUBE, cube),
+      },
+    ]);
+    const asked = await ask('manager', {
+      chartId: ids.chart,
+      cube: `fsales__${cube}`,
+      fields: FIELDS,
+      description: `On ${name} (${MARK})`,
+    });
+    expect(asked.statusCode, asked.body).toBe(201);
+    return { cube, id: asked.json<{ id: string }>().id };
+  };
+
+  it('answers the file that defines its cube now, where that file has moved since it was asked', async () => {
+    const { cube, id } = await askedOn('moved');
+    await modelFileStore(getDb()).remove(ids.sales, `cubes/${cube}.yml`);
+    await modelFileStore(getDb()).write([
+      {
+        folderId: ids.sales,
+        path: `models/${cube}.yml`,
+        content: MODEL_YAML.replaceAll(CUBE, cube),
+      },
+    ]);
+
+    const taken = await take('writer', id);
+    expect(taken.statusCode, taken.body).toBe(200);
+    expect(taken.json()).toEqual({
+      folderId: ids.sales,
+      modelPath: `models/${cube}.yml`,
+      cube: `fsales__${cube}`,
+    });
+  });
+
+  it('is refused, and no one recorded, once no model defines its cube', async () => {
+    const { cube, id } = await askedOn('gone');
+    await modelFileStore(getDb()).remove(ids.sales, `cubes/${cube}.yml`);
+
+    const taken = await take('writer', id);
+    expect(taken.statusCode, taken.body).toBe(409);
+    expect(taken.json<{ error: string }>().error).toBe(
+      `No model in its folder defines ${cube} now, so there is nothing to open.`,
+    );
+    expect(await calcRequestStore(getDb()).takersOf(id)).toEqual([]);
+  });
+
+  it('is refused, and no one recorded, once it is resolved', async () => {
+    const { id } = await askedOn('resolved');
+    await getDb()
+      .updateTable('calc_requests')
+      .set({ status: 'resolved' })
+      .where('id', '=', id)
+      .execute();
+
+    const taken = await take('writer', id);
+    expect(taken.statusCode, taken.body).toBe(409);
+    expect(taken.json<{ error: string }>().error).toBe('It is resolved already.');
+    expect(await calcRequestStore(getDb()).takersOf(id)).toEqual([]);
+  });
+});

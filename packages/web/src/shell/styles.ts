@@ -2921,6 +2921,11 @@ main:has(.export-pane--over) { padding-right: 480px; }
    Model page's third column — beside the overview, or in the code's place on
    a file's page, the form widening — its steps in cards of 34 px rows. */
 .model-page.model-page--generating { grid-template-columns: 240px minmax(0, 1fr) 480px; }
+/* A calculation request beside the file it was opened on (T384, AC-051): a third
+   column, as Generate cubes' pane is, at direction.md's right-inspector 320 px. */
+.model-page.model-page--request { grid-template-columns: 240px minmax(0, 1fr) 320px; }
+.model-request { overflow-y: auto; min-height: 0; padding: var(--wc-surface-padding); }
+.model-request__title { margin: 0 0 8px; font-size: var(--wc-text-sm-size); font-weight: 600; }
 .model-page--generating .model-editor { grid-template-columns: minmax(0, 1fr); }
 .model-page--generating .model-editor__yaml { display: none; }
 .model-tree__generate.is-open,
@@ -3470,6 +3475,8 @@ input.switch:focus-visible { outline: 2px solid var(--wc-accent); outline-offset
   main:has(.export-pane--over) { padding-right: 0; }
   /* Generate cubes covers the page, as design 01's pane does (design 11 pin 1). */
   .model-page.model-page--generating { grid-template-columns: minmax(0, 1fr); }
+  /* The request goes under the editor (T384). */
+  .model-page.model-page--request { grid-template-columns: minmax(0, 1fr); }
 }
 .info-bar {
   display: flex;

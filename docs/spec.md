@@ -232,7 +232,7 @@ Traces to: `[R7]`, `[R2]`, `[research/cube/data-modeling.md]`.
       Fails when: the calculation is offered and produces an error, or gives no reason when disabled.
 - [x] AC-050 WHEN the user requests a calculation the menu cannot express, THE SYSTEM SHALL record a request carrying the chart, the fields in use and the user's description, and show it to the read-write members of the folder whose model defines the chart's cube, under Reviews › Calculation requests, counted in the top bar's Reviews count while open (amended 2026-10-04, `[R60]`).
       Fails when: the request is stored without the chart reference, or is not shown to that folder's read-write members under Reviews › Calculation requests, or an open one is left out of their Reviews count (amended 2026-10-04, `[R60]`).
-- [ ] AC-051 WHEN a read-write member of that folder opens a calculation request, THE SYSTEM SHALL open the target cube's model in the model editor, in their workspace, with the request visible beside it.
+- [x] AC-051 WHEN a read-write member of that folder opens a calculation request, THE SYSTEM SHALL open the target cube's model in the model editor, in their workspace, with the request visible beside it.
       Fails when: the editor opens without the request, or on a different cube than the request names.
 - [ ] AC-052 WHEN a requested measure is added to the model and its proposal is approved into the folder, THE SYSTEM SHALL mark the request as resolved and name the member that resolves it.
       Fails when: the request stays open after the member exists in the folder, or names no member.
