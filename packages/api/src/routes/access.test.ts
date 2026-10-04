@@ -408,6 +408,34 @@ describe('who may change a folder’s groups, with security on (T314, AC-259)', 
     expect(asReader.statusCode).toBe(403);
   });
 
+  /**
+   * T473 (2026-09-27 design 07, state A): each suggestion "Used on other
+   * folders" names where it is set, so the answer says which folders each
+   * group is set on, of those the caller may see, and never a hidden one.
+   */
+  it('says which of the caller’s folders each suggested group is set on', async () => {
+    const seen = await folder(a);
+    const hidden = await folder('root');
+    await put(app, seen, { readOnly: ['set-twice'] }, cookies['super']);
+    await put(app, hidden, { readWrite: ['set-twice', 'set-hidden'] }, cookies['super']);
+    const usedOn = async (who: string) =>
+      (
+        await app.inject({
+          method: 'GET',
+          url: '/api/access/known-groups',
+          headers: { cookie: cookies[who]! },
+        })
+      ).json<{ groups: string[]; usedOn: Record<string, string[]> }>();
+    const writers = await usedOn('writer');
+    expect(writers.usedOn['set-twice']).toEqual([seen]);
+    expect(writers.usedOn['set-hidden']).toBe(undefined);
+    expect(writers.usedOn['sales-rw']).toContain(a);
+    // Every group suggested says where, and nothing else is said.
+    expect(Object.keys(writers.usedOn).sort()).toEqual(writers.groups);
+    const supers = await usedOn('super');
+    expect([...(supers.usedOn['set-twice'] ?? [])].sort()).toEqual([seen, hidden].sort());
+  });
+
   it('refuses anyone else who can see it with 403, and changes nothing', async () => {
     const settingOf = async (id: string) =>
       (await get(app, id, cookies['super'])).json<{ setting: unknown }>().setting;

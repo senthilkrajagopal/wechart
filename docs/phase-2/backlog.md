@@ -253,6 +253,12 @@ R37 asks for both UI reviews' designs to be built, with the 2026-09-27 ones winn
 - **MW-13:** the proposed empty-list line.
 - **2026-09-27 design 01, approve 11:** whether to ask vendors for permission to show their logos (T472 uses monograms).
 - **2026-09-27 design 07, state F:** the Access panel with sign-in off. This contradicts the earlier answer "no Access button with sign-in off" (`docs/handoff.md`, T330).
+- **references.md › Phase 2 › surface 2 (the Access panel), where design 07 is silent** (found by T473's review, 2026-10-04). No task covers these, and T473's failing test didn't name them:
+  - the panel in the address (`…?panel=access`);
+  - "Access…" in a subfolder row's ⋯;
+  - Delete or Backspace on a focused group row removes it;
+  - F6 takes the panel into the pane cycle;
+  - opening focuses the panel's heading (it focuses the panel itself, as T330 built it).
 - **2026-09-27 design 03, state E:** a "Scheduled health check" row. It is only needed if periodic tests are wanted, which is a spec change.
 - **Explore and the top bar below 1,024 px:** neither review designs them (§3, N16).
 - **2026-09-27 design 04, pin 6:** "Search My workspace" or "Search Sales / EMEA" names the box for its folder, but AC-019's Explore search looks through the whole library, not one folder. Either the search is scoped to the open folder (an AC-019 change), or the box keeps its global label.
@@ -288,7 +294,7 @@ R37 asks for both UI reviews' designs to be built, with the 2026-09-27 ones winn
   - design 11 proposal 5 (T492).
 - **The audit trail** (T368 → T369, T370, T427):
   - 2026-09-27 design 08's Audit tab;
-  - design 07's audit note;
+  - ~~design 07's audit note;~~ *drawn by T473, 2026-10-04*
   - design 05 pin 7.
 - **Preview as groups, enforced by Cube** (T437 → T436 → T438): design 08 state E's folder reach, and state F's folder-refusal sentence.
 - **Build history** (AC-150: T340 → T371 → T372 → T374):

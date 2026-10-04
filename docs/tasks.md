@@ -10601,7 +10601,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - The research found no vendor's published terms allow its logo in the picker. PostgreSQL, Snowflake, BigQuery and Dremio are "not clearly allowed"; Redshift, MySQL, SQL Server and Oracle are "not allowed". So `CLEARED_LOGOS` is empty.
     - A logo goes in only with a sibling research doc recording the vendor's permission.
     - Whether to ask any vendor for permission is the user's to decide (the research's open question).
-- [ ] T473 (AC-259, AC-260, AC-265, AC-267, AC-343) Redraw the Access panel as design 07
+- [x] T473 (AC-259, AC-260, AC-265, AC-267, AC-343) Redraw the Access panel as design 07
   - Files: `packages/web/src/workspaces/explore/access/AccessPanel.tsx` (+ test), `e2e/security/access.spec.ts`
   - Failing test: design 07's states:
     - titled by the folder's path, with each list's help line;
@@ -10610,6 +10610,58 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - the group suggestions, "Not set here. Inherits from …", the self-lockout question and the Undo toast.
   - Depends on: T330
   - *2026-10-02, `[R56]`:* the read-write list's help line reads as design 16's state J rewords it: "Propose changes, create subfolders, set access, and build and schedule this folder's pre-aggregations. They also see every folder above, view-only, but not its pre-aggregations in Jobs." (AC-399)
+  - **Done 2026-10-04.** No AC is newly ticked:
+    - AC-259 and AC-260 were ticked by T330, and still hold;
+    - AC-265 and AC-267 stay open for their other halves (the other admin surfaces; T328's question);
+    - AC-343 and AC-399 stay open until every surface they name is drawn.
+  - **As built, by design 07's pins and states:**
+    - **Pin 1:** Access in the folder header with its lock icon, pressed (accent border, ground and colour) while its panel is open.
+    - **Pin 2:** the panel is titled "Access" with the folder's path below Shared ("Sales / EMEA", or a root's name), and is named so. It follows the folder: a source link, the tree, a breadcrumb or a row opens the folder with the panel still open on it.
+    - **Pin 3:** each list's help line. The read-write one is state J's.
+    - **Pin 4:** a group set here is in the code face with a people icon, and its × is "Remove _group_ from read-write".
+    - **Pin 5:** inherited rows are locked, "from _folder_" as a link, with the tooltip "Set on _folder_. A grant reaches every folder below it."
+    - **Pin 6:** "Read-write from _folder_ outranks this.", with the folder as a link.
+    - **Pin 7 and state A:** Add group inside each list opens the "AD group" combobox (APG, list popup). Its placeholder is "Group, as your identity provider sends it". Suggestions come under "Your groups" ("yours") and "Used on other folders" with the folder path, plus "Add "…" as typed". A group already in the list isn't offered.
+    - **Pin 8:** pending rows marked Adding, or Removing (struck through) with Keep. Remove and Keep hand focus to each other.
+    - **Pin 9:** the foot: "Changes apply when saved, and every one is recorded in the audit trail.", Cancel, and Save _n_ changes (disabled at 0). Cancel, × and Escape ask "Discard your changes?" when there are changes, focus on Keep editing.
+    - **State B:** "Not set here. Inherits from _parent_.", the parent a link.
+    - **State C:** the lock notice "Only Super-Admins can see this folder. Add a group to either list to give people access." Each list says "Not set here, and no folder above sets any." with no sub-heads.
+    - **State D:** "You'll lose read-write access to _path_." / "Removing _group_ leaves you with none of this folder's read-write groups. Save anyway?" Focus is on Cancel, which Escape answers too. Not asked of a Super-Admin.
+    - **State E:** the toast "Access saved for _path_ · _n_ changes" with Undo (`UndoToast`), and with no Undo after the editor removed their own access.
+    - **State G:**
+      - a load error: "Couldn't load access for this folder." with Retry and Details;
+      - a save error: "Couldn't save. Your _n_ changes are kept." with Retry and Details, the edits kept;
+      - access refused while open (403 or 404, from a save or a refetch): "You can no longer change access here. The lists below are read-only.", with no remove, add or Save. Explore keeps the panel open for it.
+    - Loading draws skeleton rows (references.md surface 2).
+  - **API:** `GET /api/access/known-groups` adds `usedOn`: each group with the folders it is set on, of those the caller may see, for the suggestion's "where".
+  - **Small decisions, overturnable:**
+    - the discard question's wording (not drawn): "Discard your changes?", "Your _n_ changes to the access of _path_ aren't saved.", Keep editing, Discard changes;
+    - a suggestion set on several folders shows the first's path and "+_n_";
+    - the combobox stays open until Escape, a save or another list's Add group, so a click that leaves it lands where it was aimed;
+    - following another folder drops the pending changes without asking, as closing the panel by moving away did before;
+    - state C's notice stays while a group is only pending: until it is saved, only Super-Admins see the folder.
+  - **Not built:**
+    - state F, sign-in off: held for the user in `docs/phase-2/backlog.md` §6(a);
+    - from references.md surface 2, outside the design and the failing test: `?panel=access` in the address, "Access…" in a subfolder row's ⋯, Delete or Backspace on a row, F6, and focus on the heading rather than the panel. They are now in the backlog §6(a).
+    - Design 02's note 6, "ask before the data source pane replaces Access", has no case to ask in. New › Data source is offered only in My workspace, where there is no Access panel. Export and Import still replace it without asking (T471's, T511's).
+  - **The cold review (PASS, five low-severity bugs, all fixed with a test that failed first):**
+    1. Retry after a failed save skipped the lockout question. It now asks as Save does.
+    2. A stale panel came back on the next tree click after Back had closed it. It now follows only while shown.
+    3. The Undo toast sat over the panel's Save and Cancel. At 1,024 px and wider it now sits left of the panel.
+    4. Pending changes came back on returning to a folder the panel had followed away from. They are dropped on following.
+    5. Taking back an addition left focus on the page, so Escape no longer closed the panel. Focus now stays in its list.
+    - Test gaps closed: Explore keeping the panel open read-only once a refetch is refused (the writer e2e); no question for a Super-Admin; following a tree click.
+  - **Tests:**
+    - `AccessPanel.test.tsx` (31): every pin and state above but F, and the review's cases;
+    - `routes/access.test.ts`: `usedOn`, with no hidden folder's;
+    - `e2e/security/access.spec.ts` (14, Chrome), covering:
+      - the button and title, and the help lines;
+      - inheritance, and the panel following its link and the tree, staying closed after Back;
+      - suggestions, Adding and Undo, with the toast clear of the foot;
+      - state C, the discard question and the lockout question;
+      - a writer's panel turning read-only;
+      - three groups in two lists.
+    - The web unit suite (2,316) passes, and so does `explore-roles.spec.ts` on its own. Run together with access.spec, its first `writer` test met the known Dex sign-in timeout twice.
 - [ ] T474 (AC-165, AC-166, AC-295, AC-343) Security as design 08's three tabs, for Super-Admins only
   - Files: `packages/web/src/workspaces/security/…` (+ tests), `e2e/security/security-page.spec.ts`
   - Failing test: `security-page.spec.ts`:
@@ -11769,10 +11821,10 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-234 | T378, T552, T504 | AC-246 | T404 | AC-249 | T336, T450 |
 | AC-251 | T318, T321, T324, T431 | AC-252 | T316, T319, T320 | AC-253 | T317, T321 |
 | AC-254 | T311, T319, T351, T359 | AC-255 | T312, T408 | AC-256 | T313, T323, T325, T326 |
-| AC-257 | T315, T320, T324 | AC-258 | T411 | AC-259 | T314, T330 |
-| AC-260 | T312, T314, T330 | AC-261 | T312, T325, T408 | AC-262 | T313, T327, T334, T335 |
-| AC-263 | T313, T326, T334, T335, T436 | AC-264 | T313, T325, T326 | AC-265 | T313, T323, T328, T330, T369, T371 |
-| AC-266 | T326, T340, T334 | AC-267 | T328, T334, T335, T343, T408 | AC-268 | T340, T408 |
+| AC-257 | T315, T320, T324 | AC-258 | T411 | AC-259 | T314, T330, T473 |
+| AC-260 | T312, T314, T330, T473 | AC-261 | T312, T325, T408 | AC-262 | T313, T327, T334, T335 |
+| AC-263 | T313, T326, T334, T335, T436 | AC-264 | T313, T325, T326 | AC-265 | T313, T323, T328, T330, T369, T371, T473 |
+| AC-266 | T326, T340, T334 | AC-267 | T328, T334, T335, T343, T408, T473 | AC-268 | T340, T408 |
 | AC-269 | T334, T335, T462 | AC-270 | T336 | AC-271 | T336, T452 |
 | AC-272 | ~~T337, T339, T340~~ T429, T457 | AC-273 | ~~T338~~ T435 | AC-274 | T341 |
 | AC-275 | ~~T337, T352~~ T428 | AC-276 | T343 | AC-277 | T343 |

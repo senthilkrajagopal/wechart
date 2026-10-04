@@ -11,7 +11,7 @@ import {
   folderAccessQuery,
   refreshFolderAccess,
 } from './access/AccessPanel';
-import { AccessChip, OnlySuperAdminsChip } from './AccessChip';
+import { AccessChip, AccessIcon, OnlySuperAdminsChip } from './AccessChip';
 import { CreateMenu, DEFAULT_TITLES, type CreatableKind } from './CreateMenu';
 import { folderRoleOf, rightFrom } from './folderRole';
 import {
@@ -445,6 +445,16 @@ export function ExplorePage() {
     retry: false,
   });
   const mayEditAccess = signedIn && !searching && known && access.isSuccess;
+  /**
+   * The open folder's access refused after it was answered, while its panel
+   * is open: the panel stays, read-only, saying so (T473; design 07, state G).
+   */
+  const accessLostOpen =
+    signedIn &&
+    !searching &&
+    known &&
+    access.data !== undefined &&
+    access.error instanceof AccessRefused;
   /** A shared folder open: its New and footnote are the role's (T331), the single user's too (T359). */
   const inShared = viaWorkspace && !searching && !inMyWorkspace;
   /**
@@ -705,19 +715,35 @@ export function ExplorePage() {
   };
   // The docked panes replace each other: not two at once (T471).
   const accessOpen =
-    mayEditAccess &&
+    (mayEditAccess || accessLostOpen) &&
     accessOf === folderId &&
     addingSource === null &&
     exportOf === null &&
     !importing;
   const titleOf = (id: string) =>
     rootTitleOf(id) ?? (folders.data ?? []).find((folder) => folder.id === id)?.title ?? id;
+  /** A folder by its path below its root, "Sales / EMEA", or a root by its name (design 07, pin 2). */
+  const pathOf = (id: string) => {
+    const steps = folderChain(folders.data ?? [], id);
+    return steps.length > 1
+      ? steps
+          .slice(1)
+          .map((step) => step.title)
+          .join(' / ')
+      : titleOf(id);
+  };
 
-  /** Open a folder: the tree, a breadcrumb or a folder's row. */
+  /**
+   * Open a folder: the tree, a breadcrumb, a folder's row, or the Access
+   * panel's links. An open Access panel follows it (T473; design 07, pin 2).
+   */
   const openFolder = (id: string) => {
     setQuery('');
     setRenaming(null);
     setFolderId(id);
+    // Only while it is shown: one closed by Back, or by another pane, stays
+    // closed (T473's review).
+    if (accessOpen) setAccessOf(id);
   };
 
   /** The open folder's description, as the folders were read (T524, AC-369). */
@@ -948,10 +974,12 @@ export function ExplorePage() {
               Rename
             </button>
           ) : null}
+          {/* Access with its lock, pressed while its panel is open (T473;
+              design 07, pin 1). */}
           {mayEditAccess ? (
             <button
               type="button"
-              className="btn-ghost btn-sm"
+              className="btn-sm explore__access"
               ref={accessButton}
               aria-expanded={accessOpen}
               aria-controls={accessOpen ? ACCESS_PANEL_ID : undefined}
@@ -963,6 +991,7 @@ export function ExplorePage() {
                 setAccessOf(accessOpen ? null : folderId);
               }}
             >
+              <AccessIcon name="lock" />
               Access
             </button>
           ) : null}
@@ -1444,16 +1473,19 @@ export function ExplorePage() {
       {accessOpen ? (
         <AccessPanel
           folderId={folderId}
-          folderTitle={folderTitle}
-          parentTitle={chain.length > 1 ? chain.at(-2)?.title : undefined}
+          folderPath={pathOf(folderId)}
+          parent={chain.length > 1 ? chain.at(-2) : undefined}
           titleOf={titleOf}
+          pathOf={pathOf}
           myGroups={me.data?.groups ?? []}
           superAdmin={me.data?.superAdmin === true}
           onOpenFolder={openFolder}
           onClose={() => {
             setAccessOf(null);
-            // Back where the panel was opened from.
-            accessButton.current?.focus();
+            // Back where the panel was opened from; to the heading where
+            // that button has gone with the access (state G).
+            if (accessButton.current === null) heading.current?.focus();
+            else accessButton.current.focus();
           }}
           id={ACCESS_PANEL_ID}
         />

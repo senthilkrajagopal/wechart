@@ -2078,7 +2078,12 @@ a.btn-primary.btn-sm { min-height: 24px; height: 24px; padding: 0 8px; }
 }
 .explore__no-access p { margin: 0; color: var(--wc-text-secondary); }
 .explore__no-access > svg { color: var(--wc-text-muted); }
+/* The Access panel as the 2026-09-27 design 07 draws it (T473): 360 px,
+   docked right; a 44 px head with "Access" at text-md and the folder's path
+   beside it (pin 2); each list a section with its help line (pin 3); the
+   foot pinned, with the audit note, Cancel and Save (pin 9). */
 .access-panel {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -2090,14 +2095,14 @@ a.btn-primary.btn-sm { min-height: 24px; height: 24px; padding: 0 8px; }
   align-items: center;
   gap: 8px;
   min-height: 44px;
-  padding: 8px 12px;
+  padding: 8px 8px 8px 16px;
   border-bottom: 1px solid var(--wc-border-subtle);
 }
 .access-panel__head h2 {
   margin: 0;
-  font-size: var(--wc-text-sm-size);
-  line-height: var(--wc-text-sm-line);
-  font-weight: var(--wc-text-sm-strong-weight);
+  font-size: var(--wc-text-md-size);
+  line-height: var(--wc-text-md-line);
+  font-weight: var(--wc-text-md-weight);
 }
 .access-panel__folder {
   flex: 1;
@@ -2107,49 +2112,243 @@ a.btn-primary.btn-sm { min-height: 24px; height: 24px; padding: 0 8px; }
   white-space: nowrap;
   color: var(--wc-text-secondary);
   font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
 }
+.access-panel__close,
+.access-row__remove {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--wc-text-secondary);
+}
+.access-row__remove { width: 24px; height: 24px; }
+.access-panel__close:hover,
+.access-row__remove:hover { background: var(--wc-bg-hover); }
 .access-panel__body {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
-.access-panel__alone,
-.access-panel__unset {
-  margin: 0;
-  font-size: var(--wc-text-xs-size);
-  line-height: var(--wc-text-xs-line);
-  color: var(--wc-text-muted);
+.access-panel__loading { margin: 12px 16px; padding: 0; list-style: none; display: grid; gap: 8px; }
+.access-panel__loading > li { height: 28px; border-radius: 4px; background: var(--wc-bg-subtle); }
+.access-panel__level {
+  display: grid;
+  gap: 6px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--wc-border-subtle);
 }
 .access-panel__level h3 {
-  margin: 0 0 4px;
+  margin: 0;
   font-size: var(--wc-text-sm-size);
   line-height: var(--wc-text-sm-line);
   font-weight: var(--wc-text-sm-strong-weight);
 }
-.access-panel__level h4 {
-  margin: 8px 0 2px;
+.access-panel__help,
+.access-panel__unset {
+  margin: 0;
   font-size: var(--wc-text-xs-size);
   line-height: var(--wc-text-xs-line);
-  font-weight: var(--wc-text-sm-strong-weight);
   color: var(--wc-text-secondary);
 }
+/* "Set here" and "From ancestors": the design's 12/600 capitals. */
+.access-panel__level h4 {
+  margin: 4px 0 0;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  font-weight: var(--wc-text-xs-strong-weight);
+  color: var(--wc-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 .access-panel__list { list-style: none; margin: 0; padding: 0; }
-.access-row {
+/* A group, 28 px (direction rule 17), in the code face as the token carries it (pin 4). */
+.access-row__line {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-height: 28px;
-  font-size: var(--wc-text-sm-size);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
 }
-.access-row__lock { flex: none; color: var(--wc-text-muted); }
-.access-row__group { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.access-row__source,
-.access-row__note { font-size: var(--wc-text-xs-size); color: var(--wc-text-muted); }
-.access-row__remove { margin-left: auto; }
+.access-row__icon { flex: none; color: var(--wc-text-muted); }
+.access-row__group {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--wc-font-code);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+}
+.access-row.is-removing .access-row__group { text-decoration: line-through; color: var(--wc-text-muted); }
+.access-row__end { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
+.access-row__from { color: var(--wc-text-secondary); }
+.access-row__outranked {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 0 0 4px 22px;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  color: var(--wc-text-secondary);
+}
+.access-row__info { flex: none; color: var(--wc-accent); }
+/* Pending changes (pin 8): Adding in the accent, Removing in status-error. */
+.access-tag {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: var(--wc-text-xs-size);
+  font-weight: var(--wc-text-xs-strong-weight);
+}
+.access-tag--add { background: var(--wc-bg-accent-soft); color: var(--wc-accent); }
+.access-tag--remove {
+  background: color-mix(in srgb, var(--wc-status-error) 10%, var(--wc-bg-surface));
+  color: var(--wc-status-error);
+}
+/* The design's text links: Add group, Keep, Retry at 12/600; a folder's name at 400. */
+.access-panel__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--wc-accent);
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  font-weight: var(--wc-text-xs-strong-weight);
+  cursor: pointer;
+}
+.access-panel__link:hover { text-decoration: underline; }
+.access-row__from .access-panel__link,
+.access-row__outranked .access-panel__link,
+.access-panel__unset .access-panel__link { display: inline; font-weight: var(--wc-text-xs-weight); }
+.access-panel__add { justify-self: start; }
+/* State A: the AD group box, its label stacked above it, its suggestions below. */
+.group-combobox { position: relative; display: grid; gap: 4px; }
+.group-combobox > label {
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  font-weight: var(--wc-text-xs-strong-weight);
+  color: var(--wc-text-secondary);
+}
+.group-combobox > input { font-family: var(--wc-font-code); }
+.group-combobox__list {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  z-index: 20;
+  margin-top: 4px;
+  padding: 4px;
+  max-height: 280px;
+  overflow: auto;
+  background: var(--wc-bg-raised);
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  box-shadow: var(--wc-shadow-pop);
+}
+.group-combobox__head {
+  padding: 6px 8px 2px;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  font-weight: var(--wc-text-xs-strong-weight);
+  color: var(--wc-text-secondary);
+}
+.group-combobox__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: 4px;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  cursor: pointer;
+}
+.group-combobox__option code { font-family: var(--wc-font-code); font-size: var(--wc-text-xs-size); }
+.group-combobox__option:hover,
+.group-combobox__option[aria-selected='true'] { background: var(--wc-bg-hover); }
+.group-combobox__option.is-typed { margin-top: 4px; border-top: 1px solid var(--wc-border-subtle); border-radius: 0 0 4px 4px; }
+.group-combobox__hint { margin-left: auto; color: var(--wc-text-muted); }
+/* States C and G: a notice or error band in the panel, icon and words. */
+.access-panel__band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 16px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  color: var(--wc-text-primary);
+}
+.access-panel__band > svg { flex: none; margin-top: 1px; }
+.access-panel__band > span { flex: 1; min-width: 0; }
+.access-panel__band details { flex-basis: 100%; }
+.access-panel__band details p { margin: 4px 0 0; color: var(--wc-text-secondary); }
+.access-panel__band--warn { background: color-mix(in srgb, var(--wc-status-warning-icon) 14%, var(--wc-bg-surface)); }
+.access-panel__band--err { background: color-mix(in srgb, var(--wc-status-error) 9%, var(--wc-bg-surface)); }
+.access-panel__foot {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--wc-border-subtle);
+}
+.access-panel__foot > p {
+  margin: 0;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  color: var(--wc-text-secondary);
+}
+.access-panel__acts { display: flex; justify-content: flex-end; gap: 8px; }
+/* State D, and the discard question: a popover anchored above Save. */
+.access-panel__ask {
+  position: absolute;
+  right: 16px;
+  bottom: calc(100% + 8px);
+  left: 40px;
+  z-index: 20;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  background: var(--wc-bg-raised);
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  box-shadow: var(--wc-shadow-pop);
+}
+.access-panel__ask p { margin: 0; font-size: var(--wc-text-sm-size); line-height: var(--wc-text-sm-line); }
+.access-panel__ask .access-panel__ask-title { font-weight: var(--wc-text-sm-strong-weight); }
+.access-panel__ask code { font-family: var(--wc-font-code); font-size: var(--wc-text-xs-size); }
+/* State E's toast, left of the docked panel rather than over its Save and
+   Cancel (T473's review); stacked below 1,024 px, the page's corner. */
+@media (min-width: 1024px) {
+  .access-panel .undo-toast { right: calc(360px + 16px); }
+}
+/* The folder header's Access, with its lock, pressed while its panel is open (pin 1). */
+.explore__access { display: inline-flex; align-items: center; gap: 6px; }
+.explore__access[aria-expanded='true'] {
+  background: var(--wc-bg-accent-soft);
+  border-color: var(--wc-accent);
+  color: var(--wc-accent);
+  font-weight: var(--wc-text-xs-strong-weight);
+}
 .access-picker {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -2158,17 +2357,6 @@ a.btn-primary.btn-sm { min-height: 24px; height: 24px; padding: 0 8px; }
   font-size: var(--wc-text-sm-size);
 }
 .access-picker button { grid-column: 2; justify-self: start; }
-.access-panel__ask {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 8px;
-  border: 1px solid var(--wc-border-subtle);
-  border-radius: 6px;
-}
-.access-panel__ask p { flex-basis: 100%; margin: 0; font-size: var(--wc-text-sm-size); }
-.access-panel__saved { margin: 0; font-size: var(--wc-text-sm-size); }
-.access-panel__foot { display: flex; justify-content: flex-end; }
 
 .link-button {
   padding: 4px 6px;

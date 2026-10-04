@@ -230,17 +230,23 @@ export function registerFolderAccess(
         'Only a Super-Admin or a read-write member of a folder can see its groups.',
       );
     }
-    const groups = new Set<string>();
+    // Each group with the folders it is set on, of those the caller may see:
+    // the picker says where a suggestion is used (T473; design 07, state A).
+    const usedOn = new Map<string, string[]>();
     for (const folder of tree) {
       if (!rights.has(folder.id)) continue;
-      for (const group of [
+      for (const group of new Set([
         ...(folder.access?.readOnly ?? []),
         ...(folder.access?.readWrite ?? []),
-      ]) {
-        groups.add(group);
+      ])) {
+        usedOn.set(group, [...(usedOn.get(group) ?? []), folder.id]);
       }
     }
-    return reply.send({ groups: [...groups].sort() });
+    const groups = [...usedOn.keys()].sort();
+    return reply.send({
+      groups,
+      usedOn: Object.fromEntries(groups.map((group) => [group, usedOn.get(group) ?? []])),
+    });
   });
 
   app.put('/api/folders/:folderId/access', USER, async (request, reply) => {
