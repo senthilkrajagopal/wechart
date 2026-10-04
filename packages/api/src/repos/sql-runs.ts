@@ -244,11 +244,15 @@ export interface FinishedRun {
   readonly durationMs?: number | null;
   readonly truncated?: 'rows' | 'bytes' | null;
   readonly statement?: string | null;
-  /** A Cube Store run stopped but run on: when Cube Store ends it at the latest (T548). */
+  /**
+   * A Cube Store run stopped but run on, or one xcube didn't answer: until
+   * when xcube is asked whether it has ended. Its end at the latest, or, with
+   * none (its router's), as long as xcube follows it (T548, T549).
+   */
   readonly endsBy?: Date | null;
 }
 
-/** A user's run stopped, which Cube Store runs on until `endsBy` at the latest (T548). */
+/** A user's run stopped, which Cube Store runs on, asked about until `endsBy` (T548, T549). */
 export interface StoppingRun {
   readonly runId: string;
   readonly dataSourceId: string | null;

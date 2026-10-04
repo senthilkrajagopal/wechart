@@ -599,6 +599,56 @@ describe('the SQL tab, the runner on (T535)', () => {
     expect(within(note).queryByRole('link')).toBeNull();
     expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
   });
+
+  it('holds Run while the user’s last Cube Store run is run to its end, saying no time (T549, AC-378, AC-379)', async () => {
+    serve({
+      going: {
+        dataSource: null,
+        cubeStore: true,
+        startedAt: '2026-10-01T14:40:02.000Z',
+        stopping: true,
+        endsBy: null,
+      },
+    });
+    open();
+    const note = await screen.findByTestId('sql-going-elsewhere');
+    expect(note.textContent).toBe(
+      'Cube Store is running your last query to its end; it can’t be stopped. One run at a time: your next one runs once it has ended.',
+    );
+    expect(within(note).queryByRole('button')).toBeNull();
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('holds Run where xcube can’t say whether it has ended, and says so (T549)', async () => {
+    serve({
+      going: {
+        dataSource: null,
+        cubeStore: true,
+        startedAt: '2026-10-01T14:40:02.000Z',
+        stopping: true,
+        endsBy: null,
+        unconfirmed: true,
+      },
+    });
+    open();
+    const note = await screen.findByTestId('sql-going-elsewhere');
+    expect(note.textContent).toBe(
+      'xcube can’t say whether Cube Store has finished your last query. One run at a time: your next one runs once it has ended.',
+    );
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('says a Cube Store run going elsewhere has no Cancel, for Cube Store can’t stop a query (AC-379, R64)', async () => {
+    serve({
+      going: { dataSource: null, cubeStore: true, startedAt: '2026-10-01T14:40:02.000Z' },
+    });
+    open();
+    const note = await screen.findByTestId('sql-going-elsewhere');
+    expect(within(note).queryByRole('button')).toBeNull();
+    expect(within(note).getByTestId('sql-no-cancel').textContent).toBe(
+      'Cube Store can’t stop a query, so there’s no Cancel.',
+    );
+  });
 });
 
 describe('the SQL tab, the runner off (T535, AC-373; design 15’s P1 and screen 2)', () => {

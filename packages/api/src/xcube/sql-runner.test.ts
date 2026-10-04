@@ -190,6 +190,7 @@ describe('a run asked of xcube (T532)', () => {
       ],
       rowCount: 2,
       // A data source's stop is real: nothing runs on (T548).
+      stillRunning: false,
       endsBy: null,
     });
     expect(await run('cancelled')).toEqual({
@@ -201,6 +202,7 @@ describe('a run asked of xcube (T532)', () => {
       columns: [],
       rows: [],
       rowCount: 0,
+      stillRunning: false,
       endsBy: null,
     });
     expect(await run('failed')).toEqual({
@@ -269,7 +271,41 @@ describe('a Cube Store run stopped, and a run’s state (T548; xcube 2099b13f2d)
       columns: [],
       rows: [],
       rowCount: 0,
+      stillRunning: true,
       endsBy: '2026-10-04T18:02:36.304Z',
+    });
+  });
+
+  it('reads a stop its router runs to its end: still running, with no end (T549; xcube 46ca0ce708)', async () => {
+    const stub = fakeXcube();
+    stub.answerSql(() => ({
+      status: 422,
+      body: {
+        error:
+          "The statement ran past 30 s and was stopped; Cube Store can't stop a query, and runs this one, which its router runs, to its end: nothing bounds it",
+        code: 'timeout',
+        statement: 'select',
+        redactedSql: 'SELECT ?',
+        durationMs: 32_004,
+        columns: [],
+        rows: [],
+        rowCount: 0,
+        truncated: 'stopped',
+        stillRunning: true,
+        endsBy: null,
+      },
+    }));
+    expect(await runnerOn(stub).run({ cubeStore: true }, ASK)).toEqual({
+      kind: 'stopped',
+      how: 'timeout',
+      statement: 'select',
+      redactedSql: 'SELECT ?',
+      durationMs: 32_004,
+      columns: [],
+      rows: [],
+      rowCount: 0,
+      stillRunning: true,
+      endsBy: null,
     });
   });
 
@@ -291,6 +327,7 @@ describe('a Cube Store run stopped, and a run’s state (T548; xcube 2099b13f2d)
     }));
     expect(await runnerOn(stub).run({ connection: 'c' }, ASK)).toMatchObject({
       kind: 'stopped',
+      stillRunning: false,
       endsBy: null,
     });
   });
@@ -300,7 +337,11 @@ describe('a Cube Store run stopped, and a run’s state (T548; xcube 2099b13f2d)
     stub.answerSqlState((runId) =>
       runId === 'finishing'
         ? { state: 'stopping', endsBy: '2026-10-04T18:02:36.304Z' }
-        : { state: 'ended' },
+        : runId === 'unbounded'
+          ? { state: 'stopping' }
+          : runId === 'garbled'
+            ? { state: 'stopping', endsBy: 'not a time' }
+            : { state: 'ended' },
     );
     const runner = runnerOn(stub);
     expect(await runner.state('finishing')).toEqual({
@@ -311,6 +352,10 @@ describe('a Cube Store run stopped, and a run’s state (T548; xcube 2099b13f2d)
       `/cubejs-api/v1/semantic/models/${MODEL}/sql/runs/finishing`,
     );
     expect(stub.calls.at(-1)?.method).toBe('GET');
+    // Its router's: nothing bounds it (T549).
+    expect(await runner.state('unbounded')).toEqual({ state: 'stopping', endsBy: null });
+    // A time it can't read is none, never shown (T549's review).
+    expect(await runner.state('garbled')).toEqual({ state: 'stopping', endsBy: null });
     expect(await runner.state('done')).toEqual({ state: 'ended', endsBy: null });
   });
 

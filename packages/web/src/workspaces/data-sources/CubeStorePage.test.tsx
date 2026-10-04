@@ -207,6 +207,10 @@ describe('Cube Store’s page (T536, AC-384; design 15’s state H)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Run' }));
     await screen.findByRole('button', { name: 'Running…' });
     expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+    // And says so (AC-379, amended by R64).
+    expect(screen.getByTestId('sql-no-cancel').textContent).toBe(
+      'Cube Store can’t stop a query, so there’s no Cancel.',
+    );
     state = 'stopping';
     finish({
       status: 422,

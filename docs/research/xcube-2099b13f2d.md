@@ -72,8 +72,11 @@ xcube's answer has a stopped query keep Cube Store busy "until Cube Store's own 
 - **Other queries starve meanwhile:** a `SELECT 1` on Cube Store took 18.9 s at 19:21:01Z, and the e2e's own `SELECT 1` after the hold lifted hadn't answered in 5 s.
 - **So "ended" in xcube's state means Cube Store answered** (its "Query execution timed out"), not that the query's work stopped. A user's next run can start while Cube Store still computes their last, and so can Cube's own queries.
 - Which queries Cube Store stops at its timeout, and which it computes on, wasn't settled here. xcube's own test, a three-way cross join, went idle at the timeout [answer, "Tested"].
+- *Settled by xcube's next answer, and corrected in `46ca0ce708`: see [`xcube-46ca0ce708.md`](./xcube-46ca0ce708.md).* The timeout ends only select workers' work. A query the router runs (`VALUES`, the catalog, a join above `ClusterSend`) runs to its end, and from `46ca0ce708` xcube says no `endsBy` for it and stays `stopping` until Cube Store answers.
 
 ## What wechart does with it (T548, R62)
+
+*T549 changes the last three points, with `46ca0ce708`: where xcube can't be asked, the next run is held all the same and said so, with no time guessed; a run with no end, and one xcube didn't answer, are asked about for 24 hours, as long as xcube follows one (`xcube-46ca0ce708.md`).*
 
 - A Cube Store run's answer with `stillRunning` is said as still finishing in Cube Store, until `endsBy`. Its row in wechart's `sql_runs` keeps `ends_by`.
 - The user's next run, on Cube Store or a data source, waits while xcube says that run hasn't ended. Where xcube can't be asked, it waits until `endsBy`.

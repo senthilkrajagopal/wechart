@@ -12171,13 +12171,45 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - Cube Store sat at 365–1,240 % CPU after xcube said the run ended, and a `SELECT 1` took 18.9 s. The coordinator restarted `wechart-cubestore` at 19:56:07Z, 37 minutes after the timeout.
       - So "ended" in xcube's state can come before the query's work ends, and AC-378's "a next run starts before it has ended" can still hold.
       - Written up for xcube in `to-xcube/` (cube-b4).
-- [ ] T549 (AC-378, AC-379) Cube Store's work past its timeout: as the user decides *(added 2026-10-04, from T548)*
+- [x] T549 (AC-378, AC-379) Cube Store's work past its timeout: as the user decides *(added 2026-10-04, from T548)*
   - Files: as the user's answer has it.
   - The questions:
     - Cube Store's `CUBESTORE_QUERY_TIMEOUT` ends a query's wait, but its router computed a stopped query on after it, and xcube said the run ended (research `xcube-2099b13f2d.md`, "Correction"). Which queries run on, and what xcube or Cube Store could do about it, is for xcube to find; whether AC-378 and AC-379 are amended for it is the user's.
     - AC-379 offers Cancel, and Cube Store's page offers none. xcube `2099b13f2d` answers a Cube Store cancel at once, with `stillRunning`, and the API says it (T548). Offer it, or amend AC-379 for Cube Store as R62 amended AC-378?
   - Failing test: as the answer has it.
   - Depends on: T548, the user's answer
+  - **Done 2026-10-04** (xcube's answer `to-wechart/2026-10-04-2100-cube-store-work-past-timeout.md`; the coordinator's word; R64).
+    - **The answers:**
+      - xcube: Cube Store's timeout ends only its select workers' work. A query its router runs (`VALUES`, the catalog, a join above `ClusterSend`) runs to its end, and nothing but restarting Cube Store stops it. From `46ca0ce708` xcube explains each Cube Store SELECT first: a router run's stop says `endsBy: null`, and it stays `stopping` until Cube Store answers, for up to 24 hours.
+      - R64: Cube Store offers no Cancel, and says so (AC-379 amended). Refusing router-join queries before they run is yes, asked of xcube as T650, waiting on its image.
+      - The coordinator: hold the next run until xcube says ended; where xcube can't be asked, keep holding and say so, with no time guessed.
+    - **The pin:** `ghcr.io/senthilkrajagopal/xcube:v1.7.45-46ca0ce708@sha256:340f97c1…` in compose (Cube and its refresh worker), both Helm values files, `docs/deploy.md` (no migration; upgrade the API with it or first) and `cube-image.test.ts`. Compose's two Cube containers were recreated on it under the e2e lock, with the main checkout's compose file and project directory and only `CUBE_IMAGE` set. Each container's config-hash equals the main checkout's, and both came up healthy.
+    - **Research:** `xcube-46ca0ce708.md`, with the probe against compose's image (a router query stopped at a 3 s cap: `endsBy: null`, the same id refused, `stopping` with no end until Cube Store answered at about 21 s, then `ended`, Cube Store idle). `xcube-2099b13f2d.md` points to it from its "Correction".
+    - **The API:**
+      - A Cube Store stop with `stillRunning` and no `endsBy` answers "Stopped at 30 seconds: Cube Store runs this query to its end; it can’t be stopped." with `stillRunning: true, endsBy: null`. One with an end reads as in T548.
+      - Its row is asked about until its end at the latest, or, with none, for 24 hours (and a margin), as long as xcube follows it. So is a Cube Store run xcube didn't answer, which T548 held for a guessed 120 s.
+      - Where xcube can't be asked, the next run is held all the same, past any end, until its row is two minutes past what it was asked about until. The 409 and `GET /api/sql-runs/going` say `{ endsBy: null, unconfirmed: true }` and "xcube can’t say whether Cube Store has finished your last query." T548 released such a hold at `endsBy`; its test now holds past it, by the coordinator's word.
+      - The audit event says `stillRunning: true` and `endsBy`, the end or null.
+    - **The page:**
+      - The result and the note above the editor say a router run runs to its end and can't be stopped, with no time.
+      - Where xcube can't say, the note says so, and Run stays held.
+      - Cube Store's page offers no Cancel and says "Cube Store can’t stop a query, so there’s no Cancel." while a run goes, and in the note on another page while one goes there (AC-379, R64).
+    - **Tests:**
+      - `xcube/sql-runner.test.ts`: a router stop read as still running with no end; a data source's as not running on; a state of `stopping` with no end.
+      - `routes/sql-cube-store.test.ts`: a router stop said, held with no end on Cube Store and the going route, its row asked about for 24 hours, its event; held where xcube can't say, past its end, said so, and not once its row is long past.
+      - `SqlResult.test.tsx`, `SqlRunner.test.tsx` and `CubeStorePage.test.tsx`: the router run's note, before and after it ends; the held notes with no end and unconfirmed; no Cancel, said so, on Cube Store's page and of a Cube Store run going elsewhere.
+      - `e2e/security/sql-runner.spec.ts`: the Cube Store test now expects the new image's router run (no end, no Cancel and said so, held on Cube Store and on a data source, lifted when Cube Store answers). **Not yet run:** wechart_security holds a stray migration row the user is to remove, and the coordinator holds the security e2e until then.
+    - **Fixed after the review** (one round, which passed it with no real bug):
+      - a run's state with an `endsBy` that isn't a time is read as none, never shown;
+      - the 24 hours a run with no end is asked about are counted from its start with a 5-minute margin, since xcube counts from the stop (Claude's call, overturnable);
+      - the hold after a run xcube didn't answer is tested to last the 24 hours;
+      - the research note says when a hold xcube can't confirm lapses: two minutes past what it was asked about until, as a lost run's.
+    - **Left as found** (low, from the review):
+      - a run xcube didn't answer, which xcube still reports `running`, is said to run to its end;
+      - the spoken text for a router run has no test;
+      - `/api/sql-runs/cancel` still takes a Cube Store run, though no page offers it;
+      - AC-378's text still names `2099b13f2d` and "until when"; whether it is amended for router runs, as R64 amended AC-379, is the user's.
+    - **AC-378 and AC-379 stay unticked** until that e2e passes on the real page.
 - [x] T538 (AC-354) Set export-import's hidden dependencies up as copy-on-use allows *(added 2026-10-01, from T527)*
   - Files: `e2e/security/export-import.spec.ts`
   - Failing test:

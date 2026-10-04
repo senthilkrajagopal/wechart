@@ -39,10 +39,11 @@ export type SqlOutcome =
       readonly truncated?: 'stopped';
       /**
        * On Cube Store, which can't stop a query: it runs on until `endsBy` at
-       * the latest (T548, AC-378; xcube `2099b13f2d`).
+       * the latest (T548, AC-378; xcube `2099b13f2d`), or, with none, to its
+       * end, its router's (T549; xcube `46ca0ce708`).
        */
       readonly stillRunning?: true;
-      readonly endsBy?: string;
+      readonly endsBy?: string | null;
     }
   | {
       readonly outcome: 'refused';
@@ -292,13 +293,19 @@ export function SqlResult({
           : `Cancelled after ${(result.durationMs / 1000).toFixed(1)} s`;
       // Cube Store can't stop a query: it runs on until its end at the latest,
       // which is said, until it has ended (T548, AC-378; R62).
-      const endsBy = result.stillRunning === true ? result.endsBy : undefined;
+      // With no end, its router's, it runs to its end (T549).
+      const endsBy = result.endsBy ?? null;
+      const stillRunning = `${
+        endsBy === null
+          ? 'Cube Store runs this query to its end; it can’t be stopped.'
+          : `Cube Store can’t stop a query, so it is still finishing this one, until ${clock(new Date(endsBy))} at the latest.`
+      } Your next run waits until it has ended.`;
       const why =
-        endsBy !== undefined
-          ? `${timedOut ? 'The run hadn’t finished after 30 seconds' : 'You cancelled the run'}, so wechart stopped waiting for it. Cube Store can’t stop a query, so ${
+        result.stillRunning === true
+          ? `${timedOut ? 'The run hadn’t finished after 30 seconds' : 'You cancelled the run'}, so wechart stopped waiting for it. ${
               ended
-                ? 'it finished this one on its own: it has since ended.'
-                : `it is still finishing this one, until ${clock(new Date(endsBy))} at the latest. Your next run waits until it has ended.`
+                ? 'Cube Store can’t stop a query, so it finished this one on its own: it has since ended.'
+                : stillRunning
             }`
           : onCubeStore
             ? // An xcube that says nothing of its run on (T548's review).

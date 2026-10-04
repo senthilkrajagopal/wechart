@@ -75,9 +75,15 @@ export type SqlAnswer =
       readonly rows: readonly (readonly unknown[])[];
       readonly rowCount: number;
       /**
-       * Where Cube Store runs it on, for it can't stop a query: when its own
-       * timeout ends it at the latest (`2099b13f2d`, T548; research
-       * xcube-2099b13f2d.md). Null where the stop is real, a data source's.
+       * Cube Store runs it on, for it can't stop a query (`2099b13f2d`,
+       * T548): false where the stop is real, a data source's.
+       */
+      readonly stillRunning: boolean;
+      /**
+       * When Cube Store's own timeout ends it at the latest, where anything
+       * does: null for a query its router runs, which runs to its end
+       * (`46ca0ce708`, T549; research xcube-46ca0ce708.md), and where the
+       * stop is real.
        */
       readonly endsBy: string | null;
     }
@@ -105,7 +111,8 @@ export type SqlAnswer =
 /**
  * A run's state on xcube (T548; `GET …/sql/runs/{runId}`, xcube 2099b13f2d):
  * `stopping` is a Cube Store query stopped but run on, until `endsBy` at the
- * latest; `ended` is ended, or never was.
+ * latest, or with none to its end, its router's (T549, `46ca0ce708`);
+ * `ended` is Cube Store having answered it, or a run that never was.
  */
 export interface SqlRunState {
   readonly state: 'running' | 'stopping' | 'ended';
@@ -212,6 +219,7 @@ export function xcubeSqlRunner({
           columns,
           rows,
           rowCount,
+          stillRunning: answer['stillRunning'] === true,
           endsBy: answer['stillRunning'] === true ? text(answer['endsBy']) : null,
         };
       if (
@@ -259,7 +267,12 @@ export function xcubeSqlRunner({
           text(answer['code']) ?? undefined,
           `xcube answered ${String(response.status)} when asked a run's state`,
         );
-      return { state, endsBy: state === 'stopping' ? text(answer['endsBy']) : null };
+      // A time it can't read is none: never shown as one (T549's review).
+      const endsBy = state === 'stopping' ? text(answer['endsBy']) : null;
+      return {
+        state,
+        endsBy: endsBy !== null && !Number.isNaN(Date.parse(endsBy)) ? endsBy : null,
+      };
     },
   };
 }

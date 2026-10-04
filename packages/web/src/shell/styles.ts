@@ -4216,6 +4216,8 @@ code.schedules__sub { font-family: var(--wc-font-code); }
   border: 1px solid var(--wc-border-strong); border-bottom-width: 2px; background: var(--wc-bg-surface);
 }
 .sql-runner__limits { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+/* Cube Store's running run: no Cancel, said so (AC-379, R64). */
+.sql-runner__note { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
 .sql-runner__empty { margin: 0; padding: 28px 16px; text-align: center; font-size: 12px; color: var(--wc-text-secondary); }
 .sql-runner__turn-off { margin-left: 8px; }
 .sql-runner__toast {

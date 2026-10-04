@@ -306,7 +306,11 @@ export interface SqlRunTable {
   duration_ms: number | null;
   truncated: string | null;
   statement: string | null;
-  /** A Cube Store run stopped but run on: when it ends at the latest (T548). */
+  /**
+   * A Cube Store run stopped but run on: until when xcube is asked whether it
+   * has ended, its end at the latest or, with none, as long as xcube follows
+   * it (T548, T549).
+   */
   ends_by: Generated<Date | null>;
 }
 

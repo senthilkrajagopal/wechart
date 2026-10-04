@@ -52,9 +52,13 @@ import { describe, expect, it } from 'vitest';
  * cancelled at once with `stillRunning` and `endsBy`, follows it to its real
  * end, and says a run's state by `GET …/sql/runs/{runId}`; migration 13,
  * additive (research xcube-2099b13f2d.md).
+ *
+ * T549, AC-378, AC-379: `46ca0ce708` follows a stopped Cube Store query its
+ * router runs, which Cube Store's timeout can't end, to its real end, with
+ * no `endsBy`; no migration (research xcube-46ca0ce708.md).
  */
 const IMAGE =
-  'ghcr.io/senthilkrajagopal/xcube:v1.7.45-2099b13f2d@sha256:1e483afc30f1da9bcc58a0cc37e5ba96824c2f9fda709b2b2d699dcc768b2e12';
+  'ghcr.io/senthilkrajagopal/xcube:v1.7.45-46ca0ce708@sha256:340f97c193e0bf3f745301f62bfe84764ded70e93a80aed87e160d68d0287382';
 /** Slice 2's image, built locally: only the way back names it. */
 const SLICE_2_IMAGE = 'xcube:v1.7.45-83cb9f0888';
 
@@ -84,7 +88,7 @@ describe('docs/deploy.md pulls the fork’s published image by digest (T449, AC-
 
   it('names the image the release runs, and slice 2’s only for the way back, with how to build it', () => {
     // No other xcube tag, and no build of the package under its old name.
-    expect(deploy).not.toMatch(/xcube:v1\.7\.45-(?!2099b13f2d@|83cb9f0888|feat-xcube|\$|<)/);
+    expect(deploy).not.toMatch(/xcube:v1\.7\.45-(?!46ca0ce708@|83cb9f0888|feat-xcube|\$|<)/);
     expect(deploy).not.toContain('cube:v1.7.45-introspection-');
     // Slice 2's image was built locally and never published: the way back says how.
     const back = deploy.slice(deploy.indexOf('### Items mode, and the way back'));

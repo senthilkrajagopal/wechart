@@ -124,9 +124,10 @@ spec:
             - name: CUBEJS_GRACEFUL_SHUTDOWN
               value: "15"
             # Cube Store's own query timeout, which xcube can't read from it:
-            # a SQL run stopped on Cube Store runs on until it, and xcube says
-            # until when (T548, AC-378; research xcube-2099b13f2d.md). Unset
-            # on both, both are 120 s.
+            # a SQL run stopped on Cube Store's select workers runs on until
+            # it, and xcube says until when (T548, AC-378; research
+            # xcube-2099b13f2d.md); one its router runs, to its end (T549;
+            # xcube-46ca0ce708.md). Unset on both, both are 120 s.
             {{- with $.Values.cubestore.env.CUBESTORE_QUERY_TIMEOUT }}
             - name: XCUBE_CUBESTORE_QUERY_TIMEOUT
               value: {{ . | toString | quote }}

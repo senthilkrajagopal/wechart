@@ -246,7 +246,10 @@ describe('a run on Cube Store (T536, AC-384; design 15’s H3)', () => {
  */
 describe('a Cube Store run stopped but run on (T548, AC-378, AC-379)', () => {
   const ENDS_BY = new Date(2026, 9, 1, 14, 34, 5).toISOString();
-  const stopped = (outcome: 'timeout' | 'cancelled'): SqlOutcome => ({
+  const stopped = (
+    outcome: 'timeout' | 'cancelled',
+    endsBy: string | null = ENDS_BY,
+  ): SqlOutcome => ({
     outcome,
     durationMs: 32_004,
     columns: [],
@@ -254,7 +257,7 @@ describe('a Cube Store run stopped but run on (T548, AC-378, AC-379)', () => {
     rowCount: 0,
     truncated: 'stopped',
     stillRunning: true,
-    endsBy: ENDS_BY,
+    endsBy,
   });
   const showOnCubeStore = (result: SqlOutcome, ended = false) =>
     render(
@@ -278,6 +281,19 @@ describe('a Cube Store run stopped but run on (T548, AC-378, AC-379)', () => {
 
   it('says it has since ended, once it has', () => {
     showOnCubeStore(stopped('timeout'), true);
+    expect(screen.getByTestId('sql-result-note').textContent).toBe(
+      'The run hadn’t finished after 30 seconds, so wechart stopped waiting for it. Cube Store can’t stop a query, so it finished this one on its own: it has since ended. Nothing came back. Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.',
+    );
+  });
+
+  it('says one its router runs is run to its end, with no time, and then that it has ended (T549)', () => {
+    const router = stopped('timeout', null);
+    const { unmount } = showOnCubeStore(router);
+    expect(screen.getByTestId('sql-result-note').textContent).toBe(
+      'The run hadn’t finished after 30 seconds, so wechart stopped waiting for it. Cube Store runs this query to its end; it can’t be stopped. Your next run waits until it has ended. Nothing came back. Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.',
+    );
+    unmount();
+    showOnCubeStore(router, true);
     expect(screen.getByTestId('sql-result-note').textContent).toBe(
       'The run hadn’t finished after 30 seconds, so wechart stopped waiting for it. Cube Store can’t stop a query, so it finished this one on its own: it has since ended. Nothing came back. Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.',
     );

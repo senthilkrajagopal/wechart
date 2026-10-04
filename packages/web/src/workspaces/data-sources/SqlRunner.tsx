@@ -483,8 +483,14 @@ interface Going {
    * latest: their next waits (T548, AC-378, AC-379; R62).
    */
   readonly stopping?: true;
-  readonly endsBy?: string;
+  /** None for one its router runs to its end (T549), or where xcube can't say. */
+  readonly endsBy?: string | null;
+  /** xcube can't be asked whether it has ended: held all the same (T549). */
+  readonly unconfirmed?: true;
 }
+
+/** AC-379, amended by R64: Cube Store offers no Cancel, and says so. */
+const NO_CANCEL = 'Cube Store can’t stop a query, so there’s no Cancel.';
 
 const clockWithSeconds = (iso: string) =>
   new Date(iso).toLocaleTimeString('en-GB', {
@@ -712,11 +718,13 @@ function Runner({
         {elsewhere === null ? null : elsewhere.stopping === true ? (
           // Nothing to cancel, nor to go to: Cube Store can't stop it (T548).
           <p className="notebar sql-runner__elsewhere" data-testid="sql-going-elsewhere">
-            Cube Store is still finishing your last query
-            {elsewhere.endsBy === undefined
-              ? ''
-              : `, until ${clockWithSeconds(elsewhere.endsBy)} at the latest`}
-            . One run at a time: your next one runs once it has ended.
+            {elsewhere.unconfirmed === true
+              ? 'xcube can’t say whether Cube Store has finished your last query.'
+              : elsewhere.endsBy == null
+                ? // Its router's, run to its end (T549).
+                  'Cube Store is running your last query to its end; it can’t be stopped.'
+                : `Cube Store is still finishing your last query, until ${clockWithSeconds(elsewhere.endsBy)} at the latest.`}{' '}
+            One run at a time: your next one runs once it has ended.
           </p>
         ) : (
           <p className="notebar sql-runner__elsewhere" data-testid="sql-going-elsewhere">
@@ -729,8 +737,10 @@ function Runner({
             ) : elsewhere.cubeStore === true && !onCubeStore ? (
               <a href={sqlTabHref(CUBE_STORE_ID)}>Go to it</a>
             ) : null}{' '}
-            {/* Cube Store's has no cancel: it can't stop a query (T548; research). */}
-            {elsewhere.cubeStore === true ? null : (
+            {/* Cube Store's has no cancel, and says so: it can't stop a query (AC-379, R64). */}
+            {elsewhere.cubeStore === true ? (
+              <span data-testid="sql-no-cancel">{NO_CANCEL}</span>
+            ) : (
               <button type="button" className="btn-link" onClick={() => void cancel()}>
                 Cancel that run
               </button>
@@ -770,7 +780,7 @@ function Runner({
               </span>
               {running === null ? null : (
                 <>
-                  {/* Cube Store can't stop a query: xcube stops waiting at 30 s (T548; research). */}
+                  {/* Cube Store can't stop a query: no Cancel, said so (AC-379, R64); xcube stops waiting at 30 s. */}
                   {onCubeStore ? null : (
                     <button type="button" className="btn" onClick={() => void cancel()}>
                       Cancel
@@ -780,6 +790,11 @@ function Runner({
                     <StatusIcon kind="run" />
                     Running {String(Math.floor((now - running.getTime()) / 1000))} s · stops at 30 s
                   </span>
+                  {onCubeStore ? (
+                    <span className="sql-runner__note" data-testid="sql-no-cancel">
+                      {NO_CANCEL}
+                    </span>
+                  ) : null}
                 </>
               )}
               <span className="sql-runner__spacer" />
@@ -873,10 +888,11 @@ function spokenOf(result: SqlOutcome, sql: string, onCubeStore: boolean): string
         got === 0
           ? head
           : `${head}: ${got === 1 ? '1 row' : `${got.toLocaleString('en')} rows`} came back before it was stopped`;
-      // And that Cube Store runs it on, until when at the latest (T548).
-      return result.stillRunning === true && result.endsBy !== undefined
-        ? `${said}. Cube Store is still finishing it, until ${clockWithSeconds(result.endsBy)} at the latest.`
-        : said;
+      // And that Cube Store runs it on, until when at the latest (T548), or to its end (T549).
+      if (result.stillRunning !== true) return said;
+      return result.endsBy == null
+        ? `${said}. Cube Store runs it to its end; it can’t be stopped.`
+        : `${said}. Cube Store is still finishing it, until ${clockWithSeconds(result.endsBy)} at the latest.`;
     }
     default:
       return 'error' in result ? result.error : 'Not run';

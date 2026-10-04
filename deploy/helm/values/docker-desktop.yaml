@@ -20,11 +20,12 @@ cube:
   # read-only SQL runner from 89628a0e88 (T532, R50), a stopped run's rows
   # from 6d9673ccda (T545), a workspace overlay's data source's catalog from
   # 93a5f7a73b (T547), and a Cube Store run stopped said still running until
-  # when, and each run's state, from 2099b13f2d (T548). The fork's
-  # CI publishes it for amd64 and arm64, pinned here by digest
+  # when, and each run's state, from 2099b13f2d (T548), and a query Cube
+  # Store's router runs followed to its real end from 46ca0ce708 (T549). The
+  # fork's CI publishes it for amd64 and arm64, pinned here by digest
   # (docs/deploy.md). Cube and its refresh worker both run it, with the
   # image's own command.
-  image: ghcr.io/senthilkrajagopal/xcube:v1.7.45-2099b13f2d@sha256:1e483afc30f1da9bcc58a0cc37e5ba96824c2f9fda709b2b2d699dcc768b2e12
+  image: ghcr.io/senthilkrajagopal/xcube:v1.7.45-46ca0ce708@sha256:340f97c193e0bf3f745301f62bfe84764ded70e93a80aed87e160d68d0287382
   dataSource:
     type: postgres
     host: superset-postgresql.superset.svc.cluster.local
