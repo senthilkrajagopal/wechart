@@ -950,6 +950,12 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R60 — calculation requests, rollup refusals after the switch, and Cube Store's stop** (2026-10-04, the user)
+- Q (from T383): where should a folder's read-write members see calculation requests? A: "Reviews tab + count (Recommended)". *A third Reviews tab, "Calculation requests", and the Reviews count in the top bar includes open requests. Design 05, direction.md rule 76 and AC-287's count are amended.*
+- Q (from T451): a rollup that names a member the model doesn't have saves in My workspace and is refused only when proposed. Should the workspace save check it? A: "No, at proposal only". *AC-189 is amended: refused at proposal or approval.*
+- Q (from T451): when a proposal is refused for a rollup Cube can't join, what does the Propose dialog show? A: "Just the count". *The breaks are named on the review page (state L). AC-235 is amended.*
+- Q (from T536): Cube Store has no cancel, so a stopped Cube Store run can run on until its own 120 s limit. A: "Ask xcube for a cancel". *Requested from xcube; T548 waits on its image.*
+
 **R59 — Run now, pausing, and the schema browser's scope** (2026-10-02, the user)
 - Q: When a Run now on a wechart schedule fails, does it count toward the schedule's suspension limit? A: "No, scheduled runs only (Recommended)". *A Run now neither counts nor resets the count (AC-155, AC-395).*
 - Q: Is Run now offered on a schedule that is paused or suspended? A: "Yes, on both (Recommended)". *A Run now is a one-off build; it doesn't resume the schedule (AC-395).*
