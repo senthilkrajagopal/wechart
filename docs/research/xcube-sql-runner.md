@@ -50,7 +50,7 @@ T532 pinned the image and recreated compose's `wechart-cube` and `wechart-cube-r
   - `EXPLAIN SELECT 1` answers one column, `logical plan`.
 
 **What xcube's answer didn't say:**
-1. **A stopped or cancelled run gives no rows.** `422 timeout` and `422 cancelled` carry only `error`, `code`, `statement`, `redactedSql` and `durationMs`. That held even where rows had been read before the stop (`SELECT g, CASE WHEN g > 3 THEN pg_sleep(3) END FROM generate_series(1, 10) g`, stopped at 2 s). So design 15's Q6 ("rows that arrived before a stop are shown, marked cut", AC-378, AC-379) can't be met from this image. Reported to the user; xcube would need to answer the rows it read with `timeout` and `cancelled`.
+1. **A stopped or cancelled run gives no rows.** `422 timeout` and `422 cancelled` carry only `error`, `code`, `statement`, `redactedSql` and `durationMs`. That held even where rows had been read before the stop (`SELECT g, CASE WHEN g > 3 THEN pg_sleep(3) END FROM generate_series(1, 10) g`, stopped at 2 s). So design 15's Q6 ("rows that arrived before a stop are shown, marked cut", AC-378, AC-379) can't be met from this image. Reported to the user; xcube would need to answer the rows it read with `timeout` and `cancelled`. **Corrected by `6d9673ccda`** (T545): both now carry the rows read before the stop, `truncated: "stopped"` (`xcube-6d9673ccda.md`).
 2. **A type PostgreSQL's driver doesn't name comes as `oid <n>`:** `pg_class.relname`, of type `name`, came as `"oid 19"`.
 3. **A `timestamptz` value comes without its zone,** in the API server's local time: `now()` came as `"2026-10-02T06:06:27.045"`.
 

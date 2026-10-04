@@ -36,8 +36,9 @@ import { refusalSentence, SqlResult, type SqlOutcome } from './SqlResult';
  *   Store hasn't: xcube stops waiting at 30 seconds (research
  *   `xcube-sql-runner.md`).
  *
- * A stopped or cancelled run says nothing came back: xcube gives no rows
- * with either until its next image (T532's note; T545).
+ * A stopped or cancelled run shows the rows that came back before the stop,
+ * marked cut, and offers them as a CSV; with none, it says nothing came back
+ * (T545, xcube `6d9673ccda`; design 15's Q6).
  */
 
 /** What the data source's page says of its runner, for this user (`GET …/:id`). */
@@ -590,8 +591,22 @@ function Runner({
   };
 
   const download = () => {
-    if (shown?.result.outcome !== 'finished') return;
-    const blob = new Blob([csvOf(shown.result.columns, shown.result.rows)], {
+    if (shown === null) return;
+    const { result } = shown;
+    // A finished run's rows, or a stopped one's read before its stop (T545).
+    const got =
+      result.outcome === 'finished'
+        ? { columns: result.columns, rows: result.rows, rowCount: result.rowCount }
+        : (result.outcome === 'timeout' || result.outcome === 'cancelled') &&
+            (result.rows?.length ?? 0) > 0
+          ? {
+              columns: result.columns ?? [],
+              rows: result.rows ?? [],
+              rowCount: result.rowCount ?? result.rows?.length ?? 0,
+            }
+          : null;
+    if (got === null) return;
+    const blob = new Blob([csvOf(got.columns, got.rows)], {
       type: 'text/csv',
     });
     const url = URL.createObjectURL(blob);
@@ -602,7 +617,7 @@ function Runner({
     setTimeout(() => {
       URL.revokeObjectURL(url);
     }, 0);
-    const rows = shown.result.rowCount;
+    const rows = got.rowCount;
     setSaid(
       `Downloaded ${rows === 1 ? '1 row' : `${rows.toLocaleString('en')} rows`} as a CSV file.`,
     );
@@ -822,9 +837,14 @@ function spokenOf(result: SqlOutcome, sql: string, onCubeStore: boolean): string
           ? 'Limited to 10 MB'
           : `Finished: ${result.rowCount.toLocaleString('en')} rows in ${(result.durationMs / 1000).toFixed(2)} seconds`;
     case 'timeout':
-      return 'Stopped at 30 seconds';
-    case 'cancelled':
-      return 'Cancelled';
+    case 'cancelled': {
+      const head = result.outcome === 'timeout' ? 'Stopped at 30 seconds' : 'Cancelled';
+      const got = result.rowCount ?? result.rows?.length ?? 0;
+      // With the rows that came back before the stop (T545).
+      return got === 0
+        ? head
+        : `${head}: ${got === 1 ? '1 row' : `${got.toLocaleString('en')} rows`} came back before it was stopped`;
+    }
     default:
       return 'error' in result ? result.error : 'Not run';
   }
@@ -997,7 +1017,10 @@ function MyRuns({
                 </span>
                 {run.outcome === 'refused' && run.statement !== null ? (
                   <span className="sql-runs__rows">{run.statement.toUpperCase()}</span>
-                ) : run.rowCount === null ? null : (
+                ) : run.rowCount === null ||
+                  // A stop with none read says nothing of rows (T545).
+                  (run.rowCount === 0 &&
+                    (run.outcome === 'timeout' || run.outcome === 'cancelled')) ? null : (
                   <span className="sql-runs__rows">
                     {run.rowCount === 1 ? '1 row' : `${run.rowCount.toLocaleString('en')} rows`}
                   </span>

@@ -233,6 +233,41 @@ describe('the SQL tab, the runner on (T535)', () => {
     expect(screen.getByRole('button', { name: 'Run' })).toBeTruthy();
   });
 
+  it('shows the rows a cancelled run had, marked cut, and downloads exactly them (T545, AC-379)', async () => {
+    let finish: (answer: { status: number; body: unknown }) => void = () => undefined;
+    const asked = serve({ answers: [new Promise((resolve) => (finish = resolve))] });
+    const { container } = open();
+    typeSql(container, 'SELECT g, pg_sleep(20) FROM generate_series(1, 9) g');
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    finish({
+      status: 422,
+      body: {
+        outcome: 'cancelled',
+        error: 'Cancelled: the run was stopped on the database.',
+        durationMs: 1_503,
+        columns: [{ name: 'g', type: 'int4' }],
+        rows: [[1], [2]],
+        rowCount: 2,
+        truncated: 'stopped',
+        statement: 'select',
+      },
+    });
+    await screen.findByRole('table', { name: 'Result: 2 rows, 1 column' });
+    expect(screen.getByTestId('sql-result-cut').textContent).toBe(
+      'Cancelled before it finished. Run it again to see every row.',
+    );
+    await waitFor(() => {
+      expect(container.querySelector('[role="status"][aria-live="polite"]')?.textContent).toBe(
+        'Cancelled: 2 rows came back before it was stopped',
+      );
+    });
+    const made = vi.mocked(URL.createObjectURL);
+    await userEvent.click(screen.getByRole('button', { name: 'Download CSV · 2 rows' }));
+    expect(await (made.mock.calls[0]![0] as Blob).text()).toBe('g\r\n1\r\n2\r\n');
+    expect(sqlPosts(asked)).toHaveLength(1);
+  });
+
   it('says when Cancel fails, rather than nothing (T535’s review)', async () => {
     let finish: (answer: { status: number; body: unknown }) => void = () => undefined;
     serve({
@@ -445,6 +480,29 @@ describe('the SQL tab, the runner on (T535)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('says how many rows a stopped run read before its stop, and nothing of rows where none came (T545)', async () => {
+    const run = (id: string, outcome: string, rowCount: number) => ({
+      id,
+      sql: `SELECT ${id}`,
+      dataSource: { id: 'ds-1', name: 'emea_replica', folderPath: [], inWorkspace: false },
+      startedAt: '2026-10-01T14:32:00.000Z',
+      outcome,
+      rowCount,
+      durationMs: 10,
+      truncated: null,
+      statement: 'select',
+    });
+    serve({ runs: [run('a', 'cancelled', 2), run('b', 'timeout', 0), run('c', 'finished', 0)] });
+    open();
+    const pane = await screen.findByRole('region', { name: 'My runs' });
+    await within(pane).findByText('SELECT a');
+    expect(
+      [...pane.querySelectorAll('.sql-runs__top')].map(
+        (top) => top.querySelector('.sql-runs__rows')?.textContent ?? null,
+      ),
+    ).toEqual(['2 rows', null, '0 rows']);
   });
 
   it('moves between runs with ↑ and ↓, and Enter puts a run’s SQL in the editor and focus there (design 15, keyboard)', async () => {

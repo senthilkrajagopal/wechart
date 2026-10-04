@@ -15,7 +15,7 @@ import {
 } from './fixtures';
 
 /**
- * F40, the SQL runner, against compose's xcube (`89628a0e88`) and its sample
+ * F40, the SQL runner, against compose's xcube (`6d9673ccda`) and its sample
  * PostgreSQL. A folder read-write for `sales-rw` (writer) and read-only for
  * `sales-ro` (reader), with a data source on the sample database, made by
  * `super`, who switches its runner on.
@@ -213,15 +213,33 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
     expect(result.truncated).toBe('rows');
   });
 
-  test('stops a run at 30 seconds, on the database (AC-378)', async ({ page }) => {
+  test('stops a run at 30 seconds, on the database, giving the rows read before (AC-378; T545)', async ({
+    page,
+  }) => {
     test.setTimeout(120_000);
     const marker = `stop_${RUN}`;
     const started = Date.now();
-    const answer = await runOn(page.request, world.sourceId, `SELECT pg_sleep(31) AS ${marker}`);
+    const answer = await runOn(
+      page.request,
+      world.sourceId,
+      `SELECT g AS ${marker}, CASE WHEN g > 3 THEN pg_sleep(31)::text END AS slept FROM generate_series(1, 5) g`,
+    );
     expect(answer.status(), await answer.text()).toBe(422);
     expect(await answer.json()).toMatchObject({
       outcome: 'timeout',
       error: 'Stopped at 30 seconds: the run hadn’t finished, so it was stopped on the database.',
+      // The three rows read before its fourth slept past the cap (xcube 6d9673ccda).
+      columns: [
+        { name: marker, type: 'int4' },
+        { name: 'slept', type: 'text' },
+      ],
+      rows: [
+        [1, null],
+        [2, null],
+        [3, null],
+      ],
+      rowCount: 3,
+      truncated: 'stopped',
     });
     expect(Date.now() - started).toBeLessThan(40_000);
     expect(
@@ -483,11 +501,46 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
         await typeSql(page, 'SELECT pg_sleep(20)');
         await panel.getByRole('button', { name: 'Run', exact: true }).click();
         await expect(panel.getByRole('button', { name: 'Running…' })).toBeDisabled();
-        await panel.getByRole('button', { name: 'Cancel' }).click();
+        await panel.getByRole('button', { name: 'Cancel', exact: true }).click();
         await expect(panel.getByTestId('sql-result-head')).toHaveText(/^Cancelled after [\d.]+ s/);
         await expect(panel.getByTestId('sql-result-note')).toHaveText(
           'You cancelled the run, and it was stopped on the database. Nothing came back.',
         );
+
+        // Cancelled after two rows came back: they're shown, marked cut (T545, AC-379; Q6).
+        await typeSql(
+          page,
+          'SELECT g, CASE WHEN g > 2 THEN pg_sleep(20)::text END AS slept FROM generate_series(1, 5) g',
+        );
+        await panel.getByRole('button', { name: 'Run', exact: true }).click();
+        await expect(panel.getByRole('button', { name: 'Running…' })).toBeDisabled();
+        // Asleep on its third row, its first two read.
+        await expect
+          .poll(() =>
+            sample(
+              "SELECT count(*) FROM pg_stat_activity WHERE state = 'active' AND query LIKE '%generate_series(1, 5) g%' AND pid <> pg_backend_pid()",
+            ),
+          )
+          .toBe('1');
+        await panel.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await expect(panel.getByTestId('sql-result-head')).toHaveText(
+          /^Cancelled after [\d.]+ s 2 rows · at /,
+        );
+        await expect(panel.getByTestId('sql-result-note')).toHaveText(
+          'You cancelled the run, and it was stopped on the database. These are the 2 rows that came back before it was stopped.',
+        );
+        await expect(
+          panel.getByRole('table', { name: 'Result: 2 rows, 2 columns' }).getByRole('row'),
+        ).toHaveCount(3);
+        await expect(panel.getByTestId('sql-result-cut')).toHaveText(
+          'Cancelled before it finished. Run it again to see every row.',
+        );
+        // Stopped on the database, its rows read or not (AC-379; T545's review).
+        expect(
+          sample(
+            "SELECT count(*) FROM pg_stat_activity WHERE state = 'active' AND query LIKE '%generate_series(1, 5) g%' AND pid <> pg_backend_pid()",
+          ),
+        ).toBe('0');
 
         await typeSql(page, 'DELETE FROM pg_class');
         await panel.getByRole('button', { name: 'Run', exact: true }).click();

@@ -25,7 +25,19 @@ export type SqlOutcome =
       readonly durationMs: number;
       readonly statement: 'select' | 'explain';
     }
-  | { readonly outcome: 'timeout' | 'cancelled'; readonly durationMs: number | null }
+  /**
+   * Stopped at 30 seconds, or cancelled, with the rows read before the stop,
+   * `truncated: 'stopped'` (T545; xcube `6d9673ccda`). None where nothing
+   * arrived, or from an older image.
+   */
+  | {
+      readonly outcome: 'timeout' | 'cancelled';
+      readonly durationMs: number | null;
+      readonly columns?: readonly SqlColumn[];
+      readonly rows?: readonly (readonly unknown[])[];
+      readonly rowCount?: number;
+      readonly truncated?: 'stopped';
+    }
   | {
       readonly outcome: 'refused';
       readonly error: string;
@@ -117,6 +129,81 @@ function Head({
   );
 }
 
+/**
+ * A run's rows (AC-380): headed by each column's name and its type as the
+ * database names it (Q5), values as they came, NULL said, numbers
+ * right-aligned by their type (pin 9). A finished run's, and a stopped one's
+ * rows read before its stop (T545).
+ */
+function Grid({
+  columns,
+  rows,
+  rowCount,
+}: {
+  columns: readonly SqlColumn[];
+  rows: readonly (readonly unknown[])[];
+  rowCount: number;
+}) {
+  const counted = rowCount === 1 ? '1 row' : `${count(rowCount)} rows`;
+  return (
+    // A scrolling box the keyboard must reach, as TableScroll's (WCAG 2.1.1).
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+    <div className="sql-result__scroll" role="region" aria-label="Result rows" tabIndex={0}>
+      <table
+        className="sql-result__grid"
+        aria-label={`Result: ${counted}, ${
+          columns.length === 1 ? '1 column' : `${count(columns.length)} columns`
+        }`}
+      >
+        <thead>
+          <tr>
+            <th scope="col" className="sql-result__n">
+              #
+            </th>
+            {columns.map((column, index) => (
+              // Positions: duplicate names are kept, as rows are arrays.
+              <th
+                key={String(index)}
+                scope="col"
+                className={isNumeric(column.type) ? 'sql-result__num' : undefined}
+              >
+                <span className="sql-result__name">{column.name}</span>
+                {column.type === null ? null : (
+                  <span className="sql-result__type">{column.type}</span>
+                )}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, at) => (
+            <tr key={String(at)}>
+              <td className="sql-result__n">{count(at + 1)}</td>
+              {row.map((value, index) =>
+                value === null || value === undefined ? (
+                  <td key={String(index)} className="sql-result__null">
+                    NULL
+                  </td>
+                ) : (
+                  <td
+                    key={String(index)}
+                    className={
+                      isNumeric(columns[index]?.type ?? null) ? 'sql-result__num' : undefined
+                    }
+                  >
+                    {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                  </td>
+                ),
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {rowCount === 0 ? <p className="sql-result__empty">The query returned no rows.</p> : null}
+    </div>
+  );
+}
+
 const Note = ({ children }: { children: ReactNode }) => (
   <p className="sql-result__note" data-testid="sql-result-note">
     {children}
@@ -173,65 +260,7 @@ export function SqlResult({
               MB.
             </Note>
           ) : null}
-          {/* A scrolling box the keyboard must reach, as TableScroll's (WCAG 2.1.1). */}
-          {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
-          <div className="sql-result__scroll" role="region" aria-label="Result rows" tabIndex={0}>
-            <table
-              className="sql-result__grid"
-              aria-label={`Result: ${rows}, ${
-                result.columns.length === 1 ? '1 column' : `${count(result.columns.length)} columns`
-              }`}
-            >
-              <thead>
-                <tr>
-                  <th scope="col" className="sql-result__n">
-                    #
-                  </th>
-                  {result.columns.map((column, index) => (
-                    // Positions: duplicate names are kept, as rows are arrays.
-                    <th
-                      key={String(index)}
-                      scope="col"
-                      className={isNumeric(column.type) ? 'sql-result__num' : undefined}
-                    >
-                      <span className="sql-result__name">{column.name}</span>
-                      {column.type === null ? null : (
-                        <span className="sql-result__type">{column.type}</span>
-                      )}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {result.rows.map((row, at) => (
-                  <tr key={String(at)}>
-                    <td className="sql-result__n">{count(at + 1)}</td>
-                    {row.map((value, index) =>
-                      value === null || value === undefined ? (
-                        <td key={String(index)} className="sql-result__null">
-                          NULL
-                        </td>
-                      ) : (
-                        <td
-                          key={String(index)}
-                          className={
-                            isNumeric(result.columns[index]?.type ?? null)
-                              ? 'sql-result__num'
-                              : undefined
-                          }
-                        >
-                          {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                        </td>
-                      ),
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {result.rowCount === 0 ? (
-              <p className="sql-result__empty">The query returned no rows.</p>
-            ) : null}
-          </div>
+          <Grid columns={result.columns} rows={result.rows} rowCount={result.rowCount} />
           {cut === 'rows' ? (
             <p className="sql-result__cut" data-testid="sql-result-cut">
               Limited to 10,000 rows. Narrow the query with WHERE, or group it, to see the rest.
@@ -245,33 +274,55 @@ export function SqlResult({
       );
     }
     case 'timeout':
-      return (
-        <div className="sql-result" data-testid="sql-result">
-          <Head kind="err" label="Stopped at 30 seconds" detail={at} />
-          <Note>
-            The run hadn’t finished after 30 seconds, so{' '}
-            {onCubeStore
+    case 'cancelled': {
+      const timedOut = result.outcome === 'timeout';
+      const label = timedOut
+        ? 'Stopped at 30 seconds'
+        : result.durationMs === null
+          ? 'Cancelled'
+          : `Cancelled after ${(result.durationMs / 1000).toFixed(1)} s`;
+      const why = timedOut
+        ? `The run hadn’t finished after 30 seconds, so ${
+            onCubeStore
               ? 'xcube stopped waiting for it, and Cube Store ends the query at its own time limit'
-              : 'it was stopped on the database'}
-            . Nothing came back. Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.
-          </Note>
-        </div>
-      );
-    case 'cancelled':
+              : 'it was stopped on the database'
+          }.`
+        : 'You cancelled the run, and it was stopped on the database.';
+      const got = result.rows ?? [];
+      if (got.length === 0)
+        return (
+          <div className="sql-result" data-testid="sql-result">
+            <Head kind={timedOut ? 'err' : 'idle'} label={label} detail={at} />
+            <Note>
+              {why} Nothing came back.
+              {timedOut ? ' Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.' : ''}
+            </Note>
+          </div>
+        );
+      // The rows that came back before the stop, marked cut as the row
+      // limit's are (T545, AC-378, AC-379; design 15's Q6, answered R51).
+      const rowCount = result.rowCount ?? got.length;
+      const rows = rowCount === 1 ? '1 row' : `${count(rowCount)} rows`;
       return (
         <div className="sql-result" data-testid="sql-result">
-          <Head
-            kind="idle"
-            label={
-              result.durationMs === null
-                ? 'Cancelled'
-                : `Cancelled after ${(result.durationMs / 1000).toFixed(1)} s`
-            }
-            detail={at}
-          />
-          <Note>You cancelled the run, and it was stopped on the database. Nothing came back.</Note>
+          <Head kind={timedOut ? 'err' : 'idle'} label={label} detail={`${rows} · ${at}`}>
+            <button type="button" className="btn btn-sm" onClick={onDownload}>
+              Download CSV · {rows}
+            </button>
+          </Head>
+          <Note>
+            {why} These are the {rows} that came back before it was stopped.
+          </Note>
+          <Grid columns={result.columns ?? []} rows={got} rowCount={rowCount} />
+          <p className="sql-result__cut" data-testid="sql-result-cut">
+            {timedOut
+              ? 'Stopped at 30 seconds. Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.'
+              : // The limit, and what to do, as the row limit's line says them (T545's review).
+                'Cancelled before it finished. Run it again to see every row.'}
+          </p>
         </div>
       );
+    }
     case 'refused':
       return (
         <div className="sql-result" data-testid="sql-result">

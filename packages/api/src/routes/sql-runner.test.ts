@@ -331,23 +331,51 @@ describe('what a run answers (T532, AC-375, AC-377, AC-378)', () => {
     });
   });
 
-  it('says a run stopped at 30 seconds was stopped there (AC-378)', async () => {
+  it('says a run stopped at 30 seconds was stopped there, with the rows that came back before (AC-378; T545)', async () => {
+    // As xcube 6d9673ccda answers it (research xcube-6d9673ccda.md).
     stub.answerSql(() => ({
       status: 422,
       body: {
         error: 'The statement ran past 30 s and was stopped',
         code: 'timeout',
         statement: 'select',
-        redactedSql: 'SELECT pg_sleep(?)',
+        redactedSql: 'SELECT g, pg_sleep(?) FROM generate_series(?, ?) g',
         durationMs: 30_002,
+        columns: [
+          { name: 'g', type: 'int4' },
+          { name: 'slept', type: 'text' },
+        ],
+        rows: [
+          [1, null],
+          [2, null],
+          [3, null],
+        ],
+        rowCount: 3,
+        truncated: 'stopped',
       },
     }));
-    const answer = await run('writer', source, 'SELECT pg_sleep(31)');
+    const answer = await run(
+      'writer',
+      source,
+      'SELECT g, pg_sleep(31) FROM generate_series(1, 9) g',
+    );
     expect(answer.statusCode, answer.body).toBe(422);
     expect(answer.json()).toEqual({
       outcome: 'timeout',
       error: 'Stopped at 30 seconds: the run hadn’t finished, so it was stopped on the database.',
       durationMs: 30_002,
+      columns: [
+        { name: 'g', type: 'int4' },
+        { name: 'slept', type: 'text' },
+      ],
+      rows: [
+        [1, null],
+        [2, null],
+        [3, null],
+      ],
+      rowCount: 3,
+      truncated: 'stopped',
+      statement: 'select',
     });
   });
 

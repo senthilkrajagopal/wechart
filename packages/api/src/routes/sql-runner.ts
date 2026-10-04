@@ -196,6 +196,12 @@ function replyOf(answer: SqlAnswer, onCubeStore = false): RunReply {
           error:
             answer.how === 'timeout' ? (onCubeStore ? CUBE_STORE_STOPPED : STOPPED) : CANCELLED,
           durationMs: answer.durationMs,
+          // The rows read before the stop, marked so (T545, AC-378, AC-379; Q6).
+          columns: answer.columns,
+          rows: answer.rows,
+          rowCount: answer.rowCount,
+          truncated: 'stopped',
+          statement: answer.statement,
         },
       };
     case 'failed':
@@ -470,7 +476,8 @@ export function registerSqlRunner(
     const ran = answer?.kind === 'ran' ? answer : undefined;
     const done = {
       outcome,
-      rowCount: ran?.rowCount ?? null,
+      // A stopped run's too: the rows it read before its stop (T545).
+      rowCount: ran?.rowCount ?? (answer?.kind === 'stopped' ? answer.rowCount : null),
       durationMs:
         answer !== undefined && 'durationMs' in answer ? (answer.durationMs ?? null) : null,
       truncated: ran?.truncated ?? null,
@@ -865,8 +872,11 @@ function summaryOf(
       if (kind === 'explain') return 'Not run · EXPLAIN ANALYZE';
       return `Not run · ${article(kind.toUpperCase())} ${kind.toUpperCase()}`;
     }
-    case 'stopped':
-      return answer.how === 'timeout' ? 'Stopped at 30 seconds' : 'Cancelled';
+    case 'stopped': {
+      const head = answer.how === 'timeout' ? 'Stopped at 30 seconds' : 'Cancelled';
+      // With the rows read before the stop, where any were (T545).
+      return answer.rowCount > 0 ? `${head} · ${rowsText(answer.rowCount)}` : head;
+    }
     case 'failed':
       return answer.code === 'connect_failed' ? 'Not run · couldn’t connect' : 'Database error';
     case 'busy':

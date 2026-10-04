@@ -301,6 +301,32 @@ describe('every run, an audit event (T534, AC-382)', () => {
     });
   });
 
+  it('records the rows a stopped run read before its stop, in its history and its event (T545, AC-378)', async () => {
+    stub.answerSql(() => ({
+      status: 422,
+      body: {
+        error: 'The run was cancelled',
+        code: 'cancelled',
+        statement: 'select',
+        redactedSql: `SELECT g FROM generate_series(?, ?) g`,
+        durationMs: 1_503,
+        columns: [{ name: 'g', type: 'int4' }],
+        rows: [[1], [2]],
+        rowCount: 2,
+        truncated: 'stopped',
+      },
+    }));
+    const sql = `SELECT g FROM generate_series(1, 9) g -- ${MARK} stopped`;
+    expect((await run('writer', sourceIds[0]!, sql)).statusCode).toBe(422);
+    const listed = (await listOf('writer')).runs.find((each) => each.sql === sql);
+    expect(listed).toMatchObject({ outcome: 'cancelled', rowCount: 2 });
+    const [event] = (await events()).filter((each) => each.item?.id === sourceIds[0]);
+    expect(event).toMatchObject({
+      summary: 'Cancelled · 2 rows',
+      details: { outcome: 'cancelled', rowCount: 2 },
+    });
+  });
+
   it('records a run its server never finished, as it counts it lost at its user’s next run (T534’s review)', async () => {
     expect((await run('writer', sourceIds[0]!, 'SELECT 1')).statusCode).toBe(200);
     const { user_key: writerKey } = await getDb()

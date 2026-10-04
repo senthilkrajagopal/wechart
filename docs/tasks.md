@@ -11355,10 +11355,46 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - the breadcrumbs on Cube Store's page reload the page;
       - who may use Cube Store is read one switched data source at a time.
     - **ACs ticked:** AC-384; AC-374, with T531's half.
-- [ ] T545 (AC-378, AC-379) Show the rows that came back before a stop or a cancel, marked stopped *(added 2026-10-02, from T535's review)*
+- [x] T545 (AC-378, AC-379) Show the rows that came back before a stop or a cancel, marked stopped *(added 2026-10-02, from T535's review)*
   - Files: `docs/research/` (a doc for xcube `6d9673ccda`, or a correction beside `xcube-sql-runner.md`), `docker-compose.yml`, the Helm values, `packages/api/src/deploy/cube-image.test.ts`, `docs/deploy.md`, `packages/api/src/routes/sql-runner.ts`, `packages/api/src/xcube/sql-runner.ts`, `SqlResult.tsx`, tests and `e2e/security/sql-runner.spec.ts`
   - Failing test: a run stopped at 30 seconds, and one cancelled, show the rows that arrived before it, marked stopped, in place of "Nothing came back"; one with none says so (AC-378, AC-379; design 15's Q6).
   - Depends on: T535, T536, xcube `v1.7.45-6d9673ccda` (published by digest)
+  - **Done 2026-10-02.**
+    - **The pin:** `ghcr.io/senthilkrajagopal/xcube:v1.7.45-6d9673ccda@sha256:b876ef9e…` in compose (Cube and its refresh worker), both Helm values files, `docs/deploy.md` (no migration) and `cube-image.test.ts`.
+      - Compose's two Cube containers were recreated on it under the e2e lock, by digest, and came up healthy with revision `6d9673ccda`.
+    - **Research:** `xcube-6d9673ccda.md`, a correction beside `xcube-sql-runner.md`, whose "no rows" item now points to it. It records xcube's answer, what each database gives before a stop, and the check against compose's running image: a time cap with 3 rows, one before any row with its columns, and a cancel with 2.
+    - **The API:**
+      - xcube's client reads a stopped run's `columns`, `rows` and `rowCount`;
+      - the run route passes them on with `truncated: 'stopped'` and the statement;
+      - history and the audit event keep its row count, e.g. "Cancelled · 2 rows".
+    - **The page** (Q6, answered "Show them, marked cut"):
+      - a stopped or cancelled run with rows shows them in the grid. Its head names the stop with the row count and Download CSV · N rows; the note says "These are the N rows that came back before it was stopped"; a line under the grid marks them cut, as the row limit's does;
+      - with none, it still says nothing came back;
+      - the CSV holds exactly those rows, and the live region says how many came back.
+    - **Tests:**
+      - `xcube/sql-runner.test.ts`: a stopped answer's rows, and none;
+      - `routes/sql-runner.test.ts`: a stop's rows passed on;
+      - `routes/sql-runner-history.test.ts`: a cancel's rows in history and in its event;
+      - `SqlResult.stopped.test.tsx` (3);
+      - `SqlRunner.test.tsx`: a cancel's rows shown and downloaded; a stopped run's rows in My runs, and none said where none came;
+      - `cube-image.test.ts`;
+      - `e2e/security/sql-runner.spec.ts` (Chrome, compose's 6d9673ccda):
+        - a stop at 30 s answering its three rows read before, with the statement gone from `pg_stat_activity`;
+        - a cancel after two rows, shown in the grid marked cut, its statement gone from `pg_stat_activity`.
+    - **Fixed after the review** (one round, which passed it):
+      - the cancelled cut line names what happened and what to do ("Cancelled before it finished. Run it again to see every row."), not the note again;
+      - the e2e checks that a cancel after rows were read leaves nothing running, and the cut line;
+      - the research table says Redshift's row was checked on PostgreSQL only;
+      - T548 tracks Cube Store's half of AC-378 and AC-379.
+    - **AC-378 and AC-379 stay open, for Cube Store alone (T548).** Data sources now meet both, rows included.
+- [ ] T548 (AC-378, AC-379) Cube Store's stop: as the user decides *(added 2026-10-04, from T545's review)*
+  - Files: as the user's answer has it.
+  - The question (T536's note): Cube Store has no cancel. At 30 seconds xcube stops waiting, but Cube Store runs the query on to its own 120 s limit (research `xcube-sql-runner.md`). So a user's next run can start while Cube Store still runs their last, and AC-378's "still running … after it is said to have stopped" holds for it. The options:
+    - (a) hold the user's run slot after a Cube Store stop until 120 s from its start;
+    - (b) amend AC-378 and AC-379 for Cube Store;
+    - (c) ask xcube for a Cube Store cancel.
+  - Failing test: as the answer has it.
+  - Depends on: T536, the user's answer (with the coordinator since 2026-10-02)
 - [x] T538 (AC-354) Set export-import's hidden dependencies up as copy-on-use allows *(added 2026-10-01, from T527)*
   - Files: `e2e/security/export-import.spec.ts`
   - Failing test:
@@ -11440,8 +11476,8 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-368 | T523 | AC-369 | T524 | AC-370 | T525 |
 | AC-371 | T527, T537 | AC-372 | T528 | | |
 | AC-373 | T531, T532, T535 | AC-374 | T531, T536 | AC-375 | T532 |
-| AC-376 | T532 | AC-377 | T532, T535 | AC-378 | T532, T535, T545 |
-| AC-379 | T533, T535, T545 | AC-380 | T535 | AC-381 | T534, T535 |
+| AC-376 | T532 | AC-377 | T532, T535 | AC-378 | T532, T535, T545, T548 |
+| AC-379 | T533, T535, T545, T548 | AC-380 | T535 | AC-381 | T534, T535 |
 | AC-382 | T534 | AC-383 | T532, T535 | AC-384 | T536 |
 | AC-385 | T535 | AC-386 | T539, T547 | AC-387 | T535 |
 | AC-388 | T541 | AC-389 | T540 | AC-390 | T544 |

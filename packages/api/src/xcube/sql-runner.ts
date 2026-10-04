@@ -2,7 +2,8 @@ import { XcubeError } from './client';
 
 /**
  * xcube's read-only SQL runner (T532, R50; research `xcube-sql-runner.md`,
- * image `89628a0e88`): three admin routes under one model, called only by
+ * image `89628a0e88`, and from `6d9673ccda` a stopped run's rows,
+ * `xcube-6d9673ccda.md`): three admin routes under one model, called only by
  * wechart's server, with its service credential (AC-327).
  *
  * - `POST …/connections/{name}/sql`: a stored connection by its name; a
@@ -59,13 +60,20 @@ export type SqlAnswer =
       readonly statement: string | null;
       readonly redactedSql: string | null;
     }
-  /** Stopped at its time cap, or cancelled. xcube gives no rows with either (T532's check). */
+  /**
+   * Stopped at its time cap, or cancelled, with the rows it read before the
+   * stop, none where nothing arrived (`6d9673ccda`, T545; research
+   * xcube-6d9673ccda.md). Its columns as far as the database described them.
+   */
   | {
       readonly kind: 'stopped';
       readonly how: 'timeout' | 'cancelled';
       readonly statement: string | null;
       readonly redactedSql: string | null;
       readonly durationMs: number | null;
+      readonly columns: readonly SqlColumn[];
+      readonly rows: readonly (readonly unknown[])[];
+      readonly rowCount: number;
     }
   /**
    * The database refused it, or couldn't be connected to. Its message may
@@ -151,17 +159,20 @@ export function xcubeSqlRunner({
       const error = text(answer['error']) ?? code ?? `xcube answered ${String(status)}`;
       const statement = text(answer['statement']);
       const redactedSql = text(answer['redactedSql']);
+      const columns = Array.isArray(answer['columns'])
+        ? (answer['columns'] as Record<string, unknown>[]).map((column) => ({
+            name: String(column['name']),
+            type: text(column['type']),
+          }))
+        : [];
+      const rows = Array.isArray(answer['rows']) ? (answer['rows'] as unknown[][]) : [];
+      const rowCount = count(answer['rowCount']) ?? rows.length;
       if (status === 200)
         return {
           kind: 'ran',
-          columns: Array.isArray(answer['columns'])
-            ? (answer['columns'] as Record<string, unknown>[]).map((column) => ({
-                name: String(column['name']),
-                type: text(column['type']),
-              }))
-            : [],
-          rows: Array.isArray(answer['rows']) ? (answer['rows'] as unknown[][]) : [],
-          rowCount: count(answer['rowCount']) ?? 0,
+          columns,
+          rows,
+          rowCount,
           truncated:
             answer['truncated'] === 'rows' || answer['truncated'] === 'bytes'
               ? answer['truncated']
@@ -180,6 +191,9 @@ export function xcubeSqlRunner({
           statement,
           redactedSql,
           durationMs: count(answer['durationMs']),
+          columns,
+          rows,
+          rowCount,
         };
       if (
         (status === 422 && code === 'query_failed') ||

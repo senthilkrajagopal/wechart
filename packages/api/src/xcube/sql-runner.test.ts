@@ -94,6 +94,7 @@ describe('a run asked of xcube (T532)', () => {
           redactedSql: 'SELECT ?; SELECT ?',
         },
       },
+      // With the rows read before the stop, from 6d9673ccda (T545; research xcube-6d9673ccda.md).
       timeout: {
         status: 422,
         body: {
@@ -102,6 +103,16 @@ describe('a run asked of xcube (T532)', () => {
           statement: 'select',
           redactedSql: 'SELECT pg_sleep(?)',
           durationMs: 30_001,
+          columns: [
+            { name: 'g', type: 'int4' },
+            { name: 'slept', type: 'text' },
+          ],
+          rows: [
+            [1, null],
+            [2, null],
+          ],
+          rowCount: 2,
+          truncated: 'stopped',
         },
       },
       cancelled: {
@@ -112,6 +123,10 @@ describe('a run asked of xcube (T532)', () => {
           statement: 'select',
           redactedSql: 'SELECT pg_sleep(?)',
           durationMs: 1_200,
+          columns: [],
+          rows: [],
+          rowCount: 0,
+          truncated: 'stopped',
         },
       },
       failed: {
@@ -165,11 +180,25 @@ describe('a run asked of xcube (T532)', () => {
       statement: 'select',
       redactedSql: 'SELECT pg_sleep(?)',
       durationMs: 30_001,
+      columns: [
+        { name: 'g', type: 'int4' },
+        { name: 'slept', type: 'text' },
+      ],
+      rows: [
+        [1, null],
+        [2, null],
+      ],
+      rowCount: 2,
     });
-    expect(await run('cancelled')).toMatchObject({
+    expect(await run('cancelled')).toEqual({
       kind: 'stopped',
       how: 'cancelled',
+      statement: 'select',
+      redactedSql: 'SELECT pg_sleep(?)',
       durationMs: 1_200,
+      columns: [],
+      rows: [],
+      rowCount: 0,
     });
     expect(await run('failed')).toEqual({
       kind: 'failed',
