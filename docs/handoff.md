@@ -17,7 +17,10 @@
 >        - T557's failing tests, on branch `t557-owner-filter-wip` (5923b11). The filter must be a radiogroup of buttons, because no Schedules test may find an input.
 >      - Not written: jobs.spec.ts:72's fix (poll its own job until done), and T553's follow-up (a module counts as failing until a worker on the current revision has a good run).
 >    - **The route matrix failed twice after rebasing on 0abfbc2, in routes nobody touched:** `many` sees root's model, `manager` runs Cube Store SQL, and introspection and cube-store timed out. wechart_test's root access looks changed by interference. On resuming, rebuild wechart_test from scratch (drop it and let the global setup migrate it), then run the full API suite under the lock before trusting it.
->    - **Group 6**, T633 (the filter bar's picker), T634 (Ctrl+Enter adds), then T476 and T477 once Jobs' pages are final. T406's critique and T410's phase-1 run come last.
+>    - **Group 6**: T632 is picked.
+>      - Still to do: T633 (the filter bar's picker) and T634 (Ctrl+Enter adds), neither yet written into tasks.md; then T476 and T477 once Jobs' pages are final.
+>      - T405's two follow-ups: the Bookmarks name dialog closes on Esc without asking, and DecisionPanel's Reject takes Esc only from its text box.
+>      - T406's critique and T410's phase-1 run come last.
 >    - **F6**, T590 if it isn't done.
 >    - **SQL runner**, T650 (refuse router queries) once xcube's image answers `to-xcube/2026-10-04-2200-cube-store-refuse-router-joins.md`.
 > 4. **The user's open items:** the stray ghcr packages `wechart-apiatest` and `wechart-webatest`; whether a Super-Admin's delete of another user's shared bookmark should ask first or be recorded; and the e2e's network need for Snowflake and Entra tests.
