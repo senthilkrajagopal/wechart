@@ -344,8 +344,10 @@ describe('where the development key pair lives (T333, AC-324, AC-298)', () => {
       // seals (and the golden vectors xcube's tests open) with this key. A
       // test alone; no product code reads it.
       path === 'packages/core/src/data-sources/seal.test.ts' ||
-      // T368 (AC-298): the canary e2e reads the private half only to check
-      // that the dumped database holds it in no form. A test alone.
+      // T368, T581 (AC-298): the canary e2e reads the private half to check
+      // that the dumped database holds it in no form, and, standing in for
+      // xcube as the sealing test does, to open the dumped envelopes
+      // (research `credential-sealing.md`, item 3). A test alone.
       path === 'e2e/security/credential-canary.spec.ts';
 
     const holding: string[] = [];

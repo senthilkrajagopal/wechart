@@ -6942,6 +6942,48 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - `POST /api/builds` (`jobs/build.ts`) starts a build today and records nothing.
       - Cancels (T376) and wechart-owned schedules (T378) aren't built yet.
       - AC-294 waits for T505, and for the user's answer to the open question above: a folder's move changes the groups that reach it, and isn't recorded as a permission change. T505 now says so too.
+    - *2026-10-04 (R61):* "no request carries it" stands for the logs: AC-298 and AC-325 tick on the rest of the plan, which T581 drives. A folder's move is no permission change: AC-294 waits only on T505.
+- [x] T581 (AC-298, AC-325) Drive the rest of the credential plan: every driver's secret fields, the remaining flows, and the dumped envelopes opened *(added 2026-10-04, R61)*
+  - Files: `e2e/security/credential-canary.spec.ts`, `e2e/package.json` (`hpke` 1.1.7, research `credential-sealing.md`, for opening the envelopes as xcube does), `pnpm-lock.yaml`; also the comment on `packages/api/src/secrets/xcube-key.test.ts`'s allowance for the spec, which now opens envelopes with the private half too
+  - Failing test: `credential-canary.spec.ts`: research `credential-sealing.md`'s "AC-298 and AC-325 tests", items 1–3, without item 4's logs (R61): a canary in every secret field of every driver's form; the failing-test, non-secret edit, copy, propose-and-reject, restore and target-change flows; no request, answer or dumped row holding any canary; each stored envelope opening to what was typed with the development private key, and with no other key.
+  - Depends on: T368, T515
+  - **Done 2026-10-04.**
+    - **The flows**, on a PostgreSQL source whose password is a canary that connects (a login made for the run in compose's sample database):
+      - `writer` tests a wrong canary in the wizard, which fails xcube's connect check, then the right one, which passes, and makes the source;
+      - it is proposed from its row and approved from the review view;
+      - its password is replaced with a second canary, tested, saved and proposed, then rejected from the review view, proposed again and approved, landing as version 2;
+      - its database is changed, a field no secret is bound to: the password stays "Kept from" the folder, isn't asked for, and nothing sealed is sent;
+      - the folder's version 1 is restored into a draft;
+      - the draft's host is changed, so its password is asked for again (AC-312), and a third canary is typed, tested and saved;
+      - `super` copies the folder's into their workspace with "Edit in my workspace".
+    - **Every driver's secret fields:** a canary of its own in each, for every driver and every way it signs in. That is 16 sign-ins and every secret field core's `DRIVERS` has: `password`, `sslKey`, `sslPassphrase`, `privateKey`, `privateKeyPass`, `oauthToken`, `credentials`, `clientSecret` and `token`.
+      - Multiline ones are pasted as a key is: a PEM block, or a BigQuery service-account JSON.
+      - No database in compose takes them, so each test fails. It is marked passed in the database, as `data-sources.spec.ts` does for T506, and the source is made from what the browser sealed.
+      - The flows above run on PostgreSQL alone; for the other drivers it is the test and the create. A test checks the sign-ins against core's `DRIVERS`, so a driver, way to sign in or secret field added there fails it until it is typed here.
+      - Each driver's test fails at Connect, but passes xcube's "Open the secrets" check: xcube opened what the browser sealed, for every driver.
+    - **What the tests show:**
+      - **Requests (AC-325):** nothing the page sent wechart's API, through every step, holds any form of any canary, by address, any header (cookies included) or body. Nor does any answer it read, or the test read itself. Each test, create and save carried exactly its secrets, each as an envelope (`v`, `kid`, `enc`, `ct`). The save of the database change carried none.
+      - **The dump (AC-298, item 2):** a plain `pg_dump` of the suite's metadata database holds no form of any canary: raw, hex in either case, or base64 and base64url at each of the three alignments. Nor does it hold the development private key. It holds each of the run's sources' stored envelopes (`data_source_secrets`), each sealed to the development key's `kid`.
+      - **The envelopes (item 3):** each opens with the development private key, giving back exactly what was typed into its field, and a random key opens none. That covers:
+        - each source's stored ones: the folder's, the draft's, the copy's and each driver's, the run's sources being exactly those it made;
+        - those kept beside them: each version of the folder's (`item_versions`: the first canary, then the second) and each proposal's snapshot (`proposal_items`: approved, rejected, approved);
+        - the restored draft's, opened before its host changed: version 1's, the first canary.
+    - **AC-298 and AC-325 are ticked:** items 1–3 of the plan, with the logs left unread as R61 has it.
+    - **No product code changed.** These tests check what T335, T346, T352, T363, T441 and T515 built. None was seen failing for a leak, since none leaked. The first runs failed on the spec's own selectors (the "Kept from" line, "Save 2 changes"), fixed. The alignment logic was shown to catch the canary embedded at every offset (T368).
+    - **Not driven in the browser**, since no secret is typed in them:
+      - the restore (T515's route);
+      - the second-round proposal, its re-proposal after the rejection, and the second approval;
+      - the drivers' creates, made from the browser's sealed test, since their tests can't pass in compose.
+    - **Not covered:** the editor's Replace for any secret but PostgreSQL's password (it seals through the same loop as the wizard), and the copy, proposal, restore and target-change flows on another driver's envelopes (the server handles `sealed` by field, whatever the driver).
+    - **Outside compose:** the Snowflake and Entra trials reach the real endpoints with random canaries. The tests need network access out of Cube's container.
+    - Chrome only so far; Firefox and WebKit run it at the next all-browser run.
+    - **The cold review (PASS)** led to:
+      - opening the envelopes kept in versions and proposals, not only the stored ones, so the first canary is shown sealed where it still is;
+      - opening the restored draft's before its host changes;
+      - tying the sign-ins to `DRIVERS`;
+      - requiring each driver's "Open the secrets" check to pass;
+      - checking cookies among the headers;
+      - these notes, and AC-298's and AC-325's ticks, saying what they rest on.
 - [x] T369 (AC-295) Show the audit trail to Super-Admins only, newest first, filtered by user, event and folder
   - Files: `packages/web/src/workspaces/security/AuditTrail.tsx` (+ test), `packages/api/src/routes/audit.ts` (+ test), `e2e/security/audit.spec.ts`
   - Failing test: `audit.spec.ts`: `super` sees the records newest first; the User, Event, Folder and Time filters combine and every row matches them; `writer` gets Not found for the page and 403 from the API (AC-295; rule 82).
@@ -11687,7 +11729,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-397 | T557 | AC-398 | T558 | AC-399 | T559, T560, T473 |
 | AC-281 (again, rebinding) | T542 | AC-283 (again, use-only copies) | T543 | | |
 | AC-354 (again, copy on use) | T538 | | | | |
-| AC-296 | T370 | AC-297 | T371, T378, T559, T504 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441 |
+| AC-296 | T370 | AC-297 | T371, T378, T559, T504 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441, T581 |
 | AC-299 | T391 | AC-300 | T392 | AC-301 | T393 |
 | AC-302 | T394 | AC-303 | T395 | AC-304 | T396 |
 | AC-305 | T398 | AC-306 | T399 | AC-307 | T409, T444 |
@@ -11700,7 +11742,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-332 (again) | T426 | AC-235 (again) | T445, T447 | AC-140 (again) | T446 |
 | AC-319 | T418, T421, T422, T423, T444 | AC-320 | T436 | AC-321 | ~~T426~~ T451, T436, T456 |
 | AC-322 | T427, T451 | AC-323 | T347, T440 | AC-324 | T333, T455 |
-| AC-325 | T441, T363 | AC-326 | T420, T437 | AC-327 | T431, T442, T458 |
+| AC-325 | T441, T363, T581 | AC-326 | T420, T437 | AC-327 | T431, T442, T458 |
 | AC-328 | T341, T425, T449, T452, T435, T501 | AC-329 | T429, T450, T342, T347 | AC-330 | T419, T447, T425, T449, T436, T442 |
 | ~~AC-331~~ (retired, `[R30]`) | ~~T430~~ | AC-332 | T433 | AC-333 | T419, T447, T449, T425, T420 |
 | AC-334 | T421, T447 | AC-335 | T446, T447 | AC-336 | T430, T449 |
