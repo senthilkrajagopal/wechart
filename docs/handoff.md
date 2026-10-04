@@ -1,19 +1,26 @@
 # Handoff — 2026-09-24
 
-> **Now, 2026-10-02 (read this block first).**
-> - **The user has a demo on 2026-10-03** on the docker-desktop release.
->   - It runs wechart d8ac962 with xcube 89628a0e88, sign-in on, at http://localhost:8089, and all 42 verify.sh checks pass.
->   - The demo path is Generate cubes (T492), shown as super: open `default`'s data source page, or its row's ⋯ in Explore, then Generate cubes…, which opens My workspace's model.
->   - Don't redeploy before the demo unless the user asks.
->   - The same images are on ghcr.io as `:d8ac962` and `:latest`, for amd64 and arm64. `xcube:latest` is 89628a0e88.
->   - The stray packages `wechart-apiatest` and `wechart-webatest` (a zsh `$t:latest` mistake) are the user's to delete, or `gh auth refresh -s delete:packages`.
-> - **Agents in flight, each in a worktree.** Cherry-pick each commit as it reports.
->   - **SQL runner:** T535, T539, T536, then the partial-rows follow-up, pinning xcube 6d9673ccda.
->   - **Approval:** a new task for AC-141's warning on the workspace save (R55), then T451's sign-in-off half. Don't pick either until after the demo.
->   - **Design 16:** spec and tasks amendments for R56, P1–P5 and Q1–Q12's defaults. It works in the main checkout and makes docs commits only.
->   - **Group 5:** T367 (bookmark sharing), then T368 (the audit trail).
->   - **F6:** research on xcube's quick calculations, then T382–T385.
-> - **Next, after design 16's docs land:** Jobs and Schedules, then group 6 (T473–T478, T405, T406), then the phase-1 regression run (T410).
+> **Now, 2026-10-04 (read this block first).**
+> - **The docker-desktop release** still runs d8ac962 with xcube 89628a0e88, the build for the demo of 2026-10-03.
+>   - ghcr.io has `:d8ac962` and `:latest` of wechart-api and wechart-web, and `xcube:latest` is 89628a0e88.
+>   - feat/xcube now pins xcube **93a5f7a73b** (T547), and compose's containers run it.
+>   - If an API says "xcube answered 401 … credential keys", compare the host's clock with `docker exec wechart-cube date -u +%s`. Docker Desktop's clock drifts after a host sleep.
+> - **Agents in flight, each in a worktree.** Cherry-pick each commit as it reports. Task numbers: T546–T549 SQL runner and approval, T580s group 5, T590s F6, T610s Jobs, T630s group 6. Migrations go 1758560000000 and up, F6 first.
+>   - **Jobs:** T552, then T379, T505, T553–T560 (R59 answered Run now and pausing).
+>   - **Approval:** T451's sign-in-off half, with AC-189 and AC-235 amended to proposal (R60).
+>   - **F6:** T383 (on Reviews, with the count; R60), then T384 and T385.
+>   - **Group 5:** T580 (a Super-Admin deletes a shared bookmark; R61), then AC-298 and AC-325's remaining flows.
+>   - **Group 6:** T473–T478, T405.
+> - **Waiting on xcube:** a Cube Store cancel (T548; `to-xcube/2026-10-04-0900-cube-store-cancel.md`).
+> - **Next:** T406's critique once all UI lands, then the phase-1 regression run (T410).
+> - **Since 2026-10-02:**
+>   - T600 (the model pane's pop-out, R58);
+>   - the SQL runner, T535–T547;
+>   - T546;
+>   - T367 and T368;
+>   - T382;
+>   - Jobs, T372–T378;
+>   - R56–R61.
 > - **Since 2026-10-01:**
 >   - T544 (the review's collapsible panels, as design 05);
 >   - T532–T534 (the SQL runner);
