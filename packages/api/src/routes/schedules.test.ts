@@ -9,6 +9,7 @@ import { pgSessionStore } from '../auth/session-store';
 import { PUBLIC_URL, signIn, USERS } from '../auth/sign-in.fixture';
 import { CubeClient } from '../cube/client';
 import { closeDb, databaseUrl, getDb } from '../db/client';
+import { auditStore } from '../repos/audit';
 import { buildHistory } from '../repos/build-history';
 import { catalog } from '../repos/catalog';
 import { documents, type DocumentKind } from '../repos/documents';
@@ -211,6 +212,8 @@ beforeAll(async () => {
     }),
     buildHistory: buildHistory(getDb()),
     schedules: scheduler,
+    // Changes and Run now's starts in the trail (T505, T555).
+    audit: auditStore(getDb()),
     // Next runs are counted from pg-boss's clock (T552).
     now: () => new Date(clock.now()),
   });
@@ -227,6 +230,7 @@ afterAll(async () => {
     .deleteFrom('build_runs')
     .where('pre_aggregation', 'in', Object.keys(ids).map(preAggIn))
     .execute();
+  await db.deleteFrom('audit_records').where('folder_id', 'in', Object.values(ids)).execute();
   const client = new pg.Client({ connectionString: databaseUrl() });
   await client.connect();
   await client.query(`DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE`);
@@ -597,5 +601,134 @@ describe('Suspended after its failed runs in a row, and Resume (T379, AC-155)', 
       method: 'DELETE',
       url: `/api/wechart-schedules/${made.json<{ id: string }>().id}`,
     });
+  });
+});
+
+/**
+ * T555 (AC-395; design 16, P2; R59): Run now starts the schedule's build at
+ * once through Cube's jobs API, every partition as its runs do, recorded in
+ * Run history as Run now on the schedule, by the user, and in the trail as a
+ * Build started (AC-294). The schedule's times are left alone. A Run now that
+ * fails doesn't count toward its suspension, nor start the count again; and
+ * it is offered on a suspended schedule.
+ */
+describe('Run now (T555, AC-395)', () => {
+  const runNow = (who: string, id: string) =>
+    as(who, { method: 'POST', url: `/api/wechart-schedules/${id}/run` });
+
+  it('starts its build at once, as Run now on the schedule by the user, in the trail too, and leaves its times alone', async () => {
+    await clock.setTime(new Date('2026-10-08T03:00:00Z'));
+    await place('r', { readOnly: [], readWrite: ['managers'] });
+    const made = (
+      await as('manager', {
+        method: 'POST',
+        url: '/api/wechart-schedules',
+        payload: fields('r', { name: `Run now ${MARK}` }),
+      })
+    ).json<Listed>();
+    const before = await laid(made.id);
+    posted.length = 0;
+
+    const answer = await runNow('manager', made.id);
+
+    expect(answer.statusCode, answer.body).toBe(200);
+    const { runId } = answer.json<{ runId: string }>();
+    expect(posted).toEqual([[preAggIn('r')]]);
+    // The manager, as the schedule they made names them.
+    const me = made.createdBy;
+    const record = await buildHistory(getDb()).get(runId);
+    expect([record?.via, record?.partitions, record?.starter]).toEqual([
+      'run-now',
+      null,
+      {
+        kind: 'schedule',
+        id: made.id,
+        name: `Run now ${MARK}`,
+        by: { key: me.key, name: me.name },
+      },
+    ]);
+    // Its times as they were: pg-boss's schedule, and its next five runs.
+    const after = await laid(made.id);
+    expect([after?.cron, after?.timezone, after?.key]).toEqual([
+      before?.cron,
+      before?.timezone,
+      before?.key,
+    ]);
+    const row = (await listed('manager')).rows.find((each) => each.id === made.id);
+    expect(row?.runs).toEqual(made.runs);
+    // The trail: a build started, by Run now on the schedule (AC-294).
+    const [kept] = (
+      await auditStore(getDb()).list({ events: ['build-started'], folderIds: [ids['r']!] })
+    ).records;
+    expect([kept?.actor?.key, kept?.summary, kept?.details]).toEqual([
+      me.key,
+      `Run now · Run now ${MARK}`,
+      {
+        preAggregation: preAggIn('r'),
+        via: 'run-now',
+        partitions: null,
+        granularity: 'month',
+        runId,
+        schedule: { id: made.id, name: `Run now ${MARK}` },
+      },
+    ]);
+  });
+
+  it('counts a failed Run now toward no suspension, and runs a suspended schedule now too (R59)', async () => {
+    await place('s', { readOnly: [], readWrite: ['managers'] });
+    const made = (
+      await as('manager', {
+        method: 'POST',
+        url: '/api/wechart-schedules',
+        payload: fields('s', { name: `Refused now ${MARK}`, suspendAfter: 1 }),
+      })
+    ).json<Listed>();
+    refusing.add(preAggIn('s'));
+
+    const refused = await runNow('manager', made.id);
+
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json<{ error: string }>().error).toContain(REMOVED);
+    // Recorded failed, Cube's words and all, and not counted: still running.
+    const runs = (
+      await buildHistory(getDb()).list({
+        within: undefined,
+        filters: { starter: { kind: 'schedule', id: made.id } },
+      })
+    ).records;
+    expect(runs.map((each) => [each.via, each.outcome, each.error?.includes(REMOVED)])).toEqual([
+      ['run-now', 'failed', true],
+    ]);
+    const row = (await listed('manager')).rows.find((each) => each.id === made.id) as
+      (Listed & Record<string, unknown>) | undefined;
+    expect([row?.['suspendedAt'], row?.['failuresInARow']]).toEqual([null, 0]);
+
+    // A scheduled run refused: suspended, at its number.
+    await scheduler.run(made.id, `job-${MARK}-s`).catch(() => undefined);
+    refusing.delete(preAggIn('s'));
+    // Run now on it, suspended: it runs, and the schedule stays suspended, its count as it was.
+    expect((await runNow('manager', made.id)).statusCode).toBe(200);
+    const suspended = (await listed('manager')).rows.find((each) => each.id === made.id) as
+      (Listed & Record<string, unknown>) | undefined;
+    expect([typeof suspended?.['suspendedAt'], suspended?.['failuresInARow']]).toEqual([
+      'string',
+      1,
+    ]);
+  });
+
+  it('refuses a member of another folder and a reader, before Cube is asked', async () => {
+    const made = (
+      await as('manager', {
+        method: 'POST',
+        url: '/api/wechart-schedules',
+        payload: fields('a', { name: `Not theirs ${MARK}` }),
+      })
+    ).json<Listed>();
+    posted.length = 0;
+
+    expect((await runNow('many', made.id)).statusCode).toBe(403);
+    expect((await runNow('reader', made.id)).statusCode).toBe(403);
+    expect((await runNow('manager', randomUUID())).statusCode).toBe(404);
+    expect(posted).toEqual([]);
   });
 });

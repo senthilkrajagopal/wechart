@@ -7770,7 +7770,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - Stop on an entry the refresh worker or a query started is never offered, and is refused with `403` (AC-394).
     - `e2e/jobs.spec.ts`, against compose's xcube: a stopped build leaves the queue, and its partition gets no new version from it (AC-394).
   - Depends on: T376, T505
-- [ ] T555 (AC-395) Run now on a wechart schedule *(added 2026-10-02, `[R56]`: design 16's P2)*
+- [x] T555 (AC-395) Run now on a wechart schedule *(added 2026-10-02, `[R56]`: design 16's P2)*
   - Files: `packages/api/src/routes/schedules.ts` (+ test), `packages/web/src/workspaces/schedules/SchedulePane.tsx` (+ test)
   - Failing test: `routes/schedules.test.ts`, with a fake clock and the stub Cube:
     - Run now starts a build of every partition at once;
@@ -7780,6 +7780,30 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - **For the user, before it's built:**
     - whether a failed Run now counts toward the schedule's suspension (AC-155 counts "runs");
     - whether Run now is offered on a suspended or paused schedule.
+  - *Answered (R59):*
+    - A failed Run now doesn't count toward suspension, and doesn't start the count again.
+    - Run now is offered on paused and suspended schedules.
+  - *Done 2026-10-04.*
+    - **The route** is `POST /api/wechart-schedules/:id/run`, for any who write the schedule's folder, with a route-matrix case. It calls the scheduler's `runNow`:
+      - one post of every partition, outside the schedule's times;
+      - pg-boss's schedule is left alone;
+      - recorded in Run history with `via: 'run-now'` and the schedule as starter, `by` the person, kept in the starter columns.
+    - **Not counted.** The suspension count reads `via: 'schedule'` alone, so a Run now, done or failed, neither counts nor starts the count again. The Suspension pane's failed-runs table leaves Run now's runs out too.
+    - **A refused Run now** is recorded failed, Cube's words and all, and answered as Build's is: Cube's status, `{ error, source: 'cube' }`.
+    - **The trail** records it as Build started, "Run now · <schedule>", by the person (AC-294), with the schedule in its details.
+    - **On the page,** Run now is on the right of the pane's actions (D1). Run history's Started by reads "Run now · Month-end close, by Wren Writer" (P2).
+    - **`e2e/schedules.spec.ts`** runs it against compose's Cube: built to Done, Run history names both, and the next runs are unchanged.
+  - **Implementer's calls, for the user to confirm or change:**
+    - **Schedules' Last run** includes a Run now: it lists the schedule's latest build, whatever started it.
+    - **The pane says** "Started “<name>” now. Run history lists it." A refusal reads "Not started: <Cube's words>".
+    - **Run history's Started by filter** lists the schedule once. A Run now is under the schedule, not under the person.
+  - **One review round (spec-reviewer), fixed:**
+    1. When Cube started no job, the pane still said the run had started. It now says "Cube started no job: nothing of “<name>” was built.", as Build does.
+    2. A build log's Started line read a Run now as a scheduled run. It now reads "by <person>, with Run now on <schedule>, a wechart schedule".
+  - **Left as they are (test strength, for a later pass):**
+    - The test that a successful Run now doesn't start the count again reads it while the run is still open.
+    - The Started by filter's one-row-per-schedule query has no test of its own.
+    - The Suspension pane's failed-runs table leaves out Run now's runs on the page, from one page of 50.
 - [ ] T556 (AC-396) Pause and resume a wechart schedule by hand *(added 2026-10-02, `[R56]`: design 16's P3)*
   - Files: `packages/api/src/routes/schedules.ts`, `packages/api/src/scheduler/schedules.ts` (+ tests), `packages/web/src/workspaces/schedules/{SchedulesPage,SchedulePane}.tsx` (+ tests)
   - Failing test: with a fake clock:

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import {
   actorOf,
+  preAggregationItem,
   recordIn,
   scheduleChangeEntry,
   scheduleSettingsOf,
@@ -297,6 +298,42 @@ export function registerWechartSchedules(
       now(),
       rows !== undefined,
     );
+  });
+
+  /**
+   * Run now (T555, AC-395; design 16, P2): its build at once, by any who
+   * write its folder, suspended or not (R59), its times left alone. In Run
+   * history as Run now on the schedule, by them, and in the audit trail as a
+   * build started (AC-294). Cube's refusal is the answer, as Build's is.
+   */
+  app.post('/api/wechart-schedules/:id/run', USER, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const found = await theirs(request, id);
+    if (!found.ok) return reply.status(found.status).send(found.body);
+    const user = userOf(request);
+    const ran = await scheduler.runNow(id, byOf(request));
+    if (ran === undefined) return reply.status(404).send(NO_SUCH_SCHEDULE);
+    if (ran.tokens.length > 0)
+      await recordIn(
+        audit,
+        {
+          actor: actorOf(user),
+          event: 'build-started',
+          folderId: ran.schedule.folderId,
+          item: preAggregationItem(ran.schedule.preAggregation),
+          summary: `Run now · ${ran.schedule.name}`,
+          details: {
+            preAggregation: ran.schedule.preAggregation,
+            via: 'run-now',
+            partitions: null,
+            granularity: ran.granularity,
+            ...(ran.runId === null ? {} : { runId: ran.runId }),
+            schedule: { id: ran.schedule.id, name: ran.schedule.name },
+          },
+        },
+        request.log,
+      );
+    return { runId: ran.runId, tokens: ran.tokens };
   });
 
   app.delete('/api/wechart-schedules/:id', USER, async (request, reply) => {

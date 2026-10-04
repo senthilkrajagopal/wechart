@@ -269,6 +269,8 @@ export function shownSchedules({
   wechart = [],
   failing = [],
   runs = [],
+  runNowRefused,
+  runNowNoJob,
 }: {
   at?: string;
   keys?: unknown[];
@@ -277,6 +279,10 @@ export function shownSchedules({
   failing?: readonly ('keys' | 'wechart')[];
   /** Run history's records of a schedule, newest first. */
   runs?: readonly unknown[];
+  /** Cube's words refusing a Run now (T555); none, and it starts. */
+  runNowRefused?: string;
+  /** A Run now Cube answers with no job: nothing to build (T555's review). */
+  runNowNoJob?: boolean;
 } = {}) {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(at));
@@ -301,6 +307,14 @@ export function shownSchedules({
         return Response.json({ error: 'wechart’s schedules could not be read.' }, { status: 500 });
       if (url.pathname === '/api/preaggregations') return Response.json(PRE_AGGREGATIONS);
       if (url.pathname === '/api/jobs/builds') return Response.json({ records: runs });
+      // Run now (T555): started, or Cube's refusal, as the API answers Build's.
+      const running = /^\/api\/wechart-schedules\/(.+)\/run$/.exec(url.pathname)?.[1];
+      if (running !== undefined && method === 'POST')
+        return runNowRefused !== undefined
+          ? Response.json({ error: runNowRefused, source: 'cube' }, { status: 400 })
+          : runNowNoJob === true
+            ? Response.json({ runId: null, tokens: [] })
+            : Response.json({ runId: 'run-now-1', tokens: ['t-1'] });
       const resuming = /^\/api\/wechart-schedules\/(.+)\/resume$/.exec(url.pathname)?.[1];
       if (resuming !== undefined && method === 'POST') {
         const was = listed.find((each) => each.id === resuming);

@@ -163,6 +163,25 @@ describe('a build’s log (T374, AC-150)', () => {
     expect(text(pane)).toContain('by Weekday mornings, a wechart schedule');
   });
 
+  it('says a Run now was one, on its schedule, by the person who chose it (T555’s review)', async () => {
+    shown(
+      record({
+        via: 'run-now',
+        starter: {
+          kind: 'schedule',
+          id: 's-1',
+          name: 'Weekday mornings',
+          by: { key: 'wren', name: 'Wren Writer' },
+        },
+      }),
+    );
+
+    const pane = await screen.findByRole('complementary', { name: /^Build of / });
+    expect(text(pane)).toContain(
+      'by Wren Writer, with Run now on Weekday mornings, a wechart schedule',
+    );
+  });
+
   it('names each line’s job, by its partition or else its token, when the build made several', async () => {
     shown(
       record({

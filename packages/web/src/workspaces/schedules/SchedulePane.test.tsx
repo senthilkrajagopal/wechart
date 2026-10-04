@@ -286,3 +286,94 @@ describe('Suspended after its failed runs in a row, and Resume (T379, AC-155)', 
     expect(within(paneOf()).queryAllByTestId('not-in-model')).toHaveLength(0);
   });
 });
+
+/**
+ * T555 (AC-395; design 16, P2 and D1; R59): Run now in a wechart schedule's
+ * pane starts its build at once, and says so; Cube's refusal is said in its
+ * words. It is offered on a suspended schedule too, and its runs aren't
+ * among the failed runs that suspend it.
+ */
+describe('Run now (T555, AC-395)', () => {
+  it('starts its build at once from the pane, and says so', async () => {
+    const { sent } = shownSchedules({ wechart: [schedule()] });
+    await user().click(await wechartRow('Weekday mornings'));
+
+    await user().click(within(paneOf()).getByRole('button', { name: 'Run now' }));
+
+    await waitFor(() => {
+      expect(sent.filter((each) => each.method === 'POST')).toEqual([
+        { method: 'POST', url: '/api/wechart-schedules/sched-1/run' },
+      ]);
+    });
+    expect(text(await within(paneOf()).findByTestId('ran-now'))).toBe(
+      'Started “Weekday mornings” now. Run history lists it.',
+    );
+  });
+
+  it('says Cube started no job, rather than that it ran, when Cube answers with none (T555’s review)', async () => {
+    shownSchedules({ wechart: [schedule()], runNowNoJob: true });
+    await user().click(await wechartRow('Weekday mornings'));
+
+    await user().click(within(paneOf()).getByRole('button', { name: 'Run now' }));
+
+    await waitFor(() => {
+      expect(text(within(paneOf()).getByTestId('ran-now'))).toBe(
+        'Cube started no job: nothing of “Weekday mornings” was built.',
+      );
+    });
+  });
+
+  it('says Cube’s refusal in its words', async () => {
+    shownSchedules({
+      wechart: [schedule()],
+      runNowRefused: 'A user’s selector doesn’t match any of the pre-aggregations.',
+    });
+    await user().click(await wechartRow('Weekday mornings'));
+
+    await user().click(within(paneOf()).getByRole('button', { name: 'Run now' }));
+
+    expect(text(await within(paneOf()).findByTestId('ran-now-refused'))).toBe(
+      'Not started: A user’s selector doesn’t match any of the pre-aggregations.',
+    );
+  });
+
+  it('offers Run now on a suspended schedule, and doesn’t number its runs among the failures (R59)', async () => {
+    shownSchedules({
+      wechart: [suspended()],
+      runs: [
+        {
+          id: 'run-5',
+          startedAt: '2026-10-02T12:30:00.000Z',
+          outcome: 'failed',
+          error: 'failure: Error: connect ETIMEDOUT 10.20.4.17:5432',
+          via: 'run-now',
+        },
+        ...SUSPENDED_RUNS,
+      ],
+    });
+    await user().click(await wechartRow('Weekday mornings'));
+
+    expect(within(paneOf()).getByRole('button', { name: 'Run now' }).hasAttribute('disabled')).toBe(
+      false,
+    );
+    const failed = within(paneOf()).getByRole('table', { name: 'The failed runs' });
+    await waitFor(() => {
+      expect(within(failed).getAllByRole('row')).toHaveLength(4);
+    });
+    expect(
+      within(failed)
+        .getAllByRole('row')
+        .map((each) =>
+          within(each)
+            .getAllByRole('cell')
+            .slice(1, 3)
+            .map((cell) => text(cell)),
+        ),
+    ).toEqual([
+      ['Failed', '3 of 3'],
+      ['Failed', '2 of 3'],
+      ['Failed', '1 of 3'],
+      ['Done', ''],
+    ]);
+  });
+});

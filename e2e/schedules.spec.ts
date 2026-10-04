@@ -376,3 +376,98 @@ ${measures}    pre_aggregations:
     if (id !== undefined) await request.delete(`/api/wechart-schedules/${id}`);
   }
 });
+
+/**
+ * T555 / AC-395 (design 16, P2): WHEN the user chooses Run now on a wechart
+ * schedule, THE SYSTEM SHALL start the schedule's build at once through
+ * Cube's jobs API, recorded in Run history as started by Run now on that
+ * schedule, by that user, and leave the schedule's times unchanged.
+ *
+ * A daily schedule on a rollup of this browser's own that Cube's refresh
+ * worker never builds: Run now in its pane starts its build against
+ * compose's Cube, Run history lists it as Run now on the schedule, by admin,
+ * followed to Done, and the schedule's next runs are as they were.
+ */
+test('Run now starts a schedule’s build at once, Run history names the schedule and who chose it, and its times stay', async ({
+  page,
+  request,
+  browserName,
+}) => {
+  test.setTimeout(180_000);
+  const cube = `run_now_${browserName}`;
+  const rollup = `${cube}.main`;
+  const name = `Daily ${browserName} ${String(Date.now())}`;
+  await ownCubeFile(
+    request,
+    cube,
+    `cubes:
+  - name: ${cube}
+    sql_table: public.orders
+    dimensions:
+      - name: status
+        sql: status
+        type: string
+    measures:
+      - name: count
+        type: count
+    pre_aggregations:
+      - name: main
+        measures: [CUBE.count]
+        dimensions: [CUBE.status]
+        scheduled_refresh: false
+`,
+  );
+  let id: string | undefined;
+  try {
+    await expect
+      .poll(
+        async () =>
+          (
+            await request.post('/api/wechart-schedules', {
+              data: { preAggregation: rollup, name, cron: '0 4 * * *', timezone: 'UTC' },
+            })
+          ).status(),
+        PUBLISHED,
+      )
+      .toBe(201);
+    const made = (
+      (await (await request.get('/api/wechart-schedules')).json()) as {
+        id: string;
+        name: string;
+        runs: string[];
+      }[]
+    ).find((each) => each.name === name)!;
+    id = made.id;
+
+    await page.goto('/schedules');
+    await page
+      .getByRole('table', { name: 'Refresh schedules' })
+      .getByRole('row')
+      .filter({ hasText: name })
+      .click();
+    const pane = page.getByRole('complementary', { name: 'Schedule details' });
+    await pane.getByRole('button', { name: 'Run now' }).click();
+    await expect(pane.getByTestId('ran-now')).toHaveText(
+      `Started “${name}” now. Run history lists it.`,
+    );
+
+    // Run history: Run now on the schedule, by admin, followed to Done.
+    await page.goto(`/jobs?tab=history&preagg=${encodeURIComponent(rollup)}`);
+    const built = page.getByTestId(/^build-row-/).filter({
+      has: page.getByTestId('starter').filter({ hasText: `Run now · ${name}, by admin` }),
+    });
+    await expect(built).toHaveCount(1, { timeout: 30_000 });
+    await expect(built.getByTestId('build-outcome')).toHaveText('Done', { timeout: 60_000 });
+
+    // Its times as they were.
+    const after = (
+      (await (await request.get('/api/wechart-schedules')).json()) as {
+        id: string;
+        runs: string[];
+      }[]
+    ).find((each) => each.id === id);
+    expect(after?.runs).toEqual(made.runs);
+  } finally {
+    if (id !== undefined) await request.delete(`/api/wechart-schedules/${id}`);
+  }
+});

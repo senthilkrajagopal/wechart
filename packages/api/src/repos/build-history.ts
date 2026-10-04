@@ -18,13 +18,34 @@ import type { Database } from '../db/schema';
  * (research db-access.md §3), so every write lands once.
  */
 
-/** Who or what started a build: a person, or a wechart schedule. */
+/**
+ * Who or what started a build: a person, or a wechart schedule — and, for a
+ * schedule's Run now, the person who chose it (T555, AC-395).
+ */
 export type Starter =
   | { readonly kind: 'person'; readonly key: string; readonly name: string }
-  | { readonly kind: 'schedule'; readonly id: string; readonly name: string };
+  | {
+      readonly kind: 'schedule';
+      readonly id: string;
+      readonly name: string;
+      readonly by?: { readonly key: string; readonly name: string };
+    };
 
-/** How it was started: Build all (Build now, when not partitioned), Rebuild selected, or a schedule's run. */
-export type BuildVia = 'build-all' | 'rebuild-selected' | 'schedule';
+/**
+ * How it was started: Build all (Build now, when not partitioned), Rebuild
+ * selected, a schedule's run at its time, or Run now on a schedule (T555),
+ * which isn't one of its runs: its suspension counts only those (R59).
+ */
+export type BuildVia = 'build-all' | 'rebuild-selected' | 'schedule' | 'run-now';
+
+/** Its starter's columns: a schedule's Run now names the person too (T555). */
+const starterColumns = (starter: Starter) => ({
+  starter_kind: starter.kind,
+  starter_key: starter.kind === 'person' ? starter.key : (starter.by?.key ?? null),
+  starter_name: starter.kind === 'person' ? starter.name : (starter.by?.name ?? null),
+  schedule_id: starter.kind === 'schedule' ? starter.id : null,
+  schedule_name: starter.kind === 'schedule' ? starter.name : null,
+});
 
 /**
  * How a build ended: done; failed; cancelled from the queue (T376); or Cube's
@@ -184,7 +205,15 @@ const starterOf = (
   >,
 ): Starter =>
   row.starter_kind === 'schedule'
-    ? { kind: 'schedule', id: row.schedule_id ?? '', name: row.schedule_name ?? '' }
+    ? {
+        kind: 'schedule',
+        id: row.schedule_id ?? '',
+        name: row.schedule_name ?? '',
+        // A Run now names who chose it (T555).
+        ...(row.starter_key === null
+          ? {}
+          : { by: { key: row.starter_key, name: row.starter_name ?? '' } }),
+      }
     : { kind: 'person', key: row.starter_key ?? '', name: row.starter_name ?? '' };
 
 /**
@@ -303,11 +332,7 @@ export function buildHistory(db: Kysely<Database>) {
             partitions: build.partitions === null ? null : JSON.stringify(build.partitions),
             partition_granularity: build.granularity,
             via: build.via,
-            starter_kind: build.starter.kind,
-            starter_key: build.starter.kind === 'person' ? build.starter.key : null,
-            starter_name: build.starter.kind === 'person' ? build.starter.name : null,
-            schedule_id: build.starter.kind === 'schedule' ? build.starter.id : null,
-            schedule_name: build.starter.kind === 'schedule' ? build.starter.name : null,
+            ...starterColumns(build.starter),
             request_id: build.requestId,
             started_at: build.startedAt,
             answered_at: build.answeredAt,
@@ -367,10 +392,7 @@ export function buildHistory(db: Kysely<Database>) {
         partitions: run.partitions,
         granularity: run.partition_granularity,
         via: run.via as BuildVia,
-        starter:
-          run.starter_kind === 'schedule'
-            ? { kind: 'schedule', id: run.schedule_id ?? '', name: run.schedule_name ?? '' }
-            : { kind: 'person', key: run.starter_key ?? '', name: run.starter_name ?? '' },
+        starter: starterOf(run),
         requestId: run.request_id,
         startedAt: run.started_at,
         answeredAt: run.answered_at,
@@ -569,11 +591,7 @@ export function buildHistory(db: Kysely<Database>) {
             partitions: null,
             partition_granularity: build.granularity,
             via: build.via,
-            starter_kind: build.starter.kind,
-            starter_key: build.starter.kind === 'person' ? build.starter.key : null,
-            starter_name: build.starter.kind === 'person' ? build.starter.name : null,
-            schedule_id: build.starter.kind === 'schedule' ? build.starter.id : null,
-            schedule_name: build.starter.kind === 'schedule' ? build.starter.name : null,
+            ...starterColumns(build.starter),
             request_id: build.requestId,
             started_at: build.startedAt,
             answered_at: build.startedAt,
@@ -935,17 +953,26 @@ export function buildHistory(db: Kysely<Database>) {
     /** Who started builds in `within`'s folders — every folder's, given none — each once, by their latest name. */
     async starters(within: readonly string[] | undefined): Promise<Starter[]> {
       if (within !== undefined && within.length === 0) return [];
+      // A schedule by its id, whoever chose a Run now on it (T555).
+      const who = sql`CASE WHEN starter_kind = 'schedule' THEN schedule_id ELSE starter_key END`;
       let query = db
         .selectFrom('build_runs')
-        .distinctOn(['starter_kind', sql`COALESCE(starter_key, schedule_id)`])
+        .distinctOn(['starter_kind', who])
         .select(['starter_kind', 'starter_key', 'starter_name', 'schedule_id', 'schedule_name']);
       if (within !== undefined) query = query.where('folder_id', 'in', within);
       const rows = await query
         .orderBy('starter_kind')
-        .orderBy(sql`COALESCE(starter_key, schedule_id)`)
+        .orderBy(who)
         .orderBy('started_at', 'desc')
         .execute();
-      return rows.map(starterOf).sort((a, b) => a.name.localeCompare(b.name));
+      return rows
+        .map(starterOf)
+        .map((starter): Starter =>
+          starter.kind === 'schedule'
+            ? { kind: 'schedule', id: starter.id, name: starter.name }
+            : starter,
+        )
+        .sort((a, b) => a.name.localeCompare(b.name));
     },
 
     /**

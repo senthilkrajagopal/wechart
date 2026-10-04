@@ -215,6 +215,24 @@ describe('Run history (T374, AC-150)', () => {
     expect(within(row('sched')).getByTestId('starter').querySelectorAll('svg')).toHaveLength(1);
   });
 
+  it('names a Run now by the schedule and the person who chose it (T555, AC-395; design 16, P2)', async () => {
+    api(() =>
+      listOf([
+        summary({
+          id: 'now',
+          via: 'run-now',
+          starter: { ...close, by: { key: 'wren', name: 'Wren Writer' } },
+        }),
+      ]),
+    );
+    shown();
+
+    const table = await screen.findByRole('table', { name: 'Run history' });
+    const starter = within(within(table).getByTestId('build-row-now')).getByTestId('starter');
+    expect(text(starter)).toBe('Run now · Month-end close, by Wren Writer');
+    expect(starter.querySelector('svg')?.getAttribute('data-icon')).toBe('schedule');
+  });
+
   it('says what is listed when nothing is, naming no folder, and that the refresh worker’s builds come later', async () => {
     api(() => listOf([]));
     shown();

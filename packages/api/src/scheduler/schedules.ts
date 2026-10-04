@@ -250,6 +250,26 @@ export interface WechartScheduler {
   resume(id: string, by: { key: string; name: string }): Promise<Schedule | undefined>;
   /** Builds that ended, as the follower closed them: a schedule's failed one counted (T379). */
   ended(closed: readonly { runId: string; outcome: string }[]): Promise<void>;
+  /**
+   * Run now (T555, AC-395; design 16, P2): the schedule's build at once,
+   * every partition as its runs build, outside its times, which it leaves
+   * alone; offered on a suspended schedule too (R59). Recorded in Run history
+   * as Run now on the schedule, by `by`. It isn't one of its runs: neither a
+   * failure nor a success of it moves the count that suspends it (R59). None
+   * where there's no such schedule; Cube's refusal, recorded, is thrown.
+   */
+  runNow(
+    id: string,
+    by: { key: string; name: string },
+  ): Promise<
+    | {
+        readonly schedule: Schedule;
+        readonly runId: string | null;
+        readonly tokens: readonly string[];
+        readonly granularity: string | null;
+      }
+    | undefined
+  >;
   /** One run of a schedule, as pg-boss hands it out: exported for its tests. */
   run(scheduleId: string, runId: string): Promise<void>;
 }
@@ -525,6 +545,53 @@ export function wechartScheduler({
           onError(error);
         }
       }
+    },
+    async runNow(id, by) {
+      const stored = await store.get(id);
+      if (stored === undefined) return undefined;
+      const schedule = await counted(stored);
+      const requestId = `wechart-run-now-${randomUUID()}`;
+      const starter = { kind: 'schedule' as const, id: schedule.id, name: schedule.name, by };
+      // Read before the post, as a run's is (T372's review).
+      const granularity = await granularityOf(schedule.preAggregation);
+      const startedAt = now();
+      let answered: unknown;
+      try {
+        answered = await cube.buildPreAggregations([schedule.preAggregation], { requestId });
+      } catch (error) {
+        // Recorded failed, Cube's words and all, and not counted: it isn't a run (R59).
+        await history?.refused({
+          preAggregation: schedule.preAggregation,
+          folderId: schedule.folderId,
+          granularity,
+          via: 'run-now',
+          starter,
+          requestId,
+          startedAt,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
+      const tokens = Array.isArray(answered)
+        ? answered.filter((each): each is string => typeof each === 'string')
+        : [];
+      // A start that made no job built nothing, and isn't recorded (T372).
+      const runId =
+        history === undefined || tokens.length === 0
+          ? null
+          : await history.start({
+              preAggregation: schedule.preAggregation,
+              folderId: schedule.folderId,
+              partitions: null,
+              granularity,
+              via: 'run-now',
+              starter,
+              requestId,
+              tokens,
+              startedAt,
+              answeredAt: now(),
+            });
+      return { schedule, runId, tokens, granularity };
     },
     run,
   };

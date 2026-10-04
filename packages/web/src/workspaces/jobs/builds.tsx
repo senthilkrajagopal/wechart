@@ -8,12 +8,20 @@ import { Status } from './StateBadge';
  * and words (rule 3), the same in Run history's list and in a build's log.
  */
 
-/** Who or what started a build: a person, or a wechart schedule. */
+/**
+ * Who or what started a build: a person, or a wechart schedule — and, for a
+ * Run now on a schedule, the person who chose it (T555, AC-395).
+ */
 export type Starter =
   | { readonly kind: 'person'; readonly key: string; readonly name: string }
-  | { readonly kind: 'schedule'; readonly id: string; readonly name: string };
+  | {
+      readonly kind: 'schedule';
+      readonly id: string;
+      readonly name: string;
+      readonly by?: { readonly key: string; readonly name: string };
+    };
 
-export type BuildVia = 'build-all' | 'rebuild-selected' | 'schedule';
+export type BuildVia = 'build-all' | 'rebuild-selected' | 'schedule' | 'run-now';
 export type BuildOutcome = 'done' | 'failed' | 'cancelled' | 'expired';
 
 /** A build as Run history lists it (`GET /api/jobs/builds`). */
@@ -239,7 +247,10 @@ export function StarterLabel({ starter }: { starter: Starter }) {
           </>
         )}
       </svg>
-      {starter.name}
+      {/* "Run now · Month-end close, by Wren Writer" (design 16, P2). */}
+      {starter.kind === 'schedule' && starter.by !== undefined
+        ? `Run now · ${starter.name}, by ${starter.by.name}`
+        : starter.name}
     </span>
   );
 }

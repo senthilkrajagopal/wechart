@@ -43,7 +43,11 @@ export interface BuildRecord extends Omit<BuildSummary, 'jobs' | 'progress'> {
 
 /** How it was started, in words: "with Rebuild selected in Jobs". */
 function howOf(record: BuildRecord): string {
-  if (record.starter.kind === 'schedule') return `by ${record.starter.name}, a wechart schedule`;
+  if (record.starter.kind === 'schedule')
+    // A Run now names who chose it (T555's review).
+    return record.starter.by === undefined
+      ? `by ${record.starter.name}, a wechart schedule`
+      : `by ${record.starter.by.name}, with Run now on ${record.starter.name}, a wechart schedule`;
   const how =
     record.via === 'rebuild-selected'
       ? 'Rebuild selected'

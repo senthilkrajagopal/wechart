@@ -15,6 +15,7 @@ import {
   deleteSchedule,
   readRunsOf,
   resumeSchedule,
+  runScheduleNow,
   WECHART_SCHEDULES_KEY,
   type LastRun,
   type WechartSchedule,
@@ -194,6 +195,12 @@ export function WechartPane({
    * while someone is working in the pane (T379's review).
    */
   const [focusResume, setFocusResume] = useState(schedule.suspendedAt !== null);
+  const client = useQueryClient();
+  /** Run now (T555, AC-395): its last run on Schedules, and Run history, read again. */
+  const runNow = useMutation({
+    mutationFn: () => runScheduleNow(schedule.id),
+    onSettled: () => void client.invalidateQueries({ queryKey: WECHART_SCHEDULES_KEY }),
+  });
   return (
     <>
       <div className="admin-pane__head">
@@ -222,8 +229,17 @@ export function WechartPane({
         />
       )}
       {/* There from the start, so what it comes to say is read (E3). */}
+      {/* The pane's one live region: a resume said (E3), or a Run now started (T555). */}
       <p role="status" className="schedules__resumed">
         {schedule.suspendedAt === null ? (resumedSaid ?? '') : ''}
+        <span data-testid="ran-now">
+          {!runNow.isSuccess
+            ? ''
+            : runNow.data.tokens.length === 0
+              ? // Cube started no job: nothing to list (T555's review).
+                `Cube started no job: nothing of “${schedule.name}” was built.`
+              : `Started “${schedule.name}” now. Run history lists it.`}
+        </span>
       </p>
       <dl className="admin-pane__facts">
         <dt>State</dt>
@@ -282,7 +298,26 @@ export function WechartPane({
         >
           Delete…
         </button>
+        {/* Run now, on the right (design 16, D1 and P2): suspended or not (R59). */}
+        <span className="spacer" />
+        <button
+          type="button"
+          className="btn-sm"
+          disabled={runNow.isPending}
+          onClick={() => runNow.mutate()}
+        >
+          <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+            <path d="M5 3.2v9.6L12.6 8z" fill="currentColor" />
+          </svg>
+          Run now
+        </button>
       </ScheduleForm>
+      {runNow.isError ? (
+        <p className="schedules__ran-refused" data-testid="ran-now-refused" role="alert">
+          <StatusIcon kind="err" />
+          {`Not started: ${runNow.error.message}`}
+        </p>
+      ) : null}
       {deleting ? (
         <DeleteScheduleDialog
           schedule={schedule}
@@ -351,6 +386,8 @@ function Suspension({
   // Its failures in a row, then the run before them (E1), newest first: of
   // the runs that count, a dropped record or a cancel left out (T379's review).
   const shownRuns = (runs.data ?? [])
+    // Its runs at its times: a Run now's don't count toward suspending it (T555, R59).
+    .filter((run) => run.via !== 'run-now')
     .filter((run) => run.outcome === 'failed' || run.outcome === 'done')
     .slice(0, count + 1);
   return (

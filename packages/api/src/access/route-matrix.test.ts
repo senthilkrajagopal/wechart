@@ -2373,6 +2373,18 @@ const CASES: Record<string, Case> = {
         else refused(response, where);
       }
   },
+  // Run now: only in folders they write, refused before Cube is asked (T555).
+  'POST /api/wechart-schedules/:id/run': async () => {
+    for (const place of PLACES)
+      for (const who of WHO.filter((each) => !writes(each, place)))
+        refused(
+          await ask(who, {
+            method: 'POST',
+            url: `/api/wechart-schedules/${schedulesIn[place]}/run`,
+          }),
+          `${who} running ${place}'s schedule now`,
+        );
+  },
   'DELETE /api/wechart-schedules/:id': async () => {
     for (const place of PLACES)
       for (const who of WHO.filter((each) => !writes(each, place)))

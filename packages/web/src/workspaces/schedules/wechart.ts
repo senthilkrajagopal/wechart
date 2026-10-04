@@ -159,6 +159,23 @@ export interface ScheduleRun {
   readonly startedAt: string;
   readonly outcome: 'done' | 'failed' | 'cancelled' | 'expired' | null;
   readonly error: string | null;
+  /** One of its runs at its times, or a Run now on it (T555), which doesn't count toward suspending it. */
+  readonly via?: 'schedule' | 'run-now';
+}
+
+/**
+ * Run now (T555, AC-395; design 16, P2): its build at once, outside its
+ * times, which stay as they are. Its run, or Cube's refusal in Cube's words.
+ */
+export async function runScheduleNow(
+  id: string,
+): Promise<{ runId: string | null; tokens: readonly string[] }> {
+  const response = await fetch(`/api/wechart-schedules/${encodeURIComponent(id)}/run`, {
+    method: 'POST',
+  });
+  if (!response.ok) throw await refusalOf(response, 'The run could not be started');
+  // Cube's jobs, none where it started none: nothing was built (T555's review).
+  return (await response.json()) as { runId: string | null; tokens: readonly string[] };
 }
 
 /** A schedule's latest runs, newest first, from Run history. */
