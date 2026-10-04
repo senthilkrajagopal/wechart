@@ -294,3 +294,28 @@ describe('shared bookmarks (T367, AC-293)', () => {
     expect(await store().get(dashboardId, randomUUID())).toBeUndefined();
   });
 });
+
+/**
+ * T580 (AC-293, amended 2026-10-04 by R61): a Super-Admin may delete any
+ * shared bookmark. The store's part: one removed while it is shared, whoever's,
+ * and none that isn't. That the asker is a Super-Admin is the route's.
+ */
+describe('a shared bookmark removed by a Super-Admin (T580)', () => {
+  it('removes one that is shared, whoever’s, and none unshared or of another dashboard', async () => {
+    const dashboardId = `d-${randomUUID()}`;
+    const shared = await store().save({ dashboardId, name: 's', state: STATE, owner: 'writer' });
+    await store().change(dashboardId, shared.id, 'writer', { shared: true });
+    const unshared = await store().save({ dashboardId, name: 'u', state: STATE, owner: 'writer' });
+
+    expect(await store().removeShared(dashboardId, unshared.id)).toBe(false);
+    expect(await store().removeShared(`d-${randomUUID()}`, shared.id)).toBe(false);
+    expect((await store().list(dashboardId, 'writer')).map((each) => each.name)).toEqual([
+      'u',
+      's',
+    ]);
+
+    expect(await store().removeShared(dashboardId, shared.id)).toBe(true);
+    expect(await store().get(dashboardId, shared.id)).toBeUndefined();
+    expect((await store().list(dashboardId, 'writer')).map((each) => each.name)).toEqual(['u']);
+  });
+});

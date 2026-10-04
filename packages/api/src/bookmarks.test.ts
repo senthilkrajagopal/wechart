@@ -56,6 +56,12 @@ function memoryBookmarks(): BookmarkStore & { saved: Bookmark[] } {
       saved.splice(saved.indexOf(found), 1);
       return true;
     },
+    removeShared: async (dashboardId, id) => {
+      const found = of(dashboardId, id);
+      if (found?.shared !== true) return false;
+      saved.splice(saved.indexOf(found), 1);
+      return true;
+    },
     removeFor: async (dashboardId) => {
       saved.splice(0, saved.length, ...saved.filter((each) => each.dashboardId !== dashboardId));
     },
@@ -96,6 +102,7 @@ describe('a dashboard’s bookmarks', () => {
       state: STATE,
       shared: false,
       mine: true,
+      mayDelete: true,
     };
     expect([saved.statusCode, saved.json()]).toEqual([201, bookmark]);
     expect(listed.json()).toEqual({ bookmarks: [bookmark] });
@@ -140,6 +147,7 @@ describe('a dashboard’s bookmarks', () => {
       state: { ...STATE, page: 'page-3' },
       shared: true,
       mine: true,
+      mayDelete: true,
     };
     expect([shared.statusCode, renamed.statusCode, updated.statusCode]).toEqual([200, 200, 200]);
     expect(updated.json()).toEqual(after);

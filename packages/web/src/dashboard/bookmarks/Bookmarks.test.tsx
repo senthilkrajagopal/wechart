@@ -86,6 +86,7 @@ const mine = (id: string, name: string, state: unknown = STATE) => ({
   state,
   shared: false,
   mine: true,
+  mayDelete: true,
 });
 
 describe('Save bookmark…', () => {
@@ -210,15 +211,18 @@ describe('a bookmark in the list', () => {
 /**
  * T367, AC-293: WHEN a user shares a bookmark, THE SYSTEM SHALL list it for
  * everyone who may see the dashboard, labelled with who shared it. Only its
- * owner SHALL be able to change or unshare it.
+ * owner SHALL be able to change or unshare it; only its owner or a
+ * Super-Admin delete it (amended 2026-10-04, R61; T580).
  * `Fails when: someone who may see the dashboard doesn't see a shared
- * bookmark, or someone other than its owner can change or unshare it.`
+ * bookmark, someone other than its owner can change or unshare it, or
+ * someone other than its owner or a Super-Admin can delete it.`
  *
- * Rule 81 (design 10, states B and C): Mine before Shared, newest first
- * within each — the order the API gives; a new one "Only me"; each row's
- * visibility an icon and a label, a shared row naming who shared it. Update,
- * Rename, Stop sharing and Delete are its owner's alone; anyone else's
- * "Save a copy to mine".
+ * Rule 81 (design 10, states B and C; amended by R61): Mine before Shared,
+ * newest first within each — the order the API gives; a new one "Only me";
+ * each row's visibility an icon and a label, a shared row naming who shared
+ * it. Update, Rename and Stop sharing are its owner's alone, and Delete is
+ * its owner's and, on another's shared one, a Super-Admin's (the API's
+ * `mayDelete`); anyone else's "Save a copy to mine".
  */
 describe('Mine and Shared (T367, AC-293)', () => {
   const ours = { ...mine('b2', 'Top 5'), shared: true };
@@ -229,6 +233,7 @@ describe('Mine and Shared (T367, AC-293)', () => {
     state: { ...STATE, page: 'page-9' },
     shared: true,
     mine: false,
+    mayDelete: false,
     sharedBy: 'Ada Admin',
   };
   const LISTED = [mine('b1', 'EMEA'), ours, theirs];
@@ -309,7 +314,7 @@ describe('Mine and Shared (T367, AC-293)', () => {
     ]);
   });
 
-  it('offers anyone else’s only Apply and Save a copy to mine', async () => {
+  it('offers anyone else’s only Apply and Save a copy to mine, where the API says it may not delete it', async () => {
     const applied: [string, unknown][] = [];
     api(ok, () => LISTED);
     render(
@@ -328,6 +333,27 @@ describe('Mine and Shared (T367, AC-293)', () => {
 
     expect(applied).toEqual([['Board pack', { ...STATE, page: 'page-9' }]]);
     expect(screen.queryByRole('dialog', { name: 'Bookmarks' })).toBeNull();
+  });
+
+  /**
+   * T580 (AC-293, amended 2026-10-04 by R61): a Super-Admin may delete any
+   * shared bookmark. Whether they may is the API's to say, as `mayDelete`.
+   */
+  it('offers Delete on another’s shared one where the API says it may be deleted, and deletes it', async () => {
+    const asked = api(ok, () => [mine('b1', 'EMEA'), { ...theirs, mayDelete: true }]);
+    const user = userEvent.setup();
+    render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
+    const popover = await open();
+    await within(popover).findByRole('list', { name: 'Shared' });
+
+    const menu = await actionsOf(popover, 'Shared', 'Board pack');
+    expect(offered(menu)).toEqual(['Apply', 'Save a copy to mine…', 'Delete']);
+    await user.click(within(menu).getByRole('menuitem', { name: 'Delete' }));
+
+    await assertSaid('Deleted the bookmark “Board pack”.');
+    expect(asked.filter((each) => each.method !== 'GET')).toEqual([
+      { url: '/api/dashboards/d1/bookmarks/b3', method: 'DELETE' },
+    ]);
   });
 
   it('shares one only once asked, saying who will see it', async () => {

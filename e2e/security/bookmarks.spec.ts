@@ -7,15 +7,16 @@ import { expect, test } from './fixtures';
  * listed on the dashboard for them alone.
  * `Fails when: another user sees a bookmark its owner hasn't shared.`
  *
- * T367, AC-293: WHEN a user shares a bookmark, THE SYSTEM SHALL list it for
- * everyone who may see the dashboard, labelled with who shared it. Only its
- * owner SHALL be able to change or unshare it.
- * `Fails when: someone who may see the dashboard doesn't see a shared
- * bookmark, or someone other than its owner can change or unshare it.`
+ * T367, T580; AC-293 (amended 2026-10-04, R61): WHEN a user shares a
+ * bookmark, THE SYSTEM SHALL list it for everyone who may see the dashboard,
+ * labelled with who shared it, until its owner stops sharing or deletes it,
+ * or a Super-Admin deletes it. Only its owner SHALL be able to change or
+ * unshare it, and only its owner or a Super-Admin SHALL be able to delete it.
  * Rule 81: Mine before Shared, newest first within each; a new one "Only me";
  * each row's visibility an icon and a label, a shared row naming who shared
- * it; Update, Rename, Stop sharing and Delete its owner's alone, everyone
- * else's "Save a copy to mine".
+ * it; Update, Rename and Stop sharing its owner's alone, Delete its owner's
+ * and a Super-Admin's on another's shared one; everyone else's "Save a copy
+ * to mine".
  *
  * A dashboard in a folder `writer` writes and `reader` reads, made through the
  * API as `super`, with this run's own names, and removed after. `writer` is
@@ -254,12 +255,20 @@ test.describe('the reader, who may see the dashboard (T367)', () => {
 test.describe('a Super-Admin, who may see every dashboard (T367)', () => {
   test.use({ role: 'super' });
 
-  test('sees the shared ones too, and may only apply them or save a copy', async ({ page }) => {
+  test('sees the shared ones too, and may apply them, save a copy, or delete them', async ({
+    page,
+  }) => {
     const popover = await bookmarks(page);
     await expect(names(popover, 'Shared')).toHaveText([NEWER, NAME]);
     await expect(row(popover, 'Shared', NAME)).toContainText(`Shared by ${WRITER}`);
     const menu = await actionsOf(page, row(popover, 'Shared', NAME), NAME);
-    await expect(menu.getByRole('menuitem')).toHaveText(['Apply', 'Save a copy to mine…']);
+    // Delete too, as a Super-Admin (T580; AC-293 and rule 81, amended by R61),
+    // but never Update, Rename or Stop sharing: those are its owner's alone.
+    await expect(menu.getByRole('menuitem')).toHaveText([
+      'Apply',
+      'Save a copy to mine…',
+      'Delete',
+    ]);
   });
 });
 
@@ -288,6 +297,38 @@ test.describe('the reader, after (T367)', () => {
     await expect(row(popover, 'Mine', NAME)).toContainText('Only me');
   });
 });
+
+/**
+ * T580 (AC-293, amended 2026-10-04 by R61): a Super-Admin may delete any
+ * shared bookmark, so one its owner can no longer reach can be removed. It
+ * stays listed until then.
+ */
+test.describe('a Super-Admin removes a shared bookmark (T580)', () => {
+  test.use({ role: 'super' });
+
+  test('deletes the writer’s, from its ⋯', async ({ page }) => {
+    const popover = await bookmarks(page);
+    const menu = await actionsOf(page, row(popover, 'Shared', NEWER), NEWER);
+    await menu.getByRole('menuitem', { name: 'Delete' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Deleted' })).toHaveText(
+      `Deleted the bookmark “${NEWER}”.`,
+    );
+
+    await expect((await bookmarks(page)).getByRole('list', { name: 'Shared' })).toHaveCount(0);
+  });
+});
+
+for (const role of ['writer', 'reader'] as const)
+  test.describe(`as ${role}, after (T580)`, () => {
+    test.use({ role });
+
+    test('no longer finds the one the Super-Admin deleted', async ({ page }) => {
+      const popover = await bookmarks(page);
+      await expect(popover.getByRole('button', { name: NEWER, exact: true })).toHaveCount(0);
+      // What else each had stays: the writer's own, and the reader's copy.
+      await expect(names(popover, 'Mine')).toHaveText(role === 'writer' ? [NAME] : [NAME, READERS]);
+    });
+  });
 
 test.describe('cleaning up', () => {
   test.use({ role: 'super' });

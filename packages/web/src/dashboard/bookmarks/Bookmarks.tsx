@@ -15,6 +15,11 @@ interface Saved {
   readonly shared: boolean;
   /** This user's own: theirs to change. */
   readonly mine: boolean;
+  /**
+   * Theirs to delete: their own, or another's shared one to a Super-Admin
+   * (T580; AC-293 as amended by R61). The API's to say.
+   */
+  readonly mayDelete: boolean;
   /** Who shared it, on another's. */
   readonly sharedBy?: string;
 }
@@ -52,7 +57,7 @@ async function whyNot(response: Response): Promise<string> {
 
 function readSaved(raw: unknown): Saved | undefined {
   if (typeof raw !== 'object' || raw === null) return undefined;
-  const { id, name, state, shared, mine, sharedBy } = raw as Record<string, unknown>;
+  const { id, name, state, shared, mine, mayDelete, sharedBy } = raw as Record<string, unknown>;
   if (typeof id !== 'string' || typeof name !== 'string') return undefined;
   return {
     id,
@@ -60,6 +65,7 @@ function readSaved(raw: unknown): Saved | undefined {
     state,
     shared: shared === true,
     mine: mine === true,
+    mayDelete: mayDelete === true,
     ...(typeof sharedBy === 'string' ? { sharedBy } : {}),
   };
 }
@@ -87,7 +93,8 @@ function PeopleIcon() {
  * (rule 81; design 10, state B). Each row's name applies it (`onApply`),
  * writing nothing; its visibility is an icon and a label; its ⋯ offers its
  * owner Update, Rename, Share or Stop sharing and Delete, and anyone else
- * only Apply and Save a copy to mine. Save bookmark… keeps what the
+ * Apply and Save a copy to mine, with Delete too where the API says they may
+ * (a Super-Admin, on a shared one: T580, R61). Save bookmark… keeps what the
  * dashboard shows now — the page tab, the filters' values and the marks —
  * under a name, "Only me". It sits in the header with the dashboard's other
  * reading controls, before its settings gear.
@@ -190,7 +197,7 @@ export function Bookmarks({
     setSaid(`Applied the bookmark “${bookmark.name}”.`);
   };
 
-  /** An owner's change with nothing to ask first: said done, or why not. */
+  /** A change with nothing to ask first, its owner's or a Super-Admin's delete: said done, or why not. */
   const act = (bookmark: Saved, init: RequestInit, done: string, failed: string) => {
     closeAll();
     void fetch(urlOf(dashboardId, bookmark.id), init)
@@ -216,7 +223,23 @@ export function Bookmarks({
         apply(bookmark);
       },
     };
-    // Anyone else's: theirs to apply or copy, never to change (AC-293).
+    // Asks nothing first, as R61 has it for one's own.
+    const deleting: MenuItem = {
+      key: 'delete',
+      label: 'Delete',
+      danger: true,
+      separatorBefore: true,
+      onSelect: () => {
+        act(
+          bookmark,
+          { method: 'DELETE' },
+          `Deleted the bookmark “${bookmark.name}”.`,
+          `The bookmark “${bookmark.name}” was not deleted`,
+        );
+      },
+    };
+    // Anyone else's: theirs to apply or copy, never to change (AC-293); a
+    // Super-Admin's to delete too, where shared (T580, R61).
     if (!bookmark.mine)
       return [
         applying,
@@ -229,6 +252,7 @@ export function Bookmarks({
             setAsking({ kind: 'save', state: bookmark.state, copyOf: bookmark.name });
           },
         },
+        ...(bookmark.mayDelete ? [deleting] : []),
       ];
     return [
       applying,
@@ -276,20 +300,7 @@ export function Bookmarks({
               setAsking({ kind: 'share', bookmark });
             },
           },
-      {
-        key: 'delete',
-        label: 'Delete',
-        danger: true,
-        separatorBefore: true,
-        onSelect: () => {
-          act(
-            bookmark,
-            { method: 'DELETE' },
-            `Deleted the bookmark “${bookmark.name}”.`,
-            `The bookmark “${bookmark.name}” was not deleted`,
-          );
-        },
-      },
+      deleting,
     ];
   };
 

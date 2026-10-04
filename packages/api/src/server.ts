@@ -5620,16 +5620,19 @@ export function buildServer({
   /**
    * A bookmark as its viewer is told it (T367, AC-293): whether it is theirs
    * and whether it is shared, and, on another's shared one, who shared it by
-   * name. Nobody's key goes to anyone else.
+   * name. Nobody's key goes to anyone else. Whether they may delete it: their
+   * own, or, as a Super-Admin, another's shared one (T580; AC-293 as amended
+   * by R61).
    */
-  const bookmarkFor = (viewer: string, bookmark: Bookmark) => ({
+  const bookmarkFor = (viewer: { key: string; superAdmin: boolean }, bookmark: Bookmark) => ({
     id: bookmark.id,
     dashboardId: bookmark.dashboardId,
     name: bookmark.name,
     state: bookmark.state,
     shared: bookmark.shared,
-    mine: bookmark.owner === viewer,
-    ...(bookmark.owner === viewer ? {} : { sharedBy: bookmark.ownerName }),
+    mine: bookmark.owner === viewer.key,
+    mayDelete: bookmark.owner === viewer.key || (bookmark.shared && viewer.superAdmin),
+    ...(bookmark.owner === viewer.key ? {} : { sharedBy: bookmark.ownerName }),
   });
   const isBookmarkState = (state: unknown): state is Record<string, unknown> => {
     const record = (value: unknown): value is Record<string, unknown> =>
@@ -5656,9 +5659,9 @@ export function buildServer({
     if ((await itemFor(request, reply, 'dashboard', dashboardId, 'open')) === undefined)
       return reply;
     // Theirs (T366, AC-292), then those others share (T367, AC-293).
-    const viewer = userOf(request).key;
+    const viewer = userOf(request);
     return {
-      bookmarks: (await bookmarks.list(dashboardId, viewer)).map((each) =>
+      bookmarks: (await bookmarks.list(dashboardId, viewer.key)).map((each) =>
         bookmarkFor(viewer, each),
       ),
     };
@@ -5689,7 +5692,7 @@ export function buildServer({
       owner: user.key,
       ownerName: user.name,
     });
-    return reply.code(201).send(bookmarkFor(user.key, saved));
+    return reply.code(201).send(bookmarkFor(user, saved));
   });
 
   /**
@@ -5740,7 +5743,7 @@ export function buildServer({
       ownerName: user.name,
     });
     if (changed === undefined) return reply.code(404).send(NO_SUCH_BOOKMARK);
-    return bookmarkFor(user.key, changed);
+    return bookmarkFor(user, changed);
   });
 
   app.delete('/api/dashboards/:dashboardId/bookmarks/:id', USER, async (request, reply) => {
@@ -5753,10 +5756,15 @@ export function buildServer({
     const found = await bookmarks.get(dashboardId, id);
     if (found === undefined || (found.owner !== user.key && !found.shared))
       return reply.code(404).send(NO_SUCH_BOOKMARK);
-    if (found.owner !== user.key) return reply.code(403).send(NOT_BOOKMARK_OWNER);
-    // A delete of its own from elsewhere, first, leaves nothing for this one.
-    if (!(await bookmarks.remove(dashboardId, id, user.key)))
-      return reply.code(404).send(NO_SUCH_BOOKMARK);
+    // Another's shared one: a Super-Admin's to remove too, as one whose owner
+    // can no longer reach it would otherwise stay (T580; AC-293 as amended by R61).
+    const own = found.owner === user.key;
+    if (!own && !user.superAdmin) return reply.code(403).send(NOT_BOOKMARK_OWNER);
+    // A delete from elsewhere, first, or an unshare before this one, leaves nothing for it.
+    const removed = own
+      ? await bookmarks.remove(dashboardId, id, user.key)
+      : await bookmarks.removeShared(dashboardId, id);
+    if (!removed) return reply.code(404).send(NO_SUCH_BOOKMARK);
     return reply.code(204).send();
   });
 

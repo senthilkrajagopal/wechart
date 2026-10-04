@@ -71,6 +71,11 @@ export interface BookmarkStore {
   ): Promise<Bookmark | undefined>;
   /** Its owner's delete (T367, AC-293); false when it isn't `owner`'s, on that dashboard. */
   remove(dashboardId: string, id: string, owner: string): Promise<boolean>;
+  /**
+   * A Super-Admin's delete of a shared one, whoever's (T580; AC-293 as
+   * amended by R61); false when it isn't shared, on that dashboard.
+   */
+  removeShared(dashboardId: string, id: string): Promise<boolean>;
   /** A dashboard's bookmarks, everyone's, gone with it (T127's review). */
   removeFor(dashboardId: string): Promise<unknown>;
 }
@@ -187,6 +192,17 @@ export function bookmarkStore(db: Kysely<Database>): BookmarkStore {
         .where('id', '=', id)
         .where(dashboardOf, '=', dashboardId)
         .where('owner', '=', owner)
+        .executeTakeFirst();
+      return Number(gone.numDeletedRows) > 0;
+    },
+
+    async removeShared(dashboardId, id) {
+      const gone = await db
+        .deleteFrom('documents')
+        .where('kind', '=', 'bookmark')
+        .where('id', '=', id)
+        .where(dashboardOf, '=', dashboardId)
+        .where(sharedOf, '=', true)
         .executeTakeFirst();
       return Number(gone.numDeletedRows) > 0;
     },

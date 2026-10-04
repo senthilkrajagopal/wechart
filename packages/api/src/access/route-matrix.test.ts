@@ -1556,24 +1556,48 @@ const CASES: Record<string, Case> = {
         }
       }
   },
+  /**
+   * Deleted by its owner; and a shared one by a Super-Admin too (T580; AC-293
+   * as amended by R61), asked of one shared for it, so the world's stays.
+   */
   'DELETE /api/dashboards/:dashboardId/bookmarks/:id': async () => {
     for (const [owner, target] of OWNERS) {
       const bookmarksOf = `/api/dashboards/${at[target].dashboard}/bookmarks`;
-      // One of its owner's, made to be deleted.
-      const made_ = await ask(owner, {
-        method: 'POST',
-        url: bookmarksOf,
-        payload: { name: `${MARK} ${owner}'s doomed one`, state: BOOKMARKED },
-      });
-      answered(made_, `${owner} making one to delete`);
-      const doomed = made_.json<{ id: string }>().id;
-      for (const id of [ws[owner].bookmark, ws[owner].sharedBookmark, doomed])
-        for (const who of WHO)
-          if (who !== owner)
-            refused(
-              await ask(who, { method: 'DELETE', url: `${bookmarksOf}/${id}` }),
-              `${who} deleting ${owner}'s bookmark`,
-            );
+      // Two of its owner's, made to be deleted: one by them, one shared for a Super-Admin to.
+      const doomedOne = async (name: string) => {
+        const made_ = await ask(owner, {
+          method: 'POST',
+          url: bookmarksOf,
+          payload: { name: `${MARK} ${owner}'s ${name}`, state: BOOKMARKED },
+        });
+        answered(made_, `${owner} making ${name}`);
+        return made_.json<{ id: string }>().id;
+      };
+      const doomed = await doomedOne('doomed one');
+      const sharedDoomed = await doomedOne('doomed shared one');
+      answered(
+        await ask(owner, {
+          method: 'PATCH',
+          url: `${bookmarksOf}/${sharedDoomed}`,
+          payload: { shared: true },
+        }),
+        `${owner} sharing one to delete`,
+      );
+      for (const id of [ws[owner].bookmark, ws[owner].sharedBookmark, doomed, sharedDoomed])
+        for (const who of WHO) {
+          if (who === owner) continue;
+          // The world's shared one stays: a Super-Admin's delete is asked of the doomed one.
+          if (who === 'super' && (id === ws[owner].sharedBookmark || id === sharedDoomed)) continue;
+          refused(
+            await ask(who, { method: 'DELETE', url: `${bookmarksOf}/${id}` }),
+            `${who} deleting ${owner}'s bookmark`,
+          );
+        }
+      expect(
+        (await ask('super', { method: 'DELETE', url: `${bookmarksOf}/${sharedDoomed}` }))
+          .statusCode,
+        `super deleting ${owner}'s shared one`,
+      ).toBe(204);
       expect(
         (await ask(owner, { method: 'DELETE', url: `${bookmarksOf}/${doomed}` })).statusCode,
       ).toBe(204);

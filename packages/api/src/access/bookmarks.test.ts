@@ -127,9 +127,11 @@ describe('each bookmark its saver’s own, signed in (T366, AC-292)', () => {
 /**
  * T367, AC-293: WHEN a user shares a bookmark, THE SYSTEM SHALL list it for
  * everyone who may see the dashboard, labelled with who shared it. Only its
- * owner SHALL be able to change or unshare it.
+ * owner SHALL be able to change or unshare it; only its owner or a
+ * Super-Admin delete it (amended 2026-10-04, R61; T580, at the end).
  * `Fails when: someone who may see the dashboard doesn't see a shared
- * bookmark, or someone other than its owner can change or unshare it.`
+ * bookmark, someone other than its owner can change or unshare it, or
+ * someone other than its owner or a Super-Admin can delete it.`
  *
  * Rule 81: Mine before Shared, newest first within each; a new one "Only me".
  * After the tests above, `writer` and `reader` each have "My view", unshared.
@@ -143,6 +145,8 @@ describe('shared bookmarks, signed in (T367, AC-293)', () => {
     state: Record<string, unknown>;
     shared: boolean;
     mine: boolean;
+    /** Its owner's, or a Super-Admin's on another's shared one (T580). */
+    mayDelete: boolean;
     sharedBy?: string;
   }
   const url = (id: string, on = dashboard) => `/api/dashboards/${on}/bookmarks/${id}`;
@@ -182,6 +186,7 @@ describe('shared bookmarks, signed in (T367, AC-293)', () => {
       state: STATE,
       shared: false,
       mine: true,
+      mayDelete: true,
     });
     expect(named(await all('reader'))).toEqual([['My view', true]]);
   });
@@ -193,7 +198,15 @@ describe('shared bookmarks, signed in (T367, AC-293)', () => {
 
     expect([shared.statusCode, shared.json()]).toEqual([
       200,
-      { id, dashboardId: dashboard, name: 'Shared later', state: STATE, shared: true, mine: true },
+      {
+        id,
+        dashboardId: dashboard,
+        name: 'Shared later',
+        state: STATE,
+        shared: true,
+        mine: true,
+        mayDelete: true,
+      },
     ]);
     const asOthers = {
       id,
@@ -202,6 +215,7 @@ describe('shared bookmarks, signed in (T367, AC-293)', () => {
       state: STATE,
       shared: true,
       mine: false,
+      mayDelete: false,
       sharedBy: 'Wren Writer',
     };
     const readers = await all('reader');
@@ -210,8 +224,9 @@ describe('shared bookmarks, signed in (T367, AC-293)', () => {
       ['Shared later', false],
     ]);
     expect(readers[1]).toEqual(asOthers);
-    // A Super-Admin may open every dashboard; not their own, so under Shared.
-    expect(await all('super')).toEqual([asOthers]);
+    // A Super-Admin may open every dashboard; not their own, so under Shared,
+    // and theirs to delete (T580; AC-293, amended by R61).
+    expect(await all('super')).toEqual([{ ...asOthers, mayDelete: true }]);
     // Its owner's still, under Mine, newest first.
     expect(named(await all('writer'))).toEqual([
       ['Shared later', true],
@@ -240,7 +255,8 @@ describe('shared bookmarks, signed in (T367, AC-293)', () => {
     ]);
   });
 
-  it('lets nobody but its owner change, unshare or delete it, Super-Admins included', async () => {
+  // A Super-Admin may delete it since R61 (T580, below), and change it no more than before.
+  it('lets nobody but its owner change or unshare it, Super-Admins included, and no reader delete it', async () => {
     const { id } = await own('writer', 'Shared later');
     const before = (await all('reader')).find((each) => each.id === id);
 
@@ -256,8 +272,10 @@ describe('shared bookmarks, signed in (T367, AC-293)', () => {
           NOT_OWNER,
         ]);
       }
-      const deleting = await remove(who, id);
-      expect([deleting.statusCode, deleting.json()], `${who} deleting`).toEqual([403, NOT_OWNER]);
+      if (who === 'reader') {
+        const deleting = await remove(who, id);
+        expect([deleting.statusCode, deleting.json()], `${who} deleting`).toEqual([403, NOT_OWNER]);
+      } else expect((await all(who)).find((each) => each.id === id)?.mayDelete, who).toBe(true);
     }
     // Those who may not open the dashboard are told it isn't there.
     for (const who of ['manager', 'nobody']) {
@@ -266,7 +284,10 @@ describe('shared bookmarks, signed in (T367, AC-293)', () => {
     }
 
     expect((await all('reader')).find((each) => each.id === id)).toEqual(before);
-    expect((await all('super')).find((each) => each.id === id)).toEqual(before);
+    expect((await all('super')).find((each) => each.id === id)).toEqual({
+      ...before,
+      mayDelete: true,
+    });
   });
 
   it('answers one another hasn’t shared, one that isn’t there, and one of another dashboard, as not there', async () => {
@@ -301,6 +322,7 @@ describe('shared bookmarks, signed in (T367, AC-293)', () => {
       state: { ...STATE, page: 'p7' },
       shared: true,
       mine: false,
+      mayDelete: false,
       sharedBy: 'Wren Writer',
     });
 
@@ -337,6 +359,79 @@ describe('shared bookmarks, signed in (T367, AC-293)', () => {
     // Its own name again is no clash.
     expect((await change('writer', id, { name: 'Shared later' })).statusCode).toBe(200);
     expect((await own('writer', 'Shared later')).shared).toBe(true);
+  });
+
+  /**
+   * T580 (AC-293, amended 2026-10-04 by R61): a Super-Admin may delete any
+   * shared bookmark, and change none. One its owner can no longer reach is
+   * removed so, and stays listed until then.
+   */
+  describe('a Super-Admin deleting another’s shared bookmark (T580)', () => {
+    it('deletes a shared one, and is told it may; none unshared, and changes none', async () => {
+      expect((await save('writer', 'For super')).statusCode).toBe(201);
+      const { id } = await own('writer', 'For super');
+      expect((await change('writer', id, { shared: true })).statusCode).toBe(200);
+      const hidden = (await own('writer', 'My view')).id;
+
+      // Told it may, where a reader isn't.
+      const asSuper = (await all('super')).find((each) => each.id === id);
+      expect([asSuper?.mine, asSuper?.mayDelete]).toEqual([false, true]);
+      expect((await all('reader')).find((each) => each.id === id)?.mayDelete).toBe(false);
+      // An unshared one of another's isn't there for them, a Super-Admin's included.
+      const unshared = await remove('super', hidden);
+      expect([unshared.statusCode, unshared.json()]).toEqual([404, NO_SUCH]);
+      expect((await own('writer', 'My view')).id).toBe(hidden);
+
+      const deleted = await remove('super', id);
+
+      expect(deleted.statusCode, deleted.body).toBe(204);
+      for (const who of ['writer', 'reader', 'super'])
+        expect(
+          (await all(who)).map((each) => each.id),
+          who,
+        ).not.toContain(id);
+      // Gone, as one of its owner's own.
+      const again = await remove('writer', id);
+      expect([again.statusCode, again.json()]).toEqual([404, NO_SUCH]);
+    });
+
+    it('removes one whose owner can no longer open its dashboard, which stays listed until then', async () => {
+      // A dashboard writer could open, then can't: its folder's groups changed.
+      const lost = await make('folder', { title: 'Bookmarks T580', folderId: 'root' });
+      await folderAccessStore(getDb()).set(lost, {
+        readOnly: ['sales-ro'],
+        readWrite: ['sales-rw'],
+      });
+      const board = await make('dashboard', { title: 'Left behind', folderId: lost });
+      const url_ = `/api/dashboards/${board}/bookmarks`;
+      const made_ = await as('writer', {
+        method: 'POST',
+        url: url_,
+        payload: { name: 'Orphaned', state: STATE },
+      });
+      const { id } = made_.json<{ id: string }>();
+      expect(
+        (await as('writer', { method: 'PATCH', url: `${url_}/${id}`, payload: { shared: true } }))
+          .statusCode,
+      ).toBe(200);
+      await folderAccessStore(getDb()).set(lost, { readOnly: ['sales-ro'], readWrite: [] });
+
+      const listed = async (who: string) =>
+        (await as(who, { method: 'GET', url: url_ })).json<{ bookmarks: Listed[] }>().bookmarks;
+      // Its owner can neither see it nor remove it now.
+      expect((await as('writer', { method: 'DELETE', url: `${url_}/${id}` })).statusCode).toBe(404);
+      for (const who of ['reader', 'super'])
+        expect(
+          (await listed(who)).map((each) => [each.name, each.sharedBy]),
+          who,
+        ).toEqual([['Orphaned', 'Wren Writer']]);
+
+      const deleted = await as('super', { method: 'DELETE', url: `${url_}/${id}` });
+
+      expect(deleted.statusCode, deleted.body).toBe(204);
+      expect(await listed('reader')).toEqual([]);
+      expect(await listed('super')).toEqual([]);
+    });
   });
 });
 

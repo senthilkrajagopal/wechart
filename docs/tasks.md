@@ -6840,6 +6840,37 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       3. An owner who loses access to the dashboard can't stop sharing or delete their bookmark, and nobody else can, Super-Admins included. It stays listed "Shared by" them until the dashboard goes. Should a Super-Admin be able to remove it, or should it stop being listed?
       4. A shared bookmark holds its owner's filter values and marks as they are. Everyone who opens it receives them, including a viewer whose Cube rules hide those members (AC-008, AC-326). Their queries still run as them. Should sharing keep only what each viewer may see?
     - AC-293 is ticked.
+    - *2026-10-04 (R61):* the user answered 3, a Super-Admin may delete any shared bookmark (T580, AC-293 amended), and 4, a shared bookmark applies as saved. 1 and 2 are Claude's calls, overturnable: newest by when first saved, and deleting one's own doesn't ask.
+- [x] T580 (AC-293) Let a Super-Admin delete any shared bookmark, so one its owner can no longer reach can be removed *(added 2026-10-04, R61)*
+  - Files: `packages/api/src/repos/bookmarks.ts` (+ test), `packages/api/src/server.ts`, `packages/api/src/access/bookmarks.test.ts`, `packages/api/src/bookmarks.test.ts`, `packages/api/src/access/route-matrix.test.ts`, `packages/web/src/dashboard/bookmarks/Bookmarks.tsx` (+ test), `e2e/security/bookmarks.spec.ts`; also `docs/design/direction.md` (rule 81 amended)
+  - Failing test: `bookmarks.spec.ts`: `super` is offered Delete on `writer`'s shared bookmark and deletes it, and it is listed for neither `reader` nor `writer` after; `reader` is still offered only Apply and Save a copy to mine (AC-293 as amended; rule 81 as amended).
+  - Depends on: T367
+  - **Done 2026-10-04.**
+    - **The amendment.** AC-293 now says only its owner or a Super-Admin may delete a shared bookmark, which stays listed until then. Only its owner still changes or unshares one. Rule 81 says a Super-Admin also sees Delete on another's shared bookmark.
+    - **The store:** `removeShared` removes a bookmark only while it is shared, whoever's it is.
+    - **The route:** `DELETE /api/dashboards/:id/bookmarks/:bookmarkId` now also takes a Super-Admin's delete of another's shared bookmark.
+      - Another's unshared bookmark is still not there for them (404).
+      - Their `PATCH` of another's is still refused (403).
+      - A reader's delete is still 403.
+    - **The answer:** every listed bookmark now says `mayDelete`, true on one's own and, for a Super-Admin, on another's shared one. The popover offers Delete from it, after Apply and Save a copy to mine.
+    - **For the user** (Claude's call, overturnable): a Super-Admin's Delete of another's bookmark asks nothing first, as one's own doesn't (R61). It removes the bookmark for its owner and everyone else, with no undo. Nor is it in the audit trail, whose kinds (AC-294) don't include bookmarks. Should it ask first, or be recorded?
+    - **What the tests show:**
+      - `e2e/security/bookmarks.spec.ts` (Chrome, 15 tests): `super` is offered Apply, Save a copy to mine… and Delete on `writer`'s shared one. `super` deletes it from its ⋯, and neither `writer` nor `reader` finds it after; what else each had stays. `reader` is still offered Apply and Save a copy to mine only.
+      - `access/bookmarks.test.ts`, signed in:
+        - `super` is told it may delete; `reader` isn't;
+        - `super` deletes a shared one, and it's gone for everyone;
+        - `super`'s delete of another's unshared one answers 404;
+        - an orphan is removed: a shared bookmark whose owner's folder access was taken away is still listed "Shared by Wren Writer". Its owner's delete answers 404 and a Super-Admin's 204.
+      - `route-matrix.test.ts`: on each owner's dashboard, `super` deletes a bookmark shared for the case; everyone else's delete of each owner's bookmarks is refused.
+      - `repos/bookmarks.test.ts` and `Bookmarks.test.tsx`: the store's shared-only removal, and Delete offered where the API says.
+      - The full web (254 files) and API (153 files) suites. Two API files failed once on Dex 503s while an e2e run restarted Dex, and passed when run again alone.
+    - The e2e was written first, but run only once the change was in. The unit tests failed first, each for the reason expected.
+    - **The cold review (PASS)** led to:
+      - AC-293's "until" saying an unshare ends the listing too, not a delete alone;
+      - rule 81 saying Update, Rename and Stop sharing are the owner's alone, where it had listed Delete with them;
+      - T367's note telling the user's answers from Claude's calls;
+      - the comments that quoted AC-293 and rule 81 as they were.
+    - AC-293 is ticked again, as amended.
 
 ## P2.9 Audit trail (F32)
 
@@ -11636,7 +11667,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-284 | T349, T358 | AC-285 | T350, T451 | AC-286 | T351 |
 | AC-287 | T355, T356 | AC-288 | T352, ~~T426~~ T451 | AC-289 | T354, T357, T515 |
 | AC-290 | T353, T358 | AC-291 | T329, ~~T426~~ T451 | AC-292 | T366 |
-| AC-293 | T367 | AC-294 | T368, T505, T554, T555, T556 | AC-295 | T369 |
+| AC-293 | T367, T580 | AC-294 | T368, T505, T554, T555, T556 | AC-295 | T369 |
 | AC-353 | T506, T509 | AC-096 | T507 | | |
 | AC-354 | T508, T511 | AC-355 | T508, T511 | AC-356 | T508, T513 |
 | AC-357 | T508, T513 | AC-358 | T508, T514 | AC-359 | T508, T512 |
