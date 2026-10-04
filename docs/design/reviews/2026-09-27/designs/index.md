@@ -22,6 +22,8 @@ Ten static mockups that go with `../ui-review.md`.
 | 11 | [11-generate-cubes.html](11-generate-cubes.html) | MW-20 … MW-25 of `../../../critiques/2026-09-27-model-workspace.md` · AC-139, AC-249, AC-344 | *Added for R34, approved by R35.* **Generate cubes as design 01's docked pane:** 480 px beside the tree, the steps Source · Tables · Review, a context strip, a pinned foot (Back · Cancel · one primary, with the blocked reason), a Type pill, columns opening in place under their table, a status per generated file, clash bars with Open and Leave this table out, the YAML at full length, and the "Discard this generation?" question. It still publishes directly (D4). | Approved as drawn (R35). Its proposals approved by R36 (AC-345 … AC-351). |
 | 12 | [12-model-overview.html](12-model-overview.html) | MW-01 … MW-03 · AC-131, AC-344 | *Added for R34, approved by R35.* **The Model overview as a table:** one card, a row per cube or view (File, Kind, Name, counts, Members in a tooltip), a "+ New ▾" in the title row, the tree as design 03, and design 03's state C for New cube or New view. | Approved as drawn (R35). Its proposals approved by R36 (AC-345 … AC-351). |
 
+**Design 05, amended 2026-10-04 by [R60]** (the drawing is unchanged): the Reviews page has a third tab, "Calculation requests" (T383, AC-050). It lists the calculation requests asked of the folders the user may change, in this design's list and inspector: Cube, Folder, Asked by, Asked and Status, then the request opened beside the list. The top-bar Reviews control's count (state C) includes the open requests as well as the rows in To review (AC-287, rule 76).
+
 ## Findings not designed
 
 These are documented in the review without a mockup:

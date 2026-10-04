@@ -26,6 +26,7 @@ import { CubeClient } from './cube/client';
 import { buildFollower, startFollowingBuilds } from './jobs/follow';
 import { xcubePartitions } from './xcube/partitions';
 import { xcubeQueue } from './xcube/queue';
+import { calcRequestStore } from './repos/calc-requests';
 import { AUDIT_RETENTION_DAYS, startAuditRetention } from './audit/retention';
 import { readModelDir } from './model/read-dir';
 import { startModel } from './model/split';
@@ -277,6 +278,8 @@ async function main(): Promise<void> {
             token: () => service.token(),
           }),
         }),
+    // Calculations the quick calculations menu can't express (T383, AC-050).
+    calcRequests: calcRequestStore(db),
     // Read-only SQL run by xcube, on a data source's connection (T532, AC-373).
     ...(config.xcube === undefined || service === undefined
       ? {}

@@ -26,6 +26,7 @@ import { proposalStore } from '../repos/proposals';
 import { queryLog } from '../repos/query-log';
 import { CUBE_STORE_TARGET, sqlRunnerSwitches } from '../repos/sql-runner-switches';
 import { sqlRuns } from '../repos/sql-runs';
+import { calcRequestStore } from '../repos/calc-requests';
 import { versionStore } from '../repos/versions';
 import { scheduleStore, wechartScheduler } from '../scheduler/schedules';
 import { buildServer } from '../server';
@@ -127,6 +128,8 @@ const cubeOf = (place: Place) => `${mark}_${place.toLowerCase()}`;
  */
 const rollupOf = (place: Place) => `${mark}_rollup_${place.toLowerCase()}_r`;
 const tokenOf = (place: Place) => `${MARK}-token-${place}-t`;
+/** A place's calculation request (T383), ended so /A's is never found inside /A/B's. */
+const requestMark = (place: Place) => `${MARK} calc request in ${place}-q`;
 /** A group set on each folder beside the real one: none of the users is in it. */
 const groupOf = (place: Place) => `${MARK}-group-${place}`;
 
@@ -680,6 +683,8 @@ beforeAll(async () => {
               })),
             })) as typeof fetch,
     }),
+    // Calculation requests (T383).
+    calcRequests: calcRequestStore(getDb()),
     sqlRunner: xcubeSqlRunner({
       cubeApiUrl: secured.cubeApiUrl,
       model: 'dev',
@@ -994,6 +999,8 @@ afterAll(async () => {
     .where('data_source_id', 'is', null)
     .where('sql', 'like', `%${MARK}%`)
     .execute();
+  // The calculation requests the matrix asked (T383).
+  await db.deleteFrom('calc_requests').where('description', 'like', `${MARK}%`).execute();
   if (models.length > 0) await db.deleteFrom('model_files').where('path', 'in', models).execute();
   await db.deleteFrom('data_sources').where('name', 'like', `${mark}%`).execute();
   for (const id of extraSources) await db.deleteFrom('data_sources').where('id', '=', id).execute();
@@ -1744,14 +1751,22 @@ const CASES: Record<string, Case> = {
       ([owner]) => ws[owner].proposal,
     ),
   ),
-  // The count counts what "To review" lists them, never one they may not decide (AC-268's "counts").
+  /**
+   * The count counts what "To review" lists them and the open calculation
+   * requests listed to them (R60), never one they may not decide or see
+   * (AC-268's "counts"). Whatever order the cases run in.
+   */
   'GET /api/reviews/count': async () => {
     for (const who of WHO) {
       const counted = await ask(who, { method: 'GET', url: '/api/reviews/count' });
       const listing = await ask(who, { method: 'GET', url: '/api/reviews' });
+      const requests = await ask(who, { method: 'GET', url: '/api/calc-requests' });
       answered(counted, `${who} counting reviews`);
+      const open = requests
+        .json<{ requests: { status: string }[] }>()
+        .requests.filter((each) => each.status === 'open').length;
       expect(counted.json<{ waiting: number }>().waiting, `${who}'s count`).toBe(
-        listing.json<{ toReview: unknown[] }>().toReview.length,
+        listing.json<{ toReview: unknown[] }>().toReview.length + open,
       );
       if (who === 'nobody') expect(counted.json<{ waiting: number }>().waiting).toBe(0);
     }
@@ -1949,6 +1964,61 @@ const CASES: Record<string, Case> = {
         await ask(who, { method: 'POST', url: '/api/sql-runs/cancel' }),
         `${who} cancelling a run they don't have`,
       );
+  },
+  /**
+   * A calculation request (T383, AC-050): asked from a chart its asker may
+   * open, on a cube whose folder's models they may see (AC-263), of that
+   * folder's read-write members. Each place's is seen by those alone.
+   */
+  'POST /api/calc-requests': async () => {
+    const asking = (chartId: string, place: Place, about: string) => ({
+      method: 'POST' as const,
+      url: '/api/calc-requests',
+      payload: {
+        chartId,
+        cube: fullName(place),
+        fields: { measures: [`${fullName(place)}.count`] },
+        description: `${requestMark(place)} ${about}`,
+      },
+    });
+    for (const place of PLACES) {
+      secret(`calc request in ${place}`, (who) => writes(who, place), requestMark(place));
+      for (const who of WHO) {
+        const response = await ask(who, asking(at[place].libraryChart, place, `by ${who}`));
+        const where = `${who} asking a calculation of ${place}`;
+        if (seesAll(who, place)) expect(response.statusCode, where).toBe(201);
+        else refused(response, where);
+      }
+    }
+    // From a workspace chart: its own owner's to ask, and named to them alone (AC-276).
+    for (const [owner, target] of OWNERS)
+      expect(
+        (await ask(owner, asking(ws[owner].chart, target, `from ${owner}'s workspace`))).statusCode,
+      ).toBe(201);
+    refused(
+      await ask('super', asking(ws.writer.chart, 'AB', 'from writer’s workspace')),
+      "super asking from writer's workspace chart",
+    );
+  },
+  'GET /api/calc-requests': async () => {
+    for (const who of WHO) {
+      const answer = await ask(who, { method: 'GET', url: '/api/calc-requests' });
+      answered(answer, `${who} listing calculation requests`);
+      for (const place of PLACES)
+        expect(
+          answer.body.includes(requestMark(place)),
+          `${who} sees ${place}'s calculation requests`,
+        ).toBe(writes(who, place));
+      // With them asked, the Reviews count counts those listed, open (R60).
+      const open = answer
+        .json<{ requests: { status: string }[] }>()
+        .requests.filter((each) => each.status === 'open').length;
+      const toReview = (await ask(who, { method: 'GET', url: '/api/reviews' })).json<{
+        toReview: unknown[];
+      }>().toReview.length;
+      const counted = await ask(who, { method: 'GET', url: '/api/reviews/count' });
+      expect(counted.json<{ waiting: number }>().waiting, `${who}'s count`).toBe(toReview + open);
+    }
   },
   'DELETE /api/data-sources/:id': async () => {
     for (const place of PLACES)

@@ -675,6 +675,26 @@ describe('the menu on a measure pill (AC-047)', () => {
     );
   });
 
+  /** T383 / AC-050: a calculation the menu can't express is requested from it, by measure. */
+  it('asks for a calculation the menu can’t express on the measure whose menu it is', async () => {
+    const onRequest = vi.fn();
+    render(
+      <Wells
+        spec={spec}
+        available={[measure, amount]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        onCalculation={vi.fn()}
+        onRequest={onRequest}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Calculations on Total amount' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Request a calculation…' }));
+
+    expect(onRequest).toHaveBeenCalledWith('orders.total_amount');
+  });
+
   it('says nothing is paused once the chart has a time field again', () => {
     render(
       <Wells

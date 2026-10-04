@@ -63,6 +63,8 @@ import {
   chartRenamed,
   cubesOfDashboard,
   dashboardRenamed,
+  shortOf,
+  xcubeFolderOf,
 } from './model/bind';
 import { catalogOf, registerIntrospection } from './model/introspection';
 import type { Config } from './config';
@@ -93,6 +95,7 @@ import type { SqlRunnerSwitchStore } from './repos/sql-runner-switches';
 import type { XcubeSqlRunner } from './xcube/sql-runner';
 import type { SqlRunStore } from './repos/sql-runs';
 import type { BuildHistory } from './repos/build-history';
+import type { CalcRequestStore } from './repos/calc-requests';
 import { signsInOtherwise } from './routes/sql-runner-switch';
 import type { DataSourceLanding } from './routes/data-sources';
 import {
@@ -124,6 +127,7 @@ import {
   withChartsRenamed,
 } from './routes/workspace-copy';
 import { registerWorkspaceClear } from './routes/workspace-clear';
+import { registerCalcRequests } from './routes/calc-requests';
 import {
   editingText,
   freeName,
@@ -240,6 +244,8 @@ export interface BuildOptions {
   readonly buildPartitions?: XcubePartitions;
   /** wechart's own schedules, run by pg-boss (T378, AC-234). Unset: none are offered. */
   readonly schedules?: WechartScheduler;
+  /** Calculations the quick calculations menu can't express, asked of a model's folder (T383, AC-050). */
+  readonly calcRequests?: CalcRequestStore;
   /**
    * Where a data source lands before it is stored, and leaves before it is
    * removed (T442): xcube's connections. Unset without xcube.
@@ -466,6 +472,7 @@ export function buildServer({
   buildQueue,
   buildPartitions,
   schedules,
+  calcRequests,
   dataSourceLanding,
   connectionTest,
   connectionTests,
@@ -1428,6 +1435,22 @@ export function buildServer({
         : {
             folderOfXcube: async (xcubeId: string) =>
               [...(await folders()).ids].find(([, id]) => id === xcubeId)?.[0],
+          }),
+      // The open calculation requests listed to the user count with the
+      // proposals (R60): those of the folders they write, as the list has them.
+      ...(calcRequests === undefined
+        ? {}
+        : {
+            alsoWaiting: async (request: FastifyRequest) => {
+              const seen = await visibilityOf(request);
+              return calcRequests.openCount(
+                seen === undefined
+                  ? 'all'
+                  : [...seen.rights].flatMap(([folderId, right]) =>
+                      right.write ? [folderId] : [],
+                    ),
+              );
+            },
           }),
       // A landed dashboard shows only library charts on its folder's path:
       // any other as its own copy (T537, AC-371). With sign-in on, as T527.
@@ -3878,6 +3901,52 @@ export function buildServer({
         return (folderId: string) => pathOf(folderId);
       },
       inTurn,
+    });
+  }
+
+  /**
+   * Calculation requests (T383, AC-050): asked of the read-write members of
+   * the folder whose model defines the chart's cube. A cube's folder is the
+   * shared one its full name's prefix names, the root's where it has none.
+   */
+  if (calcRequests !== undefined) {
+    const folderOfCube = async (cube: string): Promise<string | undefined> => {
+      const xcubeId = xcubeFolderOf(cube);
+      if (xcubeId === null) return ROOT_FOLDER_ID;
+      const ids = (folders === undefined ? ROOT_ONLY : await folders()).ids;
+      for (const [folderId, published] of ids) if (published === xcubeId) return folderId;
+      return undefined;
+    };
+    registerCalcRequests(app, {
+      store: calcRequests,
+      userOf,
+      visibilityOf,
+      openableChart: async (_request, chartId, seen) => {
+        let stored: Stored | null | undefined;
+        try {
+          stored = await docs?.get?.('chart', chartId);
+        } catch (failure) {
+          if (failure instanceof ChartDocumentError) return undefined;
+          throw failure;
+        }
+        if (stored == null) return undefined;
+        if (seen !== undefined && !(await mayOpen(seen, 'chart', stored))) return undefined;
+        const title = stored.body['title'];
+        return { id: stored.id, title: typeof title === 'string' ? title : '' };
+      },
+      definedBy: async (cube) => {
+        const folderId = await folderOfCube(cube);
+        if (folderId === undefined || modelStore === undefined) return undefined;
+        // A shared folder's model alone: a workspace's cube is its owner's to change.
+        if ((await workspaceRootOf(folderId)) !== null) return undefined;
+        const name = shortOf(cube);
+        const file = (await modelStore.inFolders([folderId])).find((each) =>
+          declaredIn(each.content).some((declared) => declared.name === name),
+        );
+        return file === undefined ? undefined : { folderId, modelPath: file.path };
+      },
+      folderOfCube,
+      pathsOf,
     });
   }
 

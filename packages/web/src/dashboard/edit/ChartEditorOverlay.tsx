@@ -15,6 +15,7 @@ import {
 import type { TileSize } from '../../editor/PreviewFrame';
 import { SharedChartNotice } from '../../editor/SharedChartNotice';
 import { useQueryItem, type QueryItem } from '../../query/item';
+import { requestableChartId } from '../../editor/calcRequests';
 import { loadTile } from '../../query/loadTile';
 import { StateLine } from '../../shell/StatusIcon';
 import { tileChartOf } from '../chartSpec';
@@ -440,6 +441,9 @@ export function ChartEditorOverlay({
               Save dashboard (AC-214). */}
           <ChartEditor
             key={tileId ?? chartId}
+            // What a calculation request carries (T383, AC-050): a stored chart,
+            // never a draft the dashboard hasn't saved yet.
+            chartId={requestableChartId(chartId, opened?.version)}
             initial={view.initial}
             tile={tile}
             onChange={onChange}

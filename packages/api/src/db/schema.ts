@@ -169,6 +169,7 @@ export interface Database {
   build_runs: BuildRunTable;
   build_tokens: BuildTokenTable;
   schedules: ScheduleTable;
+  calc_requests: CalcRequestTable;
 }
 
 /** A wechart schedule (T378, AC-234): every partition of one pre-aggregation, at its times. */
@@ -226,6 +227,33 @@ export interface BuildTokenTable {
   finished_at: Date | null;
   log: JSONColumnType<{ at: string; status: string; table?: string }[], string | undefined, string>;
   lease_until: Date | null;
+}
+
+/**
+ * A calculation request (T383, AC-050): what the chart had in use and what
+ * its requester asked, for the read-write members of the folder whose model
+ * defines the chart's cube.
+ */
+export interface CalcRequestTable {
+  id: Generated<string>;
+  chart_id: string;
+  cube: string;
+  folder_id: string;
+  model_path: string;
+  fields: JSONColumnType<CalcRequestFields>;
+  description: string;
+  requested_by_key: string;
+  requested_by_name: string;
+  requested_at: Generated<Date>;
+  status: Generated<'open' | 'resolved'>;
+}
+
+/** The fields a chart had in use when a calculation was requested on it. */
+export interface CalcRequestFields {
+  readonly measures: readonly string[];
+  readonly dimensions: readonly string[];
+  readonly timeDimensions: readonly string[];
+  readonly filters: readonly string[];
 }
 
 /** The SQL runner switched on for a target (T531, AC-374): a data source's id, or `cubestore`. */

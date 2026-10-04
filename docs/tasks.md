@@ -7678,10 +7678,68 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - in Chrome, `quick-calcs.spec.ts` and the specs around the tiles passed after the review's fixes: titles, table-columns, table-view, tiles, chart-page, editor-preview, chart-editor, dashboard, filters, export, marked-share, library-chart and tile-menu (202 of 203).
       - The one failure, `editor-preview.spec.ts` "a tile resized in this session is previewed at its new height" (2 px against 1), fails alone too, and fails the same way on the unchanged base (`04cc5a4`, every change set aside). It is not this task's.
     - **For the user:** the paused note (R45.4) is drawn in the editor's Metrics well. A saved chart with a paused calculation draws the plain measure on dashboards and its page with no note. Should the tile say so too?
-- [ ] T383 (AC-050) Record a calculation request and show it to the read-write members of the folder whose model defines the cube
+- [x] T383 (AC-050, AC-287) Record a calculation request and show it to the read-write members of the folder whose model defines the cube
   - Files: `packages/api/src/repos/calc-requests.ts` (+ test), `packages/web/src/editor/RequestCalcDialog.tsx`
   - Failing test: `calc-requests.test.ts`: the request holds the chart, the fields and the description, and is listed for that folder's read-write members and no one else (AC-050).
   - Depends on: T380, T334, T325
+  - **As built:**
+    - api: `packages/api/src/db/migrations/1758560000000_calc-requests.cjs`, `packages/api/src/db/schema.ts`, `packages/api/src/repos/calc-requests.ts` (+ test), `packages/api/src/routes/calc-requests.ts` (+ test), `packages/api/src/routes/proposals.ts` (the count, R60), `packages/api/src/{server,main}.ts`, `packages/api/src/access/route-matrix.test.ts`;
+    - docs (R60): AC-287 and AC-050 amended in `docs/spec.md`, rule 76 and the Proposals row in `docs/design/direction.md`, `docs/design/references.md`'s Reviews page, and a note on design 05 in `docs/design/reviews/2026-09-27/designs/index.md` (the drawing unchanged);
+    - web: `packages/web/src/editor/{RequestCalcDialog.tsx,calcRequests.ts}` (+ tests), `packages/web/src/editor/{QuickCalcMenu,Wells,ChartEditor}.tsx` (+ QuickCalcMenu and Wells tests), `packages/web/src/workspaces/reviews/{calcRequests.ts,CalcRequestsPanel.tsx,ReviewsPage.tsx}` (+ panel and page tests), `packages/web/src/router/routes.tsx`, `packages/web/src/dashboard/edit/ChartEditorOverlay.tsx`;
+    - `e2e/security/calc-requests.spec.ts`.
+  - **Done 2026-10-04**, with R60 (the user, 2026-10-04: "Reviews tab + count").
+    - **Asking.** Each measure's menu in the chart editor ends with "Request a calculation…" on a stored chart: on its page, and in the overlay on a dashboard. A chart added, copied or duplicated there is a draft until the dashboard is saved, and gets none. Its dialog shows the fields the request carries, by group and title, and takes the user's description. The description is required, and counted against the Propose dialog's limit of 1,000 characters ("Shorten to 1,000 characters"; nothing is silently cut). Sent, it says where the request is listed; refused, it gives the API's reason and keeps what was written.
+    - **Recorded** (`POST /api/calc-requests`, `{ chartId, cube, fields, description }`). It keeps:
+      - the chart's id;
+      - its cube or view, by full name;
+      - the fields in use (metrics, dimensions, time and filters), as the editor has them unsaved;
+      - the description and who asked;
+      - the folder whose model defines the cube, and the model file there.
+      
+      That folder is the one the cube's prefix names (`f…__`), or the root for none, through xcube's folder ids. Its file is the one there declaring the cube's short name.
+      - Refused when the chart is one the user can't open (404).
+      - Refused when the cube is in no shared folder's model, a workspace's own cube included (409, "…so there is no one to ask. A cube of your own workspace is yours to change."). A cube in a folder whose models the user may not see (AC-263) answers the same, so a request reveals nothing.
+      - Refused when the description is empty or the fields aren't lists of names (400).
+    - **Shown** (`GET /api/calc-requests`) to the read-write members of that folder, Super-Admins among them, newest first, and to no one else. It is a third tab on the Reviews page, "Calculation requests" (`/reviews?tab=requests`), in design 05's list and inspector (R60).
+    - **Counted** (R60, amending AC-287 and rule 76): the top bar's Reviews count (`GET /api/reviews/count`) is the rows in To review plus the open requests listed to the user, those of the folders they write. A resolved request isn't counted.
+      - The list shows the cube, folder, asker, when and status. The inspector shows what they need, the fields in use and the model file.
+      - The chart is named, with a link, only to those who may open it. A chart in its asker's workspace is theirs alone (AC-276): "From a chart you can't open."
+      - A field of a cube in a folder the viewer can't see is counted, never named.
+    - **The route matrix** asks both routes as every user. A request is asked of each place from its library chart, and seen by that place's read-write members alone. A workspace chart's request names the chart to its owner alone, and another's workspace chart can't be asked from.
+    - **Tests:**
+      - `calc-requests.test.ts`, the repo's and the route's:
+        - recorded with the chart, fields and description;
+        - listed to writer and super, and to no reader, manager or nobody;
+        - the chart named to those who may open it;
+        - a field of a folder the viewer can't see counted, not named;
+        - each refusal;
+        - counted in the Reviews count of writer and super, by one, and in no one else's (R60).
+      - The route matrix, both routes as every user (105 with the calc tests).
+      - The web: `RequestCalcDialog`, `calcRequests`, `QuickCalcMenu`, `Wells`, `CalcRequestsPanel` and `ReviewsPage` tests.
+      - `e2e/security/calc-requests.spec.ts` (Chrome, 5 of 5):
+        - manager asks from the measure's menu in his workspace chart's editor, and the POST carries the chart, the fields and the description;
+        - writer sees it under Reviews › Calculation requests, with the fields and the description;
+        - manager, who writes only /Calc/West, doesn't;
+        - the top bar's Reviews control reads "Reviews, _n_ waiting", _n_ being writer's rows in To review plus the open requests listed to him (R60). **AC-050 ticked.**
+      - The full API suite (1392) and web suite passed before the review's fixes, and the touched tests after them.
+    - **The cold review (FAIL)** found one real bug, now fixed: the overlay offered a request on a dashboard's unsaved draft charts, and the API, having no chart of that id, refused it as "no such chart". It also found, now fixed:
+      - no test of the unseen-field count;
+      - the visibility read again for each request listed;
+      - "only its asker can open" said of any chart the viewer can't open;
+      - an invented 4,000-character limit.
+      
+      Left as found: the measure whose menu the request came from isn't stored, only the chart's fields.
+    - **The second review round (FAIL, on R60's changes)** found, now fixed and tested:
+      - the request's inspector drawn under the list, not beside it as design 05's is (`ReviewsPage.test.tsx`, and the e2e measures it right of the list);
+      - references.md still giving the old count rule twice;
+      - the route matrix asserting the count from before R60. It now counts To review plus the open requests listed, before the requests are asked and after;
+      - the AC wording;
+      - no test that a resolved request isn't counted (`calc-requests.test.ts`, the repo's).
+      
+      Left as found: a request sent doesn't refresh the asker's own Reviews pill, which reads again within 60 s; and `GET /api/calc-requests` opens each listed request's chart to see whether the viewer may.
+    - **Claude's call, overturnable:** the description's limit is the Propose dialog's 1,000 characters, with its counter (rule 75). No criterion sets one for requests.
+    - **Where requests are listed** was asked of the user, since design 05 and direction.md (binding, AC-343) gave the Reviews page two tabs and nothing placed requests. R60 answered: a third Reviews tab, counted in the top bar. AC-287, rule 76 and design 05's notes are amended to it.
+    - **The shared test databases:** node-pg-migrate checks that the migrations already applied match the files on disk, position by position. So this migration, applied before another agent's not-yet-applied one, breaks that agent's run. Each run here took it back out of the test databases straight after. It is numbered 1758560000000, after the 1758530000000s now on feat/xcube.
 - [ ] T384 (AC-051) Open a request's cube in the member's workspace model editor, with the request beside it
   - Files: `packages/web/src/workspaces/model/RequestPane.tsx` (+ test)
   - Failing test: `RequestPane.test.tsx`: opening a request copies the model into the member's workspace (or opens the copy) on the cube it names, with the request text beside the editor (AC-051).

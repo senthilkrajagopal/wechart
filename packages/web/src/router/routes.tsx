@@ -104,8 +104,10 @@ const reviewsRoute = createRoute({
     const router = useRouter();
     const searched = useRouterState({ select: (state) => state.location.searchStr });
     const params = new URLSearchParams(searched);
+    const tab = params.get('tab');
     const view: ReviewsView = {
-      tab: params.get('tab') === 'mine' ? 'mine' : 'to-review',
+      // Calculation requests have a tab of their own (T383, AC-050).
+      tab: tab === 'mine' || tab === 'requests' ? tab : 'to-review',
       selected: params.get('selected') ?? undefined,
     };
     return (
@@ -114,7 +116,7 @@ const reviewsRoute = createRoute({
           view={view}
           onView={(next) => {
             const search = new URLSearchParams();
-            if (next.tab === 'mine') search.set('tab', 'mine');
+            if (next.tab !== 'to-review') search.set('tab', next.tab);
             if (next.selected !== undefined) search.set('selected', next.selected);
             const text = search.toString();
             router.history.push(`/reviews${text === '' ? '' : `?${text}`}`);
@@ -542,6 +544,8 @@ function ChartEditorSurface() {
             key={chartId}
             // Its queries are for this chart (T340, AC-268).
             item={{ kind: 'chart', id: chartId }}
+            // What a calculation request carries (T383, AC-050).
+            chartId={chartId}
             initial={view.initial}
             onChange={setEdited}
             // Its folder's path, for the picker (T429, AC-329): a local chart's

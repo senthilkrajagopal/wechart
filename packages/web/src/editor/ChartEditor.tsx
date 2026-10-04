@@ -56,6 +56,8 @@ import { countryMarkingsOf, signatureOf, topTypeOf } from '../query/signature';
 import { canRedo, canUndo, discard, historyOf, isDirty, push, redo, undo } from './history';
 import { FieldList } from './FieldList';
 import { Wells } from './Wells';
+import { requestCalculation } from './calcRequests';
+import { RequestCalcDialog } from './RequestCalcDialog';
 import { cubesFrom, formatsOf, membersOf, shortTitlesOf, titlesOf, type Member } from './fields';
 
 /**
@@ -182,6 +184,11 @@ export interface ChartEditorProps {
    * Left out, the item around it: the dashboard it is edited on.
    */
   readonly item?: QueryItem | undefined;
+  /**
+   * The chart edited, by its id: what a calculation request carries (T383,
+   * AC-050). Given, each measure's menu offers "Request a calculation…".
+   */
+  readonly chartId?: string | undefined;
 }
 
 /** The inspector's tabs (AC-214, the prototype's Data and Customize). */
@@ -209,8 +216,11 @@ function EditorBody({
   head,
   busy = false,
   folderId,
+  chartId,
 }: Omit<ChartEditorProps, 'item'>) {
   const [history, setHistory] = useState(() => historyOf(initial));
+  /** The measure a calculation is being requested on (T383, AC-050), while its dialog is open. */
+  const [requesting, setRequesting] = useState<string | undefined>(undefined);
   const { cubeName, spec, chartType: chartTypeState, options, title } = history.present;
   /** The title as being typed, until it is set down (null: not being typed). */
   const [typedTitle, setTypedTitle] = useState<string | null>(null);
@@ -834,6 +844,8 @@ function EditorBody({
                 onCalculation={(member, calc) =>
                   setSpec((current) => applyQuickCalc(current, member, calc))
                 }
+                // Anything else, asked of whoever may change the model (T383, AC-050).
+                onRequest={chartId === undefined ? undefined : setRequesting}
                 // The last filter removed leaves none stored, as there were.
                 onFilters={(filters) =>
                   setSpec((current) => {
@@ -962,6 +974,42 @@ function EditorBody({
           onClose={closeGallery}
         />
       ) : null}
+      {requesting === undefined || chartId === undefined ? null : (
+        // A calculation the menu can't express (T383, AC-050): the chart, the
+        // fields it has in use and the user's description, asked of the
+        // people who may change the model that defines its cube.
+        <RequestCalcDialog
+          measureTitle={
+            available.find((member) => member.name === requesting)?.shortTitle ??
+            titles[requesting] ??
+            requesting
+          }
+          cubeTitle={sourceTitle}
+          fields={{
+            measures: spec.measures,
+            dimensions: spec.dimensions,
+            timeDimensions: spec.timeDimensions,
+            filters: (spec.filters ?? []).map((filter) => filter.member),
+          }}
+          titleOf={(member) => titles[member] ?? member}
+          onSend={async (description) => {
+            await requestCalculation({
+              chartId,
+              cube: spec.cube,
+              fields: {
+                measures: spec.measures,
+                dimensions: spec.dimensions,
+                timeDimensions: spec.timeDimensions,
+                filters: (spec.filters ?? []).map((filter) => filter.member),
+              },
+              description,
+            });
+          }}
+          onClose={() => {
+            setRequesting(undefined);
+          }}
+        />
+      )}
     </div>
   );
 }

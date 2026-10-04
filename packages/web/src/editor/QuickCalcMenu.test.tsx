@@ -141,3 +141,28 @@ describe('the menu on a measure (AC-047)', () => {
     expect(onApply).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * T383 / AC-050: WHEN the user requests a calculation the menu cannot
+ * express, THE SYSTEM SHALL record a request…: asked from the same menu,
+ * after the six.
+ */
+describe('asking for a calculation the menu can’t express (T383, AC-050)', () => {
+  it('ends the menu with a way to request one, where requests can be made', async () => {
+    const onRequest = vi.fn();
+    render(<QuickCalcMenu title="Count" tag="count" onApply={vi.fn()} onRequest={onRequest} />);
+    const menu = await open();
+    const items = within(menu).getAllByRole('menuitem');
+
+    expect(items.at(-1)?.textContent).toBe('Request a calculation…');
+    await userEvent.click(items.at(-1)!);
+    expect(onRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers none where no request can be made', async () => {
+    menuFor();
+    const menu = await open();
+
+    expect(within(menu).queryByRole('menuitem', { name: 'Request a calculation…' })).toBeNull();
+  });
+});

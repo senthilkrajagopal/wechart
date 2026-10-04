@@ -164,6 +164,12 @@ export interface ProposalRoutes {
   readonly bindings?: ProposalBindingStore;
   /** wechart's folder by its xcube id, to say where a name binds (T456). */
   readonly folderOfXcube?: (xcubeId: string) => Promise<string | undefined>;
+  /**
+   * What else waits for the user, counted with the proposals in the top bar's
+   * Reviews count (R60, amending AC-287 and rule 76): the open calculation
+   * requests listed to them. Unset, nothing else.
+   */
+  readonly alsoWaiting?: (request: FastifyRequest) => Promise<number>;
 }
 
 const NOT_THERE = { error: 'There is no such item in your workspace.' };
@@ -759,10 +765,17 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     );
   };
 
-  /** The top bar's count alone (T355's review): what "To review" lists, counted. */
+  /**
+   * The top bar's count alone (T355's review): what "To review" lists,
+   * counted, and the open calculation requests listed to the user (R60).
+   */
   app.get('/api/reviews/count', USER, async (request, reply) => {
     if (!routes.enabled) return reply.code(404).send({ error: 'Proposals need sign-in.' });
-    return { waiting: (await toDecide(request)).length };
+    const [proposals, requests] = await Promise.all([
+      toDecide(request),
+      routes.alsoWaiting?.(request) ?? Promise.resolve(0),
+    ]);
+    return { waiting: proposals.length + requests };
   });
 
   app.get('/api/reviews', USER, async (request, reply) => {

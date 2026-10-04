@@ -31,6 +31,11 @@ export interface QuickCalcMenuProps {
    * beside its name, where it can be read without pointing at it.
    */
   readonly whyNot?: ((kind: QuickCalcKind) => string | undefined) | undefined;
+  /**
+   * Asks for a calculation the menu can't express (T383, AC-050). Given, the
+   * menu ends with "Request a calculation…".
+   */
+  readonly onRequest?: (() => void) | undefined;
   readonly testId?: string;
 }
 
@@ -50,6 +55,7 @@ export function QuickCalcMenu({
   applied,
   onApply,
   whyNot,
+  onRequest,
   testId,
 }: QuickCalcMenuProps) {
   const label = `Calculations on ${title}`;
@@ -92,6 +98,18 @@ export function QuickCalcMenu({
         },
       };
     }),
+    // Anything else, asked of whoever may change the model (T383, AC-050).
+    ...(onRequest === undefined
+      ? []
+      : [
+          {
+            key: 'request',
+            testId: 'calc-request',
+            label: 'Request a calculation…',
+            separatorBefore: true,
+            onSelect: onRequest,
+          },
+        ]),
   ];
   return (
     <MenuButton

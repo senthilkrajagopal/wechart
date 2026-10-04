@@ -246,4 +246,64 @@ describe('the Reviews page (T355, AC-287)', () => {
     shown();
     expect((await screen.findByRole('alert')).textContent).toBe('Proposals need sign-in.');
   });
+
+  /**
+   * T383 / AC-050: a calculation request is shown to the read-write members
+   * of the folder whose model defines the chart's cube, under its own tab.
+   */
+  it('shows the calculation requests asked of the user’s folders under their own tab', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        url === '/api/reviews'
+          ? answer(200, LISTS)
+          : url === '/api/calc-requests'
+            ? answer(200, { requests: [] })
+            : answer(404, {}),
+      ),
+    );
+    shown();
+    await userEvent.click(await screen.findByRole('tab', { name: 'Calculation requests' }));
+
+    expect(
+      screen.getByRole('tab', { name: 'Calculation requests' }).getAttribute('aria-selected'),
+    ).toBe('true');
+    expect((await screen.findByTestId('requests-none')).textContent).toBe(
+      'No calculations have been asked of the folders you may change.',
+    );
+  });
+
+  /** T383's review: the request opens beside the list, as a proposal's summary does. */
+  it('opens a calculation request beside the list, as a proposal’s summary opens', async () => {
+    const request = {
+      id: 'r1',
+      chart: null,
+      cube: 'fsales__orders',
+      folderId: 'sales',
+      folderPath: ['Sales'],
+      modelPath: 'cubes/orders.yml',
+      fields: { measures: [], dimensions: [], timeDimensions: [], filters: [] },
+      unseenFields: 0,
+      description: 'Margin',
+      requestedBy: 'Manager',
+      requestedAt: at(27, 9),
+      status: 'open',
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        url === '/api/reviews'
+          ? answer(200, LISTS)
+          : url === '/api/calc-requests'
+            ? answer(200, { requests: [request] })
+            : answer(404, {}),
+      ),
+    );
+    const { container } = shown({ tab: 'requests' });
+    await userEvent.click(await screen.findByRole('button', { name: 'orders' }));
+
+    const summary = screen.getByRole('region', { name: 'Calculation on orders' });
+    expect(screen.getByRole('tabpanel').contains(summary)).toBe(false);
+    expect(summary.parentElement).toBe(container.querySelector('.reviews'));
+  });
 });

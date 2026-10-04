@@ -230,8 +230,8 @@ Traces to: `[R7]`, `[R2]`, `[research/cube/data-modeling.md]`.
       Fails when: the value is computed from the already-fetched rows, or the label does not name the calculation.
 - [x] AC-049 WHEN a quick calculation needs a time dimension and the chart has none, THE SYSTEM SHALL disable it and say which field is missing.
       Fails when: the calculation is offered and produces an error, or gives no reason when disabled.
-- [ ] AC-050 WHEN the user requests a calculation the menu cannot express, THE SYSTEM SHALL record a request carrying the chart, the fields in use and the user's description, and show it to the read-write members of the folder whose model defines the chart's cube.
-      Fails when: the request is stored without the chart reference, or is not shown to that folder's read-write members.
+- [x] AC-050 WHEN the user requests a calculation the menu cannot express, THE SYSTEM SHALL record a request carrying the chart, the fields in use and the user's description, and show it to the read-write members of the folder whose model defines the chart's cube, under Reviews › Calculation requests, counted in the top bar's Reviews count while open (amended 2026-10-04, `[R60]`).
+      Fails when: the request is stored without the chart reference, or is not shown to that folder's read-write members under Reviews › Calculation requests, or an open one is left out of their Reviews count (amended 2026-10-04, `[R60]`).
 - [ ] AC-051 WHEN a read-write member of that folder opens a calculation request, THE SYSTEM SHALL open the target cube's model in the model editor, in their workspace, with the request visible beside it.
       Fails when: the editor opens without the request, or on a different cube than the request names.
 - [ ] AC-052 WHEN a requested measure is added to the model and its proposal is approved into the folder, THE SYSTEM SHALL mark the request as resolved and name the member that resolves it.
@@ -1111,8 +1111,8 @@ Traces to: §P2.6 E, `[P2 input]`, `[R12, R17, R18]`.
       Fails when: the dashboard lands without those models, or the models land without the dashboard.
 - [ ] AC-286 THE SYSTEM SHALL let a proposal be approved or rejected only by its author, a read-write member of the target folder or a Super-Admin, and SHALL never let one land without an approval (`[R12, R17, R18]`).
       Fails when: a read-only member, or someone without access, can approve; or a proposal lands unapproved.
-- [x] AC-287 THE SYSTEM SHALL show each user, in the app, the proposals they may approve, each with its item, folder, author and description, and their number in the top bar. There are no notices outside the app (`[R12]`).
-      Fails when: a proposal the user may approve is missing, the number differs from the list, or a proposal is shown to someone who may not approve it.
+- [x] AC-287 THE SYSTEM SHALL show each user, in the app, the proposals they may approve, each with its item, folder, author and description, and their number in the top bar, counted together with the open calculation requests listed to them (AC-050). There are no notices outside the app (`[R12]`; amended 2026-10-04, `[R60]`).
+      Fails when: a proposal the user may approve is missing, ~~the number differs from the list~~ the number differs from the rows in To review plus the open calculation requests listed to them (amended 2026-10-04, `[R60]`), or a proposal is shown to someone who may not approve it.
 - [ ] AC-288 WHEN a proposal is approved and ~~the whole model still compiles~~ every module it affects still compiles with it (AC-321), THE SYSTEM SHALL put its item into the folder, replacing any item of the same kind and name, and keep the replaced version in the item's history, a copy wechart holds (`[R17, AD 6, R27]`; amended 2026-09-25; amended 2026-09-26, `[IP 5]`).
       Fails when: the folder shows the old version after an approval that passed the check; the replaced version is missing from history; or an approval that fails the check changes the folder.
 - [x] AC-289 THE SYSTEM SHALL keep an item's last 10 versions, each with its author, approver, time and description, show them to the folder's read-write members and to Super-Admins only, and SHALL let a read-write member restore one through a proposal (`[R17, R23]`).

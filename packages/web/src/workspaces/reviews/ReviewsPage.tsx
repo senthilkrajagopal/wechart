@@ -4,6 +4,7 @@ import { useEffect, useId, useRef } from 'react';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { onTabKey } from '../../shell/tabKeys';
+import { CalcRequestSummary, CalcRequestsPanel } from './CalcRequestsPanel';
 import {
   folderText,
   includesText,
@@ -24,7 +25,7 @@ import {
  *
  * The tab and the proposal chosen live in the address, so a reload keeps them.
  */
-export type ReviewsTab = 'to-review' | 'mine';
+export type ReviewsTab = 'to-review' | 'mine' | 'requests';
 
 export interface ReviewsView {
   readonly tab: ReviewsTab;
@@ -56,6 +57,8 @@ export function ReviewsPage({
   const tabs: [ReviewsTab, string, number | undefined][] = [
     ['to-review', 'To review', lists.data?.toReview.length],
     ['mine', 'My proposals', undefined],
+    // Asked of the folders the user may change (T383, AC-050).
+    ['requests', 'Calculation requests', undefined],
   ];
 
   return (
@@ -90,7 +93,16 @@ export function ReviewsPage({
         </div>
 
         <div id={`${ids}-panel`} role="tabpanel" aria-labelledby={`${ids}-tab-${view.tab}`}>
-          {lists.isError ? (
+          {view.tab === 'requests' ? (
+            <CalcRequestsPanel
+              selected={view.selected}
+              onSelect={(selected) => {
+                onView({ tab: 'requests', selected });
+              }}
+              summaryId={`${ids}-summary`}
+              now={now}
+            />
+          ) : lists.isError ? (
             <StateLine kind="err" role="alert">
               {lists.error.message}
             </StateLine>
@@ -183,7 +195,17 @@ export function ReviewsPage({
         </div>
       </div>
 
-      {chosen === undefined ? null : (
+      {view.tab === 'requests' ? (
+        // Beside the list, as a proposal's summary is (design 05; T383's review).
+        <CalcRequestSummary
+          id={`${ids}-summary`}
+          selected={view.selected}
+          now={now}
+          onClose={() => {
+            onView({ tab: 'requests' });
+          }}
+        />
+      ) : chosen === undefined ? null : (
         <Summary
           id={`${ids}-summary`}
           row={chosen}

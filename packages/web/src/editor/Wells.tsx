@@ -143,6 +143,11 @@ export interface WellsProps {
    * or taken off. Given, each measure in Metrics carries the menu.
    */
   readonly onCalculation?: (member: string, calc: QuickCalc | undefined) => void;
+  /**
+   * Asks for a calculation the menu can't express, on this measure (T383,
+   * AC-050). Given, each measure's menu ends with "Request a calculation…".
+   */
+  readonly onRequest?: ((member: string) => void) | undefined;
   /** The chart's own filters, changed in the Filters well (AC-216). */
   readonly onFilters?: (filters: readonly ChartFilter[]) => void;
   /** How many categories are kept before the rest fold into Other (AC-216, AC-041). */
@@ -179,6 +184,7 @@ export function Wells({
   dragging = null,
   onGranularity,
   onCalculation,
+  onRequest,
   onFilters,
   topN,
   onTopN,
@@ -348,6 +354,13 @@ export function Wells({
                           applied={spec.calculations?.[member]}
                           onApply={(calc) => onCalculation(member, calc)}
                           whyNot={whyNotOn(member)}
+                          onRequest={
+                            onRequest === undefined
+                              ? undefined
+                              : () => {
+                                  onRequest(member);
+                                }
+                          }
                           testId={`calcs-${member}`}
                         />
                       ) : known?.aggType === undefined ? null : (

@@ -1262,12 +1262,13 @@ Widths and heights are direction.md tokens unless the Tokens section says otherw
   - The proposal is a snapshot. Later edits add "You've changed it since proposing; those changes aren't in the proposal." (see open point 2)
 - **Reviews control** in the top bar: an icon, the label "Reviews" and a count pill.
   - It is shown only to users who may approve anything (Super-Admins, anyone in a read-write group, single-user mode).
-  - Count = rows in To review. The pill is hidden at 0.
+  - ~~Count = rows in To review.~~ Count = rows in To review plus the open calculation requests listed to the user (amended 2026-10-04, [R60]). The pill is hidden at 0.
   - Accessible name: "Reviews, 3 waiting".
   - It isn't in the workspace switcher, so AC-001's switcher list stays exact.
-- **Reviews page** (`/reviews`): a list plus a full-height inspector (AC-228's layout). There are two tabs:
+- **Reviews page** (`/reviews`): a list plus a full-height inspector (AC-228's layout). There are ~~two~~ three tabs (amended 2026-10-04, [R60]):
   - **To review (_n_):** every open proposal the user may approve, their own included and tagged "Yours".
   - **My proposals:** the user's proposals in every state.
+  - **Calculation requests:** those asked of the folders the user may change (AC-050). The top bar's count includes the open ones.
   - Columns: Item (icon and name), Kind, Target folder, Author, Proposed, Includes ("+2 models"), and Status.
   - Selecting a row shows a summary in the inspector with **Open review**. **Approve and Reject are not offered here** (principle 9).
   - Empty states: "Nothing is waiting for your review." / "You haven't proposed anything yet. Proposals start from items in My workspace."
@@ -1423,7 +1424,7 @@ No new colours and no new type sizes. Each new value is below with its provenanc
 73. Every workspace item shows its origin ("Copied from _path_ · version _n_" or "New") and its target folder. The Edit in my workspace dialog for a dashboard lists models and data sources unchecked, and says that uncopied ones are used from their folders.
 74. Creating a dashboard, chart, model or data source in the workspace asks for a target folder from a picker that lists only folders where the user has read-write access.
 75. The Propose dialog names the target and says whether the item is new or replaces version _n_. It warns when the item it replaces isn't its origin, and lists bundled workspace models with the reason and no way to remove them. Its description counter reads "_n_ / 1,000" and blocks submission above 1,000 without truncating.
-76. The top-bar Reviews control appears only to users who may approve something. Its count equals the rows in To review, and its accessible name includes the count.
+76. The top-bar Reviews control appears only to users who may approve something. ~~Its count equals the rows in To review~~ Its count equals the rows in To review plus the open requests in Calculation requests, and its accessible name includes the count (amended 2026-10-04, [R60]).
 77. Approve and Reject are available only in the review view. That view renders the proposed item: a drawn dashboard with a Proposed / Current switch, a model YAML diff, or a data-source settings diff with no credential values. Approve asks for confirmation. Reject offers an optional reason with a "_n_ / 1,000" counter.
 78. When the reviewer is the author, the review view says so and the button reads "Approve my own proposal".
 79. Proposal states always pair an icon and a label: Waiting for review, Approved, Rejected. A rejected workspace item shows the approver, the time and the reason at the top of the item.
