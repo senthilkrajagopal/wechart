@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { cubePicker } from './cubePicker';
 import { wellPicker } from './wells';
 import { seedDashboardCopy } from './workspace';
 
@@ -79,7 +80,7 @@ test('the chart editor offers no width or height field either', async ({ page })
   // "Anywhere in the editor" is the criterion's wording, and a tile's pencil
   // leads here.
   await page.goto('/explore/charts/seed-chart-empty/edit');
-  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  await cubePicker(page).selectOption({ label: 'Orders' });
   await expect(page.getByTestId('member-orders.count')).toBeVisible();
 
   // An empty editor renders almost none of its controls, so a sweep of it

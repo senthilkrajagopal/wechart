@@ -3,7 +3,8 @@ import { useState } from 'react';
 
 import { metaQueryOf, useWorkspaceItem } from '../query/meta';
 import { FOLDERS_QUERY } from '../workspaces/explore/folders';
-import { cubesOnPath } from './pathCubes';
+import { CubePicker } from './CubePicker';
+import { pickerGroupsOf } from './pathCubes';
 import { missingScopeOf, ScopeUnavailable } from '../query/scopes';
 import { StateLine } from '../shell/StatusIcon';
 import {
@@ -13,7 +14,6 @@ import {
   groupByCube,
   matchesSearch,
   membersOf,
-  type CubeSummary,
   type Member,
 } from './fields';
 
@@ -92,31 +92,6 @@ export interface FieldListProps {
 
 const NONE_USED: ReadonlySet<string> = new Set();
 
-/** A cube in the picker: its title, and "(view)" for a view. */
-const optionOf = (cube: CubeSummary) => (
-  <option key={cube.name} value={cube.name}>
-    {cube.title}
-    {cube.isView ? ' (view)' : ''}
-  </option>
-);
-
-/**
- * The picker's cubes by their folder path (T429, AC-329): the root's first,
- * then each folder down the path; those with no path, as they come.
- */
-function groupedByPath(
-  cubes: readonly CubeSummary[],
-): { path: string | undefined; cubes: CubeSummary[] }[] {
-  const groups: { path: string | undefined; cubes: CubeSummary[] }[] = [];
-  for (const cube of cubes) {
-    const group = groups.find((each) => each.path === cube.folderPath);
-    if (group === undefined) groups.push({ path: cube.folderPath, cubes: [cube] });
-    else group.cubes.push(cube);
-  }
-  const depth = (path: string | undefined) => (path === undefined ? -1 : path.split(' / ').length);
-  return groups.sort((a, b) => depth(a.path) - depth(b.path));
-}
-
 export function FieldList({
   cubeName: controlled,
   onCubeChange,
@@ -145,6 +120,10 @@ export function FieldList({
   const meta = useQuery({ ...metaQueryOf(workspace), refetchOnMount: 'always' });
   // The folders, for the path the picker offers (T429, AC-329).
   const folders = useQuery({ ...FOLDERS_QUERY, enabled: folderId !== undefined });
+  // For a workspace item, the folders' own cubes: its overlay holds its copy
+  // in place of the cube it copies, which the picker lists as hidden by the
+  // copy (T475's review, AC-342).
+  const published = useQuery({ ...metaQueryOf(undefined), enabled: workspace !== undefined });
 
   if (meta.isPending) return <StateLine kind="run">Loading the model…</StateLine>;
   if (meta.isError) {
@@ -158,20 +137,28 @@ export function FieldList({
   }
 
   const cubes = cubesFrom(meta.data);
-  // Only those on the chart's folder path, each name's nearest (AC-329); the
-  // chart's own cube too, so the picker still says what it is built on.
-  const onPath = cubesOnPath(cubes, folderId, folders.data ?? [], workspace?.targetFolderId);
-  const offered = onPath.some((cube) => cube.name === cubeName)
-    ? onPath
-    : [...onPath, ...cubes.filter((cube) => cube.name === cubeName)];
+  // The cubes on the chart's folder path, by folder, nearest first, a farther
+  // one of a name a nearer one holds listed as hidden (AC-329, AC-342; T475).
+  // The chart's own cube is named on the button whether listed or not.
+  const groups = pickerGroupsOf(
+    cubes,
+    folderId,
+    folders.data ?? [],
+    workspace?.targetFolderId,
+    published.data === undefined ? undefined : cubesFrom(published.data),
+  );
   /**
    * A cube as a reader knows it: its title, or — for one the model does not
    * publish, whose members a view shows — its name written as words, never
-   * the identifier (T229's review).
+   * the identifier (T229's review); for a folder's, its short name, never
+   * the folder prefix, which no short name holds (AC-329; T475's review;
+   * research `xcube-slice-3a.md`, "Names").
    */
   const cubeTitle = (name: string) =>
     cubes.find((cube) => cube.name === name)?.title ??
-    name.replace(/_/g, ' ').replace(/^./, (first) => first.toUpperCase());
+    (name.split('__').pop() ?? name)
+      .replace(/_/g, ' ')
+      .replace(/^./, (first) => first.toUpperCase());
   const members = cubeName ? membersOf(meta.data, cubeName) : [];
   const found = members.filter((member) => matchesSearch(member, search));
   const byCube = groupByCube(found);
@@ -179,26 +166,18 @@ export function FieldList({
   return (
     <div className="field-list">
       <div className="field-list__source">
-        <label htmlFor="cube-picker">Cube or view</label>
-        <select
-          id="cube-picker"
-          className="select-sm"
+        {/* Design 10's picker (T475): each by its title under its folder
+            path, never its prefixed name (AC-329), nearest first. */}
+        <CubePicker
+          groups={groups}
           value={cubeName}
-          onChange={(event) => setCubeName(event.target.value)}
-        >
-          <option value="">Choose a cube or view…</option>
-          {/* Each by its title under its folder path, never its prefixed
-              name (AC-329): the root's first, then down the path. */}
-          {groupedByPath(offered).map(({ path, cubes: inPath }) =>
-            path === undefined ? (
-              inPath.map((cube) => optionOf(cube))
-            ) : (
-              <optgroup key={path} label={path}>
-                {inPath.map((cube) => optionOf(cube))}
-              </optgroup>
-            ),
-          )}
-        </select>
+          valueTitle={
+            cubeName === ''
+              ? undefined
+              : `${cubeTitle(cubeName)}${cubes.find((cube) => cube.name === cubeName)?.isView === true ? ' (view)' : ''}`
+          }
+          onChoose={setCubeName}
+        />
       </div>
 
       {cubeName === '' ? (

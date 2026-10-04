@@ -1,5 +1,6 @@
 import { expect, type APIRequestContext, type Page } from '@playwright/test';
 
+import { cubePicker } from './cubePicker';
 import { ownCubeFile, PUBLISHED } from './model-files';
 import { wellPicker } from './wells';
 import { newInMyWorkspace } from './workspace';
@@ -59,11 +60,10 @@ export async function newChartOnCountries(
   // New in My workspace, to go to Finance, as the single user makes one (T359).
   await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
   await expect(page).toHaveURL(/\/edit\?new=true$/);
-  await expect(page.getByLabel('Cube or view').locator(`option[value="${cube}"]`)).toHaveCount(
-    1,
-    PUBLISHED,
-  );
-  await page.getByLabel('Cube or view').selectOption(cube);
+  const picker = cubePicker(page);
+  await picker.open();
+  await expect(picker.optionOf(cube)).toHaveCount(1, PUBLISHED);
+  await picker.selectOption(cube);
   await wellPicker(page, 'measures').selectOption(`${cube}.total`);
   return cube;
 }

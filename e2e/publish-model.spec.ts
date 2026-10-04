@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { cubePicker } from './cubePicker';
 import { ownCubeFile, ownModelCopy, PUBLISHED } from './model-files';
 
 /**
@@ -36,7 +37,7 @@ test('a measure published in the Model workspace is in the chart builder’s fie
   // Another tab with the builder open before the publish: its model is loaded.
   const other = await context.newPage();
   await other.goto('/explore/charts/seed-chart-empty/edit');
-  await other.getByLabel('Cube or view').selectOption({ value: cube });
+  await cubePicker(other).selectOption({ value: cube });
   await expect(other.getByTestId(`member-${cube}.count`)).toBeVisible();
 
   // Every request the page makes from here, to show a save asks wechart
@@ -55,7 +56,7 @@ test('a measure published in the Model workspace is in the chart builder’s fie
 
   // The chart builder, which reads the model from Cube's /v1/meta through wechart.
   await page.goto('/explore/charts/seed-chart-empty/edit');
-  await page.getByLabel('Cube or view').selectOption({ value: cube });
+  await cubePicker(page).selectOption({ value: cube });
   await expect(page.getByTestId(`member-${cube}.published`)).toBeVisible();
 
   // And the other tab, opening the builder again within the app — no reload,
@@ -64,12 +65,12 @@ test('a measure published in the Model workspace is in the chart builder’s fie
     window.history.pushState({}, '', '/explore');
     window.dispatchEvent(new PopStateEvent('popstate'));
   });
-  await expect(other.getByLabel('Cube or view')).toHaveCount(0);
+  await expect(cubePicker(other).button).toHaveCount(0);
   await other.evaluate(() => {
     window.history.pushState({}, '', '/explore/charts/seed-chart-empty/edit');
     window.dispatchEvent(new PopStateEvent('popstate'));
   });
-  await other.getByLabel('Cube or view').selectOption({ value: cube });
+  await cubePicker(other).selectOption({ value: cube });
   await expect(other.getByTestId(`member-${cube}.published`)).toBeVisible();
   expect(await members()).toContain(`${cube}.published`);
 });

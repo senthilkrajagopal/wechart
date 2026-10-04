@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { cubePicker } from './cubePicker';
 import { IN_MY_WORKSPACE } from './workspace';
 
 const API = 'http://localhost:4100/api';
@@ -85,5 +86,5 @@ test('a chart added to a dashboard is its own, local, and in no folder or search
     .getByRole('button', { name: /^Edit Chart\b/ })
     .first()
     .click();
-  await expect(page.getByLabel('Cube or view')).toBeVisible();
+  await expect(cubePicker(page).button).toBeVisible();
 });

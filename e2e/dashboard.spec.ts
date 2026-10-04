@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
+import { cubePicker } from './cubePicker';
 import { chartGone } from './store';
 import { IN_MY_WORKSPACE, landedAs, seedDashboardCopy, shared } from './workspace';
 
@@ -708,7 +709,8 @@ test('E on a focused tile opens its chart editor', async ({ page }) => {
   // chart it came from.
   await expect(page.getByTestId('chart-editor-overlay')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Chart editor' })).toBeVisible();
-  await expect(page.getByLabel('Cube or view')).toHaveValue('orders');
+  await expect(cubePicker(page).button).toHaveAttribute('data-value', 'orders');
+  await expect(cubePicker(page).button).toContainText('Orders');
   await expect(page.getByTestId('in-measures-orders.count')).toBeVisible();
   await expect(page.getByTestId('in-dimensions-products.category')).toBeVisible();
   await expect.poll(() => new URL(page.url()).searchParams.get('edit')).toBe('tile-status');

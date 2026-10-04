@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { cubePicker } from './cubePicker';
+
 /**
  * AC-025: WHEN the user opens the chart editor, THE SYSTEM SHALL list the cubes
  * and views available from `/v1/meta` and, once one is chosen, its measures,
@@ -18,10 +20,10 @@ const CUBE_HOST_PORT = '54000';
 test('lists the cubes and views from the model', async ({ page }) => {
   await page.goto('/explore/charts/seed-chart-empty/edit');
 
-  const picker = page.getByLabel('Cube or view');
-  await expect(picker).toBeVisible();
+  const picker = cubePicker(page);
+  await expect(picker.button).toBeVisible();
 
-  const options = await picker.locator('option').allTextContents();
+  const options = await picker.titles();
   expect(options).toContain('Orders');
   expect(options).toContain('Customers');
   expect(options).toContain('Products');
@@ -31,7 +33,7 @@ test('shows a chosen cube’s members grouped by type', async ({ page }) => {
   await page.goto('/explore/charts/seed-chart-empty/edit');
   await expect(page.getByTestId('no-cube-chosen')).toBeVisible();
 
-  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  await cubePicker(page).selectOption({ label: 'Orders' });
 
   // Measures, dimensions and time dimensions are separate groups.
   await expect(page.getByTestId('group-measure')).toBeVisible();
@@ -55,7 +57,7 @@ test('the browser asks wechart for metadata and never Cube (AC-007)', async ({ p
   page.on('request', (request) => requested.push(request.url()));
 
   await page.goto('/explore/charts/seed-chart-empty/edit');
-  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  await cubePicker(page).selectOption({ label: 'Orders' });
   await expect(page.getByTestId('member-orders.count')).toBeVisible();
 
   // It really did fetch metadata -- otherwise the next assertion proves nothing.
@@ -73,7 +75,7 @@ test('no response reaching the browser carries the Cube secret (AC-007)', async 
   });
 
   await page.goto('/explore/charts/seed-chart-empty/edit');
-  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  await cubePicker(page).selectOption({ label: 'Orders' });
   await expect(page.getByTestId('member-orders.count')).toBeVisible();
 
   expect(bodies.some((body) => body.includes('dev-secret'))).toBe(false);

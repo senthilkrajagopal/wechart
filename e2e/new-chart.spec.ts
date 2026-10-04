@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { cubePicker } from './cubePicker';
 import { wellPicker } from './wells';
 import { newInMyWorkspace } from './workspace';
 
@@ -29,7 +30,7 @@ test('New › Chart opens the editor on an untitled chart, and saving it opens i
   await expect(page.getByLabel('Chart title')).toHaveValue('Untitled chart');
 
   // A field, and Save.
-  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  await cubePicker(page).selectOption({ label: 'Orders' });
   await wellPicker(page, 'measures').selectOption('orders.count');
   await page.getByRole('button', { name: 'Save chart' }).click();
 
@@ -67,7 +68,7 @@ test('a title typed and saved at once, without leaving the field, is the one sav
   await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
   await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit\?new=true$/);
 
-  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  await cubePicker(page).selectOption({ label: 'Orders' });
   await wellPicker(page, 'measures').selectOption('orders.count');
   const field = page.getByLabel('Chart title');
   await field.fill(title);

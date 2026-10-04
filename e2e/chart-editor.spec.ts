@@ -2,6 +2,7 @@ import { CHART_TYPES } from '@wechart/core';
 import { expect, test } from '@playwright/test';
 
 import { chooseChartType, expectChartType } from './chartType';
+import { cubePicker } from './cubePicker';
 import { wellPicker } from './wells';
 import { IN_MY_WORKSPACE, myCopyOf, newInMyWorkspace } from './workspace';
 
@@ -17,7 +18,7 @@ import { IN_MY_WORKSPACE, myCopyOf, newInMyWorkspace } from './workspace';
  */
 async function openEditorOnOrders(page: import('@playwright/test').Page) {
   await page.goto('/explore/charts/seed-chart-empty/edit');
-  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  await cubePicker(page).selectOption({ label: 'Orders' });
   await expect(page.getByTestId('member-orders.count')).toBeVisible();
 }
 
@@ -48,7 +49,7 @@ test('the wells wait for a cube or view, saying so, then take fields', async ({ 
     await expect(add).toHaveAccessibleDescription('Choose a cube or view first.');
   }
 
-  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  await cubePicker(page).selectOption({ label: 'Orders' });
   await expect(note).toHaveCount(0);
   for (const name of ['Add to Metrics', 'Add to Dimensions', 'Add to Time', 'Add a filter']) {
     await expect(page.getByRole('button', { name })).toBeEnabled();
@@ -323,7 +324,7 @@ test('discard restores the chart as it opened', async ({ page }) => {
 
 test('nothing to undo or discard when the editor opens', async ({ page }) => {
   await page.goto('/explore/charts/seed-chart-empty/edit');
-  await expect(page.getByLabel('Cube or view')).toBeVisible();
+  await expect(cubePicker(page).button).toBeVisible();
 
   await expect(page.getByTestId('undo')).toBeDisabled();
   await expect(page.getByTestId('redo')).toBeDisabled();
@@ -393,7 +394,7 @@ test('the drawer shows result rows, underlying rows and the query', async ({ pag
  */
 test('the underlying rows work on a cube that publishes no primary key', async ({ page }) => {
   await page.goto('/explore/charts/seed-chart-empty/edit');
-  await page.getByLabel('Cube or view').selectOption({ label: 'Customers' });
+  await cubePicker(page).selectOption({ label: 'Customers' });
   await expect(page.getByTestId('member-customers.count')).toBeVisible();
   await wellPicker(page, 'measures').selectOption('customers.count');
   await wellPicker(page, 'dimensions').selectOption('customers.country');
@@ -523,7 +524,7 @@ test('a scatter, a heatmap, small multiples and a pivot draw from the wells', as
   await expect.poll(painted).toBeGreaterThanOrEqual(6);
 
   // A heatmap: products' categories across, their names down, a cell each.
-  await page.getByLabel('Cube or view').selectOption({ label: 'Products' });
+  await cubePicker(page).selectOption({ label: 'Products' });
   await wellPicker(page, 'measures').selectOption('products.count');
   await wellPicker(page, 'dimensions').selectOption('products.category');
   await wellPicker(page, 'dimensions').selectOption('products.name');
@@ -638,7 +639,7 @@ test('a top N folds the rest into “Other (n)” or leaves it out, and a row li
   page,
 }) => {
   await page.goto('/explore/charts/seed-chart-empty/edit');
-  await page.getByLabel('Cube or view').selectOption({ label: 'Products' });
+  await cubePicker(page).selectOption({ label: 'Products' });
   await expect(page.getByTestId('member-products.count')).toBeVisible();
   await wellPicker(page, 'measures').selectOption('products.count');
   await wellPicker(page, 'dimensions').selectOption('products.name');
@@ -738,7 +739,9 @@ test.describe('opening a saved chart (AC-182)', () => {
     await page.goto(SAVED);
 
     // The criterion's first failing state: "the editor opens with empty wells".
-    await expect(page.getByLabel('Cube or view')).toHaveValue('orders');
+    await expect(cubePicker(page).button).toHaveAttribute('data-value', 'orders');
+    // Named by its title (T475's review).
+    await expect(cubePicker(page).button).toContainText('Orders');
     await expect(page.getByTestId('in-measures-orders.count')).toBeVisible();
     await expect(page.getByTestId('in-dimensions-products.category')).toBeVisible();
     await expect(page.getByTestId('in-dimensions-orders.status')).toBeVisible();
@@ -821,7 +824,7 @@ test.describe('opening a saved chart (AC-182)', () => {
      */
     await page.goto('/explore/charts/seed-chart-empty/edit');
 
-    await expect(page.getByLabel('Cube or view')).toHaveValue('');
+    await expect(cubePicker(page).button).toHaveAttribute('data-value', '');
     await expect(page.getByTestId('no-cube-chosen')).toBeVisible();
   });
 
@@ -836,7 +839,7 @@ test.describe('opening a saved chart (AC-182)', () => {
     await expect(page.getByTestId('editor-load-error')).toHaveText(
       'This chart is no longer available.',
     );
-    await expect(page.getByLabel('Cube or view')).toBeHidden();
+    await expect(cubePicker(page).button).toBeHidden();
   });
 });
 
@@ -1205,7 +1208,7 @@ test('a two-measure legend, the results headers and the trace read the members�
  */
 test('a pie over two dimensions has a legend entry per slice', async ({ page }) => {
   await page.goto('/explore/charts/seed-chart-empty/edit');
-  await page.getByLabel('Cube or view').selectOption({ label: 'Products' });
+  await cubePicker(page).selectOption({ label: 'Products' });
   await wellPicker(page, 'measures').selectOption('products.count');
   await wellPicker(page, 'dimensions').selectOption('products.category');
   await wellPicker(page, 'dimensions').selectOption('products.name');

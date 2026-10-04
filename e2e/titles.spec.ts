@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
+import { cubePicker } from './cubePicker';
 import { wellPicker } from './wells';
 import { IN_MY_WORKSPACE } from './workspace';
 
@@ -22,7 +23,7 @@ const INTERNAL = /\b(orders|customers)\.[a-z_]+/;
 
 async function openEditorOnOrders(page: Page) {
   await page.goto('/explore/charts/seed-chart-empty/edit');
-  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  await cubePicker(page).selectOption({ label: 'Orders' });
   await expect(page.getByTestId('member-orders.count')).toBeVisible();
 }
 

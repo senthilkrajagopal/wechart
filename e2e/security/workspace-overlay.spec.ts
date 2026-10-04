@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import type { APIRequestContext } from '@playwright/test';
 import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
+import { cubePicker } from '../cubePicker';
 import { landed } from '../model-files';
 import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtures';
 
@@ -295,13 +296,26 @@ test.describe('My workspace’s overlay (T347, AC-323)', () => {
       made.chart = ((await chart.json()) as { id: string }).id;
       await page.goto(`/explore/charts/${made.chart}/edit?new=true`);
 
-      const picker = page.getByRole('combobox', { name: 'Cube or view' });
+      // Design 10's picker (T475): My workspace's group first.
+      const list = await cubePicker(page).open();
       // This run's own, by its full name: other specs, running beside this
       // one, add cubes of their own to the same writer's workspace (T543's
       // report), so the group's count isn't this test's to know.
-      const mine = picker.locator(`optgroup[label="My workspace"] option[value="${full(CUBE)}"]`);
+      const mine = list
+        .getByRole('group', { name: 'My workspace' })
+        .locator(`[data-cube="${full(CUBE)}"]`);
       await expect(mine).toHaveCount(1);
-      await expect(mine).toHaveAttribute('value', full(CUBE));
+      // Pickable, with its path beside it.
+      await expect(mine).not.toHaveAttribute('aria-disabled', 'true');
+      await expect(mine).toContainText('My workspace');
+      await expect(list.getByRole('group').first()).toHaveAttribute('aria-label', 'My workspace');
+      // The folder's own, which the copy replaces in the overlay, listed in its
+      // folder and unselectable, "hidden by your copy" (AC-342; design 10, state D).
+      const original = list
+        .getByRole('group', { name: FOLDER, exact: true })
+        .locator(`[data-cube="${full(CUBE)}"]`);
+      await expect(original).toHaveAttribute('aria-disabled', 'true');
+      await expect(original).toContainText(`${FOLDER} · hidden by your copy`);
     });
 
     test('answers from a data source copied in and pointed at another database, the folder’s from its own (AC-280)', async ({

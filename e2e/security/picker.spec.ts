@@ -1,5 +1,6 @@
-import type { APIRequestContext } from '@playwright/test';
+import type { APIRequestContext, Page } from '@playwright/test';
 
+import { cubePicker } from '../cubePicker';
 import { landed } from '../model-files';
 import { expect, test } from './fixtures';
 import { changeShared, proposeShared } from './shared-change';
@@ -34,6 +35,17 @@ async function publish(request: APIRequestContext, folderId: string, name: strin
   };
   expect(await landed(request, folderId, [file])).toEqual([file]);
 }
+
+/** The muted ink a dimmed row is drawn in: direction.md §5's text-muted, as the page has it. */
+const hiddenColour = (page: Page) =>
+  page.evaluate(() => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--wc-text-muted)';
+    document.body.append(probe);
+    const colour = getComputedStyle(probe).color;
+    probe.remove();
+    return colour;
+  });
 
 /** A chart made in a folder, as New › Chart makes one. */
 async function chartIn(request: APIRequestContext, folderId: string, title: string) {
@@ -106,34 +118,72 @@ test.describe('cubes bound and picked on a folder’s path (T429)', () => {
     const id = await chartIn(page.request, ids.b, `Picker chart ${RUN}`);
     await page.goto(`/explore/charts/${id}/edit?new=true`);
 
-    const picker = page.getByRole('combobox', { name: 'Cube or view' });
-    await expect(picker).toBeVisible();
-    // /A/B's own `picker_sales`, with /A/B's path: not /A's, nor /A/B/C's.
-    // Once the folders are read: /A/B's group, not only the root's.
-    await expect(
-      picker.locator(`optgroup[label="Shared / Picker A ${RUN} / Picker B ${RUN}"]`),
-    ).toHaveCount(1);
-    // Each cube by its title, under its folder path.
-    const options = await picker.locator('option').evaluateAll((all) =>
-      (all as HTMLOptionElement[]).map((option) => ({
-        value: option.value,
-        text: option.textContent ?? '',
-        path:
-          option.parentElement instanceof HTMLOptGroupElement ? option.parentElement.label : null,
+    // Design 10's picker, state D (T475): its folders' groups, nearest first.
+    const picker = cubePicker(page);
+    const list = await picker.open();
+    await expect(page.getByRole('combobox', { name: 'Search cubes and views' })).toBeFocused();
+    const AB = `Picker A ${RUN} / Picker B ${RUN}`;
+    // Once the folders are read: /A/B's group first, not only the root's.
+    await expect(list.getByRole('group').first()).toHaveAttribute('aria-label', AB);
+    const options = await list.getByRole('option').evaluateAll((all) =>
+      all.map((option) => ({
+        cube: option.getAttribute('data-cube') ?? '',
+        group: option.closest('[role="group"]')?.getAttribute('aria-label') ?? null,
+        title: option.querySelector('.cube-picker__title')?.textContent ?? '',
+        path: option.querySelector('.cube-picker__path')?.textContent ?? '',
+        hidden: option.getAttribute('aria-disabled') === 'true',
       })),
     );
-    const sales = options.filter((option) => option.value.endsWith('picker_sales'));
-    expect(sales).toEqual([
-      { value: bFull(), text: 'Picker Sales', path: `Shared / Picker A ${RUN} / Picker B ${RUN}` },
+    // /A/B's own `picker_sales`, by its title with /A/B's path; /A/B/C's not at all.
+    const sales = options.filter((option) => option.cube.endsWith('picker_sales'));
+    expect(sales.filter((option) => !option.hidden)).toEqual([
+      { cube: bFull(), group: AB, title: 'Picker Sales', path: AB, hidden: false },
     ]);
+    expect(sales.some((option) => option.cube.includes(ids.c.replaceAll('-', '')))).toBe(false);
     // No sibling's cube.
-    expect(options.some((option) => option.value.endsWith('picker_widgets'))).toBe(false);
-    // The root's, under the root's path.
-    expect(options).toContainEqual({ value: 'orders', text: 'Orders', path: 'Shared' });
-    // Never a prefixed name, and every cube under its folder path.
-    for (const option of options.filter((each) => each.value !== ''))
-      expect(option.path, option.value).toMatch(/^Shared/);
-    for (const option of options) expect(option.text).not.toContain('__');
+    expect(options.some((option) => option.cube.endsWith('picker_widgets'))).toBe(false);
+    // The root's, under the root's name.
+    expect(options).toContainEqual({
+      cube: 'orders',
+      group: 'Shared',
+      title: 'Orders',
+      path: 'Shared',
+      hidden: false,
+    });
+    // Never a prefixed name, and every cube with its folder path.
+    for (const option of options) {
+      expect(`${option.title} ${option.path}`, option.cube).not.toContain('__');
+      expect(option.path, option.cube).not.toBe('');
+    }
+  });
+
+  /**
+   * T475, AC-342: WHEN a cube on the item's folder path is hidden by a nearer
+   * cube of the same name, THE SYSTEM SHALL list it in the cube picker dimmed
+   * and unselectable, saying which folder's cube hides it.
+   * `Fails when: a hidden farther cube is missing from the list, can be
+   * picked, or doesn't say what hides it.`
+   */
+  test('lists /A’s picker_sales under /A, dimmed and unpickable, hidden by /A/B’s (AC-342)', async ({
+    page,
+  }) => {
+    const id = await chartIn(page.request, ids.b, `Hidden chart ${RUN}`);
+    await page.goto(`/explore/charts/${id}/edit?new=true`);
+    const picker = cubePicker(page);
+    const list = await picker.open();
+    const A = `Picker A ${RUN}`;
+    const AB = `${A} / Picker B ${RUN}`;
+    await expect(list.getByRole('group').first()).toHaveAttribute('aria-label', AB);
+    const hidden = list
+      .getByRole('group', { name: A, exact: true })
+      .locator(`[data-cube="f${ids.a.replaceAll('-', '')}__picker_sales"]`);
+    await expect(hidden).toHaveAttribute('aria-disabled', 'true');
+    await expect(hidden).toContainText(`${A} · hidden by Picker Sales in ${AB}`);
+    await expect(hidden).toHaveCSS('color', await hiddenColour(page));
+    // It can't be picked: the button still names none. Forced, as a person's
+    // click is: Playwright waits on a control that says it is disabled.
+    await hidden.click({ force: true });
+    await expect(picker.button).toHaveAttribute('data-value', '');
   });
 
   /**

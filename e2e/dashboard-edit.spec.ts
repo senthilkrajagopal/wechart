@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
+import { cubePicker } from './cubePicker';
 import { myCopyOf } from './workspace';
 
 /**
@@ -84,7 +85,7 @@ test('selecting a chart tile opens its Properties: chart, ownership, marking and
 
   // Edit chart opens the chart editor on it.
   await chart.getByRole('button', { name: 'Edit chart' }).click();
-  await expect(page.getByLabel('Cube or view')).toBeVisible();
+  await expect(cubePicker(page).button).toBeVisible();
 });
 
 /**

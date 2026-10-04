@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
+import { cubePicker } from './cubePicker';
 import { wellPicker } from './wells';
 import { IN_MY_WORKSPACE, newInMyWorkspace } from './workspace';
 
@@ -11,7 +12,7 @@ import { IN_MY_WORKSPACE, newInMyWorkspace } from './workspace';
  */
 async function openEditorWithCount(page: Page) {
   await page.goto('/explore/charts/seed-chart-empty/edit');
-  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  await cubePicker(page).selectOption({ label: 'Orders' });
   await expect(page.getByTestId('member-orders.count')).toBeVisible();
   await wellPicker(page, 'measures').selectOption('orders.count');
   await expect(page.getByTestId('in-measures-orders.count')).toBeVisible();
@@ -64,7 +65,7 @@ test.describe('the menu on a measure (AC-047)', () => {
     await expect(page).toHaveURL(/\/explore\/charts\/[^/]+\/edit\?new=true$/);
     const id = /\/explore\/charts\/([^/]+)\/edit\?new=true$/.exec(page.url())?.[1] ?? '';
 
-    await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+    await cubePicker(page).selectOption({ label: 'Orders' });
     await wellPicker(page, 'measures').selectOption('orders.count');
     await page
       .getByTestId('in-measures-orders.count')
@@ -137,7 +138,7 @@ test.describe('a calculation over time on a chart with no time field (AC-049)', 
     page,
   }) => {
     await page.goto('/explore/charts/seed-chart-empty/edit');
-    await page.getByLabel('Cube or view').selectOption({ label: 'Products' });
+    await cubePicker(page).selectOption({ label: 'Products' });
     await wellPicker(page, 'measures').selectOption('products.count');
     await page
       .getByTestId('in-measures-products.count')
@@ -427,7 +428,7 @@ test('the menu on an average disables % of total, running total and moving avera
   page,
 }) => {
   await page.goto('/explore/charts/seed-chart-empty/edit');
-  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  await cubePicker(page).selectOption({ label: 'Orders' });
   await wellPicker(page, 'measures').selectOption('orders.average_amount');
   await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
   const pill = page.getByTestId('in-measures-orders.average_amount');
@@ -458,7 +459,7 @@ test('a running total is paused while the chart has no time field, and runs agai
   page,
 }) => {
   await page.goto('/explore/charts/seed-chart-empty/edit');
-  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  await cubePicker(page).selectOption({ label: 'Orders' });
   // Time first, so the plain count is first asked once Ordered at is taken out.
   await wellPicker(page, 'timeDimensions').selectOption('orders.ordered_at');
   await wellPicker(page, 'measures').selectOption('orders.count');

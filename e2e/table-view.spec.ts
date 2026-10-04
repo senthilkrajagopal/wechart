@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { chooseChartType } from './chartType';
 import { newChartOnCountries } from './countries';
+import { cubePicker } from './cubePicker';
 import { wellPicker } from './wells';
 
 /**
@@ -26,7 +27,7 @@ import { wellPicker } from './wells';
  */
 async function openEditorWithEveryWellFilled(page: Page, chartType: string) {
   await page.goto('/explore/charts/seed-chart-empty/edit');
-  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  await cubePicker(page).selectOption({ label: 'Orders' });
   await expect(page.getByTestId('member-orders.count')).toBeVisible();
 
   await wellPicker(page, 'measures').selectOption('orders.count');

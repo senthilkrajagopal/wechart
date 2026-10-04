@@ -8,6 +8,7 @@ import {
   proposedModel,
   PUBLISHED,
 } from './model-files';
+import { cubePicker } from './cubePicker';
 import { wellPicker } from './wells';
 
 /**
@@ -636,7 +637,7 @@ test('a chart’s acceleration panel says which rollup serves it, and what stops
   }).toPass({ timeout: 90_000, intervals: [2_000] });
 
   await page.goto('/explore/charts/seed-chart-empty/edit');
-  await page.getByLabel('Cube or view').selectOption({ value: 'monthly_orders' });
+  await cubePicker(page).selectOption({ value: 'monthly_orders' });
   await wellPicker(page, 'measures').selectOption('monthly_orders.count');
   await wellPicker(page, 'dimensions').selectOption('monthly_orders.status');
   /**
@@ -678,7 +679,7 @@ test('a chart’s acceleration panel says which rollup serves it, and what stops
 
   // A cube with no rollups says so, by titles (T403, AC-220): the re-critique
   // read "Stopped by orders.count: orders has no pre-aggregations."
-  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  await cubePicker(page).selectOption({ label: 'Orders' });
   await wellPicker(page, 'measures').selectOption('orders.count');
   await expect(page.getByTestId('acceleration-miss')).toHaveText(
     'Not served from a pre-aggregation. Stopped by Orders Count: Orders has no pre-aggregations.',
@@ -699,7 +700,7 @@ test('a chart’s acceleration panel says which rollup serves it, and what stops
 test('a chart no rollup serves is warned of depending on the source database', async ({ page }) => {
   const cube = { timeout: 30_000 };
   await page.goto('/explore/charts/seed-chart-empty/edit');
-  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  await cubePicker(page).selectOption({ label: 'Orders' });
   await wellPicker(page, 'measures').selectOption('orders.count');
 
   // On the chart itself, beside its result — nothing to open first (T153's
@@ -721,7 +722,7 @@ test('a chart no rollup serves is warned of depending on the source database', a
   ).toBeVisible(cube);
 
   // A chart the rollup serves: no warning, on the chart or in the panel.
-  await page.getByLabel('Cube or view').selectOption({ value: 'monthly_orders' });
+  await cubePicker(page).selectOption({ value: 'monthly_orders' });
   await wellPicker(page, 'measures').selectOption('monthly_orders.count');
   await wellPicker(page, 'dimensions').selectOption('monthly_orders.status');
   await expect(page.getByTestId('acceleration-matched')).toBeVisible(cube);

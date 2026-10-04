@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
+import { cubePicker } from './cubePicker';
 import { IN_MY_WORKSPACE } from './workspace';
 
 /**
@@ -172,7 +173,8 @@ test('Edit chart opens the chart editor on it', async ({ page, request }) => {
   await expect(page.getByRole('heading', { name: 'Chart editor' })).toBeVisible();
   // On this chart: loaded, with its cube chosen.
   await expect(page.getByTestId('editor-load-error')).toHaveCount(0);
-  await expect(page.getByLabel('Cube or view')).toHaveValue('orders');
+  await expect(cubePicker(page).button).toHaveAttribute('data-value', 'orders');
+  await expect(cubePicker(page).button).toContainText('Orders');
 });
 
 test('a chart with no fields yet says what to do, not that something failed', async ({

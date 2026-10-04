@@ -8145,6 +8145,82 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
 .field-list { display: grid; align-content: start; }
 .field-list__source { display: grid; gap: 4px; padding: 8px 12px 0; }
 .field-list__source > label { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--wc-text-secondary); }
+/* The cube picker as the 2026-09-27 design 10 draws it (T475, state D): the
+   button as the select it replaced; a 520 px list under it with its search
+   box, a 12/600 heading per folder, 32 px rows of a C or V chip, the title
+   and the path in 12 px secondary at the right, a hidden one in text-muted. */
+.cube-picker { position: relative; display: grid; gap: 4px; }
+.cube-picker__label { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--wc-text-secondary); }
+.cube-picker__button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.cube-picker__button > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cube-picker__pop {
+  /* Fixed to the window at the button (CubePicker places it), so the field
+     pane's scrolling box doesn't cut it to the pane's width. */
+  position: fixed;
+  z-index: 30;
+  width: min(520px, calc(100vw - 32px));
+  background: var(--wc-bg-raised);
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  box-shadow: var(--wc-shadow-pop);
+}
+.cube-picker__field { position: relative; margin: 10px; }
+.cube-picker__glyph { position: absolute; left: 10px; top: 9px; color: var(--wc-text-muted); pointer-events: none; }
+.cube-picker__field > input.cube-picker__search:not([type='checkbox']) {
+  display: block;
+  width: 100%;
+  height: 32px;
+  padding-left: 30px;
+  font-size: var(--wc-text-sm-size);
+}
+.cube-picker__list { max-height: 360px; overflow: auto; padding-bottom: 6px; border-top: 1px solid var(--wc-border-subtle); }
+.cube-picker__group {
+  padding: 8px 10px 2px;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  font-weight: var(--wc-text-xs-strong-weight);
+  color: var(--wc-text-secondary);
+}
+.cube-picker__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  font-size: var(--wc-text-sm-size);
+  cursor: pointer;
+}
+.cube-picker__option:hover,
+.cube-picker__option[aria-selected='true'] { background: var(--wc-bg-hover); }
+.cube-picker__kind {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--wc-bg-role-dimension-soft);
+  color: var(--wc-role-dimension);
+  font-size: var(--wc-text-xs-size);
+  font-weight: var(--wc-text-xs-strong-weight);
+}
+.cube-picker__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cube-picker__path { margin-left: auto; flex: none; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+/* Hidden by a nearer cube of its name (AC-342): dimmed, and no pointer. */
+.cube-picker__option.is-hidden { color: var(--wc-text-muted); cursor: default; }
+.cube-picker__option.is-hidden:hover { background: none; }
+.cube-picker__option.is-hidden .cube-picker__kind { opacity: 0.6; }
+.cube-picker__option.is-hidden .cube-picker__path { color: var(--wc-text-muted); }
+.cube-picker__none { margin: 10px; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
 .field-list__search-box { padding: 8px 12px; }
 .field-list__search { width: 100%; }
 .field-list ul { margin: 0; padding: 0; list-style: none; }

@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Locator } from '@playwright/test';
 
 import { chooseChartType, expectChartType } from './chartType';
+import { cubePicker } from './cubePicker';
 import { ownCubeFile, PUBLISHED } from './model-files';
 import { wellPicker } from './wells';
 import { IN_MY_WORKSPACE, newInMyWorkspace } from './workspace';
@@ -24,7 +25,7 @@ test('a box plot of order amounts by status draws a box per status from the rows
   await newInMyWorkspace(page, 'Chart', 'seed-folder-0');
   await expect(page).toHaveURL(/\/edit\?new=true$/);
 
-  await page.getByLabel('Cube or view').selectOption({ label: 'Orders' });
+  await cubePicker(page).selectOption({ label: 'Orders' });
   await wellPicker(page, 'measures').selectOption('orders.total_amount');
   await wellPicker(page, 'dimensions').selectOption('orders.status');
 

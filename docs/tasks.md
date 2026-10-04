@@ -10920,6 +10920,33 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
 - [ ] T475 (AC-329, AC-342, AC-343) The cube picker as design 10: cubes on the item's path grouped by folder, and a hidden same-named cube dimmed
   - Failing test: `picker.spec.ts`: the picker groups cubes by folder along the item's path, by title; a farther same-named cube is listed dimmed and unselectable, saying which folder's cube hides it (AC-342).
   - Depends on: T429, T342
+  - **Built 2026-10-04: state D as drawn,** the coordinator's choice (option A), since AC-343 binds the design.
+    - `editor/pathCubes.ts` `pickerGroupsOf`: the cubes on the item's path by folder, nearest first. Each group is named by its path below Shared, the root as "Shared". A workspace item's own cubes come first, under "My workspace", then its target's path.
+      - A farther cube of a name a nearer one holds stays in its folder's group, with `hiddenBy`: "hidden by _title_ in _path_", or "hidden by your copy".
+      - A descendant's or a sibling's cube isn't listed.
+    - `editor/CubePicker.tsx`, in place of the native select. "Cube or view" names the cube chosen (`data-value` holds its name) and opens a 520 px list, fixed to the window under it so the field pane doesn't cut it:
+      - its "Search cubes and views" box, narrowing by title;
+      - a group per folder, its 12/600 heading;
+      - 32 px rows of a C or V chip, the title, and the path at the right;
+      - a hidden row in text-muted, `aria-disabled`, with what hides it after its path, and not pickable.
+      - The APG keys: Down and Up move through what can be picked, skipping the hidden; Enter picks; Escape closes, back on the button.
+    - **e2e:** every `selectOption` on 'Cube or view' moved to `e2e/cubePicker.ts`, shaped like `wells.ts`'s `wellPicker`, across 17 specs. `toHaveValue` on the select is now the button's `data-value`.
+    - **Small decisions, overturnable:**
+      - the wording "hidden by Orders in Sales / EMEA", since AC-342 asks which folder's cube; the design's example says "hidden by a nearer Orders";
+      - the C/V chip at 12 px, where the design draws 11, for direction.md rule 1's floor;
+      - the workspace row's path is "My workspace": the design's "· your copy of orders.yml" needs the file name, which the field list doesn't carry.
+    - **Review round, fixed:**
+      - A workspace item's overlay meta holds its copy in place of the cube it copies, under the same name, so the original never showed as "hidden by your copy". The picker now reads the folders' own cubes from `/api/meta` beside the overlay's, and each row has its own key, the copy and its original sharing a name.
+      - A press outside or Tab left what was typed for the next opening; both now close it afresh. It opens on the cube chosen, and the keys scroll the active row into view.
+      - A chosen cube the model no longer lists was named with its folder prefix; it is named by its short name.
+      - The design's search glyph.
+    - **Open, for the user:** the dashboard filter bar's field picker still lists cubes as before. Whether AC-329 and AC-342 reach it is not settled.
+    - **Tests:**
+      - `pathCubes.test.ts`, `CubePicker.test.tsx`, `FieldList.test.tsx`;
+      - the phase-1 specs that pick cubes, 180 in Chrome (`boxplot.spec.ts`'s "Each point is" timed out once on a hover under load, and passed on its rerun);
+      - `security/picker.spec.ts`: AC-329 rewritten for the list, and AC-342 new;
+      - `security/workspace-overlay.spec.ts`: My workspace's group first, and the folder's original "hidden by your copy".
+    - **Left unticked, with AC-342,** until the two security specs have run: they wait for wechart_security's stale migration row to be cleared.
 - *The designs of the phase-2 tasks already planned:*
   - T462: design 03 (a data source's settings);
   - T331: design 09, and design 04's shared-folder and read-only states (UX-230, UX-231, UX-237);
