@@ -188,17 +188,40 @@ test.describe.serial('Cube and xcube call nothing of wechart’s (T431, T458, AC
     record!.seen.length = 0;
     served.length = 0;
 
-    // A publish, checked by xcube's dry run and pushed to xcube (T445, T419).
+    // A publish, as a shared model is changed with sign-in off now (T451's
+    // switch; AC-254, R52): saved in My workspace, checked through its
+    // overlay by xcube's dry run; proposed, checked again; and approved by
+    // the single user, which lands it through xcube's changeset (T445, T419).
     const cube = `e2e_no_callbacks_${testInfo.project.name}`;
+    const path = `cubes/${cube}.yml`;
+    const folder = await call('/api/documents', {
+      kind: 'folder',
+      title: 'No callbacks',
+      folderId: 'mine',
+    });
+    expect(folder.status, JSON.stringify(folder.body)).toBe(201);
+    const project = (folder.body as { id: string }).id;
     const published = await call('/api/model/publish', {
+      folderId: project,
+      targetFolderId: 'root',
       files: [
         {
-          path: `cubes/${cube}.yml`,
+          path,
           content: `cubes:\n  - name: ${cube}\n    sql_table: public.products\n\n    measures:\n      - name: count\n        type: count\n`,
         },
       ],
     });
-    expect(published.status).toBe(200);
+    expect(published.status, JSON.stringify(published.body)).toBe(200);
+    const { fileId } = (
+      await call(`/api/model/files/dependents?folder=${project}&path=${encodeURIComponent(path)}`)
+    ).body as { fileId?: string };
+    const proposed = await call('/api/proposals', { kind: 'model', id: fileId });
+    expect(proposed.status, JSON.stringify(proposed.body)).toBe(201);
+    const approved = await call(
+      `/api/proposals/${(proposed.body as { id: string }).id}/approve`,
+      {},
+    );
+    expect(approved.status, JSON.stringify(approved.body)).toBe(200);
 
     // A query on it, asked again while Cube says "Continue wait".
     await expect

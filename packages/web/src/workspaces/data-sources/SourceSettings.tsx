@@ -37,6 +37,7 @@ import { checkSource, openProposalOf, removeSource } from '../explore/deleteChec
 import { sayOnExplore } from '../explore/deletedToast';
 import { exploreHref } from '../explore/folders';
 import { browserTimeZone } from '../explore/projectFolder';
+import { modelsAreWorkspaceOnly } from '../model/inFolder';
 import { generateFrom } from '../model/ModelFilePage';
 import { cubeSourceOf } from './cubeSource';
 
@@ -352,8 +353,8 @@ function Settings({ source }: { source: StoredSource }) {
         )}
         {/* Its tables as cubes (T492; the user, 2026-10-02: "add generate cube
             within the datasource details page"): into My workspace's model,
-            to go to its folder, for those with a workspace; with sign-in off,
-            the root's model. */}
+            to go to its folder, wherever models are workspace-only, with
+            sign-in off too (T451's switch). */}
         {mayGenerate && inCube !== undefined && viewing === undefined ? (
           <button
             type="button"
@@ -363,7 +364,7 @@ function Settings({ source }: { source: StoredSource }) {
                 generateFrom(queryClient, {
                   source: inCube,
                   target: source.folderId,
-                  signedIn: me.data?.security === 'oidc',
+                  workspaceOnly: modelsAreWorkspaceOnly(me.data),
                 }),
               );
             }}

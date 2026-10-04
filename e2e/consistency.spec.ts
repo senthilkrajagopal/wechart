@@ -128,8 +128,13 @@ test.describe('one dialog pattern (UX-106)', () => {
   test('Generate cubes: a 16/600 title, and Cancel beside its one primary at the foot', async ({
     page,
   }) => {
-    await page.goto('/model');
-    await page.getByRole('button', { name: 'Generate from a data source…' }).click();
+    // In My workspace's model, where cubes are generated (T492; T451's switch, AC-254).
+    // From the tree: an empty model offers it in the overview as well.
+    await page.goto('/explore/folders/mine/models');
+    await page
+      .getByRole('navigation', { name: 'Model files' })
+      .getByRole('button', { name: 'Generate from a data source…' })
+      .click();
     // Design 11's pane, as design 01's: its title, then Cancel and the step's one primary.
     const dialog = page.getByRole('dialog', { name: 'Generate cubes' });
     expect((await typeOf(dialog)).title).toEqual({ size: '16px', weight: '600' });

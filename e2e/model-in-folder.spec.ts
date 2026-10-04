@@ -1,26 +1,32 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
-import { PUBLISHED } from './model-files';
-import { sharedIn } from './workspace';
+import { inMyWorkspace, landed, modelFilesIn, PUBLISHED } from './model-files';
+import { myModelCopy, sharedIn } from './workspace';
 
 /**
- * T342, with sign-in off: one user, who changes a model in place in any
- * folder, as phase 1 had it (rule 71 needs sign-in; T359 works through the
- * workspace with it off).
+ * T342, with sign-in off: one user, who changes a shared folder's model only
+ * through a copy in My workspace and a proposal they approve, as a
+ * Super-Admin does with sign-in on (T451's switch; AC-254, AC-278, R52).
  *
  * AC-222: WHILE a model is open, THE SYSTEM SHALL show its folder's model
  * files beside the editor, open the chosen file in place with its folder and
- * name in the URL, … and mark each file that has problems.
+ * name in the URL, offer New cube and New view in the user's workspace, and
+ * mark each file that has problems.
+ * `Fails when: … New cube or New view is missing in the workspace, or
+ * offered in a shared folder; or a file with an error carries no mark.`
  *
- * AC-141: WHEN the user edits a member that charts use, THE SYSTEM SHALL
- * list the charts and dashboards that reference it before saving.
- * `Fails when: a referencing chart is missing from that list.`
- * With models in folders, a chart in a folder is bound to its cube's full
- * name, `<xcubeId>__<name>` (AC-328), and a folder's view names a root cube
- * along its path (AC-272).
+ * AC-141, as amended (R55): a model saved in My workspace lists, before it
+ * is saved, the shared charts and dashboards that landing it would change
+ * in the folder it goes to, naming that folder (T546). With models in
+ * folders, a chart in a folder is bound to its cube's full name,
+ * `<xcubeId>__<name>` (AC-328), and a folder's view names a root cube along
+ * its path (AC-272).
  *
  * AC-329, the model page's part: a member is said by its short name, never
  * its prefixed one.
+ *
+ * Every name is this browser's own: the browsers share the single user's
+ * workspace, whose overlay holds a name once.
  */
 
 async function folderOf(request: APIRequestContext, title: string): Promise<string> {
@@ -31,16 +37,13 @@ async function folderOf(request: APIRequestContext, title: string): Promise<stri
   return ((await made.json()) as { id: string }).id;
 }
 
+/** Files put in a shared folder as the single user puts them: through My workspace and a proposal. */
 async function publish(
   request: APIRequestContext,
   folderId: string,
   files: { path: string; content: string }[],
 ) {
-  const published = await request.post('/api/model/publish', {
-    data: folderId === 'root' ? { files } : { folderId, files },
-    timeout: 90_000,
-  });
-  expect(published.status(), await published.text()).toBe(200);
+  expect(await landed(request, folderId, files)).toEqual(files);
 }
 
 /** A folder's id in xcube, which prefixes its items' names (AC-328). */
@@ -128,33 +131,41 @@ async function renameCount(page: Page) {
   await page.keyboard.type('_all');
 }
 
-test('a folder’s model opens beside its files, one after another in place, a file with problems marked', async ({
+/** The warning a workspace save gives before it saves (T546, AC-141). */
+const warningOf = (page: Page) =>
+  page.getByRole('alert').filter({ hasText: 'this changes members that' });
+
+test('a folder’s model opens beside its files, one after another in place, read-only; in My workspace a file with problems is marked', async ({
   page,
 }, testInfo) => {
   const request = page.request;
-  const folderId = await folderOf(
-    request,
-    `T342 files ${testInfo.project.name} ${String(Date.now())}`,
-  );
+  const project = testInfo.project.name;
+  const folderId = await folderOf(request, `T342 files ${project} ${String(Date.now())}`);
+  const [a, b] = [`t342_a_${project}`, `t342_b_${project}`];
   const files = [
-    { path: 'cubes/t342_a.yml', content: cube('t342_a') },
-    { path: 'cubes/t342_b.yml', content: cube('t342_b') },
+    { path: `cubes/${a}.yml`, content: cube(a) },
+    { path: `cubes/${b}.yml`, content: cube(b) },
   ];
+  // Two of its own in My workspace, going to the folder: where a file is edited.
+  const [c, d] = [`t342_c_${project}`, `t342_d_${project}`];
+  let own: Awaited<ReturnType<typeof inMyWorkspace>> | undefined;
+  /** The copy "Edit in my workspace" makes, in a project folder of its own. */
+  let copyFolder = '';
   try {
     await publish(request, folderId, files);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/explore?folder=${folderId}`);
     await page
-      .getByTestId('item-cubes/t342_a.yml')
-      // Its name, not its ⋯ "Actions for t342_a.yml" (T526).
-      .getByRole('button', { name: 't342_a.yml', exact: true })
+      .getByTestId(`item-cubes/${a}.yml`)
+      // Its name, not its ⋯ "Actions for <file>" (T526).
+      .getByRole('button', { name: `${a}.yml`, exact: true })
       .click();
 
     // The folder and the file in the address, the folder's files beside it.
     await expect(page).toHaveURL(
-      new RegExp(`/explore/folders/${folderId}/models/cubes%2Ft342_a\\.yml$`),
+      new RegExp(`/explore/folders/${folderId}/models/cubes%2F${a}\\.yml$`),
     );
-    await expect(yaml(page, 'cubes/t342_a.yml')).toContainText('name: t342_a');
+    await expect(yaml(page, `cubes/${a}.yml`)).toContainText(`name: ${a}`);
     await expect(tree(page).getByRole('link')).toHaveCount(2);
     // Its own panes, full height: the page itself never scrolls (AC-223).
     expect(
@@ -169,84 +180,136 @@ test('a folder’s model opens beside its files, one after another in place, a f
       (window as unknown as { stayed?: boolean }).stayed = true;
     });
     await tree(page)
-      .getByRole('link', { name: /^t342_b\.yml/ })
+      .getByRole('link', { name: new RegExp(`^${b}\\.yml`) })
       .click();
     await expect(page).toHaveURL(
-      new RegExp(`/explore/folders/${folderId}/models/cubes%2Ft342_b\\.yml$`),
+      new RegExp(`/explore/folders/${folderId}/models/cubes%2F${b}\\.yml$`),
     );
-    await expect(yaml(page, 'cubes/t342_b.yml')).toContainText('name: t342_b');
+    await expect(yaml(page, `cubes/${b}.yml`)).toContainText(`name: ${b}`);
     expect(await page.evaluate(() => (window as unknown as { stayed?: boolean }).stayed)).toBe(
       true,
     );
+    // Shared: read-only, nothing made here, and Edit in my workspace offered (rule 71).
+    await expect(yaml(page, `cubes/${b}.yml`)).toHaveAttribute('aria-readonly', 'true');
+    for (const name of [/New cube/, /New view/])
+      await expect(tree(page).getByRole('button', { name })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Edit in my workspace' })).toBeEnabled();
+    // Pressed: the single user's copy in a project folder of My workspace,
+    // open there to edit and save, the folder's file unchanged (AC-278, AC-254).
+    await page.getByRole('button', { name: 'Edit in my workspace' }).click();
+    await expect(page).toHaveURL(
+      new RegExp(`/explore/folders/(?!${folderId})[^/]+/models/cubes%2F${b}\\.yml$`),
+    );
+    copyFolder = decodeURIComponent(new URL(page.url()).pathname.split('/')[3] ?? '');
+    await expect(yaml(page, `cubes/${b}.yml`)).toContainText(`name: ${b}`);
+    await expect(yaml(page, `cubes/${b}.yml`)).not.toHaveAttribute('aria-readonly', 'true');
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeVisible();
+    expect(
+      (await modelFilesIn(request, folderId)).find((file) => file.path === `cubes/${b}.yml`)
+        ?.content,
+    ).toBe(cube(b));
 
-    // A file that stops parsing is marked in the tree, in words; the other isn't.
+    // In My workspace: a file that stops parsing is marked in the tree, in
+    // words; the other isn't.
+    own = await inMyWorkspace(request, folderId, [
+      { path: `cubes/${c}.yml`, content: cube(c) },
+      { path: `cubes/${d}.yml`, content: cube(d) },
+    ]);
+    const projectFolder = own.folderOf(`cubes/${c}.yml`);
+    await page.goto(
+      `/explore/folders/${projectFolder}/models/${encodeURIComponent(`cubes/${d}.yml`)}`,
+    );
+    await expect(yaml(page, `cubes/${d}.yml`)).toContainText(`name: ${d}`);
+    await expect(tree(page).getByRole('link')).toHaveCount(2);
     await page.locator('.cm-line', { hasText: 'sql_table:' }).first().click();
     await page.keyboard.press('End');
     await page.keyboard.type(': x');
-    await expect(tree(page).getByRole('link', { name: /^t342_b\.yml/ })).toContainText('problems');
-    await expect(tree(page).getByRole('link', { name: /^t342_a\.yml/ })).not.toContainText(
+    await expect(tree(page).getByRole('link', { name: new RegExp(`^${d}\\.yml`) })).toContainText(
       'problems',
     );
+    await expect(
+      tree(page).getByRole('link', { name: new RegExp(`^${c}\\.yml`) }),
+    ).not.toContainText('problems');
 
-    // New cube makes a file in this folder; discarded, the folder's model opens.
+    // New cube makes a file in this folder of My workspace, going where it is
+    // asked to (AC-282); discarded, the folder's model opens.
     await tree(page).getByRole('button', { name: 'New cube' }).click();
+    const asking = page.getByRole('dialog', { name: 'New cube in My workspace' });
+    await asking.getByRole('combobox', { name: 'Target folder' }).selectOption(folderId);
+    await asking.getByRole('button', { name: 'Create' }).click();
     await page
       .getByRole('alertdialog', { name: 'Leave with unpublished changes?' })
       .getByRole('button', { name: 'Leave without publishing' })
       .click();
     await expect(page).toHaveURL(
-      new RegExp(`/explore/folders/${folderId}/models/cubes%2Fnew_cube_1\\.yml$`),
+      new RegExp(`/explore/folders/${projectFolder}/models/cubes%2Fnew_cube_1\\.yml$`),
     );
     await expect(tree(page).getByRole('link', { name: /^new_cube_1\.yml/ })).toContainText(
       'unpublished',
     );
     await page.getByRole('button', { name: 'Discard' }).click();
-    await expect(page).toHaveURL(new RegExp(`/explore/folders/${folderId}/models$`));
+    await expect(page).toHaveURL(new RegExp(`/explore/folders/${projectFolder}/models$`));
     await expect(tree(page).getByRole('link')).toHaveCount(2);
   } finally {
+    await own?.drop();
     await cleanUp(
       request,
       [],
-      files.map(({ path }) => ({ folderId, path })),
-      [folderId],
+      [
+        ...(copyFolder === '' ? [] : [{ folderId: copyFolder, path: `cubes/${b}.yml` }]),
+        ...files.map(({ path }) => ({ folderId, path })),
+      ],
+      [...(copyFolder === '' ? [] : [copyFolder]), folderId],
     );
   }
 });
 
-test('saving a folder’s file lists the charts bound to its members’ full names, said by short name', async ({
+test('saving a copy of a folder’s file lists the charts bound to its members’ full names there, said by short name (T546)', async ({
   page,
 }, testInfo) => {
   const request = page.request;
   const title = `T342 edit ${testInfo.project.name} ${String(Date.now())}`;
   const folderId = await folderOf(request, title);
-  const path = 'cubes/t342_edited.yml';
+  const name = `t342_edited_${testInfo.project.name}`;
+  const path = `cubes/${name}.yml`;
   const charts: string[] = [];
+  let copy: Awaited<ReturnType<typeof myModelCopy>> | undefined;
   try {
-    await publish(request, folderId, [{ path, content: cube('t342_edited') }]);
+    await publish(request, folderId, [{ path, content: cube(name) }]);
     const xcubeId = await xcubeIdOf(request, folderId);
-    const chart = await chartOn(request, folderId, `${title} chart`, 't342_edited', 'count');
+    const chart = await chartOn(request, folderId, `${title} chart`, name, 'count');
     charts.push(chart);
     // Bound in its folder: to the cube's full name there.
-    expect(await measuresOf(request, chart)).toEqual([`${xcubeId}__t342_edited.count`]);
+    expect(await measuresOf(request, chart)).toEqual([`${xcubeId}__${name}.count`]);
 
-    await page.goto(`/explore/folders/${folderId}/models/${encodeURIComponent(path)}`);
-    await expect(yaml(page, path)).toContainText('name: t342_edited');
+    // Changed in a copy in My workspace, as a shared model is.
+    copy = await myModelCopy(request, path, folderId);
+    await page.goto(copy.href);
+    await expect(yaml(page, path)).toContainText(`name: ${name}`);
     await renameCount(page);
-    await page.getByRole('button', { name: 'Save & reload Cube' }).click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
 
-    const warning = page.getByRole('alert').filter({ hasText: 'This save changes members' });
+    const warning = warningOf(page);
     await expect(warning).toBeVisible(PUBLISHED);
+    await expect(warning.locator('.model-references__lead')).toHaveText(
+      `Landed in ${title}, this changes members that 1 chart and 0 dashboards use.`,
+    );
     await expect(warning.getByRole('list', { name: 'Charts' })).toContainText(
-      `${title} chart — uses t342_edited.count`,
+      `${title} chart — uses ${name}.count`,
     );
     await expect(warning).not.toContainText(`${xcubeId}__`);
     await warning.getByRole('button', { name: 'Cancel' }).click();
   } finally {
-    await cleanUp(request, charts, [{ folderId, path }], [folderId]);
+    await cleanUp(
+      request,
+      charts,
+      [{ folderId, path }, ...(copy === undefined ? [] : [copy])],
+      [folderId, ...(copy === undefined ? [] : [copy.folderId])],
+    );
   }
 });
 
-test('a root edit lists the charts bound to a folder’s view of it, by that folder’s name', async ({
+test('a copy of a root file lists the charts bound to a folder’s view of it, by that folder’s name (T546)', async ({
   page,
 }, testInfo) => {
   const request = page.request;
@@ -255,9 +318,11 @@ test('a root edit lists the charts bound to a folder’s view of it, by that fol
   // The root is every browser's: a cube of this browser's own.
   const rootCube = `t342_root_${testInfo.project.name}`;
   const rootPath = `cubes/${rootCube}.yml`;
-  const viewPath = 'views/t342_view.yml';
+  const view = `t342_view_${testInfo.project.name}`;
+  const viewPath = `views/${view}.yml`;
   const charts: string[] = [];
   const files: { folderId: string; path: string }[] = [];
+  let copy: Awaited<ReturnType<typeof myModelCopy>> | undefined;
   try {
     await publish(request, 'root', [{ path: rootPath, content: cube(rootCube) }]);
     files.unshift({ folderId: 'root', path: rootPath });
@@ -266,7 +331,7 @@ test('a root edit lists the charts bound to a folder’s view of it, by that fol
         path: viewPath,
         content: [
           'views:',
-          '  - name: t342_view',
+          `  - name: ${view}`,
           '    cubes:',
           `      - join_path: ${rootCube}`,
           '        includes: [count]',
@@ -276,24 +341,33 @@ test('a root edit lists the charts bound to a folder’s view of it, by that fol
     ]);
     files.unshift({ folderId, path: viewPath });
     const xcubeId = await xcubeIdOf(request, folderId);
-    const chart = await chartOn(request, folderId, `${title} chart`, 't342_view', 'count');
+    const chart = await chartOn(request, folderId, `${title} chart`, view, 'count');
     charts.push(chart);
-    expect(await measuresOf(request, chart)).toEqual([`${xcubeId}__t342_view.count`]);
+    expect(await measuresOf(request, chart)).toEqual([`${xcubeId}__${view}.count`]);
 
-    // The root's file, in the Model workspace as it always opened.
-    await page.goto(`/model/files/${encodeURIComponent(rootPath)}`);
+    // The root's file, changed in a copy in My workspace, going to the root.
+    copy = await myModelCopy(request, rootPath);
+    await page.goto(copy.href);
     await expect(yaml(page, rootPath)).toContainText(`name: ${rootCube}`);
     await renameCount(page);
-    await page.getByRole('button', { name: 'Save & reload Cube' }).click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
 
-    const warning = page.getByRole('alert').filter({ hasText: 'This save changes members' });
+    const warning = warningOf(page);
     await expect(warning).toBeVisible(PUBLISHED);
+    await expect(warning.locator('.model-references__lead')).toHaveText(
+      'Landed in Shared, this changes members that 1 chart and 0 dashboards use.',
+    );
     await expect(warning.getByRole('list', { name: 'Charts' })).toContainText(
-      `${title} chart — uses t342_view.count (${title})`,
+      `${title} chart — uses ${view}.count (${title})`,
     );
     await expect(warning).not.toContainText(`${xcubeId}__`);
     await warning.getByRole('button', { name: 'Cancel' }).click();
   } finally {
-    await cleanUp(request, charts, files, [folderId]);
+    await cleanUp(
+      request,
+      charts,
+      [...(copy === undefined ? [] : [copy]), ...files],
+      [folderId, ...(copy === undefined ? [] : [copy.folderId])],
+    );
   }
 });

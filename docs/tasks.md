@@ -8905,7 +8905,7 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - **AC-136, AC-009 and AC-137 stay ticked, retested on items mode:**
       - `check.test.ts` (20), `snapshot.test.ts` (25), `client.test.ts`, `changesets.test.ts` and `publish.test.ts`;
       - in Chrome on compose's Cube on the image: the model specs (50), including `model.spec.ts`'s error on its file with no line, `publish-model.spec.ts`'s new member in the chart builder, and the cut-over spec's D2, where the revision holding the publish says `via: 'changeset'` and the other API and Cube instance list it at once.
-- [ ] T451 (AC-321, AC-288, AC-291, AC-322, AC-285) Check a proposal with a changeset's dry run when it is made, and apply that changeset at approval *(split from T426, 2026-09-26)*
+- [ ] T451 (AC-321, AC-288, AC-291, AC-322, AC-285, AC-278, AC-254, AC-189, AC-235) Check a proposal with a changeset's dry run when it is made, and apply that changeset at approval *(split from T426, 2026-09-26)*
   - Files: `packages/api/src/routes/proposals.ts`, `packages/api/src/xcube/changesets.ts`, `e2e/security/publish-check.spec.ts`
   - Failing test: `publish-check.spec.ts`, against xcube's image:
     - a proposal is checked (`dryRun`) when made, and applied at approval;
@@ -8976,6 +8976,39 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - Tested in `routes/shared-model-in-place.test.ts` (2): refused for `writer` and `super`, the folder's file unchanged; a copy in My workspace saved instead.
     - The security suite's models now land as a shared model changes: `e2e/model-files.ts`'s `landed` writes each file in My workspace (a copy of the folder's file of its path, or a new one in a project folder of its own), proposes it, approves it as its author and removes the workspace's files. 19 specs use it. Two refusals moved with it: an unbindable data source is now said by the workspace save (`data-source-binding.spec.ts`), and a rollup the join no longer plans by the proposal's dry run (`cube-refuses.spec.ts`).
     - **The sign-in-off half waits, for the user.** Switched, the single user edits no model in place either, and some 55 phase-1 tests in 22 specs move to My workspace and a proposal (a Chrome run of the switch, 2026-10-01). One AC loses its surface: AC-141's warning, "list the charts and dashboards that reference [a member] before saving", is shown only for an in-place save, never for a workspace's (T347), and an approval refuses only a cube or view renamed away (AC-275), not a member. So a member renamed in a copy lands with no warning anywhere: with sign-in on since models land (above), and with the switch for the single user too. AC-141 needs a home first: the workspace save, the proposal, or the approval.
+      - *2026-10-02:* the user chose the workspace save (R55), built as T546.
+  - **The switch, with sign-in off, 2026-10-04 (AC-254's model half, R52).** The single user changes a shared model only in a copy in My workspace: saved there, proposed, and approved as its own author, as a signed-in user does. `POST /api/model/publish` into a shared folder answers `409` `shared_in_place` with sign-in off too.
+    - **The API** (`server.ts`, `model/publish.ts`):
+      - My workspace's and a proposal's overlays run with sign-in off wherever folders' access is stored. A unit server without that store keeps phase 1's in-place path (T359's carve-out).
+      - `ownWorkspaceOf` names the single user's workspace, `mine`, wherever a user's own was asked for.
+      - A query for a workspace item or a proposal is answered from its overlay (`singleUserScope`), as a signed-in user's is. One xcube won't take answers `409`, "… can't be previewed as it is: …".
+      - The workspace save refuses generated files the target folder already has, by file or by name, as the in-place publish did (AC-249).
+    - **Generate cubes** goes to My workspace with sign-in off too (T492). `generateFrom`, `SourceSettings` and `ExplorePage` decide by `modelsAreWorkspaceOnly` (`inFolder.ts`), not by being signed in. In the pane (`GenerateCubes.tsx`):
+      - clashes are checked against the target folder as well, and its file opens in a new tab, keeping the generation;
+      - "In model" reads the root's cubes too (AC-347).
+    - **A workspace model's page** (`ModelFilePage.tsx`):
+      - its join graph and pickers take the files on the target folder's path too, less the names the workspace's files declare (AC-138, AC-224);
+      - the New dialog gives the focus back to what opened it, so Stay, at the leave question that follows, puts it there (AC-226).
+    - **Found:** xcube strips rollups from an overlay (`xcube-slice-5.md`, gotcha 15). So a workspace save never sees a rollup's compile error, an unknown member or unjoinable cubes. The landing's dry run refuses them when the copy is proposed, or at approval when the world changed in between.
+    - **AC-189 and AC-235, amended for the user (R60):** a rollup's unknown members and unjoinable cubes are refused at proposal or approval, never at the workspace save. The Propose dialog says only how many items would break ("Just the count"); a refused approval's review names each break (design 05, state L). Both stay ticked on these e2e tests, on Chrome:
+      - `preaggregations.spec.ts`:
+        - an unknown member saved in a copy, refused when proposed: the dialog's count, and the refusal naming `CUBE.no_such_member (dimensions)` at the rollup's line;
+        - another file's rollup broken by a removed member, refused when proposed, naming that file;
+        - an unjoinable rollup refused when proposed, with the dialog's count;
+        - a rollup proposed while joinable, its bridge's join landed away meanwhile: refused at approval, the review naming the rollup, its file and Cube's reason.
+      - `folder-models.spec.ts`: a folder's rollup on a root member renamed away while it waited, refused at approval, said as that folder's file with the name.
+      - `xcube-cutover.spec.ts`: a rollup in a file the change leaves alone, refused when proposed.
+    - **AC-254 and AC-278 ticked.** Models were the last part of each (T359's and T502's notes). A shared model is refused in place with sign-in on and off (`shared-model-in-place.test.ts`). With sign-in off, `model-in-folder.spec.ts` presses Edit in my workspace on a folder's model: the copy opens in a project folder of My workspace to edit and save, and the folder's file is unchanged. The security suite does the same with sign-in on.
+    - **The review (one round, PASS), fixed:** a shared file on the target's path at the open file's path, declaring another cube, was left out of the joins and pickers (`filesBeside`, `workspaceModels.test.ts`). Noted, not changed:
+      - AC-322 asks every break a refusal names; the Propose dialog says only the count (R60). The dialog's refusal names none, so a proposal refused when made has its breaks in the API's answer and the audit trail alone.
+      - AC-189's amendment drops the rollup row's names with the in-place save: the save that showed them is gone, and a workspace save checks no rollup (R60).
+      - Untested: `singleUserScope`'s proposal branch and its `409`; the `modelsAreWorkspaceOnly` wiring in `SourceSettings` and `ExplorePage`.
+      - `publish-model.spec.ts` shows AC-327's browser half for the workspace save; the landing is asked through the API.
+      - A target folder's clashing file opens in a new tab from Generate cubes: a small UI call, keeping the generation in place.
+    - **Tests:**
+      - API: `routes/shared-model-in-place.test.ts` (5): refused in place with sign-in on and off, a copy saved and previewed through the overlay, and a generated clash refused.
+      - Web: `generateFrom.test.ts` (2), `ModelInFolder.test.tsx` (sign-in off read-only, `modelsAreWorkspaceOnly`), `GenerateCubes.test.tsx` (2).
+      - The phase-1 e2e specs that changed a root model in place now copy, save, propose and approve. `e2e/model-files.ts` gains `ownModelCopy` and per-name locks (`holdNames`), since the browsers and workers share the single user's workspace, whose overlay holds a name once. `xcube-cutover.spec.ts` compares xcube with the published folders' files only.
 - [x] T427 (AC-322) Word a refused publish: breaks named in the folders the user may see, a count for the rest, all in the audit trail
   - Files: `packages/api/src/xcube/refusal.ts` (+ test), `packages/web/src/workspaces/reviews/Refusal.tsx` (+ test)
   - Failing test: `refusal.test.ts`:
@@ -11646,6 +11679,6 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-344 | T470, T479–T487, T493, T494 | AC-345 | T488 | AC-346 | T488 |
 | AC-347 | T489 | AC-348 | T490 | AC-349 | T491 |
 | AC-350 | T492 | AC-351 | T493 | AC-249 (again, drafts) | T488 |
-| AC-420 | T600 | | | | |
+| AC-420 | T600 | AC-189, AC-235 (again, amended `[R60]`) | T451 | AC-254 (again, models) | T451 |
 
 AC-009, AC-136 and AC-137 are ticked from phase 1. ~~They stay ticked until slice 3 changes how publishing works; T426 and T432 then reword them and retest them (R28 Q9).~~ They keep their wording and their ticks while their tests pass: T447 re-runs them against xcube at slice 2's cut-over, and T426 and T432 again in slice 3 (2026-09-26, `[R29]`). AC-235 was unticked by R29 and is ticked again by T445 and T447.

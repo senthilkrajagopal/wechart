@@ -33,7 +33,7 @@ import { statusOfItem } from './proposalStatus';
 import { ExportPane } from '../../dashboard/export/ExportPane';
 import { ExportedToast } from '../../dashboard/export/ExportedToast';
 import { ImportPane } from './import/ImportPane';
-import { fileHref } from '../model/inFolder';
+import { fileHref, modelsAreWorkspaceOnly } from '../model/inFolder';
 import { generateFrom, startModelDraft } from '../model/ModelFilePage';
 import { cubeSourceOf } from '../data-sources/cubeSource';
 import { FolderDescription } from './FolderDescription';
@@ -1200,8 +1200,8 @@ export function ExplorePage() {
                   : undefined
               }
               // A data source's tables as cubes (T492): into My workspace's
-              // model, to go to its folder, for those with a workspace; with
-              // sign-in off, the root's model.
+              // model, to go to its folder, wherever models are
+              // workspace-only, with sign-in off too (T451's switch).
               onGenerate={
                 mayGenerateCubes
                   ? (item) => {
@@ -1211,7 +1211,7 @@ export function ExplorePage() {
                         generateFrom(queryClient, {
                           source,
                           target: item.folderId ?? SHARED_ROOT.id,
-                          signedIn,
+                          workspaceOnly: modelsAreWorkspaceOnly(me.data),
                         }),
                       );
                     }

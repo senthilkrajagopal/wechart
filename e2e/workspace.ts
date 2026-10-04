@@ -81,6 +81,35 @@ export async function myCopyOf(
 }
 
 /**
+ * The single user's copy in My workspace of a shared folder's model file, as
+ * "Edit in my workspace" makes it (T347, T523), or their copy already there:
+ * where it is, and its address in the model editor. A shared model is
+ * changed only through a copy now, with sign-in off too (T451's switch;
+ * AC-254, `[R52]`).
+ *
+ * Every spec asking for one file's copy is given the same copy, so a spec
+ * only edits it, never saving it: a saved change would be what the others
+ * open, and what each workspace preview reads in place of the folder's
+ * (T347). A spec that saves a model saves its own (`ownCubeFile`, `landed`).
+ */
+export async function myModelCopy(
+  request: APIRequestContext,
+  path: string,
+  folderId = 'root',
+): Promise<{ readonly folderId: string; readonly path: string; readonly href: string }> {
+  const answer = await request.post(`${API}/workspace/copies`, {
+    data: { kind: 'model', folderId, path, timeZone: 'UTC' },
+    timeout: 90_000,
+  });
+  expect(answer.status(), await answer.text()).toBeLessThan(300);
+  const copy = (await answer.json()) as { folderId: string; path: string };
+  return {
+    ...copy,
+    href: `/explore/folders/${encodeURIComponent(copy.folderId)}/models/${encodeURIComponent(copy.path)}`,
+  };
+}
+
+/**
  * The address of the single user's copy of the seeded shared dashboard,
  * `seed-root-dashboard-1`, for a spec that edits it (T359): asked once, in a
  * `beforeAll`, with a request context of its own.

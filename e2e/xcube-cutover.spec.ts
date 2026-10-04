@@ -428,20 +428,41 @@ test.describe.serial('xcube and an API of its own (T447)', () => {
       ].join('\n'),
     });
 
-    // A change to another file altogether.
-    const published = await fetch(`${api!.url}/api/model/publish`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        files: [
-          {
-            path: 'cubes/e2e_unrelated.yml',
-            content:
-              'cubes:\n  - name: e2e_unrelated\n    sql_table: public.products\n    measures:\n      - name: count\n        type: count\n',
-          },
-        ],
-      }),
+    // A change to another file altogether, made as a shared model is changed
+    // with sign-in off now (T451's switch; AC-254, R52): saved in My
+    // workspace, whose overlay runs no rollup's probe, then proposed — the
+    // landing's dry run, which checks every rollup.
+    const post = (path: string, body: unknown) =>
+      fetch(`${api!.url}${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    const folder = await post('/api/documents', {
+      kind: 'folder',
+      title: 'Unrelated',
+      folderId: 'mine',
     });
+    expect(folder.status).toBe(201);
+    const project = ((await folder.json()) as { id: string }).id;
+    const saved = await post('/api/model/publish', {
+      folderId: project,
+      targetFolderId: 'root',
+      files: [
+        {
+          path: 'cubes/e2e_unrelated.yml',
+          content:
+            'cubes:\n  - name: e2e_unrelated\n    sql_table: public.products\n    measures:\n      - name: count\n        type: count\n',
+        },
+      ],
+    });
+    expect(saved.status, await saved.clone().text()).toBe(200);
+    const { fileId } = (await (
+      await fetch(
+        `${api!.url}/api/model/files/dependents?folder=${project}&path=${encodeURIComponent('cubes/e2e_unrelated.yml')}`,
+      )
+    ).json()) as { fileId?: string };
+    const published = await post('/api/proposals', { kind: 'model', id: fileId });
     const { errors } = (await published.json()) as {
       errors?: { path: string; message: string; preAggregation?: { cube: string; name: string } }[];
     };
@@ -458,8 +479,8 @@ test.describe.serial('xcube and an API of its own (T447)', () => {
         ),
       }),
     ]);
-    // Nothing published.
-    expect((await filesInStore(database)).map((file) => file.path)).not.toContain(
+    // Nothing published: the change is My workspace's alone.
+    expect(everyFolderIn(database).map((file) => file.path)).not.toContain(
       'cubes/e2e_unrelated.yml',
     );
   });
@@ -479,18 +500,24 @@ async function filesInStore(database: string): Promise<File[]> {
 type File = { path: string; content: string; folderId?: string };
 
 /**
- * Every folder's model files in a database, each with its folder's xcube id:
- * what wechart sends xcube from T452.
+ * Every published folder's model files in a database, each with its folder's
+ * xcube id: what wechart sends xcube from T452. Not My workspace's, which
+ * reach xcube only as overlays (T347), and which the single user's models are
+ * all made in now (T451's switch).
  */
 function everyFolderIn(database: string): File[] {
   return JSON.parse(
     psql(
       database,
-      // A folder's id outlives it: only the root's and existing folders' files.
-      `SELECT coalesce(json_agg(json_build_object('path', m.path, 'content', m.content, 'folderId', f.xcube_id)), '[]')
+      // A folder's id outlives it: only the root's and existing folders' files,
+      // each folder reaching the root.
+      `WITH RECURSIVE served(id) AS (
+         SELECT 'root'::text
+         UNION SELECT d.id FROM documents d JOIN served s ON d.folder_id = s.id WHERE d.kind = 'folder'
+       )
+       SELECT coalesce(json_agg(json_build_object('path', m.path, 'content', m.content, 'folderId', f.xcube_id)), '[]')
          FROM model_files m JOIN folder_xcube_ids f ON f.folder_id = m.folder_id
-        WHERE m.folder_id = 'root'
-           OR EXISTS (SELECT 1 FROM documents d WHERE d.id = m.folder_id AND d.kind = 'folder')`,
+        WHERE m.folder_id IN (SELECT id FROM served)`,
     ),
   ) as File[];
 }

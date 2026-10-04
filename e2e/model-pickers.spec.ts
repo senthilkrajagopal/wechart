@@ -1,4 +1,6 @@
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+
+import { myModelCopy } from './workspace';
 
 /**
  * T235 / AC-224: THE SYSTEM SHALL edit every field that refers to model
@@ -8,9 +10,13 @@ import { expect, test, type Locator } from '@playwright/test';
  * list of cubes (direction.md §7b).
  * `Fails when: any of those fields accepts free text.`
  *
- * On the seeded model, and nothing published: other browsers' own cubes may
- * be in the model too, so what is listed is checked for what it must hold.
+ * On the seeded model, in the single user's copies of its files in My
+ * workspace, where a shared model is changed with sign-in off (T451's switch;
+ * AC-254), and nothing saved: what a copy may refer to is what the root's
+ * model has, the copy over it. Other browsers' own cubes may be in the model
+ * too, so what is listed is checked for what it must hold.
  */
+const copyOf = async (page: Page, path: string) => (await myModelCopy(page.request, path)).href;
 const typesNothing = async (field: Locator) => {
   await expect(field).toBeVisible();
   await expect(field.locator('input, textarea')).toHaveCount(0);
@@ -21,7 +27,7 @@ test('a rollup’s members, a join’s target, drill members and a view’s incl
 }) => {
   // A rollup: its measures, dimensions, segments and rollups each a picker,
   // its time dimension a list of the time dimensions.
-  await page.goto('/model/files/cubes%2Fmonthly_orders.yml');
+  await page.goto(await copyOf(page, 'cubes/monthly_orders.yml'));
   const cube = page.getByRole('region', { name: 'Cube monthly_orders' });
   await cube.getByRole('tab', { name: /^Pre-aggs/ }).click();
   await cube.locator('.model-member__name', { hasText: /^by_status_month$/ }).click();
@@ -53,10 +59,8 @@ test('a rollup’s members, a join’s target, drill members and a view’s incl
     .getByRole('region', { name: 'Form editor' })
     .getByRole('button', { name: 'Discard' })
     .click();
-  await page
-    .getByRole('navigation', { name: 'Model files' })
-    .getByRole('link', { name: /^orders\.yml/ })
-    .click();
+  await expect(page.locator('.cm-line', { hasText: /^\s+- total_amount$/ })).toHaveCount(1);
+  await page.goto(await copyOf(page, 'cubes/orders.yml'));
   const orders = page.getByRole('region', { name: 'Cube orders' });
   await orders.getByRole('tab', { name: /^Joins/ }).click();
   await orders.locator('.model-member__name', { hasText: /^customers$/ }).click();
@@ -77,7 +81,7 @@ test('a rollup’s members, a join’s target, drill members and a view’s incl
   await expect(drill.getByRole('button', { name: 'customers.country', exact: true })).toBeVisible();
 
   // A view's includes and excludes, from its path's cube, or all of them.
-  await page.goto('/model/files/views%2Forder_summary.yml');
+  await page.goto(await copyOf(page, 'views/order_summary.yml'));
   const view = page.getByRole('region', { name: 'View order_summary' });
   await view.getByRole('tab', { name: /^Cubes/ }).click();
   await view.locator('.model-member__name').first().click();

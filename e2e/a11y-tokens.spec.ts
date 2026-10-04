@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { CATEGORICAL } from '@wechart/ui';
 
-import { IN_MY_WORKSPACE, myCopyOf } from './workspace';
+import { IN_MY_WORKSPACE, myCopyOf, myModelCopy } from './workspace';
 
 /**
  * AC-004: THE SYSTEM SHALL render every text node at a computed font size of at
@@ -150,7 +150,8 @@ for (const theme of THEMES) {
 test('renders no text below 12 px with a problem listed in the Model (AC-004)', async ({
   page,
 }) => {
-  await page.goto('/model/files/cubes%2Forders.yml');
+  // Edited in the single user's copy, never saved (T451's switch, AC-254).
+  await page.goto((await myModelCopy(page.request, 'cubes/orders.yml')).href);
   const problems = page.getByRole('region', { name: 'Problems' });
   await expect(problems).toContainText('No problems in cubes/orders.yml');
 

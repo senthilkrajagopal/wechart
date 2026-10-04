@@ -1,4 +1,10 @@
+import { mkdir, rmdir, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { expect, type APIRequestContext } from '@playwright/test';
+
+import { myModelCopy } from './workspace';
 
 /**
  * How long a test waits for a publish's outcome. The whole model is compiled
@@ -45,6 +51,45 @@ export async function proposedModel(
   return request.post('/api/proposals', { data: { kind: 'model', id: fileId }, ...LANDING });
 }
 
+/**
+ * The cubes and views of these names held in My workspace by this worker
+ * alone, until `release`: a workspace's overlay may not hold two items of one
+ * short name (research `xcube-slice-5.md`, input row 17), and the workers and
+ * browsers sharing one user's workspace — the single user's with sign-in off,
+ * a role's with it on — would put two there at once. A lock directory per
+ * name, taken in order; one left by a worker that died is taken after three
+ * minutes.
+ */
+async function holdNames(files: readonly ModelFileText[]): Promise<() => Promise<void>> {
+  const names = [
+    ...new Set(
+      files.flatMap((file) => /^\s*-\s+name:\s*(\S+)/m.exec(file.content)?.slice(1, 2) ?? []),
+    ),
+  ].sort();
+  const held: string[] = [];
+  for (const name of names) {
+    const lock = join(tmpdir(), `wechart-e2e-workspace-model-${name}.lock`);
+    for (;;) {
+      try {
+        await mkdir(lock);
+        held.push(lock);
+        break;
+      } catch (error) {
+        if ((error as { code?: string }).code !== 'EEXIST') throw error;
+        const since = await stat(lock).then(
+          (found) => Date.now() - found.mtimeMs,
+          () => 0,
+        );
+        if (since > 180_000) await rmdir(lock).catch(() => undefined);
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    }
+  }
+  return async () => {
+    for (const lock of held.splice(0)) await rmdir(lock).catch(() => undefined);
+  };
+}
+
 /** Model files written in My workspace to go to a shared folder, until dropped. */
 export interface InMyWorkspace {
   /** The workspace folder a file of the batch is in, by its path. */
@@ -55,29 +100,40 @@ export interface InMyWorkspace {
 
 /**
  * Model files written in My workspace to go to the shared folder `folderId`,
- * as a shared model is changed with sign-in on (T451; AC-278, `[R52]`): the
- * folder's file of a path copied in ("Edit in my workspace", T347) and
+ * as a shared model is changed (T451; AC-278, AC-254, `[R52]`), sign-in on
+ * or off: the folder's file of a path copied in ("Edit in my workspace", T347) and
  * changed there; a new one made in a project folder of the batch's own, so
  * two specs' files of one path, going to different folders, never meet.
  * Each save is checked through the workspace's overlay, and held to `200`.
+ * Their names are this worker's in the workspace until dropped (`holdNames`).
  */
 export async function inMyWorkspace(
   request: APIRequestContext,
   folderId: string,
   files: readonly ModelFileText[],
 ): Promise<InMyWorkspace> {
-  const there = new Set((await modelFilesIn(request, folderId)).map((file) => file.path));
+  const existing = await modelFilesIn(request, folderId);
+  const there = new Set(existing.map((file) => file.path));
+  // A copy holds the folder's file's name until it is saved over.
+  const release = await holdNames([
+    ...files,
+    ...existing.filter((file) => files.some((each) => each.path === file.path)),
+  ]);
   const placed = new Map<string, string>();
   // Removed in this order: a copy, which may name a new one, before the new.
   const written: { folderId: string; path: string }[] = [];
   const folders: string[] = [];
   const drop = async () => {
-    for (const file of written)
-      await request.delete(
-        `/api/model/files?folder=${encodeURIComponent(file.folderId)}&path=${encodeURIComponent(file.path)}`,
-        LANDING,
-      );
-    for (const folder of folders) await request.delete(`/api/documents/folder/${folder}`);
+    try {
+      for (const file of written)
+        await request.delete(
+          `/api/model/files?folder=${encodeURIComponent(file.folderId)}&path=${encodeURIComponent(file.path)}`,
+          LANDING,
+        );
+      for (const folder of folders) await request.delete(`/api/documents/folder/${folder}`);
+    } finally {
+      await release();
+    }
   };
   try {
     // The new ones first, together, so a copy naming one is checked with it.
@@ -142,9 +198,9 @@ export const approvedBy = (request: APIRequestContext, proposalId: string) =>
 
 /**
  * Model files put in the shared folder `folderId` as a shared model is
- * changed with sign-in on (T451; AC-278, `[R52]`): only through My
- * workspace and a proposal, approved here by its own author — a writer of
- * the folder, as a Super-Admin is.
+ * changed (T451; AC-278, AC-254, `[R52]`): only through My workspace and a
+ * proposal, approved here by its own author — a writer of the folder, as a
+ * Super-Admin and the single user of sign-in off are.
  *
  * Each is written in My workspace (`inMyWorkspace`), proposed with the
  * workspace models it names, and approved, which lands it through xcube's
@@ -190,10 +246,39 @@ export async function landed(
 }
 
 /**
- * A cube file of this browser's own, published through the API (T142). The
- * browsers run at once, and each publish writes a whole file, so two editing
- * one file write over each other's change: a test that publishes uses its
- * own file, not the seed model's.
+ * The single user's copy in My workspace of a root file of this browser's
+ * own (`ownCubeFile`), to change, save and land as a shared model is changed
+ * (T451's switch; AC-254, `[R52]`): `land` proposes it, and approves it as
+ * its author, which lands what the copy has; `drop` takes the copy and its
+ * project folder out of My workspace again.
+ */
+export async function ownModelCopy(request: APIRequestContext, path: string) {
+  const copy = await myModelCopy(request, path);
+  return {
+    ...copy,
+    land: async () => {
+      const proposed = await proposedModel(request, copy.folderId, copy.path);
+      expect(proposed.status(), await proposed.text()).toBe(201);
+      const approved = await approvedBy(request, ((await proposed.json()) as { id: string }).id);
+      expect(approved.status(), await approved.text()).toBe(200);
+    },
+    drop: async () => {
+      await request.delete(
+        `/api/model/files?folder=${encodeURIComponent(copy.folderId)}&path=${encodeURIComponent(copy.path)}`,
+        LANDING,
+      );
+      await request.delete(`/api/documents/folder/${copy.folderId}`);
+    },
+  };
+}
+
+/**
+ * A cube file of this browser's own in the shared root (T142), put there as
+ * the single user puts one now (`landed`; T451's switch, AC-254): through My
+ * workspace and a proposal they approve. The browsers run at once, and each
+ * landing writes a whole file, so two editing one file write over each
+ * other's change: a test that lands a model uses its own file, not the seed
+ * model's.
  */
 export async function ownCubeFile(
   request: APIRequestContext,
@@ -202,9 +287,6 @@ export async function ownCubeFile(
   content = `cubes:\n  - name: ${cube}\n    sql_table: public.products\n\n    measures:\n      - name: count\n        type: count\n`,
 ): Promise<string> {
   const path = `cubes/${cube}.yml`;
-  const response = await request.post('/api/model/publish', {
-    data: { files: [{ path, content }] },
-  });
-  expect(response.status()).toBe(200);
+  expect(await landed(request, 'root', [{ path, content }])).toEqual([{ path, content }]);
   return path;
 }

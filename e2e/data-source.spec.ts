@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
-import { ownCubeFile, PUBLISHED } from './model-files';
+import { approvedBy, modelFilesIn, ownCubeFile, proposedModel, PUBLISHED } from './model-files';
+import { myModelCopy } from './workspace';
 
 const RUN = Math.random().toString(36).slice(2, 8);
 const KEY = JSON.parse(
@@ -112,28 +113,41 @@ test('a cube assigned to a data source has it in its model file, published', asy
 }, testInfo) => {
   const cube = `e2e_source_${testInfo.project.name}`;
   const path = await ownCubeFile(page.request, cube);
-  await page.goto(`/model/files/${encodeURIComponent(path)}`);
-  const form = page.getByRole('region', { name: `Cube ${cube}` });
-  const yaml = page.getByRole('textbox', { name: `${path}, as YAML` });
-  await expect(yaml).toContainText(`name: ${cube}`);
-  await expect(yaml).not.toContainText('data_source');
+  // Changed in a copy in My workspace, as a shared model is now (T451's switch; AC-254).
+  const copy = await myModelCopy(page.request, path);
+  try {
+    await page.goto(copy.href);
+    const form = page.getByRole('region', { name: `Cube ${cube}` });
+    const yaml = page.getByRole('textbox', { name: `${path}, as YAML` });
+    await expect(yaml).toContainText(`name: ${cube}`);
+    await expect(yaml).not.toContainText('data_source');
 
-  // Picked from the data sources Cube has (T481), once they are read.
-  const source = form.getByLabel('Data source', { exact: true });
-  await expect(source).toHaveJSProperty('tagName', 'SELECT');
-  await source.selectOption('default');
-  await expect(yaml).toContainText('data_source: default');
+    // Picked from the data sources Cube has (T481), once they are read.
+    const source = form.getByLabel('Data source', { exact: true });
+    await expect(source).toHaveJSProperty('tagName', 'SELECT');
+    await source.selectOption('default');
+    await expect(yaml).toContainText('data_source: default');
 
-  await page.getByRole('button', { name: 'Save & reload Cube' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Published' })).toHaveText(
-    'Published. Cube is reading the new model.',
-    PUBLISHED,
-  );
-  // In the model file wechart serves Cube — the model itself.
-  const files = (await (await page.request.get('/api/model/files')).json()) as {
-    files: { path: string; content: string }[];
-  };
-  const stored = files.files.find((file) => file.path === path)?.content ?? '';
-  // On the cube itself: a key of the list item, at its keys' indentation.
-  expect(stored).toMatch(/^ {4}data_source: default$/m);
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText(
+      'Saved. Previews in My workspace use it now.',
+      PUBLISHED,
+    );
+    // Published once its proposal is approved: in the model file wechart
+    // serves Cube — the model itself.
+    const proposed = await proposedModel(page.request, copy.folderId, copy.path);
+    expect(proposed.status(), await proposed.text()).toBe(201);
+    const approved = await approvedBy(page.request, ((await proposed.json()) as { id: string }).id);
+    expect(approved.status(), await approved.text()).toBe(200);
+    const stored =
+      (await modelFilesIn(page.request, 'root')).find((file) => file.path === path)?.content ?? '';
+    // On the cube itself: a key of the list item, at its keys' indentation.
+    expect(stored).toMatch(/^ {4}data_source: default$/m);
+  } finally {
+    await page.request.delete(
+      `/api/model/files?folder=${encodeURIComponent(copy.folderId)}&path=${encodeURIComponent(copy.path)}`,
+      { timeout: 90_000 },
+    );
+    await page.request.delete(`/api/documents/folder/${copy.folderId}`);
+  }
 });

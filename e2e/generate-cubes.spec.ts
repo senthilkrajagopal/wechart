@@ -1,5 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
+import { approvedBy, proposedModel } from './model-files';
+
 /**
  * T145 / AC-139: WHEN the user generates cubes from a data source, THE SYSTEM
  * SHALL browse that connection's schemas and tables and create a cube per
@@ -15,17 +17,26 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
  * (infra/sample-db/generate.sql) each project generates on its own: cube names
  * are global to the model, and the projects run at the same time.
  *
- * In design 11's pane (T485): Source, Tables, Review.
+ * In design 11's pane (T485): Source, Tables, Review. In My workspace's
+ * model, where the single user's models are made now, as a signed-in user's
+ * are (T492, AC-350; T451's switch, AC-254): the cubes go to the folder
+ * chosen, by a proposal.
  */
+
+/** My workspace's model, the single user's. */
+const MY_MODEL = '/explore/folders/mine/models';
 
 /** Opens the pane from the tree, and goes to a schema's tables. */
 async function toTables(page: Page, schema: string, search: string) {
-  await page.goto('/model');
+  await page.goto(MY_MODEL);
   await page
     .getByRole('navigation', { name: 'Model files' })
     .getByRole('button', { name: 'Generate from a data source…' })
     .click();
   const pane = page.getByRole('dialog', { name: 'Generate cubes' });
+  await expect(pane.locator('.source-pane__head .source-pane__where')).toHaveText(
+    'in My workspace',
+  );
   await expect(pane.getByRole('radio', { name: 'default PostgreSQL' })).toBeChecked();
   await pane.getByRole('radio', { name: schema, exact: true }).check();
   await pane.getByRole('button', { name: 'Next: Tables' }).click();
@@ -123,6 +134,11 @@ test('a data source’s tables become cubes, each column mapped or said to be le
     '_loaded_at | timestamp with time zone | its name starts with an underscore',
   ]);
 
+  // To go to the shared root, asked in My workspace before they are added (T492).
+  await pane
+    .getByRole('tree', { name: 'Target folder' })
+    .getByRole('treeitem', { name: 'Shared' })
+    .click();
   // Added as drafts, none published (R36, T488, AC-345): both in the tree, marked
   // unpublished, and neither in Cube's model.
   await pane.getByRole('button', { name: 'Add 2 cubes as drafts' }).click();
@@ -138,9 +154,9 @@ test('a data source’s tables become cubes, each column mapped or said to be le
   expect(await cubesInMeta()).not.toContain(visits);
   expect(await cubesInMeta()).not.toContain(stores);
 
-  // The visits draft joins the stores draft: named beside Save, and published with it (AC-346).
+  // The visits draft joins the stores draft: named beside Save, and saved with it (AC-346).
   await pane.getByRole('button', { name: `Open cubes/${visits}.yml` }).click();
-  await expect(page).toHaveURL(new RegExp(`/model/files/cubes%2F${visits}\\.yml$`));
+  await expect(page).toHaveURL(new RegExp(`${MY_MODEL}/cubes%2F${visits}\\.yml$`));
   await expect(page.getByRole('dialog', { name: 'Generate cubes' })).toHaveCount(0);
   const form = page.getByRole('region', { name: 'Form editor' });
   const head = form.locator('.model-editor__head');
@@ -150,13 +166,14 @@ test('a data source’s tables become cubes, each column mapped or said to be le
   // Whole on screen, under Save, not clipped (T488's review).
   await expect(note).toBeVisible();
   expect(await note.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
-  const save = head.getByRole('button', { name: 'Save & reload Cube' });
+  const save = head.getByRole('button', { name: 'Save', exact: true });
   const [saveBox, noteBox] = await Promise.all([save.boundingBox(), note.boundingBox()]);
   expect(Math.round(noteBox?.y ?? 0)).toBeGreaterThanOrEqual(
     Math.round((saveBox?.y ?? 0) + (saveBox?.height ?? 0)),
   );
   await expect(save).toHaveAccessibleDescription(said);
-  // One publish of both, each new to the model's clash check (AC-249).
+  // One save of both into My workspace, to go to the root, each new to its
+  // clash check (AC-249).
   const publishing = page.waitForRequest(
     (request) => request.url().endsWith('/api/model/publish') && request.method() === 'POST',
   );
@@ -164,17 +181,36 @@ test('a data source’s tables become cubes, each column mapped or said to be le
   const body = (await publishing).postDataJSON() as {
     files: { path: string }[];
     create: string[];
+    targetFolderId?: string;
   };
-  expect([body.files.map((file) => file.path), body.create]).toEqual([
+  expect([body.files.map((file) => file.path), body.create, body.targetFolderId]).toEqual([
     [`cubes/${visits}.yml`, `cubes/${stores}.yml`],
     [`cubes/${visits}.yml`, `cubes/${stores}.yml`],
+    'root',
   ]);
-  await expect(head).toContainText('Published. Cube is reading the new model.', {
+  await expect(head).toContainText('Saved. Previews in My workspace use it now.', {
     timeout: 30_000,
   });
   await expect(row(stores)).not.toContainText('unpublished');
   await expect(row(visits)).not.toContainText('unpublished');
   await expect(note).toHaveCount(0);
+  expect(await cubesInMeta()).not.toContain(visits);
+
+  // Published by a proposal the single user approves: the visits file, with
+  // the stores file it joins (T350).
+  const proposed = await proposedModel(request, 'mine', `cubes/${visits}.yml`);
+  expect(proposed.status(), await proposed.text()).toBe(201);
+  const approved = await approvedBy(request, ((await proposed.json()) as { id: string }).id);
+  expect(approved.status(), await approved.text()).toBe(200);
+  expect(
+    ((await approved.json()) as { landed: { kind: string }[] }).landed.map((each) => each.kind),
+  ).toEqual(['model', 'model']);
+  // Out of My workspace again: the single user's, which other specs share.
+  for (const name of [visits, stores])
+    await request.delete(
+      `/api/model/files?folder=mine&path=${encodeURIComponent(`cubes/${name}.yml`)}`,
+      { timeout: 90_000 },
+    );
 
   // And Cube answers them, across the join generated between them: 30 visits,
   // 10 to each of the three stores, two of them in Lisbon.
@@ -276,6 +312,11 @@ test('a generated cube the model already has is marked, named, and refused, and 
   );
   await tables.getByRole('checkbox', { name: 'orders', exact: true }).check();
   await pane.getByRole('button', { name: 'Generate 1 cube' }).click();
+  // To go to the shared root, which has it: new to the folder it goes to, or refused (T492).
+  await pane
+    .getByRole('tree', { name: 'Target folder' })
+    .getByRole('treeitem', { name: 'Shared' })
+    .click();
 
   // Marked, with its status and a bar naming the cube it clashes with; adding refused, saying why.
   const orders = pane.getByRole('region', { name: 'cubes/orders.yml' });
@@ -283,13 +324,19 @@ test('a generated cube the model already has is marked, named, and refused, and 
   await expect(
     orders.locator('.generate-pane__file-body > .generate-pane__note.is-err p'),
   ).toHaveText('orders is already a cube in cubes/orders.yml.');
+  // The root's file, opened in a tab of its own: the pane and its generation
+  // stay here in My workspace (T451's switch).
+  const theRoots = orders.getByRole('link', { name: 'Open cubes/orders.yml' });
+  await expect(theRoots).toHaveAttribute('href', '/model/files/cubes%2Forders.yml');
+  await expect(theRoots).toHaveAttribute('target', '_blank');
   await expect(pane.locator('.source-pane__foot-note')).toHaveText('Resolve 1 clash first');
   const add = pane.getByRole('button', { name: 'Add 1 cube as a draft' });
   await expect(add).toHaveAttribute('aria-disabled', 'true');
   await add.click({ force: true });
   await expect(pane.getByText('Added 1 cube as a draft.')).toHaveCount(0);
 
-  // Whatever the browser sends, the API refuses it, naming the cube it has.
+  // Whatever the browser sends, the API refuses it, naming the cube it has:
+  // saved into My workspace to go to the root, as the pane would.
   const scaffold = (await (
     await request.post('/api/introspection/sources/default/scaffold', {
       data: { tables: [{ schema: 'public', table: 'orders' }] },
@@ -297,6 +344,8 @@ test('a generated cube the model already has is marked, named, and refused, and 
   ).json()) as { cubes: { content: string }[] };
   const refused = await request.post('/api/model/publish', {
     data: {
+      folderId: 'mine',
+      targetFolderId: 'root',
       files: [{ path: 'cubes/orders.yml', content: scaffold.cubes[0]?.content }],
       create: true,
     },
@@ -310,6 +359,11 @@ test('a generated cube the model already has is marked, named, and refused, and 
     },
   ]);
   expect(await storedOrders()).toBe(before);
+  // Nor saved in My workspace.
+  const mine = (await (await request.get('/api/model/files?folder=mine')).json()) as {
+    files: { path: string }[];
+  };
+  expect(mine.files.map((file) => file.path)).not.toContain('cubes/orders.yml');
 });
 
 /**
@@ -341,7 +395,7 @@ test('the Source step shows the root’s default with the health Data sources gi
     };
   }
 
-  await page.goto('/model');
+  await page.goto(MY_MODEL);
   await page
     .getByRole('navigation', { name: 'Model files' })
     .getByRole('button', { name: 'Generate from a data source…' })

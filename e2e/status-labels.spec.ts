@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { seedDashboardCopy } from './workspace';
+import { myModelCopy, seedDashboardCopy } from './workspace';
 
 /**
  * T183 / AC-177: THE SYSTEM SHALL pair every status, validation and job state
@@ -161,7 +161,9 @@ test('every state of a download has an icon and words', async ({ page }) => {
 
 /** A model edit Cube refuses: the outcome, and the problem on its file. */
 test('every state of a publish Cube refuses has an icon and words', async ({ page }) => {
-  await page.goto('/model/files/cubes%2Forders.yml');
+  // Saved in the single user's copy in My workspace, as a shared model is
+  // changed now (T451's switch, AC-254); refused here before it is kept.
+  await page.goto((await myModelCopy(page.request, 'cubes/orders.yml')).href);
   await page.route('**/api/model/publish', (route) =>
     route.fulfill({
       status: 422,
@@ -170,7 +172,7 @@ test('every state of a publish Cube refuses has an icon and words', async ({ pag
   );
   const form = page.getByRole('region', { name: 'Cube orders' });
   await form.getByLabel('Title', { exact: true }).fill('Orders, edited');
-  await page.getByRole('button', { name: 'Save & reload Cube' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
 
   await expect(page.getByRole('alert').filter({ hasText: 'Cube refused the model' })).toBeVisible();
   expect(await statesLacking(page)).toEqual([]);

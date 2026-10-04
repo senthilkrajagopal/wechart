@@ -564,7 +564,7 @@ export function buildServer({
     }
     if (overlays === undefined) return;
     if (!url.startsWith('/api/data-sources') && url !== '/api/workspace/clear') return;
-    void overlays.push(workspaceIdOf(user.key)).catch(warn);
+    void overlays.push(ownWorkspaceOf(user.key)).catch(warn);
   });
   const security = config.security ?? 'off';
   /**
@@ -879,8 +879,10 @@ export function buildServer({
   /**
    * My workspace's overlay in xcube (T347; AC-281, AC-323, AC-280): its
    * models and data sources, placed where they go, pushed before a model of
-   * it is stored and before a preview names it (`xcube/overlays.ts`). With
-   * sign-in on and xcube configured: workspaces are signed-in users'.
+   * it is stored and before a preview names it (`xcube/overlays.ts`). Where
+   * xcube is configured, sign-in on or off: with it off, the single user's
+   * (T451's switch; AC-254, R52). A server with no store of folders' groups
+   * keeps phase 1's, with none (T359).
    */
   const workspaceFolderIds = async (workspaceId: string) => [
     workspaceId,
@@ -926,7 +928,9 @@ export function buildServer({
             : { remove: modelFiles.remove.bind(modelFiles) }),
         };
   const overlays =
-    security === 'off' || xcube === undefined || modelStore === undefined
+    (security === 'off' && folderAccess === undefined) ||
+    xcube === undefined ||
+    modelStore === undefined
       ? undefined
       : overlaySync({
           xcube,
@@ -947,7 +951,9 @@ export function buildServer({
    * Its review's queries name it (`proposalScope`).
    */
   const proposalOverlays =
-    security === 'off' || xcube === undefined || proposals === undefined
+    (security === 'off' && folderAccess === undefined) ||
+    xcube === undefined ||
+    proposals === undefined
       ? undefined
       : overlaySync({
           xcube,
@@ -3140,7 +3146,7 @@ export function buildServer({
     if (seen === undefined) return undefined;
     const inWorkspace =
       typeof target === 'string' && target !== '' ? await workspaceRootOf(target) : null;
-    if (inWorkspace !== null && inWorkspace !== workspaceIdOf(userOf(request).key))
+    if (inWorkspace !== null && inWorkspace !== ownWorkspaceOf(userOf(request).key))
       return { status: 404, body: NOT_THERE };
     if (typeof target !== 'string' || target === '' || inWorkspace !== null)
       return {
@@ -3284,7 +3290,7 @@ export function buildServer({
     reply: FastifyReply,
     item: QueryItem | undefined | null,
   ): Promise<QueryScope | undefined> => {
-    if (security === 'off') return { allowed: 'all' };
+    if (security === 'off') return singleUserScope(reply, item);
     if (item === undefined && userOf(request).superAdmin) return { allowed: 'all' };
     if (item === undefined || item === null) {
       await reply.code(400).send({
@@ -3310,7 +3316,7 @@ export function buildServer({
     const ensured =
       workspace === null ||
       overlays === undefined ||
-      workspace !== workspaceIdOf(userOf(request).key)
+      workspace !== ownWorkspaceOf(userOf(request).key)
         ? undefined
         : await overlays.ensure(workspace);
     // One xcube took none of: what it said, naming each item (T440's review).
@@ -3368,6 +3374,42 @@ export function buildServer({
     const overlay = scope.overlay;
     if (overlay === undefined) return cubeFor(request);
     return cubeFor(request).inOverlay(overlay.id, overlay.pushAgain, overlay.version);
+  };
+  /**
+   * With sign-in off, the single user may query every cube (T359), and a
+   * workspace item's previews and a proposal's review are answered from
+   * their overlays, as a signed-in user's are (T451's switch; AC-254, R52).
+   */
+  const singleUserScope = async (
+    reply: FastifyReply,
+    item: QueryItem | undefined | null,
+  ): Promise<QueryScope | undefined> => {
+    if (item === undefined || item === null) return { allowed: 'all' };
+    let ensured: EnsuredOverlay | undefined;
+    let pushAgain: () => Promise<unknown>;
+    if (item.kind === 'proposal') {
+      if (proposalOverlays === undefined) return { allowed: 'all' };
+      ensured = await proposalOverlays.ensure(item.id);
+      pushAgain = () => proposalOverlays.push(item.id);
+    } else {
+      const stored =
+        overlays === undefined ? null : await docs?.get?.(item.kind, item.id).catch(() => null);
+      if (overlays === undefined || stored == null) return { allowed: 'all' };
+      const workspace = await workspaceRootOf(await governingFolder(item.kind, stored));
+      if (workspace !== MY_WORKSPACE_ID) return { allowed: 'all' };
+      ensured = await overlays.ensure(workspace);
+      pushAgain = () => overlays.push(workspace);
+    }
+    if (ensured?.problem !== undefined) {
+      await reply.code(409).send({
+        error: `${item.kind === 'proposal' ? 'This proposal' : 'Your workspace'} can’t be previewed as it is: ${ensured.problem}`,
+        source: 'xcube',
+      });
+      return undefined;
+    }
+    return ensured === undefined
+      ? { allowed: 'all' }
+      : { allowed: 'all', overlay: overlayScopeOf(ensured, pushAgain) };
   };
   /** A scope's overlay: its id, its own cubes and views by full name, its version. */
   const overlayScopeOf = (
@@ -3670,7 +3712,7 @@ export function buildServer({
       return reply
         .code(409)
         .send({ error: 'Models can’t be copied into My workspace here: xcube isn’t configured.' });
-    const own = workspaceIdOf(userOf(request).key);
+    const own = ownWorkspaceOf(userOf(request).key);
     if (!seen.rights.has(own))
       return reply.code(403).send({
         error: 'You have no workspace: only read-write members and Super-Admins have one.',

@@ -1,4 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+import { myModelCopy } from './workspace';
 
 /**
  * T600 (AC-420; R58, the user: "can you add functionality to see join diagram
@@ -10,10 +12,16 @@ import { expect, test } from '@playwright/test';
 const MARK_IN = '# typed in place';
 const MARK_OUT = '# typed while popped out';
 
+/**
+ * The single user's copy of the seed's orders.yml in My workspace, where a
+ * shared model is edited with sign-in off now (T451's switch; AC-254, R52).
+ */
+const ordersCopy = (page: Page) => myModelCopy(page.request, 'cubes/orders.yml');
+
 test('the YAML pops out larger, keeps what was typed, and goes back into place with its undo', async ({
   page,
 }) => {
-  await page.goto('/model/files/cubes%2Forders.yml');
+  await page.goto((await ordersCopy(page)).href);
   const pane = page.getByRole('region', { name: 'YAML and join diagram' });
   const code = page.locator('.cm-content');
   await expect(code).toBeVisible();
@@ -60,13 +68,14 @@ test('the YAML pops out larger, keeps what was typed, and goes back into place w
 test('a question the page asks puts the popped-out pane back first, the question in reach', async ({
   page,
 }) => {
-  // Opened from another file in the app, so Back stays in the app.
-  await page.goto('/model/files/cubes%2Fcustomers.yml');
-  await expect(page.locator('.cm-content')).toBeVisible();
-  await page
+  // Opened from its folder's overview in the app, so Back stays in the app.
+  const copy = await ordersCopy(page);
+  await page.goto(`/explore/folders/${encodeURIComponent(copy.folderId)}/models`);
+  const ordersRow = page
     .getByRole('navigation', { name: 'Model files' })
-    .getByRole('link', { name: /^orders\.yml/ })
-    .click();
+    .getByRole('link', { name: /^orders\.yml/ });
+  await expect(ordersRow).toBeVisible();
+  await ordersRow.click();
   await expect(page).toHaveURL(/cubes%2Forders\.yml$/);
   const pane = page.getByRole('region', { name: 'YAML and join diagram' });
   await expect(pane.locator('.cm-content')).toContainText('name: orders');

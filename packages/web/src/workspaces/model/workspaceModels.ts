@@ -1,5 +1,43 @@
 import type { Target } from '../explore/NewItemDialog';
 import { browserTimeZone } from '../explore/projectFolder';
+import { objectsOf } from './objects';
+
+interface FileText {
+  readonly path: string;
+  readonly content: string;
+}
+
+/**
+ * What a model in My workspace joins and picks from besides its own text
+ * (AC-138, AC-224): its folder's other files and drafts, and the shared
+ * files on the path of the folder it goes to (T451's switch), less those
+ * declaring a cube or view the workspace's files declare, which are its own.
+ */
+export function filesBeside<Shared extends FileText & { readonly folderId?: string }>({
+  open,
+  own,
+  shared,
+  onPath,
+}: {
+  /** The open file's path, read from the form instead. */
+  readonly open: string | undefined;
+  readonly own: readonly FileText[];
+  readonly shared: readonly Shared[];
+  /** The folders on the path of the folder it goes to; none while that isn't known. */
+  readonly onPath: ReadonlySet<string>;
+}): (FileText | Shared)[] {
+  const declared = new Set(
+    own.flatMap((file) => objectsOf(file.path, file.content).objects.map((each) => each.name)),
+  );
+  const fromPath = shared.filter(
+    (file) =>
+      onPath.has(file.folderId ?? 'root') &&
+      !objectsOf(file.path, file.content).objects.some((each) => declared.has(each.name)),
+  );
+  // Only the workspace's file at the open path is the open file: a shared
+  // one there declaring another cube is the model's still.
+  return [...own.filter((file) => file.path !== open), ...fromPath];
+}
 
 /**
  * Models in My workspace (T347; AC-222, AC-278, AC-282): a shared model

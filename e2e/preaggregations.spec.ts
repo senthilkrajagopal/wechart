@@ -1,6 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { ownCubeFile, PUBLISHED } from './model-files';
+import {
+  inMyWorkspace,
+  modelFilesIn,
+  ownCubeFile,
+  ownModelCopy,
+  proposedModel,
+  PUBLISHED,
+} from './model-files';
 import { wellPicker } from './wells';
 
 /**
@@ -100,6 +107,9 @@ async function openRollup(page: Page, cube: string) {
   return { rollup, own };
 }
 
+/** A copy's save, in My workspace (T347). */
+const SAVED = 'Saved. Previews in My workspace use it now.';
+
 const storedFile = async (page: Page, path: string) =>
   (
     (await (await page.request.get('/api/model/files')).json()) as {
@@ -112,23 +122,33 @@ test('a rollup edited in its form is YAML in its file, and published as any mode
 }, testInfo) => {
   const cube = `e2e_rollup_${testInfo.project.name}`;
   const path = await ownCubeFile(page.request, cube, withRollup(cube));
-  await page.goto(`/model/files/${encodeURIComponent(path)}`);
-  const yaml = page.getByRole('textbox', { name: `${path}, as YAML` });
-  const { rollup, own } = await openRollup(page, cube);
+  // Changed as a shared model is with sign-in off now (T451's switch;
+  // AC-254, R52): in the single user's copy, saved, then landed.
+  const copy = await ownModelCopy(page.request, path);
+  try {
+    await page.goto(copy.href);
+    const yaml = page.getByRole('textbox', { name: `${path}, as YAML` });
+    const { rollup, own } = await openRollup(page, cube);
 
-  // Free text: a model may define granularities of its own.
-  await own('granularity').getByLabel('Granularity', { exact: true }).fill('day');
+    // Free text: a model may define granularities of its own.
+    await own('granularity').getByLabel('Granularity', { exact: true }).fill('day');
 
-  // In the file's YAML at once; not in the stored model until it is saved.
-  await expect(yaml).toContainText('granularity: day');
-  expect(await storedFile(page, path)).toContain('granularity: month');
-  await expect(rollup.locator('.rollup-facts dd').nth(3)).toHaveText('day');
+    // In the file's YAML at once; not in the stored model until it is saved.
+    await expect(yaml).toContainText('granularity: day');
+    expect(await storedFile(page, path)).toContain('granularity: month');
+    await expect(rollup.locator('.rollup-facts dd').nth(3)).toHaveText('day');
 
-  await page.getByRole('button', { name: 'Save & reload Cube' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Published' })).toHaveText(
-    'Published. Cube is reading the new model.',
-    PUBLISHED,
-  );
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText(
+      SAVED,
+      PUBLISHED,
+    );
+    // Saved in the copy, the shared model as it was until it lands.
+    expect(await storedFile(page, path)).toContain('granularity: month');
+    await copy.land();
+  } finally {
+    await copy.drop();
+  }
   const stored = await storedFile(page, path);
   expect(stored).toContain('granularity: day');
   expect(stored).not.toContain('granularity: month');
@@ -137,7 +157,26 @@ test('a rollup edited in its form is YAML in its file, and published as any mode
 test('a rollup edit Cube refuses is not published', async ({ page }, testInfo) => {
   const cube = `e2e_rollup_refused_${testInfo.project.name}`;
   const path = await ownCubeFile(page.request, cube, withRollup(cube));
-  await page.goto(`/model/files/${encodeURIComponent(path)}`);
+  // Changed in the single user's copy in My workspace (T451's switch;
+  // AC-254, R52), and refused when proposed: xcube's dry run of the landing
+  // compiles the rollup, which a workspace's overlay strips (research
+  // xcube-slice-5.md, gotcha 15), so its save keeps it.
+  const copy = await ownModelCopy(page.request, path);
+  try {
+    await refusedWhenProposed(page, cube, path, copy);
+  } finally {
+    await copy.drop();
+  }
+});
+
+/** A time dimension's granularity cleared in `copy`, saved, and refused when proposed. */
+async function refusedWhenProposed(
+  page: Page,
+  cube: string,
+  path: string,
+  copy: { readonly folderId: string; readonly path: string; readonly href: string },
+) {
+  await page.goto(copy.href);
   const { own } = await openRollup(page, cube);
 
   /**
@@ -150,84 +189,130 @@ test('a rollup edit Cube refuses is not published', async ({ page }, testInfo) =
   await expect(page.getByRole('textbox', { name: `${path}, as YAML` })).not.toContainText(
     'granularity:',
   );
-  await page.getByRole('button', { name: 'Save & reload Cube' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText(SAVED, PUBLISHED);
+  expect(
+    (await modelFilesIn(page.request, copy.folderId)).find((file) => file.path === path)?.content,
+  ).not.toContain('granularity:');
 
-  await expect(page.getByRole('alert').filter({ hasText: 'Cube refused the model' })).toBeVisible(
-    PUBLISHED,
-  );
-  const problem = page
-    .getByRole('region', { name: 'Problems' })
-    .getByRole('listitem')
-    .filter({ hasText: 'preAggregations.by_status.granularity) is required' });
-  await expect(problem.locator('.model-problems__where')).toHaveText(path);
+  // Proposed: Cube's refusal, on the file; nothing proposed, nothing published.
+  const proposed = await proposedModel(page.request, copy.folderId, copy.path);
+  expect(proposed.status(), await proposed.text()).toBe(422);
+  const { errors } = (await proposed.json()) as {
+    errors?: { path: string; message: string }[];
+  };
+  expect(errors).toEqual([
+    expect.objectContaining({
+      path,
+      message: expect.stringContaining('preAggregations.by_status.granularity) is required'),
+    }),
+  ]);
   expect(await storedFile(page, path)).toContain('granularity: month');
-});
+}
 
 /**
- * T207 / AC-189: IF a model change being published leaves a pre-aggregation
- * naming a measure, dimension, segment, time dimension or index column that
- * the model does not have, THEN THE SYSTEM SHALL refuse to publish the change
- * and show each unknown name on that pre-aggregation's row in its cube's
- * Pre-aggregations tab.
- * Fails when: a change whose rollup names `CUBE.no_such_member` is published
- * (the stored file changes), or the refusal does not show
- * `CUBE.no_such_member` on that rollup's row.
+ * The Propose dialog for a model in My workspace, opened from its row in
+ * Explore (T358, AC-284): a refusal is said as it opens, as a count of what
+ * would break (`[R60]`, "Just the count").
+ */
+async function proposeRefused(
+  page: Page,
+  copy: { readonly folderId: string; readonly path: string },
+) {
+  await page.goto(`/explore?folder=${encodeURIComponent(copy.folderId)}`);
+  await page
+    .getByTestId(`item-${copy.path}`)
+    .getByRole('button', { name: `Actions for ${copy.path.slice(copy.path.lastIndexOf('/') + 1)}` })
+    .click();
+  await page.getByRole('menuitem', { name: 'Propose…' }).click();
+  const dialog = page.getByRole('dialog', { name: /^Propose to / });
+  await expect(dialog.getByRole('alert')).toHaveText(
+    'Can’t propose: 1 item would break, so it wasn’t proposed.',
+    { timeout: 90_000 },
+  );
+  await expect(dialog.getByRole('button', { name: 'Propose', exact: true })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect(dialog).toHaveCount(0);
+}
+
+/**
+ * T207 / AC-189 (amended 2026-10-04, `[R60]`): IF a model change being
+ * proposed or approved leaves a pre-aggregation naming a measure, dimension,
+ * segment, time dimension or index column that the model does not have, THEN
+ * THE SYSTEM SHALL refuse the proposal or the approval, and a refused
+ * approval's review SHALL name each unknown name with its pre-aggregation and
+ * file (design 05, state L).
+ * Fails when: a change whose rollup names `CUBE.no_such_member` is proposed,
+ * or lands (the shared file changes); or a refused approval's review doesn't
+ * name the member the rollup lacks.
  *
  * Against the real Cube, which compiles such a rollup and then fails queries
- * on its cube (research/cube/pre-aggregations.md, "Observed locally").
+ * on its cube (research/cube/pre-aggregations.md, "Observed locally"). Here,
+ * the proposal's half: saved in My workspace, which checks no rollup (R60),
+ * and refused when proposed. The approval's half, a refused review naming
+ * the member, is `folder-models.spec.ts`'s.
  */
-test('a rollup naming a member the model doesn’t have is refused, and the name shown on its row', async ({
+test('a rollup naming a member the model doesn’t have is refused when proposed, naming it', async ({
   page,
 }, testInfo) => {
   const cube = `e2e_rollup_unknown_${testInfo.project.name}`;
   const path = await ownCubeFile(page.request, cube, withRollup(cube));
-  await page.goto(`/model/files/${encodeURIComponent(path)}`);
-  const { rollup, own } = await openRollup(page, cube);
+  const copy = await ownModelCopy(page.request, path);
+  try {
+    await page.goto(copy.href);
+    const { own } = await openRollup(page, cube);
 
-  // Written in the code: the form's picker names only what the model has
-  // (AC-224). The rollup's `- status`, line 26, made a name it doesn't have.
-  await page.locator('.cm-line', { hasText: /^\s+- status$/ }).click();
-  await page.keyboard.press('End');
-  await page.keyboard.press('Shift+Home');
-  await page.keyboard.type('- CUBE.no_such_member');
-  await expect(page.getByRole('textbox', { name: `${path}, as YAML` })).toContainText(
-    'CUBE.no_such_member',
-  );
-  // The form reads it, and keeps the name picked, until it is taken away.
-  await expect(
-    own('dimensions').getByRole('button', { name: 'CUBE.no_such_member', pressed: true }),
-  ).toBeVisible();
-  await page.getByRole('button', { name: 'Save & reload Cube' }).click();
+    // Written in the code: the form's picker names only what the model has
+    // (AC-224). The rollup's `- status`, line 26, made a name it doesn't have.
+    await page.locator('.cm-line', { hasText: /^\s+- status$/ }).click();
+    await page.keyboard.press('End');
+    await page.keyboard.press('Shift+Home');
+    await page.keyboard.type('- CUBE.no_such_member');
+    await expect(page.getByRole('textbox', { name: `${path}, as YAML` })).toContainText(
+      'CUBE.no_such_member',
+    );
+    // The form reads it, and keeps the name picked, until it is taken away.
+    await expect(
+      own('dimensions').getByRole('button', { name: 'CUBE.no_such_member', pressed: true }),
+    ).toBeVisible();
+    // Saved in My workspace: its save checks no rollup (R60).
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText(
+      SAVED,
+      PUBLISHED,
+    );
 
-  await expect(
-    page.getByRole('alert').filter({ hasText: 'names members the model doesn’t have' }),
-  ).toBeVisible(PUBLISHED);
-  const unknown = rollup.getByTestId('rollup-unknown');
-  await expect(unknown).toContainText('CUBE.no_such_member (dimensions)');
-  await expect(unknown.locator('[data-icon="error"]')).toHaveCount(1);
-  // Said in the Problems panel too, on the file at the rollup's line (its `- name: by_status`).
-  await expect(
-    page
-      .getByRole('region', { name: 'Problems' })
-      .getByRole('listitem')
-      .filter({ hasText: 'CUBE.no_such_member' })
-      .locator('.model-problems__where'),
-  ).toHaveText(`${path}:22`);
-  expect(await storedFile(page, path)).not.toContain('no_such_member');
+    // Proposed: the dialog counts what would break, and nothing is proposed.
+    await proposeRefused(page, copy);
+    // The refusal names the member, on the file at the rollup's line (its `- name: by_status`).
+    const proposed = await proposedModel(page.request, copy.folderId, copy.path);
+    expect(proposed.status()).toBe(422);
+    const { errors } = (await proposed.json()) as {
+      errors?: { path: string; line?: number; message: string }[];
+    };
+    expect(errors?.map((each) => [each.path, each.line])).toEqual([[path, 22]]);
+    expect(errors?.[0]?.message).toContain('CUBE.no_such_member (dimensions)');
+    expect(await storedFile(page, path)).not.toContain('no_such_member');
+  } finally {
+    await copy.drop();
+  }
 });
 
 /**
- * T265 / AC-235: WHEN the user publishes a model change in which a rollup
- * names members of cubes Cube cannot join, THE SYSTEM SHALL refuse the
- * publish, name the rollup and its file, and give Cube's reason.
- * `Fails when: such a change is published, or the refusal names no rollup or
- * gives no reason.`
+ * T265 / AC-235 (amended 2026-10-04, `[R60]`): WHEN the user proposes or
+ * approves a model change in which a rollup names members of cubes Cube
+ * cannot join, THE SYSTEM SHALL refuse it: the Propose dialog SHALL say how
+ * many items would break, and a refused approval's review SHALL name the
+ * rollup and its file and give Cube's reason (design 05, state L).
+ * `Fails when: such a change is proposed, or lands; the Propose dialog's
+ * refusal doesn't say how many items would break; or a refused approval's
+ * review names no rollup or gives no reason.`
  *
  * The seed's `products` joins nothing, and nothing but `orders` joins it: a
  * cube on the customers table naming `products.category` in a rollup can't
  * be joined. The real Cube, under the draft, says why (research/cube/
  * rollup-join-paths.md, Q5); the same rollup on a cube that joins products
- * publishes.
+ * publishes. Here, the proposal's half; the approval's is the next test.
  */
 test('a rollup naming a cube its own can’t be joined to is refused, naming it, its file and Cube’s reason', async ({
   page,
@@ -263,57 +348,152 @@ ${joins}
 `,
   );
   // With the join, the rollup publishes: what the store holds from here, on a rerun too.
-  const published = await request.post('/api/model/publish', {
-    data: { files: [{ path, content: joined }] },
-  });
-  expect(published.status(), await published.text()).toBe(200);
+  expect(await ownCubeFile(request, cube, joined)).toBe(path);
 
-  const refused = await request.post('/api/model/publish', {
-    data: { files: [{ path, content: file('customers', '') }] },
-  });
-  const { errors } = (await refused.json()) as {
-    errors?: { path: string; line?: number; message: string }[];
-  };
-  expect(refused.status()).toBe(422);
-  expect(errors).toHaveLength(1);
-  // `- name: by_category`, the fifteenth line of the file.
-  expect(errors?.[0]).toMatchObject({ path, line: 15 });
-  expect(errors?.[0]?.message).toMatch(
-    /^Pre-aggregation by_category can't be built: Cube cannot join its cubes\. Can't find join path to join .*'products'.*\.$/,
+  /**
+   * Published as a shared model is changed with sign-in off now (T451's
+   * switch; AC-254, R52): saved in the single user's copy, whose overlay
+   * plans no rollup (research xcube-slice-5.md, gotcha 15), and refused when
+   * proposed, by the dry run of the change's landing.
+   */
+  const copy = await ownModelCopy(request, path);
+  try {
+    const saved = await request.post('/api/model/publish', {
+      data: { folderId: copy.folderId, files: [{ path, content: file('customers', '') }] },
+      timeout: 90_000,
+    });
+    expect(saved.status(), await saved.text()).toBe(200);
+    const refused = await proposedModel(request, copy.folderId, copy.path);
+    const { errors } = (await refused.json()) as {
+      errors?: { path: string; line?: number; message: string }[];
+    };
+    expect(refused.status()).toBe(422);
+    expect(errors).toHaveLength(1);
+    // `- name: by_category`, the fifteenth line of the file.
+    expect(errors?.[0]).toMatchObject({ path, line: 15 });
+    expect(errors?.[0]?.message).toMatch(
+      /^Pre-aggregation by_category can't be built: Cube cannot join its cubes\. Can't find join path to join .*'products'.*\.$/,
+    );
+    expect(await storedFile(page, path)).toBe(joined);
+
+    // In the Model workspace: the copy back as it landed, its rollup made to
+    // name a cube this one doesn't join, in the code, saved, and refused as
+    // that, on its line, when proposed: counted in the Propose dialog (R60).
+    const again = await request.post('/api/model/publish', {
+      data: { folderId: copy.folderId, files: [{ path, content: joined }] },
+      timeout: 90_000,
+    });
+    expect(again.status(), await again.text()).toBe(200);
+    await page.goto(copy.href);
+    await page.locator('.cm-line', { hasText: /^\s+dimensions: \[products\.category\]$/ }).click();
+    await page.keyboard.press('End');
+    await page.keyboard.press('Shift+Home');
+    await page.keyboard.type('dimensions: [customers.country]');
+    await expect(page.getByRole('textbox', { name: `${path}, as YAML` })).toContainText(
+      'customers.country',
+    );
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText(
+      SAVED,
+      PUBLISHED,
+    );
+    await proposeRefused(page, copy);
+    const proposed = await proposedModel(request, copy.folderId, copy.path);
+    expect(proposed.status()).toBe(422);
+    const [problem] =
+      ((await proposed.json()) as { errors?: { path: string; line?: number; message: string }[] })
+        .errors ?? [];
+    expect(problem?.message).toMatch(/by_category can't be built: Cube cannot join its cubes/);
+    expect(problem?.message).toMatch(/Can't find join path to join .*'customers'/);
+    // `- name: by_category`, the nineteenth line of the file with its join.
+    expect([problem?.path, problem?.line]).toEqual([path, 19]);
+    expect(await storedFile(page, path)).toBe(joined);
+  } finally {
+    await copy.drop();
+  }
+});
+
+/**
+ * AC-235's approval half (amended 2026-10-04, `[R60]`): a rollup that could
+ * be joined when it was proposed — through a cube of its own that joins
+ * `products` — can't be once that cube's join is taken away and landed
+ * meanwhile. Approved, it is refused, and the review names the rollup, its
+ * file and Cube's reason (design 05, state L); nothing lands.
+ */
+test('a rollup whose join path went while it waited is refused at approval, the review naming it and Cube’s reason', async ({
+  page,
+  request,
+}, testInfo) => {
+  test.setTimeout(240_000);
+  const project = testInfo.project.name;
+  const bridge = `e2e_bridge_${project}`;
+  const cube = `e2e_bridged_${project}`;
+  const bridgeFile = (joins: string) =>
+    `cubes:\n  - name: ${bridge}\n    sql_table: public.orders\n${joins}    dimensions:\n      - name: id\n        sql: id\n        type: number\n        primary_key: true\n    measures:\n      - name: count\n        type: count\n`;
+  const bridgePath = await ownCubeFile(
+    request,
+    bridge,
+    bridgeFile(
+      `    joins:\n      - name: products\n        sql: "{CUBE}.product_id = {products.id}"\n        relationship: many_to_one\n`,
+    ),
   );
-  expect(await storedFile(page, path)).toBe(joined);
+  // New, to go to the root, its rollup on products through the bridge alone.
+  const path = `cubes/${cube}.yml`;
+  const held = await inMyWorkspace(request, 'root', [
+    {
+      path,
+      content: `cubes:\n  - name: ${cube}\n    sql_table: public.orders\n    joins:\n      - name: ${bridge}\n        sql: "{CUBE}.id = {${bridge}}.id"\n        relationship: one_to_one\n    dimensions:\n      - name: id\n        sql: id\n        type: number\n        primary_key: true\n    measures:\n      - name: count\n        type: count\n\n    pre_aggregations:\n      - name: by_category\n        measures: [count]\n        dimensions: [products.category]\n`,
+    },
+  ]);
+  const bridgeCopy = await ownModelCopy(request, bridgePath);
+  let proposal = '';
+  try {
+    // Proposed while it can be joined: the dry run passes.
+    const proposed = await proposedModel(request, held.folderOf(path), path);
+    expect(proposed.status(), await proposed.text()).toBe(201);
+    proposal = ((await proposed.json()) as { id: string }).id;
 
-  // In the Model workspace: the rollup made to name a cube this one doesn't
-  // join, in the code, is refused as that, on its line.
-  await page.goto(`/model/files/${encodeURIComponent(path)}`);
-  await page.locator('.cm-line', { hasText: /^\s+dimensions: \[products\.category\]$/ }).click();
-  await page.keyboard.press('End');
-  await page.keyboard.press('Shift+Home');
-  await page.keyboard.type('dimensions: [customers.country]');
-  await expect(page.getByRole('textbox', { name: `${path}, as YAML` })).toContainText(
-    'customers.country',
-  );
-  await page.getByRole('button', { name: 'Save & reload Cube' }).click();
+    // Meanwhile the bridge's join to products is taken away, and lands.
+    const saved = await request.post('/api/model/publish', {
+      data: {
+        folderId: bridgeCopy.folderId,
+        files: [{ path: bridgePath, content: bridgeFile('') }],
+      },
+      timeout: 90_000,
+    });
+    expect(saved.status(), await saved.text()).toBe(200);
+    await bridgeCopy.land();
 
-  await expect(
-    page.getByRole('alert').filter({ hasText: 'A pre-aggregation’s cubes can’t be joined' }),
-  ).toBeVisible(PUBLISHED);
-  const problem = page
-    .getByRole('region', { name: 'Problems' })
-    .getByRole('listitem')
-    .filter({ hasText: "by_category can't be built: Cube cannot join its cubes" });
-  await expect(problem).toContainText(/Can't find join path to join .*'customers'/);
-  // `- name: by_category`, the nineteenth line of the file with its join.
-  await expect(problem.locator('.model-problems__where')).toHaveText(`${path}:19`);
-  expect(await storedFile(page, path)).toBe(joined);
+    // Approved now, it is refused, the review naming the rollup, its file and why.
+    await page.goto(`/reviews/${proposal}`);
+    await page.getByRole('button', { name: 'Approve my own proposal' }).click();
+    await page.getByRole('button', { name: 'Approve and publish' }).click();
+    await expect(page.getByRole('alert')).toHaveText('Can’t approve: 1 item would break', {
+      timeout: 90_000,
+    });
+    const broken = page.locator('.review-refusal__break');
+    await expect(broken).toHaveCount(1);
+    await expect(broken).toContainText(`${path} · Shared`);
+    await expect(broken).toContainText(
+      /Pre-aggregation by_category can't be built: Cube cannot join its cubes\. Can't find join path to join /,
+    );
+    // Nothing landed.
+    expect((await modelFilesIn(request, 'root')).map((file) => file.path)).not.toContain(path);
+  } finally {
+    if (proposal !== '') await request.post(`/api/proposals/${proposal}/reject`, { data: {} });
+    await held.drop();
+    await bridgeCopy.drop();
+  }
 });
 
 /**
  * T207's review: a change to one file that leaves another file's rollup
- * naming what the model no longer has is refused too — and that rollup's own
- * row says so, when its file is opened from the refusal.
+ * naming what the model no longer has is refused too, the refusal naming
+ * that rollup's file and the member it lacks. Proposed, as a shared model is
+ * changed now (T451's switch; AC-189 amended, `[R60]`): the copy's save in My
+ * workspace checks no rollup, and the proposal is refused.
  */
-test('taking away a member another file’s rollup names is refused, and that rollup’s row says so', async ({
+test('taking away a member another file’s rollup names is refused when proposed, naming that file', async ({
   page,
 }, testInfo) => {
   const base = `e2e_rollup_base_${testInfo.project.name}`;
@@ -334,34 +514,34 @@ test('taking away a member another file’s rollup names is refused, and that ro
     `cubes:\n  - name: ${user}\n    sql_table: public.orders\n    joins:\n      - name: ${base}\n        relationship: one_to_one\n        sql: "{CUBE}.id = {${base}}.id"\n    dimensions:\n      - name: id\n        sql: id\n        type: number\n        primary_key: true\n    measures:\n      - name: count\n        type: count\n    pre_aggregations:\n      - name: by_region\n        measures: [CUBE.count]\n        dimensions: [${base}.region]\n`,
   );
 
-  await page.goto(`/model/files/${encodeURIComponent(basePath)}`);
-  const form = page.getByRole('region', { name: `Cube ${base}` });
-  await form.getByRole('tab', { name: /^Dimensions/ }).click();
-  // Remove is inside the open member since T480.
-  await form.locator('.model-member__name', { hasText: /^region$/ }).click();
-  await form.getByRole('button', { name: /^Remove .* region$/ }).click();
-  await page.getByRole('button', { name: 'Save & reload Cube' }).click();
+  const copy = await ownModelCopy(page.request, basePath);
+  try {
+    await page.goto(copy.href);
+    const form = page.getByRole('region', { name: `Cube ${base}` });
+    await form.getByRole('tab', { name: /^Dimensions/ }).click();
+    // Remove is inside the open member since T480.
+    await form.locator('.model-member__name', { hasText: /^region$/ }).click();
+    await form.getByRole('button', { name: /^Remove .* region$/ }).click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText(
+      SAVED,
+      PUBLISHED,
+    );
 
-  await expect(
-    page.getByRole('alert').filter({ hasText: 'names members the model doesn’t have' }),
-  ).toBeVisible(PUBLISHED);
-  expect(await storedFile(page, basePath)).toContain('name: region');
-
-  // The refusal is about the other file's rollup: followed there, its row says what is missing.
-  await page
-    .getByRole('region', { name: 'Problems' })
-    .getByRole('link', { name: new RegExp(`^${userPath}`) })
-    .click();
-  await expect(page).toHaveURL(new RegExp(encodeURIComponent(userPath)));
-  const userForm = page.getByRole('region', { name: `Cube ${user}` });
-  const tab = userForm.getByRole('tab', { name: /^Pre-aggs/ });
-  await expect(tab.locator('[data-icon="error"]')).toHaveCount(1);
-  await tab.click();
-  const rollup = userForm
-    .getByRole('list', { name: 'Pre-aggregations' })
-    .locator(':scope > li')
-    .filter({ has: page.locator('.model-member__name', { hasText: /^by_region$/ }) });
-  await expect(rollup.getByTestId('rollup-unknown')).toContainText(`${base}.region (dimensions)`);
+    // Proposed: counted in the dialog; the refusal is about the other file's
+    // rollup, naming it and what it lacks; nothing changes.
+    await proposeRefused(page, copy);
+    const proposed = await proposedModel(page.request, copy.folderId, copy.path);
+    expect(proposed.status()).toBe(422);
+    const { errors } = (await proposed.json()) as {
+      errors?: { path: string; message: string }[];
+    };
+    expect(errors?.map((each) => each.path)).toEqual([userPath]);
+    expect(errors?.[0]?.message).toContain(`${base}.region (dimensions)`);
+    expect(await storedFile(page, basePath)).toContain('name: region');
+  } finally {
+    await copy.drop();
+  }
 });
 
 /**
@@ -391,8 +571,25 @@ test('an index’s columns are moved into order, and an aggregate one is written
         '              - status\n              - customer_id\n',
     );
   const path = await ownCubeFile(page.request, cube, content);
-  await page.goto(`/model/files/${encodeURIComponent(path)}`);
-  const yaml = page.getByRole('textbox', { name: `${path}, as YAML` });
+  // In the single user's copy, saved, then landed (T451's switch; AC-254).
+  const copy = await ownModelCopy(page.request, path);
+  try {
+    await page.goto(copy.href);
+    await indexOrdered(page, cube);
+    await copy.land();
+  } finally {
+    await copy.drop();
+  }
+  // The file, in the order moved into, the index marked aggregate.
+  expect(await storedFile(page, path)).toContain(
+    '        indexes:\n          - name: by_customer\n            columns:\n' +
+      '              - customer_id\n              - status\n            type: aggregate\n',
+  );
+});
+
+/** The rollup's index `by_customer` reordered and made aggregate, and saved. */
+async function indexOrdered(page: Page, cube: string) {
+  const yaml = page.getByRole('textbox', { name: /, as YAML$/ });
   const { rollup } = await openRollup(page, cube);
   await rollup.locator('.model-member__name', { hasText: /^by_customer$/ }).click();
   const index = rollup.locator('.model-member').filter({
@@ -406,17 +603,9 @@ test('an index’s columns are moved into order, and an aggregate one is written
 
   await expect(columns.locator('.ordered-references__name')).toHaveText(['customer_id', 'status']);
   await expect(yaml).toContainText('type: aggregate');
-  await page.getByRole('button', { name: 'Save & reload Cube' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Published' })).toHaveText(
-    'Published. Cube is reading the new model.',
-    PUBLISHED,
-  );
-  // The file, in the order moved into, the index marked aggregate.
-  expect(await storedFile(page, path)).toContain(
-    '        indexes:\n          - name: by_customer\n            columns:\n' +
-      '              - customer_id\n              - status\n            type: aggregate\n',
-  );
-});
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText(SAVED, PUBLISHED);
+}
 
 /**
  * T150 / AC-144: WHEN the user opens a chart's acceleration panel, THE SYSTEM

@@ -5,7 +5,13 @@ import { describe, expect, it, vi } from 'vitest';
 import type { FolderNode } from '../explore/FolderTree';
 import { FileList, modelFilesQuery, ModelFilesNotFound } from './FileList';
 import { FileTree } from './FileTree';
-import { fileHref, modelAccessOf, modelHref, shownMemberOf } from './inFolder';
+import {
+  fileHref,
+  modelAccessOf,
+  modelHref,
+  modelsAreWorkspaceOnly,
+  shownMemberOf,
+} from './inFolder';
 import { JoinEditor } from './JoinEditor';
 import { ProblemsPanel } from './ProblemsPanel';
 import { ReferencesWarning } from './ReferencesWarning';
@@ -51,12 +57,26 @@ describe('who may change a model where (rules 70 and 71, AC-222)', () => {
     readWrite,
   });
 
-  it('lets the one user of sign-in off change it in place', () => {
+  // T451's switch (2026-10-01, for the user): once models land through an
+  // approval, the one user of sign-in off changes a shared one in My
+  // workspace, as a Super-Admin does (AC-254, AC-278; R52).
+  it('keeps a shared model read-only for the one user of sign-in off, offering Edit in my workspace', () => {
     expect(modelAccessOf({ me: me('off'), right: 'unknown' })).toEqual({
+      readOnly: true,
+      editInWorkspace: true,
+      useInWorkspace: false,
+    });
+    expect(modelAccessOf({ me: me('off'), right: 'unknown', inWorkspace: true })).toEqual({
       readOnly: false,
       editInWorkspace: false,
       useInWorkspace: false,
     });
+  });
+
+  it('says models are workspace-only once who is asking is known, sign-in on or off', () => {
+    expect(modelsAreWorkspaceOnly(me('off'))).toBe(true);
+    expect(modelsAreWorkspaceOnly(me('oidc'))).toBe(true);
+    expect(modelsAreWorkspaceOnly(undefined)).toBe(false);
   });
 
   it('keeps a shared model read-only with sign-in on, a Super-Admin’s too, offering Edit in my workspace', () => {

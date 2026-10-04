@@ -52,11 +52,23 @@ export function rollupHref({
 }
 
 /**
+ * Whether a shared model changes only through My workspace and a proposal:
+ * signed in (T347), and with sign-in off too since a model lands through an
+ * approval (T451's switch; AC-254, R52). So where Generate cubes and New
+ * cube add, and how a shared model is offered, follow this, never whether
+ * anyone is signed in. Unknown until who is asking is.
+ */
+export function modelsAreWorkspaceOnly(me: Me | undefined): boolean {
+  return me !== undefined;
+}
+
+/**
  * Who may change a model, and how (rules 70 and 71, AC-222, AC-278):
- * - with sign-in off, its one user, in place, as phase 1 had it;
- * - with sign-in on, nobody in place: a model outside the workspace is
- *   shared, changed only in a copy in My workspace. "Edit in my workspace"
- *   is for those who could propose it back — a Super-Admin or read-write
+ * - nobody in place: a model outside the workspace is shared, changed only
+ *   in a copy in My workspace (`modelsAreWorkspaceOnly`). With sign-in off,
+ *   its one user is offered "Edit in my workspace", as a Super-Admin is
+ *   (T451's switch; AC-254, R52). With sign-in on, "Edit in my workspace" is
+ *   for those who could propose it back — a Super-Admin or read-write
  *   member, with write on the model's folder; "Use in my workspace" for one
  *   with a workspace who may only read it (T543, AC-283).
  * - in My workspace, its owner, there: its models are changed in place and
@@ -84,7 +96,9 @@ export function modelAccessOf({
   readonly useInWorkspace: boolean;
 } {
   const none = { editInWorkspace: false, useInWorkspace: false };
-  if (me?.security === 'off') return { readOnly: false, ...none };
+  // The one user of sign-in off holds every right, as a Super-Admin does.
+  if (me?.security === 'off')
+    return { readOnly: !inWorkspace, editInWorkspace: !inWorkspace, useInWorkspace: false };
   if (inWorkspace) return { readOnly: me?.security !== 'oidc', ...none };
   const hasWorkspace = me?.security === 'oidc' && (me.superAdmin || me.readWrite === true);
   return {

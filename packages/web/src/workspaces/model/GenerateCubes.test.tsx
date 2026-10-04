@@ -26,6 +26,8 @@ function api(
   sources: readonly { dataSource: string; dbType: string }[] = [
     { dataSource: 'default', dbType: 'postgres' },
   ],
+  /** Each shared folder's model files, by its id, as `GET /api/model/files?folder=` answers them. */
+  folderFiles: Readonly<Record<string, readonly { path: string; content: string }[]>> = {},
 ) {
   const asked: { url: string; body?: unknown }[] = [];
   vi.stubGlobal(
@@ -36,8 +38,7 @@ function api(
       asked.push({ url, ...(body === undefined ? {} : { body }) });
       const json = (value: unknown, status = 200) =>
         new Response(JSON.stringify(value), { status });
-      if (url === '/api/introspection/sources')
-        return json({ dataSources: sources });
+      if (url === '/api/introspection/sources') return json({ dataSources: sources });
       if (url.startsWith('/api/introspection/sources/default/schemas'))
         return json({ schemas: [{ name: 'generate' }, { name: 'public' }] });
       if (url.startsWith('/api/introspection/sources/default/tables'))
@@ -104,6 +105,13 @@ function api(
           ],
         });
       if (url === '/api/model/publish') return json({ version: 'v8' });
+      if (url.startsWith('/api/model/files?folder='))
+        return json({
+          files:
+            folderFiles[decodeURIComponent(url.slice('/api/model/files?folder='.length))] ?? [],
+        });
+      // The shared root's, which the API answers with no folder named.
+      if (url === '/api/model/files') return json({ files: folderFiles['root'] ?? [] });
       return json({ error: 'unexpected' }, 500);
     }),
   );
@@ -1042,9 +1050,9 @@ describe('generating cubes in My workspace (T492, AC-350)', () => {
     expect((source as HTMLInputElement).checked).toBe(true);
     await reviewed(dialog);
     const tree = within(dialog).getByRole('tree', { name: 'Target folder' });
-    expect(within(tree).getByRole('treeitem', { name: 'Shared' }).getAttribute('aria-selected')).toBe(
-      'true',
-    );
+    expect(
+      within(tree).getByRole('treeitem', { name: 'Shared' }).getAttribute('aria-selected'),
+    ).toBe('true');
   });
 
   it('says so when the folders they may go to can’t be read', async () => {
@@ -1054,6 +1062,66 @@ describe('generating cubes in My workspace (T492, AC-350)', () => {
     expect(within(dialog).getByRole('alert').textContent).toBe(
       'The folders they may go to couldn’t be read: Refused (503).',
     );
+  });
+
+  /**
+   * AC-347 there (T492, with T451's switch): My workspace's model is what it
+   * adds to, so the shared root's cubes, which every folder's path reaches,
+   * say which tables are in the model, as its own do.
+   */
+  it('marks a table a root cube reads from as in the model, before a folder is chosen', async () => {
+    api(undefined, undefined, {
+      root: [
+        {
+          path: 'cubes/stores.yml',
+          content: 'cubes:\n  - name: stores\n    sql_table: generate.chrome_stores\n',
+        },
+      ],
+    });
+    const { dialog } = pane({
+      workspace: { targets },
+      existing: [{ path: 'cubes/mine.yml', content: 'cubes:\n  - name: mine\n' }],
+    });
+    const tables = await toTables(dialog);
+    const row = within(tables).getByRole('checkbox', { name: 'chrome_stores' }).closest('tr')!;
+    await vi.waitFor(() => {
+      expect(row.querySelector('.generate-pane__in-model')?.textContent).toBe('In model · stores');
+    });
+  });
+
+  /**
+   * AC-249 there (T492, with T451's switch): a generated cube is new to the
+   * folder it goes to, so one that folder has, by name or file, is marked
+   * and not added, as one the model has is outside My workspace.
+   */
+  it('marks a cube the folder chosen has, and adds nothing while it clashes', async () => {
+    api(undefined, undefined, {
+      'f-sales': [{ path: 'cubes/stores.yml', content: STORES }],
+    });
+    const { dialog, onAdded } = pane({ workspace: { targets } });
+    await reviewed(dialog);
+    const stores = within(dialog).getByRole('region', { name: 'cubes/chrome_stores.yml' });
+    // Shared's has neither: both ready.
+    const tree = within(dialog).getByRole('tree', { name: 'Target folder' });
+    await userEvent.click(within(tree).getByRole('treeitem', { name: 'Shared' }));
+    expect(stores.querySelector('.generate-pane__status')?.textContent).toBe('Ready');
+
+    // Sales has `chrome_stores`: it clashes there, named, and nothing is added.
+    await userEvent.click(within(tree).getByRole('treeitem', { name: 'Sales' }));
+    await vi.waitFor(() => {
+      expect(stores.querySelector('.generate-pane__status')?.textContent).toBe('Clashes');
+    });
+    expect(
+      stores.querySelector('.generate-pane__file-body > .generate-pane__note.is-err p')
+        ?.textContent,
+    ).toBe('chrome_stores is already a cube in cubes/stores.yml.');
+    // Its file is the folder's, not My workspace's: opened there, in a new
+    // tab, so the pane and its generation stay as they are.
+    const open = within(stores).getByRole('link', { name: 'Open cubes/stores.yml' });
+    expect(open.getAttribute('href')).toBe('/explore/folders/f-sales/models/cubes%2Fstores.yml');
+    expect(open.getAttribute('target')).toBe('_blank');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add 2 cubes as drafts' }));
+    expect(onAdded).not.toHaveBeenCalled();
   });
 
   it('asks no folder outside My workspace', async () => {

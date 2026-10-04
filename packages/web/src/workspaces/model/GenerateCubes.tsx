@@ -20,6 +20,8 @@ import { DATA_SOURCES_QUERY } from '../data-sources/query';
 import { TargetTree } from '../data-sources/TargetTree';
 import type { Target } from '../explore/NewItemDialog';
 import { SHARED_ROOT } from '../explore/roots';
+import { modelFilesQuery } from './FileList';
+import { fileHref } from './inFolder';
 import { objectsOf } from './objects';
 import { modelOf } from './sync';
 import { YamlEditor } from './YamlEditor';
@@ -252,6 +254,15 @@ interface Clash {
   /** The cube or view of the same name, when that is the clash. */
   readonly name?: string;
   readonly kind?: 'cube' | 'view';
+  /** In My workspace, the shared folder the file is in, when it is that folder's (T492). */
+  readonly folderId?: string;
+}
+
+/** A file the generated ones must not clash with; a shared folder's, by its folder. */
+interface Held {
+  readonly path: string;
+  readonly content: string;
+  readonly folderId?: string;
 }
 
 /** A part of a table's name as `sql_table` writes it: quoted, it is exact; else not by case. */
@@ -331,24 +342,26 @@ const readersFor = (readers: readonly Reader[], source: string | null, table: Ta
  * (packages/api/src/model/clashes.ts).
  */
 function clashesWith(
-  existing: readonly { readonly path: string; readonly content: string }[],
+  existing: readonly Held[],
   created: readonly { readonly path: string; readonly content: string }[],
 ): Map<string, Clash[]> {
-  const paths = new Set(existing.map((file) => file.path));
-  const names = new Map<string, { kind: 'cube' | 'view'; path: string }>();
+  const folderOf = (file: Held) => (file.folderId === undefined ? {} : { folderId: file.folderId });
+  const paths = new Map(existing.map((file) => [file.path, folderOf(file)] as const));
+  const names = new Map<string, { kind: 'cube' | 'view'; path: string; folderId?: string }>();
   for (const file of existing)
     for (const { kind, name } of objectsOf(file.path, file.content).objects)
-      if (!names.has(name)) names.set(name, { kind, path: file.path });
+      if (!names.has(name)) names.set(name, { kind, path: file.path, ...folderOf(file) });
   const clashes = new Map<string, Clash[]>();
   for (const file of created) {
     const byName = objectsOf(file.path, file.content).objects.flatMap(({ name }) => {
       const found = names.get(name);
       return found === undefined ? [] : [{ name, ...found }];
     });
+    const atPath = paths.get(file.path);
     const said: Clash[] = [
       // "The model": the store's files and the unpublished drafts (T276's review).
-      ...(paths.has(file.path) && !byName.some((clash) => clash.path === file.path)
-        ? [{ path: file.path }]
+      ...(atPath !== undefined && !byName.some((clash) => clash.path === file.path)
+        ? [{ path: file.path, ...atPath }]
         : []),
       ...byName,
     ];
@@ -658,6 +671,26 @@ export function GenerateCubes({
 
   const pathOf = (cube: Generated) => `cubes/${cube.fileName}`;
   /**
+   * In My workspace, the folder chosen for them as well: generated cubes are
+   * new to the folder they go to, file and name (AC-249), as the API holds a
+   * save of them to (T492, with T451's switch).
+   */
+  const targetFiles = useQuery({
+    ...modelFilesQuery(target === '' ? SHARED_ROOT.id : target),
+    enabled: workspace !== undefined && target !== '',
+  });
+  const against = useMemo<readonly Held[]>(
+    () =>
+      workspace !== undefined && target !== '' && targetFiles.data !== undefined
+        ? [
+            // My workspace's own, then the folder's, each by its folder.
+            ...existing.map(({ path, content }) => ({ path, content })),
+            ...targetFiles.data.map(({ path, content }) => ({ path, content, folderId: target })),
+          ]
+        : existing,
+    [workspace, target, targetFiles.data, existing],
+  );
+  /**
    * Against the model as it is now: a clash put right in a file opened beside
    * the pane clears at once (T485's review). Once added the cubes are the
    * model's drafts, and the files are listed, not checked (T276's review).
@@ -665,16 +698,32 @@ export function GenerateCubes({
   const clashes =
     generated.kind === 'ok'
       ? clashesWith(
-          existing,
+          against,
           generated.value.map((cube) => ({ path: pathOf(cube), content: cube.content })),
         )
       : new Map<string, Clash[]>();
   const clashing = [...clashes.values()].reduce((sum, each) => sum + each.length, 0);
   /**
+   * In My workspace, the shared root's model too, which every folder's path
+   * reaches: which tables are in the model is theirs to say as well (AC-347).
+   */
+  const rootFiles = useQuery({
+    ...modelFilesQuery(SHARED_ROOT.id),
+    enabled: workspace !== undefined,
+  });
+  /**
    * The model's cubes by the table each reads, before anything is generated
    * (T489, AC-347): read once per model, not at each keystroke in the pane.
    */
-  const readers = useMemo(() => readersOf(existing), [existing]);
+  const readers = useMemo(
+    () =>
+      readersOf(
+        workspace === undefined
+          ? existing
+          : [...against, ...(target === SHARED_ROOT.id ? [] : (rootFiles.data ?? []))],
+      ),
+    [workspace, existing, against, target, rootFiles.data],
+  );
   /** A generated file's status (design 11 pin 13). */
   const statusOf = (cube: Generated): 'ready' | 'clash' | 'check' =>
     (clashes.get(pathOf(cube)) ?? []).length > 0
@@ -1498,7 +1547,23 @@ export function GenerateCubes({
                                     )}
                                   </p>
                                   <div className="generate-pane__actions">
-                                    {onShow === undefined ? null : (
+                                    {clash.folderId !== undefined ? (
+                                      // The folder's, from My workspace: opened there, in a
+                                      // new tab, the pane and its generation kept (T492).
+                                      <a
+                                        className="btn btn-sm"
+                                        href={fileHref(
+                                          clash.path,
+                                          clash.folderId === SHARED_ROOT.id
+                                            ? undefined
+                                            : clash.folderId,
+                                        )}
+                                        target="_blank"
+                                        rel="noopener"
+                                      >
+                                        Open {clash.path}
+                                      </a>
+                                    ) : onShow === undefined ? null : (
                                       <button
                                         type="button"
                                         className="btn-sm"

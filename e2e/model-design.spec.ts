@@ -1,4 +1,7 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+import { inMyWorkspace } from './model-files';
+import { myModelCopy } from './workspace';
 
 /**
  * The Model workspace drawn as phase-1 design 03
@@ -11,6 +14,30 @@ import { expect, test } from '@playwright/test';
 test.use({ viewport: { width: 1440, height: 900 } });
 
 const ORDERS = '/model/files/cubes%2Forders.yml';
+
+/**
+ * The single user's copy of the seed's orders.yml in My workspace, where a
+ * shared model is changed with sign-in off as with it on (T451's switch;
+ * AC-254, R52): edited here, never saved, as every spec asking shares it.
+ */
+const ordersCopy = async (page: Page) => (await myModelCopy(page.request, 'cubes/orders.yml')).href;
+
+/** My workspace's models, where a model is made (T451's switch; AC-222, AC-254). */
+const MY_MODELS = '/explore/folders/mine/models';
+
+/**
+ * New cube or New view from the tree, in My workspace: asked first where it
+ * is to go (T347; AC-282), the shared root here, its name as offered.
+ */
+async function madeInWorkspace(page: Page, kind: 'cube' | 'view') {
+  await page
+    .getByRole('navigation', { name: 'Model files' })
+    .getByRole('button', { name: `New ${kind}` })
+    .click();
+  const asking = page.getByRole('dialog', { name: `New ${kind} in My workspace` });
+  await asking.getByRole('combobox', { name: 'Target folder' }).selectOption('root');
+  await asking.getByRole('button', { name: 'Create' }).click();
+}
 
 test('T470: the form is flat in its pane, 676 : 524 beside the code, and every tab fits (UX-074, UX-077)', async ({
   page,
@@ -85,7 +112,7 @@ test('T470: the form is flat in its pane, 676 : 524 beside the code, and every t
 
 test('T479: the tree as design 03 note 1 — a Model head, folder rows, full-width files, tags, actions after (MW-02, MW-03)', async ({
   page,
-}) => {
+}, testInfo) => {
   await page.goto(ORDERS);
   const tree = page.getByRole('navigation', { name: 'Model files' });
   const box = await tree.boundingBox();
@@ -164,7 +191,29 @@ test('T479: the tree as design 03 note 1 — a Model head, folder rows, full-wid
   await expect(jinja).toHaveText('Jinja, read-only');
   await expect(jinja).toHaveAttribute('title', 'Jinja template · read-only here');
 
-  // New cube, New view and Generate cubes after the files, not over them.
+  // Shared, read-only: nothing to make here (T451's switch; AC-222).
+  await expect(tree.locator('.model-tree__actions')).toHaveCount(0);
+
+  // New cube, New view and Generate cubes after the files, not over them: in
+  // My workspace, where the single user makes a model, beside a file of its own.
+  const own = `e2e_tree_${testInfo.project.name}`;
+  const held = await inMyWorkspace(page.request, 'root', [
+    {
+      path: `cubes/${own}.yml`,
+      content: `cubes:\n  - name: ${own}\n    sql_table: public.orders\n`,
+    },
+  ]);
+  try {
+    await page.goto(`/explore/folders/${held.folderOf(`cubes/${own}.yml`)}/models`);
+    await workspaceActions(page, own);
+  } finally {
+    await held.drop();
+  }
+});
+
+/** The tree's foot in My workspace, after the file `own` (T479; design 03 note 1). */
+async function workspaceActions(page: Page, own: string) {
+  const tree = page.getByRole('navigation', { name: 'Model files' });
   const actions = tree.locator('.model-tree__actions');
   await expect(actions.getByRole('button')).toHaveText([
     '+ New cube',
@@ -197,15 +246,21 @@ test('T479: the tree as design 03 note 1 — a Model head, folder rows, full-wid
       }),
   ).toBeGreaterThanOrEqual(3);
   expect((await actions.boundingBox())?.y ?? 0).toBeGreaterThan(
-    (await tree.getByRole('link', { name: /^secured_orders\.yml/ }).boundingBox())?.y ?? Infinity,
+    (await tree.getByRole('link', { name: new RegExp(`^${own}\\.yml`) }).boundingBox())?.y ??
+      Infinity,
   );
-});
+}
 
 test('T479: the editor head as design 03 note 2 — 44 px, a 13/600 path, its state, Discard and Save (MW-05)', async ({
   page,
 }) => {
-  await page.goto(ORDERS);
+  // In the single user's copy in My workspace, where a shared model is
+  // changed (T451's switch; AC-254): saved there, never published (T347).
+  const copy = await myModelCopy(page.request, 'cubes/orders.yml');
+  await page.goto(copy.href);
   const head = page.getByRole('region', { name: 'Form editor' }).locator('.model-editor__head');
+  // Measured once the copy is read.
+  await expect(head.getByTestId('selected-object')).toBeVisible();
   expect(Math.round((await head.boundingBox())?.height ?? 0)).toBe(44);
   const path = head.getByTestId('selected-object');
   await expect(path).toHaveText('cubes/orders.yml');
@@ -217,38 +272,37 @@ test('T479: the editor head as design 03 note 2 — 44 px, a 13/600 path, its st
     }),
   ).toEqual(['13px', '600', 'IBM Plex Mono']);
 
-  // At rest: published, and both actions there but disabled (D2).
+  // At rest: saved, and both actions there but disabled (D2).
   const state = head.locator('.model-editor__state');
-  await expect(state).toHaveText('Published · no changes');
+  await expect(state).toHaveText('Saved · no changes');
   await expect(state.locator('svg')).toHaveAttribute('data-icon', 'ok');
   await expect(head.getByRole('button', { name: 'Discard' })).toBeDisabled();
-  await expect(head.getByRole('button', { name: 'Save & reload Cube' })).toBeDisabled();
+  await expect(head.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
   // Then its ⋯, holding Delete *file*… (T526; design 14, D1).
-  await expect(head.getByRole('button')).toHaveText(['Discard', 'Save & reload Cube', '⋯']);
+  await expect(head.getByRole('button')).toHaveText(['Discard', 'Save', '⋯']);
 
-  // Edited: unpublished, and both enabled.
+  // Edited: unsaved, and both enabled.
   await page
     .getByRole('region', { name: 'Cube orders' })
     .getByLabel('Title', { exact: true })
     .fill('Orders!');
-  await expect(state).toHaveText('Unpublished changes');
+  await expect(state).toHaveText('Unsaved changes');
   await expect(state.locator('svg')).toHaveAttribute('data-icon', 'idle');
   await expect(head.getByRole('button', { name: 'Discard' })).toBeEnabled();
-  await expect(head.getByRole('button', { name: 'Save & reload Cube' })).toBeEnabled();
+  await expect(head.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
   await head.getByRole('button', { name: 'Discard' }).click();
-  await expect(state).toHaveText('Published · no changes');
+  await expect(state).toHaveText('Saved · no changes');
 
   // A file made here says it is new, with the clock, not the tick; discarded,
   // it goes, and the overview opens.
-  await page
-    .getByRole('navigation', { name: 'Model files' })
-    .getByRole('button', { name: 'New cube' })
-    .click();
-  await expect(page).toHaveURL(/new_cube_1\.yml$/);
-  await expect(head.locator('.model-editor__state')).toHaveText('New file · not published');
+  await madeInWorkspace(page, 'cube');
+  await expect(page).toHaveURL(/new_cube_\d+\.yml$/);
+  await expect(head.locator('.model-editor__state')).toHaveText('New file · not saved');
   await expect(head.locator('.model-editor__state svg')).toHaveAttribute('data-icon', 'idle');
   await head.getByRole('button', { name: 'Discard' }).click();
-  await expect(page).toHaveURL(/\/model$/);
+  await expect(page).toHaveURL(
+    new RegExp(`/explore/folders/${encodeURIComponent(copy.folderId)}/models$`),
+  );
 });
 
 test('T480: members as rows that read like the YAML, opening into a short grouped form (MW-09, MW-10, MW-12)', async ({
@@ -370,7 +424,12 @@ test('T480: members as rows that read like the YAML, opening into a short groupe
 test('T485: Generate cubes docks 480 px beside the model, and stays docked as a clashing file opens (design 11)', async ({
   page,
 }) => {
-  await page.goto('/model');
+  // In My workspace, where cubes are generated (T492; T451's switch, AC-254):
+  // in the folder of the single user's copy of orders.yml, which a generated
+  // orders cube clashes with.
+  const copy = await myModelCopy(page.request, 'cubes/orders.yml');
+  const folder = encodeURIComponent(copy.folderId);
+  await page.goto(`/explore/folders/${folder}/models`);
   const tree = page.getByRole('navigation', { name: 'Model files' });
   const opener = tree.getByRole('button', { name: 'Generate from a data source…' });
   await opener.click();
@@ -408,10 +467,21 @@ test('T485: Generate cubes docks 480 px beside the model, and stays docked as a 
   const orders = pane.getByRole('region', { name: 'cubes/orders.yml' });
   await expect(orders.locator('.generate-pane__status')).toHaveText('Clashes');
   expect(await footAt()).toBe(first);
+  // To go to Shared, whose orders.yml it clashes with too, the file named is
+  // still this folder's own, opened here, not in a tab of its own (T451's switch).
+  await pane
+    .getByRole('tree', { name: 'Target folder' })
+    .getByRole('treeitem', { name: 'Shared' })
+    .click();
+  await expect(orders.locator('.generate-pane__status')).toHaveText('Clashes');
+  await expect(orders.getByRole('link', { name: 'Open cubes/orders.yml' })).toHaveCount(0);
+  await expect(orders.getByRole('button', { name: 'Open cubes/orders.yml' })).toBeVisible();
 
   // Open the file it clashes with: another page, and the pane stays, as it was (pin 17).
   await orders.getByRole('button', { name: 'Open cubes/orders.yml' }).click();
-  await expect(page).toHaveURL(/\/model\/files\/cubes%2Forders\.yml$/);
+  await expect(page).toHaveURL(
+    new RegExp(`/explore/folders/${folder}/models/cubes%2Forders\\.yml$`),
+  );
   await expect(pane.getByRole('region', { name: 'cubes/orders.yml' })).toBeVisible();
   // On a file's page it takes the code's place, and the form widens (state Q).
   await expect(page.getByRole('region', { name: 'YAML and join diagram' })).toBeHidden();
@@ -584,7 +654,7 @@ test('T482: a file’s comment said upfront and shown in the YAML, the open memb
 
 /**
  * T482's review: a file of several forms — two cubes and a view — as a draft
- * kept for the tab, so nothing is published. The bar is said once; each
+ * kept for the tab, so nothing is saved. The bar is said once; each
  * form's open member is tinted, whichever form is used after; a list tab
  * opens with its members closed; the tint follows a line moved in the code.
  */
@@ -619,10 +689,14 @@ const PAIR = [
 test('T482: in a file of two cubes and a view, the bar is said once and each form’s open member tinted', async ({
   page,
 }) => {
+  // In My workspace, where a model is made (T451's switch; AC-254).
   await page.addInitScript((content) => {
-    sessionStorage.setItem('wechart.model.drafts', JSON.stringify({ 'cubes/pair.yml': content }));
+    sessionStorage.setItem(
+      'wechart.model.drafts.mine',
+      JSON.stringify({ 'cubes/pair.yml': content }),
+    );
   }, PAIR);
-  await page.goto('/model/files/cubes%2Fpair.yml');
+  await page.goto(`${MY_MODELS}/cubes%2Fpair.yml`);
   const a = page.getByRole('region', { name: 'Cube pair_a' });
   const b = page.getByRole('region', { name: 'Cube pair_b' });
   const view = page.getByRole('region', { name: 'View pair_view' });
@@ -744,24 +818,16 @@ test('T481: a cube’s General as design 03 state B — Basics, Refresh, Advance
 test('T486: the overview as design 12 — one card, a row per cube or view, + New ▾ in the title row (MW-01)', async ({
   page,
 }) => {
+  // The shared root's, read-only with sign-in off as with it on (T451's
+  // switch; AC-254): no + New, and a row opens its file to read (T342).
   await page.goto('/model');
   const overview = page.locator('.model-page__overview');
-  // The title row: "Model" left, its one primary + New ▾ right (pin 5).
-  const title = overview.getByRole('heading', { level: 1, name: 'Model' });
-  const create = overview.getByRole('button', { name: 'New' });
-  const [titleBox, createBox] = [await title.boundingBox(), await create.boundingBox()];
-  expect(
-    Math.abs(
-      (titleBox?.y ?? 0) +
-        (titleBox?.height ?? 0) / 2 -
-        ((createBox?.y ?? 0) + (createBox?.height ?? 0) / 2),
-    ),
-  ).toBeLessThanOrEqual(2);
-  await expect(create).toHaveClass(/btn-primary/);
+  await expect(overview.getByRole('heading', { level: 1, name: 'Model' })).toBeVisible();
+  await expect(overview.getByRole('button', { name: /New/ })).toHaveCount(0);
   // The note and the card, one width (pin 6).
   const note = overview.locator('.info-bar');
   await expect(note).toHaveText(
-    'Every cube and view in the model, by file. Open a row to edit its file.',
+    'Every cube and view in the model, by file. Open a row to read its file.',
   );
   const card = overview.locator('.model-overview');
   const [noteBox, cardBox] = [await note.boundingBox(), await card.boundingBox()];
@@ -825,6 +891,31 @@ test('T486: the overview as design 12 — one card, a row per cube or view, + Ne
   await rows.last().locator('.model-overview__members').focus();
   await expect(rows.last().getByRole('tooltip')).toBeInViewport({ ratio: 1 });
 
+  // The whole row opens its file (pin 13), its Members too.
+  await orders.locator('.model-overview__members').click();
+  await expect(page).toHaveURL(/\/model\/files\/cubes%2Forders\.yml$/);
+
+  // My workspace's, where a model is made — the folder of the single user's
+  // copy of orders.yml: the title row, "Model" left, its one primary + New ▾
+  // right (pin 5), and a row opens its file to edit.
+  const copy = await myModelCopy(page.request, 'cubes/orders.yml');
+  await page.goto(`/explore/folders/${encodeURIComponent(copy.folderId)}/models`);
+  await expect(rowOf('cubes/orders.yml')).toBeVisible();
+  const title = overview.getByRole('heading', { level: 1, name: 'Model' });
+  const create = overview.getByRole('button', { name: 'New', exact: true });
+  const [titleBox, createBox] = [await title.boundingBox(), await create.boundingBox()];
+  expect(
+    Math.abs(
+      (titleBox?.y ?? 0) +
+        (titleBox?.height ?? 0) / 2 -
+        ((createBox?.y ?? 0) + (createBox?.height ?? 0) / 2),
+    ),
+  ).toBeLessThanOrEqual(2);
+  await expect(create).toHaveClass(/btn-primary/);
+  await expect(note).toHaveText(
+    'Every cube and view in the model, by file. Open a row to edit its file.',
+  );
+
   // + New ▾: the tree foot's three ways to add, Generate set apart (state A);
   // Escape gives focus back.
   await create.click();
@@ -844,21 +935,20 @@ test('T486: the overview as design 12 — one card, a row per cube or view, + Ne
   await pane.getByRole('button', { name: 'Close' }).click();
   await expect(pane).toHaveCount(0);
   await expect(create).toBeFocused();
-
-  // The whole row opens its file (pin 13), its Members too.
-  await orders.locator('.model-overview__members').click();
-  await expect(page).toHaveURL(/\/model\/files\/cubes%2Forders\.yml$/);
 });
 
 test('T484: New cube as design 03 state C — no made-up table, Name selected to type over (MW-17, MW-18)', async ({
   page,
 }) => {
-  await page.goto('/model');
-  await page
-    .getByRole('navigation', { name: 'Model files' })
-    .getByRole('button', { name: 'New cube' })
-    .click();
-  await expect(page).toHaveURL(/\/model\/files\/cubes%2Fnew_cube_1\.yml$/);
+  // In My workspace, beside the single user's copy of orders.yml (T451's
+  // switch; AC-254): made there, to go to the root.
+  const copy = await myModelCopy(page.request, 'cubes/orders.yml');
+  const folder = encodeURIComponent(copy.folderId);
+  await page.goto(`/explore/folders/${folder}/models`);
+  await madeInWorkspace(page, 'cube');
+  await expect(page).toHaveURL(
+    new RegExp(`/explore/folders/${folder}/models/cubes%2Fnew_cube_1\\.yml$`),
+  );
   const form = page.getByRole('region', { name: 'Cube new_cube_1' });
   // Name focused, its text selected for typing over (MW-18).
   const name = form.getByRole('tabpanel').getByLabel('Name', { exact: true });
@@ -869,7 +959,7 @@ test('T484: New cube as design 03 state C — no made-up table, Name selected to
       return [field.selectionStart, field.selectionEnd, field.value.length];
     }),
   ).toEqual([0, 10, 10]);
-  await expect(page.locator('.model-editor__state')).toHaveText('New file · not published');
+  await expect(page.locator('.model-editor__state')).toHaveText('New file · not saved');
   // No made-up table: Reads from empty, its placeholder the shape (MW-17).
   const yaml = page.getByRole('textbox', { name: 'cubes/new_cube_1.yml, as YAML' });
   await expect(yaml).toContainText('name: new_cube_1');
@@ -895,8 +985,8 @@ test('T484: New cube as design 03 state C — no made-up table, Name selected to
   await expect(draft).toBeFocused();
   // Discarded, then a new cube at the same path: a new file, its Name focused (T484's review).
   await page.locator('.model-editor__head').getByRole('button', { name: 'Discard' }).click();
-  await expect(page).toHaveURL(/\/model$/);
-  await tree.getByRole('button', { name: 'New cube' }).click();
+  await expect(page).toHaveURL(new RegExp(`/explore/folders/${folder}/models$`));
+  await madeInWorkspace(page, 'cube');
   await expect(page).toHaveURL(/new_cube_1\.yml$/);
   await expect(
     page.getByRole('region', { name: 'Cube new_cube_1' }).getByRole('tabpanel').getByLabel('Name', {
@@ -908,9 +998,10 @@ test('T484: New cube as design 03 state C — no made-up table, Name selected to
 test('T494: side by side with design 03 — controls in a row line up, and a tree name is never broken', async ({
   page,
 }) => {
-  await page.goto('/model');
+  // In My workspace, where a model is made (T451's switch; AC-254).
+  await page.goto(MY_MODELS);
   const tree = page.getByRole('navigation', { name: 'Model files' });
-  await tree.getByRole('button', { name: 'New cube' }).click();
+  await madeInWorkspace(page, 'cube');
   await expect(page).toHaveURL(/new_cube_1\.yml$/);
   // A draft with problems carries both marks; its name stays on one line, whole.
   const row = tree.getByRole('link', { name: /^new_cube_1\.yml/ });
@@ -936,8 +1027,9 @@ test('T494: side by side with design 03 — controls in a row line up, and a tre
   expect(name).toBe(source);
   await page.locator('.model-editor__head').getByRole('button', { name: 'Discard' }).click();
 
-  // A dimension's Name, with its help, beside its Type (design 03's main screen).
-  await page.goto(ORDERS);
+  // A dimension's Name, with its help, beside its Type (design 03's main
+  // screen): in the copy where orders.yml is edited.
+  await page.goto(await ordersCopy(page));
   const form = page.getByRole('region', { name: 'Cube orders' });
   await form.getByRole('tab', { name: /^Dimensions/ }).click();
   const status = form.locator('details.model-member').filter({
@@ -978,10 +1070,14 @@ test('T495: the tree as design 12 — a locked Jinja tag, and its reading and em
   release();
   await expect(tree.locator('.model-tree__state')).toHaveText('All published');
 
-  // A model with no files: said, still no state, and the three ways to start.
+  // A model with no files: said, still no state, and — in My workspace, where
+  // a model is made (T451's switch; AC-254) — the three ways to start.
   await page.unroute('**/api/model/files');
-  await page.route('**/api/model/files', (route) => route.fulfill({ json: { files: [] } }));
-  await page.reload();
+  await page.route(
+    (url) => url.pathname === '/api/model/files' && url.searchParams.get('folder') === 'mine',
+    (route) => route.fulfill({ json: { files: [] } }),
+  );
+  await page.goto(MY_MODELS);
   await expect(tree.locator('.model-tree__empty')).toHaveText('No files yet.');
   await expect(tree.locator('.model-tree__state')).toHaveCount(0);
   await expect(tree.locator('.model-tree__actions button')).toHaveCount(3);
@@ -1017,12 +1113,11 @@ test('T483: a Jinja file in the editor’s frame, read-only and saying so (MW-16
 test('T493: New view chooses no cube for the user — it opens on Cubes, its join path to pick (MW-19)', async ({
   page,
 }) => {
-  await page.goto('/model');
-  await page
-    .getByRole('navigation', { name: 'Model files' })
-    .getByRole('button', { name: 'New view' })
-    .click();
-  await expect(page).toHaveURL(/\/model\/files\/views%2Fnew_view_1\.yml$/);
+  // In My workspace, to go to the root, whose cubes it may include (T451's
+  // switch; AC-254, AC-138).
+  await page.goto(MY_MODELS);
+  await madeInWorkspace(page, 'view');
+  await expect(page).toHaveURL(/\/explore\/folders\/mine\/models\/views%2Fnew_view_1\.yml$/);
   const yaml = page.getByRole('textbox', { name: 'views/new_view_1.yml, as YAML' });
   await expect(yaml).toContainText('name: new_view_1');
   // No cube, and no members, the user didn't choose.
@@ -1048,7 +1143,8 @@ test('T487: below 1,280 px the editor is one pane at a time, behind Form | YAML 
   page,
 }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
-  await page.goto(ORDERS);
+  // In the copy where orders.yml is edited (T451's switch; AC-254).
+  await page.goto(await ordersCopy(page));
   const formPane = page.getByRole('region', { name: 'Form editor' });
   const codePane = page.getByRole('region', { name: 'YAML and join diagram' });
   const head = formPane.locator(':scope > .model-editor__head');
@@ -1088,7 +1184,7 @@ test('T487: below 1,280 px the editor is one pane at a time, behind Form | YAML 
   await expect(codePane).toBeVisible();
   await expect(head.getByTestId('selected-object')).toHaveText('cubes/orders.yml');
   await expect(head.locator('.model-editor__state')).toBeVisible();
-  await expect(head.getByRole('button', { name: 'Save & reload Cube' })).toBeVisible();
+  await expect(head.getByRole('button', { name: 'Save', exact: true })).toBeVisible();
   const [headBox, codeBox] = [await head.boundingBox(), await codePane.boundingBox()];
   expect(Math.round(codeBox?.y ?? 0)).toBeGreaterThanOrEqual(
     Math.round((headBox?.y ?? 0) + (headBox?.height ?? 0)),
@@ -1138,7 +1234,8 @@ test('T487: below 1,280 px the editor is one pane at a time, behind Form | YAML 
 test('T470: a bar over the form is a band across the pane, and a view’s tabs are short too', async ({
   page,
 }) => {
-  await page.goto(ORDERS);
+  // In the copy where orders.yml is edited (T451's switch; AC-254).
+  await page.goto(await ordersCopy(page));
   const form = page.getByRole('region', { name: 'Cube orders' });
   await form.getByRole('tab', { name: /^Dimensions/ }).click();
   await form.locator('.model-member__name', { hasText: /^id$/ }).click();

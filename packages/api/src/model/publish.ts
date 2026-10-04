@@ -627,8 +627,8 @@ export function registerModelPublishing(
       /**
        * A shared folder's model changes only through a proposal (T451,
        * AC-278), as a dashboard does: copied into My workspace, changed and
-       * proposed. Wherever workspaces hold models and proposals land them:
-       * with sign-in on (with it off, the single user has no overlay yet).
+       * proposed. Wherever workspaces hold models and proposals land them,
+       * sign-in on or off (T451's switch; AC-254, R52).
        */
       if (workspace?.proposed === true && inWorkspace === null)
         return reply.status(409).send(sharedInPlace('model'));
@@ -703,6 +703,31 @@ export function registerModelPublishing(
         );
         const again = redeclaredIn(changed, own);
         if (again.length > 0) return reply.status(422).send({ errors: again });
+        /**
+         * Generated cubes are new to the folder they go to, file and name
+         * (T276, AC-249), as a publish's are: Generate cubes adds to My
+         * workspace wherever models are workspace-only (T492, T451's switch).
+         */
+        const generated =
+          body?.create === true
+            ? changed
+            : Array.isArray(body?.create)
+              ? changed.filter((file) => (body.create as unknown[]).includes(file.path))
+              : [];
+        if (generated.length > 0 && target !== undefined && modelFiles !== undefined) {
+          const compiled =
+            target === ROOT_FOLDER_ID
+              ? await client.modelMeta().then(compiledIn, (error: unknown) => {
+                  app.log.warn(
+                    { err: error },
+                    'could not read Cube’s model to check generated names',
+                  );
+                  return [];
+                })
+              : [];
+          const clashes = clashesOf(generated, await modelFiles.list(target), compiled);
+          if (clashes.length > 0) return reply.status(422).send({ errors: clashes });
+        }
         const answer = await workspace.save(inWorkspace, folderId, changed, target);
         return reply.status(answer.status).send(answer.body);
       }

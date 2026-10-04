@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { ownCubeFile } from './model-files';
+import { landed, ownCubeFile } from './model-files';
 import { psql } from './store';
 
 /**
@@ -269,9 +269,11 @@ test('a build wechart queued waits with its token, Cancel takes it out, and Run 
       { timeout: 120_000 },
     );
   } finally {
-    await request.post('/api/model/publish', {
-      data: { files: [{ path, content: slowCube(cube).replace('pg_sleep(3)', 'pg_sleep(0)') }] },
-    });
+    // Its sleep taken out, landed as a shared model is changed with sign-in
+    // off now (T451's switch; AC-254, R52).
+    await landed(request, 'root', [
+      { path, content: slowCube(cube).replace('pg_sleep(3)', 'pg_sleep(0)') },
+    ]);
   }
 });
 

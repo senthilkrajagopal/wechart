@@ -1,6 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
-import { ownCubeFile, PUBLISHED } from './model-files';
+import { ownCubeFile, ownModelCopy, PUBLISHED } from './model-files';
 
 /**
  * T143 / AC-137: WHEN a valid model is published, THE SYSTEM SHALL make the
@@ -11,6 +11,10 @@ import { ownCubeFile, PUBLISHED } from './model-files';
  * On the real Cube, under xcube (T447): the publish is sent to xcube as the
  * model's next revision (T419), and every token names that revision (T421),
  * so Cube answers from it at once; nothing restarts it here.
+ *
+ * Published as a shared model is changed with sign-in off now, as with it on
+ * (T451's switch; AC-254, R52): saved in a copy in My workspace, then
+ * proposed, and approved by the single user, which lands it.
  */
 test('a measure published in the Model workspace is in the chart builder’s field list', async ({
   page,
@@ -35,32 +39,19 @@ test('a measure published in the Model workspace is in the chart builder’s fie
   await other.getByLabel('Cube or view').selectOption({ value: cube });
   await expect(other.getByTestId(`member-${cube}.count`)).toBeVisible();
 
-  // Every request the page makes from here, to show a publish asks wechart
+  // Every request the page makes from here, to show a save asks wechart
   // alone, never Cube or xcube (T458, AC-327).
   const asked: string[] = [];
   page.on('request', (request) => asked.push(request.url()));
-  await page.goto(`/model/files/${encodeURIComponent(path)}`);
-  const form = page.getByRole('region', { name: `Cube ${cube}` });
-  await form.getByRole('tab', { name: /^Measures/ }).click();
-  await form.getByRole('button', { name: 'Add measure' }).click();
-  const measure = form
-    .getByRole('listitem')
-    .filter({ has: page.locator('.model-member__name', { hasText: /^measure_1$/ }) });
-  // Added, it opens on its own, its name to type over (T480).
-  await expect(measure.locator('.model-member')).toHaveAttribute('open', '');
-  const own = (key: string) =>
-    // In its named group (T236, AC-225).
-    measure.locator(
-      `.model-member > .model-form__fields > .model-form__group > .model-form__fields > [data-key="${key}"]`,
-    );
-  await own('type').getByLabel('Type', { exact: true }).selectOption('count');
-  await own('name').getByLabel('Name', { exact: true }).fill('published');
-  await page.getByRole('button', { name: 'Save & reload Cube' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Published' })).toBeVisible(PUBLISHED);
-  const origin = new URL(page.url()).origin;
-  expect(asked.filter((url) => url.endsWith('/api/model/publish'))).toHaveLength(1);
-  expect(asked.filter((url) => !url.startsWith(`${origin}/`))).toEqual([]);
-  expect(asked.filter((url) => /:5400[01]\b|cubejs-api|\/v1\/semantic\//.test(url))).toEqual([]);
+  const copy = await ownModelCopy(page.request, path);
+  try {
+    await page.goto(copy.href);
+    await savedInCopy(page, cube, asked);
+    // Published: proposed, and approved by the single user (T451).
+    await copy.land();
+  } finally {
+    await copy.drop();
+  }
 
   // The chart builder, which reads the model from Cube's /v1/meta through wechart.
   await page.goto('/explore/charts/seed-chart-empty/edit');
@@ -82,3 +73,30 @@ test('a measure published in the Model workspace is in the chart builder’s fie
   await expect(other.getByTestId(`member-${cube}.published`)).toBeVisible();
   expect(await members()).toContain(`${cube}.published`);
 });
+
+/** A count named `published` added to `cube` in its copy and saved there, asking wechart alone. */
+async function savedInCopy(page: Page, cube: string, asked: readonly string[]) {
+  const form = page.getByRole('region', { name: `Cube ${cube}` });
+  await form.getByRole('tab', { name: /^Measures/ }).click();
+  await form.getByRole('button', { name: 'Add measure' }).click();
+  const measure = form
+    .getByRole('listitem')
+    .filter({ has: page.locator('.model-member__name', { hasText: /^measure_1$/ }) });
+  // Added, it opens on its own, its name to type over (T480).
+  await expect(measure.locator('.model-member')).toHaveAttribute('open', '');
+  const own = (key: string) =>
+    // In its named group (T236, AC-225).
+    measure.locator(
+      `.model-member > .model-form__fields > .model-form__group > .model-form__fields > [data-key="${key}"]`,
+    );
+  await own('type').getByLabel('Type', { exact: true }).selectOption('count');
+  await own('name').getByLabel('Name', { exact: true }).fill('published');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Saved. Previews in My workspace use it now.' }),
+  ).toBeVisible(PUBLISHED);
+  const origin = new URL(page.url()).origin;
+  expect(asked.filter((url) => url.endsWith('/api/model/publish'))).toHaveLength(1);
+  expect(asked.filter((url) => !url.startsWith(`${origin}/`))).toEqual([]);
+  expect(asked.filter((url) => /:5400[01]\b|cubejs-api|\/v1\/semantic\//.test(url))).toEqual([]);
+}

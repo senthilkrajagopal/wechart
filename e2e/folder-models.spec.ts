@@ -1,6 +1,13 @@
 import { expect, test } from '@playwright/test';
 
-import { PUBLISHED } from './model-files';
+import {
+  inMyWorkspace,
+  landed,
+  modelFilesIn,
+  ownModelCopy,
+  proposedModel,
+  PUBLISHED,
+} from './model-files';
 
 /**
  * T452, AC-328: WHEN a cube is published, THE SYSTEM SHALL publish it under
@@ -24,20 +31,16 @@ test('a cube published into a new folder is served under the folder’s id, and 
   });
   expect(made.status()).toBe(201);
   const { id } = (await made.json()) as { id: string };
-  const name = 'folder_orders';
+  // Of this browser's own: the browsers share the single user's workspace,
+  // which holds a name once (T451's switch).
+  const name = `folder_orders_${testInfo.project.name}`;
 
-  const published = await request.post('/api/model/publish', {
-    data: {
-      folderId: id,
-      files: [
-        {
-          path: `cubes/${name}.yml`,
-          content: `cubes:\n  - name: ${name}\n    sql_table: public.orders\n    measures:\n      - name: count\n        type: count\n`,
-        },
-      ],
-    },
-  });
-  expect(published.status(), await published.text()).toBe(200);
+  // Through My workspace and a proposal the single user approves (T451's switch; AC-254).
+  const file = {
+    path: `cubes/${name}.yml`,
+    content: `cubes:\n  - name: ${name}\n    sql_table: public.orders\n    measures:\n      - name: count\n        type: count\n`,
+  };
+  expect(await landed(request, id, [file])).toEqual([file]);
 
   // Stored in the folder, by its own name there.
   const stored = (await (await request.get(`/api/model/files?folder=${id}`)).json()) as {
@@ -79,32 +82,26 @@ test('Schedules reads a folder rollup’s key SQL from its folder’s file', asy
   expect(made.status()).toBe(201);
   const { id } = (await made.json()) as { id: string };
   const cube = `t450_keyed_${testInfo.project.name}`;
-  const published = await page.request.post('/api/model/publish', {
-    data: {
-      folderId: id,
-      files: [
-        {
-          path: `cubes/${cube}.yml`,
-          content: [
-            'cubes:',
-            `  - name: ${cube}`,
-            '    sql_table: public.orders',
-            '    measures:',
-            '      - name: count',
-            '        type: count',
-            '    pre_aggregations:',
-            '      - name: main',
-            '        measures: [CUBE.count]',
-            '        refresh_key:',
-            '          sql: SELECT MAX(id) FROM public.orders',
-            '          every: 1 hour',
-            '',
-          ].join('\n'),
-        },
-      ],
-    },
-  });
-  expect(published.status(), await published.text()).toBe(200);
+  // Through My workspace and a proposal the single user approves (T451's switch; AC-254).
+  const file = {
+    path: `cubes/${cube}.yml`,
+    content: [
+      'cubes:',
+      `  - name: ${cube}`,
+      '    sql_table: public.orders',
+      '    measures:',
+      '      - name: count',
+      '        type: count',
+      '    pre_aggregations:',
+      '      - name: main',
+      '        measures: [CUBE.count]',
+      '        refresh_key:',
+      '          sql: SELECT MAX(id) FROM public.orders',
+      '          every: 1 hour',
+      '',
+    ].join('\n'),
+  };
+  expect(await landed(page.request, id, [file])).toEqual([file]);
 
   await page.goto('/schedules');
   const table = page.getByRole('main').getByRole('table', { name: 'Refresh schedules' });
@@ -140,108 +137,128 @@ test('Schedules reads a folder rollup’s key SQL from its folder’s file', asy
 });
 
 /**
- * T450's review, AC-189: IF a model change being published leaves a
- * pre-aggregation naming a member the model does not have, THEN THE SYSTEM
- * SHALL refuse to publish the change and show each unknown name … — here a
- * change at the root that breaks another folder's rollup. The refusal is
- * said as that folder's file, with a way to the folder, and never marks the
- * root's file of the same path.
+ * T450's review, AC-189 (amended 2026-10-04, `[R60]`): IF a model change
+ * being proposed or approved leaves a pre-aggregation naming a member the
+ * model does not have, THEN THE SYSTEM SHALL refuse the proposal or the
+ * approval, and a refused approval's review SHALL name each unknown name
+ * with its pre-aggregation and file (design 05, state L) — here a folder's
+ * rollup on a member of the root's cube of the same path.
+ *
+ * As a shared model is changed with sign-in off now (T451's switch; AC-254,
+ * R52): the folder's file, in My workspace, is proposed while the root's
+ * cube has the member; the root's copy, the member renamed away, lands
+ * meanwhile; then the approval is refused, the review saying the break as
+ * that folder's file, never the root's of the same path, with the name; and
+ * nothing lands.
  */
-test('a root change that breaks a folder’s rollup is refused, and said as that folder’s file', async ({
+test('a folder’s rollup whose root member went while it waited is refused at approval, said as that folder’s file', async ({
   page,
 }, testInfo) => {
+  test.setTimeout(240_000);
   const request = page.request;
-  const base = `t450_base_${testInfo.project.name}`;
+  const project = testInfo.project.name;
+  const base = `t450_base_${project}`;
   // One path in both folders: the root's declares `base`, the folder's a
   // cube whose rollup names `base.total`.
-  const path = `cubes/t450_${testInfo.project.name}.yml`;
-  const root = await request.post('/api/model/publish', {
-    data: {
-      files: [
-        {
-          path,
-          content: [
-            'cubes:',
-            `  - name: ${base}`,
-            '    sql_table: public.orders',
-            '    dimensions:',
-            '      - name: id',
-            '        sql: id',
-            '        type: number',
-            '        primary_key: true',
-            '    measures:',
-            '      - name: count',
-            '        type: count',
-            '      - name: total',
-            '        sql: amount',
-            '        type: sum',
-            '',
-          ].join('\n'),
-        },
-      ],
-    },
-  });
-  expect(root.status(), await root.text()).toBe(200);
+  const path = `cubes/t450_${project}.yml`;
+  const rootFile = {
+    path,
+    content: [
+      'cubes:',
+      `  - name: ${base}`,
+      '    sql_table: public.orders',
+      '    dimensions:',
+      '      - name: id',
+      '        sql: id',
+      '        type: number',
+      '        primary_key: true',
+      '    measures:',
+      '      - name: count',
+      '        type: count',
+      '      - name: total',
+      '        sql: amount',
+      '        type: sum',
+      '',
+    ].join('\n'),
+  };
+  expect(await landed(request, 'root', [rootFile])).toEqual([rootFile]);
 
-  const title = `T450 rollups ${testInfo.project.name} ${String(Date.now())}`;
+  const title = `T450 rollups ${project} ${String(Date.now())}`;
   const made = await request.post('/api/documents', {
     data: { kind: 'folder', title, folderId: 'root' },
   });
   expect(made.status()).toBe(201);
   const { id } = (await made.json()) as { id: string };
-  const inFolder = await request.post('/api/model/publish', {
-    data: {
-      folderId: id,
-      files: [
-        {
-          path,
-          content: [
-            'cubes:',
-            '  - name: t450_summary',
-            '    sql_table: public.orders',
-            '    joins:',
-            `      - name: ${base}`,
-            `        sql: "{CUBE}.id = {${base}}.id"`,
-            '        relationship: one_to_one',
-            '    dimensions:',
-            '      - name: id',
-            '        sql: id',
-            '        type: number',
-            '        primary_key: true',
-            '    measures:',
-            '      - name: count',
-            '        type: count',
-            '    pre_aggregations:',
-            '      - name: spend',
-            `        measures: [${base}.total]`,
-            '',
-          ].join('\n'),
-        },
-      ],
-    },
-  });
-  expect(inFolder.status(), await inFolder.text()).toBe(200);
 
-  // At the root, `total` renamed: the folder's rollup then names what the
-  // model doesn't have.
-  await page.goto(`/model/files/${encodeURIComponent(path)}`);
-  await page.locator('.cm-line', { hasText: /^\s+- name: total$/ }).click();
-  await page.keyboard.press('End');
-  await page.keyboard.type('_gone');
-  await page.getByRole('button', { name: 'Save & reload Cube' }).click();
+  // The folder's rollup on `base.total`, in My workspace, proposed while the
+  // root's cube has `total`: the dry run passes.
+  const folderFile = {
+    path,
+    content: [
+      'cubes:',
+      `  - name: t450_summary_${project}`,
+      '    sql_table: public.orders',
+      '    joins:',
+      `      - name: ${base}`,
+      `        sql: "{CUBE}.id = {${base}}.id"`,
+      '        relationship: one_to_one',
+      '    dimensions:',
+      '      - name: id',
+      '        sql: id',
+      '        type: number',
+      '        primary_key: true',
+      '    measures:',
+      '      - name: count',
+      '        type: count',
+      '    pre_aggregations:',
+      '      - name: spend',
+      `        measures: [${base}.total]`,
+      '',
+    ].join('\n'),
+  };
+  const held = await inMyWorkspace(request, id, [folderFile]);
+  const copy = await ownModelCopy(request, path);
+  let proposal = '';
+  try {
+    const proposed = await proposedModel(request, held.folderOf(path), path);
+    expect(proposed.status(), await proposed.text()).toBe(201);
+    proposal = ((await proposed.json()) as { id: string }).id;
 
-  await expect(
-    page.getByRole('alert').filter({ hasText: 'names members the model doesn’t have' }),
-  ).toBeVisible(PUBLISHED);
-  const where = page
-    .getByRole('region', { name: 'Problems' })
-    .getByRole('link', { name: new RegExp(`^Shared / ${title} · ${path}:\\d+$`) });
-  await expect(where).toHaveCount(1);
-  await expect(where).toHaveAttribute('href', `/explore?folder=${id}`);
-  // The root's file of that path is not marked for it.
-  await expect(
-    page
-      .getByRole('navigation', { name: 'Model files' })
-      .getByRole('link', { name: new RegExp(`^t450_${testInfo.project.name}\\.yml`) }),
-  ).not.toContainText('problems');
+    // Meanwhile, at the root, `total` renamed in the single user's copy,
+    // saved, and landed.
+    await page.goto(copy.href);
+    await page.locator('.cm-line', { hasText: /^\s+- name: total$/ }).click();
+    await page.keyboard.press('End');
+    await page.keyboard.type('_gone');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Saved. Previews in My workspace use it now.' }),
+    ).toBeVisible(PUBLISHED);
+    await copy.land();
+    const renamed = rootFile.content.replace('- name: total\n', '- name: total_gone\n');
+    expect((await modelFilesIn(request, 'root')).find((file) => file.path === path)?.content).toBe(
+      renamed,
+    );
+
+    // Approved now, the folder's rollup would name what the model doesn't
+    // have: refused, said as the folder's file, with the name.
+    await page.goto(`/reviews/${proposal}`);
+    await page.getByRole('button', { name: 'Approve my own proposal' }).click();
+    await page.getByRole('button', { name: 'Approve and publish' }).click();
+    await expect(page.getByRole('alert')).toHaveText('Can’t approve: 1 item would break', {
+      timeout: 90_000,
+    });
+    const broken = page.locator('.review-refusal__break');
+    await expect(broken).toHaveCount(1);
+    await expect(broken).toContainText(`${path} · ${title}`);
+    await expect(broken).toContainText(
+      `Pre-aggregation spend names what the model doesn’t have: ${base}.total (measures).`,
+    );
+    // Nothing landed: the folder has no file of that path.
+    expect((await modelFilesIn(request, id)).map((file) => file.path)).not.toContain(path);
+  } finally {
+    if (proposal !== '') await request.post(`/api/proposals/${proposal}/reject`, { data: {} });
+    await held.drop();
+    await copy.drop();
+  }
 });

@@ -1,8 +1,21 @@
 import { createHash } from 'node:crypto';
 
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
-import { ownCubeFile, PUBLISHED } from './model-files';
+import { inMyWorkspace, modelFilesIn, ownCubeFile, ownModelCopy, PUBLISHED } from './model-files';
+import { myModelCopy } from './workspace';
+
+/**
+ * With sign-in off, the single user changes a shared model only in a copy in
+ * My workspace, as a Super-Admin does (T451's switch; AC-254, AC-278, R52).
+ * The seed's orders.yml is edited in theirs, never saved: every spec asking
+ * is given the same copy (`myModelCopy`). A test that saves edits a copy of
+ * its own cube, and lands it by a proposal it approves.
+ */
+const ordersCopy = async (page: Page) => (await myModelCopy(page.request, 'cubes/orders.yml')).href;
+
+/** A copy of this browser's own cube in My workspace, to land, and take out again. */
+const ownCopy = (page: Page, path: string) => ownModelCopy(page.request, path);
 
 /**
  * T137 / AC-131: WHEN the user opens the Model workspace, THE SYSTEM SHALL
@@ -48,7 +61,7 @@ test('the Model workspace lists each model file with what it defines', async ({ 
  * Fails when: either view still shows the previous value after that point.
  */
 test('the form and the YAML view each show what the other edits', async ({ page }) => {
-  await page.goto('/model/files/cubes%2Forders.yml');
+  await page.goto(await ordersCopy(page));
   const form = page.getByRole('region', { name: 'Cube orders' });
   const yaml = page.getByRole('textbox', { name: 'cubes/orders.yml, as YAML' });
   await expect(yaml).toContainText('sql_table: public.orders');
@@ -90,7 +103,7 @@ test('the form and the YAML view each show what the other edits', async ({ page 
 test('a form edit that would drop a comment names it first, and waits to be told', async ({
   page,
 }) => {
-  await page.goto('/model/files/cubes%2Forders.yml');
+  await page.goto(await ordersCopy(page));
   const form = page.getByRole('region', { name: 'Cube orders' });
   const yaml = page.locator('.yaml-editor .cm-scroller');
   const comment = '# Cube hides primary keys from metadata unless told otherwise.';
@@ -145,14 +158,20 @@ test('a form edit that would drop a comment names it first, and waits to be told
  * to a file.
  *
  * On the real Cube, under xcube (T447): xcube's dry run compiles the change
- * without storing it (T445), and it goes live only if it compiles.
+ * without storing it (T445), and it goes live only if it compiles. Saved in
+ * My workspace (T451's switch), it is compiled as its overlay (T347) and
+ * kept only if it compiles; nothing is published until a proposal lands.
  */
 test('a model change Cube refuses is not published, and Cube’s reason is on its file', async ({
   page,
-}) => {
-  await page.goto('/model/files/cubes%2Forders.yml');
-  const form = page.getByRole('region', { name: 'Cube orders' });
-  const save = page.getByRole('button', { name: 'Save & reload Cube' });
+}, testInfo) => {
+  // A copy of a cube of this browser's own: a refused save must leave the seed's alone.
+  const cube = `e2e_refused_${testInfo.project.name}`;
+  const path = await ownCubeFile(page.request, cube);
+  const copy = await ownCopy(page, path);
+  await page.goto(copy.href);
+  const form = page.getByRole('region', { name: `Cube ${cube}` });
+  const save = page.getByRole('button', { name: 'Save', exact: true });
   await expect(save).toBeDisabled();
 
   // A measure whose SQL names a member there is none of.
@@ -171,34 +190,37 @@ test('a model change Cube refuses is not published, and Cube’s reason is on it
   await own('type').getByLabel('Type', { exact: true }).selectOption('number');
   await own('sql').getByLabel('SQL', { exact: true }).fill('{no_such_member}');
 
-  await save.click();
-  await expect(page.getByRole('alert').filter({ hasText: 'Cube refused the model' })).toBeVisible(
-    PUBLISHED,
-  );
-  const problem = page
-    .getByRole('region', { name: 'Problems' })
-    .getByRole('listitem')
-    .filter({ hasText: 'Cube: no_such_member is not defined' });
-  await expect(problem.locator('.model-problems__where')).toHaveText('cubes/orders.yml');
-  // And the file is marked in the tree (T234's review, AC-222).
-  await expect(
-    page
-      .getByRole('navigation', { name: 'Model files' })
-      .getByRole('link', { name: /^orders\.yml/ }),
-  ).toContainText('problems');
+  try {
+    await save.click();
+    await expect(page.getByRole('alert').filter({ hasText: 'Cube refused the model' })).toBeVisible(
+      PUBLISHED,
+    );
+    const problem = page
+      .getByRole('region', { name: 'Problems' })
+      .getByRole('listitem')
+      .filter({ hasText: 'Cube: no_such_member is not defined' });
+    await expect(problem.locator('.model-problems__where')).toHaveText(path);
+    // And the file is marked in the tree (T234's review, AC-222).
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Model files' })
+        .getByRole('link', { name: new RegExp(`^${cube}\\.yml`) }),
+    ).toContainText('problems');
 
-  // Nothing published: the stored file, and the model Cube serves, as they were.
-  const stored = await page.request.get('/api/model/files');
-  const orders = (
-    (await stored.json()) as { files: { path: string; content: string }[] }
-  ).files.find((file) => file.path === 'cubes/orders.yml');
-  expect(orders?.content).not.toContain('measure_1');
-  const meta = (await (await page.request.get('/api/meta')).json()) as {
-    cubes: { name: string; measures: { name: string }[] }[];
-  };
-  expect(
-    meta.cubes.find((cube) => cube.name === 'orders')?.measures.map((each) => each.name),
-  ).not.toContain('orders.measure_1');
+    // Nothing published, nor saved: the stored files, and the model Cube serves, as they were.
+    for (const folderId of ['root', copy.folderId])
+      expect(
+        (await modelFilesIn(page.request, folderId)).find((file) => file.path === path)?.content,
+      ).not.toContain('measure_1');
+    const meta = (await (await page.request.get('/api/meta')).json()) as {
+      cubes: { name: string; measures: { name: string }[] }[];
+    };
+    expect(
+      meta.cubes.find((each) => each.name === cube)?.measures.map((each) => each.name),
+    ).not.toContain(`${cube}.measure_1`);
+  } finally {
+    await copy.drop();
+  }
 });
 
 test('a model change Cube compiles is published, and Cube serves it', async ({
@@ -208,31 +230,37 @@ test('a model change Cube compiles is published, and Cube serves it', async ({
   const cube = `e2e_described_${testInfo.project.name}`;
   const path = await ownCubeFile(page.request, cube);
   const description = `Every product the shop sells, as ${testInfo.project.name} saw it.`;
-  await page.goto(`/model/files/${encodeURIComponent(path)}`);
-  const form = page.getByRole('region', { name: `Cube ${cube}` });
-  await form.getByLabel('Description', { exact: true }).fill(description);
+  // Changed in its copy in My workspace, and published when that is approved (T451's switch).
+  const copy = await ownCopy(page, path);
+  try {
+    await page.goto(copy.href);
+    const form = page.getByRole('region', { name: `Cube ${cube}` });
+    await form.getByLabel('Description', { exact: true }).fill(description);
 
-  await page.getByRole('button', { name: 'Save & reload Cube' }).click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
 
-  await expect(page.getByRole('status').filter({ hasText: 'Published' })).toHaveText(
-    'Published. Cube is reading the new model.',
-    PUBLISHED,
-  );
-  await expect(page.getByRole('button', { name: 'Save & reload Cube' })).toBeDisabled();
-  // Said once, in the head's one 44 px line, however long the path (T479's review).
-  const head = page.getByRole('region', { name: 'Form editor' }).locator('.model-editor__head');
-  expect(Math.round((await head.boundingBox())?.height ?? 0)).toBe(44);
-  await expect(head.locator('.model-editor__state')).toHaveCount(0);
-  const stored = (await (await page.request.get('/api/model/files')).json()) as {
-    files: { path: string; content: string }[];
-  };
-  expect(stored.files.find((file) => file.path === path)?.content).toContain(
-    `description: ${description}`,
-  );
-  const meta = (await (await page.request.get('/api/meta')).json()) as {
-    cubes: { name: string; description?: string }[];
-  };
-  expect(meta.cubes.find((each) => each.name === cube)?.description).toBe(description);
+    await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toHaveText(
+      'Saved. Previews in My workspace use it now.',
+      PUBLISHED,
+    );
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+    // Said once, in the head's one 44 px line, however long the path (T479's review).
+    const head = page.getByRole('region', { name: 'Form editor' }).locator('.model-editor__head');
+    expect(Math.round((await head.boundingBox())?.height ?? 0)).toBe(44);
+    await expect(head.locator('.model-editor__state')).toHaveCount(0);
+
+    await copy.land();
+    const stored = await modelFilesIn(page.request, 'root');
+    expect(stored.find((file) => file.path === path)?.content).toContain(
+      `description: ${description}`,
+    );
+    const meta = (await (await page.request.get('/api/meta')).json()) as {
+      cubes: { name: string; description?: string }[];
+    };
+    expect(meta.cubes.find((each) => each.name === cube)?.description).toBe(description);
+  } finally {
+    await copy.drop();
+  }
 });
 
 /**
@@ -284,50 +312,61 @@ test('the join diagram draws each declared join its way, and adds one', async ({
   await expect(joins).toContainText('orders → customers, many to one');
   await expect(joins).toContainText('orders → products, many to one');
 
-  // Adding one, on a cube file of this browser's own: target, relationship, condition.
+  // Adding one, on a cube file of this browser's own: target, relationship,
+  // condition. In its copy in My workspace (T451's switch), its joins may name
+  // the cubes of the folder it goes to, the root's here.
   const cube = `e2e_joins_${testInfo.project.name}`;
   const path = await ownCubeFile(page.request, cube);
-  await page.goto(`/model/files/${encodeURIComponent(path)}`);
-  await page
-    .getByRole('group', { name: 'Right pane view' })
-    .getByRole('button', { name: 'Join diagram' })
-    .click();
-  const add = page.getByRole('form', { name: `Add a join to ${cube}` });
-  await add.getByLabel('Target cube', { exact: true }).selectOption('customers');
-  await add.getByLabel('Relationship', { exact: true }).selectOption('many_to_one');
-  await add.getByLabel('Condition', { exact: true }).fill('{CUBE}.id = {customers}.id');
-  await add.getByRole('button', { name: 'Add join' }).click();
+  const copy = await ownCopy(page, path);
+  try {
+    await page.goto(copy.href);
+    await page
+      .getByRole('group', { name: 'Right pane view' })
+      .getByRole('button', { name: 'Join diagram' })
+      .click();
+    const add = page.getByRole('form', { name: `Add a join to ${cube}` });
+    await add.getByLabel('Target cube', { exact: true }).selectOption('customers');
+    await add.getByLabel('Relationship', { exact: true }).selectOption('many_to_one');
+    await add.getByLabel('Condition', { exact: true }).fill('{CUBE}.id = {customers}.id');
+    await add.getByRole('button', { name: 'Add join' }).click();
 
-  await expect(page.getByRole('list', { name: 'Joins' })).toContainText(
-    `${cube} → customers, many to one`,
-  );
-  await expect(
-    page.getByRole('img', { name: /^Join diagram/ }).locator(`[data-join="${cube}→customers"]`),
-  ).toBeVisible();
-  // And in the file: the form's edit, written into the YAML.
-  await page
-    .getByRole('group', { name: 'Right pane view' })
-    .getByRole('button', { name: 'YAML' })
-    .click();
-  const yaml = page.getByRole('textbox', { name: `${path}, as YAML` });
-  await expect(yaml).toContainText('- name: customers');
-  // `yaml` quotes a new string with braces in double quotes.
-  await expect(yaml).toContainText('sql: "{CUBE}.id = {customers}.id"');
-  await expect(yaml).toContainText('relationship: many_to_one');
+    await expect(page.getByRole('list', { name: 'Joins' })).toContainText(
+      `${cube} → customers, many to one`,
+    );
+    await expect(
+      page.getByRole('img', { name: /^Join diagram/ }).locator(`[data-join="${cube}→customers"]`),
+    ).toBeVisible();
+    // And in the file: the form's edit, written into the YAML.
+    await page
+      .getByRole('group', { name: 'Right pane view' })
+      .getByRole('button', { name: 'YAML' })
+      .click();
+    const yaml = page.getByRole('textbox', { name: `${path}, as YAML` });
+    await expect(yaml).toContainText('- name: customers');
+    // `yaml` quotes a new string with braces in double quotes.
+    await expect(yaml).toContainText('sql: "{CUBE}.id = {customers}.id"');
+    await expect(yaml).toContainText('relationship: many_to_one');
+  } finally {
+    await copy.drop();
+  }
 });
 
 /**
  * T147 / AC-141: WHEN the user edits a member that charts use, THE SYSTEM
  * SHALL list the charts and dashboards that reference it before saving.
- * Fails when: a referencing chart is missing from that list.
+ * Fails when: a referencing chart is missing from that list. As amended
+ * (R55, T546): a model saved in My workspace lists the shared charts and
+ * dashboards that landing it would change, naming the folder it goes to.
  *
- * On the seed data: `orders.count` is used by the seed charts. Cancelled, so
- * the model every other test reads is never changed.
+ * On the seed data: `orders.count` is used by the seed charts. In the single
+ * user's copy of orders.yml, going to the root; cancelled, so the copy every
+ * other test opens is never changed.
  */
 test('a save that edits a member charts use lists them first, and saves only if told', async ({
   page,
 }) => {
-  await page.goto('/model/files/cubes%2Forders.yml');
+  const copy = await myModelCopy(page.request, 'cubes/orders.yml');
+  await page.goto(copy.href);
   const form = page.getByRole('region', { name: 'Cube orders' });
   await form.getByRole('tab', { name: /^Measures/ }).click();
   await form.locator('.model-member__name', { hasText: /^count$/ }).click();
@@ -342,9 +381,13 @@ test('a save that edits a member charts use lists them first, and saves only if 
     .getByLabel('Title', { exact: true })
     .fill('Order lines');
 
-  await page.getByRole('button', { name: 'Save & reload Cube' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
 
-  const warning = page.getByRole('alert').filter({ hasText: 'This save changes members that' });
+  const warning = page.getByRole('alert').filter({ hasText: 'this changes members that' });
+  // Landing it in the root would change them: the folder named by its path.
+  await expect(warning.locator('.model-references__lead')).toHaveText(
+    /^Landed in Shared, this changes members that \d+ charts? and \d+ dashboards? use\.$/,
+  );
   // The seed charts on orders.count, each a link to it, saying what it uses.
   // The seeded dashboard's own, by where they link: the single user's copy
   // of that dashboard has charts and a title of the same names (T359, AC-254).
@@ -369,13 +412,15 @@ test('a save that edits a member charts use lists them first, and saves only if 
   await expect(seeded('Dashboards').filter({ hasText: 'Company dashboard 01' })).toHaveText(
     'Company dashboard 01 — uses orders.count',
   );
-  // Nothing saved yet: the stored file is as it was.
+  // Nothing saved yet: the copy, and the root's file, as they were.
   const stored = async () =>
-    (
-      (await (await page.request.get('/api/model/files')).json()) as {
-        files: { path: string; content: string }[];
-      }
-    ).files.find((file) => file.path === 'cubes/orders.yml')?.content ?? '';
+    [
+      ...(await modelFilesIn(page.request, copy.folderId)),
+      ...(await modelFilesIn(page.request, 'root')),
+    ]
+      .filter((file) => file.path === 'cubes/orders.yml')
+      .map((file) => file.content)
+      .join('\n');
   expect(await stored()).not.toContain('Order lines');
 
   await warning.getByRole('button', { name: 'Cancel' }).click();
@@ -438,7 +483,7 @@ test('a Jinja template opens read-only in the code view, with the reason', async
 test('YAML that does not parse is listed by file and line, and holds the form read-only', async ({
   page,
 }) => {
-  await page.goto('/model/files/cubes%2Forders.yml');
+  await page.goto(await ordersCopy(page));
   const form = page.getByRole('region', { name: 'Cube orders' });
   const problems = page.getByRole('region', { name: 'Problems' });
   const title = form.getByLabel('Title', { exact: true });
@@ -491,7 +536,7 @@ test('YAML that does not parse is listed by file and line, and holds the form re
 
 test('typing that never pauses still reaches the form within 500 ms', async ({ page }) => {
   // T139's review: a pause-only wait held the form as long as the typing went on.
-  await page.goto('/model/files/cubes%2Forders.yml');
+  await page.goto(await ordersCopy(page));
   const table = page
     .getByRole('region', { name: 'Cube orders' })
     .getByLabel('SQL table', { exact: true });
@@ -507,7 +552,7 @@ test('typing that never pauses still reaches the form within 500 ms', async ({ p
 
 test('an entry typed as far as its dash is waited for, not a crash', async ({ page }) => {
   // T139's review: `- ` parses as null, and the form read it as an object.
-  await page.goto('/model/files/cubes%2Forders.yml');
+  await page.goto(await ordersCopy(page));
   const form = page.getByRole('region', { name: 'Cube orders' });
   await form.getByRole('tab', { name: /^Measures/ }).click();
   await page.locator('.cm-line', { hasText: /^\s+measures:$/ }).click();
@@ -616,8 +661,9 @@ test('a model file opens on a form for its cube, its enumerations the validator�
  */
 test('Model is one workspace: a tree beside full-height form and code panes, Problems docked', async ({
   page,
-}) => {
+}, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
+  // The shared root's model, read-only: its tree, its panes, and another file in place.
   await page.goto('/model/files/cubes%2Forders.yml');
   const tree = page.getByRole('navigation', { name: 'Model files' });
   const yaml = page.getByRole('textbox', { name: 'cubes/orders.yml, as YAML' });
@@ -679,31 +725,67 @@ test('Model is one workspace: a tree beside full-height form and code panes, Pro
     'name: customers',
   );
   expect(await page.evaluate(() => (window as unknown as { stayed?: boolean }).stayed)).toBe(true);
+  // Shared: nothing made here (T451's switch; AC-222's "offered in a shared folder").
+  for (const name of [/New cube/, /New view/])
+    await expect(tree.getByRole('button', { name })).toHaveCount(0);
 
-  // A file that stops parsing is marked in the tree, in words.
-  await page.locator('.cm-line', { hasText: 'sql_table:' }).first().click();
-  await page.keyboard.press('End');
-  await page.keyboard.type(': x');
-  await expect(tree.getByRole('link', { name: /^customers\.yml/ })).toContainText('problems');
-  await expect(tree.getByRole('link', { name: /^orders\.yml/ })).not.toContainText('problems');
+  // In My workspace, a folder of two files of this browser's own, going to the root.
+  const project = testInfo.project.name;
+  const [a, b] = [`e2e_tree_a_${project}`, `e2e_tree_b_${project}`];
+  const yamlOf = (name: string) => `cubes:\n  - name: ${name}\n    sql_table: public.products\n`;
+  const own = await inMyWorkspace(page.request, 'root', [
+    { path: `cubes/${a}.yml`, content: yamlOf(a) },
+    { path: `cubes/${b}.yml`, content: yamlOf(b) },
+  ]);
+  const folder = own.folderOf(`cubes/${a}.yml`);
+  try {
+    await page.goto(`/explore/folders/${folder}/models/${encodeURIComponent(`cubes/${b}.yml`)}`);
+    await expect(page.getByRole('textbox', { name: `cubes/${b}.yml, as YAML` })).toContainText(
+      `name: ${b}`,
+    );
 
-  // New cube and New view: a file of its own, open, and said to be unpublished
-  // — once customers.yml's edit is let go, which it asks about first (AC-226).
-  await tree.getByRole('button', { name: 'New cube' }).click();
-  await page
-    .getByRole('alertdialog', { name: 'Leave with unpublished changes?' })
-    .getByRole('button', { name: 'Leave without publishing' })
-    .click();
-  await expect(page).toHaveURL(/\/model\/files\/cubes%2Fnew_cube_1\.yml$/);
-  await expect(page.getByRole('textbox', { name: 'cubes/new_cube_1.yml, as YAML' })).toContainText(
-    'name: new_cube_1',
-  );
-  await expect(tree.getByRole('link', { name: /^new_cube_1\.yml/ })).toContainText('unpublished');
-  await expect(page.getByRole('button', { name: 'Save & reload Cube' })).toBeEnabled();
-  await tree.getByRole('button', { name: 'New view' }).click();
-  await expect(page).toHaveURL(/\/model\/files\/views%2Fnew_view_1\.yml$/);
-  // The cube made first is still there to come back to.
-  await expect(tree.getByRole('link', { name: /^new_cube_1\.yml/ })).toBeVisible();
+    // A file that stops parsing is marked in the tree, in words.
+    await page.locator('.cm-line', { hasText: 'sql_table:' }).first().click();
+    await page.keyboard.press('End');
+    await page.keyboard.type(': x');
+    await expect(tree.getByRole('link', { name: new RegExp(`^${b}\\.yml`) })).toContainText(
+      'problems',
+    );
+    await expect(tree.getByRole('link', { name: new RegExp(`^${a}\\.yml`) })).not.toContainText(
+      'problems',
+    );
+
+    // New cube and New view: a file of its own, going where it is asked to
+    // (AC-282), open, and said to be unpublished — once the broken file's
+    // edit is let go, which it asks about first (AC-226).
+    await tree.getByRole('button', { name: 'New cube' }).click();
+    const asking = (kind: string) =>
+      page.getByRole('dialog', { name: `New ${kind} in My workspace` });
+    await asking('cube').getByRole('combobox', { name: 'Target folder' }).selectOption('root');
+    await asking('cube').getByRole('button', { name: 'Create' }).click();
+    await page
+      .getByRole('alertdialog', { name: 'Leave with unpublished changes?' })
+      .getByRole('button', { name: 'Leave without publishing' })
+      .click();
+    await expect(page).toHaveURL(
+      new RegExp(`/explore/folders/${folder}/models/cubes%2Fnew_cube_1\\.yml$`),
+    );
+    await expect(
+      page.getByRole('textbox', { name: 'cubes/new_cube_1.yml, as YAML' }),
+    ).toContainText('name: new_cube_1');
+    await expect(tree.getByRole('link', { name: /^new_cube_1\.yml/ })).toContainText('unpublished');
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+    await tree.getByRole('button', { name: 'New view' }).click();
+    await asking('view').getByRole('combobox', { name: 'Target folder' }).selectOption('root');
+    await asking('view').getByRole('button', { name: 'Create' }).click();
+    await expect(page).toHaveURL(
+      new RegExp(`/explore/folders/${folder}/models/views%2Fnew_view_1\\.yml$`),
+    );
+    // The cube made first is still there to come back to.
+    await expect(tree.getByRole('link', { name: /^new_cube_1\.yml/ })).toBeVisible();
+  } finally {
+    await own.drop();
+  }
 });
 
 /**
@@ -746,18 +828,27 @@ test('the join diagram fits its pane’s width, every box in view', async ({ pag
  * file's — so what New cube made must outlive the page that made it.
  */
 test('New cube and New view from the overview open their new file', async ({ page }) => {
-  await page.goto('/model');
+  // My workspace's overview: where the single user makes a model now (T451's switch).
+  const overview = '/explore/folders/mine/models';
+  const made = async (kind: 'cube' | 'view') => {
+    const asking = page.getByRole('dialog', { name: `New ${kind} in My workspace` });
+    await asking.getByRole('combobox', { name: 'Target folder' }).selectOption('root');
+    await asking.getByRole('button', { name: 'Create' }).click();
+  };
+  await page.goto(overview);
   const tree = page.getByRole('navigation', { name: 'Model files' });
   await tree.getByRole('button', { name: 'New cube' }).click();
-  await expect(page).toHaveURL(/\/model\/files\/cubes%2Fnew_cube_\d+\.yml$/);
+  await made('cube');
+  await expect(page).toHaveURL(/\/explore\/folders\/mine\/models\/cubes%2Fnew_cube_\d+\.yml$/);
   await expect(
     page.getByRole('textbox', { name: /^cubes\/new_cube_\d+\.yml, as YAML$/ }),
   ).toContainText('name: new_cube_');
   await expect(tree.getByRole('link', { name: /^new_cube_\d+\.yml/ })).toContainText('unpublished');
 
-  await page.goto('/model');
+  await page.goto(overview);
   await tree.getByRole('button', { name: 'New view' }).click();
-  await expect(page).toHaveURL(/\/model\/files\/views%2Fnew_view_\d+\.yml$/);
+  await made('view');
+  await expect(page).toHaveURL(/\/explore\/folders\/mine\/models\/views%2Fnew_view_\d+\.yml$/);
   await expect(
     page.getByRole('textbox', { name: /^views\/new_view_\d+\.yml, as YAML$/ }),
   ).toContainText('name: new_view_');

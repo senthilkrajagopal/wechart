@@ -32,7 +32,14 @@ import { isMyWorkspace, MY_WORKSPACE, SHARED_ROOT } from '../explore/roots';
 import { ALL_MODEL_FILES_QUERY, FileList, modelFilesQuery, ModelFilesNotFound } from './FileList';
 import { GenerateCubes, generateWith } from './GenerateCubes';
 import { FileTree } from './FileTree';
-import { fileHref, folderWordsOf, modelAccessOf, modelHref, shownMemberOf } from './inFolder';
+import {
+  fileHref,
+  folderWordsOf,
+  modelAccessOf,
+  modelHref,
+  modelsAreWorkspaceOnly,
+  shownMemberOf,
+} from './inFolder';
 import { objectsOf } from './objects';
 import { CubeForm } from './form/CubeForm';
 import { JoinEditor } from './JoinEditor';
@@ -57,6 +64,7 @@ import { memberLines } from './memberLines';
 import {
   copyModelToWorkspace,
   draftTargetOf,
+  filesBeside,
   keepDraftTarget,
   namedFileOf,
   savedTargetOf,
@@ -713,14 +721,48 @@ function FileEditor({
     staleTime: 60_000,
   });
   /**
+   * In My workspace, the shared folder this file goes to and each above it,
+   * the root's included: where its names resolve once it lands, after the
+   * workspace's own (T347, R53). What its joins and pickers may name too
+   * (AC-138, AC-224), now every shared model is changed there (T451's
+   * switch). A cube or view the workspace's files declare is theirs.
+   */
+  const landsIn = useQuery({
+    queryKey: ['model-lands-in', where.folderId, path, published],
+    queryFn: async () =>
+      (published
+        ? await savedTargetOf(where.folderId, path)
+        : draftTargetOf(where.folderId, path)) ?? null,
+    enabled: where.inWorkspace,
+    retry: false,
+  });
+  const everyFile = useQuery({
+    ...ALL_MODEL_FILES_QUERY,
+    enabled: where.inWorkspace && landsIn.data != null,
+  });
+  /** The folders on the path of the folder it goes to; none outside My workspace. */
+  const onPath = useMemo(() => {
+    const target = landsIn.data;
+    return !where.inWorkspace || target == null || everyFile.data === undefined
+      ? new Set<string>()
+      : new Set(placesOf(folders.data ?? []).pathOf(target));
+  }, [where.inWorkspace, landsIn.data, everyFile.data, folders.data]);
+  /**
    * The model's join graph, with this file as the form has it now (AC-138):
    * worked out only while the diagram shows, the other files once each —
    * the model as the tree shows it, its stored files and its other drafts,
-   * which publish with this one when it joins them (T488's review).
+   * which publish with this one when it joins them (T488's review); in My
+   * workspace, and the shared model on the path it goes to (`filesBeside`).
    */
   const modelFiles = useMemo(
-    () => [...(allFiles.data ?? []), ...drafts].filter((file) => file.path !== path),
-    [allFiles.data, drafts, path],
+    () =>
+      filesBeside({
+        open: path,
+        own: [...(allFiles.data ?? []), ...drafts],
+        shared: everyFile.data ?? [],
+        onPath,
+      }),
+    [allFiles.data, drafts, everyFile.data, onPath, path],
   );
   const others = useMemo(
     () => (view === 'joins' ? joinGraphOf(modelFiles) : undefined),
@@ -1526,24 +1568,26 @@ const GENERATING_KEY = ['generate-cubes-open'] as const;
 /**
  * Generate cubes, opened afresh on a data source for the model page to dock
  * (T492; the user, 2026-10-02): from that data source's page or its row's
- * ⋯ in Explore. With sign-in on, the cubes go to My workspace's model, to go
- * to `target`; with it off, to the root's. Gives the model page's address.
+ * ⋯ in Explore. Where models are workspace-only (`modelsAreWorkspaceOnly`:
+ * signed in, and with sign-in off too since T451's switch), the cubes go to
+ * My workspace's model, to go to `target`; elsewhere, to the root's. Gives
+ * the model page's address.
  */
 export function generateFrom(
   queryClient: ReturnType<typeof useQueryClient>,
   {
     source,
     target,
-    signedIn,
+    workspaceOnly,
   }: {
     readonly source: string;
     readonly target?: string | undefined;
-    readonly signedIn: boolean;
+    readonly workspaceOnly: boolean;
   },
 ): string {
-  generateWith(queryClient, { source, ...(signedIn ? { target } : {}) });
+  generateWith(queryClient, { source, ...(workspaceOnly ? { target } : {}) });
   queryClient.setQueryData(GENERATING_KEY, true);
-  return signedIn ? modelHref(MY_WORKSPACE.id) : modelHref();
+  return workspaceOnly ? modelHref(MY_WORKSPACE.id) : modelHref();
 }
 const DRAFTS_STORAGE = 'wechart.model.drafts';
 /**
@@ -1668,9 +1712,10 @@ export function ModelFilePage({
   const router = useRouter();
   const folders = useQuery(FOLDERS_QUERY);
   /**
-   * Whether it may be changed here (rules 70 and 71): with sign-in on, a
-   * model is shared and read-only; "Edit in my workspace" for those whose
-   * access to its folder answers them, a Super-Admin or read-write member.
+   * Whether it may be changed here (rules 70 and 71): a shared model is
+   * read-only (`modelsAreWorkspaceOnly`); "Edit in my workspace" for those
+   * whose access to its folder answers them, a Super-Admin or read-write
+   * member, and with sign-in off, its one user (T451's switch).
    */
   const me = useQuery(ME_QUERY);
   const access = useQuery({
@@ -1679,9 +1724,9 @@ export function ModelFilePage({
     retry: false,
   });
   // My workspace, or a folder in it (T347): its models are its owner's to
-  // change there. A signed-in user's: with sign-in off there is none.
+  // change there; with sign-in off, the single user's (T451's switch).
   const inWorkspace =
-    me.data?.security === 'oidc' &&
+    modelsAreWorkspaceOnly(me.data) &&
     (isMyWorkspace(folder) || isMyWorkspace(folderChain(folders.data ?? [], folder)[0]?.id ?? ''));
   const { readOnly, editInWorkspace, useInWorkspace } = modelAccessOf({
     me: me.data,
@@ -1825,8 +1870,16 @@ export function ModelFilePage({
     readonly targets: readonly Target[];
   }>();
   const [targetsFailed, setTargetsFailed] = useState<string>();
+  /**
+   * What asked for the dialog: given the focus back as it closes (rule 85),
+   * before the new file opens — so a question about leaving an unsaved file
+   * puts it back there on Stay (AC-226), as it does where nothing is asked.
+   */
+  const newOpener = useRef<HTMLElement | null>(null);
   const makeNew = (kind: 'cube' | 'view') => {
     if (where.inWorkspace) {
+      newOpener.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setTargetsFailed(undefined);
       void targetsOf().then(
         (targets) => {
@@ -2204,9 +2257,11 @@ export function ModelFilePage({
           targets={askingNew.targets}
           onClose={() => {
             setAskingNew(undefined);
+            newOpener.current?.focus();
           }}
           onCreate={(name, target) => {
             setAskingNew(undefined);
+            newOpener.current?.focus();
             makeNamed(askingNew.kind, name, target);
           }}
         />
