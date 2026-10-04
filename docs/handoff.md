@@ -1,7 +1,9 @@
 # Handoff — 2026-09-24
 
 > **PAUSED 2026-10-04 at the user's word** ("…pause .. running out of tokens.. os will need to stop for couple of days"). Each agent was told to finish its current task, commit it and stop. On resuming:
-> 1. **Pick the agents' last commits**, if not already on feat/xcube: Jobs T555 (and its research correction and its jobs.spec:72 fix), the SQL runner's T549, group 6's T632, and F6's T590 if it was started.
+> 1. **Every agent has stopped, and their last commits are all on feat/xcube:** T555, the cancel correction, T632 and T549, which pins xcube 46ca0ce708 (compose runs it). F6 didn't start T590. Nothing is left to pick.
+>    - **The SQL runner's next steps:** run `e2e/security/sql-runner.spec.ts` once wechart_security is clean, and tick AC-378 and AC-379 if it passes.
+>    - **For the user:** AC-378's text still says Cube Store's stop says "until when". A router query has no end time to give (`endsBy: null`, 46ca0ce708). Amend AC-378 for router runs, as R64 did AC-379?
 > 2. **`wechart_security` blocks the security e2e suite.** It still holds the stray pgmigrations row `1758565480000_sql-run-ends-by`; that number now belongs to `1758620000000`. The user must delete it, since agents were refused that change to a shared resource:
 >    `docker exec wechart-meta psql -U wechart -d wechart_security -c "delete from pgmigrations where name = '1758565480000_sql-run-ends-by'"`
 >    Then run the security specs that wait on it, and tick:
