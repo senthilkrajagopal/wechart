@@ -12153,6 +12153,22 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       2. `addTileAsBeforeCopyOnUse` adds that tile to the stored body in the suite's `wechart_security` database, through `psql` in compose's `wechart-meta`, with the values as psql variables.
     - The spec's assertions are unchanged, and it passes 9 of 9 on Chrome. A reader's export (no models or data sources offered) was already its own case.
 
+## P2.23 Calculation requests on views (added 2026-10-04, `[R64]`)
+
+- [ ] T590 (AC-052) Resolve a request on a view when the taker's approved measure lands on a cube on the view's join paths
+  - Files:
+    - `packages/api/src/model/added-measures.ts`, `packages/api/src/repos/calc-resolution.ts` and `packages/api/src/routes/proposals.ts` (`afterModelsLanded`), each with tests;
+    - `packages/api/src/xcube/fake.ts`;
+    - `e2e/security/calc-request-resolve.spec.ts`.
+  - Failing test: `calc-request-resolve.test.ts` and the e2e. A request raised on a view chart, once its taker's proposal adding a measure to a cube on one of the view's `join_path`s is approved, is resolved, naming that measure. A measure on a cube off those paths leaves it open (AC-052, R64).
+  - Depends on: T385
+  - *Notes from F6, 2026-10-04, read but not built:*
+    - Every segment of a view's `cubes[].join_path` names a cube, and xcube binds every segment (`xcube-slice-3a.md`, resolution table; `cube/data-modeling.md` Y.10a). Its bindings come through `xcube.items()` as `HeldItem.bindings`, with `kind: 'view'`.
+    - So: take the segments from the view's own file, map them through its held bindings, and resolve when a landed file adds a measure to a cube whose full name is in that set.
+    - `fake.ts`'s `bindingsOf` binds only `joins`; extend it to views' join paths.
+    - `openOn(<landed folders>)` misses a view request whose view sits in a folder beneath the cube's. Search all open requests the author took up instead.
+    - Amend AC-052 to R64's wording, "(amended 2026-10-04, `[R64]`)".
+
 ## P2.22 The model editor's pane, popped out (added 2026-10-02, `[R58]`)
 
 - [x] T600 (AC-420) Pop the model editor's YAML and join diagram out into a larger dialog, and back into place
