@@ -29,6 +29,15 @@ export interface WechartSchedule {
   readonly change?: ClockChangeSeen;
   /** How its last run went; none before its first. */
   readonly lastRun: LastRun | null;
+  /** How many failed runs in a row suspend it (T379, AC-155). */
+  readonly suspendAfter: number;
+  /** How many of its runs have failed in a row. */
+  readonly failuresInARow: number;
+  /** When it was suspended, and Cube's last error then; none while it runs. */
+  readonly suspendedAt: string | null;
+  readonly suspendedError: string | null;
+  /** Whether the model still has its pre-aggregation; none where it couldn't be read (E4). */
+  readonly inModel?: boolean;
 }
 
 export interface ClockChangeSeen {
@@ -72,9 +81,22 @@ export interface ScheduleFields {
   readonly cron: string;
   readonly timezone: string;
   readonly missed: 'once' | 'skip';
+  /** A whole number of 1 or more (T379). */
+  readonly suspendAfter: number;
 }
 
 export const WECHART_SCHEDULES_KEY = ['wechart-schedules'] as const;
+
+/** How many failed runs in a row suspend a schedule unless it's changed (T379, Q9). */
+export const SUSPEND_AFTER = 3;
+
+/** "1 failure", "3 failures". */
+export const failuresWords = (count: number) =>
+  `${String(count)} ${count === 1 ? 'failure' : 'failures'}`;
+
+/** Said of a number to suspend after that isn't one, as the API says it. */
+export const SUSPEND_AFTER_REFUSAL =
+  'Suspend it after a whole number of failed runs in a row, 1 or more.';
 
 /** The API's words for a refusal, else what failed. */
 async function refusalOf(response: Response, what: string): Promise<Error> {
@@ -120,6 +142,33 @@ export async function saveSchedule(fields: ScheduleFields, id?: string): Promise
   );
   if (!response.ok) throw await refusalOf(response, 'The schedule could not be saved');
   return (await response.json()) as WechartSchedule;
+}
+
+/** Resumes a suspended schedule (T379, AC-155): the schedule, running again, or the API's refusal. */
+export async function resumeSchedule(id: string): Promise<WechartSchedule> {
+  const response = await fetch(`/api/wechart-schedules/${encodeURIComponent(id)}/resume`, {
+    method: 'POST',
+  });
+  if (!response.ok) throw await refusalOf(response, 'The schedule could not be resumed');
+  return (await response.json()) as WechartSchedule;
+}
+
+/** One of a schedule's runs, as Run history lists it (T374): its failed runs' table (E1). */
+export interface ScheduleRun {
+  readonly id: string;
+  readonly startedAt: string;
+  readonly outcome: 'done' | 'failed' | 'cancelled' | 'expired' | null;
+  readonly error: string | null;
+}
+
+/** A schedule's latest runs, newest first, from Run history. */
+export async function readRunsOf(id: string, signal?: AbortSignal): Promise<ScheduleRun[]> {
+  const response = await fetch(
+    `/api/jobs/builds?${new URLSearchParams({ starter: `schedule:${id}`, within: 'all' }).toString()}`,
+    signal === undefined ? {} : { signal },
+  );
+  if (!response.ok) throw await refusalOf(response, 'Its runs could not be read');
+  return ((await response.json()) as { records: ScheduleRun[] }).records;
 }
 
 export async function deleteSchedule(id: string): Promise<void> {

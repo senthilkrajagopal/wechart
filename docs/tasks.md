@@ -7598,7 +7598,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - `e2e/schedules.spec.ts` and `e2e/admin.spec.ts` (Chrome);
     - `e2e/security/jobs-scope.spec.ts` (Chrome).
   - **ACs ticked:** AC-234, AC-392 and AC-154. AC-297 stays open for T559's folder views.
-- [ ] T379 (AC-155) Suspend a wechart schedule after its set number of failed runs in a row, say so, and offer Resume
+- [x] T379 (AC-155) Suspend a wechart schedule after its set number of failed runs in a row, say so, and offer Resume
   - *Rewritten 2026-10-02 to design 16's state E and Q9 (`[R56]`).*
   - *2026-09-28, R42.4:* wechart-owned schedules only; the number is set per schedule, 3 by default. A refresh key keeps Cube's own retry.
   - Files:
@@ -7619,6 +7619,68 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - before the limit, the row reads "n failed in a row · suspends after N".
     - `e2e/schedules.spec.ts`: a schedule on a pre-aggregation the model no longer has is suspended after its number of runs, and Resume clears that (AC-155, state E4).
   - Depends on: T552
+  - **As built (2026-10-04):**
+    - **The table** (migration `1758630000000_schedule-suspension.cjs`, in this worktree's range from the coordinator):
+      - `suspend_after`: an integer, 3 by default, checked to be 1 or more;
+      - `counted_from`: Resume's time;
+      - `suspended_at` and `suspended_error`.
+    - **The count isn't stored. It is read from Run history** (`scheduler/suspend.ts`, `failuresOf`):
+      - it reads the schedule's latest runs that ended done or failed, started after `counted_from`, newest first, at most its number, and counts the failed ones in a row;
+      - Run history's `failed` is any partition failed or missing (T372's `endOf`), so one failed partition counts;
+      - Cube's record expiring, or a cancel, counts neither way, and a run still open hasn't ended;
+      - only the schedule's own runs (`via: schedule`) count. T555's Run now will start with another `via`, so it won't count (R59).
+    - **A start Cube refuses is recorded** (`history.refused`):
+      - It is a failed run with no jobs and Cube's words, ended as it started. Run history lists it, and the schedule's failed runs list it (E4).
+      - T378 recorded nothing for one. Its test now expects the failed record.
+    - **When a schedule is checked against its number** (`counting`):
+      - after a refused start;
+      - after the follower closes a failed scheduled run: `closeEnded` answers what it closed, once, and the follower hands that to `scheduler.ended` (`onEnded`, wired in main.ts).
+    - **At its number:** `suspended_at` and Cube's last error are written once, however many replicas ask, and pg-boss's schedule is dropped. A run handed out anyway posts nothing. A start doesn't lay a suspended schedule again.
+    - **Resume** (`POST /api/wechart-schedules/:id/resume`, scoped as a change is, in the route matrix):
+      - clears the suspension and sets `counted_from` to now, so the count starts again from 0;
+      - lays pg-boss's schedule anew, so it runs from its next time, with nothing missed while it was suspended;
+      - names who resumed it as its last changer.
+    - **The number:** `suspendAfter` on create and change. A whole number of 1 or more, 3 unless set. Anything else is refused: "Suspend it after a whole number of failed runs in a row, 1 or more." A change that leaves it out keeps it.
+    - **The page (design 16, state E, pin 7, pin 14):**
+      - The form's "On failure: Suspend after [3] failed runs in a row", with "It then stops running until someone resumes it." A number that isn't one is named, and Create and Save wait.
+      - The row's Next run reads "Suspended after n failures", with the error icon. Before its number it reads "n failed in a row · suspends after N" (E2).
+      - **The pane (E1):**
+        - "Suspended after n failed runs in a row, at 11:00:41 today. It won't run again until it's resumed."
+        - Resume, focused, with "Its next run would be … The count of failures starts again from 0."
+        - The failed runs, from Run history, each "k of N", then the run before them.
+        - "Cube's error on the last one".
+        - E4's help where the model no longer has the pre-aggregation.
+      - After Resume, it reads Active, and "Resumed “…”. Its next run is …" (E3).
+  - **Implementer's calls, for the user to confirm or change:**
+    - A cancelled run counts neither way, like an expired one. Q9 names only the expired one.
+    - The count is read from Run history, not kept. A failed run pruned past the latest 100 of its pre-aggregation (AC-150) can't count, and no schedule's number comes near 100.
+    - E3's toast is a status line in the pane.
+    - **A start that fails for any reason counts as refused,** Cube unreachable or a credential refused included, not only Cube's own refusal. A run that didn't start is a failed run to the person who scheduled it. The cost: N runs of a Cube outage suspend every schedule whose number is N. The alternative is to count only Cube's HTTP refusals.
+    - A run the follower closed failed and a cancel then re-closed as cancelled (T376's known race) has already been counted. If it suspended the schedule, the suspension stays.
+  - **One review round (spec-reviewer), fixed:**
+    1. A number lowered to the count, or a count whose trigger was lost (a replica gone between closing and counting, or one failure in a batch), left the schedule running. Each run now checks the count before it posts, and is suspended instead. Tested. A failed count in a batch is said, and the rest are still counted.
+    2. Resume took focus whenever a refresh found the open schedule suspended. It now takes focus only as the pane opens on a suspended one. Tested.
+    3. Focus was lost after Resume. It now goes back to the schedule's row. The status line is in the pane from the start, so its words are read. Tested.
+    4. "Resumed …" stayed on another schedule's pane. Each schedule's pane is now its own. Tested.
+    5. "k of N" counted table rows. It now counts only runs that count: an expired or cancelled run is left out of the table. Tested.
+    6. E4's help showed when the model couldn't be read. The API now says `inModel` only when it has read the model. Tested.
+    7. A number past what the table holds gave a 500. It is now refused like any other. Tested.
+    8. The suspended icon is now design 16's paused one (`s-susp`), not the error's X.
+    9. Test fixes:
+       - The form test shows Create enabled before 0 disables it.
+       - The negative check for a missed run now waits long enough for pg-boss's passes, in real time.
+       - The e2e puts the rollup back in the model before Resume, so the next run doesn't race the assertion.
+    10. Formatter changes to `export.ts` and `import.ts` were left out of this task.
+  - **Tests:**
+    - `scheduler/suspend.test.ts` (6);
+    - `scheduler/schedules.test.ts`;
+    - `routes/schedules.test.ts` (with Resume and the number);
+    - `repos/build-history.test.ts` (`closeEnded`'s answer, `refused`, `scheduledEnds`);
+    - `jobs/follow.test.ts` (`onEnded`);
+    - `access/route-matrix.test.ts` (Resume);
+    - `ScheduleForm.test.tsx`, `SchedulePane.test.tsx`, `SchedulesPage.test.tsx`;
+    - `e2e/schedules.spec.ts` (Chrome): a schedule whose rollup the model no longer has is suspended after 1, says so on its row and pane with Cube's words, offers Resume focused, and is resumed once the rollup is back (E4).
+  - AC-155 ticked.
 - [ ] T505 (AC-294) Record builds started from Jobs, cancels, and changes to wechart-owned schedules in the audit trail, a suspension by "wechart's scheduler" *(added 2026-09-28, R42.8; rewritten and moved here 2026-10-02 to design 16's state I and Q12, `[R56]`)*
   - Files:
     - `packages/api/src/audit/record.ts` (+ test);

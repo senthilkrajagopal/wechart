@@ -241,6 +241,7 @@ describe('Schedules’ wechart rows (T552, AC-154, AC-234)', () => {
             cron: '0 6 * * *',
             timezone: 'Europe/Berlin',
             missed: 'once',
+            suspendAfter: 3,
           },
         },
       ]);

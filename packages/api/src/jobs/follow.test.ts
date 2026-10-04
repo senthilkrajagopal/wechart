@@ -312,6 +312,31 @@ describe('following a build on the server (T372, AC-150, AC-319)', () => {
 });
 
 describe('how a build ended (T372, AC-150)', () => {
+  it('is handed on once it’s closed, with how it ended: a schedule’s failure counted (T379)', async () => {
+    const tokens = newTokens(1);
+    const stub = stubCube(tokens);
+    const time = clock('2026-10-02T16:00:00.000Z');
+    const runId = await started(stub, time.now);
+    stub.states.set(tokens[0]!, { status: 'failure: timed out' });
+    time.advance(60_000);
+    const handed: { runId: string; outcome: string }[][] = [];
+
+    const follower = buildFollower({
+      history: buildHistory(getDb()),
+      cube: stub.cube,
+      now: time.now,
+      onEnded: (closed) => {
+        handed.push([...closed]);
+      },
+    });
+    await follower.once();
+    await follower.once();
+
+    expect(handed.flat().filter((each) => each.runId === runId)).toEqual([
+      { runId, outcome: 'failed' },
+    ]);
+  });
+
   it('failed, saying how many partitions failed and Cube’s error', async () => {
     const tokens = newTokens(3);
     const stub = stubCube(tokens);

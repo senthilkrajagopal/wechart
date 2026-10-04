@@ -8,6 +8,8 @@ import {
   clockChangeLine,
   readPreview,
   saveSchedule,
+  SUSPEND_AFTER,
+  SUSPEND_AFTER_REFUSAL,
   WECHART_SCHEDULES_KEY,
   type ScheduleFields,
   type WechartSchedule,
@@ -84,7 +86,7 @@ export function ScheduleForm({
 }) {
   const id = useId();
   const client = useQueryClient();
-  const [fields, setFields] = useState<ScheduleFields>(() => ({
+  const [fields, setFields] = useState<Omit<ScheduleFields, 'suspendAfter'>>(() => ({
     preAggregation: schedule?.preAggregation ?? '',
     name: schedule?.name ?? '',
     cron: schedule?.cron ?? '',
@@ -94,6 +96,10 @@ export function ScheduleForm({
   const set = (change: Partial<ScheduleFields>) => {
     setFields((was) => ({ ...was, ...change }));
   };
+  // How many failed runs in a row suspend it, as typed: 3 unless changed (T379, pin 14).
+  const [limit, setLimit] = useState(() => String(schedule?.suspendAfter ?? SUSPEND_AFTER));
+  const suspendAfter = /^\d+$/.test(limit.trim()) ? Number(limit.trim()) : 0;
+  const limitWrong = suspendAfter < 1;
 
   // The pre-aggregations of the user's folders, as Jobs lists them (T371): New schedule's.
   const pickable = useQuery({
@@ -120,7 +126,8 @@ export function ScheduleForm({
   const current = read !== undefined && !preview.isPlaceholderData;
 
   const save = useMutation({
-    mutationFn: () => saveSchedule({ ...fields, name: fields.name.trim() }, schedule?.id),
+    mutationFn: () =>
+      saveSchedule({ ...fields, name: fields.name.trim(), suspendAfter }, schedule?.id),
     onSuccess: async (saved) => {
       await client.invalidateQueries({ queryKey: WECHART_SCHEDULES_KEY });
       onSaved(saved);
@@ -132,6 +139,7 @@ export function ScheduleForm({
     fields.preAggregation !== '' &&
     fields.name.trim() !== '' &&
     zone !== '' &&
+    !limitWrong &&
     current &&
     read.ok &&
     read.runs.length > 0;
@@ -140,7 +148,8 @@ export function ScheduleForm({
     fields.name !== schedule.name ||
     fields.cron !== schedule.cron ||
     fields.timezone !== schedule.timezone ||
-    fields.missed !== schedule.missed;
+    fields.missed !== schedule.missed ||
+    suspendAfter !== schedule.suspendAfter;
   const refreshKey = refreshKeys.find((each) => each.id === fields.preAggregation);
   const shownZone = read?.ok === true ? (read.timezone ?? zone) : zone;
   // Which field is wrong, said under that field; the cron's words kept when it's the zone.
@@ -343,6 +352,36 @@ export function ScheduleForm({
             </label>
           ))}
         </div>
+      </div>
+      {/* On failure (T379, AC-155; pin 14): a whole number from 1 up, with no "never" (Q9). */}
+      <div className="field">
+        <span className="field__label">On failure</span>
+        <span className="schedule-form__limit">
+          Suspend after{' '}
+          <input
+            type="number"
+            min={1}
+            step={1}
+            inputMode="numeric"
+            aria-label="Suspend after failed runs in a row"
+            aria-invalid={limitWrong ? true : undefined}
+            aria-describedby={`${id}-limit-help${limitWrong ? ` ${id}-limit-error` : ''}`}
+            value={limit}
+            onChange={(event) => {
+              setLimit(event.target.value);
+            }}
+          />{' '}
+          failed runs in a row
+        </span>
+        <p className="help field__help" id={`${id}-limit-help`} data-testid="suspend-help">
+          It then stops running until someone resumes it.
+        </p>
+        {limitWrong ? (
+          <p className="field__error" id={`${id}-limit-error`} data-testid="suspend-error">
+            <StatusIcon kind="err" />
+            <span>{SUSPEND_AFTER_REFUSAL}</span>
+          </p>
+        ) : null}
       </div>
       {save.isError ? <StateLine kind="err">{save.error.message}</StateLine> : null}
       <div className="schedule-form__foot">

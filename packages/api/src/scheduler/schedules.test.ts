@@ -278,7 +278,7 @@ describe('wechart’s schedules (T378, AC-234)', { timeout: 120_000 }, () => {
     expect((await runsOf(schedule.id)).length).toBe(1);
   });
 
-  it('says a run Cube refuses, and fails it, recording nothing', async () => {
+  it('says a run Cube refuses, and fails it, recording it failed with Cube’s words (T379)', async () => {
     await clock.setTime(new Date(START));
     const scheduler = await replica();
     const schedule = await scheduler.create(newSchedule({ name: `Refused ${MARK}` }), by);
@@ -292,7 +292,11 @@ describe('wechart’s schedules (T378, AC-234)', { timeout: 120_000 }, () => {
     expect(failures.map((each) => (each instanceof Error ? each.message : String(each)))).toEqual([
       `“Refused ${MARK}” could not start its run: Pre-aggregation not found`,
     ]);
-    expect((await runsOf(schedule.id)).length).toBe(0);
+    // Since T379, a refused start is a failed run, which its suspension counts (design 16, E4).
+    const runs = await runsOf(schedule.id);
+    expect(runs.map((each) => [each.outcome, each.error, each.jobs])).toEqual([
+      ['failed', 'Pre-aggregation not found', 0],
+    ]);
   });
 
   it('lays at a start only what pg-boss lacks or holds otherwise, and drops what wechart no longer has', async () => {

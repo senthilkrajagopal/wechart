@@ -95,11 +95,19 @@ export function buildFollower({
   cube,
   now = () => new Date(),
   firstMomentsMs = FIRST_MOMENTS_MS,
+  onEnded,
 }: {
   readonly history: BuildHistory;
   readonly cube: Pick<CubeClient, 'jobStatuses'>;
   readonly now?: () => Date;
   readonly firstMomentsMs?: number;
+  /**
+   * The builds a round closed, with how each ended, once each: wechart's
+   * scheduler counts a schedule's failed runs by them (T379, AC-155).
+   */
+  readonly onEnded?: (
+    closed: readonly { readonly runId: string; readonly outcome: string }[],
+  ) => unknown;
 }) {
   return {
     /**
@@ -134,7 +142,8 @@ export function buildFollower({
             });
           }
         }
-        await history.closeEnded();
+        const closed = await history.closeEnded();
+        if (closed.length > 0) await onEnded?.(closed);
       } finally {
         await history.release(held, new Date(now().getTime() + ASKED_AGAIN_AFTER_MS));
       }

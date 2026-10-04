@@ -4041,6 +4041,13 @@ code.schedules__sub { font-family: var(--wc-font-code); }
 .schedule-form__each { margin: 0; font-size: var(--wc-text-sm-size); }
 .schedule-form__choice { display: grid; gap: 4px; }
 .schedule-form__choice > label { display: flex; gap: 6px; align-items: center; font-size: var(--wc-text-sm-size); }
+/* Suspend after n failed runs in a row (T379; screen 2, pin 14): the number in the sentence. */
+.schedule-form__limit { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: var(--wc-text-sm-size); }
+.schedule-form__limit input { width: 64px; height: 28px; box-sizing: border-box; }
+/* Failures in a row before the limit, in the warning's colour (E2); a resumed one said (E3). */
+.schedules__failing { color: var(--wc-status-warning); font-weight: 600; }
+.schedules__resumed { margin: 0; font-size: var(--wc-text-sm-size); }
+.schedules__failed td { padding-top: 4px; padding-bottom: 4px; }
 .schedule-form__foot {
   display: grid;
   gap: 8px;
@@ -5218,6 +5225,7 @@ main:has(.review-view) {
 /* Not built, idle; Partly built, a warning (design 16's legend; T550). */
 .status--off { color: var(--wc-text-secondary); }
 .status--part { color: var(--wc-status-warning); }
+.status--susp { color: var(--wc-status-error); }
 /* What Last built and Started by mean, under Jobs' table (design 16, pin 9). */
 .jobs-foot { margin: 8px 0 0; color: var(--wc-text-secondary); font-size: 12px; line-height: 16px; max-width: 72ch; }
 .jobs-foot b { color: var(--wc-text-primary); font-weight: 600; }

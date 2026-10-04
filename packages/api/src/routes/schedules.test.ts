@@ -13,7 +13,12 @@ import { buildHistory } from '../repos/build-history';
 import { catalog } from '../repos/catalog';
 import { documents, type DocumentKind } from '../repos/documents';
 import { folderAccessStore } from '../repos/folder-access';
-import { RUN_QUEUE, scheduleStore, wechartScheduler } from '../scheduler/schedules';
+import {
+  RUN_QUEUE,
+  scheduleStore,
+  wechartScheduler,
+  type WechartScheduler,
+} from '../scheduler/schedules';
 import { buildServer } from '../server';
 
 /**
@@ -59,6 +64,13 @@ const ids: Record<string, string> = {};
 const xcubeIds: Record<string, string> = {};
 let app: FastifyInstance;
 let boss: PgBoss;
+let scheduler: WechartScheduler;
+/** Pre-aggregations whose jobs posts the stub Cube refuses, as for one the model no longer has. */
+const refusing = new Set<string>();
+/** Folders whose cube the stub meta leaves out: their rollups are gone from the model. */
+const unlisted = new Set<string>();
+const REMOVED =
+  "A user's selector doesn't match any of the pre-aggregations defined in the data model.";
 /** Every jobs post the stub Cube is sent, by the pre-aggregations it names. */
 const posted: string[][] = [];
 
@@ -146,11 +158,15 @@ beforeAll(async () => {
       const asked = new URL(url);
       if (asked.pathname.endsWith('/models/dev/meta'))
         return Response.json({
-          cubes: Object.values(xcubeIds).map((xcubeId) => cube(`${xcubeId}__orders`, xcubeId)),
+          cubes: Object.keys(xcubeIds)
+            .filter((key) => !unlisted.has(key))
+            .map((key) => cube(`${xcubeIds[key]!}__orders`, xcubeIds[key]!)),
         });
       if (asked.pathname.endsWith('/v1/pre-aggregations/jobs')) {
         const body = JSON.parse(String(init?.body)) as { selector: { preAggregations: string[] } };
         const named = body.selector.preAggregations;
+        if (named.some((each) => refusing.has(each)))
+          return Response.json({ error: REMOVED }, { status: 400 });
         if (named.some((each) => Object.keys(ids).some((key) => each === preAggIn(key))))
           posted.push(named);
         return Response.json([`${MARK}-token-${String(posted.length)}`]);
@@ -166,7 +182,7 @@ beforeAll(async () => {
     cronWorkerIntervalSeconds: 1,
     supervise: false,
   });
-  const scheduler = wechartScheduler({
+  scheduler = wechartScheduler({
     boss,
     // This file's schedules alone: another file's, in the same database, aren't its to run.
     store: scheduleStore(getDb(), { named: MARK }),
@@ -499,5 +515,87 @@ describe('Schedules’ wechart rows, and the form’s preview (T552, AC-234, AC-
     });
     // Schedules is for those who write a folder, and a Super-Admin (T371).
     expect((await preview('reader', '0 6 * * *', 'UTC')).status).toBe(403);
+  });
+});
+
+describe('Suspended after its failed runs in a row, and Resume (T379, AC-155)', () => {
+  it('lists one suspended with when, Cube’s last error and its count, and resumes it from its next time with the count at 0', async () => {
+    await clock.setTime(new Date('2026-10-07T03:00:00Z'));
+    await place('g', { readOnly: [], readWrite: ['managers'] });
+    // The model no longer has its pre-aggregation: Cube refuses each run (design 16, E4).
+    refusing.add(preAggIn('g'));
+    const own = (
+      await as('manager', {
+        method: 'POST',
+        url: '/api/wechart-schedules',
+        payload: fields('g', { name: `Suspended ${MARK}`, suspendAfter: 1 }),
+      })
+    ).json<Listed & { suspendAfter: number }>();
+    expect(own.suspendAfter).toBe(1);
+    // Gone from the model's list too.
+    unlisted.add('g');
+
+    await scheduler.run(own.id, `job-${MARK}-g`).catch(() => undefined);
+
+    const row = (await listed('manager')).rows.find((each) => each.id === own.id) as
+      (Listed & Record<string, unknown>) | undefined;
+    expect([
+      row?.['suspendedAt'],
+      row?.['suspendedError'],
+      row?.['failuresInARow'],
+      row?.['inModel'],
+    ]).toEqual(['2026-10-07T03:00:00.000Z', REMOVED, 1, false]);
+    expect(await laid(own.id)).toBeUndefined();
+
+    // A member of another folder may not resume it; one of its folder may.
+    expect(
+      (await as('many', { method: 'POST', url: `/api/wechart-schedules/${own.id}/resume` }))
+        .statusCode,
+    ).toBe(403);
+    // Back in the model, then resumed.
+    refusing.delete(preAggIn('g'));
+    unlisted.delete('g');
+    const resumed = await as('manager', {
+      method: 'POST',
+      url: `/api/wechart-schedules/${own.id}/resume`,
+    });
+    expect(resumed.statusCode).toBe(200);
+    const after = resumed.json<Listed & Record<string, unknown>>();
+    expect([after['suspendedAt'], after['failuresInARow'], after.runs?.[0]]).toEqual([
+      null,
+      0,
+      // 05:00 in London, 04:00 UTC: today's, still ahead.
+      '2026-10-07T04:00:00.000Z',
+    ]);
+    expect((await laid(own.id))?.cron).toBe('0 5 * * *');
+    expect(
+      (await as('manager', { method: 'DELETE', url: `/api/wechart-schedules/${own.id}` }))
+        .statusCode,
+    ).toBe(204);
+  });
+
+  it('suspends after 3 unless set, and refuses a number that isn’t a whole one of 1 or more', async () => {
+    await place('h', { readOnly: [], readWrite: ['managers'] });
+    const made = await as('manager', {
+      method: 'POST',
+      url: '/api/wechart-schedules',
+      payload: fields('h', { name: `Three ${MARK}` }),
+    });
+    expect(made.json<{ suspendAfter: number }>().suspendAfter).toBe(3);
+    for (const suspendAfter of [0, 2.5, 'never'])
+      expect(
+        (
+          await as('manager', {
+            method: 'POST',
+            url: '/api/wechart-schedules',
+            payload: fields('h', { name: `Bad ${MARK}`, suspendAfter }),
+          })
+        ).json(),
+        String(suspendAfter),
+      ).toEqual({ error: 'Suspend it after a whole number of failed runs in a row, 1 or more.' });
+    await as('manager', {
+      method: 'DELETE',
+      url: `/api/wechart-schedules/${made.json<{ id: string }>().id}`,
+    });
   });
 });

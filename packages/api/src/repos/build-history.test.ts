@@ -518,3 +518,96 @@ describe('a wechart schedule’s last run (T552, AC-154)', () => {
     expect(await history().lastRunsOf([])).toEqual(new Map());
   });
 });
+
+describe('a wechart schedule’s runs, as its suspension counts them (T379, AC-155)', () => {
+  const scheduleOf = (id: string) => ({ kind: 'schedule', id, name: `Hourly ${tag}` }) as const;
+
+  /** A scheduled run whose one job ended as `status`, `minutes` after STARTED. */
+  async function ran(id: string, status: string, minutes: number) {
+    const started = build(preAggOf('counted'), {
+      via: 'schedule',
+      starter: scheduleOf(id),
+      tokens: [`t-${randomUUID()}`],
+      startedAt: new Date(STARTED.getTime() + minutes * 60_000),
+    });
+    const runId = await history().start(started);
+    await history().seen({
+      runId,
+      token: started.tokens[0]!,
+      previous: null,
+      status,
+      at: new Date(started.startedAt.getTime() + 41_000),
+      final: true,
+    });
+    return runId;
+  }
+
+  it('answers each build it closes with how it ended, once', async () => {
+    const id = `s-${randomUUID()}`;
+    const failed = await ran(id, 'failure: timed out', 0);
+
+    const closed = await history().closeEnded();
+
+    expect(closed.filter((each) => each.runId === failed)).toEqual([
+      { runId: failed, outcome: 'failed' },
+    ]);
+    expect((await history().closeEnded()).filter((each) => each.runId === failed)).toEqual([]);
+  });
+
+  it('records a start Cube refused as failed, with Cube’s words and no jobs, ended as it started', async () => {
+    const id = `s-${randomUUID()}`;
+    const at = new Date(STARTED.getTime() + 5 * 60_000);
+    const error =
+      "A user's selector doesn't match any of the pre-aggregations defined in the data model.";
+
+    const runId = await history().refused({
+      preAggregation: preAggOf('refused'),
+      folderId: 'emea',
+      granularity: null,
+      via: 'schedule',
+      starter: scheduleOf(id),
+      requestId: `wechart-schedule-${randomUUID()}`,
+      startedAt: at,
+      error,
+    });
+
+    const record = await history().get(runId);
+    expect([
+      record?.outcome,
+      record?.error,
+      record?.failedCount,
+      record?.tokens,
+      record?.endedAt,
+      record?.starter,
+    ]).toEqual(['failed', error, 0, [], at, scheduleOf(id)]);
+  });
+
+  it('gives a schedule’s ended runs by its times, newest first, from a time on, none still open', async () => {
+    const id = `s-${randomUUID()}`;
+    await ran(id, 'done', 10);
+    const older = await ran(id, 'failure: one', 20);
+    const newer = await ran(id, 'missing_partition', 30);
+    await history().closeEnded();
+    // Still open: not counted.
+    await history().start(
+      build(preAggOf('counted'), {
+        via: 'schedule',
+        starter: scheduleOf(id),
+        startedAt: new Date(STARTED.getTime() + 40 * 60_000),
+      }),
+    );
+
+    expect(await history().scheduledEnds(id, null, 10)).toEqual([
+      { runId: newer, outcome: 'failed', error: 'missing_partition' },
+      { runId: older, outcome: 'failed', error: 'failure: one' },
+      expect.objectContaining({ outcome: 'done', error: null }),
+    ]);
+    // From a time on: Resume's.
+    expect(
+      (await history().scheduledEnds(id, new Date(STARTED.getTime() + 15 * 60_000), 10)).map(
+        (each) => each.runId,
+      ),
+    ).toEqual([newer, older]);
+    expect((await history().scheduledEnds(id, null, 1)).map((each) => each.runId)).toEqual([newer]);
+  });
+});

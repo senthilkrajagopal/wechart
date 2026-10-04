@@ -2319,6 +2319,19 @@ const CASES: Record<string, Case> = {
           `${who} changing ${place}'s schedule`,
         );
   },
+  // Resume: those who write its folder (T379, Q10); one not suspended is answered as it is.
+  'POST /api/wechart-schedules/:id/resume': async () => {
+    for (const place of PLACES)
+      for (const who of WHO) {
+        const response = await ask(who, {
+          method: 'POST',
+          url: `/api/wechart-schedules/${schedulesIn[place]}/resume`,
+        });
+        const where = `${who} resuming ${place}'s schedule`;
+        if (writes(who, place)) answered(response, where);
+        else refused(response, where);
+      }
+  },
   'DELETE /api/wechart-schedules/:id': async () => {
     for (const place of PLACES)
       for (const who of WHO.filter((each) => !writes(each, place)))

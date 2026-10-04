@@ -8,6 +8,7 @@ import type { Database, ScheduleTable } from '../db/schema';
 import type { BuildHistory } from '../repos/build-history';
 import { buildablesFrom } from '../jobs/build';
 import { previewOf, readCron, unknownZone, zoneNamed, type Preview } from './cron';
+import { failuresOf, SUSPEND_AFTER, SUSPEND_AFTER_REFUSAL, suspendAfterOf } from './suspend';
 
 /**
  * wechart's own schedules (T378, AC-234; design 16, screen 2, Q7, Q8, Q10).
@@ -23,7 +24,8 @@ import { previewOf, readCron, unknownZone, zoneNamed, type Preview } from './cro
  */
 export const RUN_QUEUE = 'wechart-schedule-run';
 
-export interface Schedule {
+/** A schedule as stored. */
+export interface StoredSchedule {
   readonly id: string;
   readonly name: string;
   readonly preAggregation: string;
@@ -35,6 +37,18 @@ export interface Schedule {
   readonly createdAt: Date;
   readonly updatedBy: { readonly key: string; readonly name: string };
   readonly updatedAt: Date;
+  /** How many failed runs in a row suspend it (T379, AC-155). */
+  readonly suspendAfter: number;
+  /** Its failures in a row are counted from runs started after it: Resume's. */
+  readonly countedFrom: Date | null;
+  /** When it was suspended, and Cube's last error then; none while it runs. */
+  readonly suspendedAt: Date | null;
+  readonly suspendedError: string | null;
+}
+
+/** A schedule, with how many of its runs have failed in a row (T379). */
+export interface Schedule extends StoredSchedule {
+  readonly failuresInARow: number;
 }
 
 /** What a person sets: the rest is wechart's. */
@@ -45,6 +59,8 @@ export interface ScheduleFields {
   readonly cron: string;
   readonly timezone: string;
   readonly missed?: 'once' | 'skip';
+  /** A whole number of 1 or more; 3 unless set (T379, Q9). */
+  readonly suspendAfter?: number;
 }
 
 /** A schedule refused, in the words the form shows (design 16, D3). */
@@ -55,7 +71,7 @@ export class ScheduleRefused extends Error {
   }
 }
 
-const rowOf = (row: Selectable<ScheduleTable>): Schedule => ({
+const rowOf = (row: Selectable<ScheduleTable>): StoredSchedule => ({
   id: row.id,
   name: row.name,
   preAggregation: row.pre_aggregation,
@@ -67,6 +83,10 @@ const rowOf = (row: Selectable<ScheduleTable>): Schedule => ({
   createdAt: row.created_at,
   updatedBy: { key: row.updated_by_key, name: row.updated_by_name },
   updatedAt: row.updated_at,
+  suspendAfter: row.suspend_after,
+  countedFrom: row.counted_from,
+  suspendedAt: row.suspended_at,
+  suspendedError: row.suspended_error,
 });
 
 /**
@@ -80,15 +100,15 @@ export function scheduleStore(db: Kysely<Database>, { named }: { readonly named?
     return named === undefined ? query : query.where('name', 'like', `%${named}%`);
   };
   return {
-    async get(id: string): Promise<Schedule | undefined> {
+    async get(id: string): Promise<StoredSchedule | undefined> {
       const row = await scoped().where('id', '=', id).executeTakeFirst();
       return row === undefined ? undefined : rowOf(row);
     },
-    async list(): Promise<Schedule[]> {
+    async list(): Promise<StoredSchedule[]> {
       const rows = await scoped().orderBy('name').orderBy('id').execute();
       return rows.map(rowOf);
     },
-    async insert(schedule: Schedule): Promise<void> {
+    async insert(schedule: StoredSchedule): Promise<void> {
       await db
         .insertInto('schedules')
         .values({
@@ -99,6 +119,7 @@ export function scheduleStore(db: Kysely<Database>, { named }: { readonly named?
           cron: schedule.cron,
           timezone: schedule.timezone,
           missed: schedule.missed,
+          suspend_after: schedule.suspendAfter,
           created_by_key: schedule.createdBy.key,
           created_by_name: schedule.createdBy.name,
           created_at: schedule.createdAt,
@@ -108,7 +129,7 @@ export function scheduleStore(db: Kysely<Database>, { named }: { readonly named?
         })
         .execute();
     },
-    async update(schedule: Schedule): Promise<boolean> {
+    async update(schedule: StoredSchedule): Promise<boolean> {
       const result = await db
         .updateTable('schedules')
         .set({
@@ -118,6 +139,7 @@ export function scheduleStore(db: Kysely<Database>, { named }: { readonly named?
           cron: schedule.cron,
           timezone: schedule.timezone,
           missed: schedule.missed,
+          suspend_after: schedule.suspendAfter,
           updated_by_key: schedule.updatedBy.key,
           updated_by_name: schedule.updatedBy.name,
           updated_at: schedule.updatedAt,
@@ -129,6 +151,36 @@ export function scheduleStore(db: Kysely<Database>, { named }: { readonly named?
     async remove(id: string): Promise<boolean> {
       const result = await db.deleteFrom('schedules').where('id', '=', id).executeTakeFirst();
       return Number(result.numDeletedRows) > 0;
+    },
+    /** Suspended now, with Cube's last error, unless it already is: whether this suspended it. */
+    async suspend(id: string, at: Date, error: string | null): Promise<boolean> {
+      const result = await db
+        .updateTable('schedules')
+        .set({ suspended_at: at, suspended_error: error })
+        .where('id', '=', id)
+        .where('suspended_at', 'is', null)
+        .executeTakeFirst();
+      return Number(result.numUpdatedRows) > 0;
+    },
+    /**
+     * Resumed by `by` at `at` (T379): running again, its failures in a row
+     * counted from then on. Whether it was suspended to resume.
+     */
+    async resume(id: string, at: Date, by: { key: string; name: string }): Promise<boolean> {
+      const result = await db
+        .updateTable('schedules')
+        .set({
+          suspended_at: null,
+          suspended_error: null,
+          counted_from: at,
+          updated_by_key: by.key,
+          updated_by_name: by.name,
+          updated_at: at,
+        })
+        .where('id', '=', id)
+        .where('suspended_at', 'is not', null)
+        .executeTakeFirst();
+      return Number(result.numUpdatedRows) > 0;
     },
   };
 }
@@ -160,6 +212,11 @@ export function checkedFields(
   const missed = fields.missed ?? 'once';
   if (missed !== 'once' && missed !== 'skip')
     throw new ScheduleRefused('A missed run is run once, or skipped.');
+  // A whole number from 1 up, 3 unless set, with no "never" (T379, Q9).
+  const suspendAfter = suspendAfterOf(
+    'suspendAfter' in fields ? fields.suspendAfter : SUSPEND_AFTER,
+  );
+  if (suspendAfter === undefined) throw new ScheduleRefused(SUSPEND_AFTER_REFUSAL);
   return {
     name,
     preAggregation: fields.preAggregation,
@@ -167,6 +224,7 @@ export function checkedFields(
     cron,
     timezone,
     missed,
+    suspendAfter,
   };
 }
 
@@ -182,6 +240,14 @@ export interface WechartScheduler {
     by: { key: string; name: string },
   ): Promise<Schedule | undefined>;
   remove(id: string): Promise<boolean>;
+  /**
+   * Resumes a suspended schedule (T379, AC-155): from its next time, with
+   * its count of failures at 0. None where there's no such schedule; one
+   * not suspended is answered as it is.
+   */
+  resume(id: string, by: { key: string; name: string }): Promise<Schedule | undefined>;
+  /** Builds that ended, as the follower closed them: a schedule's failed one counted (T379). */
+  ended(closed: readonly { runId: string; outcome: string }[]): Promise<void>;
   /** One run of a schedule, as pg-boss hands it out: exported for its tests. */
   run(scheduleId: string, runId: string): Promise<void>;
 }
@@ -206,7 +272,7 @@ export function wechartScheduler({
   readonly onError?: (error: unknown) => void;
 }): WechartScheduler {
   /** pg-boss's schedule for one of wechart's: its times, its zone, its missed-run policy. */
-  const lay = (schedule: Schedule) =>
+  const lay = (schedule: StoredSchedule) =>
     boss.schedule(
       RUN_QUEUE,
       schedule.cron,
@@ -228,10 +294,38 @@ export function wechartScheduler({
     }
   };
 
-  const run = async (scheduleId: string, runId: string) => {
-    // Deleted since pg-boss sent it: nothing to run.
+  /** With its count of failures in a row, from Run history (T379). */
+  const counted = async (schedule: StoredSchedule): Promise<Schedule> => ({
+    ...schedule,
+    failuresInARow: history === undefined ? 0 : (await failuresOf(history, schedule)).count,
+  });
+
+  /**
+   * After one of its runs failed (T379, AC-155): at its number in a row, it
+   * is suspended, with Cube's last error, and pg-boss starts no more of its
+   * runs. Once, however many replicas ask.
+   */
+  /** Whether it is suspended, now or already. */
+  const counting = async (scheduleId: string): Promise<boolean> => {
+    if (history === undefined) return false;
     const schedule = await store.get(scheduleId);
-    if (schedule === undefined) return;
+    if (schedule === undefined) return false;
+    if (schedule.suspendedAt !== null) return true;
+    const { count, lastError } = await failuresOf(history, schedule);
+    if (count < schedule.suspendAfter) return false;
+    if (await store.suspend(schedule.id, now(), lastError))
+      await boss.unschedule(RUN_QUEUE, schedule.id);
+    return true;
+  };
+
+  const run = async (scheduleId: string, runId: string) => {
+    // Deleted since pg-boss sent it, or suspended: nothing to run (T379).
+    const schedule = await store.get(scheduleId);
+    if (schedule === undefined || schedule.suspendedAt !== null) return;
+    // At its number already, however the count got there — a lowered number,
+    // or a failure whose count a replica didn't finish: suspended, not run
+    // (T379's review).
+    if (await counting(schedule.id)) return;
     // pg-boss hands a run out at least once (research scheduler.md): its id
     // names the post, so one handed out again isn't started twice.
     const requestId = `wechart-schedule-${runId}`;
@@ -247,9 +341,23 @@ export function wechartScheduler({
     try {
       answered = await cube.buildPreAggregations([schedule.preAggregation], { requestId });
     } catch (error) {
-      // Said, and the run failed: pg-boss records it so (T379 counts it).
+      // Said, and the run failed: pg-boss records it so. Recorded in Run
+      // history, Cube's words and all, and counted (T379; design 16, E4).
       const said = error instanceof Error ? error.message : String(error);
       onError(new Error(`“${schedule.name}” could not start its run: ${said}`, { cause: error }));
+      if (history !== undefined) {
+        await history.refused({
+          preAggregation: schedule.preAggregation,
+          folderId: schedule.folderId,
+          granularity,
+          via: 'schedule',
+          starter: { kind: 'schedule', id: schedule.id, name: schedule.name },
+          requestId,
+          startedAt,
+          error: said,
+        });
+        await counting(schedule.id);
+      }
       throw error;
     }
     const tokens = Array.isArray(answered)
@@ -294,8 +402,9 @@ export function wechartScheduler({
        * row that is gone, read again to be sure, is dropped.
        */
       const laid = new Map((await boss.getSchedules(RUN_QUEUE)).map((each) => [each.key, each]));
-      const schedules = await store.list();
-      for (const schedule of schedules) {
+      // A suspended one is laid only when resumed (T379).
+      const running = (await store.list()).filter((schedule) => schedule.suspendedAt === null);
+      for (const schedule of running) {
         const held = laid.get(schedule.id);
         if (
           held === undefined ||
@@ -305,26 +414,37 @@ export function wechartScheduler({
         )
           await lay(schedule);
       }
-      const kept = new Set(schedules.map((schedule) => schedule.id));
-      for (const key of laid.keys())
-        if (!kept.has(key) && (await store.get(key)) === undefined)
+      const kept = new Set(running.map((schedule) => schedule.id));
+      for (const key of laid.keys()) {
+        if (kept.has(key)) continue;
+        const stored = await store.get(key);
+        if (stored === undefined || stored.suspendedAt !== null)
           await boss.unschedule(RUN_QUEUE, key);
+      }
     },
     async stop() {
       await boss.stop({ graceful: true });
     },
-    get: (id) => store.get(id),
-    list: () => store.list(),
+    async get(id) {
+      const schedule = await store.get(id);
+      return schedule === undefined ? undefined : counted(schedule);
+    },
+    async list() {
+      return Promise.all((await store.list()).map(counted));
+    },
     async create(fields, by) {
       const checked = checkedFields(fields);
       const at = now();
-      const schedule: Schedule = {
+      const schedule: StoredSchedule = {
         id: randomUUID(),
         ...checked,
         createdBy: by,
         createdAt: at,
         updatedBy: by,
         updatedAt: at,
+        countedFrom: null,
+        suspendedAt: null,
+        suspendedError: null,
       };
       await store.insert(schedule);
       try {
@@ -333,28 +453,58 @@ export function wechartScheduler({
         await store.remove(schedule.id);
         throw error;
       }
-      return schedule;
+      return { ...schedule, failuresInARow: 0 };
     },
     async change(id, fields, by) {
       const was = await store.get(id);
       if (was === undefined) return undefined;
-      const schedule: Schedule = {
+      const schedule: StoredSchedule = {
         ...was,
-        // A missed-run choice left out stays as it was.
-        ...checkedFields({ ...fields, missed: fields.missed ?? was.missed }),
+        // A missed-run choice, or a number to suspend after, left out stays as it was.
+        ...checkedFields({
+          ...fields,
+          missed: fields.missed ?? was.missed,
+          suspendAfter: 'suspendAfter' in fields ? fields.suspendAfter : was.suspendAfter,
+        }),
         updatedBy: by,
         updatedAt: now(),
       };
       // Deleted meanwhile: nothing to lay again.
       if (!(await store.update(schedule))) return undefined;
-      // At once, with no proposal (AC-234): pg-boss's schedule replaced.
-      await lay(schedule);
-      return schedule;
+      // At once, with no proposal (AC-234): pg-boss's schedule replaced; a
+      // suspended one's stays off until it's resumed (T379).
+      if (schedule.suspendedAt === null) await lay(schedule);
+      return counted(schedule);
     },
     async remove(id) {
       const removed = await store.remove(id);
       await boss.unschedule(RUN_QUEUE, id);
       return removed;
+    },
+    async resume(id, by) {
+      const at = now();
+      if (await store.resume(id, at, by)) {
+        const resumed = await store.get(id);
+        // Laid again, new: its next time after now, none missed while it was off.
+        if (resumed !== undefined) await lay(resumed);
+      }
+      const schedule = await store.get(id);
+      return schedule === undefined ? undefined : counted(schedule);
+    },
+    async ended(closed) {
+      if (history === undefined) return;
+      for (const { runId, outcome } of closed) {
+        // Only a failure can suspend; a done one starts the count again by itself.
+        if (outcome !== 'failed') continue;
+        try {
+          const build = await history.get(runId);
+          if (build?.via === 'schedule' && build.starter.kind === 'schedule')
+            await counting(build.starter.id);
+        } catch (error) {
+          // Said, and the rest counted: the next run's start counts it again.
+          onError(error);
+        }
+      }
     },
     run,
   };

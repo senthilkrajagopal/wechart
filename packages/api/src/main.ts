@@ -402,7 +402,12 @@ async function main(): Promise<void> {
    * client asks it (T420).
    */
   const stopFollowing = startFollowingBuilds(
-    buildFollower({ history: builds, cube: serviceCube }),
+    buildFollower({
+      history: builds,
+      cube: serviceCube,
+      // A schedule's failed runs counted, and it suspended at its number (T379, AC-155).
+      onEnded: (closed) => scheduler.ended(closed),
+    }),
     {
       onError: (error) => {
         app.log.warn({ err: error }, 'could not follow the builds wechart started');

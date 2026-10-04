@@ -512,7 +512,7 @@ export function buildHistory(db: Kysely<Database>) {
      * stopped before closing — its replica gone, or a write failing — is
      * closed by the next (AC-150, AC-319). Closing again changes nothing.
      */
-    async closeEnded(): Promise<void> {
+    async closeEnded(): Promise<{ runId: string; outcome: BuildOutcome }[]> {
       const ended = await db
         .selectFrom('build_runs')
         .select('id')
@@ -529,7 +529,108 @@ export function buildHistory(db: Kysely<Database>) {
         )
         .limit(500)
         .execute();
-      for (const { id } of ended) await close(id);
+      // Each it closed, with how it ended, for a schedule's count of failures (T379).
+      const closed: { runId: string; outcome: BuildOutcome }[] = [];
+      for (const { id } of ended) {
+        const outcome = await close(id);
+        if (outcome !== undefined) closed.push({ runId: id, outcome });
+      }
+      return closed;
+    },
+
+    /**
+     * A start Cube refused (T379, AC-155; design 16, E4): recorded failed,
+     * with Cube's words and no jobs, ended as it started, so a schedule's
+     * failed runs list it. Past the latest 100 of its pre-aggregation, the
+     * oldest go, as for any start.
+     */
+    async refused(
+      build: Omit<NewBuild, 'tokens' | 'answeredAt' | 'partitions'> & {
+        readonly error: string;
+      },
+    ): Promise<string> {
+      const id = randomUUID();
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .selectFrom('build_runs')
+          .select('id')
+          .where('pre_aggregation', '=', build.preAggregation)
+          .orderBy('started_at')
+          .orderBy('id')
+          .limit(1)
+          .forUpdate()
+          .execute();
+        await trx
+          .insertInto('build_runs')
+          .values({
+            id,
+            pre_aggregation: build.preAggregation,
+            folder_id: build.folderId,
+            partitions: null,
+            partition_granularity: build.granularity,
+            via: build.via,
+            starter_kind: build.starter.kind,
+            starter_key: build.starter.kind === 'person' ? build.starter.key : null,
+            starter_name: build.starter.kind === 'person' ? build.starter.name : null,
+            schedule_id: build.starter.kind === 'schedule' ? build.starter.id : null,
+            schedule_name: build.starter.kind === 'schedule' ? build.starter.name : null,
+            request_id: build.requestId,
+            started_at: build.startedAt,
+            answered_at: build.startedAt,
+            ended_at: build.startedAt,
+            outcome: 'failed',
+            failed_count: 0,
+            error: build.error,
+          })
+          .execute();
+        await trx
+          .deleteFrom('build_runs')
+          .where('pre_aggregation', '=', build.preAggregation)
+          .where(
+            'id',
+            'not in',
+            trx
+              .selectFrom('build_runs')
+              .select('id')
+              .where('pre_aggregation', '=', build.preAggregation)
+              .orderBy('started_at', 'desc')
+              .orderBy('id', 'desc')
+              .limit(KEPT_PER_PRE_AGGREGATION),
+          )
+          .execute();
+      });
+      return id;
+    },
+
+    /**
+     * A schedule's runs that ended done or failed, newest first, at most
+     * `limit`, started after `from` where given, a Resume (T379, AC-155):
+     * what its count of failures in a row is read from. Cube's record
+     * expiring, or a cancel, counts neither way (design 16, Q9), and a run
+     * still open hasn't ended; a start of the schedule's own only, by its times.
+     */
+    async scheduledEnds(
+      scheduleId: string,
+      from: Date | null,
+      limit: number,
+    ): Promise<{ runId: string; outcome: 'done' | 'failed'; error: string | null }[]> {
+      let query = db
+        .selectFrom('build_runs')
+        .select(['id', 'outcome', 'error'])
+        .where('schedule_id', '=', scheduleId)
+        .where('via', '=', 'schedule')
+        .where('outcome', 'in', ['done', 'failed']);
+      if (from !== null) query = query.where('started_at', '>', from);
+      const rows = await query
+        .orderBy('started_at', 'desc')
+        .orderBy('id', 'desc')
+        .limit(limit)
+        .execute();
+      return rows.map((row) => ({
+        runId: row.id,
+        outcome: row.outcome === 'done' ? 'done' : 'failed',
+        error: row.error,
+      }));
     },
 
     /**

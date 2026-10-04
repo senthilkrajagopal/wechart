@@ -170,6 +170,8 @@ describe('New schedule (T552, AC-234)', () => {
             cron: '0 4 1 1,4,7,10 *',
             timezone: 'Europe/Berlin',
             missed: 'once',
+            // 3 unless changed (T379).
+            suspendAfter: 3,
           },
         },
       ]);
@@ -203,8 +205,55 @@ describe('New schedule (T552, AC-234)', () => {
           cron: '0 6 * * *',
           timezone: 'Europe/Berlin',
           missed: 'skip',
+          suspendAfter: 3,
         },
       ]);
+    });
+  });
+
+  it('sets how many failed runs in a row suspend it: 3 unless changed, a whole number of 1 or more (T379, pin 14)', async () => {
+    const { pane, sent } = await opened();
+    const limit = within(pane).getByRole('spinbutton', {
+      name: 'Suspend after failed runs in a row',
+    }) as HTMLInputElement;
+    expect(limit.value).toBe('3');
+    expect(text(within(pane).getByTestId('suspend-help'))).toBe(
+      'It then stops running until someone resumes it.',
+    );
+    await user().selectOptions(
+      within(pane).getByRole('combobox', { name: 'Pre-aggregation' }),
+      'fsales__orders.mornings',
+    );
+    await user().type(field(pane, /^Name/), 'Five');
+    await user().type(field(pane, 'Cron expression'), '0 6 * * *');
+    await user().type(field(pane, 'Time zone'), 'Europe/Berlin');
+    // Complete, with 3: Create is offered (T379's review).
+    await waitFor(() => {
+      expect(button(pane, 'Create schedule').disabled).toBe(false);
+    });
+
+    // No "never": 0 is refused, and Create waits.
+    await user().clear(limit);
+    await user().type(limit, '0');
+    expect(text(within(pane).getByTestId('suspend-error'))).toBe(
+      'Suspend it after a whole number of failed runs in a row, 1 or more.',
+    );
+    expect(limit.getAttribute('aria-invalid')).toBe('true');
+    expect(button(pane, 'Create schedule').disabled).toBe(true);
+
+    await user().clear(limit);
+    await user().type(limit, '5');
+    const create = button(pane, 'Create schedule');
+    await waitFor(() => {
+      expect(create.disabled).toBe(false);
+    });
+    await user().click(create);
+    await waitFor(() => {
+      expect(
+        sent
+          .filter((each) => each.method === 'POST')
+          .map((each) => (each.body as { suspendAfter: unknown }).suspendAfter),
+      ).toEqual([5]);
     });
   });
 

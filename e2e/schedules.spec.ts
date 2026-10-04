@@ -277,3 +277,102 @@ test('a schedule made on the page starts its build within its minute, and Run hi
       if (each.name === name) await request.delete(`/api/wechart-schedules/${each.id}`);
   }
 });
+
+/**
+ * T379 / AC-155: IF a wechart-owned schedule's runs fail as many times in a
+ * row as that schedule sets, THEN THE SYSTEM SHALL suspend the schedule, …
+ * say so on its row and in its pane, and offer Resume (design 16, E4).
+ *
+ * A `* * * * *` schedule in UTC that suspends after 1, on a rollup the model
+ * then no longer has: Cube refuses its next run, and it is suspended, with
+ * Cube's words. Resume starts it again, from its next time. Deleted after.
+ */
+test('a schedule whose pre-aggregation the model no longer has is suspended after its failed runs, and Resume starts it again', async ({
+  page,
+  request,
+  browserName,
+}) => {
+  test.setTimeout(240_000);
+  const cube = `suspended_${browserName}`;
+  const rollup = `${cube}.main`;
+  const name = `Suspends ${browserName} ${String(Date.now())}`;
+  const measures = `    measures:
+      - name: count
+        type: count
+`;
+  const withRollup = `cubes:
+  - name: ${cube}
+    sql_table: public.orders
+${measures}    pre_aggregations:
+      - name: main
+        measures: [CUBE.count]
+        scheduled_refresh: false
+`;
+  await ownCubeFile(request, cube, withRollup);
+  /** Once Jobs lists the rollup, or doesn't, as the model now has it. */
+  const listed = (has: boolean) =>
+    expect
+      .poll(
+        async () =>
+          ((await (await request.get('/api/preaggregations')).json()) as { id: string }[]).some(
+            (each) => each.id === rollup,
+          ),
+        PUBLISHED,
+      )
+      .toBe(has);
+  let id: string | undefined;
+  try {
+    await listed(true);
+    const made = await request.post('/api/wechart-schedules', {
+      data: { preAggregation: rollup, name, cron: '* * * * *', timezone: 'UTC', suspendAfter: 1 },
+    });
+    expect(made.status(), await made.text()).toBe(201);
+    id = ((await made.json()) as { id: string }).id;
+    // The model no longer has the rollup.
+    await ownCubeFile(
+      request,
+      cube,
+      `cubes:\n  - name: ${cube}\n    sql_table: public.orders\n${measures}`,
+    );
+
+    // Within its minute, Cube refuses the run, and at 1 in a row it is suspended (pin 7).
+    await page.goto('/schedules');
+    const row = page
+      .getByRole('table', { name: 'Refresh schedules' })
+      .getByRole('row')
+      .filter({ hasText: name });
+    await expect(async () => {
+      await page.reload();
+      await expect(row.getByTestId('schedule-state')).toHaveText('Suspended after 1 failure', {
+        timeout: 2_000,
+      });
+    }).toPass({ timeout: 120_000 });
+
+    // Its pane: suspended, Cube's words, what to do, and Resume (E1, E4).
+    await row.click();
+    const pane = page.getByRole('complementary', { name: 'Schedule details' });
+    await expect(pane.getByTestId('suspended-note')).toContainText(
+      'Suspended after 1 failed run in a row,',
+    );
+    await expect(pane.getByTestId('last-error')).toHaveText(
+      "A user's selector doesn't match any of the pre-aggregations defined in the data model.",
+    );
+    await expect(pane.getByTestId('not-in-model')).toBeVisible();
+    const resume = pane.getByRole('button', { name: 'Resume' });
+    await expect(resume).toBeFocused();
+    // Its failed run, newest first: a run before the model changed may follow it.
+    const failed = pane.getByRole('table', { name: 'The failed runs' }).getByRole('row').first();
+    await expect(failed).toContainText('Failed');
+    await expect(failed).toContainText('1 of 1');
+
+    // The rollup back in the model, then resumed: active again, its count at 0,
+    // and its next run builds (E4's "resume it once the pre-aggregation is back").
+    await ownCubeFile(request, cube, withRollup);
+    await listed(true);
+    await resume.click();
+    await expect(pane.getByRole('status')).toContainText(`Resumed “${name}”.`);
+    await expect(pane.getByTestId('schedule-state')).toHaveText('Active');
+  } finally {
+    if (id !== undefined) await request.delete(`/api/wechart-schedules/${id}`);
+  }
+});

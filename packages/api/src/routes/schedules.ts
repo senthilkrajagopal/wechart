@@ -51,12 +51,16 @@ function listedRow(
   row: Buildable | undefined,
   last: LastRun | undefined,
   now: Date,
+  /** Whether the model's pre-aggregations were read: none, and whether it has this one isn't known. */
+  known = true,
 ) {
   const preview = cronPreview(schedule.cron, schedule.timezone, now);
   return {
     ...shown(schedule),
     ...(row?.shortName === undefined ? {} : { shortName: row.shortName }),
     ...(row?.folderPath === undefined ? {} : { folderPath: row.folderPath }),
+    // Whether the model still has its pre-aggregation (T379, design 16 E4).
+    ...(known ? { inModel: row !== undefined } : {}),
     ...(preview.ok
       ? {
           when: preview.words,
@@ -144,6 +148,8 @@ export function registerWechartSchedules(
         cron: text('cron'),
         timezone: text('timezone'),
         ...(missed === undefined ? {} : { missed }),
+        // Checked by the scheduler: a whole number of 1 or more (T379, Q9).
+        ...('suspendAfter' in body ? { suspendAfter: body['suspendAfter'] as number } : {}),
       },
     };
   };
@@ -163,15 +169,21 @@ export function registerWechartSchedules(
     );
     // Each pre-aggregation's short name and folder, as Jobs has them; a
     // schedule doesn't need Cube to be listed, so none where it can't be read.
-    const rows = await listedBuildables(client, modelFiles, access).catch((): Buildable[] => []);
-    const byId = new Map(rows.map((row) => [row.id, row]));
+    const rows = await listedBuildables(client, modelFiles, access).catch(() => undefined);
+    const byId = new Map((rows ?? []).map((row) => [row.id, row]));
     const last =
       history === undefined
         ? new Map<string, LastRun>()
         : await history.lastRunsOf(schedules.map((schedule) => schedule.id));
     const at = now();
     return schedules.map((schedule) =>
-      listedRow(schedule, byId.get(schedule.preAggregation), last.get(schedule.id), at),
+      listedRow(
+        schedule,
+        byId.get(schedule.preAggregation),
+        last.get(schedule.id),
+        at,
+        rows !== undefined,
+      ),
     );
   });
 
@@ -232,6 +244,28 @@ export function registerWechartSchedules(
       if (error instanceof ScheduleRefused) return reply.status(400).send({ error: error.message });
       throw error;
     }
+  });
+
+  /**
+   * Resume (T379, AC-155; design 16, E1, E3): a suspended schedule runs again
+   * from its next time, its count of failures at 0, by any who write its
+   * folder (Q10). One not suspended is answered as it is.
+   */
+  app.post('/api/wechart-schedules/:id/resume', USER, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const found = await theirs(request, id);
+    if (!found.ok) return reply.status(found.status).send(found.body);
+    const resumed = await scheduler.resume(id, byOf(request));
+    if (resumed === undefined) return reply.status(404).send(NO_SUCH_SCHEDULE);
+    const rows = await listedBuildables(client, modelFiles, access).catch(() => undefined);
+    const last = (await history?.lastRunsOf([id]))?.get(id);
+    return listedRow(
+      resumed,
+      rows?.find((row) => row.id === resumed.preAggregation),
+      last,
+      now(),
+      rows !== undefined,
+    );
   });
 
   app.delete('/api/wechart-schedules/:id', USER, async (request, reply) => {

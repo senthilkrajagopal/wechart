@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
@@ -13,6 +13,8 @@ import { changeWords, dayIn, runsOf, timeIn, zoneOf, type Schedule } from './sch
 import { RefreshKeyRuns, ScheduleForm } from './ScheduleForm';
 import {
   deleteSchedule,
+  readRunsOf,
+  resumeSchedule,
   WECHART_SCHEDULES_KEY,
   type LastRun,
   type WechartSchedule,
@@ -180,6 +182,18 @@ export function WechartPane({
   });
   const next = schedule.runs?.[0];
   const zone = schedule.timezone;
+  const nextWords =
+    next === undefined
+      ? undefined
+      : `${dayIn(zone, new Date(next))}, ${timeIn(zone, new Date(next))}`;
+  /** Said once Resume has started it again (design 16, E3). */
+  const [resumedSaid, setResumedSaid] = useState<string | undefined>(undefined);
+  /**
+   * Resume takes focus only as the pane opens on a suspended schedule
+   * (design 16's keyboard table): never when a refresh finds one suspended
+   * while someone is working in the pane (T379's review).
+   */
+  const [focusResume, setFocusResume] = useState(schedule.suspendedAt !== null);
   return (
     <>
       <div className="admin-pane__head">
@@ -187,13 +201,41 @@ export function WechartPane({
         <span className="spacer" />
         <OwnerLabel owner="wechart" />
       </div>
+      {schedule.suspendedAt === null ? null : (
+        <Suspension
+          schedule={schedule}
+          nextWords={nextWords}
+          focus={focusResume}
+          onResumed={(resumed) => {
+            const at = resumed.runs?.[0];
+            setFocusResume(false);
+            setResumedSaid(
+              `Resumed “${resumed.name}”.${
+                at === undefined
+                  ? ''
+                  : ` Its next run is ${dayIn(zone, new Date(at))}, ${timeIn(zone, new Date(at))}.`
+              }`,
+            );
+            // Focus stays on its row (design 16's keyboard table), not lost with Resume.
+            document.querySelector<HTMLElement>(`tr[data-schedule-id="${resumed.id}"]`)?.focus();
+          }}
+        />
+      )}
+      {/* There from the start, so what it comes to say is read (E3). */}
+      <p role="status" className="schedules__resumed">
+        {schedule.suspendedAt === null ? (resumedSaid ?? '') : ''}
+      </p>
       <dl className="admin-pane__facts">
         <dt>State</dt>
         <dd>
-          <Status kind="ok" label="Active" testId="schedule-state" state="active" />
-          {next === undefined
-            ? null
-            : ` · next ${dayIn(zone, new Date(next))}, ${timeIn(zone, new Date(next))}`}
+          {schedule.suspendedAt === null ? (
+            <>
+              <Status kind="ok" label="Active" testId="schedule-state" state="active" />
+              {nextWords === undefined ? null : ` · next ${nextWords}`}
+            </>
+          ) : (
+            <Status kind="susp" label="Suspended" testId="schedule-state" state="suspended" />
+          )}
         </dd>
         <dt>Builds</dt>
         <dd>{`${shown.name} · ${shown.folder ?? 'Shared'}`}</dd>
@@ -257,6 +299,136 @@ export function WechartPane({
         />
       ) : null}
     </>
+  );
+}
+
+/** "at 11:00:41 today", "at 16:20:31 yesterday", "on 29 Sep at 07:55:00": your local time. */
+function momentOf(iso: string): string {
+  const [day = '', time = ''] = whenOf(iso).shown.split(/ (?=\d{2}:\d{2}:\d{2}$)/);
+  return day === 'Today' || day === 'Yesterday'
+    ? `at ${time} ${day.toLowerCase()}`
+    : `on ${day} at ${time}`;
+}
+
+/**
+ * A suspended schedule's pane head (T379, AC-155; design 16, E1, E4): that
+ * it's suspended, after how many failed runs in a row and when, and that it
+ * won't run until it's resumed; Resume, focused, with when it would next run
+ * and the count starting again; its failed runs, from Run history, each "k
+ * of N", and Cube's error on the last one.
+ */
+function Suspension({
+  schedule,
+  nextWords,
+  focus,
+  onResumed,
+}: {
+  schedule: WechartSchedule;
+  nextWords: string | undefined;
+  /** Whether Resume takes focus: the pane just opened on it. */
+  focus: boolean;
+  onResumed: (resumed: WechartSchedule) => void;
+}) {
+  const client = useQueryClient();
+  const resumeButton = useRef<HTMLButtonElement>(null);
+  const focusing = useRef(focus);
+  useEffect(() => {
+    // Its way out, at hand (E1's ring), as the pane opens on it.
+    if (focusing.current) resumeButton.current?.focus();
+  }, []);
+  const resume = useMutation({
+    mutationFn: () => resumeSchedule(schedule.id),
+    onSuccess: async (resumed) => {
+      await client.invalidateQueries({ queryKey: WECHART_SCHEDULES_KEY });
+      onResumed(resumed);
+    },
+  });
+  const runs = useQuery({
+    queryKey: ['wechart-schedules', 'runs', schedule.id],
+    queryFn: ({ signal }) => readRunsOf(schedule.id, signal),
+  });
+  const count = schedule.failuresInARow || schedule.suspendAfter;
+  // Its failures in a row, then the run before them (E1), newest first: of
+  // the runs that count, a dropped record or a cancel left out (T379's review).
+  const shownRuns = (runs.data ?? [])
+    .filter((run) => run.outcome === 'failed' || run.outcome === 'done')
+    .slice(0, count + 1);
+  return (
+    <section className="build-log__section" aria-label="Suspended">
+      <p className="notebar notebar--err" data-testid="suspended-note">
+        <span>
+          <b>{`Suspended after ${String(count)} failed ${count === 1 ? 'run' : 'runs'} in a row,`}</b>{' '}
+          {`${momentOf(schedule.suspendedAt ?? '')}. It won’t run again until it’s resumed.`}
+        </span>
+      </p>
+      <div className="admin-pane__actions">
+        <button
+          type="button"
+          ref={resumeButton}
+          className="btn-primary btn-sm"
+          disabled={resume.isPending}
+          onClick={() => {
+            resume.mutate();
+          }}
+        >
+          Resume
+        </button>
+        <span className="help" data-testid="resume-help">
+          {`${nextWords === undefined ? '' : `Its next run would be ${nextWords}. `}The count of failures starts again from 0.`}
+        </span>
+      </div>
+      {resume.isError ? <StateLine kind="err">{resume.error.message}</StateLine> : null}
+      <h3>The failed runs</h3>
+      {runs.isError ? <StateLine kind="err">{runs.error.message}</StateLine> : null}
+      <table className="query-log schedules__failed" aria-label="The failed runs">
+        <tbody>
+          {shownRuns.map((run, at) => (
+            <tr key={run.id}>
+              <td>{minuteOf(run.startedAt)}</td>
+              <td>
+                <LastRunStatus
+                  run={{
+                    id: run.id,
+                    outcome: run.outcome,
+                    startedAt: run.startedAt,
+                    endedAt: null,
+                    error: run.error,
+                  }}
+                />
+              </td>
+              <td className="schedules__sub">
+                {run.outcome === 'failed' && at < count
+                  ? `${String(count - at)} of ${String(schedule.suspendAfter)}`
+                  : ''}
+              </td>
+              <td>
+                <a
+                  className="btn-link"
+                  href={`/jobs?tab=history&preagg=${encodeURIComponent(schedule.preAggregation)}`}
+                >
+                  Log
+                </a>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {schedule.suspendedError === null ? null : (
+        <>
+          <p className="help">Cube’s error on the last one:</p>
+          <pre className="schedules__written" data-testid="last-error">
+            {schedule.suspendedError}
+          </pre>
+        </>
+      )}
+      {/* Its pre-aggregation gone from the model (E4): what to do. Not said where the model couldn't be read. */}
+      {schedule.inModel !== false ? null : (
+        <p className="help" data-testid="not-in-model">
+          Cube’s answer when the pre-aggregation it names no longer exists. Delete the schedule, or
+          resume it once the pre-aggregation is back.
+        </p>
+      )}
+    </section>
   );
 }
 

@@ -206,8 +206,52 @@ export const schedule = (over: Partial<WechartSchedule> = {}): WechartSchedule =
     endedAt: '2026-10-02T12:00:41.000Z',
     error: null,
   },
+  suspendAfter: 3,
+  failuresInARow: 0,
+  suspendedAt: null,
+  suspendedError: null,
   ...over,
 });
+
+/** "Trading hours", suspended after 3 failed runs in a row (design 16, E1). */
+export const suspended = (over: Partial<WechartSchedule> = {}): WechartSchedule =>
+  schedule({
+    failuresInARow: 3,
+    // At the tests' own now: today in every zone.
+    suspendedAt: '2026-10-02T12:00:00.000Z',
+    suspendedError: 'failure: Error: connect ETIMEDOUT 10.20.4.17:5432',
+    lastRun: {
+      id: 'run-4',
+      outcome: 'failed',
+      startedAt: '2026-10-02T12:00:00.000Z',
+      endedAt: '2026-10-02T12:00:00.000Z',
+      error: 'failure: Error: connect ETIMEDOUT 10.20.4.17:5432',
+    },
+    ...over,
+  });
+
+/** Its runs, newest first, as Run history lists them: three failed, after one done. */
+export const SUSPENDED_RUNS = [
+  {
+    id: 'run-4',
+    startedAt: '2026-10-02T12:00:00.000Z',
+    outcome: 'failed',
+    error: 'failure: Error: connect ETIMEDOUT 10.20.4.17:5432',
+  },
+  {
+    id: 'run-3',
+    startedAt: '2026-10-02T11:00:00.000Z',
+    outcome: 'failed',
+    error: 'failure: Error: connect ETIMEDOUT 10.20.4.17:5432',
+  },
+  {
+    id: 'run-2',
+    startedAt: '2026-10-02T10:00:00.000Z',
+    outcome: 'failed',
+    error: 'failure: Error: connect ETIMEDOUT 10.20.4.17:5432',
+  },
+  { id: 'run-1', startedAt: '2026-10-02T09:00:00.000Z', outcome: 'done', error: null },
+];
 
 export interface Sent {
   readonly method: string;
@@ -224,12 +268,15 @@ export function shownSchedules({
   keys = KEY_ROWS,
   wechart = [],
   failing = [],
+  runs = [],
 }: {
   at?: string;
   keys?: unknown[];
   wechart?: WechartSchedule[];
   /** Lists the API fails to read, with its words: the refresh keys', or wechart's. */
   failing?: readonly ('keys' | 'wechart')[];
+  /** Run history's records of a schedule, newest first. */
+  runs?: readonly unknown[];
 } = {}) {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(at));
@@ -253,6 +300,16 @@ export function shownSchedules({
       if (url.pathname === '/api/wechart-schedules' && failing.includes('wechart'))
         return Response.json({ error: 'wechart’s schedules could not be read.' }, { status: 500 });
       if (url.pathname === '/api/preaggregations') return Response.json(PRE_AGGREGATIONS);
+      if (url.pathname === '/api/jobs/builds') return Response.json({ records: runs });
+      const resuming = /^\/api\/wechart-schedules\/(.+)\/resume$/.exec(url.pathname)?.[1];
+      if (resuming !== undefined && method === 'POST') {
+        const was = listed.find((each) => each.id === resuming);
+        if (was === undefined)
+          return Response.json({ error: 'There is no such schedule.' }, { status: 404 });
+        const resumed = { ...was, suspendedAt: null, suspendedError: null, failuresInARow: 0 };
+        listed = listed.map((each) => (each.id === resuming ? resumed : each));
+        return Response.json(resumed);
+      }
       if (url.pathname === '/api/wechart-schedules/preview')
         return Response.json(
           previewOf(url.searchParams.get('cron') ?? '', url.searchParams.get('timezone') ?? ''),
@@ -281,14 +338,23 @@ export function shownSchedules({
       return Response.json({ error: 'not here' }, { status: 404 });
     }),
   );
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
+    <QueryClientProvider client={client}>
       <SchedulesPage />
     </QueryClientProvider>,
   );
-  return { sent };
+  return {
+    sent,
+    /**
+     * wechart's schedules as the API lists them from now on, read again as
+     * the page's refresh reads them: a schedule suspended meanwhile, say.
+     */
+    async listedLater(next: WechartSchedule[]) {
+      listed = [...next];
+      await client.invalidateQueries({ queryKey: ['wechart-schedules'] });
+    },
+  };
 }
 
 export const text = (element: Element | null | undefined) => element?.textContent ?? '';

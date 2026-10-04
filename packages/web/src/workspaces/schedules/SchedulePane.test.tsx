@@ -9,6 +9,8 @@ import {
   runsIn,
   schedule,
   shownSchedules,
+  suspended,
+  SUSPENDED_RUNS,
   text,
 } from './schedules.fixture';
 
@@ -122,5 +124,165 @@ describe('A refresh key that runs too (T552, AC-392)', () => {
     );
     await user().selectOptions(picker, 'fsales__orders.on_demand');
     expect(within(pane).queryAllByTestId('refresh-key-runs')).toHaveLength(0);
+  });
+});
+
+/** T379 / AC-155 (design 16, state E, screen 2 pin 7). */
+describe('Suspended after its failed runs in a row, and Resume (T379, AC-155)', () => {
+  /** A cell of a row, by its column's header. */
+  const cellOf = (row: HTMLElement, column: string) => {
+    const table = row.closest('table') as HTMLElement;
+    const at = within(table)
+      .getAllByRole('columnheader')
+      .findIndex((header) => text(header) === column);
+    return within(row).getAllByRole('cell')[at] as HTMLElement;
+  };
+
+  it('says on its row and pane it’s suspended after its failures, lists them with Cube’s last error, and offers Resume, focused', async () => {
+    shownSchedules({ wechart: [suspended()], runs: SUSPENDED_RUNS });
+    const row = await wechartRow('Weekday mornings');
+
+    // Where its next run would be, with its icon: design 16's paused one (pin 7, s-susp).
+    const next = cellOf(row, 'Next run');
+    expect(text(next)).toBe('Suspended after 3 failures');
+    expect(next.querySelector('[data-state="suspended"] svg')?.getAttribute('data-icon')).toBe(
+      'susp',
+    );
+
+    await user().click(row);
+    const pane = paneOf();
+    expect(text(within(pane).getByTestId('suspended-note'))).toMatch(
+      /^Suspended after 3 failed runs in a row, at \d{2}:\d{2}:\d{2} today\. It won’t run again until it’s resumed\.$/,
+    );
+    const resume = within(pane).getByRole('button', { name: 'Resume' });
+    expect(document.activeElement).toBe(resume);
+    expect(text(within(pane).getByTestId('resume-help'))).toBe(
+      'Its next run would be Mon 5 Oct, 07:55. The count of failures starts again from 0.',
+    );
+    const failed = within(pane).getByRole('table', { name: 'The failed runs' });
+    await waitFor(() => {
+      expect(within(failed).getAllByRole('row')).toHaveLength(4);
+    });
+    expect(
+      within(failed)
+        .getAllByRole('row')
+        .map((each) =>
+          within(each)
+            .getAllByRole('cell')
+            .slice(1, 3)
+            .map((cell) => text(cell)),
+        ),
+    ).toEqual([
+      ['Failed', '3 of 3'],
+      ['Failed', '2 of 3'],
+      ['Failed', '1 of 3'],
+      ['Done', ''],
+    ]);
+    expect(text(within(pane).getByTestId('last-error'))).toBe(
+      'failure: Error: connect ETIMEDOUT 10.20.4.17:5432',
+    );
+  });
+
+  it('counts the failures in a row on its row before its number (E2)', async () => {
+    shownSchedules({ wechart: [schedule({ failuresInARow: 2 })] });
+    const row = await wechartRow('Weekday mornings');
+
+    expect(text(cellOf(row, 'Next run'))).toBe(
+      'Mon 5 Oct, 07:5505:55 UTC · in 3 days2 failed in a row · suspends after 3',
+    );
+  });
+
+  it('starts it again on Resume: active again, saying when it next runs (E3)', async () => {
+    const { sent } = shownSchedules({ wechart: [suspended()], runs: SUSPENDED_RUNS });
+    await user().click(await wechartRow('Weekday mornings'));
+
+    await user().click(within(paneOf()).getByRole('button', { name: 'Resume' }));
+
+    await waitFor(() => {
+      expect(sent.filter((each) => each.method === 'POST')).toEqual([
+        { method: 'POST', url: '/api/wechart-schedules/sched-1/resume' },
+      ]);
+    });
+    expect(text(await within(paneOf()).findByRole('status'))).toBe(
+      'Resumed “Weekday mornings”. Its next run is Mon 5 Oct, 07:55.',
+    );
+    const facts = within(paneOf()).getAllByRole('term');
+    expect(text(facts.find((term) => text(term) === 'State')?.nextElementSibling)).toBe(
+      'Active · next Mon 5 Oct, 07:55',
+    );
+    // Focus stays on its row (design 16's keyboard table).
+    expect(document.activeElement).toBe(await wechartRow('Weekday mornings'));
+  });
+
+  it('moves no focus to Resume when a schedule open in the pane is suspended by a refresh (T379’s review)', async () => {
+    const { listedLater } = shownSchedules({ wechart: [schedule()], runs: SUSPENDED_RUNS });
+    await user().click(await wechartRow('Weekday mornings'));
+    const name = within(paneOf()).getByRole('textbox', { name: /^Name/ });
+    name.focus();
+
+    await listedLater([suspended()]);
+
+    const resume = await within(paneOf()).findByRole('button', { name: 'Resume' });
+    expect(text(resume)).toBe('Resume');
+    expect(document.activeElement).toBe(name);
+  });
+
+  it('says a resume on its own schedule’s pane only (T379’s review)', async () => {
+    shownSchedules({
+      wechart: [suspended(), schedule({ id: 'sched-2', name: 'Month-end close' })],
+      runs: SUSPENDED_RUNS,
+    });
+    await user().click(await wechartRow('Weekday mornings'));
+    await user().click(within(paneOf()).getByRole('button', { name: 'Resume' }));
+    expect(text(await within(paneOf()).findByRole('status'))).toContain('Resumed');
+
+    await user().click(await wechartRow('Month-end close'));
+
+    expect(text(within(paneOf()).getByRole('status'))).toBe('');
+  });
+
+  it('numbers only the runs that count, leaving out one whose record Cube dropped (T379’s review)', async () => {
+    shownSchedules({
+      wechart: [suspended({ failuresInARow: 2, suspendAfter: 2 })],
+      runs: [
+        SUSPENDED_RUNS[0],
+        { id: 'run-x', startedAt: '2026-10-02T11:30:00.000Z', outcome: 'expired', error: null },
+        SUSPENDED_RUNS[1],
+        SUSPENDED_RUNS[3],
+      ],
+    });
+    await user().click(await wechartRow('Weekday mornings'));
+    const failed = within(paneOf()).getByRole('table', { name: 'The failed runs' });
+
+    await waitFor(() => {
+      expect(
+        within(failed)
+          .getAllByRole('row')
+          .map((each) =>
+            within(each)
+              .getAllByRole('cell')
+              .slice(1, 3)
+              .map((cell) => text(cell)),
+          ),
+      ).toEqual([
+        ['Failed', '2 of 2'],
+        ['Failed', '1 of 2'],
+        ['Done', ''],
+      ]);
+    });
+  });
+
+  it('says what to do when the model no longer has its pre-aggregation, and only then (E4)', async () => {
+    shownSchedules({ wechart: [suspended({ inModel: false })], runs: SUSPENDED_RUNS });
+    await user().click(await wechartRow('Weekday mornings'));
+    expect(text(within(paneOf()).getByTestId('not-in-model'))).toBe(
+      'Cube’s answer when the pre-aggregation it names no longer exists. Delete the schedule, or resume it once the pre-aggregation is back.',
+    );
+  });
+
+  it('says nothing of a missing pre-aggregation where the model couldn’t be read (T379’s review)', async () => {
+    shownSchedules({ wechart: [suspended()], runs: SUSPENDED_RUNS });
+    await user().click(await wechartRow('Weekday mornings'));
+    expect(within(paneOf()).queryAllByTestId('not-in-model')).toHaveLength(0);
   });
 });

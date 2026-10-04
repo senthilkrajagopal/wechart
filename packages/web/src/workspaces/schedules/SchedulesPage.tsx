@@ -6,11 +6,17 @@ import { StateLine, StatusIcon, type StateKind } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { shownOf } from '../jobs/BuildPanel';
 import { BuiltWhen } from '../jobs/builds';
+import { Status } from '../jobs/StateBadge';
 import { OwnerLabel } from './OwnerLabel';
 import { LastRunStatus, minuteOf, SchedulePane, WechartPane } from './SchedulePane';
 import { dayIn, runsOf, timeIn, untilIn, zoneOf, type Schedule } from './schedule';
 import { ScheduleForm } from './ScheduleForm';
-import { readWechartSchedules, WECHART_SCHEDULES_KEY, type WechartSchedule } from './wechart';
+import {
+  failuresWords,
+  readWechartSchedules,
+  WECHART_SCHEDULES_KEY,
+  type WechartSchedule,
+} from './wechart';
 
 /**
  * Schedules (T160, AC-154; T551, T552, design 16's screen 2): every
@@ -64,15 +70,41 @@ function LastRun({ schedule }: { schedule: Schedule }): ReactNode {
   );
 }
 
-/** A wechart schedule's next run, in its zone, with UTC and how long until it (screen 2). */
+/**
+ * A wechart schedule's next run, in its zone, with UTC and how long until it
+ * (screen 2); where it would be, Suspended after its failures, with its icon
+ * (pin 7); before its number, how many have failed in a row (E2).
+ */
 function WechartNextRun({ schedule, now }: { schedule: WechartSchedule; now: Date }) {
+  if (schedule.suspendedAt !== null)
+    return (
+      <Status
+        kind="susp"
+        label={`Suspended after ${failuresWords(schedule.failuresInARow || schedule.suspendAfter)}`}
+        testId="schedule-state"
+        state="suspended"
+      />
+    );
   const next = schedule.runs?.[0];
-  if (next === undefined) return <span className="muted">—</span>;
+  const failing =
+    schedule.failuresInARow > 0 ? (
+      <span className="schedules__sub schedules__failing">
+        {`${String(schedule.failuresInARow)} failed in a row · suspends after ${String(schedule.suspendAfter)}`}
+      </span>
+    ) : null;
+  if (next === undefined)
+    return (
+      <>
+        <span className="muted">—</span>
+        {failing}
+      </>
+    );
   const at = new Date(next);
   return (
     <>
       {`${dayIn(schedule.timezone, at)}, ${timeIn(schedule.timezone, at)}`}
       <span className="schedules__sub">{`${timeIn('UTC', at)} UTC · ${untilIn(at, now)}`}</span>
+      {failing}
     </>
   );
 }
@@ -98,6 +130,7 @@ function WechartRow({
   const lastRun = schedule.lastRun ?? null;
   return (
     <tr
+      data-schedule-id={schedule.id}
       aria-selected={selected}
       tabIndex={0}
       className="build-panel__row"
@@ -199,6 +232,8 @@ export function SchedulesPage() {
       const found = own.find((each) => each.id === selected.id) ?? selected.held;
       return found === undefined ? null : (
         <WechartPane
+          // Each schedule's pane its own: nothing said on one stays on another's.
+          key={found.id}
           schedule={found}
           refreshKeys={keys}
           onDeleted={() => {

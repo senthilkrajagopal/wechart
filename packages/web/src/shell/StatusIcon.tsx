@@ -7,7 +7,7 @@ import type { ReactNode } from 'react';
  * never colour alone.
  */
 export type StateKind =
-  'ok' | 'run' | 'idle' | 'warn' | 'err' | 'info' | 'draft' | 'cancel' | 'off' | 'part';
+  'ok' | 'run' | 'idle' | 'warn' | 'err' | 'info' | 'draft' | 'cancel' | 'off' | 'part' | 'susp';
 
 export function StatusIcon({ kind }: { kind: StateKind }) {
   const common = {
@@ -42,6 +42,14 @@ export function StatusIcon({ kind }: { kind: StateKind }) {
         <svg {...common}>
           <rect x="1.5" y="1.5" width="13" height="13" rx="3" fill="var(--wc-status-error-icon)" />
           <path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="#fff" strokeWidth="1.8" />
+        </svg>
+      );
+    // A wechart schedule suspended after its failures: the error's colour, paused (design 16, s-susp).
+    case 'susp':
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="8" r="7" fill="var(--wc-status-error-icon)" />
+          <path d="M6.2 5v6M9.8 5v6" stroke="#fff" strokeWidth="1.8" />
         </svg>
       );
     case 'run':

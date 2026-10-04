@@ -196,6 +196,13 @@ export interface ScheduleTable {
   updated_by_key: string;
   updated_by_name: string;
   updated_at: Date;
+  /** How many failed runs in a row suspend it, 3 unless set (T379, AC-155). */
+  suspend_after: Generated<number>;
+  /** Its failures in a row are counted from runs started after it: set by Resume. */
+  counted_from: Generated<Date | null>;
+  /** When it was suspended, and Cube's last error then; none while it runs. */
+  suspended_at: Generated<Date | null>;
+  suspended_error: Generated<string | null>;
 }
 
 /** A build wechart started through Cube's jobs API (T372, AC-150): one row per start. */
