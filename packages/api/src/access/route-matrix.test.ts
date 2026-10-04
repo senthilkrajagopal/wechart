@@ -3,13 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { CHART_DOCUMENT_VERSION, type SealedV1 } from '@wechart/core';
 import type { FastifyInstance, InjectOptions, LightMyRequestResponse } from 'fastify';
 import { sql } from 'kysely';
+import { PgBoss } from 'pg-boss';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { routesOf } from '../auth/guard';
 import { pgSessionStore } from '../auth/session-store';
 import { PUBLIC_URL, signIn, USERS } from '../auth/sign-in.fixture';
 import { CubeClient } from '../cube/client';
-import { closeDb, getDb } from '../db/client';
+import { closeDb, databaseUrl, getDb } from '../db/client';
 import { auditStore } from '../repos/audit';
 import { buildHistory } from '../repos/build-history';
 import { bookmarkStore } from '../repos/bookmarks';
@@ -26,6 +27,7 @@ import { queryLog } from '../repos/query-log';
 import { CUBE_STORE_TARGET, sqlRunnerSwitches } from '../repos/sql-runner-switches';
 import { sqlRuns } from '../repos/sql-runs';
 import { versionStore } from '../repos/versions';
+import { scheduleStore, wechartScheduler } from '../scheduler/schedules';
 import { buildServer } from '../server';
 import { xcubeAdmin } from '../xcube/client';
 import { connectionNameOf } from '../xcube/connections';
@@ -167,6 +169,11 @@ interface Held {
 const at = {} as Record<Place, Held>;
 /** The build recorded in each place (T374). */
 const builds = {} as Record<Place, string>;
+/** The wechart schedule made in each place (T378). */
+const schedulesIn = {} as Record<Place, string>;
+/** pg-boss's schema for them: the matrix's own. */
+const SCHEDULE_SCHEMA = `pgboss_${mark}`;
+let scheduleBoss: PgBoss | undefined;
 /** Its entry in xcube's queue (T376): ends where no other place's does. */
 const queueKeyOf = (place: Place) => `${MARK}-queue-${place}-k`;
 /** Each owner's workspace and what it holds. */
@@ -596,6 +603,14 @@ beforeAll(async () => {
   const published = await folderXcubeIds(getDb()).published();
   stub.holdItems('dev', itemsOf(await files.all(), published.ids));
 
+  scheduleBoss = new PgBoss({ connectionString: databaseUrl(), schema: SCHEDULE_SCHEMA });
+  const scheduler = wechartScheduler({
+    boss: scheduleBoss,
+    store: scheduleStore(getDb()),
+    history: buildHistory(getDb()),
+    cube: cube(),
+  });
+  await scheduler.start();
   app = buildServer({
     config: secured,
     cube: cube(),
@@ -680,6 +695,8 @@ beforeAll(async () => {
     queryLog: queryLog(getDb()),
     healthFetch: (async () => new Response('{}', { status: 200 })) as typeof fetch,
     introspectionRetryMs: 1,
+    // wechart's own schedules, on pg-boss in the matrix's own schema (T378).
+    schedules: scheduler,
   });
   for (const who of WHO) cookies[who] = await signIn(app, USERS[who]!);
 
@@ -812,6 +829,21 @@ beforeAll(async () => {
     });
   }
 
+  // A wechart schedule in each place (T378): on 1 January only, so none runs here.
+  for (const place of PLACES)
+    schedulesIn[place] = (
+      await scheduler.create(
+        {
+          name: `${MARK} schedule in ${place}.`,
+          preAggregation: `${fullName(place)}.${rollupOf(place)}`,
+          folderId: at[place].folder,
+          cron: '0 5 1 1 *',
+          timezone: 'UTC',
+        },
+        { key: `${MARK}-maker-${place}`, name: `${MARK} maker in ${place}.` },
+      )
+    ).id;
+
   // Every secret, and who may see it.
   for (const place of PLACES) {
     const held = at[place];
@@ -825,6 +857,14 @@ beforeAll(async () => {
     );
     // Its entry in the queue, to the same (T376, AC-297).
     secret(`queue entry in ${place}`, (who) => writes(who, place), queueKeyOf(place));
+    // A wechart schedule, and who made it, to the same (T378, AC-297).
+    secret(
+      `wechart schedule in ${place}`,
+      (who) => writes(who, place),
+      schedulesIn[place],
+      `${MARK} schedule in ${place}.`,
+      `${MARK} maker in ${place}.`,
+    );
     if (place !== 'root') {
       secret(`folder ${place}`, (who) => opens(who, place), held.folder, `${MARK} folder ${place}`);
       secret(`groups of ${place}`, (who) => opens(who, place), groupOf(place));
@@ -939,7 +979,11 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (app !== undefined) await app.close();
+  if (scheduleBoss !== undefined) await scheduleBoss.stop({ graceful: false, close: true });
   const db = getDb();
+  // The schedules the matrix made (T378), and pg-boss's schema of them.
+  await db.deleteFrom('schedules').where('name', 'like', `${MARK}%`).execute();
+  await sql`DROP SCHEMA IF EXISTS ${sql.id(SCHEDULE_SCHEMA)} CASCADE`.execute(db);
   // The SQL runs the matrix made (T533, T534).
   const sourced = PLACES.map((place) => at[place]?.source).filter((id) => id !== undefined);
   if (sourced.length > 0)
@@ -2118,6 +2162,52 @@ const CASES: Record<string, Case> = {
   'GET /api/schedules?seen=1': listed({ method: 'GET', url: '/api/schedules?seen=1' }, (who) =>
     inPlaces(who, opens, rollupOf),
   ),
+  // wechart's own schedules: made, changed and deleted only in folders they write (T378, Q10).
+  'GET /api/wechart-schedules': listed({ method: 'GET', url: '/api/wechart-schedules' }, (who) =>
+    inPlaces(who, writes, (place) => schedulesIn[place]),
+  ),
+  'POST /api/wechart-schedules': async () => {
+    for (const place of PLACES)
+      for (const who of WHO.filter((each) => !writes(each, place)))
+        refused(
+          await ask(who, {
+            method: 'POST',
+            url: '/api/wechart-schedules',
+            payload: {
+              name: `${MARK} made by ${who}`,
+              preAggregation: `${fullName(place)}.${rollupOf(place)}`,
+              cron: '0 5 1 1 *',
+              timezone: 'UTC',
+            },
+          }),
+          `${who} scheduling in ${place}`,
+        );
+  },
+  'PUT /api/wechart-schedules/:id': async () => {
+    for (const place of PLACES)
+      for (const who of WHO.filter((each) => !writes(each, place)))
+        refused(
+          await ask(who, {
+            method: 'PUT',
+            url: `/api/wechart-schedules/${schedulesIn[place]}`,
+            payload: {
+              name: `${MARK} changed by ${who}`,
+              preAggregation: `${fullName(place)}.${rollupOf(place)}`,
+              cron: '0 6 1 1 *',
+              timezone: 'UTC',
+            },
+          }),
+          `${who} changing ${place}'s schedule`,
+        );
+  },
+  'DELETE /api/wechart-schedules/:id': async () => {
+    for (const place of PLACES)
+      for (const who of WHO.filter((each) => !writes(each, place)))
+        refused(
+          await ask(who, { method: 'DELETE', url: `/api/wechart-schedules/${schedulesIn[place]}` }),
+          `${who} deleting ${place}'s schedule`,
+        );
+  },
 
   // Access: a folder's groups to those who may change them; previews and the trail, Super-Admins'.
   'GET /api/folders/:folderId/access': async () => {

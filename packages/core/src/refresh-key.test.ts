@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  clockChangeBetween,
   nextRefreshes,
   nextRefreshesBeforeChange,
   refreshLagSeconds,
@@ -139,6 +140,30 @@ describe('nextRefreshesBeforeChange', () => {
     expect(
       nextRefreshesBeforeChange('1 day', 'America/Los_Angeles', at('2026-10-29T12:00:00Z'), 5),
     ).toEqual({ runs: nextRefreshes('1 day', undefined, at('2026-10-29T12:00:00Z'), 5) });
+  });
+});
+
+/** T378 (design 16, D4): a wechart schedule's runs are listed across a change, with it marked. */
+describe('clockChangeBetween', () => {
+  it('finds the zone’s change between two moments, and which way the clocks go', () => {
+    // Europe falls back on Sun 25 Oct 2026, at 01:00 UTC.
+    expect(
+      clockChangeBetween(
+        'Europe/Berlin',
+        new Date('2026-10-19T05:00:00Z'),
+        new Date('2026-10-26T06:00:00Z'),
+      ),
+    ).toEqual({ at: new Date('2026-10-25T01:00:00Z'), back: true });
+    expect(
+      clockChangeBetween(
+        'Europe/Berlin',
+        new Date('2026-10-05T05:00:00Z'),
+        new Date('2026-10-12T05:00:00Z'),
+      ),
+    ).toBeUndefined();
+    expect(
+      clockChangeBetween('UTC', new Date('2026-10-19T05:00:00Z'), new Date('2026-10-26T06:00:00Z')),
+    ).toBeUndefined();
   });
 });
 

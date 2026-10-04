@@ -1,10 +1,13 @@
 import closeWithGrace from 'close-with-grace';
+import { PgBoss } from 'pg-boss';
 
 import { pgSessionStore } from './auth/session-store';
 import { loadConfig } from './config';
 import { serviceCredential } from './cube/service-token';
+import { deploymentModel } from './cube/deployment-model';
 import { querySigner } from './cube/signing';
-import { closeDb, getDb } from './db/client';
+import { closeDb, databaseUrl, getDb } from './db/client';
+import { scheduleStore, wechartScheduler } from './scheduler/schedules';
 import { migrateToLatest } from './db/migrate';
 import { bookmarkStore } from './repos/bookmarks';
 import { catalog } from './repos/catalog';
@@ -179,6 +182,35 @@ async function main(): Promise<void> {
   const runStore = sqlRuns(db);
   // The builds wechart starts, one record per start (T372, AC-150).
   const builds = buildHistory(db);
+  /**
+   * The jobs API with the service credential, as the server's own client
+   * asks it (T420): following each build (T372), and each scheduled run
+   * (T378), which names the model xcube serves, as Jobs' builds do (T421).
+   */
+  const model = deploymentModel(config.xcube?.model, publications, (error) => {
+    app.log.warn({ err: error }, 'could not read the revision xcube acknowledged');
+  });
+  const serviceCube = new CubeClient({
+    apiUrl: config.cubeApiUrl,
+    apiSecret: config.cubeApiSecret,
+    securityContext: config.securityContext,
+    ...(model === undefined ? {} : { model }),
+    ...(service === undefined ? {} : { service: () => service.token() }),
+  });
+  /**
+   * wechart's own schedules (T378, AC-234), their times kept by pg-boss in
+   * its own schema of the metadata database (research scheduler.md): each
+   * due run started once whichever replica takes it (AC-319).
+   */
+  const scheduler = wechartScheduler({
+    boss: new PgBoss({ connectionString: databaseUrl(), schema: 'pgboss' }),
+    store: scheduleStore(db),
+    history: builds,
+    cube: serviceCube,
+    onError: (error) => {
+      app.log.warn({ err: error }, 'wechart’s scheduler failed');
+    },
+  });
   const app = buildServer({
     config,
     queryLog: queryLog(db),
@@ -227,6 +259,8 @@ async function main(): Promise<void> {
     // Each user's SQL runs, one going at a time (T533, AC-379), kept as their history (T534).
     sqlRuns: runStore,
     buildHistory: builds,
+    // wechart's own schedules (T378, AC-234).
+    schedules: scheduler,
     // xcube's build queue and its cancel (T376, AC-151).
     ...(config.xcube === undefined || service === undefined
       ? {}
@@ -365,19 +399,21 @@ async function main(): Promise<void> {
    * client asks it (T420).
    */
   const stopFollowing = startFollowingBuilds(
-    buildFollower({
-      history: builds,
-      cube: new CubeClient({
-        apiUrl: config.cubeApiUrl,
-        apiSecret: config.cubeApiSecret,
-        securityContext: config.securityContext,
-        ...(service === undefined ? {} : { service: () => service.token() }),
-      }),
-    }),
+    buildFollower({ history: builds, cube: serviceCube }),
     {
       onError: (error) => {
         app.log.warn({ err: error }, 'could not follow the builds wechart started');
       },
+    },
+  );
+
+  // wechart's schedules laid from its table, and their runs taken (T378).
+  // One that can't start is said: the rest of wechart serves on.
+  const scheduling = await scheduler.start().then(
+    () => true,
+    (error: unknown) => {
+      app.log.warn({ err: error }, 'wechart’s scheduler could not start');
+      return false;
     },
   );
 
@@ -389,6 +425,7 @@ async function main(): Promise<void> {
     stopRetention();
     stopRunRetention();
     stopFollowing();
+    if (scheduling) await scheduler.stop();
     clearInterval(sweeping);
     if (reconciling !== undefined) clearInterval(reconciling);
     await app.close();

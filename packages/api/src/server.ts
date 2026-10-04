@@ -53,6 +53,9 @@ import { registerQueue } from './jobs/queue';
 import type { XcubePartitions } from './xcube/partitions';
 import type { XcubeQueue } from './xcube/queue';
 import { registerSchedules } from './jobs/schedules';
+import { registerWechartSchedules } from './routes/schedules';
+import { deploymentModel } from './cube/deployment-model';
+import type { WechartScheduler } from './scheduler/schedules';
 import { NO_JOBS, type JobsAccess } from './jobs/scope';
 import {
   bindChart,
@@ -235,6 +238,8 @@ export interface BuildOptions {
   readonly buildQueue?: XcubeQueue;
   /** xcube's partitions route (T375, AC-145). Unset without xcube: no partitions. */
   readonly buildPartitions?: XcubePartitions;
+  /** wechart's own schedules, run by pg-boss (T378, AC-234). Unset: none are offered. */
+  readonly schedules?: WechartScheduler;
   /**
    * Where a data source lands before it is stored, and leaves before it is
    * removed (T442): xcube's connections. Unset without xcube.
@@ -460,6 +465,7 @@ export function buildServer({
   buildHistory,
   buildQueue,
   buildPartitions,
+  schedules,
   dataSourceLanding,
   connectionTest,
   connectionTests,
@@ -639,27 +645,11 @@ export function buildServer({
   app.get('/api/cube-auth', ADMIN, async () => authCheckOf(config.cubeApiUrl, healthFetch));
   /**
    * The model xcube serves this deployment, and the revision last recorded
-   * for it, read as each request is signed (T421, AC-334): an answer comes
-   * from that revision or a newer one, whichever replica recorded it.
+   * for it, read as each request is signed (T421, AC-334).
    */
-  const xcubeModel = config.xcube?.model;
-  // The last revision read stands while the record can't be read: reading it
-  // is never what breaks a chart (T421's review).
-  let lastRevision: number | undefined;
-  const model =
-    xcubeModel === undefined || publications === undefined
-      ? undefined
-      : {
-          id: xcubeModel,
-          revision: async () => {
-            try {
-              lastRevision = (await publications.get(xcubeModel))?.revision;
-            } catch (error) {
-              app.log.warn({ err: error }, 'could not read the revision xcube acknowledged');
-            }
-            return lastRevision;
-          },
-        };
+  const model = deploymentModel(config.xcube?.model, publications, (error) => {
+    app.log.warn({ err: error }, 'could not read the revision xcube acknowledged');
+  });
   const client =
     cube ??
     new CubeClient({
@@ -1177,6 +1167,14 @@ export function buildServer({
   // With the model's files: a key's SQL is read there (T273's review).
   // And each folder's, under its prefixed names (T450's review).
   registerSchedules(app, client, modelFiles, folders, jobsAccess, statesOfRows);
+  // wechart's own schedules, by any who write the pre-aggregation's folder (T378, AC-234, Q10).
+  if (schedules !== undefined)
+    registerWechartSchedules(app, {
+      scheduler: schedules,
+      client,
+      ...(modelFiles === undefined ? {} : { modelFiles }),
+      access: jobsAccess,
+    });
   // A data source's catalog, through Cube's introspection API (T145, AC-139).
   registerIntrospection(app, client, {
     ...(introspectionRetryMs === undefined ? {} : { retryMs: introspectionRetryMs }),

@@ -168,6 +168,24 @@ export interface Database {
   sql_runs: SqlRunTable;
   build_runs: BuildRunTable;
   build_tokens: BuildTokenTable;
+  schedules: ScheduleTable;
+}
+
+/** A wechart schedule (T378, AC-234): every partition of one pre-aggregation, at its times. */
+export interface ScheduleTable {
+  id: string;
+  name: string;
+  pre_aggregation: string;
+  folder_id: string | null;
+  cron: string;
+  timezone: string;
+  missed: string;
+  created_by_key: string;
+  created_by_name: string;
+  created_at: Date;
+  updated_by_key: string;
+  updated_by_name: string;
+  updated_at: Date;
 }
 
 /** A build wechart started through Cube's jobs API (T372, AC-150): one row per start. */

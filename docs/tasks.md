@@ -7357,7 +7357,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - **The e2e's fixture:** no Dremio runs in compose, and a data source is made only from a passing test of it (AC-158). So the fixture's test runs through the API against `127.0.0.1:9047`, where nothing listens in Cube's container, and fails there. It is then marked passed in the suite's own database (`markPassed`, `docker exec wechart-meta psql`), and the source is made through the API from it. Only the fixture goes round the test gate. The warning shows before Save, so no Dremio is needed after that.
   - **Not covered, a question for the user if wanted:** switching the way a data source signs in to a key or token (say, Snowflake from a key pair to OAuth) stores a key or token where none was. By `xcube-919cff8c6e.md` ("a new host, database, user or key holder aliases a data source's cubes and rebuilds their rollups"), that likely rebuilds too; no test has checked it. AC-353 speaks only of one already stored, so nothing is said there.
   - AC-353 ticked.
-- [ ] T378 (AC-234, AC-297) Run wechart's own schedules: each due run builds every partition through Cube's jobs API
+- [x] T378 (AC-234, AC-297) Run wechart's own schedules: each due run builds every partition through Cube's jobs API
   - *Rewritten 2026-10-02 to design 16 (`[R56]`):*
     - five fields and a required zone;
     - every partition per run (Q7);
@@ -7386,6 +7386,55 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - a member of another folder gets `403`, and so does a reader;
       - a schedule whose maker has left the folder's groups still runs, and still names them (AC-297, Q10).
   - Depends on: T372
+  - **As built (2026-10-04):**
+    - **pg-boss 12.33.2** keeps the times, in its own schema (`pgboss`) of the metadata database. `docs/research/pg-boss-12.33.2-installed.md` corrects `scheduler.md` where they differ: a named export; six fields accepted, so five is wechart's own rule; both daylight-saving directions probed; `schedule()` again under the same key replaces it; replicas starting at once are safe with migrations on.
+    - **The table** (migration `1758530002000_schedules.cjs`): name, pre-aggregation, folder, cron, zone (required), missed (`once` or `skip`, `once` by default), and who made it and last changed it, with when.
+    - **`scheduler/cron.ts`:**
+      - `readCron`: five fields, each in range, read back in words, or refused naming the field. It also says whether a refresh key could run it, by core's `refreshEveryRefusal`. pg-boss's own check is the last word.
+      - `nextRunsOf`: the next runs from pg-boss's `previewSchedule`, with the first clock change among them and how many runs come before it. Core's `clockChangeBetween` finds the change; it's split out of `nextRefreshesBeforeChange`.
+    - **`scheduler/schedules.ts`:**
+      - One pg-boss schedule per wechart schedule, keyed by its id, on the queue `wechart-schedule-run`. Each run is handled there; the planned `worker.ts` is folded in.
+      - A run posts one jobs request with no `dateRange` (every partition), with the request id `wechart-schedule-<job id>`. That id skips a run pg-boss hands out again. The run is recorded as one start by the schedule (`via: schedule`), with the rollup's partition granularity read from the model first.
+      - Create, change and delete apply at once.
+      - A start lays only the rows pg-boss lacks or holds otherwise, and drops what pg-boss holds for rows that are gone.
+      - A zone is checked by `Intl`, then by pg-boss's preview in that zone, and stored by its canonical name.
+      - A change that leaves out the missed-run choice keeps it.
+      - A run Cube refuses is said through `onError` and fails in pg-boss. It isn't retried.
+    - **The routes** (`routes/schedules.ts`): `GET` and `POST /api/wechart-schedules`, `PUT` and `DELETE /api/wechart-schedules/:id`, scoped as Jobs is (T371).
+      - Making one needs a pre-aggregation Jobs could build, in a folder the user writes; a rollup made of others is refused.
+      - Changing or deleting one needs its folder, and the folder of any pre-aggregation it is moved to.
+      - Its maker stays named whoever changes it. It runs with the service credential.
+      - All four routes are in the route matrix.
+    - **main.ts:**
+      - The scheduler starts before the server listens, and stops in the grace period. One that can't start is logged, and the rest serves on.
+      - Its Cube client is the service one the build follower uses. It now names the deployment's model and revision (`cube/deployment-model.ts`, shared with `server.ts`), so a run builds the model xcube serves (`xcube-slice-2.md`).
+    - The built bundle (`pnpm --filter @wechart/api build`) keeps `pg-boss` external, and it loads.
+  - **Implementer's calls, for the user to confirm or change:**
+    - A schedule needs a name (design 16's form marks it required). An empty one is refused: "Name it: its name names its runs in Run history."
+    - A rollup of a cube marked `public: false` can't be scheduled. Jobs doesn't offer one either, and no research says the jobs API builds one.
+  - **One review round (spec-reviewer), fixed:**
+    1. A run named no model, so in an xcube deployment it asked Cube's disk model. Fixed, and the test asserts the model and revision on the request.
+    2. Run history read a scheduled run of a partitioned rollup as "Whole". The run now records the granularity, and the test asserts it.
+    3. A replica starting from a stale list could drop or roll back another replica's change. Fixed, and tested.
+    4. A run Cube refused vanished without a word. It's now said, and tested.
+    5. A zone `Intl` takes but pg-boss doesn't gave a 500. It's now refused, and a zone is stored by its canonical name.
+    6. A change racing a delete could lay a deleted schedule again. Fixed.
+    7. A change without `missed` reset it to `once`. It now keeps it.
+    8. Test fixes:
+       - records are polled for with a deadline, not a fixed wait;
+       - "saving nothing" covers all three refusals;
+       - a run handed out twice starts once;
+       - the route tests no longer depend on each other;
+       - the spring change, and a time it skips, are tested.
+    9. `clockChangeBetween`'s comment now says it compares only the two ends.
+  - **For T552:** no route serves the form's cron read-back, next runs and refresh-key note. `cron.ts` runs on pg-boss, on the server, so T552 adds a preview route to `routes/schedules.ts` (+ test).
+  - **Tests:**
+    - `scheduler/cron.test.ts` (7);
+    - `scheduler/schedules.test.ts` (9, on pg-boss with its `TestClock`, in a schema of its own);
+    - `routes/schedules.test.ts` (4);
+    - `access/route-matrix.test.ts`;
+    - core's `refresh-key.test.ts`.
+  - AC-234 and AC-297 stay open for T552's form and rows, T559's folder views and T504.
 - [ ] T552 (AC-234, AC-392, AC-154) Make, change and delete a wechart schedule on Schedules, listed beside the refresh keys *(added 2026-10-02, `[R56]`: design 16's screen 2 and state D)*
   - Files: `packages/web/src/workspaces/schedules/{ScheduleForm,SchedulesPage,SchedulePane}.tsx` (+ tests), `e2e/schedules.spec.ts`
   - Failing test:

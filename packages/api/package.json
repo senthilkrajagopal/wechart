@@ -30,6 +30,7 @@
     "node-pg-migrate": "9.0.0",
     "openid-client": "6.8.8",
     "pg": "8.23.0",
+    "pg-boss": "12.33.2",
     "yaml": "2.9.1"
   },
   "devDependencies": {

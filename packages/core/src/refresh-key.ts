@@ -204,19 +204,31 @@ export function nextRefreshesBeforeChange(
   const runs = nextRefreshes(every, zone, now, count);
   const last = runs[runs.length - 1];
   if (zone === undefined || last === undefined) return { runs };
-  const before = offsetOf(zone, now);
-  const after = offsetOf(zone, last);
-  if (before === undefined || after === undefined || before === after) return { runs };
-  // The change: the first moment the offset differs, to the millisecond.
-  let lo = now.getTime();
-  let hi = last.getTime();
+  const change = clockChangeBetween(zone, now, last);
+  if (change === undefined) return { runs };
+  return { runs: runs.filter((run) => run < change.at), change };
+}
+
+/**
+ * A zone's daylight-saving change between two moments, where its offset at
+ * the second differs from its offset at the first (T378: a wechart schedule's
+ * runs are listed across it, design 16 D4): the moment it changes, to the
+ * millisecond, and which way the clocks go. None in UTC, or a zone this
+ * runtime lacks, or where two changes between the moments cancel out (a
+ * year apart, say): the offsets at the two ends are all it compares.
+ */
+export function clockChangeBetween(zone: string, from: Date, to: Date): ClockChange | undefined {
+  const before = offsetOf(zone, from);
+  const after = offsetOf(zone, to);
+  if (before === undefined || after === undefined || before === after) return undefined;
+  let lo = from.getTime();
+  let hi = to.getTime();
   while (hi - lo > 1) {
     const mid = Math.floor((lo + hi) / 2);
     if (offsetOf(zone, new Date(mid)) === before) lo = mid;
     else hi = mid;
   }
-  const at = new Date(hi);
-  return { runs: runs.filter((run) => run < at), change: { at, back: after < before } };
+  return { at: new Date(hi), back: after < before };
 }
 
 /**

@@ -58,6 +58,7 @@ export {
   type ExportItem,
 } from './exportFile';
 export {
+  clockChangeBetween,
   nextRefreshes,
   nextRefreshesBeforeChange,
   refreshEveryRefusal,
