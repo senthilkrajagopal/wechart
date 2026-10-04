@@ -13,7 +13,12 @@
 >    - **Jobs**: T555 is picked (2c74709), and so is the cancel correction (c6774f4).
 >      - Still to do: T556–T560, on migrations 1758650000000–1758659999999. Per R59, resuming a paused schedule keeps its failure count.
 >      - Parked in the Jobs worktree:
->        - T554, on branch `t554-stop-wip` (ea522da, old base). It waits on xcube: `to-xcube/2026-10-04-2105-stop-processing-build.md`.
+>        - T554, on branch `t554-stop-wip` (ea522da, old base). **xcube has answered and it's unblocked:** `to-wechart/2026-10-04-2200-stop-processing-build.md`, image `ghcr.io/senthilkrajagopal/xcube:v1.7.45-74c933bdb8@sha256:262d59e434cd98eb0c1cf238fcbbc7168809e0fd31e103f87d127d9082e3df71`, no new migration.
+>          - A processing build cancelled with `processing: true` is really stopped: the source query is cancelled and nothing is kept.
+>          - The jobs API then reports `failure: xcube stopped this build…`.
+>          - The cancel answer waits up to 20 s, then says stopped, failed or stopping, or `notCancelled` with `finished`.
+>          - It's checked on PostgreSQL only.
+>          - Pin it after T549's 46ca0ce708, on the same branch. Then rebase T554 and run its e2e.
 >        - T557's failing tests, on branch `t557-owner-filter-wip` (5923b11). The filter must be a radiogroup of buttons, because no Schedules test may find an input.
 >      - Not written: jobs.spec.ts:72's fix (poll its own job until done), and T553's follow-up (a module counts as failing until a worker on the current revision has a good run).
 >    - **The route matrix failed twice after rebasing on 0abfbc2, in routes nobody touched:** `many` sees root's model, `manager` runs Cube Store SQL, and introspection and cube-store timed out. wechart_test's root access looks changed by interference. On resuming, rebuild wechart_test from scratch (drop it and let the global setup migrate it), then run the full API suite under the lock before trusting it.
