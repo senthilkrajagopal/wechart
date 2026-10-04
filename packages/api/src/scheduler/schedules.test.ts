@@ -83,7 +83,8 @@ const replica = async (): Promise<WechartScheduler> => {
   bosses.push(boss);
   const scheduler = wechartScheduler({
     boss,
-    store: scheduleStore(getDb()),
+    // This file's schedules alone: another file's, in the same database, aren't its to run.
+    store: scheduleStore(getDb(), { named: MARK }),
     history: buildHistory(getDb()),
     cube,
     now: () => new Date(clock.now()),
@@ -102,7 +103,25 @@ const stopAll = async () => {
   for (const boss of bosses.splice(0)) await boss.stop({ graceful: false, close: true });
 };
 
-/** Moves the test clock on, a second at a time, letting pg-boss's passes and workers run. */
+/**
+ * Brings the test clock to `due`, 2 s before it, and holds it near there, a
+ * second at a time, never past the run's minute, until `until` holds or 30 s
+ * of real time pass. pg-boss's passes are timed in real time: under load
+ * they come late, and a clock run on past the minute would leave them no run
+ * to find. With no `due`, from where the clock is.
+ */
+async function runAt(due: string | null, until: () => boolean): Promise<void> {
+  if (due !== null) await clock.setTime(new Date(new Date(due).getTime() - 2000));
+  const deadline = Date.now() + 30_000;
+  for (let ticks = 0; !until() && Date.now() < deadline; ticks += 1) {
+    if (ticks < 40) await clock.tick(1000);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  // Let a worker that just fetched a job finish it.
+  await new Promise((resolve) => setTimeout(resolve, 300));
+}
+
+/** Moves the test clock on, a second at a time: for times when nothing should run. */
 async function runFor(seconds: number, until: () => boolean = () => false): Promise<void> {
   for (let at = 0; at < seconds && !until(); at += 1) {
     await clock.tick(1000);
@@ -172,7 +191,7 @@ describe('wechart’s schedules (T378, AC-234)', { timeout: 120_000 }, () => {
     const schedule = await scheduler.create(newSchedule(), by);
     made.push(schedule.id);
 
-    await runFor(240, () => posted.length > 0);
+    await runAt('2026-10-05T05:00:00Z', () => posted.length > 0);
 
     expect(posted).toHaveLength(1);
     // Build all: no dateRange, so every partition (Q7).
@@ -223,7 +242,7 @@ describe('wechart’s schedules (T378, AC-234)', { timeout: 120_000 }, () => {
     // wechart is down across 05:00, and back at 06:30.
     await clock.setTime(new Date('2026-10-06T06:30:00Z'));
     await replica();
-    await runFor(30, () => posted.length > 0);
+    await runAt(null, () => posted.length > 0);
     await runFor(5);
 
     expect((await runsWhen(once.id, 1)).length).toBe(1);
@@ -237,7 +256,7 @@ describe('wechart’s schedules (T378, AC-234)', { timeout: 120_000 }, () => {
     const schedule = await one.create(newSchedule({ name: `Twice ${MARK}` }), by);
     made.push(schedule.id);
 
-    await runFor(120, () => posted.length > 0);
+    await runAt('2026-10-07T05:00:00Z', () => posted.length > 0);
     await runFor(10);
 
     expect(posted).toHaveLength(1);
@@ -249,11 +268,13 @@ describe('wechart’s schedules (T378, AC-234)', { timeout: 120_000 }, () => {
     const scheduler = await replica();
     const schedule = await scheduler.create(newSchedule({ name: `Again ${MARK}` }), by);
     made.push(schedule.id);
+    // This run's own job id: Run history is shared with every other run of the suite.
+    const job = `job-${MARK}`;
 
-    await scheduler.run(schedule.id, 'job-handed-out-twice');
-    await scheduler.run(schedule.id, 'job-handed-out-twice');
+    await scheduler.run(schedule.id, job);
+    await scheduler.run(schedule.id, job);
 
-    expect(posted.map((each) => each.requestId)).toEqual(['wechart-schedule-job-handed-out-twice']);
+    expect(posted.map((each) => each.requestId)).toEqual([`wechart-schedule-${job}`]);
     expect((await runsOf(schedule.id)).length).toBe(1);
   });
 
@@ -264,7 +285,7 @@ describe('wechart’s schedules (T378, AC-234)', { timeout: 120_000 }, () => {
     made.push(schedule.id);
     answerJobs = () => Response.json({ error: 'Pre-aggregation not found' }, { status: 400 });
 
-    await expect(scheduler.run(schedule.id, 'job-refused')).rejects.toThrow(
+    await expect(scheduler.run(schedule.id, `job-refused-${MARK}`)).rejects.toThrow(
       'Pre-aggregation not found',
     );
     expect(failures).toHaveLength(1);

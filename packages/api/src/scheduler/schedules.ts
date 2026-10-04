@@ -69,24 +69,23 @@ const rowOf = (row: Selectable<ScheduleTable>): Schedule => ({
   updatedAt: row.updated_at,
 });
 
-/** wechart's schedules, as stored. */
-export function scheduleStore(db: Kysely<Database>) {
+/**
+ * wechart's schedules, as stored. A test's store sees only the schedules
+ * whose names hold its mark (`named`): its scheduler lays and runs those
+ * alone, never another test file's in the same database.
+ */
+export function scheduleStore(db: Kysely<Database>, { named }: { readonly named?: string } = {}) {
+  const scoped = () => {
+    const query = db.selectFrom('schedules').selectAll();
+    return named === undefined ? query : query.where('name', 'like', `%${named}%`);
+  };
   return {
     async get(id: string): Promise<Schedule | undefined> {
-      const row = await db
-        .selectFrom('schedules')
-        .selectAll()
-        .where('id', '=', id)
-        .executeTakeFirst();
+      const row = await scoped().where('id', '=', id).executeTakeFirst();
       return row === undefined ? undefined : rowOf(row);
     },
     async list(): Promise<Schedule[]> {
-      const rows = await db
-        .selectFrom('schedules')
-        .selectAll()
-        .orderBy('name')
-        .orderBy('id')
-        .execute();
+      const rows = await scoped().orderBy('name').orderBy('id').execute();
       return rows.map(rowOf);
     },
     async insert(schedule: Schedule): Promise<void> {

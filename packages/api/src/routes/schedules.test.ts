@@ -54,8 +54,9 @@ const clock = new TestClock(new Date('2026-10-05T04:00:00Z'));
 const docs = () => documents(getDb());
 const made: { kind: DocumentKind; id: string }[] = [];
 const cookies: Record<string, string> = {};
-const ids = { a: '', c: '' };
-const xcubeIds = { a: '', c: '' };
+/** This file's folders, by a letter of its own: wechart's ids, and xcube's. */
+const ids: Record<string, string> = {};
+const xcubeIds: Record<string, string> = {};
 let app: FastifyInstance;
 let boss: PgBoss;
 /** Every jobs post the stub Cube is sent, by the pre-aggregations it names. */
@@ -72,10 +73,19 @@ async function folder(title: string, access: { readOnly: string[]; readWrite: st
   return id;
 }
 
+/**
+ * A folder of this file's, published, its cube's rollup listed: made by the
+ * test that uses it, so nothing another test does to a folder reaches it.
+ */
+async function place(key: string, access: { readOnly: string[]; readWrite: string[] }) {
+  ids[key] = await folder(`${key.toUpperCase()} ${MARK}`, access);
+  xcubeIds[key] = `f${ids[key].replaceAll('-', '')}`;
+}
+
 const as = (who: string, options: InjectOptions) =>
   app.inject({ ...options, headers: { ...options.headers, cookie: cookies[who]! } });
 
-const preAggIn = (place: 'a' | 'c') => `${xcubeIds[place]}__orders.by_month`;
+const preAggIn = (key: string) => `${xcubeIds[key] ?? ''}__orders.by_month`;
 
 interface Listed {
   id: string;
@@ -95,9 +105,9 @@ interface Listed {
   lastRun?: { id: string; outcome: string | null; startedAt: string } | null;
 }
 
-const fields = (place: 'a' | 'c', over: Record<string, unknown> = {}) => ({
+const fields = (key: string, over: Record<string, unknown> = {}) => ({
   name: `Morning ${MARK}`,
-  preAggregation: preAggIn(place),
+  preAggregation: preAggIn(key),
   cron: '0 5 * * *',
   timezone: 'Europe/London',
   ...over,
@@ -109,7 +119,7 @@ const listed = async (who: string) => {
     status: answer.statusCode,
     rows:
       answer.statusCode === 200
-        ? answer.json<Listed[]>().filter((each) => [ids.a, ids.c].includes(each.folderId ?? ''))
+        ? answer.json<Listed[]>().filter((each) => Object.values(ids).includes(each.folderId ?? ''))
         : [],
   };
 };
@@ -119,13 +129,8 @@ const laid = async (id: string) =>
   (await boss.getSchedules(RUN_QUEUE)).find((each) => each.key === id);
 
 beforeAll(async () => {
-  ids.a = await folder(`A ${MARK}`, {
-    readOnly: ['sales-ro'],
-    readWrite: ['sales-rw', 'managers'],
-  });
-  ids.c = await folder(`C ${MARK}`, { readOnly: [], readWrite: ['g01'] });
-  xcubeIds.a = `f${ids.a.replaceAll('-', '')}`;
-  xcubeIds.c = `f${ids.c.replaceAll('-', '')}`;
+  await place('a', { readOnly: ['sales-ro'], readWrite: ['sales-rw', 'managers'] });
+  await place('c', { readOnly: [], readWrite: ['g01'] });
   const cube = (name: string, folderId: string) => ({
     name,
     meta: { xcube: { folderId, shortName: 'orders' } },
@@ -141,16 +146,12 @@ beforeAll(async () => {
       const asked = new URL(url);
       if (asked.pathname.endsWith('/models/dev/meta'))
         return Response.json({
-          cubes: [
-            cube(`${xcubeIds.a}__orders`, xcubeIds.a),
-            cube(`${xcubeIds.c}__orders`, xcubeIds.c),
-          ],
+          cubes: Object.values(xcubeIds).map((xcubeId) => cube(`${xcubeId}__orders`, xcubeId)),
         });
       if (asked.pathname.endsWith('/v1/pre-aggregations/jobs')) {
         const body = JSON.parse(String(init?.body)) as { selector: { preAggregations: string[] } };
-        // This file's: its scheduler lays every stored schedule, another test file's too.
         const named = body.selector.preAggregations;
-        if (named.some((each) => each === preAggIn('a') || each === preAggIn('c')))
+        if (named.some((each) => Object.keys(ids).some((key) => each === preAggIn(key))))
           posted.push(named);
         return Response.json([`${MARK}-token-${String(posted.length)}`]);
       }
@@ -167,7 +168,8 @@ beforeAll(async () => {
   });
   const scheduler = wechartScheduler({
     boss,
-    store: scheduleStore(getDb()),
+    // This file's schedules alone: another file's, in the same database, aren't its to run.
+    store: scheduleStore(getDb(), { named: MARK }),
     history: buildHistory(getDb()),
     cube: client,
     now: () => new Date(clock.now()),
@@ -184,13 +186,11 @@ beforeAll(async () => {
     folders: async () => ({
       ids: new Map([
         ['root', 'froot'],
-        [ids.a, xcubeIds.a],
-        [ids.c, xcubeIds.c],
+        ...Object.keys(ids).map((key) => [ids[key]!, xcubeIds[key]!] as [string, string]),
       ]),
-      parents: new Map([
+      parents: new Map<string, string | null>([
         ['root', null],
-        [ids.a, 'root'],
-        [ids.c, 'root'],
+        ...Object.values(ids).map((id) => [id, 'root'] as [string, string]),
       ]),
     }),
     buildHistory: buildHistory(getDb()),
@@ -206,10 +206,10 @@ afterAll(async () => {
   if (app !== undefined) await app.close();
   if (boss !== undefined) await boss.stop({ graceful: false, close: true });
   const db = getDb();
-  await db.deleteFrom('schedules').where('folder_id', 'in', [ids.a, ids.c]).execute();
+  await db.deleteFrom('schedules').where('name', 'like', `%${MARK}%`).execute();
   await db
     .deleteFrom('build_runs')
-    .where('pre_aggregation', 'in', [preAggIn('a'), preAggIn('c')])
+    .where('pre_aggregation', 'in', Object.keys(ids).map(preAggIn))
     .execute();
   const client = new pg.Client({ connectionString: databaseUrl() });
   await client.connect();
@@ -345,10 +345,10 @@ describe('wechart’s schedules through the API (T378, AC-234, AC-297)', { timeo
       })
     ).json<Listed>();
     // `sales-rw` taken off /A: the writer no longer writes it.
-    const stored = await docs().get('folder', ids.a);
+    const stored = await docs().get('folder', ids['a']!);
     await docs().update({
       kind: 'folder',
-      id: ids.a,
+      id: ids['a']!,
       body: { ...stored!.body, access: { readOnly: ['sales-ro'], readWrite: ['managers'] } },
       expectedVersion: stored!.version,
     });
@@ -356,10 +356,14 @@ describe('wechart’s schedules through the API (T378, AC-234, AC-297)', { timeo
     expect((await listed('writer')).rows).toEqual([]);
 
     // 05:00 in London is 04:00 UTC in October. Only this test's run counts.
+    // The clock is brought to it and held there, a second at a time, never
+    // past its minute: pg-boss's passes, timed in real time, come late under load.
     posted.length = 0;
-    for (let at = 0; at < 240 && posted.length === 0; at += 1) {
-      await clock.tick(1000);
-      await new Promise((resolve) => setTimeout(resolve, 25));
+    await clock.setTime(new Date('2026-10-06T03:59:58Z'));
+    const deadline = Date.now() + 30_000;
+    for (let ticks = 0; posted.length === 0 && Date.now() < deadline; ticks += 1) {
+      if (ticks < 40) await clock.tick(1000);
+      await new Promise((resolve) => setTimeout(resolve, 250));
     }
     // Its record, once written: the post comes before it.
     const runsOf = async () =>
@@ -369,9 +373,9 @@ describe('wechart’s schedules through the API (T378, AC-234, AC-297)', { timeo
           filters: { starter: { kind: 'schedule', id: own.id } },
         })
       ).records;
-    const deadline = Date.now() + 10_000;
+    const recorded = Date.now() + 10_000;
     let runs = await runsOf();
-    while (runs.length === 0 && Date.now() < deadline) {
+    while (runs.length === 0 && Date.now() < recorded) {
       await new Promise((resolve) => setTimeout(resolve, 100));
       runs = await runsOf();
     }
@@ -394,12 +398,13 @@ describe('Schedules’ wechart rows, and the form’s preview (T552, AC-234, AC-
   it('lists each by its short name and folder, in words, with its next five runs and no last run yet', async () => {
     // 03:00 UTC, before 05:00 in London (04:00 UTC).
     await clock.setTime(new Date('2026-10-05T03:00:00Z'));
-    // The manager: the test above took `sales-rw` off /A.
+    // In a folder of this test's own, the manager's.
+    await place('d', { readOnly: [], readWrite: ['managers'] });
     const own = (
       await as('manager', {
         method: 'POST',
         url: '/api/wechart-schedules',
-        payload: fields('a', { name: `Listed ${MARK}` }),
+        payload: fields('d', { name: `Listed ${MARK}` }),
       })
     ).json<Listed>();
 
@@ -415,7 +420,7 @@ describe('Schedules’ wechart rows, and the form’s preview (T552, AC-234, AC-
       lastRun: row?.lastRun,
     }).toEqual({
       shortName: 'orders',
-      folderPath: ['Shared', `A ${MARK}`],
+      folderPath: ['Shared', `D ${MARK}`],
       when: 'At 05:00 every day.',
       runs: [
         '2026-10-05T04:00:00.000Z',
@@ -431,7 +436,7 @@ describe('Schedules’ wechart rows, and the form’s preview (T552, AC-234, AC-
       await as('manager', {
         method: 'PUT',
         url: `/api/wechart-schedules/${own.id}`,
-        payload: fields('a', { name: `Listed ${MARK}`, cron: '0 6 * * *' }),
+        payload: fields('d', { name: `Listed ${MARK}`, cron: '0 6 * * *' }),
       })
     ).json<Listed>();
     expect(changed).toEqual((await listed('manager')).rows.find((each) => each.id === own.id));
@@ -452,7 +457,8 @@ describe('Schedules’ wechart rows, and the form’s preview (T552, AC-234, AC-
       return { status: answer.statusCode, body: answer.json<unknown>() };
     };
 
-    // As the manager, who writes /A: the writer no longer writes it (above).
+    // As the manager, who writes a folder of this test's own.
+    await place('e', { readOnly: [], readWrite: ['managers'] });
     // D4: 07:00 stays 07:00 when Berlin's clocks go back on 25 Oct.
     expect(await preview('manager', '0 7 * 10,11 1', 'Europe/Berlin')).toEqual({
       status: 200,

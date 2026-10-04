@@ -609,7 +609,8 @@ beforeAll(async () => {
   scheduleBoss = new PgBoss({ connectionString: databaseUrl(), schema: SCHEDULE_SCHEMA });
   const scheduler = wechartScheduler({
     boss: scheduleBoss,
-    store: scheduleStore(getDb()),
+    // The matrix's schedules alone: another file's, in the same database, aren't its to run.
+    store: scheduleStore(getDb(), { named: MARK }),
     history: buildHistory(getDb()),
     cube: cube(),
   });
