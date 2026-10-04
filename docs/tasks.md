@@ -10900,10 +10900,24 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 
 ## P2.22 The model editor's pane, popped out (added 2026-10-02, `[R58]`)
 
-- [ ] T600 (AC-420) Pop the model editor's YAML and join diagram out into a larger dialog, and back into place
+- [x] T600 (AC-420) Pop the model editor's YAML and join diagram out into a larger dialog, and back into place
   - Files: `packages/web/src/shell/PopOut.tsx` (+ test), `packages/web/src/workspaces/model/ModelFilePage.tsx`, `packages/web/src/shell/styles.ts`, `e2e/model-popout.spec.ts`
   - Failing test: `PopOut.test.tsx`: popped out, the content is in a modal dialog and its place is empty; Esc, the close button or the pop-in control puts the same element back, with focus on the pop-out control. `model-popout.spec.ts`: text typed in the YAML before and while popped out is kept, and undo still undoes it after closing; the dialog is larger than the pane (AC-420).
   - Depends on: none
+  - **Done 2026-10-04.**
+    - **The pop-out.** `PopOut` draws the pane once, into an element of its own, and moves that element between its place and a modal dialog. So the editor's text, cursor and undo history and the diagram's layout are never rebuilt, and scroll offsets are put back after each move.
+      - The dialog is the window less a 12 px margin, so it is wider and taller than the pane.
+      - Its head names the file. The pane's own head (YAML / Join diagram, Wrap, "Pop back in") and its problems go with it.
+      - Esc, the dialog's Close and "Pop back in" put it back, and focus goes to the control.
+    - **A question the page asks beside the form** (leaving with unpublished changes, an edit held or refused, the charts a save would change) puts the pane back first. That was the review's medium finding.
+    - **Tests.**
+      - `PopOut.test.tsx`: the same node moved; Esc, Close and the pop-in control; the Tab trap.
+      - `e2e/model-popout.spec.ts` (Chrome):
+        - the dialog's size;
+        - text typed in place and while out, both kept, scrolled where they were;
+        - undo after popping back in removes what was typed out there, so the editor was moved, not rebuilt;
+        - the join diagram and the YAML switch in the dialog;
+        - Back with unpublished changes brings the pane back with Stay focused.
 
 ## Phase 2 coverage: acceptance criterion → task
 

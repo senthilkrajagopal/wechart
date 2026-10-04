@@ -1369,6 +1369,54 @@ main:has(.model-page) {
 .model-annotations p { display: inline; margin: 0; }
 .model-annotations__actions { display: flex; gap: 6px; margin-top: 6px; }
 .model-editor__wrap[aria-pressed='true'] { color: var(--wc-accent); font-weight: 600; }
+/* The right pane popped out into a larger dialog and back (T600, AC-420;
+   PopOut.tsx): one element, filling its place in the section or the dialog's
+   body; it keeps the class model-editor__yaml, so the pane's own rules follow it. */
+.model-editor__yaml > .pop-out__place,
+.model-editor__popped,
+.pop-out__body { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+.model-editor__pop[aria-pressed='true'] { color: var(--wc-accent); font-weight: 600; }
+/* Code in the popped-out pane, as .model-workspace code has it in place. */
+.model-editor__popped code { font-family: var(--wc-font-code); }
+.pop-out__note { margin: 16px; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+/* Over .dialog-backdrop's centred grid, later in this sheet: the window less a
+   12 px margin, so it is taller than the pane under the app bar, as well as wider. */
+.dialog-backdrop.pop-out__backdrop {
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  padding: 12px;
+}
+.pop-out {
+  flex: 0 1 1600px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 30%);
+}
+.pop-out__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 8px 0 16px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
+.pop-out__title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .model-problems__head {
   display: inline-flex;
   align-items: center;

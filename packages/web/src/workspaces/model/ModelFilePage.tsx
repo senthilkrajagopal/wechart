@@ -27,6 +27,7 @@ import { DeleteDialog } from '../explore/DeleteDialog';
 import { checkModel, removeModel } from '../explore/deleteChecks';
 import { sayOnExplore } from '../explore/deletedToast';
 import { NewItemDialog, type Target } from '../explore/NewItemDialog';
+import { PopOut } from '../../shell/PopOut';
 import { isMyWorkspace, MY_WORKSPACE, SHARED_ROOT } from '../explore/roots';
 import { ALL_MODEL_FILES_QUERY, FileList, modelFilesQuery, ModelFilesNotFound } from './FileList';
 import { GenerateCubes, generateWith } from './GenerateCubes';
@@ -579,6 +580,9 @@ function FileEditor({
 
   /** The right pane: the YAML, or the join diagram (T144). */
   const [view, setView] = useState<'yaml' | 'joins'>('yaml');
+  /** The right pane popped out into a larger dialog (T600, AC-420), and its control. */
+  const [poppedOut, setPoppedOut] = useState(false);
+  const popButton = useRef<HTMLButtonElement>(null);
   /** Soft wrap, on by default (design 03 note 8). */
   const [wrap, setWrap] = useState(true);
   /**
@@ -821,6 +825,17 @@ function FileEditor({
   /** Where the focus was when leaving was asked about: where staying puts it back. */
   const returnTo = useRef<HTMLElement | null>(null);
   const { status: leave, reset } = leaving;
+  /**
+   * A question the page asks beside the form — leaving with changes, an edit
+   * held or refused, the charts a save would change — puts a popped-out pane
+   * back first, so it isn't asked behind the dialog (T600's review).
+   */
+  const asking = leave === 'blocked' || pending !== null || refused !== null || references !== null;
+  const [wasAsking, setWasAsking] = useState(asking);
+  if (asking !== wasAsking) {
+    setWasAsking(asking);
+    if (asking) setPoppedOut(false);
+  }
   const stayHere = useCallback(() => {
     reset?.();
     returnTo.current?.focus();
@@ -1254,104 +1269,130 @@ function FileEditor({
         </div>
       </section>
       <section className="model-editor__pane model-editor__yaml" aria-label="YAML and join diagram">
-        <div className="model-editor__head">
-          {/* The prototype's right-pane toggle (model.js): the YAML, or the join diagram. */}
-          <div className="seg model-editor__view" role="group" aria-label="Right pane view">
-            <button
-              type="button"
-              aria-pressed={view === 'yaml'}
-              onClick={() => {
-                setView('yaml');
-              }}
-            >
-              YAML
-            </button>
-            <button
-              type="button"
-              aria-pressed={view === 'joins'}
-              onClick={() => {
-                setView('joins');
-              }}
-            >
-              Join diagram
-            </button>
-          </div>
-          <span className="model-editor__sync">Edits in either side stay in sync</span>
-          {/* Soft wrap, so long descriptions and comments stay in the pane (note 8). */}
-          {view === 'yaml' ? (
-            <button
-              type="button"
-              className="btn-sm btn-ghost model-editor__wrap"
-              aria-pressed={wrap}
-              onClick={() => {
-                setWrap(!wrap);
-              }}
-            >
-              <span aria-hidden="true">↵ </span>Wrap
-            </button>
-          ) : null}
-        </div>
-        <div className="model-editor__code">
-          {view === 'joins' && graph !== undefined ? (
-            <JoinEditor
-              graph={graph}
-              cube={cubeNames[0]}
-              cubes={cubeNames}
-              // Its cubes' files are this folder's (T342's review).
-              hrefOf={where.hrefOf}
-              // Locked as the form is (AC-135): an edit then would be written over the typing.
-              readOnly={readOnly}
-              onAdd={(name, join) => {
-                const entry = cubes.find(({ value }) => value['name'] === name);
-                if (entry === undefined) return false;
-                const joins = Array.isArray(entry.value['joins'])
-                  ? (entry.value['joins'] as unknown[])
-                  : [];
-                return (
-                  edit('cubes', entry.at, { ...entry.value, joins: [...joins, join] }) === 'applied'
-                );
-              }}
-            />
-          ) : null}
-          {/* Hidden, not gone, while the diagram shows: its undo history stays. */}
-          <div className="model-editor__yaml-view" hidden={view !== 'yaml'}>
-            <YamlEditor
-              value={text}
-              onChange={(next) => {
-                // Typing in the YAML answers a held or refused form edit: it was of the text before.
-                setPending(null);
-                setRefused(null);
-                setText(next);
-              }}
-              label={`${path}, as YAML`}
-              // Shared, it is read, not typed in (T342): fixed for the editor's
-              // life, which is keyed by it.
-              readOnly={where.readOnly}
-              problems={listed}
-              goTo={goTo}
-              wrap={wrap}
-              tinted={tinted}
-              noted={noted}
-              flagged={flagged}
-              reveal={reveal}
-            />
-          </div>
-        </div>
-        {/* Docked beneath the code, its own scroll (AC-223). */}
-        <ProblemsPanel
-          path={path}
-          problems={listed}
-          cubeProblems={cubeProblems}
-          folders={folders.data ?? []}
-          folderId={where.folderId}
-          hrefOf={where.hrefOf}
-          onPick={(problem) => {
-            // To the YAML, where the problem is (the prototype's click does too).
-            setView('yaml');
-            setShown('yaml');
-            setGoTo({ at: problem.from });
+        {/* Popped out into a larger dialog and back, the same pane moved, so
+            nothing in it is reset (T600, AC-420; R58). */}
+        <PopOut
+          out={poppedOut}
+          onClose={() => {
+            setPoppedOut(false);
           }}
-        />
+          label={`${path} · YAML and join diagram`}
+          className="model-editor__popped model-editor__yaml"
+          returnFocus={popButton}
+        >
+          <div className="model-editor__head">
+            {/* The prototype's right-pane toggle (model.js): the YAML, or the join diagram. */}
+            <div className="seg model-editor__view" role="group" aria-label="Right pane view">
+              <button
+                type="button"
+                aria-pressed={view === 'yaml'}
+                onClick={() => {
+                  setView('yaml');
+                }}
+              >
+                YAML
+              </button>
+              <button
+                type="button"
+                aria-pressed={view === 'joins'}
+                onClick={() => {
+                  setView('joins');
+                }}
+              >
+                Join diagram
+              </button>
+            </div>
+            <span className="model-editor__sync">Edits in either side stay in sync</span>
+            {/* Soft wrap, so long descriptions and comments stay in the pane (note 8). */}
+            {view === 'yaml' ? (
+              <button
+                type="button"
+                className="btn-sm btn-ghost model-editor__wrap"
+                aria-pressed={wrap}
+                onClick={() => {
+                  setWrap(!wrap);
+                }}
+              >
+                <span aria-hidden="true">↵ </span>Wrap
+              </button>
+            ) : null}
+            <button
+              ref={popButton}
+              type="button"
+              className="btn-sm btn-ghost model-editor__pop"
+              aria-pressed={poppedOut}
+              title={poppedOut ? 'Put it back in its place' : 'Show it in a larger view'}
+              onClick={() => {
+                setPoppedOut(!poppedOut);
+              }}
+            >
+              <span aria-hidden="true">{poppedOut ? '⤡ ' : '⤢ '}</span>
+              {poppedOut ? 'Pop back in' : 'Pop out'}
+            </button>
+          </div>
+          <div className="model-editor__code">
+            {view === 'joins' && graph !== undefined ? (
+              <JoinEditor
+                graph={graph}
+                cube={cubeNames[0]}
+                cubes={cubeNames}
+                // Its cubes' files are this folder's (T342's review).
+                hrefOf={where.hrefOf}
+                // Locked as the form is (AC-135): an edit then would be written over the typing.
+                readOnly={readOnly}
+                onAdd={(name, join) => {
+                  const entry = cubes.find(({ value }) => value['name'] === name);
+                  if (entry === undefined) return false;
+                  const joins = Array.isArray(entry.value['joins'])
+                    ? (entry.value['joins'] as unknown[])
+                    : [];
+                  return (
+                    edit('cubes', entry.at, { ...entry.value, joins: [...joins, join] }) ===
+                    'applied'
+                  );
+                }}
+              />
+            ) : null}
+            {/* Hidden, not gone, while the diagram shows: its undo history stays. */}
+            <div className="model-editor__yaml-view" hidden={view !== 'yaml'}>
+              <YamlEditor
+                value={text}
+                onChange={(next) => {
+                  // Typing in the YAML answers a held or refused form edit: it was of the text before.
+                  setPending(null);
+                  setRefused(null);
+                  setText(next);
+                }}
+                label={`${path}, as YAML`}
+                // Shared, it is read, not typed in (T342): fixed for the editor's
+                // life, which is keyed by it.
+                readOnly={where.readOnly}
+                problems={listed}
+                goTo={goTo}
+                wrap={wrap}
+                tinted={tinted}
+                noted={noted}
+                flagged={flagged}
+                reveal={reveal}
+              />
+            </div>
+          </div>
+          {/* Docked beneath the code, its own scroll (AC-223). */}
+          <ProblemsPanel
+            path={path}
+            problems={listed}
+            cubeProblems={cubeProblems}
+            folders={folders.data ?? []}
+            folderId={where.folderId}
+            hrefOf={where.hrefOf}
+            onPick={(problem) => {
+              // To the YAML, where the problem is (the prototype's click does too).
+              setView('yaml');
+              setShown('yaml');
+              setGoTo({ at: problem.from });
+            }}
+          />
+        </PopOut>
       </section>
     </div>
   );
@@ -1450,7 +1491,11 @@ const GENERATING_KEY = ['generate-cubes-open'] as const;
  */
 export function generateFrom(
   queryClient: ReturnType<typeof useQueryClient>,
-  { source, target, signedIn }: {
+  {
+    source,
+    target,
+    signedIn,
+  }: {
     readonly source: string;
     readonly target?: string | undefined;
     readonly signedIn: boolean;
