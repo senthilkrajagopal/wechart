@@ -950,6 +950,13 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R62 — Cube Store's stop, as xcube can give it** (2026-10-04, the user)
+- xcube answered that Cube Store can't stop a running query. Its protocol and SQL have no cancel, and its only limit is the process-wide `CUBESTORE_QUERY_TIMEOUT`. `2099b13f2d` instead answers a stopped run at once with `stillRunning` and `endsBy`, keeps the run "stopping" until Cube Store ends it, and adds `GET …/sql/runs/{runId}` (`to-wechart/2026-10-04-1900-cube-store-cancel.md`).
+- Q: How should AC-378 stand for Cube Store? A: "Say it, and hold Run (Recommended)". *AC-378 is amended: the result says the query is still finishing in Cube Store until its end, and the next run waits. No deployment change. T548.*
+- *Claude's calls from T451's review, overturnable:*
+  - AC-322 is amended to R60's choice: a proposal refused when made is said in the Propose dialog as a count, and the breaks are named at a refused approval (state L) and in the audit trail.
+  - AC-189's amendment (R60) also drops the names marked on the rollup's row, which only the in-place save gave.
+
 **R61 — shared bookmarks, the credential tests, and moves in the audit trail** (2026-10-04, the user)
 - Q (from T367): a shared bookmark carries its owner's filter values and marks, including values on members a viewer's Cube rules hide (their queries still run as themselves). A: "Apply as saved". *No change: a shared bookmark applies as its owner saved it.*
 - Q (from T367): an owner who loses access to the dashboard leaves a shared bookmark nobody can unshare or delete. A: "Super-Admin can remove it (Recommended)". *A Super-Admin may delete any shared bookmark; it stays listed until then. AC-293 is amended; T580.*
