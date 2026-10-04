@@ -161,6 +161,7 @@ These are not criteria. Each needs either a spec decision or research before it 
   - They can be saved and applied, but not renamed or deleted, and no criterion asks for either.
   - They belong to a dashboard, shared by everyone, which only suits single-user phase 1. With users and groups (below), phase 2 should decide whose they are.
   - Two saves under one name at the same moment can both be kept. This was left as is, following the standing guidance not to harden concurrency.
+- **⌘K results grouped by kind** (UX-013's second half, the 2026-09-27 re-check's cleanup item 12; found by T478's review, 2026-10-04). The re-check recommends Dashboards, Charts and Models, then "Fields (_n_)" collapsed to 3, with the cube as a group rather than a detail line. T478 built only the first half: members and their cubes by title, never an id. No task or criterion asks for the grouping. AC-191 asks only that each result has its type.
 - **Copy link with marks is in the marking chip's menu only.** direction.md also lists it in the tile's ⋯ menu, whose order an e2e pins.
 - **A camelCase `preAggregations` key isn't read by the unknown-name check.** `rollupReferences.ts` (AC-189) reads only `pre_aggregations`. The join check (AC-235) reads both, since Cube accepts both.
 - **Cube's refusal names cubes, not rollups** (AC-235), so it is placed by matching cubes. When a cube's rollups fail on different cubes, Cube reports only the first, and a second publish shows the next.

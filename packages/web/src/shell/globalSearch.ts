@@ -17,7 +17,7 @@ export interface SearchResult {
   readonly key: string;
   readonly type: 'Dashboard' | 'Chart' | 'Measure' | 'Dimension' | 'Model file';
   readonly title: string;
-  /** A second line: a field's name and owner, or nothing. */
+  /** A second line: a field's cube or view, by title, and a folder's path; or nothing. */
   readonly detail?: string;
   readonly href: string;
 }
@@ -58,6 +58,10 @@ export interface SearchSources {
   readonly folders?: readonly FolderNode[];
 }
 
+/** An identifier in words, "sales_lines" as "Sales lines", for a name with no title. */
+const inWords = (name: string) =>
+  name.replace(/_/g, ' ').replace(/^./, (first) => first.toUpperCase());
+
 export function globalResults(text: string, sources: SearchSources): SearchResult[] {
   const needle = text.trim().toLowerCase();
   if (needle === '') return [];
@@ -96,23 +100,26 @@ export function globalResults(text: string, sources: SearchSources): SearchResul
       typeof xcube.shortName === 'string'
         ? { folderId: xcube.folderId, shortName: xcube.shortName }
         : undefined;
-    const kind = cube.type === 'view' ? 'view' : 'cube';
+    const kind = cube.type === 'view' ? 'View' : 'Cube';
     const folder = inFolder && sources.folders?.find((each) => each.xcubeId === inFolder.folderId);
-    const owner =
-      inFolder === undefined
-        ? `${kind} ${cube.name}`
+    // Its cube or view by title, and a folder's by its path too: never an id
+    // (T478, AC-220; UX-013, UX-102).
+    const cubeTitle = cube.title ?? inWords(inFolder?.shortName ?? cube.name);
+    const owner = [
+      `${kind} ${cubeTitle}`,
+      ...(folder === undefined
+        ? []
         : [
-            `${kind} ${cube.title ?? inFolder.shortName}`,
-            ...(folder === undefined
-              ? []
-              : [
-                  folderChain(sources.folders ?? [], folder.id)
-                    .map((crumb) => crumb.title)
-                    .join(' / '),
-                ]),
-          ].join(' · ');
+            folderChain(sources.folders ?? [], folder.id)
+              .map((crumb) => crumb.title)
+              .join(' / '),
+          ]),
+    ].join(' · ');
     const shown = (name: string) =>
       inFolder === undefined ? name : `${inFolder.shortName}${name.slice(cube.name.length)}`;
+    /** A member with no title, in words: its cube's title, then its own name. */
+    const titleOf = (member: MetaMember) =>
+      member.title ?? `${cubeTitle} ${inWords(member.name.slice(cube.name.length + 1))}`;
     const members = [
       ...(cube.measures ?? []).map((member) => ({ member, type: 'Measure' as const })),
       ...(cube.dimensions ?? []).map((member) => ({ member, type: 'Dimension' as const })),
@@ -124,8 +131,8 @@ export function globalResults(text: string, sources: SearchSources): SearchResul
       fields.push({
         key: `field:${member.name}`,
         type,
-        title: member.title ?? shown(member.name),
-        detail: `${shown(member.name)} · ${owner}`,
+        title: titleOf(member),
+        detail: owner,
         // A folder's cube, in its folder's model, whose files search doesn't
         // hold: never the root's Model workspace (T530, AC-222).
         href: folder ? modelHref(folder.id) : openFile(fileOf.get(cube.name)),

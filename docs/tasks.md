@@ -9993,11 +9993,23 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
   - Files: `packages/web/src/shell/formatTime.ts` (+ test), each date shown (Explore, Data sources, Jobs, a tile's badge and menu), `e2e/consistency.spec.ts`
   - Failing test: `consistency.spec.ts`, and `formatTime.test.ts`: recent times relative ("4 min ago"), older ones "Sep 27, 03:27", a clock "03:27", all on one 24-hour clock, each with its exact time in a tooltip (UX-110).
   - Depends on: T466
-- [ ] T478 (AC-187, AC-220) Members by title in the search palette and the query log
+- [x] T478 (AC-187, AC-220) Members by title in the search palette and the query log
   - Files: `packages/web/src/shell/SearchPalette.tsx`, `packages/web/src/workspaces/jobs/…` (+ tests), `e2e/consistency.spec.ts`
   - Failing test: `consistency.spec.ts`: the palette's field results and the query log name members by title, never by id (UX-102's parts AC-220 covers, UX-013, UX-082).
   - Depends on: T466
   - *2026-09-28:* the query log's half is built with T469 (its members by title, an unknown one as code). The palette is still to do.
+  - **Done 2026-10-04.** No AC changes: AC-220 was ticked by T403 and still holds, and AC-187 stays open for the rest of its list.
+    - **As built:** `packages/web/src/shell/globalSearch.ts` (+ test), not `SearchPalette.tsx`, which draws what it is given.
+      - A field result's detail line was "orders.count · cube orders". It is now its cube or view by title, "Cube Orders", with a folder cube's path after it: "Cube Orders · Shared / Sales".
+      - A cube, view or member with no title is said in words ("Sales lines"), never as its identifier.
+      - Fields are still found by their names, as AC-191 asks.
+    - **Tests:**
+      - `globalSearch.test.ts`: the detail by title, a cube with no title said in words, and no id anywhere in a result.
+      - `consistency.spec.ts` "members by title (UX-102)" (Chrome): "orders.count" finds "Measure · Orders Count · Cube Orders", and no field result shows an id.
+      - Two e2e assertions that pinned the old id detail now assert the title form: `search-palette.spec.ts` and `security/picker.spec.ts`.
+      - The query log's half is `jobs.spec.ts` "the query log is grouped by day, its members by title" (T469). It isn't repeated in consistency.spec.
+    - **The cold review (PASS, no real bugs):** a stale comment and a test name were corrected, and the picker spec's assertion pinned to the member again.
+    - **Not built:** UX-013's other half, results grouped by kind with "Fields (_n_)" collapsed to 3. No task or criterion asks for it; it is now in `docs/phase-2/backlog.md` §2.
 - [x] T467 (AC-036, AC-039, AC-042, AC-187) Fix the chart bugs the re-check found
   - Files: `packages/charts/src/…`, `packages/web/src/editor/…` (+ tests)
   - Failing test:

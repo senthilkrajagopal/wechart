@@ -65,12 +65,39 @@ describe('what the palette finds', () => {
     ).toEqual([['Model file', 'views/sales.yml']]);
   });
 
-  it('finds a field by its name as well as its title, and says where it lives', () => {
+  /**
+   * T478 (AC-220; UX-013, UX-102): found by its name as well as its title,
+   * but said by titles only: its cube or view by title, never an id.
+   */
+  it('finds a field by its name as well as its title, and says where it lives by title', () => {
     const byName = globalResults('sales.rev', { catalog: [], meta, files });
     expect(byName).toHaveLength(1);
     expect(byName[0]?.type).toBe('Measure');
-    expect(byName[0]?.detail).toBe('sales.revenue · view sales');
+    expect(byName[0]?.title).toBe('Sales Revenue');
+    expect(byName[0]?.detail).toBe('View Sales');
     expect(byName[0]?.href).toBe('/model/files/views%2Fsales.yml');
+  });
+
+  // T478: a cube without a title is said in words, never as its identifier.
+  it('says a cube with no title in words, and never shows a member’s or cube’s id', () => {
+    const untitled = {
+      cubes: [
+        {
+          name: 'sales_lines',
+          type: 'cube',
+          measures: [{ name: 'sales_lines.revenue', title: 'Sales lines Revenue' }],
+          dimensions: [{ name: 'sales_lines.order_date' }],
+        },
+      ],
+    };
+    const found = globalResults('sales', { catalog: [], meta: untitled, files: [] });
+    expect(found.map(({ title, detail }) => [title, detail])).toEqual([
+      ['Sales lines Revenue', 'Cube Sales lines'],
+      ['Sales lines Order date', 'Cube Sales lines'],
+    ]);
+    for (const result of found) {
+      expect(`${result.title} ${result.detail ?? ''}`).not.toMatch(/sales_lines|\w\.\w/);
+    }
   });
 
   it('leaves out a field the model keeps private', () => {
@@ -143,7 +170,7 @@ describe('a folder’s fields (T450)', () => {
       {
         type: 'Measure',
         title: 'Orders Count',
-        detail: 'orders.count · cube Orders · Shared / Sales',
+        detail: 'Cube Orders · Shared / Sales',
       },
     ]);
     // Found by its short name too, and by nothing that shows the prefix.
@@ -163,7 +190,7 @@ describe('a folder’s fields (T450)', () => {
 
   // Every item xcube serves carries `meta.xcube`; the root's is `froot`,
   // named as it was before folders (T450's review).
-  it('names a root item’s fields as before', () => {
+  it('names a root item’s fields with no folder path, its cube by title (T478)', () => {
     const atRoot = {
       cubes: [
         {
@@ -181,6 +208,6 @@ describe('a folder’s fields (T450)', () => {
       globalResults('count', { catalog: [], meta: atRoot, files: [], folders }).map(
         ({ detail }) => detail,
       ),
-    ).toEqual(['orders.count · cube orders']);
+    ).toEqual(['Cube Orders']);
   });
 });

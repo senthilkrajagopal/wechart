@@ -149,11 +149,13 @@ test('the palette finds fields and model files by type, and the arrows and Enter
   const file = results.getByRole('option', { name: /\bcubes\/orders\.yml$/ });
   await expect(file).toContainText('Model file');
 
-  // A field, by its name: typed, and saying where it lives.
+  // A field, by its name: typed, and saying where it lives, by its cube's
+  // title and its own, never by an id (T478, AC-220).
   await input.fill('total_amount');
   const field = results.getByRole('option').first();
   await expect(field).toContainText('Measure');
-  await expect(field).toContainText('orders.total_amount');
+  await expect(field).toHaveText(/^Measure(.+) Total AmountCube \1$/);
+  await expect(field).not.toContainText('total_amount');
 
   // The arrows move the active result, which the input names.
   await input.fill('orders');

@@ -174,3 +174,32 @@ test.describe('one dialog pattern (UX-106)', () => {
     expect((await typeOf(dialog)).title).toEqual({ size: '16px', weight: '600' });
   });
 });
+
+/**
+ * T478 (AC-220; UX-102, UX-013): members named by title wherever a person
+ * reads them. The ⌘K palette's field results: found by a member's name, but
+ * said by its title and its cube's, never an identifier. The query log's half
+ * is `jobs.spec.ts`'s "the query log is grouped by day, its members by title"
+ * (T469).
+ */
+test.describe('members by title (UX-102)', () => {
+  test('the search palette names fields and their cubes by title, never by id', async ({
+    page,
+  }) => {
+    await page.goto('/explore');
+    // The shortcut is bound once the app is mounted (search-palette.spec.ts).
+    await expect(page.getByRole('button', { name: /theme/i })).toBeVisible();
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k');
+    const palette = page.getByRole('dialog', { name: /search/i });
+    await palette.getByRole('combobox').fill('orders.count');
+    const fields = palette
+      .getByRole('listbox', { name: 'Search results' })
+      .getByRole('option')
+      .filter({ hasText: /^(Measure|Dimension)/ });
+    // The seeded `orders.count`: its type, its title, then its cube's.
+    await expect(fields.filter({ hasText: /^MeasureOrders CountCube Orders$/ })).toHaveCount(1);
+    // Others found by their names too ("monthly_orders.count"), each said by title.
+    expect(await fields.count()).toBeGreaterThan(1);
+    for (const text of await fields.allTextContents()) expect(text).not.toMatch(/[a-z]\.[a-z]|_/);
+  });
+});

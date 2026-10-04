@@ -152,9 +152,10 @@ test.describe('cubes bound and picked on a folder’s path (T429)', () => {
     const results = palette.getByRole('listbox', { name: 'Search results' });
     await expect(
       results.getByRole('option').filter({
-        // /A/B/C's own is found too: its path runs on past /A/B's.
+        // /A/B/C's own is found too: its path runs on past /A/B's. Its cube
+        // by title, never an id (T478, AC-220).
         hasText: new RegExp(
-          `picker_sales\\.count · cube Picker Sales · Shared / Picker A ${RUN} / Picker B ${RUN}$`,
+          `^MeasurePicker Sales CountCube Picker Sales · Shared / Picker A ${RUN} / Picker B ${RUN}$`,
         ),
       }),
     ).toHaveCount(1);
