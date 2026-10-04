@@ -237,19 +237,63 @@ describe('a run on Cube Store (T536, AC-384; design 15’s H3)', () => {
       ),
     ).toBe('This is a QUEUE command.');
   });
+});
 
-  it('says a run stopped at 30 seconds was left by xcube, for Cube Store to end: it has no cancel', () => {
+/**
+ * T548 (AC-378, AC-379; R62, "Say it, and hold Run"): Cube Store can't stop
+ * a query (xcube 2099b13f2d). A run stopped at 30 seconds runs on in it until
+ * its own timeout at the latest, which the result says, until it has ended.
+ */
+describe('a Cube Store run stopped but run on (T548, AC-378, AC-379)', () => {
+  const ENDS_BY = new Date(2026, 9, 1, 14, 34, 5).toISOString();
+  const stopped = (outcome: 'timeout' | 'cancelled'): SqlOutcome => ({
+    outcome,
+    durationMs: 32_004,
+    columns: [],
+    rows: [],
+    rowCount: 0,
+    truncated: 'stopped',
+    stillRunning: true,
+    endsBy: ENDS_BY,
+  });
+  const showOnCubeStore = (result: SqlOutcome, ended = false) =>
     render(
       <SqlResult
-        result={{ outcome: 'timeout', durationMs: 30_000 }}
+        result={result}
         sql="SELECT 1"
         startedAt={AT}
         onDownload={vi.fn()}
         onCubeStore
+        ended={ended}
       />,
     );
+
+  it('says the query is still finishing in Cube Store, until when at the latest, and that the next run waits', () => {
+    showOnCubeStore(stopped('timeout'));
+    expect(screen.getByTestId('sql-result-head').textContent).toContain('Stopped at 30 seconds');
     expect(screen.getByTestId('sql-result-note').textContent).toBe(
-      'The run hadn’t finished after 30 seconds, so xcube stopped waiting for it, and Cube Store ends the query at its own time limit. Nothing came back. Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.',
+      'The run hadn’t finished after 30 seconds, so wechart stopped waiting for it. Cube Store can’t stop a query, so it is still finishing this one, until 14:34:05 at the latest. Your next run waits until it has ended. Nothing came back. Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.',
+    );
+  });
+
+  it('says it has since ended, once it has', () => {
+    showOnCubeStore(stopped('timeout'), true);
+    expect(screen.getByTestId('sql-result-note').textContent).toBe(
+      'The run hadn’t finished after 30 seconds, so wechart stopped waiting for it. Cube Store can’t stop a query, so it finished this one on its own: it has since ended. Nothing came back. Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.',
+    );
+  });
+
+  it('says one stopped by an xcube that says nothing of its run on may still be finishing (T548’s review)', () => {
+    showOnCubeStore({ outcome: 'timeout', durationMs: 30_000 });
+    expect(screen.getByTestId('sql-result-note').textContent).toBe(
+      'The run hadn’t finished after 30 seconds, so wechart stopped waiting for it. Cube Store can’t stop a query, so it may still be finishing this one. Nothing came back. Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.',
+    );
+  });
+
+  it('says a cancelled one is still finishing too', () => {
+    showOnCubeStore(stopped('cancelled'));
+    expect(screen.getByTestId('sql-result-note').textContent).toBe(
+      'You cancelled the run, so wechart stopped waiting for it. Cube Store can’t stop a query, so it is still finishing this one, until 14:34:05 at the latest. Your next run waits until it has ended. Nothing came back.',
     );
   });
 });

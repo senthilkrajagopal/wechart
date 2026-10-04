@@ -578,6 +578,27 @@ describe('the SQL tab, the runner on (T535)', () => {
     await userEvent.click(within(note).getByRole('button', { name: 'Cancel that run' }));
     expect(asked.some((each) => each.url === '/api/sql-runs/cancel')).toBe(true);
   });
+
+  it('holds Run while the user’s last Cube Store run is still finishing there, saying until when (T548, AC-378, AC-379)', async () => {
+    serve({
+      going: {
+        dataSource: null,
+        cubeStore: true,
+        startedAt: '2026-10-01T14:40:02.000Z',
+        stopping: true,
+        endsBy: new Date(2026, 9, 1, 14, 42, 2).toISOString(),
+      },
+    });
+    open();
+    const note = await screen.findByTestId('sql-going-elsewhere');
+    expect(note.textContent).toBe(
+      'Cube Store is still finishing your last query, until 14:42:02 at the latest. One run at a time: your next one runs once it has ended.',
+    );
+    // Nothing to cancel, nor to go to: Cube Store can't stop it.
+    expect(within(note).queryByRole('button')).toBeNull();
+    expect(within(note).queryByRole('link')).toBeNull();
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
+  });
 });
 
 describe('the SQL tab, the runner off (T535, AC-373; design 15’s P1 and screen 2)', () => {

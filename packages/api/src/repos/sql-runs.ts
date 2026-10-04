@@ -119,7 +119,49 @@ export function sqlRuns(db: Kysely<Database>) {
           duration_ms: done.durationMs ?? null,
           truncated: done.truncated ?? null,
           statement: done.statement ?? null,
+          ends_by: done.endsBy ?? null,
         })
+        .where('id', '=', runId)
+        .where('finished_at', 'is', null)
+        .execute();
+    },
+
+    /**
+     * The user's runs stopped but run on in Cube Store, not yet said ended,
+     * newest first (T548, AC-378, AC-379): xcube says whether each has. One
+     * just past its end is among them: xcube follows it up to 5 s on, and its
+     * clock isn't the database's. One long past it is over, as a lost run is.
+     */
+    async stopping(userKey: string): Promise<StoppingRun[]> {
+      const rows = await db
+        .selectFrom('sql_runs')
+        .select(['id', 'data_source_id', 'started_at', 'ends_by'])
+        .where('user_key', '=', userKey)
+        .where('finished_at', 'is not', null)
+        .where('ends_by', '>', LOST_AFTER)
+        .orderBy('started_at', 'desc')
+        .execute();
+      return rows.map((row) => ({
+        runId: row.id,
+        dataSourceId: row.data_source_id,
+        startedAt: row.started_at,
+        endsBy: row.ends_by!,
+      }));
+    },
+
+    /** Ended in Cube Store, as xcube says: it holds its user up no more (T548). */
+    async ended(runId: string): Promise<void> {
+      await db.updateTable('sql_runs').set({ ends_by: null }).where('id', '=', runId).execute();
+    },
+
+    /**
+     * A run started but held back before it ran, gone unkept (T548): its
+     * user's last still runs on in Cube Store. Taken first, so a stop that
+     * finished their last as it started is seen. One that ran stays.
+     */
+    async release(runId: string): Promise<void> {
+      await db
+        .deleteFrom('sql_runs')
         .where('id', '=', runId)
         .where('finished_at', 'is', null)
         .execute();
@@ -202,6 +244,16 @@ export interface FinishedRun {
   readonly durationMs?: number | null;
   readonly truncated?: 'rows' | 'bytes' | null;
   readonly statement?: string | null;
+  /** A Cube Store run stopped but run on: when Cube Store ends it at the latest (T548). */
+  readonly endsBy?: Date | null;
+}
+
+/** A user's run stopped, which Cube Store runs on until `endsBy` at the latest (T548). */
+export interface StoppingRun {
+  readonly runId: string;
+  readonly dataSourceId: string | null;
+  readonly startedAt: Date;
+  readonly endsBy: Date;
 }
 
 /** A run counted lost: its instance never finished it. */

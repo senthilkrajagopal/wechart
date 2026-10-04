@@ -123,6 +123,14 @@ spec:
             # research cube/ha-topology.md §1, "Graceful stop").
             - name: CUBEJS_GRACEFUL_SHUTDOWN
               value: "15"
+            # Cube Store's own query timeout, which xcube can't read from it:
+            # a SQL run stopped on Cube Store runs on until it, and xcube says
+            # until when (T548, AC-378; research xcube-2099b13f2d.md). Unset
+            # on both, both are 120 s.
+            {{- with $.Values.cubestore.env.CUBESTORE_QUERY_TIMEOUT }}
+            - name: XCUBE_CUBESTORE_QUERY_TIMEOUT
+              value: {{ . | toString | quote }}
+            {{- end }}
             {{- end }}
           # With contextToAppId configured, as xcube's config() does,
           # /readyz answers once the server is up and tests nothing further;

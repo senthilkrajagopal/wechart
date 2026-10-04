@@ -141,6 +141,10 @@ services:
   cubestore:
     image: ${CUBESTORE_IMAGE:-cubejs/cubestore:v1.7.45-arm64v8}
     container_name: wechart-cubestore
+    # No CUBESTORE_QUERY_TIMEOUT: Cube Store's is 120 s unset, as xcube's
+    # XCUBE_CUBESTORE_QUERY_TIMEOUT is, which says until when a stopped SQL
+    # run runs on (T548; docs/research/xcube-2099b13f2d.md). Set one, set
+    # the other to match, on the cube service.
     environment:
       CUBESTORE_SERVER_NAME: cubestore:9999
     volumes:
@@ -167,15 +171,17 @@ services:
   # Cube Store, with its cancel (T532, R50; xcube-sql-runner.md); from
   # 6d9673ccda, a run stopped or cancelled answers the rows it read before
   # (T545; xcube-6d9673ccda.md); from 93a5f7a73b, introspection of a
-  # workspace overlay's own data source (T547; xcube-93a5f7a73b.md). The
-  # stored root `default` matches CUBEJS_DB_* above exactly, so the root's
+  # workspace overlay's own data source (T547; xcube-93a5f7a73b.md); from
+  # 2099b13f2d, a Cube Store run stopped or cancelled said still running
+  # until when, followed to its end, and each run's state (T548;
+  # xcube-2099b13f2d.md), with xcube's migration 13. The stored root `default` matches CUBEJS_DB_* above exactly, so the root's
   # cubes keep their names. The fork's CI publishes the image for amd64 and
   # arm64, pulled here by digest: its moving tag isn't a version.
   # The image's own CMD starts the package's server: give neither service a
   # `command`, or Cube starts without the routes. Cube and its refresh worker
   # run the same image.
   cube:
-    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-93a5f7a73b@sha256:3b8530173a367ae2c41cb22dc9430bd651f7cb5ae909f86a3912c6b84e86f9cd}
+    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-2099b13f2d@sha256:1e483afc30f1da9bcc58a0cc37e5ba96824c2f9fda709b2b2d699dcc768b2e12}
     container_name: wechart-cube
     depends_on: &cube-depends-on
       sample-db:
@@ -210,7 +216,7 @@ services:
   # "Topology"; pre-aggregations.md, "Observed locally"). A build asked for
   # through the jobs API runs in the API instance, though (upgrade-1.7.43.md).
   cube-refresh-worker:
-    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-93a5f7a73b@sha256:3b8530173a367ae2c41cb22dc9430bd651f7cb5ae909f86a3912c6b84e86f9cd}
+    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-2099b13f2d@sha256:1e483afc30f1da9bcc58a0cc37e5ba96824c2f9fda709b2b2d699dcc768b2e12}
     container_name: wechart-cube-refresh-worker
     depends_on: *cube-depends-on
     environment:

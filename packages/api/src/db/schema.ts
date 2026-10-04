@@ -289,6 +289,8 @@ export interface SqlRunTable {
   duration_ms: number | null;
   truncated: string | null;
   statement: string | null;
+  /** A Cube Store run stopped but run on: when it ends at the latest (T548). */
+  ends_by: Generated<Date | null>;
 }
 
 /** A version of a shared item wechart landed (T352, AC-288), a copy it holds. */

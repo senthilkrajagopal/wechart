@@ -189,6 +189,8 @@ describe('a run asked of xcube (T532)', () => {
         [2, null],
       ],
       rowCount: 2,
+      // A data source's stop is real: nothing runs on (T548).
+      endsBy: null,
     });
     expect(await run('cancelled')).toEqual({
       kind: 'stopped',
@@ -199,6 +201,7 @@ describe('a run asked of xcube (T532)', () => {
       columns: [],
       rows: [],
       rowCount: 0,
+      endsBy: null,
     });
     expect(await run('failed')).toEqual({
       kind: 'failed',
@@ -234,6 +237,86 @@ describe('a run asked of xcube (T532)', () => {
     await expect(
       runnerOn(stub, 'not-the-token').run({ connection: 'c' }, ASK),
     ).rejects.toBeInstanceOf(XcubeError);
+  });
+});
+
+describe('a Cube Store run stopped, and a run’s state (T548; xcube 2099b13f2d)', () => {
+  it('reads a stop Cube Store runs on: still running, until when at the latest', async () => {
+    const stub = fakeXcube();
+    stub.answerSql(() => ({
+      status: 422,
+      body: {
+        error:
+          "The statement ran past 30 s and was stopped; Cube Store can't stop a query, and runs it on until it ends, by 2026-10-04T18:02:36.304Z at the latest",
+        code: 'timeout',
+        statement: 'select',
+        redactedSql: 'SELECT ?',
+        durationMs: 32_004,
+        columns: [],
+        rows: [],
+        rowCount: 0,
+        truncated: 'stopped',
+        stillRunning: true,
+        endsBy: '2026-10-04T18:02:36.304Z',
+      },
+    }));
+    expect(await runnerOn(stub).run({ cubeStore: true }, ASK)).toEqual({
+      kind: 'stopped',
+      how: 'timeout',
+      statement: 'select',
+      redactedSql: 'SELECT ?',
+      durationMs: 32_004,
+      columns: [],
+      rows: [],
+      rowCount: 0,
+      endsBy: '2026-10-04T18:02:36.304Z',
+    });
+  });
+
+  it('reads a data source’s stop as ended: its stop is real', async () => {
+    const stub = fakeXcube();
+    stub.answerSql(() => ({
+      status: 422,
+      body: {
+        error: 'The run was cancelled',
+        code: 'cancelled',
+        statement: 'select',
+        redactedSql: 'SELECT ?',
+        durationMs: 10,
+        columns: [],
+        rows: [],
+        rowCount: 0,
+        truncated: 'stopped',
+      },
+    }));
+    expect(await runnerOn(stub).run({ connection: 'c' }, ASK)).toMatchObject({
+      kind: 'stopped',
+      endsBy: null,
+    });
+  });
+
+  it('asks a run’s state by its run id: running, stopping until when, or ended', async () => {
+    const stub = fakeXcube();
+    stub.answerSqlState((runId) =>
+      runId === 'finishing'
+        ? { state: 'stopping', endsBy: '2026-10-04T18:02:36.304Z' }
+        : { state: 'ended' },
+    );
+    const runner = runnerOn(stub);
+    expect(await runner.state('finishing')).toEqual({
+      state: 'stopping',
+      endsBy: '2026-10-04T18:02:36.304Z',
+    });
+    expect(stub.calls.at(-1)?.path).toBe(
+      `/cubejs-api/v1/semantic/models/${MODEL}/sql/runs/finishing`,
+    );
+    expect(stub.calls.at(-1)?.method).toBe('GET');
+    expect(await runner.state('done')).toEqual({ state: 'ended', endsBy: null });
+  });
+
+  it('throws where xcube won’t say a run’s state: no state is guessed', async () => {
+    const stub = fakeXcube();
+    await expect(runnerOn(stub, 'not-the-token').state('x')).rejects.toBeInstanceOf(XcubeError);
   });
 });
 

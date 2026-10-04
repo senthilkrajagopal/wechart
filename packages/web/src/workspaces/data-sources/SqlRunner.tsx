@@ -469,6 +469,8 @@ interface Shown {
   readonly result: SqlOutcome;
   readonly sql: string;
   readonly startedAt: Date;
+  /** When its answer came: what the page hears of its run after it is news (T548). */
+  readonly answeredAt: number;
 }
 
 interface Going {
@@ -476,7 +478,20 @@ interface Going {
   /** Cube Store's, which has no data source (T536). */
   readonly cubeStore?: boolean;
   readonly startedAt: string;
+  /**
+   * Their last run, stopped, which Cube Store runs on until `endsBy` at the
+   * latest: their next waits (T548, AC-378, AC-379; R62).
+   */
+  readonly stopping?: true;
+  readonly endsBy?: string;
 }
+
+const clockWithSeconds = (iso: string) =>
+  new Date(iso).toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 
 /** Once on (screen 1): where it runs, the warning, the editor, the result, and My runs. */
 function Runner({
@@ -516,7 +531,9 @@ function Runner({
     queryKey: ['sql-runs', 'going'],
     queryFn: async (): Promise<Going | null> => {
       const response = await fetch('/api/sql-runs/going');
-      if (!response.ok) return null;
+      // Not asked is not none going: what was heard last stands, so a run
+      // still finishing in Cube Store isn't said ended (T548's review).
+      if (!response.ok) throw new Error(`The run going wasn’t said (${String(response.status)}).`);
       return ((await response.json()) as { going: Going | null }).going;
     },
     refetchInterval: (query) => (query.state.data == null ? false : 3_000),
@@ -565,7 +582,7 @@ function Runner({
           error: 'No answer came back, so whether it ran isn’t known. Try again.',
         };
       }
-      setShown({ result, sql, startedAt });
+      setShown({ result, sql, startedAt, answeredAt: Date.now() });
       setRunning(null);
       setCancelFailed(null);
       setSaid(spokenOf(result, sql, source.cubeStore === true));
@@ -692,7 +709,16 @@ function Runner({
             </span>
           )}
         </p>
-        {elsewhere === null ? null : (
+        {elsewhere === null ? null : elsewhere.stopping === true ? (
+          // Nothing to cancel, nor to go to: Cube Store can't stop it (T548).
+          <p className="notebar sql-runner__elsewhere" data-testid="sql-going-elsewhere">
+            Cube Store is still finishing your last query
+            {elsewhere.endsBy === undefined
+              ? ''
+              : `, until ${clockWithSeconds(elsewhere.endsBy)} at the latest`}
+            . One run at a time: your next one runs once it has ended.
+          </p>
+        ) : (
           <p className="notebar sql-runner__elsewhere" data-testid="sql-going-elsewhere">
             You have a run going on{' '}
             {elsewhere.dataSource?.name ??
@@ -703,7 +729,7 @@ function Runner({
             ) : elsewhere.cubeStore === true && !onCubeStore ? (
               <a href={sqlTabHref(CUBE_STORE_ID)}>Go to it</a>
             ) : null}{' '}
-            {/* Cube Store's has no cancel: it stops at 30 seconds (research). */}
+            {/* Cube Store's has no cancel: it can't stop a query (T548; research). */}
             {elsewhere.cubeStore === true ? null : (
               <button type="button" className="btn-link" onClick={() => void cancel()}>
                 Cancel that run
@@ -744,7 +770,7 @@ function Runner({
               </span>
               {running === null ? null : (
                 <>
-                  {/* Cube Store has no cancel: xcube stops waiting at 30 s (research). */}
+                  {/* Cube Store can't stop a query: xcube stops waiting at 30 s (T548; research). */}
                   {onCubeStore ? null : (
                     <button type="button" className="btn" onClick={() => void cancel()}>
                       Cancel
@@ -790,6 +816,8 @@ function Runner({
             startedAt={shown.startedAt}
             onDownload={download}
             onCubeStore={onCubeStore}
+            // Heard since its answer: Cube Store's run on has ended (T548).
+            ended={going.dataUpdatedAt > shown.answeredAt && going.data?.stopping !== true}
           />
         )}
         <p className="visually-hidden" role="status" aria-live="polite">
@@ -841,9 +869,14 @@ function spokenOf(result: SqlOutcome, sql: string, onCubeStore: boolean): string
       const head = result.outcome === 'timeout' ? 'Stopped at 30 seconds' : 'Cancelled';
       const got = result.rowCount ?? result.rows?.length ?? 0;
       // With the rows that came back before the stop (T545).
-      return got === 0
-        ? head
-        : `${head}: ${got === 1 ? '1 row' : `${got.toLocaleString('en')} rows`} came back before it was stopped`;
+      const said =
+        got === 0
+          ? head
+          : `${head}: ${got === 1 ? '1 row' : `${got.toLocaleString('en')} rows`} came back before it was stopped`;
+      // And that Cube Store runs it on, until when at the latest (T548).
+      return result.stillRunning === true && result.endsBy !== undefined
+        ? `${said}. Cube Store is still finishing it, until ${clockWithSeconds(result.endsBy)} at the latest.`
+        : said;
     }
     default:
       return 'error' in result ? result.error : 'Not run';

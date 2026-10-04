@@ -152,6 +152,10 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
   /** How long a held run takes to be known, and so cancellable, after it arrives. */
   let sqlKnownAfterMs = 0;
   const sqlGoing = new Map<string, () => void>();
+  /** A run's state, as `GET …/sql/runs/{runId}` answers it (T548): `ended` unless told. */
+  let sqlState:
+    ((runId: string) => { state: 'running' | 'stopping' | 'ended'; endsBy?: string }) | undefined;
+  const sqlStatesAsked: string[] = [];
 
   const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), {
@@ -390,6 +394,20 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
           })),
         });
       }
+    }
+
+    /** A run's state (T548; xcube 2099b13f2d, research `xcube-2099b13f2d.md`). */
+    const stateRoute = /\/v1\/semantic\/models\/([^/]+)\/sql\/runs\/([^/]+)$/.exec(url.pathname);
+    if (stateRoute !== null && method === 'GET') {
+      const runId = decodeURIComponent(stateRoute[2]!);
+      sqlStatesAsked.push(runId);
+      if (sqlGoing.has(runId))
+        return answer(200, { model: decodeURIComponent(stateRoute[1]!), runId, state: 'running' });
+      return answer(200, {
+        model: decodeURIComponent(stateRoute[1]!),
+        runId,
+        ...(sqlState?.(runId) ?? { state: 'ended' }),
+      });
     }
 
     /** The SQL runner's routes (T532; research `xcube-sql-runner.md`). */
@@ -1033,6 +1051,12 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
     sqlKnownAfter: (ms: number) => {
       sqlKnownAfterMs = ms;
     },
+    /** How `GET …/sql/runs/{runId}` answers a run not held (T548): `ended` where none is given. */
+    answerSqlState: (answer: typeof sqlState) => {
+      sqlState = answer;
+    },
+    /** The run ids whose state was asked, in order. */
+    sqlStatesAsked: () => [...sqlStatesAsked],
     /** xcube's schema emptied and made again: a new generation, and no models. */
     recreate: () => {
       generation = randomUUID();

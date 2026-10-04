@@ -74,6 +74,12 @@ export type SqlAnswer =
       readonly columns: readonly SqlColumn[];
       readonly rows: readonly (readonly unknown[])[];
       readonly rowCount: number;
+      /**
+       * Where Cube Store runs it on, for it can't stop a query: when its own
+       * timeout ends it at the latest (`2099b13f2d`, T548; research
+       * xcube-2099b13f2d.md). Null where the stop is real, a data source's.
+       */
+      readonly endsBy: string | null;
     }
   /**
    * The database refused it, or couldn't be connected to. Its message may
@@ -96,10 +102,22 @@ export type SqlAnswer =
       readonly error: string;
     };
 
+/**
+ * A run's state on xcube (T548; `GET …/sql/runs/{runId}`, xcube 2099b13f2d):
+ * `stopping` is a Cube Store query stopped but run on, until `endsBy` at the
+ * latest; `ended` is ended, or never was.
+ */
+export interface SqlRunState {
+  readonly state: 'running' | 'stopping' | 'ended';
+  readonly endsBy: string | null;
+}
+
 export interface XcubeSqlRunner {
   run(target: SqlTarget, ask: SqlAsk): Promise<SqlAnswer>;
   /** Whether the run was going: it then answers `cancelled`. */
   cancel(runId: string): Promise<boolean>;
+  /** Its state, from any instance. */
+  state(runId: string): Promise<SqlRunState>;
 }
 
 /**
@@ -194,6 +212,7 @@ export function xcubeSqlRunner({
           columns,
           rows,
           rowCount,
+          endsBy: answer['stillRunning'] === true ? text(answer['endsBy']) : null,
         };
       if (
         (status === 422 && code === 'query_failed') ||
@@ -222,6 +241,25 @@ export function xcubeSqlRunner({
           `xcube answered ${String(status)} to a cancel`,
         );
       return answer['found'] === true;
+    },
+
+    async state(runId) {
+      const response = await send(`${base}/sql/runs/${encodeURIComponent(runId)}`, {
+        headers: { authorization: `Bearer ${await credential()}` },
+        signal: AbortSignal.timeout(CANCEL_TIMEOUT_MS),
+      });
+      const answer = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      const state = answer['state'];
+      if (
+        response.status !== 200 ||
+        (state !== 'running' && state !== 'stopping' && state !== 'ended')
+      )
+        throw new XcubeError(
+          response.status,
+          text(answer['code']) ?? undefined,
+          `xcube answered ${String(response.status)} when asked a run's state`,
+        );
+      return { state, endsBy: state === 'stopping' ? text(answer['endsBy']) : null };
     },
   };
 }

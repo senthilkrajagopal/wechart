@@ -66,14 +66,15 @@ cube:
   # once, its cubes keeping their names while it is at the target it was first
   # served with, from 919cff8c6e (T501, R38), the read-only SQL runner
   # from 89628a0e88 (T532, R50), a stopped run's rows from 6d9673ccda
-  # (T545), and a workspace overlay's data source's catalog from 93a5f7a73b
-  # (T547).
+  # (T545), a workspace overlay's data source's catalog from 93a5f7a73b
+  # (T547), and a Cube Store run stopped said still running until when,
+  # and each run's state, from 2099b13f2d (T548), with xcube's migration 13.
   # The seed Job stores the root `default` from `dataSource` below, the same
   # host, port, database and user Cube reads, so the root's cubes keep their
   # names: don't set those four again in `dataSource.env` or `seedFields`.
   # Published by the fork's CI for amd64 and arm64, and pinned by digest
   # (docs/deploy.md); a plain cubejs/cube image won't start with this cube.js.
-  image: ghcr.io/senthilkrajagopal/xcube:v1.7.45-93a5f7a73b@sha256:3b8530173a367ae2c41cb22dc9430bd651f7cb5ae909f86a3912c6b84e86f9cd
+  image: ghcr.io/senthilkrajagopal/xcube:v1.7.45-2099b13f2d@sha256:1e483afc30f1da9bcc58a0cc37e5ba96824c2f9fda709b2b2d699dcc768b2e12
   port: 4000
   # How long a Cube process may take to connect to xcube's schema, migrate it
   # and compile every model before it answers: its port stays closed until
@@ -131,7 +132,11 @@ cubestore:
   # Its metastore, cache store and pre-aggregations. Size it for the cluster.
   storage: 8Gi
   storageClassName: ''
-  # Anything else for Cube Store, e.g. CUBESTORE_LOG_LEVEL.
+  # Anything else for Cube Store, e.g. CUBESTORE_LOG_LEVEL. A
+  # CUBESTORE_QUERY_TIMEOUT here is given to xcube too, as
+  # XCUBE_CUBESTORE_QUERY_TIMEOUT, which must match it: a stopped SQL run
+  # runs on in Cube Store until it. Both are 120 s unset (T548;
+  # docs/research/xcube-2099b13f2d.md).
   env: {}
   resources: {}
 

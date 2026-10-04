@@ -12,10 +12,10 @@ import {
   type SqlRunnerSwitch,
   type SqlRunnerSwitchStore,
 } from '../repos/sql-runner-switches';
-import type { GoingRun, LostRun, SqlRunStore } from '../repos/sql-runs';
+import type { GoingRun, LostRun, SqlRunStore, StoppingRun } from '../repos/sql-runs';
 import { XcubeError } from '../xcube/client';
 import { connectionNameOf } from '../xcube/connections';
-import type { SqlAnswer, SqlTarget, XcubeSqlRunner } from '../xcube/sql-runner';
+import type { SqlAnswer, SqlRunState, SqlTarget, XcubeSqlRunner } from '../xcube/sql-runner';
 import { queryOf, tablesOf, type Catalog } from '../model/introspection';
 import type { DataSourceAccess } from './data-sources';
 import { copyRepointed } from './sql-runner-switch';
@@ -154,12 +154,37 @@ interface RunAt {
 const CUBE_STORE_ITEM = { kind: 'cube-store', id: CUBE_STORE_TARGET, title: 'Cube Store' };
 const CUBE_STORE_ONLY_READS =
   'On Cube Store, only SELECT and EXPLAIN run, one statement at a time.';
-/** Cube Store has no cancel: xcube stops waiting at the clock (research `xcube-sql-runner.md`). */
-const CUBE_STORE_STOPPED =
-  'Stopped at 30 seconds: xcube stopped waiting for it, and Cube Store ends the query at its own time limit.';
+/**
+ * Cube Store can't stop a query: a run stopped at its cap, or cancelled, runs
+ * on in it until its own timeout at the latest, `endsBy` (T548, AC-378; R62;
+ * xcube 2099b13f2d, research `xcube-2099b13f2d.md`).
+ */
+const CUBE_STORE_RUNS_ON = 'Cube Store can’t stop a query, so it is still finishing this one.';
+/** A stop from an xcube that says nothing of its run on: an image before 2099b13f2d (T548's review). */
+const CUBE_STORE_MAY_RUN_ON =
+  'Cube Store can’t stop a query, so it may still be finishing this one.';
+/**
+ * A Cube Store run xcube didn't answer may run on to Cube Store's own
+ * timeout, 120 s unset (research xcube-2099b13f2d.md): until then at the
+ * latest where xcube can't say, the user's next run waits (T548's review).
+ */
+const CUBE_STORE_TIMEOUT_MS = 120_000;
+/** Its user's next run waits until it has ended (T548, AC-378, AC-379; R62). */
+const CUBE_STORE_FINISHING =
+  'Cube Store is still finishing your last query. One run at a time: your next one runs once it has ended.';
 const CUBE_STORE_OFF =
   'The SQL runner is off for Cube Store: a Super-Admin turns it on in Data sources.';
 const NO_CUBE_STORE = 'There’s no such data source, or it isn’t yours to see.';
+
+/**
+ * When a stopped run that runs on ends at the latest, as xcube says; none
+ * where its stop is real, or xcube's time can't be read (T548).
+ */
+function endOf(answer: Extract<SqlAnswer, { kind: 'stopped' }>): Date | null {
+  if (answer.endsBy === null) return null;
+  const endsBy = new Date(answer.endsBy);
+  return Number.isNaN(endsBy.getTime()) ? null : endsBy;
+}
 
 /** A run's answer, as the browser is given it: never its redacted SQL, which history keeps (T534). */
 function replyOf(answer: SqlAnswer, onCubeStore = false): RunReply {
@@ -187,13 +212,17 @@ function replyOf(answer: SqlAnswer, onCubeStore = false): RunReply {
           statement: answer.statement,
         },
       };
-    case 'stopped':
+    case 'stopped': {
+      const endsBy = onCubeStore ? endOf(answer) : null;
       return {
         status: 422,
         body: {
           outcome: answer.how,
-          error:
-            answer.how === 'timeout' ? (onCubeStore ? CUBE_STORE_STOPPED : STOPPED) : CANCELLED,
+          error: onCubeStore
+            ? `${answer.how === 'timeout' ? 'Stopped at 30 seconds' : 'Cancelled'}: ${endsBy !== null ? CUBE_STORE_RUNS_ON : CUBE_STORE_MAY_RUN_ON}`
+            : answer.how === 'timeout'
+              ? STOPPED
+              : CANCELLED,
           durationMs: answer.durationMs,
           // The rows read before the stop, marked so (T545, AC-378, AC-379; Q6).
           columns: answer.columns,
@@ -201,8 +230,11 @@ function replyOf(answer: SqlAnswer, onCubeStore = false): RunReply {
           rowCount: answer.rowCount,
           truncated: 'stopped',
           statement: answer.statement,
+          // Still running in Cube Store, until when at the latest (T548).
+          ...(endsBy === null ? {} : { stillRunning: true, endsBy: endsBy.toISOString() }),
         },
       };
+    }
     case 'failed':
       return {
         status: answer.code === 'connect_failed' ? 502 : 422,
@@ -433,7 +465,27 @@ export function registerSqlRunner(
           going,
         });
       }
+      // Their last, stopped, still running in Cube Store: this one waits
+      // (T548, AC-378, AC-379; R62). Asked once this one is taken, so a stop
+      // that finished their last as it started is seen.
+      let finishing: StoppingRun | undefined;
+      try {
+        finishing = await stillFinishing(request, options.xcube);
+      } catch (error) {
+        // Not left taken: it never ran (T548's review).
+        await runs.release(runId).catch(() => undefined);
+        throw error;
+      }
+      if (finishing !== undefined) {
+        await runs.release(runId);
+        return reply.status(409).send({
+          outcome: 'going',
+          error: CUBE_STORE_FINISHING,
+          going: await stoppingView(finishing),
+        });
+      }
     }
+    const startedAt = Date.now();
     let answer: SqlAnswer | undefined;
     let said: RunReply;
     /** Why there is no answer of xcube's: it refused the request, didn't answer in time, or wasn't reached. */
@@ -472,6 +524,14 @@ export function registerSqlRunner(
     }
     const outcome = said.body.outcome;
     const ran = answer?.kind === 'ran' ? answer : undefined;
+    // A stopped run Cube Store runs on: until when at the latest (T548). One
+    // xcube didn't answer may run on too: xcube says, or its timeout bounds it.
+    const endsBy =
+      answer?.kind === 'stopped' && onCubeStore
+        ? endOf(answer)
+        : onCubeStore && (unanswered === 'late' || unanswered === 'away')
+          ? new Date(startedAt + CUBE_STORE_TIMEOUT_MS)
+          : null;
     const done = {
       outcome,
       // A stopped run's too: the rows it read before its stop (T545).
@@ -480,6 +540,7 @@ export function registerSqlRunner(
         answer !== undefined && 'durationMs' in answer ? (answer.durationMs ?? null) : null,
       truncated: ran?.truncated ?? null,
       statement: answer !== undefined && 'statement' in answer ? answer.statement : null,
+      ...(endsBy === null ? {} : { endsBy }),
     };
     // Done before it is answered, so the next run never overlaps it (T533's review).
     await runs?.finish(runId, done).catch((error: unknown) => {
@@ -801,10 +862,51 @@ export function registerSqlRunner(
     };
   };
 
-  /** The user's run going, if any (T533; design 15, D2): any of their pages may ask. */
+  /** Their last, stopped but still running in Cube Store, as the user is shown it (T548). */
+  const stoppingView = async (stopping: StoppingRun) => ({
+    ...(await goingView(stopping)),
+    stopping: true as const,
+    endsBy: stopping.endsBy.toISOString(),
+  });
+
+  /**
+   * The user's last run, stopped but still running in Cube Store (T548,
+   * AC-378, AC-379; R62): while xcube says it hasn't ended, or, where xcube
+   * can't say, until its end at the latest. One xcube says ended holds no
+   * one up again.
+   */
+  const stillFinishing = async (
+    request: FastifyRequest,
+    xcube: XcubeSqlRunner | undefined,
+  ): Promise<StoppingRun | undefined> => {
+    if (runs === undefined) return undefined;
+    for (const stopping of await runs.stopping(userKeyOf(request))) {
+      let state: SqlRunState['state'] | undefined;
+      try {
+        state = (await xcube?.state(stopping.runId))?.state;
+      } catch (error) {
+        request.log.warn({ err: error }, 'could not ask xcube whether a Cube Store run has ended');
+      }
+      if (state === 'ended') {
+        await runs.ended(stopping.runId);
+        continue;
+      }
+      if (state === undefined && stopping.endsBy.getTime() <= Date.now()) continue;
+      return stopping;
+    }
+    return undefined;
+  };
+
+  /**
+   * The user's run going, if any (T533; design 15, D2): any of their pages
+   * may ask. Else their last, stopped but still running in Cube Store, which
+   * holds their next (T548).
+   */
   app.get('/api/sql-runs/going', USER, async (request) => {
     const going = await runs?.going(userKeyOf(request));
-    return { going: going === undefined ? null : await goingView(going) };
+    if (going !== undefined) return { going: await goingView(going) };
+    const finishing = await stillFinishing(request, runner?.xcube);
+    return { going: finishing === undefined ? null : await stoppingView(finishing) };
   });
 
   /**
@@ -857,6 +959,7 @@ function summaryOf(
     readonly rowCount: number | null;
     readonly durationMs: number | null;
     readonly truncated: 'rows' | 'bytes' | null;
+    readonly endsBy?: Date;
   },
   unanswered?: 'refused' | 'late' | 'away',
 ): string {
@@ -882,8 +985,13 @@ function summaryOf(
     }
     case 'stopped': {
       const head = answer.how === 'timeout' ? 'Stopped at 30 seconds' : 'Cancelled';
-      // With the rows read before the stop, where any were (T545).
-      return answer.rowCount > 0 ? `${head} · ${rowsText(answer.rowCount)}` : head;
+      // With the rows read before the stop, where any were (T545), and
+      // whether Cube Store runs it on (T548).
+      return [
+        head,
+        ...(answer.rowCount > 0 ? [rowsText(answer.rowCount)] : []),
+        ...(done.endsBy === undefined ? [] : ['Cube Store runs it on']),
+      ].join(' · ');
     }
     case 'failed':
       return answer.code === 'connect_failed' ? 'Not run · couldn’t connect' : 'Database error';

@@ -37,6 +37,12 @@ export type SqlOutcome =
       readonly rows?: readonly (readonly unknown[])[];
       readonly rowCount?: number;
       readonly truncated?: 'stopped';
+      /**
+       * On Cube Store, which can't stop a query: it runs on until `endsBy` at
+       * the latest (T548, AC-378; xcube `2099b13f2d`).
+       */
+      readonly stillRunning?: true;
+      readonly endsBy?: string;
     }
   | {
       readonly outcome: 'refused';
@@ -216,6 +222,7 @@ export function SqlResult({
   startedAt,
   onDownload,
   onCubeStore = false,
+  ended = false,
 }: {
   result: SqlOutcome;
   /** The SQL it ran, for a refusal's words. */
@@ -224,6 +231,8 @@ export function SqlResult({
   onDownload: () => void;
   /** Run on Cube Store (T536): no cancel, and commands, not statements. */
   onCubeStore?: boolean;
+  /** Stopped but run on in Cube Store, it has since ended, as xcube says (T548). */
+  ended?: boolean;
 }) {
   const at = `at ${clock(startedAt)}`;
   switch (result.outcome) {
@@ -281,13 +290,22 @@ export function SqlResult({
         : result.durationMs === null
           ? 'Cancelled'
           : `Cancelled after ${(result.durationMs / 1000).toFixed(1)} s`;
-      const why = timedOut
-        ? `The run hadn’t finished after 30 seconds, so ${
-            onCubeStore
-              ? 'xcube stopped waiting for it, and Cube Store ends the query at its own time limit'
-              : 'it was stopped on the database'
-          }.`
-        : 'You cancelled the run, and it was stopped on the database.';
+      // Cube Store can't stop a query: it runs on until its end at the latest,
+      // which is said, until it has ended (T548, AC-378; R62).
+      const endsBy = result.stillRunning === true ? result.endsBy : undefined;
+      const why =
+        endsBy !== undefined
+          ? `${timedOut ? 'The run hadn’t finished after 30 seconds' : 'You cancelled the run'}, so wechart stopped waiting for it. Cube Store can’t stop a query, so ${
+              ended
+                ? 'it finished this one on its own: it has since ended.'
+                : `it is still finishing this one, until ${clock(new Date(endsBy))} at the latest. Your next run waits until it has ended.`
+            }`
+          : onCubeStore
+            ? // An xcube that says nothing of its run on (T548's review).
+              `${timedOut ? 'The run hadn’t finished after 30 seconds' : 'You cancelled the run'}, so wechart stopped waiting for it. Cube Store can’t stop a query, so it may still be finishing this one.`
+            : timedOut
+              ? 'The run hadn’t finished after 30 seconds, so it was stopped on the database.'
+              : 'You cancelled the run, and it was stopped on the database.';
       const got = result.rows ?? [];
       if (got.length === 0)
         return (

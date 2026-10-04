@@ -24,6 +24,61 @@ afterAll(async () => {
   await closeDb();
 });
 
+describe('a Cube Store run stopped but run on (T548, AC-378, AC-379)', () => {
+  it('keeps when Cube Store ends it at the latest, says it of its user until then, and forgets it once ended', async () => {
+    const user = userOf();
+    const stopped = randomUUID();
+    await runs().start({ runId: stopped, userKey: user, dataSourceId: null });
+    const endsBy = new Date(Date.now() + 90_000);
+    await runs().finish(stopped, { outcome: 'timeout', rowCount: 0, endsBy });
+    // Finished as a run: nothing goes, but Cube Store runs it on.
+    expect(await runs().going(user)).toBeUndefined();
+    expect(await runs().stopping(user)).toEqual([
+      { runId: stopped, dataSourceId: null, startedAt: expect.any(Date), endsBy },
+    ]);
+    // Another user's isn't theirs.
+    expect(await runs().stopping(userOf())).toEqual([]);
+
+    await runs().ended(stopped);
+    expect(await runs().stopping(user)).toEqual([]);
+  });
+
+  it('lets a run held back before it ran go, unkept, so its user may run again', async () => {
+    const user = userOf();
+    const held = randomUUID();
+    await runs().start({ runId: held, userKey: user, dataSourceId: null, sql: 'SELECT 1' });
+    await runs().release(held);
+    expect(await runs().going(user)).toBeUndefined();
+    expect((await runs().list({ userKey: user })).runs).toEqual([]);
+    // One that ran isn't let go.
+    const ran = randomUUID();
+    await runs().start({ runId: ran, userKey: user, dataSourceId: null });
+    await runs().finish(ran, { outcome: 'finished' });
+    await runs().release(ran);
+    expect((await runs().list({ userKey: user })).runs.map((run) => run.id)).toEqual([ran]);
+  });
+
+  it('says one just past its end, which xcube may still be following, and none long past it', async () => {
+    const user = userOf();
+    const [justPast, longPast] = [randomUUID(), randomUUID()];
+    const justPastEnd = new Date(Date.now() - 1_000);
+    await runs().start({ runId: justPast, userKey: user, dataSourceId: null });
+    await runs().finish(justPast, { outcome: 'timeout', rowCount: 0, endsBy: justPastEnd });
+    expect(await runs().stopping(user)).toEqual([
+      { runId: justPast, dataSourceId: null, startedAt: expect.any(Date), endsBy: justPastEnd },
+    ]);
+    await runs().ended(justPast);
+
+    await runs().start({ runId: longPast, userKey: user, dataSourceId: null });
+    await runs().finish(longPast, {
+      outcome: 'timeout',
+      rowCount: 0,
+      endsBy: new Date(Date.now() - 10 * 60_000),
+    });
+    expect(await runs().stopping(user)).toEqual([]);
+  });
+});
+
 describe('a user’s SQL runs going (T533, AC-379)', () => {
   it('starts one, refuses a second while it goes, naming the first, and starts again once it is done', async () => {
     const user = userOf();

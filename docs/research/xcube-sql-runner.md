@@ -88,7 +88,7 @@ The same request and answer, on Cube Store [answer, "The routes"; Q5]:
 - **Only SELECT and EXPLAIN (without ANALYZE).** SHOW and DESCRIBE are refused: 1.7.45 has no `SHOW TABLES`, `SHOW SCHEMAS` or `DESCRIBE`, and its other SHOWs answer every row uncapped. The refusal points to `information_schema.tables`/`columns` and `system.tables`/`partitions`/`chunks`/`indexes` with a LIMIT.
 - **Refused:** `system.cache`, `system.queue` and `system.queue_results`, and cache, queue, `SYS` and `DUMP` commands.
 - **The row cap** is its own top-level `LIMIT`, added or lowered to the cap plus one.
-- **No cancel:** at the clock, xcube answers `timeout` and drops its connection; Cube Store's own `CUBESTORE_QUERY_TIMEOUT` (120 s) stops the query.
+- **No cancel:** at the clock, xcube answers `timeout` and drops its connection; Cube Store's own `CUBESTORE_QUERY_TIMEOUT` (120 s) stops the query. *From `2099b13f2d`, xcube says so (`stillRunning`, `endsBy`) and follows the query to its end: see `xcube-2099b13f2d.md`.*
 - **Values come as strings, and `type` is `null`.** A SELECT with no rows has no columns.
 - **The route is under a model,** but Cube Store holds every model's rollups.
 

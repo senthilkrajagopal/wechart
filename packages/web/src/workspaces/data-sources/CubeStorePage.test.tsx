@@ -12,6 +12,8 @@ import { CubeStorePage } from './CubeStorePage';
  * holds every folder's rollups, for SELECT and EXPLAIN only.
  */
 type Answer = { status: number; body: unknown };
+/** `/api/sql-runs/going` failing, as `going` may say (T548's review). */
+const GOING_FAILS = Symbol('going fails');
 function serve({
   state = {
     status: 200,
@@ -23,7 +25,13 @@ function serve({
     },
   } as Answer,
   answers = [] as Answer[],
-}: { state?: Answer; answers?: Answer[] } = {}) {
+  going = () => null,
+}: {
+  state?: Answer;
+  answers?: Answer[];
+  /** The user's run going, as `/api/sql-runs/going` says it each time it is asked. */
+  going?: () => unknown;
+} = {}) {
   const asked: { url: string; method: string; body: unknown }[] = [];
   vi.stubGlobal(
     'fetch',
@@ -50,7 +58,12 @@ function serve({
       }
       if (url === '/api/cube-store/sql-runner' && method === 'PUT')
         return Response.json({ on: (body as { on: boolean }).on });
-      if (url === '/api/sql-runs/going') return Response.json({ going: null });
+      if (url === '/api/sql-runs/going') {
+        const now = going();
+        return now === GOING_FAILS
+          ? Response.json({ error: 'Boom' }, { status: 500 })
+          : Response.json({ going: now });
+      }
       if (url.startsWith('/api/sql-runs')) return Response.json({ runs: [] });
       return new Response(null, { status: 404 });
     }),
@@ -161,7 +174,23 @@ describe('Cube Store’s page (T536, AC-384; design 15’s state H)', () => {
   it('offers no Cancel while a run goes: Cube Store has none, and the run stops at 30 seconds', async () => {
     let finish: (answer: Answer) => void = () => undefined;
     const pending = new Promise<Answer>((resolve) => (finish = resolve));
-    serve();
+    const endsBy = new Date(2026, 9, 4, 18, 2, 36).toISOString();
+    /** The user's last run, once stopped: run on in Cube Store, then ended (T548). */
+    let state: 'none' | 'stopping' | 'failing' | 'ended' = 'none';
+    serve({
+      going: () =>
+        state === 'failing'
+          ? GOING_FAILS
+          : state === 'stopping'
+            ? {
+                dataSource: null,
+                cubeStore: true,
+                startedAt: '2026-10-04T18:00:36.000Z',
+                stopping: true,
+                endsBy,
+              }
+            : null,
+    });
     const fetched = vi.mocked(fetch);
     const answered = fetched.getMockImplementation()!;
     fetched.mockImplementation(async (input, init) =>
@@ -178,21 +207,74 @@ describe('Cube Store’s page (T536, AC-384; design 15’s state H)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Run' }));
     await screen.findByRole('button', { name: 'Running…' });
     expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+    state = 'stopping';
     finish({
       status: 422,
       body: {
         outcome: 'timeout',
         error:
-          'Stopped at 30 seconds: xcube stopped waiting for it, and Cube Store ends the query at its own time limit.',
-        durationMs: 30_000,
+          'Stopped at 30 seconds: Cube Store can’t stop a query, so it is still finishing this one.',
+        durationMs: 32_004,
+        columns: [],
+        rows: [],
+        rowCount: 0,
+        truncated: 'stopped',
+        statement: 'select',
+        stillRunning: true,
+        endsBy,
       },
     });
+    // T548 (AC-378, AC-379; R62): said still finishing, until when, and Run held.
     await waitFor(() => {
       expect(screen.getByTestId('sql-result-note').textContent).toBe(
-        'The run hadn’t finished after 30 seconds, so xcube stopped waiting for it, and Cube Store ends the query at its own time limit. Nothing came back. Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.',
+        'The run hadn’t finished after 30 seconds, so wechart stopped waiting for it. Cube Store can’t stop a query, so it is still finishing this one, until 18:02:36 at the latest. Your next run waits until it has ended. Nothing came back. Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.',
       );
     });
-  });
+    expect(container.querySelector('[role="status"][aria-live="polite"]')?.textContent).toBe(
+      'Stopped at 30 seconds. Cube Store is still finishing it, until 18:02:36 at the latest.',
+    );
+    const held = await screen.findByTestId('sql-going-elsewhere');
+    expect(held.textContent).toBe(
+      'Cube Store is still finishing your last query, until 18:02:36 at the latest. One run at a time: your next one runs once it has ended.',
+    );
+    expect(within(held).queryByRole('button')).toBeNull();
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
+
+    // The page unable to ask: nothing said ended, and Run still held (T548's review).
+    let asked = 0;
+    state = 'failing';
+    const fails = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      if (String(input) === '/api/sql-runs/going') asked += 1;
+      return fails(input, init);
+    });
+    await waitFor(
+      () => {
+        expect(asked).toBeGreaterThan(0);
+      },
+      { timeout: 5_000 },
+    );
+    expect(screen.getByTestId('sql-result-note').textContent).toBe(
+      'The run hadn’t finished after 30 seconds, so wechart stopped waiting for it. Cube Store can’t stop a query, so it is still finishing this one, until 18:02:36 at the latest. Your next run waits until it has ended. Nothing came back. Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.',
+    );
+    expect(screen.getByTestId('sql-going-elsewhere').textContent).toBe(
+      'Cube Store is still finishing your last query, until 18:02:36 at the latest. One run at a time: your next one runs once it has ended.',
+    );
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(true);
+
+    // Ended, as xcube says: Run is offered again, and the result says so.
+    state = 'ended';
+    await waitFor(
+      () => {
+        expect(screen.queryByTestId('sql-going-elsewhere')).toBeNull();
+      },
+      { timeout: 5_000 },
+    );
+    expect((screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByTestId('sql-result-note').textContent).toBe(
+      'The run hadn’t finished after 30 seconds, so wechart stopped waiting for it. Cube Store can’t stop a query, so it finished this one on its own: it has since ended. Nothing came back. Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.',
+    );
+  }, 15_000);
 
   it('is not there for one it isn’t for', async () => {
     serve({

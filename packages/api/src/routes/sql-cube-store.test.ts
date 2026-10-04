@@ -183,6 +183,7 @@ afterAll(async () => {
 
 beforeEach(() => {
   stub.answerSql(undefined);
+  stub.answerSqlState(undefined);
 });
 
 const as = (who: string, options: InjectOptions) =>
@@ -375,6 +376,289 @@ describe('Cube Store, listed and run (T536, AC-384; design 15’s state H and Q7
         },
       });
     } finally {
+      await turn('super', { on: false });
+    }
+  });
+});
+
+/**
+ * T548 (AC-378, AC-379; R62, "Say it, and hold Run"): Cube Store can't stop
+ * a query (xcube 2099b13f2d, research xcube-2099b13f2d.md). A run stopped at
+ * its cap answers at once, with `stillRunning` and `endsBy`; it is said so,
+ * and its user's next run waits while xcube says it is stopping.
+ */
+describe('a Cube Store run stopped but run on (T548, AC-378, AC-379)', () => {
+  const ENDS_BY = () => new Date(Date.now() + 90_000).toISOString();
+  /** The stub's stop of a Cube Store run, as 2099b13f2d answers one at its cap. */
+  const stopsRunningOn = (endsBy: string) => {
+    stub.answerSql((ask) =>
+      'cubeStore' in ask.target && ask.sql.includes('slow')
+        ? {
+            status: 422,
+            body: {
+              error: `The statement ran past 30 s and was stopped; Cube Store can't stop a query, and runs it on until it ends, by ${endsBy} at the latest`,
+              code: 'timeout',
+              statement: 'select',
+              redactedSql: 'SELECT ?',
+              durationMs: 32_004,
+              columns: [],
+              rows: [],
+              rowCount: 0,
+              truncated: 'stopped',
+              stillRunning: true,
+              endsBy,
+            },
+          }
+        : undefined,
+    );
+  };
+  /** Its runs this file made, ended: none holds another file's run up. */
+  const endAll = () =>
+    getDb()
+      .updateTable('sql_runs')
+      .set({ ends_by: null })
+      .where('sql', 'like', `%${MARK}%`)
+      .execute();
+
+  it('says a stopped run is still finishing in Cube Store and until when, and holds its user’s next run while xcube says so', async () => {
+    await turnOn();
+    await switches().on(source, { key: 'super', name: 'Super' });
+    const endsBy = ENDS_BY();
+    stopsRunningOn(endsBy);
+    try {
+      const stopped = await run('super', `SELECT 'slow ${MARK}'`);
+      expect(stopped.statusCode, stopped.body).toBe(422);
+      expect(stopped.json()).toEqual({
+        outcome: 'timeout',
+        error:
+          'Stopped at 30 seconds: Cube Store can’t stop a query, so it is still finishing this one.',
+        durationMs: 32_004,
+        columns: [],
+        rows: [],
+        rowCount: 0,
+        truncated: 'stopped',
+        statement: 'select',
+        stillRunning: true,
+        endsBy,
+      });
+      const [stoppedId] = stub
+        .sqlAsked()
+        .slice(-1)
+        .map((ask) => ask.runId);
+      stub.answerSqlState((runId) =>
+        runId === stoppedId ? { state: 'stopping', endsBy } : { state: 'ended' },
+      );
+
+      // Held: on Cube Store, and on a data source alike, nothing reaching xcube's runs.
+      const before = stub.sqlAsked().length;
+      for (const next of [
+        () => run('super', `SELECT 'next ${MARK}'`),
+        () =>
+          as('super', {
+            method: 'POST',
+            url: `/api/data-sources/${source}/sql`,
+            payload: { sql: `SELECT 'next ${MARK}'` },
+          }),
+      ]) {
+        const held = await next();
+        expect(held.statusCode, held.body).toBe(409);
+        expect(held.json()).toEqual({
+          outcome: 'going',
+          error:
+            'Cube Store is still finishing your last query. One run at a time: your next one runs once it has ended.',
+          going: {
+            dataSource: null,
+            cubeStore: true,
+            startedAt: expect.any(String),
+            stopping: true,
+            endsBy,
+          },
+        });
+      }
+      expect(stub.sqlAsked()).toHaveLength(before);
+      expect(stub.sqlStatesAsked()).toContain(stoppedId);
+      // The page is told so, to hold Run and say until when.
+      expect((await as('super', { method: 'GET', url: '/api/sql-runs/going' })).json()).toEqual({
+        going: {
+          dataSource: null,
+          cubeStore: true,
+          startedAt: expect.any(String),
+          stopping: true,
+          endsBy,
+        },
+      });
+      // Another user isn't held by it.
+      const writersRun = await as('writer', {
+        method: 'POST',
+        url: `/api/data-sources/${source}/sql`,
+        payload: { sql: `SELECT 'writer ${MARK}'` },
+      });
+      expect(writersRun.statusCode, writersRun.body).toBe(200);
+
+      // Ended, as xcube says: the next run runs, and nothing is said going.
+      stub.answerSqlState(() => ({ state: 'ended' }));
+      expect((await run('super', `SELECT 'after ${MARK}'`)).statusCode).toBe(200);
+      expect((await as('super', { method: 'GET', url: '/api/sql-runs/going' })).json()).toEqual({
+        going: null,
+      });
+      // Its event keeps its end at the latest.
+      const event = (await cubeStoreEvents()).find(
+        (record) => record.event === 'sql-run' && record.details?.['endsBy'] === endsBy,
+      );
+      expect(event).toMatchObject({
+        summary: 'Stopped at 30 seconds · Cube Store runs it on',
+        details: { outcome: 'timeout', rowCount: 0, endsBy },
+      });
+    } finally {
+      await endAll();
+      await switches().off(source);
+      await turn('super', { on: false });
+    }
+  });
+
+  it('says a cancelled run is still finishing in Cube Store, and holds the next', async () => {
+    await turnOn();
+    const endsBy = ENDS_BY();
+    stub.answerSql((ask) =>
+      'cubeStore' in ask.target && ask.sql.includes('cancel me')
+        ? {
+            status: 422,
+            body: {
+              error: 'The run was cancelled',
+              code: 'cancelled',
+              statement: 'select',
+              redactedSql: 'SELECT ?',
+              durationMs: 4_100,
+              columns: [],
+              rows: [],
+              rowCount: 0,
+              truncated: 'stopped',
+              stillRunning: true,
+              endsBy,
+            },
+          }
+        : undefined,
+    );
+    try {
+      const cancelled = await run('super', `SELECT 'cancel me ${MARK}'`);
+      expect(cancelled.statusCode, cancelled.body).toBe(422);
+      expect(cancelled.json()).toEqual({
+        outcome: 'cancelled',
+        error: 'Cancelled: Cube Store can’t stop a query, so it is still finishing this one.',
+        durationMs: 4_100,
+        columns: [],
+        rows: [],
+        rowCount: 0,
+        truncated: 'stopped',
+        statement: 'select',
+        stillRunning: true,
+        endsBy,
+      });
+      stub.answerSqlState(() => ({ state: 'stopping', endsBy }));
+      expect((await run('super', `SELECT 'next ${MARK}'`)).statusCode).toBe(409);
+      const event = (await cubeStoreEvents()).find(
+        (record) => record.event === 'sql-run' && record.details?.['endsBy'] === endsBy,
+      );
+      expect(event?.summary).toBe('Cancelled · Cube Store runs it on');
+    } finally {
+      await endAll();
+      await turn('super', { on: false });
+    }
+  });
+
+  it('says a stop from an xcube that says nothing of its run on as maybe still finishing, holding nothing (T548’s review)', async () => {
+    await turnOn();
+    // An image before 2099b13f2d: no `stillRunning`, no `endsBy`.
+    stub.answerSql((ask) =>
+      'cubeStore' in ask.target && ask.sql.includes('older')
+        ? {
+            status: 422,
+            body: {
+              error: 'The statement ran past 30 s and was stopped',
+              code: 'timeout',
+              statement: 'select',
+              redactedSql: 'SELECT ?',
+              durationMs: 30_002,
+            },
+          }
+        : undefined,
+    );
+    try {
+      const stopped = await run('super', `SELECT 'older ${MARK}'`);
+      expect(stopped.statusCode, stopped.body).toBe(422);
+      expect(stopped.json()).toEqual({
+        outcome: 'timeout',
+        error:
+          'Stopped at 30 seconds: Cube Store can’t stop a query, so it may still be finishing this one.',
+        durationMs: 30_002,
+        columns: [],
+        rows: [],
+        rowCount: 0,
+        truncated: 'stopped',
+        statement: 'select',
+      });
+      expect((await run('super', `SELECT 'next ${MARK}'`)).statusCode).toBe(200);
+    } finally {
+      await endAll();
+      await turn('super', { on: false });
+    }
+  });
+
+  it('holds the next run after one xcube didn’t answer, while xcube says it still runs (T548’s review)', async () => {
+    await turnOn();
+    stub.answerSql((ask) => {
+      if ('cubeStore' in ask.target && ask.sql.includes('unanswered'))
+        throw new Error('connection reset');
+      return undefined;
+    });
+    try {
+      const lost = await run('super', `SELECT 'unanswered ${MARK}'`);
+      expect(lost.statusCode, lost.body).toBe(503);
+      const [lostId] = stub
+        .sqlAsked()
+        .slice(-1)
+        .map((ask) => ask.runId);
+      stub.answerSqlState((runId) =>
+        runId === lostId ? { state: 'running' } : { state: 'ended' },
+      );
+      const held = await run('super', `SELECT 'next ${MARK}'`);
+      expect(held.statusCode, held.body).toBe(409);
+      expect(held.json()).toMatchObject({
+        outcome: 'going',
+        going: { cubeStore: true, stopping: true },
+      });
+      // Never seen by xcube, or ended: nothing held.
+      stub.answerSqlState(() => ({ state: 'ended' }));
+      expect((await run('super', `SELECT 'next ${MARK}'`)).statusCode).toBe(200);
+    } finally {
+      await endAll();
+      await turn('super', { on: false });
+    }
+  });
+
+  it('holds the next run until its end at the latest where xcube can’t say its state', async () => {
+    await turnOn();
+    const endsBy = ENDS_BY();
+    stopsRunningOn(endsBy);
+    try {
+      expect((await run('super', `SELECT 'slow ${MARK}'`)).statusCode).toBe(422);
+      stub.answerSqlState(() => {
+        throw new Error('xcube away');
+      });
+      const held = await run('super', `SELECT 'next ${MARK}'`);
+      expect(held.statusCode, held.body).toBe(409);
+      expect(held.json()).toMatchObject({ outcome: 'going', going: { stopping: true, endsBy } });
+
+      // Its end at the latest past, Cube Store's own timeout has ended it.
+      await getDb()
+        .updateTable('sql_runs')
+        .set({ ends_by: new Date(Date.now() - 1_000) })
+        .where('sql', 'like', `%slow ${MARK}%`)
+        .execute();
+      const after = await run('super', `SELECT 'next ${MARK}'`);
+      expect(after.statusCode, after.body).toBe(200);
+    } finally {
+      await endAll();
       await turn('super', { on: false });
     }
   });

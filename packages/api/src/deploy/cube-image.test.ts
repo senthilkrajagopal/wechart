@@ -47,9 +47,14 @@ import { describe, expect, it } from 'vitest';
  * T547, AC-386: `93a5f7a73b` reads a workspace overlay's own data source's
  * catalog, `?overlay=` on the introspection routes, under the service
  * credential alone; no migration (research xcube-93a5f7a73b.md).
+ *
+ * T548, AC-378, AC-379: `2099b13f2d` answers a Cube Store run stopped or
+ * cancelled at once with `stillRunning` and `endsBy`, follows it to its real
+ * end, and says a run's state by `GET …/sql/runs/{runId}`; migration 13,
+ * additive (research xcube-2099b13f2d.md).
  */
 const IMAGE =
-  'ghcr.io/senthilkrajagopal/xcube:v1.7.45-93a5f7a73b@sha256:3b8530173a367ae2c41cb22dc9430bd651f7cb5ae909f86a3912c6b84e86f9cd';
+  'ghcr.io/senthilkrajagopal/xcube:v1.7.45-2099b13f2d@sha256:1e483afc30f1da9bcc58a0cc37e5ba96824c2f9fda709b2b2d699dcc768b2e12';
 /** Slice 2's image, built locally: only the way back names it. */
 const SLICE_2_IMAGE = 'xcube:v1.7.45-83cb9f0888';
 
@@ -79,7 +84,7 @@ describe('docs/deploy.md pulls the fork’s published image by digest (T449, AC-
 
   it('names the image the release runs, and slice 2’s only for the way back, with how to build it', () => {
     // No other xcube tag, and no build of the package under its old name.
-    expect(deploy).not.toMatch(/xcube:v1\.7\.45-(?!93a5f7a73b@|83cb9f0888|feat-xcube|\$|<)/);
+    expect(deploy).not.toMatch(/xcube:v1\.7\.45-(?!2099b13f2d@|83cb9f0888|feat-xcube|\$|<)/);
     expect(deploy).not.toContain('cube:v1.7.45-introspection-');
     // Slice 2's image was built locally and never published: the way back says how.
     const back = deploy.slice(deploy.indexOf('### Items mode, and the way back'));
@@ -184,6 +189,37 @@ describe('the docker-desktop Helm release runs it (T414, T417, AC-248)', () => {
     expect(api).toMatch(/^\s+proxy_read_timeout 130s;$/m);
   });
 
+  /**
+   * T548, AC-378: xcube says until when a stopped Cube Store run runs on, from
+   * its own `XCUBE_CUBESTORE_QUERY_TIMEOUT`, which must be Cube Store's
+   * `CUBESTORE_QUERY_TIMEOUT`: it can't read it (research xcube-2099b13f2d.md).
+   * Both are 120 s unset. Set on Cube Store through `cubestore.env`, xcube's
+   * API instance, which runs the SQL, follows it.
+   */
+  it('gives xcube Cube Store’s query timeout wherever Cube Store is given one', () => {
+    const cube = fromRoot('deploy/helm/wechart/templates/cube.yaml');
+    const apiInstance = cube.slice(cube.indexOf('{{- else }}'));
+    expect(apiInstance).toContain(
+      [
+        '{{- with $.Values.cubestore.env.CUBESTORE_QUERY_TIMEOUT }}',
+        '            - name: XCUBE_CUBESTORE_QUERY_TIMEOUT',
+        // As Cube Store's template writes the same value.
+        '              value: {{ . | toString | quote }}',
+        '            {{- end }}',
+      ].join('\n'),
+    );
+    // Cube Store reads its env from that map alone, and the chart sets no
+    // timeout of its own on either: unset, both are 120 s.
+    expect(fromRoot('deploy/helm/wechart/templates/cubestore.yaml')).toContain(
+      '{{- range $variable, $value := .Values.cubestore.env }}',
+    );
+    for (const values of [
+      'deploy/helm/wechart/values.yaml',
+      'deploy/helm/values/docker-desktop.yaml',
+    ])
+      expect(fromRoot(values), values).not.toMatch(/^\s+CUBESTORE_QUERY_TIMEOUT:/m);
+  });
+
   it('gives Cube’s containers the image’s own command', () => {
     const template = fromRoot('deploy/helm/wechart/templates/cube.yaml');
     // One template serves both Deployments (research, "Where it runs today").
@@ -207,6 +243,15 @@ describe('compose runs the package’s image for Cube and its refresh worker (T4
       expect(block).not.toMatch(/^ {4}(command|entrypoint):/m);
     },
   );
+
+  // T548, AC-378: neither Cube Store nor xcube is given a query timeout, so
+  // both are 120 s, as each defaults (research xcube-2099b13f2d.md). One set
+  // on either must be set on the other.
+  it('sets Cube Store’s query timeout on neither Cube Store nor xcube, so the defaults match', () => {
+    expect(compose).not.toMatch(/^\s+-?\s*(XCUBE_)?CUBESTORE_QUERY_TIMEOUT\b/m);
+    // Said where Cube Store is configured, for whoever sets one.
+    expect(serviceBlock(compose, 'cubestore')).toContain('XCUBE_CUBESTORE_QUERY_TIMEOUT');
+  });
 });
 
 /**

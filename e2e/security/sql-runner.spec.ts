@@ -15,7 +15,7 @@ import {
 } from './fixtures';
 
 /**
- * F40, the SQL runner, against compose's xcube (`93a5f7a73b`) and its sample
+ * F40, the SQL runner, against compose's xcube (`2099b13f2d`) and its sample
  * PostgreSQL. A folder read-write for `sales-rw` (writer) and read-only for
  * `sales-ro` (reader), with a data source on the sample database, made by
  * `super`, who switches its runner on.
@@ -30,6 +30,13 @@ const KEY = JSON.parse(
 const FIELDS = { host: 'sample-db', port: 5432, database: 'sample', user: 'sample', ssl: false };
 const TABLE = `sqlrun_${RUN}`;
 const SEQUENCE = `sqlrun_${RUN}_seq`;
+/**
+ * The rows of Cube Store's slow query, SLOW_VALUES to the seventh: past the
+ * 30 s cap and short of Cube Store's 120 s timeout, its work bounded by its
+ * size. On an idle compose Cube Store a computed sum took 2.0 s over 17^6
+ * rows (T548's probe), so about 50 s over 18^7.
+ */
+const SLOW_VALUES = 18;
 
 /** The sample database, as its own user, from the host: what the runner reaches. */
 const sample = (sql: string) =>
@@ -552,6 +559,45 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
       }
     });
 
+    test('says a run was stopped at 30 seconds on the database, showing the rows read before, marked cut (AC-378; T548)', async ({
+      browser,
+    }) => {
+      test.setTimeout(120_000);
+      const { context, page, panel } = await onTab(browser);
+      const marker = `pagestop_${RUN}`;
+      try {
+        await typeSql(
+          page,
+          `SELECT g AS ${marker}, CASE WHEN g > 3 THEN pg_sleep(31)::text END AS slept FROM generate_series(1, 5) g`,
+        );
+        await panel.getByRole('button', { name: 'Run', exact: true }).click();
+        await expect(panel.getByRole('button', { name: 'Running…' })).toBeDisabled();
+        await expect(panel.getByTestId('sql-result-head')).toHaveText(
+          /^Stopped at 30 seconds 3 rows · at \d\d:\d\d:\d\dDownload CSV · 3 rows$/,
+          { timeout: 45_000 },
+        );
+        await expect(panel.getByTestId('sql-result-note')).toHaveText(
+          'The run hadn’t finished after 30 seconds, so it was stopped on the database. These are the 3 rows that came back before it was stopped.',
+        );
+        await expect(
+          panel.getByRole('table', { name: 'Result: 3 rows, 2 columns' }).getByRole('row'),
+        ).toHaveCount(4);
+        await expect(panel.getByTestId('sql-result-cut')).toHaveText(
+          'Stopped at 30 seconds. Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.',
+        );
+        // Stopped on the database: nothing of it runs on, and Run is offered again.
+        expect(
+          sample(
+            `SELECT count(*) FROM pg_stat_activity WHERE state = 'active' AND query LIKE '%AS ${marker}%' AND pid <> pg_backend_pid()`,
+          ),
+        ).toBe('0');
+        await expect(panel.getByTestId('sql-going-elsewhere')).toHaveCount(0);
+        await expect(panel.getByRole('button', { name: 'Run', exact: true })).toBeEnabled();
+      } finally {
+        await context.close();
+      }
+    });
+
     test('lists My runs, this data source’s by default, with All (AC-381)', async ({ browser }) => {
       const { context, page, panel } = await onTab(browser);
       try {
@@ -843,6 +889,105 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
       } finally {
         await writer.context.close();
         await reader.context.close();
+      }
+    });
+
+    /**
+     * T548 (AC-378, AC-379; R62, "Say it, and hold Run"): Cube Store can't
+     * stop a query, so a run stopped at 30 seconds runs on in it until Cube
+     * Store's own timeout, 120 s from its start in compose (both unset;
+     * research xcube-2099b13f2d.md). The page says so and until when, and
+     * holds its user's next run, on Cube Store and on a data source alike,
+     * until xcube says it has ended.
+     *
+     * The query ends by itself between the cap and Cube Store's timeout:
+     * Cube Store's router computes a query on past its timeout, starving
+     * every other (research xcube-2099b13f2d.md, "Correction"), so none here
+     * outlasts it.
+     */
+    test('says a stopped run is still finishing in Cube Store until when, and holds Run until it has ended (AC-378, AC-379)', async ({
+      page: admin,
+      browser,
+    }) => {
+      test.setTimeout(300_000);
+      const on = await admin.request.put('/api/cube-store/sql-runner', {
+        data: { on: true, readOnlyConfirmed: true },
+      });
+      expect(on.status(), await on.text()).toBe(200);
+      const writer = await signedIn(browser, 'writer');
+      const { page } = writer;
+      const tables = 'abcdefg'.split('');
+      const slow = `WITH t(x) AS (VALUES ${Array.from({ length: SLOW_VALUES }, (_, n) => `(${String(n + 1)})`).join(',')}) SELECT sum(${tables.map((name) => `${name}.x`).join(' + ')}) AS n FROM ${tables.map((name) => `t ${name}`).join(', ')}`;
+      try {
+        await page.goto('/explore/data-sources/cubestore');
+        const panel = page.getByRole('tabpanel', { name: 'SQL' });
+        await panel.locator('.sql-editor .cm-content').click();
+        await page.keyboard.type(slow);
+        const started = Date.now();
+        await panel.getByRole('button', { name: 'Run', exact: true }).click();
+        await expect(panel.getByRole('button', { name: 'Running…' })).toBeDisabled();
+        // Nothing to cancel: Cube Store can't stop it.
+        await expect(panel.getByRole('button', { name: 'Cancel', exact: true })).toHaveCount(0);
+        await expect(panel.getByTestId('sql-result-head')).toHaveText(
+          /^Stopped at 30 seconds at \d\d:\d\d:\d\d$/,
+          { timeout: 45_000 },
+        );
+
+        // Until when, as xcube says: its start and Cube Store's 120 s.
+        const going = (await (await page.request.get('/api/sql-runs/going')).json()) as {
+          going: { stopping?: boolean; endsBy?: string; cubeStore?: boolean } | null;
+        };
+        expect(going.going).toMatchObject({ cubeStore: true, stopping: true });
+        const endsBy = Date.parse(going.going?.endsBy ?? '');
+        expect(Math.abs(endsBy - (started + 120_000))).toBeLessThan(5_000);
+        const until = await page.evaluate(
+          (iso) =>
+            new Date(iso).toLocaleTimeString('en-GB', {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+            }),
+          going.going?.endsBy ?? '',
+        );
+        await expect(panel.getByTestId('sql-result-note')).toHaveText(
+          `The run hadn’t finished after 30 seconds, so wechart stopped waiting for it. Cube Store can’t stop a query, so it is still finishing this one, until ${until} at the latest. Your next run waits until it has ended. Nothing came back. Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.`,
+        );
+        const held = panel.getByTestId('sql-going-elsewhere');
+        await expect(held).toHaveText(
+          `Cube Store is still finishing your last query, until ${until} at the latest. One run at a time: your next one runs once it has ended.`,
+        );
+        await expect(panel.getByRole('button', { name: 'Run', exact: true })).toBeDisabled();
+
+        // Held on a data source too, the API refusing it, nothing run.
+        const elsewhere = await runOn(page.request, world.sourceId, 'SELECT 1');
+        expect(elsewhere.status(), await elsewhere.text()).toBe(409);
+        expect(await elsewhere.json()).toMatchObject({
+          outcome: 'going',
+          error:
+            'Cube Store is still finishing your last query. One run at a time: your next one runs once it has ended.',
+          going: { cubeStore: true, stopping: true, endsBy: going.going?.endsBy },
+        });
+        const again = await page.request.post('/api/cube-store/sql', {
+          data: { sql: 'SELECT 1' },
+        });
+        expect(again.status(), await again.text()).toBe(409);
+
+        // Ended, as xcube says once Cube Store answers it: Run is offered
+        // again, the result says so, and a run runs.
+        await expect(held).toHaveCount(0, { timeout: 150_000 });
+        // Lifted when it ended, as xcube heard it, not at its end at the latest.
+        expect(Date.now()).toBeLessThan(endsBy);
+        await expect(panel.getByRole('button', { name: 'Run', exact: true })).toBeEnabled();
+        await expect(panel.getByTestId('sql-result-note')).toHaveText(
+          'The run hadn’t finished after 30 seconds, so wechart stopped waiting for it. Cube Store can’t stop a query, so it finished this one on its own: it has since ended. Nothing came back. Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.',
+        );
+        await panel.locator('.sql-editor .cm-content').click();
+        await page.keyboard.press('ControlOrMeta+A');
+        await page.keyboard.type('SELECT 1 AS one');
+        await panel.getByRole('button', { name: 'Run', exact: true }).click();
+        await expect(panel.getByTestId('sql-result-head')).toHaveText(/^Finished 1 row/);
+      } finally {
+        await writer.context.close();
       }
     });
   });
