@@ -10,7 +10,13 @@
 >    - picker and workspace-overlay: AC-342 and T475;
 >    - preview-as: T630.
 > 3. **Remaining work, by agent and range:**
->    - **Jobs**, tasks T556–T560, migrations 1758650000000–1758659999999; T554 is parked on xcube (`to-xcube/2026-10-04-2105-stop-processing-build.md`).
+>    - **Jobs**: T555 is picked (2c74709), and so is the cancel correction (c6774f4).
+>      - Still to do: T556–T560, on migrations 1758650000000–1758659999999. Per R59, resuming a paused schedule keeps its failure count.
+>      - Parked in the Jobs worktree:
+>        - T554, on branch `t554-stop-wip` (ea522da, old base). It waits on xcube: `to-xcube/2026-10-04-2105-stop-processing-build.md`.
+>        - T557's failing tests, on branch `t557-owner-filter-wip` (5923b11). The filter must be a radiogroup of buttons, because no Schedules test may find an input.
+>      - Not written: jobs.spec.ts:72's fix (poll its own job until done), and T553's follow-up (a module counts as failing until a worker on the current revision has a good run).
+>    - **The route matrix failed twice after rebasing on 0abfbc2, in routes nobody touched:** `many` sees root's model, `manager` runs Cube Store SQL, and introspection and cube-store timed out. wechart_test's root access looks changed by interference. On resuming, rebuild wechart_test from scratch (drop it and let the global setup migrate it), then run the full API suite under the lock before trusting it.
 >    - **Group 6**, T633 (the filter bar's picker), T634 (Ctrl+Enter adds), then T476 and T477 once Jobs' pages are final. T406's critique and T410's phase-1 run come last.
 >    - **F6**, T590 if it isn't done.
 >    - **SQL runner**, T650 (refuse router queries) once xcube's image answers `to-xcube/2026-10-04-2200-cube-store-refuse-router-joins.md`.
