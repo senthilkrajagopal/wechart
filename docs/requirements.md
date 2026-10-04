@@ -950,6 +950,11 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R63 — keyboard paths to a series or panel, and resolving a calculation request** (2026-10-04, the user)
+- Q (from T405): marking a whole legend category or trellis panel is pointer-only. Which keyboard path? A: "Tile ⋯ menu entries (Recommended)". *The tile's ⋯ menu (Shift+F10) gains "Mark series ›" and "Mark panel ›". The same path serves a scatter's points and cross-filtering by series or panel, where a click means the series or panel (`clickedValue`'s BY_SERIES).*
+- Q (from T385): a request is free text. What resolves it? A: "The member who took it up (Recommended)". *An approved proposal from the member who opened the request in their workspace, adding a measure to the request's cube, resolves it, naming those measures. AC-052 is amended.*
+- *Claude's call, overturnable:* design 08's state E (Preview as) is drawn as designed, since AC-343 binds the design. T630.
+
 **R62 — Cube Store's stop, as xcube can give it** (2026-10-04, the user)
 - xcube answered that Cube Store can't stop a running query. Its protocol and SQL have no cancel, and its only limit is the process-wide `CUBESTORE_QUERY_TIMEOUT`. `2099b13f2d` instead answers a stopped run at once with `stillRunning` and `endsBy`, keeps the run "stopping" until Cube Store ends it, and adds `GET …/sql/runs/{runId}` (`to-wechart/2026-10-04-1900-cube-store-cancel.md`).
 - Q: How should AC-378 stand for Cube Store? A: "Say it, and hold Run (Recommended)". *AC-378 is amended: the result says the query is still finishing in Cube Store until its end, and the next run waits. No deployment change. T548.*
