@@ -7,17 +7,20 @@ import { TableScroll } from '../../shell/TableScroll';
 import { shownOf } from '../jobs/BuildPanel';
 import { BuiltWhen } from '../jobs/builds';
 import { OwnerLabel } from './OwnerLabel';
-import { SchedulePane } from './SchedulePane';
+import { LastRunStatus, minuteOf, SchedulePane, WechartPane } from './SchedulePane';
 import { dayIn, runsOf, timeIn, untilIn, zoneOf, type Schedule } from './schedule';
+import { ScheduleForm } from './ScheduleForm';
+import { readWechartSchedules, WECHART_SCHEDULES_KEY, type WechartSchedule } from './wechart';
 
 /**
- * Schedules (T160, AC-154; T551, design 16's screen 2): every
- * pre-aggregation's refresh schedule, a `public: false` cube's included, one
- * row each, labelled with its owner as an icon and words, read-only, each
- * opening its pane, where it is set — the pre-aggregation in Model — and
- * Jobs are a click away. Cube's refresh worker owns each one today: a
- * schedule is its refresh key, in the model (the user's "Cube-owned now",
- * 2026-09-24). wechart's own schedules come with AC-234 (T378).
+ * Schedules (T160, AC-154; T551, T552, design 16's screen 2): every
+ * pre-aggregation's refresh schedule, a `public: false` cube's included, and
+ * every wechart schedule, one row each, so a rollup with both has two; each
+ * labelled with its owner as an icon and words, and each opening its pane. A
+ * refresh key's is read-only, since the key is part of the model: where it
+ * is set — the pre-aggregation in Model — and Jobs are a click away. A
+ * wechart schedule is made here, with New schedule, and changed and deleted
+ * in its pane, at once, with no proposal (AC-234).
  */
 
 /** The icon a schedule's words wear, where its kind has one (design 07, pin 4; design 16). */
@@ -61,6 +64,89 @@ function LastRun({ schedule }: { schedule: Schedule }): ReactNode {
   );
 }
 
+/** A wechart schedule's next run, in its zone, with UTC and how long until it (screen 2). */
+function WechartNextRun({ schedule, now }: { schedule: WechartSchedule; now: Date }) {
+  const next = schedule.runs?.[0];
+  if (next === undefined) return <span className="muted">—</span>;
+  const at = new Date(next);
+  return (
+    <>
+      {`${dayIn(schedule.timezone, at)}, ${timeIn(schedule.timezone, at)}`}
+      <span className="schedules__sub">{`${timeIn('UTC', at)} UTC · ${untilIn(at, now)}`}</span>
+    </>
+  );
+}
+
+/** One wechart schedule's row (design 16, screen 2 pins 5–8). */
+function WechartRow({
+  schedule,
+  now,
+  selected,
+  onSelect,
+}: {
+  schedule: WechartSchedule;
+  now: Date;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const shownAs = shownOf({
+    id: schedule.preAggregation,
+    ...(schedule.shortName === undefined ? {} : { shortName: schedule.shortName }),
+    ...(schedule.folderPath === undefined ? {} : { folderPath: schedule.folderPath }),
+  });
+  // None before its first run; none either from an answer that lacks it.
+  const lastRun = schedule.lastRun ?? null;
+  return (
+    <tr
+      aria-selected={selected}
+      tabIndex={0}
+      className="build-panel__row"
+      onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        onSelect();
+      }}
+    >
+      <td className="query-log__query">
+        <span data-testid="schedule-name">{shownAs.name}</span>
+      </td>
+      <td>{shownAs.folder ?? 'Shared'}</td>
+      <td>
+        {/* Its name first, then in words, then as written with its zone (pin 6). */}
+        <b data-testid="wechart-schedule-name">{schedule.name}</b>
+        {schedule.when === undefined ? null : ` · ${schedule.when}`}
+        <code className="schedules__sub">{`${schedule.cron} · ${schedule.timezone}`}</code>
+      </td>
+      <td>
+        <WechartNextRun schedule={schedule} now={now} />
+      </td>
+      <td>
+        {/* How its last run ended, from Run history (pin 8). */}
+        {lastRun === null ? (
+          <span className="schedules__sub">Not run yet</span>
+        ) : (
+          <>
+            <LastRunStatus run={lastRun} />
+            <span className="schedules__sub">{minuteOf(lastRun.startedAt)}</span>
+          </>
+        )}
+      </td>
+      <td>
+        <OwnerLabel owner="wechart" />
+        <span className="schedules__sub">by {schedule.createdBy.name}</span>
+      </td>
+    </tr>
+  );
+}
+
+/** What the pane holds: a refresh key's, a wechart schedule's, or New schedule's form. */
+type Open =
+  | { readonly kind: 'cube'; readonly id: string }
+  | { readonly kind: 'wechart'; readonly id: string; readonly held?: WechartSchedule }
+  | { readonly kind: 'new' };
+
 export function SchedulesPage() {
   const schedules = useQuery({
     queryKey: ['schedules'],
@@ -79,29 +165,102 @@ export function SchedulesPage() {
       return (await response.json()) as Schedule[];
     },
   });
-  const [selected, setSelected] = useState<string | null>(null);
+  // wechart's own schedules, made here (T552, AC-234).
+  // Read again every 30 s, so a row's next and last runs move on (T552's review).
+  const wechart = useQuery({
+    queryKey: WECHART_SCHEDULES_KEY,
+    queryFn: readWechartSchedules,
+    refetchInterval: 30_000,
+  });
+  const [selected, setSelected] = useState<Open | null>(null);
   const now = new Date();
-  const open = schedules.data?.find((each) => each.id === selected);
+  const keys = schedules.data ?? [];
+  const own = wechart.data ?? [];
+  const pane: ReactNode = (() => {
+    if (selected === null) return null;
+    if (selected.kind === 'new')
+      return (
+        <>
+          <div className="admin-pane__head">
+            <h2 className="admin-pane__title">New schedule</h2>
+          </div>
+          <ScheduleForm
+            refreshKeys={keys}
+            onCancel={() => {
+              setSelected(null);
+            }}
+            onSaved={(saved) => {
+              setSelected({ kind: 'wechart', id: saved.id, held: saved });
+            }}
+          />
+        </>
+      );
+    if (selected.kind === 'wechart') {
+      const found = own.find((each) => each.id === selected.id) ?? selected.held;
+      return found === undefined ? null : (
+        <WechartPane
+          schedule={found}
+          refreshKeys={keys}
+          onDeleted={() => {
+            setSelected(null);
+          }}
+        />
+      );
+    }
+    const found = keys.find((each) => each.id === selected.id);
+    return found === undefined ? null : <SchedulePane schedule={found} now={now} />;
+  })();
+  /** wechart's schedules each after its rollup's refresh key, and those of rollups with none, last. */
+  const placed = new Set<string>();
+  const ownOf = (id: string) => {
+    const of = own.filter((each) => each.preAggregation === id);
+    for (const each of of) placed.add(each.id);
+    return of;
+  };
+  const isSelected = (kind: 'cube' | 'wechart', id: string) =>
+    selected !== null && selected.kind === kind && selected.id === id;
 
   return (
-    <div className={open === undefined ? 'admin-page' : 'admin-page admin-page--docked'}>
+    <div className={pane === null ? 'admin-page' : 'admin-page admin-page--docked'}>
       <div className="admin-page__main">
-        <h1 className="workspace-title">Schedules</h1>
-        {/* What the page does now, and that scheduling from wechart waits
-            (AC-233), with no word of phases (T466, UX-111). */}
+        <div className="schedules__head">
+          <h1 className="workspace-title">Schedules</h1>
+          {/* For those who may use Schedules: the page is theirs (pin 1, AC-297). */}
+          {schedules.isSuccess || wechart.isSuccess ? (
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => {
+                setSelected({ kind: 'new' });
+              }}
+            >
+              New schedule
+            </button>
+          ) : null}
+        </div>
+        {/* Who runs each kind of schedule, and where each is changed (pin 2;
+            R40.2, R42.3), with no word of phases (T466, UX-111). */}
         <InfoBar>
           <p>
-            When each pre-aggregation is rebuilt is set by its refresh key in the model, and Cube’s
-            refresh worker runs it: change one in Model. Scheduling builds and cache warm-ups from
-            wechart isn’t available yet.
+            Cube’s refresh worker rebuilds each pre-aggregation on its refresh key, which is part of
+            the model: to change one, edit the model in My workspace and propose it. wechart’s own
+            schedules are made here. They build pre-aggregations at times a refresh key can’t
+            express, and need no proposal.
           </p>
         </InfoBar>
+        {/* Each list read apart, and said where it couldn't be: wechart's
+            schedules are listed without Cube, and a refresh key's without
+            wechart's (T552's review); one refusal said once. */}
+        {schedules.isError ? <StateLine kind="err">{schedules.error.message}</StateLine> : null}
+        {wechart.isError && wechart.error.message !== schedules.error?.message ? (
+          <StateLine kind="err">{wechart.error.message}</StateLine>
+        ) : null}
         {schedules.isPending ? (
           <StateLine kind="run">Reading the schedules…</StateLine>
-        ) : schedules.isError ? (
-          <StateLine kind="err">{schedules.error.message}</StateLine>
-        ) : schedules.data.length === 0 ? (
-          <p>The model declares no pre-aggregations.</p>
+        ) : keys.length === 0 && own.length === 0 ? (
+          schedules.isSuccess ? (
+            <p>The model declares no pre-aggregations.</p>
+          ) : null
         ) : (
           <>
             <TableScroll label="Refresh schedules">
@@ -118,24 +277,25 @@ export function SchedulesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {schedules.data.map((schedule) => {
+                  {keys.flatMap((schedule) => {
                     const shownAs = shownOf(schedule);
                     const icon = ICONS[schedule.kind];
-                    return (
+                    const open = () => {
+                      setSelected({ kind: 'cube', id: schedule.id });
+                    };
+                    return [
                       <tr
                         key={schedule.id}
                         // A row opens its pane (D5): by pointer, or Enter or Space on it.
-                        aria-selected={selected === schedule.id}
+                        aria-selected={isSelected('cube', schedule.id)}
                         tabIndex={0}
                         className="build-panel__row"
-                        onClick={() => {
-                          setSelected(schedule.id);
-                        }}
+                        onClick={open}
                         onKeyDown={(event) => {
                           if (event.target !== event.currentTarget) return;
                           if (event.key !== 'Enter' && event.key !== ' ') return;
                           event.preventDefault();
-                          setSelected(schedule.id);
+                          open();
                         }}
                       >
                         <td className="query-log__query">
@@ -160,9 +320,34 @@ export function SchedulesPage() {
                         <td>
                           <OwnerLabel owner={schedule.owner} />
                         </td>
-                      </tr>
-                    );
+                      </tr>,
+                      // A rollup with both kinds has two rows: wechart's after its refresh key's (pin 5).
+                      ...ownOf(schedule.id).map((each) => (
+                        <WechartRow
+                          key={`wechart-${each.id}`}
+                          schedule={each}
+                          now={now}
+                          selected={isSelected('wechart', each.id)}
+                          onSelect={() => {
+                            setSelected({ kind: 'wechart', id: each.id });
+                          }}
+                        />
+                      )),
+                    ];
                   })}
+                  {own
+                    .filter((each) => !placed.has(each.id))
+                    .map((each) => (
+                      <WechartRow
+                        key={`wechart-${each.id}`}
+                        schedule={each}
+                        now={now}
+                        selected={isSelected('wechart', each.id)}
+                        onSelect={() => {
+                          setSelected({ kind: 'wechart', id: each.id });
+                        }}
+                      />
+                    ))}
                 </tbody>
               </table>
             </TableScroll>
@@ -175,9 +360,9 @@ export function SchedulesPage() {
           </>
         )}
       </div>
-      {open === undefined ? null : (
+      {pane === null ? null : (
         <aside className="admin-pane" aria-label="Schedule details">
-          <SchedulePane schedule={open} now={now} />
+          {pane}
         </aside>
       )}
     </div>

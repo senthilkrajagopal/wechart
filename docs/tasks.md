@@ -7397,7 +7397,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     8. The phase wording, as above.
     9. Data as of read hidden cubes. It no longer does.
     10. Cube's reason for a key it can't run wasn't shown. It now is, in the pane.
-  - **Left:** cubes declared only in Jinja files aren't read for the multi-cube default, and AC-154 stays unticked until wechart's own schedules (T378) and the owner filter (T552, AC-397) land.
+  - **Left:** cubes declared only in Jinja files aren't read for the multi-cube default, and AC-154 stays unticked until wechart's own schedules land (T378, T552). *(Corrected 2026-10-04: the owner filter is T557's, AC-397 of its own; AC-154 is ticked with T552.)*
   - **Tests:** `jobs/refreshWords.test.ts`, `jobs/schedules.test.ts` (with `GET /api/schedules`), `jobs/build.test.ts`, `jobs/scope.test.ts`, `SchedulesPage.test.tsx`, `BuildPanel.test.tsx`, `RunHistory.test.tsx`, `dataAsOf.test.ts`, and `e2e/schedules.spec.ts`. The e2e covers a `public: false` cube's rollup listed, read-only, and Open in Model opening that pre-aggregation.
 - *T505 moved below T379 on 2026-10-02 (`[R56]`): it records the cancel and the schedule changes, so it follows them.*
 - [x] T506 (AC-353) Keep a stored BigQuery key or Snowflake or Dremio token unless replaced, and warn that replacing it rebuilds the rollups *(added 2026-09-28, R42.5)*
@@ -7508,7 +7508,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - `access/route-matrix.test.ts`;
     - core's `refresh-key.test.ts`.
   - AC-234 and AC-297 stay open for T552's form and rows, T559's folder views and T504.
-- [ ] T552 (AC-234, AC-392, AC-154) Make, change and delete a wechart schedule on Schedules, listed beside the refresh keys *(added 2026-10-02, `[R56]`: design 16's screen 2 and state D)*
+- [x] T552 (AC-234, AC-392, AC-154) Make, change and delete a wechart schedule on Schedules, listed beside the refresh keys *(added 2026-10-02, `[R56]`: design 16's screen 2 and state D)*
   - Files: `packages/web/src/workspaces/schedules/{ScheduleForm,SchedulesPage,SchedulePane}.tsx` (+ tests), `e2e/schedules.spec.ts`
   - Failing test:
     - `ScheduleForm.test.tsx`: New schedule opens the form in the pane (AC-234), with:
@@ -7526,6 +7526,78 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - a delete's confirmation ends "You can't undo this." (design 14's rule).
     - `e2e/schedules.spec.ts`: a `* * * * *` schedule made on the page starts its build against compose's Cube within its minute, and Run history lists it as started by the schedule (AC-234).
   - Depends on: T378, T551
+  - **As built (2026-10-04):**
+    - **The API:**
+      - `GET /api/wechart-schedules` rows carry what Schedules shows:
+        - the pre-aggregation's short name and folder, as Jobs lists it (none where Cube can't be read: a schedule is listed without Cube);
+        - the cron in words;
+        - the next five runs, with a clock change among them;
+        - the last run: its outcome, start, end and Cube's error, from `lastRunsOf` in Run history.
+      - `POST` and `PUT` answer the same row.
+      - `GET /api/wechart-schedules/preview?cron=&timezone=` gives the form's reading:
+        - the words;
+        - whether a refresh key could run it;
+        - the next five runs, from pg-boss's `previewSchedule`;
+        - or what's wrong, with which field: the cron, or the zone, with the cron's words kept.
+      - The preview is for anyone who writes a folder, or a Super-Admin, as Schedules is (T371). Its route-matrix case shows it leaks nothing.
+      - The browser tests' reset (`WECHART_RESET_DATA`) deletes the schedules too.
+    - **The page (design 16, screen 2 and state D):**
+      - The note says who runs each kind of schedule, and that wechart's are made here with no proposal (pin 2).
+      - New schedule opens the form in the pane. A wechart schedule's row comes after its rollup's refresh key, so a rollup with both has two rows. A row shows:
+        - its name, the cron in words, then the cron and zone in the code face;
+        - its next run, in its zone, with UTC and how long until it;
+        - how its last run ended, with when;
+        - wechart's calendar icon, with who made it.
+      - The list is read again every 30 s.
+      - Each list is read separately and said where it can't be, so wechart's schedules are listed when the refresh keys can't be read, and the other way round.
+      - **The form:**
+        - A pre-aggregation of the user's folders: Jobs' list, without a lambda or rollup join.
+        - A name.
+        - The cron, read back in words as it's typed, or what's wrong with it named under it.
+        - A required zone, empty to start, suggesting the zones the browser knows. One it doesn't know is named under it.
+        - The next five runs in the zone and in UTC, with the year where it isn't this one, and "Sun 25 Oct: clocks go back an hour" where it falls.
+        - The refresh-key note (Q11).
+        - "Its refresh key also runs …" for a rollup Cube's refresh worker runs (AC-392).
+        - "Each run builds every partition, as Build all does."
+        - The missed-run choice, "Run it once, when wechart is back" chosen.
+        - "Applies at once, with no proposal."
+        - Create waits for all of them.
+      - **A schedule's pane (D1):**
+        - State, with its next run.
+        - What it builds.
+        - Who made it, and when it last changed.
+        - Its last run, with Run history.
+        - The same refresh-key note.
+        - Its fields, with Save changes.
+        - Delete…, asked first (D6): what stops, what stays, what then rebuilds the rollup, and "You can't undo this." last, with Cancel focused. Focus goes back to Delete… on Cancel.
+  - **Implementer's calls, for the user to confirm or change:**
+    - The pane's foot says "Applies at once, with no proposal." Design 16's "Recorded in the audit trail." is added with T505, which records it.
+    - An open run's last run reads "Under way".
+    - The page says nothing about how late a scheduled run can start. pg-boss's cron pass runs every 5 s by default (`dist/attorney.js`), so a run starts within seconds of its time.
+  - **One review round (spec-reviewer), fixed:**
+    1. Changing and deleting weren't shown to leave the model alone, and weren't done in the UI end to end. The e2e now changes and deletes the schedule in its pane, and re-reads the model file after making, changing and deleting.
+    2. The e2e didn't show the refresh-key note on the real page. It now does, for a rollup whose key Cube runs, and shows the rollup's two rows and its last run Done.
+    3. A failed read of wechart's schedules was silent. Wechart's schedules were also hidden when the refresh keys couldn't be read. Both are fixed and tested.
+    4. Tests depended on the machine's zone. They now pass in Fiji and Honolulu too. T551's "Built today" test still depends on it, as before.
+    5. A made schedule's answer lacked what the list has, so the page could crash on it. `POST` and `PUT` now answer the listed row, and the route test compares them.
+    6. No test sent "Skip it". One now does, and the Q11 test now reaches Create.
+    7. A zone it doesn't know was said under the cron. It's now said under the zone, which is marked invalid; the cron's words are kept.
+    8. Focus didn't return after a cancelled delete. It now goes back to Delete….
+    9. The e2e waited on a list the form reads only once. It now waits for Jobs to list the rollup before opening the form.
+    10. The row's next run went stale. The list is now read again every 30 s.
+    11. "Its refresh key also runs" read badly for Cube's default, and for a key Cube can't run. The default now reads "on Cube's default, every hour", and nothing is said for a key Cube can't run.
+    12. A run in another year had no year. It now has one.
+  - **Tests:**
+    - `ScheduleForm.test.tsx` (9);
+    - `SchedulePane.test.tsx` (3);
+    - `SchedulesPage.test.tsx` (14, 7 of them T552's);
+    - `routes/schedules.test.ts` (with the listing, the preview and the answers);
+    - `repos/build-history.test.ts` (`lastRunsOf`);
+    - `seed.test.ts`;
+    - `access/route-matrix.test.ts`;
+    - `e2e/schedules.spec.ts` and `e2e/admin.spec.ts` (Chrome);
+    - `e2e/security/jobs-scope.spec.ts` (Chrome).
+  - **ACs ticked:** AC-234, AC-392 and AC-154. AC-297 stays open for T559's folder views.
 - [ ] T379 (AC-155) Suspend a wechart schedule after its set number of failed runs in a row, say so, and offer Resume
   - *Rewritten 2026-10-02 to design 16's state E and Q9 (`[R56]`).*
   - *2026-09-28, R42.4:* wechart-owned schedules only; the number is set per schedule, 3 by default. A refresh key keeps Cube's own retry.

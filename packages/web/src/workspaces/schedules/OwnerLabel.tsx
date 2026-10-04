@@ -1,8 +1,34 @@
 /**
- * Whose schedule it is, as an icon and words (T551, AC-154; design 16,
- * screen 2 pin 5): Cube's refresh worker by design 16's cube icon.
+ * Whose schedule it is, as an icon and words (T551, T552, AC-154; design 16,
+ * screen 2 pin 5 and its legend): Cube's refresh worker by design 16's cube
+ * icon; wechart's scheduler by its calendar, the one Jobs' starter column
+ * draws for a schedule (T374).
  */
-export function OwnerLabel({ owner }: { owner: 'cube' }) {
+export function OwnerLabel({ owner }: { owner: 'cube' | 'wechart' }) {
+  if (owner === 'wechart')
+    return (
+      <span className="owner" data-testid="owner">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" data-icon="schedule">
+          <rect
+            x="2.2"
+            y="3.2"
+            width="11.6"
+            height="10.6"
+            rx="1.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+          />
+          <path
+            d="M2.2 6.5h11.6M5.3 1.8v2.8M10.7 1.8v2.8"
+            stroke="currentColor"
+            strokeWidth="1.4"
+          />
+          <circle cx="8" cy="10" r="1.3" fill="currentColor" />
+        </svg>
+        wechart
+      </span>
+    );
   return (
     <span className="owner" data-testid="owner">
       <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" data-icon={owner}>

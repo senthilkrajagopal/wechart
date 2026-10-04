@@ -1,9 +1,22 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef, useState } from 'react';
+
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
+import { useFocusTrap } from '../../shell/useFocusTrap';
 import { shownOf } from '../jobs/BuildPanel';
+import { whenOf } from '../jobs/builds';
+import { Status } from '../jobs/StateBadge';
 import { rollupHref } from '../model/inFolder';
 import { lagInWords } from '../model/preagg/RefreshSchedule';
 import { OwnerLabel } from './OwnerLabel';
 import { changeWords, dayIn, runsOf, timeIn, zoneOf, type Schedule } from './schedule';
+import { RefreshKeyRuns, ScheduleForm } from './ScheduleForm';
+import {
+  deleteSchedule,
+  WECHART_SCHEDULES_KEY,
+  type LastRun,
+  type WechartSchedule,
+} from './wechart';
 
 /**
  * A refresh key's pane (T551, AC-154; design 16, state D5): read-only, since
@@ -105,5 +118,227 @@ export function SchedulePane({ schedule, now }: { schedule: Schedule; now: Date 
         </section>
       )}
     </>
+  );
+}
+
+/** How a schedule's last run went, as an icon and a word (design 16's legend). */
+export function LastRunStatus({ run }: { run: LastRun }) {
+  switch (run.outcome) {
+    case 'done':
+      return <Status kind="ok" label="Done" testId="last-run" state="done" />;
+    case 'failed':
+      return <Status kind="err" label="Failed" testId="last-run" state="failed" />;
+    case 'cancelled':
+      return <Status kind="cancel" label="Cancelled" testId="last-run" state="cancelled" />;
+    case 'expired':
+      return <Status kind="warn" label="Cube’s record expired" testId="last-run" state="expired" />;
+    default:
+      return <Status kind="run" label="Under way" testId="last-run" state="open" />;
+  }
+}
+
+/** "today 14:01", "yesterday 16:20", "28 Sep 09:12": your local time, to the minute. */
+export function minuteOf(iso: string, lower = false): string {
+  const shown = whenOf(iso).shown.replace(/(\d{2}:\d{2}):\d{2}$/, '$1');
+  return lower ? `${shown.charAt(0).toLowerCase()}${shown.slice(1)}` : shown;
+}
+
+/** "2 Sep": a day, three-letter months, as design 16 writes them. */
+function dateOf(iso: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short' }).formatToParts(
+    new Date(iso),
+  );
+  const part = (type: string) => parts.find((each) => each.type === type)?.value ?? '';
+  return `${part('day')} ${part('month')}`;
+}
+
+/**
+ * A wechart schedule's pane (T552, AC-234, AC-392; design 16, state D1): its
+ * state and next run, what it builds, who made it and when it last changed,
+ * its last run with the way to Run history, the refresh key that runs too,
+ * its fields to change, applied at once, and Delete, asked first (D6).
+ */
+export function WechartPane({
+  schedule,
+  refreshKeys,
+  onDeleted,
+}: {
+  schedule: WechartSchedule;
+  refreshKeys: readonly Schedule[];
+  onDeleted: () => void;
+}) {
+  const [deleting, setDeleting] = useState(false);
+  /** Delete…, where focus goes back to when its question is cancelled (T552's review). */
+  const opener = useRef<HTMLButtonElement>(null);
+  // None before its first run; none either from an answer that lacks it.
+  const lastRun = schedule.lastRun ?? null;
+  const refreshKey = refreshKeys.find((each) => each.id === schedule.preAggregation);
+  const shown = shownOf({
+    id: schedule.preAggregation,
+    ...(schedule.shortName === undefined ? {} : { shortName: schedule.shortName }),
+    ...(schedule.folderPath === undefined ? {} : { folderPath: schedule.folderPath }),
+  });
+  const next = schedule.runs?.[0];
+  const zone = schedule.timezone;
+  return (
+    <>
+      <div className="admin-pane__head">
+        <h2 className="admin-pane__title">{schedule.name}</h2>
+        <span className="spacer" />
+        <OwnerLabel owner="wechart" />
+      </div>
+      <dl className="admin-pane__facts">
+        <dt>State</dt>
+        <dd>
+          <Status kind="ok" label="Active" testId="schedule-state" state="active" />
+          {next === undefined
+            ? null
+            : ` · next ${dayIn(zone, new Date(next))}, ${timeIn(zone, new Date(next))}`}
+        </dd>
+        <dt>Builds</dt>
+        <dd>{`${shown.name} · ${shown.folder ?? 'Shared'}`}</dd>
+        <dt>Made by</dt>
+        <dd>
+          {`${schedule.createdBy.name}, ${dateOf(schedule.createdAt)}`}
+          {schedule.updatedAt === schedule.createdAt
+            ? null
+            : ` · changed ${minuteOf(schedule.updatedAt, true)}`}
+        </dd>
+        <dt>Last run</dt>
+        <dd>
+          {lastRun === null ? (
+            'Not run yet'
+          ) : (
+            <>
+              <LastRunStatus run={lastRun} />
+              {` · ${minuteOf(lastRun.startedAt, true)} · `}
+              <a
+                className="btn-link"
+                href={`/jobs?tab=history&preagg=${encodeURIComponent(schedule.preAggregation)}`}
+              >
+                Run history
+              </a>
+            </>
+          )}
+        </dd>
+      </dl>
+      <RefreshKeyRuns refreshKey={refreshKey} />
+      {/* Keyed by its id and last change: another schedule, or one changed, starts afresh. */}
+      <ScheduleForm
+        key={`${schedule.id}-${schedule.updatedAt}`}
+        schedule={schedule}
+        refreshKeys={refreshKeys}
+        onSaved={() => undefined}
+      >
+        <button
+          type="button"
+          ref={opener}
+          className="btn-sm btn-danger"
+          onClick={() => {
+            setDeleting(true);
+          }}
+        >
+          Delete…
+        </button>
+      </ScheduleForm>
+      {deleting ? (
+        <DeleteScheduleDialog
+          schedule={schedule}
+          refreshKey={refreshKey}
+          name={shown.name}
+          onCancel={() => {
+            setDeleting(false);
+            opener.current?.focus();
+          }}
+          onDeleted={() => {
+            setDeleting(false);
+            onDeleted();
+          }}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * Deleting a wechart schedule (design 16, D6): what stops and what stays,
+ * what then rebuilds its rollup, and "You can't undo this." last (design
+ * 14's rule), with Cancel focused and one destructive button.
+ */
+function DeleteScheduleDialog({
+  schedule,
+  refreshKey,
+  name,
+  onCancel,
+  onDeleted,
+}: {
+  schedule: WechartSchedule;
+  refreshKey: Schedule | undefined;
+  name: string;
+  onCancel: () => void;
+  onDeleted: () => void;
+}) {
+  const client = useQueryClient();
+  const box = useRef<HTMLDivElement>(null);
+  const cancel = useRef<HTMLButtonElement>(null);
+  useFocusTrap(box);
+  const cancelling = useRef(onCancel);
+  useEffect(() => {
+    cancelling.current = onCancel;
+  }, [onCancel]);
+  useEffect(() => {
+    cancel.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') cancelling.current();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, []);
+  const remove = useMutation({
+    mutationFn: () => deleteSchedule(schedule.id),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: WECHART_SCHEDULES_KEY });
+      onDeleted();
+    },
+  });
+  // What rebuilds the rollup after it: its refresh key, where Cube runs one.
+  const after =
+    refreshKey === undefined
+      ? ''
+      : refreshKey.scheduled
+        ? ` ${name} keeps its refresh key, which Cube’s refresh worker runs.`
+        : ` ${name} keeps its refresh key, which is Not scheduled, so nothing will rebuild it until someone builds it or schedules it again.`;
+  return (
+    <div className="dialog-backdrop">
+      <div
+        ref={box}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={`delete-${schedule.id}`}
+        className="dialog"
+      >
+        <h2 id={`delete-${schedule.id}`}>Delete “{schedule.name}”?</h2>
+        <p>{`Its runs stop. The builds it started stay in Run history.${after}`}</p>
+        <p>You can’t undo this.</p>
+        {remove.isError ? <StateLine kind="err">{remove.error.message}</StateLine> : null}
+        <div className="dialog__actions">
+          <button type="button" ref={cancel} className="btn-primary" onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="dialog__destructive"
+            disabled={remove.isPending}
+            onClick={() => {
+              remove.mutate();
+            }}
+          >
+            Delete schedule
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

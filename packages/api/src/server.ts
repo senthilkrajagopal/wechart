@@ -1187,6 +1187,9 @@ export function buildServer({
       client,
       ...(modelFiles === undefined ? {} : { modelFiles }),
       access: jobsAccess,
+      // Each one's last run, and its next from now (T552, AC-154).
+      ...(buildHistory === undefined ? {} : { history: buildHistory }),
+      now,
     });
   // A data source's catalog, through Cube's introspection API (T145, AC-139).
   registerIntrospection(app, client, {

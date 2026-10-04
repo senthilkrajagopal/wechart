@@ -2,9 +2,9 @@ import { expect, test } from '@playwright/test';
 
 /**
  * T238 / AC-233: WHEN the user opens Schedules or Data sources, THE SYSTEM
- * SHALL show the page's title and a note saying what the page is for, and,
- * where managing its subject waits for a later phase (Schedules), that it
- * does; Data sources SHALL NOT say so (T364). It SHALL treat "/sources" as
+ * SHALL show the page's title and a note saying what the page is for; Data
+ * sources SHALL NOT say managing its subject waits (T364), and since T552
+ * neither does Schedules (design 16, pin 2). It SHALL treat "/sources" as
  * Data sources.
  * `Fails when: either page renders nothing, or "/sources" shows Not found.`
  *
@@ -12,7 +12,7 @@ import { expect, test } from '@playwright/test';
  * as broken rather than as deferred — and "/sources" answering Not found with
  * Explore marked as the current workspace.
  */
-test('Schedules shows its title and says what it is for, and that scheduling from wechart waits', async ({
+test('Schedules shows its title and says what it is for: who runs each kind of schedule, and where each is changed', async ({
   page,
 }) => {
   await page.goto('/schedules');
@@ -20,8 +20,11 @@ test('Schedules shows its title and says what it is for, and that scheduling fro
   await expect(main.getByRole('heading', { level: 1 })).toHaveText('Schedules');
   // A note, with its icon, rather than an empty page.
   const note = main.getByRole('note');
-  await expect(note).toContainText(/isn’t available yet/i);
-  // And what the page is for: where its subject is set today.
+  // wechart's own schedules are made here now (T552; design 16, pin 2):
+  // nothing says scheduling from wechart waits.
+  await expect(note).toContainText(/wechart’s own schedules are made here/);
+  await expect(note).not.toContainText(/isn’t available yet/i);
+  // And where a refresh key is set and changed.
   await expect(note).toContainText(/refresh key/);
   // Said without a word of phases (T466, UX-111).
   await expect(note).not.toContainText(/\bphase\b/i);

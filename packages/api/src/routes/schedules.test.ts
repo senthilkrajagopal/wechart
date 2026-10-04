@@ -87,6 +87,12 @@ interface Listed {
   missed: string;
   createdBy: { key: string; name: string };
   updatedBy: { key: string; name: string };
+  /** As Schedules shows it (T552): by its short name, with its folder. */
+  shortName?: string;
+  folderPath?: string[];
+  when?: string;
+  runs?: string[];
+  lastRun?: { id: string; outcome: string | null; startedAt: string } | null;
 }
 
 const fields = (place: 'a' | 'c', over: Record<string, unknown> = {}) => ({
@@ -189,6 +195,8 @@ beforeAll(async () => {
     }),
     buildHistory: buildHistory(getDb()),
     schedules: scheduler,
+    // Next runs are counted from pg-boss's clock (T552).
+    now: () => new Date(clock.now()),
   });
   for (const who of ['writer', 'manager', 'many', 'reader', 'super'])
     cookies[who] = await signIn(app, USERS[who]!);
@@ -373,5 +381,117 @@ describe('wechart’s schedules through the API (T378, AC-234, AC-297)', { timeo
     // Still named as its maker.
     const kept = (await listed('manager')).rows.find((each) => each.id === own.id);
     expect(kept?.createdBy).toEqual(own.createdBy);
+    // With how its last run went (T552, AC-154): under way still, so no outcome.
+    expect([kept?.lastRun?.id, kept?.lastRun?.outcome]).toEqual([runs[0]?.id, null]);
+    expect(
+      (await as('manager', { method: 'DELETE', url: `/api/wechart-schedules/${own.id}` }))
+        .statusCode,
+    ).toBe(204);
+  });
+});
+
+describe('Schedules’ wechart rows, and the form’s preview (T552, AC-234, AC-154)', () => {
+  it('lists each by its short name and folder, in words, with its next five runs and no last run yet', async () => {
+    // 03:00 UTC, before 05:00 in London (04:00 UTC).
+    await clock.setTime(new Date('2026-10-05T03:00:00Z'));
+    // The manager: the test above took `sales-rw` off /A.
+    const own = (
+      await as('manager', {
+        method: 'POST',
+        url: '/api/wechart-schedules',
+        payload: fields('a', { name: `Listed ${MARK}` }),
+      })
+    ).json<Listed>();
+
+    const row = (await listed('manager')).rows.find((each) => each.id === own.id);
+
+    // The made schedule is answered as the list has it, so the page can show it at once.
+    expect(own).toEqual(row);
+    expect({
+      shortName: row?.shortName,
+      folderPath: row?.folderPath,
+      when: row?.when,
+      runs: row?.runs,
+      lastRun: row?.lastRun,
+    }).toEqual({
+      shortName: 'orders',
+      folderPath: ['Shared', `A ${MARK}`],
+      when: 'At 05:00 every day.',
+      runs: [
+        '2026-10-05T04:00:00.000Z',
+        '2026-10-06T04:00:00.000Z',
+        '2026-10-07T04:00:00.000Z',
+        '2026-10-08T04:00:00.000Z',
+        '2026-10-09T04:00:00.000Z',
+      ],
+      lastRun: null,
+    });
+    // And a change, likewise.
+    const changed = (
+      await as('manager', {
+        method: 'PUT',
+        url: `/api/wechart-schedules/${own.id}`,
+        payload: fields('a', { name: `Listed ${MARK}`, cron: '0 6 * * *' }),
+      })
+    ).json<Listed>();
+    expect(changed).toEqual((await listed('manager')).rows.find((each) => each.id === own.id));
+    expect(changed.when).toBe('At 06:00 every day.');
+    expect(
+      (await as('manager', { method: 'DELETE', url: `/api/wechart-schedules/${own.id}` }))
+        .statusCode,
+    ).toBe(204);
+  });
+
+  it('previews a cron as it is typed: in words, the refresh-key note, and its next runs across a clock change', async () => {
+    await clock.setTime(new Date('2026-10-02T12:00:00Z'));
+    const preview = async (who: string, cron: string, timezone: string) => {
+      const answer = await as(who, {
+        method: 'GET',
+        url: `/api/wechart-schedules/preview?${new URLSearchParams({ cron, timezone }).toString()}`,
+      });
+      return { status: answer.statusCode, body: answer.json<unknown>() };
+    };
+
+    // As the manager, who writes /A: the writer no longer writes it (above).
+    // D4: 07:00 stays 07:00 when Berlin's clocks go back on 25 Oct.
+    expect(await preview('manager', '0 7 * 10,11 1', 'Europe/Berlin')).toEqual({
+      status: 200,
+      body: {
+        ok: true,
+        words: 'At 07:00 every Monday in October and November.',
+        refreshKeyCould: false,
+        timezone: 'Europe/Berlin',
+        runs: [
+          '2026-10-05T05:00:00.000Z',
+          '2026-10-12T05:00:00.000Z',
+          '2026-10-19T05:00:00.000Z',
+          '2026-10-26T06:00:00.000Z',
+          '2026-11-02T06:00:00.000Z',
+        ],
+        change: { at: '2026-10-25T01:00:00.000Z', back: true, before: 3 },
+      },
+    });
+    // D2: one a refresh key could run; with no zone yet, no runs.
+    expect(await preview('manager', '0 6 * * *', '')).toEqual({
+      status: 200,
+      body: { ok: true, words: 'At 06:00 every day.', refreshKeyCould: true, runs: [] },
+    });
+    // D3: one it can't read, named, and which field is wrong; and a zone it doesn't know.
+    expect(await preview('manager', '0 25 * * 1-5', 'Europe/Berlin')).toEqual({
+      status: 200,
+      body: { ok: false, field: 'cron', problem: 'The hour is 25; it must be 0 to 23.' },
+    });
+    expect(await preview('manager', '0 6 * * *', 'Mars/Olympus')).toEqual({
+      status: 200,
+      body: {
+        ok: false,
+        field: 'timezone',
+        problem: '“Mars/Olympus” isn’t a time zone wechart knows.',
+        // The cron still read back, under its own field.
+        words: 'At 06:00 every day.',
+      },
+    });
+    // Schedules is for those who write a folder, and a Super-Admin (T371).
+    expect((await preview('reader', '0 6 * * *', 'UTC')).status).toBe(403);
   });
 });

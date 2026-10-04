@@ -846,7 +846,47 @@ export function buildHistory(db: Kysely<Database>) {
         .execute();
       return rows.map(starterOf).sort((a, b) => a.name.localeCompare(b.name));
     },
+
+    /**
+     * Each wechart schedule's latest run (T552, AC-154): Schedules' Last run,
+     * how it ended and when. None for a schedule that hasn't run.
+     */
+    async lastRunsOf(scheduleIds: readonly string[]): Promise<Map<string, LastRun>> {
+      if (scheduleIds.length === 0) return new Map();
+      const rows = await db
+        .selectFrom('build_runs')
+        .distinctOn('schedule_id')
+        .select(['id', 'schedule_id', 'outcome', 'started_at', 'ended_at', 'error'])
+        .where('schedule_id', 'in', scheduleIds)
+        .orderBy('schedule_id')
+        .orderBy('started_at', 'desc')
+        .orderBy('id', 'desc')
+        .execute();
+      return new Map(
+        rows.map((row) => [
+          row.schedule_id!,
+          {
+            id: row.id,
+            outcome: row.outcome as BuildOutcome | null,
+            startedAt: row.started_at,
+            endedAt: row.ended_at,
+            error: row.error,
+          },
+        ]),
+      );
+    },
   };
+}
+
+/** A schedule's latest run, as Schedules shows it (T552). */
+export interface LastRun {
+  readonly id: string;
+  /** None while it is open. */
+  readonly outcome: BuildOutcome | null;
+  readonly startedAt: Date;
+  readonly endedAt: Date | null;
+  /** Cube's error, as Cube said it. */
+  readonly error: string | null;
 }
 
 export type BuildHistory = ReturnType<typeof buildHistory>;

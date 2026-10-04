@@ -57,4 +57,32 @@ describe('the browser tests’ reset', () => {
         .length,
     ).toBeGreaterThan(0);
   });
+
+  it('removes every wechart schedule with the folders, so none runs on in the next run (T552)', async () => {
+    const at = new Date();
+    const id = `reset-${randomUUID()}`;
+    await getDb()
+      .insertInto('schedules')
+      .values({
+        id,
+        name: 'Every minute',
+        pre_aggregation: 'orders.main',
+        folder_id: `folder-${randomUUID()}`,
+        cron: '* * * * *',
+        timezone: 'UTC',
+        missed: 'once',
+        created_by_key: 'wren',
+        created_by_name: 'Wren Writer',
+        created_at: at,
+        updated_by_key: 'wren',
+        updated_by_name: 'Wren Writer',
+        updated_at: at,
+      })
+      .execute();
+
+    process.env['WECHART_RESET_DATA'] = '1';
+    await seedDevData(getDb());
+
+    expect(await getDb().selectFrom('schedules').select('id').execute()).toEqual([]);
+  });
 });

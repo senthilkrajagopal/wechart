@@ -3823,6 +3823,35 @@ code.schedules__sub { font-family: var(--wc-font-code); }
 }
 .schedules__runs > li { display: contents; }
 .schedules__utc { color: var(--wc-text-secondary); }
+/* A clock change among a schedule's next runs, across the grid (design 16, D4). */
+.schedules__change > span { grid-column: 1 / -1; color: var(--wc-status-warning); }
+/* The page's head: its title, and New schedule at the far end (T552; screen 2, pin 1). */
+.schedules__head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+/* A wechart schedule's form in the pane (T552; screen 2, pins 9–15): its
+   fields stacked, labels over inputs, as the data source pane's are. */
+.schedule-form { display: grid; gap: 12px; }
+.schedule-form .field { display: grid; gap: 4px; min-width: 0; }
+.schedule-form .field > label,
+.schedule-form .field__label {
+  font-size: var(--wc-text-xs-size);
+  font-weight: 600;
+  color: var(--wc-text-primary);
+}
+.schedule-form .field input[type='text'],
+.schedule-form .field select { width: 100%; height: 32px; box-sizing: border-box; }
+.schedule-form [aria-invalid='true'] { border-color: var(--wc-status-error); }
+.schedule-form .field__help,
+.schedule-form__foot > .help { margin: 0; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.schedule-form__reading,
+.schedule-form__each { margin: 0; font-size: var(--wc-text-sm-size); }
+.schedule-form__choice { display: grid; gap: 4px; }
+.schedule-form__choice > label { display: flex; gap: 6px; align-items: center; font-size: var(--wc-text-sm-size); }
+.schedule-form__foot {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--wc-border-subtle);
+}
 .notebar {
   display: flex;
   gap: 8px;

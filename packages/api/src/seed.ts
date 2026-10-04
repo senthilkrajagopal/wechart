@@ -30,6 +30,9 @@ export async function seedDevData(db: Kysely<Database>): Promise<void> {
     // And the folders' data sources (T335), their secrets and tests with
     // them: left, each would name a folder no longer there.
     await db.deleteFrom('data_sources').execute();
+    // And wechart's own schedules (T552): left, each would run on in the next
+    // run, naming a folder no longer there. pg-boss's follow at the start.
+    await db.deleteFrom('schedules').execute();
   }
 
   const existing = await db

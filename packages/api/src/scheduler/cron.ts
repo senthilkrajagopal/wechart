@@ -191,6 +191,86 @@ export const previewOf: Preview = (cron, zone, from, count) => {
   return previewer.previewSchedule(cron, { tz: zone, from, count });
 };
 
+/** A zone by the name this runtime gives it (`europe/london` is Europe/London); none, unknown. */
+export function zoneNamed(zone: string): string | undefined {
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone: zone }).resolvedOptions().timeZone;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Said of a zone wechart can't run a schedule in. */
+export const unknownZone = (zone: string) => `“${zone}” isn’t a time zone wechart knows.`;
+
+/** What the form shows of a cron and zone as they are typed (T552; design 16, D2–D4). */
+export type CronPreview =
+  | {
+      readonly ok: true;
+      readonly words: string;
+      readonly refreshKeyCould: boolean;
+      /** The zone by its own name; none until one is chosen. */
+      readonly timezone?: string;
+      /** The next five, none without a zone. */
+      readonly runs: readonly string[];
+      readonly change?: { readonly at: string; readonly back: boolean; readonly before: number };
+    }
+  | {
+      readonly ok: false;
+      /** The field that's wrong, where the form says so. */
+      readonly field: 'cron' | 'timezone';
+      readonly problem: string;
+      /** The cron in words, where it is the zone that's wrong: still said under the cron. */
+      readonly words?: string;
+    };
+
+/**
+ * A cron and zone read as the form shows them (T552, AC-234): the cron in
+ * words, or what's wrong with it; whether a refresh key could run it; and,
+ * with a zone, its next five runs from pg-boss's own preview, across a
+ * daylight-saving change, with the change.
+ */
+export function cronPreview(
+  cron: string,
+  timezone: string,
+  now: Date,
+  preview: Preview = previewOf,
+): CronPreview {
+  const read = readCron(cron, preview);
+  if (!read.ok) return { ok: false, field: 'cron', problem: read.problem };
+  const typed = timezone.trim();
+  if (typed === '') return { ...read, runs: [] };
+  const zone = zoneNamed(typed);
+  const badZone = {
+    ok: false,
+    field: 'timezone',
+    problem: unknownZone(typed),
+    words: read.words,
+  } as const;
+  if (zone === undefined) return badZone;
+  let next: ReturnType<typeof nextRunsOf>;
+  try {
+    next = nextRunsOf(cron.trim().split(/\s+/).join(' '), zone, now, 5, preview);
+  } catch {
+    // The cron reads, so what pg-boss refuses is the zone (research pg-boss-12.33.2-installed.md).
+    return badZone;
+  }
+  return {
+    ...read,
+    timezone: zone,
+    runs: next.runs.map((run) => run.toISOString()),
+    ...(next.change === undefined
+      ? {}
+      : {
+          change: {
+            at: next.change.at.toISOString(),
+            back: next.change.back,
+            before: next.change.before,
+          },
+        }),
+  };
+}
+
 /**
  * A schedule's next runs in its zone (D4): listed across a daylight-saving
  * change, at the zone's own time, with the change and the first run after it.

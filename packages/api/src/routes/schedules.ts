@@ -3,8 +3,10 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { USER } from '../auth/guard';
 import { userOf } from '../auth/user';
 import type { CubeClient } from '../cube/client';
-import { listedBuildables } from '../jobs/build';
+import { listedBuildables, type Buildable } from '../jobs/build';
 import { EVERYTHING, NO_JOBS, reaches, type JobsAccess } from '../jobs/scope';
+import type { BuildHistory, LastRun } from '../repos/build-history';
+import { cronPreview } from '../scheduler/cron';
 import {
   ScheduleRefused,
   type Schedule,
@@ -37,6 +39,44 @@ const shown = (schedule: Schedule) => ({
   updatedAt: schedule.updatedAt.toISOString(),
 });
 
+/**
+ * A schedule as Schedules lists it (T552, AC-154; design 16, screen 2): its
+ * pre-aggregation by its short name, with its folder, as Jobs shows it
+ * (T371); its cron in words; its next five runs in its zone, from pg-boss's
+ * own preview, with a clock change among them (Q3); and how its last run
+ * went, from Run history.
+ */
+function listedRow(
+  schedule: Schedule,
+  row: Buildable | undefined,
+  last: LastRun | undefined,
+  now: Date,
+) {
+  const preview = cronPreview(schedule.cron, schedule.timezone, now);
+  return {
+    ...shown(schedule),
+    ...(row?.shortName === undefined ? {} : { shortName: row.shortName }),
+    ...(row?.folderPath === undefined ? {} : { folderPath: row.folderPath }),
+    ...(preview.ok
+      ? {
+          when: preview.words,
+          runs: preview.runs,
+          ...(preview.change === undefined ? {} : { change: preview.change }),
+        }
+      : {}),
+    lastRun:
+      last === undefined
+        ? null
+        : {
+            id: last.id,
+            outcome: last.outcome,
+            startedAt: last.startedAt.toISOString(),
+            endedAt: last.endedAt?.toISOString() ?? null,
+            error: last.error,
+          },
+  };
+}
+
 export function registerWechartSchedules(
   app: FastifyInstance,
   {
@@ -44,12 +84,18 @@ export function registerWechartSchedules(
     client,
     modelFiles,
     access,
+    history,
+    now = () => new Date(),
   }: {
     readonly scheduler: WechartScheduler;
     readonly client: CubeClient;
     readonly modelFiles?: ModelFileStore;
     /** Who may use Schedules, over which folders (T371); none, and everyone everywhere (sign-in off). */
     readonly access?: JobsAccess;
+    /** Each schedule's last run (T552); none, and none is shown. */
+    readonly history?: BuildHistory;
+    /** Next runs are counted from it. */
+    readonly now?: () => Date;
   },
 ): void {
   const scopeOf = (request: FastifyRequest) =>
@@ -63,7 +109,8 @@ export function registerWechartSchedules(
   const fieldsOf = async (
     request: FastifyRequest,
   ): Promise<
-    { ok: true; fields: ScheduleFields } | { ok: false; status: number; body: { error: string } }
+    | { ok: true; fields: ScheduleFields; row: Buildable }
+    | { ok: false; status: number; body: { error: string } }
   > => {
     const body = (request.body ?? {}) as Record<string, unknown>;
     const text = (key: string) => (typeof body[key] === 'string' ? body[key] : '');
@@ -89,6 +136,7 @@ export function registerWechartSchedules(
       };
     return {
       ok: true,
+      row,
       fields: {
         name: text('name'),
         preAggregation,
@@ -110,9 +158,35 @@ export function registerWechartSchedules(
   app.get('/api/wechart-schedules', USER, async (request, reply) => {
     const scope = await scopeOf(request);
     if (!scope.all && !scope.writesAny) return reply.status(403).send(NO_JOBS);
-    return (await scheduler.list())
-      .filter((schedule) => reaches(scope, schedule.folderId))
-      .map(shown);
+    const schedules = (await scheduler.list()).filter((schedule) =>
+      reaches(scope, schedule.folderId),
+    );
+    // Each pre-aggregation's short name and folder, as Jobs has them; a
+    // schedule doesn't need Cube to be listed, so none where it can't be read.
+    const rows = await listedBuildables(client, modelFiles, access).catch((): Buildable[] => []);
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const last =
+      history === undefined
+        ? new Map<string, LastRun>()
+        : await history.lastRunsOf(schedules.map((schedule) => schedule.id));
+    const at = now();
+    return schedules.map((schedule) =>
+      listedRow(schedule, byId.get(schedule.preAggregation), last.get(schedule.id), at),
+    );
+  });
+
+  /**
+   * The form's reading of a cron and zone as they are typed (T552, AC-234;
+   * design 16, D2–D4): in words or what's wrong, the refresh-key note's
+   * flag, and the next five runs, from pg-boss's own preview, so what is
+   * shown is what runs. Nothing of any folder's.
+   */
+  app.get('/api/wechart-schedules/preview', USER, async (request, reply) => {
+    const scope = await scopeOf(request);
+    if (!scope.all && !scope.writesAny) return reply.status(403).send(NO_JOBS);
+    const query = request.query as { cron?: unknown; timezone?: unknown };
+    const text = (value: unknown) => (typeof value === 'string' ? value : '');
+    return cronPreview(text(query.cron), text(query.timezone), now());
   });
 
   app.post('/api/wechart-schedules', USER, async (request, reply) => {
@@ -121,7 +195,9 @@ export function registerWechartSchedules(
     const asked = await fieldsOf(request);
     if (!asked.ok) return reply.status(asked.status).send(asked.body);
     try {
-      return reply.status(201).send(shown(await scheduler.create(asked.fields, byOf(request))));
+      const made = await scheduler.create(asked.fields, byOf(request));
+      // As the list has it (T552's review): the page shows it at once.
+      return reply.status(201).send(listedRow(made, asked.row, undefined, now()));
     } catch (error) {
       if (error instanceof ScheduleRefused) return reply.status(400).send({ error: error.message });
       throw error;
@@ -150,7 +226,8 @@ export function registerWechartSchedules(
     try {
       const changed = await scheduler.change(id, asked.fields, byOf(request));
       if (changed === undefined) return reply.status(404).send(NO_SUCH_SCHEDULE);
-      return shown(changed);
+      const last = (await history?.lastRunsOf([id]))?.get(id);
+      return listedRow(changed, asked.row, last, now());
     } catch (error) {
       if (error instanceof ScheduleRefused) return reply.status(400).send({ error: error.message });
       throw error;

@@ -468,3 +468,53 @@ describe('a build’s end (T372, AC-150)', () => {
     expect(await history().get(id)).toMatchObject({ outcome: 'done' });
   });
 });
+
+describe('a wechart schedule’s last run (T552, AC-154)', () => {
+  it('gives each schedule’s latest run, how it ended and when, and none for one that hasn’t run', async () => {
+    const schedule = (id: string) => ({ kind: 'schedule', id, name: `Morning ${tag}` }) as const;
+    const ids = { ran: `s-${randomUUID()}`, open: `s-${randomUUID()}`, never: `s-${randomUUID()}` };
+    const earlier = await history().start(
+      build(preAggOf('scheduled'), { via: 'schedule', starter: schedule(ids.ran) }),
+    );
+    const later = build(preAggOf('scheduled'), {
+      via: 'schedule',
+      starter: schedule(ids.ran),
+      tokens: [`t-${randomUUID()}`],
+      startedAt: new Date(STARTED.getTime() + 3_600_000),
+    });
+    const latest = await history().start(later);
+    const endedAt = new Date(STARTED.getTime() + 3_641_000);
+    await history().seen({
+      runId: latest,
+      token: later.tokens[0]!,
+      previous: null,
+      status: 'failure: timed out',
+      at: endedAt,
+      final: true,
+    });
+    await history().close(latest);
+    const open = await history().start(
+      build(preAggOf('scheduled'), { via: 'schedule', starter: schedule(ids.open) }),
+    );
+
+    const last = await history().lastRunsOf([ids.ran, ids.open, ids.never]);
+
+    expect(last).toEqual(
+      new Map([
+        [
+          ids.ran,
+          {
+            id: latest,
+            outcome: 'failed',
+            startedAt: later.startedAt,
+            endedAt,
+            error: 'failure: timed out',
+          },
+        ],
+        [ids.open, { id: open, outcome: null, startedAt: STARTED, endedAt: null, error: null }],
+      ]),
+    );
+    expect(last.get(ids.ran)?.id).not.toBe(earlier);
+    expect(await history().lastRunsOf([])).toEqual(new Map());
+  });
+});

@@ -2260,6 +2260,11 @@ const CASES: Record<string, Case> = {
   'GET /api/wechart-schedules': listed({ method: 'GET', url: '/api/wechart-schedules' }, (who) =>
     inPlaces(who, writes, (place) => schedulesIn[place]),
   ),
+  // The form's reading of a cron (T552): nothing of any folder's.
+  'GET /api/wechart-schedules/preview': everyone({
+    method: 'GET',
+    url: '/api/wechart-schedules/preview?cron=0%206%20*%20*%20*&timezone=UTC',
+  }),
   'POST /api/wechart-schedules': async () => {
     for (const place of PLACES)
       for (const who of WHO.filter((each) => !writes(each, place)))

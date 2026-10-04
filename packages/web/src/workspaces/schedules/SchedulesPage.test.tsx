@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { paneOf, schedule, shownSchedules } from './schedules.fixture';
 import { SchedulesPage } from './SchedulesPage';
 
 /**
@@ -181,6 +182,156 @@ describe('Schedules’ refresh-key rows (T551, AC-154)', () => {
     );
     // Read-only: nothing on the page edits a schedule.
     expect(document.querySelectorAll('main input, input, select, textarea')).toHaveLength(0);
+  });
+});
+
+/** T552 (design 16, screen 2 pins 5–8 and states D1, D6). */
+describe('Schedules’ wechart rows (T552, AC-154, AC-234)', () => {
+  const user = () => userEvent.setup({ delay: null });
+  const wechartRow = async (name: string) =>
+    (await screen.findByText(name, { selector: '[data-testid="wechart-schedule-name"]' })).closest(
+      'tr',
+    ) as HTMLElement;
+
+  it('lists a rollup with both kinds of schedule as two rows: wechart’s names who made it, with how its last run ended', async () => {
+    shownSchedules({ wechart: [schedule()] });
+    const row = await wechartRow('Weekday mornings');
+
+    const rows = screen
+      .getAllByRole('row')
+      .filter((each) => text(each).startsWith('orders.mornings'));
+    expect(rows).toHaveLength(2);
+    // Cube's first, then wechart's.
+    expect(rows[1]).toBe(row);
+    expect(text(cell(row, 'Folder'))).toBe('Sales');
+    expect(text(cell(row, 'Schedule'))).toBe(
+      'Weekday mornings · At 07:55, Monday to Friday.55 7 * * 1-5 · Europe/Berlin',
+    );
+    expect(text(cell(row, 'Next run'))).toBe('Mon 5 Oct, 07:5505:55 UTC · in 3 days');
+    const last = cell(row, 'Last run');
+    expect(text(last)).toMatch(/^DoneToday \d{2}:\d{2}$/);
+    expect(last.querySelector('[data-state="done"]')).not.toBeNull();
+    const owner = cell(row, 'Owner');
+    expect(text(owner)).toBe('wechartby Wren Writer');
+    expect(owner.querySelector('svg')?.getAttribute('data-icon')).toBe('schedule');
+  });
+
+  it('applies a change at once, with no proposal', async () => {
+    const { sent } = shownSchedules({ wechart: [schedule()] });
+    await user().click(await wechartRow('Weekday mornings'));
+    const pane = paneOf();
+    const cron = within(pane).getByRole('textbox', { name: 'Cron expression' });
+
+    await user().clear(cron);
+    await user().type(cron, '0 6 * * *');
+    const save = within(pane).getByRole('button', { name: 'Save changes' }) as HTMLButtonElement;
+    await waitFor(() => {
+      expect(save.disabled).toBe(false);
+    });
+    await user().click(save);
+
+    await waitFor(() => {
+      expect(sent.filter((each) => each.method === 'PUT')).toEqual([
+        {
+          method: 'PUT',
+          url: '/api/wechart-schedules/sched-1',
+          body: {
+            preAggregation: 'fsales__orders.mornings',
+            name: 'Weekday mornings',
+            cron: '0 6 * * *',
+            timezone: 'Europe/Berlin',
+            missed: 'once',
+          },
+        },
+      ]);
+    });
+    // The list read again: its row as changed.
+    await waitFor(async () => {
+      expect(text(cell(await wechartRow('Weekday mornings'), 'Schedule'))).toContain(
+        '0 6 * * * · Europe/Berlin',
+      );
+    });
+  });
+
+  it('asks before a delete, ending “You can’t undo this.”, with Cancel focused, then deletes it at once', async () => {
+    const { sent } = shownSchedules({ wechart: [schedule()] });
+    await user().click(await wechartRow('Weekday mornings'));
+
+    await user().click(within(paneOf()).getByRole('button', { name: 'Delete…' }));
+
+    const dialog = screen.getByRole('alertdialog', { name: 'Delete “Weekday mornings”?' });
+    expect(
+      within(dialog)
+        .getAllByRole('paragraph')
+        .map((each) => text(each)),
+    ).toEqual([
+      'Its runs stop. The builds it started stay in Run history. orders.mornings keeps its refresh key, which Cube’s refresh worker runs.',
+      'You can’t undo this.',
+    ]);
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    await user().click(within(dialog).getByRole('button', { name: 'Delete schedule' }));
+
+    await waitFor(() => {
+      expect(sent.filter((each) => each.method === 'DELETE')).toEqual([
+        { method: 'DELETE', url: '/api/wechart-schedules/sched-1' },
+      ]);
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryAllByText('Weekday mornings', {
+          selector: '[data-testid="wechart-schedule-name"]',
+        }),
+      ).toHaveLength(0);
+    });
+    expect(screen.queryAllByRole('alertdialog')).toHaveLength(0);
+    expect(screen.queryAllByRole('complementary', { name: 'Schedule details' })).toHaveLength(0);
+  });
+
+  it('says what goes when the rollup’s refresh key isn’t scheduled: nothing rebuilds it', async () => {
+    shownSchedules({
+      wechart: [schedule({ preAggregation: 'fsales__orders.on_demand' })],
+    });
+    await user().click(await wechartRow('Weekday mornings'));
+    await user().click(within(paneOf()).getByRole('button', { name: 'Delete…' }));
+
+    const dialog = screen.getByRole('alertdialog');
+    expect(text(within(dialog).getAllByRole('paragraph')[0])).toBe(
+      'Its runs stop. The builds it started stay in Run history. orders.on_demand keeps its refresh key, which is Not scheduled, so nothing will rebuild it until someone builds it or schedules it again.',
+    );
+  });
+
+  it('puts focus back on Delete… when the question is cancelled, deleting nothing (T552’s review)', async () => {
+    const { sent } = shownSchedules({ wechart: [schedule()] });
+    await user().click(await wechartRow('Weekday mornings'));
+    const remove = within(paneOf()).getByRole('button', { name: 'Delete…' });
+    await user().click(remove);
+
+    await user().click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Cancel' }),
+    );
+
+    expect(screen.queryAllByRole('alertdialog')).toHaveLength(0);
+    expect(document.activeElement).toBe(remove);
+    expect(sent.filter((each) => each.method === 'DELETE')).toEqual([]);
+  });
+
+  it('says when wechart’s schedules can’t be read, the refresh keys listed still (T552’s review)', async () => {
+    shownSchedules({ wechart: [schedule()], failing: ['wechart'] });
+
+    expect(text(await screen.findByText('wechart’s schedules could not be read.'))).toBe(
+      'wechart’s schedules could not be read.',
+    );
+    expect(text(await rowOf('orders.mornings'))).toContain('Daily at 08:00, Los Angeles');
+  });
+
+  it('lists wechart’s schedules, and offers New schedule, when the refresh keys can’t be read (T552’s review)', async () => {
+    shownSchedules({ wechart: [schedule()], failing: ['keys'] });
+
+    expect(text(await screen.findByText('Cube didn’t answer.'))).toBe('Cube didn’t answer.');
+    const row = await wechartRow('Weekday mornings');
+    expect(text(cell(row, 'Owner'))).toBe('wechartby Wren Writer');
+    expect(screen.getAllByRole('button', { name: 'New schedule' })).toHaveLength(1);
   });
 });
 

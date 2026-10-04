@@ -7,7 +7,7 @@ import type { CubeClient } from '../cube/client';
 import type { Database, ScheduleTable } from '../db/schema';
 import type { BuildHistory } from '../repos/build-history';
 import { buildablesFrom } from '../jobs/build';
-import { previewOf, readCron, type Preview } from './cron';
+import { previewOf, readCron, unknownZone, zoneNamed, type Preview } from './cron';
 
 /**
  * wechart's own schedules (T378, AC-234; design 16, screen 2, Q7, Q8, Q10).
@@ -135,15 +135,6 @@ export function scheduleStore(db: Kysely<Database>) {
 }
 export type ScheduleStore = ReturnType<typeof scheduleStore>;
 
-/** A zone by the name this runtime gives it (`europe/london` is Europe/London); none, unknown. */
-function zoneNamed(zone: string): string | undefined {
-  try {
-    return new Intl.DateTimeFormat('en-US', { timeZone: zone }).resolvedOptions().timeZone;
-  } catch {
-    return undefined;
-  }
-}
-
 /** A schedule's fields, checked as AC-234 says, or refused with the reason. */
 export function checkedFields(
   fields: ScheduleFields,
@@ -154,7 +145,7 @@ export function checkedFields(
   const typed = fields.timezone.trim();
   // Required, and starts empty (AC-234).
   if (typed === '') throw new ScheduleRefused('Choose the time zone its times are in.');
-  const unknown = new ScheduleRefused(`“${typed}” isn’t a time zone wechart knows.`);
+  const unknown = new ScheduleRefused(unknownZone(typed));
   const timezone = zoneNamed(typed);
   if (timezone === undefined) throw unknown;
   const read = readCron(fields.cron, preview);
