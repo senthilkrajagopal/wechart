@@ -950,6 +950,13 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R61 — shared bookmarks, the credential tests, and moves in the audit trail** (2026-10-04, the user)
+- Q (from T367): a shared bookmark carries its owner's filter values and marks, including values on members a viewer's Cube rules hide (their queries still run as themselves). A: "Apply as saved". *No change: a shared bookmark applies as its owner saved it.*
+- Q (from T367): an owner who loses access to the dashboard leaves a shared bookmark nobody can unshare or delete. A: "Super-Admin can remove it (Recommended)". *A Super-Admin may delete any shared bookmark; it stays listed until then. AC-293 is amended; T580.*
+- Q (from T368): must a test read wechart's and xcube's logs for the canary before AC-298 and AC-325 are ticked? A: "No, requests suffice". *The ticks rest on the remaining flows of `credential-sealing.md`'s plan, without reading the logs.*
+- Q (from T368): should a move that changes the groups reaching a folder be recorded as a permission change? A: "No, a move is a move". *AC-294 waits only on T505.*
+- *Claude's calls from T367, overturnable:* "newest first" is by when a bookmark was first saved; deleting one's own bookmark doesn't ask first; a calculation paused for want of a time field says so in the editor only (R45.4).
+
 **R60 — calculation requests, rollup refusals after the switch, and Cube Store's stop** (2026-10-04, the user)
 - Q (from T383): where should a folder's read-write members see calculation requests? A: "Reviews tab + count (Recommended)". *A third Reviews tab, "Calculation requests", and the Reviews count in the top bar includes open requests. Design 05, direction.md rule 76 and AC-287's count are amended.*
 - Q (from T451): a rollup that names a member the model doesn't have saves in My workspace and is refused only when proposed. Should the workspace save check it? A: "No, at proposal only". *AC-189 is amended: refused at proposal or approval.*
