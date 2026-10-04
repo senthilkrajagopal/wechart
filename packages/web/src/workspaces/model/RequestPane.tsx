@@ -1,8 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { StateLine } from '../../shell/StatusIcon';
+import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { browserTimeZone } from '../explore/projectFolder';
-import { CALC_REQUESTS_QUERY, shortName, type CalcRequestRow } from '../reviews/calcRequests';
+import {
+  CALC_REQUESTS_QUERY,
+  resolutionText,
+  shortName,
+  type CalcRequestRow,
+} from '../reviews/calcRequests';
 import { proposedText } from '../reviews/reviews';
 
 /**
@@ -127,10 +132,18 @@ export function RequestPane({ requestId, now = new Date() }: { requestId: string
               </a>
             </p>
           )}
-          <p className="reviews__where">
-            Add the measure to this model, then propose it: approving the proposal resolves the
-            request.
-          </p>
+          {request.resolution === null ? (
+            <p className="reviews__where" data-testid="pane-request-next">
+              Add the measure to this model, then propose it: approving the proposal resolves the
+              request.
+            </p>
+          ) : (
+            // Resolved (T385, AC-052): the members that resolve it, and whose proposal added them.
+            <p className="state-line" data-testid="pane-request-resolution">
+              <StatusIcon kind="ok" />
+              <span>{resolutionText(request.resolution, now)}</span>
+            </p>
+          )}
         </>
       )}
     </aside>

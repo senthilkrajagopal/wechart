@@ -62,6 +62,7 @@ describe('a calculation request (T383, AC-050)', () => {
       requestedBy: { key: 'manager-key', name: 'Manager' },
       requestedAt: expect.any(Date) as unknown,
       status: 'open',
+      resolution: null,
     });
     expect(await store().get(recorded.id)).toEqual(listed);
   });
@@ -82,10 +83,7 @@ describe('a calculation request (T383, AC-050)', () => {
     const second = await ask(mine, 'second');
     await ask(other, 'elsewhere');
 
-    expect((await store().inFolders([mine])).map((each) => each.id)).toEqual([
-      second.id,
-      first.id,
-    ]);
+    expect((await store().inFolders([mine])).map((each) => each.id)).toEqual([second.id, first.id]);
     expect(await store().inFolders([])).toHaveLength(0);
     expect(await store().get(randomUUID())).toBeUndefined();
   });
@@ -116,5 +114,89 @@ describe('a calculation request (T383, AC-050)', () => {
     expect(await store().openCount([mine, other])).toBe(2);
     expect(await store().openCount([])).toBe(0);
     expect(await store().openCount('all')).toBeGreaterThanOrEqual(2);
+  });
+});
+
+/**
+ * AC-052 (amended 2026-10-04, R63): WHEN a requested measure is added to the
+ * model and its proposal is approved into the folder, THE SYSTEM SHALL mark
+ * the request as resolved and name the member that resolves it. A requested
+ * measure is one that a proposal adds to the request's cube, where the
+ * proposal's author took the request up.
+ *
+ * The store: the open requests of the folders an approval landed models in,
+ * with who took each up; and a request resolved once, with the members that
+ * resolve it, the proposal, its author and its approver.
+ */
+describe('a calculation request resolved (T385, AC-052)', () => {
+  const ask = (folderId: string, description: string) =>
+    store().record({
+      chartId: 'chart-4',
+      cube: 'fsales__orders',
+      folderId,
+      modelPath: 'cubes/orders.yml',
+      fields: FIELDS,
+      description,
+      requestedBy: { key: 'manager-key', name: 'Manager' },
+    });
+
+  it('lists the open ones of these folders, each with the keys of those who took it up', async () => {
+    const [mine, other] = [folderOf(), folderOf()];
+    const taken = await ask(mine, 'taken');
+    const untaken = await ask(mine, 'untaken');
+    await ask(other, 'elsewhere');
+    await store().take(taken.id, { key: 'writer-key', name: 'Writer' });
+    await store().take(taken.id, { key: 'super-key', name: 'Super' });
+
+    expect(await store().openOn([mine])).toEqual([
+      { id: untaken.id, cube: 'fsales__orders', folderId: mine, takenBy: [] },
+      {
+        id: taken.id,
+        cube: 'fsales__orders',
+        folderId: mine,
+        takenBy: ['writer-key', 'super-key'],
+      },
+    ]);
+    expect(await store().openOn([])).toEqual([]);
+  });
+
+  it('is resolved once, with the members that resolve it, the proposal, its author and its approver', async () => {
+    const folder = folderOf();
+    const asked = await ask(folder, 'resolved');
+    const proposalId = randomUUID();
+
+    expect(
+      await store().resolve(asked.id, {
+        members: ['fsales__orders.margin', 'fsales__orders.margin_share'],
+        proposalId,
+        by: { key: 'writer-key', name: 'Writer' },
+        approvedBy: 'Super',
+      }),
+    ).toBe(true);
+    const resolved = await store().get(asked.id);
+    expect(resolved?.status).toBe('resolved');
+    expect(resolved?.resolution).toEqual({
+      members: ['fsales__orders.margin', 'fsales__orders.margin_share'],
+      proposalId,
+      by: { key: 'writer-key', name: 'Writer' },
+      approvedBy: 'Super',
+      at: expect.any(Date) as unknown,
+    });
+
+    // Once: a later approval changes nothing, and it is open no more.
+    expect(
+      await store().resolve(asked.id, {
+        members: ['fsales__orders.other'],
+        proposalId: randomUUID(),
+        by: { key: 'super-key', name: 'Super' },
+        approvedBy: 'Super',
+      }),
+    ).toBe(false);
+    expect((await store().get(asked.id))?.resolution?.members).toEqual([
+      'fsales__orders.margin',
+      'fsales__orders.margin_share',
+    ]);
+    expect(await store().openOn([folder])).toEqual([]);
+    expect(await store().openCount([folder])).toBe(0);
   });
 });

@@ -36,7 +36,9 @@ const REQUEST: CalcRequestRow = {
   requestedBy: 'Manager',
   requestedAt: new Date(2026, 9, 2, 9, 30).toISOString(),
   status: 'open',
+  resolution: null,
 };
+const NOW = new Date(2026, 9, 2, 12, 0);
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -54,7 +56,12 @@ describe('opening a calculation request (T384, AC-051)', () => {
     const fetchImpl = vi.fn((url: string, init?: RequestInit) => {
       asked.push([url, init]);
       return url === '/api/workspace/copies'
-        ? json(201, { kind: 'model', created: true, folderId: 'ws-project', path: 'models/orders.yml' })
+        ? json(201, {
+            kind: 'model',
+            created: true,
+            folderId: 'ws-project',
+            path: 'models/orders.yml',
+          })
         : json(200, TAKEN);
     }) as unknown as typeof fetch;
 
@@ -128,7 +135,7 @@ describe('the request beside the model editor (T384, AC-051)', () => {
       <QueryClientProvider
         client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
       >
-        <RequestPane requestId="r1" />
+        <RequestPane requestId="r1" now={NOW} />
       </QueryClientProvider>,
     );
   };
@@ -151,10 +158,38 @@ describe('the request beside the model editor (T384, AC-051)', () => {
     );
   });
 
+  it('says what to do while it is open', async () => {
+    shown([REQUEST]);
+    expect((await screen.findByTestId('pane-request-next')).textContent).toBe(
+      'Add the measure to this model, then propose it: approving the proposal resolves the request.',
+    );
+    expect(screen.queryByTestId('pane-request-resolution')).toBeNull();
+  });
+
+  /** T385 / AC-052 (amended 2026-10-04, R63): resolved, it names the members that resolve it. */
+  it('says what resolved it, in place of what to do, once resolved', async () => {
+    shown([
+      {
+        ...REQUEST,
+        status: 'resolved',
+        resolution: {
+          members: ['fsales__orders.margin'],
+          by: 'Writer',
+          approvedBy: 'Super',
+          at: new Date(2026, 9, 2, 11, 0).toISOString(),
+        },
+      },
+    ]);
+    expect((await screen.findByTestId('pane-request-resolution')).textContent).toBe(
+      'Resolved by orders.margin · added by Writer, approved by Super · Today 11:00',
+    );
+    expect(screen.queryByTestId('pane-request-next')).toBeNull();
+  });
+
   it('says so when the request isn’t one the user may see', async () => {
     shown([]);
-    expect(
-      (await screen.findByTestId('pane-request-missing')).textContent,
-    ).toBe('This request isn’t one of those asked of the folders you may change.');
+    expect((await screen.findByTestId('pane-request-missing')).textContent).toBe(
+      'This request isn’t one of those asked of the folders you may change.',
+    );
   });
 });

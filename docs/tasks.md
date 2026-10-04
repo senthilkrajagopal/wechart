@@ -7995,6 +7995,47 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/api/src/repos/calc-requests.ts`, `packages/api/src/repos/calc-resolution.test.ts`
   - Failing test: `calc-resolution.test.ts`: approving a model proposal that adds the requested measure marks the request resolved and records the member (AC-052).
   - Depends on: T384, T352
+  - **As built:**
+    - api:
+      - `packages/api/src/db/migrations/1758640000000_calc-request-resolutions.cjs`, `packages/api/src/db/schema.ts`;
+      - `packages/api/src/model/added-measures.ts` (+ test);
+      - `packages/api/src/repos/{calc-resolution.ts,calc-requests.ts}` (+ tests);
+      - `packages/api/src/routes/{proposals.ts,calc-requests.ts}`, `packages/api/src/server.ts`;
+      - `packages/api/src/routes/calc-request-resolve.test.ts`;
+    - web: `packages/web/src/workspaces/reviews/{calcRequests.ts,CalcRequestsPanel.tsx}` (+ panel and page tests), `packages/web/src/workspaces/model/RequestPane.tsx` (+ test);
+    - `e2e/security/calc-request-resolve.spec.ts`, T384's, carried on;
+    - docs: AC-052 amended to R63 in `docs/spec.md`.
+  - **Done 2026-10-04**, with R63 (the user: "The member who took it up").
+    - **What resolves a request.** An approved proposal resolves an open request when two things hold:
+      - its author took the request up, by opening it in their workspace (T384);
+      - one of the model files it lands, in the request's folder, adds a measure to the request's cube. A measure is added when the file it replaced didn't have it (a new file adds every measure).
+      
+      The request names those measures, by full name, with the proposal's author, its approver and when. A measure added by anyone who hasn't opened the request leaves it open, and so does a taker's proposal that adds nothing to its cube. Resolved once: a later approval changes nothing.
+    - **Where.** After an approval has landed its models and settled (`afterModelsLanded`, given each file as it landed and as it was), the open requests of those folders are read with their takers (`openOn`) and resolved (`resolve`). A failure there is logged and never undoes the approval.
+    - **Shown.** `GET /api/calc-requests` gives each request its `resolution`: `{ members, by, approvedBy, at }`, or null. The Reviews list says "Resolved". The summary says "Resolved by <cube.measure>, … · added by <author>, approved by <approver> · <when>", with the ok icon and no live region, and offers no opening. The pane beside the model editor says the same, in place of what to do next.
+    - **Tests:**
+      - `added-measures.test.ts`: each measure new to its cube, every measure of a new file, nothing for a file left as it was, a file that isn't YAML, or a view.
+      - `calc-resolution.test.ts`: resolved for a taker's proposal, naming each measure added to its cube, a root cube's by its own name; none for a proposal no taker made, in another folder, on another cube, or adding nothing.
+      - `calc-requests.test.ts` (the repo's): the open requests of folders with their takers' keys; resolved once, with the members, proposal, author and approver; open no more, and not counted.
+      - `calc-request-resolve.test.ts`, through the approval route, with the stub xcube applying the changeset: super asks three calculations, two on one cube and one on another. writer takes up one of the first cube's and the other cube's, adds a measure to the first in My workspace, and proposes it; super approves. The taken request is resolved, naming the measure, writer and super. The untaken one and the other cube's stay open.
+      - `CalcRequestsPanel.test.tsx` and `RequestPane.test.tsx`: the resolution's words, the "Resolved" status, none while open, and what to do next only while open.
+      - The full API suite (1602) and web suite (2382) passed.
+      - `e2e/security/calc-request-resolve.spec.ts` carries T385's steps after T384's: writer adds the measure in My workspace and proposes it; super approves; writer finds the request "Resolved" under Reviews, the summary naming the measure, and the same beside the model.
+    - After the rebase onto feat/xcube at 845c075, these passed: the full API suite (1614, with `proposal-reviews.test.ts` passing on its one rerun after a chart re-proposal found no item mid-run) and the full web suite (2404).
+    - **The cold review (PASS)** found these, now fixed:
+      - an approval in the app left the approver's Calculation requests, read within 5 minutes, showing the request open. Approving now reads them again (`DecisionPanel.tsx`, + test);
+      - a test header quoted AC-052's old wording;
+      - formatting.
+      
+      Left as found:
+      - the hook's failure path (logged, the approval kept) has no test;
+      - a failure there, or a document write failing after the models landed, leaves the request open for good. Nothing resolves one by hand, and no AC asks for that.
+    - **Open, asked of the user: a request on a view.** A chart's source may be a view, and T384 opens the view's file. But measures are added to cubes, and a view's file declares none, so no approval resolves a view's request, though the pane says approving will. The options:
+      - A: a view's request is resolved when the approval adds a measure to a cube on the view's join paths;
+      - B: asking on a view names one of its cubes instead;
+      - C: requests on views are refused.
+    - **Pending: the security e2e.** It hasn't run. wechart_security holds a stray migration row (1758565480000_sql-run-ends-by) that fails node-pg-migrate's order check, and the user is removing it. **AC-052 stays unticked** until that e2e passes on the real surface; the tick follows in a small follow-up.
+    - **The shared test databases:** the resolutions' migration is numbered 1758640000000, above the Jobs agent's 1758630000000s (the coordinator's rule). It was taken back out of wechart_test after each run.
 
 ## P2.12 Markings (F10, F11, returned)
 

@@ -34,6 +34,15 @@ const REQUEST: CalcRequestRow = {
   requestedBy: 'Manager',
   requestedAt: new Date(2026, 9, 2, 9, 30).toISOString(),
   status: 'open',
+  resolution: null,
+};
+
+/** What resolved it (T385): two measures on its cube, from writer's proposal, approved by super. */
+const RESOLUTION: CalcRequestRow['resolution'] = {
+  members: ['fsales__orders.margin', 'fsales__orders.margin_share'],
+  by: 'Writer',
+  approvedBy: 'Super',
+  at: new Date(2026, 9, 2, 11, 0).toISOString(),
 };
 
 function serve(requests: readonly CalcRequestRow[]) {
@@ -208,11 +217,41 @@ describe('calculation requests on the Reviews page (T383, AC-050)', () => {
   });
 
   it('offers no opening of a resolved request', async () => {
-    serve([{ ...REQUEST, status: 'resolved' }]);
+    serve([{ ...REQUEST, status: 'resolved', resolution: RESOLUTION }]);
     shown();
     await userEvent.click(await screen.findByRole('button', { name: 'orders' }));
 
     expect(screen.queryByRole('button', { name: 'Open in My workspace' })).toBeNull();
+  });
+
+  /**
+   * T385 / AC-052 (amended 2026-10-04, R63): resolved by the approval of a
+   * proposal from a member who took it up, adding measures to its cube; the
+   * request names those members.
+   * Fails when: the request stays open after that approval, or names no member.
+   */
+  it('names the members that resolved it, whose proposal added them, and who approved it', async () => {
+    serve([{ ...REQUEST, status: 'resolved', resolution: RESOLUTION }]);
+    shown();
+    const table = await screen.findByRole('table', { name: 'Calculation requests' });
+    expect(within(table).getAllByRole('row')[1]!.lastElementChild?.textContent).toBe('Resolved');
+    await userEvent.click(screen.getByRole('button', { name: 'orders' }));
+
+    expect(
+      within(screen.getByRole('region', { name: 'Calculation on orders' })).getByTestId(
+        'request-resolution',
+      ).textContent,
+    ).toBe(
+      'Resolved by orders.margin, orders.margin_share · added by Writer, approved by Super · Today 11:00',
+    );
+  });
+
+  it('names nothing resolved while it is open', async () => {
+    serve([REQUEST]);
+    shown();
+    await userEvent.click(await screen.findByRole('button', { name: 'orders' }));
+
+    expect(screen.queryByTestId('request-resolution')).toBeNull();
   });
 
   it('says when there is nothing to do', async () => {

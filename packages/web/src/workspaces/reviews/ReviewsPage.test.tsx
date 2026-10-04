@@ -288,6 +288,7 @@ describe('the Reviews page (T355, AC-287)', () => {
       requestedBy: 'Manager',
       requestedAt: at(27, 9),
       status: 'open',
+      resolution: null,
     };
     vi.stubGlobal(
       'fetch',

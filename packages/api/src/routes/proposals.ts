@@ -28,6 +28,7 @@ import type {
   ProposalBindings,
   ProposalBindingStore,
 } from '../repos/proposal-bindings';
+import type { LandedModelFile } from '../repos/calc-resolution';
 import type { XcubeAdmin } from '../xcube/client';
 import { ModelRefusal, type ProposalModels } from './proposal-models';
 import { withChartsRenamed } from './workspace-copy';
@@ -170,6 +171,18 @@ export interface ProposalRoutes {
    * requests listed to them. Unset, nothing else.
    */
   readonly alsoWaiting?: (request: FastifyRequest) => Promise<number>;
+  /**
+   * Once an approval has landed models (T385, AC-052): each file as it landed
+   * and as it was, with the proposal's author and approver, to resolve the
+   * calculation requests its measures answer. A failure here is logged and
+   * never undoes the approval.
+   */
+  readonly afterModelsLanded?: (landed: {
+    readonly author: { readonly key: string; readonly name: string };
+    readonly approver: { readonly key: string; readonly name: string };
+    readonly proposalId: string;
+    readonly files: readonly LandedModelFile[];
+  }) => Promise<unknown>;
 }
 
 const NOT_THERE = { error: 'There is no such item in your workspace.' };
@@ -987,6 +1000,8 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     proposal: Proposal,
     approver: { key: string; name: string },
     request: FastifyRequest,
+    /** Each model file it lands, as landed and as it was (T385), gathered here. */
+    landedFiles: LandedModelFile[] = [],
   ) => {
     const docs = documents as Required<ProposalRoutes['documents']>;
     const landed: { kind: ProposalKind; id: string; version: number; from: ProposedItem }[] = [];
@@ -1349,6 +1364,12 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
           { author: proposal.author, approver },
         );
         landed.push({ kind: 'model', id: file.id, version: file.version, from: item });
+        landedFiles.push({
+          folderId: write.folderId,
+          path: file.path,
+          before: write.over?.content ?? null,
+          after: file.content,
+        });
       }
       await writeDocuments(bodies);
     });
@@ -1543,8 +1564,9 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
       });
     }
     let landed: Awaited<ReturnType<typeof land>>;
+    const landedFiles: LandedModelFile[] = [];
     try {
-      landed = await land(decided, approver, request);
+      landed = await land(decided, approver, request, landedFiles);
     } catch (failure) {
       // Nothing it couldn't land is left approved: open again, to decide anew.
       await store.reopen(decided.id);
@@ -1559,6 +1581,21 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     }
     await store.settle(decided.id);
     await markOrigins(landed, request.log);
+    // The calculation requests its measures answer, resolved (T385, AC-052).
+    if (landedFiles.length > 0 && routes.afterModelsLanded !== undefined)
+      await routes
+        .afterModelsLanded({
+          author: decided.author,
+          approver,
+          proposalId: decided.id,
+          files: landedFiles,
+        })
+        .catch((failure: unknown) => {
+          request.log.warn(
+            { err: failure, proposalId: decided.id },
+            'the calculation requests an approval answers were not resolved',
+          );
+        });
     const first = landed.find((at) => at.from.id === decided.itemId);
     // What landed with it, by kind: its charts and its models (T451's review).
     const withIt = goingWithText(landed.filter((at) => at !== first).map((at) => at.from));

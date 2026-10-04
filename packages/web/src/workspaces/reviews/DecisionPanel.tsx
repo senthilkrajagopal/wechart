@@ -43,6 +43,8 @@ export function DecisionPanel({
       void client.invalidateQueries({ queryKey: ['proposal', proposal.id] });
       void client.invalidateQueries({ queryKey: ['reviews'] });
       void client.invalidateQueries({ queryKey: ['proposal-of'] });
+      // An approval may resolve calculation requests (T385, AC-052).
+      if (action === 'approve') void client.invalidateQueries({ queryKey: ['calc-requests'] });
       setStep('idle');
       if (action === 'approve') {
         const first = answer.landed?.find((each) => each.kind === proposal.kind);

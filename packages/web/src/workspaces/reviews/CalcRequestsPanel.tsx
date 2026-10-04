@@ -4,7 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import { StateLine, StatusIcon, type StateKind } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { openRequest } from '../model/RequestPane';
-import { CALC_REQUESTS_QUERY, shortName, type CalcRequestRow } from './calcRequests';
+import {
+  CALC_REQUESTS_QUERY,
+  resolutionText,
+  shortName,
+  type CalcRequestRow,
+} from './calcRequests';
 import { folderText, proposedText } from './reviews';
 
 /**
@@ -141,7 +146,9 @@ const GROUPS: readonly [keyof CalcRequestRow['fields'], string][] = [
 /** The fields a request carries, by group, and those of cubes the user can't see, counted. */
 function fieldsText(row: CalcRequestRow): string {
   const said = GROUPS.flatMap(([group, label]) =>
-    row.fields[group].length === 0 ? [] : [`${label}: ${row.fields[group].map(shortName).join(', ')}`],
+    row.fields[group].length === 0
+      ? []
+      : [`${label}: ${row.fields[group].map(shortName).join(', ')}`],
   );
   if (row.unseenFields > 0)
     said.push(
@@ -225,6 +232,14 @@ function RequestSummary({
       <p className="reviews__by" data-testid="request-by">
         Asked by {row.requestedBy} · {proposedText(row.requestedAt, now)} · model {row.modelPath}
       </p>
+      {row.resolution === null ? null : (
+        // The members that resolve it, and whose approved proposal added them
+        // (T385, AC-052): a state, with its icon, not news, so no live region.
+        <p className="state-line" data-testid="request-resolution">
+          <StatusIcon kind="ok" />
+          <span>{resolutionText(row.resolution, now)}</span>
+        </p>
+      )}
       <h3 className="reviews__label">What they need</h3>
       <p className="reviews__description" data-testid="request-description">
         {row.description}

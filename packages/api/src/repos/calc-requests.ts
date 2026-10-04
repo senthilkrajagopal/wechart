@@ -1,6 +1,7 @@
 import type { Kysely, Selectable } from 'kysely';
 
 import type { CalcRequestFields, CalcRequestTable, Database } from '../db/schema';
+import type { OpenRequest } from './calc-resolution';
 
 /**
  * Calculation requests (T383, AC-050; F6): a calculation the quick
@@ -22,9 +23,26 @@ export interface CalcRequest {
   readonly requestedBy: { readonly key: string; readonly name: string };
   readonly requestedAt: Date;
   readonly status: 'open' | 'resolved';
+  /** What resolved it (T385, AC-052); null while it is open. */
+  readonly resolution: CalcResolution | null;
 }
 
-export type NewCalcRequest = Omit<CalcRequest, 'id' | 'requestedAt' | 'status'>;
+/**
+ * A request's resolution (T385, AC-052, amended by R63): the approval of a
+ * proposal adding measures to its cube, from a member who took it up.
+ */
+export interface CalcResolution {
+  /** The measures that resolve it, each `<cube>.<measure>` by full name. */
+  readonly members: readonly string[];
+  readonly proposalId: string;
+  /** The proposal's author, who took the request up. */
+  readonly by: { readonly key: string; readonly name: string };
+  /** Who approved the proposal, by name. */
+  readonly approvedBy: string;
+  readonly at: Date;
+}
+
+export type NewCalcRequest = Omit<CalcRequest, 'id' | 'requestedAt' | 'status' | 'resolution'>;
 
 export interface CalcRequestStore {
   record(request: NewCalcRequest): Promise<CalcRequest>;
@@ -39,6 +57,14 @@ export interface CalcRequestStore {
   take(id: string, by: { readonly key: string; readonly name: string }): Promise<void>;
   /** Who took it up, first first. */
   takersOf(id: string): Promise<readonly { readonly key: string; readonly name: string }[]>;
+  /**
+   * The open requests asked of any of these folders, newest first, each with
+   * the keys of those who took it up (T385): what an approval landing models
+   * there may resolve.
+   */
+  openOn(folderIds: readonly string[]): Promise<readonly OpenRequest[]>;
+  /** Resolves an open request (T385); false, changing nothing, for one already resolved. */
+  resolve(id: string, resolution: Omit<CalcResolution, 'at'>): Promise<boolean>;
 }
 
 const requestOf = (row: Selectable<CalcRequestTable>): CalcRequest => ({
@@ -52,6 +78,22 @@ const requestOf = (row: Selectable<CalcRequestTable>): CalcRequest => ({
   requestedBy: { key: row.requested_by_key, name: row.requested_by_name },
   requestedAt: row.requested_at,
   status: row.status,
+  resolution:
+    row.status !== 'resolved' ||
+    row.resolved_members === null ||
+    row.resolved_proposal_id === null ||
+    row.resolved_by_key === null ||
+    row.resolved_by_name === null ||
+    row.approved_by_name === null ||
+    row.resolved_at === null
+      ? null
+      : {
+          members: row.resolved_members,
+          proposalId: row.resolved_proposal_id,
+          by: { key: row.resolved_by_key, name: row.resolved_by_name },
+          approvedBy: row.approved_by_name,
+          at: row.resolved_at,
+        },
 });
 
 /** An id as the database reads one, so a malformed one finds nothing rather than failing. */
@@ -122,6 +164,53 @@ export function calcRequestStore(db: Kysely<Database>): CalcRequestStore {
         .orderBy('user_key')
         .execute();
       return rows.map((row) => ({ key: row.user_key, name: row.user_name }));
+    },
+    async openOn(folderIds) {
+      if (folderIds.length === 0) return [];
+      const rows = await db
+        .selectFrom('calc_requests')
+        .select(['id', 'cube', 'folder_id'])
+        .where('status', '=', 'open')
+        .where('folder_id', 'in', folderIds)
+        .orderBy('requested_at', 'desc')
+        .orderBy('id', 'desc')
+        .execute();
+      if (rows.length === 0) return [];
+      const takers = await db
+        .selectFrom('calc_request_takers')
+        .select(['request_id', 'user_key'])
+        .where(
+          'request_id',
+          'in',
+          rows.map((row) => row.id),
+        )
+        .orderBy('taken_at')
+        .orderBy('user_key')
+        .execute();
+      return rows.map((row) => ({
+        id: row.id,
+        cube: row.cube,
+        folderId: row.folder_id,
+        takenBy: takers.flatMap((taker) => (taker.request_id === row.id ? [taker.user_key] : [])),
+      }));
+    },
+    async resolve(id, resolution) {
+      if (!UUID.test(id)) return false;
+      const resolved = await db
+        .updateTable('calc_requests')
+        .set({
+          status: 'resolved',
+          resolved_members: JSON.stringify(resolution.members),
+          resolved_proposal_id: resolution.proposalId,
+          resolved_by_key: resolution.by.key,
+          resolved_by_name: resolution.by.name,
+          approved_by_name: resolution.approvedBy,
+          resolved_at: new Date(),
+        })
+        .where('id', '=', id)
+        .where('status', '=', 'open')
+        .executeTakeFirst();
+      return Number(resolved.numUpdatedRows) > 0;
     },
     async get(id) {
       if (!UUID.test(id)) return undefined;

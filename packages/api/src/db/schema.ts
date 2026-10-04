@@ -262,6 +262,16 @@ export interface CalcRequestTable {
   requested_by_name: string;
   requested_at: Generated<Date>;
   status: Generated<'open' | 'resolved'>;
+  /**
+   * Resolved (T385, AC-052): the members that resolve it, by full name, the
+   * proposal, its author and its approver, and when; null while open.
+   */
+  resolved_members: JSONColumnType<string[] | null, string | null | undefined, string | null>;
+  resolved_proposal_id: Generated<string | null>;
+  resolved_by_key: Generated<string | null>;
+  resolved_by_name: Generated<string | null>;
+  approved_by_name: Generated<string | null>;
+  resolved_at: Generated<Date | null>;
 }
 
 /** The fields a chart had in use when a calculation was requested on it. */

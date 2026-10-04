@@ -1,3 +1,5 @@
+import { proposedText } from './reviews';
+
 /**
  * Calculation requests as `GET /api/calc-requests` lists them (T383,
  * AC-050): those asked of the folders the user may change, newest first. A
@@ -25,6 +27,17 @@ export interface CalcRequestRow {
   readonly requestedBy: string;
   readonly requestedAt: string;
   readonly status: 'open' | 'resolved';
+  /**
+   * What resolved it (T385, AC-052; R63): the measures an approved proposal
+   * added to its cube, by full name, from a member who took it up; whose
+   * proposal, who approved it, and when. Null while it is open.
+   */
+  readonly resolution: {
+    readonly members: readonly string[];
+    readonly by: string;
+    readonly approvedBy: string;
+    readonly at: string;
+  } | null;
 }
 
 export const CALC_REQUESTS_QUERY = {
@@ -47,3 +60,18 @@ export const CALC_REQUESTS_QUERY = {
 
 /** A full published name as its short one: without its folder's prefix (`fsales__`). */
 export const shortName = (name: string): string => name.replace(/^f[a-z0-9]{1,40}__/, '');
+
+/**
+ * A resolution in words (T385, AC-052): the members that resolve it, whose
+ * proposal added them, who approved it, and when.
+ */
+export function resolutionText(
+  resolution: NonNullable<CalcRequestRow['resolution']>,
+  now: Date,
+): string {
+  return (
+    `Resolved by ${resolution.members.map(shortName).join(', ')}` +
+    ` · added by ${resolution.by}, approved by ${resolution.approvedBy}` +
+    ` · ${proposedText(resolution.at, now)}`
+  );
+}

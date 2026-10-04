@@ -1,4 +1,4 @@
-import { landed } from '../model-files';
+import { landed, proposedModel } from '../model-files';
 import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
 
 /**
@@ -13,7 +13,8 @@ import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
  * `manager` asks for a calculation on the second of the two cubes. `writer`
  * opens it from Reviews › Calculation requests: the cube's model, copied into
  * My workspace, opens in the model editor on that cube's file with the
- * request beside it.
+ * request beside it. Then (T385, AC-052) `writer` adds the measure there and
+ * proposes it, `super` approves, and the request is resolved, naming it.
  */
 const RUN = Math.random().toString(36).slice(2, 8);
 const CUBE = `t384_${RUN}`;
@@ -22,13 +23,23 @@ const PATH = `cubes/${CUBE}.yml`;
 const OTHER_PATH = `cubes/${OTHER}.yml`;
 const modelOf = (name: string) =>
   `cubes:\n  - name: ${name}\n    sql: SELECT 1 AS n, 2 AS cost\n    measures:\n      - name: n\n        sql: n\n        type: sum\n`;
+const WITH_MARGIN = `${modelOf(CUBE)}      - name: margin\n        sql: n - cost\n        type: sum\n`;
 const DESCRIPTION = `Margin, n less cost (${RUN})`;
-const made = { folder: '', west: '', xcubeId: '', chart: '', request: '', asker: '', project: '' };
+const made = {
+  folder: '',
+  west: '',
+  xcubeId: '',
+  chart: '',
+  request: '',
+  asker: '',
+  project: '',
+  proposal: '',
+};
 const full = () => `${made.xcubeId}__${CUBE}`;
 
 test.describe.configure({ mode: 'serial' });
 
-test.describe('a calculation request opened in My workspace (T384)', () => {
+test.describe('a calculation request opened in My workspace, and resolved by its measure (T384, T385)', () => {
   test.afterAll(async ({ browser }) => {
     test.setTimeout(180_000);
     for (const who of ['writer', 'manager', 'super'] as const) {
@@ -182,6 +193,85 @@ test.describe('a calculation request opened in My workspace (T384)', () => {
       expect(decodeURIComponent(new URL(page.url()).pathname.split('/')[3] ?? '')).toBe(
         made.project,
       );
+    });
+
+    test('adds the measure to the cube in My workspace, and proposes it', async ({ page }) => {
+      const { request } = page;
+      const changed = await request.post('/api/model/publish', {
+        data: {
+          folderId: made.project,
+          files: [{ path: PATH, content: WITH_MARGIN }],
+          targetFolderId: made.folder,
+        },
+        timeout: 90_000,
+      });
+      expect(changed.status(), await changed.text()).toBe(200);
+      const proposed = await proposedModel(request, made.project, PATH);
+      expect(proposed.status(), await proposed.text()).toBe(201);
+      const proposal = (await proposed.json()) as {
+        id: string;
+        kind: string;
+        targetFolderId: string;
+      };
+      // The model, going back to /Resolve.
+      expect([proposal.kind, proposal.targetFolderId]).toEqual(['model', made.folder]);
+      made.proposal = proposal.id;
+    });
+  });
+
+  test.describe('as super, who writes everything', () => {
+    test.use({ role: 'super' });
+
+    test('approves the proposal', async ({ page }) => {
+      const approved = await page.request.post(`/api/proposals/${made.proposal}/approve`, {
+        data: {},
+        timeout: 90_000,
+      });
+      expect(approved.status(), await approved.text()).toBe(200);
+    });
+  });
+
+  /**
+   * T385 / AC-052 (amended 2026-10-04, R63): WHEN a requested measure is added
+   * to the model and its proposal is approved into the folder, THE SYSTEM
+   * SHALL mark the request as resolved and name the member that resolves it.
+   * A requested measure is one that a proposal adds to the request's cube,
+   * where the proposal's author is a member who took the request up by
+   * opening it in their workspace (AC-051).
+   * Fails when: the request stays open after the approval of a proposal that
+   * adds a measure to its cube, from a member who took it up, or names no
+   * member.
+   */
+  test.describe('as writer, once it is approved', () => {
+    test.use({ role: 'writer' });
+
+    test('finds the request resolved under Reviews, naming the measure that resolves it (AC-052)', async ({
+      page,
+    }) => {
+      const me = ((await (await page.request.get('/api/me')).json()) as { name: string }).name;
+      await page.goto('/reviews?tab=requests');
+      const row = page
+        .getByRole('table', { name: 'Calculation requests' })
+        .getByRole('row')
+        .filter({ has: page.getByRole('button', { name: CUBE, exact: true }) });
+      await expect(row).toHaveCount(1);
+      await expect(row.getByRole('cell').last()).toHaveText('Resolved');
+      await row.getByRole('button', { name: CUBE, exact: true }).click();
+      const summary = page.getByRole('region', { name: `Calculation on ${CUBE}` });
+      await expect(summary.getByTestId('request-resolution')).toContainText(
+        `Resolved by ${CUBE}.margin · added by ${me}, approved by `,
+      );
+      await expect(summary.getByRole('button', { name: 'Open in My workspace' })).toHaveCount(0);
+
+      // Beside the model, too, where it was opened.
+      await page.goto(
+        `/explore/folders/${encodeURIComponent(made.project)}/models/${encodeURIComponent(PATH)}?request=${made.request}`,
+      );
+      await expect(
+        page
+          .getByRole('complementary', { name: 'Calculation request' })
+          .getByTestId('pane-request-resolution'),
+      ).toContainText(`Resolved by ${CUBE}.margin`);
     });
   });
 });

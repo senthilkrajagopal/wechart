@@ -217,6 +217,17 @@ export function registerCalcRequests(app: FastifyInstance, routes: CalcRequestRo
       requestedBy: each.requestedBy.name,
       requestedAt: each.requestedAt.toISOString(),
       status: each.status,
+      // What resolved it (T385, AC-052): the measures, on its own cube, which
+      // its readers see; by whose proposal, approved by whom, and when.
+      resolution:
+        each.resolution === null
+          ? null
+          : {
+              members: each.resolution.members,
+              by: each.resolution.by.name,
+              approvedBy: each.resolution.approvedBy,
+              at: each.resolution.at.toISOString(),
+            },
     };
   };
 }

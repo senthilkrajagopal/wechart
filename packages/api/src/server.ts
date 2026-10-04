@@ -96,6 +96,7 @@ import type { XcubeSqlRunner } from './xcube/sql-runner';
 import type { SqlRunStore } from './repos/sql-runs';
 import type { BuildHistory } from './repos/build-history';
 import type { CalcRequestStore } from './repos/calc-requests';
+import { resolutionsOf } from './repos/calc-resolution';
 import { signsInOtherwise } from './routes/sql-runner-switch';
 import type { DataSourceLanding } from './routes/data-sources';
 import {
@@ -1459,6 +1460,20 @@ export function buildServer({
                       right.write ? [folderId] : [],
                     ),
               );
+            },
+            // An approval's measures resolve the open requests on their cubes
+            // that the proposal's author took up (T385, AC-052; R63).
+            afterModelsLanded: async ({ author, approver, proposalId, files }) => {
+              const open = await calcRequests.openOn([
+                ...new Set(files.map((file) => file.folderId)),
+              ]);
+              for (const { id, members } of resolutionsOf(open, files, author.key))
+                await calcRequests.resolve(id, {
+                  members,
+                  proposalId,
+                  by: { key: author.key, name: author.name },
+                  approvedBy: approver.name,
+                });
             },
           }),
       // A landed dashboard shows only library charts on its folder's path:

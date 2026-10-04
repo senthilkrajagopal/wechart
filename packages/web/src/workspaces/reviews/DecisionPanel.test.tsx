@@ -222,4 +222,41 @@ describe('deciding a proposal (T356)', () => {
     );
     expect(onDecided).not.toHaveBeenCalled();
   });
+
+  /**
+   * T385 / AC-052: an approval may resolve calculation requests, so the
+   * requests the approver has read are read again, not left showing open
+   * (T385's review).
+   */
+  it('reads the calculation requests again once approved', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              status: 'approved',
+              landed: [{ kind: 'model', id: 'm1', version: 2 }],
+            }),
+            { status: 200 },
+          ),
+        ),
+      ),
+    );
+    const client = new QueryClient();
+    client.setQueryData(['calc-requests'], []);
+    const onDecided = vi.fn();
+    render(
+      <QueryClientProvider client={client}>
+        <DecisionPanel proposal={proposal({ kind: 'model' })} onDecided={onDecided} />
+      </QueryClientProvider>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Approve and publish' }));
+    await vi.waitFor(() => {
+      expect(onDecided).toHaveBeenCalled();
+    });
+    expect(client.getQueryState(['calc-requests'])?.isInvalidated).toBe(true);
+  });
 });
