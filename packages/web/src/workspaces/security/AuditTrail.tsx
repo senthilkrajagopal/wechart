@@ -472,11 +472,16 @@ export function AuditTrail({
         )}
 
         {page.isError ? (
+          // State C: Retry and Details (T474's review; direction.md rule 18).
           <div className="audit-trail__error">
-            <StateLine kind="err">{page.error.message}</StateLine>
+            <StateLine kind="err">Couldn’t read the audit trail.</StateLine>
             <button type="button" className="btn btn-sm" onClick={() => void page.refetch()}>
               Retry
             </button>
+            <details>
+              <summary>Details</summary>
+              {page.error.message}
+            </details>
           </div>
         ) : null}
         {page.data === undefined && page.isPending ? (

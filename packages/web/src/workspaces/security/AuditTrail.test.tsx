@@ -619,3 +619,33 @@ describe('the audit trail (T369, AC-295)', () => {
     expect(screen.getByRole('button', { name: 'Newer' })).toHaveProperty('disabled', true);
   });
 });
+
+/** T474's review (design 08, state C; direction.md rule 18): an error has Retry and Details. */
+describe('the audit trail, unread', () => {
+  it('says it couldn’t be read, with Retry and Details', async () => {
+    serve();
+    const served = globalThis.fetch;
+    let refuse = true;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) =>
+        refuse && String(input).startsWith('/api/audit?')
+          ? new Response(null, { status: 503 })
+          : served(input),
+      ),
+    );
+    open();
+    const failed = await screen.findByRole('alert');
+    expect(failed.textContent).toContain('Couldn’t read the audit trail.');
+    const details = within(failed.closest('.audit-trail__error') as HTMLElement).getByText(
+      'Details',
+    );
+    expect(details.tagName).toBe('SUMMARY');
+    expect(details.closest('details')?.textContent).toContain(
+      'The audit trail could not be read (503).',
+    );
+    refuse = false;
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect((await screen.findByRole('table', { name: 'Audit trail' })).tagName).toBe('TABLE');
+  });
+});

@@ -4321,7 +4321,8 @@ code.schedules__sub { font-family: var(--wc-font-code); }
 .audit-trail__summary { text-align: left; color: var(--wc-text-primary); }
 .audit-trail__table tr.is-selected td { background: var(--wc-bg-accent-soft); }
 .audit-trail__pager { display: flex; gap: 8px; justify-content: flex-end; }
-.audit-trail__error { display: flex; gap: 8px; align-items: center; }
+.audit-trail__error { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.audit-trail__error details { flex-basis: 100%; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
 .audit-trail__skeleton { display: grid; gap: 6px; }
 .audit-trail__skeleton span { height: 28px; border-radius: 4px; background: var(--wc-bg-subtle); }
 .audit-trail__inspector {

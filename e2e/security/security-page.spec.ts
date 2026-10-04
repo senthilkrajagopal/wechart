@@ -10,22 +10,31 @@ import { expect, test } from './fixtures';
 const bar = (page: import('@playwright/test').Page) =>
   page.getByRole('banner').getByRole('navigation', { name: 'Workspaces' }).first();
 
-test.describe('Security, as a writer sees it', () => {
-  test.use({ role: 'writer' });
+/**
+ * T474 (design 08, state D; AC-295, rule 67): for anyone but a Super-Admin,
+ * a writer, a reader and someone in no group, none of the three tabs is
+ * there, and each address renders the same Not found as a missing page.
+ */
+for (const role of ['writer', 'reader', 'nobody'] as const) {
+  test.describe(`Security, as ${role} sees it`, () => {
+    test.use({ role });
 
-  test('isn’t in the bar, and its addresses are Not found (state D)', async ({ page }) => {
-    await page.goto('/explore');
-    await expect(bar(page).getByRole('link', { name: 'Explore' })).toBeVisible();
-    await expect(bar(page).getByRole('link', { name: 'Security' })).toHaveCount(0);
+    test('isn’t in the bar, and its addresses are Not found (state D)', async ({ page }) => {
+      await page.goto('/explore');
+      await expect(bar(page).getByRole('link', { name: 'Explore' })).toBeVisible();
+      await expect(bar(page).getByRole('link', { name: 'Security' })).toHaveCount(0);
 
-    for (const address of ['/security', '/security/preview']) {
-      await page.goto(address);
-      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Not found');
-      await expect(page.getByRole('main')).toContainText('Nothing here matches that address.');
-      await expect(page.getByRole('table', { name: 'Access policies' })).toHaveCount(0);
-    }
+      for (const address of ['/security', '/security/preview', '/security/audit']) {
+        await page.goto(address);
+        await expect(page.getByRole('heading', { level: 1 })).toHaveText('Not found');
+        await expect(page.getByRole('main')).toContainText('Nothing here matches that address.');
+        await expect(page.getByRole('navigation', { name: 'Security' })).toHaveCount(0);
+        await expect(page.getByRole('table', { name: 'Access policies' })).toHaveCount(0);
+        await expect(page.getByRole('table', { name: 'Audit trail' })).toHaveCount(0);
+      }
+    });
   });
-});
+}
 
 test.describe('Security, as a Super-Admin sees it', () => {
   test.use({ role: 'super' });
@@ -77,5 +86,26 @@ test.describe('Security, as a Super-Admin sees it', () => {
     // As groups (T438; design 08, state E).
     await expect(main.getByRole('region', { name: 'Preview as groups' })).toBeVisible();
     await expect(main.getByRole('table', { name: 'Access policies' })).toHaveCount(0);
+    // T474: groups chosen as chips from the AD group picker, in place of
+    // phase 1's JSON editor and "Find a dashboard" (state E; AC-166).
+    const preview = main.getByRole('region', { name: 'Preview as groups' });
+    await expect(preview.getByRole('combobox', { name: 'AD group' })).toBeVisible();
+    await expect(main.getByLabel('Security context (JSON)')).toHaveCount(0);
+    await expect(main.getByLabel('Find a dashboard')).toHaveCount(0);
+    await expect(main.getByRole('region', { name: 'Preview a security context' })).toHaveCount(0);
+
+    // T474: the third tab, the audit trail, at its own address (pin 1; T369's page).
+    await main
+      .getByRole('navigation', { name: 'Security' })
+      .getByRole('link', { name: 'Audit trail' })
+      .click();
+    await expect(page).toHaveURL(/\/security\/audit(\?.*)?$/);
+    await expect(
+      main.getByRole('navigation', { name: 'Security' }).getByRole('link', { name: 'Audit trail' }),
+    ).toHaveAttribute('aria-current', 'page');
+    await expect(
+      main.getByRole('table', { name: 'Audit trail' }).getByRole('columnheader'),
+    ).toHaveText(['Time', 'User', 'Event', 'Folder', 'Item', 'Details']);
+    await expect(main.getByText(/^Records older than .+ are removed\./)).toBeVisible();
   });
 });

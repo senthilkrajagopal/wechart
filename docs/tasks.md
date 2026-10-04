@@ -10662,7 +10662,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
       - a writer's panel turning read-only;
       - three groups in two lists.
     - The web unit suite (2,316) passes, and so does `explore-roles.spec.ts` on its own. Run together with access.spec, its first `writer` test met the known Dex sign-in timeout twice.
-- [ ] T474 (AC-165, AC-166, AC-295, AC-343) Security as design 08's three tabs, for Super-Admins only
+- [x] T474 (AC-165, AC-166, AC-295, AC-343) Security as design 08's three tabs, for Super-Admins only
   - Files: `packages/web/src/workspaces/security/…` (+ tests), `e2e/security/security-page.spec.ts`
   - Failing test: `security-page.spec.ts`:
     - Policies, Preview as groups and Audit trail as tabs, Not found for anyone but Super-Admins;
@@ -10670,6 +10670,22 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - Policies reworded for phase 2.
     - The Audit trail tab is T369's, drawn to design 08.
   - Depends on: T438, T369
+  - **Done 2026-10-04, with no product code.** Every part of the failing test was already built:
+    - T500: the tabs, Super-Admins only, and Policies reworded;
+    - T438: Preview as groups, with its chips and banner (`preview-as.spec.ts`);
+    - T369: the Audit trail (`audit.spec.ts`).
+    - `docs/design/reviews/status.md` already recorded design 08 as complete.
+  - **Added to `security-page.spec.ts`** the checks it lacked. They passed on their first run, as the behaviour exists:
+    - writer, reader and nobody each get no Security in the bar, and Not found at `/security`, `/security/preview` and `/security/audit`, with no tabs, policies or trail;
+    - a Super-Admin's preview has the AD group picker, and no JSON editor or "Find a dashboard";
+    - the Audit trail tab is at its own address, current there, with Time, User, Event, Folder, Item and Details and the retention note.
+  - No AC changes: AC-165, AC-166 and AC-295 were already ticked, and AC-343 stays open for the other surfaces.
+  - **There was no red run.** The new checks passed at once, since the behaviour was built. The cold review read each against the code it guards, and found that each would fail if its gate broke: the bar, Not found, the picker, the tab, its columns.
+  - **The cold review (PASS) found one gap, now fixed:** the Audit trail's error had Retry but no Details (state C; direction.md rule 18). It now says "Couldn't read the audit trail." with Retry and a Details disclosure holding the reason (`AuditTrail.test.tsx`, failing first).
+  - **Two differences from design 08's state E, built by T438 and not recorded until now.** They are for the user, not decided here:
+    - The banner reads "Previewing as _a_ and _b_. This dashboard's queries run as exactly these groups.". The design has "Previewing as _a_ and _b_ · _dashboard_" with Stop preview.
+    - What the groups reach is two sections: the folders, then "What the model gives them" for the cubes. The design has one list holding both.
+  - **Left, as status.md has it:** tiles a previewed group doesn't reach (xcube's folder gate, T437 → T436); the Folder filter as a tree picker.
 - [ ] T475 (AC-329, AC-342, AC-343) The cube picker as design 10: cubes on the item's path grouped by folder, and a hidden same-named cube dimmed
   - Failing test: `picker.spec.ts`: the picker groups cubes by folder along the item's path, by title; a farther same-named cube is listed dimmed and unselectable, saying which folder's cube hides it (AC-342).
   - Depends on: T429, T342
