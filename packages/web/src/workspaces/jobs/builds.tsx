@@ -82,11 +82,13 @@ export function whenOf(iso: string, now: Date = new Date()): { shown: string; ut
  * 16:20", "28 Sep 09:12" — your local time, UTC on hover (design 16, pins 6
  * and 11, and its footnote).
  */
-export function BuiltWhen({ iso }: { iso: string }) {
+export function BuiltWhen({ iso, lower = false }: { iso: string; lower?: boolean }) {
   const when = whenOf(iso);
+  const shown = when.shown.replace(/(\d{2}:\d{2}):\d{2}$/, '$1');
   return (
     <time dateTime={iso} title={when.utc}>
-      {when.shown.replace(/(\d{2}:\d{2}):\d{2}$/, '$1')}
+      {/* "Built today 14:01" (design 16, screen 2): lower-cased after a word. */}
+      {lower ? `${shown.charAt(0).toLowerCase()}${shown.slice(1)}` : shown}
     </time>
   );
 }

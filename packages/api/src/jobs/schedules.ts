@@ -7,6 +7,9 @@ import { filesInFolders, fileOf, pathsByName } from '../model/split';
 import { ROOT_FOLDER_ID } from '../repos/catalog';
 import type { ModelFile } from '../server';
 import type { PublishedFolders } from '../xcube/folders';
+import type { Buildable } from './build';
+import type { RowState } from './partitions';
+import { modelKeysOf, refreshWordsOf, type ModelKeys, type RefreshWords } from './refreshWords';
 import { EVERYTHING, NO_JOBS, placements, reaches, type JobsAccess, type Placement } from './scope';
 
 /**
@@ -35,19 +38,26 @@ export interface Schedule {
   readonly fileFolderId?: string;
   /** Whose schedule it is: Cube's refresh worker's, for now always. */
   readonly owner: 'cube';
+  /** What kind of schedule it is, for its icon (refreshWords.ts). */
+  readonly kind: RefreshWords['kind'];
   /** Whether Cube's refresh worker refreshes it at all. */
   readonly scheduled: boolean;
-  /** When it is rebuilt, in words. */
+  /** When it is rebuilt, in words (T551: design 16, screen 2 pin 6). */
   readonly when: string;
+  /** Its key as the model writes it. */
+  readonly written: string;
+  /** The key Cube turns over on, where one says when: its next runs come from it. */
+  readonly runs?: RefreshWords['runs'];
   /** Its key's `every` and `timezone`, as written, where it has them. */
   readonly every?: string;
   readonly timezone?: string;
   /** Its key's SQL, from the model file: checked, not rebuilt, each `every`. */
   readonly sql?: string;
+  /** False for a cube marked `public: false`, which xcube's admin meta lists with hidden=true. */
+  readonly public?: false;
+  /** When Cube made its newest version, from the partitions route (T375); none, never built. */
+  readonly lastBuiltAt?: string | null;
 }
-
-/** Cube's interval test (research, "Syntax"): anything else is a cron. */
-const INTERVAL = /^(\d+) (second|minute|hour|day|week)s?$/;
 
 type Value = Record<string, unknown>;
 const asValue = (value: unknown): Value | undefined =>
@@ -55,68 +65,35 @@ const asValue = (value: unknown): Value | undefined =>
     ? (value as Value)
     : undefined;
 
-/** A declared key in words; undefined for none. */
-function keyInWords(key: Value): string {
-  const every = typeof key['every'] === 'string' ? key['every'] : undefined;
-  if (every === undefined)
-    // A key of SQL alone: the metadata drops its SQL (a function), leaving
-    // no `every`; Cube checks it every 10 seconds (research, "Refresh worker cadence").
-    return 'When its SQL returns a new value, checked every 10 seconds';
-  if (!INTERVAL.test(every)) {
-    // A cron runs in its own zone, or in UTC with none — not the query's
-    // (research, "Turn-over formula").
-    const zone = typeof key['timezone'] === 'string' ? key['timezone'] : 'UTC';
-    return `At "${every}" in ${zone}`;
-  }
-  let text = `Every ${every}`;
-  if (key['incremental'] === true) text += ', incrementally';
-  if (typeof key['updateWindow'] === 'string')
-    text += `, rebuilding the last ${key['updateWindow']}`;
-  return text;
-}
-
 function scheduleOf(
   cube: Value,
   each: Value,
   stored: ReadonlyMap<string, string>,
+  model: ModelKeys,
+  home: { readonly folderId: string; readonly shortName: string },
 ): Schedule | undefined {
   const cubeName = cube['name'];
   const name = each['name'];
   if (typeof cubeName !== 'string' || typeof name !== 'string') return undefined;
   const type = typeof each['type'] === 'string' ? each['type'] : 'rollup';
   const key = asValue(each['refreshKey']);
-  const base = {
+  // In words and as written, as Jobs' Trigger says it (T551; refreshWords.ts).
+  const { kind, scheduled, words, written, runs } = refreshWordsOf(each, cube, model, home);
+  return {
     id: `${cubeName}.${name}`,
     cube: cubeName,
     name,
     type,
     ...fileOf(stored, cubeName, cube['fileName']),
     owner: 'cube' as const,
-  };
-  // A lambda or a rollup join has no table of its own to refresh (research, "For Schedules").
-  if (type === 'rollupLambda' || type === 'rollupJoin')
-    return { ...base, scheduled: false, when: 'Not scheduled: it reads the rollups it joins' };
-  if (each['scheduledRefresh'] === false)
-    return {
-      ...base,
-      scheduled: false,
-      when: 'Not scheduled: built only when asked for, from Jobs',
-    };
-  const written = {
-    ...(typeof key?.['every'] === 'string' ? { every: key['every'] } : {}),
-    ...(typeof key?.['timezone'] === 'string' ? { timezone: key['timezone'] } : {}),
-  };
-  if (key !== undefined) return { ...base, ...written, scheduled: true, when: keyInWords(key) };
-  // None declared: its cube's key where it has one, else Cube's hourly default
-  // (research, "The effective key when none is declared").
-  const cubeKey = asValue(cube['refreshKey']);
-  if (cubeKey === undefined)
-    return { ...base, scheduled: true, when: 'Every 1 hour (Cube’s default)' };
-  const said = keyInWords(cubeKey);
-  return {
-    ...base,
-    scheduled: true,
-    when: `As its cube’s refresh key: ${said.charAt(0).toLowerCase()}${said.slice(1)}`,
+    kind,
+    scheduled,
+    when: words,
+    written,
+    ...(runs === undefined ? {} : { runs }),
+    ...(scheduled && typeof key?.['every'] === 'string' ? { every: key['every'] } : {}),
+    ...(scheduled && typeof key?.['timezone'] === 'string' ? { timezone: key['timezone'] } : {}),
+    ...(cube['public'] === false ? { public: false as const } : {}),
   };
 }
 
@@ -145,6 +122,7 @@ export function schedulesFrom(
   // A folder's cube is `<xcubeId>__<name>` (T450's review): its folder, and the name its file declares.
   const folderOfXcube = new Map([...folders].map(([folderId, xcubeId]) => [xcubeId, folderId]));
   const fileIn = filesInFolders(files);
+  const model = modelKeysOf(files);
   const homeOf = (name: string) => {
     const at = name.indexOf('__');
     const folderId = at > 0 ? folderOfXcube.get(name.slice(0, at)) : undefined;
@@ -162,7 +140,8 @@ export function schedulesFrom(
     const own = fileIn(home.folderId, home.shortName);
     return all.flatMap((each: unknown) => {
       const found = asValue(each);
-      const unplaced = found === undefined ? undefined : scheduleOf(value, found, stored);
+      const unplaced =
+        found === undefined ? undefined : scheduleOf(value, found, stored, model, home);
       if (unplaced === undefined) return [];
       // A folder's never takes the root's file, nor xcube's own file name.
       const { fileName: _cubes, ...rest } = unplaced;
@@ -172,18 +151,9 @@ export function schedulesFrom(
         ...own,
         ...where,
       };
+      // Its key's SQL, for Data as of's "as written" (T273's review).
       const sql = sqlOf.get(schedule.id);
-      if (sql === undefined || !schedule.scheduled) return [schedule];
-      return [
-        {
-          ...schedule,
-          sql,
-          when:
-            schedule.every === undefined
-              ? 'When its SQL returns a new value, checked every 10 seconds'
-              : `When its SQL returns a new value, checked every ${schedule.every}`,
-        },
-      ];
+      return [sql === undefined || !schedule.scheduled ? schedule : { ...schedule, sql }];
     });
   });
 }
@@ -199,7 +169,27 @@ export function registerSchedules(
   folders?: () => Promise<PublishedFolders>,
   /** Who may see which folders' schedules (T371, AC-297); none, and everyone sees all. */
   access?: JobsAccess,
+  /** When Cube last built each, where xcube's partitions route is there (T551; T375). */
+  states?: (rows: readonly Buildable[]) => Promise<Map<string, RowState>>,
 ): void {
+  /** Each row with when Cube last built it: none for a lambda or join, which has no table. */
+  const withLastBuilt = async (rows: readonly Schedule[]): Promise<Schedule[]> => {
+    if (states === undefined) return [...rows];
+    const known = await states(
+      rows.map((row) => ({
+        id: row.id,
+        type: row.type,
+        trigger: row.when,
+        ...(row.type === 'rollupLambda' || row.type === 'rollupJoin'
+          ? { buildable: false as const }
+          : {}),
+      })),
+    );
+    return rows.map((row) => {
+      const state = known.get(row.id);
+      return state?.lastBuiltAt === undefined ? row : { ...row, lastBuiltAt: state.lastBuiltAt };
+    });
+  };
   /**
    * The Schedules workspace's: a read-write member's own folders' (T371).
    * With `?seen=1`, a dashboard's Data as of's: the folders its viewer may
@@ -210,14 +200,18 @@ export function registerSchedules(
     const forDataAsOf = (request.query as { seen?: unknown }).seen === '1';
     if (!scope.all && !forDataAsOf && !scope.writesAny) return reply.status(403).send(NO_JOBS);
     const rows = schedulesFrom(
-      // The whole model's, xcube's own: the folder gate filters no own read (T436).
-      await client.modelMeta(),
+      // The whole model's, xcube's own: the folder gate filters no own read
+      // (T436); `public: false` cubes too (T551; research
+      // xcube-jobs-schedules-routes.md §2).
+      // Data as of's only what queries reach (T551's review).
+      await client.modelMeta({ hidden: !forDataAsOf }),
       // Every folder's files where the store has them: a folder's rollups too.
       modelFiles === undefined ? [] : await (modelFiles.all?.() ?? modelFiles.list()),
       folders === undefined ? new Map() : (await folders()).ids,
       access === undefined ? undefined : await placements(access),
     );
-    if (!forDataAsOf) return rows.filter((row) => reaches(scope, row.folderId ?? null));
+    if (!forDataAsOf)
+      return withLastBuilt(rows.filter((row) => reaches(scope, row.folderId ?? null)));
     // Data as of: of a folder the viewer may see but not write, only its
     // freshness, the schedule in words; never the model's file, key or SQL,
     // and no way into Jobs (R42.7; T371's review).

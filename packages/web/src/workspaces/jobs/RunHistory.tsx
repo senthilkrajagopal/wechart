@@ -244,7 +244,7 @@ export function RunHistory({
             <span>
               Builds you or others start from Jobs, and builds wechart’s schedules start, in your
               folders, are listed here. Cube’s refresh worker’s own builds aren’t listed yet: their
-              history comes in the next phase.
+              history isn’t recorded.
             </span>
             {filters.within === 'all' ? null : (
               <button
@@ -353,7 +353,7 @@ export function RunHistory({
           </button>
           <span className="run-history__note">
             50 at a time. Each pre-aggregation keeps its latest 100 builds. Builds Cube’s refresh
-            worker starts on its own aren’t listed until their history comes, in the next phase.
+            worker starts on its own aren’t listed until their history is recorded.
           </span>
         </div>
       </div>

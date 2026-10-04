@@ -223,6 +223,9 @@ describe('Run history (T374, AC-150)', () => {
     const said = empty.parentElement!;
     expect(text(said)).toContain('in your folders');
     expect(text(said)).toContain('Cube’s refresh worker’s own builds aren’t listed yet');
+    // No page speaks of phases (UX-111; T551's review): nor its note under the pager.
+    expect(text(said)).not.toMatch(/\bphase\b/i);
+    expect(text(document.querySelector('.run-history__note'))).not.toMatch(/\bphase\b/i);
     expect(text(said)).not.toContain('EMEA');
     expect(within(said).getByRole('button', { name: 'Show all time' }).tagName).toBe('BUTTON');
   });

@@ -249,6 +249,25 @@ describe('what Data as of says, as reviewed', () => {
     );
   });
 
+  /** T551: the API's words are Schedules' now; a cron's start "Daily", "Hourly" or "At". */
+  it('says "Refreshed" before a cron’s words as before an interval’s, and not before a default’s', () => {
+    const saidOf = (when: string) =>
+      words(
+        dataAsOf({ ...base, schedules: [{ id: 'a.b', cube: 'a', when }] }, NOW, time)?.entries ??
+          [],
+      );
+    expect(saidOf('Daily at 08:00, Los Angeles')).toContain(
+      'Refreshed daily at 08:00, Los Angeles',
+    );
+    expect(saidOf('Hourly at :15')).toContain('Refreshed hourly at :15');
+    expect(saidOf('At 07:00 every Monday, Berlin')).toContain(
+      'Refreshed at 07:00 every Monday, Berlin',
+    );
+    expect(saidOf('Every hour')).toContain('Refreshed every hour');
+    expect(saidOf('Cube’s default: every hour')).toContain('Cube’s default: every hour');
+    expect(saidOf('Not scheduled')).toContain('Not scheduled');
+  });
+
   it('says it is reading the schedule while it is, rather than that it could not', () => {
     const said = dataAsOf({ ...base, schedules: 'loading' }, NOW, time);
     expect(words(said?.entries ?? [])).toContain('Reading its schedule…');

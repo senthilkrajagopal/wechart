@@ -1,44 +1,65 @@
 import { useQuery } from '@tanstack/react-query';
+import { useState, type ReactNode } from 'react';
 
 import { InfoBar } from '../../shell/InfoBar';
-import { StateLine } from '../../shell/StatusIcon';
+import { StateLine, StatusIcon, type StateKind } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { shownOf } from '../jobs/BuildPanel';
-import { rollupHref } from '../model/inFolder';
+import { BuiltWhen } from '../jobs/builds';
+import { OwnerLabel } from './OwnerLabel';
+import { SchedulePane } from './SchedulePane';
+import { dayIn, runsOf, timeIn, untilIn, zoneOf, type Schedule } from './schedule';
 
 /**
- * Schedules (T160, AC-154): every pre-aggregation's refresh schedule, labelled
- * with its owner, read-only, each linking to where it is set — the
- * pre-aggregation in Model. Cube's refresh worker owns each one today: a
+ * Schedules (T160, AC-154; T551, design 16's screen 2): every
+ * pre-aggregation's refresh schedule, a `public: false` cube's included, one
+ * row each, labelled with its owner as an icon and words, read-only, each
+ * opening its pane, where it is set — the pre-aggregation in Model — and
+ * Jobs are a click away. Cube's refresh worker owns each one today: a
  * schedule is its refresh key, in the model (the user's "Cube-owned now",
- * 2026-09-24). wechart's own scheduler is deferred (AC-234), so the page says
- * that too, rather than offering a "+ Schedule" that could do nothing.
+ * 2026-09-24). wechart's own schedules come with AC-234 (T378).
  */
-interface Schedule {
-  readonly id: string;
-  /** Its cube's short name and folder (T371): what people see (§P2.6 D). */
-  readonly shortName?: string;
-  readonly folderPath?: readonly string[];
-  readonly cube: string;
-  readonly name: string;
-  readonly fileName?: string;
-  /** That file's folder, where it isn't the root (T530). */
-  readonly fileFolderId?: string;
-  readonly owner: 'cube';
-  readonly scheduled: boolean;
-  readonly when: string;
-}
 
-const OWNERS: Readonly<Record<Schedule['owner'], string>> = {
-  cube: 'Cube’s refresh worker',
+/** The icon a schedule's words wear, where its kind has one (design 07, pin 4; design 16). */
+const ICONS: Partial<Record<Schedule['kind'], StateKind>> = {
+  'not-scheduled': 'off',
+  default: 'info',
+  'cube-keys': 'info',
+  unrunnable: 'warn',
 };
 
-/**
- * Its file, open on its cube's pre-aggregations: a folder's in its folder, by
- * the name its file declares (T530, AC-222).
- */
-const modelHref = ({ fileName, fileFolderId, cube, shortName }: Schedule) =>
-  rollupHref({ fileName, fileFolderId, cube: shortName ?? cube });
+/** Its next run, in its zone (else yours), with UTC and how long until it. */
+function NextRun({ schedule, now }: { schedule: Schedule; now: Date }) {
+  const { runs, change } = runsOf(schedule, now, 1);
+  const zone = zoneOf(schedule);
+  const next = runs[0];
+  if (next !== undefined)
+    return (
+      <>
+        {`${dayIn(zone, next)}, ${timeIn(zone, next)}`}
+        <span className="schedules__sub">{`${timeIn('UTC', next)} UTC · ${untilIn(next, now)}`}</span>
+      </>
+    );
+  if (change !== undefined)
+    return (
+      <span className="schedules__sub">After the clocks change on {dayIn(zone, change.at)}</span>
+    );
+  if (schedule.kind === 'sql') return <span className="schedules__sub">When its SQL changes</span>;
+  if (schedule.kind === 'cube-keys')
+    return <span className="schedules__sub">Depends on its cubes’ keys</span>;
+  return <span className="muted">—</span>;
+}
+
+/** When Cube last built it: "Built today 14:01", "Not built yet", or "—" where not known. */
+function LastRun({ schedule }: { schedule: Schedule }): ReactNode {
+  if (schedule.lastBuiltAt === undefined) return <span className="muted">—</span>;
+  if (schedule.lastBuiltAt === null) return <span className="schedules__sub">Not built yet</span>;
+  return (
+    <span className="schedules__sub">
+      Built <BuiltWhen iso={schedule.lastBuiltAt} lower />
+    </span>
+  );
+}
 
 export function SchedulesPage() {
   const schedules = useQuery({
@@ -58,72 +79,106 @@ export function SchedulesPage() {
       return (await response.json()) as Schedule[];
     },
   });
+  const [selected, setSelected] = useState<string | null>(null);
+  const now = new Date();
+  const open = schedules.data?.find((each) => each.id === selected);
 
   return (
-    <div className="admin-page">
-      <h1 className="workspace-title">Schedules</h1>
-      {/* What the page does now, and that scheduling from wechart waits
-          (AC-233), with no word of phases (T466, UX-111). */}
-      <InfoBar>
-        <p>
-          When each pre-aggregation is rebuilt is set by its refresh key in the model, and Cube’s
-          refresh worker runs it: change one in Model. Scheduling builds and cache warm-ups from
-          wechart isn’t available yet.
-        </p>
-      </InfoBar>
-      {schedules.isPending ? (
-        <StateLine kind="run">Reading the schedules…</StateLine>
-      ) : schedules.isError ? (
-        <StateLine kind="err">{schedules.error.message}</StateLine>
-      ) : schedules.data.length === 0 ? (
-        <p>The model declares no pre-aggregations.</p>
-      ) : (
-        <TableScroll label="Refresh schedules">
-          <table className="query-log" aria-label="Refresh schedules">
-            <thead>
-              <tr>
-                <th scope="col">Pre-aggregation</th>
-                <th scope="col">When</th>
-                <th scope="col">Owner</th>
-                <th scope="col">
-                  <span className="visually-hidden">Where it is set</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {schedules.data.map((schedule) => {
-                const href = modelHref(schedule);
-                const shownAs = shownOf(schedule);
-                return (
-                  <tr key={schedule.id}>
-                    <td className="query-log__query">
-                      {shownAs.name}
-                      {shownAs.folder === undefined ? null : (
-                        <span className="schedules__folder">{shownAs.folder}</span>
-                      )}
-                    </td>
-                    <td>
-                      {schedule.scheduled ? (
-                        schedule.when
-                      ) : (
-                        // A state, so with its icon, never colour alone (AC-152).
-                        <StateLine kind="idle">{schedule.when}</StateLine>
-                      )}
-                    </td>
-                    <td>{OWNERS[schedule.owner]}</td>
-                    <td>
-                      {href === undefined ? null : (
-                        <a href={href} aria-label={`Edit ${shownAs.name} in Model`}>
-                          Edit in Model
-                        </a>
-                      )}
-                    </td>
+    <div className={open === undefined ? 'admin-page' : 'admin-page admin-page--docked'}>
+      <div className="admin-page__main">
+        <h1 className="workspace-title">Schedules</h1>
+        {/* What the page does now, and that scheduling from wechart waits
+            (AC-233), with no word of phases (T466, UX-111). */}
+        <InfoBar>
+          <p>
+            When each pre-aggregation is rebuilt is set by its refresh key in the model, and Cube’s
+            refresh worker runs it: change one in Model. Scheduling builds and cache warm-ups from
+            wechart isn’t available yet.
+          </p>
+        </InfoBar>
+        {schedules.isPending ? (
+          <StateLine kind="run">Reading the schedules…</StateLine>
+        ) : schedules.isError ? (
+          <StateLine kind="err">{schedules.error.message}</StateLine>
+        ) : schedules.data.length === 0 ? (
+          <p>The model declares no pre-aggregations.</p>
+        ) : (
+          <>
+            <TableScroll label="Refresh schedules">
+              <table className="query-log" aria-label="Refresh schedules">
+                <thead>
+                  <tr>
+                    {['Pre-aggregation', 'Folder', 'Schedule', 'Next run', 'Last run', 'Owner'].map(
+                      (column) => (
+                        <th key={column} scope="col">
+                          {column}
+                        </th>
+                      ),
+                    )}
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </TableScroll>
+                </thead>
+                <tbody>
+                  {schedules.data.map((schedule) => {
+                    const shownAs = shownOf(schedule);
+                    const icon = ICONS[schedule.kind];
+                    return (
+                      <tr
+                        key={schedule.id}
+                        // A row opens its pane (D5): by pointer, or Enter or Space on it.
+                        aria-selected={selected === schedule.id}
+                        tabIndex={0}
+                        className="build-panel__row"
+                        onClick={() => {
+                          setSelected(schedule.id);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.target !== event.currentTarget) return;
+                          if (event.key !== 'Enter' && event.key !== ' ') return;
+                          event.preventDefault();
+                          setSelected(schedule.id);
+                        }}
+                      >
+                        <td className="query-log__query">
+                          <span data-testid="schedule-name">{shownAs.name}</span>
+                        </td>
+                        <td>{shownAs.folder ?? 'Shared'}</td>
+                        <td>
+                          <span
+                            className={icon === undefined ? undefined : `status status--${icon}`}
+                          >
+                            {icon === undefined ? null : <StatusIcon kind={icon} />}
+                            {schedule.when}
+                          </span>
+                          <code className="schedules__sub">{schedule.written}</code>
+                        </td>
+                        <td>
+                          <NextRun schedule={schedule} now={now} />
+                        </td>
+                        <td>
+                          <LastRun schedule={schedule} />
+                        </td>
+                        <td>
+                          <OwnerLabel owner={schedule.owner} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </TableScroll>
+            {/* What Last run means for a refresh key (design 16, screen 2's foot). */}
+            <p className="jobs-foot">
+              Times are your local time unless a schedule names its own zone. For a refresh key,
+              Last run is when Cube last built the rollup; who started it and how it ended aren’t
+              recorded yet, until the refresh worker’s history is.
+            </p>
+          </>
+        )}
+      </div>
+      {open === undefined ? null : (
+        <aside className="admin-pane" aria-label="Schedule details">
+          <SchedulePane schedule={open} now={now} />
+        </aside>
       )}
     </div>
   );

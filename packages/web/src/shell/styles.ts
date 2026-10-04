@@ -3796,6 +3796,33 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 .build-queue { display: grid; gap: 10px; }
 .build-queue__sub { display: block; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
 .build-queue__table code { font-size: 12px; }
+/* Schedules' rows and pane (T551; design 16, screen 2 and D5): a line under
+   each cell's first for as written, UTC and how long until; the key's block
+   in the code face; the next runs as a grid of day, time and UTC. */
+.schedules__sub { display: block; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+code.schedules__sub { font-family: var(--wc-font-code); }
+.schedules__written {
+  margin: 0;
+  padding: 8px 10px;
+  font-family: var(--wc-font-code);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 6px;
+  background: var(--wc-bg-subtle);
+}
+.schedules__runs {
+  display: grid;
+  grid-template-columns: max-content max-content 1fr;
+  gap: 2px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-variant-numeric: tabular-nums;
+}
+.schedules__runs > li { display: contents; }
+.schedules__utc { color: var(--wc-text-secondary); }
 .notebar {
   display: flex;
   gap: 8px;

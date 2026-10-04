@@ -115,16 +115,21 @@ test('Schedules reads a folder rollup’s key SQL from its folder’s file', asy
     .filter({ hasText: `${cube}.main` })
     .filter({ hasText: folderTitle });
   await expect(row).toContainText(
-    'When its SQL returns a new value, checked every 1 hour',
+    'When its SQL returns a new value, checked every hour',
     PUBLISHED,
   );
   await expect(row).not.toContainText(`${id.replaceAll('-', '')}__`);
 
-  // Edit in Model opens its own folder's file, on its pre-aggregations (T530, AC-222).
-  await row.getByRole('link', { name: `Edit ${cube}.main in Model` }).click();
+  // Open in Model, in its pane (T551; design 16, D5), opens its own folder's
+  // file, on the pre-aggregation itself (T530, AC-222).
+  await row.click();
+  await page
+    .getByRole('complementary', { name: 'Schedule details' })
+    .getByRole('link', { name: 'Open in Model' })
+    .click();
   await expect(page).toHaveURL(
     new RegExp(
-      `/explore/folders/${id}/models/${encodeURIComponent(`cubes/${cube}.yml`)}\\?cube=${cube}&tab=pre_aggregations$`,
+      `/explore/folders/${id}/models/${encodeURIComponent(`cubes/${cube}.yml`)}\\?cube=${cube}&tab=pre_aggregations&member=main$`,
     ),
   );
   await expect(page.getByRole('heading', { name: `cubes/${cube}.yml`, level: 1 })).toBeVisible();

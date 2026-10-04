@@ -271,7 +271,8 @@ test('Data as of says what served a tile, how fresh it is and where that is set'
   await expect(menu.getByRole('menuitem')).toHaveText([
     'Pre-aggregation monthly_orders.by_status_month',
     /^Last built \d/,
-    'Refreshed every 1 hour',
+    // In Schedules' words (T551).
+    'Refreshed every hour',
     'As written: every: "1 hour"',
     // The day too, when the next hour is tomorrow's (T273's review).
     /^Next run (\d{1,2} \w{3,4}, )?\d{2}:\d{2}, may start up to 5½ min late$/,

@@ -11,6 +11,7 @@ import type { BuildHistory } from '../repos/build-history';
 import { ROOT_FOLDER_ID } from '../repos/catalog';
 import type { ModelFile, ModelFileStore } from '../server';
 import type { RowState } from './partitions';
+import { modelKeysOf, refreshWordsOf, type RefreshWords } from './refreshWords';
 import { EVERYTHING, NO_JOBS, placements, reaches, type JobsAccess, type Placement } from './scope';
 
 /**
@@ -79,8 +80,10 @@ export interface Buildable {
   readonly folderPath?: readonly string[];
   readonly type: string;
   readonly partitionGranularity?: string;
-  /** What rebuilds it, in words: its refresh key (AC-229). */
+  /** What rebuilds it, in words: its refresh key (AC-229), as Schedules says it (T551). */
   readonly trigger: string;
+  /** Its kind, for an icon: "Not scheduled" has one (design 16, pin 8). */
+  readonly triggerKind?: RefreshWords['kind'];
   /** The model file its cube is defined in, for the link to Model (AC-229). */
   readonly fileName?: string;
   /** That file's folder, where it isn't the root: the link opens it there (T530, AC-222). */
@@ -129,39 +132,6 @@ function rollupsIn(
 }
 
 /**
- * A pre-aggregation's refresh key in words (AC-229). Its `every`, or the SQL
- * whose answer changing rebuilds it; with `incremental` and `updateWindow`
- * said as such. None declared is Cube's default, `every: 1 hour`
- * (research/cube/refresh-jobs-caching.md: "`refresh_key` (`every` default
- * `1 hour`…)"), said as the default. `scheduled_refresh: false` means the
- * refresh worker leaves it alone, which is said too.
- */
-export function triggerOf(each: Record<string, unknown>): string {
-  const key = each['refreshKey'];
-  const declared =
-    typeof key === 'object' && key !== null ? (key as Record<string, unknown>) : undefined;
-  let text: string;
-  if (key === undefined || key === null) {
-    // None declared: Cube's default, and only then (T239's review).
-    text = 'Every 1 hour (Cube’s default)';
-  } else if (declared !== undefined && typeof declared['sql'] === 'string') {
-    // The SQL is the trigger; an `every` beside it is how often it is asked.
-    text = `When ${declared['sql']} changes`;
-    if (typeof declared['every'] === 'string') text += `, checked every ${declared['every']}`;
-  } else if (declared !== undefined && typeof declared['every'] === 'string') {
-    text = `Every ${declared['every']}`;
-    if (declared['incremental'] === true) text += ', incrementally';
-    if (typeof declared['updateWindow'] === 'string')
-      text += `, updating the last ${declared['updateWindow']}`;
-  } else {
-    // Declared, in a shape this build does not read: not claimed to be the
-    // default, which it is not.
-    text = 'As its refresh key in the model says';
-  }
-  return each['scheduledRefresh'] === false ? `${text} · not scheduled` : text;
-}
-
-/**
  * The pre-aggregations wechart offers to build, in model order: the rollups
  * and original-SQL ones of the cubes Cube's extended metadata lists. That
  * leaves out a cube marked `public: false`, which the metadata does not list
@@ -195,6 +165,7 @@ export function buildablesFrom(
         each.path === file.fileName &&
         (each.folderId ?? ROOT_FOLDER_ID) === (file.fileFolderId ?? ROOT_FOLDER_ID),
     )?.content;
+  const model = modelKeysOf(files);
   return (cubes as { name?: unknown; fileName?: unknown; preAggregations?: unknown }[]).flatMap(
     (cube) =>
       typeof cube.name === 'string' && Array.isArray(cube.preAggregations)
@@ -210,6 +181,11 @@ export function buildablesFrom(
               const where = placed?.(cube as Record<string, unknown>);
               const type = typeof each['type'] === 'string' ? each['type'] : 'rollup';
               const file = fileFor({ name: String(cube.name), fileName: cube.fileName }, where);
+              // As Schedules says it, by the one function (T551; refreshWords.ts).
+              const said = refreshWordsOf(each, cube as Record<string, unknown>, model, {
+                folderId: where?.folderId ?? ROOT_FOLDER_ID,
+                shortName: where?.shortName ?? String(cube.name),
+              });
               return {
                 id: `${String(cube.name)}.${String(each['name'])}`,
                 ...(where ?? {}),
@@ -217,7 +193,8 @@ export function buildablesFrom(
                 ...(typeof each['partitionGranularity'] === 'string'
                   ? { partitionGranularity: each['partitionGranularity'] }
                   : {}),
-                trigger: triggerOf(each),
+                trigger: said.words,
+                triggerKind: said.kind,
                 ...file,
                 ...(COMBINED_TYPES.includes(type)
                   ? {

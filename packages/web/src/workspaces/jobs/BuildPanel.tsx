@@ -39,8 +39,10 @@ interface Buildable {
   readonly folderPath?: readonly string[];
   readonly type: string;
   readonly partitionGranularity?: string;
-  /** What rebuilds it, in words: its refresh key (AC-229). */
+  /** What rebuilds it, in words: its refresh key (AC-229), as Schedules says it (T551). */
   readonly trigger?: string;
+  /** Its kind: "Not scheduled" has its icon (design 16, pin 8). */
+  readonly triggerKind?: string;
   /** The model file its cube is defined in (AC-229). */
   readonly fileName?: string;
   /** That file's folder, where it isn't the root (T530). */
@@ -475,7 +477,14 @@ export function BuildPanel({
                           <StarterLabel starter={row.startedBy} />
                         )}
                       </td>
-                      <td>{trigger ?? '—'}</td>
+                      <td>
+                        {/* "Not scheduled" has its icon (design 16, pin 8; T551). */}
+                        {row.triggerKind === 'not-scheduled' ? (
+                          <Status kind="off" label={trigger ?? 'Not scheduled'} testId="trigger" />
+                        ) : (
+                          (trigger ?? '—')
+                        )}
+                      </td>
                       <td className="num">
                         {row.partitions == null ? (
                           <span className="muted">—</span>
@@ -513,8 +522,8 @@ export function BuildPanel({
           <b>Last built</b> is when Cube started the newest build of one of the rollup’s partitions,
           whoever started it. <b>Started by</b> names who started that build from wechart: a person,
           or a wechart schedule. “—” means wechart didn’t start it. Builds by Cube’s refresh worker
-          name no starter until their history comes, in the next phase. Times are your local time;
-          hover one for UTC.
+          name no starter until their history is recorded. Times are your local time; hover one for
+          UTC.
         </p>
         {/* Starting, in words with its icon, not only by the buttons fading (AC-177). */}
         {start.isPending ? <StateLine kind="run">Asking Cube to start the build…</StateLine> : null}

@@ -498,8 +498,8 @@ test('each pre-aggregation’s row has its state, its trigger, and its name lead
   const state = row.getByTestId('row-state');
   await expect(state).toHaveAttribute('data-state', /^(built|partly|not-built|building|queued)$/);
   await expect(state.locator('svg[data-icon]')).toHaveCount(1);
-  // What rebuilds it: the model's refresh key, as the seed declares it.
-  await expect(row.getByRole('cell').nth(4)).toHaveText('Every 1 hour');
+  // What rebuilds it: the model's refresh key, as the seed declares it, in Schedules' words (T551).
+  await expect(row.getByRole('cell').nth(4)).toHaveText('Every hour');
 
   // A build's progress is said in its own row, read again while it goes:
   // queued, building, then built. Cube's build and the row's states are
@@ -576,7 +576,7 @@ test('selecting a pre-aggregation fills the full-height pane with its state, tri
   await expect(pane.getByTestId('pane-state')).toHaveText(
     (await row.getByTestId('row-state').textContent()) ?? '',
   );
-  await expect(pane.locator('dd').nth(1)).toHaveText('Every 1 hour');
+  await expect(pane.locator('dd').nth(1)).toHaveText('Every hour');
   // Deep into Model: its file, on its cube's Pre-aggs tab, this one open (T469, UX-080).
   await expect(pane.getByRole('link', { name: 'Open in Model' })).toHaveAttribute(
     'href',

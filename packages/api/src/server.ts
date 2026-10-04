@@ -1134,20 +1134,22 @@ export function buildServer({
   };
   // With the model's files: each rollup's link names its stored file (T449).
   // Each start recorded in wechart's history (T372, AC-150).
-  registerBuilds(
-    app,
-    client,
-    modelFiles,
-    jobsAccess,
-    buildHistory === undefined ? undefined : { store: buildHistory, now },
-    // Each row's state from AC-145's sources (T550, AC-391).
+  // Each row's state from AC-145's sources (T550, AC-391), and its last build (T551).
+  const statesOfRows =
     buildPartitions === undefined
       ? undefined
       : rowStates({
           partitions: buildPartitions,
           ...(buildQueue === undefined ? {} : { queue: buildQueue }),
           ...(buildHistory === undefined ? {} : { history: buildHistory }),
-        }),
+        });
+  registerBuilds(
+    app,
+    client,
+    modelFiles,
+    jobsAccess,
+    buildHistory === undefined ? undefined : { store: buildHistory, now },
+    statesOfRows,
   );
   // Run history and each build's log, scoped as Jobs is (T374, AC-150).
   if (buildHistory !== undefined)
@@ -1174,7 +1176,7 @@ export function buildServer({
     });
   // With the model's files: a key's SQL is read there (T273's review).
   // And each folder's, under its prefixed names (T450's review).
-  registerSchedules(app, client, modelFiles, folders, jobsAccess);
+  registerSchedules(app, client, modelFiles, folders, jobsAccess, statesOfRows);
   // A data source's catalog, through Cube's introspection API (T145, AC-139).
   registerIntrospection(app, client, {
     ...(introspectionRetryMs === undefined ? {} : { retryMs: introspectionRetryMs }),

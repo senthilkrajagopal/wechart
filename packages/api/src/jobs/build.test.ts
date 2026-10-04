@@ -204,7 +204,9 @@ describe('what can be built (AC-149)', () => {
     const response = await app.inject({ method: 'GET', url: '/api/preaggregations' });
 
     // Each with its trigger too (AC-229): none declared here, so Cube's
-    // default. And its folder (T371): a cube with no `meta.xcube` is the root's.
+    // default, original SQL's its database's, and a lambda not scheduled
+    // (T551: Schedules' words). And its folder (T371): a cube with no
+    // `meta.xcube` is the root's.
     expect(response.json()).toEqual([
       {
         id: 'monthly_orders.by_status_month',
@@ -213,7 +215,8 @@ describe('what can be built (AC-149)', () => {
         folderPath: ['Shared'],
         type: 'rollup',
         partitionGranularity: 'year',
-        trigger: 'Every 1 hour (Cube’s default)',
+        trigger: 'Cube’s default: every hour',
+        triggerKind: 'default',
       },
       {
         id: 'monthly_orders.cached',
@@ -221,7 +224,8 @@ describe('what can be built (AC-149)', () => {
         shortName: 'monthly_orders',
         folderPath: ['Shared'],
         type: 'originalSql',
-        trigger: 'Every 1 hour (Cube’s default)',
+        trigger: 'Cube’s default for its database',
+        triggerKind: 'default',
       },
       {
         id: 'monthly_orders.combined',
@@ -229,7 +233,8 @@ describe('what can be built (AC-149)', () => {
         shortName: 'monthly_orders',
         folderPath: ['Shared'],
         type: 'rollupLambda',
-        trigger: 'Every 1 hour (Cube’s default)',
+        trigger: 'Not scheduled',
+        triggerKind: 'not-scheduled',
         // Not built itself; no stored file names what it combines here.
         buildable: false,
         builtFrom: [],
@@ -310,58 +315,89 @@ describe('where a pre-aggregation is defined, in items mode (T449)', () => {
 });
 
 describe('what triggers a pre-aggregation, and where it is defined (AC-229)', () => {
+  /**
+   * T551 (T160's review): in Schedules' words, by the one function both share
+   * (refreshWords.ts). The metadata drops a key's SQL, a function (research
+   * cube/refresh-key-schedule.md, "What /v1/meta?extended shows"), so a key of
+   * SQL reads as `{}` or `{every}` there, and its SQL is the model file's.
+   */
   it('says its refresh key in words, Cube’s default where it declares none, and names its file', () => {
-    const listed = buildablesFrom({
-      cubes: [
+    const listed = buildablesFrom(
+      {
+        cubes: [
+          {
+            name: 'monthly_orders',
+            fileName: 'cubes/monthly_orders.yml',
+            preAggregations: [
+              { name: 'hourly', type: 'rollup', refreshKey: { every: '1 hour' } },
+              {
+                name: 'incremental',
+                type: 'rollup',
+                refreshKey: { every: '1 day', incremental: true, updateWindow: '7 day' },
+              },
+              { name: 'by_sql', type: 'rollup', refreshKey: {} },
+              { name: 'plain', type: 'rollup' },
+              { name: 'manual', type: 'rollup', scheduledRefresh: false },
+              { name: 'checked', type: 'rollup', refreshKey: { every: '10 minute' } },
+              {
+                name: 'mondays',
+                type: 'rollup',
+                refreshKey: { every: '0 7 * * 1', timezone: 'Europe/Berlin' },
+              },
+            ],
+          },
+        ],
+      },
+      [
         {
-          name: 'monthly_orders',
-          fileName: 'cubes/monthly_orders.yml',
-          preAggregations: [
-            { name: 'hourly', type: 'rollup', refreshKey: { every: '1 hour' } },
-            {
-              name: 'incremental',
-              type: 'rollup',
-              refreshKey: { every: '1 day', incremental: true, updateWindow: '7 day' },
-            },
-            { name: 'by_sql', type: 'rollup', refreshKey: { sql: 'SELECT MAX(id) FROM orders' } },
-            { name: 'plain', type: 'rollup' },
-            { name: 'manual', type: 'rollup', scheduledRefresh: false },
-            // Both, and one this build cannot read (T239's review).
-            {
-              name: 'checked',
-              type: 'rollup',
-              refreshKey: { sql: 'SELECT MAX(id) FROM orders', every: '10 minute' },
-            },
-            { name: 'odd', type: 'rollup', refreshKey: { sql: { compiled: true } } },
-          ],
+          path: 'cubes/monthly_orders.yml',
+          content: [
+            'cubes:',
+            '  - name: monthly_orders',
+            '    pre_aggregations:',
+            '      - name: by_sql',
+            '        refresh_key:',
+            '          sql: SELECT MAX(id) FROM orders',
+            '      - name: checked',
+            '        refresh_key:',
+            '          sql: SELECT MAX(id) FROM orders',
+            '          every: 10 minute',
+            '',
+          ].join('\n'),
         },
       ],
-    });
+    );
 
     expect(listed.map((each) => [each.id, each.trigger, each.fileName])).toEqual([
-      ['monthly_orders.hourly', 'Every 1 hour', 'cubes/monthly_orders.yml'],
+      ['monthly_orders.hourly', 'Every hour', 'cubes/monthly_orders.yml'],
       [
         'monthly_orders.incremental',
-        'Every 1 day, incrementally, updating the last 7 day',
+        'Every day, from 00:00 UTC, rebuilding only partitions ending in the last 7 day',
         'cubes/monthly_orders.yml',
       ],
       [
         'monthly_orders.by_sql',
-        'When SELECT MAX(id) FROM orders changes',
+        'When its SQL returns a new value, checked every 10 seconds',
         'cubes/monthly_orders.yml',
       ],
-      ['monthly_orders.plain', 'Every 1 hour (Cube’s default)', 'cubes/monthly_orders.yml'],
-      [
-        'monthly_orders.manual',
-        'Every 1 hour (Cube’s default) · not scheduled',
-        'cubes/monthly_orders.yml',
-      ],
+      ['monthly_orders.plain', 'Cube’s default: every hour', 'cubes/monthly_orders.yml'],
+      ['monthly_orders.manual', 'Not scheduled', 'cubes/monthly_orders.yml'],
       [
         'monthly_orders.checked',
-        'When SELECT MAX(id) FROM orders changes, checked every 10 minute',
+        'When its SQL returns a new value, checked every 10 minutes',
         'cubes/monthly_orders.yml',
       ],
-      ['monthly_orders.odd', 'As its refresh key in the model says', 'cubes/monthly_orders.yml'],
+      ['monthly_orders.mondays', 'At 07:00 every Monday, Berlin', 'cubes/monthly_orders.yml'],
+    ]);
+    // "Not scheduled" has its icon in Jobs (design 16, pin 8): said by its kind.
+    expect(listed.map((each) => each.triggerKind)).toEqual([
+      'key',
+      'key',
+      'sql',
+      'default',
+      'not-scheduled',
+      'sql',
+      'key',
     ]);
   });
 });

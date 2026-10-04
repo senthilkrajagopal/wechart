@@ -250,7 +250,8 @@ describe('Jobs and Schedules, scoped to the user’s read-write folders (T371, A
     expect(rows.map((row) => row['folderId'])).toContain(ids.a);
     expect(rows.map((row) => row['folderId'])).not.toContain(ids.c);
     const mine = rows.find((row) => row['folderId'] === ids.a)!;
-    expect([mine['when'], mine['mayOpen']]).toEqual(['Every 1 hour', false]);
+    // In Schedules' words (T551).
+    expect([mine['when'], mine['mayOpen']]).toEqual(['Every hour', false]);
     for (const key of ['fileName', 'sql', 'every', 'timezone'])
       expect(Object.keys(mine), key).not.toContain(key);
     // A member of /A may open its own in Jobs.

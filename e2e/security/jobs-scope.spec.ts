@@ -117,10 +117,10 @@ test.describe('Jobs and Schedules, scoped to the user’s read-write folders (T3
       await page.goto('/schedules');
       const schedules = page.getByRole('table', { name: 'Refresh schedules' });
       const row = schedules.getByRole('row').filter({ hasText: `jobs_mine_${RUN}.main` });
-      // By its short name with its folder, never its prefixed name.
-      await expect(row.getByRole('cell').first()).toHaveText(
-        `jobs_mine_${RUN}.mainJobs mine ${RUN}`,
-      );
+      // By its short name with its folder, never its prefixed name; the
+      // folder in a column of its own (T551; design 16, screen 2).
+      await expect(row.getByRole('cell').first()).toHaveText(`jobs_mine_${RUN}.main`);
+      await expect(row.getByRole('cell').nth(1)).toHaveText(`Jobs mine ${RUN}`);
       await expect(schedules).not.toContainText('__jobs_');
       await expect(schedules).not.toContainText(`jobs_theirs_${RUN}`);
     });

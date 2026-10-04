@@ -146,6 +146,8 @@ describe('each pre-aggregation’s row (T550, AC-391)', () => {
     // What Last built and Started by mean, under the table (pin 9).
     expect(text(screen.getByTestId('jobs-foot'))).toContain('“—” means wechart didn’t start it.');
     expect(screen.queryAllByText('Not built here')).toHaveLength(0);
+    // No page speaks of phases (UX-111; T551's review).
+    expect(text(screen.getByTestId('jobs-foot'))).not.toMatch(/\bphase\b/i);
   });
 
   it.each([
@@ -173,6 +175,14 @@ describe('each pre-aggregation’s row (T550, AC-391)', () => {
     expect(text(cells[2])).toBe('—');
     expect(text(cells[3])).toBe('—');
     expect(text(cells[5])).toBe('—');
+  });
+
+  it('draws a Trigger of Not scheduled with its icon, as Schedules does (design 16, pin 8)', async () => {
+    shown([[{ ...ROW, trigger: 'Not scheduled', triggerKind: 'not-scheduled' }]]);
+
+    const trigger = cellsOf(await rowOf(ID))[4]!;
+    expect(text(trigger)).toBe('Not scheduled');
+    expect(trigger.querySelector('svg')?.getAttribute('data-icon')).toBe('off');
   });
 
   it('names a wechart schedule that started its newest build, with the schedule’s icon', async () => {

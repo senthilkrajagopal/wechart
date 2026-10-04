@@ -181,7 +181,8 @@ function scheduleWords(
   now: Date,
   timeOf: (date: Date) => string,
 ): string[] {
-  const when = /^(Every|At|When)\b/.test(schedule.when)
+  // Schedules' words (T551): a cron's start "Daily", "Hourly" or "At".
+  const when = /^(Every|At|When|Daily|Hourly)\b/.test(schedule.when)
     ? `Refreshed ${lowerFirst(schedule.when)}`
     : schedule.when;
   const written = [

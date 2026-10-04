@@ -7267,7 +7267,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     4. A weak matcher was tightened, the e2e's quoted AC was updated, and the research's "trimmed" was corrected.
   - **For the user (T264's last finding):** AC-153 and design 16 D5 say the note reads "up to about five minutes". The note says "up to about 5½ minutes … while the worker keeps up — longer while it is busy". That is research's measured bound (300 s of staleness plus the 30 s beat), and T159 chose it. Options: keep the note and reword AC-153 to "about five and a half minutes", or shorten the note to the spec's words. Recommended: reword the AC, since the note is the research's figure.
   - **Tests:** `core/src/refresh-key.test.ts`, `RefreshSchedule.test.tsx` ("a refresh schedule, as Cube runs it (T377)"), `validate.test.ts`, `publish.test.ts` (aliases and merges), and `e2e/model-schedule.spec.ts` (AC-153).
-- [ ] T551 (AC-154) Schedules' refresh-key rows as design 16 draws them, every rollup included *(added 2026-10-02, `[R56]`; T160's review findings, moved from T377)*
+- [x] T551 (AC-154) Schedules' refresh-key rows as design 16 draws them, every rollup included *(added 2026-10-02, `[R56]`; T160's review findings, moved from T377)*
   - Files:
     - `packages/api/src/jobs/schedules.ts` (+ test): the field list from xcube's `GET …/meta?extended=true&hidden=true` (research `xcube-jobs-schedules-routes.md` §2);
     - `packages/web/src/workspaces/schedules/{SchedulesPage,SchedulePane}.tsx` (+ tests);
@@ -7282,6 +7282,50 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - the pane shows the `refresh_key` as written, its file, the five next runs with the five-minute note, Open in Model to the pre-aggregation itself, and Open in Jobs (AC-154).
     - `e2e/schedules.spec.ts`, against compose's xcube: a `public: false` cube's rollup is listed, read-only, and Open in Model opens that pre-aggregation (AC-154).
   - Depends on: T375. It checks `?hidden=true` against compose's xcube first.
+  - **As built (2026-10-02):** `?hidden=true` was checked against compose's xcube first. It lists every cube, each marked `"public": true | false`, as research §2 has it.
+    - **`jobs/refreshWords.ts` is the one description function, for Schedules and Jobs' Trigger** (T160's finding). For each pre-aggregation it gives words, the key as written, its kind (for an icon), the key its next runs come from, how late a run can start, and why Cube can't run it, where Cube can't.
+      - **Crons:** said in plain words in their zone, or in UTC with none: "Daily at 08:00, Los Angeles", "At 07:00 every Monday, Berlin", "Hourly at :15".
+      - **Intervals:** said with their UTC anchor where it matters: "Every day, from 00:00 UTC", "Every 7 hours, counted from 1 Jan 1970, 00:00 UTC".
+      - **Incremental:** says what it rebuilds, on a cron as on an interval.
+      - **A key of SQL:** read from wechart's model files, since the meta drops it. It is said as checked on its interval, with no clock to align to.
+      - **None declared:**
+        - Cube's default, every hour. Its lateness is 40 s: the fallback's 10 s threshold plus the 30 s tick.
+        - Or its cube's own key.
+        - Or "Each of its cubes' own refresh key", when the rollup reads other cubes (join paths included) and one has a key.
+        - `original_sql` uses its cube's key, or its database's default.
+      - **Not scheduled:** says why, as written (`scheduled_refresh: false`, `type: rollup_lambda`).
+    - **`GET /api/schedules`** reads the meta with `hidden=true`. Data as of (`?seen=1`) reads it without, since it should see only what queries reach. Each row carries kind, written, runs, lagSeconds, problem and `public: false`. It also carries `lastBuiltAt`, from T550's row states (the partitions route): no outcome, no starter (R41).
+    - **The page (design 16, screen 2):**
+      - Columns: Pre-aggregation, Folder, Schedule (words over as written; "Cube's default" and "Not scheduled" with icons), Next run, Last run, Owner.
+        - Next run is shown in its zone, with UTC and how long until it, by AC-153's daylight-saving rule.
+        - Last run reads "Built today 14:01", or "Not built yet".
+        - Owner shows design 16's cube icon and "Cube's refresh worker".
+      - The foot note sits under the table.
+      - A row opens the read-only pane (D5). It shows:
+        - the schedule in words;
+        - the `refresh_key` block as written, and why Cube can't run it, where it can't;
+        - where it is set, and how to change it;
+        - Open in Model, on the pre-aggregation itself;
+        - Open in Jobs. A cube that isn't public has no Open in Jobs, since Jobs doesn't list it, and the pane says so;
+        - the next five runs in its zone and in UTC, with the daylight-saving warning and the lateness note.
+    - **Jobs' Trigger** uses the same words. "Not scheduled" has its icon there (pin 8).
+    - **Data as of** puts "Refreshed" before the new cron words too.
+  - **Implementer's calls, for the user to confirm or change:**
+    - The phase words came out of three foot notes: Jobs' (T550), Run history's (T374) and Schedules' (design 16's text). UX-111 says no page speaks of phases, and `consistency.spec.ts` checks it. The notes now say a refresh worker's builds and runs "aren't recorded yet" instead of "come in the next phase".
+    - The words for each key, such as "Daily at 08:00, Los Angeles" and "Cube's default: every hour", follow design 16 screen 2's examples. Keys it doesn't draw (the multi-cube default, original SQL) are worded from research's table.
+  - **One review round (spec-reviewer), fixed:**
+    1. The Schedules classes had no CSS, so text ran together. They now do, and the e2e checks that "as written" is on a line of its own and that the runs are a grid.
+    2. No test showed the daylight-saving rule in the row or the pane. One now does.
+    3. A key of SQL with a long interval claimed a clock alignment it doesn't have. Fixed.
+    4. A join path's cubes were missed for the multi-cube default. Fixed.
+    5. Open in Jobs led nowhere for a hidden cube. It's no longer offered for one.
+    6. The default key's lateness was overstated. The API now gives each key's own.
+    7. Data as of lost "Refreshed" before cron words. Fixed.
+    8. The phase wording, as above.
+    9. Data as of read hidden cubes. It no longer does.
+    10. Cube's reason for a key it can't run wasn't shown. It now is, in the pane.
+  - **Left:** cubes declared only in Jinja files aren't read for the multi-cube default, and AC-154 stays unticked until wechart's own schedules (T378) and the owner filter (T552, AC-397) land.
+  - **Tests:** `jobs/refreshWords.test.ts`, `jobs/schedules.test.ts` (with `GET /api/schedules`), `jobs/build.test.ts`, `jobs/scope.test.ts`, `SchedulesPage.test.tsx`, `BuildPanel.test.tsx`, `RunHistory.test.tsx`, `dataAsOf.test.ts`, and `e2e/schedules.spec.ts`. The e2e covers a `public: false` cube's rollup listed, read-only, and Open in Model opening that pre-aggregation.
 - *T505 moved below T379 on 2026-10-02 (`[R56]`): it records the cancel and the schedule changes, so it follows them.*
 - [x] T506 (AC-353) Keep a stored BigQuery key or Snowflake or Dremio token unless replaced, and warn that replacing it rebuilds the rollups *(added 2026-09-28, R42.5)*
   - Files: `packages/web/src/workspaces/data-sources/ConnectionForm.tsx` (+ `ConnectionForm.test.tsx`), `packages/web/src/workspaces/data-sources/SourceEditor.test.tsx`, `e2e/security/data-sources.spec.ts`

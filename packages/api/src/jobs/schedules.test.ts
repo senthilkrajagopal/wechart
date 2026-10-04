@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
+import { CubeClient } from '../cube/client';
+import { buildServer } from '../server';
+import { xcubePartitions } from '../xcube/partitions';
 import { schedulesFrom } from './schedules';
+
+const config = {
+  cubeApiUrl: 'http://cube.invalid/cubejs-api',
+  cubeApiSecret: 'secret',
+  securityContext: {},
+  port: 4100,
+  modelDir: '',
+};
 
 /**
  * T160 / AC-154: Schedules lists every pre-aggregation's refresh schedule,
@@ -11,6 +22,87 @@ import { schedulesFrom } from './schedules';
  */
 const meta = (preAggregations: Record<string, unknown>[], cube: Record<string, unknown> = {}) => ({
   cubes: [{ name: 'orders', fileName: 'cubes/orders.yml', preAggregations, ...cube }],
+});
+
+/**
+ * T551 / AC-154: every pre-aggregation's schedule, a `public: false` cube's
+ * included, from xcube's admin meta with `hidden=true` (research
+ * xcube-jobs-schedules-routes.md §2), each with when Cube last built it,
+ * from the partitions route (T375), and no outcome or starter (R41).
+ */
+describe('GET /api/schedules (T551, AC-154)', () => {
+  it('lists a hidden cube’s rollups, read with hidden=true, each with when Cube last built it', async () => {
+    const asked: unknown[] = [];
+    class Meta extends CubeClient {
+      override async modelMeta(options?: { readonly hidden?: boolean }): Promise<unknown> {
+        asked.push(options);
+        return {
+          cubes: [
+            {
+              name: 'orders',
+              public: options?.hidden === true ? false : undefined,
+              preAggregations: [
+                { name: 'main', type: 'rollup', refreshKey: { every: '1 hour' } },
+                { name: 'never', type: 'rollup', refreshKey: { every: '1 hour' } },
+              ],
+            },
+          ].filter(() => options?.hidden === true),
+        };
+      }
+    }
+    const cube = new Meta({
+      apiUrl: config.cubeApiUrl,
+      apiSecret: config.cubeApiSecret,
+      securityContext: {},
+      fetchImpl: (async () => Response.json({})) as typeof fetch,
+    });
+    const app = buildServer({
+      config,
+      cube,
+      buildPartitions: xcubePartitions({
+        cubeApiUrl: config.cubeApiUrl,
+        model: 'dev',
+        token: async () => 't',
+        askAgainAfterMs: 0,
+        fetch: (async () =>
+          Response.json({
+            preAggregationPartitions: ['main', 'never'].map((name) => ({
+              errors: [],
+              preAggregation: { id: `orders.${name}`, preAggregation: { type: 'rollup' } },
+              partitions: [
+                {
+                  tableName: `prod_pre_aggregations.orders_${name}`,
+                  versionEntries:
+                    name === 'main' ? [{ last_updated_at: Date.UTC(2026, 9, 2, 14, 1) }] : [],
+                },
+              ],
+            })),
+          })) as typeof fetch,
+      }),
+    });
+
+    const answer = await app.inject({ method: 'GET', url: '/api/schedules' });
+
+    expect(answer.statusCode, answer.body).toBe(200);
+    expect(asked).toEqual([{ hidden: true }]);
+    const rows = answer.json<Record<string, unknown>[]>();
+    expect(rows.map(({ id, public: shown, lastBuiltAt }) => ({ id, shown, lastBuiltAt }))).toEqual([
+      { id: 'orders.main', shown: false, lastBuiltAt: '2026-10-02T14:01:00.000Z' },
+      { id: 'orders.never', shown: false, lastBuiltAt: null },
+    ]);
+    // A refresh key's last run is when Cube built it: no outcome, no starter (R41).
+    for (const row of rows) {
+      expect(row).not.toHaveProperty('outcome');
+      expect(row).not.toHaveProperty('startedBy');
+    }
+
+    // Data as of reads only what queries can reach: no hidden cube's (T551's review).
+    const seen = await app.inject({ method: 'GET', url: '/api/schedules?seen=1' });
+    expect(seen.statusCode).toBe(200);
+    expect(asked.at(-1)).toEqual({ hidden: false });
+    expect(seen.json<unknown[]>()).toEqual([]);
+    await app.close();
+  });
 });
 
 describe('schedulesFrom, in items mode (T449)', () => {
@@ -33,6 +125,7 @@ describe('schedulesFrom, in items mode (T449)', () => {
 });
 
 describe('schedulesFrom', () => {
+  /** T551: in words and as written, by the function Jobs' Trigger shares (refreshWords.ts). */
   it('says a cron with its zone, and a cron with none in UTC, as Cube runs it', () => {
     const [zoned, bare] = schedulesFrom(
       meta([
@@ -51,26 +144,38 @@ describe('schedulesFrom', () => {
       type: 'rollup',
       fileName: 'cubes/orders.yml',
       owner: 'cube',
+      kind: 'key',
       scheduled: true,
-      when: 'At "0 8 * * *" in America/Los_Angeles',
+      when: 'Daily at 08:00, Los Angeles',
+      written: 'every: "0 8 * * *" · timezone: America/Los_Angeles',
+      runs: { every: '0 8 * * *', timezone: 'America/Los_Angeles' },
       every: '0 8 * * *',
       timezone: 'America/Los_Angeles',
     });
-    expect(bare?.when).toBe('At "0 * * * *" in UTC');
+    expect(bare?.when).toBe('Hourly at :00');
   });
 
-  it('says an interval, incremental and its window as written', () => {
-    const [plain, incremental] = schedulesFrom(
+  it('says an interval, and incremental and its window, on a cron too', () => {
+    const [plain, incremental, cron] = schedulesFrom(
       meta([
         { name: 'daily', refreshKey: { every: '1 day' } },
         {
           name: 'recent',
           refreshKey: { every: '1 hour', incremental: true, updateWindow: '7 day' },
         },
+        {
+          name: 'nightly',
+          refreshKey: { every: '0 3 * * *', incremental: true, updateWindow: '7 day' },
+        },
       ]),
     );
-    expect(plain?.when).toBe('Every 1 day');
-    expect(incremental?.when).toBe('Every 1 hour, incrementally, rebuilding the last 7 day');
+    expect(plain?.when).toBe('Every day, from 00:00 UTC');
+    expect(incremental?.when).toBe(
+      'Every hour, rebuilding only partitions ending in the last 7 day',
+    );
+    expect(cron?.when).toBe(
+      'Daily at 03:00 UTC, rebuilding only partitions ending in the last 7 day',
+    );
   });
 
   it('says what the SQL check means, and a default key by its cube', () => {
@@ -86,12 +191,16 @@ describe('schedulesFrom', () => {
     );
     expect(rows.map((row) => row.when)).toEqual([
       'When its SQL returns a new value, checked every 10 seconds',
-      'As its cube’s refresh key: every 30 minute',
+      'Its cube’s refresh key: every 30 minutes',
     ]);
-    expect(schedulesFrom(meta([{ name: 'plain' }]))[0]?.when).toBe('Every 1 hour (Cube’s default)');
+    expect(schedulesFrom(meta([{ name: 'plain' }]))[0]?.when).toBe('Cube’s default: every hour');
+    expect(schedulesFrom(meta([{ name: 'plain' }]))[0]).toMatchObject({
+      kind: 'default',
+      written: 'no refresh_key declared',
+    });
   });
 
-  it('says a pre-aggregation Cube never refreshes is not scheduled', () => {
+  it('says a pre-aggregation Cube never refreshes is not scheduled, and why, as written', () => {
     const rows = schedulesFrom(
       meta([
         { name: 'off', type: 'rollup', scheduledRefresh: false, refreshKey: { every: '1 hour' } },
@@ -99,11 +208,19 @@ describe('schedulesFrom', () => {
         { name: 'joined', type: 'rollupJoin' },
       ]),
     );
-    expect(rows.map(({ scheduled, when }) => ({ scheduled, when }))).toEqual([
-      { scheduled: false, when: 'Not scheduled: built only when asked for, from Jobs' },
-      { scheduled: false, when: 'Not scheduled: it reads the rollups it joins' },
-      { scheduled: false, when: 'Not scheduled: it reads the rollups it joins' },
+    expect(rows.map(({ scheduled, when, written }) => ({ scheduled, when, written }))).toEqual([
+      { scheduled: false, when: 'Not scheduled', written: 'scheduled_refresh: false' },
+      { scheduled: false, when: 'Not scheduled', written: 'type: rollup_lambda' },
+      { scheduled: false, when: 'Not scheduled', written: 'type: rollup_join' },
     ]);
+  });
+
+  it('marks a cube that isn’t public, which xcube’s admin meta lists with hidden=true', () => {
+    // research xcube-jobs-schedules-routes.md §2: each cube marked "public": true | false.
+    const [hidden] = schedulesFrom(
+      meta([{ name: 'main', refreshKey: { every: '1 hour' } }], { public: false }),
+    );
+    expect(hidden).toMatchObject({ id: 'orders.main', public: false, when: 'Every hour' });
   });
 
   it('lists nothing from metadata it cannot read', () => {
@@ -148,9 +265,12 @@ describe('schedulesFrom', () => {
     expect(checked).toMatchObject({
       every: '1 hour',
       sql: 'SELECT MAX(updated_at) FROM orders',
-      when: 'When its SQL returns a new value, checked every 1 hour',
+      kind: 'sql',
+      when: 'When its SQL returns a new value, checked every hour',
     });
-    expect(plain).toMatchObject({ every: '1 hour', when: 'Every 1 hour' });
+    // No run foretold: rebuilt when the SQL's value changes.
+    expect(checked).not.toHaveProperty('runs');
+    expect(plain).toMatchObject({ every: '1 hour', when: 'Every hour' });
     expect(plain).not.toHaveProperty('sql');
   });
 

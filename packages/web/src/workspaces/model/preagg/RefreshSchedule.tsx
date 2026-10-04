@@ -52,7 +52,7 @@ export function zones(): string[] {
 }
 
 /** How late, in words: seconds under a minute and a half, else halves of minutes. */
-function lagInWords(seconds: number): string {
+export function lagInWords(seconds: number): string {
   if (seconds < 90) return `${String(seconds)} seconds`;
   const halves = Math.round(seconds / 30);
   const whole = Math.floor(halves / 2);
