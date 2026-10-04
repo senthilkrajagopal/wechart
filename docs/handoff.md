@@ -1,5 +1,21 @@
 # Handoff — 2026-09-24
 
+> **PAUSED 2026-10-04 at the user's word** ("…pause .. running out of tokens.. os will need to stop for couple of days"). Each agent was told to finish its current task, commit it and stop. On resuming:
+> 1. **Pick the agents' last commits**, if not already on feat/xcube: Jobs T555 (and its research correction and its jobs.spec:72 fix), the SQL runner's T549, group 6's T632, and F6's T590 if it was started.
+> 2. **`wechart_security` blocks the security e2e suite.** It still holds the stray pgmigrations row `1758565480000_sql-run-ends-by`; that number now belongs to `1758620000000`. The user must delete it, since agents were refused that change to a shared resource:
+>    `docker exec wechart-meta psql -U wechart -d wechart_security -c "delete from pgmigrations where name = '1758565480000_sql-run-ends-by'"`
+>    Then run the security specs that wait on it, and tick:
+>    - sql-runner: AC-378 and AC-379 (on 46ca0ce708);
+>    - calc-request-resolve: AC-052;
+>    - picker and workspace-overlay: AC-342 and T475;
+>    - preview-as: T630.
+> 3. **Remaining work, by agent and range:**
+>    - **Jobs**, tasks T556–T560, migrations 1758650000000–1758659999999; T554 is parked on xcube (`to-xcube/2026-10-04-2105-stop-processing-build.md`).
+>    - **Group 6**, T633 (the filter bar's picker), T634 (Ctrl+Enter adds), then T476 and T477 once Jobs' pages are final. T406's critique and T410's phase-1 run come last.
+>    - **F6**, T590 if it isn't done.
+>    - **SQL runner**, T650 (refuse router queries) once xcube's image answers `to-xcube/2026-10-04-2200-cube-store-refuse-router-joins.md`.
+> 4. **The user's open items:** the stray ghcr packages `wechart-apiatest` and `wechart-webatest`; whether a Super-Admin's delete of another user's shared bookmark should ask first or be recorded; and the e2e's network need for Snowflake and Entra tests.
+>
 > **Now, 2026-10-04 (read this block first).**
 > - **The docker-desktop release** still runs d8ac962 with xcube 89628a0e88, the build for the demo of 2026-10-03.
 >   - ghcr.io has `:d8ac962` and `:latest` of wechart-api and wechart-web, and `xcube:latest` is 89628a0e88.
