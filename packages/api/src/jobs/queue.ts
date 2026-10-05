@@ -43,14 +43,22 @@ export interface QueueRow {
   readonly token: string | null;
   readonly runId: string | null;
   readonly cancellable: boolean;
+  /** Building, and wechart started it: Stop takes it out (T554, AC-394). */
+  readonly stoppable: boolean;
 }
 
 const REFUSED_BY_XCUBE: Record<string, string> = {
   processing: 'Not cancelled: it had started building.',
   gone: 'Not cancelled: it had already left the queue.',
+  // A stop that came as the build ended: its version stands (T554).
+  finished: 'Not stopped: it had finished building, and its version stands.',
 };
 const NOT_WECHARTS = {
   error: 'Only queued builds wechart started, from Jobs or a schedule, can be cancelled here.',
+};
+/** A Stop refused, as a stop (T554's review). */
+const NOT_WECHARTS_TO_STOP = {
+  error: 'Only builds wechart started, from Jobs or a schedule, can be stopped here.',
 };
 const NOT_YOURS = {
   error: 'You can cancel only the builds of folders you have read-write access to.',
@@ -157,6 +165,9 @@ export function registerQueue(
       token: start === undefined ? null : (entry.job ?? jobOf(entry, start) ?? null),
       runId: start?.runId ?? null,
       cancellable: start !== undefined && entry.status === 'queued',
+      // A building one wechart started can be stopped (T554, AC-394; design 16, P1);
+      // a stalled one goes at Cube's next check.
+      stoppable: start !== undefined && entry.status === 'processing' && !entry.stalled,
     };
   };
 
@@ -174,20 +185,26 @@ export function registerQueue(
   app.post('/api/jobs/queue/cancel', USER, async (request, reply) => {
     const scope = await scopeOf(request);
     if (!scope.all && !scope.writesAny) return reply.status(403).send(NO_JOBS);
-    const key = (request.body as { key?: unknown } | undefined)?.key;
+    const body = request.body as { key?: unknown; stop?: unknown } | undefined;
+    const key = body?.key;
     if (typeof key !== 'string' || key === '')
       return reply.status(400).send({ error: 'Name the queue entry by its key.' });
+    // Stop (T554, AC-394; design 16, P1): a building entry too, whose build
+    // xcube stops, keeping none of it, and answers what came of it (research
+    // xcube-74c933bdb8.md). Cancel takes out a queued one alone.
+    const stop = body?.stop === true;
     const found = (await read()).find(({ entry }) => entry.key === key);
     // No longer queued at all: said so without asking xcube.
     if (found === undefined)
       return { cancelled: false, reason: 'gone', message: REFUSED_BY_XCUBE['gone'] };
     if (!reaches(scope, found.row?.folderId ?? null)) return reply.status(403).send(NOT_YOURS);
-    if (found.start === undefined) return reply.status(403).send(NOT_WECHARTS);
+    if (found.start === undefined)
+      return reply.status(403).send(stop ? NOT_WECHARTS_TO_STOP : NOT_WECHARTS);
 
     // When the cancel was asked: a job the follower ends after it, its
     // partition missing, was this cancel's (T376's review).
     const askedAt = now();
-    const answer = await queue.cancel([key]);
+    const answer = await queue.cancel([key], { processing: stop });
     if (!answer.cancelled.includes(key)) {
       const reason = answer.notCancelled.find((each) => each.key === key)?.reason ?? 'gone';
       return {
@@ -196,22 +213,35 @@ export function registerQueue(
         message: REFUSED_BY_XCUBE[reason] ?? `Not cancelled: ${reason}.`,
       };
     }
-    // Recorded as cancelled, by whom (AC-150).
     const token = jobOf(found.entry, found.start);
     const user = userOf(request);
-    const recorded =
-      token !== undefined &&
-      history !== undefined &&
-      (await history.cancelled({
-        runId: found.start.runId,
-        token,
-        by: { key: user.key, name: user.name },
-        at: now(),
-        askedAt,
-      }));
-    // xcube cancelled it either way: said so, and the miss logged.
-    if (!recorded)
-      request.log.warn({ key, runId: found.start.runId }, 'a cancel xcube made was not recorded');
+    const by = { key: user.key, name: user.name };
+    // What came of a building one's build (T554; research xcube-74c933bdb8.md):
+    // none for a queued one, taken out before it ran.
+    const build = answer.builds.get(key);
+    if (build === undefined || build === 'stopped') {
+      // Recorded as cancelled, by whom (AC-150); while building, said so (AC-394).
+      const recorded =
+        token !== undefined &&
+        history !== undefined &&
+        (await history.cancelled({
+          runId: found.start.runId,
+          token,
+          by,
+          at: now(),
+          askedAt,
+          building: build === 'stopped',
+        }));
+      // xcube cancelled it either way: said so, and the miss logged.
+      if (!recorded)
+        request.log.warn({ key, runId: found.start.runId }, 'a cancel xcube made was not recorded');
+    } else if (build === 'stopping') {
+      // Still stopping when xcube's wait ran out: Cube's jobs API says how it
+      // ends, and the stopper is kept only if it reads stopped.
+      await history?.stopAsked({ runId: found.start.runId, by, at: now() });
+    }
+    // A build that failed of its own before the stop took is left to its
+    // failure, which the follower records with Cube's words.
     // And in the audit trail, with the partition and its state then (T505, AC-294; design 16, I).
     const shown = rowOf(found);
     const partition = found.entry.partition?.start ?? null;
@@ -228,10 +258,12 @@ export function registerQueue(
           partition,
           state: shown.state,
           runId: found.start.runId,
+          // A stop's outcome as xcube answered it (T554).
+          ...(build === undefined ? {} : { build }),
         },
       },
       request.log,
     );
-    return { cancelled: true };
+    return { cancelled: true, ...(build === undefined ? {} : { build }) };
   });
 }

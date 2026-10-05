@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { USER } from '../auth/guard';
 import type { CubeClient } from '../cube/client';
-import type { BuildHistory, Starter } from '../repos/build-history';
+import { stoppedByXcube, type BuildHistory, type Starter } from '../repos/build-history';
 import type { ModelFileStore } from '../server';
 import { PartitionsPending, type PartitionsOf, type XcubePartitions } from '../xcube/partitions';
 import type { QueueEntry, XcubeQueue } from '../xcube/queue';
@@ -48,8 +48,11 @@ const NOT_FOUND = { error: 'There’s no pre-aggregation by that name in your fo
  * that build makes the partition's version, stamped before wechart's start
  * (research cube/job-records.md, "Queue de-duplication makes a job report
  * `missing_partition`"), so it can't say the partition failed (T375's review).
+ * Nor xcube's failure for a build it stopped, as Stop asked (T554; research
+ * xcube-74c933bdb8.md): that build was cancelled, not failed.
  */
-const FAILED = (status: string | null) => status !== null && status.startsWith('failure');
+const FAILED = (status: string | null) =>
+  status !== null && status.startsWith('failure') && !stoppedByXcube(status);
 
 type Job = Awaited<ReturnType<BuildHistory['jobsOf']>>[number];
 type Start = Awaited<ReturnType<BuildHistory['startsFor']>>[number];

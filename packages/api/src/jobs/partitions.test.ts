@@ -617,6 +617,20 @@ describe('each pre-aggregation’s row (T550, AC-391)', () => {
     });
   });
 
+  it('reads no partition failed whose build xcube stopped, as Stop asked (T554’s review)', async () => {
+    items = quarter({ '10': all, '11': all, '12': all });
+    queued = [];
+    // November rebuilt from Jobs at 14:20, then stopped while building: xcube's failure for it.
+    await ran(
+      '11',
+      '2026-10-02T14:20:00Z',
+      'failure: xcube stopped this build: it was cancelled while building, and none of it is kept',
+    );
+
+    const row = (await rowOf(byMonth())) as { state: string } | undefined;
+    expect(row?.state).toBe('built');
+  });
+
   it('gives when Cube last built it, the newest version of any partition, and who started that build from wechart', async () => {
     // December's newest version, 15:00, made by a build Wren started from Jobs;
     // its table's last part is that version's time, base-32 seconds (research

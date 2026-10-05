@@ -52,6 +52,8 @@ export interface BuildSummary {
   /** Who cancelled it from the queue, and when (T376). */
   readonly cancelledBy?: { readonly key: string; readonly name: string } | null;
   readonly cancelledAt?: string | null;
+  /** Stopped while building, rather than taken out while queued (T554, AC-394). */
+  readonly cancelledWhileBuilding?: boolean;
   /** While it is open: its jobs done, and building. */
   readonly progress: { readonly done: number; readonly building: number };
 }
@@ -152,7 +154,13 @@ export function BuildOutcomeStatus({
 }: {
   build: Pick<
     BuildSummary,
-    'outcome' | 'failedCount' | 'jobs' | 'progress' | 'cancelledBy' | 'cancelledAt'
+    | 'outcome'
+    | 'failedCount'
+    | 'jobs'
+    | 'progress'
+    | 'cancelledBy'
+    | 'cancelledAt'
+    | 'cancelledWhileBuilding'
   >;
 }) {
   const ofAll = (n: number) => ` · ${String(n)} of ${String(build.jobs)}`;
@@ -182,7 +190,8 @@ export function BuildOutcomeStatus({
       return (
         <Status
           kind="cancel"
-          label={`Cancelled${by === undefined ? '' : ` · by ${by}${at === undefined ? '' : `, ${at}`}`}`}
+          // Stopped while building (T554, AC-394): "Cancelled while building · by …".
+          label={`Cancelled${build.cancelledWhileBuilding === true ? ' while building' : ''}${by === undefined ? '' : ` · by ${by}${at === undefined ? '' : `, ${at}`}`}`}
           testId="build-outcome"
           state="cancelled"
         />

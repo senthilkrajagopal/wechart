@@ -77,6 +77,8 @@ describe('a build’s record (T372, AC-150)', () => {
       error: null,
       cancelledBy: null,
       cancelledAt: null,
+      // Not stopped while building (T554).
+      cancelledWhileBuilding: false,
       tokens: started.tokens.map((token) => ({
         token,
         status: null,

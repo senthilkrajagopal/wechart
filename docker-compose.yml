@@ -178,14 +178,16 @@ services:
   # until when, followed to its end, and each run's state (T548;
   # xcube-2099b13f2d.md), with xcube's migration 13; from 46ca0ce708, a
   # query Cube Store's router runs followed to its real end, with no end
-  # said (T549; xcube-46ca0ce708.md). The stored root `default` matches
+  # said (T549; xcube-46ca0ce708.md); from 74c933bdb8, a building build the
+  # queue's cancel takes out really stopped, none of it kept (T554;
+  # xcube-74c933bdb8.md). The stored root `default` matches
   # CUBEJS_DB_* above exactly, so the root's cubes keep their names. The fork's CI publishes the image for amd64 and
   # arm64, pulled here by digest: its moving tag isn't a version.
   # The image's own CMD starts the package's server: give neither service a
   # `command`, or Cube starts without the routes. Cube and its refresh worker
   # run the same image.
   cube:
-    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-46ca0ce708@sha256:340f97c193e0bf3f745301f62bfe84764ded70e93a80aed87e160d68d0287382}
+    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-74c933bdb8@sha256:262d59e434cd98eb0c1cf238fcbbc7168809e0fd31e103f87d127d9082e3df71}
     container_name: wechart-cube
     depends_on: &cube-depends-on
       sample-db:
@@ -220,7 +222,7 @@ services:
   # "Topology"; pre-aggregations.md, "Observed locally"). A build asked for
   # through the jobs API runs in the API instance, though (upgrade-1.7.43.md).
   cube-refresh-worker:
-    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-46ca0ce708@sha256:340f97c193e0bf3f745301f62bfe84764ded70e93a80aed87e160d68d0287382}
+    image: ${CUBE_IMAGE:-ghcr.io/senthilkrajagopal/xcube:v1.7.45-74c933bdb8@sha256:262d59e434cd98eb0c1cf238fcbbc7168809e0fd31e103f87d127d9082e3df71}
     container_name: wechart-cube-refresh-worker
     depends_on: *cube-depends-on
     environment:

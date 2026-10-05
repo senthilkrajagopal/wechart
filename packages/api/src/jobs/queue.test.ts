@@ -7,6 +7,7 @@ import { pgSessionStore } from '../auth/session-store';
 import { PUBLIC_URL, signIn, USERS } from '../auth/sign-in.fixture';
 import { CubeClient } from '../cube/client';
 import { closeDb, getDb } from '../db/client';
+import { auditStore } from '../repos/audit';
 import { buildHistory, type Starter } from '../repos/build-history';
 import { catalog } from '../repos/catalog';
 import { documents, type DocumentKind } from '../repos/documents';
@@ -171,6 +172,8 @@ beforeAll(async () => {
       ]),
     }),
     buildHistory: history(),
+    // Each cancel and stop in the trail (T505, T554).
+    audit: auditStore(getDb()),
     buildQueue: xcubeQueue({
       cubeApiUrl: secured.cubeApiUrl,
       model: 'dev',
@@ -192,6 +195,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (app !== undefined) await app.close();
   await getDb().deleteFrom('build_runs').where('request_id', 'like', `wechart-${MARK}%`).execute();
+  await getDb().deleteFrom('audit_records').where('folder_id', 'in', [ids.a, ids.c]).execute();
   for (const { kind, id } of made.reverse()) await docs().remove(kind, id);
   await closeDb();
 });
@@ -216,6 +220,9 @@ const listed = async (who: string) => {
 };
 const cancel = (who: string, key: string) =>
   as(who, { method: 'POST', url: '/api/jobs/queue/cancel', payload: { key } });
+/** Stop, on a building entry (T554). */
+const stop = (who: string, key: string) =>
+  as(who, { method: 'POST', url: '/api/jobs/queue/cancel', payload: { key, stop: true } });
 
 describe('the build queue (T376, AC-151, AC-297)', () => {
   it('lists the entries of the user’s folders, oldest first, each with who started it and its token', async () => {
@@ -416,6 +423,318 @@ describe('the build queue (T376, AC-151, AC-297)', () => {
     expect((await cancel('writer', 'k-nowhere')).json()).toMatchObject({
       cancelled: false,
       reason: 'gone',
+    });
+    expect(cancels).toEqual([]);
+  });
+});
+
+/**
+ * T554 (AC-394; design 16, P1): Stop, on a building entry wechart started,
+ * has xcube take it out with `processing: true`. xcube stops the build, keeps
+ * none of it, and answers what came of it: stopped, failed of its own, still
+ * stopping, or `finished`, its version standing (research
+ * `xcube-74c933bdb8.md`). Run history records a stopped one cancelled while
+ * building, by whom, and the trail a Build cancelled (AC-294). An entry the
+ * refresh worker or a query started has no Stop, and is refused before xcube
+ * is asked.
+ */
+/** xcube's failure for a job it stopped, as Cube's jobs API reports it (research xcube-74c933bdb8.md). */
+const STOPPED =
+  'failure: xcube stopped this build: it was cancelled while building, and none of it is kept';
+const answeredStop = (build: string) => (keys: string[]) => ({
+  cancelled: keys.map((key) => ({ key, preAggregation: 'x', status: 'processing', build })),
+  notCancelled: [],
+});
+describe('stopping a building build wechart started (T554, AC-394)', () => {
+  it('offers Stop on a building entry wechart started, and on no other', async () => {
+    const mine = await started('a');
+    const waiting = await started('a');
+    queued = [
+      entry({
+        key: 'k-building',
+        status: 'processing',
+        startedBy: 'jobs',
+        requestId: mine.requestId,
+        job: mine.token,
+      }),
+      entry({
+        key: 'k-waiting',
+        startedBy: 'jobs',
+        requestId: waiting.requestId,
+        job: waiting.token,
+      }),
+      entry({ key: 'k-worker-building', status: 'processing' }),
+      entry({ key: 'k-query-building', status: 'processing', startedBy: 'query' }),
+    ];
+
+    const { rows } = await listed('writer');
+
+    expect(
+      rows.map((row) => [
+        row.key,
+        row.state,
+        row.cancellable,
+        (row as { stoppable?: boolean }).stoppable,
+      ]),
+    ).toEqual([
+      ['k-building', 'building', false, true],
+      ['k-waiting', 'queued', true, false],
+      ['k-worker-building', 'building', false, false],
+      ['k-query-building', 'building', false, false],
+    ]);
+  });
+
+  it('stops it through xcube’s cancel of a processing entry, recorded cancelled while building, by whom, and in the trail', async () => {
+    const mine = await started('a');
+    queued = [
+      entry({
+        key: 'k-stop',
+        status: 'processing',
+        startedBy: 'jobs',
+        requestId: mine.requestId,
+        job: mine.token,
+      }),
+    ];
+    cancels.length = 0;
+    cancelAnswer = answeredStop('stopped');
+
+    const answer = await stop('writer', 'k-stop');
+
+    expect(answer.statusCode, answer.body).toBe(200);
+    expect(answer.json()).toEqual({ cancelled: true, build: 'stopped' });
+    expect(cancels).toEqual([{ keys: ['k-stop'], processing: true }]);
+    const me = (await as('writer', { method: 'GET', url: '/api/me' })).json<{ name: string }>();
+    const record = await history().get(mine.runId);
+    expect([record?.outcome, record?.cancelledBy?.name, record?.cancelledWhileBuilding]).toEqual([
+      'cancelled',
+      me.name,
+      true,
+    ]);
+    // And in Run history's list, as its row reads it.
+    const listedBuild = (
+      await history().list({ within: undefined, filters: { preAggregation: preAggIn('a') } })
+    ).records.find((each) => each.id === mine.runId);
+    expect(listedBuild?.cancelledWhileBuilding).toBe(true);
+    // The trail's Build cancelled, with the partition and its state then (AC-294).
+    const [kept] = (
+      await auditStore(getDb()).list({ events: ['build-cancelled'], folderIds: [ids.a] })
+    ).records.filter((each) => each.details?.['runId'] === mine.runId);
+    expect([kept?.summary, kept?.details?.['state'], kept?.details?.['build']]).toEqual([
+      'Building · Aug 2026',
+      'building',
+      'stopped',
+    ]);
+  });
+
+  it('records the stop though the follower first ends the job with xcube’s failure for it', async () => {
+    const mine = await started('a');
+    queued = [
+      entry({
+        key: 'k-raced-stop',
+        status: 'processing',
+        startedBy: 'jobs',
+        requestId: mine.requestId,
+        job: mine.token,
+      }),
+    ];
+    cancelAnswer = answeredStop('stopped');
+    // While xcube's answer waits on the stop, the follower sees the job end
+    // with xcube's failure, and the round closes the build.
+    await history().seen({
+      runId: mine.runId,
+      token: mine.token,
+      previous: null,
+      status: STOPPED,
+      at: new Date(Date.now() + 1_000),
+      final: true,
+    });
+    await history().close(mine.runId);
+
+    expect((await stop('writer', 'k-raced-stop')).json()).toEqual({
+      cancelled: true,
+      build: 'stopped',
+    });
+    const record = await history().get(mine.runId);
+    expect([
+      record?.outcome,
+      record?.cancelledWhileBuilding,
+      record?.cancelledBy === null,
+      record?.error,
+    ]).toEqual(['cancelled', true, false, null]);
+  });
+
+  it('reads xcube’s failure for a build it stopped as cancelled while building, whoever stopped it', async () => {
+    const mine = await started('a');
+    await history().seen({
+      runId: mine.runId,
+      token: mine.token,
+      previous: null,
+      status: STOPPED,
+      at: new Date(),
+      final: true,
+    });
+    await history().close(mine.runId);
+
+    const record = await history().get(mine.runId);
+    expect([record?.outcome, record?.cancelledWhileBuilding, record?.failedCount]).toEqual([
+      'cancelled',
+      true,
+      0,
+    ]);
+  });
+
+  it('says a stop still under way, and records who asked once the build reads stopped', async () => {
+    const mine = await started('a');
+    queued = [
+      entry({
+        key: 'k-stopping',
+        status: 'processing',
+        startedBy: 'jobs',
+        requestId: mine.requestId,
+        job: mine.token,
+      }),
+    ];
+    cancelAnswer = answeredStop('stopping');
+
+    expect((await stop('writer', 'k-stopping')).json()).toEqual({
+      cancelled: true,
+      build: 'stopping',
+    });
+    // Still open: how it ends is Cube's to say.
+    expect((await history().get(mine.runId))?.outcome).toBe(null);
+    // Then Cube's jobs API says xcube stopped it.
+    await history().seen({
+      runId: mine.runId,
+      token: mine.token,
+      previous: null,
+      status: STOPPED,
+      at: new Date(),
+      final: true,
+    });
+    await history().close(mine.runId);
+    const me = (await as('writer', { method: 'GET', url: '/api/me' })).json<{ name: string }>();
+    const record = await history().get(mine.runId);
+    expect([record?.outcome, record?.cancelledWhileBuilding, record?.cancelledBy?.name]).toEqual([
+      'cancelled',
+      true,
+      me.name,
+    ]);
+  });
+
+  it('names no stopper where a stop still under way ended with the build’s own end', async () => {
+    const mine = await started('a');
+    queued = [
+      entry({
+        key: 'k-stopping-done',
+        status: 'processing',
+        startedBy: 'jobs',
+        requestId: mine.requestId,
+        job: mine.token,
+      }),
+    ];
+    cancelAnswer = answeredStop('stopping');
+    await stop('writer', 'k-stopping-done');
+    await history().seen({
+      runId: mine.runId,
+      token: mine.token,
+      previous: null,
+      status: 'done',
+      at: new Date(),
+      final: true,
+    });
+    await history().close(mine.runId);
+
+    const record = await history().get(mine.runId);
+    expect([record?.outcome, record?.cancelledBy, record?.cancelledWhileBuilding]).toEqual([
+      'done',
+      null,
+      false,
+    ]);
+  });
+
+  it('leaves a build that had failed of its own to its failure, said so', async () => {
+    const mine = await started('a');
+    queued = [
+      entry({
+        key: 'k-failed',
+        status: 'processing',
+        startedBy: 'jobs',
+        requestId: mine.requestId,
+        job: mine.token,
+      }),
+    ];
+    cancelAnswer = answeredStop('failed');
+
+    expect((await stop('writer', 'k-failed')).json()).toEqual({ cancelled: true, build: 'failed' });
+    // Not recorded as a stop: the follower records Cube's own failure.
+    const record = await history().get(mine.runId);
+    expect([record?.outcome, record?.cancelledBy]).toEqual([null, null]);
+  });
+
+  it('says a build had finished before the stop reached it, its version standing, and records no stop', async () => {
+    const mine = await started('a');
+    queued = [
+      entry({
+        key: 'k-finished',
+        status: 'processing',
+        startedBy: 'jobs',
+        requestId: mine.requestId,
+        job: mine.token,
+      }),
+    ];
+    cancelAnswer = (keys) => ({
+      cancelled: [],
+      notCancelled: keys.map((key) => ({ key, reason: 'finished' })),
+    });
+
+    expect((await stop('writer', 'k-finished')).json()).toEqual({
+      cancelled: false,
+      reason: 'finished',
+      message: 'Not stopped: it had finished building, and its version stands.',
+    });
+    const record = await history().get(mine.runId);
+    expect([record?.outcome, record?.cancelledBy]).toEqual([null, null]);
+    const trail = (
+      await auditStore(getDb()).list({ events: ['build-cancelled'], folderIds: [ids.a] })
+    ).records.filter((each) => each.details?.['runId'] === mine.runId);
+    expect(trail).toEqual([]);
+  });
+
+  it('keeps a cancel of a queued entry not while building', async () => {
+    const mine = await started('a');
+    queued = [
+      entry({ key: 'k-queued', startedBy: 'jobs', requestId: mine.requestId, job: mine.token }),
+    ];
+    cancelAnswer = (keys) => ({
+      cancelled: keys.map((key) => ({ key, preAggregation: 'x', status: 'queued' })),
+      notCancelled: [],
+    });
+
+    expect((await cancel('writer', 'k-queued')).json()).toEqual({ cancelled: true });
+    expect((await history().get(mine.runId))?.cancelledWhileBuilding).toBe(false);
+  });
+
+  it('refuses Stop on what the refresh worker or a query started, or another folder’s, before xcube is asked', async () => {
+    const theirs = await started('c');
+    queued = [
+      entry({ key: 'k-worker-building', status: 'processing' }),
+      entry({ key: 'k-query-building', status: 'processing', startedBy: 'query' }),
+      entry({
+        key: 'k-theirs-building',
+        status: 'processing',
+        preAggregation: preAggIn('c'),
+        startedBy: 'jobs',
+        requestId: theirs.requestId,
+        job: theirs.token,
+      }),
+    ];
+    cancels.length = 0;
+
+    for (const key of ['k-worker-building', 'k-query-building', 'k-theirs-building'])
+      expect((await stop('writer', key)).statusCode, key).toBe(403);
+    // Said as a stop, not a cancel (T554's review).
+    expect((await stop('writer', 'k-worker-building')).json()).toEqual({
+      error: 'Only builds wechart started, from Jobs or a schedule, can be stopped here.',
     });
     expect(cancels).toEqual([]);
   });

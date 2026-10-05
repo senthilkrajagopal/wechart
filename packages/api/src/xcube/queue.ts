@@ -11,8 +11,10 @@ import { XcubeError } from './client';
  *   or running, oldest first, every data source's, every instance's.
  * - `POST …/pre-aggregations/queue/cancel` `{ keys, processing }`: a queued
  *   entry taken out; a running one refused (`processing`) unless
- *   `processing: true`, then stopped at the queue's next heartbeat; a key no
- *   longer queued refused (`gone`).
+ *   `processing: true`. Then xcube stops its build and keeps none of it,
+ *   answering, after up to 20 s, what came of it, or `finished` where its
+ *   version stands (T554; research xcube-74c933bdb8.md, which corrects §1);
+ *   a key no longer queued refused (`gone`).
  */
 export interface QueueEntry {
   readonly key: string;
@@ -35,8 +37,19 @@ export interface QueueEntry {
   readonly job: string | null;
 }
 
+/**
+ * What came of a building entry's build, taken out with `processing: true`
+ * (T554; research xcube-74c933bdb8.md): stopped, none of it kept; failed of
+ * its own before the stop took, none of it kept either; or still stopping
+ * when xcube's wait ran out, for Cube's jobs API to say later.
+ */
+export type StoppedBuild = 'stopped' | 'failed' | 'stopping';
+
 export interface CancelAnswer {
   readonly cancelled: readonly string[];
+  /** What came of each building one's build, by key; a queued one has none. */
+  readonly builds: ReadonlyMap<string, StoppedBuild>;
+  /** Not cancelled: `processing`, `gone`, or `finished`, its version standing. */
   readonly notCancelled: readonly { readonly key: string; readonly reason: string }[];
 }
 
@@ -50,6 +63,7 @@ export interface XcubeQueue {
 
 const STATUSES = new Set(['queued', 'processing']);
 const STARTERS = new Set(['scheduler', 'jobs', 'query']);
+/** Past xcube's own wait on a stop's outcome, 20 s (research xcube-74c933bdb8.md). */
 const CALL_TIMEOUT_MS = 30_000;
 
 const text = (value: unknown): string | null => (typeof value === 'string' ? value : null);
@@ -133,18 +147,28 @@ export function xcubeQueue({
     },
     async cancel(keys, { processing = false } = {}) {
       const answer = await call('/cancel', { method: 'POST', body: { keys, processing } });
-      const cancelled = Array.isArray(answer['cancelled'])
+      const taken = Array.isArray(answer['cancelled'])
         ? (answer['cancelled'] as Record<string, unknown>[])
-            .map((each) => text(each['key']))
-            .filter((key): key is string => key !== null)
         : [];
+      const cancelled = taken
+        .map((each) => text(each['key']))
+        .filter((key): key is string => key !== null);
+      // A word xcube may one day add is read as still stopping, never as stopped.
+      const builds = new Map<string, StoppedBuild>(
+        taken.flatMap((each) => {
+          const key = text(each['key']);
+          const build = text(each['build']);
+          if (key === null || build === null) return [];
+          return [[key, build === 'stopped' || build === 'failed' ? build : 'stopping'] as const];
+        }),
+      );
       const notCancelled = Array.isArray(answer['notCancelled'])
         ? (answer['notCancelled'] as Record<string, unknown>[]).flatMap((each) => {
             const key = text(each['key']);
             return key === null ? [] : [{ key, reason: text(each['reason']) ?? 'gone' }];
           })
         : [];
-      return { cancelled, notCancelled };
+      return { cancelled, builds, notCancelled };
     },
   };
 }

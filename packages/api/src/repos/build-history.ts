@@ -116,6 +116,8 @@ export interface BuildRecord {
   /** Who cancelled it from the queue, and when (T376); none otherwise. */
   readonly cancelledBy: { readonly key: string; readonly name: string } | null;
   readonly cancelledAt: Date | null;
+  /** Whether it was stopped while building, rather than taken out while queued (T554, AC-394). */
+  readonly cancelledWhileBuilding: boolean;
   readonly tokens: readonly TokenRecord[];
 }
 
@@ -225,10 +227,20 @@ const starterOf = (
 export function endOf(status: string): BuildOutcome {
   if (status === 'done') return 'done';
   if (status === 'not_found') return 'expired';
-  // wechart's own state for a job taken out of the queue (T376).
-  if (status === 'cancelled') return 'cancelled';
+  // wechart's own state for a job taken out of the queue (T376), and xcube's
+  // failure for one it stopped while building (T554).
+  if (status === 'cancelled' || stoppedByXcube(status)) return 'cancelled';
   return 'failed';
 }
+
+/**
+ * xcube's failure for a building job it stopped, as Cube's jobs API reports
+ * it: `failure: xcube stopped this build: it was cancelled while building,
+ * and none of it is kept` (T554; research xcube-74c933bdb8.md).
+ */
+export const XCUBE_STOPPED = 'failure: xcube stopped this build';
+export const stoppedByXcube = (status: string | null): boolean =>
+  status?.startsWith(XCUBE_STOPPED) === true;
 
 /**
  * A build's outcome from its jobs' ends: failed when any partition failed;
@@ -295,6 +307,11 @@ export function buildHistory(db: Kysely<Database>) {
           failed[0]?.status ??
           null,
         ended_at: lastEnd,
+        // A stop still under way when asked names its stopper only if the
+        // build then read stopped; one that ended of itself names none (T554).
+        ...(outcome === 'cancelled'
+          ? {}
+          : { cancelled_by_key: null, cancelled_by_name: null, cancelled_at: null }),
       })
       .where('id', '=', runId)
       .where('outcome', 'is', null)
@@ -404,6 +421,11 @@ export function buildHistory(db: Kysely<Database>) {
         error: run.error,
         cancelledBy: cancellerOf(run),
         cancelledAt: run.cancelled_at,
+        cancelledWhileBuilding: tokens.some(
+          (each) =>
+            stoppedByXcube(each.status) ||
+            each.log.some((entry) => entry.status === 'cancelled' && entry.building === true),
+        ),
         tokens: tokens.map((each) => ({
           token: each.token,
           status: each.status,
@@ -652,6 +674,29 @@ export function buildHistory(db: Kysely<Database>) {
     },
 
     /**
+     * A stop xcube is still carrying out (T554): its build, still open, names
+     * who asked, kept only if Cube's jobs API then reads it stopped
+     * (`close` drops it otherwise).
+     */
+    async stopAsked({
+      runId,
+      by,
+      at,
+    }: {
+      readonly runId: string;
+      readonly by: { readonly key: string; readonly name: string };
+      readonly at: Date;
+    }): Promise<void> {
+      await db
+        .updateTable('build_runs')
+        .set({ cancelled_by_key: by.key, cancelled_by_name: by.name, cancelled_at: at })
+        .where('id', '=', runId)
+        .where('outcome', 'is', null)
+        .where('cancelled_by_key', 'is', null)
+        .execute();
+    },
+
+    /**
      * A job taken out of the queue (T376, AC-150, AC-151): it ends,
      * `cancelled`, at `at`, and its build names who cancelled it; the build
      * closes once its other jobs have ended. Says whether the job was still
@@ -663,6 +708,7 @@ export function buildHistory(db: Kysely<Database>) {
       by,
       at,
       askedAt,
+      building = false,
     }: {
       readonly runId: string;
       readonly token: string;
@@ -675,8 +721,12 @@ export function buildHistory(db: Kysely<Database>) {
        * Such an end, seen after the ask, was the cancel's.
        */
       readonly askedAt?: Date;
+      /** Stopped while building, rather than taken out while queued (T554, AC-394). */
+      readonly building?: boolean;
     }): Promise<boolean> {
-      const entry = JSON.stringify([{ at: at.toISOString(), status: 'cancelled' }]);
+      const entry = JSON.stringify([
+        { at: at.toISOString(), status: 'cancelled', ...(building ? { building: true } : {}) },
+      ]);
       const marked = await db
         .updateTable('build_tokens')
         .set({
@@ -688,15 +738,19 @@ export function buildHistory(db: Kysely<Database>) {
         .where('run_id', '=', runId)
         .where('token', '=', token)
         .where((where) =>
-          askedAt === undefined
-            ? where('finished', '=', false)
-            : where.or([
-                where('finished', '=', false),
-                where.and([
-                  where('status', 'in', ['missing_partition', 'not_found']),
-                  where(sql<Date>`(log -> -1 ->> 'at')::timestamptz`, '>=', askedAt),
+          where.or([
+            where('finished', '=', false),
+            // xcube's failure for a build it stopped is only ever a stop's (T554).
+            ...(building ? [where('status', 'like', `${XCUBE_STOPPED}%`)] : []),
+            ...(askedAt === undefined
+              ? []
+              : [
+                  where.and([
+                    where('status', 'in', ['missing_partition', 'not_found']),
+                    where(sql<Date>`(log -> -1 ->> 'at')::timestamptz`, '>=', askedAt),
+                  ]),
                 ]),
-              ]),
+          ]),
         )
         .returning('token')
         .executeTakeFirst();
@@ -895,6 +949,18 @@ export function buildHistory(db: Kysely<Database>) {
             .where('t.finished', '=', false)
             .where('t.status', '=', 'processing')
             .as('building'),
+          // Stopped while building (T554, AC-394).
+          eb
+            .exists(
+              eb
+                .selectFrom('build_tokens as t')
+                .select('t.token')
+                .whereRef('t.run_id', '=', 'r.id')
+                .where(
+                  sql<boolean>`(t.log @> '[{"status":"cancelled","building":true}]'::jsonb OR t.status LIKE ${`${XCUBE_STOPPED}%`})`,
+                ),
+            )
+            .as('cancelled_building'),
         ]);
       if (within !== undefined) query = query.where('r.folder_id', 'in', within);
       if (filters.folderIds !== undefined)
@@ -944,6 +1010,7 @@ export function buildHistory(db: Kysely<Database>) {
         error: row.error,
         cancelledBy: cancellerOf(row),
         cancelledAt: row.cancelled_at,
+        cancelledWhileBuilding: row.cancelled_building === true,
         jobs: Number(row.jobs ?? 0),
         progress: { done: Number(row.done ?? 0), building: Number(row.building ?? 0) },
       }));

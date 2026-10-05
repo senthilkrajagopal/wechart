@@ -35,6 +35,8 @@ export interface QueueRow {
   readonly token: string | null;
   readonly runId: string | null;
   readonly cancellable: boolean;
+  /** Building, and wechart started it: Stop ends it (T554, AC-394; design 16, P1). */
+  readonly stoppable: boolean;
 }
 
 export const QUEUE_QUERY_KEY = ['jobs', 'queue'] as const;
@@ -126,6 +128,18 @@ const REFUSED: Record<
     rest: 'It finished or was taken out before the cancel reached Cube. Run history says how it ended.',
     err: false,
   },
+  // A stop that came as the build ended (T554; research xcube-74c933bdb8.md).
+  finished: {
+    bold: 'Not stopped: it had finished building.',
+    rest: 'Its version stands, and Run history has it.',
+    err: false,
+  },
+  // Taken out, but its build had failed of its own first: none of it kept either.
+  failed: {
+    bold: 'It had already failed.',
+    rest: 'It failed before the stop reached it, and none of it is kept. Run history has Cube’s error.',
+    err: false,
+  },
 };
 
 export function BuildQueue({ enabled = true }: { enabled?: boolean }) {
@@ -139,27 +153,41 @@ export function BuildQueue({ enabled = true }: { enabled?: boolean }) {
   const [said, setSaid] = useState('');
   const [refused, setRefused] = useState<{ reason: string; message: string } | null>(null);
   const cancel = useMutation({
-    mutationFn: async (row: QueueRow) => {
+    // Stop (T554): a building one, whose build xcube stops, answering what came of it.
+    mutationFn: async ({ row, stop }: { row: QueueRow; stop: boolean }) => {
       const response = await fetch('/api/jobs/queue/cancel', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ key: row.key }),
+        body: JSON.stringify(stop ? { key: row.key, stop: true } : { key: row.key }),
       });
       const body = (await response.json().catch(() => null)) as {
         cancelled?: boolean;
+        /** What came of a stopped build (T554): stopped, failed of its own, or still stopping. */
+        build?: 'stopped' | 'failed' | 'stopping';
         reason?: string;
         message?: string;
         error?: string;
       } | null;
       if (!response.ok || body === null)
         throw new Error(body?.error ?? `The cancel failed (status ${String(response.status)}).`);
-      return { row, body };
+      return { row, stop, body };
     },
-    onSuccess: ({ row, body }) => {
-      if (body.cancelled === true) {
+    onSuccess: ({ row, stop, body }) => {
+      if (body.cancelled === true && body.build === 'failed') {
+        // Its own failure came first (T554): said as such, not as a stop.
+        setSaid('');
+        setRefused({ reason: 'failed', message: '' });
+      } else if (body.cancelled === true) {
         setRefused(null);
-        setSaid(`Cancelled ${buildOf(row)}. Build it again from Pre-aggregations.`);
+        setSaid(
+          !stop
+            ? `Cancelled ${buildOf(row)}. Build it again from Pre-aggregations.`
+            : body.build === 'stopping'
+              ? `Stopping ${buildOf(row)}. Run history says how it ends.`
+              : `Stopped ${buildOf(row)}. None of it is kept. Build it again from Pre-aggregations.`,
+        );
       } else {
+        setSaid('');
         setRefused({ reason: body.reason ?? 'gone', message: body.message ?? '' });
       }
       void client.invalidateQueries({ queryKey: QUEUE_QUERY_KEY });
@@ -250,9 +278,23 @@ export function BuildQueue({ enabled = true }: { enabled?: boolean }) {
                         className="btn btn-sm"
                         aria-label={`Cancel ${buildOf(row)}`}
                         disabled={cancel.isPending}
-                        onClick={() => cancel.mutate(row)}
+                        onClick={() => cancel.mutate({ row, stop: false })}
                       >
                         Cancel
+                      </button>
+                    ) : row.stoppable && row.state === 'building' ? (
+                      // A building one wechart started (T554, AC-394; design 16, P1).
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        aria-label={`Stop ${buildOf(row)}`}
+                        disabled={cancel.isPending}
+                        onClick={() => cancel.mutate({ row, stop: true })}
+                      >
+                        {/* xcube answers once the build has stopped, up to 20 s (T554). */}
+                        {cancel.isPending && cancel.variables.row.key === row.key
+                          ? 'Stopping…'
+                          : 'Stop'}
                       </button>
                     ) : null}
                   </td>
@@ -266,7 +308,8 @@ export function BuildQueue({ enabled = true }: { enabled?: boolean }) {
         Only queued builds wechart started, from Jobs or a schedule, can be cancelled here. Cube’s
         refresh worker would queue its own again within 30 seconds, until its refresh key turns
         over, and a query’s build is one Cube started to answer a query. A token is the one Cube’s
-        jobs API gave wechart; the worker’s and queries’ builds have none.
+        jobs API gave wechart; the worker’s and queries’ builds have none. A building one wechart
+        started can be stopped, and none of it is kept.
       </p>
       <ExportedToast message={said} onDismiss={() => setSaid('')} />
     </div>

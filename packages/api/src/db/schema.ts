@@ -241,7 +241,12 @@ export interface BuildTokenTable {
   target_table: string | null;
   finished: Generated<boolean>;
   finished_at: Date | null;
-  log: JSONColumnType<{ at: string; status: string; table?: string }[], string | undefined, string>;
+  /** Each state seen; a cancel while it was building says so (T554). */
+  log: JSONColumnType<
+    { at: string; status: string; table?: string; building?: true }[],
+    string | undefined,
+    string
+  >;
   lease_until: Date | null;
 }
 

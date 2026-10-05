@@ -278,6 +278,126 @@ test('a build wechart queued waits with its token, Cancel takes it out, and Run 
 });
 
 /**
+ * T554 / AC-394 (design 16, P1): Stop, on a building build wechart started,
+ * has xcube take it out with `processing: true`; xcube stops the build in
+ * the source, keeps none of it, and answers that it stopped (research
+ * xcube-74c933bdb8.md, which corrects xcube-jobs-schedules-routes.md §1).
+ * A cube of this run's own, whose one build sleeps 40 s, left alone by the
+ * refresh worker: once building, Stop; the entry leaves the queue; Run
+ * history reads Cancelled while building, by whom; and past when the build
+ * would have ended, Cube's jobs API reads xcube's stop, never done, and the
+ * rollup has no version from it.
+ */
+const sleepingCube = (cube: string, seconds: number) => `cubes:
+  - name: ${cube}
+    sql: SELECT o.* FROM public.orders o, pg_sleep(${String(seconds)})
+    dimensions:
+      - name: status
+        sql: status
+        type: string
+    measures:
+      - name: count
+        type: count
+    pre_aggregations:
+      - name: main
+        measures: [CUBE.count]
+        dimensions: [CUBE.status]
+        scheduled_refresh: false
+`;
+
+test('Stop ends a building build wechart started, Run history reads Cancelled while building, and it makes no version', async ({
+  page,
+  request,
+  browserName,
+}) => {
+  test.setTimeout(300_000);
+  // This run's own: no version an earlier run's build made can stand in for it.
+  const cube = `stopped_${browserName}_${Date.now().toString(36)}`;
+  const rollup = `${cube}.main`;
+  const path = await ownCubeFile(request, cube, sleepingCube(cube, 40));
+  try {
+    await page.goto('/jobs');
+    const answered = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/builds') && response.request().method() === 'POST',
+    );
+    await page
+      .getByRole('table', { name: 'Pre-aggregations' })
+      .getByRole('button', { name: `Build ${rollup}` })
+      .click({ timeout: 60_000 });
+    const { tokens, runId } = (await (await answered).json()) as {
+      tokens: string[];
+      runId: string;
+    };
+    expect(tokens).toHaveLength(1);
+    const startedAt = Date.now();
+
+    // The queue: this build, building, with Stop; no entry wechart didn't
+    // start has one (the refresh worker's and queries' are listed without).
+    await page.getByRole('tab', { name: /^Queue/ }).click();
+    const queue = page.getByRole('table', { name: 'Build queue' });
+    const building = queue
+      .getByRole('row')
+      .filter({ hasText: rollup })
+      .filter({ has: page.getByRole('button', { name: /^Stop the/ }) });
+    await expect(building).toHaveCount(1, { timeout: 30_000 });
+    await expect(building.getByTestId('queue-state')).toHaveText('Building');
+    const key = await building.getAttribute('data-key');
+    // Every entry with Stop is one wechart started, by a person or a schedule:
+    // another test's build may be building too, never the worker's or a query's.
+    const starters = await queue
+      .getByRole('row')
+      .filter({ has: page.getByRole('button', { name: /^Stop the/ }) })
+      .getByTestId('starter')
+      .locator('svg')
+      .evaluateAll((icons) => icons.map((icon) => icon.getAttribute('data-icon')));
+    expect(starters.length).toBeGreaterThan(0);
+    expect(starters.filter((icon) => icon !== 'person' && icon !== 'schedule')).toEqual([]);
+
+    await building.getByRole('button', { name: /^Stop the/ }).click();
+    await expect(page.getByRole('status').filter({ hasText: /^Stopped the / })).toContainText(
+      `build of ${rollup}. None of it is kept.`,
+      { timeout: 30_000 },
+    );
+    await expect(queue.locator(`[data-key="${key}"]`)).toHaveCount(0, { timeout: 15_000 });
+
+    // Run history: cancelled while building, by whom.
+    await page.getByRole('tab', { name: 'Run history' }).click();
+    await expect(page.getByTestId(`build-row-${runId}`).getByTestId('build-outcome')).toHaveText(
+      /^Cancelled while building · by admin, \d{2}:\d{2}$/,
+      { timeout: 30_000 },
+    );
+
+    // Past when it would have ended, with time to spare: xcube's stop, never done.
+    await page.waitForTimeout(Math.max(0, startedAt + 60_000 - Date.now()));
+    const status = (await (
+      await page.request.post('/api/builds/status', { data: { tokens } })
+    ).json()) as { status: string }[];
+    expect(status.map((each) => each.status)).toEqual([
+      'failure: xcube stopped this build: it was cancelled while building, and none of it is kept',
+    ]);
+    // Read afresh, after the wait: no version of it (T554's review).
+    const rows = (await (await page.request.get('/api/preaggregations')).json()) as {
+      id: string;
+      state?: string;
+    }[];
+    expect(rows.find((each) => each.id === rollup)?.state).toBe('not-built');
+    await page.reload();
+    await page.getByRole('tab', { name: 'Pre-aggregations' }).click();
+    const row = page
+      .getByRole('table', { name: 'Pre-aggregations' })
+      .getByRole('row')
+      .filter({ hasText: rollup });
+    await expect(row.getByTestId('row-state')).toHaveAttribute('data-state', 'not-built', {
+      timeout: 30_000,
+    });
+  } finally {
+    // Its sleep taken out, as the Cancel test's.
+    await landed(request, 'root', [{ path, content: sleepingCube(cube, 0) }]);
+  }
+});
+
+/**
  * T375 / AC-145: WHEN the user opens a rollup in Jobs, THE SYSTEM SHALL list
  * every partition Cube derives from its build range, in UTC, and rebuild the
  * ones selected, one jobs request each.

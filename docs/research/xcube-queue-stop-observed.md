@@ -8,6 +8,8 @@ researched: 2026-10-04
 
 # A processing build "stopped" through the queue's cancel still finishes (T554, AC-394)
 
+*Answered by xcube `74c933bdb8`, which stops such a build and keeps none of it: see [`xcube-74c933bdb8.md`](./xcube-74c933bdb8.md). What follows holds for `2099b13f2d` and `46ca0ce708`.*
+
 **A correction to** `xcube-jobs-schedules-routes.md` §1. That section says a processing entry cancelled with `"processing": true` is stopped "at the queue's next heartbeat (8 s)". On compose's xcube (the image above), the build ran on to its end and made a version.
 
 **Source:** wechart's own probe, 2026-10-04 at 21:02Z, through wechart's e2e API (model `e2e`, the service credential). The request to xcube is `~/Work/xcube-exchange/to-xcube/2026-10-04-2105-stop-processing-build.md`.

@@ -58,7 +58,7 @@ The model's builds queued or running in its served epoch, oldest first [answer �
 
 `{ "keys": [...], "processing": false }` → `{ "cancelled": [{ key, preAggregation, status }], "notCancelled": [{ key, reason }] }` [answer §1].
 - **A queued entry** is taken out of the queue.
-- **A processing entry** is refused with `reason: "processing"`, unless `"processing": true`. Then the instance stops it at the queue's next heartbeat (8 s).
+- **A processing entry** is refused with `reason: "processing"`, unless `"processing": true`. ~~Then the instance stops it at the queue's next heartbeat (8 s).~~ *Corrected:* before `74c933bdb8` the build ran on to its end and made its version ([`xcube-queue-stop-observed.md`](./xcube-queue-stop-observed.md)). From `74c933bdb8` it is stopped, none of it kept, and the answer says what came of it ([`xcube-74c933bdb8.md`](./xcube-74c933bdb8.md)).
 - **A key not in this model's queue** answers `reason: "gone"`.
 - **A cancelled refresh-worker build comes back,** under the same key, at the worker's next run (every 30 s), while its refresh key hasn't turned over (`ops.test.ts`; `RefreshScheduler.ts` L614-680). **A jobs build doesn't:** a job is one-shot.
 - **A sticking cancel is possible but not built.** xcube could hold the cancelled key until the refresh key turns over, and the worker would back that rollup off (1 s doubling to 10 min). The alternative needs nothing from xcube: cancel only builds wechart started, and show the worker's read-only. **This is a user decision** (backlog §6).

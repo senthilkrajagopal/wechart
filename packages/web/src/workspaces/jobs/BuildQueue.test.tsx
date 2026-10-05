@@ -26,6 +26,7 @@ const row = (over: Partial<QueueRow>): QueueRow => ({
   token: '7c1e0000000000000000000000009ab',
   runId: 'run-1',
   cancellable: true,
+  stoppable: false,
   ...over,
 });
 
@@ -89,6 +90,131 @@ const text = (element: Element | null | undefined) => element?.textContent ?? ''
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+/**
+ * T554 (AC-394; design 16, P1): Stop on a building entry wechart started,
+ * and on no other; it asks the API to stop it, says so, and the entry
+ * leaves the list.
+ */
+describe('Stop, on a building build wechart started (T554, AC-394)', () => {
+  const BUILDING = row({
+    key: 'k-building',
+    state: 'building',
+    cancellable: false,
+    stoppable: true,
+  });
+
+  it('offers Stop on a building entry wechart started, and not on one a query started', async () => {
+    serve();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ entries: [...ROWS, BUILDING], everyFolder: false })),
+    );
+    shown();
+
+    const table = await screen.findByRole('table', { name: 'Build queue' });
+    expect(
+      within(table)
+        .getAllByRole('button', { name: /^Stop/ })
+        .map((each) => each.getAttribute('aria-label')),
+    ).toEqual(['Stop the Aug 2026 build of orders_emea.by_month']);
+    expect(text(screen.getByTestId('queue-foot'))).toContain(
+      'A building one wechart started can be stopped, and none of it is kept.',
+    );
+  });
+
+  /** The queue on a stub API whose stop answers `answer`, released when `release` is called. */
+  function stopping(answer: unknown) {
+    const asked: { url: string; body?: unknown }[] = [];
+    let entries: QueueRow[] = [BUILDING];
+    let release = () => undefined as void;
+    const answered = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const body = init?.body === undefined ? undefined : JSON.parse(String(init.body));
+        asked.push({ url, body });
+        if (url === '/api/jobs/queue/cancel') {
+          // xcube waits on the build's outcome, up to 20 s (research xcube-74c933bdb8.md).
+          await answered;
+          entries = [];
+          return Response.json(answer);
+        }
+        return Response.json({ entries, everyFolder: false });
+      }),
+    );
+    shown();
+    return { asked, release: () => release() };
+  }
+  const stopButton = () =>
+    screen.getByRole('button', { name: 'Stop the Aug 2026 build of orders_emea.by_month' });
+
+  it('stops it, saying so while xcube stops it, then that none of it is kept; the entry leaves the list', async () => {
+    const { asked, release } = stopping({ cancelled: true, build: 'stopped' });
+    await screen.findByRole('table', { name: 'Build queue' });
+
+    await userEvent.click(stopButton());
+
+    // Up to 20 s while xcube stops it: said on the button, which takes no second press.
+    expect([text(stopButton()), stopButton().hasAttribute('disabled')]).toEqual([
+      'Stopping…',
+      true,
+    ]);
+    expect(asked.find((each) => each.url === '/api/jobs/queue/cancel')?.body).toEqual({
+      key: 'k-building',
+      stop: true,
+    });
+    release();
+    expect(
+      text(await screen.findByText(/Stopped the Aug 2026 build of orders_emea\.by_month/)),
+    ).toBe(
+      'Stopped the Aug 2026 build of orders_emea.by_month. None of it is kept. Build it again from Pre-aggregations.',
+    );
+    await vi.waitFor(() => {
+      expect(screen.queryAllByRole('button', { name: /^Stop the/ })).toHaveLength(0);
+    });
+  });
+
+  it.each([
+    [
+      { cancelled: true, build: 'stopping' },
+      'status',
+      'Stopping the Aug 2026 build of orders_emea.by_month. Run history says how it ends.',
+    ],
+    [
+      { cancelled: true, build: 'failed' },
+      'alert',
+      'It had already failed. It failed before the stop reached it, and none of it is kept. Run history has Cube’s error.',
+    ],
+    [
+      {
+        cancelled: false,
+        reason: 'finished',
+        message: 'Not stopped: it had finished building, and its version stands.',
+      },
+      'alert',
+      'Not stopped: it had finished building. Its version stands, and Run history has it.',
+    ],
+  ])('says what came of it: %j', async (answer, role, said) => {
+    const { release } = stopping(answer);
+    await screen.findByRole('table', { name: 'Build queue' });
+
+    await userEvent.click(stopButton());
+    release();
+
+    await vi.waitFor(() => {
+      expect(
+        screen
+          .getAllByRole(role as 'status' | 'alert')
+          .map((each) => text(each))
+          .filter((each) => each !== '' && !each.includes('in queue order')),
+      ).toEqual([said]);
+    });
+  });
 });
 
 describe('the build queue (T376, AC-151)', () => {

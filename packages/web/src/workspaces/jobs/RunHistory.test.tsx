@@ -233,6 +233,33 @@ describe('Run history (T374, AC-150)', () => {
     expect(starter.querySelector('svg')?.getAttribute('data-icon')).toBe('schedule');
   });
 
+  it('says a build stopped while building was cancelled while building, by whom and when (T554, AC-394)', async () => {
+    api(() =>
+      listOf([
+        summary({
+          id: 'stopped',
+          outcome: 'cancelled',
+          cancelledBy: { key: 'wren', name: 'Wren Writer' },
+          cancelledAt: '2026-10-02T12:39:00.000Z',
+          cancelledWhileBuilding: true,
+        }),
+      ]),
+    );
+    shown();
+
+    const table = await screen.findByRole('table', { name: 'Run history' });
+    const at = new Date('2026-10-02T12:39:00.000Z').toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const outcome = within(within(table).getByTestId('build-row-stopped')).getByTestId(
+      'build-outcome',
+    );
+    expect(text(outcome)).toBe(`Cancelled while building · by Wren Writer, ${at}`);
+    expect(outcome.querySelector('svg')?.getAttribute('data-icon')).toBe('cancel');
+  });
+
   it('says what is listed when nothing is, naming no folder, and that the refresh worker’s builds come later', async () => {
     api(() => listOf([]));
     shown();

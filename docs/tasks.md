@@ -7761,7 +7761,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - **Left for the user or a later task:**
     - **Each module by its latest run.** A restarted worker whose first run is still waiting on builds has no good run and no error. If a stopped worker's error is that module's latest, the badge reads running. Reading "a module's last error later than its last good run" across workers would read failing instead. This is the user's call, listed above.
     - **F3's member panel** draws two lines, the worker running and "1 module's last run failed". The panel's summary is one line, by the state. This is for T560's conformance pass.
-- [ ] T554 (AC-394) Stop a building build that wechart started *(added 2026-10-02, `[R56]`: design 16's P1)*
+- [x] T554 (AC-394) Stop a building build that wechart started *(added 2026-10-02, `[R56]`: design 16's P1)*
   - Files: `packages/api/src/jobs/queue.ts` (+ test), `packages/web/src/workspaces/jobs/BuildQueue.tsx` (+ test), `e2e/jobs.spec.ts`
   - Failing test:
     - `queue.test.ts`, against the stub xcube:
@@ -7770,6 +7770,32 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - Stop on an entry the refresh worker or a query started is never offered, and is refused with `403` (AC-394).
     - `e2e/jobs.spec.ts`, against compose's xcube: a stopped build leaves the queue, and its partition gets no new version from it (AC-394).
   - Depends on: T376, T505
+  - *Blocked on xcube, 2026-10-04.* Against compose's xcube (2099b13f2d), a processing build that the cancel took out with `processing: true` still ran to its end and made a version (research `xcube-queue-stop-observed.md`). The request was `~/Work/xcube-exchange/to-xcube/2026-10-04-2105-stop-processing-build.md`.
+  - *Done 2026-10-05, on xcube `74c933bdb8`* (research `xcube-74c933bdb8.md`):
+    - **The pin:** the image is pinned in compose (Cube and its refresh worker), both Helm values files, `docs/deploy.md` (no migration) and `cube-image.test.ts`. Compose's two Cube containers were moved to it under the e2e lock, each config-hash checked.
+    - **xcube now stops the build.** It answers what came of it, and Cube's jobs API then reads `failure: xcube stopped this build: …` for the job.
+    - **The API:**
+      - `stop: true` on `POST /api/jobs/queue/cancel` sends `processing: true`;
+      - queue rows carry `stoppable`, a building one wechart started;
+      - `stopped` is recorded cancelled while building, by whom;
+      - `stopping` keeps the person on the build, named only if the jobs API then reads it stopped;
+      - `failed` is left to the follower's record of Cube's own failure;
+      - `finished` is refused: "Not stopped: it had finished building, and its version stands."
+      - Every outcome but `finished` is a Build cancelled in the trail, with `build` in its details.
+      - The jobs API's stop failure reads as cancelled while building, even where the follower sees it before the cancel's answer comes.
+    - **The page:** Stop reads "Stopping…" while xcube waits on the outcome (up to 20 s), then says what came of it. Run history reads "Cancelled while building · by …".
+    - **`e2e/jobs.spec.ts`** shows it against compose's xcube: the jobs API reads xcube's stop and the rollup is Not built. Its cube is the run's own, so no earlier run's version can stand in.
+  - **Implementer's calls, for the user to confirm or change:**
+    - **A build that failed of its own before the stop took** is said "It had already failed", and not recorded as a stop.
+    - **A stop still under way when xcube's wait ran out** is said "Stopping … Run history says how it ends".
+    - **A stop that came too late** (`finished`) records nothing in Run history or the trail.
+    - **A stop whose build had failed of its own** is still a Build cancelled in the trail, the person having asked it, with `build: failed` in its details. Run history records the failure, not a stop.
+  - **One review round (spec-reviewer), fixed:**
+    1. On the `stopping` path the jobs API's stop failure stayed the token's state, and Pre-aggregations and Partitions read the partition Failed. A build xcube stopped is no longer read as failed there.
+    2. The e2e's Not built check could pass on a stale read. It now reads the rollups afresh after the wait, then reloads the page.
+    3. A refused Stop said "can be cancelled here". It now says "can be stopped here".
+    4. A stalled building entry is no longer marked stoppable, as the page offers it no Stop. Two comments still citing the corrected §1 now cite `xcube-74c933bdb8.md`.
+    5. The e2e's check that only wechart's builds have Stop now holds with other tests' builds in the queue.
 - [x] T555 (AC-395) Run now on a wechart schedule *(added 2026-10-02, `[R56]`: design 16's P2)*
   - Files: `packages/api/src/routes/schedules.ts` (+ test), `packages/web/src/workspaces/schedules/SchedulePane.tsx` (+ test)
   - Failing test: `routes/schedules.test.ts`, with a fake clock and the stub Cube:
