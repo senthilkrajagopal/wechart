@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
+import { fieldPicker } from './cubePicker';
 import { IN_MY_WORKSPACE } from './workspace';
 
 /**
@@ -193,7 +194,7 @@ async function addFilter(page: Page, widget: string, member: string) {
   await page.getByTestId('add-filter').click();
   await page.getByTestId(`add-filter-${widget}`).click();
   // Selected, its field picker in Properties (T468, UX-031).
-  await properties(page).getByLabel('Filter on').selectOption(member);
+  await fieldPicker(properties(page)).selectOption(member);
 }
 
 test('each of the four filter widgets can be added to a dashboard, and is kept', async ({

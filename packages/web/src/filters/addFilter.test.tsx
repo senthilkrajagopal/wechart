@@ -5,7 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashboardView } from '../dashboard/DashboardView';
 import type { DashboardDocument } from '../dashboard/model/document';
-import { openFilter, properties, selectFilter } from './testing';
+import {
+  fieldButton,
+  fieldsOffered,
+  openFilter,
+  pickField,
+  properties,
+  selectFilter,
+} from './testing';
 
 /**
  * T082 / AC-076, on the dashboard: each of the four filter widgets can be
@@ -115,8 +122,7 @@ describe('adding a filter', () => {
     // selected, in Properties (T468, UX-031).
     const pick = async (index: number, member: string) => {
       await selectFilter(filters[index]);
-      const select = within(properties()).getByLabelText('Filter on');
-      await userEvent.selectOptions(select, member);
+      await pickField(properties(), member);
     };
     await pick(0, 'orders.ordered_at');
     await pick(1, 'orders.status');
@@ -138,10 +144,7 @@ describe('adding a filter', () => {
     dashboard();
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
     await addFilter('Date range');
-    await userEvent.selectOptions(
-      within(properties()).getByLabelText('Filter on'),
-      'orders.ordered_at',
-    );
+    await pickField(properties(), 'orders.ordered_at');
     await addFilter('Checkbox list');
 
     const [dates] = within(bar()).getAllByTestId(/^filter-/) as [HTMLElement, HTMLElement];
@@ -165,32 +168,24 @@ describe('adding a filter', () => {
     await addFilter('Numeric range');
 
     const filterAt = (index: number) => within(bar()).getAllByTestId(/^filter-/)[index];
-    // The selected filter's, in Properties (T468).
-    const optionsOf = () =>
-      [...within(properties()).getByLabelText('Filter on').querySelectorAll('option')]
-        .map((option) => option.value)
-        .filter((value) => value !== '');
-
+    // The selected filter's, in Properties (T468), as design 10's picker lists them (T633).
     await selectFilter(filterAt(0));
     expect(
-      await vi.waitFor(() => {
-        const found = optionsOf();
+      await vi.waitFor(async () => {
+        const found = await fieldsOffered(properties());
         if (found.length === 0) throw new Error('no fields yet');
         return found;
       }),
     ).toEqual(['orders.ordered_at']);
     await selectFilter(filterAt(1));
-    expect(optionsOf()).toEqual(['orders.id']);
+    expect(await fieldsOffered(properties())).toEqual(['orders.id']);
   });
 
   it('is saved with the dashboard', async () => {
     const onSave = dashboard();
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
     await addFilter('Checkbox list');
-    await userEvent.selectOptions(
-      within(properties()).getByLabelText('Filter on'),
-      'orders.status',
-    );
+    await pickField(properties(), 'orders.status');
 
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
@@ -246,7 +241,7 @@ describe('the values a list filter offers', () => {
     dashboard();
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
     await addFilter('List with search');
-    await userEvent.selectOptions(within(properties()).getByLabelText('Filter on'), member);
+    await pickField(properties(), member);
     // Its values in its pill's popover (T468).
     await openFilter();
   }
@@ -291,8 +286,8 @@ it('a value stays with the field it was chosen on, through Undo', async () => {
   dashboard();
   await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
   await addFilter('Checkbox list');
-  await userEvent.selectOptions(within(properties()).getByLabelText('Filter on'), 'orders.status');
-  await userEvent.selectOptions(within(properties()).getByLabelText('Filter on'), 'orders.region');
+  await pickField(properties(), 'orders.status');
+  await pickField(properties(), 'orders.region');
   // Its values in its pill's popover (T468).
   await openFilter();
   await userEvent.click(await within(bar()).findByRole('checkbox', { name: 'shipped' }));
@@ -369,16 +364,26 @@ describe('a filter’s fields on a dashboard in a folder (T429)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
     await addFilter('List with search');
 
-    const select = within(properties()).getByLabelText('Filter on');
-    await waitFor(() => expect(select.querySelectorAll('optgroup')).toHaveLength(2));
+    // Design 10's picker (T633): by folder, nearest first, each field with
+    // its cube and folder path beside it.
+    await userEvent.click(fieldButton(properties()));
+    const list = await screen.findByRole('listbox', { name: 'Fields' });
+    await waitFor(() => expect(within(list).getAllByRole('group')).toHaveLength(2));
     expect(
-      [...select.querySelectorAll('optgroup')].map((group) => ({
-        label: group.label,
-        options: [...group.querySelectorAll('option')].map((option) => option.value),
-      })),
+      within(list)
+        .getAllByRole('group')
+        .map((group) => ({
+          label: group.getAttribute('aria-label'),
+          options: within(group)
+            .getAllByRole('option')
+            .map((option) => [
+              option.getAttribute('data-member'),
+              option.querySelector('.cube-picker__path')?.textContent,
+            ]),
+        })),
     ).toEqual([
-      { label: 'Orders · Shared', options: ['orders.status'] },
-      { label: 'Sales · Shared / A', options: ['fa__sales.status'] },
+      { label: 'A', options: [['fa__sales.status', 'Sales · A']] },
+      { label: 'Shared', options: [['orders.status', 'Orders · Shared']] },
     ]);
   });
 });

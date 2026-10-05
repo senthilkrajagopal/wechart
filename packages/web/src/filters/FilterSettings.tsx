@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
 
 import type { DashboardDocument } from '../dashboard/model/document';
-import { filterNameOf, usePickableFields } from './FilterBar';
+import { PathPicker } from '../editor/PathPicker';
+import { filterNameOf, useFieldGroups } from './FilterBar';
 import {
   FILTER_WIDGETS,
-  membersFor,
   valueKeyOf,
   withoutMember,
   type DashboardFilter,
@@ -48,8 +48,8 @@ export function FilterSettings({
   onFieldFocused,
   onRemoved,
 }: FilterSettingsProps) {
-  const pickable = usePickableFields(dashboard);
-  const field = useRef<HTMLSelectElement>(null);
+  const fields = useFieldGroups(dashboard, filter.widget);
+  const field = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!focusField) return;
     field.current?.focus();
@@ -67,6 +67,9 @@ export function FilterSettings({
     if (section === null) return undefined;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
+      // The field picker's own list closes on it, back on its button (T633).
+      if (event.target instanceof Element && event.target.closest('.cube-picker__pop') !== null)
+        return;
       event.preventDefault();
       event.stopPropagation();
       globalThis.document
@@ -88,16 +91,20 @@ export function FilterSettings({
   return (
     <section ref={box} className="panel-section filter-settings" aria-label={name}>
       <h3>{name}</h3>
-      <label className="filter-settings__label" htmlFor={`filter-on-${filter.id}`}>
-        Filter on
-      </label>
-      <select
-        ref={field}
-        id={`filter-on-${filter.id}`}
-        className="select-sm"
+      {/* Design 10's grouped picker, as the chart editor's cube picker (T633, R64). */}
+      <PathPicker
+        label="Filter on"
+        buttonId={`filter-on-${filter.id}`}
+        buttonRef={field}
+        empty={`${kind?.label ?? 'Filter'}: choose a field…`}
+        searchLabel="Search fields"
+        listLabel="Fields"
+        noMatch={(typed) => `No field matches “${typed}”.`}
+        clearLabel="No field"
+        groups={fields.groups}
         value={filter.member ?? ''}
-        onChange={(event) => {
-          const chosen = event.target.value;
+        valueTitle={filter.member === undefined ? undefined : fields.titleOf(filter.member)}
+        onChoose={(chosen) => {
           // The value stays with the field it was chosen on (`valueKeyOf`),
           // so there is nothing here to clear.
           onFilters(
@@ -107,21 +114,7 @@ export function FilterSettings({
             }),
           );
         }}
-      >
-        <option value="">{kind?.label ?? 'Filter'}: choose a field…</option>
-        {pickable.map(({ label, members }) => {
-          const fitting = membersFor(filter.widget, members);
-          return fitting.length === 0 ? null : (
-            <optgroup key={label} label={label}>
-              {fitting.map((candidate) => (
-                <option key={candidate.name} value={candidate.name}>
-                  {candidate.title}
-                </option>
-              ))}
-            </optgroup>
-          );
-        })}
-      </select>
+      />
       {/* Seen; heard from the select's own name. */}
       <span className="filter-settings__label" aria-hidden="true">
         Applies to

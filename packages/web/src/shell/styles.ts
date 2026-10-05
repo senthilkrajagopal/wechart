@@ -8216,8 +8216,9 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
 }
 .cube-picker__button > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cube-picker__pop {
-  /* Fixed to the window at the button (CubePicker places it), so the field
-     pane's scrolling box doesn't cut it to the pane's width. */
+  /* Fixed to the window under the button, kept within it (PathPicker places
+     it, with this width), so a scrolling pane around it doesn't cut it short:
+     the chart editor's field pane, the edit sidebar's filter settings. */
   position: fixed;
   z-index: 30;
   width: min(520px, calc(100vw - 32px));
@@ -8274,6 +8275,8 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
 .cube-picker__option.is-hidden .cube-picker__kind { opacity: 0.6; }
 .cube-picker__option.is-hidden .cube-picker__path { color: var(--wc-text-muted); }
 .cube-picker__none { margin: 10px; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+/* A filter's "No field", above the groups (T633). */
+.cube-picker__clear { color: var(--wc-text-secondary); border-bottom: 1px solid var(--wc-border-subtle); }
 .field-list__search-box { padding: 8px 12px; }
 .field-list__search { width: 100%; }
 .field-list ul { margin: 0; padding: 0; list-style: none; }

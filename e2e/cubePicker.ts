@@ -47,3 +47,24 @@ export function cubePicker(scope: Page | Locator) {
     },
   };
 }
+
+/**
+ * A dashboard filter's "Filter on", design 10's grouped picker too (T633,
+ * R64): its button, then the field in the list it opens, by its name.
+ * `button` is the control: `data-value` holds the field chosen, as the
+ * select's value did. `scope` is the edit sidebar, or its Properties.
+ */
+export function fieldPicker(scope: Page | Locator) {
+  const button = scope.getByRole('button', { name: /^Filter on\b/ });
+  // The list is drawn fixed to the window, inside the picker; found on the page.
+  const page: Page = 'goto' in scope ? scope : scope.page();
+  const list = page.getByRole('listbox', { name: 'Fields' });
+  return {
+    button,
+    list,
+    async selectOption(member: string): Promise<void> {
+      if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click();
+      await list.locator(`.cube-picker__option[data-member="${member}"]`).click();
+    },
+  };
+}

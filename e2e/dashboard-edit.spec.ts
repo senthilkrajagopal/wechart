@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-import { cubePicker } from './cubePicker';
+import { cubePicker, fieldPicker } from './cubePicker';
 import { myCopyOf } from './workspace';
 
 /**
@@ -221,8 +221,19 @@ test('adding a filter selects it: Properties, its field picker focused; its pill
   const added = bar.locator('[data-widget]').nth(before);
   await expect(added).toHaveAttribute('data-selected', 'true');
 
-  // Its field, set here; its value, in its pill.
-  await field.selectOption('orders.status');
+  // Its field, set here, in design 10's picker (T633); its value, in its pill.
+  // The list opens within the window, its paths in view, though the sidebar
+  // is at its right (T633's review).
+  await fieldPicker(settings).button.click();
+  const path = fieldPicker(settings)
+    .list.locator('.cube-picker__option[data-member="orders.status"] .cube-picker__path')
+    .first();
+  await expect(path).toBeVisible();
+  const box = await path.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box !== null && viewport !== null && box.x + box.width <= viewport.width).toBe(true);
+  await fieldPicker(settings).selectOption('orders.status');
+  await expect(fieldPicker(settings).button).toHaveAttribute('data-value', 'orders.status');
   await added.locator('button[aria-expanded]').click();
   await expect(added.getByRole('searchbox', { name: /^Search / })).toBeVisible();
   await expect(added.getByLabel('Filter on')).toHaveCount(0);
@@ -271,7 +282,7 @@ test('selecting a filter with a field: its field picker focused, Escape back, a 
   const bar = page.getByRole('region', { name: 'Filters' });
   await page.getByTestId('add-filter').click();
   await page.getByTestId('add-filter-list').click();
-  await sidebar.getByLabel('Filter on').selectOption('orders.status');
+  await fieldPicker(sidebar).selectOption('orders.status');
   // Another added after it, so it is no longer the one selected.
   await sidebar.getByRole('tab', { name: 'Add' }).click();
   await page.getByTestId('add-filter').click();
@@ -284,7 +295,7 @@ test('selecting a filter with a field: its field picker focused, Escape back, a 
   expect(await status.evaluate((node) => getComputedStyle(node).outlineStyle)).toBe('solid');
   const settings = sidebar.getByRole('region', { name: /^List with search filter \d+$/ });
   await expect(settings.getByLabel('Filter on')).toBeFocused();
-  await expect(settings.getByLabel('Filter on')).toHaveValue('orders.status');
+  await expect(fieldPicker(settings).button).toHaveAttribute('data-value', 'orders.status');
   await expect(summary).toHaveAttribute('aria-expanded', 'false');
 
   await page.keyboard.press('Escape');

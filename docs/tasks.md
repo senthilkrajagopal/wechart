@@ -8678,6 +8678,36 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - **Tests:**
     - unit: web 2,443 and charts 517, all passing;
     - e2e, Chrome: `crossfilter.spec.ts`, `keyboard-coverage.spec.ts`, `markings.spec.ts`, `tile-menu.spec.ts`, `marked-share.spec.ts`, 107/107 before the Markings test was added, and both T632 tests after. Each T632 test failed for the right reason before its fix, as above.
+- [ ] T633 (AC-329, AC-342) A dashboard filter's "Filter on" as design 10's grouped picker *(added 2026-10-04, R64: "Yes, same picker")*
+  - Files: `editor/PathPicker.tsx` (new: design 10's picker, from `CubePicker`), `editor/CubePicker.tsx` (now over it), `filters/FilterBar.tsx` (`useFieldGroups`, in place of `usePickableFields`), `filters/FilterSettings.tsx`, `filters/testing.ts`, `shell/styles.ts`, `e2e/cubePicker.ts` (`fieldPicker`)
+  - Failing test: `fieldPicker.test.tsx`:
+    - "Filter on" opens a "Search fields" box over the fields of the cubes on the dashboard's path, by folder, nearest first, each with its cube and folder path, never a prefixed name;
+    - a cube a nearer one hides is listed once, dimmed and unpickable, saying what hides it, or "hidden by your copy" for a workspace dashboard;
+    - picking sets the field; Escape closes it back on its button.
+  - Depends on: T475
+  - **Built 2026-10-04.**
+    - `PathPicker` is the cube picker's list, buttons and keys made general: its label, its words and its rows are given it. `CubePicker` is now that over cubes, unchanged to its tests.
+    - `useFieldGroups` reads the groups from `pickerGroupsOf`, as the chart editor does (T475). It also reads the folders' own meta for a workspace dashboard, so its copy's original says "hidden by your copy".
+    - The filter's settings' Escape goes back to its pill as before, except from inside the open list, which it now closes, back on its button.
+    - The unit tests and e2e that chose a field through the select (`addFilter`, `filterProperties`, `scopeBar`; `filters.spec.ts`, `dashboard-edit.spec.ts`) now go through `pickField`, `fieldsOffered` and `fieldPicker`. The select's value is the button's `data-value`.
+  - **Small decisions, overturnable:**
+    - A row is a field, with its cube's C or V chip, and at its right its cube and folder path ("Sales · A / B"). Design 10 draws cubes alone; the old select named each cube by its group.
+    - A hidden cube is one dimmed row, by its own title, not each of its fields: none can be picked, and listing them all would say nothing more.
+    - "No field", first in the list while a field is set, unsets it, as the select's first option did (T083's scope is kept through it, `scopeBar.test.tsx`). Design 10 has no such row.
+  - **The cold review (FAIL) found two bugs, both fixed:**
+    1. In the edit sidebar, at the window's right, the list opened 233 px past the window's edge. Each row's path and "hidden by …" were off-screen. `PathPicker` now keeps the list within the window. `dashboard-edit.spec.ts` checks a row's path is in view: it failed without the clamp, as did a unit test.
+    2. The button named a field the list doesn't offer by its prefixed name (`fa__sales.region`), as the select never did. One on a cube a nearer one now hides, or one the model no longer has, is now named by its title from the whole model, else by its short name in words (`fieldPicker.test.tsx`, failing first).
+    - Also from it:
+      - a hidden cube is said only where it has a field the filter could take;
+      - "No field" isn't followed by "No field matches “”." in an empty list;
+      - the list's CSS comment names its two places.
+    - Left, as nits:
+      - `cubesOnPath` now has no caller outside its tests;
+      - the search matches a field's title alone;
+      - the list opens downwards only (as T475's).
+  - **Tests:**
+    - unit: `fieldPicker.test.tsx` (6, failing first), the migrated filter tests, and the editor's, all passing;
+    - e2e, Chrome: `filters.spec.ts`, `dashboard-edit.spec.ts`, `keyboard-coverage.spec.ts`, `chart-editor.spec.ts`, `field-list.spec.ts`, 105/105. The folder tree's arrow-key test failed once in the first run, as it did in T631's, and passed on its rerun.
 - [ ] T406 (AC-187) Re-run the design critique on every surface and tick AC-187 only on measured conformance
   - Files and failing test: as T225 (above), with the phase-2 surfaces added (AC-187).
   - Depends on: T330, T348, T356, T364, T369

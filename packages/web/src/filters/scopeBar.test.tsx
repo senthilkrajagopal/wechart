@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashboardView } from '../dashboard/DashboardView';
 import type { DashboardDocument } from '../dashboard/model/document';
-import { properties, selectFilter } from './testing';
+import { fieldButton, pickField, properties, selectFilter } from './testing';
 
 /**
  * T083 / AC-077, on the filter bar: a filter's widget shows its scope
@@ -147,13 +147,12 @@ describe('a filter’s scope, on its widget', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
     // Its field and scope in Properties, once selected (T468, UX-031).
     await selectFilter();
-    const field = await within(properties()).findByLabelText('Filter on');
+    await within(properties()).findByLabelText('Filter on');
 
-    await userEvent.selectOptions(field, '');
-    await userEvent.selectOptions(
-      within(properties()).getByLabelText('Filter on'),
-      'orders.status',
-    );
+    // Unset by "No field", then chosen again (design 10's picker, T633).
+    await pickField(properties(), '');
+    expect(fieldButton(properties()).getAttribute('data-value')).toBe('');
+    await pickField(properties(), 'orders.status');
 
     expect(await badge()).toBe('Tab: Operations');
   });

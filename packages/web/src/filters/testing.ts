@@ -36,3 +36,32 @@ export async function selectFilter(filter?: HTMLElement): Promise<void> {
 
 /** The edit sidebar's Properties panel, where a selected filter's settings are (T468). */
 export const properties = () => screen.getByRole('tabpanel', { name: 'Properties' });
+
+/** A filter's "Filter on" button, design 10's grouped picker (T633), in `scope`. */
+export const fieldButton = (scope: HTMLElement) =>
+  within(scope).getByRole('button', { name: /^Filter on\b/ });
+
+/** The fields "Filter on" offers, by name, its list opened; closed again after. */
+export async function fieldsOffered(scope: HTMLElement): Promise<string[]> {
+  await userEvent.click(fieldButton(scope));
+  const list = await screen.findByRole('listbox', { name: 'Fields' });
+  const names = [...list.querySelectorAll<HTMLElement>('[role="option"][data-member]')].map(
+    (option) => option.dataset['member'] ?? '',
+  );
+  await userEvent.keyboard('{Escape}');
+  return names;
+}
+
+/** Picks `member` as the filter's field from "Filter on", or none with ''. */
+export async function pickField(scope: HTMLElement, member: string): Promise<void> {
+  await userEvent.click(fieldButton(scope));
+  const list = await screen.findByRole('listbox', { name: 'Fields' });
+  const option = await waitFor(() => {
+    const found = list.querySelector<HTMLElement>(
+      member === '' ? '[data-none]' : `[data-member="${CSS.escape(member)}"]`,
+    );
+    if (found === null) throw new Error(`No field ${member} offered`);
+    return found;
+  });
+  await userEvent.click(option);
+}

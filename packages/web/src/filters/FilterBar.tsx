@@ -3,7 +3,8 @@ import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from
 
 import type { DashboardDocument } from '../dashboard/model/document';
 import { cubesFrom, membersOf, type Member } from '../editor/fields';
-import { cubesOnPath } from '../editor/pathCubes';
+import { pickerGroupsOf } from '../editor/pathCubes';
+import type { PathPickerGroup, PathPickerRow } from '../editor/PathPicker';
 import { FOLDERS_QUERY } from '../workspaces/explore/folders';
 import { loadTile } from '../query/loadTile';
 import { metaQueryOf, useWorkspaceItem } from '../query/meta';
@@ -11,10 +12,12 @@ import { SecurityPreview } from '../query/securityPreview';
 import { summaryOf } from './describe';
 import {
   FILTER_WIDGETS,
+  membersFor,
   valueKeyOf,
   type DashboardFilter,
   type FilterValue,
   type FilterValues,
+  type FilterWidget,
 } from './model';
 import { scopeLabel } from './scope';
 import { useQueryItem } from '../query/item';
@@ -190,28 +193,90 @@ export function FilterBar(props: FilterBarProps) {
 }
 
 /**
- * What a filter picks its field from: the members of the cubes on the
- * dashboard's folder path, by cube, each cube with its folder path (T429,
- * AC-329).
+ * What a filter picks its field from, as design 10's grouped picker lists it
+ * (T633; AC-329, AC-342; R64): the cubes on the dashboard's folder path, by
+ * folder, nearest first (`pickerGroupsOf`, as the chart editor's, T475). Each
+ * cube's fields that fit the widget are rows, by their titles, with the cube
+ * and its folder path beside them. A farther cube a nearer one of its name
+ * hides is one row, dimmed, saying what hides it: its fields can't be
+ * picked, and listing each of them would say nothing more.
  */
-export function usePickableFields(
+export function useFieldGroups(
   dashboard: DashboardDocument,
-): readonly { readonly label: string; readonly members: readonly Member[] }[] {
+  widget: FilterWidget,
+): {
+  readonly groups: readonly PathPickerGroup[];
+  readonly titleOf: (member: string) => string;
+} {
   // A workspace dashboard's from its overlay, its target's path after its own (T347).
   const workspace = useWorkspaceItem();
   const meta = useQuery(metaQueryOf(workspace));
+  // The folders' own cubes, for a workspace dashboard: its overlay holds its
+  // copy in place of the cube it copies (T475's review).
+  const published = useQuery({ ...metaQueryOf(undefined), enabled: workspace !== undefined });
   const folders = useQuery({ ...FOLDERS_QUERY, enabled: dashboard.folderId !== undefined });
   const target = workspace?.targetFolderId;
-  return useMemo(
-    () =>
-      cubesOnPath(cubesFrom(meta.data), dashboard.folderId, folders.data ?? [], target).map(
-        (cube) => ({
-          label: cube.folderPath === undefined ? cube.title : `${cube.title} · ${cube.folderPath}`,
-          members: membersOf(meta.data, cube.name),
+  return useMemo(() => {
+    const cubes = cubesFrom(meta.data);
+    const groups = pickerGroupsOf(
+      cubes,
+      dashboard.folderId,
+      folders.data ?? [],
+      target,
+      published.data === undefined ? undefined : cubesFrom(published.data),
+    )
+      .map((group) => ({
+        label: group.label,
+        rows: group.rows.flatMap((row): PathPickerRow[] => {
+          const kind = row.cube.isView ? ('view' as const) : ('cube' as const);
+          if (row.hiddenBy !== undefined) {
+            // Said only where it has a field this filter could take (T633's review):
+            // a workspace copy's original is in the folders' own meta.
+            const own = membersOf(meta.data, row.cube.name);
+            const its = own.length > 0 ? own : membersOf(published.data, row.cube.name);
+            if (membersFor(widget, its).length === 0) return [];
+            return [
+              {
+                key: row.key,
+                value: row.cube.name,
+                title: row.cube.title,
+                kind,
+                path: group.label ?? '',
+                hiddenBy: row.hiddenBy,
+                data: { cube: row.cube.name },
+              },
+            ];
+          }
+          return membersFor(widget, membersOf(meta.data, row.cube.name)).map((member) => ({
+            key: `${row.key}/${member.name}`,
+            value: member.name,
+            title: member.title,
+            kind,
+            path: group.label === undefined ? row.cube.title : `${row.cube.title} · ${group.label}`,
+            data: { member: member.name },
+          }));
         }),
-      ),
-    [meta.data, dashboard.folderId, folders.data, target],
-  );
+      }))
+      .filter((group) => group.rows.length > 0);
+    /**
+     * A field named by its title wherever the model has it, listed or not —
+     * one on a cube a nearer one now hides, say (AC-272: never rebound) — and
+     * else by its short name in words, never its prefixed name (AC-329;
+     * T633's review, as the chart editor's T475).
+     */
+    const titles = new Map(
+      [...allMembers(published.data), ...allMembers(meta.data)].map((member) => [
+        member.name,
+        member.title,
+      ]),
+    );
+    const titleOf = (member: string) =>
+      titles.get(member) ??
+      (member.split('__').pop() ?? member)
+        .replace(/[._]/g, ' ')
+        .replace(/^./, (first) => first.toUpperCase());
+    return { groups, titleOf };
+  }, [meta.data, published.data, dashboard.folderId, folders.data, target, widget]);
 }
 
 /** How a filter is named apart from the rest, by its kind and place: "List with search filter 2". */

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashboardView } from '../dashboard/DashboardView';
 import type { DashboardDocument } from '../dashboard/model/document';
+import { pickField } from './testing';
 
 /**
  * T468, UX-031 (the user's answer, 2026-09-28, option a): selecting a filter,
@@ -102,10 +103,7 @@ describe('a filter’s settings are in Properties (T468, UX-031)', () => {
   it('keeps only the value control in the pill’s popover', async () => {
     await editing();
     await addFilter('List with search');
-    await userEvent.selectOptions(
-      within(properties()).getByLabelText('Filter on'),
-      'orders.status',
-    );
+    await pickField(properties(), 'orders.status');
 
     const pill = within(bar()).getByTestId(/^filter-/);
     await userEvent.click(within(pill).getByRole('button', { expanded: false }));
@@ -145,10 +143,7 @@ describe('a filter’s settings are in Properties (T468, UX-031)', () => {
   it('selecting one with a field focuses its field picker; a second press opens its value', async () => {
     await editing();
     await addFilter('List with search');
-    await userEvent.selectOptions(
-      within(properties()).getByLabelText('Filter on'),
-      'orders.status',
-    );
+    await pickField(properties(), 'orders.status');
     await addFilter('Checkbox list');
     const [first] = within(bar()).getAllByTestId(/^filter-/) as [HTMLElement];
     const summary = within(first).getByRole('button', { expanded: false });
