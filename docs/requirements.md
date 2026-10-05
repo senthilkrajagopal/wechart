@@ -950,6 +950,10 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R65 — resuming, and AC-378 for router queries** (the user)
+- After the pause: "okay lets complete groups 1 and 2". *Group 1: the built work waiting on the security e2e, T590 and T633. Group 2: Jobs and Schedules (T554–T560), keyboard (T634, T405), and design conformance (T476, T477, T510, T516, T406).*
+- Q: AC-378 says a stopped Cube Store run says "until when"; a router query has no end time. Amend it? A: "Keep as written". *For a router run xcube reports no end, and the page says it runs to its end.*
+
 **R64 — views' requests, the filter bar's picker, adding by keyboard, and Cube Store's router queries** (2026-10-04, the user)
 - Q (from T385): a request on a view can't be resolved by R63's rule. A: "Resolve via the view's cubes (Recommended)". *A taker's approved measure on any cube on the view's join paths resolves it. T590.*
 - Q (from T475): should the dashboard filter bar's field picker be design 10's grouped picker? A: "Yes, same picker (Recommended)". *T633.*
