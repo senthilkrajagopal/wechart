@@ -91,25 +91,31 @@ test('building a pre-aggregation follows its job to done, and Cube’s record of
   const { tokens } = (await (await started).json()) as { tokens: string[] };
   expect(tokens[0]).toMatch(/^[0-9a-f]{16,}$/);
 
-  // Its row read again while Cube builds it, to its end — a build takes a
-  // second or two — its newest version now the one admin's build made.
+  // This job followed to its own end. Not the row first: its cube outlives
+  // the run, so an earlier run's version, admin's too, reads Built before
+  // this build has finished (the correction of 2026-10-05).
+  const statusOf = async () =>
+    (await (
+      await page.request.post('/api/builds/status', { data: { tokens: [tokens[0]] } })
+    ).json()) as { status: string; table?: string }[];
+  await expect.poll(async () => (await statusOf())[0]?.status, { timeout: 60_000 }).toBe('done');
+
+  // Cube's own record of that token agrees, its table in the model's own
+  // rollup schema, `<schema>_<model>_<hash>`, from slice 6 (T420; research
+  // xcube-slice-6.md, "Pre-aggregation schemas").
+  const answered = await statusOf();
+  expect(answered[0]?.table).toMatch(
+    new RegExp(`^prod_pre_aggregations_e2e_[0-9a-f]+\\.${cube}_main`),
+  );
+  expect(answered.map((each) => each.status)).toEqual(['done']);
+
+  // Its row, read again, its newest version the one admin's build made.
   const state = row.getByTestId('row-state');
   await expect(row.getByTestId('starter')).toHaveText('admin', { timeout: 30_000 });
   await expect(state).toHaveAttribute('data-state', 'built');
   // T158 / AC-152: in words, with its icon — never colour alone.
   await expect(state).toHaveText('Built');
   await expect(state.locator('svg[data-icon="ok"]')).toHaveCount(1);
-
-  // Cube's own record of that token agrees, its table in the model's own
-  // rollup schema, `<schema>_<model>_<hash>`, from slice 6 (T420; research
-  // xcube-slice-6.md, "Pre-aggregation schemas").
-  const answered = (await (
-    await page.request.post('/api/builds/status', { data: { tokens: [tokens[0]] } })
-  ).json()) as { status: string; table?: string }[];
-  expect(answered[0]?.table).toMatch(
-    new RegExp(`^prod_pre_aggregations_e2e_[0-9a-f]+\\.${cube}_main`),
-  );
-  expect(answered.map((each) => each.status)).toEqual(['done']);
 });
 
 /**
