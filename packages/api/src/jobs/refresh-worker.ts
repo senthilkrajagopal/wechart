@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 
 import { USER } from '../auth/guard';
-import { latestModules, moduleFailing, refreshWorkerStateOf } from '../cube/health';
+import { moduleStatesOf, refreshWorkerStateOf } from '../cube/health';
 import type { XcubeRefreshWorker } from '../xcube/refresh-worker';
 import { NO_JOBS, type JobsAccess } from './scope';
 
@@ -11,8 +11,9 @@ import { NO_JOBS, type JobsAccess } from './scope';
  * service credential, for those who may use Jobs (T371): `/api/cube-health`
  * is anyone's, and this isn't. The state, as `refreshWorkerStateOf` reads it;
  * each worker, newest run first, with its revision, its last run and whether
- * that run finished; each module by its latest run, with its last good run
- * and whether it is failing. A module's error goes to Super-Admins alone: a
+ * that run finished; each module across every worker, with its latest run,
+ * its last good run on the model's current revision and whether it is
+ * failing (`moduleStatesOf`). A module's error goes to Super-Admins alone: a
  * module can hold cubes of several folders, and its error can name some a
  * member can't see.
  */
@@ -52,13 +53,13 @@ export function registerRefreshWorker(
           finished: each.modules.length > 0 && each.modules.every((module) => module.finished),
         }))
         .toSorted((a, b) => b.lastRunAt.localeCompare(a.lastRunAt)),
-      modules: latestModules(report)
+      modules: moduleStatesOf(report)
         .map((module) => ({
           module: module.module,
-          lastRunAt: module.lastTickAt,
+          lastRunAt: module.lastRunAt,
           lastOkAt: module.lastOkAt,
-          failing: moduleFailing(module),
-          ...(errorsShown && moduleFailing(module) && module.lastError !== null
+          failing: module.failing,
+          ...(errorsShown && module.failing && module.lastError !== null
             ? { error: module.lastError.message }
             : {}),
         }))

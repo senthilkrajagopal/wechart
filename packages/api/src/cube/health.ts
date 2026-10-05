@@ -61,9 +61,11 @@ export async function healthOf(
  * §3), its last run the latest any worker made:
  * - **none**, when no worker has run the model;
  * - **failing**, while a module's last error is later than its last good run,
- *   with how many modules. Each module is read by its latest run, so a
- *   stopped worker's, listed for a day, or one a restart replaced, counts no
- *   more;
+ *   with how many modules. Its last error is the latest any worker had, a
+ *   stopped one's too, listed for a day; its last good run only one by a
+ *   worker on the model's current revision. So an error counts until a
+ *   worker on the current revision has had a good run of that module after
+ *   it (the coordinator's rule of 2026-10-05, until the user says otherwise);
  * - **behind**, while every worker refreshes an older revision than the
  *   model's, with the newest one's;
  * - **running**, otherwise.
@@ -79,20 +81,48 @@ export type RefreshWorkerState =
     }
   | { readonly state: 'failing'; readonly lastRunAt: string; readonly modules: number };
 
-/** Whether a module's last error is later than its last good run. */
-export const moduleFailing = (module: RefreshModule): boolean =>
-  module.lastError !== null && (module.lastOkAt === null || module.lastError.at > module.lastOkAt);
+/** A module across every worker that has run it. */
+export interface ModuleState {
+  readonly module: string;
+  /** The latest run any worker made of it. */
+  readonly lastRunAt: string;
+  /** The latest good run of it by a worker on the model's current revision; none yet. */
+  readonly lastOkAt: string | null;
+  /** The latest error any worker had with it; none. */
+  readonly lastError: RefreshModule['lastError'];
+  /** Its last error is later than that good run, or there's been none since. */
+  readonly failing: boolean;
+}
 
-/** Each module by its latest run, whichever worker made it. */
-export function latestModules(report: RefreshWorkerReport): RefreshModule[] {
-  const latest = new Map<string, RefreshModule>();
+const later = (a: string | null, b: string | null) => (b !== null && (a === null || b > a) ? b : a);
+
+/** Each module across every worker, by the rule above. */
+export function moduleStatesOf(report: RefreshWorkerReport): ModuleState[] {
+  const states = new Map<
+    string,
+    { lastRunAt: string; lastOkAt: string | null; lastError: RefreshModule['lastError'] }
+  >();
   for (const worker of report.workers)
     for (const module of worker.modules) {
-      const seen = latest.get(module.module);
-      if (seen === undefined || module.lastTickAt > seen.lastTickAt)
-        latest.set(module.module, module);
+      const was = states.get(module.module);
+      // A good run counts only on the model's current revision (none known: any).
+      const current = report.revision === null || worker.revision === report.revision;
+      states.set(module.module, {
+        lastRunAt: later(was?.lastRunAt ?? null, module.lastTickAt) ?? module.lastTickAt,
+        lastOkAt: current ? later(was?.lastOkAt ?? null, module.lastOkAt) : (was?.lastOkAt ?? null),
+        lastError:
+          module.lastError !== null &&
+          (was?.lastError == null || module.lastError.at > was.lastError.at)
+            ? module.lastError
+            : (was?.lastError ?? null),
+      });
     }
-  return [...latest.values()];
+  return [...states].map(([module, state]) => ({
+    module,
+    ...state,
+    failing:
+      state.lastError !== null && (state.lastOkAt === null || state.lastError.at > state.lastOkAt),
+  }));
 }
 
 export function refreshWorkerStateOf(report: RefreshWorkerReport): RefreshWorkerState {
@@ -100,7 +130,7 @@ export function refreshWorkerStateOf(report: RefreshWorkerReport): RefreshWorker
   const lastRunAt = report.workers
     .map((worker) => worker.lastTickAt)
     .reduce((latest, at) => (at > latest ? at : latest));
-  const failing = latestModules(report).filter(moduleFailing).length;
+  const failing = moduleStatesOf(report).filter((module) => module.failing).length;
   if (failing > 0) return { state: 'failing', lastRunAt, modules: failing };
   const newest = Math.max(...report.workers.map((worker) => worker.revision));
   if (report.revision !== null && newest < report.revision)

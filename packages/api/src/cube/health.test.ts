@@ -230,6 +230,77 @@ describe('the refresh worker, as xcube reports it (T553, AC-393)', () => {
     ).toBe('running');
   });
 
+  /**
+   * The coordinator's rule (2026-10-05), until the user says otherwise: a
+   * module's error counts until a worker on the model's current revision has
+   * had a good run of it after that error.
+   */
+  it('keeps a stopped worker’s newer error failing until a worker on the current revision has a good run after it', () => {
+    const stopped = worker({
+      instance: 'stopped',
+      revision: 11,
+      lastTickAt: '2026-10-04T14:40:00.000Z',
+      modules: [
+        module({
+          revision: 11,
+          lastTickAt: '2026-10-04T14:40:00.000Z',
+          lastOkAt: '2026-10-04T14:00:00.000Z',
+          lastError: { message: ERROR.message, at: '2026-10-04T14:40:00.000Z' },
+        }),
+      ],
+    });
+    // Restarted on revision 12, its first run still waiting on builds: no good run yet.
+    const waiting = worker({
+      instance: 'restarted',
+      lastTickAt: '2026-10-04T14:41:00.000Z',
+      modules: [
+        module({ lastTickAt: '2026-10-04T14:41:00.000Z', finished: false, lastOkAt: null }),
+      ],
+    });
+    expect(refreshWorkerStateOf({ revision: 12, workers: [stopped, waiting] })).toEqual({
+      state: 'failing',
+      lastRunAt: '2026-10-04T14:41:00.000Z',
+      modules: 1,
+    });
+    // A good run before the error doesn't clear it, nor one on an older revision.
+    expect(
+      refreshWorkerStateOf({
+        revision: 12,
+        workers: [
+          stopped,
+          worker({
+            instance: 'restarted',
+            modules: [
+              module({
+                lastTickAt: '2026-10-04T14:39:00.000Z',
+                lastOkAt: '2026-10-04T14:39:00.000Z',
+              }),
+            ],
+          }),
+        ],
+      }).state,
+    ).toBe('failing');
+    // One after it, on the current revision, does.
+    expect(
+      refreshWorkerStateOf({
+        revision: 12,
+        workers: [
+          stopped,
+          worker({
+            instance: 'restarted',
+            lastTickAt: '2026-10-04T14:42:00.000Z',
+            modules: [
+              module({
+                lastTickAt: '2026-10-04T14:42:00.000Z',
+                lastOkAt: '2026-10-04T14:42:00.000Z',
+              }),
+            ],
+          }),
+        ],
+      }),
+    ).toEqual({ state: 'running', lastRunAt: '2026-10-04T14:42:00.000Z' });
+  });
+
   it('is none when no worker has run the model', () => {
     expect(refreshWorkerStateOf({ revision: 12, workers: [] })).toEqual({ state: 'none' });
   });

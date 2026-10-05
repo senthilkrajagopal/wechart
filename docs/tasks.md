@@ -7760,6 +7760,12 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     2. The route now requires Jobs' access. A route without it would have given every caller a module's error.
   - **Left for the user or a later task:**
     - **Each module by its latest run.** A restarted worker whose first run is still waiting on builds has no good run and no error. If a stopped worker's error is that module's latest, the badge reads running. Reading "a module's last error later than its last good run" across workers would read failing instead. This is the user's call, listed above.
+  - *Follow-up, 2026-10-05, the coordinator's rule until the user says otherwise:*
+    - A module counts as failing until a worker on the model's current revision has had a good run of it after its latest error.
+    - The latest error is any worker's, a stopped one's too.
+    - The last good run counts only on the current revision (`moduleStatesOf` in `cube/health.ts`; `health.test.ts`).
+    - The panel's "OK at" is that good run.
+    - This replaces "Which runs count" above.
     - **F3's member panel** draws two lines, the worker running and "1 module's last run failed". The panel's summary is one line, by the state. This is for T560's conformance pass.
 - [x] T554 (AC-394) Stop a building build that wechart started *(added 2026-10-02, `[R56]`: design 16's P1)*
   - Files: `packages/api/src/jobs/queue.ts` (+ test), `packages/web/src/workspaces/jobs/BuildQueue.tsx` (+ test), `e2e/jobs.spec.ts`
