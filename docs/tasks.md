@@ -8095,7 +8095,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       
       Left as found: the take route and the takers serve T385's open question (above), not AC-051 itself.
     - **The shared test databases:** the takers' migration is numbered 1758610000000, above the Jobs agent's 1758600000000s (the coordinator's rule, 2026-10-04). It was taken back out after each run. T383's 1758560000000 is on feat/xcube and stays.
-- [ ] T385 (AC-052) Resolve a request when its measure is approved into the folder, naming the member
+- [x] T385 (AC-052) Resolve a request when its measure is approved into the folder, naming the member
   - Files: `packages/api/src/repos/calc-requests.ts`, `packages/api/src/repos/calc-resolution.test.ts`
   - Failing test: `calc-resolution.test.ts`: approving a model proposal that adds the requested measure marks the request resolved and records the member (AC-052).
   - Depends on: T384, T352
@@ -8140,7 +8140,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - C: requests on views are refused.
       
       Answered in R64 ("Resolve via the view's cubes"), and built as T590.
-    - **Pending: the security e2e.** It hasn't run. wechart_security holds a stray migration row (1758565480000_sql-run-ends-by) that fails node-pg-migrate's order check, and the user is removing it. **AC-052 stays unticked** until that e2e passes on the real surface; the tick follows in a small follow-up.
+    - **The security e2e** waited for wechart_security's stray migration row (1758565480000_sql-run-ends-by) to be removed. On 2026-10-05, with T590's steps added, `e2e/security/calc-request-resolve.spec.ts` passed in Chrome, 9 of 9 (its first run lost a sign-in to load and passed on the rerun). Writer finds the request "Resolved" under Reviews, naming `<cube>.margin`, the author and the approver, and the same beside the model. **AC-052 ticked**, with T590.
     - **The shared test databases:** the resolutions' migration is numbered 1758640000000, above the Jobs agent's 1758630000000s (the coordinator's rule). It was taken back out of wechart_test after each run.
 
 ## P2.12 Markings (F10, F11, returned)
@@ -12306,7 +12306,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 
 ## P2.23 Calculation requests on views (added 2026-10-04, `[R64]`)
 
-- [ ] T590 (AC-052) Resolve a request on a view when the taker's approved measure lands on a cube on the view's join paths
+- [x] T590 (AC-052) Resolve a request on a view when the taker's approved measure lands on a cube on the view's join paths
   - Files:
     - `packages/api/src/model/added-measures.ts`, `packages/api/src/repos/calc-resolution.ts` and `packages/api/src/routes/proposals.ts` (`afterModelsLanded`), each with tests;
     - `packages/api/src/xcube/fake.ts`;
@@ -12364,6 +12364,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - the coverage table didn't list T590.
       
       Left as found: a view that `extends` another takes the parent's join paths, which `joinPathCubesOf` doesn't read. A request on such a view isn't resolved by a measure on an inherited cube.
+    - **The security e2e** passed in Chrome, 9 of 9, on 2026-10-05, against the real xcube (its first run lost a sign-in to load and passed on the rerun). The view in /Resolve/East is resolved by `margin` on /Resolve's cube, and Reviews names `<cube>.margin`. The view over the other cube stays "Open". **AC-052 ticked.**
 
 ## P2.22 The model editor's pane, popped out (added 2026-10-02, `[R58]`)
 
