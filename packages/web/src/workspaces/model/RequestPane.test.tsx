@@ -158,10 +158,11 @@ describe('the request beside the model editor (T384, AC-051)', () => {
     );
   });
 
-  it('says what to do while it is open', async () => {
+  /** T590 (R64): on a view, the measure goes on a cube on the view's join paths, not the view. */
+  it('says what to do while it is open, for a cube’s request and a view’s alike', async () => {
     shown([REQUEST]);
     expect((await screen.findByTestId('pane-request-next')).textContent).toBe(
-      'Add the measure to this model, then propose it: approving the proposal resolves the request.',
+      'Add the measure to its cube (for a view, to a cube on the view’s join paths), then propose it: approving the proposal resolves the request.',
     );
     expect(screen.queryByTestId('pane-request-resolution')).toBeNull();
   });

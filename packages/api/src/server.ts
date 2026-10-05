@@ -98,7 +98,7 @@ import type { XcubeSqlRunner } from './xcube/sql-runner';
 import type { SqlRunStore } from './repos/sql-runs';
 import type { BuildHistory } from './repos/build-history';
 import type { CalcRequestStore } from './repos/calc-requests';
-import { resolutionsOf } from './repos/calc-resolution';
+import { resolutionsOf, withViewCubes, type OpenRequest } from './repos/calc-resolution';
 import { signsInOtherwise } from './routes/sql-runner-switch';
 import type { DataSourceLanding } from './routes/data-sources';
 import {
@@ -1438,6 +1438,27 @@ export function buildServer({
       },
     });
 
+  /**
+   * Requests on a view, with the cubes a measure resolves them on (T590,
+   * AC-052; R64): those on the view's join paths, by the view's own file in
+   * its folder and the bindings xcube holds for it, each in wechart's folder.
+   * xcube is asked at most once, and briefly: an approval waits on it.
+   */
+  const viewCubesOf = (requests: readonly OpenRequest[]): Promise<OpenRequest[]> =>
+    modelStore === undefined || xcube === undefined
+      ? Promise.resolve([...requests])
+      : withViewCubes(requests, {
+          filesIn: (folderId) => modelStore.inFolders([folderId]),
+          held: () => xcube.items({ timeoutMs: 15_000 }),
+          folderOf: async (fullName) => {
+            const xcubeId = xcubeFolderOf(fullName);
+            if (xcubeId === null) return ROOT_FOLDER_ID;
+            const ids = (folders === undefined ? ROOT_ONLY : await folders()).ids;
+            for (const [folderId, published] of ids) if (published === xcubeId) return folderId;
+            return undefined;
+          },
+        });
+
   // Workspace items proposed to their target folders (T349, AC-284).
   if (proposals !== undefined && docs?.get !== undefined && docs.named !== undefined) {
     const get = docs.get.bind(docs);
@@ -1476,11 +1497,12 @@ export function buildServer({
               );
             },
             // An approval's measures resolve the open requests on their cubes
-            // that the proposal's author took up (T385, AC-052; R63).
+            // that the proposal's author took up (T385, AC-052; R63); a
+            // view's, on the cubes its join paths bound (T590, R64).
             afterModelsLanded: async ({ author, approver, proposalId, files }) => {
-              const open = await calcRequests.openOn([
-                ...new Set(files.map((file) => file.folderId)),
-              ]);
+              const taken = await calcRequests.openTakenBy(author.key);
+              if (taken.length === 0) return;
+              const open = await viewCubesOf(taken);
               for (const { id, members } of resolutionsOf(open, files, author.key))
                 await calcRequests.resolve(id, {
                   members,

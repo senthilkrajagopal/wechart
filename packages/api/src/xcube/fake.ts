@@ -202,7 +202,10 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
   };
   /**
    * What an item bound at its publish (research 3a, "Bindings"): its own
-   * name, and each cube its joins name, nearest first from its folder.
+   * name, each cube its joins name, and every segment of a view's
+   * `cubes[].join_path`, nearest first from its folder (T590). Research 3a's
+   * resolution table: "Every segment bound; the first by `bindOther`", the
+   * nearest item other than itself; the rest as any name is bound.
    */
   const bindingsOf = (
     model: string,
@@ -221,6 +224,16 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
         const bound = resolveIn(items, tree, item.folderId, join.name);
         if (bound !== null) bindings[join.name] = bound;
       }
+    if (item.kind === 'view') {
+      const others = items.filter((other) => other !== item);
+      const paths = (declared?.[0]?.['cubes'] ?? []) as { join_path?: unknown }[];
+      for (const entry of Array.isArray(paths) ? paths : [])
+        if (typeof entry.join_path === 'string')
+          entry.join_path.split('.').forEach((segment, at) => {
+            const bound = resolveIn(at === 0 ? others : items, tree, item.folderId, segment);
+            if (bound !== null) bindings[segment] = bound;
+          });
+    }
     return bindings;
   };
 

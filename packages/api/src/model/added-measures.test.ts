@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { addedMeasures } from './added-measures';
+import { addedMeasures, joinPathCubesOf } from './added-measures';
 
 /**
  * T385 / AC-052: WHEN a requested measure is added to the model and its
@@ -41,5 +41,37 @@ describe('the measures a landed model adds (T385, AC-052)', () => {
     expect(
       addedMeasures(null, 'views:\n  - name: summary\n    cubes:\n      - join_path: orders\n'),
     ).toEqual(new Map());
+  });
+});
+
+/**
+ * T590 / AC-052 (amended 2026-10-04, R64): a request on a view is resolved by
+ * a measure added to any cube on the view's join paths. Every segment of a
+ * view's `cubes[].join_path` names a cube (`cube/data-modeling.md`, Y.10a;
+ * `xcube-slice-3a.md`, the resolution table).
+ */
+describe('the cubes on a view’s join paths (T590, AC-052)', () => {
+  it('names every cube each of a view’s join paths passes through, once each, in order', () => {
+    const view = `views:
+  - name: summary
+    cubes:
+      - join_path: orders
+        includes: "*"
+      - join_path: orders.customers
+        includes:
+          - name
+      - join_path: orders.line_items.products
+        prefix: true
+        includes: "*"
+`;
+
+    expect(joinPathCubesOf(view)).toEqual(
+      new Map([['summary', ['orders', 'customers', 'line_items', 'products']]]),
+    );
+  });
+
+  it('names none for a cube’s file, or one that doesn’t read as YAML', () => {
+    expect(joinPathCubesOf(BEFORE)).toEqual(new Map());
+    expect(joinPathCubesOf('views: [')).toEqual(new Map());
   });
 });

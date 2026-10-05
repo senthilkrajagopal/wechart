@@ -58,11 +58,12 @@ export interface CalcRequestStore {
   /** Who took it up, first first. */
   takersOf(id: string): Promise<readonly { readonly key: string; readonly name: string }[]>;
   /**
-   * The open requests asked of any of these folders, newest first, each with
-   * the keys of those who took it up (T385): what an approval landing models
-   * there may resolve.
+   * The open requests a member took up, in any folder, newest first, each
+   * with the keys of all who took it up (T385, T590): what an approval of
+   * their proposal may resolve. A view's request may sit in a folder beneath
+   * the cubes its measures land on.
    */
-  openOn(folderIds: readonly string[]): Promise<readonly OpenRequest[]>;
+  openTakenBy(userKey: string): Promise<readonly OpenRequest[]>;
   /** Resolves an open request (T385); false, changing nothing, for one already resolved. */
   resolve(id: string, resolution: Omit<CalcResolution, 'at'>): Promise<boolean>;
 }
@@ -165,13 +166,14 @@ export function calcRequestStore(db: Kysely<Database>): CalcRequestStore {
         .execute();
       return rows.map((row) => ({ key: row.user_key, name: row.user_name }));
     },
-    async openOn(folderIds) {
-      if (folderIds.length === 0) return [];
+    async openTakenBy(userKey) {
       const rows = await db
         .selectFrom('calc_requests')
         .select(['id', 'cube', 'folder_id'])
         .where('status', '=', 'open')
-        .where('folder_id', 'in', folderIds)
+        .where('id', 'in', (eb) =>
+          eb.selectFrom('calc_request_takers').select('request_id').where('user_key', '=', userKey),
+        )
         .orderBy('requested_at', 'desc')
         .orderBy('id', 'desc')
         .execute();

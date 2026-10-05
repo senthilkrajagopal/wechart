@@ -124,11 +124,12 @@ describe('a calculation request (T383, AC-050)', () => {
  * measure is one that a proposal adds to the request's cube, where the
  * proposal's author took the request up.
  *
- * The store: the open requests of the folders an approval landed models in,
- * with who took each up; and a request resolved once, with the members that
- * resolve it, the proposal, its author and its approver.
+ * The store: the open requests a member took up, in whatever folder, each
+ * with who took it up (T590: a view's request may sit in a folder beneath the
+ * cube its measure lands on); and a request resolved once, with the members
+ * that resolve it, the proposal, its author and its approver.
  */
-describe('a calculation request resolved (T385, AC-052)', () => {
+describe('a calculation request resolved (T385, T590, AC-052)', () => {
   const ask = (folderId: string, description: string) =>
     store().record({
       chartId: 'chart-4',
@@ -140,29 +141,33 @@ describe('a calculation request resolved (T385, AC-052)', () => {
       requestedBy: { key: 'manager-key', name: 'Manager' },
     });
 
-  it('lists the open ones of these folders, each with the keys of those who took it up', async () => {
+  it('lists the open ones a member took up, in any folder, each with the keys of those who took it up', async () => {
     const [mine, other] = [folderOf(), folderOf()];
+    const taker = `taker-${randomUUID()}`;
     const taken = await ask(mine, 'taken');
-    const untaken = await ask(mine, 'untaken');
-    await ask(other, 'elsewhere');
-    await store().take(taken.id, { key: 'writer-key', name: 'Writer' });
+    await ask(mine, 'untaken');
+    const elsewhere = await ask(other, 'elsewhere');
+    await store().take(taken.id, { key: taker, name: 'Writer' });
     await store().take(taken.id, { key: 'super-key', name: 'Super' });
+    await store().take(elsewhere.id, { key: taker, name: 'Writer' });
 
-    expect(await store().openOn([mine])).toEqual([
-      { id: untaken.id, cube: 'fsales__orders', folderId: mine, takenBy: [] },
+    expect(await store().openTakenBy(taker)).toEqual([
+      { id: elsewhere.id, cube: 'fsales__orders', folderId: other, takenBy: [taker] },
       {
         id: taken.id,
         cube: 'fsales__orders',
         folderId: mine,
-        takenBy: ['writer-key', 'super-key'],
+        takenBy: [taker, 'super-key'],
       },
     ]);
-    expect(await store().openOn([])).toEqual([]);
+    expect(await store().openTakenBy(`nobody-${randomUUID()}`)).toEqual([]);
   });
 
   it('is resolved once, with the members that resolve it, the proposal, its author and its approver', async () => {
     const folder = folderOf();
     const asked = await ask(folder, 'resolved');
+    const taker = `taker-${randomUUID()}`;
+    await store().take(asked.id, { key: taker, name: 'Writer' });
     const proposalId = randomUUID();
 
     expect(
@@ -196,7 +201,7 @@ describe('a calculation request resolved (T385, AC-052)', () => {
       'fsales__orders.margin',
       'fsales__orders.margin_share',
     ]);
-    expect(await store().openOn([folder])).toEqual([]);
+    expect(await store().openTakenBy(taker)).toEqual([]);
     expect(await store().openCount([folder])).toBe(0);
   });
 });

@@ -8138,6 +8138,8 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - A: a view's request is resolved when the approval adds a measure to a cube on the view's join paths;
       - B: asking on a view names one of its cubes instead;
       - C: requests on views are refused.
+      
+      Answered in R64 ("Resolve via the view's cubes"), and built as T590.
     - **Pending: the security e2e.** It hasn't run. wechart_security holds a stray migration row (1758565480000_sql-run-ends-by) that fails node-pg-migrate's order check, and the user is removing it. **AC-052 stays unticked** until that e2e passes on the real surface; the tick follows in a small follow-up.
     - **The shared test databases:** the resolutions' migration is numbered 1758640000000, above the Jobs agent's 1758630000000s (the coordinator's rule). It was taken back out of wechart_test after each run.
 
@@ -12317,6 +12319,51 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - `fake.ts`'s `bindingsOf` binds only `joins`; extend it to views' join paths.
     - `openOn(<landed folders>)` misses a view request whose view sits in a folder beneath the cube's. Search all open requests the author took up instead.
     - Amend AC-052 to R64's wording, "(amended 2026-10-04, `[R64]`)".
+  - **As built:**
+    - api:
+      - `packages/api/src/model/added-measures.ts` (+ test): `joinPathCubesOf`;
+      - `packages/api/src/repos/calc-resolution.ts` (+ test): a request's cubes (`on`), `boundCubesOf` and `withViewCubes`;
+      - `packages/api/src/repos/calc-requests.ts` (+ test): `openTakenBy` in place of `openOn`;
+      - `packages/api/src/server.ts`: `withViewCubes`'s lookups, with `items()` limited to 15 s, and the `afterModelsLanded` hook reading the author's taken requests;
+      - `packages/api/src/xcube/fake.ts`: views' join paths bound;
+      - `packages/api/src/routes/calc-request-resolve.test.ts`;
+    - web: `packages/web/src/workspaces/model/RequestPane.tsx` (+ test), the pane's next step;
+    - `e2e/security/calc-request-resolve.spec.ts`;
+    - docs: AC-052 amended for R64 in `docs/spec.md`, and T385's open question marked answered.
+  - **Done 2026-10-05**, with R64 (the user: "Resolve via the view's cubes").
+    - **The rule.** A request on a view is resolved, as R63 resolves one on a cube, by a measure added to any cube on the view's join paths. It names the measure on that cube (`<cube>.<measure>`), not on the view.
+    - **The view's cubes.** These are the segments of each `cubes[].join_path` in the view's own file in the request's folder, each segment once. Every segment names a cube (`cube/data-modeling.md`, Y.10a). Each segment is mapped through the bindings xcube holds for the view (`GET …/items`). xcube binds every segment, and binds the first one the way it binds any reference to another item (`xcube-slice-3a.md`, the resolution table). Each bound cube is matched in wechart's folder for its full name.
+    - Left out: a segment with no binding, and one bound to the view itself. The second can happen when a view shares its short name with an ancestor folder's cube, because the bindings then keep whichever was bound last (`xcube-slice-3a.md`, "Bindings"). Such a request is resolved by none of its cubes until the view is published again.
+    - **Which requests.** After an approval, the open requests its author took up, in any folder (`openTakenBy`), replace those of the landed folders (`openOn`). A view can sit in a folder beneath the cubes it joins.
+    - **A lookup that fails** (the view's folder's files, xcube's items, or a folder) leaves that request as it is. A cube's request is still resolved, and a view's is resolved by none of its cubes.
+    - **The fake xcube** now binds every segment of a view's join paths, nearest first from the view's folder: the first as `bindOther` does, never to the view itself, and the rest as any name is bound (research 3a's resolution table). Its changeset answers (`refOf`) still bind only joins and `extends`, though xcube gives both answers the same `bindings` (`xcube-meta-revision-and-bindings.md`). Nothing here reads them for views.
+    - **The pane beside the model editor** says "Add the measure to its cube (for a view, to a cube on the view's join paths), then propose it: approving the proposal resolves the request." It used to say "to this model", which for a view is the view's own file.
+    - **Tests:**
+      - `added-measures.test.ts`: every cube on a view's join paths, once each, in order; none for a cube's file or one that isn't YAML.
+      - `calc-resolution.test.ts`:
+        - a view's request resolved by a measure on a cube on its join paths (in /Sales, or the root), named on that cube;
+        - open for a cube off its paths, a file in another folder, a proposal no taker made, or no known cubes;
+        - `boundCubesOf` maps segments through the bindings, leaving out unbound ones and the view itself;
+        - `withViewCubes` gives a view's request its bound cubes in their folders and leaves a cube's alone. A failing xcube or store read leaves every request as it is, and xcube is asked once.
+      - `calc-requests.test.ts` (the repo's): the open requests a member took up, in any folder, with all takers; none for someone who took none up; none once resolved.
+      - `calc-request-resolve.test.ts`, through the approval route, with the stub xcube binding the views:
+        - the summary view in /Sales/East joins /Sales' orders, and writer takes its request up;
+        - the stock view in /Sales joins its stock cube, and writer takes that one too;
+        - writer adds `discount` to orders and super approves;
+        - the summary's request is resolved, naming `fsales__…_orders.discount`, writer and super; the stock view's stays open.
+      - `RequestPane.test.tsx`: the next step's wording.
+      - `e2e/security/calc-request-resolve.spec.ts` carries T590's steps:
+        - /Resolve/East, beneath /Resolve and written by `sales-rw`, holds a view over /Resolve's cube; /Resolve holds one over the other cube;
+        - writer asks on the first and manager on the second, and writer takes both up;
+        - after T385's approval of `margin`, Reviews shows the first view's request "Resolved", naming `<cube>.margin`, and the other "Open".
+      - The full web suite (2453) passed. The full API suite passed 1648 of 1654. The 6 were Dex 503s and 5-second timeouts at a load average near 112; their files passed on a rerun, `sql-cube-store.test.ts` alone (13 of 13). After the review's fixes, these passed: the T590 tests, `calc-requests.test.ts`, `proposal-landing.test.ts` and `model-delete.test.ts` (59).
+    - **The cold review (PASS)** found these, now fixed and tested:
+      - one failed lookup dropped every resolution of an approval, cube requests' too, and `items()` could hold the approval for 120 s. Each request's lookup now fails alone, and `items()` has 15 s;
+      - the e2e had no view beneath its cube's folder, which is why `openTakenBy` exists. /Resolve/East now holds it;
+      - the fake bound every segment as `bindOther`, which research gives only for the first;
+      - the coverage table didn't list T590.
+      
+      Left as found: a view that `extends` another takes the parent's join paths, which `joinPathCubesOf` doesn't read. A request on such a view isn't resolved by a measure on an inherited cube.
 
 ## P2.22 The model editor's pane, popped out (added 2026-10-02, `[R58]`)
 
@@ -12345,7 +12392,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 |---|---|---|---|---|---|
 | AC-001 | T331 | AC-008 | T322, ~~T339~~ T437 | AC-041 | T390 |
 | AC-047 | T380 | AC-048 | T382 | AC-049 | T381 |
-| AC-050 | T383 | AC-051 | T384 | AC-052 | T385 |
+| AC-050 | T383 | AC-051 | T384 | AC-052 | T385, T590 |
 | AC-093 | T386 | AC-097 | T387, T453 | AC-104 | T388 |
 | AC-116 | T389 | AC-131 | T334, T342 | AC-141 | T342, T546 |
 | AC-145 | T375, T504 | | | | |

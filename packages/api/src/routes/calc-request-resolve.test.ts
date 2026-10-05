@@ -54,6 +54,12 @@ const WITH_MARGIN = cube(
   ORDERS,
   '      - name: count\n        type: count\n      - name: margin\n        sql: amount - cost\n        type: sum\n',
 );
+/** T590: a view in /Sales/East over /Sales' orders, and one in /Sales over its stock. */
+const SUMMARY = `${MARK}_summary`;
+const STOCK_VIEW = `${MARK}_stock_view`;
+const view = (name: string, over: string) =>
+  `views:\n  - name: ${name}\n    cubes:\n      - join_path: ${over}\n        includes: "*"\n`;
+const viewPath = (name: string) => `views/${name}.yml`;
 
 let cubeServer: Server;
 let admin: XcubeAdmin;
@@ -62,7 +68,7 @@ const cookies: Record<string, string> = {};
 const docs = () => documents(getDb());
 const files = () => modelFileStore(getDb());
 const made: { kind: DocumentKind; id: string }[] = [];
-const ids = { sales: '', chart: '' };
+const ids = { sales: '', east: '', chart: '', eastChart: '' };
 
 beforeAll(async () => {
   cubeServer = createServer((_request, response) => {
@@ -84,20 +90,37 @@ beforeAll(async () => {
       access: { readOnly: ['sales-ro'], readWrite: ['sales-rw'] },
     },
   });
+  // /Sales/East, beneath it, which /Sales' read-write members write too (T590).
+  ids.east = randomUUID();
+  made.push({ kind: 'folder', id: ids.east });
+  await docs().create({
+    kind: 'folder',
+    id: ids.east,
+    body: {
+      owner: 'admin',
+      title: `East ${MARK}`,
+      folderId: ids.sales,
+      access: { readOnly: null, readWrite: ['sales-rw'] },
+    },
+  });
   await files().write([
     { folderId: ids.sales, path: path(ORDERS), content: cube(ORDERS) },
     { folderId: ids.sales, path: path(STOCK), content: cube(STOCK) },
+    { folderId: ids.sales, path: viewPath(STOCK_VIEW), content: view(STOCK_VIEW, STOCK) },
+    { folderId: ids.east, path: viewPath(SUMMARY), content: view(SUMMARY, ORDERS) },
   ]);
 
   const xids = new Map([
     ['root', 'froot'],
     [ids.sales, 'fsales'],
+    [ids.east, 'feast'],
   ]);
   const stub = fakeXcube();
   admin = xcubeAdmin({ cubeApiUrl, model: MODEL, token: FAKE_ADMIN_TOKEN, fetch: stub.fetch });
   await admin.folders([
     { id: 'froot', parentId: null },
     { id: 'fsales', parentId: 'froot' },
+    { id: 'feast', parentId: 'fsales' },
   ]);
   stub.holdItems(MODEL, itemsOf(await files().all(), xids));
   app = buildServer({
@@ -134,7 +157,11 @@ beforeAll(async () => {
     xcube: admin,
     folders: async () => ({
       ids: xids,
-      parents: new Map([...xids.keys()].map((id) => [id, id === 'root' ? null : 'root'])),
+      parents: new Map<string, string | null>([
+        ['root', null],
+        [ids.sales, 'root'],
+        [ids.east, ids.sales],
+      ]),
     }),
     // What a publish sends, applied as the sync applies it (T426).
     afterPublish: async (changeset) => {
@@ -157,6 +184,14 @@ beforeAll(async () => {
   });
   expect(created.statusCode, created.body).toBe(201);
   ids.chart = created.json<{ id: string }>().id;
+  // And one going to /Sales/East, where the summary view is on its path (T590).
+  const east = await as('super', {
+    method: 'POST',
+    url: '/api/documents',
+    payload: { kind: 'chart', title: `East ${MARK}`, folderId: 'mine', targetFolderId: ids.east },
+  });
+  expect(east.statusCode, east.body).toBe(201);
+  ids.eastChart = east.json<{ id: string }>().id;
 });
 
 afterAll(async () => {
@@ -179,9 +214,12 @@ afterAll(async () => {
   await getDb().deleteFrom('proposals').where('target_folder_id', '=', ids.sales).execute();
   await getDb().deleteFrom('audit_records').where('folder_id', '=', ids.sales).execute();
   await getDb().deleteFrom('item_versions').where('folder_id', '=', ids.sales).execute();
-  await getDb().deleteFrom('calc_requests').where('folder_id', '=', ids.sales).execute();
+  await getDb()
+    .deleteFrom('calc_requests')
+    .where('folder_id', 'in', [ids.sales, ids.east])
+    .execute();
   await removeProjectFolders();
-  await getDb().deleteFrom('model_files').where('folder_id', '=', ids.sales).execute();
+  await getDb().deleteFrom('model_files').where('folder_id', 'in', [ids.sales, ids.east]).execute();
   await getDb()
     .deleteFrom('documents')
     .where(({ eb, ref }) => eb(ref('body', '->>').key('title'), 'like', `%${MARK}%`))
@@ -195,15 +233,20 @@ afterAll(async () => {
 const as = (who: string, options: InjectOptions) =>
   app.inject({ ...options, headers: { ...options.headers, cookie: cookies[who]! } });
 
-/** A calculation `super` asks on one of /Sales's cubes. */
-async function asked(name: string, description: string): Promise<string> {
+/** A calculation `super` asks on one of /Sales's cubes or views; or, by its full name, another's. */
+async function asked(
+  name: string,
+  description: string,
+  full = `fsales__${name}`,
+  chartId = ids.chart,
+): Promise<string> {
   const response = await as('super', {
     method: 'POST',
     url: '/api/calc-requests',
     payload: {
-      chartId: ids.chart,
-      cube: `fsales__${name}`,
-      fields: { measures: [`fsales__${name}.count`] },
+      chartId,
+      cube: full,
+      fields: { measures: [`${full}.count`] },
       description: `${description} (${MARK})`,
     },
   });
@@ -287,5 +330,81 @@ describe('a calculation request resolved by its taker’s approved measure (T385
         status: 'open',
         resolution: null,
       });
+  });
+});
+
+/**
+ * T590 / AC-052 (amended 2026-10-04, R64): a request on a view is resolved in
+ * the same way by a measure added to any cube on the view's join paths, which
+ * xcube bound when the view was published. The summary view sits in
+ * /Sales/East, beneath the orders cube it joins in /Sales.
+ */
+describe('a calculation request on a view, resolved through the cubes on its join paths (T590, AC-052)', () => {
+  it('is resolved by a measure on a cube its join paths name; a view over another cube stays open', async () => {
+    const onSummary = await asked(
+      SUMMARY,
+      'Discount, on the summary view',
+      `feast__${SUMMARY}`,
+      ids.eastChart,
+    );
+    const onStockView = await asked(STOCK_VIEW, 'Discount, on the stock view');
+    await take(onSummary);
+    await take(onStockView);
+
+    // The writer adds a measure to the orders cube, as /Sales has it now, and proposes it.
+    const shared = (await files().inFolders([ids.sales])).find(
+      (each) => each.path === path(ORDERS),
+    )!;
+    const copied = await as('writer', {
+      method: 'POST',
+      url: '/api/workspace/copies',
+      payload: { kind: 'model', folderId: ids.sales, path: path(ORDERS), timeZone: TEST_TIME_ZONE },
+    });
+    // Copied now, or the copy made before.
+    expect([200, 201], copied.body).toContain(copied.statusCode);
+    const project = copied.json<{ folderId: string }>().folderId;
+    const saved = await as('writer', {
+      method: 'POST',
+      url: '/api/model/publish',
+      payload: {
+        folderId: project,
+        files: [
+          {
+            path: path(ORDERS),
+            content: `${shared.content}      - name: discount\n        sql: discount\n        type: sum\n`,
+          },
+        ],
+        targetFolderId: ids.sales,
+      },
+    });
+    expect(saved.statusCode, saved.body).toBe(200);
+    const file = (await files().inFolders([project])).find((each) => each.path === path(ORDERS))!;
+    const proposed = await as('writer', {
+      method: 'POST',
+      url: '/api/proposals',
+      payload: { kind: 'model', id: file.id },
+    });
+    expect(proposed.statusCode, proposed.body).toBe(201);
+    const approved = await as('super', {
+      method: 'POST',
+      url: `/api/proposals/${proposed.json<{ id: string }>().id}/approve`,
+      payload: {},
+    });
+    expect(approved.statusCode, approved.body).toBe(200);
+
+    const now = await listed('writer');
+    expect(now.find((each) => each.id === onSummary)).toMatchObject({
+      status: 'resolved',
+      resolution: {
+        members: [`fsales__${ORDERS}.discount`],
+        by: await nameOf('writer'),
+        approvedBy: await nameOf('super'),
+      },
+    });
+    // The stock view joins no cube the measure was added to.
+    expect(now.find((each) => each.id === onStockView)).toMatchObject({
+      status: 'open',
+      resolution: null,
+    });
   });
 });

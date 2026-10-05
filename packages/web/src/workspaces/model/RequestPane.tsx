@@ -133,9 +133,10 @@ export function RequestPane({ requestId, now = new Date() }: { requestId: string
             </p>
           )}
           {request.resolution === null ? (
+            // On a view, the measure goes on a cube its join paths name (T590, R64).
             <p className="reviews__where" data-testid="pane-request-next">
-              Add the measure to this model, then propose it: approving the proposal resolves the
-              request.
+              Add the measure to its cube (for a view, to a cube on the view’s join paths), then
+              propose it: approving the proposal resolves the request.
             </p>
           ) : (
             // Resolved (T385, AC-052): the members that resolve it, and whose proposal added them.

@@ -15,6 +15,12 @@ import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
  * My workspace, opens in the model editor on that cube's file with the
  * request beside it. Then (T385, AC-052) `writer` adds the measure there and
  * proposes it, `super` approves, and the request is resolved, naming it.
+ *
+ * T590 (AC-052, amended for R64): /Resolve/East, beneath /Resolve and written
+ * by `sales-rw` too, holds a view over the cube; /Resolve holds one over the
+ * other cube. `writer` asks on the first and `manager` on the second, and
+ * `writer` takes both up. The same approval resolves the first view's
+ * request, naming the cube's measure, and leaves the second's open.
  */
 const RUN = Math.random().toString(36).slice(2, 8);
 const CUBE = `t384_${RUN}`;
@@ -25,6 +31,13 @@ const modelOf = (name: string) =>
   `cubes:\n  - name: ${name}\n    sql: SELECT 1 AS n, 2 AS cost\n    measures:\n      - name: n\n        sql: n\n        type: sum\n`;
 const WITH_MARGIN = `${modelOf(CUBE)}      - name: margin\n        sql: n - cost\n        type: sum\n`;
 const DESCRIPTION = `Margin, n less cost (${RUN})`;
+/** T590: a view over the cube, in /Resolve/East, and one over the other cube, in /Resolve. */
+const VIEW = `t590_v_${RUN}`;
+const OFF_VIEW = `t590_off_${RUN}`;
+const viewOf = (name: string, over: string) =>
+  `views:\n  - name: ${name}\n    cubes:\n      - join_path: ${over}\n        includes: "*"\n`;
+const VIEW_PATH = `views/${VIEW}.yml`;
+const OFF_VIEW_PATH = `views/${OFF_VIEW}.yml`;
 const made = {
   folder: '',
   west: '',
@@ -34,12 +47,17 @@ const made = {
   asker: '',
   project: '',
   proposal: '',
+  viewRequest: '',
+  offViewRequest: '',
+  east: '',
+  eastChart: '',
 };
-const full = () => `${made.xcubeId}__${CUBE}`;
+const xcubeIdOf = (folderId: string) => `f${folderId.replaceAll('-', '')}`;
+const full = (name = CUBE) => `${made.xcubeId}__${name}`;
 
 test.describe.configure({ mode: 'serial' });
 
-test.describe('a calculation request opened in My workspace, and resolved by its measure (T384, T385)', () => {
+test.describe('a calculation request opened in My workspace, and resolved by its measure (T384, T385, T590)', () => {
   test.afterAll(async ({ browser }) => {
     test.setTimeout(180_000);
     for (const who of ['writer', 'manager', 'super'] as const) {
@@ -56,12 +74,22 @@ test.describe('a calculation request opened in My workspace, and resolved by its
         );
         await request.delete(`/api/documents/folder/${made.project}`);
       }
+      if (who === 'writer' && made.eastChart !== '')
+        await request.delete(`/api/documents/chart/${made.eastChart}`);
       if (who === 'manager' && made.chart !== '')
         await request.delete(`/api/documents/chart/${made.chart}`);
       if (who === 'super') {
         if (made.west !== '') await request.delete(`/api/documents/folder/${made.west}`);
+        // The views first, since they name the cubes.
+        if (made.east !== '') {
+          await request.delete(
+            `/api/model/files?folder=${made.east}&path=${encodeURIComponent(VIEW_PATH)}`,
+            { timeout: 90_000 },
+          );
+          await request.delete(`/api/documents/folder/${made.east}`);
+        }
         if (made.folder !== '') {
-          for (const path of [PATH, OTHER_PATH])
+          for (const path of [OFF_VIEW_PATH, PATH, OTHER_PATH])
             await request.delete(
               `/api/model/files?folder=${made.folder}&path=${encodeURIComponent(path)}`,
               { timeout: 90_000 },
@@ -76,7 +104,9 @@ test.describe('a calculation request opened in My workspace, and resolved by its
   test.describe('as super', () => {
     test.use({ role: 'super' });
 
-    test('makes /Resolve with two cubes, and /Resolve/West beneath it', async ({ page }) => {
+    test('makes /Resolve with two cubes, a view over each (one in /Resolve/East), and /Resolve/West', async ({
+      page,
+    }) => {
       const { request } = page;
       const folder = await request.post('/api/documents', {
         data: { kind: 'folder', title: `Resolve ${RUN}`, folderId: 'root' },
@@ -106,8 +136,24 @@ test.describe('a calculation request opened in My workspace, and resolved by its
       const files = [
         { path: OTHER_PATH, content: modelOf(OTHER) },
         { path: PATH, content: modelOf(CUBE) },
+        { path: OFF_VIEW_PATH, content: viewOf(OFF_VIEW, OTHER) },
       ];
       expect(await landed(request, made.folder, files)).toEqual(files);
+      // /Resolve/East, beneath it, which /Resolve's read-write members write too,
+      // with a view over /Resolve's cube (T590).
+      const east = await request.post('/api/documents', {
+        data: { kind: 'folder', title: `East ${RUN}`, folderId: made.folder },
+      });
+      made.east = ((await east.json()) as { id: string }).id;
+      expect(
+        (
+          await request.put(`/api/folders/${made.east}/access`, {
+            data: { readOnly: [], readWrite: ['sales-rw'] },
+          })
+        ).status(),
+      ).toBe(200);
+      const view = [{ path: VIEW_PATH, content: viewOf(VIEW, CUBE) }];
+      expect(await landed(request, made.east, view)).toEqual(view);
     });
   });
 
@@ -132,6 +178,21 @@ test.describe('a calculation request opened in My workspace, and resolved by its
       expect(asked.status(), await asked.text()).toBe(201);
       made.request = ((await asked.json()) as { id: string }).id;
       made.asker = ((await (await request.get('/api/me')).json()) as { name: string }).name;
+    });
+
+    test('asks for a calculation on /Resolve’s view over the other cube (T590)', async ({
+      page,
+    }) => {
+      const asked = await page.request.post('/api/calc-requests', {
+        data: {
+          chartId: made.chart,
+          cube: full(OFF_VIEW),
+          fields: { measures: [`${full(OFF_VIEW)}.n`] },
+          description: `On the view ${OFF_VIEW}`,
+        },
+      });
+      expect(asked.status(), await asked.text()).toBe(201);
+      made.offViewRequest = ((await asked.json()) as { id: string }).id;
     });
   });
 
@@ -193,6 +254,32 @@ test.describe('a calculation request opened in My workspace, and resolved by its
       expect(decodeURIComponent(new URL(page.url()).pathname.split('/')[3] ?? '')).toBe(
         made.project,
       );
+    });
+
+    test('asks for a calculation on /Resolve/East’s view over the cube, and takes up both views’ (T590)', async ({
+      page,
+    }) => {
+      const { request } = page;
+      const created = await request.post('/api/documents', {
+        data: { kind: 'chart', title: `East ${RUN}`, folderId: 'mine', targetFolderId: made.east },
+      });
+      expect(created.status(), await created.text()).toBe(201);
+      made.eastChart = ((await created.json()) as { id: string }).id;
+      const onView = `${xcubeIdOf(made.east)}__${VIEW}`;
+      const asked = await request.post('/api/calc-requests', {
+        data: {
+          chartId: made.eastChart,
+          cube: onView,
+          fields: { measures: [`${onView}.n`] },
+          description: `On the view ${VIEW}`,
+        },
+      });
+      expect(asked.status(), await asked.text()).toBe(201);
+      made.viewRequest = ((await asked.json()) as { id: string }).id;
+      for (const id of [made.viewRequest, made.offViewRequest]) {
+        const taken = await request.post(`/api/calc-requests/${id}/take`);
+        expect(taken.status(), await taken.text()).toBe(200);
+      }
     });
 
     test('adds the measure to the cube in My workspace, and proposes it', async ({ page }) => {
@@ -272,6 +359,30 @@ test.describe('a calculation request opened in My workspace, and resolved by its
           .getByRole('complementary', { name: 'Calculation request' })
           .getByTestId('pane-request-resolution'),
       ).toContainText(`Resolved by ${CUBE}.margin`);
+    });
+
+    /**
+     * T590 / AC-052 (amended 2026-10-04, R64): a request on a view is resolved
+     * by a measure added to a cube on the view's join paths, and names it.
+     */
+    test('finds the view’s request resolved by the cube’s measure, and the other view’s still open (AC-052, R64)', async ({
+      page,
+    }) => {
+      await page.goto('/reviews?tab=requests');
+      const rowOf = (name: string) =>
+        page
+          .getByRole('table', { name: 'Calculation requests' })
+          .getByRole('row')
+          .filter({ has: page.getByRole('button', { name, exact: true }) });
+      await expect(rowOf(VIEW)).toHaveCount(1);
+      await expect(rowOf(VIEW).getByRole('cell').last()).toHaveText('Resolved');
+      await expect(rowOf(OFF_VIEW).getByRole('cell').last()).toHaveText('Open');
+      await rowOf(VIEW).getByRole('button', { name: VIEW, exact: true }).click();
+      await expect(
+        page
+          .getByRole('region', { name: `Calculation on ${VIEW}` })
+          .getByTestId('request-resolution'),
+      ).toContainText(`Resolved by ${CUBE}.margin · added by `);
     });
   });
 });
