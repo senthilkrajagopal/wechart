@@ -8710,7 +8710,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - **Tests:**
     - unit: web 2,443 and charts 517, all passing;
     - e2e, Chrome: `crossfilter.spec.ts`, `keyboard-coverage.spec.ts`, `markings.spec.ts`, `tile-menu.spec.ts`, `marked-share.spec.ts`, 107/107 before the Markings test was added, and both T632 tests after. Each T632 test failed for the right reason before its fix, as above.
-- [ ] T633 (AC-329, AC-342) A dashboard filter's "Filter on" as design 10's grouped picker *(added 2026-10-04, R64: "Yes, same picker")*
+- [x] T633 (AC-329, AC-342) A dashboard filter's "Filter on" as design 10's grouped picker *(added 2026-10-04, R64: "Yes, same picker")*
   - Files: `editor/PathPicker.tsx` (new: design 10's picker, from `CubePicker`), `editor/CubePicker.tsx` (now over it), `filters/FilterBar.tsx` (`useFieldGroups`, in place of `usePickableFields`), `filters/FilterSettings.tsx`, `filters/testing.ts`, `shell/styles.ts`, `e2e/cubePicker.ts` (`fieldPicker`)
   - Failing test: `fieldPicker.test.tsx`:
     - "Filter on" opens a "Search fields" box over the fields of the cubes on the dashboard's path, by folder, nearest first, each with its cube and folder path, never a prefixed name;
@@ -11041,7 +11041,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - The banner reads "Previewing as _a_ and _b_. This dashboard's queries run as exactly these groups.". The design has "Previewing as _a_ and _b_ · _dashboard_" with Stop preview.
     - What the groups reach is two sections: the folders, then "What the model gives them" for the cubes. The design has one list holding both.
   - **Left, as status.md has it:** tiles a previewed group doesn't reach (xcube's folder gate, T437 → T436); the Folder filter as a tree picker.
-- [ ] T475 (AC-329, AC-342, AC-343) The cube picker as design 10: cubes on the item's path grouped by folder, and a hidden same-named cube dimmed
+- [x] T475 (AC-329, AC-342, AC-343) The cube picker as design 10: cubes on the item's path grouped by folder, and a hidden same-named cube dimmed
   - Failing test: `picker.spec.ts`: the picker groups cubes by folder along the item's path, by title; a farther same-named cube is listed dimmed and unselectable, saying which folder's cube hides it (AC-342).
   - Depends on: T429, T342
   - **Built 2026-10-04: state D as drawn,** the coordinator's choice (option A), since AC-343 binds the design.
@@ -11071,7 +11071,11 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
       - `security/picker.spec.ts`: AC-329 rewritten for the list, and AC-342 new;
       - `security/workspace-overlay.spec.ts`: My workspace's group first, and the folder's original "hidden by your copy".
     - **Left unticked, with AC-342,** until the two security specs have run: they wait for wechart_security's stale migration row to be cleared.
-- [ ] T630 (AC-166, AC-343) Preview as groups as design 08's state E draws it: the banner, and one list of what the groups reach *(added 2026-10-04, R63: "drawn as designed, since AC-343 binds the design")*
+    - **Ticked 2026-10-05, with AC-329 and AC-342,** once wechart_security was clean. In Chrome:
+      - `security/picker.spec.ts` 7/7, the chart editor's AC-329 and AC-342 among them. Now also a dashboard filter's (T633's), on a workspace dashboard to go to /A/B. `picker_sales` gained a `status` dimension for a filter to pick.
+      - `security/workspace-overlay.spec.ts` 7/7, "hidden by your copy" among them. Its first run met the Dex sign-in timeout in its `afterAll`, and passed whole on its rerun.
+      - AC-329's last surface, a dashboard's filter, is T633's. AC-343 stays open for the other surfaces.
+- [x] T630 (AC-166, AC-343) Preview as groups as design 08's state E draws it: the banner, and one list of what the groups reach *(added 2026-10-04, R63: "drawn as designed, since AC-343 binds the design")*
   - Files: `dashboard/PreviewBanner.tsx`, `dashboard/DashboardView.tsx` (the dashboard's title to the banner), `workspaces/security/GroupsPreview.tsx`, `shell/styles.ts`, `e2e/security/preview-as.spec.ts`
   - Failing test:
     - `PreviewBanner.test.tsx`: with sign-in on, the banner reads "Previewing as _a_ and _b_ · _dashboard_", with the eye, each group bold in the code face, and Stop preview as a button.
@@ -11104,6 +11108,8 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - web unit: 2,427, all passing;
     - phase-1 `security.spec.ts`, sign-in off, in Chrome: 5/5. One test lost its browser at launch, and passed on its rerun.
     - `security/preview-as.spec.ts` waits for wechart_security, with T475's two specs. T630 is unticked until it passes.
+  - **Ticked 2026-10-05:** `security/preview-as.spec.ts` passes in Chrome, with the banner's words, its accent, the code face and Stop preview's focus ring.
+    - Its "Groups" locator is now exact. Since T630, "What these groups reach" is a list drawn as soon as groups are chosen, and its name holds "groups" too, so the chips' assertion read both lists.
 - *The designs of the phase-2 tasks already planned:*
   - T462: design 03 (a data source's settings);
   - T331: design 09, and design 04's shared-folder and read-only states (UX-230, UX-231, UX-237);

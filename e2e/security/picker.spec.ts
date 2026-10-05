@@ -1,6 +1,6 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 
-import { cubePicker } from '../cubePicker';
+import { cubePicker, fieldPicker } from '../cubePicker';
 import { landed } from '../model-files';
 import { expect, test } from './fixtures';
 import { changeShared, proposeShared } from './shared-change';
@@ -31,7 +31,8 @@ async function folder(request: APIRequestContext, title: string, parent: string)
 async function publish(request: APIRequestContext, folderId: string, name: string) {
   const file = {
     path: `cubes/${name}.yml`,
-    content: `cubes:\n  - name: ${name}\n    sql_table: public.orders\n    measures:\n      - name: count\n        type: count\n`,
+    // A dimension too, for a dashboard filter to pick (T633).
+    content: `cubes:\n  - name: ${name}\n    sql_table: public.orders\n    measures:\n      - name: count\n        type: count\n    dimensions:\n      - name: status\n        sql: status\n        type: string\n`,
   };
   expect(await landed(request, folderId, [file])).toEqual([file]);
 }
@@ -184,6 +185,54 @@ test.describe('cubes bound and picked on a folder’s path (T429)', () => {
     // click is: Playwright waits on a control that says it is disabled.
     await hidden.click({ force: true });
     await expect(picker.button).toHaveAttribute('data-value', '');
+  });
+
+  /**
+   * T633 (AC-329, AC-342; R64): a dashboard's filter picks its field from the
+   * cubes on the dashboard's path, as design 10's picker lists them: by
+   * folder, nearest first, each field with its cube and folder path, never a
+   * prefixed name; /A's cube, hidden by /A/B's, once, dimmed. A workspace
+   * dashboard to go to /A/B, as one is authored.
+   */
+  test('a dashboard filter picks its field from the path’s cubes, by folder, a hidden one dimmed (T633)', async ({
+    page,
+  }) => {
+    const made = await page.request.post('/api/documents', {
+      data: {
+        kind: 'dashboard',
+        title: `Picker board ${RUN}`,
+        folderId: 'mine',
+        targetFolderId: ids.b,
+      },
+    });
+    expect(made.status()).toBe(201);
+    const id = ((await made.json()) as { id: string }).id;
+    try {
+      await page.goto(`/explore/dashboards/${id}`);
+      await page.getByRole('button', { name: 'Edit', exact: true }).click();
+      await page.getByTestId('add-filter').click();
+      await page.getByTestId('add-filter-list').click();
+      const picker = fieldPicker(page.getByRole('complementary', { name: 'Edit sidebar' }));
+      await picker.button.click();
+      const A = `Picker A ${RUN}`;
+      const AB = `${A} / Picker B ${RUN}`;
+      const list = picker.list;
+      await expect(list.getByRole('group').first()).toHaveAttribute('aria-label', AB);
+      await expect(list.locator(`[data-member="${bFull()}.status"]`)).toContainText(
+        `Picker Sales · ${AB}`,
+      );
+      const hidden = list
+        .getByRole('group', { name: A, exact: true })
+        .locator(`[data-cube="f${ids.a.replaceAll('-', '')}__picker_sales"]`);
+      await expect(hidden).toHaveAttribute('aria-disabled', 'true');
+      await expect(hidden).toContainText(`${A} · hidden by Picker Sales in ${AB}`);
+      // No sibling's or descendant's cube, and never a prefixed name.
+      await expect(list.locator('[data-member*="picker_widgets"]')).toHaveCount(0);
+      await expect(list.locator(`[data-member^="f${ids.c.replaceAll('-', '')}__"]`)).toHaveCount(0);
+      expect(await list.textContent()).not.toContain('__');
+    } finally {
+      await page.request.delete(`/api/documents/dashboard/${id}`);
+    }
   });
 
   /**

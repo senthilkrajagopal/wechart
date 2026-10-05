@@ -64,10 +64,11 @@ test.describe('Preview as groups (T438, AC-166)', () => {
         await picker.fill(group);
         await picker.press('Enter');
       }
-      await expect(pane.getByRole('list', { name: 'Groups' }).getByRole('listitem')).toHaveText([
-        'sales-ro',
-        EMEA,
-      ]);
+      // The chips' list alone: since T630 "What these groups reach" is a list
+      // drawn as soon as groups are chosen, and its name holds "groups" too.
+      await expect(
+        pane.getByRole('list', { name: 'Groups', exact: true }).getByRole('listitem'),
+      ).toHaveText(['sales-ro', EMEA]);
       // What they reach, by path and how: this run's folders among them.
       const reach = pane.getByRole('list', { name: 'What these groups reach' });
       await expect(reach.getByRole('listitem').filter({ hasText: `Previewed ${RUN}` })).toHaveText([
