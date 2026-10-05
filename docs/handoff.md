@@ -1,5 +1,16 @@
 # Handoff — 2026-09-24
 
+> **PAUSED AGAIN 2026-10-05 at the user's word** ("pause again.. we are close to running out of tokens.. make a build and deloy to docker-desktop. also push to public repo at ghcr.io"). Every agent has stopped.
+> - **Deployed:** docker-desktop runs **645537e** with xcube 74c933bdb8, sign-in on; all verify.sh checks passed.
+> - **Pushed to ghcr.io** (amd64 and arm64): wechart-api and wechart-web at `:645537e` and `:latest`; `xcube:latest` is 74c933bdb8.
+> - **On feat/xcube since that build, not deployed:** the ticks for AC-378, AC-379, AC-329, AC-342 and AC-052; T590 (a43dc61).
+> - **Groups 1 and 2, what's left:**
+>   - **Group 1 is done:** the SQL runner, calculation requests including T590, the picker and the filter picker (T633), and Preview as.
+>   - **Jobs:** T556 is built but not reviewed, on branch `t556-pause-wip` (c5f7874) in the Jobs worktree. Its migration is 1758650000000_schedule-pause. It still needs its e2e, the schedules.spec "nothing edits" check scoped to Cube's rows, a review, and a commit. Then T557 (from `t557-owner-filter-wip`), T558, T559 and T560, then ticks for AC-150, AC-297 and AC-294. jobs-scope and audit security specs aren't run yet.
+>   - **Group 6:** T634 is uncommitted in its worktree. `DashboardView.tsx`'s `partsOn` `onSeries` and `onPanel` must pass the add flag on as onMarkClick's toggle; its keyboard-coverage e2e is red for the right reason. Then T405's two Esc follow-ups, T510, T516, T476 and T477 (after Jobs' pages are final), and T406.
+>   - **AC-381:** its two run-history e2e tests timed out at Dex sign-in in the last run; rerun them.
+> - **The flaky API suite's cause** (debug agent's report): `.claude/hooks/stop-continue.mjs` runs `pnpm test`, API included, against wechart_test without the lock. Each time it's cut short at 300 s, and its `seed.test.ts` empties the database mid-run. A locked full run with nothing else going passed 1,659/1,659. Changing the hook is the user's call. Options: make it take `/private/tmp/wechart-api-tests.lock`, skip packages/api, or have `vitest.globalSetup.ts` hold a Postgres advisory lock.
+>
 > **PAUSED 2026-10-04 at the user's word** ("…pause .. running out of tokens.. os will need to stop for couple of days"). Each agent was told to finish its current task, commit it and stop. On resuming:
 > 1. **Every agent has stopped, and their last commits are all on feat/xcube:** T555, the cancel correction, T632 and T549, which pins xcube 46ca0ce708 (compose runs it). F6 didn't start T590. Nothing is left to pick.
 >    - **The SQL runner's next steps:** run `e2e/security/sql-runner.spec.ts` once wechart_security is clean, and tick AC-378 and AC-379 if it passes.
