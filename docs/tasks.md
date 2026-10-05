@@ -12272,6 +12272,12 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - `/api/sql-runs/cancel` still takes a Cube Store run, though no page offers it;
       - AC-378's text still names `2099b13f2d` and "until when"; whether it is amended for router runs, as R64 amended AC-379, is the user's.
     - **AC-378 and AC-379 stay unticked** until that e2e passes on the real page.
+    - **Ticked 2026-10-05** after `e2e/security/sql-runner.spec.ts` on Chrome, against compose's xcube `74c933bdb8` (newer on the same branch, pinned by T554). AC-378 and AC-379 keep their wording (the user, via the coordinator: a router run's "until when, as xcube reports it" is no end, said so).
+      - **Passed, every test of either AC's halves:**
+        - on a data source, a stop at 30 s with its rows marked cut and nothing left in `pg_stat_activity`, through the API and on the page;
+        - a second run held while one goes, and Cancel stopping the first on the database;
+        - on Cube Store's page: no Cancel, said so; a run past 30 s said to run to its end, with no end; Run held, and the API refusing a next run on Cube Store and on a data source; the hold lifted only when Cube Store answered, and the result saying it has ended.
+      - 17 of the file's 19 passed. The other two, AC-381's history tests, timed out in the suite's Dex sign-in (`fixtures.ts:48`, `waitForURL` to Explore), before reaching the SQL runner. That is the suite's known sign-in flake; they weren't rerun, at the user's pause.
 - [x] T538 (AC-354) Set export-import's hidden dependencies up as copy-on-use allows *(added 2026-10-01, from T527)*
   - Files: `e2e/security/export-import.spec.ts`
   - Failing test:
