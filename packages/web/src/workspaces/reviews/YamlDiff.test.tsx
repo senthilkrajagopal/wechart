@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { EditorView } from '@codemirror/view';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { changedLinesOf, YamlDiff } from './YamlDiff';
 
@@ -117,6 +117,40 @@ describe('a model’s YAML diff (T350, design 05 state G)', () => {
  * on it unfolding its own.
  */
 describe('a YAML diff’s folded lines, from the keyboard (T637)', () => {
+  /**
+   * Placing the caret asks CodeMirror to measure, on its next frame, the
+   * text it scrolls to, through a Range's client rects. jsdom lays nothing
+   * out and its Range has neither method, so each unfold threw after its
+   * test. Given here as jsdom's elements give them: no boxes, and a box of
+   * nothing. Only where jsdom lacks them, and taken away after.
+   */
+  const given: (keyof Range)[] = [];
+  beforeAll(() => {
+    const none = (): DOMRect => ({
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+      toJSON: () => ({}),
+    });
+    const rects: Partial<Record<keyof Range, () => unknown>> = {
+      getClientRects: () => document.createElement('span').getClientRects(),
+      getBoundingClientRect: none,
+    };
+    for (const [name, value] of Object.entries(rects) as [keyof Range, () => unknown][]) {
+      if (name in Range.prototype) continue;
+      Object.defineProperty(Range.prototype, name, { value, configurable: true, writable: true });
+      given.push(name);
+    }
+  });
+  afterAll(() => {
+    for (const name of given.splice(0)) Reflect.deleteProperty(Range.prototype, name);
+  });
+
   const long = (end: string) =>
     [
       'cubes:',
