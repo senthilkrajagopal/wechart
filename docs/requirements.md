@@ -950,6 +950,15 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R66 — the Stop hook, Jobs' summary links, and two keyboard paths** (2026-10-07, the user)
+- Q: the Stop hook runs the API suite without the tests' lock, polluting wechart_test. A: "Hook takes the test lock (Recommended)". *It runs under the lock without waiting, and isn't cut short (3bdc94c).*
+- Q (from T558): the summary's building, queued and suspended links have no drawn filter to land on. A: "State filter pills (Recommended by agent)". *A State pill on Queue (Any, Building, Queued, Stalled) and on Schedules (Any, Active, Paused, Suspended), set from the link.*
+- Q (from T405): range marking from the keyboard? A: ""Mark range…" in tile menu (Recommended)". *T636.*
+- Q (from T405): the YAML diff's collapsed lines from the keyboard? A: ""Show all lines" toggle (Recommended)". *T637.*
+- *Claude's calls, overturnable:*
+  - a trellis header's Ctrl/⌘-click adds its panel to the marking (T635);
+  - a wechart schedule starts one run per time; a late every-minute run folds into the next (T556's follow-up).
+
 **R65 — resuming, and AC-378 for router queries** (the user)
 - After the pause: "okay lets complete groups 1 and 2". *Group 1: the built work waiting on the security e2e, T590 and T633. Group 2: Jobs and Schedules (T554–T560), keyboard (T634, T405), and design conformance (T476, T477, T510, T516, T406).*
 - Q: AC-378 says a stopped Cube Store run says "until when"; a router query has no end time. Amend it? A: "Keep as written". *For a router run xcube reports no end, and the page says it runs to its end.*
