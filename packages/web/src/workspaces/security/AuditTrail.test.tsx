@@ -861,6 +861,63 @@ describe('the audit trail (T369, AC-295)', () => {
         ['Last error then', 'Cube refused it.'],
       ]);
     });
+
+    it('names a pause, and a resume from one with since when and by whom (T556, AC-294)', async () => {
+      serve({
+        first: {
+          records: [
+            {
+              id: 'i8',
+              at: today(15, 10, 0),
+              actor: WREN,
+              event: 'schedule-change',
+              folderId: 'emea',
+              folderPath: EMEA,
+              item: SCHEDULE,
+              summary: 'Resumed',
+              details: {
+                change: 'resumed',
+                ...what,
+                pausedAt: today(14, 0, 0),
+                pausedBy: { key: 'ada', name: 'Ada Admin' },
+              },
+            },
+            {
+              id: 'i7',
+              at: today(14, 0, 0),
+              actor: WREN,
+              event: 'schedule-change',
+              folderId: 'emea',
+              folderPath: EMEA,
+              item: SCHEDULE,
+              summary: 'Paused',
+              details: { change: 'paused', ...what },
+            },
+          ],
+          total: 2,
+          retentionDays: 365,
+        },
+      });
+      open();
+      await screen.findByRole('table', { name: 'Audit trail' });
+
+      await userEvent.click(within(table()).getByRole('button', { name: 'Paused' }));
+      expect(
+        within(screen.getByRole('region', { name: /^Schedule change · Paused/ })).getByRole(
+          'heading',
+          { level: 3 },
+        ).textContent,
+      ).toBe(' Schedule change · Paused');
+      await userEvent.click(within(table()).getByRole('button', { name: 'Resumed' }));
+      const inspector = screen.getByRole('region', { name: /^Schedule change · Resumed/ });
+      const terms = within(inspector)
+        .getAllByRole('term')
+        .map((term) => [term.textContent, term.nextElementSibling?.textContent]);
+      expect(terms.slice(-2)).toEqual([
+        ['Paused since', 'Today 14:00:00'],
+        ['Paused by', 'Ada Admin'],
+      ]);
+    });
   });
 
   it('pages to older records and back (pin 9)', async () => {

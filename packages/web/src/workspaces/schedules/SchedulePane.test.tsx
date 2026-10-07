@@ -6,6 +6,7 @@ import {
   KEY_ROWS,
   localDay,
   paneOf,
+  paused,
   runsIn,
   schedule,
   shownSchedules,
@@ -375,5 +376,81 @@ describe('Run now (T555, AC-395)', () => {
       ['Failed', '1 of 3'],
       ['Done', ''],
     ]);
+  });
+});
+
+/**
+ * T556 (AC-396; design 16, P3): an On switch on a wechart schedule's row and
+ * in its pane pauses it and resumes it. A paused one reads "Paused · by
+ * <name>" with the idle icon, on its row and in its pane; resumed, its next
+ * run again. The switch on its row doesn't open its pane.
+ */
+describe('pausing and resuming a schedule (T556, AC-396)', () => {
+  const cellOf = (row: HTMLElement, column: string) => {
+    const table = row.closest('table') as HTMLElement;
+    const at = within(table)
+      .getAllByRole('columnheader')
+      .findIndex((header) => text(header) === column);
+    return within(row).getAllByRole('cell')[at] as HTMLElement;
+  };
+  const switchOn = (container: HTMLElement) =>
+    within(container).getByRole<HTMLInputElement>('switch', { name: /^On/ });
+
+  it('says a paused one is paused, by whom, with the idle icon, on its row and in its pane', async () => {
+    shownSchedules({ wechart: [paused()] });
+    const row = await wechartRow('Weekday mornings');
+
+    const next = cellOf(row, 'Next run');
+    expect(text(next)).toBe('Paused · by Ada Admin');
+    expect(next.querySelector('[data-state="paused"] svg')?.getAttribute('data-icon')).toBe('idle');
+    expect(switchOn(row).checked).toBe(false);
+
+    await user().click(row);
+    const facts = within(paneOf()).getAllByRole('term');
+    expect(text(facts.find((term) => text(term) === 'State')?.nextElementSibling)).toBe(
+      'Paused · by Ada Admin',
+    );
+    expect(switchOn(paneOf()).checked).toBe(false);
+  });
+
+  /** T556's review: its count kept across a pause (R59) is still said (AC-155, E2). */
+  it('still counts its failures in a row while paused', async () => {
+    shownSchedules({ wechart: [paused({ failuresInARow: 2 })] });
+    const row = await wechartRow('Weekday mornings');
+
+    expect(text(cellOf(row, 'Next run'))).toBe(
+      'Paused · by Ada Admin2 failed in a row · suspends after 3',
+    );
+  });
+
+  it('pauses it from its row without opening its pane, and resumes it from its pane', async () => {
+    const { sent } = shownSchedules({ wechart: [schedule()] });
+    const row = await wechartRow('Weekday mornings');
+    expect(switchOn(row).checked).toBe(true);
+
+    await user().click(switchOn(row));
+
+    await waitFor(() => {
+      expect(text(cellOf(row, 'Next run'))).toBe('Paused · by Wren Writer');
+    });
+    expect(screen.queryByRole('complementary', { name: 'Schedule details' })).toBeNull();
+
+    await user().click(row);
+    await user().click(switchOn(paneOf()));
+
+    await waitFor(() => {
+      expect(text(cellOf(row, 'Next run'))).toBe('Mon 5 Oct, 07:5505:55 UTC · in 3 days');
+    });
+    expect(sent.filter((each) => each.method === 'POST').map((each) => each.url)).toEqual([
+      '/api/wechart-schedules/sched-1/pause',
+      '/api/wechart-schedules/sched-1/unpause',
+    ]);
+  });
+
+  it('names the schedule it switches, for a screen reader', async () => {
+    shownSchedules({ wechart: [schedule()] });
+    const row = await wechartRow('Weekday mornings');
+
+    expect(switchOn(row).getAttribute('aria-label')).toBe('On: Weekday mornings');
   });
 });

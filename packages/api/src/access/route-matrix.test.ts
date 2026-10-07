@@ -2373,6 +2373,30 @@ const CASES: Record<string, Case> = {
         else refused(response, where);
       }
   },
+  // Pause and its resume: only in folders they write (T556, Q10).
+  'POST /api/wechart-schedules/:id/pause': async () => {
+    for (const place of PLACES)
+      for (const who of WHO.filter((each) => !writes(each, place)))
+        refused(
+          await ask(who, {
+            method: 'POST',
+            url: `/api/wechart-schedules/${schedulesIn[place]}/pause`,
+          }),
+          `${who} pausing ${place}'s schedule`,
+        );
+  },
+  'POST /api/wechart-schedules/:id/unpause': async () => {
+    for (const place of PLACES)
+      for (const who of WHO) {
+        const response = await ask(who, {
+          method: 'POST',
+          url: `/api/wechart-schedules/${schedulesIn[place]}/unpause`,
+        });
+        const where = `${who} resuming ${place}'s paused schedule`;
+        if (writes(who, place)) answered(response, where);
+        else refused(response, where);
+      }
+  },
   // Run now: only in folders they write, refused before Cube is asked (T555).
   'POST /api/wechart-schedules/:id/run': async () => {
     for (const place of PLACES)

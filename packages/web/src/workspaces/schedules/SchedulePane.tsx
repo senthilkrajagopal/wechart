@@ -9,6 +9,7 @@ import { Status } from '../jobs/StateBadge';
 import { rollupHref } from '../model/inFolder';
 import { lagInWords } from '../model/preagg/RefreshSchedule';
 import { OwnerLabel } from './OwnerLabel';
+import { PauseSwitch } from './PauseSwitch';
 import { changeWords, dayIn, runsOf, timeIn, zoneOf, type Schedule } from './schedule';
 import { RefreshKeyRuns, ScheduleForm } from './ScheduleForm';
 import {
@@ -206,6 +207,8 @@ export function WechartPane({
       <div className="admin-pane__head">
         <h2 className="admin-pane__title">{schedule.name}</h2>
         <span className="spacer" />
+        {/* On, or paused by hand (T556; design 16, P3). */}
+        <PauseSwitch schedule={schedule} />
         <OwnerLabel owner="wechart" />
       </div>
       {schedule.suspendedAt === null ? null : (
@@ -244,13 +247,21 @@ export function WechartPane({
       <dl className="admin-pane__facts">
         <dt>State</dt>
         <dd>
-          {schedule.suspendedAt === null ? (
+          {schedule.suspendedAt !== null ? (
+            <Status kind="susp" label="Suspended" testId="schedule-state" state="suspended" />
+          ) : schedule.pausedAt !== null ? (
+            // Paused by hand, by whom (T556; design 16, P3).
+            <Status
+              kind="idle"
+              label={`Paused · by ${schedule.pausedBy?.name ?? 'someone'}`}
+              testId="schedule-state"
+              state="paused"
+            />
+          ) : (
             <>
               <Status kind="ok" label="Active" testId="schedule-state" state="active" />
               {nextWords === undefined ? null : ` · next ${nextWords}`}
             </>
-          ) : (
-            <Status kind="susp" label="Suspended" testId="schedule-state" state="suspended" />
           )}
         </dd>
         <dt>Builds</dt>

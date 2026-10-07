@@ -8,6 +8,7 @@ import { shownOf } from '../jobs/BuildPanel';
 import { BuiltWhen } from '../jobs/builds';
 import { Status } from '../jobs/StateBadge';
 import { OwnerLabel } from './OwnerLabel';
+import { PauseSwitch } from './PauseSwitch';
 import { LastRunStatus, minuteOf, SchedulePane, WechartPane } from './SchedulePane';
 import { dayIn, runsOf, timeIn, untilIn, zoneOf, type Schedule } from './schedule';
 import { ScheduleForm } from './ScheduleForm';
@@ -85,13 +86,27 @@ function WechartNextRun({ schedule, now }: { schedule: WechartSchedule; now: Dat
         state="suspended"
       />
     );
-  const next = schedule.runs?.[0];
   const failing =
     schedule.failuresInARow > 0 ? (
       <span className="schedules__sub schedules__failing">
         {`${String(schedule.failuresInARow)} failed in a row · suspends after ${String(schedule.suspendAfter)}`}
       </span>
     ) : null;
+  // Paused by hand, by whom, with the idle icon (T556; design 16, P3); its
+  // count kept across the pause (R59), and said (T556's review).
+  if (schedule.pausedAt !== null)
+    return (
+      <>
+        <Status
+          kind="idle"
+          label={`Paused · by ${schedule.pausedBy?.name ?? 'someone'}`}
+          testId="schedule-state"
+          state="paused"
+        />
+        {failing}
+      </>
+    );
+  const next = schedule.runs?.[0];
   if (next === undefined)
     return (
       <>
@@ -143,6 +158,8 @@ function WechartRow({
       }}
     >
       <td className="query-log__query">
+        {/* On, or paused by hand (T556; design 16, P3). */}
+        <PauseSwitch schedule={schedule} />
         <span data-testid="schedule-name">{shownAs.name}</span>
       </td>
       <td>{shownAs.folder ?? 'Shared'}</td>

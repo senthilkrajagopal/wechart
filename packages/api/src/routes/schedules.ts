@@ -300,6 +300,52 @@ export function registerWechartSchedules(
     );
   });
 
+  /** A schedule as the list has it, the model's rows read again: after a pause or its resume. */
+  const listedNow = async (schedule: Schedule, id: string) => {
+    const rows = await listedBuildables(client, modelFiles, access).catch(() => undefined);
+    const last = (await history?.lastRunsOf([id]))?.get(id);
+    return listedRow(
+      schedule,
+      rows?.find((row) => row.id === schedule.preAggregation),
+      last,
+      now(),
+      rows !== undefined,
+    );
+  };
+
+  /**
+   * Pause and its resume (T556, AC-396; design 16, P3): by any who write
+   * its folder (Q10), at once. Paused, it starts none of its runs and names
+   * who paused it; resumed, it runs from its first time after now, its
+   * count of failures as it was (R59). Each is a Schedule change in the
+   * trail (AC-294). One already so is answered as it is.
+   */
+  app.post('/api/wechart-schedules/:id/pause', USER, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const found = await theirs(request, id);
+    if (!found.ok) return reply.status(found.status).send(found.body);
+    const paused = await scheduler.pause(id, byOf(request));
+    if (paused === undefined) return reply.status(404).send(NO_SUCH_SCHEDULE);
+    if (found.schedule.pausedAt === null && paused.pausedAt !== null)
+      await recorded(request, paused, { change: 'paused' });
+    return listedNow(paused, id);
+  });
+
+  app.post('/api/wechart-schedules/:id/unpause', USER, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const found = await theirs(request, id);
+    if (!found.ok) return reply.status(found.status).send(found.body);
+    const resumed = await scheduler.unpause(id);
+    if (resumed === undefined) return reply.status(404).send(NO_SUCH_SCHEDULE);
+    if (found.schedule.pausedAt !== null && resumed.pausedAt === null)
+      await recorded(request, resumed, {
+        change: 'resumed',
+        pausedAt: found.schedule.pausedAt,
+        pausedBy: found.schedule.pausedBy,
+      });
+    return listedNow(resumed, id);
+  });
+
   /**
    * Run now (T555, AC-395; design 16, P2): its build at once, by any who
    * write its folder, suspended or not (R59), its times left alone. In Run

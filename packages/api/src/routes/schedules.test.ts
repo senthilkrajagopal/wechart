@@ -732,3 +732,78 @@ describe('Run now (T555, AC-395)', () => {
     expect(posted).toEqual([]);
   });
 });
+
+/**
+ * T556 (AC-396; design 16, P3): pause and resume by any who write the
+ * schedule's folder (Q10), at once; it lists paused, with who paused it;
+ * resumed, it is laid again from its next time; each is a Schedule change in
+ * the trail (AC-294).
+ */
+describe('pausing and resuming a schedule (T556, AC-396)', () => {
+  const ask = (who: string, id: string, what: 'pause' | 'unpause') =>
+    as(who, { method: 'POST', url: `/api/wechart-schedules/${id}/${what}` });
+
+  it('pauses it at once, listed paused with who paused it, and resumes it from its next time; each in the trail', async () => {
+    await clock.setTime(new Date('2026-10-09T03:00:00Z'));
+    await place('p', { readOnly: [], readWrite: ['managers'] });
+    const made = (
+      await as('manager', {
+        method: 'POST',
+        url: '/api/wechart-schedules',
+        payload: fields('p', { name: `Pause ${MARK}` }),
+      })
+    ).json<Listed>();
+
+    const paused = await ask('manager', made.id, 'pause');
+
+    expect(paused.statusCode, paused.body).toBe(200);
+    const row = (await listed('manager')).rows.find((each) => each.id === made.id) as
+      (Listed & Record<string, unknown>) | undefined;
+    expect([row?.['pausedAt'], row?.['pausedBy']]).toEqual([
+      '2026-10-09T03:00:00.000Z',
+      made.createdBy,
+    ]);
+    expect(await laid(made.id)).toBeUndefined();
+
+    await clock.setTime(new Date('2026-10-09T06:00:00Z'));
+    const resumed = await ask('manager', made.id, 'unpause');
+
+    expect(resumed.statusCode, resumed.body).toBe(200);
+    expect([
+      resumed.json<Record<string, unknown>>()['pausedAt'],
+      resumed.json<Listed>().runs?.[0],
+    ]).toEqual([
+      null,
+      // 05:00 in London is 04:00 UTC: tomorrow's, not today's that fell while paused.
+      '2026-10-10T04:00:00.000Z',
+    ]);
+    expect((await laid(made.id))?.cron).toBe('0 5 * * *');
+    const trail = (
+      await auditStore(getDb()).list({ events: ['schedule-change'], folderIds: [ids['p']!] })
+    ).records
+      .toReversed()
+      .map((each) => [each.summary, each.details?.['change']]);
+    expect(trail).toEqual([
+      [`Made · 0 5 * * *`, 'made'],
+      ['Paused', 'paused'],
+      ['Resumed', 'resumed'],
+    ]);
+  });
+
+  it('refuses a member of another folder and a reader', async () => {
+    await place('q', { readOnly: ['sales-ro'], readWrite: ['managers'] });
+    const made = (
+      await as('manager', {
+        method: 'POST',
+        url: '/api/wechart-schedules',
+        payload: fields('q', { name: `Not to pause ${MARK}` }),
+      })
+    ).json<Listed>();
+
+    for (const who of ['many', 'reader'])
+      for (const what of ['pause', 'unpause'] as const)
+        expect((await ask(who, made.id, what)).statusCode, `${who} ${what}`).toBe(403);
+    expect((await ask('manager', randomUUID(), 'pause')).statusCode).toBe(404);
+    expect((await laid(made.id))?.cron).toBe('0 5 * * *');
+  });
+});

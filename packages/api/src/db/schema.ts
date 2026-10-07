@@ -203,6 +203,12 @@ export interface ScheduleTable {
   /** When it was suspended, and Cube's last error then; none while it runs. */
   suspended_at: Generated<Date | null>;
   suspended_error: Generated<string | null>;
+  /** Paused by hand, when and by whom (T556, AC-396); none while it runs. */
+  paused_at: Generated<Date | null>;
+  paused_by_key: Generated<string | null>;
+  paused_by_name: Generated<string | null>;
+  /** When it was last laid in pg-boss: no occurrence before it runs (T556; pg-boss's due window). */
+  runs_from: Generated<Date | null>;
 }
 
 /** A build wechart started through Cube's jobs API (T372, AC-150): one row per start. */

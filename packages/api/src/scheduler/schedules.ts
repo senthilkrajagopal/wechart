@@ -26,6 +26,9 @@ import { failuresOf, SUSPEND_AFTER, SUSPEND_AFTER_REFUSAL, suspendAfterOf } from
  */
 export const RUN_QUEUE = 'wechart-schedule-run';
 
+/** How long pg-boss keeps an occurrence due (research pg-boss-12.33.2-installed.md). */
+const DUE_WINDOW_MS = 60_000;
+
 /** A schedule as stored. */
 export interface StoredSchedule {
   readonly id: string;
@@ -46,6 +49,15 @@ export interface StoredSchedule {
   /** When it was suspended, and Cube's last error then; none while it runs. */
   readonly suspendedAt: Date | null;
   readonly suspendedError: string | null;
+  /** Paused by hand, when and by whom (T556, AC-396); none while it runs. */
+  readonly pausedAt: Date | null;
+  readonly pausedBy: { readonly key: string; readonly name: string } | null;
+  /**
+   * When it was last laid in pg-boss: made, changed, resumed or unpaused.
+   * No occurrence before it runs (pg-boss's due window; T556). None for one
+   * laid before T556.
+   */
+  readonly runsFrom: Date | null;
 }
 
 /** A schedule, with how many of its runs have failed in a row (T379). */
@@ -89,6 +101,10 @@ const rowOf = (row: Selectable<ScheduleTable>): StoredSchedule => ({
   countedFrom: row.counted_from,
   suspendedAt: row.suspended_at,
   suspendedError: row.suspended_error,
+  pausedAt: row.paused_at,
+  pausedBy:
+    row.paused_by_key === null ? null : { key: row.paused_by_key, name: row.paused_by_name ?? '' },
+  runsFrom: row.runs_from,
 });
 
 /**
@@ -128,6 +144,7 @@ export function scheduleStore(db: Kysely<Database>, { named }: { readonly named?
           updated_by_key: schedule.updatedBy.key,
           updated_by_name: schedule.updatedBy.name,
           updated_at: schedule.updatedAt,
+          runs_from: schedule.runsFrom,
         })
         .execute();
     },
@@ -145,6 +162,7 @@ export function scheduleStore(db: Kysely<Database>, { named }: { readonly named?
           updated_by_key: schedule.updatedBy.key,
           updated_by_name: schedule.updatedBy.name,
           updated_at: schedule.updatedAt,
+          runs_from: schedule.runsFrom,
         })
         .where('id', '=', schedule.id)
         .executeTakeFirst();
@@ -175,12 +193,45 @@ export function scheduleStore(db: Kysely<Database>, { named }: { readonly named?
           suspended_at: null,
           suspended_error: null,
           counted_from: at,
+          // Laid again now: no time before this runs (pg-boss's due window; T556).
+          runs_from: at,
           updated_by_key: by.key,
           updated_by_name: by.name,
           updated_at: at,
         })
         .where('id', '=', id)
         .where('suspended_at', 'is not', null)
+        .executeTakeFirst();
+      return Number(result.numUpdatedRows) > 0;
+    },
+    /** Paused by `by` at `at` (T556), unless it already is: whether this paused it. */
+    async pause(id: string, at: Date, by: { key: string; name: string }): Promise<boolean> {
+      const result = await db
+        .updateTable('schedules')
+        .set({ paused_at: at, paused_by_key: by.key, paused_by_name: by.name })
+        .where('id', '=', id)
+        .where('paused_at', 'is', null)
+        .executeTakeFirst();
+      return Number(result.numUpdatedRows) > 0;
+    },
+    /**
+     * Running again (T556), its count of failures in a row as it was (R59):
+     * `counted_from` is left alone. As a pause, it changes none of its
+     * fields, so when it was last changed stays (T556's review). Whether it
+     * was paused to unpause.
+     */
+    async unpause(id: string, at: Date): Promise<boolean> {
+      const result = await db
+        .updateTable('schedules')
+        .set({
+          paused_at: null,
+          paused_by_key: null,
+          paused_by_name: null,
+          // Laid again now: no time that fell while paused runs (pg-boss's due window).
+          runs_from: at,
+        })
+        .where('id', '=', id)
+        .where('paused_at', 'is not', null)
         .executeTakeFirst();
       return Number(result.numUpdatedRows) > 0;
     },
@@ -251,6 +302,19 @@ export interface WechartScheduler {
   /** Builds that ended, as the follower closed them: a schedule's failed one counted (T379). */
   ended(closed: readonly { runId: string; outcome: string }[]): Promise<void>;
   /**
+   * Pauses it by hand (T556, AC-396; design 16, P3): it starts none of its
+   * runs until unpaused, and names who paused it. None where there's no such
+   * schedule; one already paused is answered as it is.
+   */
+  pause(id: string, by: { key: string; name: string }): Promise<Schedule | undefined>;
+  /**
+   * Resumes one paused by hand (T556): from its first time after now, none
+   * that fell while it was paused, its count of failures kept (R59). One
+   * suspended too stays suspended until its own Resume. As a pause, it
+   * changes none of its fields: who resumed it is in the audit trail.
+   */
+  unpause(id: string): Promise<Schedule | undefined>;
+  /**
    * Run now (T555, AC-395; design 16, P2): the schedule's build at once,
    * every partition as its runs build, outside its times, which it leaves
    * alone; offered on a suspended schedule too (R59). Recorded in Run history
@@ -299,6 +363,30 @@ export function wechartScheduler({
   readonly pollingIntervalSeconds?: number;
   readonly onError?: (error: unknown) => void;
 }): WechartScheduler {
+  /** Whether it runs at its times: neither suspended (T379) nor paused by hand (T556). */
+  const runs = (schedule: StoredSchedule) =>
+    schedule.suspendedAt === null && schedule.pausedAt === null;
+
+  /**
+   * Whether the run pg-boss hands out now is for a time before the schedule
+   * was last laid (T556): its latest time in the due window, the last 60 s,
+   * read with a margin for a run handed out late, falls before `runsFrom`. A
+   * run caught up after wechart was stopped is older than the window, and
+   * isn't this.
+   */
+  const fellBeforeLaid = (schedule: StoredSchedule): boolean => {
+    if (schedule.runsFrom === null) return false;
+    const at = now();
+    const times = previewOf(
+      schedule.cron,
+      schedule.timezone,
+      new Date(at.getTime() - 2 * DUE_WINDOW_MS),
+      120,
+    ).filter((time) => time.getTime() <= at.getTime());
+    const latest = times.at(-1);
+    return latest !== undefined && latest.getTime() < schedule.runsFrom.getTime();
+  };
+
   /** pg-boss's schedule for one of wechart's: its times, its zone, its missed-run policy. */
   const lay = (schedule: StoredSchedule) =>
     boss.schedule(
@@ -359,9 +447,13 @@ export function wechartScheduler({
   };
 
   const run = async (scheduleId: string, runId: string) => {
-    // Deleted since pg-boss sent it, or suspended: nothing to run (T379).
+    // Deleted since pg-boss sent it, suspended (T379) or paused (T556): nothing to run.
     const schedule = await store.get(scheduleId);
-    if (schedule === undefined || schedule.suspendedAt !== null) return;
+    if (schedule === undefined || !runs(schedule)) return;
+    // A time from before it was last laid, which pg-boss sends when a
+    // schedule is laid within a minute after it (research
+    // pg-boss-12.33.2-installed.md, "The due window"): not one of its runs (T556).
+    if (fellBeforeLaid(schedule)) return;
     // At its number already, however the count got there — a lowered number,
     // or a failure whose count a replica didn't finish: suspended, not run
     // (T379's review).
@@ -442,8 +534,8 @@ export function wechartScheduler({
        * row that is gone, read again to be sure, is dropped.
        */
       const laid = new Map((await boss.getSchedules(RUN_QUEUE)).map((each) => [each.key, each]));
-      // A suspended one is laid only when resumed (T379).
-      const running = (await store.list()).filter((schedule) => schedule.suspendedAt === null);
+      // A suspended (T379) or paused (T556) one is laid only when resumed.
+      const running = (await store.list()).filter(runs);
       for (const schedule of running) {
         const held = laid.get(schedule.id);
         if (
@@ -458,8 +550,7 @@ export function wechartScheduler({
       for (const key of laid.keys()) {
         if (kept.has(key)) continue;
         const stored = await store.get(key);
-        if (stored === undefined || stored.suspendedAt !== null)
-          await boss.unschedule(RUN_QUEUE, key);
+        if (stored === undefined || !runs(stored)) await boss.unschedule(RUN_QUEUE, key);
       }
     },
     async stop() {
@@ -485,6 +576,9 @@ export function wechartScheduler({
         countedFrom: null,
         suspendedAt: null,
         suspendedError: null,
+        pausedAt: null,
+        pausedBy: null,
+        runsFrom: at,
       };
       await store.insert(schedule);
       try {
@@ -498,22 +592,29 @@ export function wechartScheduler({
     async change(id, fields, by) {
       const was = await store.get(id);
       if (was === undefined) return undefined;
+      // A missed-run choice, or a number to suspend after, left out stays as it was.
+      const checked = checkedFields({
+        ...fields,
+        missed: fields.missed ?? was.missed,
+        suspendAfter: 'suspendAfter' in fields ? fields.suspendAfter : was.suspendAfter,
+      });
+      const at = now();
       const schedule: StoredSchedule = {
         ...was,
-        // A missed-run choice, or a number to suspend after, left out stays as it was.
-        ...checkedFields({
-          ...fields,
-          missed: fields.missed ?? was.missed,
-          suspendAfter: 'suspendAfter' in fields ? fields.suspendAfter : was.suspendAfter,
-        }),
+        ...checked,
         updatedBy: by,
-        updatedAt: now(),
+        updatedAt: at,
+        // New times run from the change: none of them before it (pg-boss's
+        // due window; T556). Times kept are as they were, so one just due
+        // still runs (T556's review, AC-234).
+        runsFrom:
+          checked.cron === was.cron && checked.timezone === was.timezone ? was.runsFrom : at,
       };
       // Deleted meanwhile: nothing to lay again.
       if (!(await store.update(schedule))) return undefined;
       // At once, with no proposal (AC-234): pg-boss's schedule replaced; a
-      // suspended one's stays off until it's resumed (T379).
-      if (schedule.suspendedAt === null) await lay(schedule);
+      // suspended (T379) or paused (T556) one's stays off until it's resumed.
+      if (runs(schedule)) await lay(schedule);
       return counted(schedule);
     },
     async remove(id) {
@@ -525,8 +626,25 @@ export function wechartScheduler({
       const at = now();
       if (await store.resume(id, at, by)) {
         const resumed = await store.get(id);
-        // Laid again, new: its next time after now, none missed while it was off.
-        if (resumed !== undefined) await lay(resumed);
+        // Laid again, new: its next time after now, none missed while it was
+        // off; still off while paused by hand (T556).
+        if (resumed !== undefined && runs(resumed)) await lay(resumed);
+      }
+      const schedule = await store.get(id);
+      return schedule === undefined ? undefined : counted(schedule);
+    },
+    async pause(id, by) {
+      if (await store.pause(id, now(), by)) await boss.unschedule(RUN_QUEUE, id);
+      const schedule = await store.get(id);
+      return schedule === undefined ? undefined : counted(schedule);
+    },
+    async unpause(id) {
+      // Its count as it was (R59): only a suspension's Resume starts it again.
+      // Who resumed it is in the audit trail (AC-294).
+      if (await store.unpause(id, now())) {
+        const unpaused = await store.get(id);
+        // Laid again, new: its first time after now, none that fell while paused.
+        if (unpaused !== undefined && runs(unpaused)) await lay(unpaused);
       }
       const schedule = await store.get(id);
       return schedule === undefined ? undefined : counted(schedule);

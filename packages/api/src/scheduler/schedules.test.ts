@@ -395,3 +395,187 @@ describe('wechart’s schedules (T378, AC-234)', { timeout: 120_000 }, () => {
     expect(await scheduler.get(schedule.id)).toBeUndefined();
   });
 });
+
+/**
+ * T556 (AC-396; design 16, P3; R59): a schedule paused by hand starts none
+ * of its runs, a replica started meanwhile included, and says who paused it.
+ * Resumed, it next runs at its first time after the resume, never one that
+ * fell while it was paused, though it would run a missed run once; and its
+ * count of failures in a row is kept (R59).
+ */
+describe('pausing and resuming a schedule (T556, AC-396)', { timeout: 120_000 }, () => {
+  const ada = { key: 'ada', name: 'Ada Admin' };
+
+  it('starts none of its runs while paused, nor runs a time that fell then once resumed', async () => {
+    await clock.setTime(new Date('2026-10-09T04:58:00Z'));
+    const scheduler = await replica();
+    const schedule = await scheduler.create(newSchedule({ name: `Paused ${MARK}` }), by);
+    made.push(schedule.id);
+
+    const paused = await scheduler.pause(schedule.id, ada);
+
+    expect([paused?.pausedBy, paused?.pausedAt?.toISOString()]).toEqual([
+      ada,
+      '2026-10-09T04:58:00.000Z',
+    ]);
+    // Kept, as read again.
+    expect((await scheduler.get(schedule.id))?.pausedBy).toEqual(ada);
+    // Not in pg-boss's schedules, nor laid again by a replica started meanwhile.
+    expect((await laidIn(bosses[0]!)).has(schedule.id)).toBe(false);
+    await replica();
+    expect((await laidIn(bosses[0]!)).has(schedule.id)).toBe(false);
+    // 05:00 passes: no run.
+    await runFor(180);
+    expect(posted).toHaveLength(0);
+
+    // Resumed at 06:30: nothing for the 05:00 that fell while paused.
+    await clock.setTime(new Date('2026-10-09T06:30:00Z'));
+    const resumed = await scheduler.unpause(schedule.id);
+    expect([resumed?.pausedAt, resumed?.pausedBy]).toEqual([null, null]);
+    await runFor(60);
+    expect(posted).toHaveLength(0);
+    // Its next run: tomorrow's 05:00.
+    await runAt('2026-10-10T05:00:00Z', () => posted.length > 0);
+    expect((await runsWhen(schedule.id, 1)).length).toBe(1);
+  });
+
+  /**
+   * pg-boss sends any occurrence of the last 60 s when a schedule is laid,
+   * whenever it was laid (research pg-boss-12.33.2-installed.md, "The due
+   * window"): resumed 20 s after a time that fell while paused, that time
+   * isn't run (T556's e2e found it).
+   */
+  it('runs no time that fell while paused, though it fell less than a minute before the resume', async () => {
+    await clock.setTime(new Date('2026-10-14T05:58:00Z'));
+    const scheduler = await replica();
+    const schedule = await scheduler.create(
+      newSchedule({ name: `Window ${MARK}`, cron: '0 6 * * *' }),
+      by,
+    );
+    made.push(schedule.id);
+    await scheduler.pause(schedule.id, ada);
+
+    await clock.setTime(new Date('2026-10-14T06:00:20Z'));
+    await scheduler.unpause(schedule.id);
+    await runFor(30);
+
+    expect(posted).toHaveLength(0);
+  });
+
+  it('runs no time that fell less than a minute before it was made, or changed', async () => {
+    await clock.setTime(new Date('2026-10-15T06:00:15Z'));
+    const scheduler = await replica();
+    const schedule = await scheduler.create(
+      newSchedule({ name: `Late ${MARK}`, cron: '0 6 * * *' }),
+      by,
+    );
+    made.push(schedule.id);
+    await runFor(20);
+    expect(posted).toHaveLength(0);
+
+    await clock.setTime(new Date('2026-10-15T07:00:10Z'));
+    await scheduler.change(
+      schedule.id,
+      { ...newSchedule({ name: `Late ${MARK}` }), cron: '0 7 * * *' },
+      by,
+    );
+    await runFor(20);
+    expect(posted).toHaveLength(0);
+  });
+
+  /** T556's review: a rename keeps its times, so a time just due still runs (AC-234). */
+  it('runs a time that fell due just before a change that keeps its times', async () => {
+    await clock.setTime(new Date('2026-10-16T05:58:00Z'));
+    const scheduler = await replica();
+    const schedule = await scheduler.create(
+      newSchedule({ name: `Renamed ${MARK}`, cron: '0 6 * * *' }),
+      by,
+    );
+    made.push(schedule.id);
+
+    await clock.setTime(new Date('2026-10-16T06:00:05Z'));
+    await scheduler.change(
+      schedule.id,
+      { ...newSchedule({ name: `Renamed again ${MARK}` }), cron: '0 6 * * *' },
+      by,
+    );
+    await runFor(40, () => posted.length > 0);
+
+    expect(posted).toHaveLength(1);
+    expect((await runsWhen(schedule.id, 1)).length).toBe(1);
+  });
+
+  /** T556's review: as a pause, a resume changes none of its fields, so its form isn't read again. */
+  it('leaves when it was last changed, and by whom, as they were, paused and resumed', async () => {
+    await clock.setTime(new Date('2026-10-17T04:00:00Z'));
+    const scheduler = await replica();
+    const schedule = await scheduler.create(newSchedule({ name: `Unchanged ${MARK}` }), by);
+    made.push(schedule.id);
+
+    await clock.setTime(new Date('2026-10-17T04:10:00Z'));
+    const paused = await scheduler.pause(schedule.id, ada);
+    await clock.setTime(new Date('2026-10-17T04:20:00Z'));
+    const resumed = await scheduler.unpause(schedule.id);
+
+    expect([paused?.updatedAt.toISOString(), paused?.updatedBy]).toEqual([
+      '2026-10-17T04:00:00.000Z',
+      by,
+    ]);
+    expect([resumed?.updatedAt.toISOString(), resumed?.updatedBy]).toEqual([
+      '2026-10-17T04:00:00.000Z',
+      by,
+    ]);
+  });
+
+  it('skips a run pg-boss had already sent when it was paused', async () => {
+    await clock.setTime(new Date('2026-10-11T04:00:00Z'));
+    const scheduler = await replica();
+    const schedule = await scheduler.create(newSchedule({ name: `Sent ${MARK}` }), by);
+    made.push(schedule.id);
+    await scheduler.pause(schedule.id, ada);
+
+    await scheduler.run(schedule.id, `job-${MARK}-sent`);
+
+    expect(posted).toHaveLength(0);
+  });
+
+  it('keeps its count of failures in a row across a pause and its resume (R59)', async () => {
+    await clock.setTime(new Date('2026-10-12T04:00:00Z'));
+    const scheduler = await replica();
+    const schedule = await scheduler.create(
+      newSchedule({ name: `Counted ${MARK}`, suspendAfter: 3 }),
+      by,
+    );
+    made.push(schedule.id);
+    answerJobs = () => Response.json({ error: 'gone' }, { status: 400 });
+    await scheduler.run(schedule.id, `job-${MARK}-counted`).catch(() => undefined);
+    expect((await scheduler.get(schedule.id))?.failuresInARow).toBe(1);
+
+    await scheduler.pause(schedule.id, ada);
+    await clock.setTime(new Date('2026-10-12T04:30:00Z'));
+    const resumed = await scheduler.unpause(schedule.id);
+
+    expect(resumed?.failuresInARow).toBe(1);
+  });
+
+  it('pauses a suspended schedule too, and keeps it suspended once unpaused', async () => {
+    await clock.setTime(new Date('2026-10-13T04:00:00Z'));
+    const scheduler = await replica();
+    const schedule = await scheduler.create(
+      newSchedule({ name: `Both ${MARK}`, suspendAfter: 1 }),
+      by,
+    );
+    made.push(schedule.id);
+    answerJobs = () => Response.json({ error: 'gone' }, { status: 400 });
+    await scheduler.run(schedule.id, `job-${MARK}-both`).catch(() => undefined);
+    expect((await scheduler.get(schedule.id))?.suspendedAt?.toISOString()).toBe(
+      '2026-10-13T04:00:00.000Z',
+    );
+
+    await scheduler.pause(schedule.id, ada);
+    const unpaused = await scheduler.unpause(schedule.id);
+
+    expect([unpaused?.pausedAt, unpaused?.suspendedAt === null]).toEqual([null, false]);
+    expect((await laidIn(bosses[0]!)).has(schedule.id)).toBe(false);
+  });
+});

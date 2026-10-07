@@ -38,6 +38,9 @@ export interface WechartSchedule {
   readonly suspendedError: string | null;
   /** Whether the model still has its pre-aggregation; none where it couldn't be read (E4). */
   readonly inModel?: boolean;
+  /** Paused by hand, when and by whom (T556, AC-396); none while it runs. */
+  readonly pausedAt: string | null;
+  readonly pausedBy: { readonly key: string; readonly name: string } | null;
 }
 
 export interface ClockChangeSeen {
@@ -150,6 +153,23 @@ export async function resumeSchedule(id: string): Promise<WechartSchedule> {
     method: 'POST',
   });
   if (!response.ok) throw await refusalOf(response, 'The schedule could not be resumed');
+  return (await response.json()) as WechartSchedule;
+}
+
+/**
+ * Pauses it by hand, or resumes it from that (T556, AC-396; design 16, P3):
+ * the schedule as it then is, or the API's refusal.
+ */
+export async function setSchedulePaused(id: string, paused: boolean): Promise<WechartSchedule> {
+  const response = await fetch(
+    `/api/wechart-schedules/${encodeURIComponent(id)}/${paused ? 'pause' : 'unpause'}`,
+    { method: 'POST' },
+  );
+  if (!response.ok)
+    throw await refusalOf(
+      response,
+      paused ? 'The schedule could not be paused' : 'The schedule could not be resumed',
+    );
   return (await response.json()) as WechartSchedule;
 }
 

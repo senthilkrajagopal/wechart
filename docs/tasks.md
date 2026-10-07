@@ -7836,7 +7836,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - The test that a successful Run now doesn't start the count again reads it while the run is still open.
     - The Started by filter's one-row-per-schedule query has no test of its own.
     - The Suspension pane's failed-runs table leaves out Run now's runs on the page, from one page of 50.
-- [ ] T556 (AC-396) Pause and resume a wechart schedule by hand *(added 2026-10-02, `[R56]`: design 16's P3)*
+- [x] T556 (AC-396) Pause and resume a wechart schedule by hand *(added 2026-10-02, `[R56]`: design 16's P3)*
   - Files: `packages/api/src/routes/schedules.ts`, `packages/api/src/scheduler/schedules.ts` (+ tests), `packages/web/src/workspaces/schedules/{SchedulesPage,SchedulePane}.tsx` (+ tests)
   - Failing test: with a fake clock:
     - a paused schedule starts no run at its times;
@@ -7844,6 +7844,26 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - resumed, it next runs at its first time after the resume, not one that fell while it was paused;
     - a pause and a resume are each a Schedule change in the trail (AC-396, AC-294).
   - Depends on: T552, T505
+  - *Done 2026-10-07.*
+    - **Migration** `1758650000000_schedule-pause` adds `paused_at` and `paused_by_*`, and `runs_from` (below).
+    - **Scheduler:**
+      - `pause` drops pg-boss's schedule;
+      - `unpause` lays it again from now;
+      - a paused schedule is never laid by a start, a change or a suspension's Resume, nor run if pg-boss had sent one already;
+      - its count of failures in a row is kept (R59), and one suspended too stays suspended.
+    - **Routes:** `POST /api/wechart-schedules/:id/pause` and `/unpause`, for any who write its folder, with route-matrix cases. Each is a Schedule change in the trail, Paused or Resumed; a resume says when and by whom it had been paused.
+    - **The page:** an On switch on each wechart row and in its pane. A paused schedule reads "Paused · by <name>" with the idle icon. The switch on a row doesn't open the pane. `schedules.spec`'s read-only check now covers Cube's rows, the only switches on the page being wechart's own.
+    - **pg-boss's due window.** T556's e2e found it: a `* * * * *` schedule resumed 26 s into a minute ran at once, for the minute that fell while it was paused. pg-boss sends any occurrence of the last 60 s when a schedule is laid, however recently (research `pg-boss-12.33.2-installed.md`, "The due window"). So each schedule keeps `runs_from`, when it was last laid (made, changed, resumed or unpaused), and a run for an earlier time isn't started. That also stops a new or changed schedule running a time that fell in the minute before it.
+    - **`e2e/schedules.spec.ts`** shows it against compose's Cube: paused from its row, "Paused · by admin" with the idle icon, no run across a minute; resumed from its pane, its first run at its first minute after the resume.
+    - **The review's fixes:**
+      - a change moves `runs_from` only when it changes the cron or the zone, so a rename just after a time still runs that time (AC-234);
+      - a paused schedule still says how many runs in a row have failed (R59, AC-155);
+      - as a pause, a resume leaves when the schedule was last changed, and by whom, so its open form isn't read again.
+    - **Open, for the coordinator (the review's finding 2):** a pg-boss run names no occurrence, so wechart reads it from its own clock (research `pg-boss-12.33.2-installed.md`). For a cron whose times are a minute apart or less, a time from before a resume, sent by a pass in the few seconds before the next time and handled after it, is read as the next time and runs, and the next time runs too.
+  - **Implementer's calls, for the user to confirm or change:**
+    - The switch's label is "On: <schedule's name>", read by a screen reader. Off is paused.
+    - Pausing a suspended schedule is allowed; unpausing it leaves it suspended until its own Resume.
+    - Run now still runs a paused schedule (R59).
 - [ ] T557 (AC-397) Schedules' owner filter, with counts *(added 2026-10-02, `[R56]`: design 16's P4)*
   - Files: `packages/web/src/workspaces/schedules/SchedulesPage.tsx` (+ test)
   - Failing test: All, Cube's refresh worker and wechart each show the count of the rows they then list, over the folders the user sees. Each lists only its own owner's schedules (AC-397).

@@ -210,8 +210,18 @@ export const schedule = (over: Partial<WechartSchedule> = {}): WechartSchedule =
   failuresInARow: 0,
   suspendedAt: null,
   suspendedError: null,
+  pausedAt: null,
+  pausedBy: null,
   ...over,
 });
+
+/** Paused by hand by Ada Admin (T556). */
+export const paused = (over: Partial<WechartSchedule> = {}): WechartSchedule =>
+  schedule({
+    pausedAt: '2026-10-02T11:00:00.000Z',
+    pausedBy: { key: 'ada', name: 'Ada Admin' },
+    ...over,
+  });
 
 /** "Trading hours", suspended after 3 failed runs in a row (design 16, E1). */
 export const suspended = (over: Partial<WechartSchedule> = {}): WechartSchedule =>
@@ -315,6 +325,22 @@ export function shownSchedules({
           : runNowNoJob === true
             ? Response.json({ runId: null, tokens: [] })
             : Response.json({ runId: 'run-now-1', tokens: ['t-1'] });
+      // Pause and its resume (T556): as the API answers, by Wren Writer.
+      const pausing = /^\/api\/wechart-schedules\/(.+)\/(pause|unpause)$/.exec(url.pathname);
+      if (pausing !== null && method === 'POST') {
+        const [, id, what] = pausing;
+        const was = listed.find((each) => each.id === id);
+        if (was === undefined)
+          return Response.json({ error: 'There is no such schedule.' }, { status: 404 });
+        const now = schedule({
+          ...was,
+          ...(what === 'pause'
+            ? { pausedAt: at, pausedBy: { key: 'wren', name: 'Wren Writer' } }
+            : { pausedAt: null, pausedBy: null }),
+        });
+        listed = listed.map((each) => (each.id === id ? now : each));
+        return Response.json(now);
+      }
       const resuming = /^\/api\/wechart-schedules\/(.+)\/resume$/.exec(url.pathname)?.[1];
       if (resuming !== undefined && method === 'POST') {
         const was = listed.find((each) => each.id === resuming);

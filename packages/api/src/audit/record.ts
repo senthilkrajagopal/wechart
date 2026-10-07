@@ -206,7 +206,14 @@ export type ScheduleChange =
   /** By wechart's scheduler, after how many failures, with Cube's last words (Q12). */
   | { readonly change: 'suspended'; readonly failures: number; readonly error: string | null }
   /** From its suspension: since when, and with Cube's error then (T505's review). */
-  | { readonly change: 'resumed'; readonly suspendedAt: Date; readonly error: string | null };
+  | { readonly change: 'resumed'; readonly suspendedAt: Date; readonly error: string | null }
+  /** Paused by hand (T556, AC-396), and resumed from it: since when, and by whom. */
+  | { readonly change: 'paused' }
+  | {
+      readonly change: 'resumed';
+      readonly pausedAt: Date;
+      readonly pausedBy: { readonly key: string; readonly name: string } | null;
+    };
 
 /**
  * A wechart schedule's change as the trail records it (T505, AC-294; design
@@ -228,19 +235,30 @@ export function scheduleChangeEntry(
     after,
     settings: scheduleSettingRows(before, after),
   });
-  const [summary, kept] =
-    done.change === 'made'
-      ? [`Made · ${done.after.cron}`, settings(null, done.after)]
-      : done.change === 'changed'
-        ? [scheduleChangeSummary(done.before, done.after), settings(done.before, done.after)]
-        : done.change === 'deleted'
-          ? ['Deleted', settings(done.before, null)]
-          : done.change === 'suspended'
-            ? [
-                `Suspended after ${String(done.failures)} ${done.failures === 1 ? 'failure' : 'failures'}`,
-                { failures: done.failures, error: done.error },
-              ]
-            : ['Resumed', { suspendedAt: done.suspendedAt.toISOString(), error: done.error }];
+  const [summary, kept] = ((): [string, Record<string, unknown>] => {
+    switch (done.change) {
+      case 'made':
+        return [`Made · ${done.after.cron}`, settings(null, done.after)];
+      case 'changed':
+        return [scheduleChangeSummary(done.before, done.after), settings(done.before, done.after)];
+      case 'deleted':
+        return ['Deleted', settings(done.before, null)];
+      case 'suspended':
+        return [
+          `Suspended after ${String(done.failures)} ${done.failures === 1 ? 'failure' : 'failures'}`,
+          { failures: done.failures, error: done.error },
+        ];
+      case 'paused':
+        return ['Paused', {}];
+      default:
+        return [
+          'Resumed',
+          'pausedAt' in done
+            ? { pausedAt: done.pausedAt.toISOString(), pausedBy: done.pausedBy }
+            : { suspendedAt: done.suspendedAt.toISOString(), error: done.error },
+        ];
+    }
+  })();
   return {
     actor,
     event: 'schedule-change',

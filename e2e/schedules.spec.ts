@@ -106,8 +106,23 @@ test('Schedules lists each refresh schedule as Cube’s, a hidden cube’s too, 
   const hiddenRow = table.getByRole('row').filter({ hasText: `${hidden}.main` });
   await expect(hiddenRow).toContainText('Not scheduled', PUBLISHED);
 
-  // Read-only: nothing on the page edits a schedule.
-  await expect(main.locator('input, select, textarea, [role="switch"]')).toHaveCount(0);
+  // Read-only: nothing on the page edits a refresh key's schedule. The only
+  // controls are wechart schedules' own On switches (T556), on their rows.
+  const cubeRows = table
+    .getByRole('row')
+    .filter({ has: page.getByTestId('owner').filter({ hasText: 'Cube’s refresh worker' }) });
+  await expect(cubeRows.first()).toBeVisible();
+  await expect(cubeRows.locator('input, select, textarea, button, [role="switch"]')).toHaveCount(0);
+  await expect(main.locator('input:not([role="switch"]), select, textarea')).toHaveCount(0);
+  const switches = await main
+    .getByRole('switch')
+    .evaluateAll((all) =>
+      all.map((each) => [
+        each.getAttribute('aria-label')?.startsWith('On: ') ?? false,
+        each.closest('tr')?.querySelector('[data-testid="owner"]')?.textContent ?? '',
+      ]),
+    );
+  expect(switches.filter(([on, owner]) => on !== true || owner !== 'wechart')).toEqual([]);
   await expect(table.getByRole('button')).toHaveCount(0);
 
   // Its pane opens the pre-aggregation itself in the model editor: its file,
@@ -467,6 +482,116 @@ test('Run now starts a schedule’s build at once, Run history names the schedul
       }[]
     ).find((each) => each.id === id);
     expect(after?.runs).toEqual(made.runs);
+  } finally {
+    if (id !== undefined) await request.delete(`/api/wechart-schedules/${id}`);
+  }
+});
+
+/**
+ * T556 / AC-396 (design 16, P3): WHEN the user pauses a wechart schedule,
+ * THE SYSTEM SHALL start none of its runs until it is resumed, and show it
+ * as paused, with who paused it, as an icon and a label. Once resumed, its
+ * next run SHALL be its first time after the resume.
+ *
+ * A `* * * * *` schedule in UTC on a rollup of this browser's own, paused
+ * from its row's On switch: it reads "Paused · by admin" with the idle icon,
+ * and across a minute that falls while paused it starts nothing. Resumed
+ * from its pane's switch, its next run starts at its first minute after the
+ * resume, not at once for the minute that fell while it was paused.
+ */
+test('a paused schedule starts no run, says who paused it, and resumed, runs from its next time', async ({
+  page,
+  request,
+  browserName,
+}) => {
+  test.setTimeout(300_000);
+  const cube = `paused_${browserName}`;
+  const rollup = `${cube}.main`;
+  const name = `Paused ${browserName} ${String(Date.now())}`;
+  await ownCubeFile(
+    request,
+    cube,
+    `cubes:
+  - name: ${cube}
+    sql_table: public.orders
+    dimensions:
+      - name: status
+        sql: status
+        type: string
+    measures:
+      - name: count
+        type: count
+    pre_aggregations:
+      - name: main
+        measures: [CUBE.count]
+        dimensions: [CUBE.status]
+        scheduled_refresh: false
+`,
+  );
+  let id: string | undefined;
+  /** Its runs, as Run history lists them. */
+  const runs = async () =>
+    (
+      (await (
+        await request.get(
+          `/api/jobs/builds?${new URLSearchParams({ starter: `schedule:${id ?? ''}`, within: 'all' }).toString()}`,
+        )
+      ).json()) as { records: { startedAt: string }[] }
+    ).records;
+  try {
+    // Made early in a minute, so the pause comes well before its next one.
+    const second = new Date().getUTCSeconds();
+    if (second > 20) await page.waitForTimeout((62 - second) * 1000);
+    await expect
+      .poll(
+        async () =>
+          (
+            await request.post('/api/wechart-schedules', {
+              data: { preAggregation: rollup, name, cron: '* * * * *', timezone: 'UTC' },
+            })
+          ).status(),
+        PUBLISHED,
+      )
+      .toBe(201);
+    id = (
+      (await (await request.get('/api/wechart-schedules')).json()) as { id: string; name: string }[]
+    ).find((each) => each.name === name)!.id;
+
+    // Paused from its row's switch, before its next minute.
+    await page.goto('/schedules');
+    const row = page
+      .getByRole('table', { name: 'Refresh schedules' })
+      .getByRole('row')
+      .filter({ hasText: name });
+    await row.getByRole('switch', { name: `On: ${name}` }).uncheck();
+    const state = row.getByTestId('schedule-state');
+    await expect(state).toHaveText('Paused · by admin');
+    const pausedAt = Date.now();
+    await expect(state).toHaveAttribute('data-state', 'paused');
+    await expect(state.locator('svg[data-icon="idle"]')).toHaveCount(1);
+    // The switch on its row opens no pane.
+    await expect(page.getByRole('complementary', { name: 'Schedule details' })).toHaveCount(0);
+    // Paused before its first minute came: not one run of it.
+    expect(new Date(pausedAt).getUTCSeconds()).toBeLessThan(55);
+
+    // A whole minute falls while it is paused, and more: no run.
+    await page.waitForTimeout(Math.max(0, pausedAt + 75_000 - Date.now()));
+    expect(await runs()).toEqual([]);
+
+    // Resumed from its pane, early in a minute.
+    await row.click();
+    const pane = page.getByRole('complementary', { name: 'Schedule details' });
+    await expect(pane.getByTestId('schedule-state')).toHaveText('Paused · by admin');
+    const now = new Date().getUTCSeconds();
+    if (now > 40) await page.waitForTimeout((62 - now) * 1000);
+    await pane.getByRole('switch', { name: `On: ${name}` }).check();
+    await expect(pane.getByTestId('schedule-state')).toHaveText('Active');
+    const resumedAt = Date.now();
+    // Its next run: its first minute after the resume, never the one that fell while paused.
+    const nextMinute = Math.ceil(resumedAt / 60_000) * 60_000;
+    await expect.poll(async () => (await runs()).length, { timeout: 120_000 }).toBeGreaterThan(0);
+    const started = (await runs()).map((each) => Date.parse(each.startedAt));
+    expect(started.filter((at) => at < nextMinute)).toEqual([]);
   } finally {
     if (id !== undefined) await request.delete(`/api/wechart-schedules/${id}`);
   }

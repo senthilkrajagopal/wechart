@@ -148,6 +148,8 @@ const SCHEDULE_CHANGES: Readonly<Record<string, string>> = {
   made: 'Made',
   changed: 'Changed',
   suspended: 'Suspended',
+  // Paused by hand (T556, AC-396).
+  paused: 'Paused',
   resumed: 'Resumed',
   deleted: 'Deleted',
 };
@@ -856,6 +858,24 @@ function Inspector({ id, record, onClose }: { id: string; record: Record_; onClo
             </dd>
             <dt>Last error then</dt>
             <dd>{typeof details['error'] === 'string' ? details['error'] : '—'}</dd>
+          </>
+        ) : null}
+        {/* Resumed from a pause by hand: since when, and by whom (T556). */}
+        {record.event === 'schedule-change' &&
+        details['change'] === 'resumed' &&
+        typeof details['pausedAt'] === 'string' ? (
+          <>
+            <dt>Paused since</dt>
+            <dd>
+              <time dateTime={details['pausedAt']} title={whenOf(details['pausedAt']).utc}>
+                {whenOf(details['pausedAt']).shown}
+              </time>
+            </dd>
+            <dt>Paused by</dt>
+            <dd>
+              {(details['pausedBy'] as { name?: unknown } | null | undefined)?.name?.toString() ??
+                '—'}
+            </dd>
           </>
         ) : null}
       </dl>

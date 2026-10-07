@@ -651,7 +651,7 @@ Traces to: `[docs/inputs §7]`, direction.md §7c, rules 22, 34; `[research/cube
       Fails when: such a schedule's form or pane doesn't say the refresh key runs too; or making, changing or deleting a wechart schedule changes the model, or offers to set `scheduled_refresh: false`.
 - [x] AC-395 WHEN the user chooses Run now on a wechart schedule, THE SYSTEM SHALL start the schedule's build at once through Cube's jobs API, recorded in Run history as started by Run now on that schedule, by that user, and leave the schedule's times unchanged (`[R56]`, design 16's P2).
       Fails when: no build starts; its record doesn't name both the schedule and the person; or the schedule's next run changes.
-- [ ] AC-396 WHEN the user pauses a wechart schedule, THE SYSTEM SHALL start none of its runs until it is resumed, and show it as paused, with who paused it, as an icon and a label. Once resumed, its next run SHALL be its first time after the resume (`[R56]`, design 16's P3).
+- [x] AC-396 WHEN the user pauses a wechart schedule, THE SYSTEM SHALL start none of its runs until it is resumed, and show it as paused, with who paused it, as an icon and a label. Once resumed, its next run SHALL be its first time after the resume (`[R56]`, design 16's P3).
       Fails when: a paused schedule starts a run at one of its times; it doesn't say it is paused, or by whom; or once resumed it runs a time that fell while it was paused.
 
 - [x] AC-156 THE SYSTEM SHALL show the refresh worker's state and the Cube deployment's health, and mark the deployment as down when Cube's health endpoint does not report healthy.
