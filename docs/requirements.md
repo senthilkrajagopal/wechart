@@ -950,6 +950,9 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R69 — when Auto may leave a metric out** (2026-10-07, the user)
+- Q (from T510): should Auto also avoid a form that drops a metric of the same scale, such as a KPI of two counts? A: "Only across scales (Recommended)". *As built: metrics on different scales are never drawn on one axis. Elsewhere a metric a form can't draw has its pill say "not drawn", offering Small multiples and Table.*
+
 **R68 — two lines of design 16 kept as built** (2026-10-07, the user)
 - Q (from T610's audit): a rollup with no `refresh_key`. The design says "Cube's default · no refresh_key declared · depends on the cube's keys"; research shows Cube's hourly default. A: "Keep as built (Recommended)". *"Cube's default: every hour", with the computed runs.*
 - Q (from T610's audit): Run history's gap line, where the design says "wechart's API was stopped". A: "Keep as built (Recommended)". *"wechart didn't see how it ended".*
