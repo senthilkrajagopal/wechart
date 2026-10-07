@@ -5,6 +5,14 @@ import { ExportedToast } from '../../dashboard/export/ExportedToast';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { clockOf, folderTextOf, periodOf, shortToken, StarterLabel, type Starter } from './builds';
+import {
+  EVERY_FOLDER,
+  FolderFilter,
+  inFolder,
+  ScopeNote,
+  useJobsFolders,
+  type FolderChoice,
+} from './FolderFilter';
 import { ChoicePill } from './Pill';
 import { Status } from './StateBadge';
 
@@ -159,8 +167,13 @@ export function BuildQueue({
   enabled = true,
   state = '',
   onState,
+  folderChoice: folderChosen,
+  onFolderChoice,
 }: {
   enabled?: boolean;
+  /** The folder listed (T559), where Jobs holds it; none, and the queue does. */
+  folderChoice?: FolderChoice;
+  onFolderChoice?: (choice: FolderChoice) => void;
   /** The entries listed: those in this state, or every one (T558). */
   state?: QueueState | '';
   /** State chosen; none, and the filter isn't offered. */
@@ -175,6 +188,15 @@ export function BuildQueue({
   });
   const [said, setSaid] = useState('');
   const [refused, setRefused] = useState<{ reason: string; message: string } | null>(null);
+  /**
+   * The folder listed, Jobs' own where it holds it, so a summary's link can
+   * list every folder again (T559's review); and the folders the user builds
+   * in, for the filter and the note (T559).
+   */
+  const [ownChoice, setOwnChoice] = useState<FolderChoice>(EVERY_FOLDER);
+  const folderChoice = folderChosen ?? ownChoice;
+  const setFolderChoice = onFolderChoice ?? setOwnChoice;
+  const folders = useJobsFolders();
   const cancel = useMutation({
     // Stop (T554): a building one, whose build xcube stops, answering what came of it.
     mutationFn: async ({ row, stop }: { row: QueueRow; stop: boolean }) => {
@@ -219,9 +241,12 @@ export function BuildQueue({
 
   if (queue.isPending) return <StateLine kind="run">Reading the queue…</StateLine>;
   if (queue.isError) return <StateLine kind="err">{queue.error.message}</StateLine>;
-  // Those in the chosen state, as Jobs' summary counts them (T558).
-  const rows =
-    state === '' ? queue.data.entries : queue.data.entries.filter((entry) => entry.state === state);
+  // Those of the chosen folder (T559) in the chosen state, as Jobs' summary counts them (T558).
+  const rows = queue.data.entries.filter(
+    (entry) =>
+      (state === '' || entry.state === state) &&
+      inFolder(entry.folderId, folderChoice, folders.data?.folders ?? []),
+  );
   // A reason design 16 doesn't word: the API's own words (T376's review).
   const why =
     refused === null
@@ -230,7 +255,12 @@ export function BuildQueue({
 
   return (
     <div className="build-queue">
+      {/* For a read-write member: their folders only (design 16, pin 3). */}
+      <ScopeNote folders={folders.data}>
+        Showing queued and building builds in the folders where you have read-write access.
+      </ScopeNote>
       <div className="sources-filters run-history__filters">
+        <FolderFilter folders={folders.data} choice={folderChoice} onChange={setFolderChoice} />
         {onState === undefined ? null : (
           <ChoicePill
             label="State"

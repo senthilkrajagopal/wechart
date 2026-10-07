@@ -2292,6 +2292,10 @@ const CASES: Record<string, Case> = {
       (who) => who === 'super' || PLACES.some((place) => writes(who, place)),
       `${MARK}-worker`,
     ),
+  // The Folder filter's choices: the folders they build in, each listed (T559, AC-297).
+  'GET /api/jobs/folders': listed({ method: 'GET', url: '/api/jobs/folders' }, (who) =>
+    inPlaces(who, writes, (place) => folderIds[place]),
+  ),
   // Jobs' header summary: those who may use Jobs, over their folders (T558, AC-398).
   'GET /api/jobs/summary': () =>
     openedOnlyBy(

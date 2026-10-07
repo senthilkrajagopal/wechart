@@ -8,9 +8,16 @@ import { StatusIcon } from './StatusIcon';
  * state: the clock is "idle", a state, and was drawn on notes that meant
  * nothing of the sort.
  */
-export function InfoBar({ children }: { readonly children: ReactNode }) {
+export function InfoBar({
+  children,
+  label,
+}: {
+  readonly children: ReactNode;
+  /** Its name, where a surface has more than one note: Jobs' scope note's (T559). */
+  readonly label?: string;
+}) {
   return (
-    <div className="info-bar" role="note">
+    <div className="info-bar" role="note" aria-label={label}>
       <StatusIcon kind="info" />
       <div>{children}</div>
     </div>

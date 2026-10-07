@@ -13,6 +13,7 @@ import {
   readQueue,
   type QueueState,
 } from './BuildQueue';
+import { EVERY_FOLDER, type FolderChoice } from './FolderFilter';
 import { Health } from './Health';
 import { FIRST_ASK, QueryLog, queryStringOf, type QueryLogAsk, type QueryRecord } from './QueryLog';
 import { RunHistory } from './RunHistory';
@@ -117,6 +118,9 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
   /** Pre-aggregations' Status and the queue's State, which the summary's links set (T558). */
   const [status, setStatus] = useState(statusOfUrl);
   const [queueState, setQueueState] = useState(queueStateOfUrl);
+  /** Their Folder filters (T559), which a summary's link sets back to every folder. */
+  const [preaggsFolder, setPreaggsFolder] = useState<FolderChoice>(EVERY_FOLDER);
+  const [queueFolder, setQueueFolder] = useState<FolderChoice>(EVERY_FOLDER);
   // How many entries the queue holds in the user's folders, on its tab (design
   // 16, pin 1): the queue's own read, shared with its panel.
   const queue = useQuery({
@@ -132,8 +136,14 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
         {/* What needs attention in the user's folders, each a link to it (T558; P5). */}
         <Summary
           onOpen={(opens) => {
-            if (opens.tab === 'queue') setQueueState(opens.state);
-            else setStatus(opens.status);
+            // Over every folder of theirs, as the count is (T559's review).
+            if (opens.tab === 'queue') {
+              setQueueState(opens.state);
+              setQueueFolder(EVERY_FOLDER);
+            } else {
+              setStatus(opens.status);
+              setPreaggsFolder(EVERY_FOLDER);
+            }
             setOpen(opens.tab);
             // The list read again, and the summary with it, so the two say the
             // same of about the same moment (T558's review).
@@ -197,6 +207,8 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
           {...(pollMs === undefined ? {} : { pollMs })}
           status={status}
           onStatus={setStatus}
+          folderChoice={preaggsFolder}
+          onFolderChoice={setPreaggsFolder}
           // `?preagg=`, from a tile's Data as of › Open in Jobs (T273, AC-245).
           selectedFirst={new URLSearchParams(window.location.search).get('preagg')}
           // Its pane's ways on: to its builds in Run history, and to the queue (T375).
@@ -229,7 +241,12 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
         aria-labelledby={`${base}-queue`}
         hidden={open !== 'queue'}
       >
-        <BuildQueue state={queueState} onState={setQueueState} />
+        <BuildQueue
+          state={queueState}
+          onState={setQueueState}
+          folderChoice={queueFolder}
+          onFolderChoice={setQueueFolder}
+        />
       </div>
       <div
         role="tabpanel"

@@ -367,3 +367,63 @@ describe('Run history’s order, pages and filters (T374, AC-150)', () => {
     expect(paged.body.records).toEqual([]);
   });
 });
+
+/**
+ * T559 (AC-297; design 16, pin 4 and state H2): every Jobs tab and Schedules
+ * has the Folder filter: "All of mine", a member's read-write folders, or
+ * "All folders", a Super-Admin's every one, the root's included, each by its
+ * path, with Include subfolders, as the audit trail's filter has it.
+ */
+describe('the Folder filter on every tab (T559, AC-297)', () => {
+  interface Folders {
+    folders: { id: string; path: string[]; parentId: string | null }[];
+    everyFolder: boolean;
+  }
+  const foldersFor = async (who: string) => {
+    const answer = await as(who, { method: 'GET', url: '/api/jobs/folders' });
+    return { status: answer.statusCode, body: answer.json<Folders>() };
+  };
+
+  it('offers a member their folders and those below, each with its parent, and a Super-Admin every folder', async () => {
+    const writer = await foldersFor('writer');
+    expect(writer.status).toBe(200);
+    expect(writer.body.everyFolder).toBe(false);
+    expect(writer.body.folders).toContainEqual({
+      id: ids.a,
+      path: ['Shared', `A ${MARK}`],
+      parentId: 'root',
+    });
+    expect(writer.body.folders).toContainEqual({
+      id: ids.b,
+      path: ['Shared', `A ${MARK}`, `B ${MARK}`],
+      parentId: ids.a,
+    });
+    // Neither another's folder nor the root, which they don't write.
+    expect(writer.body.folders.map((folder) => folder.id)).not.toContain(ids.c);
+    expect(writer.body.folders.map((folder) => folder.id)).not.toContain('root');
+
+    const all = await foldersFor('super');
+    expect(all.body.everyFolder).toBe(true);
+    expect(all.body.folders).toContainEqual({ id: 'root', path: ['Shared'], parentId: null });
+    expect(all.body.folders.map((folder) => folder.id)).toEqual(
+      expect.arrayContaining([ids.a, ids.b, ids.c]),
+    );
+
+    expect((await foldersFor('reader')).status).toBe(403);
+  });
+
+  it('lists a folder’s builds, and with Include subfolders those of the folders below it too', async () => {
+    const inA = await recorded(ids.a, 20);
+    const inB = await recorded(ids.b, 21);
+    const idsOf = async (query: string) =>
+      new Set(ours((await listed('writer', query)).body.records).map((each) => each.id));
+
+    const alone = await idsOf(`?folder=${ids.a}&within=all`);
+    expect([alone.has(inA), alone.has(inB)]).toEqual([true, false]);
+    const below = await idsOf(`?folder=${ids.a}&subfolders=true&within=all`);
+    expect([below.has(inA), below.has(inB)]).toEqual([true, true]);
+    // Never a folder below that they don't write: B is theirs by A's grant.
+    const theirs = await idsOf(`?folder=${ids.c}&subfolders=true&within=all`);
+    expect(theirs).toEqual(new Set());
+  });
+});

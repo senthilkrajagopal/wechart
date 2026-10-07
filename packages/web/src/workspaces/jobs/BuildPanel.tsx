@@ -17,6 +17,14 @@ import {
   type Starter,
 } from './builds';
 import { Partitions, type Started } from './Partitions';
+import {
+  EVERY_FOLDER,
+  FolderFilter,
+  inFolder,
+  ScopeNote,
+  useJobsFolders,
+  type FolderChoice,
+} from './FolderFilter';
 import { ChoicePill } from './Pill';
 import { Status } from './StateBadge';
 
@@ -306,8 +314,13 @@ export function BuildPanel({
   onOpenQueue,
   status = '',
   onStatus,
+  folderChoice: folderChosen,
+  onFolderChoice,
 }: {
   pollMs?: number;
+  /** The folder listed (T559), where Jobs holds it; none, and the panel does. */
+  folderChoice?: FolderChoice;
+  onFolderChoice?: (choice: FolderChoice) => void;
   /** The rows listed: those in this state, or every one (T558). */
   status?: StatusChoice | '';
   /** Status chosen; none, and the filter isn't offered. */
@@ -378,6 +391,15 @@ export function BuildPanel({
   });
   /** The pre-aggregation whose details the pane shows (AC-228). */
   const [selected, setSelected] = useState<string | null>(selectedFirst);
+  /**
+   * The folder listed, Jobs' own where it holds it, so a summary's link can
+   * list every folder again (T559's review); and the folders the user builds
+   * in, for the filter and the note (T559).
+   */
+  const [ownChoice, setOwnChoice] = useState<FolderChoice>(EVERY_FOLDER);
+  const folderChoice = folderChosen ?? ownChoice;
+  const setFolderChoice = onFolderChoice ?? setOwnChoice;
+  const folders = useJobsFolders();
   /** A build started: its row followed until it ends, and listed in its pane once recorded. */
   const follow = (id: string) => {
     const row = buildable.data?.find((each) => each.id === id);
@@ -420,35 +442,49 @@ export function BuildPanel({
   }
   const shown = buildable.data.find((each) => each.id === selected);
   const openQueue = onOpenQueue ?? (() => window.location.assign('/jobs?tab=queue'));
-  // Those in the chosen state, as Jobs' summary counts them (T558).
-  const listed =
-    status === '' ? buildable.data : buildable.data.filter((row) => row.state === status);
+  // Those of the chosen folder (T559) in the chosen state, as Jobs' summary counts them (T558).
+  const listed = buildable.data.filter(
+    (row) =>
+      (status === '' || row.state === status) &&
+      inFolder(row.folderId, folderChoice, folders.data?.folders ?? []),
+  );
 
   return (
     <div className="build-panel">
       <div className="build-panel__list">
+        {/* For a read-write member: their folders only (design 16, pin 3). */}
+        <ScopeNote folders={folders.data}>
+          Showing pre-aggregations of models in the folders where you have read-write access.
+        </ScopeNote>
         {buildable.data.length === 0 ? (
           <p>The model declares no pre-aggregations.</p>
         ) : (
           <>
-            {onStatus === undefined ? null : (
-              <div className="sources-filters run-history__filters">
+            <div className="sources-filters run-history__filters">
+              <FolderFilter
+                folders={folders.data}
+                choice={folderChoice}
+                onChange={setFolderChoice}
+              />
+              {onStatus === undefined ? null : (
                 <ChoicePill
                   label="Status"
                   choices={[['', 'Any'], ...ROW_STATUSES]}
                   value={status}
                   onChange={onStatus}
                 />
-                <span className="run-history__count" role="status">
-                  {`${String(listed.length)} ${listed.length === 1 ? 'pre-aggregation' : 'pre-aggregations'}`}
-                </span>
-              </div>
-            )}
+              )}
+              <span className="run-history__count" role="status">
+                {`${String(listed.length)} ${listed.length === 1 ? 'pre-aggregation' : 'pre-aggregations'}`}
+              </span>
+            </div>
             <TableScroll label="Pre-aggregations">
               <table className="query-log" aria-label="Pre-aggregations">
                 <thead>
                   <tr>
                     <th scope="col">Pre-aggregation</th>
+                    {/* Each row's folder, after its name (pin 4). */}
+                    <th scope="col">Folder</th>
                     <th scope="col">Status</th>
                     <th scope="col">Last built</th>
                     <th scope="col">Started by</th>
@@ -492,12 +528,8 @@ export function BuildPanel({
                             Open in Model is the way to its definition (the
                             user, 2026-09-28: UX-080; AC-229 amended, R47). */}
                           <span data-testid="preagg-name">{shownAs.name}</span>
-                          {shownAs.folder === undefined ? null : (
-                            <span className="build-panel__folder" data-testid="preagg-folder">
-                              {shownAs.folder}
-                            </span>
-                          )}
                         </td>
+                        <td data-testid="preagg-folder">{shownAs.folder ?? 'Shared'}</td>
                         <td>
                           {/* The state of its partitions that most needs attention (AC-391, rule 22). */}
                           <RowStatus row={row} testId="row-state" />

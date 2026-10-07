@@ -127,6 +127,8 @@ describe('each pre-aggregation’s row (T550, AC-391)', () => {
         .map((header) => text(header)),
     ).toEqual([
       'Pre-aggregation',
+      // Each row's folder, after its name (T559; design 16, pin 4).
+      'Folder',
       'Status',
       'Last built',
       'Started by',
@@ -137,12 +139,14 @@ describe('each pre-aggregation’s row (T550, AC-391)', () => {
     const state = within(row).getByTestId('row-state');
     expect(text(state)).toBe('Failed · Aug 2026');
     expect(state.querySelector('svg')?.getAttribute('data-icon')).toBe('err');
-    const built = cellsOf(row)[2]!.querySelector('time');
+    // The root's folder reads Shared (T559).
+    expect(text(cellsOf(row)[1])).toBe('Shared');
+    const built = cellsOf(row)[3]!.querySelector('time');
     expect(built?.getAttribute('dateTime')).toBe('2026-10-02T12:01:00.000Z');
     expect(built?.getAttribute('title')).toBe('2026-10-02 12:01:00 UTC');
     expect(text(within(row).getByTestId('starter'))).toBe('Wren Writer');
-    expect(text(cellsOf(row)[4])).toBe('Every 1 hour');
-    expect(text(cellsOf(row)[5])).toBe('8');
+    expect(text(cellsOf(row)[5])).toBe('Every 1 hour');
+    expect(text(cellsOf(row)[6])).toBe('8');
     // What Last built and Started by mean, under the table (pin 9).
     expect(text(screen.getByTestId('jobs-foot'))).toContain('“—” means wechart didn’t start it.');
     expect(screen.queryAllByText('Not built here')).toHaveLength(0);
@@ -171,16 +175,17 @@ describe('each pre-aggregation’s row (T550, AC-391)', () => {
   it('says “—” for a build wechart didn’t start, a time never built, and partitions of one not partitioned', async () => {
     shown([[{ ...ROW, state: 'not-built', lastBuiltAt: null, partitions: null }]]);
 
+    // After Pre-aggregation and its Folder (T559): Last built, Started by, Partitions.
     const cells = cellsOf(await rowOf(ID));
-    expect(text(cells[2])).toBe('—');
     expect(text(cells[3])).toBe('—');
-    expect(text(cells[5])).toBe('—');
+    expect(text(cells[4])).toBe('—');
+    expect(text(cells[6])).toBe('—');
   });
 
   it('draws a Trigger of Not scheduled with its icon, as Schedules does (design 16, pin 8)', async () => {
     shown([[{ ...ROW, trigger: 'Not scheduled', triggerKind: 'not-scheduled' }]]);
 
-    const trigger = cellsOf(await rowOf(ID))[4]!;
+    const trigger = cellsOf(await rowOf(ID))[5]!;
     expect(text(trigger)).toBe('Not scheduled');
     expect(trigger.querySelector('svg')?.getAttribute('data-icon')).toBe('off');
   });
@@ -236,7 +241,7 @@ describe('each pre-aggregation’s row (T550, AC-391)', () => {
     ]);
 
     const row = await rowOf('monthly_orders.recent');
-    expect(text(cellsOf(row)[1])).toBe('No partitions of its own');
+    expect(text(cellsOf(row)[2])).toBe('No partitions of its own');
     expect(within(row).queryAllByRole('button')).toHaveLength(0);
   });
 });
@@ -306,7 +311,7 @@ describe('a started build’s progress in its row (T239, AC-229)', () => {
     await vi.waitFor(() => {
       expect(within(row).getByTestId('row-state').getAttribute('data-state')).toBe('built');
     });
-    expect(cellsOf(row)[2]!.querySelector('time')?.getAttribute('dateTime')).toBe(
+    expect(cellsOf(row)[3]!.querySelector('time')?.getAttribute('dateTime')).toBe(
       '2026-10-02T12:05:00.000Z',
     );
   });
@@ -391,7 +396,12 @@ describe('the pane (AC-228, AC-245; T469, T375)', () => {
     ]);
 
     // A folder's opens its own file in its folder (T530, AC-222).
-    await userEvent.click(screen.getByTestId('preagg-folder').closest('tr') as HTMLElement);
+    await userEvent.click(
+      screen
+        .getAllByTestId('preagg-folder')
+        .find((cell) => text(cell) === 'Sales')
+        ?.closest('tr') as HTMLElement,
+    );
     expect(
       (await within(pane).findByRole('link', { name: 'Open in Model' })).getAttribute('href'),
     ).toBe(

@@ -35,11 +35,12 @@ const QUEUED = [
   entry('k-3', 'queued'),
   entry('k-4', 'stalled'),
 ];
-const row = (id: string, state: string) => ({
+const row = (id: string, state: string, folderId = 'emea') => ({
   id,
   type: 'rollup',
+  folderId,
   shortName: id.slice(0, id.indexOf('.')),
-  folderPath: ['Shared'],
+  folderPath: folderId === 'emea' ? ['Shared', 'EMEA'] : ['Shared', 'DACH'],
   state,
   partitions: null,
   lastBuiltAt: null,
@@ -47,9 +48,17 @@ const row = (id: string, state: string) => ({
 });
 const PREAGGREGATIONS = [
   row('orders.main', 'built'),
-  row('orders.daily', 'failed'),
+  row('orders.daily', 'failed', 'dach'),
   row('returns.weekly', 'building'),
 ];
+/** The user's folders, for each tab's Folder filter (T559). */
+const FOLDERS = {
+  everyFolder: false,
+  folders: [
+    { id: 'dach', path: ['Shared', 'DACH'], parentId: 'root' },
+    { id: 'emea', path: ['Shared', 'EMEA'], parentId: 'root' },
+  ],
+};
 
 function serve(
   summary: unknown = SUMMARY,
@@ -64,6 +73,7 @@ function serve(
     vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === '/api/jobs/summary') return Response.json(summary);
+      if (url === '/api/jobs/folders') return Response.json(FOLDERS);
       if (url === '/api/preaggregations') return Response.json(now.preaggregations);
       if (url === '/api/jobs/queue')
         return Response.json({ entries: now.queued, everyFolder: true });
@@ -165,6 +175,28 @@ describe('Jobs’ header summary (T558, AC-398)', () => {
   });
 
   /** T558's review: the list the link opens is read again, as the count was. */
+  /** T559's review: a folder chosen on a tab doesn't narrow what a count opens. */
+  it('opens a count’s list over all the user’s folders, whatever folder the tab had chosen', async () => {
+    serve();
+    shown();
+    await screen.findByRole('table', { name: 'Pre-aggregations' });
+    const panel = screen.getByRole('tabpanel', { name: 'Pre-aggregations' });
+    const folder = within(panel).getByRole('combobox', { name: 'Folder' });
+    await vi.waitFor(() => {
+      expect(within(folder).getAllByRole('option')).toHaveLength(3);
+    });
+    await user().selectOptions(folder, 'emea');
+
+    await user().click(within(await summary()).getByRole('link', { name: '1 failed' }));
+
+    expect((folder as HTMLSelectElement).value).toBe('');
+    expect(
+      within(screen.getByRole('table', { name: 'Pre-aggregations' }))
+        .getAllByTestId('row-state')
+        .map((state) => state.getAttribute('data-state')),
+    ).toEqual(['failed']);
+  });
+
   it('reads the list again when a count opens it, so what it lists is what the count says', async () => {
     const now = { preaggregations: [row('orders.main', 'built')], queued: [] as unknown[] };
     serve(SUMMARY, now);

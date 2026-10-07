@@ -269,6 +269,15 @@ export interface Sent {
   readonly body?: unknown;
 }
 
+/** A read-write member's folders, as Jobs' Folder filter has them (T559). */
+export const MEMBER_FOLDERS = {
+  everyFolder: false,
+  folders: [
+    { id: 'sales', path: ['Shared', 'Sales'], parentId: 'root' },
+    { id: 'emea', path: ['Shared', 'Sales', 'EMEA'], parentId: 'sales' },
+  ],
+};
+
 /**
  * Schedules on the stub API at `at`: `wechart` is what the API lists, and is
  * changed by each save and delete the page sends, as the API would.
@@ -281,8 +290,11 @@ export function shownSchedules({
   runs = [],
   runNowRefused,
   runNowNoJob,
+  folders = MEMBER_FOLDERS,
 }: {
   at?: string;
+  /** The Folder filter's choices, and whether they are every folder (T559). */
+  folders?: unknown;
   keys?: unknown[];
   wechart?: WechartSchedule[];
   /** Lists the API fails to read, with its words: the refresh keys', or wechart's. */
@@ -316,6 +328,7 @@ export function shownSchedules({
       if (url.pathname === '/api/wechart-schedules' && failing.includes('wechart'))
         return Response.json({ error: 'wechart’s schedules could not be read.' }, { status: 500 });
       if (url.pathname === '/api/preaggregations') return Response.json(PRE_AGGREGATIONS);
+      if (url.pathname === '/api/jobs/folders') return Response.json(folders);
       if (url.pathname === '/api/jobs/builds') return Response.json({ records: runs });
       // Run now (T555): started, or Cube's refusal, as the API answers Build's.
       const running = /^\/api\/wechart-schedules\/(.+)\/run$/.exec(url.pathname)?.[1];

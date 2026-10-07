@@ -180,11 +180,15 @@ describe('Schedules’ refresh-key rows (T551, AC-154)', () => {
     expect(within(pane).getByRole('link', { name: 'Open in Jobs' }).getAttribute('href')).toBe(
       '/jobs?preagg=fsales__orders.mornings',
     );
-    // Read-only: nothing on the page edits a schedule. Its one control is
-    // the list's State filter (T558, R66), which edits none.
+    // Read-only: nothing on the page edits a schedule. Its only controls are
+    // the list's filters, Folder (T559) and State (T558, R66), which edit none.
     const controls = [...document.querySelectorAll('main input, input, select, textarea')];
     expect(controls.filter((each) => each.closest('.schedules__filters') === null)).toHaveLength(0);
-    expect(controls).toEqual([screen.getByRole('combobox', { name: 'State' })]);
+    expect(controls).toEqual([
+      screen.getByRole('combobox', { name: 'Folder' }),
+      screen.getByRole('checkbox', { name: 'Include subfolders' }),
+      screen.getByRole('combobox', { name: 'State' }),
+    ]);
   });
 });
 
@@ -359,6 +363,89 @@ describe('Schedules’ State filter (T558, R66)', () => {
     expect(named()).toEqual([]);
     await user().selectOptions(state, 'Suspended');
     expect(named()).toEqual(['Both']);
+  });
+});
+
+/**
+ * T559 (AC-297, AC-399; design 16, screen 2 pin 3 and state H3): Schedules'
+ * Folder filter, as every Jobs tab's: a member's folders, with Include
+ * subfolders; and the scope note for a member, none for a Super-Admin. The
+ * owner filter counts what the folder lists (AC-397).
+ */
+describe('Schedules’ Folder filter and scope note (T559, AC-297)', () => {
+  const user = () => userEvent.setup({ delay: null });
+  const named = () => screen.queryAllByTestId('wechart-schedule-name').map((each) => text(each));
+  const listed = () =>
+    within(screen.getByRole('table', { name: 'Refresh schedules' }))
+      .getAllByRole('row')
+      .slice(1);
+  const counts = () =>
+    within(screen.getByRole('radiogroup', { name: 'Owner' }))
+      .getAllByRole('radio')
+      .map((radio) => text(radio));
+  const inEmea = schedule({
+    id: 's-emea',
+    name: 'EMEA mornings',
+    preAggregation: 'femea__orders.daily',
+    folderId: 'emea',
+    folderPath: ['Shared', 'Sales', 'EMEA'],
+  });
+
+  it('says a member’s Schedules shows their folders; a Super-Admin’s says nothing', async () => {
+    shownSchedules({ wechart: [schedule()] });
+    expect(text(await screen.findByRole('note', { name: 'Scope' }))).toBe(
+      'Showing schedules of pre-aggregations in the folders where you have read-write access.',
+    );
+  });
+
+  it('has no scope note for a Super-Admin, whose Folder filter offers All folders', async () => {
+    shownSchedules({
+      wechart: [schedule()],
+      folders: { everyFolder: true, folders: [{ id: 'root', path: ['Shared'], parentId: null }] },
+    });
+    await screen.findByText('Weekday mornings', {
+      selector: '[data-testid="wechart-schedule-name"]',
+    });
+    await vi.waitFor(() => {
+      expect(
+        within(screen.getByRole('combobox', { name: 'Folder' }))
+          .getAllByRole('option')
+          .map((option) => text(option)),
+      ).toEqual(['All folders', 'Shared']);
+    });
+    expect(screen.queryByRole('note', { name: 'Scope' })).toBeNull();
+  });
+
+  it('lists a folder’s schedules, and with Include subfolders those below, the owner filter counting them', async () => {
+    shownSchedules({ wechart: [schedule(), inEmea] });
+    await screen.findByText('EMEA mornings', {
+      selector: '[data-testid="wechart-schedule-name"]',
+    });
+    const folder = screen.getByRole('combobox', { name: 'Folder' });
+    await vi.waitFor(() => {
+      expect(
+        within(folder)
+          .getAllByRole('option')
+          .map((option) => text(option)),
+      ).toEqual(['All of mine', 'Sales', 'Sales / EMEA']);
+    });
+
+    await user().selectOptions(folder, 'emea');
+    expect([named(), listed().length]).toEqual([['EMEA mornings'], 1]);
+    expect(counts()).toEqual(['All 1', 'Cube’s refresh worker 0', 'wechart 1']);
+
+    await user().selectOptions(folder, 'sales');
+    expect([named(), listed().length]).toEqual([['Weekday mornings'], KEY_ROWS.length + 1]);
+    await user().click(screen.getByRole('checkbox', { name: 'Include subfolders' }));
+    expect([named(), listed().length]).toEqual([
+      ['Weekday mornings', 'EMEA mornings'],
+      KEY_ROWS.length + 2,
+    ]);
+    expect(counts()).toEqual([
+      `All ${String(KEY_ROWS.length + 2)}`,
+      `Cube’s refresh worker ${String(KEY_ROWS.length)}`,
+      'wechart 2',
+    ]);
   });
 });
 

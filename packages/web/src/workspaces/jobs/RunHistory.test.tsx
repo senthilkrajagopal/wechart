@@ -48,6 +48,15 @@ function api(answer: (query: URLSearchParams) => unknown) {
         asked.push(url.searchParams);
         return Response.json(answer(url.searchParams));
       }
+      // Every tab's Folder filter's choices, from the API's own route (T559).
+      if (url.pathname === '/api/jobs/folders')
+        return Response.json({
+          everyFolder: false,
+          folders: [
+            { id: 'emea', path: ['Shared', 'Sales', 'EMEA'], parentId: 'sales' },
+            { id: 'dach', path: ['Shared', 'Sales', 'EMEA', 'DACH'], parentId: 'emea' },
+          ],
+        });
       return Response.json({ error: 'not here' }, { status: 404 });
     }),
   );

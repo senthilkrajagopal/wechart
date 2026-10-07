@@ -82,8 +82,8 @@ test('building a pre-aggregation follows its job to done, and Cube’s record of
     .getByRole('table', { name: 'Pre-aggregations' })
     .getByRole('row')
     .filter({ hasText: rollup });
-  // Not partitioned: no count of partitions (T550).
-  await expect(row.getByRole('cell').nth(5)).toHaveText('—', { timeout: 30_000 });
+  // Not partitioned: no count of partitions (T550), after its Folder (T559).
+  await expect(row.getByRole('cell').nth(6)).toHaveText('—', { timeout: 30_000 });
   const started = page.waitForResponse(
     (response) => response.url().endsWith('/api/builds') && response.request().method() === 'POST',
   );
@@ -552,12 +552,14 @@ test('a rollup Cube’s refresh worker built reads Built, with when, and no star
     await expect(state).toHaveText('Built', { timeout: 5_000 });
   }).toPass({ timeout: 180_000 });
   await expect(state.locator('svg[data-icon="ok"]')).toHaveCount(1);
+  // After its name and its Folder (T559): Status, Last built, Started by, Trigger, Partitions.
   const cells = row.getByRole('cell');
-  await expect(cells.nth(2)).toHaveText(/^(Today|Yesterday) \d{2}:\d{2}$/);
-  await expect(cells.nth(2).locator('time')).toHaveAttribute('title', /UTC$/);
+  await expect(cells.nth(1)).toHaveText('Shared');
+  await expect(cells.nth(3)).toHaveText(/^(Today|Yesterday) \d{2}:\d{2}$/);
+  await expect(cells.nth(3).locator('time')).toHaveAttribute('title', /UTC$/);
   // Not started from wechart, and not partitioned.
-  await expect(cells.nth(3)).toHaveText('—');
-  await expect(cells.nth(5)).toHaveText('—');
+  await expect(cells.nth(4)).toHaveText('—');
+  await expect(cells.nth(6)).toHaveText('—');
   await expect(page.getByTestId('jobs-foot')).toContainText('“—” means wechart didn’t start it.');
 });
 
@@ -694,7 +696,7 @@ test('each pre-aggregation’s row has its state, its trigger, and its name lead
   await expect(state).toHaveAttribute('data-state', /^(built|partly|not-built|building|queued)$/);
   await expect(state.locator('svg[data-icon]')).toHaveCount(1);
   // What rebuilds it: the model's refresh key, as the seed declares it, in Schedules' words (T551).
-  await expect(row.getByRole('cell').nth(4)).toHaveText('Every hour');
+  await expect(row.getByRole('cell').nth(5)).toHaveText('Every hour');
 
   // A build's progress is said in its own row, read again while it goes:
   // queued, building, then built. Cube's build and the row's states are

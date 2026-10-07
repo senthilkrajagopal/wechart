@@ -5,6 +5,14 @@ import { InfoBar } from '../../shell/InfoBar';
 import { StateLine, StatusIcon, type StateKind } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { shownOf } from '../jobs/BuildPanel';
+import {
+  EVERY_FOLDER,
+  FolderFilter,
+  inFolder,
+  ScopeNote,
+  useJobsFolders,
+  type FolderChoice,
+} from '../jobs/FolderFilter';
 import { ChoicePill } from '../jobs/Pill';
 import { BuiltWhen } from '../jobs/builds';
 import { Status } from '../jobs/StateBadge';
@@ -246,23 +254,31 @@ export function SchedulesPage() {
   const [owner, setOwner] = useState<ShownOwner>('all');
   // In which state (T558; the user's answer, R66): Jobs' "1 suspended schedule" opens it.
   const [state, setState] = useState(scheduleStateOfUrl);
+  // In which folder, as every Jobs tab (T559, AC-297; design 16, pin 3).
+  const [folderChoice, setFolderChoice] = useState<FolderChoice>(EVERY_FOLDER);
+  const folders = useJobsFolders();
   const now = new Date();
   const keys = schedules.data ?? [];
   const own = wechart.data ?? [];
   const lists = (of: 'cube' | 'wechart') => owner === 'all' || owner === of;
+  const inChosenFolder = (folderId: string | null | undefined) =>
+    inFolder(folderId, folderChoice, folders.data?.folders ?? []);
   /**
    * Whether a wechart schedule is in the chosen state, as its row reads it:
-   * one paused and suspended reads Suspended (T558's review). Every one at Any.
+   * one paused and suspended reads Suspended (T558's review), and in the
+   * chosen folder (T559). Every one at Any.
    */
   const inState = (each: WechartSchedule) =>
-    state === '' ||
-    (state === 'suspended'
-      ? each.suspendedAt !== null
-      : state === 'paused'
-        ? each.pausedAt !== null && each.suspendedAt === null
-        : each.suspendedAt === null && each.pausedAt === null);
-  // A state is a wechart schedule's: a refresh key is listed at Any only.
-  const keysListed = state === '' ? keys : [];
+    inChosenFolder(each.folderId) &&
+    (state === '' ||
+      (state === 'suspended'
+        ? each.suspendedAt !== null
+        : state === 'paused'
+          ? each.pausedAt !== null && each.suspendedAt === null
+          : each.suspendedAt === null && each.pausedAt === null));
+  /** Whether a refresh key is listed: a state is a wechart schedule's, so at Any only, in the chosen folder. */
+  const keyListed = (key: Schedule) => state === '' && inChosenFolder(key.folderId);
+  const keysListed = keys.filter(keyListed);
   const ownListed = own.filter(inState);
   const pane: ReactNode = (() => {
     if (selected === null) return null;
@@ -338,6 +354,10 @@ export function SchedulesPage() {
             express, and need no proposal.
           </p>
         </InfoBar>
+        {/* For a read-write member: their folders only (design 16, state H3). */}
+        <ScopeNote folders={folders.data}>
+          Showing schedules of pre-aggregations in the folders where you have read-write access.
+        </ScopeNote>
         {/* Each list read apart, and said where it couldn't be: wechart's
             schedules are listed without Cube, and a refresh key's without
             wechart's (T552's review); one refusal said once. */}
@@ -356,6 +376,12 @@ export function SchedulesPage() {
             {/* Each owner's count is the rows its choice lists, in the folders
                 the API answers for this user (pin 4). */}
             <div className="schedules__filters">
+              {/* The Folder filter first, as screen 2 draws it (pin 3). */}
+              <FolderFilter
+                folders={folders.data}
+                choice={folderChoice}
+                onChange={setFolderChoice}
+              />
               <OwnerFilter
                 owner={owner}
                 counts={{
@@ -395,7 +421,7 @@ export function SchedulesPage() {
                     // Read whichever owner is listed, so wechart's keep their places (T557).
                     const itsOwn = ownOf(schedule.id);
                     return [
-                      ...(lists('cube') && state === ''
+                      ...(lists('cube') && keyListed(schedule)
                         ? [
                             <tr
                               key={schedule.id}

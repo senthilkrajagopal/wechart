@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { StateLine } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { BuildLog } from './BuildLog';
+import { FolderFilter, ScopeNote, useJobsFolders } from './FolderFilter';
 import { Pill } from './Pill';
 import {
   BuildOutcomeStatus,
@@ -46,12 +47,21 @@ interface Filters {
   readonly outcome: string;
   readonly starter: string;
   readonly folder: string;
+  /** With the folder's, those of the folders below it (T559). */
+  readonly subfolders: boolean;
   readonly within: Within;
   /** One pre-aggregation's builds, by its published name; '' for every one's (T375). */
   readonly preAggregation: string;
 }
 /** As design 16 opens it: everything of the last 7 days. */
-const FIRST: Filters = { outcome: '', starter: '', folder: '', within: 'week', preAggregation: '' };
+const FIRST: Filters = {
+  outcome: '',
+  starter: '',
+  folder: '',
+  subfolders: false,
+  within: 'week',
+  preAggregation: '',
+};
 
 interface Page {
   readonly records: readonly BuildSummary[];
@@ -73,6 +83,7 @@ function queryOf(filters: Filters, before: string | undefined): string {
   if (filters.outcome !== '') query.set('outcome', filters.outcome);
   if (filters.starter !== '') query.set('starter', filters.starter);
   if (filters.folder !== '') query.set('folder', filters.folder);
+  if (filters.folder !== '' && filters.subfolders) query.set('subfolders', 'true');
   if (filters.preAggregation !== '') query.set('preagg', filters.preAggregation);
   query.set('within', filters.within);
   if (before !== undefined) query.set('before', before);
@@ -95,6 +106,8 @@ export function RunHistory({
       ? FIRST
       : { ...FIRST, preAggregation: preAggregation.id, within: 'all' },
   );
+  /** The folders the user builds in, for the Folder filter and the note (T559). */
+  const folders = useJobsFolders();
   /** Where each page seen began, the first's none: Newer is one step back. */
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -139,6 +152,10 @@ export function RunHistory({
   return (
     <div className="build-panel run-history">
       <div className="build-panel__list">
+        {/* For a read-write member: their folders only (design 16, pin 3). */}
+        <ScopeNote folders={folders.data}>
+          Showing builds of pre-aggregations in the folders where you have read-write access.
+        </ScopeNote>
         <div className="sources-filters run-history__filters">
           {filters.preAggregation === '' || preAggregation === undefined ? null : (
             <span className="select-pill run-history__only">
@@ -184,24 +201,14 @@ export function RunHistory({
               </select>
             )}
           </Pill>
-          <Pill label="Folder">
-            {(id) => (
-              <select
-                id={id}
-                value={filters.folder}
-                onChange={(event) => narrow({ folder: event.target.value })}
-              >
-                <option value="">
-                  {page.data?.everyFolder === true ? 'All folders' : 'All of mine'}
-                </option>
-                {(page.data?.folders ?? []).map((folder) => (
-                  <option key={folder.id} value={folder.id}>
-                    {folderTextOf(folder.path)}
-                  </option>
-                ))}
-              </select>
-            )}
-          </Pill>
+          {/* Every tab's Folder filter, with Include subfolders (T559). */}
+          <FolderFilter
+            folders={folders.data}
+            choice={{ folder: filters.folder, subfolders: filters.subfolders }}
+            onChange={(choice) => {
+              narrow(choice);
+            }}
+          />
           <Pill label="Time">
             {(id) => (
               <select

@@ -106,6 +106,44 @@ export function registerBuildHistory(
     folderPath: pathOf(record.folderId),
   });
 
+  /** A folder and every shared folder below it (Include subfolders; T559). */
+  const withBelow = async (folderId: string): Promise<string[]> => {
+    const tree = await treeOf();
+    const found = [folderId];
+    for (let at = 0; at < found.length; at += 1)
+      for (const folder of tree)
+        if (folder.parentId === found[at] && !found.includes(folder.id)) found.push(folder.id);
+    return found;
+  };
+
+  /**
+   * The Folder filter's choices on every Jobs tab and Schedules (T559,
+   * AC-297; design 16, state H2): the folders a member writes, a
+   * Super-Admin's every shared folder, the root's included, each by its path
+   * and with its parent, for Include subfolders.
+   */
+  app.get('/api/jobs/folders', USER, async (request, reply) => {
+    const scope = await scopeOf(request);
+    if (!scope.all && !scope.writesAny) return reply.status(403).send(NO_JOBS);
+    const tree = await treeOf();
+    const parentOf = new Map(tree.map((folder) => [folder.id, folder.parentId]));
+    const pathOf = await pathsOf();
+    const folderIds = (await foldersOf(scope)) ?? [
+      ROOT_FOLDER_ID,
+      ...tree.map((folder) => folder.id),
+    ];
+    return {
+      folders: [...new Set(folderIds)]
+        .map((id) => ({
+          id,
+          path: pathOf(id),
+          parentId: id === ROOT_FOLDER_ID ? null : (parentOf.get(id) ?? null),
+        }))
+        .sort((a, b) => a.path.join('/').localeCompare(b.path.join('/'))),
+      everyFolder: scope.all,
+    };
+  });
+
   app.get('/api/jobs/builds', USER, async (request, reply) => {
     const scope = await scopeOf(request);
     if (!scope.all && !scope.writesAny) return reply.status(403).send(NO_JOBS);
@@ -119,9 +157,13 @@ export function registerBuildHistory(
       ...(starter === null
         ? {}
         : { starter: { kind: starter[1] as 'person' | 'schedule', id: starter[2]! } }),
+      // One folder's, or with Include subfolders those below it too (T559).
       ...(asked['folder'] === undefined || asked['folder'] === ''
         ? {}
-        : { folderIds: [asked['folder']] }),
+        : {
+            folderIds:
+              asked['subfolders'] === 'true' ? await withBelow(asked['folder']) : [asked['folder']],
+          }),
       ...(span === undefined ? {} : { since: new Date(now().getTime() - span) }),
       ...(asked['preagg'] === undefined || asked['preagg'] === ''
         ? {}

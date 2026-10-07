@@ -108,7 +108,7 @@ test('Schedules lists each refresh schedule as Cube’s, a hidden cube’s too, 
 
   // Read-only: nothing on the page edits a refresh key's schedule. The only
   // controls are wechart schedules' own On switches (T556), on their rows,
-  // and the list's State filter (T558, R66), which edits none.
+  // and the list's filters, Folder (T559) and State (T558, R66), which edit none.
   const cubeRows = table
     .getByRole('row')
     .filter({ has: page.getByTestId('owner').filter({ hasText: 'Cube’s refresh worker' }) });
@@ -118,8 +118,10 @@ test('Schedules lists each refresh schedule as Cube’s, a hidden cube’s too, 
     main.locator(':is(input:not([role="switch"]), select, textarea):not(.schedules__filters *)'),
   ).toHaveCount(0);
   await expect(main.locator('.schedules__filters').locator('input, select, textarea')).toHaveCount(
-    1,
+    3,
   );
+  await expect(main.getByRole('combobox', { name: 'Folder' })).toHaveCount(1);
+  await expect(main.getByRole('checkbox', { name: 'Include subfolders' })).toHaveCount(1);
   await expect(main.getByRole('combobox', { name: 'State' })).toHaveCount(1);
   const switches = await main
     .getByRole('switch')

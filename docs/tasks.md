@@ -7908,13 +7908,49 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - **Implementer's calls, for the user to confirm or change:**
     - The summary sits after Jobs' title, before the health badges, since design 16 doesn't draw it; a count of 0 is said, as a link to an empty list.
     - A filter that lists nothing shows the table's head with no rows; design 16's empty states are T560's.
-- [ ] T559 (AC-297, AC-399) The Folder column, filter and scope note on every Jobs tab and on Schedules *(added 2026-10-02, `[R56]`; the "Folder column and filter" T371 left to the design)*
+- [x] T559 (AC-297, AC-399) The Folder column, filter and scope note on every Jobs tab and on Schedules *(added 2026-10-02, `[R56]`; the "Folder column and filter" T371 left to the design)*
   - Files: `packages/web/src/workspaces/jobs/{BuildPanel,RunHistory,BuildQueue,FolderFilter}.tsx`, `packages/web/src/workspaces/schedules/SchedulesPage.tsx` (+ tests), `e2e/security/jobs-scope.spec.ts`
   - Failing test: `jobs-scope.spec.ts`, as a read-write member of /Sales/EMEA and as a Super-Admin (AC-297, rule 84):
     - each tab and Schedules shows each row's folder;
     - "All of mine" lists the member's folders, with Include subfolders, and "All folders" a Super-Admin's;
     - the member's page carries the scope note and names no other folder; a Super-Admin's carries none.
   - Depends on: T374, T376, T550, T552
+  - *Done 2026-10-07.*
+    - **API.** `GET /api/jobs/folders` (`jobs/history.ts`), with a route-matrix case, gives the Folder filter's choices:
+      - for a member, the shared folders they write, those below included;
+      - for a Super-Admin, every shared folder, the root's as Shared;
+      - each with its path and its parent, and whether they are every folder.
+
+      Run history's `/api/jobs/builds` takes `subfolders=true` with `folder=`, for the folder and those below it, within the user's scope.
+    - **Web.** `jobs/FolderFilter.tsx` holds the Folder pill, "All of mine" or "All folders" then each folder by its path, and Include subfolders, disabled at All, as the audit trail's filter has it. It also holds the scope note, `InfoBar` named Scope, shown only to a member, never a Super-Admin. Each tab uses them:
+      - Pre-aggregations gains a Folder column after the name (Shared for the root's). The filter and the note (design 16's s1 words) are client-side over the tab's rows.
+      - Run history's Folder pill becomes this filter and asks the API with `subfolders`. Its note is design 16's words.
+      - Queue gets the filter and a note; its Folder column was there.
+      - Schedules puts the filter first in its filters row, then Owner, then State, and adds state H3's note. The owner counts follow the folder (AC-397).
+    - **Tests changed:**
+      - The Pre-aggregations tests read the new column's place.
+      - Run history's stub answers `/api/jobs/folders`.
+      - Schedules' read-only checks (unit and e2e) allow the Folder pill and Include subfolders in the filters row, beside State, and name each.
+      - `jobs.spec`'s column indexes moved one along.
+    - **`e2e/security/jobs-scope.spec.ts`** shows it against compose's xcube. A folder "Below" sits under the member's own and takes its grant.
+      - As the member, on Pre-aggregations, Run history, Queue and Schedules:
+        - the scope note reads as worded;
+        - "All of mine" offers their folder and Below, and no other;
+        - Include subfolders is disabled at All;
+        - the page names no other folder;
+        - each row shows its folder;
+        - choosing their folder hides Below's row until Include subfolders is checked.
+      - As a Super-Admin: "All folders", every folder, and no note.
+    - **AC-297 ticked**, its last part now shown: each row's folder and the Folder filter on every tab, here. The rest was shown already:
+      - each list and action scoped to the member's folders: the route matrix and `jobs-scope.spec` (T371, T376, T374);
+      - their own query records (T371);
+      - any member of the folder changes, pauses, resumes or deletes a schedule, and one who left still has it run: `routes/schedules.test.ts` (T378, T556);
+      - a `refresh_key` only by proposal: the route matrix's model-change cases (T502, AC-278), and Schedules read-only (T551).
+    - **The review's fixes:**
+      - Pre-aggregations' and Queue's Folder choices are Jobs' own, so a summary's link lists every folder again, as its count does (AC-398);
+      - the e2e waits for its build's start before leaving the page.
+    - **Left for T560 (AC-399):** state H2 draws a Super-Admin's Folder menu as a tree of short names under "Shared · the root". It is built as a flat list of paths, as the member's is drawn.
+  - **Implementer's call, for the user to confirm or change:** design 16 draws no scope note on Queue. Queue's reads "Showing queued and building builds in the folders where you have read-write access.", in the other notes' pattern.
 - [ ] T560 (AC-399) Design 16's states, and its rewording of design 10's note *(added 2026-10-02, `[R56]`: design 16's state G and state J)*
   - Files: `packages/web/src/workspaces/jobs/*`, `packages/web/src/workspaces/schedules/*` (+ tests), `e2e/jobs.spec.ts`, `e2e/schedules.spec.ts`, `e2e/a11y-tokens.spec.ts`
   - Failing test: component tests for each of design 16's G states, on Jobs' tabs and on Schedules (AC-399):
