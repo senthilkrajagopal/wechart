@@ -225,8 +225,9 @@ export function TileViewMenu({
           readonly label: string;
           readonly index: number;
         }[];
-        readonly onSeries: (value: string) => void;
-        readonly onPanel: (index: number) => void;
+        /** `add`: Ctrl+Enter, adding it to the marking (T634). */
+        readonly onSeries: (value: string, add?: boolean) => void;
+        readonly onPanel: (index: number, add?: boolean) => void;
       }
     | undefined;
   /** The chart editor, on this tile's chart (AC-199). */
@@ -581,6 +582,15 @@ export function TileViewMenu({
   }, [open]);
 
   /**
+   * Ctrl+Enter or ⌘+Enter adds the series or panel to the marking (T634;
+   * R64, the user: "Ctrl+Enter adds"): a series as a Ctrl-click on its legend
+   * entry adds it (AC-090). A header's Ctrl-click still replaces (AC-091), so
+   * adding a panel is the menu's alone. Not in cross-filter mode, which has
+   * one selection a tile.
+   */
+  const addsTo = (add: () => void) =>
+    parts?.verb === 'mark' ? { onAdd: add, addHint: 'Ctrl/⌘+Enter adds it to the marking.' } : {};
+  /**
    * "Mark series ›" and "Mark panel ›", or "Filter by series ›" and "Filter
    * by panel ›" (T631, R63): each series or panel the tile draws, by its
    * value. None where it has none.
@@ -603,6 +613,9 @@ export function TileViewMenu({
                     onSelect: () => {
                       parts.onSeries(one.value);
                     },
+                    ...addsTo(() => {
+                      parts.onSeries(one.value, true);
+                    }),
                   })),
                 },
               ]),
@@ -620,6 +633,9 @@ export function TileViewMenu({
                     onSelect: () => {
                       parts.onPanel(panel.index);
                     },
+                    ...addsTo(() => {
+                      parts.onPanel(panel.index, true);
+                    }),
                   })),
                 },
               ]),

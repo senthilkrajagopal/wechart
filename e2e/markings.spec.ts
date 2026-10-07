@@ -620,6 +620,29 @@ test('a trellis panel marks from the tile’s menu, by the keyboard alone (T631)
   await expect
     .poll(async () => (await opacities(panels)).filter((value) => value < 1).length)
     .toBeGreaterThan(0);
+
+  // T634 (R64): a second panel added with Ctrl+Enter, the first kept.
+  await panels.focus();
+  await page.keyboard.press('Shift+F10');
+  await expect(menu.getByRole('menuitem').first()).toBeFocused();
+  for (let step = 0; step < 30; step += 1) {
+    if (await markPanel.evaluate((element) => element === document.activeElement)) break;
+    await page.keyboard.press('ArrowDown');
+  }
+  await expect(markPanel).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  const instruments = page
+    .getByRole('menu', { name: /^Mark panel/ })
+    .getByRole('menuitem', { name: 'Instruments', exact: true });
+  for (let step = 0; step < 30; step += 1) {
+    if (await instruments.evaluate((element) => element === document.activeElement)) break;
+    await page.keyboard.press('ArrowDown');
+  }
+  await expect(instruments).toBeFocused();
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect(panels.getByTestId('mark-badge')).toContainText('2 marked');
+  await expect(page.getByTestId('mark-chip')).toContainText('Components');
+  await expect(page.getByTestId('mark-chip')).toContainText('Instruments');
 });
 
 /**

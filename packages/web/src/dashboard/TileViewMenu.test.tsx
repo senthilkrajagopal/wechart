@@ -778,6 +778,63 @@ describe('a series or a panel from the tile’s menu (T631, R63)', () => {
     expect(byPart.onPanel).toHaveBeenCalledWith(0);
   });
 
+  /**
+   * T634 (AC-176; R64, the user: "Ctrl+Enter adds"): on a "Mark series ›" or
+   * "Mark panel ›" entry, Ctrl+Enter or ⌘+Enter adds it to the marking — a
+   * series as a Ctrl-click on its legend entry adds it — and each entry says
+   * so. Filtering has one selection a tile, so nothing adds there.
+   */
+  it('adds a series or a panel to the marking with Ctrl+Enter, and says so', async () => {
+    const byPart = parts('mark');
+    render(
+      <TileViewMenu
+        tileId="t1"
+        title="By status"
+        spec={SPEC}
+        save={vi.fn()}
+        marked={{ name: 'Marking', count: 1, onUnmark: vi.fn() }}
+        parts={byPart}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By status' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Mark series/ }));
+    const series = within(screen.getByRole('menu', { name: /^Mark series/ })).getByRole(
+      'menuitem',
+      { name: 'completed' },
+    );
+    expect(
+      document.getElementById(series.getAttribute('aria-describedby') ?? '')?.textContent,
+    ).toBe('Ctrl/⌘+Enter adds it to the marking.');
+    series.focus();
+    await userEvent.keyboard('{Control>}{Enter}{/Control}');
+    expect(byPart.onSeries).toHaveBeenCalledWith('completed', true);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By status' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Mark panel/ }));
+    within(screen.getByRole('menu', { name: /^Mark panel/ }))
+      .getByRole('menuitem', { name: 'South' })
+      .focus();
+    await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
+    expect(byPart.onPanel).toHaveBeenCalledWith(2, true);
+  });
+
+  it('offers no add when filtering by a series', async () => {
+    const byPart = parts('filter');
+    render(
+      <TileViewMenu tileId="t1" title="By status" spec={SPEC} save={vi.fn()} parts={byPart} />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By status' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Filter by series/ }));
+    const series = within(screen.getByRole('menu', { name: /^Filter by series/ })).getByRole(
+      'menuitem',
+      { name: 'completed' },
+    );
+    expect(series.getAttribute('aria-describedby')).toBeNull();
+    series.focus();
+    await userEvent.keyboard('{Control>}{Enter}{/Control}');
+    expect(byPart.onSeries).toHaveBeenCalledWith('completed');
+  });
+
   it('offers neither where the tile has no series or no panels', async () => {
     render(
       <TileViewMenu

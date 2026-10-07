@@ -34,6 +34,14 @@ export type MenuEntry =
       readonly label: string;
       readonly onSelect: () => void;
       /**
+       * Run in its place by Ctrl+Enter or ⌘+Enter, or a Ctrl- or ⌘-click: a
+       * series or panel added to the marking, as a Ctrl-click on its legend
+       * entry adds it (T634; R64, the user: "Ctrl+Enter adds").
+       */
+      readonly onAdd?: (() => void) | undefined;
+      /** The words saying so, as the item's description. */
+      readonly addHint?: string | undefined;
+      /**
        * Why it cannot run; absent, it can. Given as the item's description
        * (`aria-describedby`), which a keyboard reaches, where a tooltip would
        * not (T182).
@@ -159,7 +167,7 @@ export function Menu({
     return find(entries);
   };
 
-  const run = (entry: MenuEntry, how: 'enter' | 'space' | 'click') => {
+  const run = (entry: MenuEntry, how: 'enter' | 'space' | 'click', add = false) => {
     if (entry.kind === 'group' || entry.kind === 'separator' || entry.kind === 'text') return;
     if (entry.disabled !== undefined) return;
     if (entry.kind === 'submenu') {
@@ -171,7 +179,9 @@ export function Menu({
       if (how !== 'space') onClose('selected');
       return;
     }
-    entry.onSelect();
+    // With Ctrl or ⌘, its add where it has one (T634).
+    if (add && entry.onAdd !== undefined) entry.onAdd();
+    else entry.onSelect();
     onClose('selected');
   };
 
@@ -205,7 +215,7 @@ export function Menu({
         return;
       case 'Enter':
         handled();
-        if (entry !== undefined) run(entry, 'enter');
+        if (entry !== undefined) run(entry, 'enter', event.ctrlKey || event.metaKey);
         return;
       case ' ':
         handled();
@@ -238,6 +248,12 @@ export function Menu({
   };
 
   const itemId = (key: string) => `${ids}-${key}`;
+  /**
+   * The id of an item's add hint, with no whitespace in it: an item's key
+   * may be a value ("series-United States"), and `aria-describedby` is a list
+   * split at whitespace (T634's review).
+   */
+  const addsId = (key: string) => `${ids}-adds-${encodeURIComponent(key)}`;
   /**
    * A disabled entry's reason as its description, and the words that give
    * it: kept beside the item, hidden, and outside it, so they describe it
@@ -380,14 +396,22 @@ export function Menu({
               tabIndex={-1}
               data-key={entry.key}
               className="menu__item"
+              {...(entry.addHint === undefined || entry.disabled !== undefined
+                ? {}
+                : { 'aria-describedby': addsId(entry.key) })}
               {...why(entry).attributes}
-              onClick={() => {
-                run(entry, 'click');
+              onClick={(event) => {
+                run(entry, 'click', event.ctrlKey || event.metaKey);
               }}
             >
               {entry.label}
             </div>
             {why(entry).words}
+            {entry.addHint === undefined || entry.disabled !== undefined ? null : (
+              <span id={addsId(entry.key)} hidden>
+                {entry.addHint}
+              </span>
+            )}
           </Fragment>
         );
     }

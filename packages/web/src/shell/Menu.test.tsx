@@ -239,4 +239,64 @@ describe('the tile menu', () => {
     expect(sub.style.left).toBe('354px');
     expect(sub.style.top).toBe('200px');
   });
+
+  /**
+   * T634 (AC-176; R64, the user: "Ctrl+Enter adds"): an item that can add
+   * runs its add with Ctrl+Enter or ⌘+Enter, as a Ctrl- or ⌘-click does; a
+   * plain Enter or click runs it as before. It says so in its description.
+   */
+  it('runs an item’s add with Ctrl+Enter, ⌘+Enter or a Ctrl-click, and says so', async () => {
+    const onSelect = vi.fn();
+    const onAdd = vi.fn();
+    const entries: MenuEntry[] = [
+      { kind: 'item', key: 'a', label: 'shipped', onSelect, onAdd, addHint: 'Ctrl+Enter adds it' },
+    ];
+    const { onClose } = menu(entries);
+    const item = screen.getByRole('menuitem', { name: 'shipped' });
+    expect(document.getElementById(item.getAttribute('aria-describedby') ?? '')?.textContent).toBe(
+      'Ctrl+Enter adds it',
+    );
+
+    await userEvent.keyboard('{Control>}{Enter}{/Control}');
+    expect(onAdd).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenLastCalledWith('selected');
+
+    item.focus();
+    await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
+    expect(onAdd).toHaveBeenCalledTimes(2);
+
+    // One user, so the key held is held through the click.
+    const user = userEvent.setup();
+    await user.keyboard('{Control>}');
+    await user.click(item);
+    await user.keyboard('{/Control}');
+    expect(onAdd).toHaveBeenCalledTimes(3);
+    expect(onSelect).not.toHaveBeenCalled();
+
+    item.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onAdd).toHaveBeenCalledTimes(3);
+  });
+
+  // T634's review: a key from a value such as "United States" must not split the reference.
+  it('says an item’s add whatever its key holds, spaces and all', () => {
+    menu([
+      {
+        kind: 'item',
+        key: 'series-United States',
+        label: 'United States',
+        onSelect: vi.fn(),
+        onAdd: vi.fn(),
+        addHint: 'Ctrl/⌘+Enter adds it',
+      },
+    ]);
+    const described = screen
+      .getByRole('menuitem', { name: 'United States' })
+      .getAttribute('aria-describedby');
+    // An ID reference list is split at whitespace (WAI-ARIA): one id, no spaces.
+    expect(described).not.toMatch(/\s/);
+    expect(document.getElementById(described ?? '')?.textContent).toBe('Ctrl/⌘+Enter adds it');
+  });
 });

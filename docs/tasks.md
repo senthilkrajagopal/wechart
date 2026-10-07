@@ -8742,6 +8742,28 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - **Tests:**
     - unit: `fieldPicker.test.tsx` (6, failing first), the migrated filter tests, and the editor's, all passing;
     - e2e, Chrome: `filters.spec.ts`, `dashboard-edit.spec.ts`, `keyboard-coverage.spec.ts`, `chart-editor.spec.ts`, `field-list.spec.ts`, 105/105. The folder tree's arrow-key test failed once in the first run, as it did in T631's, and passed on its rerun.
+- [ ] T634 (AC-176) Ctrl+Enter on a "Mark series ›" or "Mark panel ›" entry adds it to the marking, as a Ctrl-click does *(added 2026-10-04, R64: "Ctrl+Enter adds")*
+  - Files: `shell/Menu.tsx` (an item's `onAdd` and `addHint`), `dashboard/TileViewMenu.tsx`, `dashboard/DashboardView.tsx`
+  - Failing test:
+    - `Menu.test.tsx`: an item with an add runs it on Ctrl+Enter, ⌘+Enter or a Ctrl-click, and says so in its description; a plain Enter runs it as before.
+    - `TileViewMenu.test.tsx`: each "Mark series ›" and "Mark panel ›" entry adds with Ctrl+Enter and says "Ctrl+Enter adds it to the marking."; "Filter by series ›" has none.
+    - `keyboard-coverage.spec.ts`: after T631's series is marked from the menu, a second one added with Ctrl+Enter makes "2 marked", both named in the chip.
+  - Depends on: T631
+  - **Built 2026-10-07.**
+    - `Menu` runs an item's `onAdd` in place of `onSelect` when Ctrl or ⌘ is held with Enter or a click. It describes the item by its `addHint`: "Ctrl/⌘+Enter adds it to the marking.", in the app's "Ctrl/⌘" wording.
+    - The tile menu gives each series and panel entry an add in Markings mode. Each reaches `onMarkClick` with its toggle on, so `markFromLegend` adds it.
+      - For a series, that's what a Ctrl-click on its legend entry does (AC-090).
+      - A header's Ctrl-click still replaces (AC-091, as `markFromPanel` has it since T190). So adding a panel is the menu's alone, as R64 names "Mark panel ›".
+    - Cross-filter mode has none: a tile there has one selection.
+  - **The cold review (FAIL) found one bug, fixed:** the hint's id held the item's key, a value such as "series-United States". `aria-describedby` is split at whitespace, so such an entry had no description. The id is now encoded (`Menu.test.tsx`, failing first). Also from it:
+    - the panel add is tested on the dashboard (`markings.spec.ts`: a second panel with Ctrl+Enter makes "2 marked"; it read "1 marked" with the add dropped);
+    - the docs no longer say a header's Ctrl-click adds.
+  - **Open, for the user:** should a Ctrl- or ⌘-click on a trellis header add its panel, as the menu's Ctrl+Enter now does and Spotfire's Ctrl-click does (`references-markings.md`)? AC-091 names no modifier.
+    - (a) Yes, a header's Ctrl/⌘-click adds. *Recommended:* the pointer and the keyboard then mirror each other, as R64's "mirroring Ctrl-click" has it.
+    - (b) No, leave the pointer as it is.
+  - **Tests:**
+    - unit: `Menu.test.tsx`, `TileViewMenu.test.tsx`, both failing first;
+    - e2e, Chrome: `keyboard-coverage.spec.ts`, `markings.spec.ts`, `tile-menu.spec.ts`, `crossfilter.spec.ts`, 100/100. Each new e2e step read "1 marked" until `partsOn` passed the add on.
 - [ ] T406 (AC-187) Re-run the design critique on every surface and tick AC-187 only on measured conformance
   - Files and failing test: as T225 (above), with the phase-2 surfaces added (AC-187).
   - Depends on: T330, T348, T356, T364, T369

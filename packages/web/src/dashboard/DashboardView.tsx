@@ -4309,9 +4309,13 @@ export function DashboardView({
             if (shown === undefined) return undefined;
             const { series, panels } = tilePartsOf(shown);
             if (series.length === 0 && panels.length === 0) return undefined;
-            const pick = (item: ClickedItem, said: string) => {
+            // `add`: Ctrl+Enter, added to the marking as a Ctrl-click on a
+            // legend entry adds a series (T634; R64). A panel added so goes
+            // the same way (`markFromLegend` with add); a header's own
+            // Ctrl-click still replaces (AC-091).
+            const pick = (item: ClickedItem, said: string, add = false) => {
               if (marking) {
-                onMarkClick(tileId, chartId, item, false);
+                onMarkClick(tileId, chartId, item, add);
                 return;
               }
               const value = clickedValue(shown, item);
@@ -4331,13 +4335,17 @@ export function DashboardView({
               series,
               panels,
               // Said by its label, as the legend writes it (T632).
-              onSeries: (value: string) => {
-                pick({ legend: value }, series.find((one) => one.value === value)?.label ?? value);
+              onSeries: (value: string, add?: boolean) => {
+                pick(
+                  { legend: value },
+                  series.find((one) => one.value === value)?.label ?? value,
+                  add,
+                );
               },
               // By its place among the panels drawn, as a header's click names one.
-              onPanel: (index: number) => {
+              onPanel: (index: number, add?: boolean) => {
                 const panel = panels.find((one) => one.index === index);
-                if (panel !== undefined) pick({ panelIndex: index }, panel.label);
+                if (panel !== undefined) pick({ panelIndex: index }, panel.label, add);
               },
             };
           },

@@ -722,6 +722,27 @@ test('marks a whole series from the tile’s menu, by the keyboard alone (T631)'
   await page.keyboard.press('Enter');
   await expect(page.locator('.mark-chip')).toHaveCount(1);
   await expect(page.locator('.mark-chip')).toContainText(value);
+
+  /**
+   * T634 (AC-176; R64, the user: "Ctrl+Enter adds"): a second series added
+   * from the same menu with Ctrl+Enter, as a Ctrl-click on its legend entry
+   * adds it, the first kept.
+   */
+  await tile.focus();
+  await page.keyboard.press('Shift+F10');
+  await expect(menu.getByRole('menuitem').first()).toBeFocused();
+  for (let step = 0; step < 30; step += 1) {
+    if (await markSeries.evaluate((element) => element === document.activeElement)) break;
+    await page.keyboard.press('ArrowDown');
+  }
+  await page.keyboard.press('ArrowRight');
+  await expect(series.getByRole('menuitem').first()).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  const second = ((await series.getByRole('menuitem').nth(1).textContent()) ?? '').trim();
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect(tile.getByTestId('mark-badge')).toContainText('2 marked');
+  await expect(page.locator('.mark-chip')).toContainText(value);
+  await expect(page.locator('.mark-chip')).toContainText(second);
 });
 
 /**
