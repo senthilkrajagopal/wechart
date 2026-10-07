@@ -1,5 +1,12 @@
 # Handoff — 2026-09-24
 
+> **RESUMED 2026-10-07, after the weekly-limit stop below.** feat/xcube is at 0e704d9 (T510 ticked on R69). Nothing has been deployed since 645537e.
+> - **Agents running, each in its own worktree. Cherry-pick each commit as it's reported.**
+>   - **Jobs** (agent-a5f03f39b812af47a): T610 is picked (d02acc3). Next is T640, the narrow sheets as rule-85 dialogs in the `.source-pane` pattern of designs 01, 11 and 13. Then T611, T612 and T613, and then AC-399's tick.
+>   - **Group 6** (agent-a83beb1a6c745ebb6): T638, T639, T516 and T510 are picked. Next come T476 and T477, reporting where direction.md and the designs disagree before changing anything, then T406. T405 and the T63x keyboard tasks are built; it reticks them and AC-176 after T640.
+>   - **Group 3** (a new worktree on branch `group3-verify`) runs the verification passes: AC-263–267, AC-320, AC-277, AC-279, AC-286, AC-288, AC-291, AC-321, AC-269, AC-250, AC-161, AC-344, AC-256, AC-330 and AC-352. It ticks what a real-surface test shows, and brings back the user's questions as one batch.
+> - **Left after these:** group 4 (AC-258 Entra, AC-180 browsers, AC-308/T410, AC-307 and AC-319 perf, AC-008 and AC-326/T437, AC-356 and AC-358/T508, T509). T650 waits on xcube's router-joins image.
+>
 > **STOPPED 2026-10-07: the account's weekly limit** (it resets at 3pm, America/Los_Angeles). Both running agents stopped mid-task. feat/xcube is at the R68 commit; nothing has been deployed since 645537e.
 > - **Jobs agent** (worktree agent-a5f03f39b812af47a): T610 (the 8 items of design 16 its audit listed) is uncommitted, being written test-first. It was about to run its e2e (jobs, schedules, security jobs-scope). Then T611 (structure and behaviour), T612 (about 15 lines of wording) and T613 (about 15 icons and styling), one commit each, all listed in its last report and in tasks.md if it got that far. AC-399 ticks after them. R68 keeps two lines as built.
 > - **Group 6 agent** (worktree agent-a83beb1a6c745ebb6): T638 is uncommitted. It makes focus visible on a chosen ListSearch value, segmented controls inside overflow:hidden, the SQL toast's Undo and full-width rows, and adds Ctrl+Enter taking a marked series off. It was on review finding 3: the new contrast checks should also require a drawn outline. Then T639 (RequestCalcDialog asks on Esc and returns focus; TargetTree keeps its tab stop), T510 (R67), T476, T477 and T406. AC-176 is reticked after T638 and T639.
