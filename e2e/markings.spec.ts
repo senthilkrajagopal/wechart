@@ -3600,4 +3600,44 @@ test('in range mode a drag along the time axis marks its buckets, striped on the
   expect(await stripe.getAttribute('data-from')).toBe(from);
   expect(await stripe.getAttribute('data-to')).toBe(to);
   await expect(chip).toHaveText(said!);
+
+  /**
+   * T636 (AC-176, AC-093; R66): the same from the keyboard alone. "Mark
+   * range…" in the tile's ⋯ menu (Shift+F10) asks a from and a to among the
+   * axis' months; Mark marks that range, striped as a drag's is.
+   */
+  await months.focus();
+  await page.keyboard.press('Shift+F10');
+  const menu = page.getByRole('menu', { name: /^Actions for / });
+  const markRange = menu.getByRole('menuitem', { name: 'Mark range…' });
+  for (let step = 0; step < 30; step += 1) {
+    if (await markRange.evaluate((element) => element === document.activeElement)) break;
+    await page.keyboard.press('ArrowDown');
+  }
+  await expect(markRange).toBeFocused();
+  await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog', { name: 'Mark a range' });
+  const fromBox = dialog.getByRole('combobox', { name: 'From' });
+  await expect(fromBox).toBeFocused();
+  const months2 = await fromBox
+    .locator('option')
+    .evaluateAll((all) => all.map((option) => (option as HTMLOptionElement).value));
+  expect(months2.length).toBeGreaterThan(2);
+  // Not the drag's range, so the stripe below is the dialog's (T636's review).
+  expect([from, to]).not.toEqual([months2[1], months2[2]]);
+  // The second month to the third, then Mark.
+  await fromBox.selectOption(months2[1]!);
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('combobox', { name: 'To' })).toBeFocused();
+  await dialog.getByRole('combobox', { name: 'To' }).selectOption(months2[2]!);
+  await dialog.getByRole('button', { name: 'Mark' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(dialog).toHaveCount(0);
+  await expect(stripe).toHaveCount(1);
+  await expect(stripe).toHaveAttribute('data-from', months2[1]!);
+  await expect(stripe).toHaveAttribute('data-to', months2[2]!);
+  // Focus back to the tile it was opened from (rule 85).
+  await expect
+    .poll(() => months.evaluate((tileBox) => tileBox.contains(document.activeElement)))
+    .toBe(true);
 });

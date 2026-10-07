@@ -301,6 +301,11 @@ export function TileViewMenu({
         /** Invert marking and Mark all on this tile (AC-115), where it has items to name. */
         onInvert?: (() => void) | undefined;
         onMarkAll?: (() => void) | undefined;
+        /**
+         * "Mark range…", on a tile whose marking marks ranges along its axis
+         * (T636; R66): the range's from and to, asked in a dialog.
+         */
+        onMarkRange?: (() => void) | undefined;
         /** A tile beside this one, limited by its marking (AC-112). */
         onCreateDetails?: (() => void) | undefined;
       }
@@ -744,6 +749,17 @@ export function TileViewMenu({
                       key: 'all',
                       label: 'Mark all',
                       onSelect: marked.onMarkAll,
+                    },
+                  ]),
+              // A range, from the keyboard, as a drag along the axis marks one (T636).
+              ...(marked.onMarkRange === undefined
+                ? []
+                : [
+                    {
+                      kind: 'item' as const,
+                      key: 'range',
+                      label: 'Mark range…',
+                      onSelect: marked.onMarkRange,
                     },
                   ]),
               // A series or a panel, as its legend entry or header marks it (T631).

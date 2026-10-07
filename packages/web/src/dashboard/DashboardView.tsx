@@ -1,4 +1,4 @@
-import { keyToMarking, markFromLegend, markFromPanel } from '@wechart/charts';
+import { keyToMarking, markFromLegend, markFromPanel, nameWriter } from '@wechart/charts';
 import { COLORS } from '@wechart/ui';
 import {
   addItemsWithinLimit,
@@ -26,6 +26,7 @@ import {
   markingsFrom,
   memberOn,
   seriesOf,
+  distinctValues,
   type Marking,
   type MarkingPredicate,
   type MarkingSlot,
@@ -92,6 +93,7 @@ import { Outline, tileNameOf } from './edit/Outline';
 import { openSidebarPanel } from './edit/EditSidebar';
 import { MoveToMenu } from './edit/MoveToMenu';
 import { NOTHING_CHOSEN, needsOf, templateElements } from './edit/templates';
+import { MarkRangeDialog } from './MarkRangeDialog';
 import { PreviewBanner } from './PreviewBanner';
 import { tilePartsOf } from './tileParts';
 import { NO_CLIPBOARD, pageClipboard, TileViewMenu } from './TileViewMenu';
@@ -984,6 +986,12 @@ interface TileCharts {
   readonly markItemsOn?:
     ((tileId: string) => ((how: 'invert' | 'all') => void) | undefined) | undefined;
   /**
+   * "Mark range…" for a tile whose marking marks ranges along its axis (T636;
+   * R66): opens the dialog asking the range's ends; absent elsewhere.
+   */
+  readonly markRangeOn?:
+    ((tileId: string, chartId: string) => (() => void) | undefined) | undefined;
+  /**
    * Filter to marked, or out (AC-113), from the same group: the action, or
    * why the tile's marking cannot become a filter.
    */
@@ -1481,6 +1489,8 @@ function Elements({
                                 markItems('all');
                               },
                             }),
+                        // A range from the keyboard (T636; R66).
+                        onMarkRange: charts.markRangeOn?.(element.id, chartId),
                         ...(affordances.onCreateDetails === undefined
                           ? {}
                           : {
@@ -2777,6 +2787,10 @@ export function DashboardView({
   const [queryFor, setQueryFor] = useState<{ chartId: string; tileId: string } | undefined>(
     undefined,
   );
+  /** The tile whose "Mark range…" is open (T636). */
+  const [rangeFor, setRangeFor] = useState<{ chartId: string; tileId: string } | undefined>(
+    undefined,
+  );
   /** The tile whose chart Copy › To dashboard is copying (T271, AC-243). */
   /** The tile whose Why not accelerated? is open (T273, AC-245). */
   const [whyNotFor, setWhyNotFor] = useState<{ chartId: string; tileId: string } | undefined>(
@@ -3878,6 +3892,29 @@ export function DashboardView({
     );
   };
 
+  /**
+   * What "Mark range…" asks among (T636): the axis' buckets as the tile draws
+   * them, in its order, each by its words (a month as "Feb 2026"), and the
+   * axis by its member's title. The same buckets a drag's ends fall on.
+   */
+  const rangeDialogOf = ({ chartId }: { chartId: string }) => {
+    // As the tile draws it: none, where its filtered answer failed (T636's review).
+    const spec = formatted[chartId];
+    const member = spec === undefined ? undefined : memberOn(spec.encoding, 'x');
+    const write = spec === undefined ? undefined : nameWriter(spec, member);
+    const buckets =
+      spec === undefined || member === undefined
+        ? []
+        : distinctValues(spec.rows, member).map((value) => ({
+            value,
+            label: write?.(value) ?? value,
+          }));
+    return {
+      axis: member === undefined ? 'its axis' : (memberTitle?.(member) ?? member),
+      buckets,
+    };
+  };
+
   /** A tile's marking's ranges over its x member, as stripes in its colour (AC-093). */
   const rangeStripesOn = (tileId: string, chartId: string) => {
     const tile = elementAt(live, tileId);
@@ -4193,6 +4230,23 @@ export function DashboardView({
               setMarkSaid(`${markFilterLabel(made)}. ${named.name} cleared.`);
             };
           },
+          /**
+           * "Mark range…" (T636; R66): on a tile a drag marks ranges on, as
+           * `rangeMarks` has it, the dialog asking a from and a to.
+           */
+          // Only where a drag could mark: not on a drilled view, a limited
+          // tile drawing its state, one whose filtered answer failed, or one
+          // the filters left empty (T636's review, as `partsOn` has it).
+          markRangeOn: (tileId: string, chartId: string) =>
+            rangeMarks(tileId, chartId) &&
+            drillShown(tileId) === undefined &&
+            limitedStates[chartId] === undefined &&
+            withFiltered.errors[chartId] === undefined &&
+            (formatted[chartId]?.rows.length ?? 0) > 0
+              ? () => {
+                  setRangeFor({ tileId, chartId });
+                }
+              : undefined,
           /**
            * Invert marking and Mark all (AC-115): on the items the tile draws —
            * the categories a click or its keyboard marks — and on no other
@@ -5045,6 +5099,17 @@ export function DashboardView({
       {preview === undefined ? null : (
         // Named after the groups, as design 08's state E has it (T630).
         <PreviewBanner context={preview} onExit={onExitPreview} title={document.title} />
+      )}
+      {rangeFor === undefined ? null : (
+        <MarkRangeDialog
+          {...rangeDialogOf(rangeFor)}
+          onMark={(range, add) => {
+            onMarkRange(rangeFor.tileId, rangeFor.chartId, range, add);
+          }}
+          onClose={() => {
+            setRangeFor(undefined);
+          }}
+        />
       )}
       {queryFor === undefined || viewedQuery === undefined ? null : (
         <ViewQuery

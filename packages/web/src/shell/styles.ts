@@ -5806,6 +5806,13 @@ main:has(.dashboard) {
 .save-bookmark form { display: grid; gap: 12px; }
 .save-bookmark__name { display: grid; gap: 4px; }
 .save-bookmark__keeps { margin: 0; color: var(--wc-text-secondary); font-size: var(--wc-text-xs-size); line-height: var(--wc-text-xs-line); }
+/* "Mark range…" (T636): as the bookmark's name dialog, a from and a to side by side. */
+.dialog.mark-range { width: min(420px, calc(100vw - 32px)); }
+.mark-range form { display: grid; gap: 12px; }
+.mark-range__axis { margin: 0 0 12px; color: var(--wc-text-secondary); }
+.mark-range__ends { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.mark-range__ends .field { display: grid; gap: 4px; }
+.mark-range__add { display: flex; gap: 8px; align-items: center; }
 
 /* The settings page (AC-069). Full-viewport like the chart editor: it takes
    the place of the dashboard rather than floating over it, so there is one bar

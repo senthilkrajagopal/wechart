@@ -818,6 +818,50 @@ describe('a series or a panel from the tile’s menu (T631, R63)', () => {
     expect(byPart.onPanel).toHaveBeenCalledWith(2, true);
   });
 
+  /**
+   * T636 (AC-176; R66): a tile that marks ranges offers "Mark range…" in its
+   * marked group, after Mark all; one that doesn't, none.
+   */
+  it('offers Mark range… on a tile that marks ranges, and none elsewhere', async () => {
+    const onMarkRange = vi.fn();
+    const { unmount } = render(
+      <TileViewMenu
+        tileId="t1"
+        title="By month"
+        spec={SPEC}
+        save={vi.fn()}
+        marked={{
+          name: 'Marking',
+          count: 0,
+          onUnmark: vi.fn(),
+          onMarkAll: vi.fn(),
+          onMarkRange,
+        }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By month' }));
+    const group = screen.getByRole('group', { name: /^Marking/ });
+    const items = within(group)
+      .getAllByRole('menuitem')
+      .map((item) => item.textContent);
+    expect(items.indexOf('Mark range…')).toBe(items.indexOf('Mark all') + 1);
+    await userEvent.click(within(group).getByRole('menuitem', { name: 'Mark range…' }));
+    expect(onMarkRange).toHaveBeenCalledTimes(1);
+    unmount();
+
+    render(
+      <TileViewMenu
+        tileId="t1"
+        title="By month"
+        spec={SPEC}
+        save={vi.fn()}
+        marked={{ name: 'Marking', count: 0, onUnmark: vi.fn(), onMarkAll: vi.fn() }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By month' }));
+    expect(screen.queryByRole('menuitem', { name: 'Mark range…' })).toBeNull();
+  });
+
   it('offers no add when filtering by a series', async () => {
     const byPart = parts('filter');
     render(

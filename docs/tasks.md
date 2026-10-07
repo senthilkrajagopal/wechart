@@ -8850,9 +8850,23 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - **Tests:** e2e, Chrome: `markings.spec.ts`, `crossfilter.spec.ts`, `keyboard-coverage.spec.ts`. All pass but `markings.spec.ts`'s "Invert marking and Mark all…", which failed with T635's change taken back too. It isn't T635's: with ports 4100 and 5173 free, it passes alone on a fresh seed. It is listed under T407.
 - [ ] T636 (AC-176, AC-093) Mark a range from the keyboard: "Mark range…" in the tile's ⋯ menu, asking a from and a to *(added 2026-10-07, R66: ""Mark range…" in tile menu")*
   - **Why.** T405's audit: a range, the marking whose bounds survive filtering and match pre-aggregations, is made only by a drag along an axis (`onMarkRange`). The tile's keys mark items, and Shift+arrows a run of items, never a range.
-  - Files: `dashboard/TileViewMenu.tsx` (the entry and its dialog), `dashboard/DashboardView.tsx` (the range, as a drag's), `e2e/markings.spec.ts`
+  - Files: `dashboard/MarkRangeDialog.tsx` (+ test), `dashboard/TileViewMenu.tsx` (the entry), `dashboard/DashboardView.tsx` (the range, as a drag's), `shell/styles.ts`, `e2e/markings.spec.ts`
   - Failing test: a tile that marks ranges offers "Mark range…" in its marked group. Its dialog takes a from and a to on the tile's axis and marks that range, as a drag over it does; Esc closes it, asking first over typed bounds (rule 85). e2e: a range marked from the keyboard alone.
   - Depends on: T634
+  - **Built 2026-10-07.**
+    - `dashboard/MarkRangeDialog.tsx`: "Mark a range", along the axis' member by its title. It asks From and To among the axis' buckets as the tile draws them, each by its words (a month as "Feb 2026"), the whole axis to start, and "Add to what's marked", a Ctrl-drag's add in words.
+    - Mark marks the range through the drag's own `onMarkRange`, its ends the right way round, striped and kept through filters as a drag's is (AC-093).
+    - A modal (rule 85): focus on From, Tab kept in it, Esc and Cancel close it at once while untouched and ask "Discard your changes?" once changed (the question beside it, not in it), and focus back to the menu's opener.
+    - The tile menu offers "Mark range…" after Mark all, only where a drag marks ranges (`rangeMarks`: a time axis, in a marking in range mode).
+  - **The cold review (FAIL) found two bugs, both fixed:**
+    1. On an axis the filters left empty, Mark replaced the marking with an empty range. The dialog now says "Nothing is on the axis to mark." with Mark off (`MarkRangeDialog.test.tsx`, failing first), and the entry isn't offered there.
+    2. The entry was offered where no drag can mark: a drilled view, a limited tile drawing its state, or one whose filtered answer failed. It now has `partsOn`'s gates (T631's review). *Not tested on the dashboard:* `partsOn`'s gates aren't either; both are in `DashboardView`'s menu wiring, which no unit test renders.
+    - Also from it:
+      - the bounds it opens on are kept as it opened;
+      - the e2e shows the dialog's range isn't the drag's, and focus back in the tile after Mark.
+  - **Tests:**
+    - unit: `MarkRangeDialog.test.tsx` and `TileViewMenu.test.tsx`, failing first;
+    - e2e, Chrome: `markings.spec.ts` "in range mode a drag…" goes on to mark a second range. It goes from Shift+F10 to Enter on Mark, with the months chosen by `selectOption`, and the stripe shows its two months. It failed waiting for "Mark range…" before the entry. `markings`, `tile-menu` and `keyboard-coverage` 85/85.
 - [ ] T637 (AC-176) A review's YAML diff unfolds from the keyboard: "Show all lines" beside it, and each folded stretch a button *(added 2026-10-07, R66: ""Show all lines" toggle")*
   - **Why.** T405's audit: `@codemirror/merge` draws each "N unchanged lines" bar as a div that only a click unfolds (research `codemirror-merge.md`, Gotchas).
   - Files: `workspaces/reviews/YamlDiff.tsx` (+ test), `shell/styles.ts`
