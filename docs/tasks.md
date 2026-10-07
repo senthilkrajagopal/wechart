@@ -7859,7 +7859,9 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - a change moves `runs_from` only when it changes the cron or the zone, so a rename just after a time still runs that time (AC-234);
       - a paused schedule still says how many runs in a row have failed (R59, AC-155);
       - as a pause, a resume leaves when the schedule was last changed, and by whom, so its open form isn't read again.
-    - **Open, for the coordinator (the review's finding 2):** a pg-boss run names no occurrence, so wechart reads it from its own clock (research `pg-boss-12.33.2-installed.md`). For a cron whose times are a minute apart or less, a time from before a resume, sent by a pass in the few seconds before the next time and handled after it, is read as the next time and runs, and the next time runs too.
+    - **One run per time (the review's finding 2; the coordinator's call, 2026-10-07, which the user may overturn).**
+      - The problem: a pg-boss run names no time, so wechart reads it from its own clock (research `pg-boss-12.33.2-installed.md`). For a cron whose times are a minute apart or less, a time from before a resume can be sent by a pass in the few seconds before the next time and handled after it. It was then read as the next time and ran, and the next time ran too.
+      - The fix: a run of a time in the due window is posted under a request id naming the schedule and that time, `wechart-schedule-<id>-<time>`, so one run per time starts. A late run folds into the next time's. A run caught up after wechart was stopped keeps its job's id.
   - **Implementer's calls, for the user to confirm or change:**
     - The switch's label is "On: <schedule's name>", read by a screen reader. Off is paused.
     - Pausing a suspended schedule is allowed; unpausing it leaves it suspended until its own Resume.

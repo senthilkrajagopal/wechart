@@ -368,23 +368,22 @@ export function wechartScheduler({
     schedule.suspendedAt === null && schedule.pausedAt === null;
 
   /**
-   * Whether the run pg-boss hands out now is for a time before the schedule
-   * was last laid (T556): its latest time in the due window, the last 60 s,
-   * read with a margin for a run handed out late, falls before `runsFrom`. A
-   * run caught up after wechart was stopped is older than the window, and
-   * isn't this.
+   * The time the run pg-boss hands out now is for, as far as it can be read
+   * (T556): a run names none, so its latest time in the due window, the last
+   * 60 s, read with a margin for a run handed out late (research
+   * pg-boss-12.33.2-installed.md, "The job names no occurrence"). None for a
+   * run caught up after wechart was stopped, older than the window.
    */
-  const fellBeforeLaid = (schedule: StoredSchedule): boolean => {
-    if (schedule.runsFrom === null) return false;
+  const dueTimeOf = (schedule: StoredSchedule): Date | undefined => {
     const at = now();
-    const times = previewOf(
+    return previewOf(
       schedule.cron,
       schedule.timezone,
       new Date(at.getTime() - 2 * DUE_WINDOW_MS),
       120,
-    ).filter((time) => time.getTime() <= at.getTime());
-    const latest = times.at(-1);
-    return latest !== undefined && latest.getTime() < schedule.runsFrom.getTime();
+    )
+      .filter((time) => time.getTime() <= at.getTime())
+      .at(-1);
   };
 
   /** pg-boss's schedule for one of wechart's: its times, its zone, its missed-run policy. */
@@ -453,14 +452,21 @@ export function wechartScheduler({
     // A time from before it was last laid, which pg-boss sends when a
     // schedule is laid within a minute after it (research
     // pg-boss-12.33.2-installed.md, "The due window"): not one of its runs (T556).
-    if (fellBeforeLaid(schedule)) return;
+    const due = dueTimeOf(schedule);
+    if (due !== undefined && schedule.runsFrom !== null && due < schedule.runsFrom) return;
     // At its number already, however the count got there — a lowered number,
     // or a failure whose count a replica didn't finish: suspended, not run
     // (T379's review).
     if (await counting(schedule.id)) return;
     // pg-boss hands a run out at least once (research scheduler.md): its id
-    // names the post, so one handed out again isn't started twice.
-    const requestId = `wechart-schedule-${runId}`;
+    // names the post, so one handed out again isn't started twice. A time in
+    // the due window names it instead, so two runs read as one time start
+    // once: a late one folds into the next (T556's review, the coordinator's
+    // call). One caught up, older, is named by its run.
+    const requestId =
+      due === undefined
+        ? `wechart-schedule-${runId}`
+        : `wechart-schedule-${schedule.id}-${due.toISOString()}`;
     if (history !== undefined) {
       const already = await history.startsFor({ requestIds: [requestId], tokens: [] });
       if (already.length > 0) return;

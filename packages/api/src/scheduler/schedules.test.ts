@@ -505,6 +505,36 @@ describe('pausing and resuming a schedule (T556, AC-396)', { timeout: 120_000 },
     expect((await runsWhen(schedule.id, 1)).length).toBe(1);
   });
 
+  /**
+   * T556's review, its finding 2, and the coordinator's call (b): a run
+   * names no time, so a time from before a resume, handed out just after the
+   * next one, reads as that next time. One run per time, by a request id
+   * per time: it starts once, not twice.
+   */
+  it('starts one run per time, though pg-boss hands out two for it', async () => {
+    await clock.setTime(new Date('2026-10-18T10:00:40Z'));
+    const scheduler = await replica();
+    const schedule = await scheduler.create(
+      newSchedule({ name: `Each minute ${MARK}`, cron: '* * * * *' }),
+      by,
+    );
+    made.push(schedule.id);
+    await scheduler.pause(schedule.id, ada);
+    await scheduler.unpause(schedule.id);
+
+    // 10:00's, sent before the resume's minute was out and handed out after it…
+    await clock.setTime(new Date('2026-10-18T10:01:01Z'));
+    await scheduler.run(schedule.id, `job-${MARK}-stale`);
+    // …and 10:01's own.
+    await clock.setTime(new Date('2026-10-18T10:01:25Z'));
+    await scheduler.run(schedule.id, `job-${MARK}-due`);
+
+    expect(posted.map((each) => each.requestId)).toEqual([
+      `wechart-schedule-${schedule.id}-2026-10-18T10:01:00.000Z`,
+    ]);
+    expect((await runsOf(schedule.id)).length).toBe(1);
+  });
+
   /** T556's review: as a pause, a resume changes none of its fields, so its form isn't read again. */
   it('leaves when it was last changed, and by whom, as they were, paused and resumed', async () => {
     await clock.setTime(new Date('2026-10-17T04:00:00Z'));
