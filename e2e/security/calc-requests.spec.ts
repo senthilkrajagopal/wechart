@@ -131,6 +131,19 @@ test.describe('a calculation request (T383, AC-050)', () => {
       const dialog = page.getByRole('dialog', { name: 'Request a calculation' });
       await expect(dialog.getByTestId('request-fields')).toContainText('Metrics:');
       await expect(dialog.getByTestId('request-fields')).toContainText('Dimensions:');
+      /**
+       * T639 (AC-176, rule 85): Escape over a typed description asks first,
+       * and Escape over the question keeps editing, the text kept.
+       */
+      const describing = dialog.getByRole('textbox', { name: 'What should it calculate?' });
+      await describing.fill('A first try');
+      await page.keyboard.press('Escape');
+      const asking = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+      await expect(asking.getByRole('button', { name: 'Keep editing' })).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(asking).toBeHidden();
+      await expect(describing).toHaveValue('A first try');
+      await expect(describing).toBeFocused();
       const sent = page.waitForResponse(
         (response) =>
           response.url().endsWith('/api/calc-requests') && response.request().method() === 'POST',
@@ -154,6 +167,10 @@ test.describe('a calculation request (T383, AC-050)', () => {
       await expect(dialog.getByRole('status')).toHaveText(
         'Sent. It’s listed for them under Reviews › Calculation requests.',
       );
+      // Sent, nothing is lost: Close closes at once, focus back where it was asked from (T639).
+      await dialog.getByRole('button', { name: 'Close' }).click();
+      await expect(dialog).toBeHidden();
+      await expect(pill.getByRole('button', { name: /^Calculations on / })).toBeFocused();
     });
 
     test('doesn’t see it among the requests asked of folders he may change', async ({ page }) => {

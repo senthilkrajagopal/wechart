@@ -68,4 +68,37 @@ describe('the target folders as a tree', () => {
       'true',
     );
   });
+
+  /**
+   * T639 (AC-176; T405's re-audit): the tree is one tab stop, the folder
+   * chosen, or the first that can be chosen while none is. A choice the
+   * targets no longer hold (ImportPane's refetch) left it with none, so Tab
+   * passed it by.
+   */
+  it('keeps its one tab stop when the folder chosen is no longer a target', async () => {
+    const user = userEvent.setup();
+    const onChoose = vi.fn();
+    render(
+      <>
+        <button type="button">Before</button>
+        <TargetTree
+          targets={[
+            { id: 'f-sales', path: ['Sales'] },
+            { id: 'f-ops', path: ['Sales Ops'] },
+          ]}
+          chosen="f-gone"
+          onChoose={onChoose}
+        />
+      </>,
+    );
+    const stops = screen
+      .getAllByRole('treeitem')
+      .filter((item) => item.getAttribute('tabindex') === '0');
+    expect(stops.map((item) => item.textContent)).toEqual(['Sales']);
+    screen.getByRole('button', { name: 'Before' }).focus();
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: 'Sales' }));
+    await user.keyboard('{ArrowDown}');
+    expect(onChoose).toHaveBeenCalledWith('f-ops');
+  });
 });

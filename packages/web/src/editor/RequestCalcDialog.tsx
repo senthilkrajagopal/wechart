@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 
+import { DiscardQuestion } from '../shell/DiscardQuestion';
 import { useFocusTrap } from '../shell/useFocusTrap';
+import { useReturnFocus } from '../shell/useReturnFocus';
 
 /**
  * "Request a calculation…" (T383, AC-050; F6, `[R7]`): a calculation the
@@ -53,19 +55,48 @@ export function RequestCalcDialog({
     { kind: 'writing' } | { kind: 'sending' } | { kind: 'sent' } | { kind: 'refused'; why: string }
   >({ kind: 'writing' });
 
-  // Escape closes it, as every dialog here closes; focus starts in the description.
-  const closing = useRef(onClose);
+  // Focus goes back to what opened it (T639, rule 85).
+  useReturnFocus();
+  /**
+   * Escape and Cancel close it, asking first where a description was typed
+   * and not yet sent (T639, rule 85); Escape over the question keeps editing.
+   * Sent or on its way, nothing is lost by closing.
+   */
+  const [asking, setAsking] = useState(false);
+  const typed = description !== '' && (state.kind === 'writing' || state.kind === 'refused');
+  const keepEditing = () => {
+    setAsking(false);
+    writing.current?.focus();
+  };
+  const requestClose = () => {
+    if (typed) setAsking(true);
+    else onClose();
+  };
+  // Focus starts in the description.
+  const escape = useRef(requestClose);
   useEffect(() => {
-    closing.current = onClose;
-  }, [onClose]);
+    escape.current = asking ? keepEditing : requestClose;
+  });
+  const backdrop = useRef<HTMLDivElement>(null);
   useEffect(() => {
     writing.current?.focus();
+    /**
+     * Heard first, while focus is in it or its question (or nowhere), and
+     * marked handled: in a dashboard's chart editor the overlay goes back on
+     * an Escape no one handled, and took the dialog with it (T639's review;
+     * as the type gallery does, T230's).
+     */
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closing.current();
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      const focused = document.activeElement;
+      if (focused !== null && focused !== document.body && !backdrop.current?.contains(focused))
+        return;
+      event.preventDefault();
+      escape.current();
     };
-    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keydown', onKeyDown, true);
     return () => {
-      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('keydown', onKeyDown, true);
     };
   }, []);
 
@@ -76,7 +107,7 @@ export function RequestCalcDialog({
   const over = written.length > DESCRIPTION_LIMIT;
 
   return (
-    <div className="dialog-backdrop">
+    <div ref={backdrop} className="dialog-backdrop">
       <div
         ref={box}
         role="dialog"
@@ -122,7 +153,7 @@ export function RequestCalcDialog({
           <p role="status">Sent. It’s listed for them under Reviews › Calculation requests.</p>
         ) : null}
         <div className="dialog__actions">
-          <button type="button" className="btn" onClick={onClose}>
+          <button type="button" className="btn" onClick={requestClose}>
             {state.kind === 'sent' ? 'Close' : 'Cancel'}
           </button>
           {state.kind === 'sent' ? null : (
@@ -153,6 +184,14 @@ export function RequestCalcDialog({
           )}
         </div>
       </div>
+      {/* Beside the dialog, not in it, so its trap leaves Tab to the question. */}
+      {asking ? (
+        <DiscardQuestion
+          body="The description you typed isn’t kept."
+          onKeep={keepEditing}
+          onDiscard={onClose}
+        />
+      ) : null}
     </div>
   );
 }

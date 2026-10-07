@@ -9020,6 +9020,25 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - `keyboard-coverage.spec.ts` and `markings.spec.ts`, 85 of 86. The folder tree's arrow-key test failed once, as in T631's and T633's runs, and passed alone and in a full run of its spec (29/29).
       - `security/sql-runner.spec.ts` 19/19, and after the review 18 of 19. "says a run was cut at 10,000 rows…", which T638 doesn't touch, failed once on a missing element and passed alone.
       - Each ring check failed without its rule. The series step failed on its hint before `partsOn` passed `marked`.
+- [ ] T639 (AC-176) The calculation request asks before a typed description is lost and gives focus back; the target tree keeps its tab stop *(added 2026-10-07, from T405's re-audit for AC-176: its rule-85 asides; the coordinator)*
+  - **Why.** T405's re-audit for AC-176 found two rule-85 gaps outside its own findings:
+    - `RequestCalcDialog`: Escape discarded a typed description without asking, and focus fell to the page on close.
+    - `TargetTree`: it could lose its tab stop in `ImportPane` when the targets were fetched again.
+  - Files: `editor/RequestCalcDialog.tsx` (+ test), `workspaces/data-sources/TargetTree.tsx` (+ test), `e2e/security/calc-requests.spec.ts`
+  - Failing test:
+    - `RequestCalcDialog.test.tsx`: Escape with nothing typed closes it, focus back on its opener. With a description typed, Escape asks "Discard your changes?", Escape over the question keeps editing with the text kept, and Cancel then Discard closes it, focus back. Once sent, Close closes at once.
+    - `TargetTree.test.tsx`: with a chosen folder the targets no longer hold, the first folder is the tree's one tab stop, Tab reaches it, and ↓ chooses the next.
+    - `security/calc-requests.spec.ts`: the request from a measure's menu asks before Escape loses a typed description, keeps editing on Escape, and after sending, Close gives focus back to the measure's menu button.
+  - Depends on: T405
+  - **Built 2026-10-07.**
+    - `RequestCalcDialog` asks as `ProposeDialog` does (T405): `DiscardQuestion` beside the dialog, not in it, and `useReturnFocus`. It asks only while the description could still be lost: while writing, or after a refusal. Sent or on its way, Close or Cancel closes at once.
+    - `TargetTree`'s one tab stop is the folder chosen, or the first that can be chosen while none of them is. Before, that was only while nothing was chosen, so a choice the refetched targets no longer held left the tree with no tab stop.
+  - **The cold review (FAIL) found one bug, fixed:** in a dashboard's chart editor, Escape in the dialog also reached the editor overlay. The overlay goes back on any Escape not already handled, so it closed the editor, and the dialog and its question with it. The dialog now hears Escape first, in the capture phase, while focus is in it or its question, and marks it handled, as the type gallery does (T230's review). `RequestCalcDialog.test.tsx` checks this with a document listener that goes back as the overlay does; it failed first.
+    - Also from it: a test that it asks after a refusal; a stale comment corrected.
+    - **Left:** Escape or Cancel while a request is sending closes the dialog at once. If the send is then refused, the description and the refusal go unseen. This was so before T639.
+  - **Tests:**
+    - unit: `RequestCalcDialog.test.tsx` and `TargetTree.test.tsx`, each failing first;
+    - e2e, Chrome: `security/calc-requests.spec.ts` 5/5. Its new steps failed on the missing question, and on the focus left on the page with `useReturnFocus` taken out.
 - [ ] T406 (AC-187) Re-run the design critique on every surface and tick AC-187 only on measured conformance
   - Files and failing test: as T225 (above), with the phase-2 surfaces added (AC-187).
   - Depends on: T330, T348, T356, T364, T369

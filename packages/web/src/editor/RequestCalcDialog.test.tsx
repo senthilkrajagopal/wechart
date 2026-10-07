@@ -1,5 +1,6 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { RequestCalcDialog } from './RequestCalcDialog';
@@ -107,5 +108,124 @@ describe('requesting a calculation the menu can’t express (T383, AC-050)', () 
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     await userEvent.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledTimes(2);
+  });
+});
+
+/**
+ * T639 (direction.md rule 85; T405's re-audit): Escape or Cancel asks before
+ * a typed description is lost, Escape over the question keeps editing, and
+ * focus goes back to what opened it. Once sent, nothing is lost: Close closes.
+ */
+describe('the request dialog from the keyboard (T639, rule 85)', () => {
+  function Opener({ onSend = vi.fn(async () => {}) }: { onSend?: () => Promise<void> }) {
+    const [open, setOpen] = useState(false);
+    return (
+      <>
+        <button type="button" onClick={() => setOpen(true)}>
+          Calculations on Total amount
+        </button>
+        {open ? (
+          <RequestCalcDialog
+            measureTitle="Total amount"
+            cubeTitle="Orders"
+            fields={FIELDS}
+            titleOf={(member) => TITLES[member] ?? member}
+            onSend={onSend}
+            onClose={() => setOpen(false)}
+          />
+        ) : null}
+      </>
+    );
+  }
+  const describing = () => screen.getByRole('textbox', { name: 'What should it calculate?' });
+
+  it('closes on Escape with nothing typed, giving focus back to its opener', async () => {
+    render(<Opener />);
+    const opener = screen.getByRole('button', { name: 'Calculations on Total amount' });
+    await userEvent.click(opener);
+    expect(document.activeElement).toBe(describing());
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+  });
+
+  it('asks before Escape or Cancel loses a typed description', async () => {
+    render(<Opener />);
+    const opener = screen.getByRole('button', { name: 'Calculations on Total amount' });
+    await userEvent.click(opener);
+    await userEvent.type(describing(), 'Margin');
+    await userEvent.keyboard('{Escape}');
+    const asking = screen.getByRole('alertdialog', { name: 'Discard your changes?' });
+    expect(asking.textContent).toContain('The description you typed isn’t kept.');
+    expect(document.activeElement).toBe(
+      within(asking).getByRole('button', { name: 'Keep editing' }),
+    );
+    // Escape answers it as Keep editing does: the dialog and its text stay.
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect((describing() as HTMLTextAreaElement).value).toBe('Margin');
+    expect(document.activeElement).toBe(describing());
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }),
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+  });
+
+  /**
+   * T639's review: in a dashboard's chart editor the overlay goes back on an
+   * Escape it hears on the document, unless one was handled first, so the
+   * dialog's own Escape has to come first and say it was handled.
+   */
+  it('takes its Escape before the editor it is opened over goes back', async () => {
+    const back = vi.fn();
+    const overlay = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) back();
+    };
+    document.addEventListener('keydown', overlay);
+    try {
+      render(<Opener />);
+      await userEvent.click(screen.getByRole('button', { name: 'Calculations on Total amount' }));
+      await userEvent.type(describing(), 'Margin');
+      await userEvent.keyboard('{Escape}');
+      expect(screen.getByRole('alertdialog', { name: 'Discard your changes?' })).toBeTruthy();
+      await userEvent.keyboard('{Escape}');
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+      expect((describing() as HTMLTextAreaElement).value).toBe('Margin');
+      expect(back).not.toHaveBeenCalled();
+    } finally {
+      document.removeEventListener('keydown', overlay);
+    }
+  });
+
+  it('asks after a refusal too, the description still to be sent', async () => {
+    render(
+      <Opener
+        onSend={vi.fn(async () => {
+          throw new Error('No one to ask.');
+        })}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Calculations on Total amount' }));
+    await userEvent.type(describing(), 'Margin');
+    await userEvent.click(screen.getByRole('button', { name: 'Send request' }));
+    await screen.findByRole('alert');
+    await userEvent.keyboard('{Escape}');
+    expect(screen.getByRole('alertdialog', { name: 'Discard your changes?' })).toBeTruthy();
+  });
+
+  it('closes at once once sent, nothing being lost', async () => {
+    render(<Opener />);
+    const opener = screen.getByRole('button', { name: 'Calculations on Total amount' });
+    await userEvent.click(opener);
+    await userEvent.type(describing(), 'Margin');
+    await userEvent.click(screen.getByRole('button', { name: 'Send request' }));
+    await screen.findByRole('status');
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(opener));
   });
 });

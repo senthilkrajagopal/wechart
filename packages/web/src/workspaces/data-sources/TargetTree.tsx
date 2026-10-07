@@ -72,6 +72,12 @@ export function TargetTree({
 }) {
   const nodes = nodesOf(targets);
   const choosable = nodes.filter((node) => node.id !== undefined);
+  /**
+   * One tab stop: the folder chosen, or the first that can be while none of
+   * them is, a choice the targets no longer hold included (T639: after a
+   * refetch it left the tree with none).
+   */
+  const chosenShown = choosable.some((node) => node.id === chosen);
   const labelId = useId();
   const tree = useRef<HTMLUListElement>(null);
 
@@ -103,7 +109,7 @@ export function TargetTree({
         {nodes.map((node) => {
           const selected = node.id !== undefined && node.id === chosen;
           const focusable =
-            node.id !== undefined && (selected || (chosen === '' && node === choosable[0]));
+            node.id !== undefined && (selected || (!chosenShown && node === choosable[0]));
           return (
             <li
               key={node.key}
