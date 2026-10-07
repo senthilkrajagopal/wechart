@@ -110,7 +110,12 @@ const panelOf = (tab: string | RegExp) => screen.getByRole('tabpanel', { name: t
 const choicesOf = (panel: HTMLElement) =>
   within(within(panel).getByRole('combobox', { name: 'Folder' }))
     .getAllByRole('option')
-    .map((option) => text(option));
+    .map((option) => text(option).replaceAll('   ', '› '));
+/**
+ * A choice indented by its depth, as state H2 draws the menu: each folder
+ * one step in under All, and each a step further below its parent (T610).
+ */
+const at = (depth: number, words: string) => `${'› '.repeat(depth)}${words}`;
 
 describe('Pre-aggregations’ Folder column and filter, and its scope note (T559, AC-297)', () => {
   const names = () =>
@@ -142,7 +147,12 @@ describe('Pre-aggregations’ Folder column and filter, and its scope note (T559
     await screen.findByRole('table', { name: 'Pre-aggregations' });
     const panel = panelOf('Pre-aggregations');
     await vi.waitFor(() => {
-      expect(choicesOf(panel)).toEqual(['All of mine', 'Sales / EMEA', 'Sales / EMEA / DACH']);
+      // The member's paths, indented by depth below their own top folder (H2; T610).
+      expect(choicesOf(panel)).toEqual([
+        'All of mine',
+        at(1, 'Sales / EMEA'),
+        at(2, 'Sales / EMEA / DACH'),
+      ]);
     });
     const below = within(panel).getByRole('checkbox', { name: 'Include subfolders' });
     expect((below as HTMLInputElement).disabled).toBe(true);
@@ -170,13 +180,14 @@ describe('Pre-aggregations’ Folder column and filter, and its scope note (T559
 
     await vi.waitFor(() => {
       expect(choicesOf(panel)).toEqual([
-        // A tree of short names under the root, as state H2 draws a Super-Admin's (T560).
+        // A tree of short names under the root, as state H2 draws a Super-Admin's (T560),
+        // the root itself a step in under All folders (T610).
         'All folders',
-        'Shared · the root',
-        '   Finance',
-        '   Sales',
-        '      EMEA',
-        '         DACH',
+        at(1, 'Shared · the root'),
+        at(2, 'Finance'),
+        at(2, 'Sales'),
+        at(3, 'EMEA'),
+        at(4, 'DACH'),
       ]);
     });
     expect(within(panel).queryByRole('note', { name: 'Scope' })).toBeNull();
@@ -199,12 +210,12 @@ describe('Pre-aggregations’ Folder column and filter, and its scope note (T559
     const panel = panelOf('Pre-aggregations');
 
     await vi.waitFor(() => {
-      expect(choicesOf(panel).map((choice) => choice.replaceAll(' ', '·'))).toEqual([
+      expect(choicesOf(panel)).toEqual([
         'All folders',
-        'Shared · the root',
-        '···Sales',
-        '······EMEA',
-        '···Sales Ops',
+        at(1, 'Shared · the root'),
+        at(2, 'Sales'),
+        at(3, 'EMEA'),
+        at(2, 'Sales Ops'),
       ]);
     });
   });
@@ -230,7 +241,11 @@ describe('Queue’s and Run history’s Folder filter and scope note (T559, AC-2
       'Showing queued and building builds in the folders where you have read-write access.',
     );
     await vi.waitFor(() => {
-      expect(choicesOf(panel)).toEqual(['All of mine', 'Sales / EMEA', 'Sales / EMEA / DACH']);
+      expect(choicesOf(panel)).toEqual([
+        'All of mine',
+        at(1, 'Sales / EMEA'),
+        at(2, 'Sales / EMEA / DACH'),
+      ]);
     });
 
     await user().selectOptions(within(panel).getByRole('combobox', { name: 'Folder' }), 'emea');
@@ -247,7 +262,11 @@ describe('Queue’s and Run history’s Folder filter and scope note (T559, AC-2
       'Showing builds of pre-aggregations in the folders where you have read-write access.',
     );
     await vi.waitFor(() => {
-      expect(choicesOf(panel)).toEqual(['All of mine', 'Sales / EMEA', 'Sales / EMEA / DACH']);
+      expect(choicesOf(panel)).toEqual([
+        'All of mine',
+        at(1, 'Sales / EMEA'),
+        at(2, 'Sales / EMEA / DACH'),
+      ]);
     });
 
     await user().selectOptions(within(panel).getByRole('combobox', { name: 'Folder' }), 'emea');

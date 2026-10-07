@@ -12,6 +12,12 @@ import { expect, test } from './fixtures';
  */
 const RUN = Math.random().toString(36).slice(2, 8);
 const ids = { mine: '', theirs: '', below: '' };
+/** A build of each folder's, by its run id: its log's address, `/jobs/builds/…` (T610). */
+const builds = { mine: '', theirs: '' };
+/** One step of the Folder menu's indent, three no-break spaces (state H2; T560, T610). */
+const STEP = '   ';
+/** A Folder menu's choice, `depth` steps in. */
+const at = (depth: number, words: string) => `${STEP.repeat(depth)}${words}`;
 
 const cubeYaml = (name: string) =>
   [
@@ -88,6 +94,12 @@ test.describe('Jobs and Schedules, scoped to the user’s read-write folders (T3
         await expect(row.getByTestId('preagg-name')).toHaveText(`${cube}.main`);
         await expect(row.getByTestId('preagg-folder')).toHaveText(folder);
       }
+      // A build of their folder's, whose log `writer` may not open (T610, G6).
+      const theirs = await page.request.post('/api/builds', {
+        data: { preAggregation: `f${ids.theirs.replaceAll('-', '')}__jobs_theirs_${RUN}.main` },
+      });
+      expect(theirs.status(), await theirs.text()).toBe(200);
+      builds.theirs = ((await theirs.json()) as { runId: string }).runId;
     });
 
     /**
@@ -112,20 +124,20 @@ test.describe('Jobs and Schedules, scoped to the user’s read-write folders (T3
         const shown = page.getByRole('tabpanel', { name: panel });
         const folder = shown.getByRole('combobox', { name: 'Folder' });
         await expect(folder.locator('option').first()).toHaveText('All folders');
-        // A tree of short names under the root, each indented by its depth (state H2; T560).
-        const indent = '   ';
-        await expect(folder.locator('option').nth(1)).toHaveText('Shared · the root');
+        // A tree of short names under the root, each indented by its depth
+        // (state H2; T560), the root itself a step in under All folders (T610).
         const labels = await folder.locator('option').allTextContents();
+        expect(labels[1]).toBe(at(1, 'Shared · the root'));
         expect(labels).toEqual(
           expect.arrayContaining([
-            `${indent}Jobs mine ${RUN}`,
-            `${indent}${indent}Below ${RUN}`,
-            `${indent}Jobs theirs ${RUN}`,
+            at(2, `Jobs mine ${RUN}`),
+            at(3, `Below ${RUN}`),
+            at(2, `Jobs theirs ${RUN}`),
           ]),
         );
         // Below sits under its parent, next after it (T560's review).
-        expect(labels.indexOf(`${indent}${indent}Below ${RUN}`)).toBe(
-          labels.indexOf(`${indent}Jobs mine ${RUN}`) + 1,
+        expect(labels.indexOf(at(3, `Below ${RUN}`))).toBe(
+          labels.indexOf(at(2, `Jobs mine ${RUN}`)) + 1,
         );
         await expect(shown.getByRole('note', { name: 'Scope' })).toHaveCount(0);
       }
@@ -204,7 +216,9 @@ test.describe('Jobs and Schedules, scoped to the user’s read-write folders (T3
       await mine
         .getByRole('button', { name: `Build jobs_mine_${RUN}.main in Jobs mine ${RUN}` })
         .click();
-      expect((await built).status()).toBe(200);
+      const answered = await built;
+      expect(answered.status()).toBe(200);
+      builds.mine = ((await answered.json()) as { runId: string }).runId;
 
       for (const [tab, panel] of [
         ['', 'Pre-aggregations'],
@@ -216,10 +230,12 @@ test.describe('Jobs and Schedules, scoped to the user’s read-write folders (T3
         await expect(shown.getByRole('note', { name: 'Scope' })).toHaveText(notes[panel]);
         const folder = shown.getByRole('combobox', { name: 'Folder' });
         await expect(folder.locator('option').first()).toHaveText('All of mine');
-        for (const path of [`Jobs mine ${RUN}`, `Jobs mine ${RUN} / Below ${RUN}`])
-          await expect(
-            folder.locator('option').filter({ hasText: new RegExp(`^${path}$`) }),
-          ).toHaveCount(1);
+        // Their folders by path, each indented by its depth below their own (H2; T610).
+        expect(await folder.locator('option').allTextContents()).toEqual([
+          'All of mine',
+          at(1, `Jobs mine ${RUN}`),
+          at(2, `Jobs mine ${RUN} / Below ${RUN}`),
+        ]);
         await expect(shown.getByRole('checkbox', { name: 'Include subfolders' })).toBeDisabled();
         // No other folder named anywhere on the page.
         await expect(page.getByRole('main')).not.toContainText(`Jobs theirs ${RUN}`);
@@ -235,9 +251,7 @@ test.describe('Jobs and Schedules, scoped to the user’s read-write folders (T3
         `Jobs mine ${RUN} / Below ${RUN}`,
       );
       const panel = page.getByRole('tabpanel', { name: 'Pre-aggregations' });
-      await panel
-        .getByRole('combobox', { name: 'Folder' })
-        .selectOption({ label: `Jobs mine ${RUN}` });
+      await panel.getByRole('combobox', { name: 'Folder' }).selectOption(ids.mine);
       await expect(mine).toHaveCount(1);
       await expect(below).toHaveCount(0);
       await panel.getByRole('checkbox', { name: 'Include subfolders' }).check();
@@ -253,6 +267,22 @@ test.describe('Jobs and Schedules, scoped to the user’s read-write folders (T3
           .first(),
       ).toContainText(`Jobs mine ${RUN}`);
 
+      // A build's log at its address (T610; design 16, G6): theirs opens on
+      // Run history; another folder's is the app's Not found page.
+      await page.goto(`/jobs/builds/${builds.mine}`);
+      await expect(
+        page.getByRole('complementary', { name: `Build of jobs_mine_${RUN}.main` }),
+      ).toBeVisible();
+      await expect(page.getByRole('tab', { name: 'Run history' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      await page.goto(`/jobs/builds/${builds.theirs}`);
+      await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText(
+        'Not found',
+      );
+      await expect(page.getByRole('main')).not.toContainText(`jobs_theirs_${RUN}`);
+
       // Schedules: the note, the filter, and no other folder.
       await page.goto('/schedules');
       await expect(page.getByRole('note', { name: 'Scope' })).toHaveText(
@@ -260,11 +290,11 @@ test.describe('Jobs and Schedules, scoped to the user’s read-write folders (T3
       );
       const folder = page.getByRole('main').getByRole('combobox', { name: 'Folder' });
       await expect(folder.locator('option').first()).toHaveText('All of mine');
-      await expect(
-        folder
-          .locator('option')
-          .filter({ hasText: new RegExp(`^Jobs mine ${RUN} / Below ${RUN}$`) }),
-      ).toHaveCount(1);
+      expect(await folder.locator('option').allTextContents()).toEqual([
+        'All of mine',
+        at(1, `Jobs mine ${RUN}`),
+        at(2, `Jobs mine ${RUN} / Below ${RUN}`),
+      ]);
       await expect(page.getByRole('main')).not.toContainText(`Jobs theirs ${RUN}`);
       const schedules = page.getByRole('table', { name: 'Refresh schedules' });
       await expect(
@@ -280,16 +310,20 @@ test.describe('Jobs and Schedules, scoped to the user’s read-write folders (T3
   test.describe('as reader', () => {
     test.use({ role: 'reader' });
 
-    test('has neither Jobs nor Schedules', async ({ page }) => {
-      const refusal = 'Jobs and Schedules are for Super-Admins and read-write members of a folder.';
-      await page.goto('/jobs');
-      // The open tab's own; the Queries tab, hidden, says it too.
-      await expect(
-        page.getByRole('tabpanel', { name: 'Pre-aggregations' }).getByText(refusal),
-      ).toBeVisible();
-      await page.goto('/schedules');
-      await expect(page.getByRole('main').getByText(refusal)).toBeVisible();
-      await expect(page.getByRole('main')).not.toContainText(`jobs_mine_${RUN}`);
+    /**
+     * Jobs or Schedules opened by a read-only user render the app's Not
+     * found page (T610; design 16, G6; rule 67), as an address that matches
+     * nothing does.
+     */
+    test('has neither Jobs nor Schedules: each is the app’s Not found page', async ({ page }) => {
+      for (const address of ['/jobs', '/schedules', `/jobs/builds/${builds.mine}`]) {
+        await page.goto(address);
+        const main = page.getByRole('main');
+        await expect(main.getByRole('heading', { level: 1 })).toHaveText('Not found');
+        await expect(main).toContainText('Nothing here matches that address.');
+        await expect(main.getByRole('tablist')).toHaveCount(0);
+        await expect(main).not.toContainText(`jobs_mine_${RUN}`);
+      }
     });
   });
 });

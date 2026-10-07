@@ -53,17 +53,23 @@ const asked: string[] = [];
 function serve({
   preaggregations = [ROW] as Answer | (() => Answer),
   queue = [ENTRY] as Answer | (() => Answer),
-  builds = [] as Answer,
+  builds = [] as Answer | (() => Answer),
   folders = MEMBER as unknown,
   build,
   cancel,
+  me = { name: 'Wren Writer', security: 'oidc' } as unknown,
+  record,
 }: {
   preaggregations?: Answer | (() => Answer);
   queue?: Answer | (() => Answer);
-  builds?: Answer;
+  builds?: Answer | (() => Answer);
   folders?: unknown;
   build?: () => Response;
   cancel?: () => Response;
+  /** Who is signed in, and in which mode: sign-in off is `security: 'off'` (G7). */
+  me?: unknown;
+  /** One build's record, by its id: none, and the API answers Not found (G6). */
+  record?: (id: string) => Response;
 } = {}) {
   const answered = (answer: Answer, rows: (list: unknown[]) => unknown) =>
     answer === 'pending'
@@ -76,7 +82,15 @@ function serve({
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       asked.push(url);
-      if (url === '/api/jobs/folders') return Response.json(folders);
+      if (url === '/api/jobs/folders')
+        return folders instanceof Response ? folders.clone() : Response.json(folders);
+      if (url === '/api/me') return Response.json(me);
+      const one = /^\/api\/jobs\/builds\/([^/?]+)$/.exec(url)?.[1];
+      if (one !== undefined)
+        return (
+          record?.(decodeURIComponent(one)) ??
+          Response.json({ error: 'There’s no build by that id in your folders.' }, { status: 404 })
+        );
       if (url === '/api/jobs/summary')
         return Response.json({ building: null, queued: null, failed: null, suspended: null });
       if (url === '/api/preaggregations')
@@ -92,7 +106,11 @@ function serve({
           everyFolder: false,
         }));
       if (url.startsWith('/api/jobs/builds'))
-        return answered(builds, (records) => ({ records, starters: [], folders: [] }));
+        return answered(typeof builds === 'function' ? builds() : builds, (records) => ({
+          records,
+          starters: [],
+          folders: [],
+        }));
       if (url === '/api/builds' && init?.method === 'POST')
         return build?.() ?? Response.json({ tokens: ['t1'], runId: 'run-1' });
       if (url.startsWith('/api/jobs/partitions'))
@@ -112,15 +130,15 @@ function serve({
   );
 }
 
-function shown(search = '') {
+function shown(search = '', props: { buildId?: string } = {}) {
   window.history.replaceState(null, '', `/jobs${search}`);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
-      <JobsPage />
+    <QueryClientProvider client={client}>
+      <JobsPage {...props} />
     </QueryClientProvider>,
   );
+  return client;
 }
 
 afterEach(() => {
@@ -152,9 +170,38 @@ describe('G1 · loading, as skeleton rows (T560, AC-399)', () => {
         );
       });
       expect(text(within(panel).getByTestId('reading'))).toBe(`Reading ${what}…`);
+      // Under the list's own column heads, as G1 draws them (T610).
+      expect(
+        within(within(panel).getByTestId('skeleton-table'))
+          .getAllByRole('columnheader')
+          .map((header) => text(header)),
+      ).toEqual(COLUMNS[list]);
     },
   );
 });
+
+/** Each tab's columns, as its list heads them. */
+const COLUMNS: Record<(typeof TABS)[number][2], string[]> = {
+  preaggregations: [
+    'Pre-aggregation',
+    'Folder',
+    'Status',
+    'Last built',
+    'Started by',
+    'Trigger',
+    'Partitions',
+  ],
+  builds: [
+    'Started',
+    'Pre-aggregation',
+    'Folder',
+    'Partitions',
+    'Outcome',
+    'Duration',
+    'Started by',
+  ],
+  queue: ['Added', 'Pre-aggregation', 'Folder', 'Partition', 'State', 'Started by', 'Token'],
+};
 
 describe('G2 · an error, with Retry and Details (T560, AC-399; rule 18)', () => {
   it.each(TABS)(
@@ -345,6 +392,203 @@ describe('G7 · sign-in off, as a Super-Admin sees it (T560, AC-399)', () => {
       ).toBe('All folders');
     });
     expect(within(panel).queryByRole('note', { name: 'Scope' })).toBeNull();
+  });
+});
+
+/** The API's refusal of every Jobs list to one who writes no folder (T371). */
+const NO_JOBS = () =>
+  Response.json(
+    { error: 'Jobs and Schedules are for Super-Admins and read-write members of a folder.' },
+    { status: 403 },
+  );
+const BUILD = {
+  id: 'b-1',
+  preAggregation: 'orders.main',
+  name: 'orders.main',
+  folderId: 'emea',
+  folderPath: ['Shared', 'EMEA'],
+  partitions: null,
+  granularity: null,
+  jobs: 1,
+  via: 'build-all',
+  starter: { kind: 'person', key: 'admin', name: 'admin' },
+  startedAt: '2026-10-02T12:05:12.000Z',
+  endedAt: '2026-10-02T12:05:53.000Z',
+  durationMs: 41_000,
+  outcome: 'done',
+  failedCount: 0,
+  error: null,
+  progress: { done: 1, building: 0 },
+};
+
+/**
+ * T610 (AC-399; design 16, G5b): one whose last read-write folder goes while
+ * Jobs is open finds, once a list is read again, that Jobs is for read-write
+ * members, and the way to their dashboards.
+ */
+describe('G5b · no read-write folder left (T610, AC-399)', () => {
+  it.each(TABS)(
+    'says on %s that Jobs is for read-write members, and opens Explore',
+    async (search, tab, list) => {
+      let gone = false;
+      const rows = { preaggregations: [ROW], queue: [ENTRY], builds: [BUILD] }[list];
+      serve({ [list]: () => (gone ? NO_JOBS() : rows) });
+      const client = shown(search);
+      const panel = panelOf(tab);
+      await within(panel).findByRole('table');
+
+      gone = true;
+      await client.invalidateQueries();
+
+      // The page's, as G5b draws it: "Jobs is for…", no tab left (T610's review).
+      const left = await screen.findByTestId('no-folder-left');
+      expect(screen.queryByRole('tablist')).toBeNull();
+      expect(panel.isConnected).toBe(false);
+      expect(text(screen.getByRole('heading', { level: 1 }))).toBe('Jobs');
+      expect([
+        text(left.querySelector('b')),
+        text(left.querySelector('span')),
+        within(left).getByRole('link', { name: 'Open Explore' }).getAttribute('href'),
+      ]).toEqual([
+        'Jobs is for read-write members of a folder',
+        'You no longer have read-write access to any folder, so there’s nothing here for you. Your dashboards are in Explore.',
+        '/explore',
+      ]);
+      expect(left.querySelector('svg')?.getAttribute('data-icon')).toBe('lock');
+    },
+  );
+
+  it('says so over the Queries tab, and over a tab never opened, once the queue is refused', async () => {
+    let gone = false;
+    serve({
+      queue: () => (gone ? NO_JOBS() : [ENTRY]),
+      builds: () => (gone ? NO_JOBS() : [BUILD]),
+    });
+    const client = shown('?tab=queries');
+    await screen.findByRole('tablist');
+    await vi.waitFor(() => {
+      expect(asked).toContain('/api/jobs/queue');
+    });
+
+    gone = true;
+    await client.invalidateQueries({ queryKey: ['jobs', 'queue'] });
+
+    expect(text(await screen.findByTestId('no-folder-left'))).toContain(
+      'Jobs is for read-write members of a folder',
+    );
+    // Run history, never opened, is never shown with the API's refusal.
+    expect(screen.queryByRole('tab', { name: 'Run history' })).toBeNull();
+    expect(asked.some((url) => url.startsWith('/api/jobs/builds'))).toBe(false);
+  });
+});
+
+/**
+ * T610 (AC-399; design 16, G6 and rule 67): Jobs opened by one who writes no
+ * folder, and a build's log at `/jobs/builds/…` of another folder or none,
+ * render the app's Not found page.
+ */
+describe('G6 · the app’s Not found page (T610, AC-399; rule 67)', () => {
+  const notFound = async () =>
+    text(await screen.findByRole('heading', { level: 1, name: 'Not found' }));
+
+  it('is what one who writes no folder sees at /jobs, with no tab', async () => {
+    serve({ folders: NO_JOBS(), preaggregations: NO_JOBS(), queue: NO_JOBS() });
+    shown();
+
+    expect(await notFound()).toBe('Not found');
+    expect(text(screen.getByText('Nothing here matches that address.'))).toBe(
+      'Nothing here matches that address.',
+    );
+    expect(screen.queryByRole('tablist')).toBeNull();
+  });
+
+  it('is what a build’s log of another folder, or of none, reads at its address', async () => {
+    serve();
+    shown('', { buildId: 'b-theirs' });
+
+    expect(await notFound()).toBe('Not found');
+    expect(screen.queryByRole('tablist')).toBeNull();
+  });
+
+  it('opens a build’s log of theirs at its address, on Run history', async () => {
+    serve({
+      builds: [BUILD],
+      record: () =>
+        Response.json({ ...BUILD, requestId: 'r', answeredAt: BUILD.startedAt, tokens: [] }),
+    });
+    shown('', { buildId: 'b-1' });
+
+    expect(await screen.findByRole('complementary', { name: 'Build of orders.main' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Run history' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+  });
+
+  it('opens it once: Run history opened again from a pane opens no log (T610’s review)', async () => {
+    serve({
+      builds: [BUILD],
+      record: () =>
+        Response.json({ ...BUILD, requestId: 'r', answeredAt: BUILD.startedAt, tokens: [] }),
+    });
+    shown('', { buildId: 'b-1' });
+    await screen.findByRole('complementary', { name: 'Build of orders.main' });
+
+    await user().click(screen.getByRole('tab', { name: 'Pre-aggregations' }));
+    await user().click(
+      within(await within(panelOf('Pre-aggregations')).findByRole('table')).getByText(
+        'orders.main',
+      ),
+    );
+    await user().click(await screen.findByRole('link', { name: 'All its builds in Run history' }));
+
+    const history = panelOf('Run history');
+    await within(history).findByRole('table', { name: 'Run history' });
+    expect(within(history).queryByRole('complementary', { name: /^Build of/ })).toBeNull();
+    expect(text(within(history).getByRole('complementary', { name: 'Build log' }))).toBe(
+      'Select a build to see its log.',
+    );
+  });
+});
+
+/**
+ * T610 (AC-399; design 16, G7): with sign-in off, the one user's builds name
+ * them "You", wherever a starter is named.
+ */
+describe('G7 · sign-in off: the single user is "You" (T610, AC-399)', () => {
+  const SINGLE = { name: 'admin', security: 'off' };
+  const ALL = { everyFolder: true, folders: [{ id: 'root', path: ['Shared'], parentId: null }] };
+
+  it('names the single user’s builds "You" on Pre-aggregations, Run history and Queue', async () => {
+    serve({
+      me: SINGLE,
+      folders: ALL,
+      preaggregations: [{ ...ROW, startedBy: { kind: 'person', key: 'admin', name: 'admin' } }],
+      builds: [BUILD],
+      queue: [{ ...ENTRY, starter: { kind: 'person', key: 'admin', name: 'admin' } }],
+    });
+    shown();
+    const starter = async (panel: HTMLElement) => text(await within(panel).findByTestId('starter'));
+
+    await vi.waitFor(async () => {
+      expect(await starter(panelOf('Pre-aggregations'))).toBe('You');
+    });
+    await user().click(screen.getByRole('tab', { name: 'Run history' }));
+    await vi.waitFor(async () => {
+      expect(await starter(panelOf('Run history'))).toBe('You');
+    });
+    await user().click(screen.getByRole('tab', { name: /^Queue/ }));
+    await vi.waitFor(async () => {
+      expect(await starter(panelOf(/^Queue/))).toBe('You');
+    });
+  });
+
+  it('names a person by name when sign-in is on', async () => {
+    serve({
+      preaggregations: [{ ...ROW, startedBy: { kind: 'person', key: 'admin', name: 'admin' } }],
+    });
+    shown();
+
+    expect(text(await within(panelOf('Pre-aggregations')).findByTestId('starter'))).toBe('admin');
   });
 });
 

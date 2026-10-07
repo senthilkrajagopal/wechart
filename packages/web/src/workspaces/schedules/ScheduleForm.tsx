@@ -386,7 +386,8 @@ export function ScheduleForm({
         ) : null}
       </div>
       {save.isError ? <StateLine kind="err">{save.error.message}</StateLine> : null}
-      <div className="schedule-form__foot">
+      {/* Pinned at the sheet's foot below 1,024 px (design 16, G8). */}
+      <div className="schedule-form__foot sheet-foot">
         {/* Recorded with who made it (T505, AC-294; design 16, state I). */}
         <p className="help" data-testid="applies-at-once">
           Applies at once, with no proposal. Recorded in the audit trail.

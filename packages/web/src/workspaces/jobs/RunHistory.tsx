@@ -4,14 +4,16 @@ import { useState } from 'react';
 import { TableScroll } from '../../shell/TableScroll';
 import { BuildLog } from './BuildLog';
 import { FolderFilter, ScopeNote, useJobsFolders } from './FolderFilter';
-import { ListError, ListLoading, ReadError } from './ListStates';
+import { ListError, ListLoading, NoFolderLeft, noFolderLeft, ReadError } from './ListStates';
 import { Pill } from './Pill';
 import {
   BuildOutcomeStatus,
   durationOf,
   folderTextOf,
   partitionsOf,
+  personName,
   StarterLabel,
+  useSingleUser,
   whenOf,
   type BuildSummary,
   type Starter,
@@ -77,6 +79,16 @@ interface Page {
 
 /** The columns the list drops below 1,024 px, its log's sheet giving them (design 16, G8). */
 const NARROW_HIDES = new Set(['Partitions', 'Duration', 'Started by']);
+/** The list's columns, as state B heads them. */
+const HISTORY_COLUMNS = [
+  'Started',
+  'Pre-aggregation',
+  'Folder',
+  'Partitions',
+  'Outcome',
+  'Duration',
+  'Started by',
+];
 
 const starterValue = (starter: Starter) =>
   starter.kind === 'person' ? `person:${starter.key}` : `schedule:${starter.id}`;
@@ -96,6 +108,7 @@ function queryOf(filters: Filters, before: string | undefined): string {
 export function RunHistory({
   enabled = true,
   preAggregation,
+  openFirst = null,
 }: {
   enabled?: boolean;
   /**
@@ -103,7 +116,11 @@ export function RunHistory({
    * builds in Run history" (T375; design 16, pin 14).
    */
   preAggregation?: { readonly id: string; readonly name: string } | undefined;
+  /** A build's log opened at its address, `/jobs/builds/…` (T610; design 16, G6). */
+  openFirst?: string | null;
 }) {
+  // With sign-in off, the one user is "You" (G7; T610).
+  const single = useSingleUser();
   const [filters, setFilters] = useState<Filters>(() =>
     preAggregation === undefined
       ? FIRST
@@ -113,7 +130,7 @@ export function RunHistory({
   const folders = useJobsFolders();
   /** Where each page seen began, the first's none: Newer is one step back. */
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(openFirst);
   const before = cursors.at(-1);
   const page = useQuery({
     queryKey: ['jobs', 'builds', filters, before],
@@ -147,13 +164,22 @@ export function RunHistory({
     setOpenId(null);
   };
   const records = page.data?.records ?? [];
-  const opened = records.find((record) => record.id === openId);
   const time = TIMES.find(([value]) => value === filters.within) ?? TIMES[1];
   const narrowed =
     filters.outcome !== '' ||
     filters.starter !== '' ||
     filters.folder !== '' ||
     filters.preAggregation !== '';
+
+  // The last read-write folder gone while open (G5b; T610).
+  if (noFolderLeft(page))
+    return (
+      <div className="build-panel run-history">
+        <div className="build-panel__list">
+          <NoFolderLeft page="Jobs" />
+        </div>
+      </div>
+    );
 
   return (
     <div className="build-panel run-history">
@@ -201,7 +227,8 @@ export function RunHistory({
                 <option value="">Anyone</option>
                 {(page.data?.starters ?? []).map((starter) => (
                   <option key={starterValue(starter)} value={starterValue(starter)}>
-                    {starter.name}
+                    {/* With sign-in off, the one user is "You" (G7; T610). */}
+                    {starter.kind === 'person' ? personName(starter, single) : starter.name}
                   </option>
                 ))}
               </select>
@@ -239,7 +266,14 @@ export function RunHistory({
 
         {/* Skeleton rows while it's read (design 16, G1); couldn't read it, with
             Retry and Details (G2), or a refusal in the API's words (G4; T560). */}
-        {page.isPending ? <ListLoading said="Reading Run history…" /> : null}
+        {page.isPending ? (
+          <ListLoading
+            said="Reading Run history…"
+            label="Run history"
+            columns={HISTORY_COLUMNS}
+            narrow={[...NARROW_HIDES]}
+          />
+        ) : null}
         {page.isError ? (
           <ListError
             what="Run history"
@@ -374,13 +408,14 @@ export function RunHistory({
           </span>
         </div>
       </div>
-      {opened === undefined ? (
+      {openId === null ? (
         // The docked pane, as Pre-aggregations has it (T469): empty until a build is chosen.
         <aside className="admin-pane" aria-label="Build log">
           <p className="admin-pane__empty">Select a build to see its log.</p>
         </aside>
       ) : (
-        <BuildLog id={opened.id} onClose={() => setOpenId(null)} />
+        // Read by its id: one opened at its address need not be on this page (T610).
+        <BuildLog id={openId} onClose={() => setOpenId(null)} />
       )}
     </div>
   );

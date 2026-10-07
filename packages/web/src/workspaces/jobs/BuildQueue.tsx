@@ -4,7 +4,15 @@ import { useState } from 'react';
 import { ExportedToast } from '../../dashboard/export/ExportedToast';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
-import { clockOf, folderTextOf, periodOf, shortToken, StarterLabel, type Starter } from './builds';
+import {
+  clockOf,
+  folderTextOf,
+  periodOf,
+  shortToken,
+  StarterLabel,
+  useSingleUser,
+  type Starter,
+} from './builds';
 import {
   EVERY_FOLDER,
   FolderFilter,
@@ -13,7 +21,15 @@ import {
   useJobsFolders,
   type FolderChoice,
 } from './FolderFilter';
-import { ACCESS_LOST, isRefused, ListError, ListLoading, ReadError } from './ListStates';
+import {
+  ACCESS_LOST,
+  isRefused,
+  ListError,
+  ListLoading,
+  NoFolderLeft,
+  noFolderLeft,
+  ReadError,
+} from './ListStates';
 import { ChoicePill } from './Pill';
 import { Status } from './StateBadge';
 
@@ -66,6 +82,49 @@ export const QUEUE_STATES: readonly (readonly [QueueState, string])[] = [
 /** The columns the list drops below 1,024 px (design 16, G8). */
 // The queue has no sheet: its partition stays, so two entries of one rollup are told apart (T560's review).
 const QUEUE_NARROW_HIDES = new Set(['Added', 'Started by', 'Token']);
+/** The list's columns, as state C heads them. */
+const QUEUE_COLUMNS = [
+  'Added',
+  'Pre-aggregation',
+  'Folder',
+  'Partition',
+  'State',
+  'Started by',
+  'Token',
+];
+
+/** A starter as Started by chooses it: "person:wren", "schedule:s-1", "refresh-worker". */
+const starterValueOf = (starter: QueueRow['starter']): string =>
+  starter.kind === 'person'
+    ? `person:${starter.key}`
+    : starter.kind === 'schedule'
+      ? `schedule:${starter.id}`
+      : starter.kind;
+
+/**
+ * Started by's choices (T610; design 16, state C): each person and wechart
+ * schedule with entries queued, by name, then Cube's refresh worker, a
+ * query and Cube's jobs API, where they have any. With sign-in off, the one
+ * user is "You" (G7).
+ */
+function startersOf(entries: readonly QueueRow[], single: boolean): (readonly [string, string])[] {
+  const named = new Map<string, string>();
+  const others = new Set<string>();
+  for (const { starter } of entries)
+    if (starter.kind === 'person')
+      named.set(starterValueOf(starter), single ? 'You' : starter.name);
+    else if (starter.kind === 'schedule') named.set(starterValueOf(starter), starter.name);
+    else others.add(starter.kind);
+  const OTHERS: readonly (readonly [string, string])[] = [
+    ['refresh-worker', 'Cube’s refresh worker'],
+    ['query', 'A query'],
+    ['jobs', 'Cube’s jobs API'],
+  ];
+  return [
+    ...[...named].sort((a, b) => a[1].localeCompare(b[1])),
+    ...OTHERS.filter(([value]) => others.has(value)),
+  ];
+}
 
 /** The queue, as Jobs reads it for this tab and its count (design 16, pin 1). */
 export async function readQueue(signal?: AbortSignal): Promise<{ entries: QueueRow[] }> {
@@ -178,11 +237,16 @@ export function BuildQueue({
   onState,
   folderChoice: folderChosen,
   onFolderChoice,
+  starter: starterChosen,
+  onStarter,
 }: {
   enabled?: boolean;
   /** The folder listed (T559), where Jobs holds it; none, and the queue does. */
   folderChoice?: FolderChoice;
   onFolderChoice?: (choice: FolderChoice) => void;
+  /** Whose entries are listed (T610): '' for anyone's; Jobs' own where it holds it. */
+  starter?: string;
+  onStarter?: (starter: string) => void;
   /** The entries listed: those in this state, or every one (T558). */
   state?: QueueState | '';
   /** State chosen; none, and the filter isn't offered. */
@@ -206,6 +270,17 @@ export function BuildQueue({
   const folderChoice = folderChosen ?? ownChoice;
   const setFolderChoice = onFolderChoice ?? setOwnChoice;
   const folders = useJobsFolders();
+  const [ownStarter, setOwnStarter] = useState('');
+  const starter = starterChosen ?? ownStarter;
+  const setStarter = onStarter ?? setOwnStarter;
+  /**
+   * The one chosen, as named when chosen: still offered once their entries
+   * have left the queue, so a list of none isn't shown under "Anyone"
+   * (T610's review).
+   */
+  const [chosenAs, setChosenAs] = useState<readonly [string, string] | null>(null);
+  // With sign-in off, the one user is "You" (G7; T610).
+  const single = useSingleUser();
   const cancel = useMutation({
     // Stop (T554): a building one, whose build xcube stops, answering what came of it.
     mutationFn: async ({ row, stop }: { row: QueueRow; stop: boolean }) => {
@@ -259,8 +334,18 @@ export function BuildQueue({
     },
   });
 
-  // Skeleton rows while it's read (design 16, G1; T560).
-  if (queue.isPending) return <ListLoading said="Reading the queue…" />;
+  // Skeleton rows while it's read, under the list's heads (design 16, G1; T560, T610).
+  if (queue.isPending)
+    return (
+      <ListLoading
+        said="Reading the queue…"
+        label="Build queue"
+        columns={QUEUE_COLUMNS}
+        narrow={[...QUEUE_NARROW_HIDES]}
+      />
+    );
+  // The last read-write folder gone while open (G5b; T610).
+  if (noFolderLeft(queue)) return <NoFolderLeft page="Jobs" />;
   // Couldn't read it, with Retry and Details (G2); a refusal in the API's words (G4).
   if (queue.isError)
     return (
@@ -271,12 +356,19 @@ export function BuildQueue({
         onRetry={() => void queue.refetch()}
       />
     );
-  // Those of the chosen folder (T559) in the chosen state, as Jobs' summary counts them (T558).
+  // Those of the chosen folder (T559), started by whom was chosen (T610), in the chosen
+  // state, as Jobs' summary counts them (T558).
   const rows = queue.data.entries.filter(
     (entry) =>
       (state === '' || entry.state === state) &&
+      (starter === '' || starterValueOf(entry.starter) === starter) &&
       inFolder(entry.folderId, folderChoice, folders.data?.folders ?? []),
   );
+  const offered = startersOf(queue.data.entries, single);
+  const starters =
+    starter === '' || offered.some(([value]) => value === starter) || chosenAs?.[0] !== starter
+      ? offered
+      : [...offered, chosenAs];
   // A reason design 16 doesn't word: the API's own words (T376's review).
   const why =
     refused === null
@@ -291,6 +383,16 @@ export function BuildQueue({
       </ScopeNote>
       <div className="sources-filters run-history__filters">
         <FolderFilter folders={folders.data} choice={folderChoice} onChange={setFolderChoice} />
+        {/* Started by, after Folder (state C; T610): Anyone, or one who has entries queued. */}
+        <ChoicePill
+          label="Started by"
+          choices={[['', 'Anyone'], ...starters]}
+          value={starter}
+          onChange={(value) => {
+            setChosenAs(starters.find(([each]) => each === value) ?? null);
+            setStarter(value);
+          }}
+        />
         {onState === undefined ? null : (
           <ChoicePill
             label="State"

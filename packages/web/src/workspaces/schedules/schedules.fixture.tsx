@@ -294,7 +294,10 @@ export function shownSchedules({
   pending = false,
   accessLost = false,
   forbidden = false,
+  refused = false,
 }: {
+  /** One who writes no folder: every list, the folders' too, refused as the API refuses them (T610, G6). */
+  refused?: boolean;
   at?: string;
   /** The Folder filter's choices, and whether they are every folder (T559). */
   folders?: unknown;
@@ -323,6 +326,7 @@ export function shownSchedules({
   vi.setSystemTime(new Date(at));
   const sent: Sent[] = [];
   let listed = [...wechart];
+  let noJobs = refused;
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -334,6 +338,16 @@ export function shownSchedules({
         url: `${url.pathname}${url.search}`,
         ...(body === undefined ? {} : { body }),
       });
+      // No read-write folder: every list refused, in the API's words (T371).
+      if (
+        noJobs &&
+        method === 'GET' &&
+        ['/api/schedules', '/api/wechart-schedules', '/api/jobs/folders'].includes(url.pathname)
+      )
+        return Response.json(
+          { error: 'Jobs and Schedules are for Super-Admins and read-write members of a folder.' },
+          { status: 403 },
+        );
       if (url.pathname === '/api/schedules')
         return pending
           ? new Promise<Response>(() => undefined)
@@ -433,6 +447,11 @@ export function shownSchedules({
     async listedLater(next: WechartSchedule[]) {
       listed = [...next];
       await client.invalidateQueries({ queryKey: ['wechart-schedules'] });
+    },
+    /** The user's last read-write folder gone while the page is open: the lists read again (G5b). */
+    async refusedLater() {
+      noJobs = true;
+      await client.invalidateQueries();
     },
   };
 }

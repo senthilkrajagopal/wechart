@@ -8019,12 +8019,77 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - G1's column heads over the skeleton rows;
     - H2's member's folders indented by depth (they are paths).
 
-    No open task holds these, so AC-399 needs a follow-up task (the review, 2026-10-07).
+    No open task holds these, so AC-399 needs a follow-up task (the review, 2026-10-07): T610.
   - **Implementer's calls, for the user to confirm or change:**
     - G2's carry-on sentence is design 16's, said on all three Jobs tabs.
     - G3 on Schedules uses Pre-aggregations' words.
     - G5 on Schedules says it for any refused action whose schedule is gone.
     - G8's narrow columns on Run history and Queue: name, folder and outcome or state, and Queue's Cancel.
+- [x] T610 (AC-399) The rest of design 16: Search, Queue's Started by, G1's heads, G5b, G6's Not found page, G7's "You", G8's pinned actions, H2's indents *(added 2026-10-07 by the coordinator: design 16 is approved and binding, so what T559 and T560 left unbuilt is built here)*
+  - Files: `packages/web/src/workspaces/jobs/{JobsPage,BuildPanel,BuildQueue,RunHistory,BuildLog,Partitions,FolderFilter,ListStates,builds}.tsx`, `packages/web/src/workspaces/schedules/{SchedulesPage,SchedulePane,ScheduleForm}.tsx`, `packages/web/src/router/routes.tsx` (+ tests, `jobs/Find.test.tsx` new, `schedules/schedules.fixture.tsx`), `packages/web/src/shell/styles.ts`, `docs/research/tanstack-query-cache.md` (new), `e2e/jobs.spec.ts`, `e2e/schedules.spec.ts`, `e2e/security/jobs-scope.spec.ts`
+  - Failing test:
+    - `Find.test.tsx`:
+      - Search pre-aggregations, after Folder and Status, narrows by name or folder, and counts what it lists;
+      - the queue's Started by, after Folder, offers Anyone and each with entries queued;
+      - a summary link clears both (AC-398).
+    - `States.test.tsx`:
+      - G1's skeleton under each tab's heads;
+      - G5b on each tab once a read is refused after the list was read;
+      - G6: Jobs to one who writes no folder, and a build's log at `/jobs/builds/…` of another folder or none, are the app's Not found page; one of theirs opens on Run history;
+      - G7: with sign-in off, the one user's builds read "You".
+    - `FolderFilter.test.tsx`: H2's indents, a member's paths and a Super-Admin's tree, each a step in under All.
+    - `SchedulesPage.test.tsx`:
+      - Search schedules, after the owner filter, the owner counts following it;
+      - G1's heads;
+      - G5b;
+      - G6's Not found page.
+    - `e2e/jobs.spec.ts` and `e2e/schedules.spec.ts`:
+      - G8's actions at the sheet's foot at 390 px;
+      - G1's heads;
+      - G7's "You" against compose's stack, which runs with sign-in off.
+    - `e2e/security/jobs-scope.spec.ts`:
+      - a read-only user's `/jobs`, `/schedules` and `/jobs/builds/…` are Not found;
+      - a member's own build opens at its address, and another folder's is Not found.
+  - Depends on: T559, T560
+  - **Done 2026-10-07.**
+    - **As built.** The eight items above. G5b is said for the whole page, as design 16 draws it ("Jobs is for…", no tab left): Jobs watches its lists' reads in the query cache (`useNoFolderLeft`; research `tanstack-query-cache.md`), so a refusal on any tab, the queue's poll on the Queries tab included, says it, and a tab never opened is never shown with the API's refusal. Only a refusal since the page opened counts, so one kept from an earlier visit doesn't say it again once access is back. G3's empty state also gains the cube icon design 16 draws.
+    - **The review's fixes:**
+      - Started by keeps the one chosen, by name, once their entries have left the queue, so a list of none is never shown under "Anyone";
+      - the sheet's pinned foot sits in the sheet's own stacking (over its sticky table heads, under its dialog), so Delete's dialog covers it;
+      - `/jobs/builds/…` opens its log once: Run history opened anew from a pane opens none;
+      - a partition queued by the one user with sign-in off reads "Queued · You" (G7);
+      - G5b is the page's, not each list's (above);
+      - no empty bar is pinned at the foot of a lambda's sheet or of a hidden cube's refresh key with no model link;
+      - Search schedules is as tall as the pills beside it;
+      - three doc comments moved back above their own declarations.
+      - Tests added: a search matched by folder alone, Started by after its entries drain, the queued partition's "You", G5b over the Queries tab, `/jobs/builds/…` opening once, the empty foot, and at 390 px the sheet's last line above its foot and Delete's dialog over it.
+  - **Implementer's calls, for the user to confirm or change:**
+    - A read-only user at `/jobs` or `/schedules` sees the page's frame for as long as `/api/jobs/folders` takes to refuse, then Not found. No folder or item is named in that time, and `/jobs/builds/<theirs>` and `/jobs/builds/<none>` behave the same, so rule 67 holds. Holding the page until that answer would put every writer's first list read behind it.
+    - The review's doubt that the sheet's 72 px of room is too little under New schedule's two-line foot at 390 px was measured and doesn't arise: its last line ends above the foot (`schedules.spec.ts`).
+- [ ] T611 (AC-399) Design 16's structure and behaviour still unbuilt *(added 2026-10-07, from the design 16 audit during T610; the coordinator: "T611 (structure and behaviour), T612 (wording) and T613 (icons and styling), one commit each")*
+  - What design 16 draws that isn't built:
+    - Jobs' tabs write `?tab=` and Back returns to a tab (pin 1, keyboard);
+    - the Jobs pane's facts: Partitions, Also rebuilt by (its schedule opened on Schedules at an address), Model, "· its refresh key", the failure's time, the "Shared / …" folder line, and no Type or Partition granularity (pin 13);
+    - × at the right of each pane's head on desktop;
+    - no Build button on a row ("a row click only selects", J);
+    - Last built and Started by in the sheet below 1,024 px (G8);
+    - ↑/↓ between rows, and each row's name a button announcing name, folder and state (keyboard);
+    - Partitions' "since 14:31" and "Wren Writer, 14:38", a live region following each state, focus kept after Rebuild selected;
+    - Queue's "for 9 min", focus to the next Cancel, a token to copy, and its foot's last sentence;
+    - Resume's toast (E3); E1's Log opening that run's log;
+    - the refresh worker's panel as a popover (F);
+    - B3's failures first, under "…27 more, all Done";
+    - the Delete dialog's plain Cancel, and focus to the list after Esc (D6);
+    - Include subfolders and the "Wren · read-write" head in the Folder menu (H2);
+    - A3's Open in Model above Partitions, and A4's head and skeleton.
+  - Depends on: T610
+- [ ] T612 (AC-399) Design 16's wording still unbuilt *(added 2026-10-07, from the design 16 audit during T610; R68 keeps "Cube's default: every hour" and "wechart didn't see how it ended" as built)*
+  - What design 16 says that the pages don't: Schedules' foot with the viewer's zone; B1's dateRange line; the pane's recent builds without seconds; "Today" and UTC only off-zone in Next run; "Suspended" over "after 3 failures"; "Done · today 07:55"; E1's and E3's "today at 15:00"; "Next 5 runs, Europe/Berlin"; G2's error, help and actions as three lines; G4's bar with "Not started." in bold; and the low ones (tokens 4…4, "…/ EMEA / DACH", the narrow tab "History").
+  - Kept as built: the R41 sentences, where design 16 says "…comes, in the next phase", since UX-111 has no page speak of phases (`consistency.spec.ts`).
+  - Depends on: T611
+- [ ] T613 (AC-399) Design 16's icons and styling still unbuilt *(added 2026-10-07, from the design 16 audit during T610)*
+  - What design 16 draws that isn't styled: the missing icons (the cron's ✓, D2's info, the refresh key's cube, D4's warning, E1's suspended, Resume, Delete…, New schedule's +, Rebuild selected, B4's and C4's empty states, G6's search); the header's badges as pills; pane titles in the UI face; Schedules' pane at 400 px; D1's head without the owner and its rollup in the code face; and the low ones.
+  - Depends on: T612
 
 ## P2.11 Quick calculations and calculation requests (F6, returned)
 
@@ -12750,7 +12815,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-388 | T541 | AC-389 | T540 | AC-390 | T544 |
 | AC-391 | T550 | AC-392 | T552 | AC-393 | T553 |
 | AC-394 | T554 | AC-395 | T555 | AC-396 | T556 |
-| AC-397 | T557 | AC-398 | T558 | AC-399 | T559, T560, T473 |
+| AC-397 | T557 | AC-398 | T558 | AC-399 | T559, T560, T473, T610, T611, T612, T613 |
 | AC-281 (again, rebinding) | T542 | AC-283 (again, use-only copies) | T543 | | |
 | AC-354 (again, copy on use) | T538 | | | | |
 | AC-296 | T370 | AC-297 | T371, T378, T559, T504 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441, T581 |

@@ -128,6 +128,24 @@ const reviewsRoute = createRoute({
 });
 
 /**
+ * A build's log at its address (T610; design 16, G6): Run history, open on
+ * it; one of another folder, or none, reads as the app's Not found page.
+ */
+const buildLogRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/jobs/builds/$buildId',
+  component: function BuildLogSurface() {
+    const params = useParams({ strict: false }) as { buildId?: string };
+    const buildId = decodeURIComponent(params.buildId ?? '');
+    return (
+      <AppShell workspace="jobs">
+        <JobsPage key={buildId} buildId={buildId} />
+      </AppShell>
+    );
+  },
+});
+
+/**
  * A proposal's review view (T356; design 05's main screen): the item itself,
  * with Approve and Reject, only here.
  */
@@ -748,6 +766,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   sourcesRoute,
   ...workspaceRoutes,
+  buildLogRoute,
   securityTabRoute,
   reviewsRoute,
   reviewRoute,

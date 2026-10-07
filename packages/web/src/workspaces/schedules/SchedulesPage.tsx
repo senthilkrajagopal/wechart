@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { ExportedToast } from '../../dashboard/export/ExportedToast';
 import { InfoBar } from '../../shell/InfoBar';
+import { NotFound } from '../../shell/NotFound';
 import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { shownOf } from '../jobs/BuildPanel';
@@ -10,6 +11,7 @@ import {
   EVERY_FOLDER,
   FolderFilter,
   inFolder,
+  neverTheirs,
   ScopeNote,
   useJobsFolders,
   type FolderChoice,
@@ -20,6 +22,8 @@ import {
   ListEmpty,
   ListError,
   ListLoading,
+  NoFolderLeft,
+  noFolderLeft,
   readErrorOf,
 } from '../jobs/ListStates';
 import { ChoicePill } from '../jobs/Pill';
@@ -331,27 +335,46 @@ export function SchedulesPage() {
   // In which folder, as every Jobs tab (T559, AC-297; design 16, pin 3).
   const [folderChoice, setFolderChoice] = useState<FolderChoice>(EVERY_FOLDER);
   const folders = useJobsFolders();
+  // What Search schedules holds (T610; design 16, screen 2).
+  const [search, setSearch] = useState('');
   const now = new Date();
   const keys = schedules.data ?? [];
   const own = wechart.data ?? [];
   const lists = (of: 'cube' | 'wechart') => owner === 'all' || owner === of;
   const inChosenFolder = (folderId: string | null | undefined) =>
     inFolder(folderId, folderChoice, folders.data?.folders ?? []);
+  /** Whether any of a row's words holds what was searched: its rollup, its folder, its name (T610). */
+  const sought = search.trim().toLowerCase();
+  const found = (...words: (string | undefined)[]) =>
+    sought === '' ||
+    words.some((each) => each !== undefined && each.toLowerCase().includes(sought));
   /**
    * Whether a wechart schedule is in the chosen state, as its row reads it:
-   * one paused and suspended reads Suspended (T558's review), and in the
-   * chosen folder (T559). Every one at Any.
+   * one paused and suspended reads Suspended (T558's review), in the chosen
+   * folder (T559), and found by what was searched (T610). Every one at Any.
    */
-  const inState = (each: WechartSchedule) =>
-    inChosenFolder(each.folderId) &&
-    (state === '' ||
-      (state === 'suspended'
-        ? each.suspendedAt !== null
-        : state === 'paused'
-          ? each.pausedAt !== null && each.suspendedAt === null
-          : each.suspendedAt === null && each.pausedAt === null));
+  const inState = (each: WechartSchedule) => {
+    const shownAs = shownOf({
+      id: each.preAggregation,
+      ...(each.shortName === undefined ? {} : { shortName: each.shortName }),
+      ...(each.folderPath === undefined ? {} : { folderPath: each.folderPath }),
+    });
+    return (
+      inChosenFolder(each.folderId) &&
+      found(each.name, shownAs.name, shownAs.folder ?? 'Shared') &&
+      (state === '' ||
+        (state === 'suspended'
+          ? each.suspendedAt !== null
+          : state === 'paused'
+            ? each.pausedAt !== null && each.suspendedAt === null
+            : each.suspendedAt === null && each.pausedAt === null))
+    );
+  };
   /** Whether a refresh key is listed: a state is a wechart schedule's, so at Any only, in the chosen folder. */
-  const keyListed = (key: Schedule) => state === '' && inChosenFolder(key.folderId);
+  const keyListed = (key: Schedule) =>
+    state === '' &&
+    inChosenFolder(key.folderId) &&
+    found(shownOf(key).name, shownOf(key).folder ?? 'Shared');
   const keysListed = keys.filter(keyListed);
   const ownListed = own.filter(inState);
   const pane: ReactNode = (() => {
@@ -406,6 +429,21 @@ export function SchedulesPage() {
   const isSelected = (kind: 'cube' | 'wechart', id: string) =>
     selected !== null && selected.kind === kind && selected.id === id;
 
+  // Schedules to one who writes no folder reads as the app's Not found page (G6, rule 67; T610).
+  if (neverTheirs(folders)) return <NotFound />;
+  // The last read-write folder gone while the page is open (G5b; T610).
+  if (noFolderLeft(schedules) || noFolderLeft(wechart))
+    return (
+      <div className="admin-page">
+        <div className="admin-page__main">
+          <div className="schedules__head">
+            <h1 className="workspace-title">Schedules</h1>
+          </div>
+          <NoFolderLeft page="Schedules" />
+        </div>
+      </div>
+    );
+
   return (
     <div className={pane === null ? 'admin-page' : 'admin-page admin-page--docked'}>
       <div className="admin-page__main">
@@ -458,8 +496,13 @@ export function SchedulesPage() {
           />
         ) : null}
         {schedules.isPending ? (
-          // Skeleton rows while they're read (G1).
-          <ListLoading said="Reading the schedules…" />
+          // Skeleton rows while they're read, under the list's heads (G1; T610).
+          <ListLoading
+            said="Reading the schedules…"
+            label="Refresh schedules"
+            columns={['Pre-aggregation', 'Folder', 'Schedule', 'Next run', 'Last run', 'Owner']}
+            narrow={['Folder', 'Schedule', 'Last run']}
+          />
         ) : keys.length === 0 && own.length === 0 ? (
           schedules.isSuccess ? (
             // Nothing in their folders yet (G3).
@@ -472,7 +515,8 @@ export function SchedulesPage() {
           <>
             {/* Each owner's count is the rows its choice lists, in the folders
                 the API answers for this user (pin 4). */}
-            <div className="schedules__filters">
+            {/* With Pre-aggregations' filter row's styles: Search as tall as its pills (T610's review). */}
+            <div className="schedules__filters sources-filters">
               {/* The Folder filter first, as screen 2 draws it (pin 3). */}
               <FolderFilter
                 folders={folders.data}
@@ -487,6 +531,17 @@ export function SchedulesPage() {
                   wechart: ownListed.length,
                 }}
                 onChange={setOwner}
+              />
+              {/* Search schedules, after the owner filter (screen 2; T610). */}
+              <input
+                type="search"
+                className="sources-filters__search"
+                aria-label="Search schedules"
+                placeholder="Search schedules"
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                }}
               />
               <ChoicePill
                 label="State"

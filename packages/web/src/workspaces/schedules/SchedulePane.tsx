@@ -86,19 +86,22 @@ export function SchedulePane({
             : `Set in ${schedule.fileName} in ${folder}, so it’s read-only here.`}{' '}
           To change it, edit the model in My workspace and propose it.
         </p>
-        <div className="admin-pane__actions">
-          {modelHref === undefined ? null : (
-            <a className="btn btn-sm" href={modelHref}>
-              Open in Model
-            </a>
-          )}
-          {/* Jobs reads only what queries reach: a hidden cube isn't there (T551's review). */}
-          {schedule.public === false ? null : (
-            <a className="btn btn-sm" href={`/jobs?preagg=${encodeURIComponent(schedule.id)}`}>
-              Open in Jobs
-            </a>
-          )}
-        </div>
+        {/* Pinned at the sheet's foot below 1,024 px (design 16, G8); none, and no empty bar (T610's review). */}
+        {modelHref === undefined && schedule.public === false ? null : (
+          <div className="admin-pane__actions sheet-foot">
+            {modelHref === undefined ? null : (
+              <a className="btn btn-sm" href={modelHref}>
+                Open in Model
+              </a>
+            )}
+            {/* Jobs reads only what queries reach: a hidden cube isn't there (T551's review). */}
+            {schedule.public === false ? null : (
+              <a className="btn btn-sm" href={`/jobs?preagg=${encodeURIComponent(schedule.id)}`}>
+                Open in Jobs
+              </a>
+            )}
+          </div>
+        )}
         {schedule.public === false ? (
           <p className="help build-log__help" data-testid="schedule-not-in-jobs">
             Its cube isn’t public, so Jobs doesn’t list it.

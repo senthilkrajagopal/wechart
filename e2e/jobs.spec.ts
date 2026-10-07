@@ -111,7 +111,8 @@ test('building a pre-aggregation follows its job to done, and Cube’s record of
 
   // Its row, read again, its newest version the one admin's build made.
   const state = row.getByTestId('row-state');
-  await expect(row.getByTestId('starter')).toHaveText('admin', { timeout: 30_000 });
+  // Sign-in off: the one user is "You" (design 16, G7; T610).
+  await expect(row.getByTestId('starter')).toHaveText('You', { timeout: 30_000 });
   await expect(state).toHaveAttribute('data-state', 'built');
   // T158 / AC-152: in words, with its icon — never colour alone.
   await expect(state).toHaveText('Built');
@@ -155,7 +156,7 @@ test('Run history lists a build started from Jobs, its log naming its token and 
   const built = page.getByTestId(`build-row-${runId}`);
   await expect(built).toContainText(rollup);
   await expect(built.getByTestId('build-outcome')).toHaveText('Done', { timeout: 30_000 });
-  await expect(built.getByTestId('starter')).toHaveText('admin');
+  await expect(built.getByTestId('starter')).toHaveText('You');
 
   // Its log: the token, whole in its title, and Cube's end state.
   await built.getByRole('button', { name: rollup }).click();
@@ -271,7 +272,7 @@ test('a build wechart queued waits with its token, Cancel takes it out, and Run 
     // Run history: the start reads Cancelled, by whom, once its other jobs end.
     await page.getByRole('tab', { name: 'Run history' }).click();
     await expect(page.getByTestId(`build-row-${runId}`).getByTestId('build-outcome')).toHaveText(
-      /^Cancelled · by admin, \d{2}:\d{2}$/,
+      /^Cancelled · by you, \d{2}:\d{2}$/,
       { timeout: 120_000 },
     );
   } finally {
@@ -370,7 +371,7 @@ test('Stop ends a building build wechart started, Run history reads Cancelled wh
     // Run history: cancelled while building, by whom.
     await page.getByRole('tab', { name: 'Run history' }).click();
     await expect(page.getByTestId(`build-row-${runId}`).getByTestId('build-outcome')).toHaveText(
-      /^Cancelled while building · by admin, \d{2}:\d{2}$/,
+      /^Cancelled while building · by you, \d{2}:\d{2}$/,
       { timeout: 30_000 },
     );
 
@@ -732,7 +733,8 @@ test('each pre-aggregation’s row has its state, its trigger, and its name lead
   await expect(state).toHaveAttribute('data-state', 'built', { timeout: 15_000 });
   await expect(state).toHaveText('Built');
   await expect(state.locator('svg[data-icon="ok"]')).toHaveCount(1);
-  await expect(row.getByTestId('starter')).toHaveText('admin');
+  // Sign-in off: the one user is "You" (G7; T610).
+  await expect(row.getByTestId('starter')).toHaveText('You');
 
   // Its name is plain text, and the row selects it; its pane's Open in Model
   // opens its definition, on this pre-aggregation (the user, 2026-09-28:
@@ -841,14 +843,58 @@ test('below 1,024 px the list keeps name, folder and state, and the pane is a fu
   expect([sheet?.x, sheet?.width]).toEqual([0, 390]);
   // Opened, the sheet has focus, at its head (rule 85).
   await expect(pane.getByRole('heading', { level: 2 })).toBeFocused();
-  // Building stays possible, in the sheet.
-  await expect(pane.getByRole('button', { name: /^Build/ }).first()).toBeVisible();
+  // Building stays possible, in the sheet, its actions pinned at its foot (G8; T610).
+  const build = pane.getByRole('button', { name: /^Build/ }).first();
+  await expect(build).toBeVisible();
+  const actions = await build.boundingBox();
+  expect((actions?.y ?? 0) + (actions?.height ?? 0)).toBeGreaterThan(844 - 48);
 
   await pane.getByRole('button', { name: 'Back to the list' }).click();
   await expect(pane).toBeHidden();
   await expect(row).toBeVisible();
   // Focus back on its row.
   await expect(row).toBeFocused();
+});
+
+/**
+ * T610 / AC-399 (design 16, G1 and G7): the skeleton rows under the list's
+ * own heads while it is read; and with sign-in off, a build of the one
+ * user's names them "You".
+ */
+test('reads its list under its heads, and names the single user’s builds "You"', async ({
+  page,
+  request,
+}) => {
+  // A list held back a moment, so its skeleton is seen under its heads (G1).
+  let release = () => undefined as void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/preaggregations', async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.goto('/jobs');
+  const skeleton = page.getByRole('table', { name: 'Pre-aggregations, being read' });
+  await expect(skeleton.getByRole('columnheader')).toHaveText([
+    'Pre-aggregation',
+    'Folder',
+    'Status',
+    'Last built',
+    'Started by',
+    'Trigger',
+    'Partitions',
+  ]);
+  // Let it through, and every read after it.
+  release();
+
+  // Sign-in is off in this suite: a build started here names its starter "You" (G7).
+  const started = await request.post('/api/builds', { data: { preAggregation: ROLLUP } });
+  expect(started.status(), await started.text()).toBe(200);
+  await page.goto(`/jobs?tab=history&preagg=${encodeURIComponent(ROLLUP)}`);
+  await expect(
+    page.getByRole('table', { name: 'Run history' }).getByTestId('starter').first(),
+  ).toHaveText('You');
 });
 
 /**

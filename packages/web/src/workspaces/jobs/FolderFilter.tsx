@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 
 import { InfoBar } from '../../shell/InfoBar';
 import { folderTextOf } from './builds';
+import { isRefused, readErrorOf } from './ListStates';
 import { Pill } from './Pill';
 
 /**
@@ -43,12 +44,22 @@ export function useJobsFolders() {
     queryKey: JOBS_FOLDERS_KEY,
     queryFn: async ({ signal }): Promise<JobsFolders> => {
       const response = await fetch('/api/jobs/folders', { signal });
+      // With its status: refused, they write no folder (T610, G6).
       if (!response.ok)
-        throw new Error(`The folders could not be read (${String(response.status)}).`);
+        throw await readErrorOf(response, 'The folders could not be read', 'GET /api/jobs/folders');
       return (await response.json()) as JobsFolders;
     },
   });
 }
+
+/**
+ * Whether the user may not use Jobs or Schedules at all (T610; design 16,
+ * G6 and rule 67): their folders refused before they were ever read, so the
+ * page reads as the app's Not found. One who loses access while the page is
+ * open is told so by its lists instead (G5b).
+ */
+export const neverTheirs = (folders: ReturnType<typeof useJobsFolders>): boolean =>
+  folders.isError && isRefused(folders.error) && folders.data === undefined;
 
 /** Whether a row in `folderId` is listed under `choice`: its folder, or one below it with Include subfolders. */
 export function inFolder(
@@ -68,15 +79,34 @@ export function inFolder(
   return false;
 }
 
+/** One step of a choice's indent: a native option takes no padding, so spaces that don't collapse. */
+const STEP = '   ';
+
 /**
- * A choice's words, as state H2 draws them: a member's folders each by its
- * path, "Sales / EMEA"; a Super-Admin's every folder as a tree of short
- * names under "Shared · the root", each indented by its depth (T560).
+ * A choice's words, as state H2 draws them, each a step in under All and a
+ * step further for each of its folders above it that is listed too (T610):
+ * a member's folders each by its path, "Sales / EMEA"; a Super-Admin's
+ * every folder as a tree of short names under "Shared · the root" (T560).
  */
-export function choiceOf(folder: JobsFolder, everyFolder: boolean): string {
-  if (!everyFolder) return folderTextOf(folder.path);
-  if (folder.parentId === null) return 'Shared · the root';
-  return `${'   '.repeat(folder.path.length - 1)}${folder.path.at(-1) ?? ''}`;
+export function choiceOf(
+  folder: JobsFolder,
+  everyFolder: boolean,
+  folders: readonly JobsFolder[] = [],
+): string {
+  const parentOf = new Map(folders.map((each) => [each.id, each.parentId]));
+  let depth = 0;
+  const seen = new Set<string>();
+  for (let at = folder.parentId; at !== null && parentOf.has(at) && !seen.has(at);) {
+    seen.add(at);
+    depth += 1;
+    at = parentOf.get(at) ?? null;
+  }
+  const words = !everyFolder
+    ? folderTextOf(folder.path)
+    : folder.parentId === null
+      ? 'Shared · the root'
+      : (folder.path.at(-1) ?? '');
+  return `${STEP.repeat(depth + 1)}${words}`;
 }
 
 /**
@@ -121,7 +151,7 @@ export function FolderFilter({
             </option>
             {inTreeOrder(folders?.folders ?? []).map((folder) => (
               <option key={folder.id} value={folder.id}>
-                {choiceOf(folder, folders?.everyFolder === true)}
+                {choiceOf(folder, folders?.everyFolder === true, folders?.folders)}
               </option>
             ))}
           </select>

@@ -1,5 +1,7 @@
+import { useQuery } from '@tanstack/react-query';
 import { periodOf, periodsOf } from '@wechart/core';
 
+import { ME_QUERY } from '../../shell/me';
 import { Status } from './StateBadge';
 
 /**
@@ -163,6 +165,8 @@ export function BuildOutcomeStatus({
     | 'cancelledWhileBuilding'
   >;
 }) {
+  // With sign-in off, the one user is "you" (G7; T610).
+  const single = useSingleUser();
   const ofAll = (n: number) => ` · ${String(n)} of ${String(build.jobs)}`;
   switch (build.outcome) {
     case 'done':
@@ -178,7 +182,12 @@ export function BuildOutcomeStatus({
       );
     case 'cancelled': {
       // By whom and when (design 16, C2): "Cancelled · by Wren Writer, 14:39".
-      const by = build.cancelledBy?.name;
+      const by =
+        build.cancelledBy === null || build.cancelledBy === undefined
+          ? undefined
+          : single
+            ? 'you'
+            : build.cancelledBy.name;
       const at =
         typeof build.cancelledAt === 'string'
           ? new Date(build.cancelledAt).toLocaleTimeString('en-GB', {
@@ -220,8 +229,23 @@ export function BuildOutcomeStatus({
   }
 }
 
+/**
+ * Whether sign-in is off (T610; design 16, G7): the one user is a
+ * Super-Admin, and the builds they start name them "You". Not known, and
+ * people are named.
+ */
+export function useSingleUser(): boolean {
+  const me = useQuery({ ...ME_QUERY, retry: false, staleTime: Infinity });
+  return me.data?.security === 'off';
+}
+
+/** A person as Jobs names them: "You" with sign-in off (G7), else by name. */
+export const personName = (person: { readonly name: string }, single: boolean): string =>
+  single ? 'You' : person.name;
+
 /** A person's icon, or a wechart schedule's calendar, beside their name (design 16, rule 3). */
 export function StarterLabel({ starter }: { starter: Starter }) {
+  const single = useSingleUser();
   return (
     <span className="owner" data-testid="starter">
       <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" data-icon={starter.kind}>
@@ -258,8 +282,10 @@ export function StarterLabel({ starter }: { starter: Starter }) {
       </svg>
       {/* "Run now · Month-end close, by Wren Writer" (design 16, P2). */}
       {starter.kind === 'schedule' && starter.by !== undefined
-        ? `Run now · ${starter.name}, by ${starter.by.name}`
-        : starter.name}
+        ? `Run now · ${starter.name}, by ${single ? 'you' : starter.by.name}`
+        : starter.kind === 'person'
+          ? personName(starter, single)
+          : starter.name}
     </span>
   );
 }

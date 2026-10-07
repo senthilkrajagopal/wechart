@@ -181,14 +181,108 @@ describe('Schedules’ refresh-key rows (T551, AC-154)', () => {
       '/jobs?preagg=fsales__orders.mornings',
     );
     // Read-only: nothing on the page edits a schedule. Its only controls are
-    // the list's filters, Folder (T559) and State (T558, R66), which edit none.
+    // the list's filters, Folder (T559), Search (T610) and State (T558, R66),
+    // which edit none.
     const controls = [...document.querySelectorAll('main input, input, select, textarea')];
     expect(controls.filter((each) => each.closest('.schedules__filters') === null)).toHaveLength(0);
     expect(controls).toEqual([
       screen.getByRole('combobox', { name: 'Folder' }),
       screen.getByRole('checkbox', { name: 'Include subfolders' }),
+      screen.getByRole('searchbox', { name: 'Search schedules' }),
       screen.getByRole('combobox', { name: 'State' }),
     ]);
+  });
+});
+
+/**
+ * T610 (AC-399; design 16, screen 2's filters, G1, G5b and G6): Search
+ * schedules, after the owner filter; the skeleton under the list's own
+ * heads; no read-write folder left while open; and Schedules opened by one
+ * who writes no folder reads as the app's Not found page.
+ */
+describe('Schedules: Search, and the rest of design 16’s states (T610, AC-399)', () => {
+  const user = () => userEvent.setup({ delay: null });
+  const named = () => screen.queryAllByTestId('wechart-schedule-name').map((each) => text(each));
+  const keyNames = () =>
+    within(screen.getByRole('table', { name: 'Refresh schedules' }))
+      .queryAllByTestId('schedule-name')
+      .map((each) => text(each));
+
+  it('narrows the list to schedules whose rollup, name or folder holds what is typed; the owner filter counts them', async () => {
+    shownSchedules({
+      wechart: [schedule(), schedule({ id: 'sched-2', name: 'Weekends' })],
+    });
+    await screen.findByText('Weekends', { selector: '[data-testid="wechart-schedule-name"]' });
+    const find = screen.getByRole('searchbox', { name: 'Search schedules' });
+    expect(find.getAttribute('placeholder')).toBe('Search schedules');
+    // After the owner filter, as screen 2 places it.
+    expect(
+      [...document.querySelectorAll('.schedules__filters > *')].map((each) =>
+        each.matches('[role="radiogroup"]')
+          ? 'Owner'
+          : each.matches('input')
+            ? each.getAttribute('aria-label')
+            : each.matches('label')
+              ? text(each)
+              : text(each.querySelector('label')),
+      ),
+    ).toEqual(['Folder', 'Include subfolders', 'Owner', 'Search schedules', 'State']);
+
+    await user().type(find, 'weekend');
+    expect(named()).toEqual(['Weekends']);
+    expect(keyNames()).toEqual(['orders.mornings']);
+    expect(
+      within(screen.getByRole('radiogroup', { name: 'Owner' }))
+        .getAllByRole('radio')
+        .map((radio) => text(radio)),
+    ).toEqual(['All 1', 'Cube’s refresh worker 0', 'wechart 1']);
+
+    await user().clear(find);
+    await user().type(find, 'on_demand');
+    expect([named(), keyNames()]).toEqual([[], ['orders.on_demand']]);
+  });
+
+  it('draws skeleton rows under the list’s heads while it is read (G1)', async () => {
+    shownSchedules({ pending: true });
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('skeleton-rows').children.length).toBeGreaterThanOrEqual(3);
+    });
+    expect(
+      within(screen.getByTestId('skeleton-table'))
+        .getAllByRole('columnheader')
+        .map((header) => text(header)),
+    ).toEqual(['Pre-aggregation', 'Folder', 'Schedule', 'Next run', 'Last run', 'Owner']);
+  });
+
+  it('says Schedules is for read-write members once no read-write folder is left (G5b)', async () => {
+    const { refusedLater } = shownSchedules({ wechart: [schedule()] });
+    await screen.findByText('Weekday mornings', {
+      selector: '[data-testid="wechart-schedule-name"]',
+    });
+
+    await refusedLater();
+
+    const left = await screen.findByTestId('no-folder-left');
+    expect([
+      text(left.querySelector('b')),
+      text(left.querySelector('span')),
+      within(left).getByRole('link', { name: 'Open Explore' }).getAttribute('href'),
+    ]).toEqual([
+      'Schedules is for read-write members of a folder',
+      'You no longer have read-write access to any folder, so there’s nothing here for you. Your dashboards are in Explore.',
+      '/explore',
+    ]);
+  });
+
+  it('is the app’s Not found page to one who writes no folder (G6, rule 67)', async () => {
+    shownSchedules({ refused: true });
+
+    expect(text(await screen.findByRole('heading', { level: 1, name: 'Not found' }))).toBe(
+      'Not found',
+    );
+    expect(screen.queryByRole('table', { name: 'Refresh schedules' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'New schedule' })).toBeNull();
   });
 });
 
@@ -411,7 +505,8 @@ describe('Schedules’ Folder filter and scope note (T559, AC-297)', () => {
         within(screen.getByRole('combobox', { name: 'Folder' }))
           .getAllByRole('option')
           .map((option) => text(option)),
-      ).toEqual(['All folders', 'Shared · the root']);
+        // The root a step in under All folders, as H2 draws it (T610).
+      ).toEqual(['All folders', '   Shared · the root']);
     });
     expect(screen.queryByRole('note', { name: 'Scope' })).toBeNull();
   });
@@ -427,7 +522,8 @@ describe('Schedules’ Folder filter and scope note (T559, AC-297)', () => {
         within(folder)
           .getAllByRole('option')
           .map((option) => text(option)),
-      ).toEqual(['All of mine', 'Sales', 'Sales / EMEA']);
+        // The member's paths, indented by depth below their top folder (H2; T610).
+      ).toEqual(['All of mine', '   Sales', '      Sales / EMEA']);
     });
 
     await user().selectOptions(folder, 'emea');
@@ -731,6 +827,9 @@ describe('Schedules, as Cube runs them (T551’s review)', () => {
     expect(text(within(pane).getByTestId('schedule-not-in-jobs'))).toBe(
       'Its cube isn’t public, so Jobs doesn’t list it.',
     );
+    // With no link of its own either, no empty bar is pinned at the sheet's foot (T610's review).
+    expect(within(pane).queryAllByRole('link', { name: 'Open in Model' })).toHaveLength(0);
+    expect(pane.querySelectorAll('.sheet-foot')).toHaveLength(0);
   });
 
   it('says why Cube can’t run a key, in the words the model editor uses', async () => {

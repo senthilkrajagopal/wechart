@@ -41,13 +41,14 @@ const PARTITIONED = {
   ],
 };
 
-function serve(answers: unknown[]) {
+function serve(answers: unknown[], me?: unknown) {
   const posted: unknown[] = [];
   let asks = 0;
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+      if (url === '/api/me' && me !== undefined) return Response.json(me);
       if (url.startsWith('/api/jobs/partitions')) {
         const answer = answers[Math.min(asks, answers.length - 1)];
         asks += 1;
@@ -111,6 +112,33 @@ describe('a rollup’s partitions (T375, AC-145)', () => {
     expect(text(screen.getByRole('heading', { name: /Partitions/ }))).toContain(
       'UTC, newest first',
     );
+  });
+
+  it('names the single user "You" on a partition they queued, with sign-in off (design 16, G7)', async () => {
+    const queued = (startedBy: unknown, month: string) =>
+      part(month, 'queued', { startedBy, tableName: `t_q${month}` });
+    serve(
+      [
+        {
+          ...PARTITIONED,
+          partitions: [
+            queued({ kind: 'person', key: 'admin', name: 'admin' }, '07'),
+            queued({ kind: 'schedule', id: 's-1', name: 'Month-end close' }, '06'),
+          ],
+        },
+      ],
+      { name: 'admin', security: 'off' },
+    );
+    shown();
+
+    const table = await screen.findByRole('table', { name: `Partitions of ${NAME}` });
+    await vi.waitFor(() => {
+      expect(
+        within(table)
+          .getAllByTestId('partition-state')
+          .map((state) => text(state)),
+      ).toEqual(['Queued · You', 'Queued · Month-end close']);
+    });
   });
 
   it('rebuilds the selected partitions, one request naming each start, and Build all every one', async () => {
@@ -212,6 +240,8 @@ describe('a rollup’s partitions (T375, AC-145)', () => {
     const link = screen.getByRole('link', { name: 'Open orders_emea.by_month' });
     expect(link.getAttribute('href')).toBe('/jobs?preagg=femea__orders_emea.by_month');
     expect(screen.queryAllByRole('button', { name: /Build|Rebuild/ })).toHaveLength(0);
+    // Nothing of its own to act on: no empty bar pinned at the sheet's foot (T610's review).
+    expect(document.querySelectorAll('.sheet-foot')).toHaveLength(0);
   });
 
   it('asks again while Cube works the partitions out, and never shows none (A4)', async () => {

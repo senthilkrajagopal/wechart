@@ -2,7 +2,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { StateLine } from '../../shell/StatusIcon';
-import { BuiltWhen, folderTextOf, periodOf, type Starter } from './builds';
+import {
+  BuiltWhen,
+  folderTextOf,
+  periodOf,
+  personName,
+  useSingleUser,
+  type Starter,
+} from './builds';
 import { isRefused, ReadError } from './ListStates';
 import { Status } from './StateBadge';
 
@@ -54,20 +61,19 @@ const hourOf = (iso: string) =>
 
 /** A state in design 16's words, with its icon (pins 5, 12; the legend). */
 function StateOf({ row }: { row: PartitionRow }) {
+  // With sign-in off, the one user is "You" (design 16, G7; T610's review).
+  const single = useSingleUser();
+  const by =
+    row.startedBy === undefined
+      ? ''
+      : ` · ${row.startedBy.kind === 'person' ? personName(row.startedBy, single) : row.startedBy.name}`;
   switch (row.state) {
     case 'built':
       return <Status kind="ok" label="Built" testId="partition-state" state="built" />;
     case 'building':
       return <Status kind="run" label="Building" testId="partition-state" state="building" />;
     case 'queued':
-      return (
-        <Status
-          kind="idle"
-          label={`Queued${row.startedBy === undefined ? '' : ` · ${row.startedBy.name}`}`}
-          testId="partition-state"
-          state="queued"
-        />
-      );
+      return <Status kind="idle" label={`Queued${by}`} testId="partition-state" state="queued" />;
     case 'stalled':
       return <Status kind="warn" label="Stalled" testId="partition-state" state="stalled" />;
     case 'failed':
@@ -274,7 +280,7 @@ export function Partitions({
     return (
       <>
         {/* Build all needs no list; Rebuild selected waits for it (A4). */}
-        <div className="admin-pane__actions">
+        <div className="admin-pane__actions sheet-foot">
           <button
             type="button"
             className="btn-primary btn-sm"
@@ -305,7 +311,7 @@ export function Partitions({
   if (found.isPending || found.isError)
     return (
       <>
-        <div className="admin-pane__actions">
+        <div className="admin-pane__actions sheet-foot">
           {buildAll}
           {children}
         </div>
@@ -344,7 +350,8 @@ export function Partitions({
             </li>
           ))}
         </ul>
-        <div className="admin-pane__actions">{children}</div>
+        {/* None of its own, Open in Model only: no empty bar pinned at the sheet's foot (T610's review). */}
+        {children == null ? null : <div className="admin-pane__actions sheet-foot">{children}</div>}
       </section>
     );
 
@@ -359,7 +366,7 @@ export function Partitions({
 
   return (
     <>
-      <div className="admin-pane__actions">
+      <div className="admin-pane__actions sheet-foot">
         {whole ? (
           <button
             type="button"

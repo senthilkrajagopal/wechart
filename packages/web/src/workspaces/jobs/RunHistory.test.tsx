@@ -134,7 +134,8 @@ describe('Run history (T374, AC-150)', () => {
     expect(asked.at(-1)?.get('outcome')).toBe('failed');
     await userEvent.selectOptions(screen.getByLabelText('Started by'), 'Month-end close');
     expect(asked.at(-1)?.get('starter')).toBe('schedule:s-1');
-    await userEvent.selectOptions(screen.getByLabelText('Folder'), 'Sales / EMEA / DACH');
+    // By its value: its words are indented under its parent, as H2 draws them (T610).
+    await userEvent.selectOptions(screen.getByLabelText('Folder'), 'dach');
     expect(asked.at(-1)?.get('folder')).toBe('dach');
     await userEvent.selectOptions(screen.getByLabelText('Time'), 'Last 24 hours');
     expect(asked.at(-1)?.get('within')).toBe('day');

@@ -10,9 +10,11 @@ import {
   periodOfTable,
   shortToken,
   StarterLabel,
+  useSingleUser,
   whenOf,
   type BuildSummary,
 } from './builds';
+import { readErrorOf } from './ListStates';
 import { StateBadge } from './StateBadge';
 
 /**
@@ -41,20 +43,24 @@ export interface BuildRecord extends Omit<BuildSummary, 'jobs' | 'progress'> {
   }[];
 }
 
-/** How it was started, in words: "with Rebuild selected in Jobs". */
-function howOf(record: BuildRecord): string {
+/**
+ * How it was started, in words: "with Rebuild selected in Jobs". With
+ * sign-in off, the one user is "you" (G7; T610).
+ */
+function howOf(record: BuildRecord, single: boolean): string {
+  const who = (person: { readonly name: string }) => (single ? 'you' : person.name);
   if (record.starter.kind === 'schedule')
     // A Run now names who chose it (T555's review).
     return record.starter.by === undefined
       ? `by ${record.starter.name}, a wechart schedule`
-      : `by ${record.starter.by.name}, with Run now on ${record.starter.name}, a wechart schedule`;
+      : `by ${who(record.starter.by)}, with Run now on ${record.starter.name}, a wechart schedule`;
   const how =
     record.via === 'rebuild-selected'
       ? 'Rebuild selected'
       : record.granularity === null
         ? 'Build now'
         : 'Build all';
-  return `by ${record.starter.name}, with ${how} in Jobs`;
+  return `by ${who(record.starter)}, with ${how} in Jobs`;
 }
 
 /** A Cube Store table shortened to its partition: "…by_month20260801_abcd…". */
@@ -140,21 +146,24 @@ function linesOf(record: BuildRecord): Line[] {
   return lines;
 }
 
+/** One build's record, as its log reads it; refused or not found with its status (G6; T610). */
+export const buildQueryOf = (id: string) => ({
+  queryKey: ['jobs', 'build', id] as const,
+  queryFn: async ({ signal }: { signal?: AbortSignal }): Promise<BuildRecord> => {
+    const response = await fetch(
+      `/api/jobs/builds/${encodeURIComponent(id)}`,
+      signal === undefined ? {} : { signal },
+    );
+    if (!response.ok)
+      throw await readErrorOf(response, 'The build could not be read', 'GET /api/jobs/builds/…');
+    return (await response.json()) as BuildRecord;
+  },
+});
+
 export function BuildLog({ id, onClose }: { id: string; onClose: () => void }) {
+  const single = useSingleUser();
   const found = useQuery({
-    queryKey: ['jobs', 'build', id],
-    queryFn: async ({ signal }): Promise<BuildRecord> => {
-      const response = await fetch(`/api/jobs/builds/${encodeURIComponent(id)}`, { signal });
-      const body = (await response.json().catch(() => null)) as
-        (BuildRecord & { error?: unknown }) | null;
-      if (!response.ok || body === null)
-        throw new Error(
-          typeof body?.error === 'string'
-            ? body.error
-            : `The build could not be read (${String(response.status)}).`,
-        );
-      return body;
-    },
+    ...buildQueryOf(id),
     // Followed while it is open; still once it has ended.
     refetchInterval: (query) => (query.state.data?.outcome === null ? 2_000 : false),
   });
@@ -205,7 +214,7 @@ export function BuildLog({ id, onClose }: { id: string; onClose: () => void }) {
               <time dateTime={record.startedAt} title={whenOf(record.startedAt).utc}>
                 {whenOf(record.startedAt).shown}
               </time>{' '}
-              {howOf(record)}
+              {howOf(record, single)}
             </dd>
             <dt>Ended</dt>
             <dd>

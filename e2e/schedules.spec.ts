@@ -108,7 +108,8 @@ test('Schedules lists each refresh schedule as Cube’s, a hidden cube’s too, 
 
   // Read-only: nothing on the page edits a refresh key's schedule. The only
   // controls are wechart schedules' own On switches (T556), on their rows,
-  // and the list's filters, Folder (T559) and State (T558, R66), which edit none.
+  // and the list's filters, Folder (T559), Search (T610) and State (T558,
+  // R66), which edit none.
   const cubeRows = table
     .getByRole('row')
     .filter({ has: page.getByTestId('owner').filter({ hasText: 'Cube’s refresh worker' }) });
@@ -118,11 +119,23 @@ test('Schedules lists each refresh schedule as Cube’s, a hidden cube’s too, 
     main.locator(':is(input:not([role="switch"]), select, textarea):not(.schedules__filters *)'),
   ).toHaveCount(0);
   await expect(main.locator('.schedules__filters').locator('input, select, textarea')).toHaveCount(
-    3,
+    4,
   );
   await expect(main.getByRole('combobox', { name: 'Folder' })).toHaveCount(1);
   await expect(main.getByRole('checkbox', { name: 'Include subfolders' })).toHaveCount(1);
+  await expect(main.getByRole('searchbox', { name: 'Search schedules' })).toHaveCount(1);
   await expect(main.getByRole('combobox', { name: 'State' })).toHaveCount(1);
+  // Search as tall as the pills beside it, as Pre-aggregations' (T610's review).
+  const pillOf = (name: string) =>
+    main.locator('.select-pill').filter({ has: page.getByRole('combobox', { name }) });
+  const heights = await Promise.all(
+    [
+      main.getByRole('searchbox', { name: 'Search schedules' }),
+      pillOf('Folder'),
+      pillOf('State'),
+    ].map(async (control) => (await control.boundingBox())?.height),
+  );
+  expect(new Set(heights).size, JSON.stringify(heights)).toBe(1);
   const switches = await main
     .getByRole('switch')
     .evaluateAll((all) =>
@@ -478,7 +491,8 @@ test('Run now starts a schedule’s build at once, Run history names the schedul
     // Run history: Run now on the schedule, by admin, followed to Done.
     await page.goto(`/jobs?tab=history&preagg=${encodeURIComponent(rollup)}`);
     const built = page.getByTestId(/^build-row-/).filter({
-      has: page.getByTestId('starter').filter({ hasText: `Run now · ${name}, by admin` }),
+      // Sign-in off: the one user is "you" (design 16, G7; T610).
+      has: page.getByTestId('starter').filter({ hasText: `Run now · ${name}, by you` }),
     });
     await expect(built).toHaveCount(1, { timeout: 30_000 });
     await expect(built.getByTestId('build-outcome')).toHaveText('Done', { timeout: 60_000 });
@@ -735,9 +749,93 @@ test('below 1,024 px Schedules lists name, next run and owner, and its pane is a
   expect([sheet?.x, sheet?.width]).toEqual([0, 390]);
   // Opened, the sheet has focus, at its head; × leads the head (rule 85).
   await expect(pane.getByRole('heading', { level: 2 })).toBeFocused();
+  // Its actions pinned at the sheet's foot (G8; T610).
+  const actions = await pane.getByRole('link', { name: 'Open in Model' }).boundingBox();
+  expect((actions?.y ?? 0) + (actions?.height ?? 0)).toBeGreaterThan(844 - 48);
 
   await pane.getByRole('button', { name: 'Back to the list' }).click();
   await expect(pane).toHaveCount(0);
   await expect(row).toBeVisible();
   await expect(row).toBeFocused();
+});
+
+/**
+ * T610's review (AC-399; design 16, G8): the sheet's pinned foot hides none
+ * of the sheet's last lines, however tall it wraps at 390 px, and its
+ * dialog is over it, the foot's actions out of reach behind it.
+ */
+test('below 1,024 px the sheet’s pinned foot hides nothing, and its dialog is over it', async ({
+  page,
+  request,
+  browserName,
+}) => {
+  const name = `Sheet foot ${browserName} ${String(Date.now())}`;
+  let id = '';
+  await expect
+    .poll(async () => {
+      const made = await request.post('/api/wechart-schedules', {
+        data: {
+          preAggregation: 'monthly_orders.by_status_month',
+          name,
+          cron: '0 5 * * *',
+          timezone: 'UTC',
+        },
+      });
+      if (made.ok()) id = ((await made.json()) as { id: string }).id;
+      return made.status();
+    }, PUBLISHED)
+    .toBe(201);
+  expect(id).toMatch(/\S/);
+  try {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/schedules');
+    const pane = page.getByRole('complementary', { name: 'Schedule details' });
+    /** Scrolled to its end: the last line's bottom, and the foot's top. */
+    const atEnd = () =>
+      pane.evaluate((sheet) => {
+        sheet.scrollTop = sheet.scrollHeight;
+        const foot = sheet.querySelector('.sheet-foot');
+        const lines = [...sheet.querySelectorAll('*')].filter(
+          (each) =>
+            foot?.contains(each) !== true &&
+            each.children.length === 0 &&
+            each.getBoundingClientRect().height > 0,
+        );
+        return {
+          last: Math.max(...lines.map((each) => each.getBoundingClientRect().bottom)),
+          foot: foot?.getBoundingClientRect().top ?? NaN,
+        };
+      });
+
+    // New schedule: its Cancel and Create pinned, its last line above them.
+    await page.getByRole('button', { name: 'New schedule' }).click();
+    await expect(pane.getByRole('heading', { level: 2 })).toHaveText('New schedule');
+    const form = await atEnd();
+    expect(form.last).toBeLessThanOrEqual(form.foot);
+
+    // One of wechart's: its last line above the foot, and Delete's dialog over the foot.
+    await pane.getByRole('button', { name: 'Cancel' }).click();
+    await page
+      .getByRole('table', { name: 'Refresh schedules' })
+      .getByRole('row')
+      .filter({ hasText: name })
+      .click();
+    await expect(pane.getByRole('heading', { level: 2 })).toHaveText(name);
+    const own = await atEnd();
+    expect(own.last).toBeLessThanOrEqual(own.foot);
+    const runNow = pane.getByRole('button', { name: 'Run now' });
+    const box = await runNow.boundingBox();
+    await pane.getByRole('button', { name: 'Delete…' }).click();
+    const dialog = page.getByRole('alertdialog', { name: `Delete “${name}”?` });
+    await expect(dialog).toBeVisible();
+    const over = await page.evaluate(
+      ({ x, y }) => document.elementFromPoint(x, y)?.closest('.sheet-foot') === null,
+      { x: (box?.x ?? 0) + (box?.width ?? 0) / 2, y: (box?.y ?? 0) + (box?.height ?? 0) / 2 },
+    );
+    expect(over).toBe(true);
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).toHaveCount(0);
+  } finally {
+    await request.delete(`/api/wechart-schedules/${id}`);
+  }
 });

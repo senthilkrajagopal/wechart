@@ -1,9 +1,11 @@
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { useId, useMemo, useRef, useState } from 'react';
 
 import { titlesOf } from '../../editor/fields';
 import { META_QUERY } from '../../query/meta';
+import { NotFound } from '../../shell/NotFound';
 import { StateLine } from '../../shell/StatusIcon';
+import { buildQueryOf } from './BuildLog';
 import { BuildPanel, ROW_STATUSES, type StatusChoice } from './BuildPanel';
 import {
   BuildQueue,
@@ -13,8 +15,9 @@ import {
   readQueue,
   type QueueState,
 } from './BuildQueue';
-import { EVERY_FOLDER, type FolderChoice } from './FolderFilter';
+import { EVERY_FOLDER, neverTheirs, useJobsFolders, type FolderChoice } from './FolderFilter';
 import { Health } from './Health';
+import { NoFolderLeft, ReadError, useNoFolderLeft } from './ListStates';
 import { FIRST_ASK, QueryLog, queryStringOf, type QueryLogAsk, type QueryRecord } from './QueryLog';
 import { RunHistory } from './RunHistory';
 import { Summary, SUMMARY_QUERY_KEY } from './Summary';
@@ -74,6 +77,16 @@ function Queries() {
   );
 }
 
+/**
+ * Jobs' lists, by key, each refused to one who writes no folder (T371):
+ * Pre-aggregations, Run history's pages, the queue and the folders. Not a
+ * pane's own reads, which a folder's loss alone refuses.
+ */
+const isJobsList = (key: QueryKey): boolean =>
+  key[0] === 'preaggregations' ||
+  (key[0] === 'jobs' &&
+    (key[1] === 'queue' || key[1] === 'folders' || (key[1] === 'builds' && key[2] !== 'of')));
+
 /** `?tab=queries` opens the log, and `?tab=history` Run history: a link to either, and the accessibility sweep's. */
 function tabOfUrl(): Tab {
   const asked = new URLSearchParams(window.location.search).get('tab');
@@ -105,12 +118,20 @@ function historyForUrl(): { id: string; name: string; opened: number } | undefin
   return { id, name: id.replace(/^f[0-9a-z]+__/, ''), opened: 0 };
 }
 
-export function JobsPage({ pollMs }: { pollMs?: number }) {
-  const [open, setOpen] = useState<Tab>(tabOfUrl);
+export function JobsPage({
+  pollMs,
+  buildId,
+}: {
+  pollMs?: number;
+  /** A build's log at its address, `/jobs/builds/…` (T610; design 16, G6): Run history, open on it. */
+  buildId?: string;
+}) {
+  const firstTab = (): Tab => (buildId === undefined ? tabOfUrl() : 'history');
+  const [open, setOpen] = useState<Tab>(firstTab);
   /** The pre-aggregation Run history was opened on, from its pane (T375; design 16, pin 14). */
   const [historyFor, setHistoryFor] = useState(historyForUrl);
   /** The tabs opened so far: Run history is read once its tab first opens, then kept. */
-  const [opened, setOpened] = useState<ReadonlySet<Tab>>(() => new Set([tabOfUrl()]));
+  const [opened, setOpened] = useState<ReadonlySet<Tab>>(() => new Set([firstTab()]));
   if (!opened.has(open)) setOpened(new Set([...opened, open]));
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const base = useId();
@@ -121,6 +142,9 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
   /** Their Folder filters (T559), which a summary's link sets back to every folder. */
   const [preaggsFolder, setPreaggsFolder] = useState<FolderChoice>(EVERY_FOLDER);
   const [queueFolder, setQueueFolder] = useState<FolderChoice>(EVERY_FOLDER);
+  /** Search pre-aggregations and the queue's Started by (T610), which a summary's link clears. */
+  const [preaggsSearch, setPreaggsSearch] = useState('');
+  const [queueStarter, setQueueStarter] = useState('');
   // How many entries the queue holds in the user's folders, on its tab (design
   // 16, pin 1): the queue's own read, shared with its panel.
   const queue = useQuery({
@@ -129,6 +153,30 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
     refetchInterval: QUEUE_EVERY_MS,
   });
   const queued = queue.data?.entries.length ?? 0;
+  /**
+   * Jobs to one who writes no folder, and a build's log out of their folders
+   * or none at all, read as the app's Not found page (T610; design 16, G6;
+   * rule 67): the folders refused before they were read, or the build.
+   */
+  const folders = useJobsFolders();
+  const build = useQuery({ ...buildQueryOf(buildId ?? ''), enabled: buildId !== undefined });
+  const buildMissing =
+    buildId !== undefined &&
+    build.isError &&
+    build.error instanceof ReadError &&
+    (build.error.status === 403 || build.error.status === 404);
+  /** The last read-write folder gone while open: said for the page, over every tab (G5b; T610's review). */
+  const noneLeft = useNoFolderLeft(isJobsList);
+  if (neverTheirs(folders) || buildMissing) return <NotFound />;
+  if (noneLeft)
+    return (
+      <div className="jobs-workspace">
+        <div className="jobs-workspace__head">
+          <h1 className="workspace-title">Jobs</h1>
+        </div>
+        <NoFolderLeft page="Jobs" />
+      </div>
+    );
   return (
     <div className="jobs-workspace">
       <div className="jobs-workspace__head">
@@ -137,12 +185,15 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
         <Summary
           onOpen={(opens) => {
             // Over every folder of theirs, as the count is (T559's review).
+            // Nor narrowed by whom or what was searched (T610).
             if (opens.tab === 'queue') {
               setQueueState(opens.state);
               setQueueFolder(EVERY_FOLDER);
+              setQueueStarter('');
             } else {
               setStatus(opens.status);
               setPreaggsFolder(EVERY_FOLDER);
+              setPreaggsSearch('');
             }
             setOpen(opens.tab);
             // The list read again, and the summary with it, so the two say the
@@ -209,6 +260,8 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
           onStatus={setStatus}
           folderChoice={preaggsFolder}
           onFolderChoice={setPreaggsFolder}
+          search={preaggsSearch}
+          onSearch={setPreaggsSearch}
           // `?preagg=`, from a tile's Data as of › Open in Jobs (T273, AC-245).
           selectedFirst={new URLSearchParams(window.location.search).get('preagg')}
           // Its pane's ways on: to its builds in Run history, and to the queue (T375).
@@ -233,6 +286,8 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
           key={historyFor === undefined ? '' : `${historyFor.id}-${String(historyFor.opened)}`}
           enabled={opened.has('history')}
           preAggregation={historyFor}
+          // The build at its address, once: not again when a pane opens Run history anew (T610's review).
+          openFirst={historyFor === undefined ? (buildId ?? null) : null}
         />
       </div>
       <div
@@ -246,6 +301,8 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
           onState={setQueueState}
           folderChoice={queueFolder}
           onFolderChoice={setQueueFolder}
+          starter={queueStarter}
+          onStarter={setQueueStarter}
         />
       </div>
       <div

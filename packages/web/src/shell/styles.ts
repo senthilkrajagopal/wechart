@@ -3980,12 +3980,31 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
     width: auto;
     height: auto;
     z-index: 40;
-    padding: 0 16px 16px;
+    /* Room for the actions pinned at its foot. */
+    padding: 0 16px 72px;
     border-left: 0;
     overflow: auto;
   }
   .admin-pane .admin-pane__close { display: inline-flex; }
+  /* The sheet's actions stay pinned at its foot (T610; G8: "its actions stay pinned at the bottom"). */
+  .build-panel > .admin-pane .sheet-foot,
+  .admin-page > .schedules__pane .sheet-foot {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    /* In the sheet's own stacking: over its sticky table heads (1), under its dialog (30) (T610's review). */
+    z-index: 2;
+    margin: 0;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--wc-border-subtle);
+    background: var(--wc-bg-surface);
+  }
 }
+/* The skeleton's bars under the list's heads (T610; G1). */
+.jobs-skeleton__bar { display: block; height: 12px; width: 70%; border-radius: 3px; background: var(--wc-bg-subtle); }
+.jobs-no-folder { justify-items: center; text-align: center; }
+.jobs-no-folder svg, .run-history__empty > svg { color: var(--wc-text-muted); }
 .build-panel__head { margin: 0; font-size: var(--wc-text-sm-size); line-height: var(--wc-text-sm-line); font-weight: 600; }
 .build-panel__builds,
 .build-jobs__list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
@@ -4412,8 +4431,6 @@ code.schedules__sub { font-family: var(--wc-font-code); }
 /* Jobs' and Schedules' list states (T560; design 16, state G): skeleton rows
    while a list is read (G1), and an error with Retry and Details (G2). */
 .jobs-loading { display: grid; gap: 8px; }
-.jobs-skeleton { display: grid; gap: 6px; }
-.jobs-skeleton span { height: 28px; border-radius: 4px; background: var(--wc-bg-subtle); }
 .jobs-error p { margin: 0; }
 .jobs-error__actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
 .jobs-error__actions details { font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }

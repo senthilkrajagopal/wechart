@@ -31,6 +31,8 @@ import {
   ListEmpty,
   ListError,
   ListLoading,
+  NoFolderLeft,
+  noFolderLeft,
   ReadError,
   readErrorOf,
 } from './ListStates';
@@ -88,6 +90,18 @@ interface Buildable {
 type RowState = 'failed' | 'building' | 'queued' | 'stalled' | 'partly' | 'not-built' | 'built';
 /** A state the Status filter chooses (T558): any of a row's, most needing attention first. */
 export type StatusChoice = RowState;
+
+/** The list's columns, as screen 1 heads them; those that move into the sheet below 1,024 px (G8). */
+const PREAGG_COLUMNS = [
+  'Pre-aggregation',
+  'Folder',
+  'Status',
+  'Last built',
+  'Started by',
+  'Trigger',
+  'Partitions',
+];
+const PREAGG_NARROW = ['Last built', 'Started by', 'Trigger', 'Partitions'];
 
 /**
  * Design 16's Status filter (s1-filters), Any or one of AC-391's states, in
@@ -329,11 +343,16 @@ export function BuildPanel({
   onStatus,
   folderChoice: folderChosen,
   onFolderChoice,
+  search: searched,
+  onSearch,
 }: {
   pollMs?: number;
   /** The folder listed (T559), where Jobs holds it; none, and the panel does. */
   folderChoice?: FolderChoice;
   onFolderChoice?: (choice: FolderChoice) => void;
+  /** What Search pre-aggregations holds (T610), where Jobs holds it; none, and the panel does. */
+  search?: string;
+  onSearch?: (search: string) => void;
   /** The rows listed: those in this state, or every one (T558). */
   status?: StatusChoice | '';
   /** Status chosen; none, and the filter isn't offered. */
@@ -420,6 +439,9 @@ export function BuildPanel({
   const [ownChoice, setOwnChoice] = useState<FolderChoice>(EVERY_FOLDER);
   const folderChoice = folderChosen ?? ownChoice;
   const setFolderChoice = onFolderChoice ?? setOwnChoice;
+  const [ownSearch, setOwnSearch] = useState('');
+  const search = searched ?? ownSearch;
+  const setSearch = onSearch ?? setOwnSearch;
   const folders = useJobsFolders();
   /** A build started: its row followed until it ends, and listed in its pane once recorded. */
   const follow = (id: string) => {
@@ -468,8 +490,18 @@ export function BuildPanel({
    */
   if (scopes.data?.jobs === 'missing' || missingScopeOf(start.error) === 'jobs')
     return <ScopeUnavailable scope="jobs" what="Building pre-aggregations" />;
-  // Skeleton rows while it's read (design 16, G1; T560).
-  if (buildable.isPending) return <ListLoading said="Reading the pre-aggregations…" />;
+  // Skeleton rows while it's read, under the list's heads (design 16, G1; T560, T610).
+  if (buildable.isPending)
+    return (
+      <ListLoading
+        said="Reading the pre-aggregations…"
+        label="Pre-aggregations"
+        columns={PREAGG_COLUMNS}
+        narrow={PREAGG_NARROW}
+      />
+    );
+  // The last read-write folder gone while open (G5b; T610).
+  if (noFolderLeft(buildable)) return <NoFolderLeft page="Jobs" />;
   if (buildable.isError) {
     const lacking = missingScopeOf(buildable.error);
     // Couldn't read them, with Retry and Details (G2); a refusal in the API's words (G4).
@@ -504,11 +536,17 @@ export function BuildPanel({
       ×
     </button>
   );
-  // Those of the chosen folder (T559) in the chosen state, as Jobs' summary counts them (T558).
+  // Those of the chosen folder (T559) in the chosen state, as Jobs' summary counts them
+  // (T558), whose name or folder holds what was searched (T610).
+  const sought = search.trim().toLowerCase();
   const listed = buildable.data.filter(
     (row) =>
       (status === '' || row.state === status) &&
-      inFolder(row.folderId, folderChoice, folders.data?.folders ?? []),
+      inFolder(row.folderId, folderChoice, folders.data?.folders ?? []) &&
+      (sought === '' ||
+        [shownOf(row).name, shownOf(row).folder ?? 'Shared'].some((words) =>
+          words.toLowerCase().includes(sought),
+        )),
   );
 
   return (
@@ -540,6 +578,17 @@ export function BuildPanel({
                   onChange={onStatus}
                 />
               )}
+              {/* Search pre-aggregations, after Folder and Status (screen 1; T610). */}
+              <input
+                type="search"
+                className="sources-filters__search"
+                aria-label="Search pre-aggregations"
+                placeholder="Search pre-aggregations"
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                }}
+              />
               <span className="run-history__count" role="status">
                 {`${String(listed.length)} ${listed.length === 1 ? 'pre-aggregation' : 'pre-aggregations'}`}
               </span>
