@@ -118,6 +118,44 @@ describe('the recommendation follows the signature (AC-028)', () => {
     ).not.toContain('map');
   });
 
+  /**
+   * T516 (AC-036, AC-187; UX-117's second half; R67, the user: "promote the
+   * horizontal bar to second when more than half the labels would be hidden
+   * at the tile's width, including two-field and map cases; leave today's
+   * order when they fit"). `hiddenLabels` is the share a vertical bar would
+   * hide there, which the caller reckons (`hiddenLabelShare`).
+   */
+  describe('the horizontal bar as runner-up where most labels would be hidden (T516)', () => {
+    const second = (input: Signature) => recommend(input).runnersUp[0]?.candidate.chartType;
+    // Ten long names by four: a grouped or stacked bar second today.
+    const twoFields = signature(measure(), dimension(10), dimension(4, 'b'));
+    // Ten countries: the map second today, ahead of the horizontal bar
+    // (T516's review: at 20 the horizontal bar was second already).
+    const countries: Field = { ...dimension(10, 'customers.country_iso3'), countryCodes: true };
+    const byCountry = signature(measure(), countries);
+
+    it('promotes it to second, by two fields or by country, when more than half would hide', () => {
+      expect(second(twoFields)).not.toBe('hbar');
+      expect(second({ ...twoFields, hiddenLabels: 0.6 })).toBe('hbar');
+      expect(second(byCountry)).toBe('map');
+      expect(second({ ...byCountry, hiddenLabels: 0.6 })).toBe('hbar');
+    });
+
+    it('leaves today’s order where the labels fit, or no more than half hide', () => {
+      expect(second(twoFields)).not.toBe('hbar');
+      expect(second({ ...twoFields, hiddenLabels: 0 })).toBe(second(twoFields));
+      expect(second({ ...twoFields, hiddenLabels: 0.5 })).toBe(second(twoFields));
+      expect(second({ ...byCountry, hiddenLabels: 0.2 })).toBe(second(byCountry));
+    });
+
+    it('keeps it top where it ranks top already', () => {
+      const huge = signature(measure(), dimension(60));
+      expect(recommend({ ...huge, hiddenLabels: 0.9 }).top?.candidate.chartType).toBe(
+        recommend(huge).top?.candidate.chartType,
+      );
+    });
+  });
+
   it('shows two measures against each other as a scatter', () => {
     const types = [
       recommend(signature(measure(), measure('m2'))).top?.candidate.chartType,

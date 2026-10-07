@@ -30,6 +30,7 @@ export { assignColours, OTHER_COLOUR, type ColourAssignment } from './colorAssig
 export { colouredMembersOf, coloursMembers, singleSeriesOf } from './colouredMembers';
 export { legendFor, seriesCount } from './legend';
 export { MAX_PANELS } from './layout/trellis';
+export { hiddenLabelShare } from './layout/hiddenLabels';
 export { isOneSource, labelOf, nameWriter } from './modelWriter';
 export { echarts } from './echarts';
 export { DEFAULT_PALETTE, DEFAULT_SURFACE, MARK, type EChartsOption } from './theme';

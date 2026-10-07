@@ -33,16 +33,20 @@ type Axis = {
   axisLabel?: { rotate?: unknown; formatter?: unknown };
 };
 
-export function fitCategoryLabels(
+/**
+ * A category axis's labels against their room, as ECharts reckons them: the
+ * widest label's box, plus its margin, and each category's span along the
+ * axis. None for an axis that isn't one category axis of two labels or more.
+ */
+export function labelRoom(
   option: EChartsOption,
   spec: RenderSpec,
   canvas: Canvas,
-): EChartsOption {
+): { axis: Axis; count: number; width: number; height: number; span: number } | undefined {
   const axis = option.xAxis as Axis | Axis[] | undefined;
-  if (axis === undefined || Array.isArray(axis) || axis.type !== 'category') return option;
-  if (axis.axisLabel?.rotate !== undefined) return option;
+  if (axis === undefined || Array.isArray(axis) || axis.type !== 'category') return undefined;
   const data = axis.data ?? [];
-  if (data.length < 2) return option;
+  if (data.length < 2) return undefined;
 
   const write = axis.axisLabel?.formatter;
   const boxes = data.map((value, at) =>
@@ -59,6 +63,17 @@ export function fitCategoryLabels(
     String(one.name ?? ''),
   );
   const span = categoryAxisPx(canvas, false, plotEdgesOf(spec, names)) / data.length;
+  return { axis, count: data.length, width, height, span };
+}
+
+export function fitCategoryLabels(
+  option: EChartsOption,
+  spec: RenderSpec,
+  canvas: Canvas,
+): EChartsOption {
+  const room = labelRoom(option, spec, canvas);
+  if (room === undefined || room.axis.axisLabel?.rotate !== undefined) return option;
+  const { axis, width, height, span } = room;
   if (width < span) return option;
 
   // ECharts keeps every label at a turn where either of its box's sides fits

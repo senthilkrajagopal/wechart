@@ -26,6 +26,12 @@ export interface Signature {
   readonly fields: readonly Field[];
   /** Rows the query is expected to return, where known. */
   readonly rowCount?: number;
+  /**
+   * The share of a vertical bar's category labels that would be hidden at
+   * the tile's size, 0 to 1, where the caller knows it (T516; reckoned by
+   * `hiddenLabelShare` in @wechart/charts, which this package can't import).
+   */
+  readonly hiddenLabels?: number;
 }
 
 /**

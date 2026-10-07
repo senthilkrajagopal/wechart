@@ -10634,11 +10634,24 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - Auto picks them for two or more metrics on different scales, and never a form that hides a metric;
     - in a form that can't draw a metric, that metric's pill says "not drawn", with a one-line reason, and offers Small multiples and Table (UX-057, design 01-5).
   - Depends on: T467
-- [ ] T516 (AC-036, AC-187) Offer the horizontal bar as the runner-up when most category labels would be hidden *(added 2026-09-28: UX-117's second half, from T467)*
+- [x] T516 (AC-036, AC-187) Offer the horizontal bar as the runner-up when most category labels would be hidden *(added 2026-09-28: UX-117's second half, from T467)*
   - **Why.** UX-117 (`docs/design/reviews/2026-09-27/phase-1-recheck.md`) recommends two things. T467 built the first: labels rotate before any is hidden. The second is that when more than half would be hidden even then, the type card offers the horizontal bar as its runner-up.
   - Files: `packages/recommender/src/recommend.ts`, `packages/charts/src/layout/categoryLabels.ts` (+ tests)
   - Failing test: `recommend.test.ts`: a bar whose category labels would be more than half hidden at the tile's width ranks the horizontal bar second, and one whose labels fit doesn't.
   - Depends on: T467
+  - **Reworded by R67 (the user, 2026-10-07):** promote the horizontal bar to second when more than half the labels would be hidden at the tile's width, two-field and map charts included, and leave today's order where they fit. The test's "one whose labels fit doesn't" meant a chart whose order the labels don't change: for one field the horizontal bar was already second.
+  - **Built 2026-10-07.**
+    - `charts/layout/hiddenLabels.ts` (`hiddenLabelShare`, exported): the share of a vertical bar's category labels ECharts would hide at a canvas's size, turned as `fitCategoryLabels` turns them, by ECharts' own reckoning (`calculateCategoryInterval`). It is reckoned for a bar of the chart's fields, whatever type is drawn. `categoryLabels.ts` now shares its measuring (`labelRoom`).
+    - `recommender`: `Signature.hiddenLabels`. Above 0.5, the horizontal bar moves to second among the runners-up where it is offered and not already top. The pick itself never turns on it.
+    - `web/editor/hiddenLabels.ts` (`hiddenLabelsAt`): the share at the size the chart is drawn at. `drawnSizeIn` gives that size (the review: the canvas, not the tile's outer box). Opened from a tile, it is the tile's width less its frame's padding and border, at the chart's height, whichever preview size is shown. Opened from Explore, it is the drawn canvas as laid out. The editor re-measures it each render and as its pane resizes (`ResizeObserver`). So "Or" and the gallery's suggestions put the horizontal bar second there.
+    - The dashboard's pick reads no runner-up, so it is unchanged.
+    - **When it changes the order.** It matters only where the horizontal bar wasn't already second: twelve categories or fewer, by two fields or by country. Even then, it only changes the order on a small canvas. Labels turn before any is hidden (T467), so a turned label's height, not its length, sets how many are hidden.
+  - **Tests:**
+    - unit:
+      - `hiddenLabels.test.ts` in charts: each test failed first, and each was checked against the labels a drawn chart names.
+      - `recommend.test.ts`: the promotion by two fields failed first. After the review, the country case moved from twenty countries to ten, where the map is second today; at twenty, the horizontal bar was second already, so that version of the test passed with no promotion. The ten-country case was checked red without the promotion. The test also covers today's order at none, 0.5 and 0.2, and a top pick that stays unchanged.
+      - `hiddenLabels.test.ts` in web: the share, and `drawnSizeIn`, which was checked red at the tile's outer width.
+    - e2e, Chrome: `chart-editor.spec.ts`, `new-chart.spec.ts`, `field-list.spec.ts`, 62/62. No e2e drives the promotion through the editor itself.
 - [x] T468 (AC-187) Edit mode: a new filter is selected with focus in its field picker, and edit heads show the element's kind
   - Failing test: `dashboard-edit.spec.ts`: adding a filter selects it, shows Properties and focuses the field picker (UX-031); an edit-mode head reads "Chart · Area", never the freshness badge or Table view (UX-032).
   - Depends on: none

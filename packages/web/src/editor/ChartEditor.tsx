@@ -51,6 +51,7 @@ import {
 } from './chartTypeState';
 import { OPENED_WITH, type EditorState } from './openChart';
 import { PreviewFrame, type TileSize } from './PreviewFrame';
+import { drawnSizeIn, hiddenLabelsAt } from './hiddenLabels';
 import { metaQueryOf, useWorkspaceItem } from '../query/meta';
 import { countryMarkingsOf, signatureOf, topTypeOf } from '../query/signature';
 import { canRedo, canUndo, discard, historyOf, isDirty, push, redo, undo } from './history';
@@ -423,9 +424,42 @@ function EditorBody({
    */
   // A dimension of country codes, by its values unless the model says (T398, AC-313).
   const countryMarking = useMemo(() => countryMarkingsOf(meta.data), [meta.data]);
+  /**
+   * The size the chart's canvas is drawn at (T516), which says how many of a
+   * bar's labels would hide there: opened from a tile, the tile's less its
+   * own padding and border, whichever preview size is shown; else the
+   * preview's canvas as laid out (T516's review: not the tile's outer box).
+   */
+  const previewBox = useRef<HTMLDivElement>(null);
+  const [drawnAt, setDrawnAt] = useState<{ width: number; height: number } | undefined>(undefined);
+  const tileWidth = tile?.width;
+  const tileHeight = tile === undefined ? undefined : (tile.chartHeight ?? tile.height);
+  // Once each render, as the chart comes and goes; and as the pane resizes.
+  useEffect(() => {
+    const measure = () => {
+      const size = drawnSizeIn(previewBox.current, tileWidth, tileHeight);
+      if (size === undefined) return;
+      setDrawnAt((now) => (now?.width === size.width && now.height === size.height ? now : size));
+    };
+    measure();
+    const element = previewBox.current;
+    if (element === null || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  });
   const signature: Signature = useMemo(
-    () => signatureOf(spec, rows, countryMarking),
-    [spec, rows, countryMarking],
+    () => ({
+      ...signatureOf(spec, rows, countryMarking),
+      // More than half a bar's labels hidden at that size: the horizontal bar
+      // offered second (T516; R67). The pick itself never turns on it.
+      hiddenLabels: hiddenLabelsAt(previewDocument, rows, drawnAt, formats),
+    }),
+    // `drawnAt` by its numbers, so a new object of the same size asks nothing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [spec, rows, countryMarking, previewDocument, drawnAt?.width, drawnAt?.height, formats],
   );
   /** What the fields are, for what a type needs (AC-033): a map's country codes too (T398). */
   const counts = {
@@ -645,7 +679,7 @@ function EditorBody({
         inert={busy}
         aria-busy={busy}
       >
-        <div className="chart-editor__canvas">
+        <div ref={previewBox} className="chart-editor__canvas">
           {isEmpty(spec) ? (
             // In the preview's tile, as the prototype's empty editor draws it
             // (editor.js 481; recheck-chart-editor F18, T257): what to do, then

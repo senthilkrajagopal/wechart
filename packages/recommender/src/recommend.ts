@@ -311,5 +311,17 @@ export function recommend(signature: Signature, runnerUpCount = 2): Recommendati
   });
 
   const [top, ...rest] = distinct;
-  return { top: top ?? null, runnersUp: rest.slice(0, runnerUpCount) };
+  /**
+   * More than half a bar's labels hidden at the tile's size: the horizontal
+   * bar second, which writes them all across (T516; UX-117's second half; R67,
+   * the user), by two fields or by country too. Where they fit, or it is top
+   * already, the order stands.
+   */
+  const crowded = (signature.hiddenLabels ?? 0) > 0.5;
+  const across = rest.findIndex((each) => each.candidate.chartType === 'hbar');
+  const ordered =
+    crowded && across > 0
+      ? [rest[across]!, ...rest.slice(0, across), ...rest.slice(across + 1)]
+      : rest;
+  return { top: top ?? null, runnersUp: ordered.slice(0, runnerUpCount) };
 }
