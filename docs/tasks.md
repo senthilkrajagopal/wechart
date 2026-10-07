@@ -7185,6 +7185,13 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - a build started from Jobs is listed, its log naming its token and its end state, Done. This carries AC-149's e2e (the token, followed to its end) onto the new surface;
       - a record whose finish is moved back 25 hours in the suite's database is still listed (AC-150).
   - Depends on: T372
+  - **AC-150 ticked 2026-10-07**, once every task serving it was done (T372, T374, T376, T504) and its Fails-when each shown:
+    - a build finished over 24 hours ago is still listed, with every field: `e2e/jobs.spec.ts`;
+    - one finishing while no browser has Jobs open is recorded: `follow.test.ts`;
+    - the outcome Cube reported is the one recorded (done; failed with how many partitions and Cube's error; cancelled, and by whom; and Cube's record expired, neither done nor failed): `follow.test.ts` and `build-history.test.ts`;
+    - one start of several partitions is one record: `build-history.test.ts`;
+    - no more than 100 records per pre-aggregation are kept: `build-history.test.ts`;
+    - Run history lists them in the user's folders only, newest first, 50 at a time, by outcome, starter, folder and time: `history.test.ts` and `e2e/security/jobs-scope.spec.ts`.
 - [x] T376 (AC-151) Show the build queue, and cancel a queued build wechart started
   - *Rewritten 2026-10-02 to design 16's state C, against xcube's queue route as built (`89628a0e88`; research `xcube-jobs-schedules-routes.md` §1).* Of xcube's two ways, the user chose to cancel only builds wechart started (Q1). Cube's refresh worker queues a build it lost to a cancel again at its next run.
   - **As built (2026-10-02):**
@@ -7724,6 +7731,13 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - Two Resumes at once can both be recorded: concurrent saves aren't hardened further.
     - I1's "Role" row isn't recorded for a schedule change.
     - A schedule moved to another folder's pre-aggregation is recorded in its new folder only.
+  - **AC-294 ticked 2026-10-07**, once every task serving it was done (T368, T505, T554, T555, T556). Each kind it names is recorded with who, which folder and when:
+    - sign-ins, permission changes, proposals and their reviews, restores and data-source changes: T368's tests;
+    - a build started from Jobs, a cancel, a schedule made, changed, suspended (by "wechart's scheduler") or deleted, and no run a schedule started: `access/audit.test.ts`;
+    - a stop, and who asked: `jobs/queue.test.ts` (T554);
+    - Run now: `routes/schedules.test.ts` (T555);
+    - a pause and a resume, each with who, its folder and when: `routes/schedules.test.ts` (T556; its who and when added now);
+    - `e2e/security/audit.spec.ts` shows the trail against compose's stack, 3 of 3.
 - [x] T553 [P] (AC-393) The refresh worker's badge and panel, from xcube's refresh-worker route *(added 2026-10-02, `[R56]`: design 16's state F and Q4)*
   - Files:
     - `packages/api/src/xcube/refresh-worker.ts` (+ test): `GET …/models/{model}/refresh-worker`, research `xcube-jobs-schedules-routes.md` §3;

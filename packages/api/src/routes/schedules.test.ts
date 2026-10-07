@@ -744,6 +744,8 @@ describe('pausing and resuming a schedule (T556, AC-396)', () => {
     as(who, { method: 'POST', url: `/api/wechart-schedules/${id}/${what}` });
 
   it('pauses it at once, listed paused with who paused it, and resumes it from its next time; each in the trail', async () => {
+    // The trail's own clock is the wall's: its times fall in this test's run.
+    const began = Date.now();
     await clock.setTime(new Date('2026-10-09T03:00:00Z'));
     await place('p', { readOnly: [], readWrite: ['managers'] });
     const made = (
@@ -778,16 +780,32 @@ describe('pausing and resuming a schedule (T556, AC-396)', () => {
       '2026-10-10T04:00:00.000Z',
     ]);
     expect((await laid(made.id))?.cron).toBe('0 5 * * *');
-    const trail = (
+    const records = (
       await auditStore(getDb()).list({ events: ['schedule-change'], folderIds: [ids['p']!] })
-    ).records
-      .toReversed()
-      .map((each) => [each.summary, each.details?.['change']]);
+    ).records.toReversed();
+    const trail = records.map((each) => [each.summary, each.details?.['change']]);
     expect(trail).toEqual([
       [`Made · 0 5 * * *`, 'made'],
       ['Paused', 'paused'],
       ['Resumed', 'resumed'],
     ]);
+    // Each with who, which folder and when (AC-294): the member who paused and
+    // resumed it, its folder, and a time in this test's run, in order.
+    const now = Date.now();
+    expect(
+      records.map((each) => [
+        each.actor?.key,
+        each.folderId,
+        each.at.getTime() >= began && each.at.getTime() <= now,
+      ]),
+    ).toEqual([
+      [made.createdBy.key, ids['p'], true],
+      [made.createdBy.key, ids['p'], true],
+      [made.createdBy.key, ids['p'], true],
+    ]);
+    expect(records.map((each) => each.at.getTime())).toEqual(
+      records.map((each) => each.at.getTime()).toSorted((a, b) => a - b),
+    );
   });
 
   it('refuses a member of another folder and a reader', async () => {
