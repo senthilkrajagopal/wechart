@@ -596,3 +596,105 @@ test('a paused schedule starts no run, says who paused it, and resumed, runs fro
     if (id !== undefined) await request.delete(`/api/wechart-schedules/${id}`);
   }
 });
+
+/**
+ * T557 / AC-397 (design 16, P4, keeping design 07's filter): THE SYSTEM
+ * SHALL offer on Schedules an owner filter, All, Cube's refresh worker or
+ * wechart, each with the count of the schedules it lists in the folders the
+ * user sees there.
+ *
+ * With a wechart schedule of this browser's own beside compose's refresh
+ * keys: each choice lists as many rows as its count says, and only its own
+ * owner's; All's count is the other two's.
+ */
+test('the owner filter counts each owner’s schedules, and each choice lists only that owner’s', async ({
+  page,
+  request,
+  browserName,
+}) => {
+  test.setTimeout(180_000);
+  const cube = `owners_${browserName}`;
+  const rollup = `${cube}.main`;
+  const name = `Owners ${browserName} ${String(Date.now())}`;
+  await ownCubeFile(
+    request,
+    cube,
+    `cubes:
+  - name: ${cube}
+    sql_table: public.orders
+    dimensions:
+      - name: status
+        sql: status
+        type: string
+    measures:
+      - name: count
+        type: count
+    pre_aggregations:
+      - name: main
+        measures: [CUBE.count]
+        dimensions: [CUBE.status]
+        scheduled_refresh: false
+`,
+  );
+  let id: string | undefined;
+  try {
+    await expect
+      .poll(
+        async () =>
+          (
+            await request.post('/api/wechart-schedules', {
+              data: { preAggregation: rollup, name, cron: '0 4 * * *', timezone: 'UTC' },
+            })
+          ).status(),
+        PUBLISHED,
+      )
+      .toBe(201);
+    id = (
+      (await (await request.get('/api/wechart-schedules')).json()) as { id: string; name: string }[]
+    ).find((each) => each.name === name)!.id;
+
+    await page.goto('/schedules');
+    const table = page.getByRole('table', { name: 'Refresh schedules' });
+    await expect(table.getByRole('row').filter({ hasText: name })).toHaveCount(1);
+    const filter = page.getByRole('radiogroup', { name: 'Owner' });
+    /** A choice, chosen, and its count. */
+    const choose = async (label: string) => {
+      const radio = filter.getByRole('radio', { name: new RegExp(`^${label}`) });
+      await radio.click();
+      await expect(radio).toHaveAttribute('aria-checked', 'true');
+      return Number(/(\d+)$/.exec((await radio.innerText()).trim())?.[1]);
+    };
+    /** Each listed row's owner, from its Owner cell. */
+    const owners = () => table.locator('tbody tr td:last-child').allInnerTexts();
+
+    // All's count is the other two's, read at once: the file's other tests
+    // make and delete schedules meanwhile (T557's review).
+    const all = await choose('All');
+    expect(await owners()).toHaveLength(all);
+    const counts = (await filter.getByRole('radio').allInnerTexts()).map((each) =>
+      Number(/(\d+)$/.exec(each.trim())?.[1]),
+    );
+    expect(counts[0]).toBe((counts[1] ?? NaN) + (counts[2] ?? NaN));
+
+    const cubes = await choose('Cube’s refresh worker');
+    const cubeRows = await owners();
+    expect(cubeRows).toHaveLength(cubes);
+    expect(cubes).toBeGreaterThan(0);
+    expect(cubeRows.filter((owner) => owner.trim() !== 'Cube’s refresh worker')).toEqual([]);
+
+    const wecharts = await choose('wechart');
+    const wechartRows = await owners();
+    expect(wechartRows).toHaveLength(wecharts);
+    expect(wecharts).toBeGreaterThan(0);
+    expect(wechartRows.filter((owner) => !owner.startsWith('wechart'))).toEqual([]);
+    await expect(table.getByRole('row').filter({ hasText: name })).toHaveCount(1);
+
+    // And still, with wechart chosen: All's count is the other two's.
+    const [allNow, cubesNow, wechartsNow] = (await filter.getByRole('radio').allInnerTexts()).map(
+      (each) => Number(/(\d+)$/.exec(each.trim())?.[1]),
+    );
+    expect(allNow).toBe((cubesNow ?? NaN) + (wechartsNow ?? NaN));
+  } finally {
+    if (id !== undefined) await request.delete(`/api/wechart-schedules/${id}`);
+  }
+});

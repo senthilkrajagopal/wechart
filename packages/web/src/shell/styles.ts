@@ -4502,6 +4502,51 @@ code.schedules__sub { font-family: var(--wc-font-code); }
   outline-offset: 2px;
   z-index: 1;
 }
+/* Schedules' filters row, under its note (design 16, screen 2), and its
+   owner filter (T557; pin 4): the prototype's .seg, of buttons, each owner
+   with its icon and each choice with its count, in the secondary colour. */
+.schedules__filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.owner-filter {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 4px;
+  background: var(--wc-bg-surface);
+}
+.owner-filter__choice {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-left: 1px solid var(--wc-border-subtle);
+  border-radius: 0;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.owner-filter__choice:first-child { border-left: 0; border-radius: 3px 0 0 3px; }
+.owner-filter__choice:last-child { border-radius: 0 3px 3px 0; }
+.owner-filter__choice svg { color: var(--wc-text-secondary); flex: none; }
+.owner-filter__count { color: var(--wc-text-secondary); font-weight: 400; font-variant-numeric: tabular-nums; }
+/* The design's accent-soft, kept under the pointer too (T557's review). */
+.owner-filter__choice.is-chosen,
+.owner-filter__choice.is-chosen:hover:not(:disabled) {
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-accent);
+  font-weight: 600;
+}
+.owner-filter__choice.is-chosen svg { color: var(--wc-accent); }
+.owner-filter__choice:focus-visible {
+  outline: 2px solid var(--wc-accent);
+  outline-offset: 2px;
+  z-index: 1;
+}
 /* Edit in my workspace, for a dashboard (T348; design 04, state D). */
 .dialog.edit-in-workspace { width: min(520px, calc(100vw - 32px)); max-width: none; gap: 10px; }
 .dialog .edit-in-workspace__always { color: var(--wc-text-primary); }

@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { paneOf, schedule, shownSchedules } from './schedules.fixture';
+import { KEY_ROWS, paneOf, schedule, shownSchedules } from './schedules.fixture';
 import { SchedulesPage } from './SchedulesPage';
 
 /**
@@ -182,6 +182,97 @@ describe('Schedules’ refresh-key rows (T551, AC-154)', () => {
     );
     // Read-only: nothing on the page edits a schedule.
     expect(document.querySelectorAll('main input, input, select, textarea')).toHaveLength(0);
+  });
+});
+
+/**
+ * T557 (AC-397; design 16, P4, keeping design 07's filter): an owner
+ * filter, All, Cube's refresh worker or wechart, each with the count of the
+ * schedules it then lists, over the folders the user sees here; each lists
+ * only its own owner's.
+ */
+describe('the owner filter, with counts (T557, AC-397)', () => {
+  const user = () => userEvent.setup({ delay: null });
+  /** The table's rows, each by its Owner cell's words. */
+  const owners = () =>
+    within(screen.getByRole('table', { name: 'Refresh schedules' }))
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) => text(within(row).getAllByRole('cell').at(-1)));
+
+  it('counts each owner’s schedules, and lists only that owner’s when chosen', async () => {
+    shownSchedules({
+      wechart: [schedule(), schedule({ id: 'sched-2', name: 'Weekends' })],
+    });
+    await screen.findByText('Weekends', { selector: '[data-testid="wechart-schedule-name"]' });
+    const filter = screen.getByRole('radiogroup', { name: 'Owner' });
+    const keys = KEY_ROWS.length;
+    expect(
+      within(filter)
+        .getAllByRole('radio')
+        .map((radio) => [text(radio), radio.getAttribute('aria-checked')]),
+    ).toEqual([
+      [`All ${String(keys + 2)}`, 'true'],
+      [`Cube’s refresh worker ${String(keys)}`, 'false'],
+      ['wechart 2', 'false'],
+    ]);
+    expect(owners()).toHaveLength(keys + 2);
+
+    await user().click(within(filter).getByRole('radio', { name: /^wechart/ }));
+    expect(owners()).toEqual(['wechartby Wren Writer', 'wechartby Wren Writer']);
+
+    await user().click(within(filter).getByRole('radio', { name: /^Cube’s refresh worker/ }));
+    expect(owners()).toEqual(Array(keys).fill('Cube’s refresh worker'));
+
+    await user().click(within(filter).getByRole('radio', { name: /^All/ }));
+    expect(owners()).toHaveLength(keys + 2);
+  });
+
+  /** T557's review: one listed last, its rollup without a refresh key's row. */
+  it('lists a wechart schedule of a rollup with no refresh key’s row only under All and wechart', async () => {
+    shownSchedules({
+      wechart: [schedule({ id: 'sched-3', name: 'Dropped', preAggregation: 'fgone__orders.gone' })],
+    });
+    await screen.findByText('Dropped', { selector: '[data-testid="wechart-schedule-name"]' });
+    const filter = screen.getByRole('radiogroup', { name: 'Owner' });
+    const named = () => screen.queryAllByTestId('wechart-schedule-name').map((each) => text(each));
+
+    expect(named()).toEqual(['Dropped']);
+    await user().click(within(filter).getByRole('radio', { name: /^Cube’s refresh worker/ }));
+    expect([named(), owners()]).toEqual([[], Array(KEY_ROWS.length).fill('Cube’s refresh worker')]);
+    await user().click(within(filter).getByRole('radio', { name: /^wechart/ }));
+    expect([named(), owners()]).toEqual([['Dropped'], ['wechartby Wren Writer']]);
+  });
+
+  it('draws each owner with its icon, as its rows do', async () => {
+    shownSchedules({ wechart: [schedule()] });
+    await screen.findByText('Weekday mornings', {
+      selector: '[data-testid="wechart-schedule-name"]',
+    });
+    const filter = screen.getByRole('radiogroup', { name: 'Owner' });
+    expect(
+      within(filter)
+        .getAllByRole('radio')
+        .map((radio) => radio.querySelector('svg')?.getAttribute('data-icon') ?? null),
+    ).toEqual([null, 'cube', 'schedule']);
+  });
+
+  it('is a choice, not an input: the page still edits no schedule of Cube’s', async () => {
+    shownSchedules({ wechart: [schedule()] });
+    await screen.findByText('Weekday mornings', {
+      selector: '[data-testid="wechart-schedule-name"]',
+    });
+    const filter = screen.getByRole('radiogroup', { name: 'Owner' });
+    expect(filter.querySelectorAll('input, select, textarea')).toHaveLength(0);
+    // One Tab stop, whose arrows move and choose, as a radio group's do (AC-176).
+    const chosen = within(filter).getByRole('radio', { name: /^All/ });
+    chosen.focus();
+    await user().keyboard('{ArrowRight}');
+    const cube = within(filter).getByRole('radio', { name: /^Cube’s refresh worker/ });
+    expect([document.activeElement === cube, cube.getAttribute('aria-checked')]).toEqual([
+      true,
+      'true',
+    ]);
   });
 });
 

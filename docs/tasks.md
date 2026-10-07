@@ -7866,10 +7866,16 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - The switch's label is "On: <schedule's name>", read by a screen reader. Off is paused.
     - Pausing a suspended schedule is allowed; unpausing it leaves it suspended until its own Resume.
     - Run now still runs a paused schedule (R59).
-- [ ] T557 (AC-397) Schedules' owner filter, with counts *(added 2026-10-02, `[R56]`: design 16's P4)*
+- [x] T557 (AC-397) Schedules' owner filter, with counts *(added 2026-10-02, `[R56]`: design 16's P4)*
   - Files: `packages/web/src/workspaces/schedules/SchedulesPage.tsx` (+ test)
   - Failing test: All, Cube's refresh worker and wechart each show the count of the rows they then list, over the folders the user sees. Each lists only its own owner's schedules (AC-397).
   - Depends on: T552
+  - *Done 2026-10-07.*
+    - **The filter** (`OwnerFilter.tsx`) is design 16's `.seg` at pin 4, in a filters row under the page's note. It reads All, Cube's refresh worker and wechart, each owner with the icon its rows wear (`OwnerIcon`, from `OwnerLabel.tsx`), and each choice with its count.
+    - **A radio group of buttons**, not native radios, so the page still holds no input that could read as editing one of Cube's schedules (AC-154). It is one Tab stop, and the arrows, Home and End move and choose, as a radio group does (AC-176).
+    - **Counts are the rows each choice lists**, from the lists the API answers for the user's folders. A wechart schedule keeps its place after its rollup's refresh key, whichever owner is chosen.
+    - **`e2e/schedules.spec.ts`** shows it against compose's Cube, with a wechart schedule of the browser's own: each choice lists as many rows as its count, only its own owner's, and All's count is the other two's.
+  - **Implementer's call, for the user to confirm or change:** the choice isn't kept in the address, since the design doesn't say.
 - [ ] T558 (AC-398) Jobs' header summary: building, queued, failed and suspended *(added 2026-10-02, `[R56]`: design 16's P5)*
   - Files: `packages/api/src/jobs/summary.ts` (+ test), `packages/web/src/workspaces/jobs/{JobsPage,Summary}.tsx` (+ tests)
   - Failing test:

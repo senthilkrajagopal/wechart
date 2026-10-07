@@ -7,6 +7,7 @@ import { TableScroll } from '../../shell/TableScroll';
 import { shownOf } from '../jobs/BuildPanel';
 import { BuiltWhen } from '../jobs/builds';
 import { Status } from '../jobs/StateBadge';
+import { OwnerFilter, type ShownOwner } from './OwnerFilter';
 import { OwnerLabel } from './OwnerLabel';
 import { PauseSwitch } from './PauseSwitch';
 import { LastRunStatus, minuteOf, SchedulePane, WechartPane } from './SchedulePane';
@@ -223,9 +224,12 @@ export function SchedulesPage() {
     refetchInterval: 30_000,
   });
   const [selected, setSelected] = useState<Open | null>(null);
+  // Whose schedules are listed (T557, AC-397; design 16, P4).
+  const [owner, setOwner] = useState<ShownOwner>('all');
   const now = new Date();
   const keys = schedules.data ?? [];
   const own = wechart.data ?? [];
+  const lists = (of: 'cube' | 'wechart') => owner === 'all' || owner === of;
   const pane: ReactNode = (() => {
     if (selected === null) return null;
     if (selected.kind === 'new')
@@ -315,6 +319,19 @@ export function SchedulesPage() {
           ) : null
         ) : (
           <>
+            {/* Each owner's count is the rows its choice lists, in the folders
+                the API answers for this user (pin 4). */}
+            <div className="schedules__filters">
+              <OwnerFilter
+                owner={owner}
+                counts={{
+                  all: keys.length + own.length,
+                  cube: keys.length,
+                  wechart: own.length,
+                }}
+                onChange={setOwner}
+              />
+            </div>
             <TableScroll label="Refresh schedules">
               <table className="query-log" aria-label="Refresh schedules">
                 <thead>
@@ -335,46 +352,54 @@ export function SchedulesPage() {
                     const open = () => {
                       setSelected({ kind: 'cube', id: schedule.id });
                     };
+                    // Read whichever owner is listed, so wechart's keep their places (T557).
+                    const itsOwn = ownOf(schedule.id);
                     return [
-                      <tr
-                        key={schedule.id}
-                        // A row opens its pane (D5): by pointer, or Enter or Space on it.
-                        aria-selected={isSelected('cube', schedule.id)}
-                        tabIndex={0}
-                        className="build-panel__row"
-                        onClick={open}
-                        onKeyDown={(event) => {
-                          if (event.target !== event.currentTarget) return;
-                          if (event.key !== 'Enter' && event.key !== ' ') return;
-                          event.preventDefault();
-                          open();
-                        }}
-                      >
-                        <td className="query-log__query">
-                          <span data-testid="schedule-name">{shownAs.name}</span>
-                        </td>
-                        <td>{shownAs.folder ?? 'Shared'}</td>
-                        <td>
-                          <span
-                            className={icon === undefined ? undefined : `status status--${icon}`}
-                          >
-                            {icon === undefined ? null : <StatusIcon kind={icon} />}
-                            {schedule.when}
-                          </span>
-                          <code className="schedules__sub">{schedule.written}</code>
-                        </td>
-                        <td>
-                          <NextRun schedule={schedule} now={now} />
-                        </td>
-                        <td>
-                          <LastRun schedule={schedule} />
-                        </td>
-                        <td>
-                          <OwnerLabel owner={schedule.owner} />
-                        </td>
-                      </tr>,
+                      ...(lists('cube')
+                        ? [
+                            <tr
+                              key={schedule.id}
+                              // A row opens its pane (D5): by pointer, or Enter or Space on it.
+                              aria-selected={isSelected('cube', schedule.id)}
+                              tabIndex={0}
+                              className="build-panel__row"
+                              onClick={open}
+                              onKeyDown={(event) => {
+                                if (event.target !== event.currentTarget) return;
+                                if (event.key !== 'Enter' && event.key !== ' ') return;
+                                event.preventDefault();
+                                open();
+                              }}
+                            >
+                              <td className="query-log__query">
+                                <span data-testid="schedule-name">{shownAs.name}</span>
+                              </td>
+                              <td>{shownAs.folder ?? 'Shared'}</td>
+                              <td>
+                                <span
+                                  className={
+                                    icon === undefined ? undefined : `status status--${icon}`
+                                  }
+                                >
+                                  {icon === undefined ? null : <StatusIcon kind={icon} />}
+                                  {schedule.when}
+                                </span>
+                                <code className="schedules__sub">{schedule.written}</code>
+                              </td>
+                              <td>
+                                <NextRun schedule={schedule} now={now} />
+                              </td>
+                              <td>
+                                <LastRun schedule={schedule} />
+                              </td>
+                              <td>
+                                <OwnerLabel owner={schedule.owner} />
+                              </td>
+                            </tr>,
+                          ]
+                        : []),
                       // A rollup with both kinds has two rows: wechart's after its refresh key's (pin 5).
-                      ...ownOf(schedule.id).map((each) => (
+                      ...(lists('wechart') ? itsOwn : []).map((each) => (
                         <WechartRow
                           key={`wechart-${each.id}`}
                           schedule={each}
@@ -388,7 +413,7 @@ export function SchedulesPage() {
                     ];
                   })}
                   {own
-                    .filter((each) => !placed.has(each.id))
+                    .filter((each) => lists('wechart') && !placed.has(each.id))
                     .map((each) => (
                       <WechartRow
                         key={`wechart-${each.id}`}
