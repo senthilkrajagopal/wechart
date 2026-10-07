@@ -10746,7 +10746,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
       - `acceleration.spec.ts:248`, "Data as of" off the viewport;
       - `folder-models.spec.ts:72`, Schedules' folder rollup;
       - `shell.spec.ts`, the model file at 390 px.
-- [ ] T510 (AC-036, AC-187) Never draw a metric invisibly: per-metric small multiples, and "not drawn" on a metric a form can't draw *(split from T467, 2026-09-28: UX-057 with the user's answers)*
+- [x] T510 (AC-036, AC-187) Never draw a metric invisibly: per-metric small multiples, and "not drawn" on a metric a form can't draw *(split from T467, 2026-09-28: UX-057 with the user's answers)*
   - Files: `packages/charts/src/layout/trellis.ts` (a panel per metric), `packages/core/src/compile.ts`, `packages/recommender/src/{recommend,legality}.ts`, `packages/web/src/editor/{Wells,ChartEditor}.tsx` (+ tests), `e2e/chart-editor.spec.ts`
     - *As built:*
       - core: `undrawn.ts` (new), `compile.ts`, `render-spec.ts` (`answeredRows`), `index.ts`;
@@ -10757,7 +10757,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
   - Failing test:
     - a second metric whose Cube format differs from the first's (currency, percent or number) is "on another scale" (the user, option A: no magnitude threshold);
     - small multiples split by metric draw one panel per metric, each value axis in its own metric's format (the user, option a);
-    - Auto picks them for two or more metrics on different scales, and never a form that hides a metric;
+    - Auto picks them for two or more metrics on different scales, and never a form that hides a metric; *amended by R69 (the user, 2026-10-07): "never a form that hides a metric" holds across scales only. Elsewhere a metric a form can't draw has its pill say "not drawn", offering Small multiples and Table;*
     - in a form that can't draw a metric, that metric's pill says "not drawn", with a one-line reason, and offers Small multiples and Table (UX-057, design 01-5).
   - Depends on: T467
   - **R67 (the user, 2026-10-07):**
@@ -10794,12 +10794,13 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
       - It recompiles from the rows as Cube answered them, which a compiled spec now carries (`answeredRows`), so a Top N isn't folded twice.
       - Only a chart with no saved type and two measures or more is picked again, the only pick the formats can change.
       - A dashboard whose model comes after its rows draws such a tile once without the formats, then as the editor does.
-  - **Open, for the user:** should Auto also never pick a form that drops a metric of the same scale?
-    - Today, a KPI of two counts shows the first, and two metrics split by a second grouping draw the first alone. Their pills now say so.
+  - **Asked, then answered by R69 (the user, 2026-10-07):** should Auto also never pick a form that drops a metric of the same scale?
+    - Then, a KPI of two counts showed the first, and two metrics split by a second grouping drew the first alone. Their pills now say so.
     - Design 01-5's note reads "Auto never picking a form that drops a metric" in general; R67 and the task's tests speak of scales.
     - (a) Yes, everywhere. Two counts would show as a table, and two metrics by two groupings as a scatter or a table.
     - (b) No, only across scales, as built. *Recommended:* it is what R67 asked, and the pills now say what is left out.
-    - The cold review read the task's line the other way, as unconditional, so T510 stays unticked until the user answers.
+    - **R69: (b), "Only across scales".** The failing-test line is amended to it.
+    - **Ticked 2026-10-07 on R69.** `recommend.test.ts` "never a form that drops a metric (T510)" shows the rule across scales, and "leaves metrics of one scale drawn together as they were" shows the rest. AC-036 and AC-187 stay as their other tasks leave them.
     - Three calls of mine go with it, each overturnable:
       - money in two currencies counts as two scales;
       - `scatter_of_one_point` (cost 13) makes a table, not a single-point scatter, the pick for two scales with nothing to group by;
