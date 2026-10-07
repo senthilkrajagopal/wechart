@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { StateLine } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { BuildLog } from './BuildLog';
 import { FolderFilter, ScopeNote, useJobsFolders } from './FolderFilter';
+import { ListError, ListLoading, ReadError } from './ListStates';
 import { Pill } from './Pill';
 import {
   BuildOutcomeStatus,
@@ -75,6 +75,9 @@ interface Page {
   readonly everyFolder?: boolean;
 }
 
+/** The columns the list drops below 1,024 px, its log's sheet giving them (design 16, G8). */
+const NARROW_HIDES = new Set(['Partitions', 'Duration', 'Started by']);
+
 const starterValue = (starter: Starter) =>
   starter.kind === 'person' ? `person:${starter.key}` : `schedule:${starter.id}`;
 
@@ -118,11 +121,14 @@ export function RunHistory({
       const response = await fetch(`/api/jobs/builds?${queryOf(filters, before)}`, { signal });
       const body = (await response.json().catch(() => null)) as (Page & { error?: unknown }) | null;
       if (!response.ok || body === null)
-        // The API's own words where it gives them (T371's review).
-        throw new Error(
+        // The API's own words where it gives them (T371's review), with its status (T560).
+        throw new ReadError(
           typeof body?.error === 'string'
             ? body.error
             : `Run history could not be read (${String(response.status)}).`,
+          response.status,
+          response.statusText,
+          'GET /api/jobs/builds',
         );
       return body;
     },
@@ -231,8 +237,17 @@ export function RunHistory({
           </span>
         </div>
 
-        {page.isPending ? <StateLine kind="run">Reading Run history…</StateLine> : null}
-        {page.isError ? <StateLine kind="err">{page.error.message}</StateLine> : null}
+        {/* Skeleton rows while it's read (design 16, G1); couldn't read it, with
+            Retry and Details (G2), or a refusal in the API's words (G4; T560). */}
+        {page.isPending ? <ListLoading said="Reading Run history…" /> : null}
+        {page.isError ? (
+          <ListError
+            what="Run history"
+            error={page.error}
+            carryOn="Your builds carry on; this list will show them once it’s read."
+            onRetry={() => void page.refetch()}
+          />
+        ) : null}
 
         {page.data !== undefined && records.length === 0 ? (
           // Nothing to list (state B4): naming no folder.
@@ -269,7 +284,12 @@ export function RunHistory({
                     'Duration',
                     'Started by',
                   ].map((column) => (
-                    <th key={column} scope="col">
+                    // Below 1,024 px, the log's sheet has these (design 16, G8).
+                    <th
+                      key={column}
+                      scope="col"
+                      className={NARROW_HIDES.has(column) ? 'jobs-wide' : undefined}
+                    >
                       {column}
                     </th>
                   ))}
@@ -305,14 +325,14 @@ export function RunHistory({
                         </button>
                       </td>
                       <td>{folderTextOf(record.folderPath)}</td>
-                      <td>{partitionsOf(record)}</td>
+                      <td className="jobs-wide">{partitionsOf(record)}</td>
                       <td>
                         <BuildOutcomeStatus build={record} />
                       </td>
-                      <td className="num">
+                      <td className="num jobs-wide">
                         {record.durationMs === null ? '—' : durationOf(record.durationMs)}
                       </td>
-                      <td>
+                      <td className="jobs-wide">
                         <StarterLabel starter={record.starter} />
                       </td>
                     </tr>

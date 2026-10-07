@@ -7949,9 +7949,9 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **The review's fixes:**
       - Pre-aggregations' and Queue's Folder choices are Jobs' own, so a summary's link lists every folder again, as its count does (AC-398);
       - the e2e waits for its build's start before leaving the page.
-    - **Left for T560 (AC-399):** state H2 draws a Super-Admin's Folder menu as a tree of short names under "Shared · the root". It is built as a flat list of paths, as the member's is drawn.
+    - **Left for T560 (AC-399), and done there:** state H2 draws a Super-Admin's Folder menu as a tree of short names under "Shared · the root". It was built as a flat list of paths, as the member's is drawn.
   - **Implementer's call, for the user to confirm or change:** design 16 draws no scope note on Queue. Queue's reads "Showing queued and building builds in the folders where you have read-write access.", in the other notes' pattern.
-- [ ] T560 (AC-399) Design 16's states, and its rewording of design 10's note *(added 2026-10-02, `[R56]`: design 16's state G and state J)*
+- [x] T560 (AC-399) Design 16's states, and its rewording of design 10's note *(added 2026-10-02, `[R56]`: design 16's state G and state J)*
   - Files: `packages/web/src/workspaces/jobs/*`, `packages/web/src/workspaces/schedules/*` (+ tests), `e2e/jobs.spec.ts`, `e2e/schedules.spec.ts`, `e2e/a11y-tokens.spec.ts`
   - Failing test: component tests for each of design 16's G states, on Jobs' tabs and on Schedules (AC-399):
     - loading, as skeleton rows;
@@ -7965,6 +7965,52 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 
     The pane's note reads as state J words it. The Access panel's read-write help, which T473 draws, takes state J's wording there.
   - Depends on: T559, T553, T554, T555, T556, T557, T558
+  - *Done 2026-10-07.* `jobs/ListStates.tsx` holds the list states, each tab saying them in its own words. The states on Pre-aggregations, Run history, Queue and Schedules:
+    - **G1:** skeleton rows and "Reading the pre-aggregations…", "Reading Run history…", "Reading the queue…" or "Reading the schedules…".
+    - **G2:** "Couldn't read the pre-aggregations." followed by the API's words, then "Your builds carry on; this list will show them once it's read." on Jobs' tabs. Below that, Retry, which reads the list again, and Details, with the status and when. Schedules says it of each of its two lists.
+    - **G3:** "No pre-aggregations in your folders", in design 16's words, on Pre-aggregations and Schedules. Run history's and Queue's empty states, B4 and C4, were there already.
+    - **G4:** a refused list read is said in the API's words, with no Retry. A refused build, from a row or the pane, reads "Not started." and the API's words.
+    - **G5:** a refused action reads its list again. Where the row went with it, the pane closes and a toast says "You no longer have access to do this.":
+      - a build on Pre-aggregations;
+      - a cancel or stop on Queue;
+      - any action on Schedules, caught by the page's watch on refused mutations.
+    - **G6:** `?preagg=` naming none in the user's folders, another's or one that doesn't exist, reads "Not found · There's no pre-aggregation by that name in your folders." in the pane.
+    - **G7:** sign-in off, as a Super-Admin: "All folders" and no scope note on each tab. State H2's tree of short names, "Shared · the root" and each folder indented by its depth, is now a Super-Admin's Folder menu; a member's keeps paths.
+    - **G8:** below 1,024 px:
+      - each list keeps its name, folder and state, plus Queue's Cancel and Schedules' next run and owner, the rest hidden (`jobs-wide`);
+      - the pane, Pre-aggregations' and Schedules', and Run history's build log, is a full-screen sheet, and × ("Back to the list") goes back;
+      - the empty pane isn't shown.
+    - **J:** the pane's note and the Access panel's read-write help read as state J words them. Both were already so; a test now holds the pane's.
+    - **Tests:**
+      - `States.test.tsx` covers G1 to G7 and J on Jobs' tabs.
+      - `SchedulesPage.test.tsx` covers G1, G2, G3 and G5.
+      - `e2e/jobs.spec.ts` and `e2e/schedules.spec.ts` show G8 at 390 px against compose.
+      - Tests changed: one Jobs test now waits on the new empty words; the Super-Admin Folder menus in `FolderFilter.test`, `SchedulesPage.test` and `jobs-scope.spec` now read the H2 tree.
+    - **The review's fixes:**
+      - G5's toast wears the error's icon (`ExportedToast`'s `kind`);
+      - G6's Not found has the sheet's ×, so at 390 px it is no trap;
+      - H2's tree is drawn in its tree's order, comparing paths a folder at a time, whatever order the API gives;
+      - × leads each sheet's head, Schedules' three heads too;
+      - Schedules' watch takes the schedule a refused action was on from its mutation's `scheduleId`, so one gone from a row is said with another's pane open, and one still listed says nothing;
+      - G2's Details give the status, what was asked and when it failed, as drawn;
+      - Queue keeps its Partition below 1,024 px, having no sheet;
+      - at 390 px the sheet takes focus at its head, and × gives it back to the row (rule 85).
+  - **AC-399 left unticked.** Design 16 draws more than T559 and T560 build. Not yet built:
+    - the Search boxes in screen 1's and screen 2's filter rows;
+    - Queue's Started by filter;
+    - G5b's page for one with no read-write folder left;
+    - G6's Not found page for a read-only user opening Jobs or Schedules, and for another folder's build log;
+    - G7's "You" naming the single user's builds;
+    - G8's sheet actions pinned at its foot;
+    - G1's column heads over the skeleton rows;
+    - H2's member's folders indented by depth (they are paths).
+
+    No open task holds these, so AC-399 needs a follow-up task (the review, 2026-10-07).
+  - **Implementer's calls, for the user to confirm or change:**
+    - G2's carry-on sentence is design 16's, said on all three Jobs tabs.
+    - G3 on Schedules uses Pre-aggregations' words.
+    - G5 on Schedules says it for any refused action whose schedule is gone.
+    - G8's narrow columns on Run history and Queue: name, folder and outcome or state, and Queue's Cancel.
 
 ## P2.11 Quick calculations and calculation requests (F6, returned)
 

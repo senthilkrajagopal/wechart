@@ -814,6 +814,44 @@ test('selecting a pre-aggregation fills the full-height pane with its state, tri
 });
 
 /**
+ * T560 / AC-399 (design 16, state G8): below 1,024 px, drawn at 390, the
+ * list keeps each row's name, folder and state, the rest moving into the
+ * sheet; the pane is a full-screen sheet over the list, Build still in it,
+ * and × goes back to the list.
+ */
+test('below 1,024 px the list keeps name, folder and state, and the pane is a full-screen sheet', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/jobs');
+  const table = page.getByRole('table', { name: 'Pre-aggregations' });
+  const row = table.getByRole('row').filter({ hasText: ROLLUP });
+  await expect(row).toBeVisible();
+  for (const shown of ['Pre-aggregation', 'Folder', 'Status'])
+    await expect(table.getByRole('columnheader', { name: shown, exact: true })).toBeVisible();
+  for (const moved of ['Last built', 'Started by', 'Trigger', 'Partitions'])
+    await expect(table.getByRole('columnheader', { name: moved, exact: true })).toBeHidden();
+  // No pane until one is chosen: the list has the width.
+  const pane = page.getByRole('complementary', { name: 'Pre-aggregation details' });
+  await expect(pane).toBeHidden();
+
+  await row.click();
+  await expect(pane.getByRole('heading', { level: 2 })).toHaveText(ROLLUP);
+  const sheet = await pane.boundingBox();
+  expect([sheet?.x, sheet?.width]).toEqual([0, 390]);
+  // Opened, the sheet has focus, at its head (rule 85).
+  await expect(pane.getByRole('heading', { level: 2 })).toBeFocused();
+  // Building stays possible, in the sheet.
+  await expect(pane.getByRole('button', { name: /^Build/ }).first()).toBeVisible();
+
+  await pane.getByRole('button', { name: 'Back to the list' }).click();
+  await expect(pane).toBeHidden();
+  await expect(row).toBeVisible();
+  // Focus back on its row.
+  await expect(row).toBeFocused();
+});
+
+/**
  * T469, UX-080 (the phase-1 re-check): a click on a row, anywhere but its
  * name, selects it and stays in Jobs; "Open in Model" opens its file on the
  * cube's Pre-aggs tab with this pre-aggregation open. (The name keeps its

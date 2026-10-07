@@ -112,14 +112,21 @@ test.describe('Jobs and Schedules, scoped to the user’s read-write folders (T3
         const shown = page.getByRole('tabpanel', { name: panel });
         const folder = shown.getByRole('combobox', { name: 'Folder' });
         await expect(folder.locator('option').first()).toHaveText('All folders');
-        for (const path of [
-          `Jobs mine ${RUN}`,
-          `Jobs mine ${RUN} / Below ${RUN}`,
-          `Jobs theirs ${RUN}`,
-        ])
-          await expect(
-            folder.locator('option').filter({ hasText: new RegExp(`^${path}$`) }),
-          ).toHaveCount(1);
+        // A tree of short names under the root, each indented by its depth (state H2; T560).
+        const indent = '   ';
+        await expect(folder.locator('option').nth(1)).toHaveText('Shared · the root');
+        const labels = await folder.locator('option').allTextContents();
+        expect(labels).toEqual(
+          expect.arrayContaining([
+            `${indent}Jobs mine ${RUN}`,
+            `${indent}${indent}Below ${RUN}`,
+            `${indent}Jobs theirs ${RUN}`,
+          ]),
+        );
+        // Below sits under its parent, next after it (T560's review).
+        expect(labels.indexOf(`${indent}${indent}Below ${RUN}`)).toBe(
+          labels.indexOf(`${indent}Jobs mine ${RUN}`) + 1,
+        );
         await expect(shown.getByRole('note', { name: 'Scope' })).toHaveCount(0);
       }
       await page.goto('/schedules');

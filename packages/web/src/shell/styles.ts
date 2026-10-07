@@ -3965,6 +3965,27 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
   .jobs-workspace:has(> [role='tabpanel']:not([hidden]) .build-panel) { margin-right: 0; }
   .build-panel > .admin-pane { position: static; width: auto; }
 }
+/* Below 1,024 px (T560; design 16, state G8): each list keeps its name, its
+   folder and its state, one row each, the rest moving into the sheet; the
+   pane is a full-screen sheet over the list, as designs 01, 11 and 13 have
+   it, and × goes back. Nothing is taken away. */
+@media (max-width: 1023.98px) {
+  .jobs-wide { display: none; }
+  .jobs-workspace:has(> [role='tabpanel']:not([hidden]) .build-panel) { margin-right: 0; }
+  .build-panel > .admin-pane:has(> .admin-pane__empty) { display: none; }
+  .build-panel > .admin-pane,
+  .admin-page > .schedules__pane {
+    position: fixed;
+    inset: var(--wc-app-bar-height) 0 0 0;
+    width: auto;
+    height: auto;
+    z-index: 40;
+    padding: 0 16px 16px;
+    border-left: 0;
+    overflow: auto;
+  }
+  .admin-pane .admin-pane__close { display: inline-flex; }
+}
 .build-panel__head { margin: 0; font-size: var(--wc-text-sm-size); line-height: var(--wc-text-sm-line); font-weight: 600; }
 .build-panel__builds,
 .build-jobs__list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
@@ -4388,6 +4409,18 @@ code.schedules__sub { font-family: var(--wc-font-code); }
 .audit-trail__error details { flex-basis: 100%; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
 .audit-trail__skeleton { display: grid; gap: 6px; }
 .audit-trail__skeleton span { height: 28px; border-radius: 4px; background: var(--wc-bg-subtle); }
+/* Jobs' and Schedules' list states (T560; design 16, state G): skeleton rows
+   while a list is read (G1), and an error with Retry and Details (G2). */
+.jobs-loading { display: grid; gap: 8px; }
+.jobs-skeleton { display: grid; gap: 6px; }
+.jobs-skeleton span { height: 28px; border-radius: 4px; background: var(--wc-bg-subtle); }
+.jobs-error p { margin: 0; }
+.jobs-error__actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
+.jobs-error__actions details { font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
+.admin-pane__missing { padding-top: 12px; }
+.admin-pane__missing p { margin: 4px 0 0; color: var(--wc-text-secondary); }
+/* The sheet's × back to the list, first in its head, below 1,024 px only (design 16, G8). */
+.admin-pane__close { display: none; margin: 0 4px 0 -8px; }
 .audit-trail__inspector {
   position: sticky;
   top: 16px;

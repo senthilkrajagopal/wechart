@@ -16,6 +16,8 @@ export function PauseSwitch({ schedule }: { schedule: WechartSchedule }) {
   /** What the switch was just set to, until the API has answered: it never flicks back. */
   const [asked, setAsked] = useState<boolean | null>(null);
   const toggle = useMutation({
+    // Which schedule, so a refusal finding access gone is told apart (G5; T560).
+    meta: { scheduleId: schedule.id },
     mutationFn: (pause: boolean) => setSchedulePaused(schedule.id, pause),
     // Shown as the API answered at once, never flicking back while the list is read again.
     onSuccess: (now) => {

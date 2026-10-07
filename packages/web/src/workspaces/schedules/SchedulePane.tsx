@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
@@ -37,7 +37,16 @@ function writtenBlock(written: string): string {
   return ['refresh_key:', ...written.split(' · ').map((line) => `  ${line}`)].join('\n');
 }
 
-export function SchedulePane({ schedule, now }: { schedule: Schedule; now: Date }) {
+export function SchedulePane({
+  schedule,
+  now,
+  back = null,
+}: {
+  schedule: Schedule;
+  now: Date;
+  /** The sheet's ×, first in its head below 1,024 px (design 16, G8; T560). */
+  back?: ReactNode;
+}) {
   const shown = shownOf(schedule);
   const folder = shown.folder ?? 'Shared';
   const zone = zoneOf(schedule);
@@ -53,7 +62,10 @@ export function SchedulePane({ schedule, now }: { schedule: Schedule; now: Date 
   return (
     <>
       <div className="admin-pane__head">
-        <h2 className="admin-pane__title">{shown.name}</h2>
+        {back}
+        <h2 className="admin-pane__title" tabIndex={-1}>
+          {shown.name}
+        </h2>
         <span className="schedules__folder">· {folder}</span>
         <span className="spacer" />
         <OwnerLabel owner={schedule.owner} />
@@ -166,10 +178,13 @@ export function WechartPane({
   schedule,
   refreshKeys,
   onDeleted,
+  back = null,
 }: {
   schedule: WechartSchedule;
   refreshKeys: readonly Schedule[];
   onDeleted: () => void;
+  /** The sheet's ×, first in its head below 1,024 px (design 16, G8; T560). */
+  back?: ReactNode;
 }) {
   const [deleting, setDeleting] = useState(false);
   /** Delete…, where focus goes back to when its question is cancelled (T552's review). */
@@ -199,13 +214,18 @@ export function WechartPane({
   const client = useQueryClient();
   /** Run now (T555, AC-395): its last run on Schedules, and Run history, read again. */
   const runNow = useMutation({
+    // Which schedule, so a refusal finding access gone is told apart (G5; T560).
+    meta: { scheduleId: schedule.id },
     mutationFn: () => runScheduleNow(schedule.id),
     onSettled: () => void client.invalidateQueries({ queryKey: WECHART_SCHEDULES_KEY }),
   });
   return (
     <>
       <div className="admin-pane__head">
-        <h2 className="admin-pane__title">{schedule.name}</h2>
+        {back}
+        <h2 className="admin-pane__title" tabIndex={-1}>
+          {schedule.name}
+        </h2>
         <span className="spacer" />
         {/* On, or paused by hand (T556; design 16, P3). */}
         <PauseSwitch schedule={schedule} />
@@ -383,6 +403,7 @@ function Suspension({
     if (focusing.current) resumeButton.current?.focus();
   }, []);
   const resume = useMutation({
+    meta: { scheduleId: schedule.id },
     mutationFn: () => resumeSchedule(schedule.id),
     onSuccess: async (resumed) => {
       await client.invalidateQueries({ queryKey: WECHART_SCHEDULES_KEY });
@@ -517,6 +538,7 @@ function DeleteScheduleDialog({
     };
   }, []);
   const remove = useMutation({
+    meta: { scheduleId: schedule.id },
     mutationFn: () => deleteSchedule(schedule.id),
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: WECHART_SCHEDULES_KEY });

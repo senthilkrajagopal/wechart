@@ -1,3 +1,5 @@
+import { readErrorOf } from '../jobs/ListStates';
+
 /**
  * wechart's own schedules as Schedules shows them (T552, AC-234, AC-154;
  * design 16, screen 2 and state D): the rows `GET /api/wechart-schedules`
@@ -101,10 +103,13 @@ export const failuresWords = (count: number) =>
 export const SUSPEND_AFTER_REFUSAL =
   'Suspend it after a whole number of failed runs in a row, 1 or more.';
 
-/** The API's words for a refusal, else what failed. */
+/**
+ * The API's words for a refusal, else what failed; with its status, so a
+ * refusal (403) is told from a failure, and access lost while the page was
+ * open is noticed (design 16, G4 and G5; T560).
+ */
 async function refusalOf(response: Response, what: string): Promise<Error> {
-  const said = ((await response.json().catch(() => null)) as { error?: unknown } | null)?.error;
-  return new Error(typeof said === 'string' ? said : `${what} (${String(response.status)}).`);
+  return readErrorOf(response, what);
 }
 
 /**

@@ -183,7 +183,8 @@ describe('Jobs’ tabs (T374, design 16 pin 1)', () => {
   it('reads Run history only once its tab is opened', async () => {
     serve();
     shown();
-    await screen.findByText(/declares no pre-aggregations/);
+    // Pre-aggregations read, and empty (design 16, G3; T560).
+    await screen.findByText('No pre-aggregations in your folders');
     expect(asked.filter((url) => url.startsWith('/api/jobs/builds'))).toEqual([]);
 
     await userEvent.click(screen.getByRole('tab', { name: 'Run history' }));

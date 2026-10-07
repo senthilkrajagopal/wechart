@@ -707,3 +707,37 @@ test('the owner filter counts each owner’s schedules, and each choice lists on
     if (id !== undefined) await request.delete(`/api/wechart-schedules/${id}`);
   }
 });
+
+/**
+ * T560 / AC-399 (design 16, state G8): below 1,024 px, drawn at 390,
+ * Schedules lists each schedule's name, next run and owner; its pane is a
+ * full-screen sheet, and × goes back to the list.
+ */
+test('below 1,024 px Schedules lists name, next run and owner, and its pane is a full-screen sheet', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/schedules');
+  const table = page.getByRole('table', { name: 'Refresh schedules' });
+  const row = table.getByRole('row').filter({ hasText: 'monthly_orders.by_status_month' }).first();
+  await expect(row).toBeVisible(PUBLISHED);
+  for (const shown of ['Pre-aggregation', 'Next run', 'Owner'])
+    await expect(table.getByRole('columnheader', { name: shown, exact: true })).toBeVisible();
+  for (const moved of ['Folder', 'Schedule', 'Last run'])
+    await expect(table.getByRole('columnheader', { name: moved, exact: true })).toBeHidden();
+
+  await row.click();
+  const pane = page.getByRole('complementary', { name: 'Schedule details' });
+  await expect(pane.getByRole('heading', { level: 2 })).toHaveText(
+    'monthly_orders.by_status_month',
+  );
+  const sheet = await pane.boundingBox();
+  expect([sheet?.x, sheet?.width]).toEqual([0, 390]);
+  // Opened, the sheet has focus, at its head; × leads the head (rule 85).
+  await expect(pane.getByRole('heading', { level: 2 })).toBeFocused();
+
+  await pane.getByRole('button', { name: 'Back to the list' }).click();
+  await expect(pane).toHaveCount(0);
+  await expect(row).toBeVisible();
+  await expect(row).toBeFocused();
+});

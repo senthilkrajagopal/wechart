@@ -291,10 +291,23 @@ export function shownSchedules({
   runNowRefused,
   runNowNoJob,
   folders = MEMBER_FOLDERS,
+  pending = false,
+  accessLost = false,
+  forbidden = false,
 }: {
   at?: string;
   /** The Folder filter's choices, and whether they are every folder (T559). */
   folders?: unknown;
+  /** The refresh keys' list never answers: still being read (T560, G1). */
+  pending?: boolean;
+  /**
+   * The user's access goes while the page is open (T560, G5): an action on
+   * a schedule is refused, and the lists read after it lack that schedule —
+   * every one of wechart's for `true`, else those named.
+   */
+  accessLost?: boolean | readonly string[];
+  /** Every action refused, its schedule still listed: a refusal that loses nothing (G4). */
+  forbidden?: boolean;
   keys?: unknown[];
   wechart?: WechartSchedule[];
   /** Lists the API fails to read, with its words: the refresh keys', or wechart's. */
@@ -322,9 +335,23 @@ export function shownSchedules({
         ...(body === undefined ? {} : { body }),
       });
       if (url.pathname === '/api/schedules')
-        return failing.includes('keys')
-          ? Response.json({ error: 'Cube didn’t answer.' }, { status: 502 })
-          : Response.json(keys);
+        return pending
+          ? new Promise<Response>(() => undefined)
+          : failing.includes('keys')
+            ? Response.json({ error: 'Cube didn’t answer.' }, { status: 502 })
+            : Response.json(keys);
+      // Access gone: an action refused, as the API refuses another folder's (T560, G5).
+      const acted = /^\/api\/wechart-schedules\/([^/]+)/.exec(url.pathname)?.[1];
+      const lost =
+        acted !== undefined &&
+        (accessLost === true || (Array.isArray(accessLost) && accessLost.includes(acted)));
+      if (method !== 'GET' && acted !== undefined && (lost || forbidden)) {
+        if (lost) listed = accessLost === true ? [] : listed.filter((each) => each.id !== acted);
+        return Response.json(
+          { error: 'You may schedule only the pre-aggregations of folders you write.' },
+          { status: 403 },
+        );
+      }
       if (url.pathname === '/api/wechart-schedules' && failing.includes('wechart'))
         return Response.json({ error: 'wechart’s schedules could not be read.' }, { status: 500 });
       if (url.pathname === '/api/preaggregations') return Response.json(PRE_AGGREGATIONS);

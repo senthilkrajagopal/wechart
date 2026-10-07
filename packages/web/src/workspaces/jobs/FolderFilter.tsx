@@ -68,6 +68,33 @@ export function inFolder(
   return false;
 }
 
+/**
+ * A choice's words, as state H2 draws them: a member's folders each by its
+ * path, "Sales / EMEA"; a Super-Admin's every folder as a tree of short
+ * names under "Shared · the root", each indented by its depth (T560).
+ */
+export function choiceOf(folder: JobsFolder, everyFolder: boolean): string {
+  if (!everyFolder) return folderTextOf(folder.path);
+  if (folder.parentId === null) return 'Shared · the root';
+  return `${'   '.repeat(folder.path.length - 1)}${folder.path.at(-1) ?? ''}`;
+}
+
+/**
+ * Folders in their tree's order: each followed by those below it, before
+ * its next sibling, by comparing their paths a folder at a time ("Sales",
+ * "Sales / EMEA", then "Sales Ops"), so H2's indented tree reads true
+ * (T560's review).
+ */
+export function inTreeOrder(folders: readonly JobsFolder[]): JobsFolder[] {
+  return [...folders].sort((a, b) => {
+    for (let at = 0; at < Math.min(a.path.length, b.path.length); at += 1) {
+      const order = (a.path[at] ?? '').localeCompare(b.path[at] ?? '');
+      if (order !== 0) return order;
+    }
+    return a.path.length - b.path.length;
+  });
+}
+
 export function FolderFilter({
   folders,
   choice,
@@ -92,9 +119,9 @@ export function FolderFilter({
             <option value="">
               {folders?.everyFolder === true ? 'All folders' : 'All of mine'}
             </option>
-            {(folders?.folders ?? []).map((folder) => (
+            {inTreeOrder(folders?.folders ?? []).map((folder) => (
               <option key={folder.id} value={folder.id}>
-                {folderTextOf(folder.path)}
+                {choiceOf(folder, folders?.everyFolder === true)}
               </option>
             ))}
           </select>

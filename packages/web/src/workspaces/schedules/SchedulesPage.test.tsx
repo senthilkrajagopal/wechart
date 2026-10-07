@@ -411,7 +411,7 @@ describe('Schedules’ Folder filter and scope note (T559, AC-297)', () => {
         within(screen.getByRole('combobox', { name: 'Folder' }))
           .getAllByRole('option')
           .map((option) => text(option)),
-      ).toEqual(['All folders', 'Shared']);
+      ).toEqual(['All folders', 'Shared · the root']);
     });
     expect(screen.queryByRole('note', { name: 'Scope' })).toBeNull();
   });
@@ -446,6 +446,102 @@ describe('Schedules’ Folder filter and scope note (T559, AC-297)', () => {
       `Cube’s refresh worker ${String(KEY_ROWS.length)}`,
       'wechart 2',
     ]);
+  });
+});
+
+/**
+ * T560 (AC-399; design 16, state G): Schedules in every state design 16
+ * draws for Jobs, with its own words: loading as skeleton rows; an error
+ * with Retry and Details; empty in the user's folders; and access lost
+ * while open, the lists read again, the pane closed, and it said.
+ */
+describe('Schedules’ states (T560, AC-399)', () => {
+  const user = () => userEvent.setup({ delay: null });
+
+  it('draws skeleton rows while the schedules are read (G1)', async () => {
+    shownSchedules({ pending: true });
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('skeleton-rows').children.length).toBeGreaterThanOrEqual(3);
+    });
+    expect(text(screen.getByTestId('reading'))).toBe('Reading the schedules…');
+  });
+
+  it('says the schedules couldn’t be read, with Retry and Details (G2)', async () => {
+    const { sent } = shownSchedules({ failing: ['keys'] });
+
+    const said = await screen.findByRole('alert');
+    expect(text(within(said).getByTestId('read-error'))).toBe('Couldn’t read the schedules.');
+    expect(text(said)).toContain('Cube didn’t answer.');
+    expect(text(within(said).getByText('Details'))).toBe('Details');
+    const reads = () => sent.filter((each) => each.url === '/api/schedules').length;
+    const before = reads();
+    await user().click(within(said).getByRole('button', { name: 'Retry' }));
+    await vi.waitFor(() => {
+      expect(reads()).toBeGreaterThan(before);
+    });
+  });
+
+  it('says no pre-aggregation is in their folders when there are none (G3)', async () => {
+    shownSchedules({ keys: [] });
+
+    const empty = await screen.findByTestId('list-empty');
+    expect(text(empty)).toBe(
+      'No pre-aggregations in your foldersNone of the models in the folders where you have read-write access defines one yet. Add one to a model in My workspace and propose it.',
+    );
+  });
+
+  it('reads the lists again when an action finds access lost, closes the pane, and says so (G5)', async () => {
+    const { sent } = shownSchedules({ wechart: [schedule()], accessLost: true });
+    await user().click(await screen.findByText('Weekday mornings', { selector: 'b' }));
+    const pane = paneOf();
+    const reads = () => sent.filter((each) => each.url === '/api/wechart-schedules').length;
+    const before = reads();
+
+    await user().click(within(pane).getByRole('button', { name: 'Run now' }));
+
+    const toast = await screen.findByText('You no longer have access to do this.');
+    expect(text(toast)).toBe('You no longer have access to do this.');
+    // An error, with its icon (T560's review).
+    expect(toast.closest('[role="status"]')?.querySelector('svg')?.getAttribute('data-icon')).toBe(
+      'err',
+    );
+    expect(reads()).toBeGreaterThan(before);
+    await vi.waitFor(() => {
+      expect(screen.queryByRole('complementary', { name: 'Schedule details' })).toBeNull();
+    });
+  });
+
+  it('says it when a row’s switch finds its schedule gone, another’s pane left open (G5)', async () => {
+    const other = schedule({ id: 'sched-2', name: 'Weekends' });
+    shownSchedules({ wechart: [schedule(), other], accessLost: ['sched-2'] });
+    await user().click(await screen.findByText('Weekday mornings', { selector: 'b' }));
+    const weekends = (
+      await screen.findByText('Weekends', { selector: '[data-testid="wechart-schedule-name"]' })
+    ).closest('tr') as HTMLElement;
+
+    await user().click(within(weekends).getByRole('switch', { name: 'On: Weekends' }));
+
+    expect(text(await screen.findByText('You no longer have access to do this.'))).toBe(
+      'You no longer have access to do this.',
+    );
+    // Its own pane stays: Weekday mornings is still theirs.
+    expect(text(within(paneOf()).getByRole('heading', { level: 2 }))).toBe('Weekday mornings');
+  });
+
+  it('says nothing of access when an action is refused and its schedule is still listed (G4)', async () => {
+    const { sent } = shownSchedules({ wechart: [schedule()], forbidden: true });
+    await user().click(await screen.findByText('Weekday mornings', { selector: 'b' }));
+    const reads = () => sent.filter((each) => each.url === '/api/wechart-schedules').length;
+    const before = reads();
+
+    await user().click(within(paneOf()).getByRole('button', { name: 'Run now' }));
+
+    await vi.waitFor(() => {
+      expect(reads()).toBeGreaterThan(before);
+    });
+    expect(screen.queryByText('You no longer have access to do this.')).toBeNull();
+    expect(text(within(paneOf()).getByRole('heading', { level: 2 }))).toBe('Weekday mornings');
   });
 });
 

@@ -170,15 +170,43 @@ describe('Pre-aggregations’ Folder column and filter, and its scope note (T559
 
     await vi.waitFor(() => {
       expect(choicesOf(panel)).toEqual([
+        // A tree of short names under the root, as state H2 draws a Super-Admin's (T560).
         'All folders',
-        'Shared',
-        'Finance',
-        'Sales',
-        'Sales / EMEA',
-        'Sales / EMEA / DACH',
+        'Shared · the root',
+        '   Finance',
+        '   Sales',
+        '      EMEA',
+        '         DACH',
       ]);
     });
     expect(within(panel).queryByRole('note', { name: 'Scope' })).toBeNull();
+  });
+
+  /** T560's review: the tree in its own order, whatever order the folders come in. */
+  it('puts each folder of a Super-Admin’s tree under its parent, before its parent’s next sibling', async () => {
+    serve({
+      everyFolder: true,
+      // As the API sorts them, by the whole path: "Sales Ops" between Sales and Sales / EMEA.
+      folders: [
+        { id: 'root', path: ['Shared'], parentId: null },
+        { id: 'sales', path: ['Shared', 'Sales'], parentId: 'root' },
+        { id: 'ops', path: ['Shared', 'Sales Ops'], parentId: 'root' },
+        { id: 'emea', path: ['Shared', 'Sales', 'EMEA'], parentId: 'sales' },
+      ],
+    });
+    shown();
+    await screen.findByRole('table', { name: 'Pre-aggregations' });
+    const panel = panelOf('Pre-aggregations');
+
+    await vi.waitFor(() => {
+      expect(choicesOf(panel).map((choice) => choice.replaceAll(' ', '·'))).toEqual([
+        'All folders',
+        'Shared · the root',
+        '···Sales',
+        '······EMEA',
+        '···Sales Ops',
+      ]);
+    });
   });
 });
 

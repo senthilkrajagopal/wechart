@@ -13,6 +13,7 @@ import {
   useJobsFolders,
   type FolderChoice,
 } from './FolderFilter';
+import { ACCESS_LOST, isRefused, ListError, ListLoading, ReadError } from './ListStates';
 import { ChoicePill } from './Pill';
 import { Status } from './StateBadge';
 
@@ -62,6 +63,10 @@ export const QUEUE_STATES: readonly (readonly [QueueState, string])[] = [
   ['stalled', 'Stalled'],
 ];
 
+/** The columns the list drops below 1,024 px (design 16, G8). */
+// The queue has no sheet: its partition stays, so two entries of one rollup are told apart (T560's review).
+const QUEUE_NARROW_HIDES = new Set(['Added', 'Started by', 'Token']);
+
 /** The queue, as Jobs reads it for this tab and its count (design 16, pin 1). */
 export async function readQueue(signal?: AbortSignal): Promise<{ entries: QueueRow[] }> {
   const response = await fetch('/api/jobs/queue', signal === undefined ? undefined : { signal });
@@ -69,11 +74,15 @@ export async function readQueue(signal?: AbortSignal): Promise<{ entries: QueueR
     entries?: QueueRow[];
     error?: unknown;
   } | null;
+  // With its status: a refusal is said in the API's words (design 16, G4; T560).
   if (!response.ok || body === null || !Array.isArray(body.entries))
-    throw new Error(
+    throw new ReadError(
       typeof body?.error === 'string'
         ? body.error
         : `The queue could not be read (${String(response.status)}).`,
+      response.status,
+      response.statusText,
+      'GET /api/jobs/queue',
     );
   return { entries: body.entries };
 }
@@ -214,7 +223,10 @@ export function BuildQueue({
         error?: string;
       } | null;
       if (!response.ok || body === null)
-        throw new Error(body?.error ?? `The cancel failed (status ${String(response.status)}).`);
+        throw new ReadError(
+          body?.error ?? `The cancel failed (status ${String(response.status)}).`,
+          response.status,
+        );
       return { row, stop, body };
     },
     onSuccess: ({ row, stop, body }) => {
@@ -237,10 +249,28 @@ export function BuildQueue({
       }
       void client.invalidateQueries({ queryKey: QUEUE_QUERY_KEY });
     },
+    // Refused: the queue read again, and where the entry went with it, access
+    // was lost while the page was open, and it is said (design 16, G5; T560).
+    onError: async (error, { row }) => {
+      if (!isRefused(error)) return;
+      await client.invalidateQueries({ queryKey: QUEUE_QUERY_KEY });
+      const now = client.getQueryData<{ entries: QueueRow[] }>(QUEUE_QUERY_KEY);
+      if (now?.entries.some((entry) => entry.key === row.key) !== true) setSaid(ACCESS_LOST);
+    },
   });
 
-  if (queue.isPending) return <StateLine kind="run">Reading the queue…</StateLine>;
-  if (queue.isError) return <StateLine kind="err">{queue.error.message}</StateLine>;
+  // Skeleton rows while it's read (design 16, G1; T560).
+  if (queue.isPending) return <ListLoading said="Reading the queue…" />;
+  // Couldn't read it, with Retry and Details (G2); a refusal in the API's words (G4).
+  if (queue.isError)
+    return (
+      <ListError
+        what="the queue"
+        error={queue.error}
+        carryOn="Your builds carry on; this list will show them once it’s read."
+        onRetry={() => void queue.refetch()}
+      />
+    );
   // Those of the chosen folder (T559) in the chosen state, as Jobs' summary counts them (T558).
   const rows = queue.data.entries.filter(
     (entry) =>
@@ -305,7 +335,13 @@ export function BuildQueue({
                   'Started by',
                   'Token',
                 ].map((column) => (
-                  <th key={column} scope="col">
+                  // Below 1,024 px the list keeps its name, folder, state and
+                  // Cancel (design 16, G8): nothing is taken away.
+                  <th
+                    key={column}
+                    scope="col"
+                    className={QUEUE_NARROW_HIDES.has(column) ? 'jobs-wide' : undefined}
+                  >
                     {column}
                   </th>
                 ))}
@@ -317,7 +353,7 @@ export function BuildQueue({
             <tbody>
               {rows.map((row) => (
                 <tr key={row.key} data-key={row.key}>
-                  <td>
+                  <td className="jobs-wide">
                     <time dateTime={row.addedAt}>{clockOf(row.addedAt)}</time>
                   </td>
                   <td className="run-history__name">{row.name}</td>
@@ -326,10 +362,10 @@ export function BuildQueue({
                   <td className="build-queue__state">
                     <StateOf row={row} />
                   </td>
-                  <td>
+                  <td className="jobs-wide">
                     <StartedBy starter={row.starter} />
                   </td>
-                  <td data-testid="queue-token">
+                  <td className="jobs-wide" data-testid="queue-token">
                     {row.token === null ? (
                       '—'
                     ) : (
@@ -376,7 +412,12 @@ export function BuildQueue({
         jobs API gave wechart; the worker’s and queries’ builds have none. A building one wechart
         started can be stopped, and none of it is kept.
       </p>
-      <ExportedToast message={said} onDismiss={() => setSaid('')} />
+      <ExportedToast
+        message={said}
+        // Access lost is an error, with its icon (design 16, G5).
+        kind={said === ACCESS_LOST ? 'err' : 'ok'}
+        onDismiss={() => setSaid('')}
+      />
     </div>
   );
 }

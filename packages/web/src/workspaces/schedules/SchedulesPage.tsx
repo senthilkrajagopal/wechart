@@ -1,8 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
-import { useState, type ReactNode } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
+import { ExportedToast } from '../../dashboard/export/ExportedToast';
 import { InfoBar } from '../../shell/InfoBar';
-import { StateLine, StatusIcon, type StateKind } from '../../shell/StatusIcon';
+import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { shownOf } from '../jobs/BuildPanel';
 import {
@@ -13,6 +14,14 @@ import {
   useJobsFolders,
   type FolderChoice,
 } from '../jobs/FolderFilter';
+import {
+  ACCESS_LOST,
+  isRefused,
+  ListEmpty,
+  ListError,
+  ListLoading,
+  readErrorOf,
+} from '../jobs/ListStates';
 import { ChoicePill } from '../jobs/Pill';
 import { BuiltWhen } from '../jobs/builds';
 import { Status } from '../jobs/StateBadge';
@@ -172,8 +181,8 @@ function WechartRow({
         <PauseSwitch schedule={schedule} />
         <span data-testid="schedule-name">{shownAs.name}</span>
       </td>
-      <td>{shownAs.folder ?? 'Shared'}</td>
-      <td>
+      <td className="jobs-wide">{shownAs.folder ?? 'Shared'}</td>
+      <td className="jobs-wide">
         {/* Its name first, then in words, then as written with its zone (pin 6). */}
         <b data-testid="wechart-schedule-name">{schedule.name}</b>
         {schedule.when === undefined ? null : ` · ${schedule.when}`}
@@ -182,7 +191,7 @@ function WechartRow({
       <td>
         <WechartNextRun schedule={schedule} now={now} />
       </td>
-      <td>
+      <td className="jobs-wide">
         {/* How its last run ended, from Run history (pin 8). */}
         {lastRun === null ? (
           <span className="schedules__sub">Not run yet</span>
@@ -229,16 +238,9 @@ export function SchedulesPage() {
     queryKey: ['schedules'],
     queryFn: async () => {
       const response = await fetch('/api/schedules');
-      if (!response.ok) {
-        // The API's own words where it gives them: who Schedules is for (T371).
-        const said = ((await response.json().catch(() => null)) as { error?: unknown } | null)
-          ?.error;
-        throw new Error(
-          typeof said === 'string'
-            ? said
-            : `The schedules could not be read (${String(response.status)}).`,
-        );
-      }
+      // The API's own words where it gives them: who Schedules is for (T371), with its status (T560).
+      if (!response.ok)
+        throw await readErrorOf(response, 'The schedules could not be read', 'GET /api/schedules');
       return (await response.json()) as Schedule[];
     },
   });
@@ -250,6 +252,78 @@ export function SchedulesPage() {
     refetchInterval: 30_000,
   });
   const [selected, setSelected] = useState<Open | null>(null);
+  const client = useQueryClient();
+  /** Access lost while the page was open (design 16, G5; T560), said once the lists are read again. */
+  const [lost, setLost] = useState(false);
+  const opened = useRef(selected);
+  useEffect(() => {
+    opened.current = selected;
+  }, [selected]);
+  /**
+   * Any action on the page the API refuses (403) — Run now, the On switch,
+   * Resume, a save, a delete — may find access gone: both lists are read
+   * again. Where the schedule it was on (its mutation's `scheduleId`, else
+   * the open one) went with them, it is said, and an open pane whose
+   * schedule went closes (G5). One still listed was refused for another
+   * reason, said in the API's words where it was asked (G4).
+   */
+  useEffect(
+    () =>
+      client.getMutationCache().subscribe((event) => {
+        if (event.type !== 'updated' || event.action.type !== 'error') return;
+        if (!isRefused(event.action.error)) return;
+        const asked = event.mutation.options.meta?.['scheduleId'];
+        void (async () => {
+          await Promise.all([
+            client.invalidateQueries({ queryKey: ['schedules'] }),
+            client.invalidateQueries({ queryKey: WECHART_SCHEDULES_KEY }),
+          ]);
+          const now = client.getQueryData<WechartSchedule[]>(WECHART_SCHEDULES_KEY) ?? [];
+          const listed = (id: string) => now.some((each) => each.id === id);
+          const was = opened.current;
+          const target =
+            typeof asked === 'string' ? asked : was?.kind === 'wechart' ? was.id : undefined;
+          if (target !== undefined && listed(target)) return;
+          if (was?.kind === 'wechart' && !listed(was.id)) setSelected(null);
+          setLost(true);
+        })();
+      }),
+    [client],
+  );
+  /**
+   * Below 1,024 px the pane is a sheet over the list (design 16, G8): opened,
+   * it takes focus at its head; its × gives focus back to the row (rule 85).
+   */
+  useEffect(() => {
+    const narrow =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(max-width: 1023.98px)').matches;
+    if (selected !== null && narrow)
+      document.querySelector<HTMLElement>('.schedules__pane .admin-pane__title')?.focus();
+  }, [selected]);
+  const backToList = (
+    <button
+      type="button"
+      className="btn-ghost btn-sm admin-pane__close"
+      aria-label="Back to the list"
+      onClick={() => {
+        const was = selected;
+        setSelected(null);
+        if (was !== null && was.kind !== 'new')
+          requestAnimationFrame(() => {
+            document
+              .querySelector<HTMLElement>(
+                was.kind === 'wechart'
+                  ? `tr[data-schedule-id=${JSON.stringify(was.id)}]`
+                  : `tr[data-key-id=${JSON.stringify(was.id)}]`,
+              )
+              ?.focus();
+          });
+      }}
+    >
+      ×
+    </button>
+  );
   // Whose schedules are listed (T557, AC-397; design 16, P4).
   const [owner, setOwner] = useState<ShownOwner>('all');
   // In which state (T558; the user's answer, R66): Jobs' "1 suspended schedule" opens it.
@@ -286,7 +360,10 @@ export function SchedulesPage() {
       return (
         <>
           <div className="admin-pane__head">
-            <h2 className="admin-pane__title">New schedule</h2>
+            {backToList}
+            <h2 className="admin-pane__title" tabIndex={-1}>
+              New schedule
+            </h2>
           </div>
           <ScheduleForm
             refreshKeys={keys}
@@ -310,11 +387,14 @@ export function SchedulesPage() {
           onDeleted={() => {
             setSelected(null);
           }}
+          back={backToList}
         />
       );
     }
     const found = keys.find((each) => each.id === selected.id);
-    return found === undefined ? null : <SchedulePane schedule={found} now={now} />;
+    return found === undefined ? null : (
+      <SchedulePane schedule={found} now={now} back={backToList} />
+    );
   })();
   /** wechart's schedules each after its rollup's refresh key, and those of rollups with none, last. */
   const placed = new Set<string>();
@@ -360,16 +440,33 @@ export function SchedulesPage() {
         </ScopeNote>
         {/* Each list read apart, and said where it couldn't be: wechart's
             schedules are listed without Cube, and a refresh key's without
-            wechart's (T552's review); one refusal said once. */}
-        {schedules.isError ? <StateLine kind="err">{schedules.error.message}</StateLine> : null}
+            wechart's (T552's review); one refusal said once. Couldn't be
+            read, with Retry and Details (design 16, G2); a refusal in the
+            API's words (G4; T560). */}
+        {schedules.isError ? (
+          <ListError
+            what="the schedules"
+            error={schedules.error}
+            onRetry={() => void schedules.refetch()}
+          />
+        ) : null}
         {wechart.isError && wechart.error.message !== schedules.error?.message ? (
-          <StateLine kind="err">{wechart.error.message}</StateLine>
+          <ListError
+            what="wechart’s schedules"
+            error={wechart.error}
+            onRetry={() => void wechart.refetch()}
+          />
         ) : null}
         {schedules.isPending ? (
-          <StateLine kind="run">Reading the schedules…</StateLine>
+          // Skeleton rows while they're read (G1).
+          <ListLoading said="Reading the schedules…" />
         ) : keys.length === 0 && own.length === 0 ? (
           schedules.isSuccess ? (
-            <p>The model declares no pre-aggregations.</p>
+            // Nothing in their folders yet (G3).
+            <ListEmpty title="No pre-aggregations in your folders">
+              None of the models in the folders where you have read-write access defines one yet.
+              Add one to a model in My workspace and propose it.
+            </ListEmpty>
           ) : null
         ) : (
           <>
@@ -404,7 +501,16 @@ export function SchedulesPage() {
                   <tr>
                     {['Pre-aggregation', 'Folder', 'Schedule', 'Next run', 'Last run', 'Owner'].map(
                       (column) => (
-                        <th key={column} scope="col">
+                        // Below 1,024 px: name, next run and owner (design 16, G8).
+                        <th
+                          key={column}
+                          scope="col"
+                          className={
+                            ['Folder', 'Schedule', 'Last run'].includes(column)
+                              ? 'jobs-wide'
+                              : undefined
+                          }
+                        >
                           {column}
                         </th>
                       ),
@@ -425,6 +531,8 @@ export function SchedulesPage() {
                         ? [
                             <tr
                               key={schedule.id}
+                              // The sheet's × gives focus back to it (G8).
+                              data-key-id={schedule.id}
                               // A row opens its pane (D5): by pointer, or Enter or Space on it.
                               aria-selected={isSelected('cube', schedule.id)}
                               tabIndex={0}
@@ -440,8 +548,8 @@ export function SchedulesPage() {
                               <td className="query-log__query">
                                 <span data-testid="schedule-name">{shownAs.name}</span>
                               </td>
-                              <td>{shownAs.folder ?? 'Shared'}</td>
-                              <td>
+                              <td className="jobs-wide">{shownAs.folder ?? 'Shared'}</td>
+                              <td className="jobs-wide">
                                 <span
                                   className={
                                     icon === undefined ? undefined : `status status--${icon}`
@@ -455,7 +563,7 @@ export function SchedulesPage() {
                               <td>
                                 <NextRun schedule={schedule} now={now} />
                               </td>
-                              <td>
+                              <td className="jobs-wide">
                                 <LastRun schedule={schedule} />
                               </td>
                               <td>
@@ -504,10 +612,18 @@ export function SchedulesPage() {
         )}
       </div>
       {pane === null ? null : (
-        <aside className="admin-pane" aria-label="Schedule details">
+        <aside className="admin-pane schedules__pane" aria-label="Schedule details">
           {pane}
         </aside>
       )}
+      {/* Access lost while the page was open (design 16, G5; T560). */}
+      <ExportedToast
+        message={lost ? ACCESS_LOST : ''}
+        kind="err"
+        onDismiss={() => {
+          setLost(false);
+        }}
+      />
     </div>
   );
 }

@@ -126,6 +126,8 @@ export function ScheduleForm({
   const current = read !== undefined && !preview.isPlaceholderData;
 
   const save = useMutation({
+    // Which schedule, so a refusal finding access gone is told apart (G5; T560).
+    ...(schedule === undefined ? {} : { meta: { scheduleId: schedule.id } }),
     mutationFn: () =>
       saveSchedule({ ...fields, name: fields.name.trim(), suspendAfter }, schedule?.id),
     onSuccess: async (saved) => {

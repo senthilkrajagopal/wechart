@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { ExportedToast } from '../../dashboard/export/ExportedToast';
 import { missingScopeOf, ScopeUnavailable, useScopes } from '../../query/scopes';
@@ -25,6 +25,15 @@ import {
   useJobsFolders,
   type FolderChoice,
 } from './FolderFilter';
+import {
+  ACCESS_LOST,
+  isRefused,
+  ListEmpty,
+  ListError,
+  ListLoading,
+  ReadError,
+  readErrorOf,
+} from './ListStates';
 import { ChoicePill } from './Pill';
 import { Status } from './StateBadge';
 
@@ -140,8 +149,12 @@ async function send<T>(url: string, init?: { body: unknown; signal?: AbortSignal
         },
   );
   const body = (await response.json().catch(() => null)) as (T & { error?: string }) | null;
+  // With its status: a refusal may be access lost while the page was open (G5; T560).
   if (!response.ok || body === null)
-    throw new Error(body?.error ?? `The request failed (status ${String(response.status)}).`);
+    throw new ReadError(
+      body?.error ?? `The request failed (status ${String(response.status)}).`,
+      response.status,
+    );
   return body;
 }
 
@@ -365,16 +378,13 @@ export function BuildPanel({
     queryKey: ['preaggregations'],
     queryFn: ({ signal }) =>
       fetch('/api/preaggregations', { signal }).then(async (response) => {
-        if (!response.ok) {
-          // Cube's own words when it gave some: a missing scope among them (T176).
-          const said = ((await response.json().catch(() => null)) as { error?: unknown } | null)
-            ?.error;
-          throw new Error(
-            typeof said === 'string'
-              ? said
-              : `The pre-aggregations could not be read (${String(response.status)}).`,
+        // Cube's own words when it gave some: a missing scope among them (T176).
+        if (!response.ok)
+          throw await readErrorOf(
+            response,
+            'The pre-aggregations could not be read',
+            'GET /api/preaggregations',
           );
-        }
         return (await response.json()) as Buildable[];
       }),
     // Read again each time: a publish adds or removes pre-aggregations.
@@ -396,6 +406,17 @@ export function BuildPanel({
    * list every folder again (T559's review); and the folders the user builds
    * in, for the filter and the note (T559).
    */
+  /**
+   * Below 1,024 px the pane is a sheet over the list (design 16, G8): opened,
+   * it takes focus at its head; closed, focus goes back to its row (rule 85).
+   */
+  const sheetHead = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    const narrow =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(max-width: 1023.98px)').matches;
+    if (selected !== null && narrow) sheetHead.current?.focus();
+  }, [selected]);
   const [ownChoice, setOwnChoice] = useState<FolderChoice>(EVERY_FOLDER);
   const folderChoice = folderChosen ?? ownChoice;
   const setFolderChoice = onFolderChoice ?? setOwnChoice;
@@ -413,12 +434,28 @@ export function BuildPanel({
   };
   /** A Build that made no job, said by its name, as the API leaves it to say (T550's review). */
   const [noJob, setNoJob] = useState<string | null>(null);
+  /** Access lost while the page was open (design 16, G5), said once the list is read again. */
+  const [lost, setLost] = useState(false);
+  /**
+   * A refused start (G4, G5): the list read again, and where its row went
+   * with it, access was lost: the pane closes, and it is said (T560).
+   */
+  const refusedFor = async (id: string) => {
+    await client.invalidateQueries({ queryKey: ['preaggregations'] });
+    const rows = client.getQueryData<Buildable[]>(['preaggregations']) ?? [];
+    if (rows.some((row) => row.id === id)) return;
+    setSelected((was) => (was === id ? null : was));
+    setLost(true);
+  };
   const start = useMutation({
     mutationFn: (id: string) =>
       send<{ tokens: string[] }>('/api/builds', { body: { preAggregation: id } }),
     onSuccess: ({ tokens }, id) => {
       setNoJob(tokens.length === 0 ? id : null);
       if (tokens.length > 0) follow(id);
+    },
+    onError: (error, id) => {
+      if (isRefused(error)) void refusedFor(id);
     },
   });
   /** What the pane started, said in a toast with the way to the queue (design 16, A1). */
@@ -431,17 +468,42 @@ export function BuildPanel({
    */
   if (scopes.data?.jobs === 'missing' || missingScopeOf(start.error) === 'jobs')
     return <ScopeUnavailable scope="jobs" what="Building pre-aggregations" />;
-  if (buildable.isPending) return <StateLine kind="run">Reading the pre-aggregations…</StateLine>;
+  // Skeleton rows while it's read (design 16, G1; T560).
+  if (buildable.isPending) return <ListLoading said="Reading the pre-aggregations…" />;
   if (buildable.isError) {
     const lacking = missingScopeOf(buildable.error);
+    // Couldn't read them, with Retry and Details (G2); a refusal in the API's words (G4).
     return lacking === undefined ? (
-      <StateLine kind="err">{buildable.error.message}</StateLine>
+      <ListError
+        what="the pre-aggregations"
+        error={buildable.error}
+        carryOn="Your builds carry on; this list will show them once it’s read."
+        onRetry={() => void buildable.refetch()}
+      />
     ) : (
       <ScopeUnavailable scope={lacking} what="Listing pre-aggregations" />
     );
   }
   const shown = buildable.data.find((each) => each.id === selected);
   const openQueue = onOpenQueue ?? (() => window.location.assign('/jobs?tab=queue'));
+  /** The sheet's ×, back to the list, focus back on its row (design 16, G8; rule 85). */
+  const backToList = (
+    <button
+      type="button"
+      className="btn-ghost btn-sm admin-pane__close"
+      aria-label="Back to the list"
+      onClick={() => {
+        const was = selected;
+        setSelected(null);
+        if (was !== null)
+          requestAnimationFrame(() => {
+            document.querySelector<HTMLElement>(`tr[data-preagg=${JSON.stringify(was)}]`)?.focus();
+          });
+      }}
+    >
+      ×
+    </button>
+  );
   // Those of the chosen folder (T559) in the chosen state, as Jobs' summary counts them (T558).
   const listed = buildable.data.filter(
     (row) =>
@@ -457,7 +519,11 @@ export function BuildPanel({
           Showing pre-aggregations of models in the folders where you have read-write access.
         </ScopeNote>
         {buildable.data.length === 0 ? (
-          <p>The model declares no pre-aggregations.</p>
+          // Nothing in their folders yet (design 16, G3; T560).
+          <ListEmpty title="No pre-aggregations in your folders">
+            None of the models in the folders where you have read-write access defines one yet. Add
+            one to a model in My workspace and propose it.
+          </ListEmpty>
         ) : (
           <>
             <div className="sources-filters run-history__filters">
@@ -486,13 +552,20 @@ export function BuildPanel({
                     {/* Each row's folder, after its name (pin 4). */}
                     <th scope="col">Folder</th>
                     <th scope="col">Status</th>
-                    <th scope="col">Last built</th>
-                    <th scope="col">Started by</th>
-                    <th scope="col">Trigger</th>
-                    <th scope="col" className="num">
+                    {/* Below 1,024 px, these move into the sheet (design 16, G8). */}
+                    <th scope="col" className="jobs-wide">
+                      Last built
+                    </th>
+                    <th scope="col" className="jobs-wide">
+                      Started by
+                    </th>
+                    <th scope="col" className="jobs-wide">
+                      Trigger
+                    </th>
+                    <th scope="col" className="num jobs-wide">
                       Partitions
                     </th>
-                    <th scope="col">
+                    <th scope="col" className="jobs-wide">
                       <span className="visually-hidden">Build</span>
                     </th>
                   </tr>
@@ -508,6 +581,8 @@ export function BuildPanel({
                     return (
                       <tr
                         key={id}
+                        // The sheet's × gives focus back to it (G8).
+                        data-preagg={id}
                         // Selecting a row shows it in the pane (AC-228): by pointer
                         // anywhere in it, or Enter or Space on the row itself.
                         aria-selected={selected === id}
@@ -534,14 +609,14 @@ export function BuildPanel({
                           {/* The state of its partitions that most needs attention (AC-391, rule 22). */}
                           <RowStatus row={row} testId="row-state" />
                         </td>
-                        <td>
+                        <td className="jobs-wide">
                           {row.lastBuiltAt == null ? (
                             <span className="muted">—</span>
                           ) : (
                             <BuiltWhen iso={row.lastBuiltAt} />
                           )}
                         </td>
-                        <td>
+                        <td className="jobs-wide">
                           {/* Who started that build from wechart; "—" when wechart didn't (pin 7). */}
                           {row.startedBy == null ? (
                             <span className="muted">—</span>
@@ -549,7 +624,7 @@ export function BuildPanel({
                             <StarterLabel starter={row.startedBy} />
                           )}
                         </td>
-                        <td>
+                        <td className="jobs-wide">
                           {/* "Not scheduled" has its icon (design 16, pin 8; T551). */}
                           {row.triggerKind === 'not-scheduled' ? (
                             <Status
@@ -561,14 +636,14 @@ export function BuildPanel({
                             (trigger ?? '—')
                           )}
                         </td>
-                        <td className="num">
+                        <td className="num jobs-wide">
                           {row.partitions == null ? (
                             <span className="muted">—</span>
                           ) : (
                             String(row.partitions)
                           )}
                         </td>
-                        <td>
+                        <td className="jobs-wide">
                           {/* A lambda or a rollup join has nothing of its own to build (A3). */}
                           {row.buildable === false ? null : (
                             <button
@@ -611,7 +686,12 @@ export function BuildPanel({
             built.
           </StateLine>
         )}
-        {start.isError ? <StateLine kind="err">{start.error.message}</StateLine> : null}
+        {/* Not started, in the API's words (design 16, G4; T560). */}
+        {start.isError ? (
+          <StateLine kind="err" testId="not-started">
+            Not started. <span>{start.error.message}</span>
+          </StateLine>
+        ) : null}
       </div>
 
       {/*
@@ -620,7 +700,18 @@ export function BuildPanel({
         UX-081; styles.ts).
       */}
       <aside className="admin-pane" aria-label="Pre-aggregation details">
-        {shown === undefined ? (
+        {shown === undefined && selected !== null && selected === selectedFirst ? (
+          // `?preagg=` out of scope reads as one that doesn't exist (design 16, G6; rule 67).
+          <div className="admin-pane__missing" data-testid="not-found">
+            <div className="admin-pane__head">
+              {backToList}
+              <h2 className="admin-pane__title" tabIndex={-1} ref={sheetHead}>
+                Not found
+              </h2>
+            </div>
+            <p>There’s no pre-aggregation by that name in your folders.</p>
+          </div>
+        ) : shown === undefined ? (
           <p className="admin-pane__empty">
             Select a pre-aggregation to see its state, what rebuilds it, and to build it.
           </p>
@@ -628,7 +719,11 @@ export function BuildPanel({
           <>
             {/* The prototype's 44 px pane head (T469, UX-081). */}
             <div className="admin-pane__head" data-testid="pane-head">
-              <h2 className="admin-pane__title">{shownOf(shown).name}</h2>
+              {/* Below 1,024 px the pane is a sheet: × first in its head goes back to the list (design 16, G8). */}
+              {backToList}
+              <h2 className="admin-pane__title" tabIndex={-1} ref={sheetHead}>
+                {shownOf(shown).name}
+              </h2>
             </div>
             {/* Its folder, so /A's and /A/B's `sales.main` are told apart (T371's review). */}
             {shownOf(shown).folder === undefined ? null : (
@@ -659,6 +754,8 @@ export function BuildPanel({
               id={shown.id}
               name={shownOf(shown).name}
               pollMs={Math.max(pollMs, 5_000)}
+              // A refused start: access may be lost (design 16, G5; T560).
+              onRefused={() => void refusedFor(shown.id)}
               onStarted={(begun: Started) => {
                 follow(shown.id);
                 // A start that made no job is said in the pane, not toasted (T375's review).
@@ -699,6 +796,14 @@ export function BuildPanel({
               }
         }
         onDismiss={() => setToast(null)}
+      />
+      {/* Access lost while the page was open (design 16, G5; T560). */}
+      <ExportedToast
+        message={lost ? ACCESS_LOST : ''}
+        kind="err"
+        onDismiss={() => {
+          setLost(false);
+        }}
       />
     </div>
   );

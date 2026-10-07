@@ -14,11 +14,14 @@ export function ExportedToast({
   action,
   onDismiss,
   afterMs = TOAST_MS,
+  kind = 'ok',
 }: {
   readonly message: string;
   readonly action?: { readonly label: string; readonly onSelect: () => void } | undefined;
   readonly onDismiss: () => void;
   readonly afterMs?: number;
+  /** Its icon: done, or an error, as Jobs' "You no longer have access to do this." (T560, G5). */
+  readonly kind?: 'ok' | 'err';
 }) {
   const acting = action !== undefined;
   useEffect(() => {
@@ -37,7 +40,7 @@ export function ExportedToast({
     <div role="status" className={message === '' ? 'visually-hidden' : 'undo-toast export-toast'}>
       {message === '' ? null : (
         <>
-          <StatusIcon kind="ok" />
+          <StatusIcon kind={kind} />
           <span>{message}</span>
           {action === undefined ? null : (
             <>

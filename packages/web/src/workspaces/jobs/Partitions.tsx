@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { StateLine } from '../../shell/StatusIcon';
 import { BuiltWhen, folderTextOf, periodOf, type Starter } from './builds';
+import { isRefused, ReadError } from './ListStates';
 import { Status } from './StateBadge';
 
 /**
@@ -124,12 +125,15 @@ export function Partitions({
   name,
   pollMs = 5_000,
   onStarted = () => undefined,
+  onRefused = () => undefined,
   children,
 }: {
   readonly id: string;
   readonly name: string;
   readonly pollMs?: number;
   readonly onStarted?: (started: Started) => void;
+  /** A start the API refused: access may be lost while the page was open (design 16, G5). */
+  readonly onRefused?: () => void;
   /** More actions, after the builds: Open in Model. */
   readonly children?: ReactNode;
 }) {
@@ -188,10 +192,14 @@ export function Partitions({
         error?: string;
       } | null;
       if (!response.ok || body === null)
-        throw new Error(
+        throw new ReadError(
           body?.error ?? `The build didn’t start (status ${String(response.status)}).`,
+          response.status,
         );
       return body;
+    },
+    onError: (error) => {
+      if (isRefused(error)) onRefused();
     },
     onSuccess: (body, starts) => {
       const refused = new Set((body.notStarted ?? []).map((each) => each.start));
@@ -238,8 +246,11 @@ export function Partitions({
     },
   });
 
+  // Not started, in the API's words (design 16, G4; T560).
   const failedToStart = build.isError ? (
-    <StateLine kind="err">{build.error.message}</StateLine>
+    <StateLine kind="err" testId="not-started">
+      Not started. <span>{build.error.message}</span>
+    </StateLine>
   ) : unstarted === '' ? null : (
     <StateLine kind="warn">{unstarted}</StateLine>
   );
