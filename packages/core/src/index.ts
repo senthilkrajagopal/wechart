@@ -87,6 +87,16 @@ export {
 export { compile, defaultEncoding, type CompileOptions } from './compile';
 
 export {
+  onOneScale,
+  scaleOf,
+  undrawnMeasures,
+  undrawnOf,
+  type FormShape,
+  type Undrawn,
+  type UndrawnReason,
+} from './undrawn';
+
+export {
   CALC_GRANULARITIES,
   MOVING_AVERAGE_PERIODS,
   OVER_TIME,

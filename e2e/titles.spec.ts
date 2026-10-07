@@ -60,6 +60,8 @@ test('a one-source chart’s legend and pills read short titles, the rest of the
   await expect(canvas).toBeVisible();
 
   // The legend: every member is Orders', so "Count", not "Orders Count".
+  // Count and money being two scales, since T510 they are small multiples,
+  // and these are each panel's title, named as a legend names them.
   const written = canvas.locator('svg text');
   await expect(written.filter({ hasText: /^Count$/ })).toHaveCount(1);
   await expect(written.filter({ hasText: /^Total Amount$/ })).toHaveCount(1);
@@ -226,8 +228,10 @@ test('a library chart’s page draws a one-source legend by short titles', async
         owner: 'admin',
         chart: {
           source: { cube: 'orders' },
+          // Two of one scale, both money (T510: a count beside money is on
+          // another scale, and a bar no longer draws it to name).
           wells: {
-            measures: ['orders.count', 'orders.total_amount'],
+            measures: ['orders.average_amount', 'orders.total_amount'],
             dimensions: ['orders.status'],
             timeDimensions: [],
           },
@@ -239,7 +243,7 @@ test('a library chart’s page draws a one-source legend by short titles', async
 
   await page.goto(`/explore/charts/${chart.id}`);
   const written = page.locator('.chart-page__tile').getByTestId('chart-canvas').locator('svg text');
-  await expect(written.filter({ hasText: /^Count$/ })).toHaveCount(1);
+  await expect(written.filter({ hasText: /^Average Amount$/ })).toHaveCount(1);
   await expect(written.filter({ hasText: /^Total Amount$/ })).toHaveCount(1);
   await expect(written.filter({ hasText: INTERNAL })).toHaveCount(0);
 });

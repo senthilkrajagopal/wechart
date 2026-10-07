@@ -10,7 +10,7 @@
  * than saying so: the caller can show the failure, and AC-033 already expects
  * the editor to explain when a chart cannot be drawn.
  */
-import type { ChartType, RenderSpec } from '@wechart/core';
+import { onOneScale, type ChartType, type RenderSpec } from '@wechart/core';
 
 import { barOption, DEFAULT_CANVAS, isBarType, type Canvas } from './series/bar';
 import { withHighlight } from './crossfilter/highlight';
@@ -85,7 +85,14 @@ function regionsFilledByScale(option: EChartsOption): EChartsOption {
  * `canvas` is the box it will be drawn in: how wide a bar is laid out there
  * decides whether it keeps its surface gap (AC-210).
  */
-export function optionFor(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EChartsOption {
+export function optionFor(given: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EChartsOption {
+  /**
+   * An unsplit bar, line or area draws the metrics on its first metric's
+   * scale alone (T510; R67, the user: "Draw the first only"): one axis can't
+   * honour two, and a count beside revenue was drawn flat on its axis. Its
+   * axis then wears the first's format; the editor's pill names the rest.
+   */
+  const spec = onOneScale(given);
   // The legend is decided once, here, rather than in each renderer. AC-038 is
   // a rule about charts, not about bar charts, and a renderer that forgot it
   // would be a chart type quietly exempt from it.
@@ -154,7 +161,9 @@ export function optionFor(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EC
   // marked, and partly marked, as any chart's are (T453, T507).
   if (isTrellisType(spec.chartType)) {
     return thinValueLabels({
-      ...withMarks(trellisOption(spec, canvas), spec),
+      // Panelled by metric, its keys step through categories: the one they
+      // are on ringed in every panel (T510's review, AC-176).
+      ...withKeyboardFocus(withMarks(trellisOption(spec, canvas), spec), spec),
       ...tooltipFor(spec),
     });
   }

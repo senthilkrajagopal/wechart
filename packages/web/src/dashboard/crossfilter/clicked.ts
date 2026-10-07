@@ -1,4 +1,4 @@
-import { distinctValues, memberOn, seriesOf, type RenderSpec } from '@wechart/core';
+import { distinctValues, memberOn, onOneScale, seriesOf, type RenderSpec } from '@wechart/core';
 
 /**
  * Which member value a click on a chart item stands for (AC-117).
@@ -31,7 +31,8 @@ export function membersDrawn(spec: RenderSpec): string[] {
  */
 export function seriesCountOf(spec: RenderSpec): number {
   try {
-    return seriesOf(spec).series.length;
+    // As drawn: a metric on another scale than the first is no series (T510).
+    return seriesOf(onOneScale(spec)).series.length;
   } catch {
     // A type `seriesOf` does not lay out — a treemap, a KPI — draws no
     // cartesian series, and neither draws a share.
@@ -97,8 +98,19 @@ export interface ClickedValue {
  * click marks its series or its panel, nor a table's or a pivot's rows, which
  * are marked by their own keys (AC-092).
  */
-export function clickMarksCategory(chartType: string): boolean {
+export function clickMarksCategory(spec: Pick<RenderSpec, 'chartType' | 'encoding'>): boolean {
+  if (panelledByMetric(spec)) return true;
+  const { chartType } = spec;
   return !BY_SERIES.has(chartType) && !['trellis', 'table', 'pivot', 'kpi'].includes(chartType);
+}
+
+/**
+ * Small multiples panelled by metric (T510): a panel per measure, nothing to
+ * panel by. A bar there stands for its category, as a bar's does, and a
+ * header names a measure, which is no value of anything.
+ */
+function panelledByMetric(spec: Pick<RenderSpec, 'chartType' | 'encoding'>): boolean {
+  return spec.chartType === 'trellis' && memberOn(spec.encoding, 'facet') === undefined;
 }
 
 export function clickedValue(spec: RenderSpec, item: ClickedItem): ClickedValue | undefined {
@@ -120,7 +132,8 @@ export function clickedValue(spec: RenderSpec, item: ClickedItem): ClickedValue 
       : { member: split, value: item.legend };
   }
   const bySeries = BY_SERIES.has(spec.chartType);
-  const channel = spec.chartType === 'trellis' ? 'facet' : bySeries ? 'color' : 'x';
+  const byPanel = spec.chartType === 'trellis' && !panelledByMetric(spec);
+  const channel = byPanel ? 'facet' : bySeries ? 'color' : 'x';
   /**
    * No fallback to x on these: where such a chart has no split, its series
    * are its *measures* (`core/render-spec.ts`, "one series per measure"), so
@@ -129,7 +142,7 @@ export function clickedValue(spec: RenderSpec, item: ClickedItem): ClickedValue 
    * `orders.status = 'orders.count'` — and empty every target it reached.
    */
   const member = memberOn(spec.encoding, channel);
-  const value = bySeries || spec.chartType === 'trellis' ? item.seriesName : item.name;
+  const value = bySeries || byPanel ? item.seriesName : item.name;
 
   // A click that lands on nothing nameable — an empty plot area, or a type
   // drawn from no dimension at all, such as a KPI — selects nothing.

@@ -1,7 +1,7 @@
 import type { RenderSpec } from '@wechart/core';
 import { describe, expect, it } from 'vitest';
 
-import { clickedName, clickedValue } from './clicked';
+import { clickedName, clickedValue, clickMarksCategory, seriesCountOf } from './clicked';
 
 /**
  * T123 / AC-117: what a click stands for, which is the first half of "clicks
@@ -66,6 +66,35 @@ describe('the member a clicked item stands for', () => {
         seriesName: 'Beverages',
       }),
     ).toEqual({ member: 'products.category', value: 'Beverages' });
+  });
+
+  /**
+   * T510: small multiples panelled by metric. A bar there is its category, as
+   * a bar's is, and a header names a metric, which is no value to mark by.
+   */
+  it('is the category in small multiples by metric, and nothing for a header', () => {
+    const byMetric = spec('trellis', { x: ['orders.status'], y: ['orders.count', 'orders.total'] });
+    expect(clickedValue(byMetric, { name: 'shipped', seriesName: 'orders.total' })).toEqual({
+      member: 'orders.status',
+      value: 'shipped',
+    });
+    expect(clickedValue(byMetric, { panelIndex: 1 })).toBeUndefined();
+    expect(clickMarksCategory(byMetric)).toBe(true);
+    expect(
+      clickMarksCategory(spec('trellis', { ...byCategory, facet: ['products.category'] })),
+    ).toBe(false);
+  });
+
+  // T510's review: a metric on another scale is no series of the bar's, so
+  // the cross-filter's share overlay, which needs one, counts it out.
+  it('counts as series only the metrics drawn, not one on another scale', () => {
+    const twoScales: RenderSpec = {
+      ...spec('bar', { x: ['orders.status'], y: ['orders.total', 'orders.count'] }),
+      rows: [{ 'orders.status': 'paid', 'orders.total': 1000, 'orders.count': 3 }],
+      formats: { 'orders.total': 'currency' },
+    };
+    expect(seriesCountOf(twoScales)).toBe(1);
+    expect(seriesCountOf({ ...twoScales, formats: {} })).toBe(2);
   });
 
   it('is nothing for a click on empty plot area', () => {

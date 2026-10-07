@@ -8498,6 +8498,29 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
 /* The prototype's .agg is 400 at opacity .85; at full strength here, since
    .85 takes the measure's ink under AA on its tint (rule 2). */
 .pill__tag { font-size: 12px; font-weight: 400; color: inherit; }
+/* A metric the chosen form doesn't draw (T510; design 01-5's .pill.off): on
+   the surface, in muted ink (5.2:1 light, 5.7:1 dark there), dashed, and its
+   tag says "not drawn", never the look alone (rule 3). */
+.pill.pill--off {
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-muted);
+  outline: 1px dashed var(--wc-border-strong);
+  outline-offset: -1px;
+}
+/* …and why, under Metrics, with the forms that draw it (design 01-5's
+   .warnline). */
+.wells__undrawn {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 6px;
+  font-size: var(--wc-text-xs-size);
+  line-height: var(--wc-text-xs-line);
+  background: color-mix(in srgb, var(--wc-status-warning-icon) 16%, var(--wc-bg-surface));
+}
+.wells__undrawn-text { margin: 0; }
+.wells__undrawn-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .pill__grain {
   height: 20px;
   padding: 0 2px;

@@ -797,3 +797,91 @@ describe('a box plot’s "Each point is" (AC-314)', () => {
     expect(onChange).toHaveBeenCalledWith(undefined);
   });
 });
+
+/**
+ * T510 (AC-036; UX-057, design 01-5; R67, the user): a metric the chosen
+ * form doesn't draw is never silently missing. Its pill says "not drawn",
+ * with why ("on another scale"), and a line under Metrics says it is in the
+ * query and the results but not on the chart, offering Small multiples and
+ * Table, which draw it, and Remove.
+ */
+describe('a metric the form doesn’t draw (T510)', () => {
+  const amount: Member = {
+    ...measure,
+    name: 'orders.total_amount',
+    title: 'Orders Total Amount',
+    shortTitle: 'Total Amount',
+    aggType: 'sum',
+  };
+  const spec = { ...emptySpec('orders'), measures: ['orders.total_amount', 'orders.count'] };
+
+  it('says a metric on another scale is not drawn, and offers the forms that draw it', async () => {
+    const onRemove = vi.fn();
+    const onSmallMultiples = vi.fn();
+    const onTable = vi.fn();
+    render(
+      <Wells
+        spec={spec}
+        available={[amount, measure]}
+        onAdd={vi.fn()}
+        onRemove={onRemove}
+        undrawn={{
+          metrics: [{ member: 'orders.count', reason: 'scale' }],
+          drawnAs: 'Bar',
+          onSmallMultiples,
+          onTable,
+        }}
+      />,
+    );
+    expect(screen.getByTestId('in-measures-orders.count').textContent).toContain(
+      'not drawn · on another scale',
+    );
+    expect(screen.getByTestId('in-measures-orders.total_amount').textContent).not.toContain(
+      'not drawn',
+    );
+    const line = screen.getByTestId('undrawn-metrics');
+    expect(line.textContent).toContain(
+      'Bar draws one scale. Count is on another scale than Total Amount: in the query and the results, but not on the chart.',
+    );
+    await userEvent.click(within(line).getByRole('button', { name: 'Small multiples' }));
+    expect(onSmallMultiples).toHaveBeenCalledTimes(1);
+    await userEvent.click(within(line).getByRole('button', { name: 'Table' }));
+    expect(onTable).toHaveBeenCalledTimes(1);
+    await userEvent.click(within(line).getByRole('button', { name: 'Remove Count' }));
+    expect(onRemove).toHaveBeenCalledWith('measures', 'orders.count');
+    // Its button goes with the metric: focus to Metrics' "+", not the page (T510's review).
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Add to Metrics' }));
+  });
+
+  it('says how many a form draws, and offers no small multiples where they can’t draw them', () => {
+    render(
+      <Wells
+        spec={spec}
+        available={[amount, measure]}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+        undrawn={{
+          metrics: [{ member: 'orders.count', reason: 'form' }],
+          drawnAs: 'Pie',
+          onTable: vi.fn(),
+        }}
+      />,
+    );
+    expect(screen.getByTestId('in-measures-orders.count').textContent).toContain('not drawn');
+    expect(screen.getByTestId('in-measures-orders.count').textContent).not.toContain(
+      'another scale',
+    );
+    const line = screen.getByTestId('undrawn-metrics');
+    expect(line.textContent).toContain(
+      'Pie draws one metric. Count is in the query and the results, but not on the chart.',
+    );
+    expect(within(line).queryByRole('button', { name: 'Small multiples' })).toBeNull();
+    expect(within(line).getByRole('button', { name: 'Table' })).toBeTruthy();
+  });
+
+  it('says nothing where every metric is drawn', () => {
+    render(<Wells spec={spec} available={[amount, measure]} onAdd={vi.fn()} onRemove={vi.fn()} />);
+    expect(screen.queryByTestId('undrawn-metrics')).toBeNull();
+    expect(screen.getByTestId('well-measures').textContent).not.toContain('not drawn');
+  });
+});

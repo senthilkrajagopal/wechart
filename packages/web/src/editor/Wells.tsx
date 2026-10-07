@@ -4,11 +4,12 @@ import type {
   QuickCalc,
   QuickCalcKind,
   TimeGranularity,
+  Undrawn,
   WellName,
 } from '@wechart/core';
 import { useQuery } from '@tanstack/react-query';
 import { QUERY_GRANULARITY, quickCalcName } from '@wechart/core';
-import { Fragment, useId, useState, type ReactNode } from 'react';
+import { Fragment, useId, useRef, useState, type ReactNode } from 'react';
 
 import { useQueryItem } from '../query/item';
 import { loadTile } from '../query/loadTile';
@@ -174,6 +175,21 @@ export interface WellsProps {
     readonly member: string | undefined;
     readonly onChange: (member: string | undefined) => void;
   };
+  /**
+   * The metrics the chosen form leaves undrawn (T510; UX-057, design 01-5;
+   * R67): each one's pill says so, and a line under Metrics says why, with
+   * the forms that draw them and Remove. None where every metric is drawn.
+   */
+  readonly undrawn?:
+    | {
+        readonly metrics: readonly Undrawn[];
+        /** The form drawn, by its name: "Bar". */
+        readonly drawnAs: string;
+        /** Small multiples, a panel per metric, where they can draw them all. */
+        readonly onSmallMultiples?: (() => void) | undefined;
+        readonly onTable: () => void;
+      }
+    | undefined;
 }
 
 export function Wells({
@@ -195,8 +211,10 @@ export function Wells({
   titles = {},
   sort,
   eachPointIs,
+  undrawn,
 }: WellsProps) {
   const ids = useId();
+  const root = useRef<HTMLDivElement>(null);
   /**
    * A member as a reader knows it: its title from the model (AC-216, AC-220)
    * — from every cube's, for a chart naming members of more than one.
@@ -257,6 +275,64 @@ export function Wells({
       },
     ];
   });
+  /**
+   * What the chosen form leaves undrawn (T510; UX-057, design 01-5), said
+   * on each pill and in one line under Metrics, never silently missing.
+   */
+  const notDrawn = new Map((undrawn?.metrics ?? []).map((each) => [each.member, each.reason]));
+  const undrawnLine = (() => {
+    if (undrawn === undefined || undrawn.metrics.length === 0) return null;
+    const names = undrawn.metrics.map((each) => titleOf(each.member));
+    const listed =
+      names.length === 1
+        ? (names[0] ?? '')
+        : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`;
+    const are = names.length === 1 ? 'is' : 'are';
+    const drawn = spec.measures.length - undrawn.metrics.length;
+    const onScale = undrawn.metrics.every((each) => each.reason === 'scale');
+    const first = spec.measures[0] === undefined ? '' : titleOf(spec.measures[0]);
+    const lead = onScale
+      ? `${undrawn.drawnAs} draws one scale.`
+      : `${undrawn.drawnAs} draws ${drawn === 1 ? 'one metric' : `${String(drawn)} metrics`}.`;
+    const rest = onScale
+      ? ` ${listed} ${are} on another scale than ${first}: in the query and the results, but not on the chart.`
+      : ` ${listed} ${are} in the query and the results, but not on the chart.`;
+    return (
+      <div className="wells__undrawn" data-testid="undrawn-metrics">
+        <StatusIcon kind="warn" />
+        <div>
+          <p className="wells__undrawn-text">
+            <b>{lead}</b>
+            {rest}
+          </p>
+          <div className="wells__undrawn-actions">
+            {undrawn.onSmallMultiples === undefined ? null : (
+              <button type="button" className="btn btn-sm" onClick={undrawn.onSmallMultiples}>
+                Small multiples
+              </button>
+            )}
+            <button type="button" className="btn btn-sm" onClick={undrawn.onTable}>
+              Table
+            </button>
+            {undrawn.metrics.map((each) => (
+              <button
+                key={each.member}
+                type="button"
+                className="btn btn-sm btn-ghost"
+                onClick={() => {
+                  onRemove('measures', each.member);
+                  // Its button goes with it: focus to Metrics' "+" (T510's review).
+                  root.current?.querySelector<HTMLElement>('[data-testid="add-measures"]')?.focus();
+                }}
+              >
+                Remove {titleOf(each.member)}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  })();
   // Any dimension but the category the boxes are drawn by (T400).
   const pointWell =
     eachPointIs === undefined ? null : (
@@ -278,7 +354,7 @@ export function Wells({
   const addState = noSource ? { disabled: true, describedBy: noSourceId } : {};
 
   return (
-    <div className="wells">
+    <div className="wells" ref={root}>
       {noSource ? (
         <p className="wells__note" id={noSourceId} data-testid="wells-no-source">
           Choose a cube or view first.
@@ -323,10 +399,15 @@ export function Wells({
                   const grains = PILL_GRAINS.includes(grain)
                     ? PILL_GRAINS
                     : [grain, ...PILL_GRAINS];
+                  const off = well.name === 'measures' ? notDrawn.get(member) : undefined;
                   return (
                     <li
                       key={member}
-                      className={pillClass(well.name)}
+                      className={
+                        off === undefined
+                          ? pillClass(well.name)
+                          : `${pillClass(well.name)} pill--off`
+                      }
                       data-testid={`in-${well.name}-${member}`}
                     >
                       <span className="pill__title">{title}</span>
@@ -365,6 +446,12 @@ export function Wells({
                         />
                       ) : known?.aggType === undefined ? null : (
                         <span className="pill__tag">{known.aggType}</span>
+                      )}
+                      {/* Not on the chart, and why (T510, design 01-5). */}
+                      {off === undefined ? null : (
+                        <span className="pill__tag pill__off">
+                          {off === 'scale' ? 'not drawn · on another scale' : 'not drawn'}
+                        </span>
                       )}
                       <button
                         type="button"
@@ -405,14 +492,11 @@ export function Wells({
                 {refusal}
               </p>
             ) : null}
+            {well.name === 'measures' ? undrawnLine : null}
             {well.name === 'measures'
               ? paused.map(({ measure, note }) => (
                   // A paused calculation, and what it needs (R45.4).
-                  <p
-                    key={measure}
-                    className="wells__note"
-                    data-testid={`calc-paused-${measure}`}
-                  >
+                  <p key={measure} className="wells__note" data-testid={`calc-paused-${measure}`}>
                     {note}
                   </p>
                 ))

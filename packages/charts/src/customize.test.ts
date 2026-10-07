@@ -106,7 +106,13 @@ describe('data labels, as each measure is written (AC-046)', () => {
   });
 
   it('writes a label in its measure’s format, or the one chosen for values', () => {
-    const money = { ...twoSeries({ dataLabels: true }), formats: { [AMOUNT]: 'currency' } };
+    // Both money, each its own format (T510: a measure on another scale than
+    // the first is no longer drawn on a bar, so a plain count beside it would
+    // leave no amount to label).
+    const money = {
+      ...twoSeries({ dataLabels: true }),
+      formats: { [AMOUNT]: 'currency', [COUNT]: { specifier: '$,.2f' } },
+    };
     const amount = series(money).find((one) => one.name === AMOUNT);
     // As the measure's own format writes it everywhere else (AC-046).
     const asModel = formatterFor(AMOUNT, { [AMOUNT]: 'currency' })(130);

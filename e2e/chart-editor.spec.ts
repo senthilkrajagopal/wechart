@@ -542,6 +542,132 @@ test('a scatter, a heatmap, small multiples and a pivot draw from the wells', as
 });
 
 /**
+ * T510 (AC-036; UX-057, design 01-5; R67, the user): a count beside revenue,
+ * on different scales, is never drawn flat on the other's axis. Auto draws
+ * them as small multiples, a panel per metric. A bar, chosen, draws the
+ * first metric's scale alone, and the other's pill says it isn't drawn, with
+ * the forms that draw it.
+ */
+test('draws metrics on different scales a panel each, and says what a bar leaves undrawn (T510)', async ({
+  page,
+}) => {
+  const canvas = page.getByTestId('chart-canvas');
+  const texts = () => canvas.locator('svg text').allTextContents();
+  await openEditorOnOrders(page);
+  await wellPicker(page, 'measures').selectOption('orders.count');
+  await wellPicker(page, 'measures').selectOption('orders.total_amount');
+  await wellPicker(page, 'dimensions').selectOption('orders.status');
+  await expect(page.getByTestId('result-row-count')).toHaveText('3 rows');
+
+  // Auto: small multiples, a panel per metric, each titled by it.
+  await expect(page.getByTestId('recommended-type')).toHaveAttribute('data-chart-type', 'trellis');
+  await expect(page.getByTestId('recommended-reason')).toHaveText(
+    'One small chart per metric, each on its own scale.',
+  );
+  await expect.poll(texts).toEqual(expect.arrayContaining(['Count', 'Total Amount']));
+  // Revenue's own axis is in its own format.
+  await expect.poll(async () => (await texts()).some((text) => text.startsWith('$'))).toBe(true);
+  await expect(page.getByTestId('undrawn-metrics')).toHaveCount(0);
+
+  // A bar, chosen: Count's scale alone, Total Amount said, not drawn flat.
+  await chooseChartType(page, 'bar');
+  await expect(page.getByTestId('in-measures-orders.total_amount')).toContainText(
+    'not drawn · on another scale',
+  );
+  const line = page.getByTestId('undrawn-metrics');
+  await expect(line).toContainText(
+    'Bar draws one scale. Total Amount is on another scale than Count: in the query and the results, but not on the chart.',
+  );
+  // No money on Count's axis, and no series for revenue.
+  await expect.poll(async () => (await texts()).some((text) => text.startsWith('$'))).toBe(false);
+
+  // Small multiples from the line draw both again, and it goes.
+  await line.getByRole('button', { name: 'Small multiples' }).click();
+  await expectChartType(page, 'trellis');
+  await expect(line).toHaveCount(0);
+  await expect(page.getByTestId('chart-type-change')).toBeFocused();
+});
+
+/**
+ * T510 (R67, the user: "Pass formats to dashboards"; T510's review): a chart
+ * following the recommender, of Count and Total Amount, is drawn on a
+ * dashboard's tile and on its own page as the editor draws it, a panel per
+ * metric. Picked again with the model's formats as it is drawn, so no tile
+ * waits on the model to paint.
+ */
+test('a tile and a library chart’s page draw metrics on two scales as the editor does (T510)', async ({
+  page,
+  request,
+}) => {
+  const title = `Two scales ${String(Date.now())}`;
+  const chart = (await (
+    await request.post('/api/documents', { data: { kind: 'chart', title, ...IN_MY_WORKSPACE } })
+  ).json()) as { id: string };
+  const saved = await request.put(`/api/documents/chart/${chart.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        ...IN_MY_WORKSPACE,
+        owner: 'admin',
+        chart: {
+          source: { cube: 'orders' },
+          wells: {
+            measures: ['orders.count', 'orders.total_amount'],
+            dimensions: ['orders.status'],
+            timeDimensions: [],
+          },
+        },
+      },
+    },
+  });
+  expect(saved.ok(), await saved.text()).toBe(true);
+  const dashboard = (await (
+    await request.post('/api/documents', {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  const placed = await request.put(`/api/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        ...IN_MY_WORKSPACE,
+        owner: 'admin',
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            items: [{ id: 'tile-two', kind: 'chart', w: 12, h: 40, chartId: chart.id }],
+          },
+        ],
+      },
+    },
+  });
+  expect(placed.ok(), await placed.text()).toBe(true);
+
+  const panelTitles = (scope: import('@playwright/test').Locator) =>
+    scope.getByTestId('chart-canvas').locator('svg text').allTextContents();
+  await page.goto(`/explore/dashboards/${dashboard.id}`);
+  const tile = page.locator('[data-tile="tile-two"]');
+  await expect
+    .poll(() => panelTitles(tile))
+    .toEqual(expect.arrayContaining(['Count', 'Total Amount']));
+  await expect
+    .poll(async () => (await panelTitles(tile)).some((text) => text.startsWith('$')))
+    .toBe(true);
+
+  await page.goto(`/explore/charts/${chart.id}`);
+  const own = page.locator('.chart-page__tile');
+  await expect
+    .poll(() => panelTitles(own))
+    .toEqual(expect.arrayContaining(['Count', 'Total Amount']));
+  await expect(page.getByText('Small multiples · auto')).toBeVisible();
+});
+
+/**
  * AC-040: WHEN the user edits an axis, THE SYSTEM SHALL apply minimum,
  * maximum, logarithmic scale, gridlines, tick rotation, number format and axis
  * title to the rendered chart.
@@ -1178,7 +1304,9 @@ test('a two-measure legend, the results headers and the trace read the members�
   await expect(canvas).toBeVisible();
 
   // The legend: a one-source chart's, so by the short titles (AC-220 as
-  // amended, R16; T403).
+  // amended, R16; T403). Count and money being two scales, they are drawn
+  // as small multiples since T510, so these are each panel's title, named
+  // as a legend names them.
   const written = canvas.locator('svg text');
   await expect(written.filter({ hasText: /^Count$/ })).toHaveCount(1);
   await expect(written.filter({ hasText: /^Total Amount$/ })).toHaveCount(1);

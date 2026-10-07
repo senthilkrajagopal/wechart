@@ -195,10 +195,14 @@ describe('found at T195’s review', () => {
     expect(text).toBe('paid<br/>east: $76,900');
   });
 
-  it('puts no one measure’s format on an axis shared by measures formatted differently', () => {
-    // Decided (the user: breadth, not polish): one axis cannot honour two
-    // formats, so it wears neither rather than misstating one measure — a
-    // share read against "$0.25" ticks. Each keeps its format in the tooltip.
+  /**
+   * Amended by T510 (R67, the user: "Draw the first only"). It was T195's
+   * call that one axis shared by two formats wears neither. Now a measure on
+   * another scale is not drawn on it at all (its pill says so in the editor),
+   * so the axis keeps the first measure's format, and no share is read
+   * against "$" ticks because no share is drawn there.
+   */
+  it('draws a measure on another scale than the first nowhere, the axis in the first’s format', () => {
     const both: RenderSpec = {
       ...spec,
       chartType: 'groupedBar',
@@ -209,10 +213,36 @@ describe('found at T195’s review', () => {
       ],
       formats: SHARE_FORMATS,
     };
-    const labels = labelsOf(renderToSvg(optionFor(both))).map((label) => label.text);
+    const option = optionFor(both);
+    const labels = labelsOf(renderToSvg(option)).map((label) => label.text);
 
-    expect(labels.some((label) => label.startsWith('$'))).toBe(false);
+    expect(labels.some((label) => label.startsWith('$'))).toBe(true);
     expect(labels.some((label) => label.endsWith('%'))).toBe(false);
+    // The share is not a series at all, rather than one drawn flat.
+    const drawn = (option['series'] as { name?: unknown }[]).map((one) => one.name);
+    expect(drawn).toContain(AMOUNT);
+    expect(drawn).not.toContain(SHARE);
+  });
+
+  /**
+   * T510's review: two formats of one scale — money to the cent and money
+   * rounded — share the axis, which wears the first's, as R67 has the axis
+   * keep the first's format. T195's axis wearing neither is retired.
+   */
+  it('writes an axis shared by two formats of one scale in the first’s', () => {
+    const money: RenderSpec = {
+      ...spec,
+      chartType: 'groupedBar',
+      encoding: { x: [STATUS], y: [AMOUNT, SHARE] },
+      rows: [
+        { [STATUS]: 'paid', [AMOUNT]: 1000, [SHARE]: 2000 },
+        { [STATUS]: 'refunded', [AMOUNT]: 500, [SHARE]: 750 },
+      ],
+      formats: { [AMOUNT]: 'currency', [SHARE]: { specifier: '$,.0f' } },
+    };
+    const labels = labelsOf(renderToSvg(optionFor(money))).map((label) => label.text);
+
+    expect(labels.some((label) => label.startsWith('$'))).toBe(true);
   });
 
   it('leaves a heatmap’s category axes as they are', () => {

@@ -158,7 +158,9 @@ describe('series in the order set in Customize (T392, AC-300)', () => {
       chartType: 'bar',
       encoding: { x: [STATUS], y: [COUNT, 'orders.amount'] },
       rows: [{ [STATUS]: 'paid', [COUNT]: 10, 'orders.amount': 1000 }],
-      formats: { 'orders.amount': 'currency', [COUNT]: 'percent' },
+      // Both money, each its own format (T510: a percent beside money is on
+      // another scale, and no longer drawn on a bar to be ordered).
+      formats: { 'orders.amount': 'currency', [COUNT]: { specifier: '$,.2f' } },
       options: { seriesOrder: ['orders.amount', COUNT] },
     };
     const formatter = (
@@ -169,8 +171,9 @@ describe('series in the order set in Customize (T392, AC-300)', () => {
       { seriesName: 'orders.amount', seriesIndex: 0, name: 'paid', value: 1000 },
       { seriesName: COUNT, seriesIndex: 1, name: 'paid', value: 10 },
     ]);
+    // By place, the amount took the count's two places, and the count none.
     expect(text).toContain('$1,000');
-    expect(text).not.toContain('100000%');
-    expect(text).toContain('1000%');
+    expect(text).not.toContain('$1,000.00');
+    expect(text).toContain('$10.00');
   });
 });

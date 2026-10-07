@@ -1,5 +1,5 @@
-import type { ChartDocument } from '@wechart/core';
-import { useQuery } from '@tanstack/react-query';
+import type { ChartDocument, MemberFormats } from '@wechart/core';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { ChartEditor } from '../../editor/ChartEditor';
@@ -17,8 +17,9 @@ import { SharedChartNotice } from '../../editor/SharedChartNotice';
 import { useQueryItem, type QueryItem } from '../../query/item';
 import { requestableChartId } from '../../editor/calcRequests';
 import { loadTile } from '../../query/loadTile';
+import { metaQueryOf, useWorkspaceItem } from '../../query/meta';
 import { StateLine } from '../../shell/StatusIcon';
-import { tileChartOf } from '../chartSpec';
+import { formatsFrom, tileChartOf } from '../chartSpec';
 import type { ChartDraft } from './chartDrafts';
 
 export interface ChartEditorOverlayProps {
@@ -76,16 +77,22 @@ async function drawnForDraft(
   edited: ChartDocument,
   /** The dashboard it is edited on (T340, AC-268). */
   item: QueryItem | undefined,
+  /** The model's formats, picked with as the editor picked (T510, R67). */
+  formats: MemberFormats | undefined,
 ): Promise<{ drawn: ChartDraft['drawn']; total?: number }> {
   let total: number | undefined;
-  const drawn = await tileChartOf(edited, async (query) => {
-    const result = (await loadTile({ query, item })) as {
-      data?: Record<string, unknown>[];
-      total?: unknown;
-    };
-    total = typeof result.total === 'number' ? result.total : undefined;
-    return result.data ?? [];
-  });
+  const drawn = await tileChartOf(
+    edited,
+    async (query) => {
+      const result = (await loadTile({ query, item })) as {
+        data?: Record<string, unknown>[];
+        total?: unknown;
+      };
+      total = typeof result.total === 'number' ? result.total : undefined;
+      return result.data ?? [];
+    },
+    formats,
+  );
   return { drawn, ...(total === undefined ? {} : { total }) };
 }
 
@@ -120,6 +127,17 @@ export function ChartEditorOverlay({
 }: ChartEditorOverlayProps) {
   // The dashboard it is edited on (T340, AC-268).
   const item = useQueryItem();
+  /**
+   * The model the editor and the dashboard draw with, its formats as they
+   * are now (the editor has read it): what it was drawn as is recorded as
+   * the editor picked it, so Explore names it so (T510, R67; AC-193).
+   */
+  const queryClient = useQueryClient();
+  const workspaceItem = useWorkspaceItem();
+  const formatsNow = useCallback(() => {
+    const meta = queryClient.getQueryData(metaQueryOf(workspaceItem).queryKey);
+    return meta === undefined ? undefined : formatsFrom(meta);
+  }, [queryClient, workspaceItem]);
   /**
    * **A chart already drafted opens on its draft**, not on what is stored.
    * Opened from the server a second time, the editor would start from the old
@@ -210,7 +228,7 @@ export function ChartEditorOverlay({
       const edited = chartDocumentWith(opened.document, state);
       // Drawn by the very function every tile uses, so an emptied chart reads
       // "no fields yet" rather than the tile keeping its old chart.
-      const { drawn, total } = await drawnForDraft(edited, item);
+      const { drawn, total } = await drawnForDraft(edited, item, formatsNow());
       // And what it was drawn as recorded, for Explore to name it by (AC-193).
       then({
         document: withDrawnAs(edited, drawn),
@@ -219,7 +237,7 @@ export function ChartEditorOverlay({
         ...(total === undefined ? {} : { total }),
       });
     },
-    [opened, item],
+    [opened, item, formatsNow],
   );
   const back = useCallback(() => leave(onBack), [leave, onBack]);
 
@@ -242,14 +260,14 @@ export function ChartEditorOverlay({
     setApplying(true);
     try {
       const edited = chartDocumentWith(opened.document, latest.current ?? opened.state);
-      const { drawn } = await drawnForDraft(edited, item);
+      const { drawn } = await drawnForDraft(edited, item, formatsNow());
       setCopied(true);
       onMakeLocalCopy({ document: withDrawnAs(edited, drawn), drawn });
     } finally {
       leaving.current = false;
       setApplying(false);
     }
-  }, [opened, onMakeLocalCopy, item]);
+  }, [opened, onMakeLocalCopy, item, formatsNow]);
   /** Focus on what was done, once said: the button pressed has gone with the offer. */
   const copiedNote = useRef<HTMLDivElement>(null);
   const localNow = opened?.document.localToDashboardId !== undefined;

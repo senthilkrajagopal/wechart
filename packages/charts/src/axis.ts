@@ -6,7 +6,7 @@
  * than being a second place that decides what an axis is. Every renderer gets
  * them for free, and none can forget.
  */
-import { formatterFor, membersOn, type RenderSpec } from '@wechart/core';
+import { formatterFor, membersOn, scaleOf, type RenderSpec } from '@wechart/core';
 
 import type { EChartsOption } from './theme';
 import { modelWriter } from './modelWriter';
@@ -180,19 +180,17 @@ export function applyAxes(option: EChartsOption, spec: RenderSpec): EChartsOptio
 
   /**
    * The measures on the value axis. They share it when there are several —
-   * direction.md's one-axis rule — and one axis cannot honour two formats:
-   * formatted as the first, a percentage was read against "$0.25" ticks. So
-   * the axis takes a format only when every measure on it declares the same
-   * one; otherwise it wears none, and each measure keeps its own format in
-   * the tooltip (T195, decided rather than asked: the user asked for breadth
-   * over polish).
+   * direction.md's one-axis rule — and a measure on another scale than the
+   * first is not drawn there at all (`onOneScale`, T510; R67, the user: the
+   * axis keeps the first's format). So the axis wears the first's format
+   * where every measure on it is on that scale, its own format kept in the
+   * tooltip. T195's call, that an axis of two formats wear neither, is
+   * retired by R67.
    */
   const measures = membersOn(spec.encoding, 'y');
   const formats = spec.formats ?? {};
-  // Compared by what they say: each member's format read from the model is
-  // an object of its own (T201), so two alike are equal, not identical.
-  const declared = (member: string | undefined) => JSON.stringify(formats[member ?? ''] ?? null);
-  const oneFormat = measures.every((member) => declared(member) === declared(measures[0]));
+  const scale = (member: string | undefined) => scaleOf(formats[member ?? '']);
+  const oneFormat = measures.every((member) => scale(member) === scale(measures[0]));
 
   /**
    * Only on a value axis. A heatmap has none — both its axes are dimensions —

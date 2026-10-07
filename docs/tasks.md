@@ -10748,12 +10748,100 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
       - `shell.spec.ts`, the model file at 390 px.
 - [ ] T510 (AC-036, AC-187) Never draw a metric invisibly: per-metric small multiples, and "not drawn" on a metric a form can't draw *(split from T467, 2026-09-28: UX-057 with the user's answers)*
   - Files: `packages/charts/src/layout/trellis.ts` (a panel per metric), `packages/core/src/compile.ts`, `packages/recommender/src/{recommend,legality}.ts`, `packages/web/src/editor/{Wells,ChartEditor}.tsx` (+ tests), `e2e/chart-editor.spec.ts`
+    - *As built:*
+      - core: `undrawn.ts` (new), `compile.ts`, `render-spec.ts` (`answeredRows`), `index.ts`;
+      - charts: `optionFor.ts`, `axis.ts`, `layout/trellis.ts`, `tooltip.ts`;
+      - recommender: `recommend.ts`, `requirements.ts`, `types.ts` (`legality.ts` unchanged);
+      - web: `editor/{Wells,ChartEditor}.tsx`, `query/signature.ts`, `dashboard/{chartSpec.ts,DashboardView.tsx}`, `dashboard/crossfilter/clicked.ts`, `dashboard/edit/ChartEditorOverlay.tsx`, `router/routes.tsx`, `workspaces/explore/LibraryChartPage.tsx`, `workspaces/reviews/ReviewView.tsx`, `shell/styles.ts`;
+      - each with its tests, and `e2e/{chart-editor,titles}.spec.ts`.
   - Failing test:
     - a second metric whose Cube format differs from the first's (currency, percent or number) is "on another scale" (the user, option A: no magnitude threshold);
     - small multiples split by metric draw one panel per metric, each value axis in its own metric's format (the user, option a);
     - Auto picks them for two or more metrics on different scales, and never a form that hides a metric;
     - in a form that can't draw a metric, that metric's pill says "not drawn", with a one-line reason, and offers Small multiples and Table (UX-057, design 01-5).
   - Depends on: T467
+  - **R67 (the user, 2026-10-07):**
+    - An unsplit bar, line or area with two metrics on different scales draws the first only. The second's pill says "not drawn · on another scale", offering Small multiples and Table, and the axis keeps the first's format. T195's one-axis call (an axis shared by two formats wears neither) is superseded.
+    - Dashboards pick with the model's formats, so the editor and the tile pick the same chart (T193).
+  - **Built 2026-10-07.**
+    - **`core/undrawn.ts`, one account of what a form draws, for the renderer, the pills and the pick:**
+      - `scaleOf`: a format's scale. Money is in its currency, so USD and EUR are two scales. A share is one scale, and anything else is a plain number. It is read from the d3 specifier `/v1/meta` reports: a `$` is money and a `%` a share (research `cube/data-modeling.md`).
+      - `undrawnMeasures`: each metric the form leaves out, and why.
+        - An unsplit bar, line, area or combo leaves out those on another scale than the first ("scale"). A combo draws on one shared axis too, its first as bars and the rest as lines.
+        - Split by colour, it draws its first metric alone ("form").
+        - A KPI, pie, donut, treemap, heatmap, box plot or map draws one metric; a scatter draws two.
+        - A table, a pivot, and small multiples panelled by metric draw them all.
+      - `onOneScale`: that bar, line, area or combo held to the first metric's scale. `optionFor` applies it first, so the other metric is no series at all. The cross-filter's series count (`seriesCountOf`) and Customize's series list read it too.
+      - The value axis wears the first measure's format wherever every measure on it is on that scale, two formats of money included (`axis.ts`). T195's call, that an axis of two formats wears neither, is retired by R67. `format-places.test.ts`'s T195 test is amended to the new rule, as the coordinator asked.
+    - **Small multiples by metric** (the user's option (a)):
+      - With one grouping and two or more metrics, `compile` draws them a panel per metric. Each panel is titled by its metric, as a legend names it, on its own scale and in its metric's format (`trellis.ts`).
+      - A panel's header names a metric, so it marks nothing, and its bars mark by category, as a bar's do. That was my call, stated with my R67 question. `clickedValue` and `clickMarksCategory` read it so. Its keys step through the categories, and the one they are on is ringed in every panel (`withKeyboardFocus`, AC-176).
+      - Its panels are always bars, over time too, and Customize's shared scale doesn't apply to them: each has its own scale.
+      - "Small multiples" needs 2 groupings, or 2 metrics and 1. The missing-field sentence now names the second way too (`requirements.ts`).
+    - **The pick** (`recommend.ts`):
+      - Measures carry their scale (`Field.scale`).
+      - Where the scales differ and there is one grouping, small multiples by metric are a candidate.
+      - A form that drops a metric costs 20 (`drops_a_metric`), more than a table, so Auto picks small multiples there. With no grouping it picks a table. A scatter of a single point costs 13 (`scatter_of_one_point`, ours). With two groupings it picks a form that draws both: a scatter, a pivot or a table.
+      - Those that drop one are still offered, after those that draw them all.
+      - **Scoped to different scales.** With metrics of one scale, the picks are unchanged: a KPI of two counts, and a bar split by colour, both draw only their first metric. Their pills now say "not drawn", but Auto still picks them. See the question below.
+    - **The editor** (`Wells.tsx`, `ChartEditor.tsx`):
+      - Each metric the shown form leaves out has its pill drawn off (design 01-5's dashed `.pill.off`), its tag saying "not drawn · on another scale" or "not drawn".
+      - A warning line under Metrics says "Bar draws one scale. Total Amount is on another scale than Count: in the query and the results, but not on the chart." For another form it says "Pie draws one metric. …".
+      - The line offers Small multiples (where one grouping lets them draw every metric), Table, and Remove for each metric left out. Choosing a form there is a manual choice, with focus going to Change. Remove sends focus to Metrics' "+".
+    - **Dashboards and the other places a chart is drawn** (`chartSpec.ts`):
+      - Nothing waits on the model. `tileChartOf` picks with the model's formats where its caller has them now: the drill, and the two save paths, which record what the chart was drawn as for Explore (AC-193). The overlay and the standalone editor read them from the cache the editor filled.
+      - A tile drawn before the model came is picked again as it is drawn, once the formats are in (`pickedWithFormats`). The re-pick happens where the dashboard assembles its tiles, saved, drafted and filtered alike, before formats, clicks and keys read them. The library chart's page and a review's chart preview do the same, with the model each reads.
+      - It recompiles from the rows as Cube answered them, which a compiled spec now carries (`answeredRows`), so a Top N isn't folded twice.
+      - Only a chart with no saved type and two measures or more is picked again, the only pick the formats can change.
+      - A dashboard whose model comes after its rows draws such a tile once without the formats, then as the editor does.
+  - **Open, for the user:** should Auto also never pick a form that drops a metric of the same scale?
+    - Today, a KPI of two counts shows the first, and two metrics split by a second grouping draw the first alone. Their pills now say so.
+    - Design 01-5's note reads "Auto never picking a form that drops a metric" in general; R67 and the task's tests speak of scales.
+    - (a) Yes, everywhere. Two counts would show as a table, and two metrics by two groupings as a scatter or a table.
+    - (b) No, only across scales, as built. *Recommended:* it is what R67 asked, and the pills now say what is left out.
+    - The cold review read the task's line the other way, as unconditional, so T510 stays unticked until the user answers.
+    - Three calls of mine go with it, each overturnable:
+      - money in two currencies counts as two scales;
+      - `scatter_of_one_point` (cost 13) makes a table, not a single-point scatter, the pick for two scales with nothing to group by;
+      - with two groupings, the pick is a scatter where it is cheapest.
+  - **The cold review (FAIL) found five bugs, all fixed:**
+    1. A dashboard's first paint waited on the model. All its tiles load together, so one untyped tile of two measures held every tile until `/api/meta` answered, with no bound. Nothing waits now: tiles are picked again as they are drawn, above (`chartSpec.test.ts`, failing first).
+    2. `undrawnOf` read a combo as drawing two metrics. It draws them all, on one shared axis, so it is now held to one scale as a bar is (`undrawn.test.ts`, failing first).
+    3. The standalone editor's Save recorded what the chart was drawn as without the formats. It now picks with them.
+    4. The library page picked with the shared model's formats before it knew the chart was in My workspace. It now picks again at render with the model it reads.
+    5. Keys on small multiples by metric moved a focus no panel drew. Each panel now rings it (`trellis.test.ts`, failing first).
+    - Also from it:
+      - the runner-up test now shows a form that drops one ranked after those that draw both;
+      - the axis rule above, with its test;
+      - the series count and Customize's list read what is drawn;
+      - Remove's focus;
+      - this Files list;
+      - a dashboard and library e2e.
+    - **Left, as nits:**
+      - Palette colours fall back by position, so they can shift when a middle metric isn't drawn.
+    - The off pill now uses design 01-5's `text-muted`, at 5.2:1 on the light surface and 5.7:1 on the dark (AC-005). It had used `text-secondary`.
+  - **Tests:**
+    - unit, each failing first:
+      - core `undrawn.test.ts`, `compile.test.ts`;
+      - charts `trellis.test.ts`, `format-places.test.ts` (amended);
+      - recommender `recommend.test.ts`, `requirements.test.ts` (the sentence amended);
+      - web `Wells.test.tsx`, `signature.test.ts`, `chartSpec.test.ts`, `clicked.test.ts`.
+    - Two charts tests used a currency beside a plain number or a percent to test per-series formats: `customize.test.ts`'s data labels, and `seriesOrder.test.ts`'s tooltip after a reorder. Those measures are now on two scales, and the second is no longer drawn. Each now gives both measures money formats of their own, so the assertions still tell the formats apart.
+    - e2e, Chrome:
+      - `chart-editor.spec.ts` "draws metrics on different scales a panel each…": Orders Count and Total Amount by status. Auto draws them a panel each, titled, the amount's axis in dollars. A bar chosen says "not drawn · on another scale" with the line, and draws no dollars. Small multiples from the line draws both again, with focus on Change. It failed with the editor's formats taken out.
+      - "a tile and a library chart's page draw metrics on two scales as the editor does": the same chart, untyped, on a dashboard and on its own page, a panel each, "Small multiples · auto". It failed with the re-pick taken out.
+      - `titles.spec.ts`'s library legend test used Count beside Total Amount on a bar, which is no longer drawn together. It now uses Average Amount and Total Amount, both money. Two other legend tests now read each panel's title, noted in their comments.
+      - The full Chrome suite ran 734 of 746 before the review's fixes. Every failure was either the amended titles test or one that fails the same way on the commit before T510:
+        - `design-conformance.spec.ts:942`, Explore's header;
+        - `admin.spec.ts`'s Query log card;
+        - `editor-preview.spec.ts:198`, a resized tile's preview;
+        - `status-labels.spec.ts`, Jobs;
+        - `shell.spec.ts` at 390 px (both tests);
+        - `acceleration.spec.ts:252`;
+        - `markings.spec.ts`'s Invert (T407).
+      - Three more failed under load and passed alone: `filters.spec.ts:200`, `design-conformance.spec.ts:1132` and `model-design.spec.ts:818`.
+      - After the fixes: `chart-editor`, `titles`, `library-chart`, `markings`, `crossfilter`, `dashboard`, `filters`, `dashboard-edit`, `new-chart` and `field-list`, 208 of 210. The other two passed alone: `chart-editor.spec.ts:42`, which timed out as the run's first test, and `dashboard.spec.ts:547`'s drag.
+      - Unit: core 535, charts 527, recommender 130 and web 2,558, all passing.
 - [x] T516 (AC-036, AC-187) Offer the horizontal bar as the runner-up when most category labels would be hidden *(added 2026-09-28: UX-117's second half, from T467)*
   - **Why.** UX-117 (`docs/design/reviews/2026-09-27/phase-1-recheck.md`) recommends two things. T467 built the first: labels rotate before any is hidden. The second is that when more than half would be hidden even then, the type card offers the horizontal bar as its runner-up.
   - Files: `packages/recommender/src/recommend.ts`, `packages/charts/src/layout/categoryLabels.ts` (+ tests)

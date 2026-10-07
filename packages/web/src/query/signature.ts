@@ -1,4 +1,10 @@
-import { countryCodeMarkingOf, holdsCountryCodes, type ChartSpec } from '@wechart/core';
+import {
+  countryCodeMarkingOf,
+  holdsCountryCodes,
+  scaleOf,
+  type ChartSpec,
+  type MemberFormats,
+} from '@wechart/core';
 
 /**
  * How the model marks each dimension as holding country codes, from its
@@ -42,6 +48,11 @@ export function signatureOf(
    * (T398, AC-313): otherwise its values decide.
    */
   countryMarking?: (member: string) => boolean | undefined,
+  /**
+   * The model's formats, where known: each measure's scale, so metrics on
+   * different scales are drawn as small multiples (T510; R67, the user).
+   */
+  formats?: MemberFormats,
 ): Signature {
   const distinct = (member: string) => new Set(rows.map((row) => String(row[member] ?? ''))).size;
   const countryCodes = (member: string) =>
@@ -52,7 +63,11 @@ export function signatureOf(
 
   return {
     fields: [
-      ...spec.measures.map((name) => ({ name, kind: 'measure' as const })),
+      ...spec.measures.map((name) => ({
+        name,
+        kind: 'measure' as const,
+        ...(formats === undefined ? {} : { scale: scaleOf(formats[name]) }),
+      })),
       ...spec.dimensions.map((name) => ({
         name,
         kind: 'dimension' as const,
@@ -78,10 +93,14 @@ export function topTypeOf(recommendation: ReturnType<typeof recommend>): ChartTy
   return recommendation.top?.candidate.chartType ?? null;
 }
 
-/** The type the recommender would pick for this chart, or null when none. */
+/**
+ * The type the recommender would pick for this chart, or null when none:
+ * with the model's formats where given, as the editor picks (T510, R67).
+ */
 export function recommendedTypeOf(
   spec: ChartSpec,
   rows: readonly Record<string, unknown>[],
+  formats?: MemberFormats,
 ): ChartType | null {
-  return topTypeOf(recommend(signatureOf(spec, rows)));
+  return topTypeOf(recommend(signatureOf(spec, rows, undefined, formats)));
 }

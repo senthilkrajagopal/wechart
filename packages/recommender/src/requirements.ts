@@ -20,6 +20,11 @@ export interface Requirement {
   readonly timeCounts?: boolean;
   /** Only dimensions holding ISO-3 country codes count towards it (T398, AC-313). */
   readonly countryCodes?: boolean;
+  /**
+   * One fewer is enough with two or more measures: small multiples drawn a
+   * panel per metric need one grouping, not two (T510, UX-057).
+   */
+  readonly fewerByMetric?: boolean;
 }
 
 export interface FieldCounts {
@@ -86,7 +91,8 @@ export const REQUIREMENTS: Record<ChartType, readonly Requirement[]> = {
   // Rows from a time dimension and columns from a dimension, as `compile`
   // draws them (T305's review).
   pivot: [groupings(2)],
-  trellis: [measures(1), groupings(2)],
+  // Or a panel per metric: two measures and one grouping (T510).
+  trellis: [measures(1), { ...groupings(2), fewerByMetric: true }],
   combo: [measures(2)],
   // A measure's values spread per category (AC-306): one plain dimension to
   // box by, as `compile` encodes it.
@@ -101,11 +107,24 @@ function have(requirement: Requirement, counts: FieldCounts): number {
   return counts[requirement.well] + (requirement.timeCounts === true ? counts.timeDimensions : 0);
 }
 
+/**
+ * A requirement as these fields meet it: one grouping fewer, said as one,
+ * where two measures draw small multiples a panel per metric (T510).
+ */
+function asMet(requirement: Requirement, counts: FieldCounts): Requirement {
+  if (requirement.fewerByMetric !== true || counts.measures < 2) return requirement;
+  return {
+    ...requirement,
+    atLeast: requirement.atLeast - 1,
+    memberType: 'a dimension or a time dimension',
+  };
+}
+
 /** The requirements this chart does not yet meet. Empty when it can be drawn. */
 export function missingFor(chartType: ChartType, counts: FieldCounts): Requirement[] {
-  return REQUIREMENTS[chartType].filter(
-    (requirement) => have(requirement, counts) < requirement.atLeast,
-  );
+  return REQUIREMENTS[chartType]
+    .map((requirement) => asMet(requirement, counts))
+    .filter((requirement) => have(requirement, counts) < requirement.atLeast);
 }
 
 export function canDraw(chartType: ChartType, counts: FieldCounts): boolean {
@@ -127,7 +146,12 @@ export function describeMissing(chartType: ChartType, counts: FieldCounts): stri
   return missingFor(chartType, counts).map((requirement) => {
     const had = have(requirement, counts);
     const short = requirement.atLeast - had;
-    // The type by its name, never its id (AC-217).
-    return `${CHART_TYPE_NAMES[chartType]} needs ${requirement.memberType} in ${WELL_LABEL[requirement.well]}; add ${String(short)} more.`;
+    // The type by its name, never its id (AC-217). Where a second metric
+    // would do instead, that too (T510).
+    const byMetric =
+      requirement.fewerByMetric === true && counts.measures < 2
+        ? ' Or add a second metric to Metrics, for a panel per metric.'
+        : '';
+    return `${CHART_TYPE_NAMES[chartType]} needs ${requirement.memberType} in ${WELL_LABEL[requirement.well]}; add ${String(short)} more.${byMetric}`;
   });
 }

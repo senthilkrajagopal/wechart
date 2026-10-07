@@ -55,13 +55,20 @@ describe('what a chart needs (AC-033)', () => {
 
   // T242's review: small multiples need a panel per member of one grouping
   // and an axis of another — two dimensions, or a time and a dimension.
-  it('asks small multiples for two groupings, time counting as one', () => {
+  // T510 (UX-057): or a panel per metric, with two metrics and one grouping;
+  // the sentence says so (amended from T242's, which named only groupings).
+  it('asks small multiples for two groupings, time counting as one, or two metrics and one', () => {
     expect(canDraw('trellis', counts(1, 1))).toBe(false);
     expect(describeMissing('trellis', counts(1, 1))).toEqual([
-      'Small multiples needs 2 dimensions, or a time dimension and a dimension, in Dimensions; add 1 more.',
+      'Small multiples needs 2 dimensions, or a time dimension and a dimension, in Dimensions; add 1 more. Or add a second metric to Metrics, for a panel per metric.',
     ]);
     expect(canDraw('trellis', counts(1, 2))).toBe(true);
     expect(canDraw('trellis', counts(1, 1, 1))).toBe(true);
+    expect(canDraw('trellis', counts(2, 1))).toBe(true);
+    expect(canDraw('trellis', counts(2, 0, 1))).toBe(true);
+    expect(describeMissing('trellis', counts(2, 0))).toEqual([
+      'Small multiples needs a dimension or a time dimension in Dimensions; add 1 more.',
+    ]);
   });
 
   it('reports a line without a time dimension', () => {

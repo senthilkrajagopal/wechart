@@ -102,7 +102,49 @@ export function withFormats(
   );
 }
 
-export async function tileChartOf(document: ChartDocument, load: LoadRows): Promise<TileChart> {
+/**
+ * Whether a chart's pick can turn on the model's formats (T510): its type
+ * is the recommender's, and it has two measures or more to set apart by
+ * their scales.
+ */
+function pickTurnsOnFormats(document: ChartDocument): boolean {
+  return document.chart.chartType === undefined && document.chart.wells.measures.length > 1;
+}
+
+/**
+ * A chart its type left to the recommender, picked again with the model's
+ * formats (T510; R67, the user: "Pass formats to dashboards"): metrics on
+ * different scales are drawn as small multiples, as the editor picks them
+ * (T193). Done as the tile is drawn, not while it loads, so no tile's first
+ * paint waits on the model (T194; T510's review): one drawn before the
+ * model came is drawn again once it does, from the rows as Cube answered
+ * them. Any other chart, or one the formats don't move, as it is.
+ */
+export function pickedWithFormats(
+  spec: RenderSpec,
+  document: ChartDocument | undefined,
+  formats: MemberFormats | undefined,
+): RenderSpec {
+  if (document === undefined || formats === undefined || !pickTurnsOnFormats(document)) {
+    return spec;
+  }
+  const rows = spec.answeredRows ?? spec.rows;
+  const picked = recommendedTypeOf(toChartSpec(document), rows, formats);
+  return picked === null || picked === spec.chartType
+    ? spec
+    : compile(document, { rows, chartType: picked });
+}
+
+export async function tileChartOf(
+  document: ChartDocument,
+  load: LoadRows,
+  /**
+   * The model's formats, where the caller has them now (T510, R67): the
+   * pick is made with them. Never waited for; a tile drawn without them is
+   * picked again as it is drawn (`pickedWithFormats`).
+   */
+  formats?: MemberFormats,
+): Promise<TileChart> {
   /**
    * Everything after reading the document is inside one `try`. Every tile's
    * chart is loaded together (`Promise.all` in DashboardPage), so a rejection
@@ -117,7 +159,7 @@ export async function tileChartOf(document: ChartDocument, load: LoadRows): Prom
 
     const rows = await load(toCubeQuery(spec));
 
-    const chartType = document.chart.chartType ?? recommendedTypeOf(spec, rows);
+    const chartType = document.chart.chartType ?? recommendedTypeOf(spec, rows, formats);
     /**
      * Reached by a chart the recommender can place nowhere — one with only a
      * time dimension, say: every candidate needs a measure except a table,

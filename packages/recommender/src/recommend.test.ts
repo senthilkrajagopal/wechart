@@ -156,6 +156,75 @@ describe('the recommendation follows the signature (AC-028)', () => {
     });
   });
 
+  /**
+   * T510 (AC-036, AC-028; UX-057, design 01-5 item 5; R67, the user): Auto
+   * never picks a form that drops a metric. Metrics on different scales — a
+   * format differing from the first's (the user's option A) — are drawn as
+   * small multiples, a panel per metric, where there is one grouping to draw
+   * them by; otherwise as a table. A metric a form leaves out costs it.
+   */
+  describe('never a form that drops a metric (T510)', () => {
+    const money = (name = 'orders.total_amount'): Field => ({
+      name,
+      kind: 'measure',
+      scale: 'currency USD',
+    });
+    const top = (input: Signature) => recommend(input).top?.candidate;
+
+    it('draws metrics on different scales as small multiples, a panel per metric', () => {
+      for (const grouping of [dimension(8, 'customers.country'), time()]) {
+        const picked = top(signature(money(), measure(), grouping));
+        expect(picked?.chartType).toBe('trellis');
+        expect(picked?.facetField).toBeUndefined();
+        expect(picked?.valueFields.map((field) => field.name)).toEqual([
+          'orders.total_amount',
+          'orders.count',
+        ]);
+        expect(recommend(signature(money(), measure(), grouping)).top?.reason).toBe(
+          'One small chart per metric, each on its own scale.',
+        );
+      }
+    });
+
+    it('draws them as a table, or two axes of their own, where small multiples can’t', () => {
+      // One row, nothing to group by: a table, not a KPI of the first or a
+      // scatter of one point.
+      expect(top(signature(money(), measure()))?.chartType).toBe('table');
+      // Two groupings leave no one axis for a panel: a form that draws both,
+      // never one that drops one (a split bar, a heatmap, a pie).
+      const twoGroupings = top(signature(money(), measure(), dimension(4), dimension(3, 'b')));
+      expect(['table', 'pivot', 'scatter']).toContain(twoGroupings?.chartType);
+      const overTime = top(signature(money(), measure(), time(), dimension(4)));
+      expect(['table', 'pivot', 'scatter']).toContain(overTime?.chartType);
+    });
+
+    it('ranks a form that drops one after those that draw them all, still offered', () => {
+      // T510's review: two runners-up show only the cheapest, which draw both.
+      const offered = recommend(signature(money(), measure(), dimension(4)), 10).runnersUp.map(
+        (each) => each.candidate.chartType,
+      );
+      expect(offered.length).toBeGreaterThanOrEqual(1);
+      expect(offered).not.toContain('trellis');
+      expect(offered).toContain('bar');
+      expect(offered.indexOf('bar')).toBeGreaterThan(offered.indexOf('table'));
+    });
+
+    /**
+     * Of one scale, the picks are today's, a KPI of two and a split bar among
+     * them (each now says what it leaves undrawn): T510 is about scales, and
+     * whether Auto should avoid those too is the user's question.
+     */
+    it('leaves metrics of one scale drawn together as they were', () => {
+      expect(top(signature(measure(), measure('orders.items'), dimension(4)))?.chartType).toBe(
+        'bar',
+      );
+      expect(top(signature(measure(), measure('orders.items')))?.chartType).toBe('kpi');
+      expect(top(signature(measure(), measure('orders.items'), time()))?.chartType).toBe(
+        'multiLine',
+      );
+    });
+  });
+
   it('shows two measures against each other as a scatter', () => {
     const types = [
       recommend(signature(measure(), measure('m2'))).top?.candidate.chartType,

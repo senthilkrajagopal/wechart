@@ -61,6 +61,21 @@ describe('the signature of a chart', () => {
     expect(fields.every((field) => !('cardinality' in field))).toBe(true);
   });
 
+  /**
+   * T510 (R67, the user): a measure's scale from its format, so the editor
+   * and a dashboard's tile pick small multiples alike for measures on
+   * different scales (T193). None without the model's formats.
+   */
+  it('gives each measure the scale its format puts it on, given the formats', () => {
+    const twoScales = { ...spec, measures: ['orders.count', 'orders.amount'] };
+    const formats = { 'orders.amount': { name: 'currency', specifier: '$,.2~f' } };
+    const measures = signatureOf(twoScales, rows, undefined, formats).fields.filter(
+      (field) => field.kind === 'measure',
+    );
+    expect(measures.map((field) => field.scale)).toEqual(['number', 'currency USD']);
+    expect(recommendedTypeOf({ ...twoScales, timeDimensions: [] }, rows, formats)).toBe('trellis');
+  });
+
   it('carries the row count', () => {
     expect(signatureOf(spec, rows).rowCount).toBe(3);
     expect(signatureOf(spec, []).rowCount).toBe(0);

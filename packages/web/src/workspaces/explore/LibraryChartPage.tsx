@@ -3,7 +3,7 @@ import { useRouter } from '@tanstack/react-router';
 import { readChartDocument, withMemberLabels } from '@wechart/core';
 import { useId, useMemo, useRef, useState, type ReactNode } from 'react';
 
-import { CHART_MISSING, formatsFrom } from '../../dashboard/chartSpec';
+import { CHART_MISSING, formatsFrom, pickedWithFormats } from '../../dashboard/chartSpec';
 import { PencilIcon } from '../../dashboard/edit/EditChrome';
 import { NOTHING_CHOSEN } from '../../dashboard/edit/templates';
 import { specFor } from '../../dashboard/DashboardPage';
@@ -202,17 +202,26 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
       spec === undefined
         ? undefined
         : // A calculated measure keeps its calculation in its name (AC-048).
-          withMemberLabels(spec, {
-            formats: formatsFrom(meta.data),
-            titles: Object.fromEntries(
-              allMembers(meta.data).map((member) => [member.name, member.title]),
+          withMemberLabels(
+            // Picked with this model's formats, as the editor and a tile pick
+            // it (T510, R67): its own overlay's in My workspace.
+            pickedWithFormats(
+              spec,
+              drawn.data?.document,
+              meta.data === undefined ? undefined : formatsFrom(meta.data),
             ),
-            // For a one-source chart's legend and KPI (T403).
-            shortTitles: Object.fromEntries(
-              allMembers(meta.data).map((member) => [member.name, member.shortTitle]),
-            ),
-          }),
-    [spec, meta.data],
+            {
+              formats: formatsFrom(meta.data),
+              titles: Object.fromEntries(
+                allMembers(meta.data).map((member) => [member.name, member.title]),
+              ),
+              // For a one-source chart's legend and KPI (T403).
+              shortTitles: Object.fromEntries(
+                allMembers(meta.data).map((member) => [member.name, member.shortTitle]),
+              ),
+            },
+          ),
+    [spec, drawn.data?.document, meta.data],
   );
   const hasFields =
     definition !== undefined &&
@@ -228,8 +237,9 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
   const typeText =
     definition === undefined
       ? undefined
-      : definition.chartType === undefined && spec !== undefined && hasFields
-        ? `${CHART_TYPE_LABEL[spec.chartType]} · auto`
+      : definition.chartType === undefined && formatted !== undefined && hasFields
+        ? // As drawn, picked with the model's formats (T510).
+          `${CHART_TYPE_LABEL[formatted.chartType]} · auto`
         : chartTypeText({ chartType: definition.chartType ?? null, hasFields });
   const source = definition?.source.cube;
   const measures = definition?.wells.measures ?? [];

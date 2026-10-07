@@ -8,7 +8,7 @@ import {
   useRouter,
   useRouterState,
 } from '@tanstack/react-router';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
 
 import { DashboardPage } from '../dashboard/DashboardPage';
@@ -17,7 +17,7 @@ import { ChartEditor } from '../editor/ChartEditor';
 import { LibraryChartNote } from '../editor/LibraryChartNote';
 import { chartDocumentWith, editorViewOf, loadChart, type EditorState } from '../editor/openChart';
 import { withDrawnAs } from '../editor/drawnAs';
-import { tileChartOf } from '../dashboard/chartSpec';
+import { formatsFrom, tileChartOf } from '../dashboard/chartSpec';
 import { loadTile } from '../query/loadTile';
 import type { FilterValues } from '../filters/model';
 import { valuesFromSearch, valuesToSearch, type SearchFilter } from '../filters/url';
@@ -41,7 +41,7 @@ import { LibraryChartPage } from '../workspaces/explore/LibraryChartPage';
 import { LocalChartActions, useChartHome } from '../workspaces/explore/LocalChartHome';
 import { exploreHref, folderChain, FOLDERS_QUERY } from '../workspaces/explore/folders';
 import { isMyWorkspace, SHARED_ROOT } from '../workspaces/explore/roots';
-import { WorkspaceItemContext } from '../query/meta';
+import { metaQueryOf, WorkspaceItemContext } from '../query/meta';
 import { WORKSPACES, type WorkspaceId } from '../shell/WorkspaceSwitcher';
 
 /**
@@ -417,6 +417,7 @@ function ChartSurface() {
 function ChartEditorSurface() {
   const params = useParams({ strict: false }) as { objectId?: string };
   const chartId = decodeURIComponent(params.objectId ?? '');
+  const queryClient = useQueryClient();
 
   const chart = useQuery({
     queryKey: ['chart-editor', chartId],
@@ -461,13 +462,19 @@ function ChartEditorSurface() {
         throw new Error('This chart was read without its version, so it cannot be saved safely.');
       const document = chartDocumentWith(loaded.document, edited);
       // Drawn as a tile draws it, for what it was drawn as (AC-193): Explore
-      // names a chart that follows the recommendation by that.
-      const drawn = await tileChartOf(document, async (query) => {
-        const result = (await loadTile({ query, item: { kind: 'chart', id: chartId } })) as {
-          data?: Record<string, unknown>[];
-        };
-        return result.data ?? [];
-      });
+      // names a chart that follows the recommendation by that. With the
+      // model's formats the editor picked with (T510's review, R67).
+      const meta = queryClient.getQueryData(metaQueryOf(workspaceItem).queryKey);
+      const drawn = await tileChartOf(
+        document,
+        async (query) => {
+          const result = (await loadTile({ query, item: { kind: 'chart', id: chartId } })) as {
+            data?: Record<string, unknown>[];
+          };
+          return result.data ?? [];
+        },
+        meta === undefined ? undefined : formatsFrom(meta),
+      );
       const response = await fetch(`/api/documents/chart/${encodeURIComponent(chartId)}`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },

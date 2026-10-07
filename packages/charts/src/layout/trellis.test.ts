@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { RenderSpec } from '@wechart/core';
 
+import { optionFor } from '../optionFor';
 import { trellisOption, MAX_PANELS } from './trellis';
 import { labelsOf, marksOf, renderToSvg } from '../testing/renderToSvg';
 
@@ -137,5 +138,77 @@ describe('the cap', () => {
 
     expect(titles).toContain('region 0');
     expect(titles).not.toContain('region 20');
+  });
+});
+
+/**
+ * T510 (AC-036; UX-057; the user's option (a)): small multiples split by
+ * metric, for metrics on different scales. A panel per metric, titled by
+ * its title, each value axis on its own scale and in its own metric's
+ * format, so a count beside revenue is drawn at its own height.
+ */
+describe('a panel per metric (T510)', () => {
+  const AMOUNT = 'orders.amount';
+  const byMetric: RenderSpec = {
+    chartType: 'trellis',
+    encoding: { x: [STATUS], y: [AMOUNT, COUNT] },
+    rows: [
+      { [STATUS]: 'paid', [AMOUNT]: 250000, [COUNT]: 122 },
+      { [STATUS]: 'refunded', [AMOUNT]: 125000, [COUNT]: 61 },
+    ],
+    palette: PALETTE,
+    formats: { [AMOUNT]: 'currency' },
+    titles: { [AMOUNT]: 'Orders Amount', [COUNT]: 'Orders Count' },
+  };
+
+  it('draws one per metric, each titled by the metric', () => {
+    const titles = labelsOf(draw(byMetric)).map((label) => label.text);
+    expect(titles).toContain('Orders Amount');
+    expect(titles).toContain('Orders Count');
+  });
+
+  it('gives each its own scale, so the smaller metric is not drawn flat', () => {
+    const { left, right } = heightsByPanel(draw(byMetric));
+    expect(left).toHaveLength(2);
+    expect(right).toHaveLength(2);
+    // Each panel's tallest bar fills its own panel alike, whatever the metric.
+    expect(Math.max(...right)).toBeGreaterThan(Math.max(...left) * 0.8);
+  });
+
+  it('writes each panel’s values in its own metric’s format', () => {
+    const labels = labelsOf(draw(byMetric)).map((label) => label.text);
+    // Money on the amount's axis, plain numbers on the count's.
+    expect(labels.some((label) => /^\$[\d,]+/.test(label))).toBe(true);
+    // A plain number can only be the count's: the amount's ticks all read "$".
+    expect(labels.some((label) => /^\d[\d,]*$/.test(label))).toBe(true);
+    const option = trellisOption(byMetric) as {
+      yAxis: { axisLabel: { formatter: (v: number) => string } }[];
+    };
+    expect(option.yAxis[0]?.axisLabel.formatter(1000)).toBe('$1,000');
+    expect(option.yAxis[1]?.axisLabel.formatter(1000)).toBe('1,000');
+  });
+
+  /**
+   * T510's review: its bars mark by category, so the tile's keys step through
+   * its categories (`clickMarksCategory`). The one they are on is ringed in
+   * every panel, as a split bar's is in every series (AC-176).
+   */
+  it('rings the category the keyboard is on, in every panel', () => {
+    const option = optionFor({ ...byMetric, keyboardFocus: 'paid' }) as {
+      series: { data: { itemStyle?: { borderType?: unknown } }[] }[];
+    };
+    expect(option.series.map((one) => one.data[0]?.itemStyle?.borderType)).toEqual([
+      'dashed',
+      'dashed',
+    ]);
+    expect(option.series.map((one) => one.data[1]?.itemStyle?.borderType)).toEqual([
+      undefined,
+      undefined,
+    ]);
+  });
+
+  it('makes a panel’s header no handle to mark by: it names a metric, not a value', () => {
+    const option = trellisOption(byMetric) as { title: { triggerEvent?: boolean }[] };
+    expect(option.title.map((one) => one.triggerEvent === true)).toEqual([false, false]);
   });
 });

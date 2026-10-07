@@ -71,7 +71,13 @@ import { RollupRefreshNote } from '../tiles/RollupRefreshNote';
 import { TileSkeleton } from '../tiles/TileSkeleton';
 import { useDashboardColours } from './colours';
 import { AddPanel } from './edit/AddPanel';
-import { CHART_MISSING, CHART_UNTYPED, tileChartOf, withFormats } from './chartSpec';
+import {
+  CHART_MISSING,
+  CHART_UNTYPED,
+  pickedWithFormats,
+  tileChartOf,
+  withFormats,
+} from './chartSpec';
 import { ChartEditorOverlay } from './edit/ChartEditorOverlay';
 import {
   drawnWithDrafts,
@@ -2170,14 +2176,30 @@ export function DashboardView({
    * would recolour every member from scratch.
    */
   const [drafts, setDrafts] = useState<DashboardDocument['chartDrafts']>(undefined);
-  const drawn = useMemo(
-    () =>
-      drawnWithDrafts(
-        { specs, errors: errors ?? {}, documents, answered },
-        { ...document, ...(drafts === undefined ? {} : { chartDrafts: drafts }) },
-      ),
-    [specs, errors, documents, answered, document, drafts],
-  );
+  const drawn = useMemo(() => {
+    const withDrafts = drawnWithDrafts(
+      { specs, errors: errors ?? {}, documents, answered },
+      { ...document, ...(drafts === undefined ? {} : { chartDrafts: drafts }) },
+    );
+    /**
+     * Picked again with the model's formats (T510; R67, the user: "Pass
+     * formats to dashboards"): a chart following the recommender whose
+     * metrics are on different scales is drawn as the editor draws it. Done
+     * here, as the tiles are drawn, so no tile's first paint waits on the
+     * model (T194; T510's review); one drawn before it came is drawn again.
+     */
+    return formats === undefined
+      ? withDrafts
+      : {
+          ...withDrafts,
+          specs: Object.fromEntries(
+            Object.entries(withDrafts.specs).map(([id, spec]) => [
+              id,
+              pickedWithFormats(spec, withDrafts.documents?.[id], formats),
+            ]),
+          ),
+        };
+  }, [specs, errors, documents, answered, document, drafts, formats]);
   const chartTitleOf = (chartId: string) => drawn.documents?.[chartId]?.title;
   /**
    * The rows behind a chart, ungrouped, carry no quick calculation (AC-048):
@@ -2762,7 +2784,8 @@ export function DashboardView({
       if (asking || answer === undefined) pending.add(id);
       if (answer === undefined) continue;
       if ('spec' in answer) {
-        shown[id] = answer.spec;
+        // Picked with the model's formats too, as the unfiltered tile (T510).
+        shown[id] = pickedWithFormats(answer.spec, drawn.documents?.[id], formats);
         delete failed[id];
       } else {
         failed[id] = answer.error;
@@ -2772,7 +2795,7 @@ export function DashboardView({
       else said[id] = result.answered;
     }
     return { specs: shown, errors: failed, answered: said, pending };
-  }, [drawn, reached, filtered, asked]);
+  }, [drawn, reached, filtered, asked, formats]);
 
   /**
    * "Refresh now" on a tile (T154, AC-148) asks again what the tile draws: a
@@ -3160,7 +3183,7 @@ export function DashboardView({
     // of it, as `tileItemsOf` reads it (T405's review).
     const spec = withFiltered.specs[element.chartId] ?? drawn.specs[element.chartId];
     if (spec === undefined || memberOn(spec.encoding, 'x') === undefined) return [];
-    if (!clickMarksCategory(spec.chartType)) return [];
+    if (!clickMarksCategory(spec)) return [];
     try {
       return seriesOf(spec).categories.filter(
         (value) => value !== '' && !value.startsWith(`${OTHER_LABEL} (`),
@@ -3225,7 +3248,7 @@ export function DashboardView({
     if (element === null || !isTile(element) || element.chartId === undefined) return undefined;
     const spec = withFiltered.specs[element.chartId] ?? drawn.specs[element.chartId];
     const member = spec === undefined ? undefined : memberOn(spec.encoding, 'x');
-    if (spec === undefined || member === undefined || !clickMarksCategory(spec.chartType)) {
+    if (spec === undefined || member === undefined || !clickMarksCategory(spec)) {
       return undefined;
     }
     let categories: readonly string[];
@@ -4675,16 +4698,21 @@ export function DashboardView({
       return;
     }
     let answered: AnswerMeta | undefined;
-    void tileChartOf(drilledDocument(chart, to.option), async (query) => {
-      const asked = withLimit(withFilters(query, basis.applied), basis.limit);
-      const result = (await loadTile({
-        query: basis.marked === undefined ? asked : withLimit(asked, basis.marked),
-        ...(preview === undefined ? {} : { context: preview }),
-        item,
-      })) as { data?: Record<string, unknown>[] };
-      answered = answerMetaOf(result);
-      return result.data ?? [];
-    }).then((result) => {
+    void tileChartOf(
+      drilledDocument(chart, to.option),
+      async (query) => {
+        const asked = withLimit(withFilters(query, basis.applied), basis.limit);
+        const result = (await loadTile({
+          query: basis.marked === undefined ? asked : withLimit(asked, basis.marked),
+          ...(preview === undefined ? {} : { context: preview }),
+          item,
+        })) as { data?: Record<string, unknown>[] };
+        answered = answerMetaOf(result);
+        return result.data ?? [];
+      },
+      // With the model's formats where they're in, as a tile picks (T510).
+      formats,
+    ).then((result) => {
       if ('error' in result) {
         settle({ kind: 'failed', error: result.error });
         return;

@@ -86,9 +86,13 @@ export function defaultEncoding(chart: ChartDefinition, chartType?: ChartType): 
     });
   if (chartType === 'heatmap')
     return encoded({ x: channel(x), y: channel(color), color: channel(firstMeasure) });
-  // Its renderer draws the first measure in every panel.
+  // A panel per member of the split, each of the first measure; with one
+  // grouping and several measures, a panel per measure, each on its own
+  // scale (T510, UX-057).
   if (chartType === 'trellis')
-    return encoded({ x: channel(x), y: channel(firstMeasure), facet: channel(color) });
+    return color === undefined && measures.length > 1
+      ? encoded({ x: channel(x), y: [...measures] })
+      : encoded({ x: channel(x), y: channel(firstMeasure), facet: channel(color) });
   // A box per member of its first plain dimension, of its first measure's
   // values (T399): a box per day of a time dimension says nothing.
   if (chartType === 'boxplot')
@@ -187,11 +191,13 @@ export function compile(document: ChartDocument, options: CompileOptions): Rende
       }),
     ),
   );
+  // The rows as answered, for a pick made again (T510's review).
+  const answered = { ...drawn, answeredRows: options.rows };
   // Named with its calculation, and written as it is, even before the
   // model's titles and formats arrive (AC-048).
   return Object.keys(calculated).length === 0
-    ? drawn
-    : withMemberLabels(drawn, {
+    ? answered
+    : withMemberLabels(answered, {
         formats: options.formats ?? {},
         titles: options.titles ?? {},
         shortTitles: options.shortTitles,

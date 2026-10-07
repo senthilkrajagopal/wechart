@@ -8,7 +8,7 @@ import { chartIdsOf } from '../../dashboard/model/document';
 import { ReviewMarks } from '../../dashboard/grid/reviewMarks';
 import { tileChangesOf } from './tileChanges';
 import { allMembers } from '../../filters/FilterBar';
-import { formatsFrom } from '../../dashboard/chartSpec';
+import { formatsFrom, pickedWithFormats } from '../../dashboard/chartSpec';
 import { metaQueryOf } from '../../query/meta';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { ChartTile } from '../../tiles/ChartTile';
@@ -619,16 +619,24 @@ function ChartPreview({
       spec === undefined
         ? undefined
         : // A calculated measure keeps its calculation in its name (AC-048).
-          withMemberLabels(spec, {
-            formats: formatsFrom(meta.data),
-            titles: Object.fromEntries(
-              allMembers(meta.data).map((member) => [member.name, member.title]),
+          withMemberLabels(
+            // Picked with this model's formats, as a tile picks it (T510, R67).
+            pickedWithFormats(
+              spec,
+              drawn.data?.document,
+              meta.data === undefined ? undefined : formatsFrom(meta.data),
             ),
-            shortTitles: Object.fromEntries(
-              allMembers(meta.data).map((member) => [member.name, member.shortTitle]),
-            ),
-          }),
-    [spec, meta.data],
+            {
+              formats: formatsFrom(meta.data),
+              titles: Object.fromEntries(
+                allMembers(meta.data).map((member) => [member.name, member.title]),
+              ),
+              shortTitles: Object.fromEntries(
+                allMembers(meta.data).map((member) => [member.name, member.shortTitle]),
+              ),
+            },
+          ),
+    [spec, drawn.data?.document, meta.data],
   );
   if (drawn.isPending) return <TileSkeleton chartType="bar" height={360} />;
   if (drawn.isError) return <TileError error={drawn.error} onRetry={() => void drawn.refetch()} />;

@@ -12,10 +12,10 @@
  * synchronised by default and settable to independent, and that is the shape
  * here.
  */
-import { distinctValues, formatterFor, memberOn, type RenderSpec } from '@wechart/core';
+import { distinctValues, formatterFor, memberOn, membersOn, type RenderSpec } from '@wechart/core';
 
 import { DEFAULT_PALETTE, DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
-import { modelWriter, nameWriter } from '../modelWriter';
+import { labelOf, modelWriter, nameWriter } from '../modelWriter';
 import { DEFAULT_CANVAS, gapFor, laidBarWidth, type Canvas } from '../series/bar';
 
 export function isTrellisType(chartType: string): boolean {
@@ -49,31 +49,44 @@ export function trellisOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS)
   const surface = spec.surface ?? DEFAULT_SURFACE;
   const facet = memberOn(spec.encoding, 'facet');
   const category = memberOn(spec.encoding, 'x');
-  const measure = memberOn(spec.encoding, 'y');
+  const measures = membersOn(spec.encoding, 'y');
+  const measure = measures[0];
+  /**
+   * A panel per metric (T510; UX-057, the user's option (a)): with nothing to
+   * panel by and several metrics, each is drawn in a panel of its own, on its
+   * own scale and in its own format, so metrics on different scales are each
+   * read at their own height.
+   */
+  const byMetric = facet === undefined && measures.length > 1;
 
-  if (facet === undefined || category === undefined || measure === undefined) {
+  if (category === undefined || measure === undefined || (facet === undefined && !byMetric)) {
     return { animation: false, grid: [], xAxis: [], yAxis: [], title: [], series: [] };
   }
 
   // First-appearance order, capped. Sorting would override the order Cube was
   // asked for (AC-044), and dropping from the front would hide the panels a
-  // reader is most likely to want.
-  const panels = distinctValues(spec.rows, facet).slice(0, MAX_PANELS);
+  // reader is most likely to want. By metric, the Metrics well's order.
+  const panels = (byMetric ? [...measures] : distinctValues(spec.rows, facet ?? '')).slice(
+    0,
+    MAX_PANELS,
+  );
   const categories = distinctValues(spec.rows, category);
 
   const valuesFor = (panel: string) =>
     categories.map((name) => {
       const row = spec.rows.find(
         (candidate) =>
-          String(candidate[facet] ?? '') === panel && String(candidate[category] ?? '') === name,
+          (byMetric || String(candidate[facet ?? ''] ?? '') === panel) &&
+          String(candidate[category] ?? '') === name,
       );
-      return row === undefined ? null : numberAt(row, measure);
+      return row === undefined ? null : numberAt(row, byMetric ? panel : measure);
     });
 
   const series = panels.map(valuesFor);
 
-  // Synchronised unless the chart says otherwise.
-  const shared = spec.options?.['sharedScale'] !== false;
+  // Synchronised unless the chart says otherwise; by metric, each its own,
+  // as one scale for two units would say nothing true.
+  const shared = !byMetric && spec.options?.['sharedScale'] !== false;
   const everyValue = series.flat().filter((value) => value !== null);
   const sharedMax = everyValue.length === 0 ? undefined : Math.max(...everyValue);
 
@@ -97,8 +110,9 @@ export function trellisOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS)
   };
 
   // A panel of time is titled, and a category of time labelled, by its
-  // granularity (AC-188); each keeps its raw value as its name.
-  const panelTitle = nameWriter(spec, facet);
+  // granularity (AC-188); each keeps its raw value as its name. A metric's
+  // panel by the metric, as a legend names it (AC-220).
+  const panelTitle = byMetric ? (panel: string) => labelOf(spec, panel) : nameWriter(spec, facet);
   const categoryTime = modelWriter(spec, category);
 
   return {
@@ -109,8 +123,10 @@ export function trellisOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS)
       left: place(index).left,
       top: `${String(GAP_PERCENT + Math.floor(index / columns) * (cellHeight + GAP_PERCENT))}%`,
       textStyle: { fontSize: 12 },
-      // The hook AC-091 needs to mark a whole panel from its header.
-      triggerEvent: true,
+      // The hook AC-091 needs to mark a whole panel from its header. A
+      // metric's header names no value to mark by (T510): its bars mark by
+      // their category, as a bar's do.
+      triggerEvent: !byMetric,
     })),
     xAxis: panels.map((_, index) => ({
       gridIndex: index,
@@ -124,8 +140,13 @@ export function trellisOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS)
       ...(shared && sharedMax !== undefined ? { min: 0, max: sharedMax } : {}),
       // The measure's format on every panel's values (AC-046, T195). A trellis
       // has an array of axes, which the shared axis settings leave alone, so
-      // it wore none at all.
-      axisLabel: { formatter: formatterFor(measure, spec.formats ?? {}) },
+      // it wore none at all. By metric, each panel its own metric's (T510).
+      axisLabel: {
+        formatter: formatterFor(
+          byMetric ? (panels[index] ?? measure) : measure,
+          spec.formats ?? {},
+        ),
+      },
     })),
     series: panels.map((panel, index) => ({
       type: 'bar' as const,

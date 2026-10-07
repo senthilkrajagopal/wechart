@@ -1,3 +1,5 @@
+import { undrawnOf } from '@wechart/core';
+
 import { isLegal } from './legality';
 import { pieSlicesField } from './slices';
 import type { Candidate, ChartType, Field, Signature } from './types';
@@ -40,6 +42,29 @@ const timesOf = (signature: Signature) =>
 
 /** Unknown cardinality is treated as large: the optimistic guess is the one that misleads. */
 const cardinality = (field: Field | undefined) => field?.cardinality ?? Number.POSITIVE_INFINITY;
+
+/** A measure's scale, a plain number where unknown (T510). */
+const scaleOfField = (field: Field) => field.scale ?? 'number';
+
+/** How many scales the measures are on. */
+const onScales = (measures: readonly Field[]) => new Set(measures.map(scaleOfField)).size;
+
+/**
+ * The metrics a candidate's form leaves undrawn (T510): as `undrawnOf` in
+ * @wechart/core says it for the drawn chart, so the editor's pills and the
+ * pick agree. A one-axis form split by colour, or small multiples panelled
+ * by a member, draw their first metric alone.
+ */
+function dropsOf(candidate: Candidate, signature: Signature): number {
+  const measures = measuresOf(signature);
+  const scales = new Map(measures.map((field) => [field.name, scaleOfField(field)]));
+  return undrawnOf({
+    chartType: candidate.chartType,
+    measures: measures.map((field) => field.name),
+    split: candidate.colorField !== undefined || candidate.facetField !== undefined,
+    scaleOf: (member) => scales.get(member) ?? 'number',
+  }).length;
+}
 
 function build(chartType: ChartType, parts: Partial<Candidate>): Candidate {
   return {
@@ -160,6 +185,16 @@ export function enumerate(signature: Signature): Candidate[] {
     }
   }
 
+  /**
+   * Metrics on different scales, by one grouping: small multiples, a panel
+   * per metric, each on its own scale (T510; UX-057, the user's option (a)).
+   * Two groupings leave no one axis to draw each panel along.
+   */
+  const [grouping, another] = [...times, ...dimensions];
+  if (grouping !== undefined && another === undefined && onScales(measures) > 1) {
+    candidates.push(build('trellis', { valueFields: measures, categoryField: grouping }));
+  }
+
   // Two measures against each other.
   if (measures.length >= 2) {
     candidates.push(
@@ -248,6 +283,34 @@ export const SOFT_RULES: readonly SoftRule[] = [
     weight: 0,
     applies: (candidate) => candidate.chartType === 'kpi',
   },
+  {
+    /**
+     * Metrics on different scales: Auto never picks a form that drops one
+     * (T510; UX-057, design 01-5 item 5; R67). One that leaves a metric out —
+     * a second on another scale, or past the one a pie, a KPI or a split bar
+     * draws — costs more than a table, which draws them all. Offered still, as
+     * a runner-up, its pill saying "not drawn" when chosen. Of one scale, the
+     * picks stand: whether Auto should avoid dropping those too is open.
+     */
+    name: 'drops_a_metric',
+    weight: 20,
+    applies: (candidate, signature) =>
+      onScales(measuresOf(signature)) > 1 && dropsOf(candidate, signature) > 0,
+  },
+  {
+    /**
+     * Two measures on different scales with nothing to group by are one row:
+     * a scatter of them is one point, which a table says better (T510, where
+     * a KPI of the first no longer wins for dropping the second). Ours.
+     */
+    name: 'scatter_of_one_point',
+    weight: 13,
+    applies: (candidate, signature) =>
+      candidate.chartType === 'scatter' &&
+      onScales(measuresOf(signature)) > 1 &&
+      dimensionsOf(signature).length === 0 &&
+      timesOf(signature).length === 0,
+  },
 ];
 
 export function score(candidate: Candidate, signature: Signature): number {
@@ -281,7 +344,13 @@ const REASONS: Record<ChartType, string> = {
 };
 
 function reasonFor(candidate: Candidate): string {
-  const reason = REASONS[candidate.chartType];
+  // Small multiples by metric, not by a member (T510).
+  const reason =
+    candidate.chartType === 'trellis' &&
+    candidate.facetField === undefined &&
+    candidate.valueFields.length > 1
+      ? 'One small chart per metric, each on its own scale.'
+      : REASONS[candidate.chartType];
   return reason.length <= MAX_REASON_LENGTH ? reason : `${reason.slice(0, MAX_REASON_LENGTH - 1)}…`;
 }
 

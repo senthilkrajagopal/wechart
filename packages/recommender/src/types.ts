@@ -20,6 +20,13 @@ export interface Field {
    * reads the answer; how it was reached is Cube's and the model's.
    */
   readonly countryCodes?: boolean;
+  /**
+   * The scale a measure's format puts its values on (T510; `scaleOf` in
+   * @wechart/core): money in its currency, a share or a plain number, where
+   * the caller knows its format. Measures of different scales can't share
+   * one value axis. None reads as a plain number.
+   */
+  readonly scale?: string;
 }
 
 export interface Signature {

@@ -181,8 +181,9 @@ export function tooltipFor(spec: RenderSpec): EChartsOption {
   // One formatter per series, in series order, so each value is written the
   // way its own member declares rather than the way the first one does.
   const formatters = measures.map((measure) => formatterFor(measure, formats));
-  // A trellis has one measure and one series per panel, so past the first
-  // panel every series falls back to that measure's formatter.
+  // A trellis panelled by a member has one measure and one series per panel,
+  // so past the first panel every series falls back to that measure's
+  // formatter. One panelled by metric names each series by its metric (T510).
   const fallback = formatterFor(measures[0] ?? '', formats);
   /**
    * Split by colour, a chart draws its first measure once per member of the

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { TileLoadError } from '../query/loadTile';
 import { recommendedTypeOf } from '../query/signature';
-import { formatsFrom, tileChartOf, withFormats } from './chartSpec';
+import { formatsFrom, pickedWithFormats, tileChartOf, withFormats } from './chartSpec';
 import { NOTHING_CHOSEN } from './edit/templates';
 
 /**
@@ -104,6 +104,77 @@ describe('a chart with no saved type', () => {
     const chart = await tileChartOf(document, loading(many).load);
 
     expect(typeDrawn(chart)).toBe(recommendedTypeOf(spec, many));
+  });
+});
+
+/**
+ * T510 (R67, the user: "Pass formats to dashboards"): measures on different
+ * scales are drawn as small multiples, which the pick can tell only from the
+ * model's formats. A tile picks with them, as the editor does (T193), and
+ * never waits for them (T194; T510's review): one drawn before they came is
+ * picked again as it is drawn, from the rows as Cube answered them.
+ */
+describe('the pick with the model’s formats (T510)', () => {
+  const twoScales = chartOf({ measures: ['orders.count', 'orders.amount'] });
+  const scaleRows = rows.map((row, at) => ({ ...row, 'orders.amount': 1000 * (at + 1) }));
+  const formats = { 'orders.amount': { name: 'currency', specifier: '$,.2~f' } };
+  const twoScalesSpec = {
+    ...emptySpec('orders'),
+    measures: ['orders.count', 'orders.amount'],
+    dimensions: ['orders.status'],
+  };
+
+  it('picks as the editor does with them: small multiples for measures on two scales', async () => {
+    const chart = await tileChartOf(twoScales, loading(scaleRows).load, formats);
+    expect(typeDrawn(chart)).toBe('trellis');
+    expect(recommendedTypeOf(twoScalesSpec, scaleRows, formats)).toBe('trellis');
+  });
+
+  it('picks a tile drawn before the formats came again once they have', async () => {
+    const before = await tileChartOf(twoScales, loading(scaleRows).load);
+    if (!('spec' in before)) throw new Error('not drawn');
+    expect(before.spec.chartType).toBe(recommendedTypeOf(twoScalesSpec, scaleRows));
+    expect(before.spec.chartType).not.toBe('trellis');
+
+    const after = pickedWithFormats(before.spec, twoScales, formats);
+    expect(after.chartType).toBe('trellis');
+    expect(after.rows).toEqual(scaleRows);
+  });
+
+  it('picks again from the rows as answered, not from rows Top N already folded', async () => {
+    const many = Array.from({ length: 5 }, (_, at) => ({
+      'orders.status': `s${String(at)}`,
+      'orders.count': 50 - at,
+      'orders.amount': 1000 * (at + 1),
+    }));
+    const topTwo: ChartDocument = {
+      ...twoScales,
+      chart: { ...twoScales.chart, options: { topN: 2 } },
+    };
+    const before = await tileChartOf(topTwo, loading(many).load);
+    if (!('spec' in before)) throw new Error('not drawn');
+    const after = pickedWithFormats(before.spec, topTwo, formats);
+    // Two kept and one "Other (3)", as once: folded again, it would be "Other (1)".
+    expect(after.rows.map((row) => row['orders.status'])).toEqual(
+      before.spec.rows.map((row) => row['orders.status']),
+    );
+  });
+
+  it('leaves a chart whose type was chosen, of one measure, or with no formats yet', async () => {
+    const chosen = await tileChartOf(
+      chartOf({ measures: ['orders.count', 'orders.amount'], chartType: 'bar' }),
+      loading(scaleRows).load,
+    );
+    if (!('spec' in chosen)) throw new Error('not drawn');
+    const chosenDocument = chartOf({
+      measures: ['orders.count', 'orders.amount'],
+      chartType: 'bar',
+    });
+    expect(pickedWithFormats(chosen.spec, chosenDocument, formats)).toBe(chosen.spec);
+    const one = await tileChartOf(chartOf(), loading(rows).load);
+    if (!('spec' in one)) throw new Error('not drawn');
+    expect(pickedWithFormats(one.spec, chartOf(), formats)).toBe(one.spec);
+    expect(pickedWithFormats(one.spec, twoScales, undefined)).toBe(one.spec);
   });
 });
 
@@ -233,7 +304,10 @@ describe('number formats (AC-046)', () => {
    */
   it('writes a calculated measure as its calculation is written, not as the measure is', () => {
     const formats = { 'orders.total_amount': 'currency' };
-    const share = { ...drawn(), calculated: { 'orders.total_amount': { label: '% of total', format: 'percent' } } } as const;
+    const share = {
+      ...drawn(),
+      calculated: { 'orders.total_amount': { label: '% of total', format: 'percent' } },
+    } as const;
 
     const specs = withFormats({ share }, formats);
 

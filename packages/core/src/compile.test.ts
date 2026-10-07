@@ -123,6 +123,22 @@ describe('the default encoding of the types that read their channels differently
     expect(defaultEncoding(twoMeasuresTwoDimensions.chart, 'trellis').y).toEqual(['orders.count']);
   });
 
+  /**
+   * T510 (UX-057; the user's option (a)): with one grouping and two or more
+   * metrics, small multiples draw a panel per metric, each on its own scale.
+   */
+  it('draws small multiples a panel per metric where there is one grouping and several', () => {
+    const byStatus = documentFor((spec) => {
+      let next = addToWell(spec, 'measures', 'orders.count');
+      next = addToWell(next, 'measures', 'orders.total');
+      return addToWell(next, 'dimensions', 'orders.status');
+    });
+    expect(defaultEncoding(byStatus.chart, 'trellis')).toEqual({
+      x: ['orders.status'],
+      y: ['orders.count', 'orders.total'],
+    });
+  });
+
   // T242's review: a pivot reads rows and columns, which nothing filled.
   it('lays a pivot’s groupings down its rows and across its columns', () => {
     expect(defaultEncoding(twoMeasuresTwoDimensions.chart, 'pivot')).toEqual({
@@ -196,6 +212,12 @@ describe('compiling a saved document', () => {
     // quietly exempt from the cap (AC-041).
     const compiled = compile(many, { rows, chartType: 'bar' });
     expect(compiled.rows.map((row) => row['orders.status'])).toEqual(['a', 'b', 'Other (2)']);
+    /**
+     * T510's review: the rows as Cube answered them stay with it, so a chart
+     * picked again once the model's formats arrive is compiled from them, not
+     * from rows already folded, which a second Top N would fold again.
+     */
+    expect(compiled.answeredRows).toBe(rows);
   });
 
   // T390, AC-041: a row limit drops the rows past it, as they are drawn:

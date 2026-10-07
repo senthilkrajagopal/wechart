@@ -120,6 +120,13 @@ export interface RenderSpec {
   /** Cube's result rows, keyed by member name. */
   readonly rows: readonly Record<string, unknown>[];
   /**
+   * The rows as Cube answered them, before Top N, the sort and the row limit
+   * shaped `rows` (T510's review): what a chart whose type the recommender
+   * picks is compiled again from, once the model's formats can change the
+   * pick. Never drawn.
+   */
+  readonly answeredRows?: readonly Record<string, unknown>[];
+  /**
    * Series colours in assignment order. Handed in rather than looked up so
    * the same member can keep one colour across a whole dashboard (AC-039),
    * which is a decision about the dashboard, not about one chart.

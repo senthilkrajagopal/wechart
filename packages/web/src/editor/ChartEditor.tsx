@@ -6,11 +6,13 @@ import {
   compile,
   emptySpec,
   isEmpty,
+  onOneScale,
   removeFromWell,
   granularitiesOf,
   seriesOf,
   toCubeQuery,
   toUnderlyingQuery,
+  undrawnMeasures,
   wellFor,
   type ChartSpec,
   type SortSettings,
@@ -452,7 +454,9 @@ function EditorBody({
   });
   const signature: Signature = useMemo(
     () => ({
-      ...signatureOf(spec, rows, countryMarking),
+      // Each measure's scale from the model's formats: metrics on different
+      // scales are drawn as small multiples (T510, R67), as on a tile.
+      ...signatureOf(spec, rows, countryMarking, formats),
       // More than half a bar's labels hidden at that size: the horizontal bar
       // offered second (T516; R67). The pick itself never turns on it.
       hiddenLabels: hiddenLabelsAt(previewDocument, rows, drawnAt, formats),
@@ -550,11 +554,28 @@ function EditorBody({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [spec, shownType, result.isSuccess, previewDocument, rows, formats, titles, shortTitles],
   );
+  /**
+   * The metrics the form drawn leaves undrawn (T510; UX-057, design 01-5;
+   * R67), which the Metrics well says, with the forms that draw them: Small
+   * multiples where one grouping lets a panel per metric draw them all, and
+   * Table. Choosing one is a manual choice, focus going to Change.
+   */
+  const undrawn = useMemo(
+    () => (drawnSpec === undefined ? [] : undrawnMeasures(drawnSpec)),
+    [drawnSpec],
+  );
+  const byMetric =
+    spec.measures.length > 1 && spec.dimensions.length + spec.timeDimensions.length === 1;
+  const chooseAndReturn = (type: ChartType) => {
+    setChartTypeState(chooseType(type));
+    changeType.current?.focus();
+  };
   /** Its series, each with how a reader knows it: a member's title, or the value. */
   const drawnSeries = useMemo(() => {
     if (drawnSpec === undefined) return [];
     try {
-      return seriesOf(drawnSpec).series.map((one) => ({
+      // As drawn: a metric on another scale isn't a series to style (T510).
+      return seriesOf(onOneScale(drawnSpec)).series.map((one) => ({
         name: one.name,
         // Own keys only: a split's value may be "constructor" (T232's review).
         title: (Object.hasOwn(titles, one.name) ? titles[one.name] : undefined) ?? one.name,
@@ -904,6 +925,16 @@ function EditorBody({
                       },
                     }
                   : {})}
+                undrawn={
+                  undrawn.length === 0 || shownType === null
+                    ? undefined
+                    : {
+                        metrics: undrawn,
+                        drawnAs: CHART_TYPE_NAMES[shownType],
+                        onSmallMultiples: byMetric ? () => chooseAndReturn('trellis') : undefined,
+                        onTable: () => chooseAndReturn('table'),
+                      }
+                }
                 topN={topN}
                 onTopN={(n) => setOption('topN', n)}
                 tail={options['tail'] === 'drop' ? 'drop' : undefined}
