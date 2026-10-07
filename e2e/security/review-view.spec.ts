@@ -398,6 +398,16 @@ test.describe('deciding a proposal in its review view (T356, AC-288)', () => {
       const reason = inspector.getByLabel(/Reason/);
       await expect(reason).toBeFocused();
       await reason.fill(REASON);
+      // T405's follow-up (AC-176, rule 85): Esc from the step's Cancel asks
+      // first over a typed reason; Esc over the question keeps it.
+      await inspector.getByRole('button', { name: 'Cancel' }).focus();
+      await page.keyboard.press('Escape');
+      const question = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+      await expect(question.getByRole('button', { name: 'Keep editing' })).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(question).toHaveCount(0);
+      await expect(reason).toBeFocused();
+      await expect(reason).toHaveValue(REASON);
       await expect(inspector.getByTestId('reason-counter')).toHaveText(
         `${String([...REASON].length)} / 1,000`,
       );

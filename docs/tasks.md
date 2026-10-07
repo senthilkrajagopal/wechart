@@ -8684,7 +8684,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - The audit trail's record inspector closes on Escape. Its Event picker takes focus on its first kind as it opens.
       - Generate cubes' Type filter takes focus on its first choice as it opens. `GenerateCubes.test.tsx` now opens it and then focuses the pill to test Escape from there.
       - Shared pieces: `shell/useReturnFocus.ts`, which gives focus back to the opener only where it fell to the page, and `shell/DiscardQuestion.tsx`, in the wording the dashboard settings page already uses.
-      - **Follow-ups, left while their agents work there:** the Bookmarks name dialog (Save, Save a copy, Rename) closes on Escape without asking; DecisionPanel's Reject takes Escape only from its text box.
+      - **Follow-ups, left while their agents work there:** the Bookmarks name dialog (Save, Save a copy, Rename) closes on Escape without asking; DecisionPanel's Reject takes Escape only from its text box. *Both built 2026-10-07, below.*
     - **T307's chart actions:**
       - **Cross-filtering from the keyboard,** on a chart whose click means a category (bar, line, area, pie, donut, treemap, heatmap, map). On a focused tile, the arrows move between its categories without filtering. The move is said in its own polite region, `cross-filter-announcer`: a cross-filtering dashboard says nothing of markings (AC-120). Space filters the other tiles by the focused item, as a click does, and on the item it filters by takes it back. Escape clears, as before. The ring is T306's, and the tile's name lists the keys.
       - **A table tile's rows** (`DataTable.tsx`), where they can be marked (a primary key). From the table's region the arrows, Home and End take focus to a row and move it, marking nothing. Space marks it as a click does; Shift and Space mark the range from the anchor, as a Shift-click does. The focused row has a 2 px accent ring, distinct from a marked row's rule.
@@ -8700,6 +8700,27 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **Tests:**
       - unit: `ProposeDialog`, `EditInWorkspaceDialog`, `NewItemDialog`, `restore`, `ExportPane`, `AuditTrail`, `GenerateCubes`, `rowMarking` and `useReturnFocus`;
       - e2e: `crossfilter.spec.ts` "cross-filters from the keyboard…" and `markings.spec.ts` "a table's rows mark from the keyboard…".
+  - **The follow-ups, built 2026-10-07** (rule 85). Each asks "Discard your changes?" in the app's one wording (`DiscardQuestion`); Esc over the question keeps editing.
+    - **The Bookmarks name dialog** (Save bookmark…, Save a copy to mine…, Rename…): Esc and Cancel close it at once while the name is as it opened, and ask first once it was changed (`Bookmarks.test.tsx`, failing first; `security/bookmarks.spec.ts`).
+    - **DecisionPanel's Reject:** Esc closes its step from anywhere in it, its Cancel and Reject buttons too, not only its text box. With a reason typed it asks first, as Cancel now does; discarded, the reason goes, and focus goes back to Reject… (`DecisionPanel.test.tsx`, failing first; `security/review-view.spec.ts`).
+  - **And from a read-only audit of every surface for AC-176:** the option the keys are on in the cube and field picker (T475, T633) and in the Access panel's AD-group picker (T473) was drawn in the hover's shade alone, nothing telling it from a hovered one. It now has the search palette's soft accent and accent ink, and a 3 px bar in the accent at its start, which is what clears 3:1 against the list (`field-list.spec.ts`, failing first; `security/access.spec.ts`).
+  - **The cold review (FAIL) found three bugs, all fixed:**
+    1. Bookmarks drew its question inside the name dialog's trapped box, so Tab from "Discard changes" went to the name under it. It is now drawn beside the dialog, as ProposeDialog's is (`Bookmarks.test.tsx` tabs through it, failing first).
+    2. On the AD-group picker's active row, the hint stayed text-muted: 4.28:1 on the dark tint, under AC-005's 4.5:1. It is text-secondary there (`security/access.spec.ts`).
+    3. A question asked while a reject was on its way outlived the step. It now goes as the reject is done or refused (`DecisionPanel.test.tsx`, failing first).
+    - Also from it, as tests: Cancel asks in the Reject step; a discarded reason is gone when the step opens again; an untouched Rename closes on Esc at once.
+  - **Still pointer-only, so T405 and AC-176 stay open.** Proposed as new tasks; how is for the user:
+    - **Range marking** (a drag along an axis, `onMarkRange`), whose bounds survive filtering and match pre-aggregations, can't be made from the keyboard. The tile's keys mark items, and Shift+arrows a run of items, never a range.
+      - (a) A "Mark range…" entry in the tile's ⋯ menu, asking a from and a to. *Recommended:* it reaches the range's one form, as typed bounds.
+      - (b) Shift+arrows in range mode extend a range rather than a run of items.
+      - (c) Leave it: the run of items is enough.
+    - **A review's YAML diff:** its "N unchanged lines" bars (`@codemirror/merge`'s `collapseUnchanged`) open only on a click: a plain div, no tabindex, no key.
+      - (a) A "Show all lines" toggle beside the diff. *Recommended:* it's a control of the app's own, in its focus order.
+      - (b) Turn the collapsing off.
+  - **Seen by the audit, not gaps:**
+    - the selected tile in edit mode looks as a focused tile does;
+    - a disabled item's reason in a `MenuButton` is in its `title` alone;
+    - direction.md's promised ⌘Z, F6, `/` and Ctrl+M aren't bound, though each action has its button or entry.
 - [ ] T631 (AC-176, AC-090, AC-091) Mark or cross-filter a series or a trellis panel from the tile's ⋯ menu *(added 2026-10-04, R63)*
   - Files: `dashboard/TileViewMenu.tsx`, `dashboard/DashboardView.tsx`
   - Failing test: `TileViewMenu.test.tsx`: the tile's menu offers "Mark series ›" and "Mark panel ›" in its marked group, or "Filter by series ›" and "Filter by panel ›" first in cross-filter mode, each listing the tile's series or panels, and none where it has none. e2e: `keyboard-coverage.spec.ts` marks a whole series from the menu by the keyboard alone; `crossfilter.spec.ts` cross-filters by a series and by a panel the same way (AC-176).

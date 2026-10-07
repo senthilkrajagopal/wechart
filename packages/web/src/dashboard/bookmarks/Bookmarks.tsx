@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
+import { DiscardQuestion } from '../../shell/DiscardQuestion';
 import { MenuButton, type MenuItem } from '../../shell/MenuButton';
 import { StateLine } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
@@ -549,6 +550,21 @@ function NameDialog({
     field.current?.focus();
   }, []);
 
+  /**
+   * Esc and Cancel close it, asking first where a name was typed (T405's
+   * follow-up; rule 85); Esc over the question keeps editing.
+   */
+  const [asking, setAsking] = useState(false);
+  const keepEditing = () => {
+    setAsking(false);
+    field.current?.focus();
+  };
+  const requestClose = () => {
+    if (asking) keepEditing();
+    else if (name !== initial) setAsking(true);
+    else onClose();
+  };
+
   const named = name.trim();
   const save = () => {
     if (named === '' || run.kind === 'run') return;
@@ -566,8 +582,8 @@ function NameDialog({
       });
   };
 
-  return (
-    <Modal title={title} className="save-bookmark" onClose={onClose}>
+  const dialog = (
+    <Modal title={title} className="save-bookmark" onClose={requestClose}>
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -590,7 +606,7 @@ function NameDialog({
         {run.kind === 'err' ? <StateLine kind="err">{run.text}</StateLine> : null}
         {/* The dialog pattern (T466, UX-106): Cancel beside the one primary. */}
         <div className="dialog__actions">
-          <button type="button" onClick={onClose}>
+          <button type="button" onClick={requestClose}>
             Cancel
           </button>
           <button
@@ -603,6 +619,20 @@ function NameDialog({
         </div>
       </form>
     </Modal>
+  );
+  // The question beside the dialog, never in it, so the dialog's trap leaves
+  // Tab to it (`DiscardQuestion`; T405's review).
+  return (
+    <>
+      {dialog}
+      {asking ? (
+        <DiscardQuestion
+          body="The name you typed isn’t kept."
+          onKeep={keepEditing}
+          onDiscard={onClose}
+        />
+      ) : null}
+    </>
   );
 }
 

@@ -2280,8 +2280,16 @@ a.btn-primary.btn-sm { min-height: 24px; height: 24px; padding: 0 8px; }
   cursor: pointer;
 }
 .group-combobox__option code { font-family: var(--wc-font-code); font-size: var(--wc-text-xs-size); }
-.group-combobox__option:hover,
-.group-combobox__option[aria-selected='true'] { background: var(--wc-bg-hover); }
+.group-combobox__option:hover { background: var(--wc-bg-hover); }
+/* As the cube picker's: the option the keys are on, seen (AC-176; T405's
+   audit). Its hint in text-secondary there: text-muted is 4.28:1 on the dark
+   tint (tokens.ts; AC-005, T405's review). */
+.group-combobox__option[aria-selected='true'] {
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-accent);
+  box-shadow: inset 3px 0 0 var(--wc-accent);
+}
+.group-combobox__option[aria-selected='true'] .group-combobox__hint { color: var(--wc-text-secondary); }
 .group-combobox__option.is-typed { margin-top: 4px; border-top: 1px solid var(--wc-border-subtle); border-radius: 0 0 4px 4px; }
 .group-combobox__hint { margin-left: auto; color: var(--wc-text-muted); }
 /* States C and G: a notice or error band in the panel, icon and words. */
@@ -8298,8 +8306,16 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
   font-size: var(--wc-text-sm-size);
   cursor: pointer;
 }
-.cube-picker__option:hover,
-.cube-picker__option[aria-selected='true'] { background: var(--wc-bg-hover); }
+.cube-picker__option:hover { background: var(--wc-bg-hover); }
+/* The option the keys are on (AC-176; T405's audit and review): the hover's
+   shade alone told it from hover by nothing. Now the search palette's soft
+   accent and accent ink, and a 3 px bar in the accent at its start, the part
+   past 3:1 against the list. */
+.cube-picker__option[aria-selected='true'] {
+  background: var(--wc-bg-accent-soft);
+  color: var(--wc-accent);
+  box-shadow: inset 3px 0 0 var(--wc-accent);
+}
 .cube-picker__kind {
   display: inline-grid;
   place-items: center;

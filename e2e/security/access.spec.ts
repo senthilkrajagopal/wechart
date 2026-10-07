@@ -171,6 +171,24 @@ test.describe('as a Super-Admin', () => {
     const used = page.getByRole('listbox').getByRole('group', { name: 'Used on other folders' });
     await expect(used.getByRole('option')).toHaveText([`${P_ONLY}${P}`]);
     await picker.press('ArrowDown');
+    // The option the keys are on, seen in the soft accent with the accent's
+    // bar at its start (AC-176; T405's audit), its hint still readable on
+    // it, in text-secondary (AC-005; T405's review).
+    const drawn = await page.evaluate(() => {
+      const probe = document.createElement('span');
+      probe.style.background = 'var(--wc-bg-accent-soft)';
+      probe.style.boxShadow = 'inset 3px 0 0 var(--wc-accent)';
+      probe.style.color = 'var(--wc-text-secondary)';
+      document.body.append(probe);
+      const said = getComputedStyle(probe);
+      const all = { background: said.backgroundColor, bar: said.boxShadow, hint: said.color };
+      probe.remove();
+      return all;
+    });
+    const active = used.getByRole('option', { selected: true });
+    await expect(active).toHaveCSS('background-color', drawn.background);
+    await expect(active).toHaveCSS('box-shadow', drawn.bar);
+    await expect(active.locator('.group-combobox__hint')).toHaveCSS('color', drawn.hint);
     await picker.press('Enter');
     await expect(
       readOnly.getByRole('listitem', { name: new RegExp(P_ONLY) }).getByText('Adding'),

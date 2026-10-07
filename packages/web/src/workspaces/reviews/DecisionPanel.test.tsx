@@ -107,6 +107,76 @@ describe('deciding a proposal (T356)', () => {
     );
   });
 
+  /**
+   * T405's follow-up (AC-176; rule 85): Esc closes Reject's step from
+   * anywhere in it, back on Reject…, asking first when a reason was typed.
+   */
+  it('closes Reject’s step on Esc from anywhere in it, asking first over a typed reason', async () => {
+    const { fetchMock } = shown(proposal({}), { status: 200, body: { status: 'rejected' } });
+    const opener = screen.getByRole('button', { name: 'Reject…' });
+    await userEvent.click(opener);
+    // From its Cancel, nothing typed: closed at once.
+    screen.getByRole('button', { name: 'Cancel' }).focus();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByLabelText(/Reason/)).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Reject…' }));
+
+    // A reason typed: Esc from its Reject button asks first.
+    await userEvent.click(screen.getByRole('button', { name: 'Reject…' }));
+    await userEvent.type(screen.getByLabelText(/Reason/), 'Keep the median.');
+    screen.getByRole('button', { name: 'Reject' }).focus();
+    await userEvent.keyboard('{Escape}');
+    const question = screen.getByRole('alertdialog', { name: 'Discard your changes?' });
+    expect(document.activeElement).toBe(
+      within(question).getByRole('button', { name: 'Keep editing' }),
+    );
+    // Esc over the question keeps editing, the reason kept.
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect((screen.getByLabelText(/Reason/) as HTMLTextAreaElement).value).toBe('Keep the median.');
+    expect(document.activeElement).toBe(screen.getByLabelText(/Reason/));
+    // Cancel asks too; discarded, the step closes, back on Reject…, nothing sent.
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+    expect(screen.queryByLabelText(/Reason/)).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Reject…' }));
+    expect(fetchMock).not.toHaveBeenCalled();
+    // Opened again, the discarded reason is gone.
+    await userEvent.click(screen.getByRole('button', { name: 'Reject…' }));
+    expect((screen.getByLabelText(/Reason/) as HTMLTextAreaElement).value).toBe('');
+  });
+
+  // T405's review: a question asked while the reject is on its way goes with its step.
+  it('lets the question go once the reject it was asked over is done', async () => {
+    let answer: (value: Response) => void = () => undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            answer = resolve;
+          }),
+      ),
+    );
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <DecisionPanel proposal={proposal({})} onDecided={vi.fn()} />
+      </QueryClientProvider>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Reject…' }));
+    await userEvent.type(screen.getByLabelText(/Reason/), 'Keep the median.');
+    await userEvent.click(screen.getByRole('button', { name: 'Reject' }));
+    await userEvent.keyboard('{Escape}');
+    expect(
+      screen.getByRole('alertdialog', { name: 'Discard your changes?' }).textContent,
+    ).toContain('The reason you typed isn’t kept.');
+    answer(new Response(JSON.stringify({ status: 'rejected' }), { status: 200 }));
+    await vi.waitFor(() => {
+      expect(screen.queryByLabelText(/Reason/)).toBeNull();
+    });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
   it('names self-approval for the author, and withdrawing for their reject', async () => {
     shown(proposal({ yours: true }), { status: 200, body: {} });
     expect(

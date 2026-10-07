@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 
+import { DiscardQuestion } from '../../shell/DiscardQuestion';
 import { PROPOSAL_TEXT_LIMIT } from '../explore/ProposeDialog';
 import { Refusal } from './Refusal';
 import { DecisionRefused, decide, shownItems, type ProposalDetail } from './review';
@@ -32,6 +33,8 @@ export function DecisionPanel({
   const client = useQueryClient();
   const [step, setStep] = useState<'idle' | 'confirming' | 'rejecting'>('idle');
   const [reason, setReason] = useState('');
+  /** "Discard your changes?" asked over a typed reason (rule 85; below). */
+  const [asking, setAsking] = useState(false);
   const approveButton = useRef<HTMLButtonElement>(null);
   const rejectButton = useRef<HTMLButtonElement>(null);
   const folder = folderText(proposal.targetPath);
@@ -46,6 +49,8 @@ export function DecisionPanel({
       // An approval may resolve calculation requests (T385, AC-052).
       if (action === 'approve') void client.invalidateQueries({ queryKey: ['calc-requests'] });
       setStep('idle');
+      // A question asked while it was on its way goes with its step (T405's review).
+      setAsking(false);
       if (action === 'approve') {
         const first = answer.landed?.find((each) => each.kind === proposal.kind);
         onDecided(
@@ -62,6 +67,7 @@ export function DecisionPanel({
     },
     onError: () => {
       setStep('idle');
+      setAsking(false);
     },
   });
 
@@ -103,6 +109,44 @@ export function DecisionPanel({
     };
   }, [step]);
 
+  /**
+   * Reject's step closes on Esc from anywhere in it, and on Cancel, asking
+   * first where a reason was typed (T405's follow-up; rule 85); Esc over
+   * the question keeps editing.
+   */
+  const rejectBox = useRef<HTMLDivElement>(null);
+  const keepEditing = () => {
+    setAsking(false);
+    reasonField.current?.focus();
+  };
+  const discard = () => {
+    setAsking(false);
+    setReason('');
+    setStep('idle');
+  };
+  const requestClose = () => {
+    if (reason.trim() !== '') setAsking(true);
+    else discard();
+  };
+  const escape = useRef(requestClose);
+  useEffect(() => {
+    escape.current = asking ? keepEditing : requestClose;
+  });
+  useEffect(() => {
+    if (step !== 'rejecting') return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      const box = rejectBox.current;
+      if (!asking && (box === null || !box.contains(document.activeElement))) return;
+      event.preventDefault();
+      escape.current();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [step, asking]);
+
   const length = [...reason].length;
   const over = length > PROPOSAL_TEXT_LIMIT;
   const [first, ...others] = shownItems(proposal);
@@ -139,7 +183,7 @@ export function DecisionPanel({
       ) : null}
 
       {step === 'rejecting' ? (
-        <div className="field review-decision__reason">
+        <div ref={rejectBox} className="field review-decision__reason">
           <div className="propose-dialog__label-row">
             <label htmlFor={`${ids}-reason`}>
               Reason <span className="propose-dialog__optional">· optional</span>
@@ -161,12 +205,6 @@ export function DecisionPanel({
             onChange={(event) => {
               setReason(event.target.value);
             }}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') {
-                event.preventDefault();
-                setStep('idle');
-              }
-            }}
           />
           {over ? (
             <p id={`${ids}-over`} className="propose-dialog__over">
@@ -174,13 +212,7 @@ export function DecisionPanel({
             </p>
           ) : null}
           <div className="review-decision__actions">
-            <button
-              type="button"
-              className="btn"
-              onClick={() => {
-                setStep('idle');
-              }}
-            >
+            <button type="button" className="btn" onClick={requestClose}>
               Cancel
             </button>
             <button
@@ -279,6 +311,13 @@ export function DecisionPanel({
           ) : null}
         </div>
       )}
+      {asking ? (
+        <DiscardQuestion
+          body="The reason you typed isn’t kept."
+          onKeep={keepEditing}
+          onDiscard={discard}
+        />
+      ) : null}
     </div>
   );
 }

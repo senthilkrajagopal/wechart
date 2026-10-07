@@ -27,6 +27,31 @@ test('lists the cubes and views from the model', async ({ page }) => {
   expect(options).toContain('Orders');
   expect(options).toContain('Customers');
   expect(options).toContain('Products');
+
+  /**
+   * AC-176 (T405's audit): the option the keys are on is seen, as the search
+   * palette's is, in the soft accent and the accent's ink, not a hover's
+   * shade a keyboard user can't tell from the list's own.
+   */
+  await page.keyboard.press('ArrowDown');
+  const active = picker.list.locator('.cube-picker__option[aria-selected="true"]');
+  await expect(active).toHaveCount(1);
+  const accent = await page.evaluate(() => {
+    const probe = document.createElement('span');
+    probe.style.background = 'var(--wc-bg-accent-soft)';
+    probe.style.color = 'var(--wc-accent)';
+    probe.style.boxShadow = 'inset 3px 0 0 var(--wc-accent)';
+    document.body.append(probe);
+    const said = getComputedStyle(probe);
+    const all = { background: said.backgroundColor, color: said.color, bar: said.boxShadow };
+    probe.remove();
+    return all;
+  });
+  await expect(active).toHaveCSS('background-color', accent.background);
+  await expect(active.locator('.cube-picker__title')).toHaveCSS('color', accent.color);
+  // And a bar in the accent at its start: the shade and ink alone are under
+  // 3:1 against the list (T405's review).
+  await expect(active).toHaveCSS('box-shadow', accent.bar);
 });
 
 test('shows a chosen cube’s members grouped by type', async ({ page }) => {

@@ -133,6 +133,59 @@ describe('Save bookmark…', () => {
     expect(within(dialog).getByRole('button', { name: 'Save' })).toHaveProperty('disabled', true);
     expect(asked.filter((each) => each.method === 'POST')).toEqual([]);
   });
+
+  /**
+   * T405's follow-up (AC-176; rule 85): Esc and Cancel close the name
+   * dialog at once while nothing is typed, and ask first over a typed name;
+   * Esc over the question keeps editing.
+   */
+  it('asks before Esc or Cancel discards a typed name', async () => {
+    const asked = api(() => new Response('{}', { status: 201 }));
+    const user = userEvent.setup();
+    render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
+    const openDialog = async () => {
+      await user.click(within(await open()).getByRole('button', { name: 'Save bookmark…' }));
+      return screen.getByRole('dialog', { name: 'Save a bookmark' });
+    };
+
+    // Nothing typed: Esc closes it at once.
+    await openDialog();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Save a bookmark' })).toBeNull();
+
+    // A name typed: Esc asks first, and Esc over the question keeps editing.
+    let dialog = await openDialog();
+    await user.type(within(dialog).getByRole('textbox', { name: 'Name' }), 'Shipped');
+    await user.keyboard('{Escape}');
+    const question = screen.getByRole('alertdialog', { name: 'Discard your changes?' });
+    expect(document.activeElement).toBe(
+      within(question).getByRole('button', { name: 'Keep editing' }),
+    );
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    dialog = screen.getByRole('dialog', { name: 'Save a bookmark' });
+    const name = within(dialog).getByRole('textbox', { name: 'Name' });
+    expect((name as HTMLInputElement).value).toBe('Shipped');
+    expect(document.activeElement).toBe(name);
+
+    // Cancel asks too, and Tab keeps to the question (T405's review: the
+    // dialog behind it took Tab, putting focus on the name under it).
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    const asking = screen.getByRole('alertdialog', { name: 'Discard your changes?' });
+    await user.tab();
+    expect(document.activeElement).toBe(
+      within(asking).getByRole('button', { name: 'Discard changes' }),
+    );
+    await user.tab();
+    expect(document.activeElement).toBe(
+      within(asking).getByRole('button', { name: 'Keep editing' }),
+    );
+    // Discarded, the dialog closes, focus back on Bookmarks, and nothing is saved.
+    await user.click(within(asking).getByRole('button', { name: 'Discard changes' }));
+    expect(screen.queryByRole('dialog', { name: 'Save a bookmark' })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Bookmarks' }));
+    expect(asked.filter((each) => each.method === 'POST')).toEqual([]);
+  });
 });
 
 /**
@@ -434,6 +487,16 @@ describe('Mine and Shared (T367, AC-293)', () => {
     await within(popover).findByRole('list', { name: 'Mine' });
     await user.click(
       within(await actionsOf(popover, 'Mine', 'EMEA')).getByRole('menuitem', { name: 'Rename…' }),
+    );
+
+    // Untouched, its name as it opened: Esc closes it at once (T405's follow-up).
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Rename the bookmark' })).toBeNull();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    const again = await open();
+    await within(again).findByRole('list', { name: 'Mine' });
+    await user.click(
+      within(await actionsOf(again, 'Mine', 'EMEA')).getByRole('menuitem', { name: 'Rename…' }),
     );
 
     const dialog = screen.getByRole('dialog', { name: 'Rename the bookmark' });

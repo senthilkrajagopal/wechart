@@ -113,6 +113,18 @@ test.describe('as a read-write member', () => {
   test.use({ role: 'writer' });
 
   test('saves a bookmark, and has it listed as theirs, "Only me"', async ({ page }) => {
+    // T405's follow-up (AC-176, rule 85): Esc over a typed name asks first,
+    // and Discard closes it, saving nothing.
+    const asked = await bookmarks(page);
+    await asked.getByRole('button', { name: 'Save bookmark…' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Save a bookmark' });
+    await dialog.getByRole('textbox', { name: 'Name' }).fill('Not kept');
+    await page.keyboard.press('Escape');
+    const question = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    await expect(question.getByRole('button', { name: 'Keep editing' })).toBeFocused();
+    await question.getByRole('button', { name: 'Discard changes' }).click();
+    await expect(dialog).toHaveCount(0);
+
     await save(page, NAME);
 
     const popover = await bookmarks(page);
