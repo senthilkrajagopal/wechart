@@ -950,6 +950,10 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R68 — two lines of design 16 kept as built** (2026-10-07, the user)
+- Q (from T610's audit): a rollup with no `refresh_key`. The design says "Cube's default · no refresh_key declared · depends on the cube's keys"; research shows Cube's hourly default. A: "Keep as built (Recommended)". *"Cube's default: every hour", with the computed runs.*
+- Q (from T610's audit): Run history's gap line, where the design says "wechart's API was stopped". A: "Keep as built (Recommended)". *"wechart didn't see how it ended".*
+
 **R67 — metrics on two scales, the dashboards' pick, and the horizontal bar** (2026-10-07, the user)
 - Q (from T510): an unsplit bar, line or area with two metrics on different scales. A: "Draw the first only (Recommended)". *The second's pill says "not drawn · on another scale", offering Small multiples and Table (design 01-5), and the axis keeps the first's format. T195's one-axis decision is superseded.*
 - Q (from T510): picking per-metric small multiples needs formats, which dashboards don't have when they pick. A: "Pass formats to dashboards (Recommended)". *The editor and the tile pick the same chart (T193).*

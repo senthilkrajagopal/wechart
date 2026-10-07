@@ -1,5 +1,11 @@
 # Handoff — 2026-09-24
 
+> **STOPPED 2026-10-07: the account's weekly limit** (it resets at 3pm, America/Los_Angeles). Both running agents stopped mid-task. feat/xcube is at the R68 commit; nothing has been deployed since 645537e.
+> - **Jobs agent** (worktree agent-a5f03f39b812af47a): T610 (the 8 items of design 16 its audit listed) is uncommitted, being written test-first. It was about to run its e2e (jobs, schedules, security jobs-scope). Then T611 (structure and behaviour), T612 (about 15 lines of wording) and T613 (about 15 icons and styling), one commit each, all listed in its last report and in tasks.md if it got that far. AC-399 ticks after them. R68 keeps two lines as built.
+> - **Group 6 agent** (worktree agent-a83beb1a6c745ebb6): T638 is uncommitted. It makes focus visible on a chosen ListSearch value, segmented controls inside overflow:hidden, the SQL toast's Undo and full-width rows, and adds Ctrl+Enter taking a marked series off. It was on review finding 3: the new contrast checks should also require a drawn outline. Then T639 (RequestCalcDialog asks on Esc and returns focus; TargetTree keeps its tab stop), T510 (R67), T476, T477 and T406. AC-176 is reticked after T638 and T639.
+> - **The user's cleanup:** `docker network rm agent-a83beb1a6c745ebb6_default; docker volume rm agent-a83beb1a6c745ebb6_wechart-meta-data`.
+> - **On resuming:** send each agent "continue", or start fresh agents on these worktrees. Check each worktree's uncommitted state before going on.
+>
 > **PAUSED AGAIN 2026-10-05 at the user's word** ("pause again.. we are close to running out of tokens.. make a build and deloy to docker-desktop. also push to public repo at ghcr.io"). Every agent has stopped.
 > - **Deployed:** docker-desktop runs **645537e** with xcube 74c933bdb8, sign-in on; all verify.sh checks passed.
 > - **Pushed to ghcr.io** (amd64 and arm64): wechart-api and wechart-web at `:645537e` and `:latest`; `xcube:latest` is 74c933bdb8.
