@@ -2292,6 +2292,12 @@ const CASES: Record<string, Case> = {
       (who) => who === 'super' || PLACES.some((place) => writes(who, place)),
       `${MARK}-worker`,
     ),
+  // Jobs' header summary: those who may use Jobs, over their folders (T558, AC-398).
+  'GET /api/jobs/summary': () =>
+    openedOnlyBy(
+      '/api/jobs/summary',
+      (who) => who === 'super' || PLACES.some((place) => writes(who, place)),
+    ),
   // The queue, and cancelling: the folders they build in (T376, AC-297).
   'GET /api/jobs/queue': listed({ method: 'GET', url: '/api/jobs/queue' }, (who) =>
     inPlaces(who, writes, queueKeyOf),

@@ -1,14 +1,22 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useMemo, useRef, useState } from 'react';
 
 import { titlesOf } from '../../editor/fields';
 import { META_QUERY } from '../../query/meta';
 import { StateLine } from '../../shell/StatusIcon';
-import { BuildPanel } from './BuildPanel';
-import { BuildQueue, QUEUE_EVERY_MS, QUEUE_QUERY_KEY, readQueue } from './BuildQueue';
+import { BuildPanel, ROW_STATUSES, type StatusChoice } from './BuildPanel';
+import {
+  BuildQueue,
+  QUEUE_EVERY_MS,
+  QUEUE_QUERY_KEY,
+  QUEUE_STATES,
+  readQueue,
+  type QueueState,
+} from './BuildQueue';
 import { Health } from './Health';
 import { FIRST_ASK, QueryLog, queryStringOf, type QueryLogAsk, type QueryRecord } from './QueryLog';
 import { RunHistory } from './RunHistory';
+import { Summary, SUMMARY_QUERY_KEY } from './Summary';
 
 /**
  * The Jobs workspace, in the prototype's tabs: the pre-aggregations, each
@@ -72,6 +80,20 @@ function tabOfUrl(): Tab {
 }
 
 /**
+ * `?status=` opens Pre-aggregations on its rows in that state, and `?state=`
+ * the queue on its entries in that state: the links of Jobs' summary (T558;
+ * the user's answer, R66). Any for one it doesn't know.
+ */
+function statusOfUrl(): StatusChoice | '' {
+  const asked = new URLSearchParams(window.location.search).get('status');
+  return ROW_STATUSES.some(([status]) => status === asked) ? (asked as StatusChoice) : '';
+}
+function queueStateOfUrl(): QueueState | '' {
+  const asked = new URLSearchParams(window.location.search).get('state');
+  return QUEUE_STATES.some(([state]) => state === asked) ? (asked as QueueState) : '';
+}
+
+/**
  * `?tab=history&preagg=` opens Run history on one pre-aggregation's builds
  * (T375): its name as people see it, without a folder's prefix (T371).
  */
@@ -91,6 +113,10 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
   if (!opened.has(open)) setOpened(new Set([...opened, open]));
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const base = useId();
+  const client = useQueryClient();
+  /** Pre-aggregations' Status and the queue's State, which the summary's links set (T558). */
+  const [status, setStatus] = useState(statusOfUrl);
+  const [queueState, setQueueState] = useState(queueStateOfUrl);
   // How many entries the queue holds in the user's folders, on its tab (design
   // 16, pin 1): the queue's own read, shared with its panel.
   const queue = useQuery({
@@ -103,6 +129,20 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
     <div className="jobs-workspace">
       <div className="jobs-workspace__head">
         <h1 className="workspace-title">Jobs</h1>
+        {/* What needs attention in the user's folders, each a link to it (T558; P5). */}
+        <Summary
+          onOpen={(opens) => {
+            if (opens.tab === 'queue') setQueueState(opens.state);
+            else setStatus(opens.status);
+            setOpen(opens.tab);
+            // The list read again, and the summary with it, so the two say the
+            // same of about the same moment (T558's review).
+            void client.invalidateQueries({
+              queryKey: opens.tab === 'queue' ? QUEUE_QUERY_KEY : ['preaggregations'],
+            });
+            void client.invalidateQueries({ queryKey: SUMMARY_QUERY_KEY });
+          }}
+        />
         {/* Cube's health and the refresh worker's state (T162, AC-156). */}
         <Health />
       </div>
@@ -155,6 +195,8 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
       >
         <BuildPanel
           {...(pollMs === undefined ? {} : { pollMs })}
+          status={status}
+          onStatus={setStatus}
           // `?preagg=`, from a tile's Data as of › Open in Jobs (T273, AC-245).
           selectedFirst={new URLSearchParams(window.location.search).get('preagg')}
           // Its pane's ways on: to its builds in Run history, and to the queue (T375).
@@ -187,7 +229,7 @@ export function JobsPage({ pollMs }: { pollMs?: number }) {
         aria-labelledby={`${base}-queue`}
         hidden={open !== 'queue'}
       >
-        <BuildQueue />
+        <BuildQueue state={queueState} onState={setQueueState} />
       </div>
       <div
         role="tabpanel"

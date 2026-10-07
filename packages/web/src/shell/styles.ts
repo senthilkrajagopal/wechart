@@ -3590,6 +3590,8 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 .jobs-workspace__tabs { margin-bottom: 12px; background: none; }
 /* Its header: the title, then Cube's health and the refresh worker's (T162). */
 .jobs-workspace__head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+/* What needs attention in the user's folders, each count a link (T558; design 16, P5). */
+.jobs-summary { font-size: 12px; color: var(--wc-text-secondary); font-variant-numeric: tabular-nums; }
 .jobs-health { display: flex; flex-wrap: wrap; gap: 12px; }
 /* The refresh worker's badge opens its panel (T553; design 16, state F). */
 .jobs-health__worker {

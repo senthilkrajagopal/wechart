@@ -5,6 +5,7 @@ import { InfoBar } from '../../shell/InfoBar';
 import { StateLine, StatusIcon, type StateKind } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { shownOf } from '../jobs/BuildPanel';
+import { ChoicePill } from '../jobs/Pill';
 import { BuiltWhen } from '../jobs/builds';
 import { Status } from '../jobs/StateBadge';
 import { OwnerFilter, type ShownOwner } from './OwnerFilter';
@@ -192,6 +193,23 @@ function WechartRow({
   );
 }
 
+/** A wechart schedule's state, as Schedules' State filter chooses it (T558). */
+type ScheduleState = 'active' | 'paused' | 'suspended';
+/**
+ * The State filter (T558; the user's answer, R66): Any, or a wechart
+ * schedule's state, which Jobs' summary opens on Suspended.
+ */
+const SCHEDULE_STATES: readonly (readonly [ScheduleState, string])[] = [
+  ['active', 'Active'],
+  ['paused', 'Paused'],
+  ['suspended', 'Suspended'],
+];
+/** `?state=`, the summary's link; Any for one it doesn't know. */
+function scheduleStateOfUrl(): ScheduleState | '' {
+  const asked = new URLSearchParams(window.location.search).get('state');
+  return SCHEDULE_STATES.some(([state]) => state === asked) ? (asked as ScheduleState) : '';
+}
+
 /** What the pane holds: a refresh key's, a wechart schedule's, or New schedule's form. */
 type Open =
   | { readonly kind: 'cube'; readonly id: string }
@@ -226,10 +244,26 @@ export function SchedulesPage() {
   const [selected, setSelected] = useState<Open | null>(null);
   // Whose schedules are listed (T557, AC-397; design 16, P4).
   const [owner, setOwner] = useState<ShownOwner>('all');
+  // In which state (T558; the user's answer, R66): Jobs' "1 suspended schedule" opens it.
+  const [state, setState] = useState(scheduleStateOfUrl);
   const now = new Date();
   const keys = schedules.data ?? [];
   const own = wechart.data ?? [];
   const lists = (of: 'cube' | 'wechart') => owner === 'all' || owner === of;
+  /**
+   * Whether a wechart schedule is in the chosen state, as its row reads it:
+   * one paused and suspended reads Suspended (T558's review). Every one at Any.
+   */
+  const inState = (each: WechartSchedule) =>
+    state === '' ||
+    (state === 'suspended'
+      ? each.suspendedAt !== null
+      : state === 'paused'
+        ? each.pausedAt !== null && each.suspendedAt === null
+        : each.suspendedAt === null && each.pausedAt === null);
+  // A state is a wechart schedule's: a refresh key is listed at Any only.
+  const keysListed = state === '' ? keys : [];
+  const ownListed = own.filter(inState);
   const pane: ReactNode = (() => {
     if (selected === null) return null;
     if (selected.kind === 'new')
@@ -325,11 +359,17 @@ export function SchedulesPage() {
               <OwnerFilter
                 owner={owner}
                 counts={{
-                  all: keys.length + own.length,
-                  cube: keys.length,
-                  wechart: own.length,
+                  all: keysListed.length + ownListed.length,
+                  cube: keysListed.length,
+                  wechart: ownListed.length,
                 }}
                 onChange={setOwner}
+              />
+              <ChoicePill
+                label="State"
+                choices={[['', 'Any'], ...SCHEDULE_STATES]}
+                value={state}
+                onChange={setState}
               />
             </div>
             <TableScroll label="Refresh schedules">
@@ -355,7 +395,7 @@ export function SchedulesPage() {
                     // Read whichever owner is listed, so wechart's keep their places (T557).
                     const itsOwn = ownOf(schedule.id);
                     return [
-                      ...(lists('cube')
+                      ...(lists('cube') && state === ''
                         ? [
                             <tr
                               key={schedule.id}
@@ -399,7 +439,7 @@ export function SchedulesPage() {
                           ]
                         : []),
                       // A rollup with both kinds has two rows: wechart's after its refresh key's (pin 5).
-                      ...(lists('wechart') ? itsOwn : []).map((each) => (
+                      ...(lists('wechart') ? itsOwn.filter(inState) : []).map((each) => (
                         <WechartRow
                           key={`wechart-${each.id}`}
                           schedule={each}
@@ -413,7 +453,7 @@ export function SchedulesPage() {
                     ];
                   })}
                   {own
-                    .filter((each) => lists('wechart') && !placed.has(each.id))
+                    .filter((each) => lists('wechart') && inState(each) && !placed.has(each.id))
                     .map((each) => (
                       <WechartRow
                         key={`wechart-${each.id}`}

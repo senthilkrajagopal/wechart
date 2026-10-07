@@ -7876,7 +7876,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **Counts are the rows each choice lists**, from the lists the API answers for the user's folders. A wechart schedule keeps its place after its rollup's refresh key, whichever owner is chosen.
     - **`e2e/schedules.spec.ts`** shows it against compose's Cube, with a wechart schedule of the browser's own: each choice lists as many rows as its count, only its own owner's, and All's count is the other two's.
   - **Implementer's call, for the user to confirm or change:** the choice isn't kept in the address, since the design doesn't say.
-- [ ] T558 (AC-398) Jobs' header summary: building, queued, failed and suspended *(added 2026-10-02, `[R56]`: design 16's P5)*
+- [x] T558 (AC-398) Jobs' header summary: building, queued, failed and suspended *(added 2026-10-02, `[R56]`: design 16's P5)*
   - Files: `packages/api/src/jobs/summary.ts` (+ test), `packages/web/src/workspaces/jobs/{JobsPage,Summary}.tsx` (+ tests)
   - Failing test:
     - `summary.test.ts`, over a member's folders only, counts:
@@ -7885,6 +7885,29 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - the suspended schedules (T379).
     - `Summary.test.tsx`: each count links to its tab, or to Schedules, filtered, and the list there has that many rows (AC-398).
   - Depends on: T550, T376, T379
+  - **The user's answer (2026-10-07, `[R66]`), on where building, queued and suspended land, since design 16 draws no filter for them:** State filter pills, shaped like Run history's, set from the link's address and cleared by the user.
+    - On Queue, State: Any, Building, Queued, Stalled.
+    - On Schedules, State: Any, Active, Paused, Suspended.
+    - Pre-aggregations' drawn Status filter takes `?status=`.
+  - *Done 2026-10-07.*
+    - **API.** `GET /api/jobs/summary`, for those who may use Jobs, with a route-matrix case. It counts from the very functions the lists' routes answer from, which their registrations now return:
+      - the queue's entries in the user's folders, building and queued (`registerQueue`'s `rowsIn`);
+      - the Pre-aggregations tab's rows reading failed (`registerBuilds`' `rowsIn`), only where xcube's routes give states;
+      - Schedules' wechart schedules that are suspended (`registerWechartSchedules`' `listedIn`).
+
+      A count whose list can't be read is none, and the header leaves it out. `summary.test.ts` checks each user's counts, a member's and a Super-Admin's, against the lists the same user reads.
+    - **The header** reads "1 building · 2 queued · 1 failed · 1 suspended schedule" after Jobs' title. Each count is a link: `/jobs?tab=queue&state=building|queued` and `/jobs?status=failed`, which open their tab in place, and `/schedules?state=suspended`.
+    - **The filters** (R66): Pre-aggregations' Status (Any, then AC-391's states in its order), with its count of rows; Queue's State; Schedules' State. Each is a `select-pill`, from `jobs/Pill.tsx`, which Run history's pills now come from too. On Schedules, a state is a wechart schedule's, so a state chosen lists no refresh key, and the owner filter counts what is listed (AC-397).
+    - **Schedules' read-only checks** (`SchedulesPage.test.tsx`, `e2e/schedules.spec.ts`) now allow the State pill, the one control outside the rows, and say so.
+    - **`e2e/jobs.spec.ts`** shows it against compose's Cube: a rollup on a table there isn't, built from Jobs, reads Failed; a `* * * * *` schedule on it is suspended after its first run. Each count's link then lists that many rows, filtered, these among them.
+    - **The review's fixes:**
+      - a count's link on Jobs reads its list and the summary again, so an open page's list, read up to 30 s before, isn't shown against a newer count;
+      - failed is none, not 0, while xcube can't say a row's state;
+      - a schedule both paused and suspended is listed under Suspended, as its row reads, not under Paused;
+      - the summary is read every 30 s, as Pre-aggregations' rows are, since its failed count reads every rollup's partitions.
+  - **Implementer's calls, for the user to confirm or change:**
+    - The summary sits after Jobs' title, before the health badges, since design 16 doesn't draw it; a count of 0 is said, as a link to an empty list.
+    - A filter that lists nothing shows the table's head with no rows; design 16's empty states are T560's.
 - [ ] T559 (AC-297, AC-399) The Folder column, filter and scope note on every Jobs tab and on Schedules *(added 2026-10-02, `[R56]`; the "Folder column and filter" T371 left to the design)*
   - Files: `packages/web/src/workspaces/jobs/{BuildPanel,RunHistory,BuildQueue,FolderFilter}.tsx`, `packages/web/src/workspaces/schedules/SchedulesPage.tsx` (+ tests), `e2e/security/jobs-scope.spec.ts`
   - Failing test: `jobs-scope.spec.ts`, as a read-write member of /Sales/EMEA and as a Super-Admin (AC-297, rule 84):

@@ -17,6 +17,7 @@ import {
   type Starter,
 } from './builds';
 import { Partitions, type Started } from './Partitions';
+import { ChoicePill } from './Pill';
 import { Status } from './StateBadge';
 
 /**
@@ -68,6 +69,22 @@ interface Buildable {
   readonly unreadable?: string;
 }
 type RowState = 'failed' | 'building' | 'queued' | 'stalled' | 'partly' | 'not-built' | 'built';
+/** A state the Status filter chooses (T558): any of a row's, most needing attention first. */
+export type StatusChoice = RowState;
+
+/**
+ * Design 16's Status filter (s1-filters), Any or one of AC-391's states, in
+ * its order (T558; the user's answer, R66): Jobs' summary opens it on Failed.
+ */
+export const ROW_STATUSES: readonly (readonly [StatusChoice, string])[] = [
+  ['failed', 'Failed'],
+  ['building', 'Building'],
+  ['queued', 'Queued'],
+  ['stalled', 'Stalled'],
+  ['partly', 'Partly built'],
+  ['not-built', 'Not built'],
+  ['built', 'Built'],
+];
 
 /**
  * How a pre-aggregation is shown (T371; §P2.6 D): a folder's cube by its
@@ -287,8 +304,14 @@ export function BuildPanel({
   selectedFirst = null,
   onOpenHistory,
   onOpenQueue,
+  status = '',
+  onStatus,
 }: {
   pollMs?: number;
+  /** The rows listed: those in this state, or every one (T558). */
+  status?: StatusChoice | '';
+  /** Status chosen; none, and the filter isn't offered. */
+  onStatus?: (status: StatusChoice | '') => void;
   /**
    * The pre-aggregation to open on (T273, AC-245): the one a tile's Data as
    * of › Open in Jobs names, `?preagg=` in the address.
@@ -397,6 +420,9 @@ export function BuildPanel({
   }
   const shown = buildable.data.find((each) => each.id === selected);
   const openQueue = onOpenQueue ?? (() => window.location.assign('/jobs?tab=queue'));
+  // Those in the chosen state, as Jobs' summary counts them (T558).
+  const listed =
+    status === '' ? buildable.data : buildable.data.filter((row) => row.state === status);
 
   return (
     <div className="build-panel">
@@ -404,118 +430,137 @@ export function BuildPanel({
         {buildable.data.length === 0 ? (
           <p>The model declares no pre-aggregations.</p>
         ) : (
-          <TableScroll label="Pre-aggregations">
-            <table className="query-log" aria-label="Pre-aggregations">
-              <thead>
-                <tr>
-                  <th scope="col">Pre-aggregation</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Last built</th>
-                  <th scope="col">Started by</th>
-                  <th scope="col">Trigger</th>
-                  <th scope="col" className="num">
-                    Partitions
-                  </th>
-                  <th scope="col">
-                    <span className="visually-hidden">Build</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {buildable.data.map((row) => {
-                  const { id, trigger } = row;
-                  const shownAs = shownOf(row);
-                  const said =
-                    shownAs.folder === undefined
-                      ? shownAs.name
-                      : `${shownAs.name} in ${shownAs.folder}`;
-                  return (
-                    <tr
-                      key={id}
-                      // Selecting a row shows it in the pane (AC-228): by pointer
-                      // anywhere in it, or Enter or Space on the row itself.
-                      aria-selected={selected === id}
-                      tabIndex={0}
-                      className="build-panel__row"
-                      onClick={() => {
-                        setSelected(id);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.target !== event.currentTarget) return;
-                        if (event.key !== 'Enter' && event.key !== ' ') return;
-                        event.preventDefault();
-                        setSelected(id);
-                      }}
-                    >
-                      <td className="query-log__query">
-                        {/* Plain text: a row click selects it, and its pane's
+          <>
+            {onStatus === undefined ? null : (
+              <div className="sources-filters run-history__filters">
+                <ChoicePill
+                  label="Status"
+                  choices={[['', 'Any'], ...ROW_STATUSES]}
+                  value={status}
+                  onChange={onStatus}
+                />
+                <span className="run-history__count" role="status">
+                  {`${String(listed.length)} ${listed.length === 1 ? 'pre-aggregation' : 'pre-aggregations'}`}
+                </span>
+              </div>
+            )}
+            <TableScroll label="Pre-aggregations">
+              <table className="query-log" aria-label="Pre-aggregations">
+                <thead>
+                  <tr>
+                    <th scope="col">Pre-aggregation</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Last built</th>
+                    <th scope="col">Started by</th>
+                    <th scope="col">Trigger</th>
+                    <th scope="col" className="num">
+                      Partitions
+                    </th>
+                    <th scope="col">
+                      <span className="visually-hidden">Build</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {listed.map((row) => {
+                    const { id, trigger } = row;
+                    const shownAs = shownOf(row);
+                    const said =
+                      shownAs.folder === undefined
+                        ? shownAs.name
+                        : `${shownAs.name} in ${shownAs.folder}`;
+                    return (
+                      <tr
+                        key={id}
+                        // Selecting a row shows it in the pane (AC-228): by pointer
+                        // anywhere in it, or Enter or Space on the row itself.
+                        aria-selected={selected === id}
+                        tabIndex={0}
+                        className="build-panel__row"
+                        onClick={() => {
+                          setSelected(id);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.target !== event.currentTarget) return;
+                          if (event.key !== 'Enter' && event.key !== ' ') return;
+                          event.preventDefault();
+                          setSelected(id);
+                        }}
+                      >
+                        <td className="query-log__query">
+                          {/* Plain text: a row click selects it, and its pane's
                             Open in Model is the way to its definition (the
                             user, 2026-09-28: UX-080; AC-229 amended, R47). */}
-                        <span data-testid="preagg-name">{shownAs.name}</span>
-                        {shownAs.folder === undefined ? null : (
-                          <span className="build-panel__folder" data-testid="preagg-folder">
-                            {shownAs.folder}
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        {/* The state of its partitions that most needs attention (AC-391, rule 22). */}
-                        <RowStatus row={row} testId="row-state" />
-                      </td>
-                      <td>
-                        {row.lastBuiltAt == null ? (
-                          <span className="muted">—</span>
-                        ) : (
-                          <BuiltWhen iso={row.lastBuiltAt} />
-                        )}
-                      </td>
-                      <td>
-                        {/* Who started that build from wechart; "—" when wechart didn't (pin 7). */}
-                        {row.startedBy == null ? (
-                          <span className="muted">—</span>
-                        ) : (
-                          <StarterLabel starter={row.startedBy} />
-                        )}
-                      </td>
-                      <td>
-                        {/* "Not scheduled" has its icon (design 16, pin 8; T551). */}
-                        {row.triggerKind === 'not-scheduled' ? (
-                          <Status kind="off" label={trigger ?? 'Not scheduled'} testId="trigger" />
-                        ) : (
-                          (trigger ?? '—')
-                        )}
-                      </td>
-                      <td className="num">
-                        {row.partitions == null ? (
-                          <span className="muted">—</span>
-                        ) : (
-                          String(row.partitions)
-                        )}
-                      </td>
-                      <td>
-                        {/* A lambda or a rollup join has nothing of its own to build (A3). */}
-                        {row.buildable === false ? null : (
-                          <button
-                            type="button"
-                            className="btn-sm"
-                            aria-label={`Build ${said}`}
-                            // One start at a time, so each start's answer — a refusal
-                            // included — is the one shown (T155's review).
-                            disabled={start.isPending}
-                            onClick={() => {
-                              start.mutate(id);
-                            }}
-                          >
-                            Build
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </TableScroll>
+                          <span data-testid="preagg-name">{shownAs.name}</span>
+                          {shownAs.folder === undefined ? null : (
+                            <span className="build-panel__folder" data-testid="preagg-folder">
+                              {shownAs.folder}
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          {/* The state of its partitions that most needs attention (AC-391, rule 22). */}
+                          <RowStatus row={row} testId="row-state" />
+                        </td>
+                        <td>
+                          {row.lastBuiltAt == null ? (
+                            <span className="muted">—</span>
+                          ) : (
+                            <BuiltWhen iso={row.lastBuiltAt} />
+                          )}
+                        </td>
+                        <td>
+                          {/* Who started that build from wechart; "—" when wechart didn't (pin 7). */}
+                          {row.startedBy == null ? (
+                            <span className="muted">—</span>
+                          ) : (
+                            <StarterLabel starter={row.startedBy} />
+                          )}
+                        </td>
+                        <td>
+                          {/* "Not scheduled" has its icon (design 16, pin 8; T551). */}
+                          {row.triggerKind === 'not-scheduled' ? (
+                            <Status
+                              kind="off"
+                              label={trigger ?? 'Not scheduled'}
+                              testId="trigger"
+                            />
+                          ) : (
+                            (trigger ?? '—')
+                          )}
+                        </td>
+                        <td className="num">
+                          {row.partitions == null ? (
+                            <span className="muted">—</span>
+                          ) : (
+                            String(row.partitions)
+                          )}
+                        </td>
+                        <td>
+                          {/* A lambda or a rollup join has nothing of its own to build (A3). */}
+                          {row.buildable === false ? null : (
+                            <button
+                              type="button"
+                              className="btn-sm"
+                              aria-label={`Build ${said}`}
+                              // One start at a time, so each start's answer — a refusal
+                              // included — is the one shown (T155's review).
+                              disabled={start.isPending}
+                              onClick={() => {
+                                start.mutate(id);
+                              }}
+                            >
+                              Build
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </TableScroll>
+          </>
         )}
         {/* What Last built and Started by mean, so "—" isn't read as never built (pin 9). */}
         <p className="jobs-foot" data-testid="jobs-foot">

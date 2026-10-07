@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { KEY_ROWS, paneOf, schedule, shownSchedules } from './schedules.fixture';
+import { KEY_ROWS, paneOf, paused, schedule, shownSchedules, suspended } from './schedules.fixture';
 import { SchedulesPage } from './SchedulesPage';
 
 /**
@@ -180,8 +180,11 @@ describe('Schedules’ refresh-key rows (T551, AC-154)', () => {
     expect(within(pane).getByRole('link', { name: 'Open in Jobs' }).getAttribute('href')).toBe(
       '/jobs?preagg=fsales__orders.mornings',
     );
-    // Read-only: nothing on the page edits a schedule.
-    expect(document.querySelectorAll('main input, input, select, textarea')).toHaveLength(0);
+    // Read-only: nothing on the page edits a schedule. Its one control is
+    // the list's State filter (T558, R66), which edits none.
+    const controls = [...document.querySelectorAll('main input, input, select, textarea')];
+    expect(controls.filter((each) => each.closest('.schedules__filters') === null)).toHaveLength(0);
+    expect(controls).toEqual([screen.getByRole('combobox', { name: 'State' })]);
   });
 });
 
@@ -273,6 +276,89 @@ describe('the owner filter, with counts (T557, AC-397)', () => {
       true,
       'true',
     ]);
+  });
+});
+
+/**
+ * T558 (AC-398; the user's answer, R66): a State pill, Any, Active, Paused
+ * or Suspended, which Jobs' "1 suspended schedule" opens at
+ * `?state=suspended`. A state is a wechart schedule's: one chosen lists
+ * wechart's in that state only, and the owner filter counts what it lists.
+ */
+describe('Schedules’ State filter (T558, R66)', () => {
+  const user = () => userEvent.setup({ delay: null });
+  const named = () => screen.queryAllByTestId('wechart-schedule-name').map((each) => text(each));
+  const listed = () =>
+    within(screen.getByRole('table', { name: 'Refresh schedules' }))
+      .getAllByRole('row')
+      .slice(1);
+  const THREE = [
+    schedule({ id: 's-active', name: 'Running' }),
+    paused({ id: 's-paused', name: 'Paused one' }),
+    suspended({ id: 's-suspended', name: 'Suspended one' }),
+  ];
+  afterEach(() => {
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('opens at ?state=suspended on the suspended ones only, as many as Jobs’ summary counts', async () => {
+    window.history.replaceState(null, '', '/schedules?state=suspended');
+    shownSchedules({ wechart: THREE });
+    await screen.findByText('Suspended one', {
+      selector: '[data-testid="wechart-schedule-name"]',
+    });
+
+    const state = screen.getByRole('combobox', { name: 'State' }) as HTMLSelectElement;
+    expect(state.value).toBe('suspended');
+    expect(
+      within(state)
+        .getAllByRole('option')
+        .map((option) => text(option)),
+    ).toEqual(['Any', 'Active', 'Paused', 'Suspended']);
+    expect(named()).toEqual(['Suspended one']);
+    expect(listed()).toHaveLength(1);
+    expect(listed().map((row) => row.getAttribute('data-schedule-id'))).toEqual(['s-suspended']);
+    // The owner filter counts what is listed.
+    expect(
+      within(screen.getByRole('radiogroup', { name: 'Owner' }))
+        .getAllByRole('radio')
+        .map((radio) => text(radio)),
+    ).toEqual(['All 1', 'Cube’s refresh worker 0', 'wechart 1']);
+  });
+
+  it('lists the active and the paused ones each by its own, and every one at Any', async () => {
+    shownSchedules({ wechart: THREE });
+    await screen.findByText('Running', { selector: '[data-testid="wechart-schedule-name"]' });
+    const state = screen.getByRole('combobox', { name: 'State' });
+    expect((state as HTMLSelectElement).value).toBe('');
+
+    await user().selectOptions(state, 'Active');
+    expect([named(), listed().length]).toEqual([['Running'], 1]);
+    await user().selectOptions(state, 'Paused');
+    expect([named(), listed().length]).toEqual([['Paused one'], 1]);
+    await user().selectOptions(state, 'Any');
+    expect(listed()).toHaveLength(KEY_ROWS.length + 3);
+  });
+
+  /** T558's review: as its row reads it, one paused and suspended is Suspended. */
+  it('lists one both paused and suspended under Suspended, as its row reads, not Paused', async () => {
+    shownSchedules({
+      wechart: [
+        suspended({
+          id: 's-both',
+          name: 'Both',
+          pausedAt: '2026-10-02T11:00:00.000Z',
+          pausedBy: { key: 'ada', name: 'Ada Admin' },
+        }),
+      ],
+    });
+    await screen.findByText('Both', { selector: '[data-testid="wechart-schedule-name"]' });
+    const state = screen.getByRole('combobox', { name: 'State' });
+
+    await user().selectOptions(state, 'Paused');
+    expect(named()).toEqual([]);
+    await user().selectOptions(state, 'Suspended');
+    expect(named()).toEqual(['Both']);
   });
 });
 

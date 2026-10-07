@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { landed, ownCubeFile } from './model-files';
+import { landed, ownCubeFile, PUBLISHED } from './model-files';
 import { psql } from './store';
 
 /**
@@ -967,4 +967,124 @@ test('the query log narrows, sorts and pages, its headers in view as it scrolls'
   const top = (await header.boundingBox())?.y ?? 0;
   expect(top).toBeGreaterThanOrEqual(47);
   expect(top).toBeLessThanOrEqual(50);
+});
+
+/**
+ * T558 / AC-398 (design 16, P5; the user's answer, R66): THE SYSTEM SHALL
+ * show in Jobs' header, over the user's folders, how many builds are
+ * building and how many are queued, how many pre-aggregations read failed,
+ * and how many wechart schedules are suspended, each count a link to the tab
+ * or page that lists them, filtered to those.
+ *
+ * A rollup of this browser's own on a table there isn't: built from Jobs, it
+ * reads Failed; a `* * * * *` schedule on it that suspends after 1 fails its
+ * first run and is suspended. Each count then opens its list, filtered, with
+ * that many rows. Counts and lists are read again until they agree, since the
+ * spec's other tests build meanwhile.
+ */
+test('the header’s summary counts what each of its links lists, filtered', async ({
+  page,
+  request,
+  browserName,
+}) => {
+  test.setTimeout(240_000);
+  const cube = `summary_${browserName}`;
+  const rollup = `${cube}.main`;
+  const name = `Summary ${browserName} ${String(Date.now())}`;
+  await ownCubeFile(
+    request,
+    cube,
+    `cubes:
+  - name: ${cube}
+    sql_table: public.no_such_table_${browserName}
+    measures:
+      - name: count
+        type: count
+    pre_aggregations:
+      - name: main
+        measures: [CUBE.count]
+        scheduled_refresh: false
+`,
+  );
+  let id: string | undefined;
+  /** Its row, as Jobs lists it. */
+  const rowOf = async () =>
+    ((await (await request.get('/api/preaggregations')).json()) as { id: string; state?: string }[])
+      .filter((each) => each.id === rollup)
+      .at(0);
+  try {
+    await expect.poll(async () => (await rowOf()) !== undefined, PUBLISHED).toBe(true);
+    // Built from Jobs: its build fails, and its row reads Failed.
+    const built = await request.post('/api/builds', { data: { preAggregation: rollup } });
+    expect(built.status(), await built.text()).toBe(200);
+    // A schedule on it that suspends after its first failed run.
+    const made = await request.post('/api/wechart-schedules', {
+      data: { preAggregation: rollup, name, cron: '* * * * *', timezone: 'UTC', suspendAfter: 1 },
+    });
+    expect(made.status(), await made.text()).toBe(201);
+    id = ((await made.json()) as { id: string }).id;
+    await expect.poll(async () => (await rowOf())?.state, { timeout: 60_000 }).toBe('failed');
+    await expect
+      .poll(
+        async () =>
+          (
+            (await (await request.get('/api/wechart-schedules')).json()) as {
+              id: string;
+              suspendedAt: string | null;
+            }[]
+          ).find((each) => each.id === id)?.suspendedAt ?? null,
+        { timeout: 150_000 },
+      )
+      .not.toBeNull();
+
+    const said = page.getByRole('group', { name: 'In your folders' });
+    /** The count a link says, after Jobs is opened afresh. */
+    const countOf = async (link: RegExp) => {
+      await page.goto('/jobs');
+      return Number(/^(\d+)/.exec(await said.getByRole('link', { name: link }).innerText())?.[1]);
+    };
+
+    // "N failed": Pre-aggregations, its Status on Failed, N rows, this one among them.
+    await expect(async () => {
+      const failed = await countOf(/ failed$/);
+      await said.getByRole('link', { name: / failed$/ }).click();
+      await expect(page.getByRole('combobox', { name: 'Status' })).toHaveValue('failed');
+      const rows = page.getByRole('table', { name: 'Pre-aggregations' }).locator('tbody tr');
+      await expect(rows).toHaveCount(failed, { timeout: 2_000 });
+      await expect(rows.filter({ hasText: rollup })).toHaveCount(1, { timeout: 2_000 });
+    }).toPass({ timeout: 60_000 });
+
+    // "N building" and "N queued": Queue, its State on that state, N entries.
+    for (const [state, link] of [
+      ['building', / building$/],
+      ['queued', / queued$/],
+    ] as const)
+      await expect(async () => {
+        const count = await countOf(link);
+        await said.getByRole('link', { name: link }).click();
+        await expect(page.getByRole('tab', { name: /^Queue/ })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+        await expect(page.getByRole('combobox', { name: 'State' })).toHaveValue(state);
+        await expect(
+          page.getByRole('table', { name: 'Build queue' }).locator('tbody tr'),
+        ).toHaveCount(count, { timeout: 2_000 });
+      }).toPass({ timeout: 60_000 });
+
+    // "N suspended schedules": Schedules, its State on Suspended, N rows, this one among them.
+    await expect(async () => {
+      const suspended = await countOf(/ suspended schedules?$/);
+      await said.getByRole('link', { name: / suspended schedules?$/ }).click();
+      await expect(page).toHaveURL(/\/schedules\?state=suspended$/);
+      await expect(page.getByRole('combobox', { name: 'State' })).toHaveValue('suspended');
+      const rows = page.getByRole('table', { name: 'Refresh schedules' }).locator('tbody tr');
+      await expect(rows).toHaveCount(suspended, { timeout: 5_000 });
+      await expect(rows.filter({ hasText: name })).toHaveCount(1, { timeout: 2_000 });
+    }).toPass({ timeout: 60_000 });
+  } finally {
+    if (id !== undefined) await request.delete(`/api/wechart-schedules/${id}`);
+    // The rollup out of the model again, so no later run lists it failed.
+    await ownCubeFile(request, cube);
+  }
 });

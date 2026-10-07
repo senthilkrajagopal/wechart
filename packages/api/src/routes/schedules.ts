@@ -12,7 +12,7 @@ import { USER } from '../auth/guard';
 import { userOf } from '../auth/user';
 import type { CubeClient } from '../cube/client';
 import { listedBuildables, type Buildable } from '../jobs/build';
-import { EVERYTHING, NO_JOBS, reaches, type JobsAccess } from '../jobs/scope';
+import { EVERYTHING, NO_JOBS, reaches, type JobsAccess, type JobsScope } from '../jobs/scope';
 import type { AuditStore } from '../repos/audit';
 import type { BuildHistory, LastRun } from '../repos/build-history';
 import { cronPreview } from '../scheduler/cron';
@@ -113,7 +113,7 @@ export function registerWechartSchedules(
     /** Next runs are counted from it. */
     readonly now?: () => Date;
   },
-): void {
+): { readonly listedIn: (scope: JobsScope) => Promise<Schedule[]> } {
   const scopeOf = (request: FastifyRequest) =>
     access === undefined ? Promise.resolve(EVERYTHING) : access.scope(request);
 
@@ -179,13 +179,15 @@ export function registerWechartSchedules(
   const recorded = (request: FastifyRequest, schedule: Schedule, done: ScheduleChange) =>
     recordIn(audit, scheduleChangeEntry(actorOf(userOf(request)), schedule, done), request.log);
 
+  /** A scope's folders' schedules: Schedules' rows, and those Jobs' summary counts (T558). */
+  const listedIn = async (scope: JobsScope) =>
+    (await scheduler.list()).filter((schedule) => reaches(scope, schedule.folderId));
+
   // Those of the folders they write, a Super-Admin's every folder's (AC-297).
   app.get('/api/wechart-schedules', USER, async (request, reply) => {
     const scope = await scopeOf(request);
     if (!scope.all && !scope.writesAny) return reply.status(403).send(NO_JOBS);
-    const schedules = (await scheduler.list()).filter((schedule) =>
-      reaches(scope, schedule.folderId),
-    );
+    const schedules = await listedIn(scope);
     // Each pre-aggregation's short name and folder, as Jobs has them; a
     // schedule doesn't need Cube to be listed, so none where it can't be read.
     const rows = await listedBuildables(client, modelFiles, access).catch(() => undefined);
@@ -393,4 +395,6 @@ export function registerWechartSchedules(
       });
     return reply.status(204).send();
   });
+
+  return { listedIn };
 }

@@ -51,6 +51,7 @@ import { registerBuildHistory } from './jobs/history';
 import { registerPartitions, rowStates } from './jobs/partitions';
 import { registerQueue } from './jobs/queue';
 import { registerRefreshWorker } from './jobs/refresh-worker';
+import { registerJobsSummary } from './jobs/summary';
 import type { XcubePartitions } from './xcube/partitions';
 import type { XcubeQueue } from './xcube/queue';
 import type { XcubeRefreshWorker } from './xcube/refresh-worker';
@@ -1152,7 +1153,7 @@ export function buildServer({
           ...(buildQueue === undefined ? {} : { queue: buildQueue }),
           ...(buildHistory === undefined ? {} : { history: buildHistory }),
         });
-  registerBuilds(
+  const preAggregationRows = registerBuilds(
     app,
     client,
     modelFiles,
@@ -1166,17 +1167,19 @@ export function buildServer({
   if (buildHistory !== undefined)
     registerBuildHistory(app, { store: buildHistory, access: jobsAccess, now });
   // The build queue, and cancelling what wechart started (T376, AC-151).
-  if (buildQueue !== undefined)
-    registerQueue(app, {
-      queue: buildQueue,
-      ...(buildHistory === undefined ? {} : { history: buildHistory }),
-      client,
-      ...(modelFiles === undefined ? {} : { modelFiles }),
-      access: jobsAccess,
-      // Each cancel in the audit trail, by whom (T505, AC-294).
-      ...(audit === undefined ? {} : { audit }),
-      now,
-    });
+  const queueRows =
+    buildQueue === undefined
+      ? undefined
+      : registerQueue(app, {
+          queue: buildQueue,
+          ...(buildHistory === undefined ? {} : { history: buildHistory }),
+          client,
+          ...(modelFiles === undefined ? {} : { modelFiles }),
+          access: jobsAccess,
+          // Each cancel in the audit trail, by whom (T505, AC-294).
+          ...(audit === undefined ? {} : { audit }),
+          now,
+        });
   // The refresh worker's state, as xcube reports it, for Jobs' header (T553, AC-393).
   if (refreshWorker !== undefined)
     registerRefreshWorker(app, { worker: refreshWorker, access: jobsAccess });
@@ -1194,18 +1197,28 @@ export function buildServer({
   // And each folder's, under its prefixed names (T450's review).
   registerSchedules(app, client, modelFiles, folders, jobsAccess, statesOfRows);
   // wechart's own schedules, by any who write the pre-aggregation's folder (T378, AC-234, Q10).
-  if (schedules !== undefined)
-    registerWechartSchedules(app, {
-      scheduler: schedules,
-      client,
-      ...(modelFiles === undefined ? {} : { modelFiles }),
-      access: jobsAccess,
-      // Each one's last run, and its next from now (T552, AC-154).
-      ...(buildHistory === undefined ? {} : { history: buildHistory }),
-      // Each change in the audit trail, by whom (T505, AC-294).
-      ...(audit === undefined ? {} : { audit }),
-      now,
-    });
+  const wechartSchedules =
+    schedules === undefined
+      ? undefined
+      : registerWechartSchedules(app, {
+          scheduler: schedules,
+          client,
+          ...(modelFiles === undefined ? {} : { modelFiles }),
+          access: jobsAccess,
+          // Each one's last run, and its next from now (T552, AC-154).
+          ...(buildHistory === undefined ? {} : { history: buildHistory }),
+          // Each change in the audit trail, by whom (T505, AC-294).
+          ...(audit === undefined ? {} : { audit }),
+          now,
+        });
+  // Jobs' header summary, from the very lists its counts link to (T558, AC-398).
+  registerJobsSummary(app, {
+    access: jobsAccess,
+    ...(queueRows === undefined ? {} : { queue: queueRows.rowsIn }),
+    // Failed is a row state, read only where xcube's routes are there (T550).
+    ...(statesOfRows === undefined ? {} : { preAggregations: preAggregationRows.rowsIn }),
+    ...(wechartSchedules === undefined ? {} : { schedules: wechartSchedules.listedIn }),
+  });
   // A data source's catalog, through Cube's introspection API (T145, AC-139).
   registerIntrospection(app, client, {
     ...(introspectionRetryMs === undefined ? {} : { retryMs: introspectionRetryMs }),

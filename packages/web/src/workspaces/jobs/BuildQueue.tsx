@@ -5,6 +5,7 @@ import { ExportedToast } from '../../dashboard/export/ExportedToast';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { clockOf, folderTextOf, periodOf, shortToken, StarterLabel, type Starter } from './builds';
+import { ChoicePill } from './Pill';
 import { Status } from './StateBadge';
 
 /**
@@ -40,6 +41,18 @@ export interface QueueRow {
 }
 
 export const QUEUE_QUERY_KEY = ['jobs', 'queue'] as const;
+
+/** An entry's state, as its State filter chooses it (T558). */
+export type QueueState = QueueRow['state'];
+/**
+ * The queue's State filter, Any or one state (T558; the user's answer, R66):
+ * Jobs' summary opens it on Building or Queued.
+ */
+export const QUEUE_STATES: readonly (readonly [QueueState, string])[] = [
+  ['building', 'Building'],
+  ['queued', 'Queued'],
+  ['stalled', 'Stalled'],
+];
 
 /** The queue, as Jobs reads it for this tab and its count (design 16, pin 1). */
 export async function readQueue(signal?: AbortSignal): Promise<{ entries: QueueRow[] }> {
@@ -142,7 +155,17 @@ const REFUSED: Record<
   },
 };
 
-export function BuildQueue({ enabled = true }: { enabled?: boolean }) {
+export function BuildQueue({
+  enabled = true,
+  state = '',
+  onState,
+}: {
+  enabled?: boolean;
+  /** The entries listed: those in this state, or every one (T558). */
+  state?: QueueState | '';
+  /** State chosen; none, and the filter isn't offered. */
+  onState?: (state: QueueState | '') => void;
+}) {
   const client = useQueryClient();
   const queue = useQuery({
     queryKey: QUEUE_QUERY_KEY,
@@ -196,7 +219,9 @@ export function BuildQueue({ enabled = true }: { enabled?: boolean }) {
 
   if (queue.isPending) return <StateLine kind="run">Reading the queue…</StateLine>;
   if (queue.isError) return <StateLine kind="err">{queue.error.message}</StateLine>;
-  const rows = queue.data.entries;
+  // Those in the chosen state, as Jobs' summary counts them (T558).
+  const rows =
+    state === '' ? queue.data.entries : queue.data.entries.filter((entry) => entry.state === state);
   // A reason design 16 doesn't word: the API's own words (T376's review).
   const why =
     refused === null
@@ -205,9 +230,19 @@ export function BuildQueue({ enabled = true }: { enabled?: boolean }) {
 
   return (
     <div className="build-queue">
-      <p className="run-history__count" role="status">
-        {`${String(rows.length)} ${rows.length === 1 ? 'entry' : 'entries'} · in queue order, oldest first`}
-      </p>
+      <div className="sources-filters run-history__filters">
+        {onState === undefined ? null : (
+          <ChoicePill
+            label="State"
+            choices={[['', 'Any'], ...QUEUE_STATES]}
+            value={state}
+            onChange={onState}
+          />
+        )}
+        <p className="run-history__count" role="status">
+          {`${String(rows.length)} ${rows.length === 1 ? 'entry' : 'entries'} · in queue order, oldest first`}
+        </p>
+      </div>
       {why === undefined ? null : (
         <div className={`notebar${why.err ? ' notebar--err' : ''}`} role="alert">
           <StatusIcon kind={why.err ? 'err' : 'info'} />
@@ -217,8 +252,8 @@ export function BuildQueue({ enabled = true }: { enabled?: boolean }) {
         </div>
       )}
       {cancel.isError ? <StateLine kind="err">{cancel.error.message}</StateLine> : null}
-      {rows.length === 0 ? (
-        // Nothing queued or building (state C4).
+      {queue.data.entries.length === 0 ? (
+        // Nothing queued or building (state C4); a state chosen with none in it lists none.
         <div className="run-history__empty">
           <b>Nothing is queued or building</b>
           <span>

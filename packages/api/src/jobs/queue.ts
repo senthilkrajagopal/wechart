@@ -10,7 +10,7 @@ import type { ModelFileStore } from '../server';
 import type { QueueEntry, XcubeQueue } from '../xcube/queue';
 import { listedBuildables, type Buildable } from './build';
 import { shownNameOf } from './history';
-import { EVERYTHING, NO_JOBS, reaches, type JobsAccess } from './scope';
+import { EVERYTHING, NO_JOBS, reaches, type JobsAccess, type JobsScope } from './scope';
 
 /**
  * The build queue (T376, AC-151; design 16, state C): every build waiting or
@@ -101,7 +101,7 @@ export function registerQueue(
     readonly audit?: Pick<AuditStore, 'record'>;
     readonly now: () => Date;
   },
-): void {
+): { readonly rowsIn: (scope: JobsScope) => Promise<QueueRow[]> } {
   const scopeOf = (request: FastifyRequest) =>
     access === undefined ? Promise.resolve(EVERYTHING) : access.scope(request);
 
@@ -171,15 +171,18 @@ export function registerQueue(
     };
   };
 
-  app.get('/api/jobs/queue', USER, async (request, reply) => {
-    const scope = await scopeOf(request);
-    if (!scope.all && !scope.writesAny) return reply.status(403).send(NO_JOBS);
-    const rows = (await read())
+  /** The entries of a scope's folders, oldest first: the tab's, and those Jobs' summary counts (T558). */
+  const rowsIn = async (scope: JobsScope) =>
+    (await read())
       .filter(({ row }) => reaches(scope, row?.folderId ?? null))
       .map(rowOf)
       // Oldest first, as the queue runs them.
       .sort((a, b) => a.addedAt.localeCompare(b.addedAt));
-    return { entries: rows, everyFolder: scope.all };
+
+  app.get('/api/jobs/queue', USER, async (request, reply) => {
+    const scope = await scopeOf(request);
+    if (!scope.all && !scope.writesAny) return reply.status(403).send(NO_JOBS);
+    return { entries: await rowsIn(scope), everyFolder: scope.all };
   });
 
   app.post('/api/jobs/queue/cancel', USER, async (request, reply) => {
@@ -266,4 +269,6 @@ export function registerQueue(
     );
     return { cancelled: true, ...(build === undefined ? {} : { build }) };
   });
+
+  return { rowsIn };
 }

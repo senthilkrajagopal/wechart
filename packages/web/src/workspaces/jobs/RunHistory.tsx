@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
-import { useId, useState, type ReactNode } from 'react';
+import { useState } from 'react';
 
 import { StateLine } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { BuildLog } from './BuildLog';
+import { Pill } from './Pill';
 import {
   BuildOutcomeStatus,
   durationOf,
@@ -76,17 +77,6 @@ function queryOf(filters: Filters, before: string | undefined): string {
   query.set('within', filters.within);
   if (before !== undefined) query.set('before', before);
   return query.toString();
-}
-
-/** A filter pill: its name and a native select, as the audit trail's (design 08). */
-function Pill({ label, children }: { label: string; children: (id: string) => ReactNode }) {
-  const id = useId();
-  return (
-    <span className="select-pill">
-      <label htmlFor={id}>{label}</label>
-      {children(id)}
-    </span>
-  );
 }
 
 export function RunHistory({

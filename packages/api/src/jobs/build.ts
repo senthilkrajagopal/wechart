@@ -14,7 +14,15 @@ import { ROOT_FOLDER_ID } from '../repos/catalog';
 import type { ModelFile, ModelFileStore } from '../server';
 import type { RowState } from './partitions';
 import { modelKeysOf, refreshWordsOf, type RefreshWords } from './refreshWords';
-import { EVERYTHING, NO_JOBS, placements, reaches, type JobsAccess, type Placement } from './scope';
+import {
+  EVERYTHING,
+  NO_JOBS,
+  placements,
+  reaches,
+  type JobsAccess,
+  type JobsScope,
+  type Placement,
+} from './scope';
 
 /**
  * Pre-aggregation builds (T155, AC-149), through Cube's documented jobs API:
@@ -249,19 +257,27 @@ export function registerBuilds(
   states?: (rows: readonly Buildable[]) => Promise<Map<string, RowState>>,
   /** Where each start is recorded with who started it (T505, AC-294); none, and it isn't. */
   audit?: Pick<AuditStore, 'record'>,
-): void {
+): { readonly rowsIn: (scope: JobsScope) => Promise<(Buildable & Partial<RowState>)[]> } {
   const scopeOf = (request: FastifyRequest) =>
     access === undefined ? Promise.resolve(EVERYTHING) : access.scope(request);
   const listed = () => listedBuildables(client, modelFiles, access);
+
+  /**
+   * A scope's folders' pre-aggregations, each with its state where xcube's
+   * routes are there: the tab's rows, and those Jobs' summary counts (T558).
+   */
+  const rowsIn = async (scope: JobsScope) => {
+    const rows = (await listed()).filter((row) => reaches(scope, row.folderId ?? null));
+    if (states === undefined) return rows;
+    const found = await states(rows);
+    return rows.map((row) => ({ ...row, ...found.get(row.id) }));
+  };
 
   // A read-write member's own folders' only (T371).
   app.get('/api/preaggregations', USER, async (request, reply) => {
     const scope = await scopeOf(request);
     if (!scope.all && !scope.writesAny) return reply.status(403).send(NO_JOBS);
-    const rows = (await listed()).filter((row) => reaches(scope, row.folderId ?? null));
-    if (states === undefined) return rows;
-    const found = await states(rows);
-    return rows.map((row) => ({ ...row, ...found.get(row.id) }));
+    return rowsIn(scope);
   });
 
   app.post('/api/builds', USER, async (request, reply) => {
@@ -445,4 +461,6 @@ export function registerBuilds(
       },
     );
   });
+
+  return { rowsIn };
 }
