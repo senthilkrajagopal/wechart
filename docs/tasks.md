@@ -11945,6 +11945,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       4. **A run on a data source one no longer sees** is listed under the name it had, not a later one.
       5. **The audit trail page** names a run on a copy as "copy in My workspace", and wraps its SQL in the code face.
     - **AC-381 waits for T535's My runs,** its page's list. **AC-382 is ticked:** its event is on the real stack.
+    - **Rerun 2026-10-07:** AC-381's two run-history tests, which timed out in the suite's Dex sign-in during T549's run, both passed in `e2e/security/sql-runner.spec.ts` (Chrome, compose's xcube `74c933bdb8`): "keeps each run in its user's own history…" and T535's "lists My runs…". AC-381 stands as ticked.
 - [x] T535 (AC-373, AC-377, AC-378, AC-379, AC-380, AC-381, AC-383, AC-385, AC-387) The SQL tab on a data source's page, as design 15 draws it
   - Files: `packages/web/src/workspaces/data-sources/SqlRunner.tsx` (+ test, the app's CodeMirror in SQL mode, P2), `SourceSettings.tsx`, `e2e/security/sql-runner.spec.ts`
   - Failing test:
