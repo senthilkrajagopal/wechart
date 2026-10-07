@@ -297,7 +297,9 @@ describe('the refresh worker, as xcube reports it (T553, AC-393)', () => {
   });
 
   it('tells a member a module failed, and why they can’t see its error (F3, Q4)', async () => {
-    const { error: _error, ...withoutError } = FAILING.modules[1]!;
+    const withoutError = Object.fromEntries(
+      Object.entries(FAILING.modules[1]!).filter(([key]) => key !== 'error'),
+    );
     reporting({
       ...FAILING,
       modules: [FAILING.modules[0], withoutError],
