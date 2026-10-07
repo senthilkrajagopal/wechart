@@ -2959,8 +2959,18 @@ export function DashboardView({
    * click replaces that marking with what was clicked, Ctrl or ⌘ toggles the
    * one item and leaves the rest. A click on empty plot area unmarks the
    * tile's marking and leaves every other marking alone (AC-094).
+   *
+   * `off`: the tile menu's Ctrl+Enter on a series already marked, which takes
+   * it off, mirroring the Ctrl-click toggle (T638; the coordinator's call E (a)). A
+   * Ctrl-click on its legend entry still only adds (AC-090).
    */
-  const onMarkClick = (tileId: string, chartId: string, item: ClickedItem, toggle: boolean) => {
+  const onMarkClick = (
+    tileId: string,
+    chartId: string,
+    item: ClickedItem,
+    toggle: boolean,
+    off = false,
+  ) => {
     const tile = elementAt(live, tileId);
     if (tile === null || !isTile(tile)) return;
     const markingId = marksWithOf(tile);
@@ -3008,11 +3018,15 @@ export function DashboardView({
                * behaves the same way round). A header's Ctrl-click adds its
                * panel the same way (T635).
                */
-              markFromLegend(
-                before,
-                { member: clicked.member, value: clicked.value },
-                { add: toggle },
-              )
+              off && isItemMarked(before, [{ member: clicked.member, value: clicked.value }])
+              ? applyItemClick(before, [{ member: clicked.member, value: clicked.value }], {
+                  toggle: true,
+                })
+              : markFromLegend(
+                  before,
+                  { member: clicked.member, value: clicked.value },
+                  { add: toggle },
+                )
             : applyItemClick(before, [{ member: clicked.member, value: clicked.value }], {
                 toggle,
               });
@@ -4362,14 +4376,31 @@ export function DashboardView({
             // As the tile draws it: filtered, with the model's formats (T632).
             const shown = formatted[chartId];
             if (shown === undefined) return undefined;
-            const { series, panels } = tilePartsOf(shown);
-            if (series.length === 0 && panels.length === 0) return undefined;
+            const parts = tilePartsOf(shown);
+            if (parts.series.length === 0 && parts.panels.length === 0) return undefined;
+            // Which series the marking holds whole, as its legend entry marks
+            // one: Ctrl+Enter takes those off (T638; the coordinator's call E (a)).
+            const markingId = marking ? marksWithOf(element) : undefined;
+            const held = markingId === undefined ? undefined : markingOf(marks, markingId);
+            const series = parts.series.map((one) => {
+              const part =
+                held === undefined ? undefined : clickedValue(shown, { legend: one.value });
+              return {
+                ...one,
+                marked:
+                  part !== undefined &&
+                  held !== undefined &&
+                  isItemMarked(held, [{ member: part.member, value: part.value }]),
+              };
+            });
+            const { panels } = parts;
             // `add`: Ctrl+Enter, added to the marking as a Ctrl-click on a
             // legend entry adds a series (T634; R64), and as a Ctrl-click on
-            // a header adds a panel (T635): `markFromLegend` with add.
-            const pick = (item: ClickedItem, said: string, add = false) => {
+            // a header adds a panel (T635): `markFromLegend` with add. A
+            // series already marked is taken off instead (T638).
+            const pick = (item: ClickedItem, said: string, add = false, off = false) => {
               if (marking) {
-                onMarkClick(tileId, chartId, item, add);
+                onMarkClick(tileId, chartId, item, add, off);
                 return;
               }
               const value = clickedValue(shown, item);
@@ -4390,10 +4421,12 @@ export function DashboardView({
               panels,
               // Said by its label, as the legend writes it (T632).
               onSeries: (value: string, add?: boolean) => {
+                const one = series.find((each) => each.value === value);
                 pick(
                   { legend: value },
-                  series.find((one) => one.value === value)?.label ?? value,
+                  one?.label ?? value,
                   add,
+                  add === true && one?.marked === true,
                 );
               },
               // By its place among the panels drawn, as a header's click names one.

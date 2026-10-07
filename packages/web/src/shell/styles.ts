@@ -8629,12 +8629,25 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
 .tile-menu__list button:focus-visible,
 .model-problems :focus-visible,
 .filter-widget__options :focus-visible,
-.page-tabs [role='tab']:focus-visible {
+.page-tabs [role='tab']:focus-visible,
+/* T638 (the re-audit): segments and rows that fill a box that clips. */
+.preview-frame__sizes button:focus-visible,
+.choice--segmented > .choice__option:focus-visible,
+.choice--rows > .choice__option:focus-visible,
+nav.outline :focus-visible,
+.sql-runs :focus-visible,
+/* Jobs' and Schedules' rows, in a table that scrolls sideways when narrow. */
+.build-panel__row:focus-visible {
   outline-offset: -2px;
 }
 /* On the toast's inverted ground the accent falls short of 3:1 (WCAG 1.4.11);
-   the toast's own ink does not. */
-.undo-toast :focus-visible { outline-color: currentColor; }
+   the toast's own ink does not. The SQL runner's toast is the same ground
+   (T638). */
+.undo-toast :focus-visible,
+.sql-runner__toast :focus-visible { outline-color: currentColor; }
+/* A list filter's chosen value is filled in the accent: its ring, inside it,
+   in the ink on the accent (T638). */
+.filter-widget__options button[aria-pressed='true']:focus-visible { outline-color: var(--wc-text-on-accent); }
 `;
 
 export function installStyles(doc: Document = document): void {

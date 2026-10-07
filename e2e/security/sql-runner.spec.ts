@@ -417,6 +417,31 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
       await tabs.getByRole('tab', { name: 'SQL' }).click();
       return { ...writer, panel: writer.page.getByRole('tabpanel', { name: 'SQL' }) };
     }
+    /** The WCAG contrast ratio of two colours as the browser paints them (T638). */
+    async function contrastOn(page: Page, one: string, other: string) {
+      return page.evaluate(
+        ([a, b]) => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 1;
+          canvas.height = 1;
+          const context = canvas.getContext('2d', { willReadFrequently: true })!;
+          const luminance = (colour: string) => {
+            context.clearRect(0, 0, 1, 1);
+            context.fillStyle = colour;
+            context.fillRect(0, 0, 1, 1);
+            const [r = 0, g = 0, bl = 0] = context.getImageData(0, 0, 1, 1).data;
+            const linear = (channel: number) => {
+              const c = channel / 255;
+              return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+            };
+            return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(bl);
+          };
+          const [light = 0, dark = 0] = [luminance(a!), luminance(b!)].sort((x, y) => y - x);
+          return (light + 0.05) / (dark + 0.05);
+        },
+        [one, other],
+      );
+    }
     /** The editor's text replaced by `sql`, typed as a person types it. */
     async function typeSql(page: Page, sql: string) {
       await page.locator('.sql-editor .cm-content').click();
@@ -608,6 +633,49 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
         const runs = panel.getByRole('region', { name: 'My runs' });
         await expect(runs.getByRole('radio', { name: 'This data source' })).toBeChecked();
         await expect(runs.getByRole('listitem').first()).toContainText(`SELECT 'mine_${RUN}' AS m`);
+
+        /**
+         * T638 (AC-176; the re-audit): a run's focus ring whole in the list
+         * that clips, and the toast's Undo ring 3:1 against the toast's
+         * inverted ground, as the undo toast's is (T182).
+         */
+        await typeSql(page, 'SELECT 2');
+        const run = runs.locator('.sql-runs__run').first();
+        // A key first, so the browser draws the ring for focus moved by script.
+        await page.keyboard.press('Shift');
+        await run.focus();
+        expect(
+          await run.evaluate((element) => {
+            const style = getComputedStyle(element);
+            if (style.outlineStyle === 'none') return 'no ring';
+            const reach =
+              Number.parseFloat(style.outlineWidth) + Number.parseFloat(style.outlineOffset);
+            const box = element.getBoundingClientRect();
+            const list = element.closest('.sql-runs')!;
+            const edge = list.getBoundingClientRect();
+            return box.left - reach >= edge.left + list.clientLeft - 0.5 &&
+              box.right + reach <= edge.left + list.clientLeft + list.clientWidth + 0.5
+              ? 'whole'
+              : 'cut off';
+          }),
+        ).toBe('whole');
+        await page.keyboard.press('Enter');
+        const toast = panel.locator('.sql-runner__toast');
+        const undo = toast.getByRole('button', { name: 'Undo' });
+        await page.keyboard.press('Shift');
+        await undo.focus();
+        const [ring, ground, style, width] = await undo.evaluate((element) => [
+          getComputedStyle(element).outlineColor,
+          getComputedStyle(element.closest('.sql-runner__toast')!).backgroundColor,
+          getComputedStyle(element).outlineStyle,
+          getComputedStyle(element).outlineWidth,
+        ]);
+        // A ring is drawn at all: with none, `currentColor` would pass alone (T638's review).
+        expect(style).not.toBe('none');
+        expect(Number.parseFloat(width!)).toBeGreaterThanOrEqual(2);
+        expect(await contrastOn(page, ring!, ground!)).toBeGreaterThanOrEqual(3);
+        // Undo left alone: the run's SQL stays in the editor for what follows.
+
         await runs.getByRole('radio', { name: 'All' }).click();
         await expect(runs.getByRole('listitem').first()).toContainText(`warehouse · SQL ${RUN}`);
         await expect(runs.getByRole('listitem').first()).toContainText(/Today \d\d:\d\d/);

@@ -348,7 +348,136 @@ async function contrastOf(page: Page, one: string, other: string) {
   );
 }
 
+/**
+ * T638 (AC-176; the re-audit of 2026-10-07): focus seen on controls whose ring
+ * was clipped to a sliver by the box around them: the editor's Actual size /
+ * Fit, the connection form's segmented and row choices, and the edit
+ * sidebar's Outline rows; and on Jobs' rows in a narrow window.
+ */
+test('focus rings are not cut off on segmented choices, rows and the Outline (T638)', async ({
+  page,
+}) => {
+  // The editor opened from a tile: its preview's Actual size and Fit.
+  await editSeedDashboard(page);
+  await page.locator('[data-tile="tile-status"]').focus();
+  await page.keyboard.press('e');
+  const sizes = page.getByRole('group', { name: 'Preview size' });
+  for (const name of ['Actual size', 'Fit']) {
+    const size = sizes.getByRole('button', { name });
+    await size.focus();
+    expect(await ringShows(size), name).toBe('whole');
+  }
+  await page.keyboard.press('Escape');
+
+  // The edit sidebar's Outline, its rows full width in a box that clips.
+  await editSeedDashboard(page);
+  const sidebar = page.getByRole('complementary', { name: 'Edit sidebar' });
+  // By the keyboard: after a click the browser draws no ring for focus moved by script.
+  await sidebar.getByRole('tab', { name: 'Outline' }).focus();
+  await page.keyboard.press('Enter');
+  const row = sidebar
+    .getByRole('navigation', { name: 'Dashboard outline' })
+    .getByRole('button')
+    .first();
+  await row.focus();
+  expect(await ringShows(row)).toBe('whole');
+
+  // A new data source's connection: two sign-ins as a segmented choice,
+  // three as rows.
+  await page.goto('/data-sources');
+  for (const [tile, method] of [
+    ['PostgreSQL', 'Password'],
+    ['Snowflake', 'Password'],
+  ] as const) {
+    // By the keyboard, so the browser draws the ring for focus moved by script.
+    await page.getByRole('button', { name: '+ Data source' }).focus();
+    await page.keyboard.press('Enter');
+    const wizard = page.getByRole('dialog', { name: 'New data source' });
+    await wizard.getByRole('radio', { name: tile }).focus();
+    await page.keyboard.press('Space');
+    await wizard.getByRole('button', { name: 'Next: Connection' }).focus();
+    await page.keyboard.press('Enter');
+    const choice = wizard
+      .getByRole('radiogroup', { name: 'Sign in with' })
+      .getByRole('radio', { name: method, exact: true });
+    await choice.focus();
+    expect(await ringShows(choice), tile).toBe('whole');
+    await page.keyboard.press('Escape');
+    const discard = page.getByRole('button', { name: 'Discard changes' });
+    if (await discard.isVisible()) await discard.click();
+    await expect(wizard).toHaveCount(0);
+  }
+
+  // Jobs' pre-aggregations, its rows in a table that scrolls sideways below 1,024 px.
+  await page.setViewportSize({ width: 900, height: 800 });
+  await page.goto('/jobs');
+  const preAgg = page.locator('.build-panel__row').first();
+  await expect(preAgg).toBeVisible();
+  await preAgg.focus();
+  expect(await ringShows(preAgg)).toBe('whole');
+});
+
+/** A dashboard with one list filter, shipped chosen (T638). */
+async function listFilterDashboard(request: APIRequestContext) {
+  const unique = `kb-${String(Date.now())}-${String(Math.round(Math.random() * 1e6))}`;
+  const title = `List ${unique}`;
+  const dashboard = await create(request, 'dashboard', title);
+  await request.put(`${API}/api/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        ...IN_MY_WORKSPACE,
+        owner: 'admin',
+        settings: { width: 'fixed' },
+        pages: [{ id: 'only', title: 'Only', items: [] }],
+        filters: [{ id: 'f-list', widget: 'list', member: 'orders.status' }],
+      },
+    },
+  });
+  return { id: dashboard.id, title };
+}
+
 for (const theme of ['light', 'dark'] as const) {
+  /**
+   * T638 (AC-176): a list filter's chosen value, filled in the accent: its
+   * focus ring was the accent too, on it, and couldn't be seen.
+   */
+  test(`a list filter’s chosen value shows its focus ring, ${theme} (T638)`, async ({
+    page,
+    request,
+  }) => {
+    await page.addInitScript((value) => {
+      window.localStorage.setItem('wechart.theme', value);
+    }, theme);
+    const { id, title } = await listFilterDashboard(request);
+    await page.goto(`/explore/dashboards/${id}`);
+    await expect(page.getByRole('heading', { name: title })).toBeVisible();
+    const filter = pill(page, 'f-list');
+    await filter.locator('button[aria-expanded]').focus();
+    await page.keyboard.press('Enter');
+    const shipped = filter.getByRole('button', { name: 'shipped', exact: true });
+    await shipped.focus();
+    await page.keyboard.press('Enter');
+    await expect(shipped).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
+    await expect(shipped).toBeFocused();
+    // A ring is drawn at all (T638's review: with none, the colour read is
+    // `currentColor`, which would pass on its own).
+    const drawn = await shipped.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { style: style.outlineStyle, width: Number.parseFloat(style.outlineWidth) };
+    });
+    expect(drawn.style).not.toBe('none');
+    expect(drawn.width).toBeGreaterThanOrEqual(2);
+    const ring = await shipped.evaluate((element) => getComputedStyle(element).outlineColor);
+    const fill = await shipped.evaluate((element) => getComputedStyle(element).backgroundColor);
+    // WCAG 1.4.11: 3:1 against what it sits on, here the chosen value's fill.
+    expect(await contrastOf(page, ring, fill)).toBeGreaterThanOrEqual(3);
+  });
+
   test(`the undo toast’s focus ring stands out from the toast, ${theme}`, async ({ page }) => {
     await page.addInitScript((value) => {
       window.localStorage.setItem('wechart.theme', value);
@@ -743,6 +872,29 @@ test('marks a whole series from the tile’s menu, by the keyboard alone (T631)'
   await expect(tile.getByTestId('mark-badge')).toContainText('2 marked');
   await expect(page.locator('.mark-chip')).toContainText(value);
   await expect(page.locator('.mark-chip')).toContainText(second);
+
+  /**
+   * T638 (AC-176; the coordinator's call E (a)): Ctrl+Enter on a series already
+   * marked takes it off, mirroring the Ctrl-click toggle, the other kept; and
+   * its entry says so.
+   */
+  await tile.focus();
+  await page.keyboard.press('Shift+F10');
+  await expect(menu.getByRole('menuitem').first()).toBeFocused();
+  for (let step = 0; step < 30; step += 1) {
+    if (await markSeries.evaluate((element) => element === document.activeElement)) break;
+    await page.keyboard.press('ArrowDown');
+  }
+  await page.keyboard.press('ArrowRight');
+  await expect(series.getByRole('menuitem').first()).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  const again = series.getByRole('menuitem').nth(1);
+  await expect(again).toBeFocused();
+  await expect(again).toHaveAccessibleDescription('Ctrl/⌘+Enter takes it off the marking.');
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect(tile.getByTestId('mark-badge')).toContainText('1 marked');
+  await expect(page.locator('.mark-chip')).toContainText(value);
+  await expect(page.locator('.mark-chip')).not.toContainText(second);
 });
 
 /**

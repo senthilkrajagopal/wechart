@@ -819,6 +819,40 @@ describe('a series or a panel from the tile’s menu (T631, R63)', () => {
   });
 
   /**
+   * T638 (AC-176; the coordinator's call E (a)): on a series already marked, Ctrl+Enter
+   * takes it off, mirroring the Ctrl-click toggle, and its entry says so. One
+   * not marked still says it adds.
+   */
+  it('says Ctrl+Enter takes a series already marked off the marking', async () => {
+    const byPart = parts('mark');
+    render(
+      <TileViewMenu
+        tileId="t1"
+        title="By status"
+        spec={SPEC}
+        save={vi.fn()}
+        marked={{ name: 'Marking', count: 1, onUnmark: vi.fn() }}
+        parts={{
+          ...byPart,
+          series: byPart.series.map((one) => ({ ...one, marked: one.value === 'completed' })),
+        }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By status' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Mark series/ }));
+    const menu = within(screen.getByRole('menu', { name: /^Mark series/ }));
+    const hintOf = (name: string) =>
+      document.getElementById(
+        menu.getByRole('menuitem', { name }).getAttribute('aria-describedby') ?? '',
+      )?.textContent;
+    expect(hintOf('completed')).toBe('Ctrl/⌘+Enter takes it off the marking.');
+    expect(hintOf('Jan 2026')).toBe('Ctrl/⌘+Enter adds it to the marking.');
+    menu.getByRole('menuitem', { name: 'completed' }).focus();
+    await userEvent.keyboard('{Control>}{Enter}{/Control}');
+    expect(byPart.onSeries).toHaveBeenCalledWith('completed', true);
+  });
+
+  /**
    * T636 (AC-176; R66): a tile that marks ranges offers "Mark range…" in its
    * marked group, after Mark all; one that doesn't, none.
    */

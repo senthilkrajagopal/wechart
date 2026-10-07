@@ -8984,6 +8984,42 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - **Tests:**
     - unit: `YamlDiff.test.tsx`, failing first;
     - e2e, Chrome: `security/proposal-models.spec.ts`. The review of a proposed model unfolds its stretch from its bar by Enter, focus in the text, and Show all lines folds and unfolds all. Its published model gained eight comment lines first, a stretch long enough to fold. `security/review-view.spec.ts` passes too.
+- [ ] T638 (AC-176) A visible focus ring wherever one was hidden or cut off, and Ctrl+Enter takes a marked series off *(added 2026-10-07, from T405's re-audit for AC-176; the coordinator's calls: E (a), F (b))*
+  - **Why.** T405's re-audit for AC-176 found four places where the focus ring couldn't be seen, and one action the keyboard couldn't take:
+    - **A.** A list filter's chosen value drew its ring in the accent, on its own accent fill and border.
+    - **B.** Segmented controls inside boxes that clip: the editor's "Actual size / Fit", and the connection form's "Sign in with" and shape choice. The ring was cut to a sliver on the next segment.
+    - **C.** The SQL runner toast's Undo ring was 2.89:1 in light and 2.15:1 in dark, under 1.4.11's 3:1. The undo toast's `currentColor` (T182) wasn't applied there.
+    - **D.** Full-width rows cut their ring at the sides: SQL "My runs", the edit sidebar's Outline, and Jobs' and Schedules' rows below 1,024 px.
+    - **E.** Taking one series off a marking was pointer-only: a Ctrl-click on a mark toggles it, but Ctrl+Enter in "Mark series ›" only added. *The coordinator's call (a): Ctrl+Enter on a series already marked takes it off.*
+    - **F.** The legend's page arrows are drawn on the canvas. *The coordinator's call (b): left, since every series is marked or filtered by from "Mark series ›" and "Filter by series ›".*
+  - Files: `shell/styles.ts`, `dashboard/TileViewMenu.tsx` (+ test), `dashboard/DashboardView.tsx`, `e2e/keyboard-coverage.spec.ts`, `e2e/security/sql-runner.spec.ts`
+  - Failing test:
+    - `keyboard-coverage.spec.ts`:
+      - each ring in B and D is whole, by the keyboard alone;
+      - a list filter's chosen value shows its ring at 3:1 or more in each theme;
+      - Ctrl+Enter on the series marked second takes it off, "1 marked", with its entry saying so.
+    - `security/sql-runner.spec.ts`: a run in "My runs" shows its whole ring, and the toast's Undo ring is at 3:1 or more.
+    - `TileViewMenu.test.tsx`: a marked series' entry says "Ctrl/⌘+Enter takes it off the marking.", and one not marked says it adds.
+  - Depends on: T405, T634
+  - **Built 2026-10-07.**
+    - **A.** A chosen value's ring is drawn inside it, in the ink on the accent (`--wc-text-on-accent`).
+    - **B and D.** These now draw their ring inside the box (`outline-offset: -2px`), as T182's list of controls that fill a clipping box does: the preview sizes, the connection form's segmented and row choices, the Outline, "My runs", and Jobs' and Schedules' rows.
+    - **C.** The SQL runner's toast takes the undo toast's rule: the ring in the toast's own ink.
+    - **E.** The tile menu is told which series the marking holds whole, as a legend entry marks one. On those, Ctrl+Enter takes the series off (`onMarkClick` with `off`, through `applyItemClick`'s toggle), and the entry's hint says "Ctrl/⌘+Enter takes it off the marking.". A Ctrl-click on the legend entry still only adds (AC-090), and a panel's Ctrl+Enter still adds: the call names a series.
+  - **The cold review (PASS), with two findings taken up:**
+    1. The comments credited call E to the user; it was the coordinator's. They now say so.
+    2. The two contrast checks, the list filter's chosen value and the SQL toast's Undo, read only the outline's colour. With no ring drawn they would have read `currentColor` and passed. Each now also requires a drawn outline at least 2 px wide.
+    - Also from it: the menu's comment now says which Ctrl-click it mirrors (a mark's toggle, not the legend's add).
+    - **Left, as nits:**
+      - On the chosen value, the inset ring sits at the pill's edge, beside the popover's own ground, so it can read as the fill shrinking. It passes 3:1 against the fill.
+      - Schedules' rows, the shape choice and the SQL toast in dark have no check of their own; each shares its rule with one that has.
+      - `sql-runner.spec.ts` copies `contrastOf` and a sides-only `ringShows`.
+  - **Tests:**
+    - unit: `TileViewMenu.test.tsx`, failing first on the hint;
+    - e2e, Chrome:
+      - `keyboard-coverage.spec.ts` and `markings.spec.ts`, 85 of 86. The folder tree's arrow-key test failed once, as in T631's and T633's runs, and passed alone and in a full run of its spec (29/29).
+      - `security/sql-runner.spec.ts` 19/19, and after the review 18 of 19. "says a run was cut at 10,000 rows…", which T638 doesn't touch, failed once on a missing element and passed alone.
+      - Each ring check failed without its rule. The series step failed on its hint before `partsOn` passed `marked`.
 - [ ] T406 (AC-187) Re-run the design critique on every surface and tick AC-187 only on measured conformance
   - Files and failing test: as T225 (above), with the phase-2 surfaces added (AC-187).
   - Depends on: T330, T348, T356, T364, T369

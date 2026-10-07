@@ -217,15 +217,26 @@ export function TileViewMenu({
   parts?:
     | {
         readonly verb: 'mark' | 'filter';
-        /** Each by its label as the legend writes it, handed back by its value (T632). */
-        readonly series: readonly { readonly value: string; readonly label: string }[];
+        /**
+         * Each by its label as the legend writes it, handed back by its value
+         * (T632). `marked`: the whole series is in the marking, so Ctrl+Enter
+         * takes it off (T638).
+         */
+        readonly series: readonly {
+          readonly value: string;
+          readonly label: string;
+          readonly marked?: boolean;
+        }[];
         /** Each by its header's words, handed back by its place among the panels drawn (T632). */
         readonly panels: readonly {
           readonly value: string;
           readonly label: string;
           readonly index: number;
         }[];
-        /** `add`: Ctrl+Enter, adding it to the marking (T634). */
+        /**
+         * `add`: Ctrl+Enter, adding it to the marking (T634), or taking a
+         * series already marked off it (T638).
+         */
         readonly onSeries: (value: string, add?: boolean) => void;
         readonly onPanel: (index: number, add?: boolean) => void;
       }
@@ -590,10 +601,19 @@ export function TileViewMenu({
    * Ctrl+Enter or ⌘+Enter adds the series or panel to the marking (T634;
    * R64, the user: "Ctrl+Enter adds"): a series as a Ctrl-click on its legend
    * entry adds it (AC-090), and a panel as a Ctrl-click on its header does
-   * (T635). Not in cross-filter mode, which has one selection a tile.
+   * (T635). Not in cross-filter mode, which has one selection a tile. On a
+   * series already marked it takes it off, as a Ctrl-click on a mark toggles
+   * that mark (T638; the coordinator's call E (a)).
    */
-  const addsTo = (add: () => void) =>
-    parts?.verb === 'mark' ? { onAdd: add, addHint: 'Ctrl/⌘+Enter adds it to the marking.' } : {};
+  const addsTo = (add: () => void, marked = false) =>
+    parts?.verb === 'mark'
+      ? {
+          onAdd: add,
+          addHint: marked
+            ? 'Ctrl/⌘+Enter takes it off the marking.'
+            : 'Ctrl/⌘+Enter adds it to the marking.',
+        }
+      : {};
   /**
    * "Mark series ›" and "Mark panel ›", or "Filter by series ›" and "Filter
    * by panel ›" (T631, R63): each series or panel the tile draws, by its
@@ -619,7 +639,7 @@ export function TileViewMenu({
                     },
                     ...addsTo(() => {
                       parts.onSeries(one.value, true);
-                    }),
+                    }, one.marked),
                   })),
                 },
               ]),
