@@ -3,7 +3,7 @@ import { syntaxHighlighting } from '@codemirror/language';
 import { Chunk, unifiedMergeView } from '@codemirror/merge';
 import { EditorState, Text } from '@codemirror/state';
 import { EditorView, lineNumbers } from '@codemirror/view';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { TOKEN_HIGHLIGHT, TOKEN_THEME } from '../model/YamlEditor';
 
@@ -72,6 +72,12 @@ const DIFF_THEME = EditorView.theme({
   },
   '.cm-changedLineGutter::before': { content: '"+"', color: 'var(--wc-status-success)' },
   '.cm-deletedLineGutter::before': { content: '"−"', color: 'var(--wc-status-error)' },
+  // The folded stretch's bar in the tokens, in either theme: the package
+  // draws it light in both, and as a button (T637) its ring must show on it.
+  '.cm-collapsedLines': {
+    background: 'var(--wc-bg-subtle)',
+    color: 'var(--wc-text-secondary)',
+  },
 });
 
 export function YamlDiff({
@@ -94,6 +100,8 @@ export function YamlDiff({
   readonly asProposed?: boolean;
 }) {
   const host = useRef<HTMLDivElement>(null);
+  /** Every line shown, the unchanged stretches unfolded (T637; R66). */
+  const [all, setAll] = useState(false);
   const { added, removed } = changedLinesOf(current ?? '', proposed);
   const label = asProposed
     ? `${path}, as proposed`
@@ -119,16 +127,79 @@ export function YamlDiff({
                 original: current ?? '',
                 mergeControls: false,
                 // Long unchanged stretches folded, 3 lines kept around each
-                // change (design 05, state G; research, `collapseUnchanged`).
-                collapseUnchanged: { margin: 3, minSize: 4 },
+                // change (design 05, state G; research, `collapseUnchanged`),
+                // unless every line is asked for (T637).
+                ...(all ? {} : { collapseUnchanged: { margin: 3, minSize: 4 } }),
               }),
         ],
       }),
     });
+    /**
+     * Each "N unchanged lines" bar as a button (T637; R66): the package draws
+     * it as a div that only a click unfolds (research, Gotchas). So it is
+     * given the button's role and a tab stop as it is drawn, and Enter or
+     * Space on it clicks it, which is what unfolds it.
+     */
+    const bars = () => {
+      for (const bar of view.dom.querySelectorAll<HTMLElement>('.cm-collapsedLines')) {
+        if (bar.getAttribute('role') === 'button') continue;
+        bar.setAttribute('role', 'button');
+        bar.setAttribute('tabindex', '0');
+        // Named by its words alone: the theme's ⦚ marks, drawn as CSS
+        // content, would otherwise be read as part of its name.
+        bar.setAttribute('aria-label', (bar.textContent ?? '').trim());
+      }
+    };
+    bars();
+    const drawn = new MutationObserver(bars);
+    drawn.observe(view.dom, { childList: true, subtree: true });
+    const barOf = (target: EventTarget | null) =>
+      target instanceof HTMLElement && target.classList.contains('cm-collapsedLines')
+        ? target
+        : undefined;
+    /**
+     * The bar gone, the caret on the first line it unfolded and the text
+     * focused, as CodeMirror focuses it, so a reader is where the lines are
+     * (T637's review: not on the file's first line, nor the page).
+     */
+    const landAt = (pos: number) => {
+      view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+      view.focus();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      const bar = barOf(event.target);
+      if (bar === undefined || (event.key !== 'Enter' && event.key !== ' ')) return;
+      event.preventDefault();
+      const pos = view.posAtDOM(bar);
+      bar.click();
+      landAt(pos);
+    };
+    // A press on a bar keeps focus off it, which its click then removes, and
+    // the caret goes where its lines were unfolded, as from the keys.
+    let pressed: number | undefined;
+    const onDown = (event: MouseEvent) => {
+      const bar = barOf(event.target);
+      if (bar === undefined) return;
+      event.preventDefault();
+      pressed = view.posAtDOM(bar);
+    };
+    const onClick = () => {
+      if (pressed === undefined) return;
+      const pos = pressed;
+      pressed = undefined;
+      landAt(pos);
+    };
+    view.dom.addEventListener('keydown', onKey);
+    view.dom.addEventListener('mousedown', onDown);
+    view.dom.addEventListener('click', onClick);
     return () => {
+      drawn.disconnect();
+      view.dom.removeEventListener('keydown', onKey);
+      view.dom.removeEventListener('mousedown', onDown);
+      view.dom.removeEventListener('click', onClick);
       view.destroy();
     };
-  }, [label, current, proposed, asProposed]);
+  }, [label, current, proposed, asProposed, all]);
   return (
     <section className="yaml-diff" aria-label={`${path}, the YAML`}>
       <p className="yaml-diff__head" data-testid="yaml-diff-head">
@@ -145,6 +216,19 @@ export function YamlDiff({
           </>
         )}
       </p>
+      {asProposed || current === undefined ? null : (
+        // Beside the diff: every folded line unfolded, or folded again (T637; R66).
+        <button
+          type="button"
+          className="btn btn-sm yaml-diff__all"
+          aria-pressed={all}
+          onClick={() => {
+            setAll((now) => !now);
+          }}
+        >
+          Show all lines
+        </button>
+      )}
       <div ref={host} className="yaml-diff__code" />
     </section>
   );

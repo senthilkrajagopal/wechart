@@ -8848,6 +8848,32 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - direction.md's gesture table now reads "Mark the panel; Ctrl/⌘ adds";
     - the e2e now shows a plain click replacing what was marked, and fewer bars faded once both panels are marked. The seed's orders with no product draw a panel of their own, still faded.
   - **Tests:** e2e, Chrome: `markings.spec.ts`, `crossfilter.spec.ts`, `keyboard-coverage.spec.ts`. All pass but `markings.spec.ts`'s "Invert marking and Mark all…", which failed with T635's change taken back too. It isn't T635's: with ports 4100 and 5173 free, it passes alone on a fresh seed. It is listed under T407.
+- [ ] T636 (AC-176, AC-093) Mark a range from the keyboard: "Mark range…" in the tile's ⋯ menu, asking a from and a to *(added 2026-10-07, R66: ""Mark range…" in tile menu")*
+  - **Why.** T405's audit: a range, the marking whose bounds survive filtering and match pre-aggregations, is made only by a drag along an axis (`onMarkRange`). The tile's keys mark items, and Shift+arrows a run of items, never a range.
+  - Files: `dashboard/TileViewMenu.tsx` (the entry and its dialog), `dashboard/DashboardView.tsx` (the range, as a drag's), `e2e/markings.spec.ts`
+  - Failing test: a tile that marks ranges offers "Mark range…" in its marked group. Its dialog takes a from and a to on the tile's axis and marks that range, as a drag over it does; Esc closes it, asking first over typed bounds (rule 85). e2e: a range marked from the keyboard alone.
+  - Depends on: T634
+- [ ] T637 (AC-176) A review's YAML diff unfolds from the keyboard: "Show all lines" beside it, and each folded stretch a button *(added 2026-10-07, R66: ""Show all lines" toggle")*
+  - **Why.** T405's audit: `@codemirror/merge` draws each "N unchanged lines" bar as a div that only a click unfolds (research `codemirror-merge.md`, Gotchas).
+  - Files: `workspaces/reviews/YamlDiff.tsx` (+ test), `shell/styles.ts`
+  - Failing test: `YamlDiff.test.tsx`: "Show all lines" unfolds every stretch and folds them again (`aria-pressed`); each bar is a button with a tab stop, and Enter on it unfolds its stretch, focus going to the text it unfolded.
+  - Depends on: T350
+  - **Built 2026-10-07.**
+    - "Show all lines", a toggle button beside the diff, rebuilds the view without `collapseUnchanged`, and with it again. It isn't offered for a new file, or one shown as proposed, which fold nothing.
+    - Each `.cm-collapsedLines` bar is given the button's role, a tab stop and its words as its name, as the package draws it (a `MutationObserver` on the view, since it draws them as it scrolls).
+      - The name is set because the theme's ⦚ marks, drawn as CSS content, were read in Chrome as part of it.
+      - Enter or Space on a bar clicks it, the package's own way to unfold it (`uncollapseUnchanged`). Focus then goes to the text it unfolded, the bar being gone.
+    - Its focus ring is drawn inside it, since the editor's box clips one outside.
+  - The bars as buttons are the coordinator's addition to R66's toggle, so that each stretch is reached where it is.
+  - **The cold review (FAIL) found three bugs, all fixed:**
+    1. Unfolding left the caret where it was, the file's first line, wherever the stretch had been. The caret now goes to the stretch's first line, the view focused as CodeMirror focuses it (`YamlDiff.test.tsx`: a stretch between two changes, by Space; failing first).
+    2. "Show all lines" looked the same on and off. It is drawn on as the History button is: accent border and ink, 600.
+    3. A press on a bar, now focusable, took focus to it, and its click then removed it, dropping focus to the page. A press now keeps focus off it, and its click lands the caret as the keys do (failing first).
+    - Also: the bar is drawn in the tokens in either theme, where the package drew it light in both, so its ring shows in the dark theme. Tests now show the toggle isn't offered for a new file or one shown as proposed.
+    - Left, as nits: the toggle rebuilds the view, so the diff's scroll goes back to its top; Ctrl+Enter on a bar unfolds it too.
+  - **Tests:**
+    - unit: `YamlDiff.test.tsx`, failing first;
+    - e2e, Chrome: `security/proposal-models.spec.ts`. The review of a proposed model unfolds its stretch from its bar by Enter, focus in the text, and Show all lines folds and unfolds all. Its published model gained eight comment lines first, a stretch long enough to fold. `security/review-view.spec.ts` passes too.
 - [ ] T406 (AC-187) Re-run the design critique on every surface and tick AC-187 only on measured conformance
   - Files and failing test: as T225 (above), with the phase-2 surfaces added (AC-187).
   - Depends on: T330, T348, T356, T364, T369

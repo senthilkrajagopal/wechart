@@ -4834,6 +4834,12 @@ main:has(.review-view) {
 .yaml-diff { display: grid; gap: 6px; min-width: 0; }
 .yaml-diff__head { margin: 0; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
 .yaml-diff__head .is-code { font-family: var(--wc-font-code); color: var(--wc-text-primary); font-weight: 600; }
+/* Show all lines, beside the diff; each folded stretch a button, its ring
+   drawn inside it, the editor's box clipping one outside (T637). */
+.yaml-diff__all { justify-self: start; }
+/* On, seen as on, as the History button's pressed state is (T637's review). */
+.yaml-diff__all[aria-pressed='true'] { border-color: var(--wc-accent); color: var(--wc-accent); font-weight: 600; }
+.yaml-diff .cm-collapsedLines:focus-visible { outline-offset: -2px; }
 .yaml-diff__code .cm-editor {
   max-height: calc(100vh - 220px);
   border: 1px solid var(--wc-border-strong);

@@ -1,5 +1,7 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { EditorView } from '@codemirror/view';
+import { describe, expect, it, vi } from 'vitest';
 
 import { changedLinesOf, YamlDiff } from './YamlDiff';
 
@@ -105,5 +107,123 @@ describe('a model’s YAML diff (T350, design 05 state G)', () => {
     expect(container.querySelector('.cm-chunkButtons')).toBeNull();
     // Each changed line marked beside it, not by its tint alone (rule 3).
     expect(container.querySelectorAll('.cm-changedLineGutter').length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * T637 (AC-176; R66, the user): the folded lines are reached from the
+ * keyboard. "Show all lines", beside the diff, unfolds them all and folds
+ * them again; and each "N unchanged lines" bar is a button, Enter or Space
+ * on it unfolding its own.
+ */
+describe('a YAML diff’s folded lines, from the keyboard (T637)', () => {
+  const long = (end: string) =>
+    [
+      'cubes:',
+      '  - name: orders',
+      ...Array.from({ length: 20 }, (_, at) => `    # note ${String(at)}`),
+      `    sql_table: public.${end}`,
+      '',
+    ].join('\n');
+  const shown = () =>
+    render(
+      <YamlDiff
+        path="cubes/orders.yml"
+        current={long('orders')}
+        version={2}
+        proposed={long('o2')}
+      />,
+    );
+
+  it('unfolds every line with Show all lines, and folds them again', async () => {
+    const { container } = shown();
+    const toggle = screen.getByRole('button', { name: 'Show all lines' });
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    await userEvent.click(toggle);
+    expect(container.querySelector('.cm-collapsedLines')).toBeNull();
+    expect(container.textContent).toContain('# note 10');
+    expect(
+      screen.getByRole('button', { name: 'Show all lines' }).getAttribute('aria-pressed'),
+    ).toBe('true');
+    await userEvent.click(screen.getByRole('button', { name: 'Show all lines' }));
+    expect(container.querySelector('.cm-collapsedLines')).not.toBeNull();
+  });
+
+  it('makes each folded stretch a button that unfolds on Enter', async () => {
+    const { container } = shown();
+    const bar = await screen.findByRole('button', { name: /unchanged lines$/ });
+    expect(bar.classList.contains('cm-collapsedLines')).toBe(true);
+    expect(bar.getAttribute('tabindex')).toBe('0');
+    bar.focus();
+    await userEvent.keyboard('{Enter}');
+    await vi.waitFor(() => {
+      expect(container.querySelector('.cm-collapsedLines')).toBeNull();
+    });
+    expect(container.textContent).toContain('# note 10');
+    // Its bar gone, focus is in the text it unfolded, not on the page.
+    expect(document.activeElement).toBe(
+      screen.getByRole('textbox', {
+        name: 'cubes/orders.yml: the proposed YAML against the current',
+      }),
+    );
+  });
+
+  /**
+   * T637's review: a stretch between two changes, unfolded by Space, puts
+   * the caret on its first line, not the file's first; and one unfolded by
+   * the pointer keeps focus in the text, not the page.
+   */
+  const between = (first: string, last: string) =>
+    [
+      `# head ${first}`,
+      ...Array.from({ length: 20 }, (_, at) => `# note ${String(at)}`),
+      `# tail ${last}`,
+      '',
+    ].join('\n');
+  const midway = () =>
+    render(
+      <YamlDiff
+        path="cubes/orders.yml"
+        current={between('a', 'a')}
+        version={2}
+        proposed={between('b', 'b')}
+      />,
+    );
+  const textbox = () =>
+    screen.getByRole('textbox', {
+      name: 'cubes/orders.yml: the proposed YAML against the current',
+    });
+
+  it('puts the caret on the first line it unfolds, by Space', async () => {
+    midway();
+    const bar = await screen.findByRole('button', { name: /unchanged lines$/ });
+    bar.focus();
+    await userEvent.keyboard(' ');
+    await vi.waitFor(() => {
+      expect(screen.queryByRole('button', { name: /unchanged lines$/ })).toBeNull();
+    });
+    expect(document.activeElement).toBe(textbox());
+    const view = EditorView.findFromDOM(textbox());
+    const line = view?.state.doc.lineAt(view.state.selection.main.head).number ?? 0;
+    // The stretch begins past the head and the 3 lines kept round its change.
+    expect(line).toBeGreaterThan(3);
+  });
+
+  it('keeps focus in the text when the pointer unfolds a stretch', async () => {
+    midway();
+    const bar = await screen.findByRole('button', { name: /unchanged lines$/ });
+    await userEvent.click(bar);
+    await vi.waitFor(() => {
+      expect(screen.queryByRole('button', { name: /unchanged lines$/ })).toBeNull();
+    });
+    expect(document.activeElement).toBe(textbox());
+  });
+
+  it('offers Show all lines only where something folds against a current file', () => {
+    const { unmount } = render(<YamlDiff path="cubes/orders.yml" proposed={between('b', 'b')} />);
+    expect(screen.queryByRole('button', { name: 'Show all lines' })).toBeNull();
+    unmount();
+    render(<YamlDiff path="cubes/orders.yml" proposed={between('b', 'b')} asProposed />);
+    expect(screen.queryByRole('button', { name: 'Show all lines' })).toBeNull();
   });
 });

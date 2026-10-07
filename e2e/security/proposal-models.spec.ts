@@ -21,7 +21,8 @@ const CUBE = `t350_${RUN}`;
 const PATH = `cubes/${CUBE}.yml`;
 const BOARD = `Doubled ${RUN}`;
 const CHART = `Doubled chart ${RUN}`;
-const PUBLISHED = `cubes:\n  - name: ${CUBE}\n    sql: SELECT 1 AS n\n    measures:\n      - name: n\n        sql: n\n        type: sum\n`;
+// Comment lines first, a stretch long enough for the review to fold (T637).
+const PUBLISHED = `${Array.from({ length: 8 }, (_, at) => `# note ${String(at + 1)}\n`).join('')}cubes:\n  - name: ${CUBE}\n    sql: SELECT 1 AS n\n    measures:\n      - name: n\n        sql: n\n        type: sum\n`;
 const CHANGED = `${PUBLISHED}      - name: doubled\n        sql: n * 2\n        type: sum\n`;
 const made = { folder: '', xcubeId: '', project: '', chart: '', board: '', proposal: '' };
 const full = () => `${made.xcubeId}__${CUBE}`;
@@ -214,6 +215,24 @@ test.describe('a dashboard proposed with the workspace model it resolves through
       await expect(text).toContainText('name: doubled');
       // Each added line marked beside it, not by its tint alone (rule 3).
       await expect(page.locator('.cm-changedLineGutter')).toHaveCount(3);
+
+      // T637 (AC-176; R66): the folded lines from the keyboard. The bar is a
+      // button that Enter unfolds, and Show all lines folds and unfolds them all.
+      const bar = page.getByRole('button', { name: /unchanged lines$/ });
+      await bar.focus();
+      await page.keyboard.press('Enter');
+      await expect(bar).toHaveCount(0);
+      await expect(text).toContainText('# note 1');
+      await expect(text).toBeFocused();
+      const all = page.getByRole('button', { name: 'Show all lines' });
+      await expect(all).toHaveAttribute('aria-pressed', 'false');
+      await all.focus();
+      await page.keyboard.press('Enter');
+      await expect(all).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.locator('.cm-collapsedLines')).toHaveCount(0);
+      await page.keyboard.press('Enter');
+      await expect(all).toHaveAttribute('aria-pressed', 'false');
+      await expect(page.locator('.cm-collapsedLines')).toHaveCount(1);
     });
 
     test('is told, deleting the model, that it withdraws the proposal it goes with (AC-372)', async ({
