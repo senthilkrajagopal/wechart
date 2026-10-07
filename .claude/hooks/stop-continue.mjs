@@ -13,8 +13,11 @@ hook('stop-continue', 'feedback', ({ session_id: session }) => {
   if (!open.length || !scripts.test) return;
 
   const pm = existsSync(abs('pnpm-lock.yaml')) ? 'pnpm' : 'npm';
-  const tests = run(pm, ['test'], { timeout: 300_000, env: { ...process.env, CI: '1' } });
-  if (tests.status !== 0) return; // failing or timed out: allow the stop so a person sees the red state
+  // Under the API suite's lock, as every other run against wechart_test is, never waited for: a run already
+  // going leaves the suite unjudged, so the stop is allowed (the user, 2026-10-07). Long enough not to cut it short.
+  const tests = run('lockf', ['-s', '-t', '0', '/private/tmp/wechart-api-tests.lock', pm, 'test'],
+    { timeout: 900_000, env: { ...process.env, CI: '1', COMPOSE_PROJECT_NAME: 'wechart' } });
+  if (tests.status !== 0) return; // failing, locked or timed out: allow the stop so a person sees the state
 
   let state = {};
   try { state = JSON.parse(read(STATE) ?? '{}'); } catch { /* a corrupt counter counts as zero */ }
