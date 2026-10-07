@@ -950,6 +950,11 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R67 — metrics on two scales, the dashboards' pick, and the horizontal bar** (2026-10-07, the user)
+- Q (from T510): an unsplit bar, line or area with two metrics on different scales. A: "Draw the first only (Recommended)". *The second's pill says "not drawn · on another scale", offering Small multiples and Table (design 01-5), and the axis keeps the first's format. T195's one-axis decision is superseded.*
+- Q (from T510): picking per-metric small multiples needs formats, which dashboards don't have when they pick. A: "Pass formats to dashboards (Recommended)". *The editor and the tile pick the same chart (T193).*
+- Q (from T516): when should the horizontal bar be the runner-up? A: "Promote when labels hide (Recommended)". *It's second when more than half the labels would be hidden at the tile's width; otherwise today's order stands.*
+
 **R66 — the Stop hook, Jobs' summary links, and two keyboard paths** (2026-10-07, the user)
 - Q: the Stop hook runs the API suite without the tests' lock, polluting wechart_test. A: "Hook takes the test lock (Recommended)". *It runs under the lock without waiting, and isn't cut short (3bdc94c).*
 - Q (from T558): the summary's building, queued and suspended links have no drawn filter to land on. A: "State filter pills (Recommended by agent)". *A State pill on Queue (Any, Building, Queued, Stalled) and on Schedules (Any, Active, Paused, Suspended), set from the link.*
