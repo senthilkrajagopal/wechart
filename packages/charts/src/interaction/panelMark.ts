@@ -24,11 +24,11 @@ import type { EChartsOption } from '../theme';
  * inside it. A tuple naming more would mark one item and satisfy the
  * criterion's first failing state exactly.
  *
- * It takes no previous marking, because it does not consult one: a panel click
- * replaces, and AC-091 describes no modifier. (`references-markings.md` notes
- * that Spotfire's Ctrl-click adds further panels. No criterion asks for it, so
- * it is not built; when one does, this grows a modifier the way
- * `markFromLegend` has one.)
+ * It takes no previous marking, because it does not consult one: a plain panel
+ * click replaces. A Ctrl- or ⌘-click adds further panels, as Spotfire's does
+ * (`references-markings.md`), through `markFromLegend` with `add`, the
+ * dashboard's own path for a legend entry's Ctrl-click (T635; the
+ * coordinator's call on R64, with the tile menu's Ctrl+Enter, T634).
  */
 export function markFromPanel(panel: MemberValue): MarkingPredicate {
   return { ...EMPTY_PREDICATE, items: [[panel]] };

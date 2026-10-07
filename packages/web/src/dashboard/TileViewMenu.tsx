@@ -584,9 +584,8 @@ export function TileViewMenu({
   /**
    * Ctrl+Enter or ⌘+Enter adds the series or panel to the marking (T634;
    * R64, the user: "Ctrl+Enter adds"): a series as a Ctrl-click on its legend
-   * entry adds it (AC-090). A header's Ctrl-click still replaces (AC-091), so
-   * adding a panel is the menu's alone. Not in cross-filter mode, which has
-   * one selection a tile.
+   * entry adds it (AC-090), and a panel as a Ctrl-click on its header does
+   * (T635). Not in cross-filter mode, which has one selection a tile.
    */
   const addsTo = (add: () => void) =>
     parts?.verb === 'mark' ? { onAdd: add, addHint: 'Ctrl/⌘+Enter adds it to the marking.' } : {};

@@ -274,15 +274,21 @@ export function ChartCanvas({
       onItem.current = true;
       clicked.current?.({ panelIndex: Number(item) }, toggle);
     });
-    // Where on the header, so a drag along it is told from a click on it.
+    // Where on the header, so a drag along it is told from a click on it; and
+    // with Ctrl or ⌘ held, adding its panel to the marking, as a legend
+    // entry's Ctrl-click adds (T635; the coordinator's call on R64).
     const panelAt = (params: {
       componentIndex?: number;
-      event?: { offsetX?: number; offsetY?: number };
+      event?: {
+        offsetX?: number;
+        offsetY?: number;
+        event?: { ctrlKey?: boolean; metaKey?: boolean };
+      };
     }) => ({
       item: String(params.componentIndex ?? 0),
       x: params.event?.offsetX ?? 0,
       y: params.event?.offsetY ?? 0,
-      toggle: false,
+      toggle: params.event?.event?.ctrlKey === true || params.event?.event?.metaKey === true,
     });
     const onTitleDown = (params: unknown) => {
       if (!primary(params)) return;

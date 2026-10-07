@@ -8810,9 +8810,21 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - **Open, for the user:** should a Ctrl- or ⌘-click on a trellis header add its panel, as the menu's Ctrl+Enter now does and Spotfire's Ctrl-click does (`references-markings.md`)? AC-091 names no modifier.
     - (a) Yes, a header's Ctrl/⌘-click adds. *Recommended:* the pointer and the keyboard then mirror each other, as R64's "mirroring Ctrl-click" has it.
     - (b) No, leave the pointer as it is.
+    - *Answered (a) by the coordinator's call, 2026-10-07, overturnable: T635.*
   - **Tests:**
     - unit: `Menu.test.tsx`, `TileViewMenu.test.tsx`, both failing first;
     - e2e, Chrome: `keyboard-coverage.spec.ts`, `markings.spec.ts`, `tile-menu.spec.ts`, `crossfilter.spec.ts`, 100/100. Each new e2e step read "1 marked" until `partsOn` passed the add on.
+- [ ] T635 (AC-091) A Ctrl- or ⌘-click on a trellis header adds its panel to the marking *(added 2026-10-07: the coordinator's call, overturnable, on T634's question)*
+  - **Why.** R64's "Ctrl+Enter adds… mirroring Ctrl-click" gave the tile menu's "Mark panel ›" an add (T634), but a header's own Ctrl-click still replaced the marking (`markFromPanel`, since T190). The coordinator chose (a): the pointer mirrors the keyboard and a legend entry's Ctrl-click, as Spotfire's Ctrl-click on a panel header does (`references-markings.md`).
+  - Files: `web/tiles/ChartCanvas.tsx` (the header's click reads Ctrl and ⌘), `charts/interaction/panelMark.ts` (its note)
+  - Failing test: `markings.spec.ts` "a trellis panel header marks the whole panel": after Components, a Ctrl/⌘-click on Instruments' header makes "2 marked", both in the chip. It read "1 marked" before.
+  - Depends on: T634
+  - **Built 2026-10-07.** The header's click carries Ctrl or ⌘ as its toggle, as a mark's click does. `onMarkClick` already reads a panel with its toggle on through `markFromLegend` with `add`, so the header adds its panel and keeps the rest. A plain click replaces, as AC-091 has it. In cross-filter mode the toggle means nothing, as for any click there.
+  - **The cold review (PASS), with its findings taken up:**
+    - the comments that still said a header's Ctrl-click replaces, in `DashboardView.tsx` and `TileViewMenu.tsx`, now say it adds;
+    - direction.md's gesture table now reads "Mark the panel; Ctrl/⌘ adds";
+    - the e2e now shows a plain click replacing what was marked, and fewer bars faded once both panels are marked. The seed's orders with no product draw a panel of their own, still faded.
+  - **Tests:** e2e, Chrome: `markings.spec.ts`, `crossfilter.spec.ts`, `keyboard-coverage.spec.ts`. All pass but `markings.spec.ts`'s "Invert marking and Mark all…", which failed with T635's change taken back too. It isn't T635's: with ports 4100 and 5173 free, it passes alone on a fresh seed. It is listed under T407.
 - [ ] T406 (AC-187) Re-run the design critique on every surface and tick AC-187 only on measured conformance
   - Files and failing test: as T225 (above), with the phase-2 surfaces added (AC-187).
   - Depends on: T330, T348, T356, T364, T369
@@ -8820,6 +8832,9 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `playwright.config.ts`, `playwright.security.config.ts` (an Edge project locally when Edge is installed), `docs/handoff.md`
   - Failing test: both suites pass in all four browsers (AC-180).
   - Depends on: T405, T406
+  - **Order- or environment-dependent tests to look at here** (found by T631–T635's runs):
+    - `keyboard-coverage.spec.ts` "the folder tree moves with the arrow keys" failed once in each full run of the spec, in T631's and T633's, and passes alone.
+    - `markings.spec.ts:2078` "Invert marking and Mark all…" failed in a run of the whole spec (2026-10-07: "1 of 3", then "1 of 4" bars faded on "By category"). It failed again alone while ports 4100 and 5173 may have been held by another worktree's servers, which `reuseExistingServer` then used. With both ports free it passed alone, on a fresh seed. Look for what an earlier test leaves in the shared seed.
 
 ## P2.15 The whole-surface checks
 

@@ -2991,7 +2991,8 @@ export function DashboardView({
                * A legend entry marks every item of that category, and Ctrl
                * there *adds* a further category rather than toggling one
                * (AC-090 against AC-087 — the criteria differ, and Spotfire
-               * behaves the same way round).
+               * behaves the same way round). A header's Ctrl-click adds its
+               * panel the same way (T635).
                */
               markFromLegend(
                 before,
@@ -4310,9 +4311,8 @@ export function DashboardView({
             const { series, panels } = tilePartsOf(shown);
             if (series.length === 0 && panels.length === 0) return undefined;
             // `add`: Ctrl+Enter, added to the marking as a Ctrl-click on a
-            // legend entry adds a series (T634; R64). A panel added so goes
-            // the same way (`markFromLegend` with add); a header's own
-            // Ctrl-click still replaces (AC-091).
+            // legend entry adds a series (T634; R64), and as a Ctrl-click on
+            // a header adds a panel (T635): `markFromLegend` with add.
             const pick = (item: ClickedItem, said: string, add = false) => {
               if (marking) {
                 onMarkClick(tileId, chartId, item, add);

@@ -578,6 +578,29 @@ test('a trellis panel header marks the whole panel', async ({ page, request }) =
   await expect
     .poll(async () => (await opacities(panels)).filter((value) => value < 1).length)
     .toBeGreaterThan(0);
+
+  /**
+   * T635 (AC-091; the coordinator's call on R64's "mirroring Ctrl-click"): a
+   * Ctrl- or ⌘-click on another header adds its panel, the first kept, as
+   * the menu's Ctrl+Enter does (T634) and a legend entry's Ctrl-click does.
+   */
+  const fadedWithOne = (await opacities(panels)).filter((value) => value < 1).length;
+  await page.keyboard.down('ControlOrMeta');
+  await panels.locator('svg text', { hasText: 'Instruments' }).first().click();
+  await page.keyboard.up('ControlOrMeta');
+  await expect(panels.getByTestId('mark-badge')).toContainText('2 marked');
+  await expect(page.getByTestId('mark-chip')).toContainText('Components');
+  await expect(page.getByTestId('mark-chip')).toContainText('Instruments');
+  // Both panels marked: fewer bars faded than with Components alone (the
+  // seed's orders with no product make a panel of their own, still faded).
+  await expect
+    .poll(async () => (await opacities(panels)).filter((value) => value < 1).length)
+    .toBeLessThan(fadedWithOne);
+
+  // A plain click replaces, the other panel let go (AC-091; T635's review).
+  await panels.locator('svg text', { hasText: 'Components' }).first().click();
+  await expect(panels.getByTestId('mark-badge')).toContainText('1 marked');
+  await expect(page.getByTestId('mark-chip')).not.toContainText('Instruments');
 });
 
 /**
