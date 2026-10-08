@@ -77,6 +77,16 @@ test('a draft’s file follows its cube’s name when saved, and again when rena
     expect(await pathsIn()).toContain(`cubes/${first}.yml`);
     expect(await pathsIn()).not.toContain('cubes/new_cube_1.yml');
 
+    // Said once, on arrival: opened again from the tree after another file,
+    // it says nothing of that save (T737's review).
+    await tree.getByRole('link', { name: /^orders\.yml/ }).click();
+    await expect(page).toHaveURL(/\/models\/cubes%2Forders\.yml$/);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('cubes/orders.yml');
+    await tree.getByRole('link', { name: new RegExp(`^${first}\\.yml`) }).click();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(`cubes/${first}.yml`);
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeVisible();
+    await expect(saved).toHaveCount(0);
+
     // Renamed and saved again: it follows.
     await rename(first, second);
     await save.click();

@@ -423,11 +423,14 @@ function FileEditor({
   onPublished,
   where,
   said,
+  onSaid,
 }: {
   path: string;
   content: string;
   /** What its save said, where the save moved it here (T737): said again as it opens. */
   said?: { readonly ok: boolean; readonly text: string } | undefined;
+  /** Told once it has opened saying `said`, so it is said once (T737's review). */
+  onSaid?: (() => void) | undefined;
   /** Where the file is, and whether it may be changed here (T342). */
   where: Place;
   /** Just made by New view: opens on its Cubes, a new one ready to pick (T493). */
@@ -860,6 +863,11 @@ function FileEditor({
    */
   const [refusedRollups, setRefusedRollups] = useState(readRefusedRollups);
   const [outcome, setOutcome] = useState<{ ok: boolean; text: string } | null>(said ?? null);
+  // Opened saying what a save that moved it here said: its page is told, and
+  // hands it on no more (T737's review).
+  useEffect(() => {
+    if (said !== undefined) onSaid?.();
+  }, [said, onSaid]);
   const queryClient = useQueryClient();
   /** Changes not yet published (AC-226): for a file made here, all of it. */
   const changed = text !== saved;
@@ -1587,6 +1595,7 @@ function FileBody({
   onPublished,
   where,
   said,
+  onSaid,
 }: {
   path: string;
   content: string;
@@ -1611,6 +1620,8 @@ function FileBody({
   where: Place;
   /** What its save said, where the save moved it here (T737): said again as it opens. */
   said?: { readonly ok: boolean; readonly text: string } | undefined;
+  /** Told once its editor has opened saying `said` (T737's review). */
+  onSaid?: (() => void) | undefined;
 }) {
   const read = useMemo(() => objectsOf(path, content), [path, content]);
   // Code or a template: its text in the code view, read-only, with the reason (T146, AC-140).
@@ -1635,6 +1646,7 @@ function FileBody({
       drafts={drafts}
       onPublished={onPublished}
       {...(said === undefined ? {} : { said })}
+      {...(onSaid === undefined ? {} : { onSaid })}
       {...(onText === undefined ? {} : { onText })}
     />
   );
@@ -1845,12 +1857,17 @@ export function ModelFilePage({
    * save in (so leaving asks nothing).
    */
   useEffect(() => {
-    if (movedTo === undefined) return;
-    if (movedTo.from === path) router.history.replace(hrefOf(movedTo.path));
-    // Arrived: its editor has opened saying so, and says it no more after
-    // (T737's review).
-    else if (movedTo.path === path) setMovedTo(undefined);
+    if (movedTo !== undefined && movedTo.from === path)
+      router.history.replace(hrefOf(movedTo.path));
   }, [movedTo, path, router, hrefOf]);
+  /**
+   * Arrived: its editor has opened saying so, and tells the page, which then
+   * hands it on no more, so a remount or a return says nothing (T737's
+   * review). Told by the editor, never set from an effect here.
+   */
+  const saidOnArrival = useCallback(() => {
+    setMovedTo(undefined);
+  }, []);
   const words = folderWordsOf(folder, folders.data ?? []);
   const where = useMemo<Place>(
     () => ({
@@ -2292,7 +2309,9 @@ export function ModelFilePage({
                 made !== undefined && made.path === file.path && !named(made) && freshView(made)
               }
               drafts={otherDrafts}
-              {...(movedTo?.path === file.path ? { said: movedTo.said } : {})}
+              {...(movedTo?.path === file.path
+                ? { said: movedTo.said, onSaid: saidOnArrival }
+                : {})}
               onPublished={(sent, moved) => {
                 // A draft's file that followed its cube's name is no longer at
                 // its old path (T737, AC-423): neither listed there nor a draft.

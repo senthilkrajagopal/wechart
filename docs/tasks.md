@@ -14168,6 +14168,9 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - a landed cube's title changed: it lands through a proposal (`e2e/security/fixed-names.spec.ts`, T722);
       - a draft's name changed before it lands: done in the form (`e2e/draft-file-names.spec.ts`, here);
       - a draft's file name not following its cube's: it follows, on the page, at its address, in the tree and through the API (`e2e/draft-file-names.spec.ts`), and at landing (`global-names.spec.ts`'s T707 case).
+  - *Follow-up, 2026-10-08 (group 3, at the coordinator's word):* eslint's `react-hooks/set-state-in-effect` refused the page's effect that cleared the move once the editor had arrived (`setMovedTo(undefined)`). The editor now tells the page once it has opened saying the save's words (`onSaid`, from its mount); the page then hands them on no more. The effect only follows the move to its new address. No eslint-disable.
+    - The behaviour shown before and after: `draft-file-names.spec.ts` now also opens another file from the tree and comes back, and "Saved." is not said again. It passed before the change and after. With the page never clearing it, the step failed (1 found, 0 expected), so it can fail.
+    - Also passing: the model web tests (366), `model-in-folder` and `folder-models` (phase 1, Chrome); eslint over the web package has no error.
 
 - [x] T738 (AC-141, AC-329, AC-132, AC-344, AC-313, AC-356, AC-357) Fix the phase-1 and security e2e failures the naming work caused
   - *Added 2026-10-08 by the coordinator:* model-design's T481, model.spec:365, country-map's race and items-switch's index names are regressions from the naming work (R71–R73), so they are ours to fix. Run the whole phase-1 suite and the whole security suite in Chrome on the image, under the lock. Fix, test-first, every failure the naming work caused. List, unfixed, those it didn't cause.
