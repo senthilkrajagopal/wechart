@@ -686,8 +686,9 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
    * T459 (AC-157): beside each data source, the cubes xcube bound to it at
    * publish. A cube in the sales folder naming `parent_…` binds its parent's,
    * the one data source of that name (R71; T731: a nearer one of the name, and
-   * its rebinding, can no longer be made). A root data source's cube in
-   * managers' folder is no business of `writer`'s.
+   * its rebinding, can no longer be made). Published again, the cube stays
+   * beside it, and the folder's own data source has none (AC-273; T730). A
+   * root data source's cube in managers' folder is no business of `writer`'s.
    */
   test.describe('the cubes bound to each', () => {
     test.describe('as super, who publishes them', () => {
@@ -711,7 +712,7 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
             },
           }),
         });
-        expect(nearer.status()).toBe(409);
+        expect(nearer.status(), await nearer.text()).toBe(409);
         expect(await nearer.json()).toEqual({
           error: `The name “parent_${RUN}” is already in use.`,
         });
@@ -765,6 +766,12 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
         await expect(parent.locator('.sources-used-by__tip')).toHaveText(
           `uses_${RUN} · Sources parent ${RUN} / Sources ${RUN}`,
         );
+        // The folder's own data source, which the cube doesn't name: none.
+        await expect(
+          rowOf(`sales_${RUN}`, `Sources parent ${RUN} / Sources ${RUN}`).getByTestId(
+            'source-used-by',
+          ),
+        ).toHaveText('No cube');
         // Managers' cube counted, never named (as AC-322 counts what can't be seen).
         const root = rowOf(`root_${RUN}`, 'Shared').getByTestId('source-used-by');
         await expect(root.locator('.sources-used-by__count')).toHaveText('1 cube');
@@ -793,6 +800,38 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
           `uses_${RUN}.yml`,
           `Sources parent ${RUN} / Sources ${RUN}`,
         ]);
+      });
+    });
+
+    test.describe('as super, again', () => {
+      test.use({ role: 'super' });
+
+      test('publishes the cube again, by the same name', async ({ page }) => {
+        await cube(page.request, made.folder, `uses_${RUN}`, `parent_${RUN}`, 'Uses, again');
+      });
+    });
+
+    test.describe('as writer, again', () => {
+      test.use({ role: 'writer' });
+
+      test('sees it beside the same one once it’s published again, and the folder’s own with none', async ({
+        page,
+      }) => {
+        await page.goto('/data-sources');
+        const table = page.getByRole('main').getByRole('table', { name: 'Data sources' });
+        const usedBy = (name: string, folder: string) =>
+          table
+            .getByRole('row')
+            .filter({ hasText: name })
+            .filter({ has: page.getByRole('link', { name: folder, exact: true }) })
+            .getByTestId('source-used-by');
+
+        await expect(
+          usedBy(`parent_${RUN}`, `Sources parent ${RUN}`).locator('.sources-used-by__tip'),
+        ).toHaveText(`uses_${RUN} · Sources parent ${RUN} / Sources ${RUN}`);
+        await expect(usedBy(`sales_${RUN}`, `Sources parent ${RUN} / Sources ${RUN}`)).toHaveText(
+          'No cube',
+        );
       });
     });
   });

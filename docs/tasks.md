@@ -13775,6 +13775,28 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - a change is saved only after a passing test (AC-161);
       - the rebuild warning shows on an identity change and on a replaced key (AC-353).
   - Depends on: T708, T712, T722, T725
+  - *Noted (2026-10-08):*
+    - `data-source-binding.spec.ts`, reworked to one name per data source. /A keeps `wh_<run>` (postgres), /A/B/C `deep_<run>` and /S `side_<run>` (template1). On the image:
+      - a cube in /A/B on `wh_<run>` reads postgres, and one in /A/B/C extending it reads its parent's;
+      - saved in My workspace to go to /A/B, a cube on `deep_<run>` or `side_<run>` is refused with xcube's "which isn't in its folder or one of its ancestors", and one on a name no data source holds with "which the model doesn't hold";
+      - the connection is live on every instance (AC-161);
+      - another landing, and the cube published again, rebind nothing;
+      - `default` and `Default` are refused in /A and /A/B (T708); a cube naming none, in /A/B/C or /N, reads the root's `default` (`sample`);
+      - each data source is held under its own name in its folder's xcube id, the root's in `froot`;
+      - renaming /A and moving it beneath /S changes no connection's name or id. The move is seen in xcube's tree, since a cube in /A/B can then name `side_<run>`, and what was published answers as before.
+
+      T435's nearest-first and nearer-added cases go with R71.
+    - `data-sources.spec.ts` (T459's cubes-beside-each): a second `parent_<run>` is now refused as in use (AC-421), replacing the nearer one T459 added. The cube published again stays beside `parent_<run>`, and the folder's own `sales_<run>` shows no cube. T497's and T506's cases passed as they were.
+    - `root-default.spec.ts` (T443, with T708's case) and phase-1 `data-source.spec.ts` (T497, T506) passed as they were. So did `SourceEditor`/`ConnectionForm` in the web suite.
+    - On the image, in chrome: data-source-binding and data-sources 18/18; root-default 3/3; data-source 2/2.
+    - **Not run: `deploy/helm/verify.sh`** (AC-310's fresh install through the Helm chart). It already checks the root's `default` and that no other folder holds one (T702). It needs a release, which T702's Helm fresh start is held for, so T730 stays unticked until it runs on one.
+    - AC-273 ticked. Each Fails-when has a passing test on the image:
+      - binding /A/B/C's or a sibling's data source, or a name no data source holds: refused, in `data-source-binding.spec.ts`;
+      - a binding other than the data source's own name: none, shown by `/connections` and the answers;
+      - a cube extending another: queries its parent's.
+
+      T712's stub tests are the unit half.
+    - AC-310 stays unticked: its Helm fresh install is `verify.sh`'s.
 
 - [x] T731 (AC-281, AC-282, AC-283, AC-323, AC-280) Rework the tests of T345, T347, T363, T471, T542 and T543 to workspaces under one name per item
   - Files:
