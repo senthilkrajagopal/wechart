@@ -15,6 +15,8 @@ sources:
   - /Users/srajagopal/Work/bi/cube/xcube/test/integration/root-rollups.test.ts
   - /Users/srajagopal/Work/bi/cube/xcube/test/unit/names.test.ts
   - docker buildx imagetools inspect ghcr.io/senthilkrajagopal/xcube:v1.7.45-2e611eae61 (run 2026-10-08)
+  - /Users/srajagopal/Work/xcube-exchange/to-wechart/2026-10-08-1500-module-test-at-2e611eae61.md
+  - /Users/srajagopal/Work/bi/cube/xcube/test/integration/modules.test.ts (at 2e611eae61, read 2026-10-08)
   - docs/research/xcube-256d632371.md ("Aliases and rollup tables (1.2)", corrected here)
 ---
 
@@ -65,6 +67,13 @@ This is T740's research doc. It covers xcube's fix for the rename T738 found: on
 - `test/integration/root-rollups.test.ts`, against Postgres and a Cube Store 1.7.45: the seed's `monthly_orders` published as a file set and built, then switched to items, plans the same table names and SQL. `/v1/load` is answered from the pre-switch table with `lastUpdatedAt` unchanged. Against 256d632371's rule, the same test plans `xx3us3fz_by_status_month`.
 - `test/unit/names.test.ts`: a rollup keeps its names in Cube Store at any length; one built in the source is held to 63.
 - Their CI (run 37790993205): 503 passed, 5 skipped.
+
+## AC-321's module test
+
+This is the evidence for AC-321's "a module the change doesn't affect is recompiled", which no wechart test can show (`xcube-slice-3b.md`, "Modules"; tasks.md, T451's verification note).
+
+- **The test:** `xcube/test/integration/modules.test.ts`, "adding a cube compiles only its module". It upserts a fourth cube through `POST …/changesets`, then asserts `{ modules: 3, compiledModules: 1 }` on the serve log (line 231 at 2e611eae61, read in the fork). Slice 3b's doc called it "compiles 1 of 3 modules", which is what it asserts.
+- **It passes at the pinned image:** in CI run 37790993205, the run that published `v1.7.45-2e611eae61` (`PASS test/integration/modules.test.ts`; the log names suites, not single tests), and alone with `--verbose`, 6 of 6 in the suite ([module answer], `to-wechart/2026-10-08-1500-module-test-at-2e611eae61.md`).
 
 ## Corrections to earlier docs
 
