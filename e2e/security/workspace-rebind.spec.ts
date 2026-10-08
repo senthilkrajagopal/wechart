@@ -22,7 +22,16 @@ const PATH = `cubes/${CUBE}.yml`;
 const MEMBER = `${CUBE}.n`;
 const cubeOf = (n: number) =>
   `cubes:\n  - name: ${CUBE}\n    sql: SELECT ${String(n)} AS n\n    measures:\n      - name: n\n        sql: n\n        type: sum\n`;
-const made = { first: '', project: '', copyFolder: '', board: '', chart: '', shared: '' };
+const made = {
+  first: '',
+  project: '',
+  copyFolder: '',
+  board: '',
+  chart: '',
+  laterBoard: '',
+  laterChart: '',
+  shared: '',
+};
 
 async function answered(request: APIRequestContext, kind: 'dashboard', id: string) {
   const answer = await request.post('/api/load', {
@@ -47,8 +56,10 @@ test.describe('a workspace tile’s one name, answered from the workspace’s co
       await signInThroughDex(await context.newPage(), who);
       const { request } = context;
       if (who === 'writer') {
-        if (made.board !== '') await request.delete(`/api/documents/dashboard/${made.board}`);
-        if (made.chart !== '') await request.delete(`/api/documents/chart/${made.chart}`);
+        for (const board of [made.board, made.laterBoard])
+          if (board !== '') await request.delete(`/api/documents/dashboard/${board}`);
+        for (const chart of [made.chart, made.laterChart])
+          if (chart !== '') await request.delete(`/api/documents/chart/${chart}`);
         if (made.copyFolder !== '') {
           await request.delete(
             `/api/model/files?folder=${encodeURIComponent(made.copyFolder)}&path=${encodeURIComponent(PATH)}`,
@@ -165,6 +176,27 @@ test.describe('a workspace tile’s one name, answered from the workspace’s co
         body: { chart: { source: { cube: string } } };
       };
       expect(tile.body.chart.source.cube).toBe(CUBE);
+      // A tile made after the copy answers from it too (T733's review, AC-281).
+      made.laterChart = await create('chart', `Later tile ${RUN}`);
+      await change('chart', made.laterChart, (body) => ({
+        ...body,
+        chart: {
+          source: { cube: CUBE },
+          wells: { measures: [MEMBER], dimensions: [], timeDimensions: [] },
+        },
+      }));
+      made.laterBoard = await create('dashboard', `Later board ${RUN}`);
+      await change('dashboard', made.laterBoard, (body) => ({
+        ...body,
+        pages: [
+          {
+            id: 'p1',
+            title: 'Page 1',
+            items: [{ id: 't1', kind: 'chart', chartId: made.laterChart }],
+          },
+        ],
+      }));
+      expect(await answered(request, 'dashboard', made.laterBoard)).toBe(5);
       // The folder's own dashboard answers from the folder's cube still.
       expect(await answered(request, 'dashboard', made.shared)).toBe(1);
     });

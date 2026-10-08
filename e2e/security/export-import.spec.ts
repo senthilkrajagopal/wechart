@@ -51,6 +51,7 @@ const modelPath = (name: string) => `cubes/${name}.yml`;
 const ids = {
   sales: '',
   hidden: '',
+  elsewhere: '',
   board: '',
   revenue: '',
   orders: '',
@@ -194,6 +195,11 @@ async function setUp(request: APIRequestContext) {
     readWrite: ['sales-rw'],
   });
   ids.hidden = await folder(request, `Hidden ${RUN}`, { readOnly: [], readWrite: ['managers'] });
+  // Beside /Sales, off its path: a target writer may choose (T736).
+  ids.elsewhere = await folder(request, `Elsewhere ${RUN}`, {
+    readOnly: [],
+    readWrite: ['sales-rw'],
+  });
   await dataSource(request, ids.sales, names.emea);
   await dataSource(request, ids.hidden, names.hid);
   await publish(request, ids.sales, names.sales, names.emea);
@@ -365,7 +371,7 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
         ),
       );
     for (const id of sources) await removed(id, request.delete(`/api/data-sources/${id}`));
-    for (const id of [ids.sales, ids.hidden].filter((each) => each !== ''))
+    for (const id of [ids.sales, ids.hidden, ids.elsewhere].filter((each) => each !== ''))
       await removed(`folder ${id}`, request.delete(`/api/documents/folder/${id}`));
     await context.close();
   });
@@ -820,6 +826,8 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
       await expect(source.getByRole('textbox', { name: /^Host/ })).toHaveCount(0);
       await expect(pane.getByRole('button', { name: /Next: Review/ })).toBeDisabled();
       await source.getByLabel(/^Password/).fill('sample');
+      // Its secret typed, it is still not decided until a test passes (T733's review, AC-358).
+      await expect(pane.getByRole('button', { name: /Next: Review/ })).toBeDisabled();
       await source.getByRole('button', { name: 'Test connection' }).click();
       await expect(source.getByRole('status')).toContainText('Every check passed', {
         timeout: 60_000,
@@ -867,6 +875,251 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
         secrets: { password: { stored: true } },
         inWorkspace: true,
       });
+    });
+
+    /**
+     * T736 (AC-357's R73 clause): to /Elsewhere, beside /Sales, the file's
+     * model maps `<run>_sales`, which has landed in /Sales, off the target's
+     * path. While a chart that uses it stays in, the import is blocked, the
+     * cube named; one held in a folder writer can't see is named without it.
+     * Leaving out those charts lets it through; a dashboard filter on that
+     * cube still blocks; a target on its path goes through. The file's data
+     * source, /Sales's too, is left out of it, so only the cube is reckoned.
+     */
+    test('blocks an import whose charts use a cube off the target’s path until they are left out, a dashboard filter on it blocking still (T736, AC-357)', async ({
+      page,
+    }) => {
+      test.setTimeout(180_000);
+      const { request } = page;
+      const file = JSON.parse(exported.text) as { items: Record<string, unknown>[] };
+      const without = {
+        ...file,
+        items: file.items.filter((item) => item['kind'] !== 'data-source'),
+      };
+      const withFilter = {
+        ...without,
+        items: without.items.map((item) =>
+          item['kind'] === 'dashboard'
+            ? {
+                ...item,
+                body: {
+                  ...(item['body'] as Record<string, unknown>),
+                  filters: [{ id: 'f-region', widget: 'list', member: `${names.sales}.region` }],
+                },
+              }
+            : item,
+        ),
+      };
+      const usingSales = (without.items as { kind: string; id?: string; body?: unknown }[])
+        .filter(
+          (item) =>
+            item.kind === 'chart' && JSON.stringify(item.body).includes(`"cube":"${names.sales}"`),
+        )
+        .map((item) => item.id!);
+      expect(usingSales).toHaveLength(3);
+      const offWords = `“${names.sales}” is the name of a cube or view that isn’t in Elsewhere ${RUN} or a folder above it, so the imported charts there couldn’t use it. Choose a target on its path, or leave out the charts that use it.`;
+      const filterWords = `“${names.sales}” is the name of a cube or view that isn’t in Elsewhere ${RUN} or a folder above it, so the imported dashboard there couldn’t use it in its filter on ${names.sales}.region. Choose a target on its path.`;
+
+      // The pane: Review names the cube and the charts; Import waits.
+      await myWorkspace(page);
+      const idsBefore = await workspaceIds(page);
+      const pick = async (body: unknown) => {
+        await page.getByRole('button', { name: 'New', exact: true }).click();
+        await page.getByRole('menuitem', { name: /Import a dashboard…/ }).click();
+        const opened = page.getByRole('dialog', { name: 'Import a dashboard' });
+        await opened.locator('input[type="file"]').setInputFiles({
+          name: FILE,
+          mimeType: 'application/json',
+          buffer: Buffer.from(JSON.stringify(body)),
+        });
+        await opened.getByRole('button', { name: /Next: Target/ }).click();
+        await opened.getByRole('treeitem', { name: `Elsewhere ${RUN}` }).click();
+        await opened.getByRole('button', { name: /Next: Review/ }).click();
+        return opened;
+      };
+      const pane = await pick(without);
+      const model = pane.getByTestId(`lands-model-${modelPath(names.sales)}`);
+      await expect(model).toContainText(`Mapped to ${names.sales} in Sales ${RUN}`);
+      await expect(model).toContainText(
+        `The cube or view of this name isn’t in Elsewhere ${RUN} or a folder above it, so the imported charts there couldn’t use it. Choose a target on its path, or leave out the charts that use it.`,
+      );
+      const importButton = pane.getByRole('button', { name: `Import to My workspace` });
+      await expect(importButton).toBeDisabled();
+      await expect(pane.getByText(`1 warning stops the import`)).toHaveCount(1);
+      // Through the API too: refused, the cube named.
+      const blocked = await request.post(`/api/import`, {
+        data: { file: without, targetFolderId: ids.elsewhere },
+      });
+      expect(blocked.status(), await blocked.text()).toBe(409);
+      expect(((await blocked.json()) as { error: string }).error).toBe(offWords);
+
+      // Left out, with their tiles: it goes through.
+      await model.getByRole('checkbox', { name: /^Leave out .+, and their tiles$/ }).check();
+      await expect(importButton).toBeEnabled();
+      await expect(pane.getByTestId(`lands-chart-${ids.top}`)).toContainText('Left out');
+      await importButton.click();
+      await expect(pane).toHaveCount(0);
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Imported to My workspace' }),
+      ).toContainText(
+        `Imported to My workspace as new drafts: 1 dashboard and 1 chart. Nothing in Elsewhere ${RUN} changed.`,
+      );
+      const listed = (await (await request.get('/api/folders/mine/contents')).json()) as {
+        kind: string;
+        id: string;
+        title: string;
+      }[];
+      const landed = listed.filter((item) => !idsBefore.includes(item.id));
+      drafts.push(...landed.map((item) => ({ kind: item.kind, id: item.id })));
+      expect(landed.map((item) => [item.kind, item.title]).sort()).toEqual(
+        [
+          ['chart', 'Margin trend'],
+          ['dashboard', TITLE],
+        ].sort(),
+      );
+      const board = landed.find((item) => item.kind === 'dashboard')!;
+      const stored = (await (await request.get(`/api/documents/dashboard/${board.id}`)).json()) as {
+        body: { pages: { items: { id: string }[] }[]; charts?: string[] };
+      };
+      // Only Margin trend's tile is left; no own chart is.
+      expect(stored.body.pages.flatMap((each) => each.items.map((tile) => tile.id))).toEqual([
+        't-margin',
+      ]);
+      expect(stored.body.charts ?? []).toEqual([]);
+
+      // A dashboard filter on that cube can't be left out: it blocks still.
+      // (The page afresh: the toast of the last one sits over the pane's foot.)
+      await page.reload();
+      await expect(page.getByRole('heading', { name: 'My workspace', level: 1 })).toBeVisible();
+      const filtered = await pick(withFilter);
+      const filteredModel = filtered.getByTestId(`lands-model-${modelPath(names.sales)}`);
+      await filteredModel
+        .getByRole('checkbox', { name: /^Leave out .+, and their tiles$/ })
+        .check();
+      await expect(filteredModel).toContainText(
+        `The cube or view of this name isn’t in Elsewhere ${RUN} or a folder above it, so the imported dashboard there couldn’t use it in its filter on ${names.sales}.region. Choose a target on its path.`,
+      );
+      await expect(filtered.getByRole('button', { name: `Import to My workspace` })).toBeDisabled();
+      const filterBlocked = await request.post(`/api/import`, {
+        data: { file: withFilter, targetFolderId: ids.elsewhere, leaveOut: usingSales },
+      });
+      expect(filterBlocked.status(), await filterBlocked.text()).toBe(409);
+      expect(((await filterBlocked.json()) as { error: string }).error).toBe(filterWords);
+      // Review offers no Cancel: the pane's Close leaves it, asking first.
+      await filtered.getByRole('button', { name: 'Close' }).click();
+      await filtered
+        .getByRole('alertdialog', { name: /^Discard this/ })
+        .getByRole('button', { name: 'Discard' })
+        .click();
+
+      // One held in a folder writer can't see: named, its folder never.
+      const hiddenModel = {
+        ...without,
+        items: [
+          ...without.items.filter((item) => item['kind'] !== 'model'),
+          {
+            kind: 'model',
+            path: modelPath(`${names.margin}_copy`),
+            content: cubeYaml(names.margin, names.hid),
+          },
+        ],
+      };
+      const reviewedHidden = await request.post(`/api/import/review`, {
+        data: { file: hiddenModel, targetFolderId: ids.sales },
+      });
+      expect(reviewedHidden.status(), await reviewedHidden.text()).toBe(200);
+      const hiddenItem = (
+        (await reviewedHidden.json()) as {
+          items: { kind: string; mappedTo?: unknown; warnings: { kind: string }[] }[];
+        }
+      ).items.find((item) => item.kind === 'model');
+      expect(hiddenItem?.mappedTo).toEqual({ name: names.margin, path: null });
+      expect(hiddenItem?.warnings.map((each) => each.kind)).toEqual(['off-path']);
+      const hiddenBlocked = await request.post(`/api/import`, {
+        data: { file: hiddenModel, targetFolderId: ids.sales },
+      });
+      expect(hiddenBlocked.status()).toBe(409);
+      const hiddenText = await hiddenBlocked.text();
+      expect(hiddenText).toContain(names.margin);
+      expect(hiddenText).not.toContain(`Hidden ${RUN}`);
+
+      // T733's review (AC-358, AC-357): a data source whose name has landed in
+      // another folder, in another case, is mapped to it, never made; and a
+      // model whose name a draft in My workspace holds (the binding case's
+      // `<run>_whcube`) is mapped to that draft.
+      const otherCase = await request.post(`/api/import/review`, {
+        data: {
+          file: {
+            ...file,
+            items: file.items.map((item) =>
+              item['kind'] === 'data-source' ? { ...item, name: names.emea.toUpperCase() } : item,
+            ),
+          },
+          targetFolderId: ids.elsewhere,
+        },
+      });
+      expect(otherCase.status(), await otherCase.text()).toBe(200);
+      const reviewedItems = (
+        (await otherCase.json()) as {
+          items: {
+            kind: string;
+            lands: string;
+            mappedTo?: unknown;
+            held?: boolean;
+            warnings: { kind: string }[];
+          }[];
+        }
+      ).items;
+      expect(reviewedItems.find((item) => item.kind === 'data-source')).toMatchObject({
+        lands: 'not-imported',
+        mappedTo: { name: names.emea, path: [`Sales ${RUN}`] },
+        held: true,
+      });
+      const draftHeld = await request.post(`/api/import/review`, {
+        data: {
+          file: {
+            ...without,
+            items: [
+              ...without.items.filter((item) => item['kind'] !== 'model'),
+              {
+                kind: 'model',
+                path: modelPath(`${RUN}_whcube_again`),
+                content: cubeYaml(`${RUN}_whcube`, names.emea),
+              },
+            ],
+          },
+          targetFolderId: ids.sales,
+        },
+      });
+      expect(draftHeld.status(), await draftHeld.text()).toBe(200);
+      expect(
+        (
+          (await draftHeld.json()) as {
+            items: { kind: string; lands: string; mappedTo?: unknown; held?: boolean }[];
+          }
+        ).items.find((item) => item.kind === 'model'),
+      ).toMatchObject({
+        lands: 'not-imported',
+        mappedTo: { name: `${RUN}_whcube`, path: ['My workspace'] },
+        held: true,
+      });
+
+      // On its path, the same file goes through, the cube mapped.
+      const onPath = await request.post(`/api/import`, {
+        data: { file: without, targetFolderId: ids.sales },
+      });
+      expect(onPath.status(), await onPath.text()).toBe(201);
+      const afterOnPath = (await (await request.get('/api/folders/mine/contents')).json()) as {
+        kind: string;
+        id: string;
+      }[];
+      drafts.push(
+        ...afterOnPath
+          .filter(
+            (item) => !idsBefore.includes(item.id) && !drafts.some((each) => each.id === item.id),
+          )
+          .map((item) => ({ kind: item.kind, id: item.id })),
+      );
     });
 
     test('refuses a file it can’t take, naming each part and why, and imports nothing (AC-359)', async ({

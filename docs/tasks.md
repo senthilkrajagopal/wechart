@@ -13428,6 +13428,15 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - `ImportPane.test.tsx`: 3 cases, red before.
       - API 1819/1819, web 2618/2618.
     - **Not ticked:** AC-357 waits for T733's e2e on the image.
+    - **On the image (2026-10-08, the coordinator's call): AC-357 ticked.** `export-import.spec.ts`'s T736 case passes in Chrome on the R71 image (14/14 with `workspace-rebind.spec.ts`), as writer.
+      - **Blocked.** To /Elsewhere, beside /Sales, the file's model maps `<run>_sales`, off the path. Review names it and the three charts using it, and Import is disabled with "1 warning stops the import". The API's 409 names the cube.
+      - **Left out, it lands.** With those charts left out, their tiles go too. It lands as 1 dashboard and 1 chart, with only Margin trend's tile and no own chart.
+      - **A dashboard filter blocks.** A filter on that cube blocks whatever is left out, in the pane and in the API's 409, which names the filter.
+      - **A hidden holder is named without its folder.** A model held in /Hidden, which writer can't see, maps with `path: null`, and the 409 never names /Hidden.
+      - **On the path, it goes through.** The same file to /Sales returns 201.
+      - **Other cases (T733's review):**
+        - A data source whose name landed in another folder, in another case, is mapped there.
+        - A model whose name a draft in My workspace holds is mapped to that draft.
     - **Left as questions:**
       - A dashboard's own filters or text tiles on an off-path cube aren't counted as a chart's use. AC-357 names only charts. *(Settled in the follow-up below.)*
       - Leaving out a library chart that the dashboard doesn't show is allowed whenever it uses the off-path cube.
@@ -13841,11 +13850,18 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - **The unit tests** named in Files were reworked in T719 and T720.
     - **ACs ticked**, each with every Fails-when case shown by a passing spec on the R71 image (the coordinator, 2026-10-08):
       - **AC-281:** `workspace-rebind.spec.ts` (made before the copy) and `workspace-overlay.spec.ts` (made after, and a name the workspace doesn't hold).
-      - **AC-283:** `use-only-copy.spec.ts`.
+      - ~~**AC-283:** `use-only-copy.spec.ts`.~~ *Unticked after T733's review:* the spec doesn't show "one they may not see can't be used", nor that items of the other kinds from a folder they may only read can be. Those are shown only in API tests (`workspace-overlay.test.ts`).
       - **AC-428:** `picker.spec.ts`'s "Your copy" case, in both pickers with the chip's style, and `workspace-overlay.spec.ts`.
       - **AC-358:** this spec.
     - **Not ticked:**
-      - **AC-357:** its R73 clause (an off-path mapped cube a chart uses, T736) is shown in the API and component tests only.
+      - ~~**AC-357:** its R73 clause (an off-path mapped cube a chart uses, T736) is shown in the API and component tests only.~~ *Ticked with T736's e2e (see T736).*
+    - **The review (PASS with caveats), its fixes taken:**
+      - **AC-281's "made after the copy".** `workspace-rebind.spec.ts` now makes a second chart and dashboard after the copy, and they answer from it (5).
+      - **AC-358's "in any case" and "in any folder".** A data source in upper case, landed in /Sales, is mapped to it from /Elsewhere (in the T736 case).
+      - **AC-358's "without a passing test".** The secret typed, Next stays disabled until the test passes.
+      - **AC-283 unticked**, as above.
+      - **Commit messages.** This commit ticked AC-281 and AC-428 without its message saying so; this entry is the record.
+    - **T508 is not ticked:** AC-356 is open. Its sign-in-off clause is T359's.
       - **AC-423:** waits for T737's file-name clause. Every other clause is shown by `fixed-names.spec.ts` and T706's API tests.
       - **AC-329** was already ticked.
 
