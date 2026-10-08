@@ -13529,10 +13529,25 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - Added at the coordinator's word (2026-10-08): `e2e/security/proposal-models.spec.ts` and `e2e/security/calc-requests.spec.ts` built `<folderId>__<cube>` names. They now name the cube as served, its own name, and pass on the image. T717 had not landed, so the calc-requests spec was moved before it.
     - Left for its own task: `repos/calc-requests.test.ts` stores `fsales__orders` as plain strings (T717's area).
     - AC-328 ticked. Each Fails-when has a passing test:
-      - published under its own name: `isolation.spec.ts`, `folder-models.spec.ts`;
+      - a cube published under its own name: `isolation.spec.ts`, `folder-models.spec.ts`;
+      - a view: `model-in-folder.spec.ts`;
+      - a data source: `folder-data-sources.spec.ts` and `global-names.spec.ts`;
       - xcube ids stored and never reused: `repos/folder-xcube-ids.test.ts`, `xcube/folders.test.ts`;
       - 63 bytes: `isolation.spec.ts`;
       - a rename or move changing no name, breaking no chart and rebuilding no rollup: `isolation.spec.ts`.
+    - **The review (FAIL), and the follow-up commit:**
+      - Two more specs claimed AC-328 with prefixed names, and failed on the image. Both now assert the bare name and the folder's xcube id:
+        - `e2e/model-in-folder.spec.ts`: a chart on a folder's cube, and on a folder's view, bound by its own name. The view is held in its folder's xcube id and served by its own name, with no `__` name in `/api/meta`. Its names are now the run's own.
+        - `e2e/security/folder-data-sources.spec.ts`: a folder's data source is held as a connection under its own name, in its folder's xcube id, and no connection's name holds `__`.
+      - `isolation.spec.ts`'s move is now seen in xcube's tree, not only in wechart's. A cube joining /C's cube is refused in /A while /A is beside /C (`reference_range`, T713) and lands once /A is beneath /C.
+      - The guard in `folder-models.spec.ts` that could not fail now looks for the folder's id itself.
+      - Corrections to this note: `clashes.ts` and `refreshKeys.ts` have no test files of their own (they are covered through `publish.test.ts` and `GenerateCubes.test.tsx`). AC-329's "members by title" is shown by T710's tests and `picker.spec.ts` (T729), not here.
+      - **A product defect it found, fixed test-first:**
+        - The defect: `POST /api/model/references` counted the user's own drafts in My workspace beside the shared charts. A landing never changes those, and under R71 they name the same members as shared charts do, so the T546 warning said "2 charts" for 1.
+        - The fix (`server.ts`): it now leaves out every chart and dashboard kept in a workspace, and a workspace dashboard's own charts (AC-141, R55).
+        - Tests: `routes/model-references.test.ts` (new), and `model-in-folder.spec.ts` on the image.
+      - Known flake: `model-in-folder.spec.ts`'s first test can publish into a folder made a moment before, which xcube's tree doesn't hold yet ("Folder … is not in the folder tree"). It passed on two reruns.
+      - Still building `<folderId>__` names, in no task: `e2e/security/{calc-request-resolve,cube-refuses,workspace-references,audit,jobs-scope}.spec.ts`. Raised with the coordinator.
 
 - [ ] T729 (AC-272, AC-275, AC-371, AC-425) Rework the tests of T428, T429, T457 and T537 to bindings by name on the path
   - Files: `e2e/security/binding.spec.ts`, `e2e/security/picker.spec.ts` (T429's and T457's binding cases), `e2e/security/copy-on-use.spec.ts`, `packages/api/src/routes/copy-on-use.test.ts`, `packages/api/src/model/references.test.ts`

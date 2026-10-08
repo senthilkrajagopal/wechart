@@ -313,10 +313,46 @@ test.describe('cubes in the root and in folders, each under its own name (T341, 
     // Something only /C holds, published after: the model as it is now.
     const onlyC = {
       path: `cubes/iso_only_c_${RUN}.yml`,
-      // A measure, so the field list has something to list it by.
-      content: `cubes:\n  - name: iso_only_c_${RUN}\n    sql_table: public.orders\n    measures:\n      - name: count\n        type: count\n`,
+      // A measure, so the field list has something to list it by, and a key
+      // for a join to it.
+      content: `cubes:\n  - name: iso_only_c_${RUN}\n    sql_table: public.orders\n    dimensions:\n      - name: id\n        sql: id\n        type: number\n        primary_key: true\n    measures:\n      - name: count\n        type: count\n`,
     };
     expect(await landed(request, ids.c, [onlyC])).toEqual([onlyC]);
+    // A cube of /A's joining it: off /A's path while /A is beside /C, so
+    // xcube refuses its save (`reference_range`, research
+    // `xcube-256d632371.md`, R72; T713). Taken once /A is beneath /C: the
+    // move observed in xcube's tree, not only in wechart's.
+    const joiner = {
+      path: `cubes/iso_joins_c_${RUN}.yml`,
+      content: [
+        'cubes:',
+        `  - name: iso_joins_c_${RUN}`,
+        '    sql_table: public.orders',
+        '    dimensions:',
+        '      - name: id',
+        '        sql: id',
+        '        type: number',
+        '        primary_key: true',
+        '    measures:',
+        '      - name: count',
+        '        type: count',
+        '    joins:',
+        `      - name: iso_only_c_${RUN}`,
+        '        relationship: many_to_one',
+        `        sql: "{CUBE}.id = {iso_only_c_${RUN}}.id"`,
+        '',
+      ].join('\n'),
+    };
+    const project = await folder(request, `Isolation joins ${RUN}`, 'mine');
+    const offPath = await request.post('/api/model/publish', {
+      data: { folderId: project, targetFolderId: ids.a, files: [joiner] },
+      timeout: 90_000,
+    });
+    expect(offPath.status(), await offPath.text()).toBe(422);
+    expect(
+      ((await offPath.json()) as { errors: { path: string }[] }).errors.map((each) => each.path),
+    ).toEqual([joiner.path]);
+    expect((await request.delete(`/api/documents/folder/${project}`)).status()).toBeLessThan(300);
 
     expect(
       (
@@ -330,6 +366,8 @@ test.describe('cubes in the root and in folders, each under its own name (T341, 
         await request.patch(`/api/documents/folder/${ids.a}`, { data: { folderId: ids.c } })
       ).status(),
     ).toBe(200);
+    // xcube's tree has /A beneath /C: the cube joining /C's now lands in /A.
+    expect(await landed(request, ids.a, [joiner])).toEqual([joiner]);
     // Cube serves the revision that holds /C's new cube: what follows is
     // asked of the model as it is now.
     await expect

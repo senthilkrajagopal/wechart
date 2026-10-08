@@ -43,7 +43,7 @@ const connectionsOf = async (request: APIRequestContext) =>
       await request.get(`${CUBE}/v1/semantic/models/${MODEL}/connections`, {
         headers: { authorization: `Bearer ${serviceToken()}` },
       })
-    ).json()) as { connections: { name: string; secrets: string[] }[] }
+    ).json()) as { connections: { name: string; folderId: string; secrets: string[] }[] }
   ).connections;
 
 async function setUp(request: APIRequestContext) {
@@ -132,18 +132,25 @@ test('a folder lists its data source as a data source, built on its driver, and 
 
 /**
  * T442 (AC-327, AC-161): a folder's data source lands in xcube as a
- * connection — its full name `<folderId>__<name>`, its secret named and never
- * given back — and xcube, which opens each envelope for its target, refuses
- * one sealed for another, so wechart stores nothing. Removed, it leaves xcube.
+ * connection — under its own name in its folder's xcube id (T728, AC-328;
+ * `[R71]`), its secret named and never given back — and xcube, which opens
+ * each envelope for its target, refuses one sealed for another, so wechart
+ * stores nothing. Removed, it leaves xcube.
  */
 test('a data source lands in xcube as a connection, refused when its secret won’t open there, and leaves with it', async ({
   page,
 }) => {
   const { folderId, sourceId } = await setUp(page.request);
-  const name = `f${folderId.replaceAll('-', '')}__${SOURCE}`;
+  const name = SOURCE;
   try {
-    const held = (await connectionsOf(page.request)).find((each) => each.name === name);
-    expect(held?.secrets).toEqual(['password']);
+    const held = (await connectionsOf(page.request)).filter((each) => each.name === name);
+    expect(held.map(({ folderId: heldIn, secrets }) => ({ folderId: heldIn, secrets }))).toEqual([
+      { folderId: `f${folderId.replaceAll('-', '')}`, secrets: ['password'] },
+    ]);
+    // No connection's name carries a folder's prefix.
+    expect((await connectionsOf(page.request)).filter((each) => each.name.includes('__'))).toEqual(
+      [],
+    );
 
     // Sealed for another host, sent with this one: xcube can't open it, so
     // its test fails there, and nothing is made from it (T363).

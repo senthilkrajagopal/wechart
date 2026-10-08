@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
+import { CUBE, serviceToken } from './api-process';
 import { inMyWorkspace, landed, modelFilesIn, PUBLISHED } from './model-files';
 import { myModelCopy, sharedIn } from './workspace';
 
@@ -18,12 +19,11 @@ import { myModelCopy, sharedIn } from './workspace';
  * AC-141, as amended (R55): a model saved in My workspace lists, before it
  * is saved, the shared charts and dashboards that landing it would change
  * in the folder it goes to, naming that folder (T546). With models in
- * folders, a chart in a folder is bound to its cube's full name,
- * `<xcubeId>__<name>` (AC-328), and a folder's view names a root cube along
- * its path (AC-272).
+ * folders, a chart in a folder is bound to its cube's or view's own name,
+ * with no folder prefix (AC-328; reworked by T728 to R71), and a folder's
+ * view names a root cube along its path (AC-272).
  *
- * AC-329, the model page's part: a member is said by its short name, never
- * its prefixed one.
+ * AC-329, the model page's part: a member is said by its own name.
  *
  * Every name is this browser's own: the browsers share the single user's
  * workspace, whose overlay holds a name once.
@@ -46,7 +46,20 @@ async function publish(
   expect(await landed(request, folderId, files)).toEqual(files);
 }
 
-/** A folder's id in xcube, which prefixes its items' names (AC-328). */
+/** Where xcube holds an item of this name: its folder's xcube id (AC-328). */
+async function heldIn(request: APIRequestContext, name: string) {
+  return (
+    (await (
+      await request.get(`${CUBE}/v1/semantic/models/e2e/items`, {
+        headers: { authorization: `Bearer ${serviceToken()}` },
+      })
+    ).json()) as { items: { folderId: string; name: string }[] }
+  ).items
+    .filter((item) => item.name === name)
+    .map(({ folderId, name: held }) => ({ folderId, name: held }));
+}
+
+/** A folder's id in xcube, which holds its items (AC-328). */
 async function xcubeIdOf(request: APIRequestContext, folderId: string): Promise<string> {
   const folders = (await (await request.get('/api/folders')).json()) as {
     id: string;
@@ -264,13 +277,15 @@ test('a folder’s model opens beside its files, one after another in place, rea
   }
 });
 
-test('saving a copy of a folder’s file lists the charts bound to its members’ full names there, said by short name (T546)', async ({
+test('saving a copy of a folder’s file lists the charts bound to its members there, said by their own names (T546)', async ({
   page,
 }, testInfo) => {
   const request = page.request;
   const title = `T342 edit ${testInfo.project.name} ${String(Date.now())}`;
   const folderId = await folderOf(request, title);
-  const name = `t342_edited_${testInfo.project.name}`;
+  // This run's: a name is one item across the system, and an earlier run's
+  // charts on it would be counted too (T728).
+  const name = `t342_edited_${testInfo.project.name}_${Date.now().toString(36)}`;
   const path = `cubes/${name}.yml`;
   const charts: string[] = [];
   let copy: Awaited<ReturnType<typeof myModelCopy>> | undefined;
@@ -279,8 +294,9 @@ test('saving a copy of a folder’s file lists the charts bound to its members�
     const xcubeId = await xcubeIdOf(request, folderId);
     const chart = await chartOn(request, folderId, `${title} chart`, name, 'count');
     charts.push(chart);
-    // Bound in its folder: to the cube's full name there.
-    expect(await measuresOf(request, chart)).toEqual([`${xcubeId}__${name}.count`]);
+    // Bound in its folder by the cube's own name: no folder prefix (T728; AC-328, AC-272).
+    expect(await measuresOf(request, chart)).toEqual([`${name}.count`]);
+    expect(await heldIn(request, name)).toEqual([{ folderId: xcubeId, name }]);
 
     // Changed in a copy in My workspace, as a shared model is.
     copy = await myModelCopy(request, path, folderId);
@@ -297,7 +313,8 @@ test('saving a copy of a folder’s file lists the charts bound to its members�
     await expect(warning.getByRole('list', { name: 'Charts' })).toContainText(
       `${title} chart — uses ${name}.count`,
     );
-    await expect(warning).not.toContainText(`${xcubeId}__`);
+    // Nothing of the folder's xcube id in what it says.
+    await expect(warning).not.toContainText(xcubeId);
     await warning.getByRole('button', { name: 'Cancel' }).click();
   } finally {
     await cleanUp(
@@ -316,9 +333,10 @@ test('a copy of a root file lists the charts bound to a folder’s view of it, b
   const title = `T342 view ${testInfo.project.name} ${String(Date.now())}`;
   const folderId = await folderOf(request, title);
   // The root is every browser's: a cube of this browser's own.
-  const rootCube = `t342_root_${testInfo.project.name}`;
+  // This run's: an earlier run's charts on it would be counted too (T728).
+  const rootCube = `t342_root_${testInfo.project.name}_${Date.now().toString(36)}`;
   const rootPath = `cubes/${rootCube}.yml`;
-  const view = `t342_view_${testInfo.project.name}`;
+  const view = `t342_view_${testInfo.project.name}_${Date.now().toString(36)}`;
   const viewPath = `views/${view}.yml`;
   const charts: string[] = [];
   const files: { folderId: string; path: string }[] = [];
@@ -343,7 +361,14 @@ test('a copy of a root file lists the charts bound to a folder’s view of it, b
     const xcubeId = await xcubeIdOf(request, folderId);
     const chart = await chartOn(request, folderId, `${title} chart`, view, 'count');
     charts.push(chart);
-    expect(await measuresOf(request, chart)).toEqual([`${xcubeId}__${view}.count`]);
+    // A folder's view, published and bound under its own name (T728; AC-328, AC-272).
+    expect(await measuresOf(request, chart)).toEqual([`${view}.count`]);
+    expect(await heldIn(request, view)).toEqual([{ folderId: xcubeId, name: view }]);
+    const served = (
+      (await (await request.get('/api/meta')).json()) as { cubes?: { name: string }[] }
+    ).cubes?.map((each) => each.name);
+    expect(served).toContain(view);
+    expect(served?.filter((each) => each.includes('__'))).toEqual([]);
 
     // The root's file, changed in a copy in My workspace, going to the root.
     copy = await myModelCopy(request, rootPath);
@@ -360,7 +385,8 @@ test('a copy of a root file lists the charts bound to a folder’s view of it, b
     await expect(warning.getByRole('list', { name: 'Charts' })).toContainText(
       `${title} chart — uses ${view}.count (${title})`,
     );
-    await expect(warning).not.toContainText(`${xcubeId}__`);
+    // Nothing of the folder's xcube id in what it says.
+    await expect(warning).not.toContainText(xcubeId);
     await warning.getByRole('button', { name: 'Cancel' }).click();
   } finally {
     await cleanUp(

@@ -2120,7 +2120,37 @@ export function buildServer({
       .filter((member) => member !== '');
     if (members.length === 0) return { charts: [], dashboards: [] };
     const all = (await cat?.referenceDocuments?.()) ?? [];
-    return referencesOf(await visibleOf(request, all), members);
+    /**
+     * The shared charts and dashboards alone: one kept in a workspace, or a
+     * workspace dashboard's own chart, is a draft, which no landing changes
+     * (T728's follow-up; AC-141, R55). Now that a cube is named once (R71), a
+     * draft names the same member as a shared chart does.
+     */
+    const parents = new Map(
+      (
+        (cat ? await cat.folders({ counted: false }) : []) as {
+          id: string;
+          parentId: string | null;
+        }[]
+      ).map((folder) => [folder.id, folder.parentId]),
+    );
+    const inAWorkspace = (folderId: string | null | undefined) => {
+      const seen = new Set<string>();
+      for (let at = folderId ?? null; at !== null && !seen.has(at); at = parents.get(at) ?? null) {
+        if (isWorkspaceId(at)) return true;
+        seen.add(at);
+      }
+      return false;
+    };
+    const homeOf = (document: ReferenceDocument) =>
+      folderIdOf((document.body ?? {}) as Record<string, unknown>);
+    const byId = new Map(all.map((each) => [each.id, each]));
+    const shared = all.filter((document) => {
+      const home =
+        document.localToDashboardId === null ? document : byId.get(document.localToDashboardId);
+      return home !== undefined && !inAWorkspace(homeOf(home));
+    });
+    return referencesOf(await visibleOf(request, shared), members);
   });
 
   /**

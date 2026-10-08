@@ -131,7 +131,8 @@ test('Schedules reads a folder rollup’s key SQL from its folder’s file', asy
     'When its SQL returns a new value, checked every hour',
     PUBLISHED,
   );
-  await expect(row).not.toContainText(`${id.replaceAll('-', '')}__`);
+  // Nothing of the folder's id in the row (T728).
+  await expect(row).not.toContainText(id.replaceAll('-', ''));
 
   // Open in Model, in its pane (T551; design 16, D5), opens its own folder's
   // file, on the pre-aggregation itself (T530, AC-222).
