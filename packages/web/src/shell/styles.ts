@@ -980,6 +980,14 @@ main:has(.model-page) {
   .model-page,
   .model-editor { grid-template-columns: minmax(0, 1fr); }
   .model-tree { max-height: 40vh; border-right: 0; border-bottom: 1px solid var(--wc-border-subtle); }
+  /* The path on a line of its own, cut short there, and the state and the
+     actions together on the next, rather than past the window: a shared
+     file's "Edit in my workspace" and its menu don't fit beside the path at
+     390 px (AC-304). Wrapped as one line, Discard and Save stay side by side
+     (design 03 note 2), never split across the break (T680's review). */
+  .model-editor__head { flex-wrap: wrap; }
+  /* Over the path's own flex, which comes later. */
+  .model-workspace .model-editor__head .model-editor__path { flex-basis: 100%; }
 }
 /* From 1,024 to 1,279 px, one pane at a time behind "Form | YAML" in the
    editor's head (T487, MW-26; direction §2), across both panes' width, the
@@ -1214,7 +1222,8 @@ main:has(.model-page) {
    (AC-223), at design 03's 13/600: the editor's head, not a page title (D1). */
 /* One line, the head's 44 px holding whatever it says (T479's review): a long
    path gives way first, cut short with its whole in its tooltip; an outcome
-   takes up to two lines of its own; the state and the actions never wrap. */
+   takes up to two lines of its own; the state and the actions never wrap.
+   From 1,024 px: narrower, the path takes a line of its own (T680). */
 .model-workspace .model-editor__path {
   flex: 0 100 auto;
   min-width: 64px;
@@ -6709,7 +6718,12 @@ button.filter-pill__clear {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 20px;
+  /* 22 in every mode, a chart head's height in the prototype, whose 22 px
+     badge it carries in both modes (dashboard.js), and in view mode here
+     (T252): edit mode's head names the kind and has no "Table view", and at
+     20 it drew a chart 2 px taller than the same tile in view mode and in
+     the editor's preview (AC-034). */
+  min-height: 22px;
   margin-bottom: 8px;
   /* The prototype puts the tile's two 26 px actions at the end of this row;
      here they sit over the tile's corner, so the row keeps their room
