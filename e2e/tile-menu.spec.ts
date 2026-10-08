@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Route } from '@playwright/test';
 
 import { chartGone } from './store';
 import { IN_MY_WORKSPACE } from './workspace';
@@ -127,6 +127,81 @@ test('Shift+F10 and the Menu key open the menu of a chart tile with no fields ye
     reached = await tile.evaluate((node) => node === document.activeElement);
   }
   expect(reached).toBe(true);
+});
+
+/**
+ * T741: a menu opened before its tile's answer is in grows as the answer
+ * comes (Data as of, Copy, Export…), and is placed again as it grows,
+ * turned back from the window's foot. It was placed once, for its first
+ * three rows, and ran 100 px past a 720 px window, its last rows out of
+ * any pointer's reach (`acceleration.spec.ts:252`'s second visit).
+ */
+test('a tile menu opened before the answer stays in the window as it grows', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  const title = `Grows ${String(Date.now())}`;
+  const dashboard = (await (
+    await request.post(`${API}/documents`, {
+      data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+    })
+  ).json()) as { id: string };
+  const wells = { measures: ['orders.count'], dimensions: ['orders.status'], timeDimensions: [] };
+  const first = await localChart(request, dashboard.id, 'Orders by status', wells, 'bar');
+  const second = await localChart(request, dashboard.id, 'Orders again', wells, 'bar');
+  await request.put(`${API}/documents/dashboard/${dashboard.id}`, {
+    data: {
+      version: 1,
+      body: {
+        schemaVersion: 1,
+        title,
+        ...IN_MY_WORKSPACE,
+        owner: 'admin',
+        settings: { width: 'fixed' },
+        pages: [
+          {
+            id: 'only',
+            title: 'Only',
+            items: [
+              { id: 'tile-first', kind: 'chart', w: 6, h: 40, chartId: first },
+              { id: 'tile-second', kind: 'chart', w: 6, h: 40, chartId: second },
+            ],
+          },
+        ],
+      },
+    },
+  });
+
+  // The answers held until the menu is open.
+  let release = () => {};
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/load', async (route: Route) => {
+    await released;
+    await route.continue();
+  });
+  await page.goto(`/explore/dashboards/${dashboard.id}`);
+  const tile = page.locator('[data-tile="tile-first"]');
+  await tile.getByRole('button', { name: /^Actions for / }).click();
+  const menu = page.locator('.tile-view-menu').first();
+  await expect(menu).toBeVisible();
+  await expect(tile.getByRole('menuitem', { name: /^Data as of \d/ })).toHaveCount(0);
+
+  release();
+  const asOf = tile.getByRole('menuitem', { name: /^Data as of \d/ });
+  await expect(asOf).toHaveCount(1);
+
+  // Within the window, its foot as reachable as its head.
+  await expect
+    .poll(async () => {
+      const box = await menu.boundingBox();
+      return box !== null && box.y >= 8 && box.y + box.height <= 720 - 8;
+    })
+    .toBe(true);
+  await asOf.click();
+  await expect(tile.getByRole('menu', { name: /^Data as of \d/ })).toBeVisible();
 });
 
 /** A chart of the dashboard's own, from its wells and, if chosen, its type. */

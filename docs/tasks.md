@@ -9209,6 +9209,28 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
 - [ ] T406 (AC-187) Re-run the design critique on every surface and tick AC-187 only on measured conformance
   - Files and failing test: as T225 (above), with the phase-2 surfaces added (AC-187).
   - Depends on: T330, T348, T356, T364, T369
+- [x] T741 (AC-199, AC-245, AC-187, AC-231) A tile menu opened before its tile's answer is placed again as it grows; Explore's spacing as design 14 draws it; two layout tests re-based on their designs *(added 2026-10-08: the coordinator's calls on T680's three reported tests)*
+  - Files: `packages/web/src/dashboard/TileViewMenu.tsx`, `packages/web/src/shell/styles.ts`, `e2e/tile-menu.spec.ts`, `e2e/admin.spec.ts`, `e2e/design-conformance.spec.ts`
+  - **The tile menu, a product defect.** The coordinator's call for `acceleration.spec.ts:252` was (a), to reach "Data as of" by keyboard, unless a product defect was found. One was:
+    - On its second visit, the test opens the menu before the tile's answer is in. The menu is placed for its first three rows under ⋯, at y 340.
+    - Data as of, Copy and Export then come with the answer, and the menu grows to its 480 px cap. It was placed only once, as it opened, so it ran to y 820 in a 720 px window. Its last rows were out of every pointer's reach and out of sight.
+    - Playwright's "outside of the viewport" was that, not a fault of its scrolling: the wheel scrolls the menu, End reaches its last row, and Playwright scrolls into view and clicks once the menu is in the window.
+    - The menu is now placed again whenever its size changes (a `ResizeObserver` on it, while open), turned back from the window's foot.
+    - Failing test: `tile-menu.spec.ts` "a tile menu opened before the answer stays in the window as it grows". It holds `/api/load` until the menu is open, then lets it go: the menu's box ran past the window before the fix. `acceleration.spec.ts:252` passes unchanged.
+  - **`admin.spec.ts:130` (the coordinator's 1).** It measures the first query row, not the day band, which is T469's design.
+  - **`design-conformance.spec.ts:942` (the coordinator's 2), re-based on design 14** (state A, 14:305–309; H1 and E2):
+    - from the top bar to the crumbs 14 px;
+    - from the crumbs to the head 8;
+    - from the head to "Add a description" 8;
+    - from it to the Show row 12;
+    - from the Show row to the table 8.
+  - **The app made to match** (EXP-01, `2026-10-08-explore-access-signin.md`): Explore's contents padded 14 by 24 with an 8 px gap, the Show row's 4 px top margin, the add link without its −4 px, and the workspace band 14 px above the crumbs. The test failed on the old spacing (16 and 12) and passes on this.
+  - Tests (Chrome): `tile-menu`, `acceleration`, `admin`, `design-conformance`, `explore`, `explore-keyboard`, `explore-rename-move`, `consistency`, `markings` and `crossfilter`, 222 of 222. `TileViewMenu.test.tsx` 29 of 29.
+  - **The cold review (FAIL) found one regression, fixed.** The description's editor kept the text's −4 px, so it sat 4 px under the name instead of design 14 H2's 8. Its margin is now reset.
+    - `design-conformance.spec.ts:942` now also measures the open editor (8 px under the name) and My workspace's band (flush under the top bar, the crumbs 14 px under it), which no test measured.
+    - The test's title no longer says "12 px apart".
+    - After the fix, `design-conformance`, `explore` and `tile-menu` pass, 95 of 95.
+    - Left, as unlikely: a submenu open while its parent menu moves stays where it was placed. A menu opened before the answer has no submenus yet.
 - [x] T680 (AC-304, AC-034) A shared model file's head wraps at 390 px, and a tile's head is 22 px in edit mode too *(added 2026-10-08, from the five layout failures the coordinator passed on)*
   - Files: `packages/web/src/shell/styles.ts`
   - Failing tests, already in the suite, and failing before this change:

@@ -561,8 +561,11 @@ main:has(.explore) {
 }
 .folder-description .btn-link:hover,
 .folder-description__add:hover { text-decoration: underline; }
-.folder-description__add { align-self: flex-start; margin-top: -4px; }
-.folder-description.folder-description--editing { display: grid; gap: 6px; max-width: 720px; }
+/* Design 14 H1 and E2: the main's 8 px under the name, no closer. */
+.folder-description__add { align-self: flex-start; }
+/* Its editor 8 px under the name, the main's gap with no pull (design 14 H2;
+   T741's review). */
+.folder-description.folder-description--editing { display: grid; gap: 6px; max-width: 720px; margin-top: 0; }
 .folder-description__top {
   display: flex;
   align-items: center;
@@ -628,7 +631,9 @@ main:has(.explore) {
 }
 .workspace-band > svg { flex: none; }
 /* Across Explore's contents column, from its edges. */
-.explore__contents > .workspace-band { margin: -16px -24px 0; }
+/* Its crumbs 14 px below, as design 04 draws them under the band: the
+   contents' 8 px gap and 6 more (T741). */
+.explore__contents > .workspace-band { margin: -14px -24px 6px; }
 /* Across an item's own page. */
 .source-settings > .workspace-band {
   margin: calc(-1 * var(--wc-surface-padding)) calc(-1 * var(--wc-surface-padding)) 0;
@@ -1798,15 +1803,19 @@ fieldset.model-field > legend {
 
 /* The contents sit on the page, and their table is the card (AC-231), as the
    prototype draws it: a card around the card read as a frame in a frame.
-   The prototype's .admin-main: 16 px by 24, each part 12 px from the next. */
+   Design 14's main (screen 1, state A; it supersedes the prototype's
+   .admin-main, R37): 14 px by 24, each part 8 px from the next, the
+   description 4 px under the name and the Show row 12 px under what's above
+   it (T741). */
 .explore__contents {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
   min-height: 0;
-  padding: 16px 24px 0;
+  padding: 14px 24px 0;
 }
+.explore__contents > .kind-filter { margin-top: 4px; }
 /* The list and its footnote scroll, below the crumbs and the head row, which
    stay put (F23). The scroller runs to the window's foot, not the table's, so
    a row's menu or Move to at the end of a short list has room to open rather

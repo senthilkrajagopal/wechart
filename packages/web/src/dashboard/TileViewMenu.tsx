@@ -562,26 +562,38 @@ export function TileViewMenu({
    */
   useLayoutEffect(() => {
     const box = popup.current;
-    if (!open || box === null) return;
+    if (!open || box === null) return undefined;
     if (typeof box.showPopover === 'function' && !box.matches(':popover-open')) box.showPopover();
-    const size = box.getBoundingClientRect();
-    const anchor = trigger.current?.getBoundingClientRect();
-    // Within the dashboard's canvas where it has one, as the picker always
-    // opened (T253's review, finding 1), and within the window in any case.
-    const canvas = wrapper.current?.closest('.dashboard__canvas')?.getBoundingClientRect();
-    const [lowest, highest] = [
-      Math.max(8, canvas?.left ?? 0),
-      Math.min(window.innerWidth - 8, canvas?.right ?? window.innerWidth),
-    ];
-    let left = point?.x ?? (anchor === undefined ? 0 : anchor.right - size.width);
-    let top = point?.y ?? (anchor === undefined ? 0 : anchor.bottom + 4);
-    if (point !== undefined && left + size.width > highest) left -= size.width;
-    left = Math.min(Math.max(left, lowest), highest - size.width);
-    if (top + size.height > window.innerHeight - 8) {
-      top = Math.max(8, (point?.y ?? anchor?.top ?? top) - size.height - 4);
-    }
-    box.style.left = `${String(Math.max(8, left))}px`;
-    box.style.top = `${String(Math.max(8, top))}px`;
+    const place = () => {
+      const size = box.getBoundingClientRect();
+      const anchor = trigger.current?.getBoundingClientRect();
+      // Within the dashboard's canvas where it has one, as the picker always
+      // opened (T253's review, finding 1), and within the window in any case.
+      const canvas = wrapper.current?.closest('.dashboard__canvas')?.getBoundingClientRect();
+      const [lowest, highest] = [
+        Math.max(8, canvas?.left ?? 0),
+        Math.min(window.innerWidth - 8, canvas?.right ?? window.innerWidth),
+      ];
+      let left = point?.x ?? (anchor === undefined ? 0 : anchor.right - size.width);
+      let top = point?.y ?? (anchor === undefined ? 0 : anchor.bottom + 4);
+      if (point !== undefined && left + size.width > highest) left -= size.width;
+      left = Math.min(Math.max(left, lowest), highest - size.width);
+      if (top + size.height > window.innerHeight - 8) {
+        top = Math.max(8, (point?.y ?? anchor?.top ?? top) - size.height - 4);
+      }
+      box.style.left = `${String(Math.max(8, left))}px`;
+      box.style.top = `${String(Math.max(8, top))}px`;
+    };
+    place();
+    // Placed again as it grows (T741): opened before the tile's answer, it
+    // has three rows, then Data as of, Copy and Export come with the answer,
+    // and placed only once it ran past the window's foot, out of reach.
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(place);
+    observer.observe(box);
+    return () => {
+      observer.disconnect();
+    };
   }, [open, point]);
 
   // A press anywhere else puts it away.

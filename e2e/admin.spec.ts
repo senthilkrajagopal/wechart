@@ -139,8 +139,11 @@ for (const [path, name] of [
       const head = node.querySelector('thead th') as HTMLElement;
       // A one-line row, as the rules draw it: a row grows to fit what wraps,
       // and which rows wrap depends on the browser's fonts, so a copy of the
-      // first row with one character in each cell is what is measured.
-      const sample = (node.querySelector('tbody tr') as HTMLElement).cloneNode(true) as HTMLElement;
+      // first row with one character in each cell is what is measured. A
+      // row of content, not the query log's day band (T469's design; T741).
+      const sample = (node.querySelector('tbody tr:not(.query-log__day)') as HTMLElement).cloneNode(
+        true,
+      ) as HTMLElement;
       for (const each of sample.children) (each as HTMLElement).textContent = '1';
       (node.querySelector('tbody') as HTMLElement).prepend(sample);
       const oneLine = Math.round(sample.getBoundingClientRect().height);

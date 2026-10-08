@@ -939,7 +939,7 @@ test.describe('T244: Explore’s tree, header and table', () => {
     });
   });
 
-  test('the header: 24 px crumbs, a 28 × 260 search and a 36 px rename, 12 px apart', async ({
+  test('the header: 24 px crumbs, a 28 × 260 search and a 36 px rename, spaced as design 14 draws them', async ({
     page,
   }) => {
     await page.goto('/explore?folder=seed-folder-0');
@@ -967,18 +967,51 @@ test.describe('T244: Explore’s tree, header and table', () => {
       'font-size': '12px',
     });
 
-    // .admin-main { padding: 16px 24px; gap: 12px }: the crumbs, the head row
-    // and the table 12 px apart (N5).
+    // Design 14's main (screen 1, state A; it supersedes the prototype's
+    // .admin-main, R37): `padding: 14px 24px; gap: 8px`. The crumbs 8 px over
+    // the head; "Add a description" 8 px under it (H1, E2); the Show row's
+    // `margin-top: 4px`, 12 px under what's above it; the card 8 px under the
+    // Show row (14:305–309; T741, re-based from T244's 12 px).
     const heading = main.getByRole('heading', { level: 1 });
     const crumbsBox = await nav.boundingBox();
     const headBox = await heading.locator('..').boundingBox();
+    const addBox = await main.getByRole('button', { name: /Add a description/ }).boundingBox();
+    const showBox = await main.getByRole('radiogroup', { name: 'Show' }).boundingBox();
     const tableBox = await main.getByRole('table').boundingBox();
     const pane = await folders(page).boundingBox();
     const bar = await page.getByRole('banner').boundingBox();
+    const below = (lower: typeof headBox, upper: typeof headBox) =>
+      (lower?.y ?? 0) - ((upper?.y ?? 0) + (upper?.height ?? 0));
     expect((crumbsBox?.x ?? 0) - ((pane?.x ?? 0) + (pane?.width ?? 0))).toBeCloseTo(24, 0);
-    expect((crumbsBox?.y ?? 0) - ((bar?.y ?? 0) + (bar?.height ?? 0))).toBeCloseTo(16, 0);
-    expect((headBox?.y ?? 0) - ((crumbsBox?.y ?? 0) + (crumbsBox?.height ?? 0))).toBeCloseTo(12, 0);
-    expect((tableBox?.y ?? 0) - ((headBox?.y ?? 0) + (headBox?.height ?? 0))).toBeCloseTo(12, 0);
+    expect(below(crumbsBox, bar)).toBeCloseTo(14, 0);
+    expect(below(headBox, crumbsBox)).toBeCloseTo(8, 0);
+    expect(below(addBox, headBox)).toBeCloseTo(8, 0);
+    expect(below(showBox, addBox)).toBeCloseTo(12, 0);
+    expect(below(tableBox, showBox)).toBeCloseTo(8, 0);
+
+    // The description's editor, opened, 8 px under the name too (H2; T741's
+    // review: it inherited the text's −4 px), and Cancel leaves it untouched.
+    await main.getByRole('button', { name: /Add a description/ }).click();
+    const editor = main.locator('.folder-description--editing');
+    await expect(editor).toBeVisible();
+    expect(below(await editor.boundingBox(), headBox)).toBeCloseTo(8, 0);
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+
+    // In My workspace, its band flush under the top bar and the crumbs 14 px
+    // under the band (2026-09-27 design 04:199–200; T741).
+    await page.goto('/explore?folder=mine');
+    const band = page.getByTestId('explore-contents').locator('.workspace-band');
+    await expect(band).toBeVisible();
+    const bandBox = await band.boundingBox();
+    const mineCrumbs = await page
+      .getByTestId('explore-contents')
+      .getByRole('navigation', { name: 'Breadcrumb' })
+      .boundingBox();
+    expect(below(bandBox, bar)).toBeCloseTo(0, 0);
+    expect(below(mineCrumbs, bandBox)).toBeCloseTo(14, 0);
+    await page.goto('/explore?folder=seed-folder-0');
+    await expect(heading).toHaveText('Finance');
 
     // The folder's name, renamed in place: 36 px at 20/600 (N4, mismatch 7).
     await main.getByRole('button', { name: 'Rename', exact: true }).click();
