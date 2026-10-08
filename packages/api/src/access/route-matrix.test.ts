@@ -1147,6 +1147,31 @@ const CASES: Record<string, Case> = {
   'GET /api/auth/check': everyone({ method: 'GET', url: '/api/auth/check' }),
   'GET /api/auth/login': everyone({ method: 'GET', url: '/api/auth/login?returnTo=/explore' }),
   'GET /api/auth/callback': everyone({ method: 'GET', url: '/api/auth/callback' }),
+  /**
+   * wechart's own pages after signing out and when sign-in fails (T697;
+   * design 09 states C and D): public, to everyone signed in or not, and
+   * whole pages of their own words, nothing of anyone's.
+   */
+  'GET /signed-out': async () => {
+    for (const who of WHO) {
+      const response = await ask(who, { method: 'GET', url: '/signed-out' });
+      answered(response, `${who} /signed-out`);
+      expect(response.body, who).toContain('You’ve signed out of wechart.');
+    }
+    const signedOut = await app.inject({ method: 'GET', url: '/signed-out' });
+    expect(signedOut.statusCode).toBe(200);
+    expect(signedOut.body).toContain('Sign in again');
+  },
+  'GET /sign-in-failed': async () => {
+    for (const who of WHO) {
+      const response = await ask(who, { method: 'GET', url: '/sign-in-failed' });
+      answered(response, `${who} /sign-in-failed`);
+      expect(response.body, who).toContain('wechart couldn’t sign you in.');
+    }
+    const signedOut = await app.inject({ method: 'GET', url: '/sign-in-failed' });
+    expect(signedOut.statusCode).toBe(200);
+    expect(signedOut.body).toContain('Try again');
+  },
   'POST /api/auth/logout': async () => {
     // Each signs out a session of their own, made for this: the others' stay.
     for (const who of WHO) {
