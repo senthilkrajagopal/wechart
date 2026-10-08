@@ -66,6 +66,14 @@ const exported = { text: '' };
 /** Where drafts are made from a file, and where they are reviewed first (T513). */
 const MAKE_URL = `/api/import`;
 const REVIEW_URL = `${MAKE_URL}/review`;
+/**
+ * Whether a new item in writer's workspace is one of this file's drafts:
+ * one going to Sales <run> or Elsewhere <run>, its targets. Other specs share
+ * writer's workspace and add to it meanwhile, and one of theirs, taken for
+ * this file's, would be listed here and removed after (T738).
+ */
+const toThisRun = (item: { targetFolderId?: string | null }) =>
+  item.targetFolderId === ids.sales || item.targetFolderId === ids.elsewhere;
 /** What the imports made in writer's workspace, removed after. */
 const drafts: { kind: string; id: string }[] = [];
 /** The model files an import landed in writer's workspace root, removed after (T733). */
@@ -545,8 +553,15 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
       const salesBefore = await folderItems(page);
       await myWorkspace(page);
       // Its items' rows: an empty workspace's one row says so, and is none of them.
+      // Rows going to Sales <run>: other specs share writer's workspace and
+      // add rows to it meanwhile, never one going to this run's folder (T738).
       const ITEM_ROWS = 'tbody tr:not(.folder-contents__empty-row)';
-      const rowsBefore = await page.getByTestId('explore-contents').locator(ITEM_ROWS).count();
+      const salesRows = () =>
+        page
+          .getByTestId('explore-contents')
+          .locator(ITEM_ROWS)
+          .filter({ hasText: `Sales ${RUN}` });
+      const rowsBefore = await salesRows().count();
       const idsBefore = await workspaceIds(page);
       await page.getByRole('button', { name: 'New', exact: true }).click();
       await page.getByRole('menuitem', { name: /Import a dashboard…/ }).click();
@@ -615,10 +630,10 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
         targetFolderId: string | null;
         origin: unknown;
       }[];
-      const landed = listed.filter((item) => !idsBefore.includes(item.id));
+      const landed = listed.filter((item) => !idsBefore.includes(item.id) && toThisRun(item));
       drafts.push(...landed.map((item) => ({ kind: item.kind, id: item.id })));
       const contents = page.getByTestId('explore-contents');
-      await expect(contents.locator(ITEM_ROWS)).toHaveCount(rowsBefore + 3);
+      await expect(salesRows()).toHaveCount(rowsBefore + 3);
       // The mapped data source and model aren't imported: nothing made for them (AC-358, AC-357).
       expect(
         landed.map((item) => [item.kind, item.title, item.targetFolderId, item.origin]).sort(),
@@ -700,8 +715,9 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
         kind: string;
         id: string;
         title: string;
+        targetFolderId: string | null;
       }[];
-      const landed = listed.filter((item) => !idsBefore.includes(item.id));
+      const landed = listed.filter((item) => !idsBefore.includes(item.id) && toThisRun(item));
       drafts.push(...landed.map((item) => ({ kind: item.kind, id: item.id })));
       // Nothing made for it: mapped, it isn't imported.
       expect(landed.map((item) => [item.kind, item.title]).sort()).toEqual(
@@ -769,10 +785,13 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
       const listed = (await (await page.request.get('/api/folders/mine/contents')).json()) as {
         kind: string;
         id: string;
+        targetFolderId: string | null;
       }[];
       drafts.push(
         ...listed
-          .filter((item) => !idsBefore.includes(item.id) && item.kind !== 'model')
+          .filter(
+            (item) => !idsBefore.includes(item.id) && item.kind !== 'model' && toThisRun(item),
+          )
           .map((item) => ({ kind: item.kind, id: item.id })),
       );
       importedModels.push(modelPath(cube));
@@ -852,7 +871,7 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
         targetFolderId: string | null;
         origin: unknown;
       }[];
-      const landed = listed.filter((item) => !idsBefore.includes(item.id));
+      const landed = listed.filter((item) => !idsBefore.includes(item.id) && toThisRun(item));
       drafts.push(...landed.map((item) => ({ kind: item.kind, id: item.id })));
       expect(
         landed.map((item) => [item.kind, item.title, item.targetFolderId, item.origin]).sort(),
@@ -971,8 +990,9 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
         kind: string;
         id: string;
         title: string;
+        targetFolderId: string | null;
       }[];
-      const landed = listed.filter((item) => !idsBefore.includes(item.id));
+      const landed = listed.filter((item) => !idsBefore.includes(item.id) && toThisRun(item));
       drafts.push(...landed.map((item) => ({ kind: item.kind, id: item.id })));
       expect(landed.map((item) => [item.kind, item.title]).sort()).toEqual(
         [
@@ -1115,11 +1135,15 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
       const afterOnPath = (await (await request.get('/api/folders/mine/contents')).json()) as {
         kind: string;
         id: string;
+        targetFolderId: string | null;
       }[];
       drafts.push(
         ...afterOnPath
           .filter(
-            (item) => !idsBefore.includes(item.id) && !drafts.some((each) => each.id === item.id),
+            (item) =>
+              !idsBefore.includes(item.id) &&
+              !drafts.some((each) => each.id === item.id) &&
+              toThisRun(item),
           )
           .map((item) => ({ kind: item.kind, id: item.id })),
       );
@@ -1176,10 +1200,18 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
         .getByRole('button', { name: 'Discard' })
         .click();
       await expect(pane).toHaveCount(0);
+      // Nothing new from the file. Other specs share writer's workspace and
+      // add to it or take from it meanwhile, never an item going to this
+      // run's folders or titled as the file's are (T738).
       const after = await page.request.get('/api/folders/mine/contents');
-      expect(((await after.json()) as { id: string }[]).map((item) => item.id).sort()).toEqual(
-        titles,
-      );
+      const fileTitles = new Set(file.items.map((item) => String(item['title'] ?? item['name'])));
+      expect(
+        (
+          (await after.json()) as { id: string; title: string; targetFolderId: string | null }[]
+        ).filter(
+          (item) => !titles.includes(item.id) && (toThisRun(item) || fileTitles.has(item.title)),
+        ),
+      ).toEqual([]);
     });
   });
 

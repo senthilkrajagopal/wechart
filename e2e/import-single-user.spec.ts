@@ -154,9 +154,14 @@ test.describe('an import with sign-in off (T508, AC-356, AC-254)', () => {
       `Imported to My workspace as new drafts: 1 dashboard and 1 chart. Nothing in ${TARGET} changed.`,
     );
 
-    // New drafts in the single user's workspace, going to the target.
+    // New drafts in the single user's workspace, going to the target. Other
+    // specs share this workspace and add to it meanwhile (a copy's project
+    // folder, say): only what goes to the target or carries this run's name
+    // came from the file.
     const landed = (await contentsOf(request, 'mine')).filter(
-      (item) => !mineBefore.includes(item.id),
+      (item) =>
+        !mineBefore.includes(item.id) &&
+        (item.targetFolderId === made.target || item.title.includes(RUN)),
     );
     made.drafts.push(...landed.map((item) => item.id));
     expect(landed.map((item) => [item.kind, item.title, item.targetFolderId])).toEqual([

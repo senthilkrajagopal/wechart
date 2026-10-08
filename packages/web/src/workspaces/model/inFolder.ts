@@ -1,7 +1,7 @@
 import type { Me } from '../../shell/AccountMenu';
 import type { FolderNode } from '../explore/FolderTree';
 import { folderChain } from '../explore/folders';
-import { SHARED_ROOT } from '../explore/roots';
+import { isMyWorkspace, SHARED_ROOT } from '../explore/roots';
 import { objectsOf } from './objects';
 
 /**
@@ -143,6 +143,21 @@ export function shownMemberOf(
   const folderId = homeOf(dot > 0 ? member.slice(0, dot) : member);
   if (folderId === undefined || folderId === openFolderId) return member;
   return `${member} (${folderWordsOf(folderId, folders) ?? SHARED_ROOT.title})`;
+}
+
+/**
+ * Whether a folder is published, for `homesOf`: the shared root, and a
+ * shared folder xcube serves (its xcube id). Never a folder in My workspace,
+ * though xcube may hold an id for one: a copy there keeps its original's
+ * name (R71), and isn't where that name lives (T738).
+ */
+export function publishedIn(folders: readonly FolderNode[]): (folderId: string) => boolean {
+  return (folderId) => {
+    if (folderId === SHARED_ROOT.id) return true;
+    const xcubeId = folders.find((folder) => folder.id === folderId)?.xcubeId;
+    if (typeof xcubeId !== 'string' || xcubeId === '') return false;
+    return !isMyWorkspace(folderChain(folders, folderId)[0]?.id ?? '');
+  };
 }
 
 /**

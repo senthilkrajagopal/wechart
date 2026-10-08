@@ -721,9 +721,9 @@ describe('a draft’s file name follows its cube’s (T737, AC-423)', () => {
     const saved = await save('writer', folderId, LEGACY_PATH, edited);
     expect(saved.statusCode, saved.body).toBe(200);
     expect(saved.json<{ moved?: unknown }>().moved).toBeUndefined();
-    expect((await files().inFolders([folderId])).map(({ path, content }) => ({ path, content }))).toEqual(
-      [{ path: LEGACY_PATH, content: edited }],
-    );
+    expect(
+      (await files().inFolders([folderId])).map(({ path, content }) => ({ path, content })),
+    ).toEqual([{ path: LEGACY_PATH, content: edited }]);
   });
 
   // T737's review: a path is made only of a name in the grammar (AC-426).

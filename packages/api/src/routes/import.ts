@@ -1025,8 +1025,8 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
         });
       if (saved.status >= 300) return reply.code(saved.status).send(saved.body);
       // Where each was stored, to take it back from (T737, AC-423).
-      for (const { from, to } of (saved.body as { moved?: { from: string; to: string }[] })
-        .moved ?? [])
+      for (const { from, to } of (saved.body as { moved?: { from: string; to: string }[] }).moved ??
+        [])
         stored.set(from, to);
     }
     // All together or none (AC-356): the models go back out if the documents fail (T720's review).

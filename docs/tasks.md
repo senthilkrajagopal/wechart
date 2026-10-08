@@ -13660,6 +13660,57 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - a draft's name changed before it lands: done in the form (`e2e/draft-file-names.spec.ts`, here);
       - a draft's file name not following its cube's: it follows, on the page, at its address, in the tree and through the API (`e2e/draft-file-names.spec.ts`), and at landing (`global-names.spec.ts`'s T707 case).
 
+- [ ] T738 (AC-141, AC-329, AC-132, AC-344, AC-313, AC-356, AC-357) Fix the phase-1 and security e2e failures the naming work caused
+  - *Added 2026-10-08 by the coordinator:* model-design's T481, model.spec:365, country-map's race and items-switch's index names are regressions from the naming work (R71–R73), so they are ours to fix. Run the whole phase-1 suite and the whole security suite in Chrome on the image, under the lock. Fix, test-first, every failure the naming work caused. List, unfixed, those it didn't cause.
+  - Files: `packages/web/src/workspaces/model/{inFolder.ts,editedMembers.ts,ModelFilePage.tsx}` (+ `inFolder.test.ts`, `editedMembers.test.ts`), `e2e/model-files.ts`, `e2e/model-design.spec.ts`, `e2e/import-single-user.spec.ts`, `e2e/security/export-import.spec.ts`; and T737's `import.ts`, `draft-names.test.ts` and `ModelFilePage.tsx`, put to the formatter's layout
+  - Failing test:
+    - `inFolder.test.ts`: a cube's home, for the members a save's warning lists, is never a folder in My workspace, whichever file is read first (AC-141, AC-329).
+    - The e2e named below, in Chrome on the image.
+  - Depends on: T710, T722, T737
+  - *Done 2026-10-08, except items-switch (below), so not ticked.* There were three full Chrome runs of each suite on the image, under the lock. The first two led to these fixes; the third ran with all of them but the last two.
+    - **A copy in My workspace taken for the folder's file** (`model.spec.ts:365`, and `security/workspace-references.spec.ts`'s T546 cases):
+      - A project folder in My workspace holds an xcube id once a save in it has been pushed. That was seen on the image: `project-…` had `xcubeId` null after the copy and `f<id>` after a save.
+      - Since T710 a published folder's items have no prefix. So the single user's copy of `orders.yml` declared `orders` as the root's file does, and whichever file was read last stood in for the other. That caused two failures:
+        - The save warning named the root's `orders.count` with the copy's folder: "uses orders.count (project-…)".
+        - A copy's rename of `count` found nothing changed, since the unchanged copy overwrote the landed file's members, so no warning was shown and the save went through.
+      - `placesOf(…).prefixOf` and the new `publishedIn` (`homesOf`'s test) now treat no folder in My workspace as published.
+      - Tests: `editedMembers.test.ts`, "are the folder's, though the copy's project folder has an xcube id", and `inFolder.test.ts` (2). Both were red first.
+    - **`model-design.spec.ts` T481.** T722 fixed a landed cube's name, and its note replaced the Name's help. The test now checks that note on the root's `orders`. MW-08's "Unique across cubes and views" is checked on a draft made by New cube in My workspace, never saved.
+    - **country-map's race** (`e2e/model-files.ts`): the browser's two tests landed one cube at once. The second wrote a new draft of a name the first had just landed, and was refused as in use (AC-421). `inMyWorkspace` now reads the folder's files again once it holds the names, and copies a file landed meanwhile.
+    - **Specs sharing writer's workspace.**
+      - `security/export-import.spec.ts` took every new item in writer's workspace as its own. It counted those items, and removed them after. Other specs' items, such as a T546 copy's, were deleted by its clean-up.
+      - Each of its lists of new items now keeps only those going to Sales <run> or Elsewhere <run>, which are its targets. Its row count counts rows going to Sales <run>.
+      - "imports nothing" now checks that nothing new from the file is there. It checked that the whole workspace was unchanged.
+      - `import-single-user.spec.ts` (T508) is narrowed the same way.
+      - *Weaker than before:* an item made with no target, or one taken away, would no longer be seen in writer's shared workspace. Said here for the coordinator.
+    - **Left, needing xcube: `items-switch.spec.ts` (T430, AC-336).**
+      - After the move, the root's `monthly_orders` is planned as `xx3us3fz_by_status_month`, so its rollup would be rebuilt.
+      - The cause is xcube 256d632371's R71 1.2 rule (`xcube-256d632371.md`, "Aliases and rollup tables"). It gives `x<hash7>` to any item whose rollup stem `<alias>_<pre-aggregation>` passes 25 characters, root items included. `monthly_orders_by_status_month` is 30. Before R71, root items had no alias.
+      - Fixing it is xcube's, or a ruling on AC-336. It is a question for the coordinator. Nothing in wechart changes here. An authored `sql_alias` wouldn't help, since the stem would still be too long and the table would become `p<hash6>`. Shortening the seed's rollup name would only hide the problem.
+      - **AC-336 unticked** (T738's review): its one test fails on the image, at "a root cube's rollup is rebuilt because of the move".
+    - **The review (PASS), its fixes taken:**
+      - AC-336 unticked, as above.
+      - "imports nothing" also keeps items going to Elsewhere <run>, as the other lists do.
+      - `editedMembers.test.ts`'s fixture comment no longer says a project folder never has an xcube id.
+      - Weaker than the note first said: besides items with no target and items taken away, a new item from the file is missed when its title isn't the file's (a model's, say). Only items going to this run's folders, or titled as the file's items are, are counted.
+      - Unverified, as the review says: `marked-share.spec.ts:512` wasn't rerun on a pre-naming base. `deleting.spec.ts:507` and `folder-models.spec.ts:23` and `:89` touch model files and folders, and are called load-related only because they passed alone.
+    - **Not caused by the naming work, listed unfixed:**
+      - Layout checks that failed on the commit before T510, before R71: `acceleration.spec.ts:252`, `admin.spec.ts:130`, `design-conformance.spec.ts:942`, `editor-preview.spec.ts:198`, `shell.spec.ts:32` (the model file at 390 px: "Edit in my workspace" and the member tabs run past the bar) and `status-labels.spec.ts:58`, which is Jobs.
+      - `security/sql-runner.spec.ts:516` and `:981`, "Cancelled after N s" and "Stopped at 30 seconds".
+      - `sheets.spec.ts:33`, Jobs' sheet.
+      - `marked-share.spec.ts:512`, the combo's marked line: charting, with no model name in it. It wasn't rerun on a pre-naming base.
+      - Under load only; each passed alone or on a rerun:
+        - `filters.spec.ts:200` and `model-design.spec.ts:846` (T486); both were known under load before;
+        - `folder-models.spec.ts:23` and `:89`: "Folder … is not in the folder tree" just after the folder is made;
+        - `no-callbacks.spec.ts:156`: an extra `/api/health` from `localhost:4501`;
+        - `security/deleting.spec.ts:507`: a model file's row still listed 5 s after its delete;
+        - `security/proposal-models.spec.ts:147`: "Data source … has no connection".
+      - `model-design.spec.ts:254` (T479) failed twice in smaller runs: the editor head measured 0 px high just after showing. It passed in all three full runs and in 2 of 2 runs beside `model.spec.ts`.
+    - **Runs:**
+      - Last full runs, before the last two fixes: phase 1 750 passed and 12 failed; security 337 passed and 2 failed. Every failure is listed above.
+      - After the last fixes: `workspace-references`, `export-import` and `deleting` together twice, 59 of 60, the one being `deleting.spec.ts:507` under load. `model`, `model-design`, `model-unpublished`, `draft-file-names`, `folder-models`, `country-map` and `import-single-user`: 43 of 44, the one being T479.
+      - API 1835/1835; web 2636/2636.
+
 ### AC-353: R70's identity warning (with T509)
 
 - [x] T725 [P] (AC-353) Warn before Save that any change moving a data source's connection identity rebuilds its pre-aggregations
@@ -14045,5 +14096,6 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-421 | T700, T701, T702, T704 | AC-422 | T704, T705, T723, T724 | AC-423 | T706, T722, T737 |
 | AC-424 | T701, T702, T704, T705, T723, T724, T726 | AC-425 | T713, T714, T715, T729 | AC-426 | T700, T703, T708, T723 |
 | AC-427 | T707 | AC-428 | T718, T732 | | |
+| AC-141, AC-329 (again, the naming work's regressions) | T738 | AC-132, AC-344 (again, T481 after T722) | T738 | AC-313, AC-356, AC-357 (again, races under one name per item) | T738 |
 
 AC-009, AC-136 and AC-137 are ticked from phase 1. ~~They stay ticked until slice 3 changes how publishing works; T426 and T432 then reword them and retest them (R28 Q9).~~ They keep their wording and their ticks while their tests pass: T447 re-runs them against xcube at slice 2's cut-over, and T426 and T432 again in slice 3 (2026-09-26, `[R29]`). AC-235 was unticked by R29 and is ticked again by T445 and T447.

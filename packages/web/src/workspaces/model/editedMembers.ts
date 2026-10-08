@@ -1,6 +1,6 @@
 import type { FolderNode } from '../explore/FolderTree';
 import { folderChain } from '../explore/folders';
-import { SHARED_ROOT } from '../explore/roots';
+import { isMyWorkspace, SHARED_ROOT } from '../explore/roots';
 import { objectsOf } from './objects';
 import { modelOf } from './sync';
 
@@ -56,10 +56,14 @@ export function placesOf(folders: readonly FolderNode[]): Places {
             .map((crumb) => crumb.id)
             .reverse(),
     // Every published folder's items under their own names (T710, AC-328).
+    // Never a folder in My workspace, though it holds an xcube id once a save
+    // in it is pushed: a copy there keeps its original's name (R71), and
+    // would stand in for the folder's file (T738).
     prefixOf: (folderId) => {
       if (folderId === ROOT) return '';
       const xcubeId = folders.find((folder) => folder.id === folderId)?.xcubeId;
-      return typeof xcubeId === 'string' && xcubeId !== '' ? '' : undefined;
+      if (typeof xcubeId !== 'string' || xcubeId === '') return undefined;
+      return isMyWorkspace(folderChain(folders, folderId)[0]?.id ?? '') ? undefined : '';
     },
   };
 }

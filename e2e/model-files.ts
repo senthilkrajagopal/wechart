@@ -125,7 +125,6 @@ export async function inMyWorkspace(
   files: readonly ModelFileText[],
 ): Promise<InMyWorkspace> {
   const existing = await modelFilesIn(request, folderId);
-  const there = new Set(existing.map((file) => file.path));
   // A copy holds the folder's file's name until it is saved over.
   const release = await holdNames([
     ...files,
@@ -150,6 +149,10 @@ export async function inMyWorkspace(
     }
   };
   try {
+    // Read again once the names are held: another worker may have landed one
+    // of them meanwhile, which a new draft of its name would now be refused
+    // (AC-421), and is to be copied instead (T738).
+    const there = new Set((await modelFilesIn(request, folderId)).map((file) => file.path));
     // The new ones first, together, so a copy naming one is checked with it.
     const added = files.filter((file) => !there.has(file.path));
     if (added.length > 0) {

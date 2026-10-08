@@ -785,8 +785,10 @@ test('T481: a cube’s General as design 03 state B — Basics, Refresh, Advance
       .evaluate((label) => getComputedStyle(label).color),
   );
   await expect(basics.getByLabel('Name', { exact: true })).toBeVisible();
+  // `orders` has landed, so its Name's help is that its name is fixed (T722,
+  // AC-423; T738). MW-08's help is a draft's, below.
   await expect(basics.locator('[data-key="name"] .model-field__help')).toHaveText(
-    'Unique across cubes and views',
+    '“orders” has landed, so its name is fixed. Its title can still change.',
   );
   // The data source picked from the ones Cube has.
   const picker = basics.getByLabel('Data source', { exact: true });
@@ -819,6 +821,25 @@ test('T481: a cube’s General as design 03 state B — Basics, Refresh, Advance
   await expect(status.getByLabel('Type', { exact: true })).toHaveAttribute('aria-required', 'true');
   await expect(status.locator('[data-key="sql"] .model-field__help')).toHaveText(
     'A Cube SQL template: {CUBE} refers to this cube',
+  );
+
+  // A draft's Name, still free to change, carries MW-08's help (T738): New
+  // cube in My workspace, beside the single user's copy of `orders.yml`,
+  // never saved, so nothing is left.
+  const copy = await myModelCopy(page.request, 'cubes/orders.yml');
+  await page.goto(`/explore/folders/${encodeURIComponent(copy.folderId)}/models`);
+  await page
+    .getByRole('navigation', { name: 'Model files' })
+    .getByRole('button', { name: 'New cube' })
+    .click();
+  const asking = page.getByRole('dialog', { name: 'New cube in My workspace' });
+  await asking.getByRole('combobox', { name: 'Target folder' }).selectOption('root');
+  await asking.getByRole('button', { name: 'Create' }).click();
+  await expect(page).toHaveURL(/\/models\/cubes%2Fnew_cube_\d+\.yml$/);
+  const draft = page.getByRole('region', { name: /^Cube new_cube_\d+$/ }).getByRole('tabpanel');
+  await expect(draft.getByLabel('Name', { exact: true })).toBeEditable();
+  await expect(draft.locator('[data-key="name"] .model-field__help')).toHaveText(
+    'Unique across cubes and views',
   );
 });
 

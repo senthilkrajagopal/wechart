@@ -281,7 +281,8 @@ describe('the members landing a workspace model would edit (T546)', () => {
   const folders: FolderNode[] = [
     { id: 'sales', title: 'Sales', parentId: null, xcubeId: 'fsales' },
     { id: 'emea', title: 'EMEA', parentId: 'sales', xcubeId: 'femea' },
-    // A project folder in My workspace: no xcube id, as none is published to.
+    // A project folder in My workspace, before any save in it is pushed: no
+    // xcube id yet. One with an id is the T738 case below.
     { id: 'project', title: 'Project', parentId: 'mine', xcubeId: null },
   ];
   const places = placesOf(folders);
@@ -311,6 +312,21 @@ describe('the members landing a workspace model would edit (T546)', () => {
         places,
       ),
     ).toEqual([]);
+  });
+
+  // T738: a project folder holds an xcube id once a save in it has been
+  // pushed (as observed on the image, 2026-10-08). Its copy keeps the
+  // cube's one name (R71), and must never stand in for the folder's file.
+  it('are the folder’s, though the copy’s project folder has an xcube id', () => {
+    const pushed = placesOf(
+      folders.map((folder) =>
+        folder.id === 'project' ? { ...folder, xcubeId: 'fproject' } : folder,
+      ),
+    );
+    expect(
+      landedEditsOf(every, { landsIn: 'sales', path: PATH, content: TOTAL_DOUBLED }, pushed),
+    ).toEqual(['orders.total']);
+    expect(pushed.prefixOf('project')).toBeUndefined();
   });
 
   it('are every member of the cube a rename takes away from that folder', () => {

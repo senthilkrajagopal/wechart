@@ -39,6 +39,7 @@ import {
   modelAccessOf,
   modelHref,
   modelsAreWorkspaceOnly,
+  publishedIn,
   shownMemberOf,
 } from './inFolder';
 import { objectsOf } from './objects';
@@ -843,9 +844,7 @@ function FileEditor({
   /** Everything listed in Problems and marked in the code. */
   const everyProblem = useMemo(
     () =>
-      fixedNames.length === 0
-        ? listed
-        : [...listed, ...fixedNames].sort((a, b) => a.from - b.from),
+      fixedNames.length === 0 ? listed : [...listed, ...fixedNames].sort((a, b) => a.from - b.from),
     [listed, fixedNames],
   );
   /** What a use-only copy's "Request a change" asks about: its saved file's cube or view (T717). */
@@ -1070,7 +1069,8 @@ function FileEditor({
           setReferences({
             found,
             text: sent,
-            homeOf: homesOf(every, (folderId) => places.prefixOf(folderId) !== undefined),
+            // Never a folder in My workspace, whose copies keep their names (T738).
+            homeOf: homesOf(every, publishedIn(known)),
             ...(landsIn === undefined
               ? {}
               : {
