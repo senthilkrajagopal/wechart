@@ -4,7 +4,7 @@ import {
   dataSourceProblems,
   DRIVER_TYPES,
   DRIVERS,
-  SHORT_NAME,
+  nameProblem,
   targetChanges,
   type DriverType,
   type FieldValue,
@@ -203,14 +203,10 @@ export interface DataSourceStore {
   withSealed(id: string): Promise<{ source: DataSource; landed: Landed } | undefined>;
 }
 
-const MAX_NAME = 64;
-
+/** R72's grammar, at most 40 characters, as xcube takes a data source's name (T703, AC-426). */
 function checkName(name: string): void {
-  if (name.length > MAX_NAME || !SHORT_NAME.test(name))
-    throw new DataSourceRefused(
-      400,
-      `A data source’s name is lower-case letters and digits, words joined by single underscores, at most ${String(MAX_NAME)} characters: ${JSON.stringify(name)} isn’t.`,
-    );
+  const problem = nameProblem(name, 'data-source');
+  if (problem !== undefined) throw new DataSourceRefused(400, problem);
 }
 
 function checkShape(

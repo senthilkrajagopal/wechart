@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import {
   DRIVER_TYPES,
   DRIVERS,
-  SHORT_NAME,
+  nameProblem,
   type DriverType,
   type FieldValue,
   type SealedV1,
@@ -363,8 +363,9 @@ export function NewSourceWizard({
     }
   };
 
-  // As the API takes a name (repos/data-sources.ts `checkName`).
-  const named = SHORT_NAME.test(name) && name.length <= 64;
+  // As the API takes a name: R72's grammar, core's one rule (T703, AC-426).
+  const misnamed = nameProblem(name, 'data-source');
+  const named = misnamed === undefined;
   const nameTaken = taken !== null && taken.name === name;
   /** A test that passed and was kept, which a data source can be made from. */
   const passedKept = tested?.ok === true && tested.testId !== undefined;
@@ -714,11 +715,11 @@ export function NewSourceWizard({
                     {taken?.reason}
                   </>
                 ) : name !== '' && !named ? (
-                  'Not a name Cube takes: use lower-case letters and digits, words joined by single underscores, at most 64 characters.'
+                  misnamed
                 ) : (
                   <>
-                    Lower-case letters and digits, words joined by single underscores, up to 64
-                    characters. Cubes name it as{' '}
+                    A letter, then letters, digits and single underscores, not ending in one, up to
+                    40 characters. Cubes name it as{' '}
                     <code>data_source: {named ? name : 'its_name'}</code>.
                   </>
                 )}

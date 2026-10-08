@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { dataSourceProblems, SHORT_NAME, targetChanges, type SealedV1 } from './validate';
+import { nameProblem } from '../names';
+import { dataSourceProblems, targetChanges, type SealedV1 } from './validate';
 
 /**
  * T335 (AC-312, AC-164, AC-298, AC-161): what a data source is, before it is
@@ -131,11 +132,15 @@ describe('a data source’s problems', () => {
 });
 
 describe('a data source’s name', () => {
-  it('is a short name xcube takes: lower-case words joined by single underscores', () => {
-    for (const good of ['default', 'warehouse', 'sales_2', 'a'])
-      expect(SHORT_NAME.test(good), good).toBe(true);
-    for (const bad of ['Default', '2x', 'a__b', 'a_', '_a', 'a-b', 'f1__sales', ''])
-      expect(SHORT_NAME.test(bad), bad).toBe(false);
+  // T703 (AC-426): R72's grammar, upper case allowed; a folder's
+  // `<folderId>__<name>` still can't be forged, as `__` is never in a name.
+  it('is a name xcube takes: a letter, then letters, digits and single underscores', () => {
+    for (const good of ['default', 'warehouse', 'sales_2', 'a', 'Warehouse'])
+      expect(nameProblem(good, 'data-source'), good).toBe(undefined);
+    for (const bad of ['2x', 'a__b', 'a_', '_a', 'a-b', 'f1__sales', ''])
+      expect(nameProblem(bad, 'data-source'), bad).toBe(
+        `“${bad}” isn’t a name: start with a letter, then use letters, digits and single underscores, not ending in one, at most 40 characters.`,
+      );
   });
 });
 

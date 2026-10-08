@@ -115,7 +115,8 @@ describe('a folder’s data sources (AC-269, AC-164)', () => {
     const folder = folderId();
     await store().create(postgres(folder));
 
-    for (const name of ['Warehouse', 'a__b', 'x'.repeat(65)])
+    // R72's grammar, upper case allowed, at most 40 (T703, AC-426).
+    for (const name of ['order-items', 'a__b', 'x'.repeat(41)])
       await expect(store().create(postgres(folder, name)), name).rejects.toThrow(/name/);
     await expect(store().create(postgres(folder))).rejects.toThrow(
       'This folder already has a data source named warehouse.',

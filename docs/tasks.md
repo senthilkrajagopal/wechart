@@ -13036,7 +13036,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 
 ### The API's name rules
 
-- [ ] T703 (AC-426) Accept a cube, view or data source name only in R72's grammar
+- [x] T703 (AC-426) Accept a cube, view or data source name only in R72's grammar
   - Files:
     - `packages/core/src/names.ts` (new, + test): one grammar for the three kinds, with the reserved words;
     - `packages/core/src/data-sources/validate.ts`: `SHORT_NAME` gives way to it;

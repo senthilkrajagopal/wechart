@@ -383,6 +383,33 @@ describe('a landed cube’s or view’s name is fixed (T706, AC-423)', () => {
   });
 });
 
+/**
+ * T703 (AC-426): a model saved in My workspace is held to R72's grammar
+ * before anything of it is stored or reaches its overlay, as a published one
+ * is (`routes/names.test.ts`).
+ */
+describe('a workspace model named outside the grammar (T703, AC-426)', () => {
+  it('is refused, saying the grammar or the reserved word, and nothing of it is saved', async () => {
+    const project = await copiedInto(shared(USED));
+    for (const [name, message] of [
+      [
+        `${MARK}__bad`,
+        `“${MARK}__bad” isn’t a name: start with a letter, then use letters, digits and single underscores, not ending in one, at most 40 characters.`,
+      ],
+      ['Class', '“Class” is a reserved word, so a cube or view can’t take it.'],
+    ] as const) {
+      const path = `cubes/${MARK}_misnamed.yml`;
+      const saved = await save(project, path, cube(name), ids.sales);
+      expect(saved.statusCode, name).toBe(422);
+      expect(saved.json<{ errors: unknown[] }>().errors, name).toEqual([{ path, message }]);
+      expect((await files().inFolders([project])).map((file) => file.path)).not.toContain(path);
+    }
+    // Upper case is a name.
+    const upper = await save(project, `cubes/${MARK}_upper.yml`, cube(`Upper_${MARK}`), ids.sales);
+    expect(upper.statusCode, upper.body).toBe(200);
+  });
+});
+
 describe('a delete of a name in use (T706, AC-275)', () => {
   it('is still refused, naming the chart that uses it', async () => {
     const chart = randomUUID();

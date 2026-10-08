@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   DRIVERS,
-  SHORT_NAME,
+  nameProblem,
   type DriverType,
   type ExportedDataSource,
   type FieldValue,
@@ -178,7 +178,12 @@ export function ImportSources({
     if (!known(source.driver)) return;
     const driver = source.driver;
     const row = rows[source.name]!;
-    change(source.name, (now) => ({ ...now, testing: true, failure: undefined, tested: undefined }));
+    change(source.name, (now) => ({
+      ...now,
+      testing: true,
+      failure: undefined,
+      tested: undefined,
+    }));
     try {
       const sealed: Record<string, SealedV1> = {};
       for (const [field, secret] of Object.entries(row.secrets))
@@ -244,8 +249,8 @@ export function ImportSources({
   );
 }
 
-/** A name a data source takes (as the API's `checkName`). */
-const named = (name: string) => SHORT_NAME.test(name) && name.length <= 64;
+/** A name a data source takes, as the API does: R72's grammar, core's one rule (T703, AC-426). */
+const named = (name: string) => nameProblem(name, 'data-source') === undefined;
 
 function SourceRow({
   source,
@@ -290,7 +295,8 @@ function SourceRow({
   const missing = secrets.some(
     (field) => field.required && (row.secrets[field.key] ?? '').trim() === '',
   );
-  const values = driver === undefined ? undefined : storedValuesOf(driver, source.authMethod, source.fields);
+  const values =
+    driver === undefined ? undefined : storedValuesOf(driver, source.authMethod, source.fields);
   const nameTaken = row.mode === 'create' && taken !== undefined;
   const firstFailed = row.tested?.checks.find((check) => check.status === 'failed');
   const status =
@@ -334,7 +340,11 @@ function SourceRow({
           {status}
         </span>
       </div>
-      <div className="import-source__modes" role="radiogroup" aria-label={`What to do with ${source.name}`}>
+      <div
+        className="import-source__modes"
+        role="radiogroup"
+        aria-label={`What to do with ${source.name}`}
+      >
         <label>
           <input
             type="radio"
@@ -494,7 +504,7 @@ function SourceRow({
               {nameTaken
                 ? `Taken in ${targetText}. Choose another name, or use the existing one.`
                 : !named(row.name)
-                  ? 'Not a name a data source takes: lower-case letters and digits, words joined by single underscores, at most 64 characters.'
+                  ? nameProblem(row.name, 'data-source')
                   : `${targetText} has none by this name.`}
             </span>
           </div>
@@ -625,10 +635,14 @@ function SourceRow({
             <button
               type="button"
               className="btn"
-              disabled={row.testing || missing || nameTaken || !named(row.name) || driver === undefined}
+              disabled={
+                row.testing || missing || nameTaken || !named(row.name) || driver === undefined
+              }
               onClick={onTest}
             >
-              {row.tested === undefined && row.trials.length === 0 ? 'Test connection' : 'Test again'}
+              {row.tested === undefined && row.trials.length === 0
+                ? 'Test connection'
+                : 'Test again'}
             </button>
             {row.tested?.ok === true ? null : (
               <span className="connection-form__note">Created only after a passing test.</span>

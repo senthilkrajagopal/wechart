@@ -1251,31 +1251,33 @@ describe('one cube or view per model file (T448, AC-337)', () => {
 
   /**
    * T449's review: from the move to items mode each file is an xcube item,
-   * and xcube refuses a name outside its rule (`xcube-slice-3a.md`, "Names":
-   * lower-case letters, digits and single underscores, starting with a
-   * letter, at most 40 characters, no Python keyword). The check (a files
-   * dry run) doesn't apply that rule, so a file xcube would refuse is refused
-   * here, in xcube's own words, before it is committed and never served.
+   * and xcube refuses a name outside its rule. The check (a files dry run)
+   * doesn't apply that rule, so a file xcube would refuse is refused here,
+   * before it is committed and never served. T703 (AC-426): from xcube
+   * `256d632371` the rule is R72's grammar, upper case allowed and reserved
+   * words compared in any case (research xcube-256d632371.md, "The
+   * grammar"), said in wechart's words.
    */
-  it('refuses a cube or view named as xcube won’t take it, in xcube’s words', async () => {
+  it('refuses a cube or view named as xcube won’t take it', async () => {
     const store = memory([ORDERS]);
     const stub = fakeXcube();
     const app = serve({ config, modelFiles: store }, stub);
 
     for (const [name, message] of [
-      ['lineItems', 'is not a valid name'],
-      ['Orders', 'is not a valid name'],
-      ['a__b', 'is not a valid name'],
-      ['_hidden', 'is not a valid name'],
-      ['x'.repeat(41), 'is not a valid name'],
-      ['class', "is a reserved word and can't be a name"],
+      ['1lineItems', 'isn’t a name'],
+      ['order-items', 'isn’t a name'],
+      ['a__b', 'isn’t a name'],
+      ['_hidden', 'isn’t a name'],
+      ['x'.repeat(41), 'isn’t a name'],
+      ['class', 'is a reserved word, so a cube or view can’t take it'],
+      ['None', 'is a reserved word, so a cube or view can’t take it'],
     ] as const) {
       const response = await publish(app, [
         { path: 'cubes/named.yml', content: `cubes:\n  - name: ${name}\n` },
       ]);
       expect({ name, status: response.statusCode }).toEqual({ name, status: 422 });
       expect(response.json<{ errors: { message: string }[] }>().errors[0]?.message).toContain(
-        `"${name}" ${message}`,
+        `“${name}” ${message}`,
       );
     }
     expect(checkedFiles(stub)).toEqual([]);

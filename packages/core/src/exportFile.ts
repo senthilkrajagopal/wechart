@@ -1,7 +1,8 @@
 import { ChartDocumentError, readChartDocument } from './chart-document';
 import { migrateChartDocument } from './chart-migrations';
 import { DRIVER_TYPES, DRIVERS, type DriverType } from './data-sources/drivers';
-import { SHORT_NAME, type FieldValue } from './data-sources/validate';
+import type { FieldValue } from './data-sources/validate';
+import { nameKey, nameProblem } from './names';
 import { CHART_TYPES } from './render-spec';
 
 /**
@@ -560,18 +561,17 @@ export function readExport(value: unknown): ReadExport {
       );
       return;
     }
-    if (!SHORT_NAME.test(name) || name.length > 64) {
-      refuse(
-        part,
-        'Not a name a data source takes: lower-case letters and digits, words joined by single underscores, at most 64 characters.',
-      );
+    // R72's grammar (T703, AC-426); names compare in any case (AC-421).
+    const misnamed = nameProblem(name, 'data-source');
+    if (misnamed !== undefined) {
+      refuse(part, misnamed);
       return;
     }
-    if (sourceNames.has(name)) {
+    if (sourceNames.has(nameKey(name))) {
       refuse(part, 'Another data source in the file has its name.');
       return;
     }
-    sourceNames.add(name);
+    sourceNames.add(nameKey(name));
     // Any of its driver's secrets, whichever way of signing in keeps it.
     const secrets = [...spec.connection, ...spec.auth.flatMap((each) => each.fields)]
       .filter((field) => field.secret === true)
@@ -579,7 +579,10 @@ export function readExport(value: unknown): ReadExport {
     const settings = settingKeysOf(spec.type, authMethod);
     for (const [key, setting] of Object.entries(fields)) {
       if (secrets.includes(key)) {
-        refuse(part, `It holds ${key}, which ${spec.label} keeps secret: an export never holds a secret.`);
+        refuse(
+          part,
+          `It holds ${key}, which ${spec.label} keeps secret: an export never holds a secret.`,
+        );
         return;
       }
       if (!settings.includes(key)) {

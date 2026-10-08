@@ -1,3 +1,4 @@
+import { nameProblem } from '@wechart/core';
 import { Document, isMap, isNode, isScalar, isSeq, parseDocument, type YAMLSeq } from 'yaml';
 
 import { ROOT_FOLDER_ID } from '../repos/catalog';
@@ -107,36 +108,16 @@ export function splitFile(file: ModelFile, taken: ReadonlySet<string>): ModelFil
 }
 
 /**
- * xcube's rule for an item's name (research `xcube-slice-3a.md`, "Names"):
- * lower-case letters, digits and single underscores, starting with a letter,
- * at most 40 characters, and none of Python's 33 keywords.
- */
-const ITEM_NAME = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
-const RESERVED = new Set(
-  (
-    'and as assert async await break class continue def del elif else except finally for ' +
-    'from global if import in is lambda nonlocal not or pass raise return try while with yield'
-  ).split(' '),
-);
-
-/**
- * Why xcube would refuse the names a file declares, in xcube's own words
- * (T449's review): each is one item from the move to items mode, and the
- * publish check, a files dry run, doesn't apply the rule.
+ * Why the names a file declares break R72's grammar, as xcube `256d632371`
+ * would refuse them (T703, AC-426; research `xcube-256d632371.md`, "The
+ * grammar"; T449's review): checked before anything is published or saved in
+ * My workspace, in core's one rule for cubes, views and data sources.
  */
 export function misnamedIn(file: ModelFile): { path: string; message: string }[] {
-  return declaredIn(file.content).flatMap(({ name }) =>
-    RESERVED.has(name)
-      ? [{ path: file.path, message: `"${name}" is a reserved word and can't be a name` }]
-      : ITEM_NAME.test(name) && name.length <= 40
-        ? []
-        : [
-            {
-              path: file.path,
-              message: `"${name}" is not a valid name: lower-case letters, digits and single underscores, starting with a letter, at most 40 characters`,
-            },
-          ],
-  );
+  return declaredIn(file.content).flatMap(({ kind, name }) => {
+    const problem = nameProblem(name, kind);
+    return problem === undefined ? [] : [{ path: file.path, message: problem }];
+  });
 }
 
 /**

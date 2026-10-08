@@ -28,13 +28,6 @@ export interface DataSourceShape {
   readonly sealed: Readonly<Record<string, SealedV1>>;
 }
 
-/**
- * A data source's short name: lower-case letters and digits, words joined by
- * single underscores, as xcube takes it (`SHORT_NAME`, research). A name never
- * holds `__`, so a folder's `<folderId>__<name>` can't be forged.
- */
-export const SHORT_NAME = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
-
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
 /** The bytes a base64url text holds, unpadded; -1 where no text of that length is one. */
 const bytesOf = (text: unknown): number =>

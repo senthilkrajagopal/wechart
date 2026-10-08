@@ -241,7 +241,10 @@ describe('reading an export file (T512, AC-359)', () => {
     const tile = { id: 't9', kind: 'chart', chartType: 'sankey', w: 6, h: 30 };
     const board = {
       ...DASHBOARD,
-      body: { ...DASHBOARD.body, pages: [{ id: 'p1', items: [{ id: 's1', kind: 'section', items: [tile] }] }] },
+      body: {
+        ...DASHBOARD.body,
+        pages: [{ id: 'p1', items: [{ id: 's1', kind: 'section', items: [tile] }] }],
+      },
     };
     expect(readExport(fileOf([board]))).toEqual({
       ok: false,
@@ -269,11 +272,11 @@ describe('reading an export file (T512, AC-359)', () => {
         },
       ],
     });
-    expect(
-      readExport(fileOf([{ ...DASHBOARD, body: { ...pageless, pages: 'all' } }])),
-    ).toEqual({
+    expect(readExport(fileOf([{ ...DASHBOARD, body: { ...pageless, pages: 'all' } }]))).toEqual({
       ok: false,
-      parts: [{ part: 'Dashboard “Q3 board pack”', why: 'It can’t be read: its pages are not a list.' }],
+      parts: [
+        { part: 'Dashboard “Q3 board pack”', why: 'It can’t be read: its pages are not a list.' },
+      ],
     });
   });
 
@@ -363,7 +366,8 @@ describe('reading an export file (T512, AC-359)', () => {
       },
       {
         part: 'Data source Not A Name',
-        why: 'Not a name a data source takes: lower-case letters and digits, words joined by single underscores, at most 64 characters.',
+        // R72's grammar (T703, AC-426).
+        why: '“Not A Name” isn’t a name: start with a letter, then use letters, digits and single underscores, not ending in one, at most 40 characters.',
       },
       {
         part: 'Data source with_key',
@@ -428,7 +432,8 @@ describe('reading an export file (T512, AC-359)', () => {
           { ...OWN, dashboardId: 'elsewhere' },
           { ...LIBRARY, id: 'c1' },
           SOURCE,
-          SOURCE,
+          // One name in any case (AC-421).
+          { ...SOURCE, name: 'EMEA_Replica' },
           { kind: 'chart', title: 'No body' },
           42,
         ]),
@@ -441,7 +446,7 @@ describe('reading an export file (T512, AC-359)', () => {
           why: 'It is the own chart of a dashboard the file doesn’t hold.',
         },
         { part: 'Chart “Top products”', why: 'Another chart in the file has its id.' },
-        { part: 'Data source emea_replica', why: 'Another data source in the file has its name.' },
+        { part: 'Data source EMEA_Replica', why: 'Another data source in the file has its name.' },
         { part: 'Item 6, “No body”', why: 'A chart needs an id, a title and a body.' },
         { part: 'Item 7', why: 'It isn’t an item: each item is an object naming its kind.' },
       ],

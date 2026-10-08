@@ -134,11 +134,18 @@ describe('the folder a new workspace item is to go to (T345, AC-282)', () => {
     expect(screen.getByRole('button', { name: 'Create' })).toHaveProperty('disabled', true);
     // Said beside the field, as its description.
     const rule = document.getElementById(name.getAttribute('aria-describedby') ?? '');
+    // R72's grammar, core's one rule (T703, AC-426).
     expect(rule?.textContent).toBe(
-      'Lower-case letters, digits and single underscores, starting with a letter: at most 40.',
+      '“My Sales” isn’t a name: start with a letter, then use letters, digits and single underscores, not ending in one, at most 40 characters.',
     );
     await user.clear(name);
-    await user.type(name, 'my_sales');
+    await user.type(name, 'Table');
+    expect(screen.getByRole('button', { name: 'Create' })).toHaveProperty('disabled', true);
+    expect(document.getElementById(name.getAttribute('aria-describedby') ?? '')?.textContent).toBe(
+      '“Table” is a reserved word, so a cube or view can’t take it.',
+    );
+    await user.clear(name);
+    await user.type(name, 'My_sales');
     expect(screen.getByRole('button', { name: 'Create' })).toHaveProperty('disabled', false);
   });
 

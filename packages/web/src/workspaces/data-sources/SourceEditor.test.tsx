@@ -294,7 +294,7 @@ describe('a rename (state B)', () => {
     expect(name.getAttribute('aria-invalid')).toBe('true');
     expect(
       screen.getByText(
-        'Not a name Cube takes: use lower-case letters and digits, words joined by single underscores, at most 64 characters.',
+        '“EU Replica” isn’t a name: start with a letter, then use letters, digits and single underscores, not ending in one, at most 40 characters.',
       ),
     ).toBeTruthy();
     expect(saveButton()).toHaveProperty('disabled', true);

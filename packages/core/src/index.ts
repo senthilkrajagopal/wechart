@@ -284,9 +284,9 @@ export {
   type DriverSpec,
   type DriverType,
 } from './data-sources/drivers';
+export { MAX_NAME, NAME, nameKey, nameProblem, type NamedKind } from './names';
 export {
   dataSourceProblems,
-  SHORT_NAME,
   targetChanges,
   type DataSourceShape,
   type FieldValue,

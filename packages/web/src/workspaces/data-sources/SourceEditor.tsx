@@ -1,6 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useBlocker, type ShouldBlockFn } from '@tanstack/react-router';
-import { DRIVERS, SHORT_NAME, targetChanges, type DriverField, type SealedV1 } from '@wechart/core';
+import {
+  DRIVERS,
+  nameProblem,
+  targetChanges,
+  type DriverField,
+  type SealedV1,
+} from '@wechart/core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
@@ -144,8 +150,9 @@ export function useSourceEdit(source: StoredSource, { seal: given }: { seal?: Se
   const moves = identityMoves(source.driver, source, values);
   const typed = name.trim();
   const nameChanged = typed !== source.name;
-  /** As the API takes a name (the wizard's rule; `checkName`). */
-  const nameOk = !nameChanged || (SHORT_NAME.test(typed) && typed.length <= 64);
+  /** As the API takes a name: R72's grammar, core's one rule (T703, AC-426). */
+  const nameProblemOf = nameChanged ? nameProblem(typed, 'data-source') : undefined;
+  const nameOk = nameProblemOf === undefined;
   const describedAs = description.trim();
   const descriptionChanged = describedAs !== (source.description ?? '');
   const connects = changes.length > 0;
@@ -288,6 +295,8 @@ export function useSourceEdit(source: StoredSource, { seal: given }: { seal?: Se
       setSaved(null);
     },
     nameOk,
+    /** Why the typed name breaks the grammar, where it does. */
+    nameProblem: nameProblemOf,
     nameRefused: nameRefused?.name === typed ? nameRefused.reason : null,
     description,
     setDescription: (next: string) => {
@@ -545,7 +554,7 @@ export function EditableGeneral({
               {edit.nameRefused}
             </>
           ) : !edit.nameOk ? (
-            'Not a name Cube takes: use lower-case letters and digits, words joined by single underscores, at most 64 characters.'
+            edit.nameProblem
           ) : edit.nameChanged ? (
             `Was ${source.name} · cubes name it as data_source: ${typed}`
           ) : (

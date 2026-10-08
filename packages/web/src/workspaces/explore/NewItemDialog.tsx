@@ -1,3 +1,4 @@
+import { nameProblem } from '@wechart/core';
 import { useEffect, useId, useRef, useState } from 'react';
 
 import { DiscardQuestion } from '../../shell/DiscardQuestion';
@@ -18,9 +19,6 @@ export interface Target {
   /** Its folders from the root down; none for the shared root. */
   readonly path: readonly string[];
 }
-
-/** A cube's or view's name, as xcube takes an item's (its `SHORT_NAME`; the API's `misnamedIn`). */
-const ITEM_NAME = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 
 export const targetLabel = (target: Target) =>
   target.path.length === 0 ? SHARED_ROOT.title : target.path.join(' / ');
@@ -49,10 +47,9 @@ export function NewItemDialog({
   const [chosen, setChosen] = useState(targets.length === 1 ? targets[0]!.id : '');
   /** A cube's or view's name is one xcube takes for an item (T347's review), said before Create. */
   const named = title.trim();
+  // R72's grammar, core's one rule, as the API and xcube hold it (T703, AC-426).
   const misnamed =
-    (kind === 'cube' || kind === 'view') &&
-    named !== '' &&
-    !(ITEM_NAME.test(named) && named.length <= 40);
+    (kind === 'cube' || kind === 'view') && named !== '' ? nameProblem(named, kind) : undefined;
 
   // Focus goes back to what opened it (T405, rule 85).
   useReturnFocus();
@@ -100,15 +97,15 @@ export function NewItemDialog({
             id={`${heading}-name`}
             ref={naming}
             value={title}
-            aria-invalid={misnamed ? 'true' : undefined}
-            aria-describedby={misnamed ? `${heading}-name-rule` : undefined}
+            aria-invalid={misnamed !== undefined ? 'true' : undefined}
+            aria-describedby={misnamed !== undefined ? `${heading}-name-rule` : undefined}
             onChange={(event) => {
               setTitle(event.target.value);
             }}
           />
-          {misnamed ? (
+          {misnamed !== undefined ? (
             <p id={`${heading}-name-rule`} className="field__error">
-              Lower-case letters, digits and single underscores, starting with a letter: at most 40.
+              {misnamed}
             </p>
           ) : null}
         </div>
@@ -147,7 +144,7 @@ export function NewItemDialog({
           <button
             type="button"
             className="btn btn-primary"
-            disabled={chosen === '' || title.trim() === '' || misnamed || busy}
+            disabled={chosen === '' || title.trim() === '' || misnamed !== undefined || busy}
             onClick={() => {
               onCreate(title.trim(), chosen);
             }}

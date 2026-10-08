@@ -483,10 +483,11 @@ describe('the Name and target step (design 01, states G and H)', () => {
     expect(name.getAttribute('aria-invalid')).toBe('true');
     expect(
       within(pane).getByText(
-        'Not a name Cube takes: use lower-case letters and digits, words joined by single underscores, at most 64 characters.',
+        '“Sales DB” isn’t a name: start with a letter, then use letters, digits and single underscores, not ending in one, at most 40 characters.',
       ).textContent,
     ).toBe(
-      'Not a name Cube takes: use lower-case letters and digits, words joined by single underscores, at most 64 characters.',
+      // R72's grammar, core's one rule (T703, AC-426).
+      '“Sales DB” isn’t a name: start with a letter, then use letters, digits and single underscores, not ending in one, at most 40 characters.',
     );
     expect(button(pane, 'Create in My workspace')).toHaveProperty('disabled', true);
   });

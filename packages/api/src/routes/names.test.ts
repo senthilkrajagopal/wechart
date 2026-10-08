@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Config } from '../config';
 import { closeDb, getDb } from '../db/client';
 import { catalog } from '../repos/catalog';
+import { connectionTestStore } from '../repos/connection-tests';
 import { dataSourceStore } from '../repos/data-sources';
 import { documents, type DocumentKind } from '../repos/documents';
 import { modelFileStore } from '../repos/model-files';
@@ -75,6 +76,10 @@ beforeAll(async () => {
     catalog: catalog(getDb()),
     modelFiles: files(),
     dataSources: sources(),
+    // A data source is made from a passing test of its settings (T363).
+    connectionTests: connectionTestStore(getDb()),
+    connectionTest: async () =>
+      ({ ok: true, checks: [{ id: 'connect', status: 'passed', durationMs: 1 }] }) as never,
     xcube: admin,
     folders: async () => ({
       ids: xids,
@@ -307,5 +312,97 @@ describe('data sources, cubes and model files: one of a name in a folder (T336, 
     expect(fresh.statusCode, fresh.body).toBe(200);
     const path = await publish(folders.c, 'cubes/stock.yml', `stock_c_${MARK}`, true);
     expect(path.statusCode, path.body).toBe(200);
+  });
+});
+
+/**
+ * T703 (AC-426): a cube's, view's or data source's name only in R72's
+ * grammar, as xcube `256d632371` takes it (research `xcube-256d632371.md`,
+ * "The grammar"). A model is checked before it is published or saved in My
+ * workspace, where the same check runs first; a data source when it is made.
+ */
+describe('names in R72’s grammar (T703, AC-426)', () => {
+  const grammar = (name: string) =>
+    `“${name}” isn’t a name: start with a letter, then use letters, digits and single underscores, not ending in one, at most 40 characters.`;
+
+  it('refuses a model declaring a cube outside the grammar, or a reserved word in any case, and takes upper case', async () => {
+    for (const [name, error] of [
+      ['1orders', grammar('1orders')],
+      ['order__items', grammar('order__items')],
+      ['orders_', grammar('orders_')],
+      ['x'.repeat(41), grammar('x'.repeat(41))],
+      ['class', '“class” is a reserved word, so a cube or view can’t take it.'],
+      ['Table', '“Table” is a reserved word, so a cube or view can’t take it.'],
+    ] as const) {
+      const refused = await publish(folders.c, 'cubes/named.yml', name);
+      expect(refused.statusCode, name).toBe(422);
+      expect(refused.json<{ errors: unknown[] }>().errors, name).toEqual([
+        { path: 'cubes/named.yml', message: error },
+      ]);
+    }
+    // A view too, held to the same rule.
+    const view = await send({
+      method: 'POST',
+      url: '/api/model/publish',
+      payload: {
+        folderId: folders.c,
+        files: [{ path: 'views/named.yml', content: 'views:\n  - name: None\n    cubes: []\n' }],
+      },
+    });
+    expect(view.statusCode).toBe(422);
+    expect(view.json<{ errors: unknown[] }>().errors).toEqual([
+      {
+        path: 'views/named.yml',
+        message: '“None” is a reserved word, so a cube or view can’t take it.',
+      },
+    ]);
+    expect((await files().list(folders.c)).map((file) => file.path)).not.toContain(
+      'cubes/named.yml',
+    );
+
+    const upper = await publish(folders.c, 'cubes/upper.yml', `Upper_${MARK}`, true);
+    expect(upper.statusCode, upper.body).toBe(200);
+  });
+
+  it('refuses a data source named outside the grammar, and takes upper case and a reserved word', async () => {
+    const settings = {
+      driver: 'postgres',
+      authMethod: 'password',
+      fields: { host: 'db', port: 5432, database: 'sales', user: 'cube', ssl: false },
+      sealed: {
+        password: {
+          v: 1 as const,
+          kid: 'kid-1',
+          enc: Buffer.alloc(32, `enc-g-${MARK}`).toString('base64url'),
+          ct: Buffer.alloc(272, `ct-g-${MARK}`).toString('base64url'),
+        },
+      },
+    };
+    const made = async (name: string) => {
+      const tested = await send({
+        method: 'POST',
+        url: '/api/data-sources/test',
+        payload: { ...settings, folderId: folders.c },
+      });
+      expect(tested.statusCode, tested.body).toBe(200);
+      return send({
+        method: 'POST',
+        url: '/api/data-sources',
+        payload: {
+          ...settings,
+          folderId: folders.c,
+          name,
+          testId: tested.json<{ testId: string }>().testId,
+        },
+      });
+    };
+
+    for (const name of ['order-items', 'order__items', `${'x'.repeat(41)}`]) {
+      const refused = await made(name);
+      expect(refused.statusCode, name).toBe(400);
+      expect(refused.json<{ error: string }>().error, name).toBe(grammar(name));
+    }
+    for (const name of [`Warehouse_${MARK}`, 'table'])
+      expect((await made(name)).statusCode, name).toBe(201);
   });
 });
