@@ -17,7 +17,6 @@ import { cubesOfChart, cubesOfDashboard } from '../model/bind';
 import { isWorkspaceId, ROOT_FOLDER_ID } from '../repos/catalog';
 import type { DataSource } from '../repos/data-sources';
 import type { ModelFile } from '../server';
-import type { PublishedFolders } from '../xcube/folders';
 import { extendsIn } from '../xcube/used-by';
 
 /**
@@ -34,11 +33,10 @@ import { extendsIn } from '../xcube/used-by';
  * saved, its own charts, and exactly what was chosen of what was offered.
  * Anything else chosen is refused, and no file given.
  *
- * - **A model's use.** Each cube a chart names (`cubesOfChart`) is found as
- *   the chart finds it: a full name (`f…__name`) in the folder it was bound
- *   to at publish (AC-328), a short one nearest first from where the chart
- *   is published up to the root. What a model then needs goes too: the
- *   cubes it joins, a view's cubes, and what a cube extends.
+ * - **A model's use.** Each cube a chart names (`cubesOfChart`) is found by
+ *   its one name (T709, AC-328) on the path from where the chart is
+ *   published up to the root. What a model then needs goes too: the cubes
+ *   it joins, a view's cubes, and what a cube extends.
  * - **A model's data sources.** Each cube's `data_source`, its parent's where
  *   it extends one and names none, else `default`, nearest first from the
  *   model's folder (AC-273, AC-310).
@@ -64,8 +62,6 @@ export interface ExportAccess {
   readonly opensOf: (request: FastifyRequest) => Promise<(chart: Stored) => Promise<boolean>>;
   readonly folders: () => Promise<readonly Folder[]>;
   readonly modelFiles: () => Promise<readonly ModelFile[]>;
-  /** Where each folder's cubes are published, by xcube's folder id (T452): unset without xcube. */
-  readonly published?: () => Promise<PublishedFolders>;
   readonly dataSources?: () => Promise<readonly DataSource[]>;
 }
 
@@ -125,8 +121,6 @@ export interface Offered {
   readonly viewOnly: boolean;
 }
 
-/** A full name's folder prefix, and its short name (research 3a, "Names"; `model/bind.ts`). */
-const FULL_NAME = /^(f[a-z0-9]{1,40})__(.+)$/;
 const DEFAULT_SOURCE = 'default';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -235,11 +229,10 @@ export async function dependenciesOf(
       readonly sources: ReadonlyMap<string, DataSource>;
     }
 > {
-  const [folders, files, sources, published] = await Promise.all([
+  const [folders, files, sources] = await Promise.all([
     access.folders(),
     access.modelFiles(),
     access.dataSources?.() ?? Promise.resolve([] as readonly DataSource[]),
-    access.published?.(),
   ]);
   const byId = new Map(folders.map((folder) => [folder.id, folder]));
   const parentOf = (folderId: string): string | null => {
@@ -304,36 +297,19 @@ export async function dependenciesOf(
 
   // The models each chart uses, and what those need, found as the chart finds them.
   const index = indexOf(files);
-  const byXcubeId = new Map(
-    [...(published?.ids ?? new Map<string, string>())].map(([id, xcubeId]) => [xcubeId, id]),
-  );
-  const nearest = (short: string, from: string): ModelFile | undefined => {
+  /** The file declaring a name on a folder's path: one item holds a name (T709, R71). */
+  const nearest = (name: string, from: string): ModelFile | undefined => {
     for (const folderId of upFrom(from)) {
-      const found = index.declared.get(folderId)?.get(short);
+      const found = index.declared.get(folderId)?.get(name);
       if (found !== undefined) return found;
     }
     return undefined;
   };
-  /**
-   * A cube a chart stores, by the name it stores (AC-328): a full name in its
-   * folder; a short one, where the chart's folder is published, the root's,
-   * as xcube bound it and never rebinds it (AC-273); else, or where the root
-   * has none, nearest first.
-   */
-  const storedNamed = (name: string, from: string): ModelFile | undefined => {
-    const full = FULL_NAME.exec(name);
-    const bound = full === null ? undefined : byXcubeId.get(full[1]!);
-    if (full !== null && bound !== undefined) return index.declared.get(bound)?.get(full[2]!);
-    const short = full === null ? name : full[2]!;
-    const root =
-      published?.ids.has(from) === true
-        ? index.declared.get(ROOT_FOLDER_ID)?.get(short)
-        : undefined;
-    return root ?? nearest(short, from);
-  };
-  /** What a model file names — a join, a view's cube, a parent — as a publish binds it: nearest first. */
+  /** A cube a chart stores, by its one name (AC-328), on the chart's path. */
+  const storedNamed = nearest;
+  /** What a model file names — a join, a view's cube, a parent — on its folder's path. */
   const neededBy = (name: string, file: ModelFile) =>
-    nearest(FULL_NAME.exec(name)?.[2] ?? name, file.folderId ?? ROOT_FOLDER_ID);
+    nearest(name, file.folderId ?? ROOT_FOLDER_ID);
   const usedBy = new Map<string, Set<string>>();
   /** The model files the dashboard's own filters and text tokens use (T429's `cubesOfDashboard`). */
   const byDashboard = new Set<string>();
@@ -401,9 +377,8 @@ export async function dependenciesOf(
     if (found?.dataSource !== undefined) return sourceNamed(found.dataSource, at);
     if (found?.extends !== undefined && !seen.has(`${keyOf(file)}/${cube}`)) {
       seen.add(`${keyOf(file)}/${cube}`);
-      const parentName = FULL_NAME.exec(found.extends)?.[2] ?? found.extends;
       const parent = neededBy(found.extends, file);
-      if (parent !== undefined) return sourceOf(parent, parentName, seen);
+      if (parent !== undefined) return sourceOf(parent, found.extends, seen);
     }
     return sourceNamed(DEFAULT_SOURCE, at);
   };
@@ -502,7 +477,9 @@ export async function dependenciesOf(
       models: hiddenModels,
       dataSources: hiddenSources,
       folders: hiddenFolders.size,
-      usedBy: [...charts.keys()].filter((id) => hiddenUsers.has(id)).map((id) => titleOf(charts.get(id)!)),
+      usedBy: [...charts.keys()]
+        .filter((id) => hiddenUsers.has(id))
+        .map((id) => titleOf(charts.get(id)!)),
     },
     viewOnly: false,
   };
@@ -572,7 +549,8 @@ export function registerExport(
       chosen.dataSources === undefined
     )
       return reply.code(400).send({
-        error: 'Send what goes with it as { libraryCharts, models, dataSources }, each a list of ids.',
+        error:
+          'Send what goes with it as { libraryCharts, models, dataSources }, each a list of ids.',
       });
     const found = await listed(request, reply);
     if (found === undefined) return reply;
@@ -623,6 +601,8 @@ export function registerExport(
       exportedAt: new Date().toISOString(),
       items,
     };
-    return reply.header('content-type', 'application/json; charset=utf-8').send(JSON.stringify(file));
+    return reply
+      .header('content-type', 'application/json; charset=utf-8')
+      .send(JSON.stringify(file));
   });
 }

@@ -13,26 +13,14 @@ import type { XcubeAdmin } from '../xcube/client';
  * the chart joins as its cube does; one they don't reach is asked of the
  * resolver too. A name found nowhere on the path is refused, by name.
  *
- * What is stored is each cube's full published name: the root's is its short
- * name, another folder's `<folderId>__<shortName>` (AC-328). A name stored
- * already full is bound by its short name, as a chart brought into another
- * folder must bind that folder's.
+ * What is stored is each cube's published name, which is its own name in
+ * every folder (T709, AC-328; research `xcube-256d632371.md`, 1.1).
  */
 
-/** An xcube folder id's prefix on a full name (research 3a, "Names"). */
-const FOLDER_PREFIX = /^f[a-z0-9]{1,40}__/;
-
-/** A cube's short name: its full name without its folder's id. */
-export const shortOf = (name: string): string => name.replace(FOLDER_PREFIX, '');
-
-/** The xcube folder a full name is in, by its prefix: none for the root's, which has none. */
-export const xcubeFolderOf = (name: string): string | null =>
-  FOLDER_PREFIX.exec(name)?.[0].slice(0, -'__'.length) ?? null;
-
 export type Binding =
-  /** Each name as stored, where it binds to another full name, to that name. */
+  /** Each name as stored, where it binds to another stored name, to that name. */
   | { readonly kind: 'bound'; readonly renames: ReadonlyMap<string, string> }
-  /** The short names no folder on the path holds. */
+  /** The names no folder on the path holds. */
   | { readonly kind: 'refused'; readonly names: readonly string[] };
 
 /** The cube a member is of: what comes before its first dot. */
@@ -76,8 +64,8 @@ export async function bindChart(
   chart: ChartDefinition,
 ): Promise<Binding> {
   const { source, others } = cubesOfChart(chart);
-  const bound = (await xcube.resolve(folderId, [shortOf(source)])).get(shortOf(source));
-  if (bound === null || bound === undefined) return { kind: 'refused', names: [shortOf(source)] };
+  const bound = (await xcube.resolve(folderId, [source])).get(source);
+  if (bound === null || bound === undefined) return { kind: 'refused', names: [source] };
 
   // What the source item bound at its publish, and what those bound, and so on.
   const byFullName = new Map((await xcube.items()).map((item) => [item.fullName, item]));
@@ -89,17 +77,17 @@ export async function bindChart(
       if (!queue.includes(full)) queue.push(full);
     }
   }
-  const unreached = others.map(shortOf).filter((name) => !reached.has(name));
+  const unreached = others.filter((name) => !reached.has(name));
   if (unreached.length > 0)
     for (const [name, full] of await xcube.resolve(folderId, unreached))
       if (full !== null) reached.set(name, full);
-  const missing = others.map(shortOf).filter((name) => !reached.has(name));
+  const missing = others.filter((name) => !reached.has(name));
   if (missing.length > 0) return { kind: 'refused', names: missing };
 
   const renames = new Map<string, string>();
   if (bound !== source) renames.set(source, bound);
   for (const other of others) {
-    const full = reached.get(shortOf(other))!;
+    const full = reached.get(other)!;
     if (full !== other) renames.set(other, full);
   }
   return { kind: 'bound', renames };
@@ -115,12 +103,12 @@ export async function bindNames(
   names: readonly string[],
 ): Promise<Binding> {
   if (names.length === 0) return { kind: 'bound', renames: new Map() };
-  const found = await xcube.resolve(folderId, [...new Set(names.map(shortOf))]);
+  const found = await xcube.resolve(folderId, [...new Set(names)]);
   const missing = [...found].filter(([, full]) => full === null).map(([name]) => name);
   if (missing.length > 0) return { kind: 'refused', names: missing };
   const renames = new Map<string, string>();
   for (const name of names) {
-    const full = found.get(shortOf(name))!;
+    const full = found.get(name)!;
     if (full !== name) renames.set(name, full);
   }
   return { kind: 'bound', renames };

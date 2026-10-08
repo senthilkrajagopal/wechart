@@ -158,9 +158,8 @@ const cubeAsked: { path: string; groups: readonly string[] | undefined }[] = [];
 
 const folderIds: Record<Place, string> = { root: 'root', A: '', AB: '', ABC: '', C: '' };
 let xcubeIds = new Map<string, string>();
-/** A place's cube as xcube serves it: prefixed by its folder outside the root (T452). */
-const fullName = (place: Place) =>
-  place === 'root' ? cubeOf(place) : `${xcubeIds.get(folderIds[place])!}__${cubeOf(place)}`;
+/** A place's cube as xcube serves it: under its own name in every folder (T452, T709). */
+const fullName = (place: Place) => cubeOf(place);
 
 /** What was made in each place. */
 interface Held {

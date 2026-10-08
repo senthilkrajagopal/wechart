@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { xcubeAdmin } from './client';
+import { FAKE_ADMIN_TOKEN, fakeXcube } from './fake';
 import { itemsHashOf, itemsOf } from './items';
 
 /**
@@ -64,5 +66,93 @@ describe('the published files as items', () => {
     ]);
     // With no folders given, the root's alone.
     expect(itemsOf([inSales, summary]).map((item) => item.name)).toEqual(['order_summary']);
+  });
+});
+
+/**
+ * T709, AC-328: one name per item (R71). A cube, a view and the data source
+ * a cube runs on, all in /Sales, are published under their own names and
+ * read back under them, with no `<folderId>__` prefix (research
+ * `xcube-256d632371.md`, "Bare names on every route").
+ */
+describe('items in a folder, under their own names (T709)', () => {
+  it('publishes a cube on a data source, and a view, in /Sales under their own names, and reads them back so', async () => {
+    const stub = fakeXcube();
+    const admin = xcubeAdmin({
+      cubeApiUrl: 'http://cube.invalid/cubejs-api',
+      model: 'dev',
+      token: FAKE_ADMIN_TOKEN,
+      fetch: stub.fetch,
+    });
+    await admin.folders([
+      { id: 'froot', parentId: null },
+      { id: 'fsales', parentId: 'froot' },
+    ]);
+    stub.holdItems('dev', []);
+    const orders =
+      'cubes:\n  - name: orders\n    sql_table: sales.orders\n    data_source: warehouse\n';
+    const summary =
+      'views:\n  - name: order_summary\n    cubes:\n      - join_path: orders\n        includes: "*"\n';
+    const items = itemsOf(
+      [
+        { path: 'cubes/orders.yml', content: orders, folderId: 'sales' },
+        { path: 'views/order_summary.yml', content: summary, folderId: 'sales' },
+      ],
+      new Map([
+        ['root', 'froot'],
+        ['sales', 'fsales'],
+      ]),
+    );
+    expect(items.map(({ folderId, name }) => `${folderId}/${name}`)).toEqual([
+      'fsales/orders',
+      'fsales/order_summary',
+    ]);
+
+    const head = await admin.revision();
+    const checked = await admin.checkChangeset({
+      upserts: items,
+      deletes: [],
+      securityContext: {},
+      probes: [],
+    });
+    await admin.applyChangeset({
+      baseRevision: head.current?.revision ?? null,
+      upserts: items,
+      deletes: [],
+    });
+
+    // As the changeset would land them, and as they are held once landed.
+    expect(checked.items).toEqual([
+      {
+        folderId: 'fsales',
+        name: 'orders',
+        fullName: 'orders',
+        bindings: {},
+        dataSource: 'warehouse',
+      },
+      {
+        folderId: 'fsales',
+        name: 'order_summary',
+        fullName: 'order_summary',
+        bindings: { orders: 'orders' },
+      },
+    ]);
+    expect(await admin.items()).toEqual([
+      {
+        folderId: 'fsales',
+        name: 'orders',
+        kind: 'cube',
+        dataSource: 'warehouse',
+        fullName: 'orders',
+        bindings: { orders: 'orders' },
+      },
+      {
+        folderId: 'fsales',
+        name: 'order_summary',
+        kind: 'view',
+        fullName: 'order_summary',
+        bindings: { order_summary: 'order_summary', orders: 'orders' },
+      },
+    ]);
   });
 });

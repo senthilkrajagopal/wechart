@@ -77,6 +77,13 @@ const ORDERS = [
   '        dimensions: [status]',
   '',
 ].join('\n');
+/**
+ * /A's, /C's and the root's, each of a name of its own: a name is one item's
+ * across the model (R71, T709). /A/B's is `ORDERS`.
+ */
+const ORDERS_A = ORDERS.replace(`${MARK}_orders`, `${MARK}_a_orders`);
+const ORDERS_C = ORDERS.replace(`${MARK}_orders`, `${MARK}_c_orders`);
+const ORDERS_ROOT = ORDERS.replace(`${MARK}_orders`, `${MARK}_root_orders`);
 
 const docs = () => documents(getDb());
 const files = () => modelFileStore(getDb());
@@ -116,10 +123,10 @@ beforeAll(async () => {
     access: { readOnly: null, readWrite: ['managers'] },
   });
   await files().seed([
-    { folderId: ids.a, path: paths.a, content: ORDERS },
+    { folderId: ids.a, path: paths.a, content: ORDERS_A },
     { folderId: ids.b, path: paths.b, content: ORDERS },
-    { folderId: ids.c, path: paths.c, content: ORDERS },
-    { path: paths.root, content: ORDERS },
+    { folderId: ids.c, path: paths.c, content: ORDERS_C },
+    { path: paths.root, content: ORDERS_ROOT },
   ]);
 
   app = buildServer({
@@ -220,8 +227,10 @@ describe('a read-write member sees the models above their folder, view-only (T33
       const answer = await publish('writer', folderId, path);
       expect(answer.statusCode, path).toBe(403);
     }
-    expect((await files().list(ids.a)).map((file) => file.content)).toEqual([ORDERS]);
-    expect((await files().list()).find((file) => file.path === paths.root)?.content).toBe(ORDERS);
+    expect((await files().list(ids.a)).map((file) => file.content)).toEqual([ORDERS_A]);
+    expect((await files().list()).find((file) => file.path === paths.root)?.content).toBe(
+      ORDERS_ROOT,
+    );
   });
 });
 
@@ -278,7 +287,7 @@ describe('only a folder’s read-write members change its models (T334, AC-266, 
     const answer = await publish('writer', ids.c, paths.c);
 
     expect(answer.statusCode).toBe(404);
-    expect((await files().list(ids.c)).map((file) => file.content)).toEqual([ORDERS]);
+    expect((await files().list(ids.c)).map((file) => file.content)).toEqual([ORDERS_C]);
   });
 
   /**
@@ -314,12 +323,12 @@ describe('deleting a model (T428)', () => {
     expect((await del('nobody', ids.a, paths.a)).statusCode).toBe(404);
     expect((await del('writer', ids.c, paths.c)).statusCode).toBe(404);
     expect((await files().list(ids.b)).map((file) => file.content)).toEqual([ORDERS]);
-    expect((await files().list(ids.a)).map((file) => file.content)).toEqual([ORDERS]);
+    expect((await files().list(ids.a)).map((file) => file.content)).toEqual([ORDERS_A]);
   });
 
   it('counts, and never names, what uses it in folders they can’t see', async () => {
-    const xcubeB = (await folderXcubeIds(getDb()).of([ids.b])).get(ids.b)!;
-    const cube = `${xcubeB}__${MARK}_orders`;
+    // Under its own name, as in every folder (T709, AC-328).
+    const cube = `${MARK}_orders`;
     // A chart in /C, which `writer` can't see, on /A/B's cube.
     await make('chart', {
       title: `Hidden ${MARK}`,
@@ -350,7 +359,7 @@ describe('deleting a model (T428)', () => {
     // A cube of its own, which no chart names: only the model's items use it.
     const STOCK = ORDERS.replace(`${MARK}_orders`, `${MARK}_stock`);
     await files().seed([{ folderId: ids.b, path: paths.stock, content: STOCK }]);
-    const cube = `${xcubeB}__${MARK}_stock`;
+    const cube = `${MARK}_stock`;
     // Only the refusal is asked of xcube here: what is bound to the cube.
     const withXcube = buildServer({
       config: secured,
@@ -366,14 +375,14 @@ describe('deleting a model (T428)', () => {
             folderId: xcubeB,
             name: `${MARK}_view`,
             kind: 'view',
-            fullName: `${xcubeB}__${MARK}_view`,
+            fullName: `${MARK}_view`,
             bindings: { [`${MARK}_stock`]: cube },
           },
           {
             folderId: xcubeC,
             name: `${MARK}_lines`,
             kind: 'cube',
-            fullName: `${xcubeC}__${MARK}_lines`,
+            fullName: `${MARK}_lines`,
             bindings: { [`${MARK}_stock`]: cube },
           },
         ],
@@ -489,7 +498,7 @@ describe('a refused publish, said as its user may see it (T427, AC-322)', () => 
           column: 7,
           message: 'B broke',
         },
-        { folderId: xcubeOf(ids.c), name: `${MARK}_orders`, kind: 'compile', message: 'C broke' },
+        { folderId: xcubeOf(ids.c), name: `${MARK}_c_orders`, kind: 'compile', message: 'C broke' },
       ]);
     try {
       broke();
@@ -604,7 +613,7 @@ describe('a refused publish, said as its user may see it (T427, AC-322)', () => 
     await files().seed([extra]);
     const { stub, xcubeOf, as: asUser, records, close } = await refusingServer();
     stub.refuse([
-      { folderId: xcubeOf(ids.c), name: `${MARK}_orders`, kind: 'compile', message: 'C broke' },
+      { folderId: xcubeOf(ids.c), name: `${MARK}_c_orders`, kind: 'compile', message: 'C broke' },
     ]);
     try {
       const answer = await asUser('writer', {

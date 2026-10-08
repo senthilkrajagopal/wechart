@@ -7,8 +7,8 @@ import type { PublishedFolders } from './folders';
  * The cubes bound to each data source (T459, AC-157; research
  * xcube-e53cf2a8b8.md, "Mapping `dataSource` to wechart's data sources").
  *
- * xcube binds a cube at publish, nearest first from its folder, and never
- * rebinds it (AC-273), so only its items say which data source a cube uses:
+ * xcube binds a cube at publish to the one data source of the name it gives
+ * (T709; research `xcube-256d632371.md`, 4), so its items say which data source a cube uses:
  * `dataSource` is the connection's name, which from xcube `256d632371` is the
  * wechart data source's own name in any folder (T701). A cube that `extends` another has
  * none of its own (`null`) and queries its parent's current one: the parent

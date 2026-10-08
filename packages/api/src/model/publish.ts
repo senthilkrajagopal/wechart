@@ -21,7 +21,7 @@ import type { ItemBindings } from '../repos/proposal-bindings';
 import type { Changeset } from '../xcube/changesets';
 import { itemsOf } from '../xcube/items';
 import type { HeldItem } from '../xcube/client';
-import { chainOf, ROOT_ONLY, XCUBE_ROOT, type PublishedFolders } from '../xcube/folders';
+import { chainOf, ROOT_ONLY, type PublishedFolders } from '../xcube/folders';
 import { sharedInPlace } from '../routes/shared-in-place';
 import { planLanding, type LandingModel, type LandingWrite } from './landing';
 import { declaredIn, misnamedIn, redeclaredIn, severalIn, unreadableIn } from './split';
@@ -334,24 +334,20 @@ export function registerModelPublishing(
   };
 
   /**
-   * What depends on these short names in a folder, by its xcube id: the
-   * views and cubes bound to them, and the charts and dashboards that name
-   * them, each named where the user may see it and counted where not (T428,
-   * T520; AC-275, AC-365).
+   * What depends on these names: the views and cubes bound to them, and the
+   * charts and dashboards that name them, each named where the user may see
+   * it and counted where not (T428, T520; AC-275, AC-365). A name is the
+   * same in every folder (T709, AC-328).
    */
   const dependentsIn = async (
     request: FastifyRequest,
     names: readonly string[],
-    xcubeId: string,
-    /** Short names of the items the change sends again (T520's review). */
+    /** Names of the items the change sends again (T520's review). */
     resent: readonly string[] = [],
   ) => {
-    const fullOf = (name: string) => (xcubeId === XCUBE_ROOT ? name : `${xcubeId}__${name}`);
-    const full = names.map(fullOf);
-    const referenced = names.length === 0 ? undefined : await referencedBy?.(request, full);
+    const referenced = names.length === 0 ? undefined : await referencedBy?.(request, names);
     // The model's own dependents first: views and joins (T520, AC-365).
-    const models =
-      names.length === 0 ? undefined : await dependentsOf?.(request, full, resent.map(fullOf));
+    const models = names.length === 0 ? undefined : await dependentsOf?.(request, names, resent);
     return {
       views: models?.views ?? [],
       cubes: models?.cubes ?? [],
@@ -362,25 +358,19 @@ export function registerModelPublishing(
   };
 
   /**
-   * Refused while a chart or dashboard names any of these short names in a
-   * folder, by its xcube id: the refusal, naming them; else nothing (T428,
-   * AC-275). wechart checks its own items; xcube, its model's.
+   * Refused while a chart or dashboard names any of these names: the
+   * refusal, naming them; else nothing (T428, AC-275). wechart checks its
+   * own items; xcube, its model's.
    */
   const inUse = async (
     request: FastifyRequest,
     names: readonly string[],
-    xcubeId: string,
-    /** Short names of the items the change sends again (T520's review). */
+    /** Names of the items the change sends again (T520's review). */
     resent: readonly string[] = [],
   ) => {
     if (names.length === 0 || (referencedBy === undefined && dependentsOf === undefined))
       return undefined;
-    const { views, cubes, charts, dashboards, hidden } = await dependentsIn(
-      request,
-      names,
-      xcubeId,
-      resent,
-    );
+    const { views, cubes, charts, dashboards, hidden } = await dependentsIn(request, names, resent);
     if (
       charts.length === 0 &&
       dashboards.length === 0 &&
@@ -499,7 +489,6 @@ export function registerModelPublishing(
     const found = await dependentsIn(
       request,
       declares.map(({ name }) => name),
-      xcubeId,
     );
     /** The file in its folder declaring an item, to say where it is. */
     const fileOf = (name: string, id: string) =>
@@ -567,7 +556,6 @@ export function registerModelPublishing(
         declaredIn(file.content)
           .map(({ name }) => name)
           .filter((name) => name !== ''),
-        xcubeId,
       );
       if (used !== undefined) return reply.status(409).send(used);
       // xcube checks a delete and serves it (T445, T447); without it, neither happens.
@@ -1068,7 +1056,7 @@ async function landedResolver(
       folderId: item.folderId,
       name: item.name,
       kind: item.kind,
-      fullName: item.folderId === XCUBE_ROOT ? item.name : `${item.folderId}__${item.name}`,
+      fullName: item.name,
       bindings: {},
     })),
   ];

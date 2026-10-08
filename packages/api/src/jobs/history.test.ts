@@ -73,6 +73,13 @@ async function folder(
 const as = (who: string, options: InjectOptions) =>
   app.inject({ ...options, headers: { ...options.headers, cookie: cookies[who]! } });
 
+/**
+ * A folder's cube of a name, under a name of its own, as one name is one
+ * item's (T709, R71): unique to the folder, so no other test's builds share it.
+ */
+const cubeIn = (folderId: string, name: string) =>
+  `${name}_${folderId.replaceAll('-', '').slice(0, 12)}`;
+
 /** A build recorded in `folderId`, `minutes` before NOW, ended as `outcome`. */
 async function recorded(
   folderId: string,
@@ -87,7 +94,7 @@ async function recorded(
     name?: string;
   } = {},
 ) {
-  const preAggregation = `f${folderId.replaceAll('-', '')}__${name}.main`;
+  const preAggregation = `${cubeIn(folderId, name)}.main`;
   preAggs.add(preAggregation);
   const token = `${MARK}-${randomUUID()}`;
   const startedAt = minutesAgo(minutes);
@@ -190,10 +197,10 @@ describe('Run history, scoped as Jobs is (T374, AC-150, AC-297)', () => {
     ]);
     expect((await listed('reader')).status).toBe(403);
 
-    // Each by its short name, with its folder (T371).
+    // Each by its name, with its folder (T371).
     const row = writer.body.records.find((each) => each.id === inB);
     expect(row).toMatchObject({
-      name: 'orders.main',
+      name: `${cubeIn(ids.b, 'orders')}.main`,
       folderId: ids.b,
       folderPath: ['Shared', `A ${MARK}`, `B ${MARK}`],
     });
@@ -206,7 +213,7 @@ describe('Run history, scoped as Jobs is (T374, AC-150, AC-297)', () => {
     expect(own.statusCode).toBe(200);
     expect(own.json()).toMatchObject({
       id: inC,
-      name: 'orders.main',
+      name: `${cubeIn(ids.c, 'orders')}.main`,
       folderPath: ['Shared', `C ${MARK}`],
       outcome: 'failed',
       failedCount: 1,
@@ -272,14 +279,14 @@ describe('Run history’s order, pages and filters (T374, AC-150)', () => {
     // One pre-aggregation's, for its pane's "Builds started from wechart" (T375).
     const other = await recorded(ids.a, 65, { name: 'returns' });
     const ofOrders = await idsOf(
-      `?within=all&preagg=${encodeURIComponent(`f${ids.a.replaceAll('-', '')}__orders.main`)}`,
+      `?within=all&preagg=${encodeURIComponent(`${cubeIn(ids.a, 'orders')}.main`)}`,
     );
     expect(ofOrders).toContain(done);
     expect(ofOrders).not.toContain(other);
   });
 
   it('says how far an open build has got, and offers the starters and folders in scope', async () => {
-    const preAggregation = `f${ids.c.replaceAll('-', '')}__progress.main`;
+    const preAggregation = `${cubeIn(ids.c, 'progress')}.main`;
     preAggs.add(preAggregation);
     const tokens = [
       `${MARK}-${randomUUID()}`,

@@ -182,7 +182,8 @@ const load = (who: string, id: string) =>
     method: 'POST',
     url: '/api/load',
     payload: {
-      query: { measures: [`fsales__${CUBE}.count`] },
+      // Under its own name, as in every folder (T709, AC-328).
+      query: { measures: [`${CUBE}.count`] },
       for: { kind: 'proposal', id },
     },
   });

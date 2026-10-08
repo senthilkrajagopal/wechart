@@ -1,5 +1,4 @@
 import { addedMeasures, joinPathCubesOf } from '../model/added-measures';
-import { shortOf } from '../model/bind';
 import { declaredIn } from '../model/split';
 
 /** A model file as an approval landed it, and as it was before (null for a new one). */
@@ -10,7 +9,7 @@ export interface LandedModelFile {
   readonly after: string;
 }
 
-/** A cube a measure may be added to, in its folder: by its short name there, and its full name. */
+/** A cube a measure may be added to, in its folder: by its name, which is its published name too (T709). */
 export interface RequestCube {
   readonly folderId: string;
   readonly name: string;
@@ -57,7 +56,7 @@ export function resolutionsOf(
   for (const request of open) {
     if (!request.takenBy.includes(authorKey)) continue;
     const cubes = request.on ?? [
-      { folderId: request.folderId, name: shortOf(request.cube), fullName: request.cube },
+      { folderId: request.folderId, name: request.cube, fullName: request.cube },
     ];
     const members = landed.flatMap((file) => {
       const added = addedMeasures(file.before, file.after);
@@ -103,7 +102,7 @@ export async function withViewCubes(
   return Promise.all(
     requests.map(async (request): Promise<OpenRequest> => {
       try {
-        const name = shortOf(request.cube);
+        const name = request.cube;
         const file = (await lookups.filesIn(request.folderId)).find((each) =>
           declaredIn(each.content).some(
             (declared) => declared.name === name && declared.kind === 'view',
@@ -119,7 +118,7 @@ export async function withViewCubes(
           view?.bindings ?? {},
         )) {
           const folderId = await lookups.folderOf(fullName);
-          if (folderId !== undefined) on.push({ folderId, name: shortOf(fullName), fullName });
+          if (folderId !== undefined) on.push({ folderId, name: fullName, fullName });
         }
         return { ...request, on };
       } catch {

@@ -27,9 +27,10 @@ const AFTER = `${BEFORE}      - name: margin
         sql: amount - cost
         type: sum
 `;
+/** On /Sales's `orders`, under its own name, as xcube serves every folder's (T709, AC-328). */
 const OPEN = {
   id: 'r1',
-  cube: 'fsales__orders',
+  cube: 'orders',
   folderId: 'sales',
   takenBy: ['writer-key'],
 };
@@ -38,7 +39,7 @@ const LANDED = [{ folderId: 'sales', path: 'cubes/orders.yml', before: BEFORE, a
 describe('the calculation requests an approval resolves (T385, AC-052)', () => {
   it('resolves one taken up by the proposal’s author, naming the measure added to its cube', () => {
     expect(resolutionsOf([OPEN], LANDED, 'writer-key')).toEqual([
-      { id: 'r1', members: ['fsales__orders.margin'] },
+      { id: 'r1', members: ['orders.margin'] },
     ]);
   });
 
@@ -49,9 +50,10 @@ describe('the calculation requests an approval resolves (T385, AC-052)', () => {
 `;
     expect(
       resolutionsOf([OPEN], [{ ...LANDED[0]!, after: both }], 'writer-key')[0]?.members,
-    ).toEqual(['fsales__orders.margin', 'fsales__orders.margin_share']);
+    ).toEqual(['orders.margin', 'orders.margin_share']);
   });
 
+  // T709, AC-328: by its own name in any folder, the root's as /Sales's.
   it('resolves a root cube’s by its own name', () => {
     expect(
       resolutionsOf(
@@ -65,7 +67,7 @@ describe('the calculation requests an approval resolves (T385, AC-052)', () => {
   it('resolves none no taker proposed, in another folder, on another cube, or with nothing added', () => {
     expect(resolutionsOf([OPEN], LANDED, 'someone-else')).toEqual([]);
     expect(resolutionsOf([{ ...OPEN, folderId: 'ops' }], LANDED, 'writer-key')).toEqual([]);
-    expect(resolutionsOf([{ ...OPEN, cube: 'fsales__stock' }], LANDED, 'writer-key')).toEqual([]);
+    expect(resolutionsOf([{ ...OPEN, cube: 'stock' }], LANDED, 'writer-key')).toEqual([]);
     expect(resolutionsOf([OPEN], [{ ...LANDED[0]!, after: BEFORE }], 'writer-key')).toEqual([]);
   });
 });
@@ -79,11 +81,11 @@ describe('a request on a view, resolved through the cubes on its join paths (T59
   /** A view in /Sales/East over /Sales' orders and the root's customers. */
   const ON_VIEW = {
     id: 'v1',
-    cube: 'feast__summary',
+    cube: 'summary',
     folderId: 'east',
     takenBy: ['writer-key'],
     on: [
-      { folderId: 'sales', name: 'orders', fullName: 'fsales__orders' },
+      { folderId: 'sales', name: 'orders', fullName: 'orders' },
       { folderId: 'root', name: 'customers', fullName: 'customers' },
     ],
   };
@@ -94,7 +96,7 @@ describe('a request on a view, resolved through the cubes on its join paths (T59
 
   it('is resolved by a measure added to a cube on its join paths, naming it on that cube', () => {
     expect(resolutionsOf([ON_VIEW], LANDED, 'writer-key')).toEqual([
-      { id: 'v1', members: ['fsales__orders.margin'] },
+      { id: 'v1', members: ['orders.margin'] },
     ]);
     expect(
       resolutionsOf(
@@ -133,17 +135,17 @@ describe('a request on a view, resolved through the cubes on its join paths (T59
 describe('the cubes a view’s join paths bound (T590, AC-052)', () => {
   it('maps each segment through the view’s bindings', () => {
     expect(
-      boundCubesOf('feast__summary', ['orders', 'customers'], {
-        orders: 'fsales__orders',
+      boundCubesOf('summary', ['orders', 'customers'], {
+        orders: 'orders',
         customers: 'customers',
       }),
-    ).toEqual(['fsales__orders', 'customers']);
+    ).toEqual(['orders', 'customers']);
   });
 
   it('leaves out a segment it didn’t bind, or bound to the view itself', () => {
     expect(
-      boundCubesOf('fsales__orders', ['orders', 'products'], {
-        orders: 'fsales__orders',
+      boundCubesOf('orders', ['orders', 'products'], {
+        orders: 'orders',
         customers: 'customers',
       }),
     ).toEqual([]);
@@ -156,8 +158,8 @@ describe('the cubes a view’s join paths bound (T590, AC-052)', () => {
  * fails leaves that request as it is, never the others (T590's review).
  */
 describe('the requests an approval may resolve, with their views’ cubes (T590, AC-052)', () => {
-  const ON_CUBE = { id: 'c1', cube: 'fsales__orders', folderId: 'sales', takenBy: ['w'] };
-  const ON_VIEW = { id: 'v1', cube: 'feast__summary', folderId: 'east', takenBy: ['w'] };
+  const ON_CUBE = { id: 'c1', cube: 'orders', folderId: 'sales', takenBy: ['w'] };
+  const ON_VIEW = { id: 'v1', cube: 'summary', folderId: 'east', takenBy: ['w'] };
   const SUMMARY = 'views:\n  - name: summary\n    cubes:\n      - join_path: orders\n';
   const lookups = {
     filesIn: (folderId: string) =>
@@ -166,16 +168,15 @@ describe('the requests an approval may resolve, with their views’ cubes (T590,
           ? [{ content: SUMMARY }]
           : [{ content: 'cubes:\n  - name: orders\n    sql_table: public.orders\n' }],
       ),
-    held: () =>
-      Promise.resolve([{ fullName: 'feast__summary', bindings: { orders: 'fsales__orders' } }]),
-    folderOf: (fullName: string) =>
-      Promise.resolve(fullName.startsWith('fsales__') ? 'sales' : undefined),
+    held: () => Promise.resolve([{ fullName: 'summary', bindings: { orders: 'orders' } }]),
+    // The folder declaring the name: each name is one item's (T709, R71).
+    folderOf: (name: string) => Promise.resolve(name === 'orders' ? 'sales' : undefined),
   };
 
   it('gives a view’s request the cubes its join paths bound, in their folders, and leaves a cube’s', async () => {
     expect(await withViewCubes([ON_CUBE, ON_VIEW], lookups)).toEqual([
       ON_CUBE,
-      { ...ON_VIEW, on: [{ folderId: 'sales', name: 'orders', fullName: 'fsales__orders' }] },
+      { ...ON_VIEW, on: [{ folderId: 'sales', name: 'orders', fullName: 'orders' }] },
     ]);
   });
 

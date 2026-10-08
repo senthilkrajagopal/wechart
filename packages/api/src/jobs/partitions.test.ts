@@ -71,9 +71,12 @@ let refusedStarts: string[] = [];
 let unreadable: string[] = [];
 let queueDown = false;
 
-const byMonth = () => `${xcubeA}__orders.by_month`;
-const whole = () => `${xcubeA}__orders.whole`;
-const recent = () => `${xcubeA}__orders.recent`;
+// /A's cube under its own name, as in every folder (T709, AC-328): this
+// run's own, so its build history is no other test's.
+const CUBE = `orders_${MARK}`;
+const byMonth = () => `${CUBE}.by_month`;
+const whole = () => `${CUBE}.whole`;
+const recent = () => `${CUBE}.recent`;
 const table = (month: string) => `prod_pre_aggregations.orders_by_month2026${month}01`;
 const at = (iso: string) => new Date(iso).getTime();
 
@@ -134,7 +137,7 @@ beforeAll(async () => {
       path: `cubes/orders_${MARK}.yml`,
       content: [
         'cubes:',
-        '  - name: orders',
+        `  - name: ${CUBE}`,
         '    sql_table: public.orders',
         '    pre_aggregations:',
         '      - name: by_month',
@@ -143,7 +146,7 @@ beforeAll(async () => {
         '        type: rollup',
         '      - name: recent',
         '        type: rollup_lambda',
-        '        rollups: [CUBE.by_month, orders.whole]',
+        `        rollups: [CUBE.by_month, ${CUBE}.whole]`,
         '',
       ].join('\n'),
     },
@@ -158,8 +161,8 @@ beforeAll(async () => {
         return Response.json({
           cubes: [
             {
-              name: `${xcubeA}__orders`,
-              meta: { xcube: { folderId: xcubeA, shortName: 'orders' } },
+              name: CUBE,
+              meta: { xcube: { folderId: xcubeA, shortName: CUBE } },
               preAggregations: [
                 { name: 'by_month', type: 'rollup', partitionGranularity: 'month' },
                 { name: 'whole', type: 'rollup' },
@@ -248,7 +251,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (app !== undefined) await app.close();
-  await getDb().deleteFrom('build_runs').where('pre_aggregation', 'like', `${xcubeA}__%`).execute();
+  await getDb().deleteFrom('build_runs').where('pre_aggregation', 'like', `${CUBE}.%`).execute();
   await getDb().deleteFrom('model_files').where('path', '=', `cubes/orders_${MARK}.yml`).execute();
   for (const { kind, id } of made.reverse()) await docs().remove(kind, id);
   await closeDb();
@@ -359,7 +362,7 @@ describe('a rollup’s partitions (T375, AC-145)', () => {
     const { status, body } = await partitionsOf('writer', byMonth());
 
     expect(status).toBe(200);
-    expect(body).toMatchObject({ id: byMonth(), name: 'orders.by_month', kind: 'partitioned' });
+    expect(body).toMatchObject({ id: byMonth(), name: byMonth(), kind: 'partitioned' });
     expect(
       (body['partitions'] as Partition[]).map((each) => [each.start, each.state, each.lastBuiltAt]),
     ).toEqual([
@@ -497,15 +500,15 @@ describe('a rollup’s partitions (T375, AC-145)', () => {
       kind: 'combined',
       partitions: [],
       builtFrom: [
-        { id: byMonth(), name: 'orders.by_month' },
-        { id: whole(), name: 'orders.whole' },
+        { id: byMonth(), name: byMonth() },
+        { id: whole(), name: whole() },
       ],
     });
   });
 
   it('answers another folder’s, or one that doesn’t exist, as Not found, and a reader with no Jobs', async () => {
     expect((await partitionsOf('many', byMonth())).status).toBe(404);
-    expect((await partitionsOf('writer', `${xcubeA}__orders.nothing`)).status).toBe(404);
+    expect((await partitionsOf('writer', `${CUBE}.nothing`)).status).toBe(404);
     expect((await partitionsOf('reader', byMonth())).status).toBe(403);
   });
 });

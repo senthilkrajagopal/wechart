@@ -23,7 +23,8 @@ import { buildServer } from '../server';
  * Until each query names its item (T340), query records are Super-Admins'.
  *
  * A pre-aggregation's folder is its cube's `meta.xcube.folderId`, xcube's id
- * for the folder (`[X3A]`); it shows by its short name, with its folder.
+ * for the folder (`[X3A]`); it shows by its cube's name, which is bare in
+ * every folder (T709, AC-328), with its folder.
  *
  * `writer` (`sales-rw`) writes /A and reads nothing else; `many` (`g01`)
  * writes /C; `reader` (`sales-ro`) reads /A.
@@ -65,10 +66,14 @@ const rollup = (name: string) => ({
   type: 'rollup',
   refreshKey: { every: '1 hour' },
 });
-/** A cube as xcube publishes it: a folder's under `<xcubeId>__<shortName>`. */
-const cube = (name: string, folder: string, shortName: string) => ({
+/**
+ * A cube as xcube publishes it: under its own name in every folder, its
+ * `meta.xcube.shortName` that name too (T709; research
+ * `xcube-256d632371.md`, 1.1).
+ */
+const cube = (name: string, folder: string) => ({
   name,
-  meta: { xcube: { folderId: folder, shortName } },
+  meta: { xcube: { folderId: folder, shortName: name } },
   preAggregations: [rollup('main')],
 });
 
@@ -93,9 +98,9 @@ beforeAll(async () => {
   xcubeIds.c = `f${ids.c.replaceAll('-', '')}`;
   const meta = () => ({
     cubes: [
-      cube('orders', 'froot', 'orders'),
-      cube(`${xcubeIds.a}__sales`, xcubeIds.a, 'sales'),
-      cube(`${xcubeIds.c}__sales`, xcubeIds.c, 'sales'),
+      cube('orders', 'froot'),
+      cube('sales_a', xcubeIds.a),
+      cube('sales_c', xcubeIds.c),
       ...extra,
     ],
   });
@@ -120,11 +125,7 @@ beforeAll(async () => {
                 token,
                 status: 'done',
                 selector: {
-                  preAggregations: [
-                    token === 'token-mine'
-                      ? `${xcubeIds.a}__sales.main`
-                      : `${xcubeIds.c}__sales.main`,
-                  ],
+                  preAggregations: [token === 'token-mine' ? 'sales_a.main' : 'sales_c.main'],
                 },
               })),
             ),
@@ -178,7 +179,7 @@ describe('Jobs and Schedules, scoped to the user’s read-write folders (T371, A
     const { status, rows } = await rowsOf('writer', '/api/preaggregations');
     expect(status).toBe(200);
     expect(rows.map((row) => [row.id, row.folderId, row.shortName, row.folderPath])).toEqual([
-      [`${xcubeIds.a}__sales.main`, ids.a, 'sales', ['Shared', `A ${MARK}`]],
+      ['sales_a.main', ids.a, 'sales_a', ['Shared', `A ${MARK}`]],
     ]);
     const other = await rowsOf('many', '/api/preaggregations');
     expect(other.rows.map((row) => row.folderId)).toEqual([ids.c]);
@@ -188,17 +189,17 @@ describe('Jobs and Schedules, scoped to the user’s read-write folders (T371, A
     const refused = await as('writer', {
       method: 'POST',
       url: '/api/builds',
-      payload: { preAggregation: `${xcubeIds.c}__sales.main` },
+      payload: { preAggregation: 'sales_c.main' },
     });
     expect(refused.statusCode).toBe(403);
     expect(built).toEqual([]);
     const allowed = await as('writer', {
       method: 'POST',
       url: '/api/builds',
-      payload: { preAggregation: `${xcubeIds.a}__sales.main` },
+      payload: { preAggregation: 'sales_a.main' },
     });
     expect(allowed.statusCode, allowed.body).toBe(200);
-    expect(built).toEqual([`${xcubeIds.a}__sales.main`]);
+    expect(built).toEqual(['sales_a.main']);
     // One the model doesn't have is none of theirs either.
     const unknown = await as('writer', {
       method: 'POST',
@@ -212,7 +213,7 @@ describe('Jobs and Schedules, scoped to the user’s read-write folders (T371, A
     const { status, rows } = await rowsOf('writer', '/api/schedules');
     expect(status).toBe(200);
     expect(rows.map((row) => [row.id, row.folderId, row.shortName])).toEqual([
-      [`${xcubeIds.a}__sales.main`, ids.a, 'sales'],
+      ['sales_a.main', ids.a, 'sales_a'],
     ]);
   });
 
@@ -232,7 +233,7 @@ describe('Jobs and Schedules, scoped to the user’s read-write folders (T371, A
     const building = await as('reader', {
       method: 'POST',
       url: '/api/builds',
-      payload: { preAggregation: `${xcubeIds.a}__sales.main` },
+      payload: { preAggregation: 'sales_a.main' },
     });
     expect(building.statusCode).toBe(403);
     const status = await as('reader', {
@@ -269,17 +270,14 @@ describe('Jobs and Schedules, scoped to the user’s read-write folders (T371, A
     const a1 = below.json<{ id: string }>().id;
     made.push({ kind: 'folder', id: a1 });
     published.set(a1, `f${a1.replaceAll('-', '')}`);
-    extra.push(
-      cube(`${published.get(a1)!}__sales`, published.get(a1)!, 'sales'),
-      cube('fgone__old', 'fgone', 'old'),
-    );
+    extra.push(cube('sales_a1', published.get(a1)!), cube('old', 'fgone'));
     const { rows } = await rowsOf('writer', '/api/preaggregations');
     expect(rows.map((row) => [row.folderId, row.folderPath])).toEqual([
       [ids.a, ['Shared', `A ${MARK}`]],
       [a1, ['Shared', `A ${MARK}`, `A1 ${MARK}`]],
     ]);
     const everything = await rowsOf('super', '/api/preaggregations');
-    const gone = everything.rows.find((row) => row.id === 'fgone__old.main')!;
+    const gone = everything.rows.find((row) => row.id === 'old.main')!;
     expect([gone.folderId, gone.folderPath]).toEqual([
       null,
       ['Shared', 'A folder no longer there'],

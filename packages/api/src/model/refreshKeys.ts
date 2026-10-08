@@ -169,8 +169,8 @@ export function refreshKeyProblemsOf(files: readonly ModelFile[]): CompileError[
  * "What /v1/meta?extended shows"). Only a plain string: SQL built by code is
  * not read.
  *
- * A folder's cube is Cube's `<xcubeId>__<name>` (T450's review), by the
- * folder's xcube id in `folders`; a folder with none isn't published, and is
+ * A folder's cube is Cube's under its own name, as every folder's is (T709,
+ * AC-328); a folder with no xcube id in `folders` isn't published, and is
  * left out.
  */
 export function refreshKeySqlOf(
@@ -185,9 +185,7 @@ export function refreshKeySqlOf(
   for (const file of files) {
     if (!YAML_FILE.test(file.path) || JINJA.test(file.content)) continue;
     const folderId = file.folderId ?? ROOT_FOLDER_ID;
-    const xcubeId = folderId === ROOT_FOLDER_ID ? '' : folders.get(folderId);
-    if (xcubeId === undefined) continue;
-    const prefix = xcubeId === '' ? '' : `${xcubeId}__`;
+    if (folderId !== ROOT_FOLDER_ID && !folders.has(folderId)) continue;
     const document = parseDocument(file.content, { merge: true });
     if (document.errors.length > 0) continue;
     const cubes = get(document.contents, ['cubes']);
@@ -201,7 +199,7 @@ export function refreshKeySqlOf(
         const name = nameOf(rollup);
         const own = get(rollup, KEYS.refreshKey);
         const sql = own === undefined ? sqlOf(cubeKey) : sqlOf(own);
-        if (name !== undefined && sql !== undefined) found.set(`${prefix}${cubeName}.${name}`, sql);
+        if (name !== undefined && sql !== undefined) found.set(`${cubeName}.${name}`, sql);
       }
     }
   }

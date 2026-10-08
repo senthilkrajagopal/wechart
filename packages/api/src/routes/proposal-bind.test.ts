@@ -19,11 +19,12 @@ import { fakeXcube, FAKE_ADMIN_TOKEN } from '../xcube/fake';
 /**
  * T502 (AC-278, with AC-272 and AC-275): with sign-in on, a shared item is
  * never saved in place, so an approval is how it is published. Its cubes are
- * bound then, in the folder it lands in, nearest first, as a save there
- * bound them. A name no folder on that path holds refuses the approval,
- * naming it, and nothing lands.
+ * bound then, in the folder it lands in, as a save there bound them. A name
+ * no folder on that path holds refuses the approval, naming it, and nothing
+ * lands.
  *
- * The stub xcube holds the root's `orders` and /Sales's (`fsales`).
+ * The stub xcube holds the root's `orders` and /Sales's (`fsales`)
+ * `sales_orders`, each under its own name (T709, R71).
  * `writer` (`sales-rw`) makes a chart in their workspace, to go to /Sales,
  * and approves their own proposal.
  */
@@ -85,7 +86,7 @@ beforeAll(async () => {
     kind: 'cube' as const,
     yaml: `cubes:\n  - name: ${name}\n    sql_table: public.${name}\n`,
   });
-  stub.holdItems('dev', [cube('froot', 'orders'), cube('fsales', 'orders')]);
+  stub.holdItems('dev', [cube('froot', 'orders'), cube('fsales', 'sales_orders')]);
 
   app = buildServer({
     config: secured,
@@ -170,8 +171,8 @@ async function proposed(cube: string) {
 }
 
 describe('an approval publishes, binding each item in its folder (T502, AC-272)', () => {
-  it('lands a chart bound to its folder’s own cube, nearest first', async () => {
-    const { proposalId } = await proposed('orders');
+  it('lands a chart bound to its folder’s own cube, by its own name', async () => {
+    const { proposalId } = await proposed('sales_orders');
     const approved = await as({ method: 'POST', url: `/api/proposals/${proposalId}/approve` });
     expect(approved.statusCode, approved.body).toBe(200);
     const [landed] = approved.json<{ landed: { kind: string; id: string }[] }>().landed;
@@ -180,8 +181,8 @@ describe('an approval publishes, binding each item in its folder (T502, AC-272)'
       wells: { measures: string[] };
     };
     expect([chart.source.cube, chart.wells.measures]).toEqual([
-      'fsales__orders',
-      ['fsales__orders.count'],
+      'sales_orders',
+      ['sales_orders.count'],
     ]);
   });
 

@@ -8,7 +8,9 @@ import { xcubeSqlRunner } from './sql-runner';
  * T532: xcube's SQL runner, as wechart's server calls it (research
  * `xcube-sql-runner.md`, "The routes"): a stored connection by its name, an
  * overlay's own with `?overlay=`, or Cube Store; each answer read into what
- * it is, and a cancel by run id.
+ * it is, and a cancel by run id. A data source is named by its own name in
+ * every folder: /Sales's `warehouse` is `warehouse` (T709; research
+ * `xcube-256d632371.md`, 1.1).
  */
 const MODEL = 'sql-model';
 const ASK = { sql: 'SELECT 1', runId: 'run-1', maxRows: 10_000, timeoutMs: 30_000, maxBytes: 1 };
@@ -24,7 +26,7 @@ const runnerOn = (stub: ReturnType<typeof fakeXcube>, token = FAKE_ADMIN_TOKEN) 
 describe('a run asked of xcube (T532)', () => {
   it('names a stored connection, sends the SQL with its run id and caps, and reads its rows', async () => {
     const stub = fakeXcube();
-    const answer = await runnerOn(stub).run({ connection: 'fsales__warehouse' }, ASK);
+    const answer = await runnerOn(stub).run({ connection: 'warehouse' }, ASK);
     expect(answer).toEqual({
       kind: 'ran',
       columns: [{ name: 'one', type: 'int4' }],
@@ -37,9 +39,7 @@ describe('a run asked of xcube (T532)', () => {
     });
     const [call] = stub.calls;
     expect(call?.method).toBe('POST');
-    expect(call?.path).toBe(
-      `/cubejs-api/v1/semantic/models/${MODEL}/connections/fsales__warehouse/sql`,
-    );
+    expect(call?.path).toBe(`/cubejs-api/v1/semantic/models/${MODEL}/connections/warehouse/sql`);
     expect(call?.authorization).toBe(`Bearer ${FAKE_ADMIN_TOKEN}`);
     expect(call?.body).toEqual(ASK);
   });
@@ -48,13 +48,13 @@ describe('a run asked of xcube (T532)', () => {
     const stub = fakeXcube();
     const runner = runnerOn(stub);
     // No such overlay: xcube never falls back to a landed connection.
-    expect(await runner.run({ connection: 'fsales__warehouse', overlay: 'ws-1' }, ASK)).toEqual({
+    expect(await runner.run({ connection: 'warehouse', overlay: 'ws-1' }, ASK)).toEqual({
       kind: 'missing',
       code: 'unknown_overlay',
       error: 'No overlay "ws-1": it expired, was dropped, or never was',
     });
     expect(stub.calls[0]?.path).toBe(
-      `/cubejs-api/v1/semantic/models/${MODEL}/connections/fsales__warehouse/sql?overlay=ws-1`,
+      `/cubejs-api/v1/semantic/models/${MODEL}/connections/warehouse/sql?overlay=ws-1`,
     );
     expect((await runner.run({ cubeStore: true }, ASK)).kind).toBe('ran');
     expect(stub.calls[1]?.path).toBe(`/cubejs-api/v1/semantic/models/${MODEL}/cubestore/sql`);

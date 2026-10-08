@@ -4,7 +4,6 @@ import type { Visibility } from '../access/visible';
 import { USER } from '../auth/guard';
 import type { WechartUser } from '../auth/user';
 import type { CalcRequestFields } from '../db/schema';
-import { shortOf } from '../model/bind';
 import type { CalcRequest, CalcRequestStore } from '../repos/calc-requests';
 
 /**
@@ -41,7 +40,7 @@ export interface CalcRequestRoutes {
   readonly definedBy: (
     cube: string,
   ) => Promise<{ readonly folderId: string; readonly modelPath: string } | undefined>;
-  /** The shared folder a full name's cube is in, by its prefix: the root's for one with none. */
+  /** The shared folder whose model declares the cube of this name (T709): none where none does. */
   readonly folderOfCube: (cube: string) => Promise<string | undefined>;
   /** Each folder's path of titles below Shared, as the user may see it; null for one they can't. */
   readonly pathsOf: (request: FastifyRequest) => Promise<(folderId: string) => string[] | null>;
@@ -143,7 +142,7 @@ export function registerCalcRequests(app: FastifyInstance, routes: CalcRequestRo
     const defined = await definedBy(asked.cube);
     if (defined?.folderId !== asked.folderId)
       return reply.code(409).send({
-        error: `No model in its folder defines ${shortOf(asked.cube)} now, so there is nothing to open.`,
+        error: `No model in its folder defines ${asked.cube} now, so there is nothing to open.`,
       });
     const user = userOf(request);
     await store.take(asked.id, { key: user.key, name: user.name });

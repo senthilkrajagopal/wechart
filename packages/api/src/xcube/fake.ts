@@ -34,15 +34,16 @@ import { contentHashOf } from './snapshot';
  *   `unknown_connection` unless the overlay holds the connection; held until
  *   cancelled when told to hold.
  * - `401 unauthorized` without `Bearer <admin token>`.
- * - With `namesOnePerModel(true)`, names one per model, in any case, as
- *   `256d632371` holds them (T701; research `xcube-256d632371.md`): a
- *   changeset, an items snapshot or an
- *   overlay whose item takes a name another holds is refused, `422
+ * - Names one per model, in any case, as `256d632371` holds them (T701,
+ *   T709; research `xcube-256d632371.md`): a changeset, an items snapshot
+ *   or an overlay whose item takes a name another holds is refused, `422
  *   invalid_items` with errors of kind `name_in_use` on the caller's item;
  *   an overlay bringing two data sources of one name is `409 name_in_use`,
  *   and one bringing `default` outside the root `400 default_outside_root`.
- *   Items are still answered by `<folderId>__<name>` full names, and names
- *   resolved nearest first, until T709 and T711 bring the API to bare names.
+ *   `namesOnePerModel(false)` turns the rule off.
+ * - Every item is answered under its own name in every folder: its
+ *   `fullName` is its name, and its bindings name each item by its name
+ *   (T709; research `xcube-256d632371.md`, "Bare names on every route").
  */
 export const FAKE_ADMIN_TOKEN = 'fake-xcube-admin-token-0123456789abcdef';
 
@@ -151,12 +152,10 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
   let overlayVersions = 0;
   /**
    * Whether names are one per model across folders, as `256d632371` holds
-   * them (T701): on by `namesOnePerModel(true)`. Off by default until T709
-   * brings the API's own tests to bare names, which hold per-folder namesakes
-   * of the rule before R71. An overlay's two items of one name are refused
-   * either way, as they were before.
+   * them (T701, T709): on unless `namesOnePerModel(false)`. An overlay's two
+   * items of one name are refused either way, as they were before.
    */
-  let oneNamePerModel = false;
+  let oneNamePerModel = true;
   /** Overlay pushes to refuse as told, in order: `422 invalid_secret`, say. */
   const overlayRefusals: { status: number; body: Record<string, unknown>; id?: string }[] = [];
   /** Each SQL run asked (T532), and how the test answers one: `undefined` is one row. */
@@ -191,18 +190,29 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
   /** Bindings held as recorded, by `<model>/<fullName>` (`holdItems`). */
   const recorded = new Map<string, Record<string, string>>();
 
-  /** An item's full name: its own in the root, else `<folderId>__<name>` (research 3a, "Names"). */
-  const fullNameOf = (item: { folderId: string; name: string }) =>
-    item.folderId === 'froot' ? item.name : `${item.folderId}__${item.name}`;
   /**
-   * A name resolved nearest first from a folder, over these items: the
-   * folder's own, then each parent's to `froot` (research 3a, `Scope.resolve`).
+   * An item's full name: its own name, in every folder (T709; research
+   * `xcube-256d632371.md`, 1.1).
+   */
+  const fullNameOf = (item: { folderId: string; name: string }) => item.name;
+  /**
+   * A name resolved from a folder up its path, over these items: the
+   * folder's own, then each parent's to `froot`, answered by the holder's
+   * own name. A reference in YAML matches exactly; `POST …/resolve` in any
+   * case (research `xcube-256d632371.md`, 3.1, 3.3). With one name per
+   * model at most one item holds it.
+   *
+   * NOT as the image: its `POST …/resolve` answers the one holder in any
+   * folder, the folder asked only checked to be in the tree (research, 3.3).
+   * This walk stands in for the path rule until T711 makes resolve path-blind
+   * and binds on wechart's own path check.
    */
   const resolveIn = (
     items: readonly Item[],
     tree: readonly TreeFolder[],
     folderId: string,
     name: string,
+    anyCase = false,
   ): string | null => {
     const parents = new Map(tree.map((folder) => [folder.id, folder.parentId]));
     const seen = new Set<string>();
@@ -212,7 +222,11 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
       at = parents.get(at)
     ) {
       seen.add(at);
-      const found = items.find((item) => item.folderId === at && item.name === name);
+      const found = items.find(
+        (item) =>
+          item.folderId === at &&
+          (anyCase ? item.name.toLowerCase() === name.toLowerCase() : item.name === name),
+      );
       if (found !== undefined) return fullNameOf(found);
     }
     return null;
@@ -220,9 +234,8 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
   /**
    * What an item bound at its publish (research 3a, "Bindings"): its own
    * name, each cube its joins name, and every segment of a view's
-   * `cubes[].join_path`, nearest first from its folder (T590). Research 3a's
-   * resolution table: "Every segment bound; the first by `bindOther`", the
-   * nearest item other than itself; the rest as any name is bound.
+   * `cubes[].join_path` (T590), each to the one item of its name, by that
+   * name (research `xcube-256d632371.md`, 3.3; the walk is `resolveIn`'s).
    */
   const bindingsOf = (
     model: string,
@@ -315,8 +328,8 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
 
   /**
    * An item as a changeset's answer refers to it (research
-   * `xcube-meta-revision-and-bindings.md`, `ItemRef`): bound nearest first
-   * over `items`, only the names its YAML uses, never its own (Gotcha 18), and
+   * `xcube-meta-revision-and-bindings.md`, `ItemRef`): bound by name over
+   * `items`, only the names its YAML uses, never its own (Gotcha 18), and
    * a cube's data source as written, `default` where it names none, `null`
    * where it extends another, as xcube gives it for a model with no
    * connections (Gotcha 8).
@@ -325,10 +338,15 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
     const parsed = (parseYaml(item.yaml) ?? {}) as Record<string, unknown>;
     const declared = (parsed['cubes'] ?? parsed['views']) as Record<string, unknown>[] | undefined;
     const own = declared?.[0] ?? {};
+    // A view's every `join_path` segment too (research `xcube-256d632371.md`, R72).
+    const paths = (item.kind === 'view' ? (own['cubes'] ?? []) : []) as { join_path?: unknown }[];
     const named = [
       ...((own['joins'] ?? []) as { name?: unknown }[]).map((join) => join.name),
       own['extends'],
-    ].filter((name): name is string => typeof name === 'string');
+      ...(Array.isArray(paths) ? paths : []).flatMap((entry) =>
+        typeof entry.join_path === 'string' ? entry.join_path.split('.') : [],
+      ),
+    ].filter((name): name is string => typeof name === 'string' && name !== item.name);
     const bindings: Record<string, string> = {};
     for (const name of named) {
       const bound = resolveIn(items, tree, item.folderId, name);
@@ -640,6 +658,10 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
           name: item.name,
           kind: item.kind,
           fullName: fullNameOf(item),
+          // A cube's data source, as `256d632371` gives it (research 3.3).
+          ...(item.kind === 'cube' && item.yaml !== ''
+            ? { dataSource: refOf(item, head.items, known.tree ?? []).dataSource }
+            : {}),
           bindings: bindingsOf(
             model,
             item,
@@ -650,7 +672,7 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
       });
     }
 
-    /** Names resolved nearest first from a folder (research 3a, "POST …/resolve"). */
+    /** Names resolved from a folder (research 3a, "POST …/resolve"; `resolveIn`'s note). */
     if (route[2] === 'resolve' && method === 'POST') {
       const known = models.get(model);
       const { folderId, names, overlay } = body as {
@@ -672,10 +694,14 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
           overlay,
           names: Object.fromEntries(
             names.map((name) => {
-              const own = through.upserts.find((item) => item.name === name);
+              const own = through.upserts.find(
+                (item) => item.name.toLowerCase() === name.toLowerCase(),
+              );
               return [
                 name,
-                own === undefined ? resolveIn(head.items, tree, folderId, name) : fullNameOf(own),
+                own === undefined
+                  ? resolveIn(head.items, tree, folderId, name, true)
+                  : fullNameOf(own),
               ];
             }),
           ),
@@ -696,7 +722,7 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
         revision: head?.revision ?? null,
         folderId,
         names: Object.fromEntries(
-          names.map((name) => [name, resolveIn(items, tree, folderId, name)]),
+          names.map((name) => [name, resolveIn(items, tree, folderId, name, true)]),
         ),
       });
     }

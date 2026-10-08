@@ -8,19 +8,18 @@ import { bindChart, bindNames, chartRenamed, cubesOfChart, dashboardRenamed } fr
 
 /**
  * T429, AC-272: WHEN a dashboard or chart is published into a folder, THE
- * SYSTEM SHALL bind each cube it names nearest first from that folder up to
- * the root, and store the full published name of the nearest definition. It
+ * SYSTEM SHALL bind each cube it names from that folder up to the root. It
  * asks xcube's resolver for the cube the chart starts from, and binds every
  * other cube the chart uses through the bindings that cube was published
  * with. A cube only in a descendant or a sibling folder is not available,
  * and a name found nowhere on the path is refused, naming it.
  *
- * Against the stub xcube: the root holds `sales`, `customers` and
- * `regions`; /A (`fa`) and /A/B (`fab`) each their own `sales`; /A/B/C
- * (`fabc`), beneath /A/B, a `sales` of its own; /A/D (`fad`), /A/B's
- * sibling, the only `widgets`. /A/B's `sales` was published bound to the
- * root's `customers`, and /A/B has since been given a `customers` of its
- * own: xcube never rebinds.
+ * With one name per item (R71; T709), every name is one item's and is
+ * stored as it is, with no folder prefix. Against the stub xcube: the root
+ * holds `sales` (joining `customers`), `customers` (joining `regions`) and
+ * `regions`; /A (`fa`) `a_orders`; /A/B (`fab`) `ab_lines`, joining the
+ * root's `customers`; /A/B/C (`fabc`), beneath /A/B, `deep`; /A/D (`fad`),
+ * /A/B's sibling, `widgets`.
  */
 const TREE = [
   { id: 'froot', parentId: null },
@@ -51,28 +50,15 @@ async function xcube() {
     fetch: stub.fetch,
   });
   await admin.folders(TREE);
-  stub.holdItems(
-    'dev',
-    [
-      cube('froot', 'sales', ['customers']),
-      cube('froot', 'customers', ['regions']),
-      cube('froot', 'regions'),
-      cube('fa', 'sales'),
-      cube('fa', 'customers', ['regions']),
-      cube('fa', 'regions'),
-      cube('fab', 'sales', ['customers']),
-      cube('fab', 'customers'),
-      cube('fabc', 'sales'),
-      cube('fabc', 'deep'),
-      cube('fad', 'widgets'),
-    ],
-    {
-      // Published before /A/B had a `customers`: bound to /A's.
-      fab__sales: { sales: 'fab__sales', customers: 'fa__customers' },
-      // Published before /A had a `regions`: bound to the root's.
-      fa__customers: { customers: 'fa__customers', regions: 'regions' },
-    },
-  );
+  stub.holdItems('dev', [
+    cube('froot', 'sales', ['customers']),
+    cube('froot', 'customers', ['regions']),
+    cube('froot', 'regions'),
+    cube('fa', 'a_orders'),
+    cube('fab', 'ab_lines', ['customers']),
+    cube('fabc', 'deep'),
+    cube('fad', 'widgets'),
+  ]);
   return admin;
 }
 
@@ -82,40 +68,43 @@ const chart = (source: string, ...members: string[]): ChartDefinition => ({
 });
 
 describe('binding a chart’s cubes at publish (T429, AC-272)', () => {
-  it('binds the cube it starts from nearest first: /A/B’s own over /A’s, and the root’s in the root', async () => {
+  it('binds the cube it starts from by its own name, from its folder or one above, storing it as it is', async () => {
     const admin = await xcube();
 
+    // /A's and the root's, from /A/B; the root's in the root: nothing to store differently.
+    expect(await bindChart(admin, 'fab', chart('a_orders'))).toEqual({
+      kind: 'bound',
+      renames: new Map(),
+    });
     expect(await bindChart(admin, 'fab', chart('sales'))).toEqual({
       kind: 'bound',
-      renames: new Map([['sales', 'fab__sales']]),
+      renames: new Map(),
     });
-    expect(await bindChart(admin, 'fa', chart('sales'))).toEqual({
-      kind: 'bound',
-      renames: new Map([['sales', 'fa__sales']]),
-    });
-    // The root's is its short name: nothing to store differently.
     expect(await bindChart(admin, 'froot', chart('sales'))).toEqual({
       kind: 'bound',
       renames: new Map(),
     });
   });
 
-  it('takes a full name as its short name there: a chart brought into /A/B binds /A/B’s', async () => {
+  // Names compare in any case (R71 6): stored as the one item holds it
+  // (research `xcube-256d632371.md`, 3.3). This replaces T429's "a full name
+  // taken as its short name", there being no full names any more.
+  it('stores a name asked in another case as the item holds it', async () => {
     const admin = await xcube();
 
-    expect(await bindChart(admin, 'fab', chart('fa__sales'))).toEqual({
+    expect(await bindChart(admin, 'fab', chart('Sales'))).toEqual({
       kind: 'bound',
-      renames: new Map([['fa__sales', 'fab__sales']]),
+      renames: new Map([['Sales', 'sales']]),
     });
   });
 
   it('never binds a descendant’s or a sibling’s, and refuses a name no folder on the path holds, naming it', async () => {
     const admin = await xcube();
 
-    // /A/B/C's `sales` is beneath /A: /A binds its own, never its descendant's.
-    expect(await bindChart(admin, 'fa', chart('sales'))).toEqual({
-      kind: 'bound',
-      renames: new Map([['sales', 'fa__sales']]),
+    // /A/B/C's `deep` is beneath /A.
+    expect(await bindChart(admin, 'fa', chart('deep'))).toEqual({
+      kind: 'refused',
+      names: ['deep'],
     });
     // `widgets` is only /A/D's, /A/B's sibling.
     expect(await bindChart(admin, 'fab', chart('widgets'))).toEqual({
@@ -131,18 +120,10 @@ describe('binding a chart’s cubes at publish (T429, AC-272)', () => {
   it('binds another cube the chart uses as its source cube’s bindings have it, along their joins', async () => {
     const admin = await xcube();
 
-    // /A/B's `sales` was bound to /A's `customers`, which was bound to the
-    // root's `regions`. Asked afresh, the resolver would give /A/B's own
-    // `customers` and /A's `regions`: neither is what the chart joins.
-    expect(await bindChart(admin, 'fab', chart('sales', 'customers.name', 'regions.name'))).toEqual(
-      {
-        kind: 'bound',
-        renames: new Map([
-          ['sales', 'fab__sales'],
-          ['customers', 'fa__customers'],
-        ]),
-      },
-    );
+    // /A/B's `ab_lines` joins the root's `customers`, which joins `regions`.
+    expect(
+      await bindChart(admin, 'fab', chart('ab_lines', 'customers.name', 'regions.name')),
+    ).toEqual({ kind: 'bound', renames: new Map() });
   });
 
   it('refuses a name only a folder beneath holds', async () => {
@@ -158,12 +139,9 @@ describe('binding a chart’s cubes at publish (T429, AC-272)', () => {
   it('binds a dashboard’s own names by the resolver, and refuses one no folder on its path holds', async () => {
     const admin = await xcube();
 
-    expect(await bindNames(admin, 'fab', ['sales', 'regions'])).toEqual({
+    expect(await bindNames(admin, 'fab', ['ab_lines', 'a_orders', 'regions'])).toEqual({
       kind: 'bound',
-      renames: new Map([
-        ['sales', 'fab__sales'],
-        ['regions', 'fa__regions'],
-      ]),
+      renames: new Map(),
     });
     expect(await bindNames(admin, 'fab', ['sales', 'widgets'])).toEqual({
       kind: 'refused',

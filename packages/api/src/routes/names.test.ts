@@ -266,7 +266,9 @@ describe('data sources, cubes and model files: one of a name in a folder (T336, 
     expect((await sources().create(source(folders.b, name))).folderId).toBe(folders.b);
   });
 
-  it('refuses a second cube of a name across a folder’s files, naming the file that has it, and takes it in another folder', async () => {
+  // One name per item (R71, T709): another folder's cube of the name is
+  // refused too, as xcube refuses it, saying only that the name is in use.
+  it('refuses a second cube of a name across a folder’s files, naming the file that has it, and in another folder', async () => {
     const orders = `orders_${MARK}`;
     const first = await publish(folders.a, 'cubes/orders.yml', orders);
     expect(first.statusCode, first.body).toBe(200);
@@ -278,7 +280,10 @@ describe('data sources, cubes and model files: one of a name in a folder (T336, 
     ).toEqual([`\`${orders}\` is already a cube in cubes/orders.yml.`]);
 
     const elsewhere = await publish(folders.b, 'cubes/orders.yml', orders);
-    expect(elsewhere.statusCode, elsewhere.body).toBe(200);
+    expect(elsewhere.statusCode, elsewhere.body).toBe(422);
+    expect(
+      elsewhere.json<{ errors: { message: string }[] }>().errors.map((each) => each.message),
+    ).toEqual([`The name “${orders}” is already in use.`]);
   });
 
   it('refuses a new model file at a path its folder has, and takes that path in another folder', async () => {
@@ -293,7 +298,7 @@ describe('data sources, cubes and model files: one of a name in a folder (T336, 
     expect(elsewhere.statusCode, elsewhere.body).toBe(200);
   });
 
-  it('refuses a generated cube only where its folder has the name, saving nothing there and leaving the stored file as it was (AC-249)', async () => {
+  it('refuses a generated cube whose name a folder has, saving nothing there and leaving the stored file as it was (AC-249)', async () => {
     const stock = `stock_${MARK}`;
     expect((await publish(folders.b, 'cubes/stock.yml', stock)).statusCode).toBe(200);
     const before = (await files().list(folders.b)).find((file) => file.path === 'cubes/stock.yml');
@@ -307,9 +312,14 @@ describe('data sources, cubes and model files: one of a name in a folder (T336, 
     expect(after.find((file) => file.path === 'cubes/stock.yml')).toEqual(before);
     expect(after.map((file) => file.path)).not.toContain(`cubes/${stock}.yml`);
 
-    // /C has no such cube, nor that file: generated there, it is taken.
+    // /C has no such file: a cube of another name generated there at that
+    // path is taken. The name /B holds is refused there too, being one
+    // item's (R71, T709), saying only that it is in use.
     const fresh = await publish(folders.c, `cubes/${stock}.yml`, stock, true);
-    expect(fresh.statusCode, fresh.body).toBe(200);
+    expect(fresh.statusCode, fresh.body).toBe(422);
+    expect(
+      fresh.json<{ errors: { message: string }[] }>().errors.map((each) => each.message),
+    ).toEqual([`The name “${stock}” is already in use.`]);
     const path = await publish(folders.c, 'cubes/stock.yml', `stock_c_${MARK}`, true);
     expect(path.statusCode, path.body).toBe(200);
   });

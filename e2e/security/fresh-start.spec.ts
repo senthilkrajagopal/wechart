@@ -1,4 +1,5 @@
 import { CUBE, serviceToken } from '../api-process';
+import { landed } from '../model-files';
 import { expect, test } from './fixtures';
 import { seedRootDefault } from './root-default';
 
@@ -63,5 +64,61 @@ test.describe('the fresh start onto one name per item (T702, AC-328, AC-310)', (
     });
     expect(tested.status(), await tested.text()).toBe(200);
     expect(((await tested.json()) as { ok: boolean }).ok).toBe(true);
+  });
+
+  /**
+   * T709 (AC-328): a folder's cube is published under its own name, and
+   * read back under it; renaming its folder or moving it changes no
+   * published name.
+   */
+  test('a folder’s cube keeps its own name through its folder’s rename and move', async ({
+    request,
+  }) => {
+    const run = Math.random().toString(36).slice(2, 8);
+    const folder = async (title: string) => {
+      const made = await request.post('/api/documents', {
+        data: { kind: 'folder', title, folderId: 'root' },
+      });
+      expect(made.status(), await made.text()).toBe(201);
+      return ((await made.json()) as { id: string }).id;
+    };
+    const sales = await folder(`Sales t709 ${run}`);
+    const other = await folder(`Other t709 ${run}`);
+    const name = `t709_orders_${run}`;
+    const file = {
+      path: `cubes/${name}.yml`,
+      content: [
+        'cubes:',
+        `  - name: ${name}`,
+        '    sql_table: public.orders',
+        '    measures:',
+        '      - name: count',
+        '        type: count',
+        '',
+      ].join('\n'),
+    };
+    expect(await landed(request, sales, [file])).toEqual([file]);
+
+    const heldAs = async () => {
+      const { items } = (await xcube(request, '/items')) as {
+        items: { folderId: string; name: string; fullName: string }[];
+      };
+      return items.filter((item) => item.name === name);
+    };
+    const before = await heldAs();
+    expect(before).toEqual([
+      expect.objectContaining({ folderId: `f${sales.replaceAll('-', '')}`, name, fullName: name }),
+    ]);
+
+    const renamed = await request.patch(`/api/documents/folder/${sales}`, {
+      data: { title: `Sales renamed t709 ${run}` },
+    });
+    expect(renamed.status(), await renamed.text()).toBe(200);
+    const moved = await request.patch(`/api/documents/folder/${sales}`, {
+      data: { folderId: other },
+    });
+    expect(moved.status(), await moved.text()).toBe(200);
+
+    expect(await heldAs()).toEqual(before);
   });
 });

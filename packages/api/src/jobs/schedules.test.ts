@@ -275,18 +275,18 @@ describe('schedulesFrom', () => {
   });
 
   /**
-   * T450's review: a folder's rollup is Cube's `<folderId>__<cube>.<rollup>`,
-   * and its key's SQL is read from that folder's file — not missed, and not
-   * taken from the root's cube of the same short name.
+   * T450's review: a folder's rollup's key SQL is read from that folder's
+   * file — not missed, and not taken from the root's. Its cube is under its
+   * own name, as every folder's is (T709, AC-328).
    */
-  it('reads a folder rollup’s key SQL from that folder’s file, under its prefixed name', () => {
+  it('reads a folder rollup’s key SQL from that folder’s file, under its own name', () => {
     // Paths of their own, so which file each link names can be told apart (T530's review).
-    const file = (folderId: string, sql: string) => ({
+    const file = (folderId: string, name: string, sql: string) => ({
       folderId,
       path: `cubes/${folderId}_orders.yml`,
       content: [
         'cubes:',
-        '  - name: orders',
+        `  - name: ${name}`,
         '    sql_table: orders',
         '    pre_aggregations:',
         '      - name: main',
@@ -303,12 +303,12 @@ describe('schedulesFrom', () => {
             preAggregations: [{ name: 'main', refreshKey: { every: '1 hour' } }],
           },
           {
-            name: 'fsales__orders',
+            name: 'sales_orders',
             preAggregations: [{ name: 'main', refreshKey: { every: '1 hour' } }],
           },
         ],
       },
-      [file('sales', 'SELECT 2'), file('root', 'SELECT 1')],
+      [file('sales', 'sales_orders', 'SELECT 2'), file('root', 'orders', 'SELECT 1')],
       new Map([['sales', 'fsales']]),
     );
 
@@ -324,7 +324,7 @@ describe('schedulesFrom', () => {
         fileFolderId: undefined,
       },
       {
-        id: 'fsales__orders.main',
+        id: 'sales_orders.main',
         sql: 'SELECT 2',
         fileName: 'cubes/sales_orders.yml',
         fileFolderId: 'sales',

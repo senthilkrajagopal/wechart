@@ -333,7 +333,7 @@ describe('a proposal’s models, landed through xcube’s changeset (T451)', () 
     expect((await save(shared(ORDERS), CHANGED_ORDERS)).statusCode).toBe(200);
     expect((await save(shared(CUSTOMERS), cube(CUSTOMERS))).statusCode).toBe(200);
     const ordersBefore = (await salesFiles())[shared(ORDERS)]!;
-    const { board, title } = await boardNaming(`fsales__${ORDERS}`);
+    const { board, title } = await boardNaming(`${ORDERS}`);
 
     const from = stub.calls.length;
     const proposed = await propose('dashboard', board);
@@ -371,9 +371,7 @@ describe('a proposal’s models, landed through xcube’s changeset (T451)', () 
     const dashboard = (await docs().named('dashboard', ids.sales, title))!;
     expect(dashboard).not.toBeNull();
     const [chart] = await docs().localTo(dashboard.id);
-    expect((chart!.body['chart'] as { source: { cube: string } }).source.cube).toBe(
-      `fsales__${ORDERS}`,
-    );
+    expect((chart!.body['chart'] as { source: { cube: string } }).source.cube).toBe(`${ORDERS}`);
     // Each version kept: the one replaced, and the one landed (AC-288).
     const versions = await versionStore(getDb()).list('model', ordersBefore.id);
     expect(
@@ -416,7 +414,7 @@ describe('a proposal’s models, landed through xcube’s changeset (T451)', () 
   it('binds a chart to a cube only its models make, as it will resolve once they land (AC-285)', async () => {
     const fresh = `${MARK}_fresh`;
     expect((await save(shared(fresh), measured(fresh, 'margin'))).statusCode).toBe(200);
-    const { board, title } = await boardNaming(`fsales__${fresh}`);
+    const { board, title } = await boardNaming(`${fresh}`);
     const proposed = await propose('dashboard', board);
     expect(proposed.statusCode, proposed.body).toBe(201);
     const approved = await approve(proposed.json<{ id: string }>().id);
@@ -424,9 +422,7 @@ describe('a proposal’s models, landed through xcube’s changeset (T451)', () 
     expect((await salesFiles())[shared(fresh)]?.content).toBe(measured(fresh, 'margin'));
     const dashboard = (await docs().named('dashboard', ids.sales, title))!;
     const [chart] = await docs().localTo(dashboard.id);
-    expect((chart!.body['chart'] as { source: { cube: string } }).source.cube).toBe(
-      `fsales__${fresh}`,
-    );
+    expect((chart!.body['chart'] as { source: { cube: string } }).source.cube).toBe(`${fresh}`);
   });
 
   it('refuses an approval the check finds breaking, naming each break, and changes nothing', async () => {
@@ -581,8 +577,8 @@ describe('a proposal’s models, landed through xcube’s changeset (T451)', () 
         title: `Kept chart ${MARK}`,
         folderId: ids.sales,
         chart: {
-          source: { cube: `fsales__${KEPT}` },
-          wells: { measures: [`fsales__${KEPT}.count`] },
+          source: { cube: `${KEPT}` },
+          wells: { measures: [`${KEPT}.count`] },
         },
       },
     });
@@ -778,18 +774,33 @@ async function publishedIn(folderId: string, xcubeId: string, name: string, cont
  * withdraws it and proposes it again. A model's bindings are the changeset's
  * dry run's, when proposed and at approval; a chart's or a dashboard's, its
  * names bound in the folder it lands in, as an approval binds them (T502).
+ * Under one name per item (R71) a name means one item wherever it is used,
+ * so the nearer namesake that would have rebound one can't be published.
  */
 describe('an approval binding an item otherwise than when it was proposed (T456)', () => {
   const eastItem = (name: string) =>
     stub.head(MODEL)?.items.find((item) => item.folderId === 'feast' && item.name === name);
-  const eastFiles = async () =>
-    (await files().inFolders([ids.east])).map(({ path, version, content }) => ({
-      path,
-      version,
-      content,
-    }));
 
-  it('is refused for a model whose join a nearer cube would take, naming it and both, and lands nothing', async () => {
+  /**
+   * One name per item (R71, T709): a nearer cube of a bound name can no
+   * longer be published while a proposal waits, so the rebinding T456
+   * refused can't arise that way. xcube refuses the namesake, and the
+   * proposal lands as it was proposed.
+   */
+  const publishRefused = async (xcubeId: string, name: string, content: string) => {
+    const answer = await admin.applyChangeset({
+      baseRevision: stub.head(MODEL)?.revision ?? null,
+      upserts: [{ folderId: xcubeId, name, kind: 'cube', yaml: content }],
+      deletes: [],
+    });
+    expect(answer).toEqual({
+      kind: 'refused',
+      errors: [expect.objectContaining({ folderId: xcubeId, name, kind: 'name_in_use' })],
+      cubeMessage: null,
+    });
+  };
+
+  it('lands a model as proposed: no nearer cube of its join’s name can be published meanwhile', async () => {
     const base = `${MARK}_base`;
     const lines = `${MARK}_lines`;
     await publishedIn(ids.sales, 'fsales', base, cube(base));
@@ -808,72 +819,34 @@ describe('an approval binding an item otherwise than when it was proposed (T456)
     const id = (await workspaceFile(shared(lines))).id;
     const proposed = await propose('model', id);
     expect(proposed.statusCode, proposed.body).toBe(201);
-    const proposalId = proposed.json<{ id: string }>().id;
 
-    // /Sales/East publishes a cube of that name meanwhile: nearer, the join would take it.
-    await publishedIn(ids.east, 'feast', base, cube(base));
-    const before = await eastFiles();
-    const head = stub.head(MODEL)?.revision;
-    const refused = await approve(proposalId);
-    expect(refused.statusCode, refused.body).toBe(409);
-    expect(refused.json()).toEqual({
-      error: `“${shared(lines)}” would bind otherwise than when it was proposed: “${base}” would be the one in Sales ${MARK} / East ${MARK}, not the one in Sales ${MARK}. Nothing was approved; its author can withdraw it and propose it again.`,
-      rebound: [
-        {
-          kind: 'model',
-          id,
-          title: shared(lines),
-          names: [{ name: base, was: `fsales__${base}`, now: `feast__${base}` }],
-        },
-      ],
-    });
-    // Nothing landed, in the store or in xcube, and it still waits.
-    expect(await eastFiles()).toEqual(before);
-    expect(stub.head(MODEL)?.revision).toBe(head);
-    expect(eastItem(lines)).toBeUndefined();
-    expect(await statusOf(proposalId)).toBe('open');
-
-    // Withdrawn and proposed again, it binds as it does now, and lands.
-    expect((await withdraw(proposalId)).statusCode).toBe(200);
-    const again = await propose('model', id);
-    expect(again.statusCode, again.body).toBe(201);
-    const approved = await approve(again.json<{ id: string }>().id);
+    // /Sales/East can't publish a cube of that name meanwhile.
+    await publishRefused('feast', base, cube(base));
+    expect(eastItem(base)).toBeUndefined();
+    const approved = await approve(proposed.json<{ id: string }>().id);
     expect(approved.statusCode, approved.body).toBe(200);
     expect(eastItem(lines)?.yaml).toBe(joined);
   });
 
-  it('is refused for a chart a nearer cube would take, naming it and both, and lands nothing', async () => {
+  it('lands a chart as proposed: no nearer cube of its name can be published meanwhile', async () => {
     const solo = `${MARK}_solo`;
     await publishedIn(ids.sales, 'fsales', solo, measured(solo, 'margin'));
     // The workspace's dashboard for /Sales/East, its own chart on /Sales's cube.
-    const { board, chart, title } = await boardNaming(`fsales__${solo}`, ids.east);
+    const { board, title } = await boardNaming(solo, ids.east);
     const proposed = await propose('dashboard', board);
     expect(proposed.statusCode, proposed.body).toBe(201);
-    const proposalId = proposed.json<{ id: string }>().id;
 
-    await publishedIn(ids.east, 'feast', solo, measured(solo, 'margin'));
-    const refused = await approve(proposalId);
-    expect(refused.statusCode, refused.body).toBe(409);
-    expect(refused.json()).toEqual({
-      error: `“Margin ${MARK}” would bind otherwise than when it was proposed: “${solo}” would be the one in Sales ${MARK} / East ${MARK}, not the one in Sales ${MARK}. Nothing was approved; its author can withdraw it and propose it again.`,
-      rebound: [
-        {
-          kind: 'chart',
-          id: chart,
-          title: `Margin ${MARK}`,
-          names: [{ name: solo, was: `fsales__${solo}`, now: `feast__${solo}` }],
-        },
-      ],
-    });
-    expect(await docs().named('dashboard', ids.east, title)).toBeNull();
-    expect(await statusOf(proposalId)).toBe('open');
-    expect((await withdraw(proposalId)).statusCode).toBe(200);
+    await publishRefused('feast', solo, measured(solo, 'margin'));
+    const approved = await approve(proposed.json<{ id: string }>().id);
+    expect(approved.statusCode, approved.body).toBe(200);
+    const [landed] = await docs().localTo((await docs().named('dashboard', ids.east, title))!.id);
+    expect((landed!.body['chart'] as { source: { cube: string } }).source.cube).toBe(solo);
   });
 
   it('lands one whose items bind as they did when it was proposed', async () => {
     const steady = `${MARK}_steady`;
     await publishedIn(ids.sales, 'fsales', steady, measured(steady, 'margin'));
-    const { board, title } = await boardNaming(`fsales__${steady}`, ids.east);
+    const { board, title } = await boardNaming(`${steady}`, ids.east);
     const proposed = await propose('dashboard', board);
     expect(proposed.statusCode, proposed.body).toBe(201);
     // A cube of another name published meanwhile changes no binding of its.
@@ -882,8 +855,6 @@ describe('an approval binding an item otherwise than when it was proposed (T456)
     const approved = await approve(proposed.json<{ id: string }>().id);
     expect(approved.statusCode, approved.body).toBe(200);
     const [landed] = await docs().localTo((await docs().named('dashboard', ids.east, title))!.id);
-    expect((landed!.body['chart'] as { source: { cube: string } }).source.cube).toBe(
-      `fsales__${steady}`,
-    );
+    expect((landed!.body['chart'] as { source: { cube: string } }).source.cube).toBe(`${steady}`);
   });
 });

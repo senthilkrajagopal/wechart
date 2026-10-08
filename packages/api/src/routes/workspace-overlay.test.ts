@@ -80,9 +80,8 @@ beforeAll(async () => {
     const overlay = claims['wechartOverlay'];
     const own =
       typeof overlay === 'string'
-        ? (stub.overlay(MODEL, overlay)?.upserts ?? []).map((item) =>
-            item.folderId === 'froot' ? item.name : `${item.folderId}__${item.name}`,
-          )
+        ? // Each under its own name, as in every folder (T709, AC-328).
+          (stub.overlay(MODEL, overlay)?.upserts ?? []).map((item) => item.name)
         : [];
     response.writeHead(200, {
       'content-type': 'application/json',
@@ -96,13 +95,9 @@ beforeAll(async () => {
         (request.url ?? '').includes('/v1/meta')
           ? {
               // An overlay's item of a published full name stands in its place.
-              cubes: [
-                ...new Set([
-                  `fsales__${cubeName('orders')}`,
-                  `fhidden__${cubeName('secret')}`,
-                  ...own,
-                ]),
-              ].map((name) => ({ name, measures: [{ name: `${name}.count` }], dimensions: [] })),
+              cubes: [...new Set([`${cubeName('orders')}`, `${cubeName('secret')}`, ...own])].map(
+                (name) => ({ name, measures: [{ name: `${name}.count` }], dimensions: [] }),
+              ),
             }
           : { data: [] },
       ),
@@ -397,9 +392,9 @@ describe('a workspace item’s previews (T347, AC-323, AC-281, AC-283)', () => {
     const shared = await dashboardIn('writer', folders.sales);
 
     asked.length = 0;
-    const own = await load('writer', board, `fsales__${cubeName('orders')}.count`);
+    const own = await load('writer', board, `${cubeName('orders')}.count`);
     expect(own.statusCode, own.body).toBe(200);
-    const sharedLoad = await load('writer', shared, `fsales__${cubeName('orders')}.count`);
+    const sharedLoad = await load('writer', shared, `${cubeName('orders')}.count`);
     expect(sharedLoad.statusCode, sharedLoad.body).toBe(200);
 
     expect(asked.map(({ claims }) => claims['wechartOverlay'])).toEqual([
@@ -407,9 +402,7 @@ describe('a workspace item’s previews (T347, AC-323, AC-281, AC-283)', () => {
       undefined,
     ]);
     // No one else may open it, so no one else's token names it (AC-276, AC-323).
-    expect((await load('super', board, `fsales__${cubeName('orders')}.count`)).statusCode).toBe(
-      404,
-    );
+    expect((await load('super', board, `${cubeName('orders')}.count`)).statusCode).toBe(404);
   });
 
   it('may name the overlay’s cubes, wherever it places them, and still none the user can’t see', async () => {
@@ -420,9 +413,9 @@ describe('a workspace item’s previews (T347, AC-323, AC-281, AC-283)', () => {
     });
     const board = await dashboardIn('writer', folderId, folders.sales);
 
-    const widgets = await load('writer', board, `fops__${cubeName('widgets')}.count`);
+    const widgets = await load('writer', board, `${cubeName('widgets')}.count`);
     expect(widgets.statusCode, widgets.body).toBe(200);
-    const secret = await load('writer', board, `fhidden__${cubeName('secret')}.count`);
+    const secret = await load('writer', board, `${cubeName('secret')}.count`);
     expect(secret.statusCode, secret.body).toBe(403);
   });
 
@@ -439,10 +432,10 @@ describe('a workspace item’s previews (T347, AC-323, AC-281, AC-283)', () => {
     expect(asked.at(-1)?.claims['wechartOverlay']).toBe(workspaceOverlayIdOf(workspace));
     const names = meta.json<{ cubes: { name: string }[] }>().cubes.map((each) => each.name);
     expect(names).toEqual(
-      expect.arrayContaining([`fsales__${cubeName('orders')}`, `fops__${cubeName('widgets')}`]),
+      expect.arrayContaining([`${cubeName('orders')}`, `${cubeName('widgets')}`]),
     );
     // Not the hidden folder's, which the item doesn't reach.
-    expect(names).not.toContain(`fhidden__${cubeName('secret')}`);
+    expect(names).not.toContain(`${cubeName('secret')}`);
     // The workspace's own are marked, for its picker to offer first (AC-329).
     const marked = meta
       .json<{ cubes: { name: string; meta?: { wechart?: { workspace?: boolean } } }[] }>()
@@ -450,10 +443,10 @@ describe('a workspace item’s previews (T347, AC-323, AC-281, AC-283)', () => {
       .map((each) => each.name);
     // Exactly the overlay's own, whatever else the workspace holds by now.
     const own = (stub.overlay(MODEL, workspaceOverlayIdOf(workspace))?.upserts ?? []).map(
-      (item) => `${item.folderId}__${item.name}`,
+      (item) => item.name,
     );
     expect(own).toEqual(
-      expect.arrayContaining([`fops__${cubeName('widgets')}`, `fsales__${cubeName('orders')}`]),
+      expect.arrayContaining([`${cubeName('widgets')}`, `${cubeName('orders')}`]),
     );
     expect(marked.sort()).toEqual(own.sort());
   });
@@ -468,7 +461,7 @@ describe('a workspace item’s previews (T347, AC-323, AC-281, AC-283)', () => {
     const board = await dashboardIn('writer', folderId, folders.sales);
     const said = `Overlay "x" of model "${MODEL}" doesn't apply to what is published now: fsales/${cubeName('orders')}: Cube ${cubeName('customers')} doesn't exist`;
     refusing = { status: 409, error: said };
-    const answer = await load('writer', board, `fsales__${cubeName('orders')}.count`);
+    const answer = await load('writer', board, `${cubeName('orders')}.count`);
     // Taken by this one's request, or never left for the next test's.
     const unused = refusing as { status: number; error: string } | undefined;
     refusing = undefined;
@@ -488,9 +481,7 @@ describe('a workspace item’s previews (T347, AC-323, AC-281, AC-283)', () => {
     const board = await dashboardIn('writer', folderId, folders.sales);
 
     // Before a preview names it, the overlay holds the workspace as it is.
-    expect((await load('writer', board, `fsales__${cubeName('orders')}.count`)).statusCode).toBe(
-      200,
-    );
+    expect((await load('writer', board, `${cubeName('orders')}.count`)).statusCode).toBe(200);
     expect(stub.overlay(MODEL, workspaceOverlayIdOf(workspace))?.connections).toEqual([
       {
         folderId: 'fsales',
@@ -575,7 +566,7 @@ describe('an emptied workspace (T347, AC-323)', () => {
       method: 'POST',
       url: '/api/load',
       payload: {
-        query: { measures: [`fsales__${cubeName('orders')}.count`] },
+        query: { measures: [`${cubeName('orders')}.count`] },
         for: { kind: 'dashboard', id: board },
       },
     });

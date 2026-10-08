@@ -107,8 +107,8 @@ export interface Buildable {
 /**
  * The rollups a lambda or rollup join combines, as its file declares them
  * (`rollups`, research cube/data-modeling.md): each `cube.pre_aggregation`,
- * `CUBE` its own cube, named as published — a folder's with its folder's
- * prefix, as its own cube's.
+ * `CUBE` its own cube, named as published: every cube under its own name
+ * (T709, AC-328).
  */
 function rollupsIn(
   content: string | undefined,
@@ -130,14 +130,11 @@ function rollupsIn(
     ? (declared['pre_aggregations'] as Record<string, unknown>[])
     : [];
   const rollups = entries.find((each) => each['name'] === preAggregation)?.['rollups'];
-  const prefix = cube.name.endsWith(cube.shortName)
-    ? cube.name.slice(0, cube.name.length - cube.shortName.length)
-    : '';
   return (Array.isArray(rollups) ? rollups : [])
     .filter((each): each is string => typeof each === 'string' && each.includes('.'))
     .map((each) => {
       const [owner = '', name = ''] = each.split('.');
-      return owner === 'CUBE' ? `${cube.name}.${name}` : `${prefix}${owner}.${name}`;
+      return owner === 'CUBE' ? `${cube.name}.${name}` : `${owner}.${name}`;
     });
 }
 

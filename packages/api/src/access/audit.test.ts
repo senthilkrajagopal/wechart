@@ -465,8 +465,11 @@ describe(
     const SCHEMA = `pgboss_${MARK}`;
     const clock = new TestClock(new Date('2026-10-05T03:00:00Z'));
     const ids = { folder: '', xcube: '' };
-    const rollup = () => `${ids.xcube}__orders.by_month`;
-    const whole = () => `${ids.xcube}__orders.by_status`;
+    // The folder's cube under its own name, as every folder's is (T709,
+    // AC-328): this file's own, so no other test's builds share it.
+    const CUBE = `orders_${MARK}`;
+    const rollup = () => `${CUBE}.by_month`;
+    const whole = () => `${CUBE}.by_status`;
     const REMOVED =
       "A user's selector doesn't match any of the pre-aggregations defined in the data model.";
     const refusing = new Set<string>();
@@ -515,8 +518,8 @@ describe(
             return Response.json({
               cubes: [
                 {
-                  name: `${ids.xcube}__orders`,
-                  meta: { xcube: { folderId: ids.xcube, shortName: 'orders' } },
+                  name: CUBE,
+                  meta: { xcube: { folderId: ids.xcube, shortName: CUBE } },
                   preAggregations: [
                     { name: 'by_month', type: 'rollup', partitionGranularity: 'month' },
                     { name: 'by_status', type: 'rollup' },
@@ -633,19 +636,19 @@ describe(
         {
           who: WRITER,
           event: 'build-started',
-          item: { kind: 'pre-aggregation', id: whole(), title: 'orders.by_status' },
+          item: { kind: 'pre-aggregation', id: whole(), title: whole() },
           summary: 'Build now · whole',
         },
         {
           who: WRITER,
           event: 'build-started',
-          item: { kind: 'pre-aggregation', id: rollup(), title: 'orders.by_month' },
+          item: { kind: 'pre-aggregation', id: rollup(), title: rollup() },
           summary: 'Build all · every partition',
         },
         {
           who: WRITER,
           event: 'build-started',
-          item: { kind: 'pre-aggregation', id: rollup(), title: 'orders.by_month' },
+          item: { kind: 'pre-aggregation', id: rollup(), title: rollup() },
           // Months of one year say the year once, as Run history does (design 16, B1).
           summary: 'Rebuild selected · Sep, Aug 2026',
         },
@@ -714,7 +717,7 @@ describe(
       expect(brief(record!)).toEqual({
         who: WRITER,
         event: 'build-cancelled',
-        item: { kind: 'pre-aggregation', id: rollup(), title: 'orders.by_month' },
+        item: { kind: 'pre-aggregation', id: rollup(), title: rollup() },
         summary: 'Queued · Aug 2026',
       });
       expect(record?.details).toEqual({
@@ -807,7 +810,7 @@ describe(
         const shown = (cron: string | null) =>
           cron === null
             ? [null, null, null, null, null, null]
-            : [`Morning ${MARK}`, 'orders.by_month', cron, 'UTC', 'Run once', '1'];
+            : [`Morning ${MARK}`, rollup(), cron, 'UTC', 'Run once', '1'];
         const [was, is] = [shown(before), shown(after)];
         return [
           'Name',
@@ -818,7 +821,7 @@ describe(
           'Suspend after',
         ].map((setting, at) => ({ setting, before: was[at], after: is[at] }));
       };
-      const what = { preAggregation: rollup(), shownName: 'orders.by_month' };
+      const what = { preAggregation: rollup(), shownName: rollup() };
       expect(records[0]?.details).toEqual({
         change: 'made',
         ...what,

@@ -66,14 +66,12 @@ import {
   chartRenamed,
   cubesOfDashboard,
   dashboardRenamed,
-  shortOf,
-  xcubeFolderOf,
 } from './model/bind';
 import { catalogOf, registerIntrospection } from './model/introspection';
 import type { Config } from './config';
 import type { Changeset } from './xcube/changesets';
 import { XcubeError, type XcubeAdmin } from './xcube/client';
-import { ROOT_ONLY, XCUBE_ROOT, type PublishedFolders } from './xcube/folders';
+import { ROOT_ONLY, type PublishedFolders } from './xcube/folders';
 import { cubesUsing, extendsIn } from './xcube/used-by';
 import { landedNamesOf } from './model/names';
 import { declaredIn } from './model/split';
@@ -930,6 +928,19 @@ export function buildServer({
             ? {}
             : { remove: modelFiles.remove.bind(modelFiles) }),
         };
+  /**
+   * The shared folder whose model declares a cube or view of this name, by
+   * wechart's id (T709, AC-328): a name is one item's across the model
+   * (R71), and holds no folder of its own. The root where no store holds
+   * models; none where no served folder declares it.
+   */
+  const folderDeclaring = async (name: string): Promise<string | undefined> => {
+    if (modelStore === undefined) return ROOT_FOLDER_ID;
+    const served = [...(folders === undefined ? ROOT_ONLY : await folders()).ids.keys()];
+    return (await modelStore.inFolders(served)).find((file) =>
+      declaredIn(file.content).some((declared) => declared.name === name),
+    )?.folderId;
+  };
   const overlays =
     (security === 'off' && folderAccess === undefined) ||
     xcube === undefined ||
@@ -1466,13 +1477,7 @@ export function buildServer({
       : withViewCubes(requests, {
           filesIn: (folderId) => modelStore.inFolders([folderId]),
           held: () => xcube.items({ timeoutMs: 15_000 }),
-          folderOf: async (fullName) => {
-            const xcubeId = xcubeFolderOf(fullName);
-            if (xcubeId === null) return ROOT_FOLDER_ID;
-            const ids = (folders === undefined ? ROOT_ONLY : await folders()).ids;
-            for (const [folderId, published] of ids) if (published === xcubeId) return folderId;
-            return undefined;
-          },
+          folderOf: folderDeclaring,
         });
 
   // Workspace items proposed to their target folders (T349, AC-284).
@@ -1506,12 +1511,13 @@ export function buildServer({
           }),
       // Held to what its items bound to when proposed (T456, AC-321).
       ...(proposalBindings === undefined ? {} : { bindings: proposalBindings }),
-      ...(folders === undefined
-        ? {}
-        : {
-            folderOfXcube: async (xcubeId: string) =>
-              [...(await folders()).ids].find(([, id]) => id === xcubeId)?.[0],
-          }),
+      folderOfName: async (kind: 'cube' | 'dataSource', name: string) => {
+        if (kind === 'cube') return folderDeclaring(name);
+        const served = (folders === undefined ? ROOT_ONLY : await folders()).ids;
+        return ((await dataSources?.all()) ?? []).find(
+          (source) => source.name === name && served.has(source.folderId),
+        )?.folderId;
+      },
       // The open calculation requests listed to the user count with the
       // proposals (R60): those of the folders they write, as the list has them.
       ...(calcRequests === undefined
@@ -1899,7 +1905,6 @@ export function buildServer({
         : modelFiles.all === undefined
           ? modelFiles.list()
           : modelFiles.all(),
-    ...(folders === undefined ? {} : { published: folders }),
     ...(dataSources === undefined ? {} : { dataSources: () => dataSources.all() }),
   });
 
@@ -3496,18 +3501,14 @@ export function buildServer({
       ? { allowed: 'all' }
       : { allowed: 'all', overlay: overlayScopeOf(ensured, pushAgain) };
   };
-  /** A scope's overlay: its id, its own cubes and views by full name, its version. */
+  /** A scope's overlay: its id, its own cubes and views by their own names (T709), its version. */
   const overlayScopeOf = (
     ensured: EnsuredOverlay,
     pushAgain: () => Promise<unknown>,
   ): NonNullable<QueryScope['overlay']> => ({
     id: ensured.id,
     pushAgain,
-    names: new Set(
-      ensured.content.upserts.map((each) =>
-        each.folderId === XCUBE_ROOT ? each.name : `${each.folderId}__${each.name}`,
-      ),
-    ),
+    names: new Set(ensured.content.upserts.map((each) => each.name)),
     rebinds: rebindsOf(ensured.content.upserts),
     ...(ensured.version === undefined ? {} : { version: ensured.version }),
   });
@@ -4033,17 +4034,11 @@ export function buildServer({
 
   /**
    * Calculation requests (T383, AC-050): asked of the read-write members of
-   * the folder whose model defines the chart's cube. A cube's folder is the
-   * shared one its full name's prefix names, the root's where it has none.
+   * the folder whose model defines the chart's cube: the shared folder
+   * declaring its one name (T709, R71).
    */
   if (calcRequests !== undefined) {
-    const folderOfCube = async (cube: string): Promise<string | undefined> => {
-      const xcubeId = xcubeFolderOf(cube);
-      if (xcubeId === null) return ROOT_FOLDER_ID;
-      const ids = (folders === undefined ? ROOT_ONLY : await folders()).ids;
-      for (const [folderId, published] of ids) if (published === xcubeId) return folderId;
-      return undefined;
-    };
+    const folderOfCube = folderDeclaring;
     registerCalcRequests(app, {
       store: calcRequests,
       userOf,
@@ -4066,9 +4061,8 @@ export function buildServer({
         if (folderId === undefined || modelStore === undefined) return undefined;
         // A shared folder's model alone: a workspace's cube is its owner's to change.
         if ((await workspaceRootOf(folderId)) !== null) return undefined;
-        const name = shortOf(cube);
         const file = (await modelStore.inFolders([folderId])).find((each) =>
-          declaredIn(each.content).some((declared) => declared.name === name),
+          declaredIn(each.content).some((declared) => declared.name === cube),
         );
         return file === undefined ? undefined : { folderId, modelPath: file.path };
       },

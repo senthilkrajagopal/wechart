@@ -213,11 +213,8 @@ beforeAll(async () => {
 
   ids.board = randomUUID();
   ids.own1 = await doc('chart', chart('Revenue', names.sales, { localToDashboardId: ids.board }));
-  // Bound, by its folder's full name (AC-328).
-  ids.own2 = await doc(
-    'chart',
-    chart('Orders', `${xcubeIdOf(ids.sales)!}__${names.sales}`, { localToDashboardId: ids.board }),
-  );
+  // Bound, by its one name (AC-328, T709).
+  ids.own2 = await doc('chart', chart('Orders', names.sales, { localToDashboardId: ids.board }));
   ids.top = await doc('chart', chart('Top products', names.orders, { folderId: ids.sales }));
   ids.margin = await doc('chart', chart('Margin trend', names.margin, { folderId: ids.hidden }));
   await doc(
@@ -438,9 +435,7 @@ describe('what a dashboard’s export offers (T511, AC-354)', () => {
     expect(answer.statusCode, answer.body).toBe(200);
     const body = answer.json<Offered>();
     const models = new Map(body.models.map((model) => [model.path, model]));
-    expect([...models.keys()].sort()).toEqual(
-      [paths.base, paths.customers, paths.extended].sort(),
-    );
+    expect([...models.keys()].sort()).toEqual([paths.base, paths.customers, paths.extended].sort());
     expect(models.get(paths.extended)!.chartIds).toEqual([ids.extended]);
     expect(models.get(paths.base)!.chartIds).toEqual([ids.extended]);
     // Its filter's cube, used by the dashboard itself and by no chart.
@@ -559,7 +554,10 @@ describe('the export file (T511, AC-354, AC-355)', () => {
       description: `What ${names.emea} is for.`,
     });
     // Every setting it has, and none of its driver's secrets.
-    const secrets = [...DRIVERS.postgres.connection, ...DRIVERS.postgres.auth.flatMap((m) => m.fields)]
+    const secrets = [
+      ...DRIVERS.postgres.connection,
+      ...DRIVERS.postgres.auth.flatMap((m) => m.fields),
+    ]
       .filter((field) => field.secret === true)
       .map((field) => field.key);
     for (const key of secrets) expect(Object.keys(item['fields'] as object)).not.toContain(key);

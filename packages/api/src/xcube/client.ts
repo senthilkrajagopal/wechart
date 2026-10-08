@@ -247,7 +247,8 @@ export interface ItemError {
 /**
  * An item a changeset would make, bound as it would land (research
  * `xcube-meta-revision-and-bindings.md`, "Item references (`ItemRef`) in
- * answers"): nearest first along its path, over the database head.
+ * answers"): each name to the one item holding it, over the database head
+ * (research `xcube-256d632371.md`, 3.3).
  */
 export interface ItemRef {
   readonly folderId: string;

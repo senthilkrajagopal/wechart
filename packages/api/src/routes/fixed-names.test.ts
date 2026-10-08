@@ -423,8 +423,9 @@ describe('a delete of a name in use (T706, AC-275)', () => {
         title: `Used chart ${MARK}`,
         folderId: ids.sales,
         chart: {
-          source: { cube: `fsales__${USED}` },
-          wells: { measures: [`fsales__${USED}.count`] },
+          // Under its own name, as in every folder (T709, AC-328).
+          source: { cube: USED },
+          wells: { measures: [`${USED}.count`] },
         },
       },
     });

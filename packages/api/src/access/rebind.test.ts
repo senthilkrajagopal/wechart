@@ -9,15 +9,29 @@ import { answerRebound, memberBack, rebindsOf, reboundQuery } from './rebind';
  * workspace's own cube of that name answers. The answer comes back under the
  * names the item holds, so its tiles read it as they always did.
  */
-const OWN = rebindsOf([
-  { folderId: 'fops', name: 'orders' },
-  { folderId: 'froot', name: 'regions' },
+/**
+ * A rename map, as the mechanics below take one: each stored name to the
+ * overlay's own. Under one name per item (T709) `rebindsOf` maps each name
+ * to itself (below), so these names are the mechanics' alone; T716 retires
+ * the module.
+ */
+const OWN: ReadonlyMap<string, string> = new Map([
+  ['fsales__orders', 'fops__orders'],
+  ['fsales__regions', 'regions'],
+  ['orders', 'fops__orders'],
 ]);
 
 describe('rebinding a query through an overlay (T542, AC-281)', () => {
-  it('maps each of its own cubes by short name to where it places it', () => {
-    expect([...OWN]).toEqual([
-      ['orders', 'fops__orders'],
+  // T709, AC-328: an overlay's item is served under its own name wherever it
+  // places it, standing in for the published item of that name.
+  it('maps each of its own cubes to its own name, wherever it places it', () => {
+    expect([
+      ...rebindsOf([
+        { folderId: 'fops', name: 'orders' },
+        { folderId: 'froot', name: 'regions' },
+      ]),
+    ]).toEqual([
+      ['orders', 'orders'],
       ['regions', 'regions'],
     ]);
   });
@@ -193,11 +207,11 @@ describe('rebinding a query through an overlay (T542, AC-281)', () => {
     expect(
       answerRebound(
         {
-          data: [
-            { 'fops__orders.count__xc_running_total': '30', 'customers.count__xc_rank': '1' },
-          ],
+          data: [{ 'fops__orders.count__xc_running_total': '30', 'customers.count__xc_rank': '1' }],
           annotation: {
-            measures: { 'fops__orders.count__xc_running_total': { title: 'Count (running total)' } },
+            measures: {
+              'fops__orders.count__xc_running_total': { title: 'Count (running total)' },
+            },
           },
         },
         back,

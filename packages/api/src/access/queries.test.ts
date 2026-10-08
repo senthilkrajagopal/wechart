@@ -146,10 +146,11 @@ beforeAll(async () => {
   });
   ids.w2 = await make('folder', { title: '2', folderId: ids.w });
   ids.x = await make('folder', { title: 'X', folderId: 'root' });
-  const xcubeIds = await folderXcubeIds(getDb()).of([ids.w, ids.x, ids.w2, ids.r]);
-  full.wsales = `${xcubeIds.get(ids.w)!}__wsales`;
-  full.xsales = `${xcubeIds.get(ids.x)!}__xsales`;
-  full.rjoined = `${xcubeIds.get(ids.r)!}__rjoined`;
+  await folderXcubeIds(getDb()).of([ids.w, ids.x, ids.w2, ids.r]);
+  // Each folder's cube under its own name, as in every folder (T709, AC-328).
+  full.wsales = 'wsales';
+  full.xsales = 'xsales';
+  full.rjoined = 'rjoined';
 
   ids.chartR = await make('chart', { title: 'R chart', folderId: ids.r, chart: chartOn('orders') });
   ids.dashR = await make('dashboard', {

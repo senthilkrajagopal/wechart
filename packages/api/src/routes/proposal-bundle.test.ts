@@ -265,7 +265,7 @@ interface Answered {
 
 describe('the workspace models a proposed dashboard needs (T350, AC-285)', () => {
   it('go in its proposal: the one its chart names, and the one that joins, and no other', async () => {
-    const { board, chart } = await boardNaming(`fsales__${ORDERS}`);
+    const { board, chart } = await boardNaming(`${ORDERS}`);
     const proposed = await propose('dashboard', board);
     expect(proposed.statusCode, proposed.body).toBe(201);
     const proposal = proposed.json<Answered>();
@@ -298,7 +298,7 @@ describe('the workspace models a proposed dashboard needs (T350, AC-285)', () =>
       method: 'POST',
       url: '/api/load',
       payload: {
-        query: { measures: [`fsales__${ORDERS}.margin`] },
+        query: { measures: [`${ORDERS}.margin`] },
         for: { kind: 'proposal', id: proposal.id },
       },
     });
@@ -377,7 +377,7 @@ describe('the workspace models a proposed dashboard needs (T350, AC-285)', () =>
       },
     });
     expect(copied.statusCode, copied.body).toBe(201);
-    const { board, chart } = await boardNaming(`fsales__${OTHER}`);
+    const { board, chart } = await boardNaming(`${OTHER}`);
     const proposed = await propose('dashboard', board);
     expect(proposed.statusCode, proposed.body).toBe(201);
     expect(proposed.json<Answered>().items.map(({ kind, id }) => ({ kind, id }))).toEqual([
@@ -388,7 +388,7 @@ describe('the workspace models a proposed dashboard needs (T350, AC-285)', () =>
   });
 
   it('are listed by the Propose dialog’s check, and frozen with it while it waits', async () => {
-    const { board } = await boardNaming(`fsales__${ORDERS}`);
+    const { board } = await boardNaming(`${ORDERS}`);
     const checked = await as('writer', {
       method: 'POST',
       url: '/api/proposals/check',
@@ -418,7 +418,7 @@ describe('the workspace models a proposed dashboard needs (T350, AC-285)', () =>
     // Nor proposed again by itself, nor with another dashboard, which says which.
     const again = await propose('model', await fileIdOf(`cubes/${CUSTOMERS}.yml`));
     expect(again.statusCode, again.body).toBe(409);
-    const other = await boardNaming(`fsales__${ORDERS}`);
+    const other = await boardNaming(`${ORDERS}`);
     const another = await propose('dashboard', other.board);
     expect(another.statusCode, another.body).toBe(409);
     expect(another.json<{ error: string }>().error).toBe(
@@ -436,7 +436,7 @@ describe('the workspace models a proposed dashboard needs (T350, AC-285)', () =>
   });
 
   it('is never approved without them: a model the check refuses keeps the dashboard back too (T451)', async () => {
-    const { board } = await boardNaming(`fsales__${ORDERS}`);
+    const { board } = await boardNaming(`${ORDERS}`);
     const proposed = await propose('dashboard', board);
     expect(proposed.statusCode, proposed.body).toBe(201);
     const { id } = proposed.json<Answered>();
@@ -478,8 +478,8 @@ describe('the workspace models a proposed dashboard needs (T350, AC-285)', () =>
         folderId: ids.project,
         targetFolderId: ids.sales,
         chart: {
-          source: { cube: `fsales__${ORDERS}` },
-          wells: { measures: [`fsales__${ORDERS}.margin`] },
+          source: { cube: `${ORDERS}` },
+          wells: { measures: [`${ORDERS}.margin`] },
         },
       },
     });
@@ -506,7 +506,8 @@ describe('the workspace models a proposed dashboard needs (T350, AC-285)', () =>
     ]);
     try {
       const chart = randomUUID();
-      const full = `f${gone.replaceAll('-', '')}__${MARK}_gone`;
+      // Its one name, wherever it is to go (T709, AC-328).
+      const full = `${MARK}_gone`;
       await docs().create({
         kind: 'chart',
         id: chart,

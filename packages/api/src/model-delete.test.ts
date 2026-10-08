@@ -15,8 +15,9 @@ import { itemsOf } from './xcube/items';
  * refuses one another model item is bound to, and a direct delete applies
  * only if xcube's check of it passes.
  *
- * The stub xcube holds the root's `orders` and /Sales's (`fsales`) `orders`
- * and `summary`, each file its own item.
+ * The stub xcube holds the root's `orders` and /Sales's (`fsales`)
+ * `sales_orders` and `summary`, each file its own item, each under its own
+ * name (T709, R71).
  */
 const config: Config = {
   port: 0,
@@ -32,7 +33,7 @@ const cubeFile = (path: string, name: string, folderId?: string): ModelFile => (
 });
 const FILES = [
   cubeFile('cubes/orders.yml', 'orders'),
-  cubeFile('cubes/orders.yml', 'orders', 'sales'),
+  cubeFile('cubes/sales_orders.yml', 'sales_orders', 'sales'),
   cubeFile('cubes/summary.yml', 'summary', 'sales'),
 ];
 const folders = async () => ({
@@ -139,17 +140,17 @@ describe('deleting a model item (T428, AC-275, AC-291)', () => {
         kind: 'chart',
         id: 'c1',
         title: 'Sales by month',
-        body: { chart: { source: { cube: 'fsales__orders' } } },
+        body: { chart: { source: { cube: 'sales_orders' } } },
       },
       // The root's `orders` is another cube: this one uses nothing of /Sales's.
       { kind: 'chart', id: 'c2', title: 'Orders', body: { chart: { source: { cube: 'orders' } } } },
     ]);
 
-    const response = await remove(app, 'sales', 'cubes/orders.yml');
+    const response = await remove(app, 'sales', 'cubes/sales_orders.yml');
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toEqual({
-      error: '“orders” is still used by the chart “Sales by month”.',
+      error: '“sales_orders” is still used by the chart “Sales by month”.',
       views: [],
       cubes: [],
       charts: [{ id: 'c1', title: 'Sales by month' }],
@@ -167,12 +168,12 @@ describe('deleting a model item (T428, AC-275, AC-291)', () => {
         kind: 'chart',
         id: 'c1',
         title: 'Sales by month',
-        body: { chart: { source: { cube: 'fsales__orders' } } },
+        body: { chart: { source: { cube: 'sales_orders' } } },
       },
     ]);
     const ids = (await folders()).ids;
-    // /Sales's `summary` joins its `orders`, and its view `sales_view` uses it,
-    // as xcube recorded them at their publish.
+    // /Sales's `summary` joins its `sales_orders`, and its view `sales_view`
+    // uses it, as xcube recorded them at their publish.
     stub.holdItems(
       'dev',
       [
@@ -181,21 +182,21 @@ describe('deleting a model item (T428, AC-275, AC-291)', () => {
           folderId: 'fsales',
           name: 'sales_view',
           kind: 'view',
-          yaml: 'views:\n  - name: sales_view\n    cubes:\n      - join_path: orders\n',
+          yaml: 'views:\n  - name: sales_view\n    cubes:\n      - join_path: sales_orders\n',
         },
       ],
       {
-        fsales__summary: { summary: 'fsales__summary', orders: 'fsales__orders' },
-        fsales__sales_view: { sales_view: 'fsales__sales_view', orders: 'fsales__orders' },
+        summary: { summary: 'summary', sales_orders: 'sales_orders' },
+        sales_view: { sales_view: 'sales_view', sales_orders: 'sales_orders' },
       },
     );
 
-    const response = await remove(app, 'sales', 'cubes/orders.yml');
+    const response = await remove(app, 'sales', 'cubes/sales_orders.yml');
 
     expect(response.statusCode, response.body).toBe(409);
     expect(response.json()).toEqual({
       error:
-        '“orders” is still used by the view “sales_view”, the cube “summary” and the chart “Sales by month”.',
+        '“sales_orders” is still used by the view “sales_view”, the cube “summary” and the chart “Sales by month”.',
       views: [{ name: 'sales_view', folderId: 'sales' }],
       cubes: [{ name: 'summary', folderId: 'sales' }],
       charts: [{ id: 'c1', title: 'Sales by month' }],
@@ -213,12 +214,12 @@ describe('deleting a model item (T428, AC-275, AC-291)', () => {
         kind: 'chart',
         id: 'c1',
         title: 'Sales by month',
-        body: { folderId: 'sales', chart: { source: { cube: 'fsales__orders' } } },
+        body: { folderId: 'sales', chart: { source: { cube: 'sales_orders' } } },
       },
     ]);
     const ids = (await folders()).ids;
     stub.holdItems('dev', itemsOf(FILES, ids), {
-      fsales__summary: { summary: 'fsales__summary', orders: 'fsales__orders' },
+      summary: { summary: 'summary', sales_orders: 'sales_orders' },
     });
     const ask = (folder: string, path: string) =>
       app.inject({
@@ -226,10 +227,10 @@ describe('deleting a model item (T428, AC-275, AC-291)', () => {
         url: `/api/model/files/dependents?folder=${folder}&path=${encodeURIComponent(path)}`,
       });
 
-    const used = await ask('sales', 'cubes/orders.yml');
+    const used = await ask('sales', 'cubes/sales_orders.yml');
     expect(used.statusCode, used.body).toBe(200);
     expect(used.json()).toEqual({
-      declares: [{ kind: 'cube', name: 'orders' }],
+      declares: [{ kind: 'cube', name: 'sales_orders' }],
       views: [],
       cubes: [{ name: 'summary', folderId: 'sales', file: 'cubes/summary.yml' }],
       charts: [{ id: 'c1', title: 'Sales by month', folderId: 'sales' }],
@@ -278,22 +279,22 @@ describe('deleting a model item (T428, AC-275, AC-291)', () => {
     stub.refuse([
       {
         folderId: 'fsales',
-        name: 'orders',
+        name: 'sales_orders',
         kind: 'reference',
-        // xcube's wording (research 3a, "Removal and renames").
-        message: "fsales/orders can't be removed or renamed: fsales/summary refer to it",
+        // xcube's wording (research `xcube-256d632371.md`, "Refusals").
+        message: "sales_orders can't be removed: summary refer to it",
       },
     ]);
 
-    const response = await remove(app, 'sales', 'cubes/orders.yml');
+    const response = await remove(app, 'sales', 'cubes/sales_orders.yml');
 
     expect(response.statusCode).toBe(422);
     expect(response.json()).toEqual({
       errors: [
         {
-          path: 'cubes/orders.yml',
+          path: 'cubes/sales_orders.yml',
           folderId: 'sales',
-          message: "fsales/orders can't be removed or renamed: fsales/summary refer to it",
+          message: "sales_orders can't be removed: summary refer to it",
         },
       ],
     });
@@ -402,14 +403,14 @@ describe('renaming a model item (T428, AC-275; T706, AC-423)', () => {
         kind: 'dashboard',
         id: 'd1',
         title: 'Sales',
-        body: { filters: [{ member: 'fsales__orders.status' }] },
+        body: { filters: [{ member: 'sales_orders.status' }] },
       },
     ]);
 
     const response = await app.inject({
       method: 'POST',
       url: '/api/model/publish',
-      payload: { folderId: 'sales', files: [cubeFile('cubes/orders.yml', 'purchases')] },
+      payload: { folderId: 'sales', files: [cubeFile('cubes/sales_orders.yml', 'purchases')] },
     });
     const unused = await app.inject({
       method: 'POST',
@@ -419,7 +420,7 @@ describe('renaming a model item (T428, AC-275; T706, AC-423)', () => {
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toEqual({
-      error: '“orders” has landed, so its name is fixed. Its title can still change.',
+      error: '“sales_orders” has landed, so its name is fixed. Its title can still change.',
     });
     expect(unused.statusCode).toBe(409);
     expect(unused.json()).toEqual({
@@ -432,11 +433,11 @@ describe('renaming a model item (T428, AC-275; T706, AC-423)', () => {
   it('refuses it even when the publish sends the cube that joins to it again (T520’s review)', async () => {
     const { app, stub } = await serving();
     const ids = (await folders()).ids;
-    // /Sales's `summary` joins its `orders`, as xcube recorded at its publish.
+    // /Sales's `summary` joins its `sales_orders`, as xcube recorded at its publish.
     stub.holdItems('dev', itemsOf(FILES, ids), {
-      fsales__summary: { summary: 'fsales__summary', orders: 'fsales__orders' },
+      summary: { summary: 'summary', sales_orders: 'sales_orders' },
     });
-    const renamed = cubeFile('cubes/orders.yml', 'purchases');
+    const renamed = cubeFile('cubes/sales_orders.yml', 'purchases');
 
     const alone = await app.inject({
       method: 'POST',
@@ -445,7 +446,7 @@ describe('renaming a model item (T428, AC-275; T706, AC-423)', () => {
     });
     expect(alone.statusCode).toBe(409);
     expect(alone.json<{ error: string }>().error).toBe(
-      '“orders” has landed, so its name is fixed. Its title can still change.',
+      '“sales_orders” has landed, so its name is fixed. Its title can still change.',
     );
 
     // With `summary` sent again, joined to the new name: still a rename of a
@@ -467,7 +468,7 @@ describe('renaming a model item (T428, AC-275; T706, AC-423)', () => {
     });
     expect(together.statusCode, together.body).toBe(409);
     expect(together.json<{ error: string }>().error).toBe(
-      '“orders” has landed, so its name is fixed. Its title can still change.',
+      '“sales_orders” has landed, so its name is fixed. Its title can still change.',
     );
     await app.close();
   });

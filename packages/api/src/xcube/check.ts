@@ -96,17 +96,12 @@ export async function checkWithXcube({
   const served = plainYamlOf(
     draft.filter((file) => (file.folderId ?? ROOT_FOLDER_ID) === ROOT_FOLDER_ID),
   );
-  // Each folder's rollups, probed by their cube's full name (T452; research
-  // 3a: "Probe queries use full names"): a folder's own `orders` is
-  // `<folderId>__orders` there.
+  // Each folder's rollups, probed by their cube's own name, which is the
+  // same in every folder (T452, T709; research `xcube-256d632371.md`, 1.1).
   const owners: FolderOwner[] = [...folders].flatMap(([folderId, xcubeId]) =>
     rollupOwnersOf(
       plainYamlOf(draft.filter((file) => (file.folderId ?? ROOT_FOLDER_ID) === folderId)),
-    ).map((owner) =>
-      xcubeId === XCUBE_ROOT
-        ? owner
-        : { ...owner, folderId, probe: fullNamed(owner.probe, xcubeId) },
-    ),
+    ).map((owner) => (xcubeId === XCUBE_ROOT ? owner : { ...owner, folderId })),
   );
   const probes = owners.map((owner, at) => ({ id: `rollups-${String(at)}`, query: owner.probe }));
 
@@ -296,13 +291,6 @@ export async function checkWithXcube({
 
 /** A cube with rollups, and the folder holding its file where that isn't the root (T452). */
 type FolderOwner = RollupOwner & { readonly folderId?: string };
-
-/** A probe's members under their cube's full name in a folder: `<folderId>__<cube>.<member>`. */
-function fullNamed(probe: RollupOwner['probe'], xcubeId: string): RollupOwner['probe'] {
-  return 'measures' in probe
-    ? { measures: probe.measures.map((member) => `${xcubeId}__${member}`) }
-    : { dimensions: probe.dimensions.map((member) => `${xcubeId}__${member}`) };
-}
 
 function verdictOf(
   owners: readonly FolderOwner[],

@@ -30,7 +30,8 @@ import { buildServer } from '../server';
  */
 const MARK = `cr${randomUUID().replaceAll('-', '').slice(0, 8)}`;
 const CUBE = `${MARK}_orders`;
-const FULL = `fsales__${CUBE}`;
+/** As xcube serves it: under its own name, as in every folder (T709, AC-328). */
+const FULL = CUBE;
 const PATH = `cubes/${CUBE}.yml`;
 const MODEL_YAML = `cubes:\n  - name: ${CUBE}\n    sql_table: public.orders\n    measures:\n      - name: count\n        type: count\n`;
 
@@ -279,10 +280,10 @@ describe('a calculation request (T383, AC-050)', () => {
     // Another's workspace chart is one that isn't there.
     expect((await ask('writer', valid)).statusCode).toBe(404);
     expect((await ask('manager', { ...valid, chartId: randomUUID() })).statusCode).toBe(404);
-    const unknown = await ask('manager', { ...valid, cube: `fsales__${MARK}_nothing` });
+    const unknown = await ask('manager', { ...valid, cube: `${MARK}_nothing` });
     expect(unknown.statusCode, unknown.body).toBe(409);
     expect(unknown.json<{ error: string }>().error).toBe(
-      `No shared folder’s model defines fsales__${MARK}_nothing, so there is no one to ask. A cube of your own workspace is yours to change.`,
+      `No shared folder’s model defines ${MARK}_nothing, so there is no one to ask. A cube of your own workspace is yours to change.`,
     );
     expect((await ask('manager', { ...valid, description: '  ' })).statusCode).toBe(400);
     // The Propose dialog's limit (references.md): nothing silently cut.
@@ -392,7 +393,7 @@ describe('a calculation request taken up (T384, AC-051)', () => {
     ]);
     const asked = await ask('manager', {
       chartId: ids.chart,
-      cube: `fsales__${cube}`,
+      cube,
       fields: FIELDS,
       description: `On ${name} (${MARK})`,
     });
@@ -416,7 +417,7 @@ describe('a calculation request taken up (T384, AC-051)', () => {
     expect(taken.json()).toEqual({
       folderId: ids.sales,
       modelPath: `models/${cube}.yml`,
-      cube: `fsales__${cube}`,
+      cube,
     });
   });
 

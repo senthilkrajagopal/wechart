@@ -1,6 +1,3 @@
-import { shortOf } from '../model/bind';
-import { XCUBE_ROOT } from '../xcube/folders';
-
 /**
  * Rebinding in a workspace's previews (T542, AC-281; the user's answer
  * "Rebind in the workspace", R53).
@@ -18,18 +15,18 @@ import { XCUBE_ROOT } from '../xcube/folders';
  *
  * The query Cube is asked names the overlay's cubes; its answer comes back
  * under the names the item holds, so its tiles read it as they always did.
+ *
+ * With one name per item (R71, T709) an overlay's item is served under its
+ * own name wherever it places it, standing in for the published item of
+ * that name (research `xcube-256d632371.md`, 2.6): each name maps to
+ * itself, and no query is renamed. T716 retires this module.
  */
 
-/** An overlay's own cubes and views by short name: each one's full name where it places it. */
+/** An overlay's own cubes and views by name: each one's published name, its own (T709). */
 export function rebindsOf(
   upserts: readonly { readonly folderId: string; readonly name: string }[],
 ): ReadonlyMap<string, string> {
-  return new Map(
-    upserts.map((each) => [
-      each.name,
-      each.folderId === XCUBE_ROOT ? each.name : `${each.folderId}__${each.name}`,
-    ]),
-  );
+  return new Map(upserts.map((each) => [each.name, each.name]));
 }
 
 const isPlain = (value: unknown): value is Record<string, unknown> =>
@@ -133,7 +130,7 @@ export function reboundQuery(
 ): { query: Record<string, unknown>; back: Back } {
   const renames = new Map<string, string>();
   for (const cube of namedIn(query)) {
-    const own = rebinds.get(shortOf(cube));
+    const own = rebinds.get(cube);
     if (own !== undefined && own !== cube) renames.set(cube, own);
   }
   if (renames.size === 0) return { query, back: new Map() };

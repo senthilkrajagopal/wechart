@@ -28,12 +28,12 @@ const WITHIN_MS: Readonly<Record<string, number>> = {
 const OUTCOMES = new Set(['done', 'failed', 'cancelled', 'expired', 'open']);
 const NOT_FOUND = { error: 'There’s no build by that id in your folders.' };
 
-/** A published pre-aggregation's name as people see it: its cube's short name, and its own (T371). */
+/**
+ * A published pre-aggregation's name as people see it (T371): as published,
+ * every cube being under its own name (T709, AC-328).
+ */
 export function shownNameOf(preAggregation: string): string {
-  const dot = preAggregation.lastIndexOf('.');
-  const cube = dot < 0 ? preAggregation : preAggregation.slice(0, dot);
-  const own = dot < 0 ? '' : preAggregation.slice(dot);
-  return `${cube.replace(/^f[0-9a-z]+__/, '')}${own}`;
+  return preAggregation;
 }
 
 export function registerBuildHistory(

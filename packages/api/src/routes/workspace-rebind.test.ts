@@ -19,17 +19,17 @@ import { buildServer } from '../server';
 import { xcubeAdmin } from '../xcube/client';
 import { fakeXcube, FAKE_ADMIN_TOKEN } from '../xcube/fake';
 import { proposalOverlayIdOf, workspaceOverlayIdOf } from '../xcube/overlays';
-import { removeProjectFolders } from './project-folder.fixture';
+import { removeProjectFolders, TEST_TIME_ZONE } from './project-folder.fixture';
 
 /**
- * T542 (AC-281, AC-323; the user's answer "Rebind in the workspace", R53):
- * a tile saved against a path's cube, `fsales__orders`, keeps that name. Once
- * the workspace makes its own `orders` — here to go to /Ops, off /Sales's
- * path — its previews resolve the stored name again by its short name, and
- * the workspace's cube answers; the tile reads the answer under the name it
- * holds. A shared item's queries are as they were. A proposal's previews
- * rebind through the proposal's overlay, and its dashboard takes the model
- * with it (AC-285).
+ * T542 (AC-281, AC-323), under one name per item (R71, T709): a tile saved
+ * against /Sales's `orders` keeps that name, which is the cube's in every
+ * folder. Once the workspace holds its copy of `orders`, its previews ask
+ * the same name through the workspace's overlay, where the copy stands in
+ * for the landed cube (research `xcube-256d632371.md`, 2.6); the tile reads
+ * the answer under the name it holds. A shared item's queries are as they
+ * were. A proposal's previews go through the proposal's overlay, and its
+ * dashboard takes the copy it names with it (AC-285).
  *
  * Against the suite's database, the stub xcube, and a stub Cube that answers
  * each query with a row under the members it was asked for.
@@ -220,7 +220,7 @@ const as = (who: string, options: InjectOptions) =>
   app.inject({ ...options, headers: { ...options.headers, cookie: cookies[who]! } });
 
 /** A dashboard in `folderId` (going to `target`, in the workspace), its own tile on `cubeName`, /Sales's orders unless named. */
-async function boardIn(folderId: string, target?: string, cubeName = `fsales__${ORDERS}`) {
+async function boardIn(folderId: string, target?: string, cubeName = ORDERS) {
   const board = randomUUID();
   const chart = randomUUID();
   await docs().create({
@@ -257,25 +257,37 @@ const load = (who: string, item: { kind: string; id: string }) =>
   as(who, {
     method: 'POST',
     url: '/api/load',
-    payload: { query: { measures: [`fsales__${ORDERS}.count`] }, for: item },
+    payload: { query: { measures: [`${ORDERS}.count`] }, for: item },
   });
 
 describe('a workspace item’s stored names, rebound in its previews (T542, AC-281)', () => {
-  it('ask the path’s cube while the workspace has none of the name', async () => {
+  it('ask the landed cube while the workspace has none of the name', async () => {
     asked.length = 0;
     const answer = await load('writer', { kind: 'dashboard', id: ids.board });
     expect(answer.statusCode, answer.body).toBe(200);
-    expect(asked.at(-1)?.query['measures']).toEqual([`fsales__${ORDERS}.count`]);
+    expect(asked.at(-1)?.query['measures']).toEqual([`${ORDERS}.count`]);
   });
 
-  it('ask the workspace’s own cube of the name once it has one, wherever it goes, and answer under the stored name', async () => {
+  it('ask the name through the overlay once the workspace holds its copy, and answer under the stored name', async () => {
+    // The workspace's copy of /Sales's `orders`, changed: its name is the original's (R71 5).
+    const copied = await as('writer', {
+      method: 'POST',
+      url: '/api/workspace/copies',
+      payload: {
+        kind: 'model',
+        folderId: ids.sales,
+        path: `cubes/${ORDERS}.yml`,
+        timeZone: TEST_TIME_ZONE,
+      },
+    });
+    expect([200, 201], copied.body).toContain(copied.statusCode);
     const saved = await as('writer', {
       method: 'POST',
       url: '/api/model/publish',
       payload: {
-        folderId: ids.project,
+        folderId: copied.json<{ folderId: string }>().folderId,
         files: [{ path: `cubes/${ORDERS}.yml`, content: cube(ORDERS, '    description: Mine\n') }],
-        targetFolderId: ids.ops,
+        targetFolderId: ids.sales,
       },
     });
     expect(saved.statusCode, saved.body).toBe(200);
@@ -284,7 +296,7 @@ describe('a workspace item’s stored names, rebound in its previews (T542, AC-2
     const answer = await load('writer', { kind: 'dashboard', id: ids.board });
     expect(answer.statusCode, answer.body).toBe(200);
     expect(asked.at(-1)).toEqual({
-      query: { measures: [`fops__${ORDERS}.count`] },
+      query: { measures: [`${ORDERS}.count`] },
       overlay: workspaceOverlayIdOf(ids.workspace),
     });
     // The tile reads it under the name it holds.
@@ -293,42 +305,24 @@ describe('a workspace item’s stored names, rebound in its previews (T542, AC-2
       annotation: { measures: Record<string, unknown> };
       query: { measures: string[] };
     }>();
-    expect(body.data).toEqual([{ [`fsales__${ORDERS}.count`]: '7' }]);
-    expect(Object.keys(body.annotation.measures)).toEqual([`fsales__${ORDERS}.count`]);
-    expect(body.query.measures).toEqual([`fsales__${ORDERS}.count`]);
+    expect(body.data).toEqual([{ [`${ORDERS}.count`]: '7' }]);
+    expect(Object.keys(body.annotation.measures)).toEqual([`${ORDERS}.count`]);
+    expect(body.query.measures).toEqual([`${ORDERS}.count`]);
   });
 
-  // T542's review: a chart drawn before the workspace's cube, given a member after.
-  it('ask a member named both ways once, and answer it under both', async () => {
-    asked.length = 0;
-    const answer = await as('writer', {
-      method: 'POST',
-      url: '/api/load',
-      payload: {
-        query: { measures: [`fsales__${ORDERS}.count`, `fops__${ORDERS}.count`] },
-        for: { kind: 'dashboard', id: ids.board },
-      },
-    });
-    expect(answer.statusCode, answer.body).toBe(200);
-    expect(asked.at(-1)?.query).toEqual({ measures: [`fops__${ORDERS}.count`] });
-    expect(answer.json<{ data: unknown[] }>().data).toEqual([
-      { [`fsales__${ORDERS}.count`]: '7', [`fops__${ORDERS}.count`]: '7' },
-    ]);
-  });
-
-  it('show the SQL of the workspace’s own cube', async () => {
+  it('show the SQL of the workspace’s copy, through the overlay', async () => {
     asked.length = 0;
     const answer = await as('writer', {
       method: 'POST',
       url: '/api/sql',
       payload: {
-        query: { measures: [`fsales__${ORDERS}.count`] },
+        query: { measures: [`${ORDERS}.count`] },
         for: { kind: 'dashboard', id: ids.board },
       },
     });
     expect(answer.statusCode, answer.body).toBe(200);
     expect(asked.at(-1)).toEqual({
-      query: { measures: [`fops__${ORDERS}.count`] },
+      query: { measures: [`${ORDERS}.count`] },
       overlay: workspaceOverlayIdOf(ids.workspace),
     });
   });
@@ -338,46 +332,18 @@ describe('a workspace item’s stored names, rebound in its previews (T542, AC-2
     const answer = await load('writer', { kind: 'dashboard', id: ids.shared });
     expect(answer.statusCode, answer.body).toBe(200);
     expect(asked.at(-1)).toEqual({
-      query: { measures: [`fsales__${ORDERS}.count`] },
+      query: { measures: [`${ORDERS}.count`] },
       overlay: undefined,
     });
   });
 
   /**
-   * T542's review: a dashboard holding /Sales's name lands bound to /Sales's
-   * cube (T502), never through a model going to /Ops, so none goes with it,
-   * and its review shows what would land.
+   * A dashboard naming the cube the workspace holds a copy of was drawn
+   * through the workspace, so the copy goes with it (AC-285), to the folder
+   * it came from; the review previews through the proposal's overlay.
    */
-  it('go to a proposal without the workspace’s cube they rebind to, which the landed item won’t use', async () => {
-    const proposed = await as('writer', {
-      method: 'POST',
-      url: '/api/proposals',
-      payload: { kind: 'dashboard', id: ids.board },
-    });
-    expect(proposed.statusCode, proposed.body).toBe(201);
-    const proposal = proposed.json<{ id: string; items: { kind: string; landsIn: string }[] }>();
-    expect(proposal.items.map(({ kind, landsIn }) => ({ kind, landsIn }))).toEqual([
-      { kind: 'dashboard', landsIn: ids.sales },
-      { kind: 'chart', landsIn: ids.sales },
-    ]);
-    asked.length = 0;
-    const answer = await load('writer', { kind: 'proposal', id: proposal.id });
-    expect(answer.statusCode, answer.body).toBe(200);
-    expect(asked.at(-1)).toEqual({
-      query: { measures: [`fsales__${ORDERS}.count`] },
-      overlay: undefined,
-    });
-    const withdrawn = await as('writer', {
-      method: 'POST',
-      url: `/api/proposals/${proposal.id}/reject`,
-      payload: {},
-    });
-    expect(withdrawn.statusCode, withdrawn.body).toBe(200);
-  });
-
-  it('rebind in a proposal’s previews, through the model a tile names going with it (AC-323, AC-285)', async () => {
-    // A tile drawn once the workspace's cube was made: it names that one.
-    const board = await boardIn(ids.project, ids.sales, `fops__${ORDERS}`);
+  it('go to a proposal with the copy of the cube its tile names, previewed through the proposal’s overlay (AC-323, AC-285)', async () => {
+    const board = await boardIn(ids.project, ids.sales);
     const proposed = await as('writer', {
       method: 'POST',
       url: '/api/proposals',
@@ -388,18 +354,17 @@ describe('a workspace item’s stored names, rebound in its previews (T542, AC-2
     expect(proposal.items.map(({ kind, landsIn }) => ({ kind, landsIn }))).toEqual([
       { kind: 'dashboard', landsIn: ids.sales },
       { kind: 'chart', landsIn: ids.sales },
-      { kind: 'model', landsIn: ids.ops },
+      { kind: 'model', landsIn: ids.sales },
     ]);
 
-    // A stored name of the short name resolves in its overlay first.
     asked.length = 0;
     const answer = await load('writer', { kind: 'proposal', id: proposal.id });
     expect(answer.statusCode, answer.body).toBe(200);
     expect(asked.at(-1)).toEqual({
-      query: { measures: [`fops__${ORDERS}.count`] },
+      query: { measures: [`${ORDERS}.count`] },
       overlay: proposalOverlayIdOf(proposal.id),
     });
-    expect(answer.json<{ data: unknown[] }>().data).toEqual([{ [`fsales__${ORDERS}.count`]: '7' }]);
+    expect(answer.json<{ data: unknown[] }>().data).toEqual([{ [`${ORDERS}.count`]: '7' }]);
 
     const withdrawn = await as('writer', {
       method: 'POST',

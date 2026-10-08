@@ -585,11 +585,12 @@ describe('copy on move and at approval (T537, AC-371)', () => {
 /**
  * T537's review: a copy made on a folder move is bound on the dashboard's
  * path as it will be once the move is pushed to xcube, not as xcube's tree
- * has it before the move. Against the stub xcube:
+ * has it before the move. Each name is one item's (T709, R71). Against the
+ * stub xcube:
  *
- *   /P <run>      fp: its own `orders` and `widgets`    writer read-write
+ *   /P <run>      fp: `p_widgets`                       writer read-write
  *   /P/Q, /P/Q2   fq, fq2
- *   /R <run>      fr: its own `orders`                  writer read-write
+ *   /R <run>      fr: `r_orders`                        writer read-write
  *   the root      froot: `orders`
  */
 describe('copies bound where a moved folder goes (T537, AC-371, AC-272)', () => {
@@ -612,8 +613,8 @@ describe('copies bound where a moved folder goes (T537, AC-371, AC-272)', () => 
         folderId: at.p,
         chart: { source: { cube }, wells: { measures: [`${cube}.count`] } },
       });
-    at.orders = await chart('P’s orders', 'fp__orders');
-    at.widgets = await chart('P’s widgets', 'fp__widgets');
+    at.orders = await chart('P’s orders', 'orders');
+    at.widgets = await chart('P’s widgets', 'p_widgets');
 
     const stub = fakeXcube();
     const admin = xcubeAdmin({
@@ -637,9 +638,8 @@ describe('copies bound where a moved folder goes (T537, AC-371, AC-272)', () => 
     });
     stub.holdItems('dev', [
       cube('froot', 'orders'),
-      cube('fp', 'orders'),
-      cube('fp', 'widgets'),
-      cube('fr', 'orders'),
+      cube('fp', 'p_widgets'),
+      cube('fr', 'r_orders'),
     ]);
     bound = buildServer({
       config: secured,
@@ -685,8 +685,8 @@ describe('copies bound where a moved folder goes (T537, AC-371, AC-272)', () => 
     expect(answer.statusCode, answer.body).toBe(200);
     const [shown] = tilesOf((await stored('dashboard', onQ)).body);
     expect(shown).not.toBe(at.orders);
-    // Q, then R, then the root: R's own `orders`, never P's.
-    expect(await cubeOf(shown!)).toBe('fr__orders');
+    // Q, then R, then the root: the root's `orders`, under its own name.
+    expect(await cubeOf(shown!)).toBe('orders');
   });
 
   it('refuses a move whose copy its new path can’t bind, and moves nothing', async () => {
@@ -699,8 +699,8 @@ describe('copies bound where a moved folder goes (T537, AC-371, AC-272)', () => 
     });
     expect(answer.statusCode, answer.body).toBe(422);
     expect(answer.json<{ error: string; names: string[] }>()).toEqual({
-      error: `Moved, “On Q2 ${MARK}” would show “P’s widgets ${MARK}” from off its folder’s path, and its own copy can’t be bound there: no folder on its path holds “widgets”. Nothing was moved.`,
-      names: ['widgets'],
+      error: `Moved, “On Q2 ${MARK}” would show “P’s widgets ${MARK}” from off its folder’s path, and its own copy can’t be bound there: no folder on its path holds “p_widgets”. Nothing was moved.`,
+      names: ['p_widgets'],
     });
     expect((await stored('folder', at.q2)).body['folderId']).toBe(at.p);
     expect(await stored('dashboard', onQ2)).toEqual(before);

@@ -8,9 +8,10 @@ import { ROOT_FOLDER_ID } from '../repos/catalog';
  * wechart's folders as xcube knows them (T425, AC-328).
  *
  * A folder's name in xcube is an id of `f` and 1–40 lower-case letters and
- * digits, the root `froot` (research `xcube-slice-3a.md`, "Names"). It names
- * every item in the folder (`<folderId>__<shortName>`), so it is stored and
- * never reused, and never changed by a rename or a move (R30). A folder named
+ * digits, the root `froot` (research `xcube-slice-3a.md`, "Names"). It is
+ * stored and never reused, and never changed by a rename or a move (R30).
+ * It names no item: every item is served under its own name (T709; research
+ * `xcube-256d632371.md`, 1.1). A folder named
  * by a UUID — every folder made in the app — takes `f` and the UUID's 32 hex
  * digits; any other (a seed's) is given one of the same form, stored
  * (`repos/folder-xcube-ids.ts`).

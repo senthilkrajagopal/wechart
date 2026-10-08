@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { USER } from '../auth/guard';
 import type { CubeClient } from '../cube/client';
 import { refreshKeySqlOf } from '../model/refreshKeys';
-import { filesInFolders, fileOf, pathsByName } from '../model/split';
+import { declaredIn, filesInFolders, fileOf, pathsByName } from '../model/split';
 import { ROOT_FOLDER_ID } from '../repos/catalog';
 import type { ModelFile } from '../server';
 import type { PublishedFolders } from '../xcube/folders';
@@ -106,7 +106,7 @@ function scheduleOf(
 export function schedulesFrom(
   meta: unknown,
   files: readonly ModelFile[] = [],
-  /** Each published folder's xcube id, by wechart's folder id: its cubes' prefix (T450's review). */
+  /** Each published folder's xcube id, by wechart's folder id: whose files are served (T450's review). */
   folders: ReadonlyMap<string, string> = new Map(),
   /** Where each cube is published (T371); none, and rows name no folder. */
   placed?: (cube: Record<string, unknown>) => Placement,
@@ -119,17 +119,21 @@ export function schedulesFrom(
   const stored = pathsByName(
     files.filter((file) => (file.folderId ?? ROOT_FOLDER_ID) === ROOT_FOLDER_ID),
   );
-  // A folder's cube is `<xcubeId>__<name>` (T450's review): its folder, and the name its file declares.
-  const folderOfXcube = new Map([...folders].map(([folderId, xcubeId]) => [xcubeId, folderId]));
+  // A cube's folder is the published one whose file declares its name, one
+  // per model (T709, AC-328); the root's where none does.
+  const declaring = new Map<string, string>();
+  for (const file of files) {
+    const folderId = file.folderId ?? ROOT_FOLDER_ID;
+    if (folderId !== ROOT_FOLDER_ID && !folders.has(folderId)) continue;
+    for (const { name } of declaredIn(file.content))
+      if (!declaring.has(name)) declaring.set(name, folderId);
+  }
   const fileIn = filesInFolders(files);
   const model = modelKeysOf(files);
-  const homeOf = (name: string) => {
-    const at = name.indexOf('__');
-    const folderId = at > 0 ? folderOfXcube.get(name.slice(0, at)) : undefined;
-    return folderId === undefined
-      ? { folderId: ROOT_FOLDER_ID, shortName: name }
-      : { folderId, shortName: name.slice(at + 2) };
-  };
+  const homeOf = (name: string) => ({
+    folderId: declaring.get(name) ?? ROOT_FOLDER_ID,
+    shortName: name,
+  });
   return cubes.flatMap((cube: unknown) => {
     const value = asValue(cube);
     const all = value?.['preAggregations'];

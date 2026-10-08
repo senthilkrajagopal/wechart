@@ -19,7 +19,7 @@ import {
   type Replaces,
 } from '../repos/proposals';
 import type { VersionKind, VersionStore } from '../repos/versions';
-import { cubesOfChart, cubesOfDashboard, shortOf, xcubeFolderOf } from '../model/bind';
+import { cubesOfChart, cubesOfDashboard } from '../model/bind';
 import type { LandingModel } from '../model/landing';
 import { heldIn, namesDeclaredIn, type Names } from '../model/names';
 import { declaredIn } from '../model/split';
@@ -172,8 +172,15 @@ export interface ProposalRoutes {
    * binding one otherwise is refused. Unset, nothing is compared.
    */
   readonly bindings?: ProposalBindingStore;
-  /** wechart's folder by its xcube id, to say where a name binds (T456). */
-  readonly folderOfXcube?: (xcubeId: string) => Promise<string | undefined>;
+  /**
+   * The shared folder holding the cube or view, or the data source, of a
+   * name, to say where a name binds (T456): a name is one item's, holding
+   * no folder of its own (T709, R71). None where none holds it.
+   */
+  readonly folderOfName?: (
+    kind: 'cube' | 'dataSource',
+    name: string,
+  ) => Promise<string | undefined>;
   /**
    * What else waits for the user, counted with the proposals in the top bar's
    * Reviews count (R60, amending AC-287 and rule 76): the open calculation
@@ -557,7 +564,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
         : typeof chart?.source?.cube === 'string' && chart.source.cube !== ''
           ? [cubesOfChart(chart).source, ...cubesOfChart(chart).others]
           : [];
-    return { bindings: Object.fromEntries(names.map((name) => [shortOf(name), name])) };
+    return { bindings: Object.fromEntries(names.map((name) => [name, name])) };
   };
 
   /**
@@ -636,14 +643,10 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
             : [{ item, names, ...(source === undefined ? {} : { dataSource: source }) }];
         });
 
-  /** Where a full name binds, as a refusal says it: "the one in Sales / EMEA". */
-  const whereBound = async (full: string) => {
-    const xcubeId = xcubeFolderOf(full);
-    if (xcubeId === null) return 'the one in Shared';
-    const folderId = await routes.folderOfXcube?.(xcubeId);
-    return folderId === undefined
-      ? 'one in a folder no longer there'
-      : `the one in ${await pathOf(folderId)}`;
+  /** Where a name binds, as a refusal says it: "the one in Sales / EMEA". */
+  const whereBound = async (name: string, kind: 'cube' | 'dataSource' = 'cube') => {
+    const folderId = await routes.folderOfName?.(kind, name);
+    return folderId === undefined ? 'one no longer there' : `the one in ${await pathOf(folderId)}`;
   };
 
   /**
@@ -667,7 +670,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
           const sourceOf = async (full: string | null) =>
             full === null
               ? 'the one it extends'
-              : `“${shortOf(full)}”, ${(await whereBound(full)).replace(/^the one /, '')}`;
+              : `“${full}”, ${(await whereBound(full, 'dataSource')).replace(/^the one /, '')}`;
           clauses.push(
             `its data source would be ${await sourceOf(dataSource.now)}, not ${await sourceOf(dataSource.was)}`,
           );

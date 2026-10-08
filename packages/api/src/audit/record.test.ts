@@ -131,10 +131,11 @@ describe('a build started or cancelled in one line (T505)', () => {
     expect(buildCancelledSummary('stalled', null, null)).toBe('Stalled · whole');
   });
 
-  it('names a pre-aggregation by its cube’s short name, never its folder’s prefix', () => {
-    expect(preAggregationItem('f9a1b2__orders.by_month')).toEqual({
+  // A cube's name holds no folder, in any folder (T709, AC-328).
+  it('names a pre-aggregation by its cube’s name and its own', () => {
+    expect(preAggregationItem('orders.by_month')).toEqual({
       kind: 'pre-aggregation',
-      id: 'f9a1b2__orders.by_month',
+      id: 'orders.by_month',
       title: 'orders.by_month',
     });
   });
@@ -143,7 +144,7 @@ describe('a build started or cancelled in one line (T505)', () => {
 describe('a wechart schedule’s change (T505)', () => {
   const settings = {
     name: 'Month-end close',
-    preAggregation: 'f9a1b2__orders.by_month',
+    preAggregation: 'orders.by_month',
     cron: '0 6 1 * *',
     timezone: 'Europe/Berlin',
     missed: 'once' as const,

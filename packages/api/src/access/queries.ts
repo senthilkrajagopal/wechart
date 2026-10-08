@@ -110,8 +110,8 @@ export const cubesOfDashboardBody = (body: Record<string, unknown>): string[] =>
 
 /**
  * The cubes and views on a folder's path, by their published names: those
- * declared in each folder from it up to the root, the root's bare and
- * another folder's `<folderId>__<name>` (AC-328), as the editor's picker
+ * declared in each folder from it up to the root, each under its own name in
+ * every folder (T709, AC-328), as the editor's picker
  * offers them (AC-329). A folder off the published tree (a workspace's)
  * reaches the shared root's alone, as its picker does.
  */
@@ -134,15 +134,8 @@ export async function cubesOnPath(
     ? chain.filter((each) => published.ids.has(each))
     : [ROOT_FOLDER_ID];
   const names = new Set<string>();
-  for (const each of path) {
-    const xcubeId = published.ids.get(each);
+  for (const each of path)
     for (const file of await filesOf(each))
-      for (const object of objectsOf(file.path, file.content).objects)
-        names.add(
-          each === ROOT_FOLDER_ID || xcubeId === undefined
-            ? object.name
-            : `${xcubeId}__${object.name}`,
-        );
-  }
+      for (const object of objectsOf(file.path, file.content).objects) names.add(object.name);
   return names;
 }

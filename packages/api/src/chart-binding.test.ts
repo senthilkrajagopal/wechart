@@ -8,12 +8,12 @@ import type { Item } from './xcube/items';
 
 /**
  * T429, AC-272, through the routes that publish a chart or a dashboard: a
- * save into a folder stores each cube it names as bound there, nearest
- * first; one naming a cube no folder on its path holds is refused, naming it,
- * and nothing is written.
+ * save into a folder stores each cube it names as bound there, under its own
+ * name (T709, R71); one naming a cube no folder on its path holds is
+ * refused, naming it, and nothing is written.
  *
- * The stub xcube holds the root's `sales`, /A's (`fa`) and /A/B's (`fab`),
- * and `widgets` in /A/D (`fad`), /A/B's sibling.
+ * The stub xcube holds the root's `sales`, /A's (`fa`) `a_sales`, /A/B's
+ * (`fab`) `ab_sales`, and `widgets` in /A/D (`fad`), /A/B's sibling.
  */
 const config: Config = {
   port: 0,
@@ -69,8 +69,8 @@ async function serving({ down = false, withNew = false } = {}) {
   await admin.folders(TREE);
   stub.holdItems('dev', [
     item('froot', 'sales'),
-    item('fa', 'sales'),
-    item('fab', 'sales'),
+    item('fa', 'a_sales'),
+    item('fab', 'ab_sales'),
     item('fad', 'widgets'),
   ]);
   stub.down(down);
@@ -138,18 +138,20 @@ const chartBody = (folder: Record<string, string>, cube: string) => ({
 });
 
 describe('a chart or dashboard published into a folder, bound there (T429, AC-272)', () => {
-  it('stores a chart saved into /A/B with /A/B’s `sales`, not /A’s or the root’s', async () => {
+  it('stores a chart saved into /A/B on /A/B’s, /A’s or the root’s cube under its own name', async () => {
     const { app, written, stored } = await serving();
-    stored['c1'] = chartBody({ folderId: 'b' }, 'sales');
+    for (const cube of ['ab_sales', 'a_sales', 'sales']) {
+      stored['c1'] = chartBody({ folderId: 'b' }, cube);
 
-    const response = await app.inject({
-      method: 'PUT',
-      url: '/api/documents/chart/c1',
-      payload: { body: chartBody({ folderId: 'b' }, 'sales'), version: 5 },
-    });
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/api/documents/chart/c1',
+        payload: { body: chartBody({ folderId: 'b' }, cube), version: 5 },
+      });
 
-    expect(response.statusCode, response.body).toBe(200);
-    expect(written.map((each) => each.body)).toEqual([chartBody({ folderId: 'b' }, 'fab__sales')]);
+      expect(response.statusCode, response.body).toBe(200);
+      expect(written.at(-1)?.body).toEqual(chartBody({ folderId: 'b' }, cube));
+    }
     await app.close();
   });
 
@@ -174,7 +176,7 @@ describe('a chart or dashboard published into a folder, bound there (T429, AC-27
 
   it('binds a dashboard’s local chart and its own filters in the dashboard’s folder', async () => {
     const { app, written, stored } = await serving();
-    stored['c1'] = chartBody({ localToDashboardId: 'd1' }, 'sales');
+    stored['c1'] = chartBody({ localToDashboardId: 'd1' }, 'a_sales');
     stored['d1'] = { title: 'Revenue', folderId: 'a' };
 
     const response = await app.inject({
@@ -185,21 +187,23 @@ describe('a chart or dashboard published into a folder, bound there (T429, AC-27
           body: {
             title: 'Revenue',
             folderId: 'a',
-            filters: [{ id: 'f1', widget: 'list', member: 'sales.region' }],
+            filters: [{ id: 'f1', widget: 'list', member: 'a_sales.region' }],
           },
           version: 5,
         },
-        charts: [{ id: 'c1', body: chartBody({ localToDashboardId: 'd1' }, 'sales'), version: 5 }],
+        charts: [
+          { id: 'c1', body: chartBody({ localToDashboardId: 'd1' }, 'a_sales'), version: 5 },
+        ],
       },
     });
 
     expect(response.statusCode, response.body).toBe(200);
     expect(written.map((each) => each.body)).toEqual([
-      chartBody({ localToDashboardId: 'd1' }, 'fa__sales'),
+      chartBody({ localToDashboardId: 'd1' }, 'a_sales'),
       {
         title: 'Revenue',
         folderId: 'a',
-        filters: [{ id: 'f1', widget: 'list', member: 'fa__sales.region' }],
+        filters: [{ id: 'f1', widget: 'list', member: 'a_sales.region' }],
       },
     ]);
     await app.close();
@@ -223,8 +227,8 @@ describe('a chart or dashboard published into a folder, bound there (T429, AC-27
   // T429's review: Explore's Move publishes the item into its new folder.
   it('binds a chart moved into /A/B there, and refuses a move to where its cube isn’t', async () => {
     const { app, written, relocated, stored } = await serving();
-    stored['c1'] = chartBody({ folderId: 'a' }, 'fa__sales');
-    stored['c2'] = chartBody({ folderId: 'd' }, 'fad__widgets');
+    stored['c1'] = chartBody({ folderId: 'a' }, 'a_sales');
+    stored['c2'] = chartBody({ folderId: 'd' }, 'widgets');
 
     const moved = await app.inject({
       method: 'PATCH',
@@ -238,30 +242,25 @@ describe('a chart or dashboard published into a folder, bound there (T429, AC-27
     });
 
     expect(moved.statusCode, moved.body).toBe(200);
-    expect(written).toEqual([
-      {
-        kind: 'chart',
-        id: 'c1',
-        body: chartBody({ folderId: 'b' }, 'fab__sales'),
-        expectedVersion: 5,
-      },
-    ]);
+    // Its names bound as they were: moved, and nothing of it rewritten (T709).
+    expect(written).toEqual([]);
+    expect(relocated).toEqual([{ kind: 'chart', id: 'c1', folderId: 'b' }]);
     expect(refused.statusCode).toBe(422);
     expect(refused.json()).toEqual({
       error: 'No folder on this chart’s path holds “widgets”.',
       names: ['widgets'],
     });
-    expect(relocated).toEqual([]);
     await app.close();
   });
 
   it('binds a moved dashboard’s filters and its own charts in its new folder, together', async () => {
     const { app, written, stored } = await serving();
-    stored['c1'] = chartBody({ localToDashboardId: 'd1' }, 'sales');
+    // Stored in another case: the move stores each name as its item holds it.
+    stored['c1'] = chartBody({ localToDashboardId: 'd1' }, 'Sales');
     stored['d1'] = {
       title: 'Revenue',
       folderId: 'root',
-      filters: [{ id: 'f1', widget: 'list', member: 'sales.region' }],
+      filters: [{ id: 'f1', widget: 'list', member: 'Sales.region' }],
     };
 
     const moved = await app.inject({
@@ -275,7 +274,7 @@ describe('a chart or dashboard published into a folder, bound there (T429, AC-27
       {
         kind: 'chart',
         id: 'c1',
-        body: chartBody({ localToDashboardId: 'd1' }, 'fa__sales'),
+        body: chartBody({ localToDashboardId: 'd1' }, 'sales'),
         expectedVersion: 5,
       },
       {
@@ -284,7 +283,7 @@ describe('a chart or dashboard published into a folder, bound there (T429, AC-27
         body: {
           title: 'Revenue',
           folderId: 'a',
-          filters: [{ id: 'f1', widget: 'list', member: 'fa__sales.region' }],
+          filters: [{ id: 'f1', widget: 'list', member: 'sales.region' }],
         },
         expectedVersion: 5,
       },
@@ -349,7 +348,7 @@ describe('a chart or dashboard published into a folder, bound there (T429, AC-27
     const saved = await save('Sales: {{measure:sales.count | marking:A}}');
     expect(saved.statusCode, saved.body).toBe(200);
     expect(written.map((each) => each.body)).toEqual([
-      withText('Sales: {{measure:fa__sales.count | marking:A}}'),
+      withText('Sales: {{measure:sales.count | marking:A}}'),
     ]);
     await app.close();
   });

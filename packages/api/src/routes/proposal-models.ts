@@ -6,7 +6,7 @@ import { cubesOfChart, cubesOfDashboard } from '../model/bind';
 import { declaredIn } from '../model/split';
 import type { StoredModelFile } from '../repos/model-files';
 import type { ProposedItem } from '../repos/proposals';
-import { XCUBE_ROOT, xcubeIdOf } from '../xcube/folders';
+import { xcubeIdOf } from '../xcube/folders';
 import { keepsItsName } from './workspace-models';
 
 /**
@@ -16,8 +16,7 @@ import { keepsItsName } from './workspace-models';
  * A workspace's previews read its models through its overlay, each placed in
  * its target folder (a copy's is its origin's folder, a use-only copy's the
  * one its maker chose, T543), where it makes the
- * cube `<folder>__<name>` (the root's, `<name>`) in place of any published
- * one of that name (T347). A dashboard or chart naming such a cube was drawn
+ * cube of its name in place of any published one of that name (T347, T709). A dashboard or chart naming such a cube was drawn
  * through the workspace, so its proposal holds the model too, and the two are
  * approved or rejected together: landed apart, one would land naming a cube
  * its folder doesn't have, or not as it was drawn.
@@ -50,7 +49,7 @@ interface Placed {
   readonly file: StoredModelFile;
   /** The cube or view it declares. */
   readonly name: string;
-  /** Its cube's name where it is placed: `<xcube folder id>__<name>`, the root's `<name>`. */
+  /** Its cube's published name: its own, in every folder (T709, AC-328). */
   readonly fullName: string;
 }
 
@@ -152,9 +151,6 @@ const usedOnly = (path: string) =>
     `“${path}” is a copy for use only of a model in a folder you could only read: it can’t be proposed back there.`,
   );
 
-const fullNameOf = (folder: string, name: string) =>
-  folder === XCUBE_ROOT ? name : `${folder}__${name}`;
-
 export function proposalModels(deps: ProposalModelDeps) {
   /**
    * The workspace's models, where its overlay places them; `unserved`, those
@@ -176,7 +172,7 @@ export function proposalModels(deps: ProposalModelDeps) {
       (served === undefined ? unserved : placed).push({
         file,
         name: declared.name,
-        fullName: fullNameOf(folder, declared.name),
+        fullName: declared.name,
       });
     }
     return { placed, unserved };

@@ -612,7 +612,9 @@ describe('the folder tree (T449, AC-333)', () => {
       ['root', 'froot'],
       ['sales', 'fsales'],
     ]);
-    const inSales = { ...ORDERS, folderId: 'sales' };
+    // A name of its own: one name is one item's across the model (R71).
+    const SALES = 'cubes:\n  - name: sales_orders\n    sql_table: sales.orders\n';
+    const inSales = { path: 'cubes/sales_orders.yml', content: SALES, folderId: 'sales' };
     const sync = modelSync({
       model: 'dev',
       admin: xcubeAdmin({
@@ -631,7 +633,7 @@ describe('the folder tree (T449, AC-333)', () => {
     expect(await sync.sync('start')).toEqual({ kind: 'sent', revision: 1 });
     expect((snapshots(stub)[0]?.body as { items: unknown }).items).toEqual([
       { folderId: 'froot', name: 'orders', kind: 'cube', yaml: ORDERS.content },
-      { folderId: 'fsales', name: 'orders', kind: 'cube', yaml: ORDERS.content },
+      { folderId: 'fsales', name: 'sales_orders', kind: 'cube', yaml: SALES },
     ]);
     // And nothing more once xcube holds them: the hash is taken the same way.
     expect(await sync.sync('reconcile')).toEqual({ kind: 'same', revision: 1 });

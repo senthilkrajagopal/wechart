@@ -7,8 +7,9 @@ import { XcubeError } from './client';
  * wechart's server, with its service credential (AC-327).
  *
  * - `POST …/connections/{name}/sql`: a stored connection by its name; a
- *   workspace overlay's own with `?overlay=<id>`, by the name its previews
- *   use (`<folderId>__<name>`), never falling back to a landed one;
+ *   workspace overlay's own with `?overlay=<id>`, by its own name, as in
+ *   every folder (T709; research `xcube-256d632371.md`, 1.1), never falling
+ *   back to a landed one;
  * - `POST …/cubestore/sql`: Cube Store, SELECT and EXPLAIN only;
  * - `POST …/sql/cancel`: a run stopped by its id, on whichever instance runs it.
  *

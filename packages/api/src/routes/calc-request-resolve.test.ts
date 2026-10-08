@@ -233,11 +233,11 @@ afterAll(async () => {
 const as = (who: string, options: InjectOptions) =>
   app.inject({ ...options, headers: { ...options.headers, cookie: cookies[who]! } });
 
-/** A calculation `super` asks on one of /Sales's cubes or views; or, by its full name, another's. */
+/** A calculation `super` asks on a cube or view, by its one name (T709, AC-328). */
 async function asked(
   name: string,
   description: string,
-  full = `fsales__${name}`,
+  full = name,
   chartId = ids.chart,
 ): Promise<string> {
   const response = await as('super', {
@@ -319,7 +319,7 @@ describe('a calculation request resolved by its taker’s approved measure (T385
     const resolved = now.find((each) => each.id === taken)!;
     expect(resolved.status).toBe('resolved');
     expect(resolved.resolution).toEqual({
-      members: [`fsales__${ORDERS}.margin`],
+      members: [`${ORDERS}.margin`],
       by: await nameOf('writer'),
       approvedBy: await nameOf('super'),
       at: expect.any(String) as unknown,
@@ -341,12 +341,7 @@ describe('a calculation request resolved by its taker’s approved measure (T385
  */
 describe('a calculation request on a view, resolved through the cubes on its join paths (T590, AC-052)', () => {
   it('is resolved by a measure on a cube its join paths name; a view over another cube stays open', async () => {
-    const onSummary = await asked(
-      SUMMARY,
-      'Discount, on the summary view',
-      `feast__${SUMMARY}`,
-      ids.eastChart,
-    );
+    const onSummary = await asked(SUMMARY, 'Discount, on the summary view', SUMMARY, ids.eastChart);
     const onStockView = await asked(STOCK_VIEW, 'Discount, on the stock view');
     await take(onSummary);
     await take(onStockView);
@@ -396,7 +391,7 @@ describe('a calculation request on a view, resolved through the cubes on its joi
     expect(now.find((each) => each.id === onSummary)).toMatchObject({
       status: 'resolved',
       resolution: {
-        members: [`fsales__${ORDERS}.discount`],
+        members: [`${ORDERS}.discount`],
         by: await nameOf('writer'),
         approvedBy: await nameOf('super'),
       },

@@ -296,13 +296,14 @@ describe('a model of a folder one may only read, copied to use (T543, AC-283)', 
       method: 'POST',
       url: '/api/load',
       payload: {
-        query: { measures: [`fviewing__${REGIONS}.count`] },
+        // Its one name, the original's (T709, R71): the copy stands in for it.
+        query: { measures: [`${REGIONS}.count`] },
         for: { kind: 'dashboard', id: board },
       },
     });
     expect(answer.statusCode, answer.body).toBe(200);
     expect(asked.at(-1)).toEqual({
-      query: { measures: [`fsales__${REGIONS}.count`] },
+      query: { measures: [`${REGIONS}.count`] },
       overlay: workspaceOverlayIdOf(ids.workspace),
     });
 
@@ -317,29 +318,24 @@ describe('a model of a folder one may only read, copied to use (T543, AC-283)', 
     });
   });
 
-  it('is proposed to the folder it goes to, as a new model', async () => {
+  // One name per item (R71 8, T709): the copy holds its original's name,
+  // which has landed, so its proposal is refused, saying only that the name
+  // is in use. T717 refuses it for every folder before xcube is asked.
+  it('is not proposed to the folder it goes to: its name is its original’s, landed', async () => {
     const [file] = await files().inFolders([ids.project]);
     const proposed = await as('writer', {
       method: 'POST',
       url: '/api/proposals',
       payload: { kind: 'model', id: file!.id },
     });
-    expect(proposed.statusCode, proposed.body).toBe(201);
-    const proposal = proposed.json<{
-      id: string;
-      targetFolderId: string;
-      items: { kind: string; landsIn: string; replaces: unknown }[];
-    }>();
-    expect(proposal.targetFolderId).toBe(ids.sales);
-    expect(
-      proposal.items.map(({ kind, landsIn, replaces }) => ({ kind, landsIn, replaces })),
-    ).toEqual([{ kind: 'model', landsIn: ids.sales, replaces: null }]);
-    const withdrawn = await as('writer', {
-      method: 'POST',
-      url: `/api/proposals/${proposal.id}/reject`,
-      payload: {},
-    });
-    expect(withdrawn.statusCode, withdrawn.body).toBe(200);
+    expect(proposed.statusCode, proposed.body).toBe(422);
+    expect(proposed.json<{ errors: { path: string; message: string }[] }>().errors).toContainEqual(
+      expect.objectContaining({
+        path: PATH,
+        message: `The name “${REGIONS}” is already in use.`,
+      }),
+    );
+    expect(await proposalStore(getDb()).openFor('model', file!.id)).toBeNull();
   });
 
   it('is never proposed back to the folder it came from, even by one who may write it since', async () => {
