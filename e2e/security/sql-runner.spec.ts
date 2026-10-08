@@ -538,6 +538,16 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
         await typeSql(page, 'SELECT pg_sleep(20)');
         await panel.getByRole('button', { name: 'Run', exact: true }).click();
         await expect(panel.getByRole('button', { name: 'Running…' })).toBeDisabled();
+        // Asleep on the database before it is cancelled: a cancel while xcube
+        // is still connecting has no statement time to say ("Cancelled · at …",
+        // the coordinator's call, 2026-10-08, overturnable).
+        await expect
+          .poll(() =>
+            sample(
+              "SELECT count(*) FROM pg_stat_activity WHERE state = 'active' AND query LIKE '%SELECT pg_sleep(20)%' AND pid <> pg_backend_pid()",
+            ),
+          )
+          .toBe('1');
         await panel.getByRole('button', { name: 'Cancel', exact: true }).click();
         await expect(panel.getByTestId('sql-result-head')).toHaveText(/^Cancelled after [\d.]+ s/);
         await expect(panel.getByTestId('sql-result-note')).toHaveText(
