@@ -13815,7 +13815,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - **Clean-up:** the copy's removal is checked.
       - 8/8 in Chrome.
 
-- [ ] T733 (AC-357, AC-358, AC-361) Rework the tests of T513 and T514 to imports that map landed names
+- [x] T733 (AC-357, AC-358, AC-361) Rework the tests of T513 and T514 to imports that map landed names
   - Files: `e2e/security/export-import.spec.ts`, `packages/api/src/routes/import.test.ts`, `packages/web/src/workspaces/explore/import/{ImportSources,ImportPane}.test.tsx`
   - Failing test: `export-import.spec.ts`. T514's case that "renames the data source past Name taken" becomes:
     - the file's data source whose name has landed is mapped, with no Create (AC-358);
@@ -13823,6 +13823,31 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - a MySQL one mapped to Sales's PostgreSQL one warns (AC-361);
     - Review warns of same-named dashboards and charts in the target or the workspace without blocking, and lists what was mapped (AC-357).
   - Depends on: T719, T720, T721
+  - **Done 2026-10-08.** `export-import.spec.ts` passes 11/11 in Chrome on the R71 image.
+    - **The T513 import case.**
+      - File's list: the model listed as "Model".
+      - Data sources: the file's `<run>_emea`, whose name has landed in Sales, is "Mapped" with the held note, no radio and no Test (AC-358).
+      - Review:
+        - dashboard's and Top products' in-target warnings;
+        - "Mapped to …" and "Not imported" for the data source and the model;
+        - "3 new drafts · 2 warnings" and "None stops the import" (AC-357).
+      - Import: "1 dashboard and 4 charts"; nothing is made for the data source or the model.
+      - **Removed:** the "Name taken" and "Create under another name" flow, and the rename it made. R71 retires that premise, and the test-integrity hook flagged the removal.
+    - **New, the create flow:** a file data source of a name nothing holds (`<run>_fresh`).
+      - It is created under its own name: Name read-only, no "Create under another name", and Next is disabled until a test passes.
+      - Once tested, Import makes the data source in My workspace from the file's settings and description, its secret sealed (AC-358). These are the removed case's own assertions, moved here.
+    - **New, the binding (T721) on the image.** A file data source `<run>_wh` is mapped to Sales's `<run>_emea`. A model of a new name on it lands as a new draft, and the toast says "1 model". It is stored in My workspace's root naming `<run>_emea`, the file otherwise unchanged (AC-358, AC-356). The spec removes it after.
+    - **T514's MySQL mapping (AC-361)** passes as it stands.
+    - **The unit tests** named in Files were reworked in T719 and T720.
+    - **ACs ticked**, each with every Fails-when case shown by a passing spec on the R71 image (the coordinator, 2026-10-08):
+      - **AC-281:** `workspace-rebind.spec.ts` (made before the copy) and `workspace-overlay.spec.ts` (made after, and a name the workspace doesn't hold).
+      - **AC-283:** `use-only-copy.spec.ts`.
+      - **AC-428:** `picker.spec.ts`'s "Your copy" case, in both pickers with the chip's style, and `workspace-overlay.spec.ts`.
+      - **AC-358:** this spec.
+    - **Not ticked:**
+      - **AC-357:** its R73 clause (an off-path mapped cube a chart uses, T736) is shown in the API and component tests only.
+      - **AC-423:** waits for T737's file-name clause. Every other clause is shown by `fixed-names.spec.ts` and T706's API tests.
+      - **AC-329** was already ticked.
 
 ## Phase 2 coverage: acceptance criterion → task
 
