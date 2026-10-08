@@ -113,10 +113,10 @@ export function pickerGroupsOf(
 
 /**
  * The cubes a chart or dashboard in a folder may be built on (T429,
- * AC-329): those on its folder's path, from the root down, each name's
- * nearest alone — as xcube binds it at publish (AC-272) — never a
- * descendant's or a sibling's. Each carries its folder path, which the
- * picker shows beside its title, never its prefixed name.
+ * AC-329): those its folder's path keeps, from the root down, never a
+ * descendant's or a sibling's. Each is under its own name, one item's in
+ * every folder (T710, AC-328), and carries its folder path, which the picker
+ * shows beside its title.
  *
  * Where the item's folder isn't known, or the model says nothing of folders
  * (a Cube not served by xcube), every cube is offered as it was.
@@ -135,20 +135,20 @@ export function cubesOnPath(
   const chain = folderChain(folders, folderId);
   /**
    * In My workspace (T347; AC-329, AC-281): the workspace's own cubes first,
-   * wherever its overlay places them, each hiding a cube of its short name
-   * on the path, as names resolve in the overlay first; then its target's
-   * path, or the shared root's where it has none.
+   * wherever its overlay places them; then its target's path, or the shared
+   * root's where it has none. A copy is its cube's one name, standing in for
+   * the landed cube in the overlay, so the landed one isn't offered too.
    */
   if (chain[0]?.id === MY_WORKSPACE.id) {
     const own = cubes
       .filter((cube) => cube.inWorkspace === true)
       .map((cube) => ({ ...cube, folderPath: MY_WORKSPACE.title }));
-    const hidden = new Set(own.flatMap((cube) => (cube.xcube ? [cube.xcube.shortName] : [])));
+    const held = new Set(own.map((cube) => cube.name.toLowerCase()));
     const shared = cubesOnPath(
       cubes.filter((cube) => cube.inWorkspace !== true),
       targetFolderId ?? SHARED_ROOT.id,
       folders,
-    ).filter((cube) => cube.xcube === undefined || !hidden.has(cube.xcube.shortName));
+    ).filter((cube) => !held.has(cube.name.toLowerCase()));
     return [...own, ...shared];
   }
   const crumbs = chain;
@@ -167,21 +167,14 @@ export function cubesOnPath(
             .join(' / '),
         }))
       : [{ xcubeId: XCUBE_ROOT, words: SHARED_ROOT.title }];
-  const depthOf = new Map(
-    path.flatMap((step, at) => (step.xcubeId === undefined ? [] : [[step.xcubeId, at] as const])),
+  const wordsOf = new Map(
+    path.flatMap((step) =>
+      step.xcubeId === undefined ? [] : [[step.xcubeId, step.words] as const],
+    ),
   );
-  // Each short name's nearest: the deepest folder on the path that holds it.
-  const nearest = new Map<string, { cube: CubeSummary; depth: number }>();
-  for (const cube of cubes) {
-    if (cube.xcube === undefined) continue;
-    const depth = depthOf.get(cube.xcube.folderId);
-    if (depth === undefined) continue;
-    const held = nearest.get(cube.xcube.shortName);
-    if (held === undefined || depth > held.depth)
-      nearest.set(cube.xcube.shortName, { cube, depth });
-  }
-  const chosen = new Set([...nearest.values()].map(({ cube }) => cube));
-  return cubes
-    .filter((cube) => chosen.has(cube))
-    .map((cube) => ({ ...cube, folderPath: path[depthOf.get(cube.xcube!.folderId)!]!.words }));
+  // Each cube a folder on the path keeps, under its own name.
+  return cubes.flatMap((cube) => {
+    const words = cube.xcube === undefined ? undefined : wordsOf.get(cube.xcube.folderId);
+    return words === undefined ? [] : [{ ...cube, folderPath: words }];
+  });
 }

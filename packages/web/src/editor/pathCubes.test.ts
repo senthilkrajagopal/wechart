@@ -34,18 +34,42 @@ const cubes = [
   cube('fad', 'widgets', 'Widgets'),
 ];
 
-describe('the cubes on an item’s folder path (T429, AC-329)', () => {
-  it('offers each name’s nearest cube on the path, never a descendant’s or a sibling’s, with its folder path', () => {
-    expect(cubesOnPath(cubes, 'b', folders)).toEqual([
-      { ...cube('froot', 'customers', 'Customers'), folderPath: 'Shared' },
-      { ...cube('fab', 'sales', 'Sales'), folderPath: 'Shared / A / B' },
+/**
+ * T710 (AC-329, AC-328): with one name per item (R71) each cube is under its
+ * own name in every folder, so the path's cubes are those its folders keep,
+ * each once: the root's `sales` and `customers`, /A's `a_orders`, /A/B's
+ * `ab_lines`; /A/B/C's `deep` is beneath /A/B, and /A/D's `widgets` its
+ * sibling's.
+ */
+const kept = (folderId: string, name: string, title: string): CubeSummary => ({
+  name,
+  title,
+  isView: false,
+  xcube: { folderId, shortName: name },
+});
+const onPaths = [
+  kept('froot', 'sales', 'Sales'),
+  kept('froot', 'customers', 'Customers'),
+  kept('fa', 'a_orders', 'A orders'),
+  kept('fab', 'ab_lines', 'AB lines'),
+  kept('fabc', 'deep', 'Deep'),
+  kept('fad', 'widgets', 'Widgets'),
+];
+
+describe('the cubes on an item’s folder path (T429, T710; AC-329, AC-328)', () => {
+  it('offers each cube its path’s folders keep, by its own name with its folder path, never a descendant’s or a sibling’s, and none hidden', () => {
+    expect(cubesOnPath(onPaths, 'b', folders)).toEqual([
+      { ...kept('froot', 'sales', 'Sales'), folderPath: 'Shared' },
+      { ...kept('froot', 'customers', 'Customers'), folderPath: 'Shared' },
+      { ...kept('fa', 'a_orders', 'A orders'), folderPath: 'Shared / A' },
+      { ...kept('fab', 'ab_lines', 'AB lines'), folderPath: 'Shared / A / B' },
     ]);
   });
 
   it('offers the root’s alone for an item in the root', () => {
-    expect(cubesOnPath(cubes, 'root', folders)).toEqual([
-      { ...cube('froot', 'sales', 'Sales'), folderPath: 'Shared' },
-      { ...cube('froot', 'customers', 'Customers'), folderPath: 'Shared' },
+    expect(cubesOnPath(onPaths, 'root', folders)).toEqual([
+      { ...kept('froot', 'sales', 'Sales'), folderPath: 'Shared' },
+      { ...kept('froot', 'customers', 'Customers'), folderPath: 'Shared' },
     ]);
   });
 
@@ -56,44 +80,46 @@ describe('the cubes on an item’s folder path (T429, AC-329)', () => {
       { id: 'w', title: 'Drafts', parentId: 'mine', itemCount: 0, xcubeId: 'fw' },
     ];
 
-    expect(cubesOnPath(cubes, 'w', inWorkspace)).toEqual([
-      { ...cube('froot', 'sales', 'Sales'), folderPath: 'Shared' },
-      { ...cube('froot', 'customers', 'Customers'), folderPath: 'Shared' },
+    expect(cubesOnPath(onPaths, 'w', inWorkspace)).toEqual([
+      { ...kept('froot', 'sales', 'Sales'), folderPath: 'Shared' },
+      { ...kept('froot', 'customers', 'Customers'), folderPath: 'Shared' },
     ]);
   });
 
   /**
    * T347 (AC-329's workspace path, AC-281): for an item in My workspace, the
    * path is the workspace, then its target's. The workspace's own cubes come
-   * first, wherever its overlay places them, and hide a cube of the same
-   * short name on the path, as names resolve in the overlay first.
+   * first, wherever its overlay places them; its copy of a cube is that
+   * cube's one name, so the landed one isn't offered beside it.
    */
   it('offers a workspace item its workspace’s cubes first, then its target’s path, each name once', () => {
     const inWorkspace: FolderNode[] = [
       ...folders,
       { id: 'w', title: 'project-2026-10-01-0900', parentId: 'mine', itemCount: 0, xcubeId: null },
     ];
-    const own = (folderId: string, shortName: string, title: string): CubeSummary => ({
-      ...cube(folderId, shortName, title),
+    const mine = (folderId: string, name: string, title: string): CubeSummary => ({
+      ...kept(folderId, name, title),
       inWorkspace: true,
     });
     const withWorkspace = [
-      ...cubes,
-      own('fab', 'sales', 'Sales (mine)'),
-      own('fad', 'gadgets', 'Gadgets'),
+      ...onPaths,
+      mine('fab', 'ab_lines', 'AB lines (mine)'),
+      mine('fad', 'gadgets', 'Gadgets'),
     ];
 
     expect(cubesOnPath(withWorkspace, 'w', inWorkspace, 'b')).toEqual([
-      { ...own('fab', 'sales', 'Sales (mine)'), folderPath: 'My workspace' },
-      { ...own('fad', 'gadgets', 'Gadgets'), folderPath: 'My workspace' },
-      { ...cube('froot', 'customers', 'Customers'), folderPath: 'Shared' },
+      { ...mine('fab', 'ab_lines', 'AB lines (mine)'), folderPath: 'My workspace' },
+      { ...mine('fad', 'gadgets', 'Gadgets'), folderPath: 'My workspace' },
+      { ...kept('froot', 'sales', 'Sales'), folderPath: 'Shared' },
+      { ...kept('froot', 'customers', 'Customers'), folderPath: 'Shared' },
+      { ...kept('fa', 'a_orders', 'A orders'), folderPath: 'Shared / A' },
     ]);
-    // With no target, the shared root's path, after the workspace's own,
-    // whose `sales` hides the root's.
+    // With no target, the shared root's path, after the workspace's own.
     expect(cubesOnPath(withWorkspace, 'w', inWorkspace)).toEqual([
-      { ...own('fab', 'sales', 'Sales (mine)'), folderPath: 'My workspace' },
-      { ...own('fad', 'gadgets', 'Gadgets'), folderPath: 'My workspace' },
-      { ...cube('froot', 'customers', 'Customers'), folderPath: 'Shared' },
+      { ...mine('fab', 'ab_lines', 'AB lines (mine)'), folderPath: 'My workspace' },
+      { ...mine('fad', 'gadgets', 'Gadgets'), folderPath: 'My workspace' },
+      { ...kept('froot', 'sales', 'Sales'), folderPath: 'Shared' },
+      { ...kept('froot', 'customers', 'Customers'), folderPath: 'Shared' },
     ]);
   });
 
@@ -101,7 +127,7 @@ describe('the cubes on an item’s folder path (T429, AC-329)', () => {
     const plain = { name: 'orders', title: 'Orders', isView: false };
 
     expect(cubesOnPath([plain], 'b', folders)).toEqual([plain]);
-    expect(cubesOnPath(cubes, undefined, folders)).toEqual(cubes);
+    expect(cubesOnPath(onPaths, undefined, folders)).toEqual(onPaths);
   });
 });
 

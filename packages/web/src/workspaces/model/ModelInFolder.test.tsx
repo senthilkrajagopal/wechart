@@ -7,6 +7,7 @@ import { FileList, modelFilesQuery, ModelFilesNotFound } from './FileList';
 import { FileTree } from './FileTree';
 import {
   fileHref,
+  homesOf,
   modelAccessOf,
   modelHref,
   modelsAreWorkspaceOnly,
@@ -145,21 +146,76 @@ describe('who may change a model where (rules 70 and 71, AC-222)', () => {
   });
 });
 
-describe('a member as the model page names it (AC-329)', () => {
-  it('names the open folder’s own by its short name, never the prefixed one', () => {
-    expect(shownMemberOf('femea__orders.count', 'emea', FOLDERS)).toBe('orders.count');
+/**
+ * T710 (AC-328, AC-329): a member is named by its one name, the same in
+ * every folder; the folder whose model keeps its cube is read from the
+ * model's files, not from the name.
+ */
+describe('a member as the model page names it (AC-329, T710)', () => {
+  const homes = new Map([
+    ['emea_orders', 'emea'],
+    ['emea_summary', 'emea'],
+    ['sales_summary', 'sales'],
+    ['orders', 'root'],
+  ]);
+  const homeOf = (cube: string) => homes.get(cube);
+
+  it('names the open folder’s own by its name alone', () => {
+    expect(shownMemberOf('emea_orders.count', 'emea', FOLDERS, homeOf)).toBe('emea_orders.count');
   });
 
   it('names another folder’s with that folder’s path', () => {
-    expect(shownMemberOf('femea__summary.count', 'sales', FOLDERS)).toBe(
-      'summary.count (Sales / EMEA)',
+    expect(shownMemberOf('emea_summary.count', 'sales', FOLDERS, homeOf)).toBe(
+      'emea_summary.count (Sales / EMEA)',
     );
-    expect(shownMemberOf('fsales__summary.count', 'root', FOLDERS)).toBe('summary.count (Sales)');
+    expect(shownMemberOf('sales_summary.count', 'root', FOLDERS, homeOf)).toBe(
+      'sales_summary.count (Sales)',
+    );
   });
 
   it('names the root’s as they are, from the root, and with “Shared” from a folder', () => {
-    expect(shownMemberOf('orders.count', 'root', FOLDERS)).toBe('orders.count');
-    expect(shownMemberOf('orders.count', 'emea', FOLDERS)).toBe('orders.count (Shared)');
+    expect(shownMemberOf('orders.count', 'root', FOLDERS, homeOf)).toBe('orders.count');
+    expect(shownMemberOf('orders.count', 'emea', FOLDERS, homeOf)).toBe('orders.count (Shared)');
+  });
+
+  it('names one whose cube no file keeps by its name alone', () => {
+    expect(shownMemberOf('gone.count', 'emea', FOLDERS, homeOf)).toBe('gone.count');
+  });
+
+  // T710's review: a workspace copy keeps its original's name (R71), and the
+  // files list it, its folder first; the cube's folder is the published one.
+  it('takes a cube’s folder from a published folder, never a workspace copy’s', () => {
+    const found = homesOf(
+      [
+        {
+          folderId: '0a1b-project',
+          path: 'cubes/orders.yml',
+          content: 'cubes:\n  - name: orders\n',
+        },
+        { folderId: 'root', path: 'cubes/orders.yml', content: 'cubes:\n  - name: orders\n' },
+      ],
+      (folderId) => folderId !== '0a1b-project',
+    );
+    expect(found('orders')).toBe('root');
+  });
+
+  it('finds each cube’s and view’s folder from the files that declare them', () => {
+    const found = homesOf(
+      [
+        { path: 'cubes/orders.yml', content: 'cubes:\n  - name: orders\n' },
+        {
+          folderId: 'emea',
+          path: 'views/emea_summary.yml',
+          content: 'views:\n  - name: emea_summary\n',
+        },
+      ],
+      () => true,
+    );
+    expect([found('orders'), found('emea_summary'), found('gone')]).toEqual([
+      'root',
+      'emea',
+      undefined,
+    ]);
   });
 });
 
@@ -297,23 +353,22 @@ describe('Cube’s refusals on a folder’s page (AC-222)', () => {
 });
 
 describe('the charts a folder’s save changes, named as the page names members (AC-141, AC-329)', () => {
-  it('says each member as the page names it, never by its prefixed name', () => {
+  it('says each member as the page names it, with another folder’s path', () => {
     render(
       <ReferencesWarning
         found={{
           charts: [
-            { id: 'c1', title: 'EMEA orders', dashboardId: null, members: ['femea__orders.count'] },
+            { id: 'c1', title: 'EMEA orders', dashboardId: null, members: ['orders.count'] },
           ],
           dashboards: [],
         }}
-        nameOf={(member) => shownMemberOf(member, 'emea', FOLDERS)}
+        nameOf={(member) => shownMemberOf(member, 'emea', FOLDERS, () => 'sales')}
         onSave={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
 
     const warning = screen.getByRole('alert');
-    expect(warning.textContent).toContain('EMEA orders — uses orders.count');
-    expect(warning.textContent).not.toContain('femea__');
+    expect(warning.textContent).toContain('EMEA orders — uses orders.count (Sales)');
   });
 });

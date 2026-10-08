@@ -2,6 +2,7 @@ import type { Me } from '../../shell/AccountMenu';
 import type { FolderNode } from '../explore/FolderTree';
 import { folderChain } from '../explore/folders';
 import { SHARED_ROOT } from '../explore/roots';
+import { objectsOf } from './objects';
 
 /**
  * A model in its folder (T342; AC-222, rules 70 and 71): where its files
@@ -125,25 +126,42 @@ export function folderWordsOf(
 }
 
 /**
- * A member as the model page says it (AC-329): named as charts are bound to
- * it — a folder's `<xcubeId>__<cube>.<member>` (AC-328) — it is said by its
- * short name, the one its file gives it, with its folder's path where that
- * folder isn't the one open. Never by its prefixed name.
+ * A member as the model page says it (AC-329): by its one name, the same in
+ * every folder (T710, AC-328), with the path of the folder keeping its cube
+ * where that folder isn't the one open. The folder is the model's files'
+ * (`homeOf`), never read from the name; one whose cube no file keeps is
+ * said by its name alone.
  */
 export function shownMemberOf(
   member: string,
   openFolderId: string,
   folders: readonly FolderNode[],
+  /** The folder whose model declares a cube of this name; none where no file does. */
+  homeOf: (cube: string) => string | undefined,
 ): string {
-  const owner = folders.find(
-    (folder) =>
-      typeof folder.xcubeId === 'string' &&
-      folder.xcubeId !== '' &&
-      member.startsWith(`${folder.xcubeId}__`),
-  );
-  const folderId = owner?.id ?? SHARED_ROOT.id;
-  const short = owner === undefined ? member : member.slice(`${String(owner.xcubeId)}__`.length);
-  return folderId === openFolderId
-    ? short
-    : `${short} (${folderWordsOf(folderId, folders) ?? SHARED_ROOT.title})`;
+  const dot = member.indexOf('.');
+  const folderId = homeOf(dot > 0 ? member.slice(0, dot) : member);
+  if (folderId === undefined || folderId === openFolderId) return member;
+  return `${member} (${folderWordsOf(folderId, folders) ?? SHARED_ROOT.title})`;
+}
+
+/**
+ * Each cube's and view's folder, by its name, from the model's files: a
+ * name is one item's across the model (R71). The root's for a file naming
+ * none. Only a published folder's files count: a workspace copy keeps its
+ * original's name (T710's review).
+ */
+export function homesOf(
+  files: readonly { readonly path: string; readonly content: string; readonly folderId?: string }[],
+  /** Whether a folder is published: a shared one xcube serves, not a workspace's. */
+  published: (folderId: string) => boolean,
+): (cube: string) => string | undefined {
+  const homes = new Map<string, string>();
+  for (const file of files) {
+    const folderId = file.folderId ?? SHARED_ROOT.id;
+    if (!published(folderId)) continue;
+    for (const object of objectsOf(file.path, file.content).objects)
+      if (!homes.has(object.name)) homes.set(object.name, folderId);
+  }
+  return (cube) => homes.get(cube);
 }

@@ -146,17 +146,18 @@ describe('the members a save edits', () => {
 });
 
 /**
- * T342 / AC-141, with models in folders: a folder's items are published as
- * `<xcubeId>__<name>` (AC-328), and a folder's names are found along its
- * path, nearest first (AC-272). So the charts bound to a folder's member are
- * bound to its full name, and a root edit reaches a folder's view or
- * extending cube by that folder's name.
+ * T342 / AC-141, with models in folders: a folder's names are found along its
+ * path (AC-272), and each item is published under its own name in every
+ * folder (T710, AC-328). So the charts bound to a folder's member are bound
+ * to its one name, and a root edit reaches a folder's view or extending cube
+ * by theirs.
  */
-describe('the members a save edits, with models in folders (T342)', () => {
-  // Shared › Sales › EMEA, and Shared › Stock, the folder ids stored with each.
+describe('the members a save edits, with models in folders (T342, T710)', () => {
+  // Shared › Sales › EMEA, Shared › Other, and Shared › Stock, the folder ids stored with each.
   const folders: FolderNode[] = [
     { id: 'sales', title: 'Sales', parentId: null, xcubeId: 'fsales' },
     { id: 'emea', title: 'EMEA', parentId: 'sales', xcubeId: 'femea' },
+    { id: 'other', title: 'Other', parentId: null, xcubeId: 'fother' },
     { id: 'stock', title: 'Stock', parentId: null, xcubeId: null },
   ];
   const places = placesOf(folders);
@@ -167,12 +168,12 @@ describe('the members a save edits, with models in folders (T342)', () => {
   });
   const TOTAL_DOUBLED = ORDERS.replace('        sql: amount\n', '        sql: amount * 2\n');
 
-  it('are a folder’s by its full name, and the root’s file of the same path is left be', () => {
-    const root = { path: 'cubes/orders.yml', content: ORDERS };
+  it('are a folder’s by its own name, and the root’s file of the same path is left be', () => {
+    const root = { path: 'cubes/orders.yml', content: 'cubes:\n  - name: customers\n' };
     const before = [root, inFolder('sales', 'cubes/orders.yml', ORDERS)];
     const after = [root, inFolder('sales', 'cubes/orders.yml', TOTAL_DOUBLED)];
 
-    expect(editedMembersOf(before, after, places)).toEqual(['fsales__orders.total']);
+    expect(editedMembersOf(before, after, places)).toEqual(['orders.total']);
   });
 
   it('are a folder’s view’s, by the folder’s name, where it exposes a root member edited', () => {
@@ -190,10 +191,10 @@ describe('the members a save edits, with models in folders (T342)', () => {
         ],
         places,
       ),
-    ).toEqual(['orders.count', 'orders.total', 'fsales__summary.count']);
+    ).toEqual(['orders.count', 'orders.total', 'summary.count']);
   });
 
-  it('are a folder’s extending cube’s, by the folder’s name, where it takes the root member as it is', () => {
+  it('are a folder’s extending cube’s, by its own name, where it takes the root member as it is', () => {
     const child = inFolder(
       'emea',
       'cubes/big_orders.yml',
@@ -206,7 +207,7 @@ describe('the members a save edits, with models in folders (T342)', () => {
         [{ path: 'cubes/orders.yml', content: TOTAL_DOUBLED }, child],
         places,
       ),
-    ).toEqual(['orders.total', 'femea__big_orders.total']);
+    ).toEqual(['orders.total', 'big_orders.total']);
   });
 
   it('are a subfolder’s view’s, where it exposes a member of the folder above', () => {
@@ -225,17 +226,19 @@ describe('the members a save edits, with models in folders (T342)', () => {
         ],
         places,
       ),
-    ).toEqual(['fsales__orders.count', 'femea__summary.count']);
+    ).toEqual(['orders.count', 'summary.count']);
   });
 
-  it('are not a folder’s view’s where a nearer cube of the name hides the edited one', () => {
+  // With one name per item (R71) no nearer namesake can hide the edited cube;
+  // a view off its path binds none of it (AC-272).
+  it('are not a view’s in a folder off the edited cube’s path', () => {
     const own = inFolder('sales', 'cubes/orders.yml', ORDERS);
-    const view = inFolder('sales', 'views/summary.yml', SUMMARY);
+    const view = inFolder('other', 'views/summary.yml', SUMMARY);
 
     expect(
       editedMembersOf(
-        [{ path: 'cubes/orders.yml', content: ORDERS }, own, view],
-        [{ path: 'cubes/orders.yml', content: TOTAL_DOUBLED }, own, view],
+        [own, view],
+        [inFolder('sales', 'cubes/orders.yml', TOTAL_DOUBLED), view],
         places,
       ),
     ).toEqual(['orders.total']);
@@ -296,10 +299,10 @@ describe('the members landing a workspace model would edit (T546)', () => {
     inFolder('project', PATH, ORDERS),
   ];
 
-  it('are the folder it goes to’s, by their full names there, though it is saved in My workspace', () => {
+  it('are the folder it goes to’s, by their own names, though it is saved in My workspace', () => {
     expect(
       landedEditsOf(every, { landsIn: 'sales', path: PATH, content: TOTAL_DOUBLED }, places),
-    ).toEqual(['fsales__orders.total']);
+    ).toEqual(['orders.total']);
     // Saved in place, the workspace's own folder's would be none: nothing is bound there.
     expect(
       editedMembersOf(
@@ -315,21 +318,16 @@ describe('the members landing a workspace model would edit (T546)', () => {
 
     expect(
       landedEditsOf(every, { landsIn: 'sales', path: PATH, content: renamed }, places),
-    ).toEqual([
-      'fsales__orders.count',
-      'fsales__orders.total',
-      'fsales__orders.status',
-      'fsales__orders.shipped',
-    ]);
+    ).toEqual(['orders.count', 'orders.total', 'orders.status', 'orders.shipped']);
   });
 
-  it('are a view’s on a path through that folder, by the view’s folder’s name', () => {
+  it('are a view’s on a path through that folder, by the view’s own name', () => {
     const withView = [...every, inFolder('emea', 'views/summary.yml', SUMMARY)];
     const countDistinct = ORDERS.replace('type: count', 'type: count_distinct\n        sql: id');
 
     expect(
       landedEditsOf(withView, { landsIn: 'sales', path: PATH, content: countDistinct }, places),
-    ).toEqual(['fsales__orders.count', 'femea__summary.count']);
+    ).toEqual(['orders.count', 'summary.count']);
   });
 
   it('are every member the landing would change, an earlier save’s edits too', () => {
@@ -338,8 +336,8 @@ describe('the members landing a workspace model would edit (T546)', () => {
     const saved = [...every.slice(0, 2), inFolder('project', PATH, TOTAL_DOUBLED)];
 
     expect(landedEditsOf(saved, { landsIn: 'sales', path: PATH, content: both }, places)).toEqual([
-      'fsales__orders.count',
-      'fsales__orders.total',
+      'orders.count',
+      'orders.total',
     ]);
   });
 
@@ -360,11 +358,12 @@ describe('the members landing a workspace model would edit (T546)', () => {
         { landsIn: 'sales', path: 'cubes/orders_again.yml', content: TOTAL_DOUBLED },
         places,
       ),
-    ).toEqual(['fsales__orders.total']);
+    ).toEqual(['orders.total']);
   });
 
-  it('are the root’s by their bare names, for a model going to the shared root', () => {
-    const rootOrders = [...every, { folderId: 'root', path: PATH, content: ORDERS }];
+  it('are the root’s by their own names, for a model going to the shared root', () => {
+    // The root's `orders`, the one cube of the name (R71).
+    const rootOrders = [every[0]!, { folderId: 'root', path: PATH, content: ORDERS }];
 
     expect(
       landedEditsOf(rootOrders, { landsIn: 'root', path: PATH, content: TOTAL_DOUBLED }, places),

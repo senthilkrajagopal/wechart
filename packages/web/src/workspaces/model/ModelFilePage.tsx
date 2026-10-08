@@ -35,6 +35,7 @@ import { FileTree } from './FileTree';
 import {
   fileHref,
   folderWordsOf,
+  homesOf,
   modelAccessOf,
   modelHref,
   modelsAreWorkspaceOnly,
@@ -538,6 +539,8 @@ function FileEditor({
      * edits, and that folder's path as the warning says it (T546, R55).
      */
     landing?: { readonly folderId: string; readonly words: string };
+    /** Each cube's folder, by its one name, from the model's files (T710). */
+    homeOf: (cube: string) => string | undefined;
   } | null>(null);
   /** Where the focus goes back to when the warning closes. */
   const saveButton = useRef<HTMLButtonElement>(null);
@@ -980,7 +983,7 @@ function FileEditor({
         }
       // Across the whole model: a view in another file exposes a cube's
       // member by a name of its own (T147's review) — and a view or an
-      // extending cube in another folder, by that folder's (T342). Every
+      // extending cube in another folder, by its own (T342, T710). Every
       // folder's files the user may see, as they are now.
       let every: readonly (ModelFile & { readonly folderId?: string })[] = [];
       let known: Awaited<ReturnType<(typeof FOLDERS_QUERY)['queryFn']>> = [];
@@ -1019,6 +1022,7 @@ function FileEditor({
           setReferences({
             found,
             text: sent,
+            homeOf: homesOf(every, (folderId) => places.prefixOf(folderId) !== undefined),
             ...(landsIn === undefined
               ? {}
               : {
@@ -1244,14 +1248,15 @@ function FileEditor({
                 setReferences(null);
                 saveButton.current?.focus();
               }}
-              // A folder's members by the names its files give them, never
-              // their prefixed ones (T342, AC-329): short in the folder the
-              // model lands in, from My workspace (T546).
+              // Each member by its one name (T710, AC-328), with its cube's
+              // folder where that isn't the folder the model lands in, from
+              // My workspace (T546), or the one open (T342, AC-329).
               nameOf={(member) =>
                 shownMemberOf(
                   member,
                   references.landing?.folderId ?? where.folderId,
                   folders.data ?? [],
+                  references.homeOf,
                 )
               }
             />

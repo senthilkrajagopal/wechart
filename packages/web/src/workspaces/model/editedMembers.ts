@@ -16,12 +16,10 @@ import { modelOf } from './sync';
  * includes the definition of the member it takes, so a change to that shows
  * as a change to every name it goes by (T147's review).
  *
- * With models in folders (T342): a folder's items are published as
- * `<xcubeId>__<name>` (AC-328), the root's bare, and the names a folder's
- * view or extending cube uses are found along its path, nearest first, as
- * xcube binds them (AC-272). So each member is named as charts are bound to
- * it: a folder's by its full name, and a root member a folder's view exposes
- * by that folder's name too.
+ * With models in folders (T342): every item is published under its own name
+ * in every folder (T710, AC-328), and the names a folder's view or extending
+ * cube uses are found along its path (AC-272). So each member is named as
+ * charts are bound to it, by its one name.
  */
 type Value = Record<string, unknown>;
 type File = {
@@ -36,8 +34,9 @@ export interface Places {
   /** A folder and each folder above it, itself first, the root last: where its names are found. */
   readonly pathOf: (folderId: string) => readonly string[];
   /**
-   * What its items' full names start with: nothing for the root, and none
-   * at all for a folder not yet published to, whose items no chart names.
+   * What its items' published names start with: nothing, in every published
+   * folder (T710), and none at all for a folder not yet published to, whose
+   * items no chart names.
    */
   readonly prefixOf: (folderId: string) => string | undefined;
 }
@@ -56,10 +55,11 @@ export function placesOf(folders: readonly FolderNode[]): Places {
         : folderChain(folders, folderId)
             .map((crumb) => crumb.id)
             .reverse(),
+    // Every published folder's items under their own names (T710, AC-328).
     prefixOf: (folderId) => {
       if (folderId === ROOT) return '';
       const xcubeId = folders.find((folder) => folder.id === folderId)?.xcubeId;
-      return typeof xcubeId === 'string' && xcubeId !== '' ? `${xcubeId}__` : undefined;
+      return typeof xcubeId === 'string' && xcubeId !== '' ? '' : undefined;
     },
   };
 }
@@ -124,7 +124,10 @@ function modelMembers(
     views.push(...objects(model.views).map((view) => ({ folder, view })));
   }
 
-  /** The cube a name means in a folder: the nearest on its path with one (AC-272), never `not`. */
+  /**
+   * The folder on a folder's path keeping the cube of a name (AC-272): one
+   * item holds a name (R71), so at most one does; never `not`.
+   */
   const find = (from: string, name: string, not?: string) => {
     for (const at of places.pathOf(from)) {
       if (`${at}/${name}` === not) continue;

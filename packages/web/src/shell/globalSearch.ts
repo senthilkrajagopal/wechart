@@ -91,20 +91,17 @@ export function globalResults(text: string, sources: SearchSources): SearchResul
   );
   const fields: SearchResult[] = [];
   for (const cube of cubes) {
-    // A folder's cube by its short name, its title and its folder path;
-    // never its prefixed name (T450, AC-329). The root's, as before.
-    const xcube = cube.meta?.xcube;
-    const inFolder =
-      typeof xcube?.folderId === 'string' &&
-      xcube.folderId !== 'froot' &&
-      typeof xcube.shortName === 'string'
-        ? { folderId: xcube.folderId, shortName: xcube.shortName }
-        : undefined;
+    // A folder's cube by its own name, the same in every folder (T710,
+    // AC-328), its title and its folder path (T450, AC-329). The root's, as before.
+    const xcubeFolder = cube.meta?.xcube?.folderId;
     const kind = cube.type === 'view' ? 'View' : 'Cube';
-    const folder = inFolder && sources.folders?.find((each) => each.xcubeId === inFolder.folderId);
+    const folder =
+      typeof xcubeFolder === 'string' && xcubeFolder !== 'froot'
+        ? sources.folders?.find((each) => each.xcubeId === xcubeFolder)
+        : undefined;
     // Its cube or view by title, and a folder's by its path too: never an id
     // (T478, AC-220; UX-013, UX-102).
-    const cubeTitle = cube.title ?? inWords(inFolder?.shortName ?? cube.name);
+    const cubeTitle = cube.title ?? inWords(cube.name);
     const owner = [
       `${kind} ${cubeTitle}`,
       ...(folder === undefined
@@ -115,8 +112,6 @@ export function globalResults(text: string, sources: SearchSources): SearchResul
               .join(' / '),
           ]),
     ].join(' · ');
-    const shown = (name: string) =>
-      inFolder === undefined ? name : `${inFolder.shortName}${name.slice(cube.name.length)}`;
     /** A member with no title, in words: its cube's title, then its own name. */
     const titleOf = (member: MetaMember) =>
       member.title ?? `${cubeTitle} ${inWords(member.name.slice(cube.name.length + 1))}`;
@@ -127,7 +122,7 @@ export function globalResults(text: string, sources: SearchSources): SearchResul
     for (const { member, type } of members) {
       // A member the model hides is not one to offer: it cannot be queried.
       if (member.public === false || member.isVisible === false) continue;
-      if (!matches(member.title, member.shortTitle, shown(member.name))) continue;
+      if (!matches(member.title, member.shortTitle, member.name)) continue;
       fields.push({
         key: `field:${member.name}`,
         type,

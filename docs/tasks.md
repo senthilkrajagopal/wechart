@@ -13166,12 +13166,21 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - **Tests:** `xcube/items.test.ts`, "items in a folder, under their own names (T709)": a cube, a view and a data-sourced cube in /Sales checked and applied as a changeset, read back by the dry run and `GET …/items` under their own names. `publish.test.ts`: /Sales's cube probed and held under its own name. `jobs/scope.test.ts`, `repos/calc-resolution.test.ts`, `xcube/sql-runner.test.ts` read bare names. Full API suite 1708/1709: `jobs/partitions.test.ts`'s "reads no partition failed whose build xcube stopped" failed once in the full run and passed alone twice (two builds of one partition at one minute: their order). e2e `security/fresh-start.spec.ts` in Chrome on the R71 image: the new case passes (/Sales's cube held as its own name, unchanged by the folder's rename and move); T702's "the root holds the only `default`" fails, seed-default refused 422 after the data reset (reported; T708's).
     - **AC-328 not ticked:** its 63-byte identifiers, xcube ids and "no rebuild on a move" are T728's to show again on the image.
 
-- [ ] T710 (AC-329, AC-328) The web finds and shows each cube by its one name, with no prefix stripped and no nearest-first lookup
+- [x] T710 (AC-329, AC-328) The web finds and shows each cube by its one name, with no prefix stripped and no nearest-first lookup
   - Files: `packages/web/src/editor/pathCubes.ts`, `packages/web/src/shell/globalSearch.ts`, `packages/web/src/workspaces/model/{inFolder,editedMembers}.ts`, `packages/web/src/workspaces/data-sources/cubeSource.ts`, `ModelFilePage.tsx` (`filesBeside`), each with its test
   - Failing test:
     - `pathCubes.test.ts`: the cubes on an item's path, each by its title with its folder path, and no row for a cube hidden by a nearer one (AC-329).
     - `globalSearch.test.ts`, `editedMembers.test.ts` and `cubeSource.test.ts`: a cube a chart names is found by its name in whichever folder of the path keeps it, and is shown under the name xcube gives (AC-328).
   - Depends on: T709
+  - **Done 2026-10-07.**
+    - `cubeSource.ts`: a shared data source is browsed in Cube by its own name in every folder, a seed's folder too; none in My workspace, as before.
+    - `editedMembers.ts`: every published folder's members by their own names (`prefixOf` is empty for a published folder, none for one not yet published).
+    - `inFolder.ts`: `shownMemberOf` names a member by its one name, with the path of the folder whose files declare its cube (`homesOf`, new, over the published folders' files only, since a workspace copy keeps its original's name: the review's finding) where that isn't the one open; never read from the name. `ModelFilePage.tsx` keeps that lookup with the references warning.
+    - The review also noted `cubesOnPath` has no caller outside its tests since T475/T633 (the picker uses `pickerGroupsOf`, T718's), so its tests show nothing of AC-329's surface; and `reviews/calcRequests.ts`'s `shortName` strip, left since no name in the grammar holds `__`.
+    - `pathCubes.ts`'s `cubesOnPath`: the cubes the path's folders keep, each under its own name, with no nearest-first choice; a workspace copy stands in for the landed cube of its name (compared ignoring case). `globalSearch.ts` names fields by the cube's name, its folder from `meta.xcube`, with no short-name rewrite. `filesBeside` needed nothing.
+    - Left: `pickerGroupsOf`, `FieldList`, `FilterBar` (T718) and `reviews/calcRequests.ts`'s `shortName`, whose strip matches no name in the grammar.
+    - **Tests:** `cubeSource.test.ts` (3; red on the prefix), `editedMembers.test.ts` (22; ten red on the prefix; the "nearer namesake hides" case, impossible under R71, became "a view off the edited cube's path binds none of it"), `ModelInFolder.test.tsx` (21; `shownMemberOf` from files; `homesOf`, a workspace copy listed first never taken, red before the fix; the warning's `not.toContain('femea__')` gave way to the stronger `toContain('… uses orders.count (Sales)')`), `pathCubes.test.ts` (9; green before, a refactor), `globalSearch.test.ts` (12). Full web suite 2593/2593.
+    - **ACs not ticked:** AC-329 stays ticked (the picker's real surface is T718's and T732's); AC-328 is T728's.
 
 - [ ] T711 (AC-272, AC-263) Bind a chart's and a dashboard's cubes by name, to the one cube or view of that name on the item's folder path
   - Files:

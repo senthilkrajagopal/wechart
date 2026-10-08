@@ -144,26 +144,27 @@ describe('what the palette finds', () => {
 });
 
 /**
- * T450, AC-329: a folder's cube is `fsales__orders` in Cube's field list and
- * `orders` in its folder. The palette names its fields by their short names
- * and says which folder the cube is in, never showing the prefixed name.
+ * T450, T710 (AC-329, AC-328): a folder's cube is under its own name in
+ * Cube's field list, `orders` as in its folder (research
+ * `xcube-256d632371.md`, 1.1). The palette names its fields by that name and
+ * says which folder the cube is in, from `meta.xcube`.
  */
-describe('a folder’s fields (T450)', () => {
+describe('a folder’s fields (T450, T710)', () => {
   const inFolder = {
     cubes: [
       {
-        name: 'fsales__orders',
+        name: 'orders',
         title: 'Orders',
         type: 'cube',
         meta: { xcube: { folderId: 'fsales', shortName: 'orders' } },
-        measures: [{ name: 'fsales__orders.count', title: 'Orders Count', shortTitle: 'Count' }],
+        measures: [{ name: 'orders.count', title: 'Orders Count', shortTitle: 'Count' }],
         dimensions: [],
       },
     ],
   };
   const folders = [{ id: 's', title: 'Sales', parentId: 'root', xcubeId: 'fsales' }];
 
-  it('names each by its short name and its cube’s folder path, never the prefixed name', () => {
+  it('names each by its own name and its cube’s folder path, never the folder’s id', () => {
     const found = globalResults('count', { catalog: [], meta: inFolder, files: [], folders });
 
     expect(found.map(({ type, title, detail }) => ({ type, title, detail }))).toEqual([
@@ -173,7 +174,7 @@ describe('a folder’s fields (T450)', () => {
         detail: 'Cube Orders · Shared / Sales',
       },
     ]);
-    // Found by its short name too, and by nothing that shows the prefix.
+    // Found by its name too, and by nothing that shows the folder's id.
     expect(
       globalResults('orders.count', { catalog: [], meta: inFolder, files: [], folders }),
     ).toHaveLength(1);
