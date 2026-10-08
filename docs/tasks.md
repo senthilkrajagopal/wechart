@@ -8957,7 +8957,8 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - no marked-rows group for a chart with no query;
       - the untyped test.
     - **AC-246 ticked** on `tile-menu.spec.ts` and `markings.spec.ts`'s right-click and Menu-key test.
-- [ ] T405 (AC-176) Reach the remaining pointer-only actions from the keyboard
+- [x] T405 (AC-176) Reach the remaining pointer-only actions from the keyboard
+  - **Closed 2026-10-08 under R75** (the user: "every action need not be reachable by keyboard. Whatever is already done is great"). AC-176 is amended to the reach built through T640, and ticked on the re-audit's passing runs: the AC-176 and T631–T640 e2e, 182/182 in Chrome and 47/47 on the security stack (254315ae). T743's four gaps are not built.
   - Files and failing test: as T307 and T182 (above), extended to every phase-2 panel, dialog and popover (rule 85) (AC-176).
   - Depends on: T330, T356, T357, T367
   - **Partly built 2026-10-04. Left unticked, and AC-176 open,** for the parts below that wait on the user or on other agents.
@@ -9024,7 +9025,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **To check in a browser with it** (the code shows the pattern): focus while a focused button is disabled or removed during its request. This applies to the delete dialog's failed delete, "Use in my workspace" while busy, the Pause switch and Run now, and IndexEditor's "Add column" and its last row's ×.
     - **Ticked with it:** T631, T632 and T634–T639. Each one's own work is built, its tests pass in the runs above, and the re-audit found it holding. T405 and AC-176 stay open for T743.
     - **Covered by T611 (AC-399), not AC-176's:** Jobs' queue focus after Cancel and after "Rebuild selected", ↑/↓ between rows, and the schedule Delete dialog's Esc. T611 builds them as design 16 asks. Whether AC-176 waits on them too is for the coordinator.
-- [ ] T743 (AC-176) Keep Tab inside the data source wizard, Import, Export and Generate cubes sheets below 1,024 px, and give focus back after Import's Keep going, the folder heading's Rename and "Back to current" *(added 2026-10-08, from T405's re-audit)*
+- [ ] T743 (AC-176) **Not built, by R75 (2026-10-08): build only on the user's approval.** Keep Tab inside the data source wizard, Import, Export and Generate cubes sheets below 1,024 px, and give focus back after Import's Keep going, the folder heading's Rename and "Back to current" *(added 2026-10-08, from T405's re-audit)*
   - Files:
     - `packages/web/src/workspaces/data-sources/NewSourceWizard.tsx`
     - `packages/web/src/workspaces/explore/import/ImportPane.tsx`

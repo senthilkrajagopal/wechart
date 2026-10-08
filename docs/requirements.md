@@ -950,6 +950,10 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R75 — keyboard reach as built** (2026-10-08, the user)
+- The user: "AC-176 change this for now.. every action need not be reachable by keyboard. Whatever is already done is great. If anything new has to be done.. please check with me before proceeding. Dont want t waste iterations on this."
+- *AC-176 is amended to keep the keyboard reach built through T640, and ticked on its passing tests. T743 (four gaps the re-audit found: Tab kept in four narrow sheets, and focus given back after Import's "Keep going", Explore's heading Rename and the version view's "Back to current") is not built. Any further keyboard work needs the user's approval first.*
+
 **R74 — ancestors are visible, the shared root included** (2026-10-08, the user)
 - Q (from AC-267's check): under R12's ancestor rule, with a grant on a subfolder counting as assigned, a group granted on any top-level folder sees every root-level phase-1 dashboard, view-only. Is that wanted? A: "Yes, as R12 says". *Ancestors are visible, view-only, to anyone granted below them, the shared root included.*
 

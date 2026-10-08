@@ -781,8 +781,8 @@ Traces to: `[R3]`, `[R7]`, direction.md rules 1–5, 39, 52.
       Fails when: the p95 across a repeated run exceeds 3 seconds.
 - [x] AC-175 WHEN a marking changes on a dashboard of 10 charts, THE SYSTEM SHALL update every affected tile within 3 seconds at the 95th percentile.
       Fails when: the p95 update time exceeds 3 seconds.
-- [ ] AC-176 THE SYSTEM SHALL make every action reachable from the keyboard: navigation, authoring, marking, filtering and every dialog, with a visible focus indicator distinct from the marking outline (direction.md rules 39, 52; phase 2, `[R16]`).
-      Fails when: an action can be performed only with a pointer, or focus is invisible on any control.
+- [x] AC-176 THE SYSTEM SHALL ~~make every action reachable from the keyboard: navigation, authoring, marking, filtering and every dialog, with a visible focus indicator distinct from the marking outline~~ keep reachable from the keyboard every action built so as of 2026-10-08 (T182, T307, T405, T631–T640): navigation, authoring, marking, filtering and the dialogs those tasks cover, with a visible focus indicator distinct from the marking outline. Further keyboard reach is added only on the user's approval (direction.md rules 39, 52; phase 2, `[R16]`; amended 2026-10-08, `[R75]`).
+      Fails when: ~~an action can be performed only with a pointer, or focus is invisible on any control~~ an action those tasks made reachable from the keyboard can no longer be performed without a pointer, or focus is invisible on a control they cover (amended 2026-10-08, `[R75]`).
 - [x] AC-177 THE SYSTEM SHALL pair every status, validation and job state with an icon and a text label (direction.md rule 3).
       Fails when: any state is conveyed by colour alone.
 - [x] AC-178 THE SYSTEM SHALL provide a table view of every chart's data, reachable from the tile (direction.md rule 5).
