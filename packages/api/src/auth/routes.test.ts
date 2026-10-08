@@ -97,7 +97,12 @@ describe('signing in through the configured OIDC provider (T316, AC-252)', () =>
     expect((meToo.json() as { groups: string[] }).groups).toEqual([]);
   });
 
-  it('refuses a callback it didn’t start, and signs nobody in', async () => {
+  /**
+   * T697 (design 09, state D): a callback that fails lands on wechart's own
+   * page, the reason in its Details, and signs nobody in; never a JSON body
+   * in the browser.
+   */
+  it('sends a callback it didn’t start to wechart’s sign-in-failed page, and signs nobody in', async () => {
     const app = serve();
     const login = await app.inject({ method: 'GET', url: '/api/auth/login' });
     const cookie = cookieOf(login.headers['set-cookie']);
@@ -106,9 +111,56 @@ describe('signing in through the configured OIDC provider (T316, AC-252)', () =>
       url: '/api/auth/callback?code=x&state=not-the-one-it-sent',
       headers: { cookie },
     });
-    expect(response.statusCode).toBe(400);
+    expect(response.statusCode).toBe(302);
+    // Its address carries no words of its own (T697's review): the reason is
+    // kept in this browser's session, for the page.
+    expect(response.headers.location).toBe('/sign-in-failed');
+    const failed = await app.inject({ method: 'GET', url: '/sign-in-failed', headers: { cookie } });
+    expect(failed.body).toContain(
+      '<pre class="state-card__code">This sign-in wasn’t started here.</pre>',
+    );
     const me = await app.inject({ method: 'GET', url: '/api/me', headers: { cookie } });
     expect(me.statusCode).toBe(401);
+  });
+
+  it('sends a code the provider refuses to the sign-in-failed page with the provider’s reason', async () => {
+    const app = serve();
+    const login = await app.inject({ method: 'GET', url: '/api/auth/login?returnTo=/jobs' });
+    const cookie = cookieOf(login.headers['set-cookie']);
+    const state = new URL(login.headers.location as string).searchParams.get('state')!;
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/auth/callback?code=not-a-code-dex-issued&state=${state}`,
+      headers: { cookie },
+    });
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe('/sign-in-failed');
+    const failed = await app.inject({ method: 'GET', url: '/sign-in-failed', headers: { cookie } });
+    // The provider's words, as openid-client gives them, for Details: some
+    // reason, and not the one for a sign-in wechart didn't start.
+    const detail = /<pre class="state-card__code">([^<]+)<\/pre>/.exec(failed.body)?.[1];
+    expect(detail?.trim().length).toBeGreaterThan(0);
+    expect(detail).not.toBe('This sign-in wasn’t started here.');
+    // "Try again" returns to where the sign-in started.
+    expect(failed.body).toContain(
+      '<a class="btn btn-primary" href="/api/auth/login?returnTo=%2Fjobs">Try again</a>',
+    );
+    const me = await app.inject({ method: 'GET', url: '/api/me', headers: { cookie } });
+    expect(me.statusCode).toBe(401);
+  });
+
+  it('shows nothing a link puts in the sign-in-failed page’s address (T697’s review)', async () => {
+    const app = serve();
+    const page = await app.inject({
+      method: 'GET',
+      url: `/sign-in-failed?detail=${encodeURIComponent('Your account is locked. Call 555-0100.')}&returnTo=${encodeURIComponent('https://evil.example')}`,
+    });
+    expect(page.statusCode).toBe(200);
+    expect(page.body).not.toContain('Your account is locked');
+    expect(page.body).not.toContain('<details');
+    expect(page.body).toContain(
+      '<a class="btn btn-primary" href="/api/auth/login?returnTo=%2F">Try again</a>',
+    );
   });
 
   it('gives the session a new id once signed in (no session fixation)', async () => {

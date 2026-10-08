@@ -91,6 +91,8 @@ describe('the folder a new workspace item is to go to (T345, AC-282)', () => {
       />,
     );
     const filter = screen.getByRole('searchbox', { name: 'Filter folders' });
+    // The design's search icon at its head (state B; T697, the coordinator's call).
+    expect(filter.parentElement?.querySelector('svg[data-icon="search"]')).not.toBeNull();
     await user.type(filter, 'emea');
     const tree = screen.getByRole('tree', { name: 'Target folder' });
     expect([...tree.querySelectorAll('[role="treeitem"]')].map((row) => row.textContent)).toEqual([

@@ -63,8 +63,9 @@ describe('signing out (T317, AC-253)', () => {
 
     const out = await app.inject({ method: 'POST', url: '/api/auth/logout', headers: { cookie } });
     expect(out.statusCode).toBe(200);
-    // Dex has no end-session endpoint (research/dex.md), so back to wechart.
-    expect(out.json()).toEqual({ redirectTo: `${PUBLIC_URL}/` });
+    // Dex has no end-session endpoint (research/dex.md), so back to wechart:
+    // its own signed-out page, never the provider's form (design 09, state C; T697).
+    expect(out.json()).toEqual({ redirectTo: `${PUBLIC_URL}/signed-out` });
 
     const me = await app.inject({ method: 'GET', url: '/api/me', headers: { cookie } });
     expect(me.statusCode).toBe(401);
@@ -105,7 +106,7 @@ describe('signing out (T317, AC-253)', () => {
     const app = serve();
     const out = await app.inject({ method: 'POST', url: '/api/auth/logout' });
     expect(out.statusCode).toBe(200);
-    expect(out.json()).toEqual({ redirectTo: `${PUBLIC_URL}/` });
+    expect(out.json()).toEqual({ redirectTo: `${PUBLIC_URL}/signed-out` });
   });
 
   // T317's review: a cross-site form's POST carries no SameSite=Lax cookie. Were
@@ -158,13 +159,14 @@ describe('where signing out sends the browser (T317, research/openid-client.md â
     );
     expect(`${target.origin}${target.pathname}`).toBe('https://login.example/tenant/logout');
     expect(target.searchParams.get('id_token_hint')).toBe('the.id.token');
-    expect(target.searchParams.get('post_logout_redirect_uri')).toBe(`${PUBLIC_URL}/`);
+    // Back to wechart's own signed-out page (design 09, state C; T697).
+    expect(target.searchParams.get('post_logout_redirect_uri')).toBe(`${PUBLIC_URL}/signed-out`);
     expect(target.searchParams.get('client_id')).toBe('wechart');
   });
 
   it('back to wechart when the provider has none, or canâ€™t be reached', () => {
-    expect(signOutTarget(provider(), PUBLIC_URL, 'the.id.token')).toBe(`${PUBLIC_URL}/`);
-    expect(signOutTarget(undefined, PUBLIC_URL, 'the.id.token')).toBe(`${PUBLIC_URL}/`);
+    expect(signOutTarget(provider(), PUBLIC_URL, 'the.id.token')).toBe(`${PUBLIC_URL}/signed-out`);
+    expect(signOutTarget(undefined, PUBLIC_URL, 'the.id.token')).toBe(`${PUBLIC_URL}/signed-out`);
   });
 
   it('without a hint when there was no ID token', () => {

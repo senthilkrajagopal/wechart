@@ -227,6 +227,9 @@ importers:
       '@wechart/core':
         specifier: workspace:*
         version: link:../core
+      '@wechart/ui':
+        specifier: workspace:*
+        version: link:../ui
       close-with-grace:
         specifier: 2.5.0
         version: 2.5.0

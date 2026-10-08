@@ -171,17 +171,37 @@ export function NewItemDialog({
               {...(many
                 ? {
                     filter: (
-                      <input
-                        type="search"
-                        className="new-item-dialog__filter"
-                        aria-label="Filter folders"
-                        placeholder="Filter folders"
-                        value={match}
-                        onChange={(event) => {
-                          setMatch(event.target.value);
-                        }}
-                        onKeyDown={onFilterKey}
-                      />
+                      <span className="new-item-dialog__find">
+                        {/* Design 04 state B's search icon at its head. */}
+                        <svg
+                          data-icon="search"
+                          viewBox="0 0 16 16"
+                          width="14"
+                          height="14"
+                          aria-hidden="true"
+                        >
+                          <circle
+                            cx="7"
+                            cy="7"
+                            r="4.5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                          />
+                          <path d="M10.5 10.5l3 3" stroke="currentColor" strokeWidth="1.6" />
+                        </svg>
+                        <input
+                          type="search"
+                          className="new-item-dialog__filter"
+                          aria-label="Filter folders"
+                          placeholder="Filter folders"
+                          value={match}
+                          onChange={(event) => {
+                            setMatch(event.target.value);
+                          }}
+                          onKeyDown={onFilterKey}
+                        />
+                      </span>
                     ),
                   }
                 : {})}

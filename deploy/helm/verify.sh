@@ -242,6 +242,15 @@ if [[ "$security" == true ]]; then
   else
     fail "3a. /api/me without a session answered $status"
   fi
+  # Sign-in's own page for signing out (T697; design 09, state C): served
+  # without a session, by the API, with no app bundle.
+  signedout="$(curl -sS --max-time 30 -w '\n%{http_code}' "$url/signed-out")"
+  if [[ "${signedout##*$'\n'}" == 200 && "$signedout" == *'signed out of wechart'* \
+    && "$signedout" != *'/assets/'* ]]; then
+    pass '3a. /signed-out is wechart'"'"'s own page, without a session'
+  else
+    fail "3a. /signed-out answered ${signedout##*$'\n'}"
+  fi
   # Sign-in's next hop is the provider, at the issuer the values give it.
   issuer="$(jq -r 'if (.security.oidc.issuer // "") != "" then .security.oidc.issuer
     else "http://localhost:\(.security.dex.port)/dex" end' <<< "$release_values")"

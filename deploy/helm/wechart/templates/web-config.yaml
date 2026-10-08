@@ -77,6 +77,18 @@ data:
             proxy_set_header X-Forwarded-Host $host;
         }
 
+        # Sign-in's own pages for its end (design 09, states C and D; T697):
+        # the API serves them whole, with no app bundle, to anyone, since they
+        # are for those not signed in. Nothing of wechart is in them (AC-251).
+        location ~ ^/(signed-out|sign-in-failed)$ {
+            proxy_pass http://{{ include "wechart.host" (list . "api") }}:{{ .Values.api.port }};
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Host $host;
+        }
+
         # Vite's hashed files never change; one that is missing is a 404,
         # not the app.
         location /assets/ {

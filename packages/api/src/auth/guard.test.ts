@@ -138,6 +138,10 @@ describe('with security on and no session (T318, AC-251)', () => {
       'public GET /api/auth/login',
       'public GET /api/cube-health',
       'public GET /api/health',
+      // Sign-in's own pages for its end (design 09, states C and D; T697): the
+      // product mark and one sentence, no wechart content (AC-251's exemption).
+      'public GET /sign-in-failed',
+      'public GET /signed-out',
       'public POST /api/auth/logout',
     ]);
     const health = await app.inject({ method: 'GET', url: '/api/health' });

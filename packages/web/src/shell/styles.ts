@@ -5436,7 +5436,16 @@ main:has(.review-view) {
 .new-item-dialog__note b { color: var(--wc-text-primary); }
 /* Design 04's .ptree: rows edge to edge, radius 4. */
 .new-item-dialog .target-tree { gap: 0; border-radius: 4px; }
-.new-item-dialog .new-item-dialog__filter { width: 100%; height: 32px; box-sizing: border-box; }
+/* The filter, its search icon at its head (design 04, state B). The text
+   starts after the icon, over the global input rule's padding. */
+.new-item-dialog__find { position: relative; display: block; }
+.new-item-dialog__find > svg { position: absolute; left: 9px; top: 9px; color: var(--wc-text-muted); pointer-events: none; }
+.new-item-dialog__find > input.new-item-dialog__filter:not([type='checkbox']):not([type='radio']) {
+  width: 100%;
+  height: 32px;
+  box-sizing: border-box;
+  padding-left: 29px;
+}
 .new-item-dialog .field__help { margin: 0; font-size: var(--wc-text-xs-size); line-height: var(--wc-text-xs-line); color: var(--wc-text-secondary); }
 .new-item-dialog .field input,
 .new-item-dialog .field select { height: 32px; }

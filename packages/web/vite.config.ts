@@ -8,6 +8,17 @@ import { defineConfig } from 'vitest/config';
  */
 const api = process.env['WECHART_API_URL'] ?? 'http://localhost:4100';
 
+/**
+ * To the API: its routes, and sign-in's own pages for its end (design 09,
+ * states C and D; T697), which the API serves whole, as the web server routes
+ * them in a deployment.
+ */
+const toApi = { target: api, changeOrigin: true };
+const proxy = {
+  '/api': toApi,
+  '^/(signed-out|sign-in-failed)$': toApi,
+};
+
 export default defineConfig({
   plugins: [react()],
   // The browser only ever talks to wechart's own origin; the API holds the
@@ -17,12 +28,8 @@ export default defineConfig({
   // `preview.proxy` is the built app's, and Vite does not share them. The
   // browser suite serves the build, so without the second one every /api call
   // in it would 404.
-  server: {
-    proxy: { '/api': { target: api, changeOrigin: true } },
-  },
-  preview: {
-    proxy: { '/api': { target: api, changeOrigin: true } },
-  },
+  server: { proxy },
+  preview: { proxy },
   test: {
     environment: 'jsdom',
     globals: false,

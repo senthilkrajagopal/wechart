@@ -70,12 +70,36 @@ test('after Sign out, the next page asks for a new sign-in (AC-253)', async ({ p
     .getByRole('button', { name: /^Account: / })
     .click();
   await page.getByRole('menuitem', { name: 'Sign out' }).click();
-  await expect(page).toHaveURL(DEX_FORM);
+  // wechart's own page, not the provider's form a shared machine would sit
+  // on (design 09, state C; T697): the mark, one sentence, Sign in again.
+  await expect(page).toHaveURL(`${BASE_URL}/signed-out`);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('You’ve signed out of wechart.');
+  await expect(page.locator('.app-bar')).toHaveCount(0);
+  const again = page.getByRole('link', { name: 'Sign in again' });
+  await expect(again).toHaveAttribute('href', '/api/auth/login');
 
   const appeared = await watchForWechart(page);
   await page.goto('/explore');
   await expect(page).toHaveURL(DEX_FORM);
   expect(appeared()).toBe(false);
+});
+
+/**
+ * T697 (design 09, state D): a sign-in that fails ends on wechart's own page,
+ * never a JSON body or the app.
+ */
+test('a sign-in that fails ends on wechart’s own page, its reason in Details', async ({ page }) => {
+  // A callback wechart didn't start: state D, its reason in Details.
+  await page.goto('/api/auth/callback?code=x&state=not-one-wechart-sent');
+  // Its address carries no words of its own: the reason is the session's.
+  await expect(page).toHaveURL(`${BASE_URL}/sign-in-failed`);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('wechart couldn’t sign you in.');
+  await page.getByText('Details').click();
+  await expect(page.locator('pre')).toHaveText('This sign-in wasn’t started here.');
+  await expect(page.getByRole('link', { name: 'Try again' })).toHaveAttribute(
+    'href',
+    '/api/auth/login?returnTo=%2F',
+  );
 });
 
 test('a sign-in past its 12 hours asks for a new one, and says so mid-work (AC-316)', async ({

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 import fastifyCookie from '@fastify/cookie';
 import fastifySession, { type SessionStore } from '@fastify/session';
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import * as oidc from 'openid-client';
 
 import { recordIn } from '../audit/record';
@@ -10,6 +10,7 @@ import type { Config, OidcSettings } from '../config';
 import type { AuditStore } from '../repos/audit';
 import { PUBLIC } from './guard';
 import { displayNameFrom, groupsFrom, identityFrom, oidcConfig } from './oidc';
+import { signedOutPage, signInFailedPage } from './statePages';
 
 /**
  * Signing in, with security on (T316, AC-252, AC-316; research/openid-client.md):
@@ -50,6 +51,12 @@ declare module 'fastify' {
     /** For `id_token_hint` at sign-out, where the provider takes one. */
     idToken?: string;
     oidcTx?: Record<string, SignInAttempt>;
+    /**
+     * Why the last sign-in failed, for its page's Details (design 09, state
+     * D; T697), kept here rather than in the page's address, so no link can
+     * put words of its own on a wechart page (T697's review).
+     */
+    signInFailure?: { readonly detail: string; readonly returnTo: string };
   }
 }
 
@@ -137,12 +144,41 @@ export function signOutTarget(
   publicUrl: string,
   idToken: string | undefined,
 ): string {
-  const home = new URL('/', publicUrl).href;
+  // wechart's own signed-out page (design 09, state C; T697), never the
+  // provider's sign-in form, which a shared machine would sit on pre-filled.
+  // The provider registers it as a post-logout redirect (docs/deploy.md).
+  const home = new URL(SIGNED_OUT, publicUrl).href;
   if (config?.serverMetadata().end_session_endpoint === undefined) return home;
   return oidc.buildEndSessionUrl(config, {
     post_logout_redirect_uri: home,
     ...(idToken === undefined ? {} : { id_token_hint: idToken }),
   }).href;
+}
+
+/**
+ * wechart's own pages for the end of a sign-in (design 09, states C and D;
+ * T697). State E, no group list, waits on how to tell it from a user in no
+ * group: Dex and Keycloak leave the claim out for one (research/dex.md,
+ * keycloak.md).
+ */
+export const SIGNED_OUT = '/signed-out';
+export const SIGN_IN_FAILED = '/sign-in-failed';
+
+/**
+ * To the sign-in-failed page (state D): never a JSON body in the browser. The
+ * reason for its Details and where "Try again" returns to are kept in the
+ * session, signed in as nobody, so the page's address carries no words a
+ * link could choose (T697's review).
+ */
+function failedSignIn(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  detail: string,
+  returnTo = '/',
+): FastifyReply {
+  if (request.session.user === undefined) request.session.options({ maxAge: PENDING_MS });
+  request.session.signInFailure = { detail: detail.slice(0, 500), returnTo };
+  return reply.redirect(SIGN_IN_FAILED);
 }
 
 /** The provider couldn't be asked: say so, not "Internal error" (T316's review). */
@@ -214,20 +250,47 @@ export function registerSignIn(app: FastifyInstance, options: SignInOptions): vo
     return reply.redirect(url.href);
   });
 
+  /**
+   * wechart's own pages for the end of a sign-in (design 09, states C and D; T697),
+   * served here, whole, since the web server gives the app's bundle only to
+   * the signed-in (AC-251). The web server routes these two paths to the API.
+   */
+  const html = (reply: FastifyReply, body: string) =>
+    reply.type('text/html; charset=utf-8').header('cache-control', 'no-store').send(body);
+  app.get(SIGNED_OUT, PUBLIC, async (_request, reply) => html(reply, signedOutPage()));
+  app.get(SIGN_IN_FAILED, PUBLIC, async (request, reply) => {
+    // The reason this session's sign-in failed; nothing from the address.
+    const failure = request.session.signInFailure;
+    return html(
+      reply,
+      signInFailedPage(
+        failure?.detail ?? '',
+        safeReturnTo(failure?.returnTo ?? '/', options.publicUrl),
+      ),
+    );
+  });
+
   app.get('/api/auth/callback', PUBLIC, async (request, reply) => {
     // Built from the configured public address, never from the request's Host.
     const current = new URL(request.url, options.publicUrl);
     const state = current.searchParams.get('state') ?? '';
     const attempt = request.session.oidcTx?.[state];
     if (attempt === undefined || Date.now() - attempt.at >= PENDING_MS) {
-      return reply.status(400).send({ error: 'This sign-in wasn’t started here. Sign in again.' });
+      return failedSignIn(request, reply, 'This sign-in wasn’t started here.');
     }
 
     let config: oidc.Configuration;
     try {
       config = await oidcConfig(options.oidc);
     } catch (error) {
-      return unreachable(reply, error);
+      // On the way back, the browser's: wechart's page, never JSON (T697's review).
+      request.log.warn({ err: error }, 'the sign-in provider could not be reached');
+      return failedSignIn(
+        request,
+        reply,
+        'The sign-in provider can’t be reached. Try again shortly.',
+        attempt.returnTo,
+      );
     }
     let tokens: Awaited<ReturnType<typeof oidc.authorizationCodeGrant>>;
     try {
@@ -238,14 +301,16 @@ export function registerSignIn(app: FastifyInstance, options: SignInOptions): vo
       });
     } catch (error) {
       request.log.warn({ err: error }, 'sign-in failed');
-      return reply.status(400).send({
-        error: 'wechart couldn’t sign you in.',
-        detail: error instanceof Error ? error.message : String(error),
-      });
+      return failedSignIn(
+        request,
+        reply,
+        error instanceof Error ? error.message : String(error),
+        attempt.returnTo,
+      );
     }
     const claims = tokens.claims();
     if (claims === undefined) {
-      return reply.status(502).send({ error: 'The provider sent no ID token.' });
+      return failedSignIn(request, reply, 'The provider sent no ID token.', attempt.returnTo);
     }
 
     // Groups from the configured claim: the ID token's, else UserInfo's.
@@ -256,10 +321,14 @@ export function registerSignIn(app: FastifyInstance, options: SignInOptions): vo
         groups = groupsFrom(userInfo, options.oidc.groupsClaim);
       } catch (error) {
         request.log.warn({ err: error }, 'the provider’s UserInfo failed');
-        return reply.status(502).send({
-          error: 'wechart couldn’t read your groups from the sign-in provider.',
-          detail: error instanceof Error ? error.message : String(error),
-        });
+        return failedSignIn(
+          request,
+          reply,
+          `wechart couldn’t read your groups from the sign-in provider: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          attempt.returnTo,
+        );
       }
     }
 

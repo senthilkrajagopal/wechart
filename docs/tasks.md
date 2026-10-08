@@ -9517,6 +9517,10 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       4. With a choice the filter hides, Enter left it chosen. It now chooses the first match (`NewItemDialog.test.tsx`, failing first).
       - After the fixes: `explore` 20 of 20; the security suite's `explore-roles`, `workspaces` and `workspace-overlay`, 32 of 32.
       - Left, as the review's nits: the filter's arrows aren't announced (no live region), the design's search icon in the filter box, and the tree's own "· required", which is unchanged from design 01's tree.
+      - **Followed up in T697's commit (the coordinator, 2026-10-08):**
+        - The filter box now has design 04 state B's search icon, its text starting after it (`NewItemDialog.test.tsx`, failing first).
+        - **A known gap for the user, under R75:** a screen reader announces nothing as the filter's arrows move the choice. Announcing it is new keyboard and screen-reader behaviour, which R75 holds back.
+        - The tree's own "· required" stays as design 01's tree has it.
 - [ ] T693 (AC-187, AC-343, AC-369, AC-370) Explore's list, head, tree and menus as designs 14 and 04 draw them *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/workspaces/explore/{ExplorePage,FolderContents,FolderTree}.tsx`, `packages/web/src/shell/{MenuButton.tsx,styles.ts}` (+ tests), `e2e/design-conformance.spec.ts`, `e2e/explore.spec.ts`
   - Findings: EXP-02, EXP-03, EXP-04, EXP-05, EXP-07, EXP-10, EXP-11, EXP-12, EXP-14, EXP-25, EXP-26, EXP-27 (`docs/design/critiques/2026-10-08-explore-access-signin.md`).
@@ -9576,7 +9580,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **components-Q4:** below 1,280 px the single-user chip shows its icon only, the warning-coloured open padlock. Its label moves to its accessible name and tooltip, and "Sign-in is off" stays one click away in its menu. The search and Reviews keep their labels.
     - **components-Q5:** every 11 px text in the bar and its menus goes to 12 px; the floor is absolute (direction §3).
   - Depends on: none
-- [ ] T697 (AC-251, AC-253, AC-343) wechart's own pages after signing out, when sign-in fails, and when no group list comes back, as design 09 states C–E draw them *(added 2026-10-08 by T406)*
+- [x] T697 (AC-251, AC-253, AC-343) wechart's own pages after signing out, when sign-in fails, and when no group list comes back, as design 09 states C–E draw them *(added 2026-10-08 by T406)*
   - Files: `packages/api/src/auth/routes.ts` (+ test), `packages/web/src/shell/SignInPages.tsx` (+ test), `e2e/security/sign-in.spec.ts`
   - Findings: EXP-19, EXP-20.
   - Failing test:
@@ -9584,6 +9588,42 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - a failed callback lands on "wechart couldn't sign you in." with Details and "Try again", never JSON;
     - a sign-in without groups lands on state E's page with "Sign out".
   - Depends on: none
+  - **Built 2026-10-08: states C and D.** State E is not built (below).
+    - **Why the API serves them.** With sign-in on, the web server gives the app's bundle only to the signed-in (AC-251). Someone just signed out, or refused, would get sign-in again for the bundle, and never the page. So the API serves these pages whole, as plain HTML in `@wechart/ui`'s tokens (the stylesheet's own source), in the viewer's theme, with no app bundle (`packages/api/src/auth/statePages.ts`).
+    - **Routing.** The web server routes `/signed-out` and `/sign-in-failed` to the API without a session (the Helm chart's nginx; Vite's dev and preview proxies). They are sign-in's own routes under AC-251's exemption, which `guard.test.ts` lists.
+    - **State C.** Signing out lands on `/signed-out`, "You've signed out of wechart.", with "Sign in again" (to `/api/auth/login`); never Dex's or Entra's form, which a shared machine would sit on.
+      - `signOutTarget`'s home is now `/signed-out`, and so is its `post_logout_redirect_uri` for a provider with an end-session endpoint.
+      - The coordinator's call: `docs/deploy.md` now lists `<publicUrl>/signed-out` as the post-logout URI to register, and T411 carries the note for the Entra setup.
+      - `deploy/helm/verify.sh` checks the page is served without a session, with no app bundle.
+    - **State D.** A failed callback lands on `/sign-in-failed`, "wechart couldn't sign you in.", the reason only in Details, and "Try again" back to where the sign-in began; never a JSON body. This covers:
+      - a callback wechart didn't start;
+      - a code the provider refuses;
+      - no ID token;
+      - a UserInfo that failed.
+      - The reason is escaped and capped at 500 characters.
+      - Try again's return is checked as sign-in's own is (`safeReturnTo`).
+      - The reason and the return are kept in the browser's session, signed in as nobody, never in the page's address. `/sign-in-failed` reads them there.
+    - **The page** is design 09's `.state-card`: centred, at most 420 px, padding 24; the 36 px mark (radius 8, 16/600); the title 16/22/600; Details as design 09's `.details`, its reason in the code face on bg-subtle; buttons 32 px.
+    - **State E, not built: a question for the coordinator.** Design 09 keys E on "the token carried no groups claim (for example Entra's overage)".
+      - Dex and Keycloak leave the claim out for a user in no group (research `dex.md` §3, "omitempty"; `keycloak.md` row 4). The absence can't tell an overage from such a user.
+      - Built that way, it locked out the security suite's `nobody` (`sign-in.spec.ts`, `explore-roles.spec.ts`).
+      - The options:
+        - (a) Detect Entra's overage marker itself, which needs a research entry on how Entra marks it and a check at T411.
+        - (b) A setting saying the provider always sends the claim.
+        - (c) Leave E unbuilt, with a user in no group signed in to an empty Explore, as now.
+      - Recommended: (a), at T411, where a real tenant can be checked.
+    - **Tests**, each failing first:
+      - `statePages.test.ts`: C and D, D's reason as text and Try again's safe return.
+      - `routes.test.ts`: a callback wechart didn't start, and a code the provider refuses, each landing on D with nobody signed in.
+      - `logout.test.ts`: sign-out's target `/signed-out`, and the provider's `post_logout_redirect_uri` with it.
+      - `guard.test.ts`: the two pages added to AC-251's exempt list.
+      - `security/page-gate.spec.ts`: Sign out lands on C and the next page still asks for sign-in; a failed callback lands on D with its Details and Try again.
+      - Results: the API's `auth` tests, 76 of 76; in the security suite, `page-gate`, `sign-in` and `explore-roles`, 33 of 33; in the main suite, `shell` and `consistency`, 42 of 42.
+    - **The cold review (PASS), with two of its findings taken up:**
+      - **Text from a link.** The reason first went in the page's address (`?detail=`), so any link could put its own words on a wechart page headed "wechart couldn't sign you in." The reason and the return are now kept in the session, and the address carries nothing. `routes.test.ts` checks that a crafted `?detail=` shows nothing.
+      - **An unreachable provider.** If the provider couldn't be reached on the way back (only if the API had restarted since the sign-in began), the callback answered JSON. It now lands on D too.
+      - After both: `auth` 77 of 77; `page-gate` and `sign-in` 14 of 14.
+      - Left, as the review's nits: D's Details closed at first, where the design draws it open; and nginx's route for the two pages also sits outside `security.enabled`, where the API answers 404.
 - [ ] T698 (AC-343, AC-284, AC-374, AC-187) A data source's pages as designs 03 and 15 draw them: Propose and the version line, the frame, the editor, Test to save, the save bar, and the SQL tab's off panel *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/workspaces/data-sources/{SourceSettings,SourceEditor,connectionTest,SqlRunner,DataSourcesList}.tsx`, `packages/web/src/shell/{InfoBar.tsx,styles.ts}` (+ tests), `docs/phase-2/backlog.md` §6(c), `docs/design/reviews/status.md`, `e2e/security/data-sources.spec.ts`, `e2e/security/sql-runner.spec.ts`
   - Findings: SRC-02, SRC-03, SRC-05 (head and SQL icons), SRC-06, SRC-07, SRC-08, SRC-09, SRC-10, SRC-11, SRC-15, SRC-17, SRC-18, SRC-19, SRC-20, SRC-21 (`docs/design/critiques/2026-10-08-data-sources.md`).
@@ -9774,7 +9814,8 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `docs/deploy.md` (the configuration used), `docs/handoff.md` (the result)
   - Failing test: signing in as a directory user whose groups are known, and comparing the groups wechart resolves with the directory's (AC-258). **Needs the user:** a tenant or broker to test against.
   - Depends on: T410
-  - Also to check there (T317's review): the provider must accept wechart's public root as a post-logout redirect URI, which Entra requires to be registered; and a sign-out URL whose `id_token_hint` carries a token with up to 200 group GUIDs must fit the URL limits on the way.
+  - Also to check there (T317's review): the provider must accept ~~wechart's public root~~ `<publicUrl>/signed-out` (T697, design 09 state C; the coordinator, 2026-10-08) as a post-logout redirect URI, which Entra requires to be registered; and a sign-out URL whose `id_token_hint` carries a token with up to 200 group GUIDs must fit the URL limits on the way.
+  - Also from T697: design 09's state E ("Your sign-in worked, but no group list came with it.") isn't built. Dex and Keycloak leave the groups claim out for a user in no group, so its absence can't tell an Entra overage from such a user. Check here how Entra marks an overage, if the user chooses to detect it.
 
 ## P2.16 The Cube introspection package (branch `feat/xcube`)
 
