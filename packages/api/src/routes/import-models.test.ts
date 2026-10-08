@@ -53,7 +53,7 @@ const docs = () => documents(getDb());
 const files = () => modelFileStore(getDb());
 const sources = () => dataSourceStore(getDb());
 const made: { kind: DocumentKind; id: string }[] = [];
-const folders = { sales: '', ops: '', hidden: '' };
+const folders = { sales: '', ops: '', hidden: '', unserved: '' };
 let sourceId = '';
 let app: FastifyInstance;
 let stub: ReturnType<typeof fakeXcube>;
@@ -129,6 +129,8 @@ beforeAll(async () => {
     ['ops', 'Ops', ['sales-rw']],
     // One the writer can't see (T720's review).
     ['hidden', 'Hidden', [`${MARK}-nobody`]],
+    // One xcube doesn't serve: its files have not landed (T720's second follow-up).
+    ['unserved', 'Unserved', ['sales-rw']],
   ] as const) {
     const id = randomUUID();
     made.push({ kind: 'folder', id });
@@ -148,6 +150,7 @@ beforeAll(async () => {
     { folderId: folders.sales, path: pathOf('orders'), content: cube(name('orders')) },
     { folderId: folders.ops, path: pathOf('ops'), content: cube(name('ops')) },
     { folderId: folders.hidden, path: pathOf('secret'), content: cube(name('secret')) },
+    { folderId: folders.unserved, path: pathOf('unserved'), content: cube(name('unserved')) },
   ]);
   sourceId = (
     await sources().create({
@@ -238,7 +241,7 @@ afterAll(async () => {
     .execute();
   await db
     .deleteFrom('model_files')
-    .where('folder_id', 'in', [folders.sales, folders.ops, folders.hidden])
+    .where('folder_id', 'in', [folders.sales, folders.ops, folders.hidden, folders.unserved])
     .execute();
   const boards = (
     await db
@@ -543,6 +546,83 @@ describe('the models of an imported file (T720, AC-357, AC-356)', () => {
       parts: [{ part: `Model ${pathOf('broken')}`, why: 'Broken here' }],
     });
     expect(await everything()).toEqual(before);
+  });
+});
+
+/**
+ * T720's second follow-up (AC-357, AC-356; the coordinator's rulings,
+ * 2026-10-08): a model declaring a held name beside a new one is refused,
+ * naming it, neither mapped whole nor split; two new models of one name in a
+ * file are refused at Review, naming each, before xcube is asked; and a name
+ * has landed only where xcube serves its folder, as the name checks hold.
+ */
+describe('a file’s models refused before xcube is asked, and what has landed (T720, AC-357)', () => {
+  const refused = (parts: { part: string; why: string }[]) => ({
+    error: 'Refused: nothing was imported.',
+    parts,
+  });
+
+  it('refuses a model declaring a name in use beside a new one, naming it, at Review and Import', async () => {
+    const mixed = [
+      {
+        path: pathOf('mixed'),
+        content: `${cube(name('orders'))}  - name: ${name('mixed_new')}\n    sql_table: public.${name('mixed_new')}\n`,
+      },
+    ];
+    const why = `“${name('orders')}” is in use and “${name('mixed_new')}” is new: a model file is either mapped to items in use or imported as new, not both. Split it, then import again.`;
+    const reviewed = await review(exportFile(mixed, `${MARK} mixed`));
+    expect(reviewed.statusCode, reviewed.body).toBe(409);
+    expect(reviewed.json()).toEqual(refused([{ part: `Model ${pathOf('mixed')}`, why }]));
+    const before = await everything();
+    const answer = await land(exportFile(mixed, `${MARK} mixed`));
+    expect(answer.statusCode, answer.body).toBe(409);
+    expect(answer.json()).toEqual(refused([{ part: `Model ${pathOf('mixed')}`, why }]));
+    expect(await everything()).toEqual(before);
+  });
+
+  it('refuses two new models of one name, naming each, before xcube is asked', async () => {
+    const twins = [
+      { path: pathOf('twin_a'), content: cube(name('twin')) },
+      { path: pathOf('twin_b'), content: cube(name('TWIN')) },
+    ];
+    const parts = [
+      {
+        part: `Model ${pathOf('twin_a')}`,
+        why: `Another model in the file declares “${name('twin')}” too: each name is declared once.`,
+      },
+      {
+        part: `Model ${pathOf('twin_b')}`,
+        why: `Another model in the file declares “${name('TWIN')}” too: each name is declared once.`,
+      },
+    ];
+    const overlay = stub.overlay(MODEL, workspaceOverlayIdOf(workspace))?.version;
+    const reviewed = await review(exportFile(twins, `${MARK} twins`));
+    expect(reviewed.statusCode, reviewed.body).toBe(409);
+    expect(reviewed.json()).toEqual(refused(parts));
+    const before = await everything();
+    const answer = await land(exportFile(twins, `${MARK} twins`));
+    expect(answer.statusCode, answer.body).toBe(409);
+    expect(answer.json()).toEqual(refused(parts));
+    expect(await everything()).toEqual(before);
+    expect(stub.overlay(MODEL, workspaceOverlayIdOf(workspace))?.version).toBe(overlay);
+  });
+
+  it('holds a name landed only where xcube serves its folder, as the name checks do', async () => {
+    const elsewhere = [{ path: pathOf('unserved_copy'), content: cube(name('unserved')) }];
+    const reviewed = await review(exportFile(elsewhere, `${MARK} unserved`));
+    expect(reviewed.statusCode, reviewed.body).toBe(200);
+    expect(modelsIn(reviewed.json<Reviewed>())).toEqual([
+      {
+        kind: 'model',
+        key: pathOf('unserved_copy'),
+        title: pathOf('unserved_copy'),
+        lands: 'draft',
+        warnings: [],
+      },
+    ]);
+    const answer = await land(exportFile(elsewhere, `${MARK} unserved`));
+    expect(answer.statusCode, answer.body).toBe(201);
+    expect(answer.json<{ created: Record<string, number> }>().created.models).toBe(1);
   });
 });
 

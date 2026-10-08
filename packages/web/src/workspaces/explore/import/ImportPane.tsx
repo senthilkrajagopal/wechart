@@ -88,6 +88,50 @@ class Refused extends Error {
   }
 }
 
+/** A refused answer as the pane says it: the API's words, and each part it names (T720). */
+async function refusalOf(response: Response, fallback: string): Promise<Refused> {
+  const said = (await response.json().catch(() => null)) as {
+    error?: unknown;
+    parts?: unknown;
+  } | null;
+  const parts = Array.isArray(said?.parts)
+    ? (said.parts as unknown[]).flatMap((part) =>
+        part !== null &&
+        typeof part === 'object' &&
+        typeof (part as { part?: unknown }).part === 'string' &&
+        typeof (part as { why?: unknown }).why === 'string'
+          ? [part as { part: string; why: string }]
+          : [],
+      )
+    : [];
+  return new Refused(typeof said?.error === 'string' ? said.error : fallback, parts);
+}
+
+/** A failure of Review or Import: its parts listed where the API names them. */
+function RefusalAlert({ error }: { readonly error: Error }) {
+  return error instanceof Refused && error.parts.length > 0 ? (
+    <div role="alert" className="import-pane__refused">
+      <p className="import-pane__refused-head">
+        <StatusIcon kind="err" />
+        {error.message}
+      </p>
+      <ul className="import-pane__parts">
+        {error.parts.map((part) => (
+          <li key={`${part.part}:${part.why}`} className="import-pane__part">
+            <b>{part.part}</b>
+            <span>{part.why}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  ) : (
+    <p className="source-pane__alert" role="alert">
+      <StatusIcon kind="err" />
+      {error.message}
+    </p>
+  );
+}
+
 interface Reviewed {
   readonly target: { readonly id: string; readonly path: readonly string[] };
   readonly items: readonly {
@@ -348,10 +392,9 @@ export function ImportPane({
         }),
         signal,
       });
+      // Its parts refused before xcube is asked, each named (T720's second follow-up).
       if (!response.ok)
-        throw new Error(
-          await saidBy(response, `It couldn’t be reviewed (${String(response.status)}).`),
-        );
+        throw await refusalOf(response, `It couldn’t be reviewed (${String(response.status)}).`);
       return (await response.json()) as Reviewed;
     },
     enabled: step === 3 && file !== undefined && targetId !== '',
@@ -446,29 +489,8 @@ export function ImportPane({
               }),
         }),
       });
-      if (!response.ok) {
-        const said = (await response.json().catch(() => null)) as {
-          error?: unknown;
-          parts?: unknown;
-        } | null;
-        // Each part refused and why, where the API names them (T720).
-        const parts = Array.isArray(said?.parts)
-          ? (said.parts as unknown[]).flatMap((part) =>
-              part !== null &&
-              typeof part === 'object' &&
-              typeof (part as { part?: unknown }).part === 'string' &&
-              typeof (part as { why?: unknown }).why === 'string'
-                ? [part as { part: string; why: string }]
-                : [],
-            )
-          : [];
-        throw new Refused(
-          typeof said?.error === 'string'
-            ? said.error
-            : `It couldn’t be imported (${String(response.status)}).`,
-          parts,
-        );
-      }
+      if (!response.ok)
+        throw await refusalOf(response, `It couldn’t be imported (${String(response.status)}).`);
       return (await response.json()) as Imported;
     },
     onSuccess: (imported) => {
@@ -862,10 +884,7 @@ export function ImportPane({
           review.isPending ? (
             <p className="import-pane__note">Checking what it may affect…</p>
           ) : review.isError ? (
-            <p className="source-pane__alert" role="alert">
-              <StatusIcon kind="err" />
-              {review.error.message}
-            </p>
+            <RefusalAlert error={review.error} />
           ) : (
             <>
               <p className="import-pane__info" role="note">
@@ -985,29 +1004,7 @@ export function ImportPane({
           )
         ) : null}
 
-        {importing.isError ? (
-          importing.error instanceof Refused && importing.error.parts.length > 0 ? (
-            <div role="alert" className="import-pane__refused">
-              <p className="import-pane__refused-head">
-                <StatusIcon kind="err" />
-                {importing.error.message}
-              </p>
-              <ul className="import-pane__parts">
-                {importing.error.parts.map((part) => (
-                  <li key={`${part.part}:${part.why}`} className="import-pane__part">
-                    <b>{part.part}</b>
-                    <span>{part.why}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <p className="source-pane__alert" role="alert">
-              <StatusIcon kind="err" />
-              {importing.error.message}
-            </p>
-          )
-        ) : null}
+        {importing.isError ? <RefusalAlert error={importing.error} /> : null}
       </div>
 
       <footer className="source-pane__foot">

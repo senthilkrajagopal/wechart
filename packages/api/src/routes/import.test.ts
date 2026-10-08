@@ -257,6 +257,14 @@ beforeAll(async () => {
     folderAccess: folderAccessStore(getDb()),
     modelFiles: files(),
     dataSources: sources(),
+    // The folders xcube serves, so Sales's model has landed (T720's second follow-up).
+    folders: async () => {
+      const served = [ROOT_FOLDER_ID, ids.sales, ids.view, ids.hidden];
+      return {
+        ids: new Map(served.map((id) => [id, `x-${id}`])),
+        parents: new Map(served.map((id) => [id, id === ROOT_FOLDER_ID ? null : ROOT_FOLDER_ID])),
+      };
+    },
   });
   single = buildServer({
     config: open,

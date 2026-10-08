@@ -13385,11 +13385,17 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - All together or none (AC-356): models are saved before the documents and, if the documents fail, taken back out of the workspace root and its overlay.
       - The API case for a folder the importer can't see: mapped, `mappedTo.path` null, and the 409 naming no folder of it.
       - Tests: `import-models.test.ts` (3 more). The first two were red before: one failed on 3 of 4 runs, as folder order decided it; the other was red outright. API 1815/1815.
-    - **Left as reported:**
-      - `path-in-workspace` blocks: the coordinator's call. AC-357's text warns "without blocking" of a same-named item in the workspace.
-      - A model holding one held name and one new name is mapped whole, so its new name doesn't land: a question.
-      - "Landed" means any shared folder's file here, but only xcube-served folders in `landedNames`.
-      - Two new models of one name in a file are refused only as xcube refuses them.
+    - **Second follow-up (the coordinator's rulings, 2026-10-08; AC-357 amended on feat/xcube):**
+      - **The path clash stays blocking.** It is storage, one path per folder, not a same-name warning.
+      - **A model declaring a name in use beside a new one is refused, naming it.** It is neither mapped whole nor split. Review and Import answer 409 `{ error: 'Refused: nothing was imported.', parts: [{ part: 'Model <path>', why }] }`, where `why` is "“a” is in use and “b” is new: a model file is either mapped to items in use or imported as new, not both. Split it, then import again."
+      - **Two new models of one name in a file are refused at Review, naming each, before xcube is asked.** The `why` is "Another model in the file declares “x” too: each name is declared once." Names compare in any case. The check applies where models land.
+      - **"Landed" is one thing.** `heldItems` reads the files of the folders xcube serves (`landedFiles`), as `landedNames` does; a file in a shared folder xcube doesn't serve has not landed.
+      - **The pane** lists a refused Review's parts as it does a refused Import's (`refusalOf`, `RefusalAlert`), and offers no Import.
+      - **Tests:**
+        - `import-models.test.ts`: 3 cases (the mixed model; the twins with the overlay untouched; an unserved folder's name not held), each red before.
+        - `import.test.ts`: its server now names the folders xcube serves, so Sales's model has landed as before.
+        - `ImportPane.test.tsx`: 1 case, red before.
+        - API 1822/1822, web 2619/2619.
 
 - [x] T736 (AC-357) An import blocked by an off-path mapped item can leave out the charts that use it, and their tiles
   - Files: `packages/api/src/routes/import.ts` (+ `import-models.test.ts`), `packages/web/src/workspaces/explore/import/ImportPane.tsx` (+ test)

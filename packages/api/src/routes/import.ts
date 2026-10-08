@@ -332,6 +332,7 @@ async function heldModelsIn(
         const off = new Set(
           holders.filter((each) => !each.onPath).map((each) => nameKey(each.name)),
         );
+        const taken = new Set(holders.map((each) => nameKey(each.name)));
         held.set(item.path, {
           holder,
           asked: names.find((name) => nameKey(name) === nameKey(holder.name)) ?? holder.name,
@@ -339,6 +340,8 @@ async function heldModelsIn(
           using: charts.filter((chart) =>
             cubesOfChartBody(chart.body).some((cube) => off.has(nameKey(cube))),
           ),
+          heldNames: names.filter((name) => taken.has(nameKey(name))),
+          fresh: names.filter((name) => !taken.has(nameKey(name))),
         });
       }
     }
@@ -351,6 +354,51 @@ interface HeldModel {
   readonly asked: string;
   /** The file's charts that use a name of it held off the target's path (T736). */
   readonly using: readonly ExportedChart[];
+  /** Its names held, and those new, as the file has them. */
+  readonly heldNames: readonly string[];
+  readonly fresh: readonly string[];
+}
+
+const quoted = (names: readonly string[]) => names.map((name) => `“${name}”`).join(', ');
+
+/**
+ * The file's models refused before xcube is asked (the coordinator's rulings
+ * on T720, 2026-10-08), each part and why: one declaring a name in use beside
+ * a new one, which is neither mapped whole nor split; and, where models land,
+ * each new one declaring a name another new one in the file declares.
+ */
+function modelPartsRefused(
+  file: ExportFile,
+  held: ReadonlyMap<string, HeldModel>,
+  lands: boolean,
+): { readonly part: string; readonly why: string }[] {
+  const parts: { part: string; why: string }[] = [];
+  for (const [path, model] of held) {
+    if (model.fresh.length > 0)
+      parts.push({
+        part: `Model ${path}`,
+        why: `${quoted(model.heldNames)} ${model.heldNames.length === 1 ? 'is' : 'are'} in use and ${quoted(model.fresh)} ${model.fresh.length === 1 ? 'is' : 'are'} new: a model file is either mapped to items in use or imported as new, not both. Split it, then import again.`,
+      });
+  }
+  if (!lands) return parts;
+  const landing = file.items.flatMap((item) =>
+    item.kind === 'model' && !held.has(item.path)
+      ? [{ path: item.path, names: namesDeclaredIn(item.content) }]
+      : [],
+  );
+  for (const model of landing) {
+    const twin = model.names.find((name) =>
+      landing.some(
+        (other) => other !== model && other.names.some((each) => nameKey(each) === nameKey(name)),
+      ),
+    );
+    if (twin !== undefined)
+      parts.push({
+        part: `Model ${model.path}`,
+        why: `Another model in the file declares “${twin}” too: each name is declared once.`,
+      });
+  }
+  return parts;
 }
 
 /** The charts a body asks to leave out (T736): their ids in the file; undefined for a body not so. */
@@ -562,6 +610,10 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
     const holdings = await access.holdings(request, own, target.id, titles);
     // Models whose names are held: mapped (T720); the workspace root's paths, for the rest.
     const heldModels = await heldModelsIn(request, access, own, target.id, file);
+    // Models refused before xcube is asked, each named (T720's second follow-up).
+    const refusedParts = modelPartsRefused(file, heldModels, access.models !== undefined);
+    if (refusedParts.length > 0)
+      return reply.code(409).send({ error: REFUSED, parts: refusedParts });
     const rootPaths = (await access.models?.paths(own)) ?? new Set<string>();
     // The charts left out, each one that uses an item off the target's path (T736).
     const leaveOut = leaveOutIn((request.body as { leaveOut?: unknown }).leaveOut);
@@ -740,6 +792,9 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
      * left out go, with their tiles; a chart may be left out only so.
      */
     const heldModels = await heldModelsIn(request, access, own, target.id, file);
+    const refusedParts = modelPartsRefused(file, heldModels, access.models !== undefined);
+    if (refusedParts.length > 0)
+      return reply.code(409).send({ error: REFUSED, parts: refusedParts });
     const leaveOut = leaveOutIn((request.body as { leaveOut?: unknown }).leaveOut);
     if (leaveOut === undefined)
       return reply

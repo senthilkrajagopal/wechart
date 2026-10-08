@@ -1017,13 +1017,21 @@ export function buildServer({
    * model files and data sources, those xcube's tree holds, all but what a
    * change replaces.
    */
-  const landedNames =
+  /** The model files that have landed: those of the folders xcube's tree holds (T704; T720's follow-up). */
+  const landedFiles =
     modelStore === undefined
+      ? undefined
+      : async () => {
+          const published = folders === undefined ? ROOT_ONLY : await folders();
+          return modelStore.inFolders([...published.ids.keys()]);
+        };
+  const landedNames =
+    modelStore === undefined || landedFiles === undefined
       ? undefined
       : async (except?: Except) => {
           const published = folders === undefined ? ROOT_ONLY : await folders();
           return landedNamesOf({
-            files: await modelStore.inFolders([...published.ids.keys()]),
+            files: await landedFiles(),
             dataSources: ((await dataSources?.all()) ?? []).filter((source) =>
               published.ids.has(source.folderId),
             ),
@@ -2053,15 +2061,16 @@ export function buildServer({
        * folder is said only where the importer may see that folder's models.
        */
       heldItems: async (request, own, target, names) => {
-        if (modelFiles?.all === undefined || modelStore === undefined) return [];
+        if (landedFiles === undefined || modelStore === undefined) return [];
         // Each name asked, by its key, until a holder is found for it.
         const asked = new Set(names.map(nameKey));
         const held: { name: string; path: readonly string[] | null; onPath: boolean }[] = [];
         const path = await importPathOf(target);
-        for (const file of await modelFiles.all()) {
-          const folderId = file.folderId ?? ROOT_FOLDER_ID;
+        // Landed as the name checks hold it: in a folder xcube serves (the coordinator, 2026-10-08).
+        for (const file of await landedFiles()) {
+          const { folderId } = file;
           const found = namesDeclaredIn(file.content).filter((name) => asked.has(nameKey(name)));
-          if (found.length === 0 || (await workspaceRootOf(folderId)) !== null) continue;
+          if (found.length === 0) continue;
           const seen = await visibilityOf(request);
           const sees = seen === undefined || seen.rights.get(folderId)?.kinds === 'all';
           for (const name of found) {

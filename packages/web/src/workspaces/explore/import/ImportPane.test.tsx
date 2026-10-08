@@ -602,6 +602,36 @@ describe('the models of an imported file (T720, AC-356, AC-357)', () => {
     expect(primary.getAttribute('aria-describedby')).toBe(why.id);
   });
 
+  // T720's second follow-up: Review refuses models before xcube is asked, naming each.
+  it('shows a refused Review’s parts, naming each, and offers no Import', async () => {
+    shown((url, init) =>
+      url === '/api/import/review'
+        ? answer(409, {
+            error: 'Refused: nothing was imported.',
+            parts: [
+              {
+                part: 'Model sales.yml',
+                why: 'Another model in the file declares “orders” too: each name is declared once.',
+              },
+            ],
+          })
+        : serving(url, init),
+    );
+    const pane = screen.getByRole('dialog', { name: 'Import a dashboard' });
+    await toReview(pane);
+    const alert = await within(pane).findByRole('alert');
+    expect(alert.textContent).toContain('Refused: nothing was imported.');
+    expect(
+      within(alert)
+        .getAllByRole('listitem')
+        .map((part) => part.textContent),
+    ).toEqual([
+      'Model sales.ymlAnother model in the file declares “orders” too: each name is declared once.',
+    ]);
+    const primary = within(pane).getByRole('button', { name: `Import to My workspace` });
+    expect((primary as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('shows a refused import’s parts, naming each, and lands nothing', async () => {
     const { onImported } = shown((url, init) =>
       url === `/api/import` && init?.method === 'POST'
