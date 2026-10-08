@@ -13891,6 +13891,18 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - **Replacement:** at the same step, making the nearer `parent_<run>` in /Sources parent/Sources is refused, 409 `{ error: 'The name “parent_<run>” is already in use.' }`, which names no folder (AC-421, AC-424). The cube stays bound to the parent's, as the writer's step shows.
       - **Collateral:** this case's failure, a 409 that left a cube naming a data source that was never made, broke `workspace-overlay.spec.ts`'s previews in the same run. That spec passes alone and with the fix.
     - **Not ticked:** the ACs are left to the coordinator's run on the image, as with T729.
+  - *Follow-up 2026-10-08, AC-283 (the coordinator's item 2, after T733's review unticked it):*
+    - **The reading.** "Used" is read as T543 reads it: resolved and previewed in the workspace. A dashboard is used by being opened, with its tiles answering. Copying a dashboard or chart from a folder its copier only reads stays refused (`workspace-copy.test.ts`, "copies nothing from a folder its copier only reads"). The coordinator settled this, 2026-10-08.
+    - **`use-only-copy.spec.ts`, on the image.** `super` gives /Parent a data source, a library chart on its cube, and a dashboard showing that chart. They make /Hidden <run>, which only `managers` see, holding one of each of the four kinds. Then, as writer, from My workspace, with a workspace dashboard going to /Parent/Child:
+      - **models:** /Parent's cube answers a workspace preview (3). /Hidden's is refused, 403, and a copy of its model to use is refused, 404.
+      - **data sources:** a draft cube going to /Parent/Child, naming /Parent's data source, saves and previews from it (5). One naming /Hidden's is refused, 422. The refusal names the data source and nothing of its folder, and nothing is stored.
+      - **charts:** /Parent's library chart, put on the workspace dashboard, answers in its tile. /Hidden's chart is a 404.
+      - **dashboards:** /Parent's dashboard opens and its tile answers. /Hidden's is a 404.
+    - Then the spec's T543 and T717 cases: the use-only copy is asked for no folder, previews, is proposed nowhere, and offers "Request a change". 7/7 in chrome.
+    - AC-283 ticked. Each Fails-when has a passing test on the image:
+      - an item they may see that can't be used there, or one they may not see that can: the case above;
+      - a use-only copy proposed to any folder: refused in the UI and the API;
+      - the dialog asking for a folder, or no "Request a change", or one opening anything but AC-050's request: T717's cases.
 
 - [x] T732 (AC-329, AC-428) Rework the tests of T475 and T633 to a picker with no hidden cubes and the user's copy in place
   - Files: `e2e/security/picker.spec.ts` (T475's dimmed hidden cube goes, AC-342 being retired), `packages/web/src/filters/fieldPicker.test.tsx`, `e2e/cubePicker.ts`

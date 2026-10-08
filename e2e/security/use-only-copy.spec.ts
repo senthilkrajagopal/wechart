@@ -1,5 +1,11 @@
+import { readFileSync } from 'node:fs';
+
+import type { APIRequestContext, APIResponse } from '@playwright/test';
+import { sealSecretV1, type XcubeKey } from '@wechart/core';
+
 import { landed } from '../model-files';
-import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
+import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtures';
+import { changeShared } from './shared-change';
 
 /**
  * T543 (AC-283; the user's answer "Yes, use-only copy", R53), as T717 has it
@@ -21,6 +27,100 @@ const cubeOf = (n: number) =>
   `cubes:\n  - name: ${CUBE}\n    sql: SELECT ${String(n)} AS n\n    measures:\n      - name: n\n        sql: n\n        type: sum\n`;
 const made = { parent: '', child: '', project: '', board: '', chart: '' };
 
+/**
+ * AC-283's first sentence (T737's coordinator, item 2): every kind of item
+ * in a folder the user may see is usable from their workspace, and none in
+ * one they may not. "Used" is read as T543 reads it: resolved and previewed
+ * there. A dashboard is used by being opened, its tiles answering; copying
+ * one from a folder its copier only reads stays refused
+ * (`workspace-copy.test.ts`, "copies nothing from a folder its copier only
+ * reads"). Beside the model above, `super` gives /Parent a data source, a
+ * library chart on the cube and a dashboard showing it. /Hidden, which only
+ * `managers` see, gets the same four kinds.
+ */
+const HIDDEN = `Hidden ${RUN}`;
+const HIDDEN_CUBE = `t543_hid_${RUN}`;
+const HIDDEN_PATH = `cubes/${HIDDEN_CUBE}.yml`;
+const SOURCE = `t543_src_${RUN}`;
+const HIDDEN_SOURCE = `t543_hid_src_${RUN}`;
+const DRAFT = `t543_ds_${RUN}`;
+const HIDDEN_DRAFT = `t543_ds_hid_${RUN}`;
+const KEY = JSON.parse(
+  readFileSync(new URL('../../infra/xcube/dev-credential-key.pub.jwk', import.meta.url), 'utf8'),
+) as XcubeKey;
+const FIELDS = { host: 'sample-db', port: 5432, database: 'sample', user: 'sample', ssl: false };
+const kinds = {
+  hidden: '',
+  source: '',
+  hiddenSource: '',
+  chart: '',
+  hiddenChart: '',
+  board: '',
+  hiddenBoard: '',
+  /** Writer's: a workspace dashboard going to /Parent/Child, and a project folder for drafts. */
+  workspaceBoard: '',
+  workspaceProject: '',
+};
+/** A table of a cube's `n`. */
+const tableOf = (cube: string) => ({
+  source: { cube },
+  wells: { measures: [`${cube}.n`], dimensions: [], timeDimensions: [] },
+  chartType: 'table',
+});
+
+/** A load's first row's value of `member`, as a number. */
+const firstOf = async (answer: APIResponse, member: string) =>
+  Number(((await answer.json()) as { data: Record<string, unknown>[] }).data[0]?.[member]);
+
+async function createdId(request: APIRequestContext, data: Record<string, unknown>) {
+  const answer = await request.post('/api/documents', { data });
+  expect(answer.status(), await answer.text()).toBe(201);
+  return ((await answer.json()) as { id: string }).id;
+}
+
+async function dataSourceIn(request: APIRequestContext, folderId: string, name: string) {
+  const answer = await request.post('/api/data-sources', {
+    data: await testedSource(request, {
+      folderId,
+      name,
+      driver: 'postgres',
+      authMethod: 'password',
+      fields: FIELDS,
+      sealed: { password: await sealSecretV1(KEY, 'postgres', 'password', FIELDS, 'sample') },
+    }),
+    timeout: 90_000,
+  });
+  expect(answer.status(), await answer.text()).toBe(201);
+  return ((await answer.json()) as { id: string }).id;
+}
+
+/** A library chart on `cube`, given its definition by an approved copy (T502, AC-278). */
+async function libraryChart(
+  request: APIRequestContext,
+  folderId: string,
+  title: string,
+  cube: string,
+) {
+  const id = await createdId(request, { kind: 'chart', title, folderId });
+  await changeShared(request, 'chart', id, (body) => ({ ...body, chart: tableOf(cube) }));
+  return id;
+}
+
+/** A dashboard showing `chartId` on its one tile, given it by an approved copy. */
+async function dashboardShowing(
+  request: APIRequestContext,
+  folderId: string,
+  title: string,
+  chartId: string,
+) {
+  const id = await createdId(request, { kind: 'dashboard', title, folderId });
+  await changeShared(request, 'dashboard', id, (body) => ({
+    ...body,
+    pages: [{ id: 'p', title: 'P', items: [{ id: 'tile', kind: 'chart', chartId, w: 6, h: 30 }] }],
+  }));
+  return id;
+}
+
 test.describe.configure({ mode: 'serial' });
 
 test.describe('a model of a folder one may only read, used in My workspace (T543, AC-283)', () => {
@@ -34,6 +134,16 @@ test.describe('a model of a folder one may only read, used in My workspace (T543
       await signInThroughDex(await context.newPage(), who);
       const { request } = context;
       if (who === 'writer') {
+        if (kinds.workspaceBoard !== '')
+          await request.delete(`/api/documents/dashboard/${kinds.workspaceBoard}`);
+        if (kinds.workspaceProject !== '') {
+          for (const draft of [DRAFT, HIDDEN_DRAFT])
+            await request.delete(
+              `/api/model/files?folder=${encodeURIComponent(kinds.workspaceProject)}&path=${encodeURIComponent(`cubes/${draft}.yml`)}`,
+              { timeout: 90_000 },
+            );
+          await request.delete(`/api/documents/folder/${kinds.workspaceProject}`);
+        }
         if (made.chart !== '') await request.delete(`/api/documents/chart/${made.chart}`);
         if (made.board !== '') await request.delete(`/api/documents/dashboard/${made.board}`);
         if (made.project !== '') {
@@ -45,6 +155,22 @@ test.describe('a model of a folder one may only read, used in My workspace (T543
         }
       }
       if (who === 'super') {
+        for (const [kind, id] of [
+          ['dashboard', kinds.board],
+          ['dashboard', kinds.hiddenBoard],
+          ['chart', kinds.chart],
+          ['chart', kinds.hiddenChart],
+        ] as const)
+          if (id !== '') await request.delete(`/api/documents/${kind}/${id}`);
+        for (const id of [kinds.source, kinds.hiddenSource])
+          if (id !== '') await request.delete(`/api/data-sources/${id}`, { timeout: 90_000 });
+        if (kinds.hidden !== '') {
+          await request.delete(
+            `/api/model/files?folder=${kinds.hidden}&path=${encodeURIComponent(HIDDEN_PATH)}`,
+            { timeout: 90_000 },
+          );
+          await request.delete(`/api/documents/folder/${kinds.hidden}`);
+        }
         if (made.child !== '') await request.delete(`/api/documents/folder/${made.child}`);
         if (made.parent !== '') {
           await request.delete(
@@ -81,6 +207,153 @@ test.describe('a model of a folder one may only read, used in My workspace (T543
       // Through My workspace and a proposal `super` approves (T451, AC-278).
       const file = { path: PATH, content: cubeOf(3) };
       expect(await landed(request, made.parent, [file])).toEqual([file]);
+    });
+
+    test('gives /Parent a data source, a library chart and a dashboard, and /Hidden the four kinds', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      const { request } = page;
+      kinds.hidden = await createdId(request, { kind: 'folder', title: HIDDEN, folderId: 'root' });
+      const access = await request.put(`/api/folders/${kinds.hidden}/access`, {
+        data: { readOnly: [], readWrite: ['managers'] },
+      });
+      expect(access.status(), await access.text()).toBe(200);
+      const hiddenFile = {
+        path: HIDDEN_PATH,
+        content: `cubes:\n  - name: ${HIDDEN_CUBE}\n    sql: SELECT 4 AS n\n    measures:\n      - name: n\n        sql: n\n        type: sum\n`,
+      };
+      expect(await landed(request, kinds.hidden, [hiddenFile])).toEqual([hiddenFile]);
+      kinds.source = await dataSourceIn(request, made.parent, SOURCE);
+      kinds.hiddenSource = await dataSourceIn(request, kinds.hidden, HIDDEN_SOURCE);
+      kinds.chart = await libraryChart(request, made.parent, `Parent chart ${RUN}`, CUBE);
+      kinds.hiddenChart = await libraryChart(
+        request,
+        kinds.hidden,
+        `Hidden chart ${RUN}`,
+        HIDDEN_CUBE,
+      );
+      kinds.board = await dashboardShowing(
+        request,
+        made.parent,
+        `Parent board ${RUN}`,
+        kinds.chart,
+      );
+      kinds.hiddenBoard = await dashboardShowing(
+        request,
+        kinds.hidden,
+        `Hidden board ${RUN}`,
+        kinds.hiddenChart,
+      );
+    });
+  });
+
+  test.describe('as writer, before any copy', () => {
+    test.use({ role: 'writer' });
+
+    test('uses each kind of /Parent’s items from My workspace, and none of /Hidden’s (AC-283)', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      const { request } = page;
+      kinds.workspaceBoard = await createdId(request, {
+        kind: 'dashboard',
+        title: `Workspace board ${RUN}`,
+        folderId: 'mine',
+        targetFolderId: made.child,
+      });
+      const preview = (member: string) =>
+        request.post('/api/load', {
+          data: {
+            query: { measures: [member] },
+            for: { kind: 'dashboard', id: kinds.workspaceBoard },
+          },
+          timeout: 90_000,
+        });
+
+      // Models: /Parent's cube answers a workspace preview; /Hidden's is refused,
+      // and its model can't be copied in to use.
+      const parentCube = await preview(`${CUBE}.n`);
+      expect(parentCube.status(), await parentCube.text()).toBe(200);
+      expect(await firstOf(parentCube, `${CUBE}.n`)).toBe(3);
+      const hiddenCube = await preview(`${HIDDEN_CUBE}.n`);
+      expect(hiddenCube.status(), await hiddenCube.text()).toBe(403);
+      const hiddenCopy = await request.post('/api/workspace/copies', {
+        data: { kind: 'model', folderId: kinds.hidden, path: HIDDEN_PATH, timeZone: 'UTC' },
+      });
+      expect(hiddenCopy.status(), await hiddenCopy.text()).toBe(404);
+
+      // Data sources: a draft going to /Parent/Child binds /Parent's, and
+      // previews from it; one naming /Hidden's is refused, and nothing stored.
+      kinds.workspaceProject = await createdId(request, {
+        kind: 'folder',
+        title: `Use ${RUN}`,
+        folderId: 'mine',
+      });
+      const draftOf = (name: string, source: string, n: number) => ({
+        path: `cubes/${name}.yml`,
+        content: `cubes:\n  - name: ${name}\n    sql: SELECT ${String(n)} AS n\n    data_source: ${source}\n    measures:\n      - name: n\n        sql: n\n        type: sum\n`,
+      });
+      const saveDraft = (name: string, source: string, n: number) =>
+        request.post('/api/model/publish', {
+          data: {
+            folderId: kinds.workspaceProject,
+            targetFolderId: made.child,
+            files: [draftOf(name, source, n)],
+          },
+          timeout: 90_000,
+        });
+      const bound = await saveDraft(DRAFT, SOURCE, 5);
+      expect(bound.status(), await bound.text()).toBe(200);
+      const fromSource = await preview(`${DRAFT}.n`);
+      expect(fromSource.status(), await fromSource.text()).toBe(200);
+      expect(await firstOf(fromSource, `${DRAFT}.n`)).toBe(5);
+      const unbound = await saveDraft(HIDDEN_DRAFT, HIDDEN_SOURCE, 6);
+      expect(unbound.status(), await unbound.text()).toBe(422);
+      // Said of the data source it names, and nothing of where that is (AC-424).
+      expect(await unbound.text()).toContain(HIDDEN_SOURCE);
+      expect(await unbound.text()).not.toContain(HIDDEN);
+      expect(await unbound.text()).not.toContain(kinds.hidden);
+      const stored = (await (
+        await request.get(`/api/model/files?folder=${kinds.workspaceProject}`)
+      ).json()) as { files: { path: string }[] };
+      expect(stored.files.map((each) => each.path)).toEqual([`cubes/${DRAFT}.yml`]);
+
+      // Charts: /Parent's library chart, shown on the workspace dashboard,
+      // answers there; /Hidden's can't be opened.
+      const board = (await (
+        await request.get(`/api/documents/dashboard/${kinds.workspaceBoard}`)
+      ).json()) as { body: Record<string, unknown>; version: number };
+      const shown = await request.put(`/api/documents/dashboard/${kinds.workspaceBoard}`, {
+        data: {
+          version: board.version,
+          body: {
+            ...board.body,
+            pages: [
+              {
+                id: 'p',
+                title: 'P',
+                items: [{ id: 'tile', kind: 'chart', chartId: kinds.chart, w: 6, h: 30 }],
+              },
+            ],
+          },
+        },
+      });
+      expect(shown.status(), await shown.text()).toBe(200);
+      await page.goto(`/explore/dashboards/${kinds.workspaceBoard}`);
+      await expect(page.locator('[data-tile="tile"]').getByRole('table')).toContainText('3', {
+        timeout: 60_000,
+      });
+      expect((await request.get(`/api/documents/chart/${kinds.hiddenChart}`)).status()).toBe(404);
+
+      // Dashboards: /Parent's opens, its tile answering; /Hidden's is a 404.
+      await page.goto(`/explore/dashboards/${kinds.board}`);
+      await expect(page.locator('[data-tile="tile"]').getByRole('table')).toContainText('3', {
+        timeout: 60_000,
+      });
+      expect((await request.get(`/api/documents/dashboard/${kinds.hiddenBoard}`)).status()).toBe(
+        404,
+      );
     });
   });
 
