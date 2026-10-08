@@ -950,7 +950,26 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R71 — one name per item across the whole system: cubes, views and data sources** (2026-10-07, the user, after a brainstorm on naming, modules and workspaces)
+- The user: "datasources will have unique names and the names will not changes." Then: "okay.. lets have unique name for both datasources as well as cubes across the entire system." Then: "There is no migration, since we are in development and this is not yet in production.. we can delete all tables/dashboards/cubes and recreate them." Then, on Claude's seven decisions: "we dont need the name to be locked.. the first publish wins is this doable? all other decisions are good with me." Then: "okay proceed with these changes first before we do any other changes".
+- *Decided:*
+  1. **One namespace system-wide.** Cubes and views share one namespace, as Cube requires. Data sources have their own. Each namespace is unique across every folder, the shared root and every workspace's landed items. This replaces per-folder names (AC-270, AC-271), nearest-first resolution (AC-273, AC-281, AC-310), folder-prefixed published names (AC-328) and R70's rebinding on move: a name means the same item wherever it is used.
+  2. **Tenancy is not needed now.** Per-folder overrides go: a subfolder can no longer redefine an ancestor's cube or data source under the same name. If one model over several identical databases is needed later, it is a feature of its own, using Cube's security-context multitenancy (a tenant key in the token, allowed by AD groups; one data source with a connection per tenant). That needs xcube's support. Not in scope.
+  3. **Names are fixed, titles are editable.** An item's name is set when it is created and never changes once it has landed. Its title can change at any time. No rename of a landed cube, view or data source: AC-291's rename of those kinds goes.
+  4. **A deleted item's name may be used again.** A delete is already refused while anything uses the item.
+  5. **The first to land wins; names are not reserved.**
+     - A draft is checked against landed names when it is made, when it is proposed, and when it is approved.
+     - Drafts in different workspaces may share a new name. Two drafts in one workspace may not, since xcube refuses an overlay holding two items of one name.
+     - A later approval of a name already landed is refused, and nothing of it lands.
+     - A draft's name stays editable until it lands.
+     - Editing an existing item never takes a name: its copy keeps the original's and lands over it.
+  6. **Names compare case-insensitively.** "Orders" and "orders" are the same name. A name is a letter followed by letters, digits and underscores. A refusal says only that the name is in use, never where, so a folder the user can't see is never revealed.
+  7. **Only the shared root has a `default` data source.** A cube that names no data source uses it. Any other data source is named explicitly. A cube may use a data source only in its own folder or an ancestor of it. This holds when the cube or the data source is published, moved or landed.
+  8. **A cube from a folder the user may only read.** The user gets a use-only copy for previews in their workspace. To change the shared cube, they send a request to the folder's owners. The copy can't be proposed anywhere. A variant of their own is a new cube with a new name. This supersedes R53's "proposed to a folder they may write, as a new model".
+  9. **No migration.** Development data (wechart's metadata database, xcube's schema, dashboards, charts and models) is dropped and seeded again.
+
 **R70 — a moved folder's bindings, and which data-source changes warn of a rebuild** (2026-10-07, the user)
+- *Superseded in part by R71:* with one name per item system-wide, a move changes no binding. Only the rule that a cube's data source is in its folder or an ancestor is checked.
 - Q (from group 3's AC-263 pass): a moved folder's own charts keep their bindings (AC-275, no rebinding). xcube admits a query by the cube's folder, so a reader granted only on the new path is refused those tiles. A: "Rebind on move (Recommended)". *A move rebinds the moved folder's items along its new path, as copy-on-move does for copies. Where a name doesn't resolve on the new path, the move is refused, naming the items. This is an exception to "no rebinding", for moves only.*
 - Q (from T509's review): changing a saved data source's connection identity rebuilds its rollups (research `xcube-bc18f82c01.md`, "A connection's identity"). Which changes warn? A: "Any identity change (Recommended)". *Before Save, warn on any change that moves the identity: the sign-in method, host, database, user or key holder. AC-353 is amended accordingly.*
 
