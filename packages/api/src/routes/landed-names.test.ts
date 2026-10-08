@@ -41,6 +41,11 @@ const SEED = `${MARK}_seed`;
 const ORDERS = `orders_${MARK}`;
 const REV = `rev_${MARK}`;
 const WAREHOUSE = `warehouse_${MARK}`;
+/** AC-421's and AC-424's Verify (2026-10-08): /Ops's landed view, split view and their cube, and ORDERS's title. */
+const OPS_BASE = `opsbase_${MARK}`;
+const SIGHT = `sight_${MARK}`;
+const LENS = `lens_${MARK}`;
+const ORDERS_TITLE = `Ops secret ${MARK}`;
 const cube = (name: string) => `cubes:\n  - name: ${name}\n    sql_table: public.${name}\n`;
 const splitView = (name: string, alias: string) =>
   `views:\n  - name: ${name}\n    cubes:\n      - join_path: ${SEED}\n        alias: ${alias}\n        includes: "*"\n        split: true\n`;
@@ -88,8 +93,23 @@ beforeAll(async () => {
   }
   await files().write([
     { folderId: ids.sales, path: shared(SEED), content: cube(SEED) },
-    { folderId: ids.ops, path: shared(ORDERS), content: cube(ORDERS) },
+    {
+      folderId: ids.ops,
+      path: shared(ORDERS),
+      content: `${cube(ORDERS)}    title: ${ORDERS_TITLE}\n`,
+    },
     { folderId: ids.ops, path: shared(`${REV}_lines`), content: cube(`${REV}_lines`) },
+    { folderId: ids.ops, path: shared(OPS_BASE), content: cube(OPS_BASE) },
+    {
+      folderId: ids.ops,
+      path: `views/${SIGHT}.yml`,
+      content: `views:\n  - name: ${SIGHT}\n    cubes:\n      - join_path: ${OPS_BASE}\n        includes: "*"\n`,
+    },
+    {
+      folderId: ids.ops,
+      path: `views/${LENS}.yml`,
+      content: `views:\n  - name: ${LENS}\n    cubes:\n      - join_path: ${OPS_BASE}\n        alias: rows\n        includes: "*"\n        split: true\n`,
+    },
   ]);
   await sources().create({
     folderId: ids.ops,
@@ -237,8 +257,10 @@ const salesFiles = async () =>
   );
 const headNames = () => (stub.head(MODEL)?.items ?? []).map((item) => item.name).sort();
 /** Nothing of where the name is held: not /Ops's id, xcube id or title. */
+/** Nothing of where a name is held (AC-424): not /Ops's id, xcube id or title, nor the holder's title or owner. */
 const sayingNoFolder = (body: string) => {
-  for (const where of [ids.ops, 'fops', `Ops ${MARK}`]) expect(body).not.toContain(where);
+  for (const where of [ids.ops, 'fops', `Ops ${MARK}`, ORDERS_TITLE, '"admin"', 'owner'])
+    expect(body).not.toContain(where);
 };
 
 describe('an approval holding a name already landed (T704, AC-421, AC-422, AC-424, AC-321)', () => {
@@ -260,6 +282,27 @@ describe('an approval holding a name already landed (T704, AC-421, AC-422, AC-42
     for (const [path, content, name] of [
       [`views/${MARK}_v.yml`, view(ORDERS), ORDERS],
       [`views/${MARK}_split.yml`, splitView(REV, 'lines'), `${REV}_lines`],
+    ] as const) {
+      const proposal = await proposedModel(path, content);
+      const before = [await salesFiles(), headNames()];
+
+      const refused = await approve(proposal.id);
+
+      expect(refused.statusCode, refused.body).toBe(409);
+      expect(refused.json<{ error: string }>().error).toBe(
+        `The name “${name}” is already in use, so nothing was approved.`,
+      );
+      sayingNoFolder(refused.body);
+      expect([await salesFiles(), headNames()]).toEqual(before);
+    }
+  });
+
+  // AC-421's Verify (2026-10-08): two views, in another case; and a cube
+  // under a name a landed view's split view takes.
+  it('is refused for a view whose name a landed view holds, in another case, and for a cube a landed split view’s name takes', async () => {
+    for (const [path, content, name] of [
+      [`views/${MARK}_sight2.yml`, view(SIGHT.toUpperCase()), SIGHT.toUpperCase()],
+      [shared(`${LENS}_rows`), cube(`${LENS}_rows`), `${LENS}_rows`],
     ] as const) {
       const proposal = await proposedModel(path, content);
       const before = [await salesFiles(), headNames()];
@@ -320,6 +363,65 @@ describe('an approval holding a name already landed (T704, AC-421, AC-422, AC-42
       `The name “${name}” is already in use, so nothing was approved.`,
     );
     sayingNoFolder(refused.body);
+    expect((await sources().inFolder(ids.sales)).map((each) => each.name)).toEqual([]);
+  });
+
+  // AC-421's Verify (2026-10-08): the holder in the shared root.
+  it('is refused for a data source whose name one landed in the shared root holds', async () => {
+    const held = `rootsrc_${MARK}`;
+    await sources().create({
+      folderId: 'root',
+      name: held,
+      driver: 'postgres',
+      authMethod: 'password',
+      fields,
+      sealed: { password: sealed },
+    });
+    const folderId = await project();
+    const name = held.toUpperCase();
+    const drafted = await sources().create({
+      folderId,
+      targetFolderId: ids.sales,
+      name,
+      driver: 'postgres',
+      authMethod: 'password',
+      fields,
+      sealed: { password: sealed },
+    });
+    const proposal = await proposalStore(getDb()).create({
+      author: { key: await workspaceKeyOf(folderId), name: 'Wren Writer' },
+      targetFolderId: ids.sales,
+      description: null,
+      items: [
+        {
+          kind: 'data-source',
+          id: drafted.id,
+          title: name,
+          version: drafted.version,
+          snapshot: {
+            name,
+            driver: 'postgres',
+            authMethod: 'password',
+            fields,
+            description: null,
+            origin: null,
+            sealed: { password: sealed },
+            revisions: {},
+          },
+          landsIn: ids.sales,
+          replaces: null,
+        },
+      ],
+    });
+
+    const refused = await approve(proposal.id);
+
+    expect(refused.statusCode, refused.body).toBe(409);
+    expect(refused.json<{ error: string }>().error).toBe(
+      `The name “${name}” is already in use, so nothing was approved.`,
+    );
+    sayingNoFolder(refused.body);
+    expect(refused.body).not.toContain('froot');
     expect((await sources().inFolder(ids.sales)).map((each) => each.name)).toEqual([]);
   });
 

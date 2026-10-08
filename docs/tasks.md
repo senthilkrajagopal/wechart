@@ -13178,6 +13178,26 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - `global-names.spec.ts`, on the image: two workspaces each propose a draft of one new name. The first approval lands it. The second is refused, and nothing of it lands (AC-422).
   - Depends on: T701, T702
   - *Noted (2026-10-08), known and accepted:* two approvals racing so that only xcube sees the clash can leave a proposal's data source landed: data sources land first (R52), before xcube refuses the model. This is a concurrent-change edge case, which the user's standing rule accepts for now and keeps from being hardened further (the coordinator, 2026-10-08). AC-422 is ticked with T724: its sequential cases are each shown by a passing test, namely made, renamed and proposed (T705's `draft-names.test.ts`), a later approval refused with nothing landed (this task's `landed-names.test.ts` and `global-names.spec.ts`), and the edit copy (T705's `draft-names.test.ts` and `use-only-copy.test.ts`).
+  - **Verified 2026-10-08: AC-421 and AC-424 ticked** (the coordinator's ask, after T704, T705, T720, T723, T724 and T726).
+    - **AC-421.** Each Fails-when has a passing test.
+      - Two cubes in one folder: `landed-names.test.ts` "lands the first of two drafts of one new name … even in the same folder", and `global-names.spec.ts`'s T704 case on the image.
+      - Two cubes in two folders, in another case: `landed-names.test.ts` (`ORDERS` upper-cased against /Ops's).
+      - Two cubes, one in the shared root: `global-names.spec.ts`'s T702 case on the image, `Orders` refused against the root's `orders` by xcube itself.
+      - A cube and a view: `landed-names.test.ts`, a view named as /Ops's cube.
+      - Two views: `landed-names.test.ts`, a view in another case of /Ops's landed view. This case was added here.
+      - Two data sources in one folder: `name-refusals.test.ts` "a data source the store refuses for a name its folder holds".
+      - Two data sources in two folders, and in another case: `landed-names.test.ts`, and `data-sources.spec.ts`'s second `parent_<run>` on the image.
+      - Two data sources, one in the root: `landed-names.test.ts`, a draft of a root data source's name, upper-cased. This case was added here.
+      - A cube or view landing under a name a landed view's split cube takes: `landed-names.test.ts`, a cube named `<lens>_rows` after /Ops's split view `lens` with alias `rows`. This case was added here.
+      - A view landing whose split cube takes a landed name: `landed-names.test.ts`'s `rev_<mark>` case.
+    - **AC-424.** No refusal of a name in use holds the holder's folder or workspace (name, path or id), its owner, or the holding item's title.
+      - The API: T726's `name-refusals.test.ts` (a model save, a generated cube, a data source made and renamed, a proposal and an approval, each read for all of these), T705's `draft-names.test.ts`, T724's `generate-names.test.ts`, and `landed-names.test.ts`. The landed cube in /Ops now carries a title, which is checked absent along with its owner.
+      - The page:
+        - T723's `publish.test.ts` and the model page's refusal;
+        - `generate-in-workspace.spec.ts`'s T724 case on the image, which shows a name said only as in use, in the pane and on Save, with no way to the holder's file;
+        - `new-data-source.spec.ts` (T363).
+      - Imports: T720's `import-models.test.ts` (one held in a folder the importer can't see, its folder unsaid), and `export-import.spec.ts`'s hidden case on the image.
+    - **Runs:** `landed-names.test.ts` 8/8. The API suite is 1836 of 1838: `phase1-content.test.ts`'s two cases failed in the full run and pass alone with `landed-names.test.ts` (11/11), a clash between files run at once that was seen before these cases. The e2e named are among the reruns under `lockf -k` above (T650's follow-up): 83/83 and 46/46. `new-data-source.spec.ts` passes 4/4, under the same lock.
 
 - [x] T705 (AC-422, AC-424, AC-282, AC-270, AC-271) Check a draft's name when it is made, renamed and proposed: against every landed name and the workspace's other drafts, never another workspace's; an edit copy keeps its original's name
   - Files:
