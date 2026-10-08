@@ -354,6 +354,18 @@ export function connectionSync({
   /** The version xcube holds under exactly this name, or null where it holds none. */
   const heldVersion = async (name: string) =>
     (await connections.list()).find((held) => held.name === name)?.version ?? null;
+  /**
+   * A new one's: the version of what xcube still holds of exactly it, under
+   * its name in its folder, left when wechart's store was emptied (a data
+   * reset; xcube keeps the root's `default` its cubes use): landed over, as
+   * the start's reconcile would (T708, AC-330). Anything else, or xcube not
+   * answering the list, creates (`null`), which xcube refuses while another
+   * holds the name.
+   */
+  const leftVersion = async (name: string, xcubeFolderId: string) =>
+    (await connections.list().catch(() => [])).find(
+      (held) => held.name === name && held.folderId === xcubeFolderId,
+    )?.version ?? null;
 
   return {
     /**
@@ -380,7 +392,9 @@ export function connectionSync({
           try {
             // By its own name in any folder (T701; research
             // `xcube-256d632371.md`, 1.1).
-            const baseVersion = creating ? null : await heldVersion(source.name);
+            const baseVersion = creating
+              ? await leftVersion(source.name, id)
+              : await heldVersion(source.name);
             await connections.put(source.name, bodyOf(source, id, landed, baseVersion));
           } catch (error) {
             throw refusalOf(error, 'saved', source.name);

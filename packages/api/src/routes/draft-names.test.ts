@@ -546,6 +546,33 @@ describe('a deleted item’s name (T707, AC-427)', () => {
     expect((await fileIn(ids.sales, path))?.content).toBe(cube(margin.toUpperCase()));
   });
 
+  // T708's review: a view's, as a cube's (AC-427 names all three).
+  it('is taken again by a draft view: made, proposed and approved, and it lands', async () => {
+    const lens = `lens_${MARK}`;
+    const view = (name: string) =>
+      `views:\n  - name: ${name}\n    cubes:\n      - join_path: ${SEED}\n        includes: "*"\n`;
+    const path = `views/${lens}.yml`;
+    await files().write([{ folderId: ids.sales, path, content: view(lens) }]);
+    const folderId = await project('writer');
+    const early = await save('writer', folderId, `views/${lens}_new.yml`, view(lens), ids.sales);
+    expect(early.statusCode, early.body).toBe(422);
+
+    const deleted = await as('writer', {
+      method: 'DELETE',
+      url: `/api/model/files?folder=${encodeURIComponent(ids.sales)}&path=${encodeURIComponent(path)}`,
+    });
+    expect(deleted.statusCode, deleted.body).toBe(200);
+
+    const again = `views/${lens}_new.yml`;
+    const made = await save('writer', folderId, again, view(lens.toUpperCase()), ids.sales);
+    expect(made.statusCode, made.body).toBe(200);
+    const proposed = await propose('model', (await fileIn(folderId, again))!.id);
+    expect(proposed.statusCode, proposed.body).toBe(201);
+    const approved = await approve(proposed.json<{ id: string }>().id);
+    expect(approved.statusCode, approved.body).toBe(200);
+    expect((await fileIn(ids.sales, again))?.content).toBe(view(lens.toUpperCase()));
+  });
+
   it('is taken again by a draft data source: made, renamed to, proposed and approved, and it lands', async () => {
     const staging = `staging_${MARK}`;
     const landed = await sources().create({

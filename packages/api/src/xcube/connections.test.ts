@@ -288,7 +288,10 @@ describe('a data source landing in xcube before it is stored (T442)', () => {
 
     // A create is `baseVersion: null`, which xcube never lands over another
     // data source of the name, in any case (research `xcube-256d632371.md`, 2.5).
-    expect(sent.map(({ method, url, body }) => ({ method, url, body }))).toEqual([
+    // Each asks first what xcube holds (T708, below): here, nothing.
+    expect(sent.filter(({ method }) => method === 'GET')).toHaveLength(2);
+    const puts = sent.filter(({ method }) => method === 'PUT');
+    expect(puts.map(({ method, url, body }) => ({ method, url, body }))).toEqual([
       {
         method: 'PUT',
         url: `${BASE}/connections/warehouse`,
@@ -303,6 +306,48 @@ describe('a data source landing in xcube before it is stored (T442)', () => {
         },
       },
       expect.objectContaining({ url: `${BASE}/connections/default` }) as Sent,
+    ]);
+  });
+
+  /**
+   * T708: a data source wechart makes that xcube still holds, under exactly
+   * its name and in its folder, is wechart's own left behind (a data reset
+   * empties wechart's store, while xcube keeps the root's `default` its cubes
+   * use, and refuses to drop it): landed over it, at the version xcube holds,
+   * as the start's reconcile brings xcube's up to wechart's (AC-330; research
+   * `xcube-256d632371.md`, 2.5). One of the name in another folder, or
+   * another case, is another's: created, which xcube refuses as in use.
+   */
+  it('makes a new one over what xcube holds of exactly it, in its folder, and never over another’s', async () => {
+    const held = [
+      { name: 'default', folderId: 'froot', version: 3 },
+      { name: 'warehouse', folderId: 'fb', version: 5 },
+      { name: 'Lake', folderId: 'fa', version: 7 },
+    ];
+    const { sent, connections } = stub(({ method }) =>
+      method === 'GET'
+        ? { status: 200, body: { model: 'dev', connections: held } }
+        : { status: 200, body: {} },
+    );
+    const sync = connectionSync({ connections, folders: async () => tree({ 'folder-a': 'fa' }) });
+
+    await (
+      await sync.prepare(ROOT_FOLDER_ID)
+    ).land(source({ folderId: ROOT_FOLDER_ID, name: 'default' }), landed(), true);
+    await (await sync.prepare('folder-a')).land(source(), landed(), true);
+    await (await sync.prepare('folder-a')).land(source({ name: 'lake' }), landed(), true);
+
+    expect(
+      sent
+        .filter(({ method }) => method === 'PUT')
+        .map(({ url, body }) => [
+          url.slice(BASE.length),
+          (body as { baseVersion: unknown }).baseVersion,
+        ]),
+    ).toEqual([
+      ['/connections/default', 3],
+      ['/connections/warehouse', null],
+      ['/connections/lake', null],
     ]);
   });
 
@@ -424,8 +469,9 @@ describe('a data source landing in xcube before it is stored (T442)', () => {
     // (T452). Put first, so the landing inside the save's transaction needs
     // nothing more of the database (T442's review).
     const order: string[] = [];
-    const { connections } = stub(() => {
-      order.push('PUT');
+    const { connections } = stub(({ method }) => {
+      // What xcube holds is asked of xcube, not the database (T708).
+      order.push(method);
       return { status: 200, body: {} };
     });
     let asked = 0;
@@ -442,7 +488,7 @@ describe('a data source landing in xcube before it is stored (T442)', () => {
     const prepared = await sync.prepare('folder-a');
     const before = asked;
     await prepared.land(source(), landed(), true);
-    expect(order).toEqual(['tree', 'PUT']);
+    expect(order).toEqual(['tree', 'GET', 'PUT']);
     expect(asked).toBe(before);
 
     // A folder no tree holds (a workspace's, until slice 5's overlays).

@@ -13134,8 +13134,15 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - *Noted (2026-10-07):* the e2e also shows, on the image, a deleted data source's name taken by a new one, and the re-landed cube queried for its new SQL's answer. AC-427 is not ticked here: its `default` exception is T708's.
   - Depends on: T705
 
-- [ ] T708 (AC-310, AC-426) Hold `default` to the shared root
-  - Files: `packages/api/src/routes/data-sources.ts`, `packages/api/src/model/names.ts`, `packages/api/src/routes/proposals.ts`, `e2e/security/root-default.spec.ts`
+- [x] T708 (AC-310, AC-426) Hold `default` to the shared root
+  - Files: `packages/api/src/routes/data-sources.ts`, `packages/api/src/model/names.ts`, `packages/api/src/routes/proposals.ts`, `packages/api/src/routes/root-default-only.test.ts`, `packages/api/src/xcube/connections.ts` (+ test), `packages/api/src/routes/draft-names.test.ts` (a view's name taken again, for AC-427), `e2e/security/root-default.spec.ts`
+  - *Noted (2026-10-07):*
+    - The refusal is xcube's own `default_outside_root` wording, `DEFAULT_AT_ROOT` (T701), answered `400`. It comes before the name-in-use check, so `default` outside the root is never said to be in use. A proposal is refused with "…, so it wasn’t proposed." and an approval with "…, so nothing was approved.".
+    - The re-seed fix, at the coordinator's request: `WECHART_RESET_DATA` empties wechart's store, but xcube keeps the root's `default` that its cubes use, so the seed's create sent `baseVersion: null` and got `409 name_in_use`. A new data source now lands over the version xcube holds under exactly its name in exactly its folder, as the start's reconcile would (AC-330). Anything else is still created with `null` and refused while another holds the name (research `xcube-256d632371.md`, 2.5: a number edits). Tests: `xcube/connections.test.ts`, and T702's `fresh-start.spec.ts` "the shared root holds the only `default`" passes again on the image.
+    - AC-310 and AC-426 are not ticked: T702 (Helm), T730 and T723 are still open on them. AC-427 is ticked with T707's tests and these.
+    - The "previews" check is the workspace overlay holding the copy under `froot`/`default`: the stub xcube refuses `default` anywhere else.
+    - The binding is xcube's. The unit test of a cube in /A/B shows only that wechart reads xcube's `default` as the root's data source, since the stub says `default` for any cube that names none. The proof is the e2e on the image: there the cube is listed under the root's `default`, and it counts what the root's `customers` counts.
+    - A view's name taken again after its delete is shown in `draft-names.test.ts`, so AC-427 has its cube, view and data source.
   - Failing test:
     - `routes/root-default-only.test.ts` (new):
       - a data source named `default`, `Default` or `DEFAULT` is refused when made new in a workspace or going to any folder but the root;

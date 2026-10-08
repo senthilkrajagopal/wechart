@@ -21,7 +21,9 @@ import {
 import type { VersionKind, VersionStore } from '../repos/versions';
 import { cubesOfChart, cubesOfDashboard } from '../model/bind';
 import type { LandingModel } from '../model/landing';
-import { heldIn, namesDeclaredIn, type Names } from '../model/names';
+import { heldIn, isDefaultName, namesDeclaredIn, type Names } from '../model/names';
+import { ROOT_FOLDER_ID } from '../repos/catalog';
+import { DEFAULT_AT_ROOT } from '../xcube/refusal';
 import { declaredIn } from '../model/split';
 import type { LandingCheck, ModelLanding } from '../model/publish';
 import type {
@@ -1405,9 +1407,20 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     /** Approving, or proposing (T705): checked again then, for one landed since it was drafted. */
     phase: 'approval' | 'proposal' = 'approval',
   ) => {
-    if (routes.landedNames === undefined) return;
     const models = proposal.items.filter((item) => item.kind === 'model');
     const sources = proposal.items.filter((item) => item.kind === 'data-source');
+    const so = phase === 'approval' ? 'so nothing was approved' : 'so it wasn’t proposed';
+    // `default` lands in the shared root alone (T708, AC-310): there, only as
+    // the copy of the root's or the root's own.
+    if (
+      sources.some(
+        (item) =>
+          isDefaultName(String(item.snapshot['name'] ?? item.title)) &&
+          item.landsIn !== ROOT_FOLDER_ID,
+      )
+    )
+      throw new Refused(400, `${DEFAULT_AT_ROOT.replace(/\.$/, '')}, ${so}.`);
+    if (routes.landedNames === undefined) return;
     if (models.length === 0 && sources.length === 0) return;
     // An edit copy's original, where the copy lands over it: in its own folder.
     const originOf = (item: ProposedItem) => {
@@ -1441,7 +1454,6 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     });
     if (held.length === 0) return;
     const said = held.map((name) => `“${name}”`);
-    const so = phase === 'approval' ? 'so nothing was approved' : 'so it wasn’t proposed';
     throw new Refused(
       409,
       held.length === 1

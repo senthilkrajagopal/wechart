@@ -22,7 +22,8 @@ import {
 import { XCUBE_PUBLIC_KEY, type XcubePublicKey } from '../secrets/xcube-key';
 import type { ConnectionTest, ConnectionTestStore } from '../repos/connection-tests';
 import { XcubeError } from '../xcube/client';
-import { nameInUse } from '../xcube/refusal';
+import { DEFAULT_AT_ROOT, nameInUse } from '../xcube/refusal';
+import { isDefaultName } from '../model/names';
 import {
   ConnectionRefused,
   type ConnectionHealth,
@@ -800,6 +801,10 @@ export function registerDataSources(
       if (targetRefusal !== undefined)
         return reply.status(targetRefusal.status).send(targetRefusal.body);
     }
+    // Only the shared root has `default` (T708, AC-310): never made new in a
+    // workspace, whose one is only its copy of the root's (AC-280).
+    if (isDefaultName(name) && (inWorkspace || folderId !== ROOT_FOLDER_ID))
+      return reply.status(400).send({ error: DEFAULT_AT_ROOT });
     const taken = await nameTaken(name, workspace);
     if (taken !== undefined) return reply.status(409).send(taken);
     const shape = {
@@ -907,6 +912,7 @@ export function registerDataSources(
     // A workspace's is changed in wechart alone, as it was made; renamed, it
     // is checked as one made is (T345's review; T705, AC-422).
     if (workspaced && change.name !== undefined && change.name !== source.name) {
+      if (isDefaultName(change.name)) return reply.status(400).send({ error: DEFAULT_AT_ROOT });
       const taken = await nameTaken(
         change.name,
         (await workspaceOf?.(source.folderId)) ?? null,

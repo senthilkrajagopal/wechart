@@ -1,7 +1,8 @@
 import { seedDefault } from '../../packages/api/src/seed-default';
 import { CUBE, serviceToken } from '../api-process';
+import { landed } from '../model-files';
 import { expect, projectFolderOf, removeProjectFolder, test } from './fixtures';
-import { ROOT_DEFAULT_ENV } from './root-default';
+import { ROOT_DEFAULT_ENV, seedRootDefault } from './root-default';
 
 /**
  * T443 (AC-310): the shared root's `default` data source, seeded at install
@@ -20,7 +21,7 @@ type Listed = {
   name: string;
   folderId: string;
   driver: string;
-  usedBy: { name: string }[] | null;
+  usedBy: { name: string; folderId: string }[] | null;
 };
 
 test.describe('the root’s default data source, seeded at install (T443, AC-310)', () => {
@@ -78,6 +79,76 @@ test.describe('the root’s default data source, seeded at install (T443, AC-310
     // The seeded root cubes name no data source: bound to it (AC-310).
     const cubes = root!.usedBy?.map((cube) => cube.name) ?? [];
     expect(cubes).toEqual(expect.arrayContaining(['orders']));
+  });
+
+  /**
+   * T708 (AC-310; `[R71]`): a cube in /A/B naming no data source is bound to
+   * the shared root's `default`, the only data source of that name, and
+   * answers from its database: the sample's `customers`, counted as the
+   * root's own `customers` cube counts them.
+   */
+  test('binds a cube in /A/B naming no data source to it, which answers from its database', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    const request = page.request;
+    const seeded = await seedRootDefault();
+    expect(seeded.code, seeded.said.join('\n')).toBe(0);
+    const run = `rd${Math.random().toString(36).slice(2, 7)}`;
+    const plain = `plain_${run}`;
+    const folders: string[] = [];
+    const folderIn = async (parent: string, title: string) => {
+      const made = await request.post('/api/documents', {
+        data: { kind: 'folder', title, folderId: parent },
+      });
+      expect(made.status(), await made.text()).toBe(201);
+      const id = ((await made.json()) as { id: string }).id;
+      folders.unshift(id);
+      return id;
+    };
+    const file = {
+      path: `cubes/${plain}.yml`,
+      content: `cubes:\n  - name: ${plain}\n    sql_table: public.customers\n\n    measures:\n      - name: count\n        type: count\n`,
+    };
+    let b = '';
+    try {
+      const a = await folderIn('root', `A ${run}`);
+      b = await folderIn(a, `B ${run}`);
+      expect(await landed(request, b, [file])).toEqual([file]);
+
+      const listed = (await (await request.get('/api/data-sources')).json()) as Listed[];
+      const root = listed.find((row) => row.folderId === 'root' && row.name === 'default');
+      expect(
+        (root?.usedBy ?? [])
+          .filter((cube) => cube.name === plain)
+          .map(({ name, folderId }) => ({ name, folderId })),
+      ).toEqual([{ name: plain, folderId: b }]);
+      // No other data source is named `default`, in any case.
+      expect(listed.filter((row) => row.name.toLowerCase() === 'default')).toEqual([
+        expect.objectContaining({ folderId: 'root', name: 'default' }),
+      ]);
+
+      const count = async (measure: string) => {
+        const answer = await request.post('/api/load', {
+          data: { query: { measures: [measure] } },
+          timeout: 90_000,
+        });
+        expect(answer.status(), await answer.text()).toBe(200);
+        return ((await answer.json()) as { data: Record<string, unknown>[] }).data;
+      };
+      const roots = await count('customers.count');
+      expect(roots).toHaveLength(1);
+      expect(await count(`${plain}.count`)).toEqual([
+        { [`${plain}.count`]: roots[0]!['customers.count'] },
+      ]);
+    } finally {
+      if (b !== '')
+        await request.delete(
+          `/api/model/files?folder=${encodeURIComponent(b)}&path=${encodeURIComponent(file.path)}`,
+          { timeout: 90_000 },
+        );
+      for (const id of folders) await request.delete(`/api/documents/folder/${id}`);
+    }
   });
 
   /**

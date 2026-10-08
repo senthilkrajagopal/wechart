@@ -12,6 +12,13 @@ import { declaredIn } from './split';
  * `splitViewNames`).
  */
 
+/**
+ * `default`, in any case: the shared root's data source alone, which a cube
+ * naming none is bound to (T708; AC-310, AC-426; R71 6). A workspace holds
+ * one only as its copy of the root's (AC-280).
+ */
+export const isDefaultName = (name: string): boolean => nameKey(name) === 'default';
+
 /** The names a model file declares: its cube's or view's, and each split view's. */
 export function namesDeclaredIn(content: string): string[] {
   const names = declaredIn(content).map(({ name }) => name);
