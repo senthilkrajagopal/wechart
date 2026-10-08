@@ -11415,7 +11415,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - no stale phase copy (UX-111);
     - dialogs at 16/600 and 14 px, with Cancel beside one primary at the foot (UX-106, UX-109, UX-111).
   - Depends on: none
-- [ ] T476 (AC-187) Control sizes by context, and the theme's own controls
+- [x] T476 (AC-187) Control sizes by context, and the theme's own controls
   - Files: `packages/web/src/shell/styles.ts`, the forms and filter bars that differ, `e2e/consistency.spec.ts`
   - Failing test: `consistency.spec.ts`:
     - controls 32/14 in forms and dialogs, 28/12 in panes and filter bars, labels stacked 12/600 above them (UX-107);
@@ -14720,7 +14720,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - a move leaving a chart off its path: T714's `move-paths.test.ts` and `move-paths.spec.ts`, and `copy-on-use.spec.ts`;
       - a save while xcube can't be reached: the run above.
 
-- [ ] T730 (AC-273, AC-310, AC-161, AC-353) Rework the tests of T435, T443, T497 and T506 to data sources named once, with `default` at the root only
+- [x] T730 (AC-273, AC-310, AC-161, AC-353) Rework the tests of T435, T443, T497 and T506 to data sources named once, with `default` at the root only
   - Files: `e2e/security/data-source-binding.spec.ts` (T435), `e2e/security/root-default.spec.ts` and `deploy/helm/verify.sh` (T443), `e2e/security/data-sources.spec.ts` and `e2e/data-source.spec.ts` (T497, T506), `packages/web/src/workspaces/data-sources/{SourceEditor,ConnectionForm}.test.tsx`
   - Failing test:
     - `data-source-binding.spec.ts` (AC-273, AC-310):
