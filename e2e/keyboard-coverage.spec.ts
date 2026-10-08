@@ -593,6 +593,12 @@ test.describe('T182: what the first round left open', () => {
   test('the folder tree moves with the arrow keys, as a tree promises', async ({ page }) => {
     await page.goto('/explore');
     const tree = page.getByRole('tree', { name: 'Folders' });
+    // The tree as it stands once read. It is drawn first with the shared root
+    // alone, and fills in as the roots' counts (My workspace only once the API
+    // counts one: T343, AC-277) and the folders arrive. Pressed before then,
+    // ↓ has no second row to go to, and the rows it is checked against move.
+    await expect(tree.getByRole('treeitem', { name: 'My workspace', exact: true })).toBeVisible();
+    await expect(tree.getByRole('treeitem', { name: 'Archive', exact: true })).toBeVisible();
     const first = tree.getByRole('button').first();
     const second = tree.getByRole('button').nth(1);
     await first.focus();
