@@ -2096,6 +2096,16 @@ test('switching the interaction mode and back leaves no mark behind', async ({ p
  * misses a visible item.`
  *
  * Both from the tile's ⋯ marked-rows group, as the prototype's (AC-199).
+ *
+ * A marking is a union (core/markings/predicate.ts), so each tile's marked
+ * values reach into the other's items: once Instruments is marked, every
+ * status holds some marked orders, and once a status is, so does every
+ * category. Since T387 (AC-097) such an item is drawn partly marked: its
+ * marked share at full strength on the baseline, its faded remainder above.
+ * So each item is read here as marked, unmarked or partly marked over its
+ * axis label, never by counting a tile's drawn parts, which the shares
+ * change as their queries answer (docs/phase-2/backlog.md, "The flaky
+ * markings test's expected count", which the user approved correcting).
  */
 test('Invert marking and Mark all change one tile’s items, and keep another tile’s', async ({
   page,
@@ -2105,32 +2115,66 @@ test('Invert marking and Mark all change one tile’s items, and keep another ti
   await open(page, id, title);
   const status = tile(page, 'tile-status');
   const category = tile(page, 'tile-category');
+  const statuses = ['completed', 'shipped', 'processing'] as const;
+  const categories = ['Instruments', 'Components'] as const;
+  /** The drawn parts of a tile's bar over each named axis label. */
+  const partsOver = async (target: Locator, names: readonly string[]) => {
+    const centres = await Promise.all(
+      names.map((name) =>
+        target
+          .locator('svg text', { hasText: name })
+          .first()
+          .evaluate((text) => {
+            const rect = text.getBoundingClientRect();
+            return rect.left + rect.width / 2;
+          }),
+      ),
+    );
+    return target.locator('svg path[fill]').evaluateAll((nodes, xs) => {
+      const parts = nodes
+        .map((node) => ({
+          box: (node as SVGGraphicsElement).getBoundingClientRect(),
+          opacity: Number(node.getAttribute('fill-opacity') ?? node.getAttribute('opacity') ?? 1),
+        }))
+        .filter(({ box }) => box.width > 2 && box.height > 2);
+      return xs.map((x) =>
+        parts.filter(({ box }) => box.left <= x && x <= box.right).map(({ opacity }) => opacity),
+      );
+    }, centres);
+  };
+  /**
+   * How each named item is drawn: marked at full strength, unmarked faded,
+   * or partly marked — a full-strength share under a faded remainder.
+   */
+  const drawn = async (target: Locator, names: readonly string[]) =>
+    (await partsOver(target, names))
+      .map((opacities, index) => {
+        const state =
+          opacities.length === 0
+            ? 'not drawn'
+            : opacities.every((value) => value === 1)
+              ? 'marked'
+              : opacities.every((value) => value < 1)
+                ? 'unmarked'
+                : 'partly';
+        return `${names[index] ?? ''} ${state}`;
+      })
+      .join(', ');
+  const statusBars = () => drawn(status, statuses);
+  const categoryBars = () => drawn(category, categories);
+  /** The faintest part of the status bar over an axis label: unmarked, its fade. */
+  const faintestAt = async (label: string) =>
+    Math.min(...((await partsOver(status, [label]))[0] ?? []));
+
   // The status tile's shipped, and — added with Ctrl — the category tile's Instruments.
   await clickBar(page, status, 'shipped');
   await clickBar(page, category, 'Instruments', ['ControlOrMeta']);
   await expect(status.getByTestId('mark-badge')).toContainText('2 marked');
-  /** How many of a tile's bars are faded — unmarked — and how many drawn. */
-  const faded = async (target: Locator) => {
-    const all = await opacities(target);
-    return `${String(all.filter((value) => value < 1).length)} of ${String(all.length)}`;
-  };
-  // Of three statuses, shipped marked; of two categories, Instruments.
-  await expect.poll(() => faded(status)).toBe('2 of 3');
-  await expect.poll(() => faded(category)).toBe('1 of 2');
-  /** The opacity of the bar over an axis label: the one a click on it marks. */
-  const opacityAt = async (label: string) => {
-    const at = await status.locator('svg text', { hasText: label }).first().boundingBox();
-    return status.locator('svg path[fill]').evaluateAll(
-      (nodes, x) =>
-        nodes
-          .map((node) => ({ box: (node as SVGGraphicsElement).getBoundingClientRect(), node }))
-          .filter(({ box }) => box.width > 2 && box.height > 2 && box.left <= x && x <= box.right)
-          // No bar found is no opacity at all, which no assertion accepts.
-          .map(({ node }) => Number(node.getAttribute('fill-opacity') ?? 1))[0] ?? Number.NaN,
-      (at?.x ?? 0) + (at?.width ?? 0) / 2,
-    );
-  };
-  expect(await opacityAt('shipped')).toBe(1);
+  // Shipped marked; the other statuses partly, by their Instruments orders.
+  await expect.poll(statusBars).toBe('completed partly, shipped marked, processing partly');
+  // Instruments marked; Components partly, by its shipped orders.
+  await expect.poll(categoryBars).toBe('Instruments marked, Components partly');
+  expect(await faintestAt('shipped')).toBe(1);
 
   const act = async (name: string) => {
     await status.getByRole('button', { name: /^Actions for / }).click();
@@ -2141,37 +2185,41 @@ test('Invert marking and Mark all change one tile’s items, and keep another ti
   };
 
   // Inverted: the tile's other two statuses, not shipped; Instruments kept.
+  // Shipped is left only partly marked, by its Instruments orders.
   await act('Invert marking');
   await expect(status.getByTestId('mark-badge')).toContainText('3 marked');
-  await expect.poll(() => faded(status)).toBe('1 of 3');
+  await expect.poll(statusBars).toBe('completed marked, shipped partly, processing marked');
   // Faded to direction.md's unmarked strength, not merely something under 1.
-  await expect.poll(() => opacityAt('shipped')).toBe(0.28);
-  await expect.poll(() => faded(category)).toBe('1 of 2');
+  await expect.poll(() => faintestAt('shipped')).toBe(0.28);
+  await expect.poll(categoryBars).toBe('Instruments marked, Components partly');
 
   // Mark all: every status the tile draws, stored as what the tile is
   // filtered by (AC-102) — nothing, here, so every row — and Instruments kept.
   await act('Mark all');
   await expect(status.getByTestId('mark-badge')).toContainText('4 marked');
-  await expect.poll(() => faded(status)).toBe('0 of 3');
-  await expect.poll(() => faded(category)).toBe('0 of 2');
+  await expect.poll(statusBars).toBe('completed marked, shipped marked, processing marked');
+  await expect.poll(categoryBars).toBe('Instruments marked, Components marked');
   await expect(page.getByTestId('mark-chip').locator('.mark-chip__summary')).toHaveAttribute(
     'title',
     /all 3 in By status/,
   );
 
-  // A Ctrl-click then takes one status away, as on any marked item.
+  // A Ctrl-click then takes one status away, as on any marked item: partly
+  // marked now, by its Instruments orders alone.
   await clickBar(page, status, 'completed', ['ControlOrMeta']);
   await expect(status.getByTestId('mark-badge')).toContainText('3 marked');
-  await expect.poll(() => faded(status)).toBe('1 of 3');
-  await expect.poll(() => opacityAt('completed')).toBe(0.28);
-  await expect.poll(() => faded(category)).toBe('1 of 2');
+  await expect.poll(statusBars).toBe('completed partly, shipped marked, processing marked');
+  await expect.poll(() => faintestAt('completed')).toBe(0.28);
+  await expect.poll(categoryBars).toBe('Instruments marked, Components partly');
 
-  // Mark all, then Invert: none of the tile, Instruments still kept.
+  // Mark all, then Invert: none of the tile, Instruments still kept. Every
+  // status is left partly marked, by its Instruments orders, and Components
+  // holds no marked order at all.
   await act('Mark all');
   await act('Invert marking');
   await expect(status.getByTestId('mark-badge')).toContainText('1 marked');
-  await expect.poll(() => faded(status)).toBe('3 of 3');
-  await expect.poll(() => faded(category)).toBe('1 of 2');
+  await expect.poll(statusBars).toBe('completed partly, shipped partly, processing partly');
+  await expect.poll(categoryBars).toBe('Instruments marked, Components unmarked');
 });
 
 test('Mark all limits a details tile by what the tile shows, and is offered only where a click marks its categories', async ({
