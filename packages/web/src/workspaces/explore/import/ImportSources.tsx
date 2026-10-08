@@ -81,6 +81,23 @@ export interface HeldName {
   readonly path: readonly string[] | null;
   /** In the target or a folder above it: a model there may use it. */
   readonly onPath: boolean;
+  /** Its driver differs from the file's (AC-361); which, where its folder is seen. */
+  readonly driverDiffers?: boolean;
+  readonly driver?: string;
+}
+
+/**
+ * A mapping to another driver, in words (AC-361; design 13, P5): both named,
+ * or, where the one mapped to is in a folder the user can't see, only said.
+ */
+export function driverMismatchText(
+  file: { readonly name: string; readonly driver: string },
+  to: { readonly name: string; readonly driver?: string | undefined },
+): string {
+  const from = driverLabel(file.driver);
+  return to.driver === undefined
+    ? `${file.name} is ${from} in the file, and the data source it is mapped to has another driver: a model written for ${from}’s SQL may not run on it.`
+    : `${file.name} is ${from} in the file, and ${to.name} is ${driverLabel(to.driver)}: a model written for ${from}’s SQL may not run on ${driverLabel(to.driver)}.`;
 }
 
 interface Tested {
@@ -376,6 +393,18 @@ function SourceRow({
     return (
       <div ref={box} role="group" aria-labelledby={`${ids}-name`} className="import-source">
         {head}
+        {holder.driverDiffers === true ? (
+          // Mapped by its name, of another driver: warned of, as a mapping chosen is (AC-361).
+          <p
+            className="import-pane__warning import-source__mismatch"
+            role="note"
+            aria-label="Different driver"
+            data-testid="driver-mismatch"
+          >
+            <StatusIcon kind="warn" />
+            <span>{driverMismatchText(source, holder)}</span>
+          </p>
+        ) : null}
         {holder.onPath ? (
           <p className="import-source__held" data-testid="held">
             {`Its name is ${holder.name}’s, in ${holder.path === null ? 'a folder you can’t see' : pathText(holder.path)}: it is mapped to that one, and not imported.`}
@@ -482,9 +511,7 @@ function SourceRow({
               data-testid="driver-mismatch"
             >
               <StatusIcon kind="warn" />
-              <span>
-                {`${source.name} is ${driverLabel(source.driver)} in the file, and ${mapped.name} is ${driverLabel(mapped.driver)}: a model written for ${driverLabel(source.driver)}’s SQL may not run on ${driverLabel(mapped.driver)}.`}
-              </span>
+              <span>{driverMismatchText(source, mapped)}</span>
             </p>
           ) : null}
         </div>

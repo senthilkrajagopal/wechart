@@ -484,6 +484,26 @@ describe('a data source created by the import (T514, AC-358)', () => {
   });
 });
 
+// The coordinator's call on T719 (AC-361): a mapping by name warns of another driver too.
+describe('what a held data source of another driver means (T719, AC-361)', () => {
+  it('names both drivers where its folder is seen, and says only that it differs where not', () => {
+    const item = {
+      kind: 'data-source',
+      title: 'emea_replica',
+      driver: 'mysql',
+      mappedTo: { name: 'emea_replica', path: ['Sales'] },
+    };
+    expect(
+      warningText({ kind: 'driver-differs', driver: 'postgres' }, item, 'Sales / EMEA', true),
+    ).toBe(
+      'emea_replica is MySQL in the file, and emea_replica is PostgreSQL: a model written for MySQL’s SQL may not run on PostgreSQL.',
+    );
+    expect(warningText({ kind: 'driver-differs' }, item, 'Sales / EMEA', true)).toBe(
+      'emea_replica is MySQL in the file, and the data source it is mapped to has another driver: a model written for MySQL’s SQL may not run on it.',
+    );
+  });
+});
+
 describe('what a same-named draft means (T513, AC-357)', () => {
   it('says the second approved replaces the first only where both go to one folder', () => {
     const item = { kind: 'chart', title: 'Top products' };

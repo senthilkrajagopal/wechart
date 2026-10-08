@@ -73,7 +73,16 @@ function shown(
   held = SOURCES,
   /** Those whose names are held, as Review says them (T719). */
   named: Readonly<
-    Record<string, { name: string; path: readonly string[] | null; onPath: boolean }>
+    Record<
+      string,
+      {
+        name: string;
+        path: readonly string[] | null;
+        onPath: boolean;
+        driverDiffers?: boolean;
+        driver?: string;
+      }
+    >
   > = {},
 ) {
   const fetchMock = vi.fn((url: string, init?: RequestInit) =>
@@ -239,6 +248,24 @@ describe('an imported data source whose name is held (T719, AC-358)', () => {
     );
     expect(within(replica).queryByRole('radio')).toBeNull();
     expect(within(replica).queryByRole('button', { name: 'Test connection' })).toBeNull();
+    expect(last()['emea_replica']).toEqual({ kind: 'held' });
+  });
+
+  // The coordinator's call on T719 (AC-361): of another driver, it warns, and still maps.
+  it('warns, naming both drivers, when the one holding its name has another', () => {
+    const { last } = shown([REPLICA], () => answer(404, {}), SOURCES, {
+      emea_replica: {
+        name: 'emea_replica',
+        path: ['Sales'],
+        onPath: true,
+        driverDiffers: true,
+        driver: 'mysql',
+      },
+    });
+    const replica = row('emea_replica');
+    expect(within(replica).getByTestId('driver-mismatch').textContent).toBe(
+      'emea_replica is PostgreSQL in the file, and emea_replica is MySQL: a model written for PostgreSQL’s SQL may not run on MySQL.',
+    );
     expect(last()['emea_replica']).toEqual({ kind: 'held' });
   });
 

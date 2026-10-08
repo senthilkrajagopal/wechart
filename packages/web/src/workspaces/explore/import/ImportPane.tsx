@@ -12,7 +12,12 @@ import { StatusIcon } from '../../../shell/StatusIcon';
 import { useFocusTrap } from '../../../shell/useFocusTrap';
 import { TargetTree } from '../../data-sources/TargetTree';
 import type { Seal } from '../../data-sources/connectionTest';
-import { ImportSources, type HeldName, type SourceDecision } from './ImportSources';
+import {
+  driverMismatchText,
+  ImportSources,
+  type HeldName,
+  type SourceDecision,
+} from './ImportSources';
 import type { Target } from '../NewItemDialog';
 
 /**
@@ -50,7 +55,9 @@ type Warning =
   | { readonly kind: 'in-workspace'; readonly targetPath: readonly string[] | null }
   | { readonly kind: 'cube-in-target'; readonly cube: string; readonly file: string }
   /** The data source its name means is off the target's path: this one blocks (T719). */
-  | { readonly kind: 'off-path' };
+  | { readonly kind: 'off-path' }
+  /** That one's driver differs: which, where its folder is seen (AC-361). */
+  | { readonly kind: 'driver-differs'; readonly driver?: string };
 
 interface Reviewed {
   readonly target: { readonly id: string; readonly path: readonly string[] };
@@ -111,7 +118,12 @@ async function saidBy(response: Response, fallback: string): Promise<string> {
 /** A warning in words (design 13, pins 19–21), where the target is `target`. */
 export function warningText(
   warning: Warning,
-  item: { readonly kind: string; readonly title: string },
+  item: {
+    readonly kind: string;
+    readonly title: string;
+    readonly driver?: string | undefined;
+    readonly mappedTo?: { readonly name: string } | undefined;
+  },
   target: string,
   signedIn: boolean,
 ): string {
@@ -142,6 +154,11 @@ export function warningText(
       return `Cube ${warning.cube} is already in ${target}, in ${warning.file}. Proposing this draft is refused until one of them is renamed.`;
     case 'off-path':
       return `The data source of this name isn’t in ${target} or a folder above it, so a model there couldn’t use it. Choose a target on its path.`;
+    case 'driver-differs':
+      return driverMismatchText(
+        { name: item.title, driver: item.driver ?? '' },
+        { name: item.mappedTo?.name ?? item.title, driver: warning.driver },
+      );
   }
 }
 
@@ -226,11 +243,22 @@ export function ImportPane({
             ? [
                 [
                   item.key,
-                  {
-                    name: item.mappedTo.name,
-                    path: item.mappedTo.path,
-                    onPath: !item.warnings.some((warning) => warning.kind === 'off-path'),
-                  },
+                  (() => {
+                    const differs = item.warnings.find(
+                      (warning) => warning.kind === 'driver-differs',
+                    );
+                    return {
+                      name: item.mappedTo.name,
+                      path: item.mappedTo.path,
+                      onPath: !item.warnings.some((warning) => warning.kind === 'off-path'),
+                      ...(differs === undefined
+                        ? {}
+                        : {
+                            driverDiffers: true,
+                            ...(differs.driver === undefined ? {} : { driver: differs.driver }),
+                          }),
+                    };
+                  })(),
                 ],
               ]
             : [],

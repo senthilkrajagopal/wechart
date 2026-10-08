@@ -2107,6 +2107,7 @@ export function buildServer({
             return {
               id: source.id,
               name: source.name,
+              driver: source.driver,
               path: sees ? ((await pathsOf(request))(source.folderId) ?? []) : null,
               onPath: (await importPathOf(target)).includes(source.folderId),
               created: false,
@@ -2120,6 +2121,7 @@ export function buildServer({
           : {
               id: draft.id,
               name: draft.name,
+              driver: draft.driver,
               path: ['My workspace'],
               onPath:
                 draft.targetFolderId !== null &&

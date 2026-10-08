@@ -52,7 +52,13 @@ export type Warning =
    * so a model there couldn't use it: the import waits for a target on its
    * path (T719; AC-358, AC-357's R73 clause). This one blocks.
    */
-  | { readonly kind: 'off-path' };
+  | { readonly kind: 'off-path' }
+  /**
+   * The data source its name means has another driver than the file's
+   * (AC-361, the coordinator's call on T719): named where the importer may
+   * see its folder, only said otherwise. A warning; nothing blocks.
+   */
+  | { readonly kind: 'driver-differs'; readonly driver?: string };
 
 /** What the target and the workspace hold, as the warnings are reckoned against. */
 export interface Holdings {
@@ -151,6 +157,7 @@ export interface Mappable {
 export interface HeldSource {
   readonly id: string;
   readonly name: string;
+  readonly driver: string;
   /** Its folder's path, where the importer may see it; none where not. */
   readonly path: readonly string[] | null;
   /** In the target or a folder above it, or a draft going to the target: a model there may use it. */
@@ -461,7 +468,17 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
             lands: 'not-imported',
             mappedTo: { name: holder.name, path: holder.path },
             held: true,
-            warnings: holder.onPath ? [] : [{ kind: 'off-path' }],
+            warnings: [
+              ...(holder.onPath ? [] : [{ kind: 'off-path' } as const]),
+              // Its driver said only where its folder is seen (AC-361).
+              ...(holder.driver === item.driver
+                ? []
+                : [
+                    holder.path === null
+                      ? ({ kind: 'driver-differs' } as const)
+                      : ({ kind: 'driver-differs', driver: holder.driver } as const),
+                  ]),
+            ],
           },
         ];
       // A data source as decided (T514): mapped, not imported; created, a
@@ -540,7 +557,8 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
       if (item.kind === 'data-source') {
         const holder = held.get(item.name);
         if (holder !== undefined) {
-          if (holder.created) createdSources += 1;
+          // Counted only where the import names it as the one it made (the pane's Create).
+          if (holder.created && decided.get(item.name)?.to === holder.id) createdSources += 1;
           continue;
         }
         const found = await access.mappable(request, decided.get(item.name)!.to!, own, target.id);

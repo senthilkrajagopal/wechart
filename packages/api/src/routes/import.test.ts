@@ -796,14 +796,43 @@ describe('an import’s data sources whose names are held (T719, AC-358)', () =>
         held: true,
       }),
     );
+    // Made before this import, it is mapped, not counted as made by it (the coordinator, T719).
     const answer = await importing('writer', file, ids.sales, []);
     expect(answer.statusCode, answer.body).toBe(201);
     expect(answer.json<{ created: Record<string, number> }>().created).toEqual({
       dashboards: 1,
       charts: 3,
       models: 0,
-      dataSources: 1,
+      dataSources: 0,
     });
+    // Named by the import as the one it made (the pane's Create): counted.
+    const made2 = await importing('writer', file, ids.sales, [{ name, to: made.id }]);
+    expect(made2.statusCode, made2.body).toBe(201);
+    expect(made2.json<{ created: Record<string, number> }>().created.dataSources).toBe(1);
+  });
+
+  // The coordinator's call on T719 (AC-361): a mapping by name warns of another driver too.
+  it('warns of a held one of another driver, naming it only where its folder is seen', async () => {
+    const mysql = (name: string) => ({ ...freshSource(name), driver: 'mysql' });
+    // The file's SOURCE, MySQL there, mapped to Sales's PostgreSQL one of its name.
+    const base = exportFile();
+    const asMysql = {
+      ...base,
+      items: base.items.map((item) =>
+        (item as { kind: string }).kind === 'data-source'
+          ? { ...(item as Record<string, unknown>), driver: 'mysql' }
+          : item,
+      ),
+    };
+    const seen = await review('writer', asMysql, ids.sales, []);
+    expect(sourceOf(seen.json<Reviewed>(), SOURCE)?.warnings).toEqual([
+      { kind: 'driver-differs', driver: 'postgres' },
+    ]);
+    const hidden = await review('writer', exportFile([mysql(`${MARK}_hidden`)]), ids.sales, []);
+    expect(sourceOf(hidden.json<Reviewed>(), `${MARK}_hidden`)?.warnings).toEqual([
+      { kind: 'off-path' },
+      { kind: 'driver-differs' },
+    ]);
   });
 
   // T719's review: a draft going above the target is on its path, as a landed one there is.
