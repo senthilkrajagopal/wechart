@@ -23,7 +23,9 @@ const FOLDER = `Deleting ${RUN}`;
 const CHART = `Top products ${RUN}`;
 const BOARD = `Revenue ${RUN}`;
 const DRAFT = `Q4 review ${RUN}`;
-const made = { folder: '', chart: '', board: '', draft: '' };
+// A library chart in the folder that no dashboard shows (AC-263).
+const LONE = `Lone chart ${RUN}`;
+const made = { folder: '', chart: '', board: '', draft: '', lone: '' };
 
 /** A signed-in context of `who`'s own, for set-up and clean-up. */
 async function as(browser: Browser, who: Role) {
@@ -45,6 +47,7 @@ test.describe('deleting a library chart (T517, AC-362)', () => {
     const admin = await as(browser, 'super');
     if (made.board !== '') await admin.request.delete(`/api/documents/dashboard/${made.board}`);
     if (made.chart !== '') await admin.request.delete(`/api/documents/chart/${made.chart}`);
+    if (made.lone !== '') await admin.request.delete(`/api/documents/chart/${made.lone}`);
     if (made.folder !== '') await admin.request.delete(`/api/documents/folder/${made.folder}`);
     await admin.close();
   });
@@ -69,6 +72,11 @@ test.describe('deleting a library chart (T517, AC-362)', () => {
       });
       expect(chart.status(), await chart.text()).toBe(201);
       made.chart = ((await chart.json()) as { id: string }).id;
+      const lone = await page.request.post('/api/documents', {
+        data: { kind: 'chart', title: LONE, folderId: made.folder },
+      });
+      expect(lone.status(), await lone.text()).toBe(201);
+      made.lone = ((await lone.json()) as { id: string }).id;
       const board = await page.request.post('/api/documents', {
         data: { kind: 'dashboard', title: BOARD, folderId: made.folder },
       });
@@ -98,6 +106,28 @@ test.describe('deleting a library chart (T517, AC-362)', () => {
         page.locator('.chart-page__head').getByText(new RegExp(`^In ${FOLDER} · version`)),
       ).toBeVisible();
       await expect(page.getByRole('button', { name: `More actions for ${CHART}` })).toHaveCount(0);
+    });
+
+    test('sees the dashboard in the folder, and neither sees nor opens a library chart no dashboard of theirs shows (AC-263)', async ({
+      page,
+    }) => {
+      await page.goto(`/explore?folder=${made.folder}`);
+      const contents = page.getByTestId('explore-contents');
+      await expect(contents.getByRole('heading', { level: 1 })).toHaveText(FOLDER);
+      // The dashboard alone: neither library chart is listed, the one it
+      // shows included (AC-263: "and no … library charts").
+      const rows = contents.locator('tbody tr');
+      await expect(rows).toHaveCount(1);
+      await expect(rows.first()).toContainText(BOARD);
+      // The one no dashboard shows doesn't open: its page says what it says of
+      // a chart that isn't there, never its title, and the API answers 404.
+      await page.goto(`/explore/charts/${made.lone}`);
+      await expect(
+        page.getByRole('status').filter({ hasText: 'This chart is no longer available.' }),
+      ).toBeVisible();
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Chart');
+      await expect(page.getByText(LONE)).toHaveCount(0);
+      expect((await page.request.get(`/api/documents/chart/${made.lone}`)).status()).toBe(404);
     });
   });
 
