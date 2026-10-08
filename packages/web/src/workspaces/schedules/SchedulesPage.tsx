@@ -37,7 +37,7 @@ import {
   useFootHeight,
   useSheetEscape,
 } from '../jobs/Sheet';
-import { BuiltWhen } from '../jobs/builds';
+import { announced, BuiltWhen, stepRows } from '../jobs/builds';
 import { Status } from '../jobs/StateBadge';
 import { OwnerFilter, type ShownOwner } from './OwnerFilter';
 import { OwnerLabel } from './OwnerLabel';
@@ -188,20 +188,31 @@ function WechartRow({
     <tr
       data-schedule-id={schedule.id}
       aria-selected={selected}
-      tabIndex={0}
       className="build-panel__row"
       onClick={onSelect}
-      onKeyDown={(event) => {
-        if (event.target !== event.currentTarget) return;
-        if (event.key !== 'Enter' && event.key !== ' ') return;
-        event.preventDefault();
-        onSelect();
-      }}
     >
       <td className="query-log__query">
         {/* On, or paused by hand (T556; design 16, P3). */}
         <PauseSwitch schedule={schedule} />
-        <span data-testid="schedule-name">{shownAs.name}</span>
+        {/* Its name, a button read as the row is: Enter or Space opens it, ↑ ↓ go row to row (T611). */}
+        <button
+          type="button"
+          className="link-button list-name"
+          aria-label={announced(
+            shownAs.name,
+            shownAs.folder ?? 'Shared',
+            schedule.name,
+            schedule.suspendedAt !== null
+              ? 'Suspended'
+              : schedule.pausedAt !== null
+                ? 'Paused'
+                : 'Active',
+            'wechart',
+          )}
+          onKeyDown={stepRows}
+        >
+          <span data-testid="schedule-name">{shownAs.name}</span>
+        </button>
       </td>
       <td className="jobs-wide">{shownAs.folder ?? 'Shared'}</td>
       <td className="jobs-wide">
@@ -252,7 +263,13 @@ function scheduleStateOfUrl(): ScheduleState | '' {
 /** What the pane holds: a refresh key's, a wechart schedule's, or New schedule's form. */
 type Open =
   | { readonly kind: 'cube'; readonly id: string }
-  | { readonly kind: 'wechart'; readonly id: string; readonly held?: WechartSchedule }
+  | {
+      readonly kind: 'wechart';
+      readonly id: string;
+      readonly held?: WechartSchedule;
+      /** Asked for at `?schedule=` and not yet shown: not found once read, it's no schedule. */
+      readonly addressed?: true;
+    }
   | { readonly kind: 'new' };
 
 export function SchedulesPage() {
@@ -273,7 +290,13 @@ export function SchedulesPage() {
     queryFn: readWechartSchedules,
     refetchInterval: 30_000,
   });
-  const [selected, setSelected] = useState<Open | null>(null);
+  // `?schedule=` opens one of wechart's schedules: Jobs' "Also rebuilt by" links to it (pin 13; T611).
+  const [selected, setSelected] = useState<Open | null>(() => {
+    const asked = new URLSearchParams(window.location.search).get('schedule');
+    return asked === null || asked === ''
+      ? null
+      : { kind: 'wechart', id: asked, addressed: true };
+  });
   const client = useQueryClient();
   /** Access lost while the page was open (design 16, G5; T560), said once the lists are read again. */
   const [lost, setLost] = useState(false);
@@ -323,10 +346,36 @@ export function SchedulesPage() {
    * typed in its form, and focus goes back to what opened it: its row, or
    * New schedule (rule 85).
    */
+  /**
+   * Whether what's chosen is there to show: one opened at `?schedule=` is
+   * once wechart's schedules are read; one not listed then reads as one that
+   * doesn't exist, and nothing is chosen (T611's review; rule 67).
+   */
+  const chosenShown =
+    selected === null
+      ? false
+      : selected.kind === 'new'
+        ? true
+        : selected.kind === 'wechart'
+          ? selected.held !== undefined ||
+            (wechart.data ?? []).some((each) => each.id === selected.id)
+          : (schedules.data ?? []).some((each) => each.id === selected.id);
+  /*
+   * Only one asked for at the address: a pane shown and then gone from the
+   * list, as access goes, is closed by the refusal it came with, which puts
+   * focus on the list (G5; T611's e2e).
+   */
+  if (selected?.kind === 'wechart' && selected.addressed === true && wechart.data !== undefined) {
+    if (!chosenShown) setSelected(null);
+    else setSelected({ kind: 'wechart', id: selected.id });
+  }
+  // Its head takes focus once it's shown: at once, or once read (T611's review).
   useEffect(() => {
-    if (selected !== null && narrowNow())
-      document.querySelector<HTMLElement>('.schedules__pane .admin-pane__title')?.focus();
-  }, [selected]);
+    if (selected === null || !chosenShown || !narrowNow()) return;
+    // Not where the pane put it itself: Resume, as a suspended one opens (E1).
+    if (document.activeElement?.closest('.schedules__pane') != null) return;
+    document.querySelector<HTMLElement>('.schedules__pane .admin-pane__title')?.focus();
+  }, [selected, chosenShown]);
   const narrow = useNarrowWindow();
   const sheet = useRef<HTMLElement>(null);
   /** The sheet and its toast, Tab's box while it covers the page (T640's review). */
@@ -353,8 +402,8 @@ export function SchedulesPage() {
       was.kind === 'new'
         ? NEW_SCHEDULE
         : was.kind === 'wechart'
-          ? `tr[data-schedule-id=${JSON.stringify(was.id)}]`
-          : `tr[data-key-id=${JSON.stringify(was.id)}]`,
+          ? `tr[data-schedule-id=${JSON.stringify(was.id)}] .list-name`
+          : `tr[data-key-id=${JSON.stringify(was.id)}] .list-name`,
       ...TO_THE_LIST,
     );
   };
@@ -665,20 +714,26 @@ export function SchedulesPage() {
                               key={schedule.id}
                               // The sheet's × gives focus back to it (G8).
                               data-key-id={schedule.id}
-                              // A row opens its pane (D5): by pointer, or Enter or Space on it.
+                              // A row opens its pane (D5): by pointer anywhere in it, or its name.
                               aria-selected={isSelected('cube', schedule.id)}
-                              tabIndex={0}
                               className="build-panel__row"
                               onClick={open}
-                              onKeyDown={(event) => {
-                                if (event.target !== event.currentTarget) return;
-                                if (event.key !== 'Enter' && event.key !== ' ') return;
-                                event.preventDefault();
-                                open();
-                              }}
                             >
                               <td className="query-log__query">
-                                <span data-testid="schedule-name">{shownAs.name}</span>
+                                {/* Its name, a button read as the row is (T611). */}
+                                <button
+                                  type="button"
+                                  className="link-button list-name"
+                                  aria-label={announced(
+                                    shownAs.name,
+                                    shownAs.folder ?? 'Shared',
+                                    schedule.when,
+                                    schedule.owner === 'cube' ? 'Cube’s refresh worker' : 'wechart',
+                                  )}
+                                  onKeyDown={stepRows}
+                                >
+                                  <span data-testid="schedule-name">{shownAs.name}</span>
+                                </button>
                               </td>
                               <td className="jobs-wide">{shownAs.folder ?? 'Shared'}</td>
                               <td className="jobs-wide">
@@ -746,7 +801,13 @@ export function SchedulesPage() {
       {/* The sheet and what's said over it, as one, for Tab (T640). */}
       <div ref={over} className="sheet-over">
         {pane === null ? null : (
-          <aside ref={sheet} className="admin-pane schedules__pane" aria-label="Schedule details">
+          <aside
+            ref={sheet}
+            className="admin-pane schedules__pane"
+            aria-label="Schedule details"
+            // Covering the page, a modal dialog, as the .source-pane sheets are (T611).
+            {...(narrow ? { role: 'dialog', 'aria-modal': true } : {})}
+          >
             {/* Below 1,024 px, its actions pinned in the sheet's foot (G8; T640). */}
             <SheetFootContext.Provider value={narrow ? foot : null}>
               {pane}

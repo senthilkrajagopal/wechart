@@ -282,7 +282,10 @@ describe('G4 · a refusal in the API’s words, and G5 · access lost while open
     ) as HTMLElement;
     const before = reads();
 
-    await user().click(within(row).getByRole('button', { name: /^Build orders\.main/ }));
+    // From its pane, a row click only selecting (design 16, J; T611).
+    await user().click(row);
+    const pane = screen.getByRole('complementary', { name: 'Pre-aggregation details' });
+    await user().click(await within(pane).findByRole('button', { name: /^Build now/ }));
 
     expect(text(await screen.findByTestId('not-started'))).toBe(`Not started. ${REFUSED.error}`);
     // Read again, and still theirs: no word of access lost (T560's review).
@@ -317,12 +320,15 @@ describe('G4 · a refusal in the API’s words, and G5 · access lost while open
     shown('?preagg=orders.main');
     const pane = await screen.findByRole('complementary', { name: 'Pre-aggregation details' });
     await within(pane).findByTestId('pane-head');
-    const row = within(screen.getByRole('table', { name: 'Pre-aggregations' }))
-      .getByText('orders.main', { selector: '[data-testid="preagg-name"]' })
-      .closest('tr') as HTMLElement;
+    expect(
+      within(screen.getByRole('table', { name: 'Pre-aggregations' })).getByText('orders.main', {
+        selector: '[data-testid="preagg-name"]',
+      }),
+    ).toBeTruthy();
     const before = reads();
 
-    await user().click(within(row).getByRole('button', { name: /^Build orders\.main/ }));
+    // From its pane, a row click only selecting (design 16, J; T611).
+    await user().click(await within(pane).findByRole('button', { name: /^Build now/ }));
 
     const toast = await screen.findByText('You no longer have access to do this.');
     expect(text(toast)).toBe('You no longer have access to do this.');
@@ -352,7 +358,8 @@ describe('G4 · a refusal in the API’s words, and G5 · access lost while open
       },
     });
     shown('?preagg=orders.main');
-    const pane = await screen.findByRole('complementary', { name: 'Pre-aggregation details' });
+    // A sheet over the page, a modal dialog (T611).
+    const pane = await screen.findByRole('dialog', { name: 'Pre-aggregation details' });
     await within(pane).findByTestId('pane-head');
     // Every live region there is as the sheet covers the page.
     const regions = [...document.querySelectorAll('[role="status"]')];
@@ -364,6 +371,25 @@ describe('G4 · a refusal in the API’s words, and G5 · access lost while open
     );
     // The same region, there before what it says: a screen reader reads it as it changes.
     expect(regions).toContain(toast);
+  });
+
+  /** T611 (AC-176; T640's call): a sheet is a modal dialog, as the .source-pane sheets are. */
+  it('reads its pane below 1,024 px as a modal dialog, and docked as a complementary pane', async () => {
+    narrowWindow();
+    serve();
+    shown('?preagg=orders.main');
+
+    const sheet = await screen.findByRole('dialog', { name: 'Pre-aggregation details' });
+    expect(sheet.getAttribute('aria-modal')).toBe('true');
+    expect(
+      screen.queryAllByRole('complementary', { name: 'Pre-aggregation details' }),
+    ).toHaveLength(0);
+    // What it starts is said in it, so a reader that honours aria-modal reads it (T611's review).
+    await user().click(await within(sheet).findByRole('button', { name: /^Build now/ }));
+    const follow = await within(sheet).findByRole('button', { name: 'Follow it in Queue' });
+    expect(text(follow.closest('[role="status"]'))).toBe(
+      'Building orders.main.Follow it in Queue×',
+    );
   });
 
   it('reads the queue again when a cancel finds access lost, and says so', async () => {
@@ -638,7 +664,9 @@ describe('Esc in the docked pane (T640, AC-176)', () => {
     const row = within(await screen.findByRole('table', { name: 'Pre-aggregations' }))
       .getByText('orders.main', { selector: '[data-testid="preagg-name"]' })
       .closest('tr') as HTMLElement;
-    await user().click(row);
+    // Its row's name, a button, the row's one stop (T611).
+    const name = within(row).getByRole('button', { name: /^orders\.main/ });
+    await user().click(name);
     const pane = screen.getByRole('complementary', { name: 'Pre-aggregation details' });
     within(pane).getByRole('heading', { level: 2, name: 'orders.main' }).focus();
 
@@ -648,7 +676,7 @@ describe('Esc in the docked pane (T640, AC-176)', () => {
       'Select a pre-aggregation to see its state, what rebuilds it, and to build it.',
     );
     await vi.waitFor(() => {
-      expect(document.activeElement).toBe(row);
+      expect(document.activeElement).toBe(name);
     });
   });
 });

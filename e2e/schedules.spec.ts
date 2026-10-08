@@ -114,7 +114,11 @@ test('Schedules lists each refresh schedule as Cube’s, a hidden cube’s too, 
     .getByRole('row')
     .filter({ has: page.getByTestId('owner').filter({ hasText: 'Cube’s refresh worker' }) });
   await expect(cubeRows.first()).toBeVisible();
-  await expect(cubeRows.locator('input, select, textarea, button, [role="switch"]')).toHaveCount(0);
+  // Its name a button that opens its read-only pane, read as the row is (T611), and nothing else.
+  await expect(
+    cubeRows.locator('input, select, textarea, button:not(.list-name), [role="switch"]'),
+  ).toHaveCount(0);
+  await expect(cubeRows.locator('button.list-name')).toHaveCount(await cubeRows.count());
   await expect(
     main.locator(':is(input:not([role="switch"]), select, textarea):not(.schedules__filters *)'),
   ).toHaveCount(0);
@@ -145,7 +149,14 @@ test('Schedules lists each refresh schedule as Cube’s, a hidden cube’s too, 
       ]),
     );
   expect(switches.filter(([on, owner]) => on !== true || owner !== 'wechart')).toEqual([]);
-  await expect(table.getByRole('button')).toHaveCount(0);
+  // No button but each row's name, which opens its pane (T611).
+  await expect(table.locator('button:not(.list-name):not([role="switch"])')).toHaveCount(0);
+  await expect(table.locator('button.list-name')).toHaveCount(
+    await table
+      .getByRole('row')
+      .filter({ has: page.getByTestId('schedule-name') })
+      .count(),
+  );
 
   // Its pane opens the pre-aggregation itself in the model editor: its file,
   // on its cube's Pre-aggregations tab, with this one open (T160's review).
@@ -407,7 +418,10 @@ ${measures}    pre_aggregations:
     await ownCubeFile(request, cube, withRollup);
     await listed(true);
     await resume.click();
-    await expect(pane.getByRole('status')).toContainText(`Resumed “${name}”.`);
+    // Said in a polite toast (E3; T611).
+    await expect(page.getByRole('status').filter({ hasText: /^Resumed/ })).toContainText(
+      `Resumed “${name}”.`,
+    );
     await expect(pane.getByTestId('schedule-state')).toHaveText('Active');
   } finally {
     if (id !== undefined) await request.delete(`/api/wechart-schedules/${id}`);
@@ -741,7 +755,8 @@ test('below 1,024 px Schedules lists name, next run and owner, and its pane is a
     await expect(table.getByRole('columnheader', { name: moved, exact: true })).toBeHidden();
 
   await row.click();
-  const pane = page.getByRole('complementary', { name: 'Schedule details' });
+  // A sheet over the page: a modal dialog, as the .source-pane sheets are (T611).
+  const pane = page.getByRole('dialog', { name: 'Schedule details' });
   await expect(pane.getByRole('heading', { level: 2 })).toHaveText(
     'monthly_orders.by_status_month',
   );
@@ -756,7 +771,10 @@ test('below 1,024 px Schedules lists name, next run and owner, and its pane is a
   await pane.getByRole('button', { name: 'Back to the list' }).click();
   await expect(pane).toHaveCount(0);
   await expect(row).toBeVisible();
-  await expect(row).toBeFocused();
+  // On its row's name, the row's one stop (T611).
+  await expect(
+    row.getByRole('button', { name: /^monthly_orders\.by_status_month,/ }),
+  ).toBeFocused();
 });
 
 /**
@@ -789,7 +807,8 @@ test('below 1,024 px the sheet’s pinned foot hides nothing, and its dialog is 
   try {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/schedules');
-    const pane = page.getByRole('complementary', { name: 'Schedule details' });
+    // A sheet over the page: a modal dialog (T611).
+    const pane = page.getByRole('dialog', { name: 'Schedule details' });
     /** Scrolled to its end: the last line's bottom, and the foot's top. */
     const atEnd = () =>
       pane.evaluate((sheet) => {

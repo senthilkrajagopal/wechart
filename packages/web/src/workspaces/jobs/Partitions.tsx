@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
-import { clockOrWhenOf, exactOf } from '../../shell/formatTime';
+import { clockOf, clockOrWhenOf, exactOf } from '../../shell/formatTime';
 import { StateLine } from '../../shell/StatusIcon';
 import {
   BuiltWhen,
@@ -34,6 +34,8 @@ export interface PartitionRow {
   readonly state: PartitionState;
   readonly lastBuiltAt: string | null;
   readonly startedBy?: Starter;
+  /** Since when its build is in Cube's queue (T611). */
+  readonly since?: string;
   readonly failed?: {
     readonly runId: string;
     readonly at: string;
@@ -41,7 +43,7 @@ export interface PartitionRow {
   };
 }
 
-interface PartitionsAnswer {
+export interface PartitionsAnswer {
   readonly id: string;
   readonly name: string;
   readonly kind: 'partitioned' | 'whole' | 'combined';
@@ -57,6 +59,78 @@ interface PartitionsAnswer {
 /** Cube is still working the partitions out: asked again (A4). */
 class StillWorking extends Error {}
 
+/** A rollup's partitions, read as its pane and its facts read them (T375, T611). */
+export const partitionsQueryOf = (id: string) => ({
+  queryKey: ['jobs', 'partitions', id] as const,
+  queryFn: async ({ signal }: { signal?: AbortSignal }): Promise<PartitionsAnswer> => {
+    const response = await fetch(
+      `/api/jobs/partitions?preagg=${encodeURIComponent(id)}`,
+      signal === undefined ? {} : { signal },
+    );
+    const body = (await response.json().catch(() => null)) as
+      (PartitionsAnswer & { error?: unknown; pending?: boolean }) | null;
+    if (response.status === 503 && body?.pending === true) throw new StillWorking();
+    if (!response.ok || body === null)
+      throw new Error(
+        typeof body?.error === 'string'
+          ? body.error
+          : `The partitions could not be read (${String(response.status)}).`,
+      );
+    return body;
+  },
+});
+
+/**
+ * Its partitions in a line, as the pane's facts say them (design 16, pin 13;
+ * T611): "10 by month · 7 built, 1 building, 1 failed, 1 not built".
+ */
+export function partitionsLineOf(answer: PartitionsAnswer): string | undefined {
+  if (answer.kind === 'combined') return undefined;
+  if (answer.kind === 'whole') return 'Not partitioned';
+  const order: readonly (readonly [PartitionState, string])[] = [
+    ['built', 'built'],
+    ['building', 'building'],
+    ['queued', 'queued'],
+    ['stalled', 'stalled'],
+    ['failed', 'failed'],
+    ['not-built', 'not built'],
+  ];
+  const counts = order
+    .map(([state, words]) => {
+      const n = answer.partitions.filter((row) => row.state === state).length;
+      return n === 0 ? '' : `${String(n)} ${words}`;
+    })
+    .filter((each) => each !== '');
+  const by = answer.granularity === null ? '' : ` by ${answer.granularity}`;
+  return `${String(answer.partitions.length)}${by} · ${counts.join(', ')}`;
+}
+
+/**
+ * When its newest failure was, where one of its partitions reads failed (pin
+ * 13; T611): "at 14:05" today, as the design draws it, else with its day,
+ * "yesterday 14:05" or "2 Oct 14:05" (T477, Q8).
+ */
+export function failedAtOf(answer: PartitionsAnswer): string | undefined {
+  const at = answer.partitions
+    .flatMap((row) => (row.failed === undefined ? [] : [row.failed.at]))
+    .sort()
+    .at(-1);
+  if (at === undefined) return undefined;
+  const clock = clockOf(new Date(at));
+  const when = hourOf(at);
+  return when === clock ? `at ${clock}` : when.replace(/^Yesterday/, 'yesterday');
+}
+
+/** A partition's state in a word, as its row says it. */
+const STATE_WORDS: Readonly<Record<PartitionState, string>> = {
+  built: 'Built',
+  'not-built': 'Not built',
+  building: 'Building',
+  queued: 'Queued',
+  stalled: 'Stalled',
+  failed: 'Failed',
+};
+
 /**
  * "14:05", as design 16 draws it, with its day where it isn't today's
  * ("2 Oct 14:05"), so an older failure isn't read as today's (T477, Q8).
@@ -69,15 +143,35 @@ function StateOf({ row }: { row: PartitionRow }) {
   const single = useSingleUser();
   const by =
     row.startedBy === undefined
-      ? ''
-      : ` · ${row.startedBy.kind === 'person' ? personName(row.startedBy, single) : row.startedBy.name}`;
+      ? undefined
+      : row.startedBy.kind === 'person'
+        ? personName(row.startedBy, single)
+        : row.startedBy.name;
+  // By whom, and when it was queued: "Queued · Wren Writer, 14:38" (pin 12; T611).
+  const queuedBy = [by, row.since === undefined ? undefined : hourOf(row.since)]
+    .filter((each) => each !== undefined)
+    .join(', ');
   switch (row.state) {
     case 'built':
       return <Status kind="ok" label="Built" testId="partition-state" state="built" />;
     case 'building':
-      return <Status kind="run" label="Building" testId="partition-state" state="building" />;
+      return (
+        <Status
+          kind="run"
+          label={`Building${row.since === undefined ? '' : ` · since ${hourOf(row.since)}`}`}
+          testId="partition-state"
+          state="building"
+        />
+      );
     case 'queued':
-      return <Status kind="idle" label={`Queued${by}`} testId="partition-state" state="queued" />;
+      return (
+        <Status
+          kind="idle"
+          label={`Queued${queuedBy === '' ? '' : ` · ${queuedBy}`}`}
+          testId="partition-state"
+          state="queued"
+        />
+      );
     case 'stalled':
       return <Status kind="warn" label="Stalled" testId="partition-state" state="stalled" />;
     case 'failed':
@@ -147,29 +241,17 @@ export function Partitions({
   readonly name: string;
   readonly pollMs?: number;
   readonly onStarted?: (started: Started) => void;
-  /** A start the API refused: access may be lost while the page was open (design 16, G5). */
-  readonly onRefused?: () => void;
+  /**
+   * A start the API refused, with its words: access may be lost while the
+   * page was open (design 16, G5), or Cube's `jobs` scope missing (T176).
+   */
+  readonly onRefused?: (error: Error) => void;
   /** More actions, after the builds: Open in Model. */
   readonly children?: ReactNode;
 }) {
   const client = useQueryClient();
   const found = useQuery({
-    queryKey: ['jobs', 'partitions', id],
-    queryFn: async ({ signal }): Promise<PartitionsAnswer> => {
-      const response = await fetch(`/api/jobs/partitions?preagg=${encodeURIComponent(id)}`, {
-        signal,
-      });
-      const body = (await response.json().catch(() => null)) as
-        (PartitionsAnswer & { error?: unknown; pending?: boolean }) | null;
-      if (response.status === 503 && body?.pending === true) throw new StillWorking();
-      if (!response.ok || body === null)
-        throw new Error(
-          typeof body?.error === 'string'
-            ? body.error
-            : `The partitions could not be read (${String(response.status)}).`,
-        );
-      return body;
-    },
+    ...partitionsQueryOf(id),
     // States change as builds go: read again while the pane is open.
     refetchInterval: pollMs,
   });
@@ -182,6 +264,26 @@ export function Partitions({
   const parts = answer?.partitions ?? [];
   const periodFor = (row: PartitionRow) =>
     row.start === null ? 'Whole pre-aggregation' : periodOf(row.start, answer?.granularity ?? null);
+  /**
+   * Each partition's state as it changes, said in the polite live region
+   * (design 16's keyboard table, "Starting a build"; T611): "Sep 2026:
+   * Building", read again while the pane is open.
+   */
+  const [seen, setSeen] = useState(answer);
+  /** Whether a build was started here: each state is said only then (T611's review). */
+  const [startedHere, setStartedHere] = useState(false);
+  if (answer !== seen) {
+    if (startedHere && seen !== undefined && answer !== undefined) {
+      const changed = answer.partitions.flatMap((row) => {
+        const was = seen.partitions.find((each) => each.tableName === row.tableName);
+        return was === undefined || was.state === row.state
+          ? []
+          : [`${periodFor(row)}: ${STATE_WORDS[row.state]}`];
+      });
+      if (changed.length > 0) setSaid(changed.join('; '));
+    }
+    setSeen(answer);
+  }
   const chosen = parts.filter((row) => row.start !== null && selected.has(row.start));
   useEffect(() => {
     if (all.current !== null)
@@ -214,7 +316,7 @@ export function Partitions({
       return body;
     },
     onError: (error) => {
-      if (isRefused(error)) onRefused();
+      if (isRefused(error)) onRefused(error);
     },
     onSuccess: (body, starts) => {
       const refused = new Set((body.notStarted ?? []).map((each) => each.start));
@@ -252,6 +354,7 @@ export function Partitions({
             : `Rebuilding ${partitionsCount(begun.length)}`,
       );
       setSelected(new Set());
+      setStartedHere(true);
       onStarted({
         ...(body.runId === undefined ? {} : { runId: body.runId }),
         tokens: body.tokens ?? [],
@@ -269,14 +372,19 @@ export function Partitions({
   ) : unstarted === '' ? null : (
     <StateLine kind="warn">{unstarted}</StateLine>
   );
+  /**
+   * Build all's and Build now's start: out of use while one is starting, not
+   * out of reach, so focus stays on the button (design 16's keyboard table; T611).
+   */
+  const startEvery = {
+    'aria-disabled': build.isPending,
+    onClick: () => {
+      if (!build.isPending) build.mutate(undefined);
+    },
+  };
   /** Build all needs no list (A4): offered while it's read, or can't be (AC-228; T375's review). */
   const buildAll = (
-    <button
-      type="button"
-      className="btn btn-sm"
-      disabled={build.isPending}
-      onClick={() => build.mutate(undefined)}
-    >
+    <button type="button" className="btn btn-sm" {...startEvery}>
       Build all
     </button>
   );
@@ -305,8 +413,14 @@ export function Partitions({
         {liveRegion}
         <section
           className="build-log__section partitions partitions--pending"
-          aria-label="Partitions"
+          aria-labelledby={`${id}-parts`}
+          aria-busy
         >
+          {/* Under its head, over skeleton rows, as A4 draws it (T611). */}
+          <h3 id={`${id}-parts`}>Partitions</h3>
+          <span className="jobs-skeleton__bar" aria-hidden />
+          <span className="jobs-skeleton__bar" aria-hidden />
+          <span className="jobs-skeleton__bar" aria-hidden />
           <StateLine kind="run">Cube is still working out its partitions. Asking again…</StateLine>
           <p className="help build-log__help">
             Cube answers “Continue wait” while it’s still reading a build range, and xcube’s
@@ -336,32 +450,34 @@ export function Partitions({
 
   if (answer?.kind === 'combined')
     return (
-      <section className="build-log__section partitions" aria-labelledby={`${id}-parts`}>
-        <h3 id={`${id}-parts`}>Partitions</h3>
-        <p className="help build-log__help">
-          It has no partitions of its own. Cube answers it from the rollups it combines, so build
-          those:
-        </p>
-        <ul className="partitions__from">
-          {(answer.builtFrom ?? []).map((each) => (
-            <li key={each.id}>
-              <span className="run-history__name">{each.name}</span>
-              {each.folderPath === null ? null : (
-                <span className="build-queue__sub"> · {folderTextOf(each.folderPath)}</span>
-              )}{' '}
-              <a
-                className="link-button"
-                href={`/jobs?preagg=${encodeURIComponent(each.id)}`}
-                aria-label={`Open ${each.name}`}
-              >
-                Open
-              </a>
-            </li>
-          ))}
-        </ul>
-        {/* None of its own, Open in Model only: no empty bar pinned at the sheet's foot (T610's review). */}
+      <>
+        {/* Open in Model above its Partitions, as A3 draws it (T611); none, and no empty bar (T610's review). */}
         {children == null ? null : <SheetActions>{children}</SheetActions>}
-      </section>
+        <section className="build-log__section partitions" aria-labelledby={`${id}-parts`}>
+          <h3 id={`${id}-parts`}>Partitions</h3>
+          <p className="help build-log__help">
+            It has no partitions of its own. Cube answers it from the rollups it combines, so build
+            those:
+          </p>
+          <ul className="partitions__from">
+            {(answer.builtFrom ?? []).map((each) => (
+              <li key={each.id}>
+                <span className="run-history__name">{each.name}</span>
+                {each.folderPath === null ? null : (
+                  <span className="build-queue__sub"> · {folderTextOf(each.folderPath)}</span>
+                )}{' '}
+                <a
+                  className="link-button"
+                  href={`/jobs?preagg=${encodeURIComponent(each.id)}`}
+                  aria-label={`Open ${each.name}`}
+                >
+                  Open
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </>
     );
 
   const whole = answer?.kind === 'whole';
@@ -377,12 +493,7 @@ export function Partitions({
     <>
       <SheetActions>
         {whole ? (
-          <button
-            type="button"
-            className="btn-primary btn-sm"
-            disabled={build.isPending}
-            onClick={() => build.mutate(undefined)}
-          >
+          <button type="button" className="btn-primary btn-sm" {...startEvery}>
             Build now
           </button>
         ) : (
@@ -391,17 +502,17 @@ export function Partitions({
               type="button"
               className="btn-primary btn-sm"
               aria-label={`Rebuild ${String(chosen.length)} selected ${chosen.length === 1 ? 'partition' : 'partitions'} of ${name}`}
-              disabled={chosen.length === 0 || build.isPending}
-              onClick={() => build.mutate(chosen.map((row) => row.start!))}
+              // Out of use, not out of reach: focus stays on it once it starts
+              // and the selection clears (design 16's keyboard table; T611).
+              aria-disabled={chosen.length === 0 || build.isPending}
+              onClick={() => {
+                if (chosen.length === 0 || build.isPending) return;
+                build.mutate(chosen.map((row) => row.start!));
+              }}
             >
               Rebuild selected{chosen.length === 0 ? '' : ` (${String(chosen.length)})`}
             </button>
-            <button
-              type="button"
-              className="btn btn-sm"
-              disabled={build.isPending}
-              onClick={() => build.mutate(undefined)}
-            >
+            <button type="button" className="btn btn-sm" {...startEvery}>
               Build all {parts.length}
             </button>
           </>

@@ -142,6 +142,21 @@ const listed = async (who: string, query = '') => {
         : { records: [] as Summary[] },
   };
 };
+/**
+ * Every page of what `who` is given, newest first, following each page's
+ * `older` to the end: the shared database's others' builds take pages too.
+ */
+const everyPage = async (who: string, query = '') => {
+  const first = await listed(who, query);
+  const records = [...first.body.records];
+  let older = first.body.older;
+  while (older !== undefined) {
+    const next = await listed(who, `${query === '' ? '?' : `${query}&`}before=${older}`);
+    records.push(...next.body.records);
+    older = next.body.older;
+  }
+  return { status: first.status, body: { records } };
+};
 /** Only this test's records: the shared database holds others'. */
 const ours = (records: readonly Summary[]) =>
   records.filter((each) => [ids.a, ids.b, ids.c].includes(each.folderId));
@@ -185,12 +200,20 @@ describe('Run history, scoped as Jobs is (T374, AC-150, AC-297)', () => {
     const inA = await recorded(ids.a, 10);
     const inB = await recorded(ids.b, 9);
     const inC = await recorded(ids.c, 8);
+    // The shared database holds others' builds, newer than these, more than a
+    // page of them, in folders all three may see (the coordinator, 2026-10-08:
+    // 85 left over failed this test). Each is read past them, page by page.
+    const others = await folder(`Others ${MARK}`, 'root', {
+      readOnly: [],
+      readWrite: ['sales-rw', 'g01'],
+    });
+    for (let each = 0; each < 55; each += 1) await recorded(others, 1 + each / 100);
 
-    const writer = await listed('writer');
+    const writer = await everyPage('writer');
     expect(writer.status).toBe(200);
     expect(ours(writer.body.records).map((each) => each.id)).toEqual([inB, inA]);
-    expect(ours((await listed('many')).body.records).map((each) => each.id)).toEqual([inC]);
-    expect(ours((await listed('super')).body.records).map((each) => each.id)).toEqual([
+    expect(ours((await everyPage('many')).body.records).map((each) => each.id)).toEqual([inC]);
+    expect(ours((await everyPage('super')).body.records).map((each) => each.id)).toEqual([
       inC,
       inB,
       inA,
@@ -260,8 +283,9 @@ describe('Run history’s order, pages and filters (T374, AC-150)', () => {
     const bySchedule = await recorded(ids.b, 64, { starter: schedule });
     const twoDaysAgo = await recorded(ids.b, 2 * 24 * 60);
 
+    // Every page: others' builds in the shared database can fill the first (T611's fix).
     const idsOf = async (query: string) =>
-      new Set(ours((await listed('writer', query)).body.records).map((each) => each.id));
+      new Set(ours((await everyPage('writer', query)).body.records).map((each) => each.id));
 
     expect(await idsOf('?outcome=failed')).toContain(failed);
     expect(await idsOf('?outcome=failed')).not.toContain(done);
@@ -330,7 +354,9 @@ describe('Run history’s order, pages and filters (T374, AC-150)', () => {
       folders: { id: string; path: string[] }[];
       everyFolder: boolean;
     }>();
-    expect(page.records.find((each) => each.id === id)).toMatchObject({
+    // Found on whichever page it's on: others' builds in the shared database take pages too.
+    const records = (await everyPage('many')).body.records as unknown as typeof page.records;
+    expect(records.find((each) => each.id === id)).toMatchObject({
       outcome: null,
       jobs: 3,
       granularity: 'month',
@@ -422,8 +448,9 @@ describe('the Folder filter on every tab (T559, AC-297)', () => {
   it('lists a folder’s builds, and with Include subfolders those of the folders below it too', async () => {
     const inA = await recorded(ids.a, 20);
     const inB = await recorded(ids.b, 21);
+    // Every page: others' builds in the shared database can fill the first (T611's fix).
     const idsOf = async (query: string) =>
-      new Set(ours((await listed('writer', query)).body.records).map((each) => each.id));
+      new Set(ours((await everyPage('writer', query)).body.records).map((each) => each.id));
 
     const alone = await idsOf(`?folder=${ids.a}&within=all`);
     expect([alone.has(inA), alone.has(inB)]).toEqual([true, false]);

@@ -162,8 +162,12 @@ test.describe('Jobs and Schedules, scoped to the user’s read-write folders (T3
       await expect(table(page)).not.toContainText(`jobs_theirs_${RUN}`);
       // Nor the root's, which they don't write.
       await expect(table(page)).not.toContainText('monthly_orders');
+      // Built from its pane, a row click only selecting (design 16, J; T611).
+      await mine.getByTestId('preagg-name').click();
       await expect(
-        mine.getByRole('button', { name: `Build jobs_mine_${RUN}.main in Jobs mine ${RUN}` }),
+        page
+          .getByRole('complementary', { name: 'Pre-aggregation details' })
+          .getByRole('button', { name: /^Build (all|now)/ }),
       ).toBeVisible();
       // Another folder's, asked for by its published name, is refused.
       const refused = await page.request.post('/api/builds', {
@@ -215,8 +219,11 @@ test.describe('Jobs and Schedules, scoped to the user’s read-write folders (T3
         (response) =>
           response.url().endsWith('/api/builds') && response.request().method() === 'POST',
       );
-      await mine
-        .getByRole('button', { name: `Build jobs_mine_${RUN}.main in Jobs mine ${RUN}` })
+      // From its pane, a row click only selecting (design 16, J; T611).
+      await mine.getByTestId('preagg-name').click();
+      await page
+        .getByRole('complementary', { name: 'Pre-aggregation details' })
+        .getByRole('button', { name: /^Build (all|now)/ })
         .click();
       const answered = await built;
       expect(answered.status()).toBe(200);

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
 import { ExportedToast } from '../../dashboard/export/ExportedToast';
@@ -8,16 +8,26 @@ import { StateLine, type StateKind } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { rollupHref } from '../model/inFolder';
 import {
+  announced,
   BuildOutcomeStatus,
   BuiltWhen,
   partitionsOf,
   periodOf,
   StarterLabel,
+  stepRows,
   whenOf,
   type BuildSummary,
   type Starter,
 } from './builds';
-import { Partitions, type Started } from './Partitions';
+import { OwnerIcon } from '../schedules/OwnerLabel';
+import { readWechartSchedules, WECHART_SCHEDULES_KEY } from '../schedules/wechart';
+import {
+  failedAtOf,
+  Partitions,
+  partitionsLineOf,
+  partitionsQueryOf,
+  type Started,
+} from './Partitions';
 import {
   EVERY_FOLDER,
   FolderFilter,
@@ -28,13 +38,11 @@ import {
 } from './FolderFilter';
 import {
   ACCESS_LOST,
-  isRefused,
   ListEmpty,
   ListError,
   ListLoading,
   NoFolderLeft,
   noFolderLeft,
-  ReadError,
   readErrorOf,
 } from './ListStates';
 import { ChoicePill } from './Pill';
@@ -159,28 +167,6 @@ function memberHref(row: Buildable & { readonly fileName: string }): string {
   })!;
 }
 
-async function send<T>(url: string, init?: { body: unknown; signal?: AbortSignal }): Promise<T> {
-  const response = await fetch(
-    url,
-    init === undefined
-      ? undefined
-      : {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(init.body),
-          ...(init.signal === undefined ? {} : { signal: init.signal }),
-        },
-  );
-  const body = (await response.json().catch(() => null)) as (T & { error?: string }) | null;
-  // With its status: a refusal may be access lost while the page was open (G5; T560).
-  if (!response.ok || body === null)
-    throw new ReadError(
-      body?.error ?? `The request failed (status ${String(response.status)}).`,
-      response.status,
-    );
-  return body;
-}
-
 /** The list, or Jobs' tab where none is listed: focus, once a sheet with no row to go back to closes (T640). */
 const TO_THE_LIST = [
   '.build-panel [role="region"][aria-label="Pre-aggregations"]',
@@ -201,60 +187,151 @@ const AWAITED_MS = 60_000;
  * design 16, pin 5 and its legend): the state of its partitions that most
  * needs attention, with the partition it is of, as an icon and words.
  */
-function RowStatus({ row, testId }: { row: Buildable; testId: string }) {
+function RowStatus({
+  row,
+  testId,
+  more = '',
+}: {
+  row: Buildable;
+  testId: string;
+  /** More of it, as the pane says it: when it failed (T611; pin 13). */
+  more?: string;
+}) {
+  const { kind, label, state, title } = stateOf(row);
+  return kind === null ? (
+    <span className="muted" data-testid={testId}>
+      {label}
+    </span>
+  ) : (
+    <Status
+      kind={kind}
+      label={`${label}${more}`}
+      testId={testId}
+      {...(state === undefined ? {} : { state })}
+      {...(title === undefined ? {} : { title })}
+    />
+  );
+}
+
+/** A row's state in words with its icon: what RowStatus draws, and its row's name says (T611). */
+function stateOf(row: Buildable): {
+  kind: StateKind | null;
+  label: string;
+  state?: string;
+  title?: string;
+} {
   const at =
     row.stateAt === undefined
       ? ''
       : row.stateAt === null
         ? ' · whole'
         : ` · ${periodOf(row.stateAt, row.partitionGranularity ?? null)}`;
-  const shown = (kind: StateKind, label: string, state: string) => (
-    <Status kind={kind} label={label} testId={testId} state={state} />
-  );
   switch (row.state) {
     case 'failed':
-      return shown('err', `Failed${at}`, 'failed');
+      return { kind: 'err', label: `Failed${at}`, state: 'failed' };
     // A whole one's building, queued or stall says no period (screen 1).
     case 'building':
-      return shown('run', `Building${row.stateAt === null ? '' : at}`, 'building');
+      return { kind: 'run', label: `Building${row.stateAt === null ? '' : at}`, state: 'building' };
     case 'queued':
-      return shown('idle', `Queued${row.stateAt === null ? '' : at}`, 'queued');
+      return { kind: 'idle', label: `Queued${row.stateAt === null ? '' : at}`, state: 'queued' };
     case 'stalled':
-      return shown('warn', `Stalled${row.stateAt === null ? '' : at}`, 'stalled');
+      return { kind: 'warn', label: `Stalled${row.stateAt === null ? '' : at}`, state: 'stalled' };
     case 'partly':
-      return shown(
-        'part',
-        `Partly built · ${String(row.built ?? 0)} of ${String(row.partitions ?? 0)}`,
-        'partly',
-      );
+      return {
+        kind: 'part',
+        label: `Partly built · ${String(row.built ?? 0)} of ${String(row.partitions ?? 0)}`,
+        state: 'partly',
+      };
     case 'not-built':
-      return shown('off', 'Not built', 'not-built');
+      return { kind: 'off', label: 'Not built', state: 'not-built' };
     case 'built':
-      return shown('ok', 'Built', 'built');
+      return { kind: 'ok', label: 'Built', state: 'built' };
     default:
       // Made of other rollups (A3); or Cube still working its partitions out
       // (A4), never read as not built; or, with xcube's routes not there, nothing known.
-      return row.buildable === false ? (
-        <span className="muted" data-testid={testId}>
-          No partitions of its own
-        </span>
-      ) : row.unreadable !== undefined ? (
-        // xcube couldn't say: its words on hover; the row and its Build stay.
-        <Status
-          kind="warn"
-          label="Couldn’t read its state"
-          testId={testId}
-          state="unreadable"
-          title={row.unreadable}
-        />
-      ) : row.pending === true ? (
-        shown('run', 'Asking Cube…', 'pending')
-      ) : (
-        <span className="muted" data-testid={testId}>
-          —
-        </span>
-      );
+      return row.buildable === false
+        ? { kind: null, label: 'No partitions of its own' }
+        : row.unreadable !== undefined
+          ? // xcube couldn't say: its words on hover; the row and building from its pane stay.
+            {
+              kind: 'warn',
+              label: 'Couldn’t read its state',
+              state: 'unreadable',
+              title: row.unreadable,
+            }
+          : row.pending === true
+            ? { kind: 'run', label: 'Asking Cube…', state: 'pending' }
+            : { kind: null, label: '—' };
   }
+}
+
+/**
+ * The pane's facts (design 16, screen 1 pin 13; T611): its state, with when
+ * it failed; its partitions in a line; its trigger, its refresh key; the
+ * wechart schedules that also rebuild it, each opening on Schedules; and its
+ * model, read-only in its folder.
+ */
+function PaneFacts({ row }: { row: Buildable }) {
+  const partitions = useQuery(partitionsQueryOf(row.id));
+  const schedules = useQuery({ queryKey: WECHART_SCHEDULES_KEY, queryFn: readWechartSchedules });
+  const failedAt =
+    row.state === 'failed' && partitions.data !== undefined
+      ? failedAtOf(partitions.data)
+      : undefined;
+  const line = partitions.data === undefined ? undefined : partitionsLineOf(partitions.data);
+  const also = (schedules.data ?? []).filter((each) => each.preAggregation === row.id);
+  const shown = shownOf(row);
+  return (
+    <dl className="admin-pane__facts" role="group" aria-label="Facts">
+      <dt>Status</dt>
+      <dd>
+        <RowStatus
+          row={row}
+          testId="pane-state"
+          more={failedAt === undefined ? '' : `, ${failedAt}`}
+        />
+      </dd>
+      {line === undefined ? null : (
+        <>
+          <dt>Partitions</dt>
+          <dd data-testid="pane-partitions">{line}</dd>
+        </>
+      )}
+      <dt>Trigger</dt>
+      <dd>
+        {row.trigger ?? '—'}
+        {row.trigger === undefined || row.triggerKind === 'not-scheduled' ? null : (
+          <span className="muted"> · its refresh key</span>
+        )}
+      </dd>
+      {also.length === 0 ? null : (
+        <>
+          <dt>Also rebuilt by</dt>
+          <dd>
+            {also.map((each, at) => (
+              <span key={each.id} className="owner">
+                {at === 0 ? null : ', '}
+                <OwnerIcon owner="wechart" />
+                <a className="btn-link" href={`/schedules?schedule=${encodeURIComponent(each.id)}`}>
+                  {each.name}
+                </a>
+                <span className="muted"> · wechart</span>
+              </span>
+            ))}
+          </dd>
+        </>
+      )}
+      {row.fileName === undefined ? null : (
+        <>
+          <dt>Model</dt>
+          <dd>
+            <code>{row.fileName}</code>
+            <span className="muted"> · read-only in {shown.folder ?? 'Shared'}</span>
+          </dd>
+        </>
+      )}
+    </dl>
+  );
 }
 
 /** How many of its builds the pane lists (design 16, pin 14). */
@@ -477,7 +554,9 @@ export function BuildPanel({
   const closePane = () => {
     const was = selected;
     setSelected(null);
-    if (was !== null) focusAfterClose(`tr[data-preagg=${JSON.stringify(was)}]`, ...TO_THE_LIST);
+    // On its row's name, the row's one stop (T611).
+    if (was !== null)
+      focusAfterClose(`tr[data-preagg=${JSON.stringify(was)}] .list-name`, ...TO_THE_LIST);
   };
   useSheetEscape(pane, active && showing !== null, closePane);
   const [ownChoice, setOwnChoice] = useState<FolderChoice>(EVERY_FOLDER);
@@ -498,8 +577,12 @@ export function BuildPanel({
     void client.invalidateQueries({ queryKey: ['preaggregations'] });
     void client.invalidateQueries({ queryKey: ['jobs', 'builds', 'of', id] });
   };
-  /** A Build that made no job, said by its name, as the API leaves it to say (T550's review). */
-  const [noJob, setNoJob] = useState<string | null>(null);
+  /**
+   * A start refused for Cube's missing `jobs` scope: building is said to be
+   * unavailable, never as the build's failure (T176, AC-170). Builds start
+   * from the pane, a row click only selecting (design 16, J; T611).
+   */
+  const [noJobsScope, setNoJobsScope] = useState(false);
   /** Access lost while the page was open (design 16, G5), said once the list is read again. */
   const [lost, setLost] = useState(false);
   /**
@@ -515,17 +598,6 @@ export function BuildPanel({
     // Its row went with it: focus on the list, or Jobs' tab where none is left (T640).
     focusAfterClose(...TO_THE_LIST);
   };
-  const start = useMutation({
-    mutationFn: (id: string) =>
-      send<{ tokens: string[] }>('/api/builds', { body: { preAggregation: id } }),
-    onSuccess: ({ tokens }, id) => {
-      setNoJob(tokens.length === 0 ? id : null);
-      if (tokens.length > 0) follow(id);
-    },
-    onError: (error, id) => {
-      if (isRefused(error)) void refusedFor(id);
-    },
-  });
   /** What the pane started, said in a toast with the way to the queue (design 16, A1). */
   const [toast, setToast] = useState<{ said: string; jobs: number } | null>(null);
 
@@ -534,7 +606,7 @@ export function BuildPanel({
    * that, up front when the probe says so, and when a build is refused for
    * it — never as the build's failure.
    */
-  if (scopes.data?.jobs === 'missing' || missingScopeOf(start.error) === 'jobs')
+  if (scopes.data?.jobs === 'missing' || noJobsScope)
     return <ScopeUnavailable scope="jobs" what="Building pre-aggregations" />;
   // Skeleton rows while it's read, under the list's heads (design 16, G1; T560, T610).
   if (buildable.isPending)
@@ -564,29 +636,33 @@ export function BuildPanel({
   }
   const shown = buildable.data.find((each) => each.id === selected);
   const openQueue = onOpenQueue ?? (() => window.location.assign('/jobs?tab=queue'));
-  const toasts = (
-    <>
-      <ExportedToast
-        message={toast === null ? '' : `${toast.said}.`}
-        action={
-          toast === null
-            ? undefined
-            : {
-                label: toast.jobs > 1 ? 'Follow them in Queue' : 'Follow it in Queue',
-                onSelect: openQueue,
-              }
-        }
-        onDismiss={() => setToast(null)}
-      />
-      {/* Access lost while the page was open (design 16, G5; T560). */}
-      <ExportedToast
-        message={lost ? ACCESS_LOST : ''}
-        kind="err"
-        onDismiss={() => {
-          setLost(false);
-        }}
-      />
-    </>
+  /** What the pane started: in the sheet, a modal dialog, while one covers the page (T611's review). */
+  const startedToast = (
+    <ExportedToast
+      message={toast === null ? '' : `${toast.said}.`}
+      action={
+        toast === null
+          ? undefined
+          : {
+              label: toast.jobs > 1 ? 'Follow them in Queue' : 'Follow it in Queue',
+              onSelect: openQueue,
+            }
+      }
+      onDismiss={() => setToast(null)}
+    />
+  );
+  /**
+   * Access lost while the page was open (design 16, G5; T560): said as the
+   * sheet closes, so kept in one place outside it, and announced (T640's review).
+   */
+  const lostToast = (
+    <ExportedToast
+      message={lost ? ACCESS_LOST : ''}
+      kind="err"
+      onDismiss={() => {
+        setLost(false);
+      }}
+    />
   );
   /** The sheet's ×, back to the list, focus back on its row (design 16, G8; rule 85). */
   const backToList = (
@@ -652,7 +728,8 @@ export function BuildPanel({
                   setSearch(event.target.value);
                 }}
               />
-              <span className="run-history__count" role="status">
+              {/* A count, read as it changes, not a state (T611: status-labels' sweep). */}
+              <span className="run-history__count" aria-live="polite">
                 {`${String(listed.length)} ${listed.length === 1 ? 'pre-aggregation' : 'pre-aggregations'}`}
               </span>
             </div>
@@ -677,44 +754,43 @@ export function BuildPanel({
                     <th scope="col" className="num jobs-wide">
                       Partitions
                     </th>
-                    <th scope="col" className="jobs-wide">
-                      <span className="visually-hidden">Build</span>
-                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {listed.map((row) => {
                     const { id, trigger } = row;
                     const shownAs = shownOf(row);
-                    const said =
-                      shownAs.folder === undefined
-                        ? shownAs.name
-                        : `${shownAs.name} in ${shownAs.folder}`;
                     return (
                       <tr
                         key={id}
                         // The sheet's × gives focus back to it (G8).
                         data-preagg={id}
-                        // Selecting a row shows it in the pane (AC-228): by pointer
-                        // anywhere in it, or Enter or Space on the row itself.
+                        // Selecting a row shows it in the pane (AC-228): a click
+                        // anywhere in it only selects, building being the pane's
+                        // (design 16, J; T611).
                         aria-selected={selected === id}
-                        tabIndex={0}
                         className="build-panel__row"
                         onClick={() => {
                           setSelected(id);
                         }}
-                        onKeyDown={(event) => {
-                          if (event.target !== event.currentTarget) return;
-                          if (event.key !== 'Enter' && event.key !== ' ') return;
-                          event.preventDefault();
-                          setSelected(id);
-                        }}
                       >
                         <td className="query-log__query">
-                          {/* Plain text: a row click selects it, and its pane's
-                            Open in Model is the way to its definition (the
-                            user, 2026-09-28: UX-080; AC-229 amended, R47). */}
-                          <span data-testid="preagg-name">{shownAs.name}</span>
+                          {/* Its name, a button read as the row is (design 16's
+                            keyboard table): Enter or Space selects it, ↑ ↓ go
+                            to the next row's (T611). Its pane's Open in Model
+                            is the way to its definition (UX-080; R47). */}
+                          <button
+                            type="button"
+                            className="link-button list-name"
+                            aria-label={announced(
+                              shownAs.name,
+                              shownAs.folder ?? 'Shared',
+                              stateOf(row).label,
+                            )}
+                            onKeyDown={stepRows}
+                          >
+                            <span data-testid="preagg-name">{shownAs.name}</span>
+                          </button>
                         </td>
                         <td data-testid="preagg-folder">{shownAs.folder ?? 'Shared'}</td>
                         <td>
@@ -755,24 +831,6 @@ export function BuildPanel({
                             String(row.partitions)
                           )}
                         </td>
-                        <td className="jobs-wide">
-                          {/* A lambda or a rollup join has nothing of its own to build (A3). */}
-                          {row.buildable === false ? null : (
-                            <button
-                              type="button"
-                              className="btn-sm"
-                              aria-label={`Build ${said}`}
-                              // One start at a time, so each start's answer — a refusal
-                              // included — is the one shown (T155's review).
-                              disabled={start.isPending}
-                              onClick={() => {
-                                start.mutate(id);
-                              }}
-                            >
-                              Build
-                            </button>
-                          )}
-                        </td>
                       </tr>
                     );
                   })}
@@ -789,21 +847,6 @@ export function BuildPanel({
           name no starter until their history is recorded. Times are your local time; hover one for
           UTC.
         </p>
-        {/* Starting, in words with its icon, not only by the buttons fading (AC-177). */}
-        {start.isPending ? <StateLine kind="run">Asking Cube to start the build…</StateLine> : null}
-        {noJob === null ? null : (
-          <StateLine kind="warn" testId="build-empty">
-            Cube started no job: no partition of{' '}
-            {shownOf(buildable.data.find((each) => each.id === noJob) ?? { id: noJob }).name} was
-            built.
-          </StateLine>
-        )}
-        {/* Not started, in the API's words (design 16, G4; T560). */}
-        {start.isError ? (
-          <StateLine kind="err" testId="not-started">
-            Not started. <span>{start.error.message}</span>
-          </StateLine>
-        ) : null}
       </div>
 
       {/*
@@ -813,7 +856,13 @@ export function BuildPanel({
       */}
       {/* The sheet and what's said over it, as one, for Tab (T640). */}
       <div ref={over} className="sheet-over">
-        <aside ref={pane} className="admin-pane" aria-label="Pre-aggregation details">
+        <aside
+          ref={pane}
+          className="admin-pane"
+          aria-label="Pre-aggregation details"
+          // Covering the page, a modal dialog, as the .source-pane sheets are (T611).
+          {...(sheetOpen ? { role: 'dialog', 'aria-modal': true } : {})}
+        >
           {/* Below 1,024 px, its actions pinned in the sheet's foot (G8; T640). */}
           <SheetFootContext.Provider value={sheetOpen ? foot : null}>
             {shown === undefined && selected !== null && selected === selectedFirst ? (
@@ -843,23 +892,25 @@ export function BuildPanel({
                 </div>
                 {/* What scrolls under the head, the sheet's body below 1,024 px (T640). */}
                 <div className="admin-pane__body">
-                  {/* Its folder, so /A's and /A/B's `sales.main` are told apart (T371's review). */}
-                  {shownOf(shown).folder === undefined ? null : (
-                    <p className="build-panel__folder" data-testid="pane-folder">
-                      {shownOf(shown).folder}
-                    </p>
-                  )}
-                  <dl className="admin-pane__facts">
-                    <dt>Status</dt>
+                  {/* Its folder from the root, "Shared / Sales / EMEA" (pin 13; T611). */}
+                  <p className="build-panel__folder" data-testid="pane-folder">
+                    {(shown.folderPath ?? ['Shared']).join(' / ')}
+                  </p>
+                  <PaneFacts row={shown} />
+                  {/* Below 1,024 px, what the list leaves out (G8; T611). */}
+                  <dl
+                    className="admin-pane__facts jobs-narrow"
+                    role="group"
+                    aria-label="On the list"
+                  >
+                    <dt>Last built</dt>
                     <dd>
-                      <RowStatus row={shown} testId="pane-state" />
+                      {shown.lastBuiltAt == null ? '—' : <BuiltWhen iso={shown.lastBuiltAt} />}
                     </dd>
-                    <dt>Trigger</dt>
-                    <dd>{shown.trigger ?? '—'}</dd>
-                    <dt>Type</dt>
-                    <dd>{shown.type}</dd>
-                    <dt>Partition granularity</dt>
-                    <dd>{shown.partitionGranularity ?? 'none'}</dd>
+                    <dt>Started by</dt>
+                    <dd>
+                      {shown.startedBy == null ? '—' : <StarterLabel starter={shown.startedBy} />}
+                    </dd>
                   </dl>
                   {/*
               Its partitions, with Rebuild selected and Build all, or Build now
@@ -873,7 +924,10 @@ export function BuildPanel({
                     name={shownOf(shown).name}
                     pollMs={Math.max(pollMs, 5_000)}
                     // A refused start: access may be lost (design 16, G5; T560).
-                    onRefused={() => void refusedFor(shown.id)}
+                    onRefused={(error) => {
+                      if (missingScopeOf(error) === 'jobs') setNoJobsScope(true);
+                      else void refusedFor(shown.id);
+                    }}
                     onStarted={(begun: Started) => {
                       follow(shown.id);
                       // A start that made no job is said in the pane, not toasted (T375's review).
@@ -908,10 +962,13 @@ export function BuildPanel({
             )}
           </SheetFootContext.Provider>
           {narrow ? <footer className="source-pane__foot" ref={setFoot} /> : null}
+          {/* In the modal sheet, so a screen reader that honours aria-modal reads it (T611's review). */}
+          {sheetOpen ? startedToast : null}
         </aside>
         {/* Kept in one place, so each is announced as it comes; over the sheet,
           above its foot, and in its Tab order while it covers the page (T640). */}
-        {toasts}
+        {sheetOpen ? null : startedToast}
+        {lostToast}
       </div>
       {sheetOpen ? <SheetTrap pane={over} /> : null}
     </div>

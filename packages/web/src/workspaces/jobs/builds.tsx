@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { periodOf, periodsOf } from '@wechart/core';
+import type { KeyboardEvent } from 'react';
 
 import { clockOf as shownClock, exactOf, whenOf as momentOf } from '../../shell/formatTime';
 import { ME_QUERY } from '../../shell/me';
+import type { StateKind } from '../../shell/StatusIcon';
 import { Status } from './StateBadge';
 
 /**
@@ -153,19 +155,37 @@ export function BuildOutcomeStatus({
 }) {
   // With sign-in off, the one user is "you" (G7; T610).
   const single = useSingleUser();
+  const { kind, label, state } = outcomeOf(build, single);
+  return <Status kind={kind} label={label} testId="build-outcome" state={state} />;
+}
+
+/**
+ * How a build ended, or how far it has got, in words with its icon: what
+ * BuildOutcomeStatus draws, and what its row's name says (T611).
+ */
+export function outcomeOf(
+  build: Pick<
+    BuildSummary,
+    | 'outcome'
+    | 'failedCount'
+    | 'jobs'
+    | 'progress'
+    | 'cancelledBy'
+    | 'cancelledAt'
+    | 'cancelledWhileBuilding'
+  >,
+  single: boolean,
+): { kind: StateKind; label: string; state: string } {
   const ofAll = (n: number) => ` · ${String(n)} of ${String(build.jobs)}`;
   switch (build.outcome) {
     case 'done':
-      return <Status kind="ok" label="Done" testId="build-outcome" state="done" />;
+      return { kind: 'ok', label: 'Done', state: 'done' };
     case 'failed':
-      return (
-        <Status
-          kind="err"
-          label={`Failed${build.jobs > 1 ? ofAll(build.failedCount ?? 0) : ''}`}
-          testId="build-outcome"
-          state="failed"
-        />
-      );
+      return {
+        kind: 'err',
+        label: `Failed${build.jobs > 1 ? ofAll(build.failedCount ?? 0) : ''}`,
+        state: 'failed',
+      };
     case 'cancelled': {
       // By whom and when (design 16, C2): "Cancelled · by Wren Writer, 14:39".
       const by =
@@ -176,36 +196,50 @@ export function BuildOutcomeStatus({
             : build.cancelledBy.name;
       const at =
         typeof build.cancelledAt === 'string' ? shownClock(new Date(build.cancelledAt)) : undefined;
-      return (
-        <Status
-          kind="cancel"
-          // Stopped while building (T554, AC-394): "Cancelled while building · by …".
-          label={`Cancelled${build.cancelledWhileBuilding === true ? ' while building' : ''}${by === undefined ? '' : ` · by ${by}${at === undefined ? '' : `, ${at}`}`}`}
-          testId="build-outcome"
-          state="cancelled"
-        />
-      );
+      return {
+        kind: 'cancel',
+        // Stopped while building (T554, AC-394): "Cancelled while building · by …".
+        label: `Cancelled${build.cancelledWhileBuilding === true ? ' while building' : ''}${by === undefined ? '' : ` · by ${by}${at === undefined ? '' : `, ${at}`}`}`,
+        state: 'cancelled',
+      };
     }
     case 'expired':
-      return (
-        <Status kind="warn" label="Cube’s record expired" testId="build-outcome" state="expired" />
-      );
+      return { kind: 'warn', label: 'Cube’s record expired', state: 'expired' };
     default:
-      return build.progress.building > 0 ? (
-        <Status
-          kind="run"
-          label={`Building${ofAll(build.progress.done)}`}
-          testId="build-outcome"
-          state="building"
-        />
-      ) : (
-        <Status
-          kind="idle"
-          label={`Queued${ofAll(build.progress.done)}`}
-          testId="build-outcome"
-          state="queued"
-        />
-      );
+      return build.progress.building > 0
+        ? { kind: 'run', label: `Building${ofAll(build.progress.done)}`, state: 'building' }
+        : { kind: 'idle', label: `Queued${ofAll(build.progress.done)}`, state: 'queued' };
+  }
+}
+
+/**
+ * What a row's name says to a screen reader, as one (design 16's keyboard
+ * table): "orders_emea.by_month, Sales / EMEA, Failed, Aug 2026" (T611).
+ */
+export const announced = (...parts: (string | undefined)[]): string =>
+  parts
+    .filter((part): part is string => part !== undefined && part !== '' && part !== '—')
+    .map((part) => part.replaceAll(' · ', ', '))
+    .join(', ');
+
+/**
+ * ↑ and ↓ from a row's name to the next or last row's (design 16's keyboard
+ * table: "A row in a list · Tab · ↑ ↓ · Enter / Space"; T611).
+ */
+export function stepRows(event: KeyboardEvent<HTMLElement>) {
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+  let row = event.currentTarget.closest('tr');
+  for (;;) {
+    row = (
+      event.key === 'ArrowDown' ? row?.nextElementSibling : row?.previousElementSibling
+    ) as HTMLTableRowElement | null;
+    if (row === null || row === undefined) return;
+    const name = row.querySelector<HTMLElement>('.list-name');
+    if (name !== null) {
+      event.preventDefault();
+      name.focus();
+      return;
+    }
   }
 }
 

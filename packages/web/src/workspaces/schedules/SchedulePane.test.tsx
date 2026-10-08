@@ -179,6 +179,12 @@ describe('Suspended after its failed runs in a row, and Resume (T379, AC-155)', 
       ['Failed', '1 of 3'],
       ['Done', ''],
     ]);
+    // Each failed run's Log opens that run's log, at its address (E1; T611).
+    expect(
+      within(failed)
+        .getAllByRole('link', { name: 'Log' })
+        .map((link) => link.getAttribute('href')),
+    ).toEqual(['/jobs/builds/run-4', '/jobs/builds/run-3', '/jobs/builds/run-2']);
     expect(text(within(pane).getByTestId('last-error'))).toBe(
       'failure: Error: connect ETIMEDOUT 10.20.4.17:5432',
     );
@@ -204,15 +210,21 @@ describe('Suspended after its failed runs in a row, and Resume (T379, AC-155)', 
         { method: 'POST', url: '/api/wechart-schedules/sched-1/resume' },
       ]);
     });
-    expect(text(await within(paneOf()).findByRole('status'))).toBe(
-      'Resumed “Weekday mornings”. Its next run is Mon 5 Oct, 07:55.',
-    );
+    // Said in a polite toast (E3; T611), not a line in the pane.
+    const toast = (
+      await screen.findByText('Resumed “Weekday mornings”. Its next run is Mon 5 Oct, 07:55.')
+    ).closest('[role="status"]') as HTMLElement;
+    expect(toast.className).toContain('undo-toast');
     const facts = within(paneOf()).getAllByRole('term');
     expect(text(facts.find((term) => text(term) === 'State')?.nextElementSibling)).toBe(
       'Active · next Mon 5 Oct, 07:55',
     );
-    // Focus stays on its row (design 16's keyboard table).
-    expect(document.activeElement).toBe(await wechartRow('Weekday mornings'));
+    // Focus stays on its row (design 16's keyboard table): its name, the row's one stop.
+    expect(document.activeElement).toBe(
+      within(await wechartRow('Weekday mornings')).getByRole('button', {
+        name: /^orders\.mornings/,
+      }),
+    );
   });
 
   it('moves no focus to Resume when a schedule open in the pane is suspended by a refresh (T379’s review)', async () => {
@@ -235,11 +247,18 @@ describe('Suspended after its failed runs in a row, and Resume (T379, AC-155)', 
     });
     await user().click(await wechartRow('Weekday mornings'));
     await user().click(within(paneOf()).getByRole('button', { name: 'Resume' }));
-    expect(text(await within(paneOf()).findByRole('status'))).toContain('Resumed');
+    // Its toast (E3; T611).
+    expect(text(await screen.findByText(/^Resumed “Weekday mornings”/))).toContain('Resumed');
 
     await user().click(await wechartRow('Month-end close'));
 
-    expect(text(within(paneOf()).getByRole('status'))).toBe('');
+    // Not carried over to another schedule's pane.
+    expect(screen.queryAllByText(/^Resumed/)).toHaveLength(0);
+    expect(
+      within(paneOf())
+        .getAllByRole('status')
+        .map((status) => text(status)),
+    ).toEqual(['', '']);
   });
 
   it('numbers only the runs that count, leaving out one whose record Cube dropped (T379’s review)', async () => {

@@ -8,12 +8,15 @@ import { ListError, ListLoading, NoFolderLeft, noFolderLeft, ReadError } from '.
 import { Pill } from './Pill';
 import { focusAfterClose } from './Sheet';
 import {
+  announced,
   BuildOutcomeStatus,
   durationOf,
   folderTextOf,
+  outcomeOf,
   partitionsOf,
   personName,
   StarterLabel,
+  stepRows,
   useSingleUser,
   whenOf,
   type BuildSummary,
@@ -261,7 +264,8 @@ export function RunHistory({
               </select>
             )}
           </Pill>
-          <span className="run-history__count" role="status">
+          {/* A count, read as it changes, not a state (T611: status-labels' sweep). */}
+          <span className="run-history__count" aria-live="polite">
             {page.data === undefined
               ? ''
               : `${String(records.length)} ${records.length === 1 ? 'build' : 'builds'} · newest first`}
@@ -353,7 +357,15 @@ export function RunHistory({
                         {/* The row's name, a button, so it is reached and read as one (design 16, keyboard). */}
                         <button
                           type="button"
-                          className="link-button run-history__name"
+                          className="link-button run-history__name list-name"
+                          // Read as the row is, and ↑ ↓ go row to row (design 16's keyboard table; T611).
+                          aria-label={announced(
+                            record.name,
+                            folderTextOf(record.folderPath),
+                            outcomeOf(record, single).label,
+                            partitionsOf(record),
+                          )}
+                          onKeyDown={stepRows}
                           onClick={(event) => {
                             event.stopPropagation();
                             setOpenId(record.id);
@@ -421,6 +433,8 @@ export function RunHistory({
         // Read by its id: one opened at its address need not be on this page (T610).
         // Closed, focus goes back to its row's name, which opened it (T640; rule 85).
         <BuildLog
+          // Each build's log its own: one's "…N more" opened isn't another's (T611).
+          key={openId}
           id={openId}
           active={active}
           onClose={() => {

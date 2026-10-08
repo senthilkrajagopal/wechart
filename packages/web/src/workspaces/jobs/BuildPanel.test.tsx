@@ -3,7 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { exactOf } from '../../shell/formatTime';
+import { clockOf, exactOf } from '../../shell/formatTime';
 import { BuildPanel } from './BuildPanel';
 import { JobsPage } from './JobsPage';
 
@@ -54,7 +54,12 @@ const PARTITIONS = {
  * The API: the list answered with each of `lists` in turn, the last one
  * again after that; every list read and build start kept.
  */
-function api(lists: Row[][], recent: Row[] = [], tokens: string[] = ['78f5612']) {
+function api(
+  lists: Row[][],
+  recent: Row[] = [],
+  tokens: string[] = ['78f5612'],
+  more: { partitions?: unknown; schedules?: unknown[] } = {},
+) {
   const asked: string[] = [];
   const posted: unknown[] = [];
   vi.stubGlobal(
@@ -68,7 +73,10 @@ function api(lists: Row[][], recent: Row[] = [], tokens: string[] = ['78f5612'])
         posted.push(JSON.parse(String(init?.body)));
         return Response.json(tokens.length === 0 ? { tokens } : { tokens, runId: 'run-1' });
       }
-      if (url.startsWith('/api/jobs/partitions')) return Response.json(PARTITIONS);
+      if (url.startsWith('/api/jobs/partitions'))
+        return Response.json(more.partitions ?? PARTITIONS);
+      if (url === '/api/wechart-schedules' && more.schedules !== undefined)
+        return Response.json(more.schedules);
       if (url.startsWith('/api/jobs/builds'))
         return Response.json({ records: recent, starters: [], folders: [] });
       if (url === '/api/jobs/queue') return Response.json({ entries: [], everyFolder: true });
@@ -100,12 +108,22 @@ function shown(
 }
 
 const text = (element: Element | null | undefined) => element?.textContent ?? '';
+// By its name, its cell's name being its button's whole announcement (T611).
 const rowOf = async (name: string) =>
-  (await screen.findByRole('cell', { name })).closest('tr') as HTMLElement;
+  (await screen.findByText(name, { selector: '[data-testid="preagg-name"]' })).closest(
+    'tr',
+  ) as HTMLElement;
+/** Its pane's Build all, or Build now, the way to build it, a row click only selecting (T611). */
+const buildFromPane = async (row: HTMLElement) => {
+  await userEvent.click(row);
+  const pane = screen.getByRole('complementary', { name: 'Pre-aggregation details' });
+  await userEvent.click(await within(pane).findByRole('button', { name: /^Build (all|now)/ }));
+};
 const cellsOf = (row: HTMLElement) => within(row).getAllByRole('cell');
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('each pre-aggregation’s row (T550, AC-391)', () => {
@@ -135,8 +153,9 @@ describe('each pre-aggregation’s row (T550, AC-391)', () => {
       'Started by',
       'Trigger',
       'Partitions',
-      'Build',
     ]);
+    // A row click only selects: no Build of its own (design 16, J; T611).
+    expect(within(row).queryAllByRole('button', { name: /^Build/ })).toHaveLength(0);
     const state = within(row).getByTestId('row-state');
     expect(text(state)).toBe('Failed · Aug 2026');
     expect(state.querySelector('svg')?.getAttribute('data-icon')).toBe('err');
@@ -209,16 +228,52 @@ describe('each pre-aggregation’s row (T550, AC-391)', () => {
     expect(text(state)).toBe('Couldn’t read its state');
     expect(state.querySelector('svg')?.getAttribute('data-icon')).toBe('warn');
     expect(state.getAttribute('title')).toBe('xcube answered 500: Too many partitions');
-    expect(within(row).getAllByRole('button', { name: `Build ${ID}` })).toHaveLength(1);
+    // Building from its pane, as any row's (design 16, J; T611).
+    await userEvent.click(row);
+    const pane = screen.getByRole('complementary', { name: 'Pre-aggregation details' });
+    expect(await within(pane).findAllByRole('button', { name: /^Build all/ })).toHaveLength(1);
   });
 
   it('says so when Cube started no job for a Build', async () => {
     shown([[ROW]], null, [], []);
 
-    await userEvent.click(within(await rowOf(ID)).getByRole('button', { name: `Build ${ID}` }));
+    await buildFromPane(await rowOf(ID));
     expect(text(await screen.findByText(/^Cube started no job/))).toBe(
       `Cube started no job: no partition of ${ID} was built.`,
     );
+  });
+
+  /** T611 (AC-399; design 16's keyboard table, "A row in a list"). */
+  it('names each row by a button read as the row is, and ↑ ↓ go from row to row', async () => {
+    shown([
+      [
+        { ...ROW, state: 'failed', stateAt: '2026-08-01T00:00:00.000' },
+        {
+          ...ROW,
+          id: 'fa1__sales.main',
+          folderId: 'a1',
+          shortName: 'sales',
+          folderPath: ['Shared', 'Sales', 'EMEA'],
+        },
+      ],
+    ]);
+
+    const first = within(await rowOf(ID)).getByRole('button', {
+      name: `${ID}, Shared, Failed, Aug 2026`,
+    });
+    const second = within(await rowOf('sales.main')).getByRole('button', {
+      name: 'sales.main, Sales / EMEA, Built',
+    });
+    // The row itself is no stop of its own: its name is.
+    expect((await rowOf(ID)).hasAttribute('tabindex')).toBe(false);
+    first.focus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(second);
+    await userEvent.keyboard('{ArrowUp}');
+    expect(document.activeElement).toBe(first);
+    // Enter on it selects it, its pane open on it.
+    await userEvent.keyboard('{Enter}');
+    expect((await rowOf(ID)).getAttribute('aria-selected')).toBe('true');
   });
 
   it('reads others’ builds under way now and then, not as often as one started here', async () => {
@@ -245,7 +300,12 @@ describe('each pre-aggregation’s row (T550, AC-391)', () => {
 
     const row = await rowOf('monthly_orders.recent');
     expect(text(cellsOf(row)[2])).toBe('No partitions of its own');
-    expect(within(row).queryAllByRole('button')).toHaveLength(0);
+    // Its name is its row's one button, as every row's is (T611): nothing to build.
+    expect(
+      within(row)
+        .getAllByRole('button')
+        .map((button) => text(button)),
+    ).toEqual(['monthly_orders.recent']);
   });
 });
 
@@ -269,7 +329,7 @@ describe('a started build’s progress in its row (T239, AC-229)', () => {
     ]);
 
     const row = await rowOf(ID);
-    await userEvent.click(within(row).getByRole('button', { name: `Build ${ID}` }));
+    await buildFromPane(row);
     expect(posted).toEqual([{ preAggregation: ID }]);
 
     const state = () => within(row).getByTestId('row-state');
@@ -304,7 +364,7 @@ describe('a started build’s progress in its row (T239, AC-229)', () => {
     );
 
     const row = await rowOf(ID);
-    await userEvent.click(within(row).getByRole('button', { name: `Build ${ID}` }));
+    await buildFromPane(row);
     await vi.waitFor(() => {
       expect(within(row).getByTestId('row-state').getAttribute('data-state')).toBe('building');
     });
@@ -338,7 +398,7 @@ describe('a folder’s pre-aggregation (T371, AC-297; §P2.6 D)', () => {
     expect(name.textContent).toBe('sales.main');
     expect(screen.getByTestId('preagg-folder').textContent).toBe('Sales / EMEA');
     expect(screen.queryByText('fa1__sales.main')).toBeNull();
-    await userEvent.click(screen.getByRole('button', { name: 'Build sales.main in Sales / EMEA' }));
+    await buildFromPane(await rowOf('sales.main'));
     expect(posted).toEqual([{ preAggregation: 'fa1__sales.main' }]);
   });
 });
@@ -410,6 +470,93 @@ describe('the pane (AC-228, AC-245; T469, T375)', () => {
     ).toBe(
       '/explore/folders/a1/models/cubes%2Fsales.yml?cube=sales&tab=pre_aggregations&member=main',
     );
+  });
+
+  /** T611 (AC-399; design 16, pin 13): the pane's facts, as screen 1's pane draws them. */
+  it('says its folder from the root, its state with when it failed, its partitions, its trigger, what else rebuilds it, and its model', async () => {
+    const failedAt = '2026-10-02T12:05:00.000Z';
+    // Read the day it failed, so its time is a bare clock (T477; another day's is in Partitions.test).
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(new Date(failedAt).setHours(23, 0)));
+    api(
+      [
+        [
+          {
+            ...ROW,
+            id: 'orders_emea.by_month',
+            folderId: 'emea',
+            folderPath: ['Shared', 'Sales', 'EMEA'],
+            fileName: 'sales.yml',
+            fileFolderId: 'emea',
+            state: 'failed',
+            stateAt: '2026-08-01T00:00:00.000',
+            trigger: 'Every 30 minutes',
+          },
+        ],
+      ],
+      [],
+      undefined,
+      {
+        partitions: {
+          ...PARTITIONS,
+          id: 'orders_emea.by_month',
+          partitions: [
+            { ...PARTITIONS.partitions[0]!, state: 'building', tableName: 't1' },
+            { ...PARTITIONS.partitions[0]!, tableName: 't2' },
+            {
+              ...PARTITIONS.partitions[0]!,
+              tableName: 't3',
+              state: 'failed',
+              failed: { runId: 'r1', at: failedAt, serving: null },
+            },
+            {
+              ...PARTITIONS.partitions[0]!,
+              tableName: 't4',
+              state: 'not-built',
+              lastBuiltAt: null,
+            },
+          ],
+        },
+        schedules: [
+          {
+            id: 's-close',
+            name: 'Month-end close',
+            preAggregation: 'orders_emea.by_month',
+          },
+          { id: 's-other', name: 'Other', preAggregation: 'returns.daily' },
+        ],
+      },
+    );
+    render(
+      <QueryClientProvider client={client()}>
+        <BuildPanel pollMs={10} selectedFirst="orders_emea.by_month" />
+      </QueryClientProvider>,
+    );
+    const pane = await screen.findByRole('complementary', { name: 'Pre-aggregation details' });
+    const facts = async () => {
+      const list = within(pane).getByRole('group', { name: 'Facts' });
+      return [...list.querySelectorAll('dt')].map((term) => [
+        text(term),
+        text(term.nextElementSibling),
+      ]);
+    };
+
+    expect(text(await within(pane).findByTestId('pane-folder'))).toBe('Shared / Sales / EMEA');
+    const clock = clockOf(new Date(failedAt));
+    await vi.waitFor(async () => {
+      expect(await facts()).toEqual([
+        ['Status', `Failed · Aug 2026, at ${clock}`],
+        ['Partitions', '4 by month · 1 built, 1 building, 1 failed, 1 not built'],
+        ['Trigger', 'Every 30 minutes · its refresh key'],
+        ['Also rebuilt by', 'Month-end close · wechart'],
+        ['Model', 'sales.yml · read-only in Sales / EMEA'],
+      ]);
+    });
+    // The schedule's name opens it on Schedules (pin 13).
+    expect(within(pane).getByRole('link', { name: 'Month-end close' }).getAttribute('href')).toBe(
+      '/schedules?schedule=s-close',
+    );
+    expect(within(pane).queryByText('Partition granularity')).toBeNull();
   });
 
   it('lists the builds started from wechart, with the way to all of them in Run history', async () => {

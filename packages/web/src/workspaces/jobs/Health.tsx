@@ -131,7 +131,9 @@ export function Health({ pollMs = 10_000 }: { pollMs?: number }) {
     />
   );
   return (
-    <>
+    // The badge and its panel, a non-modal popover anchored to it (design 16's
+    // keyboard table; T611): Esc closes it back to the badge, a click elsewhere too.
+    <div className="jobs-health__anchor">
       <div className="jobs-health" role="status" aria-label="Cube">
         <Status kind={cubeKind} label={cubeLabel} testId="cube-health" />
         {report === undefined ? (
@@ -157,12 +159,13 @@ export function Health({ pollMs = 10_000 }: { pollMs?: number }) {
         <RefreshWorkerPanel
           id={panelId}
           report={report}
-          onClose={() => {
+          opener={opener}
+          onClose={(back) => {
             setOpen(false);
-            opener.current?.focus();
+            if (back) opener.current?.focus();
           }}
         />
       ) : null}
-    </>
+    </div>
   );
 }

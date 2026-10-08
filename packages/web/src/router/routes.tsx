@@ -26,7 +26,7 @@ import { AppShell } from '../shell/AppShell';
 import { NotFound } from '../shell/NotFound';
 import { StateLine } from '../shell/StatusIcon';
 import { ExplorePage } from '../workspaces/explore/ExplorePage';
-import { JobsPage } from '../workspaces/jobs/JobsPage';
+import { jobsTabOf, JobsPage } from '../workspaces/jobs/JobsPage';
 import { auditFiltersFrom, auditSearchOf } from '../workspaces/security/AuditTrail';
 import { SecuritySurface } from '../workspaces/security/SecuritySurface';
 import { ReviewsPage, type ReviewsView } from '../workspaces/reviews/ReviewsPage';
@@ -136,14 +136,39 @@ const buildLogRoute = createRoute({
   path: '/jobs/builds/$buildId',
   component: function BuildLogSurface() {
     const params = useParams({ strict: false }) as { buildId?: string };
+    const router = useRouter();
     const buildId = decodeURIComponent(params.buildId ?? '');
     return (
       <AppShell workspace="jobs">
-        <JobsPage key={buildId} buildId={buildId} />
+        <JobsPage
+          key={buildId}
+          buildId={buildId}
+          // Another tab, at its own address (T611's review).
+          onTab={(tab) => {
+            router.history.push(tab === 'preaggs' ? '/jobs' : `/jobs?tab=${tab}`);
+          }}
+        />
       </AppShell>
     );
   },
 });
+
+/**
+ * Jobs, its tab at its own address, `?tab=` (T611; design 16, pin 1: "Each
+ * tab's address is its own, so Back returns to it").
+ */
+function JobsSurface() {
+  const router = useRouter();
+  const searched = useRouterState({ select: (state) => state.location.searchStr });
+  return (
+    <JobsPage
+      tab={jobsTabOf(new URLSearchParams(searched).get('tab')) ?? 'preaggs'}
+      onTab={(tab) => {
+        router.history.push(tab === 'preaggs' ? '/jobs' : `/jobs?tab=${tab}`);
+      }}
+    />
+  );
+}
 
 /**
  * A proposal's review view (T356; design 05's main screen): the item itself,
@@ -190,7 +215,7 @@ const sourcesRoute = createRoute({
 const WORKSPACE_CONTENT: Partial<Record<string, () => React.ReactNode>> = {
   explore: () => <ExplorePage />,
   // The queries wechart has issued (AC-016), which T015 built and never mounted.
-  jobs: () => <JobsPage />,
+  jobs: () => <JobsSurface />,
   // Their frames and what they are for; managing either waits (AC-233).
   schedules: () => <SchedulesPage />,
   'data-sources': () => <DataSourcesPage />,

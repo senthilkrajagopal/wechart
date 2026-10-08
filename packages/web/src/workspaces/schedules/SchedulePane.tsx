@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
+import { ExportedToast } from '../../dashboard/export/ExportedToast';
 import { dayOf } from '../../shell/formatTime';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
@@ -257,22 +258,27 @@ export function WechartPane({
                     : ` Its next run is ${dayIn(zone, new Date(at))}, ${timeIn(zone, new Date(at))}.`
                 }`,
               );
-              // Focus stays on its row (design 16's keyboard table), not lost with Resume;
-              // below 1,024 px the sheet covers the row, so on the sheet's head (T640).
+              // Focus stays on its row (design 16's keyboard table), its name, not lost
+              // with Resume; below 1,024 px the sheet covers the row, so on the sheet's head (T640).
               document
                 .querySelector<HTMLElement>(
                   narrowNow()
                     ? '.schedules__pane .admin-pane__title'
-                    : `tr[data-schedule-id="${resumed.id}"]`,
+                    : `tr[data-schedule-id="${resumed.id}"] .list-name`,
                 )
                 ?.focus();
             }}
           />
         )}
-        {/* There from the start, so what it comes to say is read (E3). */}
-        {/* The pane's one live region: a resume said (E3), or a Run now started (T555). */}
+        {/* A resume, said in a polite toast (E3; T611). */}
+        <ExportedToast
+          message={schedule.suspendedAt === null ? (resumedSaid ?? '') : ''}
+          onDismiss={() => {
+            setResumedSaid(undefined);
+          }}
+        />
+        {/* There from the start, so what it comes to say is read: a Run now started (T555). */}
         <p role="status" className="schedules__resumed">
-          {schedule.suspendedAt === null ? (resumedSaid ?? '') : ''}
           <span data-testid="ran-now">
             {!runNow.isSuccess
               ? ''
@@ -491,12 +497,12 @@ function Suspension({
                   : ''}
               </td>
               <td>
-                <a
-                  className="btn-link"
-                  href={`/jobs?tab=history&preagg=${encodeURIComponent(schedule.preAggregation)}`}
-                >
-                  Log
-                </a>
+                {/* That run's log, at its address (E1; T611): a failed run's, as drawn. */}
+                {run.outcome === 'failed' ? (
+                  <a className="btn-link" href={`/jobs/builds/${encodeURIComponent(run.id)}`}>
+                    Log
+                  </a>
+                ) : null}
               </td>
             </tr>
           ))}
@@ -589,7 +595,8 @@ function DeleteScheduleDialog({
         <p>You can’t undo this.</p>
         {remove.isError ? <StateLine kind="err">{remove.error.message}</StateLine> : null}
         <div className="dialog__actions">
-          <button type="button" ref={cancel} className="btn-primary" onClick={onCancel}>
+          {/* Plain, with the focus ring: the one primary is the destructive one (D6; T611). */}
+          <button type="button" ref={cancel} className="btn" onClick={onCancel}>
             Cancel
           </button>
           <button

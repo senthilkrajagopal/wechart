@@ -2,7 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
 import { InfoBar } from '../../shell/InfoBar';
-import { folderTextOf } from './builds';
+import { ME_QUERY } from '../../shell/me';
+import { folderTextOf, personName, useSingleUser } from './builds';
 import { isRefused, readErrorOf } from './ListStates';
 import { Pill } from './Pill';
 
@@ -134,6 +135,19 @@ export function FolderFilter({
   readonly choice: FolderChoice;
   readonly onChange: (choice: FolderChoice) => void;
 }) {
+  // Headed by whose folders they are, "Wren · read-write", as H2's menu is (T611).
+  const me = useQuery({ ...ME_QUERY, retry: false, staleTime: Infinity });
+  const single = useSingleUser();
+  const choices = (
+    <>
+      <option value="">{folders?.everyFolder === true ? 'All folders' : 'All of mine'}</option>
+      {inTreeOrder(folders?.folders ?? []).map((folder) => (
+        <option key={folder.id} value={folder.id}>
+          {choiceOf(folder, folders?.everyFolder === true, folders?.folders)}
+        </option>
+      ))}
+    </>
+  );
   return (
     <>
       <Pill label="Folder">
@@ -146,14 +160,15 @@ export function FolderFilter({
               onChange(folder === '' ? EVERY_FOLDER : { ...choice, folder });
             }}
           >
-            <option value="">
-              {folders?.everyFolder === true ? 'All folders' : 'All of mine'}
-            </option>
-            {inTreeOrder(folders?.folders ?? []).map((folder) => (
-              <option key={folder.id} value={folder.id}>
-                {choiceOf(folder, folders?.everyFolder === true, folders?.folders)}
-              </option>
-            ))}
+            {me.data === undefined ? (
+              choices
+            ) : (
+              <optgroup
+                label={`${personName(me.data, single)} · ${folders?.everyFolder === true ? 'Super-Admin' : 'read-write'}`}
+              >
+                {choices}
+              </optgroup>
+            )}
           </select>
         )}
       </Pill>

@@ -33,6 +33,8 @@ export interface PartitionRow {
   readonly lastBuiltAt: string | null;
   /** Who started its queued or running build, where wechart did. */
   readonly startedBy?: Starter;
+  /** Since when its build is in Cube's queue, queued, building or stalled: its entry's `addedAt` (T611). */
+  readonly since?: string;
   /** The failed build wechart started, and the version it still serves. */
   readonly failed?: {
     readonly runId: string;
@@ -88,6 +90,9 @@ function partitionRowsOf(
       return {
         ...base,
         state: entry.stalled ? 'stalled' : entry.status === 'processing' ? 'building' : 'queued',
+        // Since when it is in the queue: "Building · since 14:31" (design 16, pin 12; T611).
+        // None where xcube gave no time (T611's review).
+        ...(entry.addedAt === '' ? {} : { since: entry.addedAt }),
         ...(start === undefined ? {} : { startedBy: start.starter }),
       };
     }

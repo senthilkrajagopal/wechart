@@ -174,6 +174,35 @@ describe('Run history (T374, AC-150)', () => {
     expect(text(within(rows[0]!).getByTestId('build-outcome'))).toBe('Failed · 2 of 30');
   });
 
+  /** T611 (AC-399; design 16's keyboard table, "A row in a list"). */
+  it('names each row by a button read as the row is, and ↑ ↓ go from row to row', async () => {
+    api(() =>
+      listOf([
+        summary({
+          id: 'failed',
+          partitions: ['2026-08-01T00:00:00.000'],
+          jobs: 1,
+          outcome: 'failed',
+          failedCount: 1,
+        }),
+        summary({ id: 'done' }),
+      ]),
+    );
+    shown();
+
+    const first = await screen.findByRole('button', {
+      name: 'orders_emea.by_month, Sales / EMEA, Failed, Aug 2026',
+    });
+    const second = screen.getByRole('button', {
+      name: 'orders_emea.by_month, Sales / EMEA, Done, All 10',
+    });
+    first.focus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(second);
+    await userEvent.keyboard('{ArrowUp}');
+    expect(document.activeElement).toBe(first);
+  });
+
   it('names each row’s partitions, outcome, duration and starter as design 16 draws them', async () => {
     api(() =>
       listOf([

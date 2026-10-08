@@ -159,11 +159,14 @@ describe('Stop, on a building build wechart started (T554, AC-394)', () => {
 
     await userEvent.click(stopButton());
 
-    // Up to 20 s while xcube stops it: said on the button, which takes no second press.
-    expect([text(stopButton()), stopButton().hasAttribute('disabled')]).toEqual([
+    // Up to 20 s while xcube stops it: said on the button, which takes no second
+    // press, kept in reach so focus isn't dropped (T611).
+    expect([text(stopButton()), stopButton().getAttribute('aria-disabled')]).toEqual([
       'Stopping…',
-      true,
+      'true',
     ]);
+    await userEvent.click(stopButton());
+    expect(asked.filter((each) => each.url === '/api/jobs/queue/cancel')).toHaveLength(1);
     expect(asked.find((each) => each.url === '/api/jobs/queue/cancel')?.body).toEqual({
       key: 'k-building',
       stop: true,
@@ -235,7 +238,8 @@ describe('the build queue (T376, AC-151)', () => {
     expect(text(rows[0])).toContain('Cube takes it out at its next check');
     expect(text(rows[0])).toContain('Cube’s refresh worker');
     expect(text(rows[1])).toContain('Whole');
-    expect(text(within(rows[1]!).getByTestId('queue-state'))).toBe('Building');
+    // With how long (T611): its minutes, exactly, in the test that fixes the clock.
+    expect(text(within(rows[1]!).getByTestId('queue-state'))).toMatch(/^Building · for \d+ min$/);
     expect(text(rows[1])).toContain('A query');
     expect(text(rows[2])).toContain('Sales / EMEA');
     expect(text(rows[2])).toContain('Aug 2026');
@@ -279,6 +283,106 @@ describe('the build queue (T376, AC-151)', () => {
     ).toContain('Build it again from Pre-aggregations.');
     await vi.waitFor(() => {
       expect(screen.queryAllByRole('button', { name: /^Cancel the/ })).toHaveLength(0);
+    });
+  });
+
+  /** T611 (AC-399; design 16, state C and the keyboard table). */
+  it('says how long a build has been building, and offers each token to copy', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-02T12:40:30.000Z'));
+    try {
+      serve();
+      const copied: string[] = [];
+      vi.stubGlobal('isSecureContext', true);
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: {
+          writeText: async (said: string) => {
+            copied.push(said);
+          },
+        },
+      });
+      shown();
+
+      const table = await screen.findByRole('table', { name: 'Build queue' });
+      const rows = within(table).getAllByRole('row').slice(1);
+      // Added 12:38:41, building since: a minute and more, "for 1 min" (C).
+      expect(text(within(rows[1]!).getByTestId('queue-state'))).toBe('Building · for 1 min');
+      await userEvent.click(
+        within(rows[2]!).getByRole('button', { name: 'Copy the token 7c1e0000…09ab' }),
+      );
+      expect(copied).toEqual(['7c1e0000000000000000000000009ab']);
+      // Said, as the tile menu's copies are (T611's review).
+      expect(text(await screen.findByText('Copied the token 7c1e0000…09ab.'))).toBe(
+        'Copied the token 7c1e0000…09ab.',
+      );
+      expect(text(screen.getByTestId('queue-foot'))).toContain(
+        'Hover a token to see it whole, or copy it.',
+      );
+    } finally {
+      vi.useRealTimers();
+      Reflect.deleteProperty(navigator, 'clipboard');
+    }
+  });
+
+  it('says building with no time where the queue gives none (T611’s review)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({
+          entries: [row({ key: 'k-b', state: 'building', addedAt: '', cancellable: false })],
+          everyFolder: false,
+        }),
+      ),
+    );
+    shown();
+
+    const table = await screen.findByRole('table', { name: 'Build queue' });
+    expect(text(within(table).getByTestId('queue-state'))).toBe('Building');
+  });
+
+  it('puts focus on the next entry’s Cancel once one is cancelled, else on the table', async () => {
+    const two = [
+      row({ key: 'k-first' }),
+      row({
+        key: 'k-second',
+        partition: { start: '2026-09-01T00:00:00.000', end: '2026-09-30T23:59:59.999' },
+      }),
+      // Its own, with no Cancel: the table stays once the two are gone.
+      ROWS[0]!,
+    ];
+    let entries = two;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === '/api/jobs/queue') return Response.json({ entries, everyFolder: false });
+        if (url === '/api/jobs/queue/cancel') {
+          const { key } = JSON.parse(String(init?.body)) as { key: string };
+          entries = entries.filter((each) => each.key !== key);
+          return Response.json({ cancelled: true });
+        }
+        return Response.json({ error: 'not here' }, { status: 404 });
+      }),
+    );
+    shown();
+    const table = await screen.findByRole('table', { name: 'Build queue' });
+
+    await userEvent.click(
+      within(table).getByRole('button', {
+        name: 'Cancel the Aug 2026 build of orders_emea.by_month',
+      }),
+    );
+    const next = await within(table).findByRole('button', {
+      name: 'Cancel the Sep 2026 build of orders_emea.by_month',
+    });
+    await vi.waitFor(() => {
+      expect(document.activeElement).toBe(next);
+    });
+
+    await userEvent.click(next);
+    await vi.waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole('table', { name: 'Build queue' }));
     });
   });
 

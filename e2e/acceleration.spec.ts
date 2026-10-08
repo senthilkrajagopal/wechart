@@ -284,8 +284,16 @@ test('Data as of says what served a tile, how fresh it is and where that is set'
   // Open in Jobs: that pre-aggregation, selected.
   await menu.getByRole('menuitem', { name: 'Open in Jobs' }).click();
   await expect(page).toHaveURL(/\/jobs\?preagg=monthly_orders\.by_status_month$/);
+  // Its row, by its name, a button read as the row is (T611).
   await expect(
-    page.getByRole('cell', { name: 'monthly_orders.by_status_month' }).locator('xpath=..'),
+    page
+      .getByRole('table', { name: 'Pre-aggregations' })
+      .getByRole('row')
+      .filter({
+        has: page
+          .getByTestId('preagg-name')
+          .filter({ hasText: /^monthly_orders\.by_status_month$/ }),
+      }),
   ).toHaveAttribute('aria-selected', 'true');
 
   // Edit schedule in Model: its file, on its cube's pre-aggregations.

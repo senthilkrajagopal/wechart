@@ -411,7 +411,8 @@ test('focus rings are not cut off on segmented choices, rows and the Outline (T6
   // Jobs' pre-aggregations, its rows in a table that scrolls sideways below 1,024 px.
   await page.setViewportSize({ width: 900, height: 800 });
   await page.goto('/jobs');
-  const preAgg = page.locator('.build-panel__row').first();
+  // A row's stop is its name, a button read as the row is (T611; design 16's keyboard table).
+  const preAgg = page.locator('.build-panel__row .list-name').first();
   await expect(preAgg).toBeVisible();
   await preAgg.focus();
   expect(await ringShows(preAgg)).toBe('whole');

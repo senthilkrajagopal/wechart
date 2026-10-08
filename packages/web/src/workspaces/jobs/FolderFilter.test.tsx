@@ -73,6 +73,11 @@ function serve(folders: unknown = MEMBER) {
       const url = String(input);
       asked.push(url);
       if (url === '/api/jobs/folders') return Response.json(folders);
+      if (url === '/api/me')
+        return Response.json({
+          name: (folders as { everyFolder: boolean }).everyFolder ? 'Ada Admin' : 'Wren Writer',
+          security: 'oidc',
+        });
       if (url === '/api/jobs/summary')
         return Response.json({ building: 0, queued: 2, failed: 0, suspended: 0 });
       if (url === '/api/preaggregations') return Response.json(PREAGGREGATIONS);
@@ -154,6 +159,12 @@ describe('Pre-aggregations’ Folder column and filter, and its scope note (T559
         at(2, 'Sales / EMEA / DACH'),
       ]);
     });
+    // Headed by whose they are, as H2's menu is (T611).
+    await vi.waitFor(() => {
+      expect(within(panel).getByRole('group', { name: 'Wren Writer · read-write' }).tagName).toBe(
+        'OPTGROUP',
+      );
+    });
     const below = within(panel).getByRole('checkbox', { name: 'Include subfolders' });
     expect((below as HTMLInputElement).disabled).toBe(true);
 
@@ -189,6 +200,11 @@ describe('Pre-aggregations’ Folder column and filter, and its scope note (T559
         at(3, 'EMEA'),
         at(4, 'DACH'),
       ]);
+    });
+    await vi.waitFor(() => {
+      expect(within(panel).getByRole('group', { name: 'Ada Admin · Super-Admin' }).tagName).toBe(
+        'OPTGROUP',
+      );
     });
     expect(within(panel).queryByRole('note', { name: 'Scope' })).toBeNull();
   });

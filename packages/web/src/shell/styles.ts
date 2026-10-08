@@ -3625,16 +3625,24 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
   cursor: pointer;
 }
 .jobs-health__worker:hover { background: var(--wc-bg-subtle); }
+/* Its panel, a non-modal popover under the badge, over the page (design 16's keyboard table; T611). */
+.jobs-health__anchor { position: relative; display: inline-flex; }
 .refresh-worker-panel {
-  flex-basis: 100%;
-  max-width: 560px;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  width: min(560px, calc(100vw - 32px));
   display: grid;
   gap: 8px;
   padding: 12px 14px;
   border: 1px solid var(--wc-border-subtle);
   border-radius: 6px;
   background: var(--wc-bg-surface);
+  box-shadow: var(--wc-shadow-pop);
 }
+/* A token's copy, beside it (design 16, state C; T611). */
+.build-queue__copy { margin-left: 4px; padding: 0 4px; vertical-align: middle; color: var(--wc-text-secondary); }
 .refresh-worker-panel__head { display: flex; align-items: baseline; gap: 8px; }
 .refresh-worker-panel__head h2 { margin: 0; font-size: 14px; font-weight: 600; }
 .refresh-worker-panel__revision { margin-left: auto; font-size: 12px; color: var(--wc-text-secondary); }
@@ -4026,9 +4034,19 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
     padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   }
   .source-pane__foot > .schedule-form__foot { flex: 1; padding-top: 0; border-top: 0; }
-  .admin-pane .admin-pane__close { display: inline-flex; }
-  /* A toast over the sheet, above its pinned foot (T640's review). */
-  .sheet-over > .undo-toast {
+  /* As a sheet, × leads its head, back to the list (G8). */
+  .admin-pane .admin-pane__close { order: -1; margin: 0 4px 0 -8px; }
+  .admin-pane__facts.jobs-narrow { display: grid; }
+  /* Wherever the wrapped header puts its badge, the popover is on screen, under the app bar (T611's review). */
+  .refresh-worker-panel {
+    position: fixed;
+    top: calc(var(--wc-app-bar-height) + 8px);
+    left: 16px;
+    right: 16px;
+    width: auto;
+  }
+  /* A toast over the sheet, above its pinned foot (T640's review): beside it, or in it (T611's review). */
+  .sheet-over .undo-toast {
     z-index: 45;
     bottom: calc(var(--sheet-foot-height, 0px) + 16px);
   }
@@ -4055,6 +4073,8 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 .run-history__count { margin-left: auto; font-size: 12px; color: var(--wc-text-secondary); }
 .run-history__table td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .run-history__name { font-family: var(--wc-font-code); font-size: 12px; font-weight: 600; }
+/* A row's name, a button read as the row is (design 16's keyboard table; T611): drawn as the name, no padding of a button's. */
+.link-button.list-name { padding: 0 2px; margin: 0 -2px; }
 .run-history__empty {
   display: grid;
   justify-items: center;
@@ -4476,8 +4496,10 @@ code.schedules__sub { font-family: var(--wc-font-code); }
 .jobs-error__actions details { font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
 .admin-pane__missing { padding-top: 12px; }
 .admin-pane__missing p { margin: 4px 0 0; color: var(--wc-text-secondary); }
-/* The sheet's × back to the list, first in its head, below 1,024 px only (design 16, G8). */
-.admin-pane__close { display: none; margin: 0 4px 0 -8px; }
+/* Docked, × closes the pane at the right end of its head (design 16, screen 1 and D1; T611). */
+.admin-pane__close { display: inline-flex; order: 99; margin: 0 -8px 0 auto; }
+/* What the list leaves out below 1,024 px, said in the sheet there only (G8; T611). */
+.jobs-narrow { display: none; }
 .audit-trail__inspector {
   position: sticky;
   top: 16px;

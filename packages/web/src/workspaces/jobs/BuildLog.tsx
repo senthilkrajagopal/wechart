@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useNarrowWindow } from '../../dashboard/useNarrowWindow';
 import { dayOf } from '../../shell/formatTime';
@@ -150,6 +150,25 @@ function linesOf(record: BuildRecord): Line[] {
 }
 
 /** One build's record, as its log reads it; refused or not found with its status (G6; T610). */
+/** How many of a build's partitions are drawn before "…N more, all Done" (design 16, B3). */
+const PARTS_SHOWN = 3;
+
+/**
+ * A build's partitions as its log lists them (design 16, B3; T611): those
+ * not Done first, in its order, then Done ones up to three in all; the rest,
+ * every one Done, counted in a line, until it's chosen.
+ */
+function partsOf<Job extends { readonly status: string | null }>(
+  jobs: readonly Job[],
+  all: boolean,
+): { shown: readonly Job[]; more: number } {
+  const done = (job: Job) => job.status === 'done';
+  const ordered = [...jobs.filter((job) => !done(job)), ...jobs.filter(done)];
+  if (all) return { shown: ordered, more: 0 };
+  const first = Math.max(PARTS_SHOWN, jobs.filter((job) => !done(job)).length);
+  return { shown: ordered.slice(0, first), more: ordered.length - Math.min(first, ordered.length) };
+}
+
 export const buildQueryOf = (id: string) => ({
   queryKey: ['jobs', 'build', id] as const,
   queryFn: async ({ signal }: { signal?: AbortSignal }): Promise<BuildRecord> => {
@@ -186,10 +205,19 @@ export function BuildLog({
   const narrow = useNarrowWindow();
   useSheetEscape(pane, active, onClose);
   const record = found.data;
+  /** Every partition listed, once its "…N more, all Done" is chosen (B3; T611). */
+  const [allParts, setAllParts] = useState(false);
+  const partsTable = useRef<HTMLTableElement>(null);
   const name = record?.name ?? '';
 
   return (
-    <aside ref={pane} className="admin-pane build-log" aria-label={`Build of ${name}`}>
+    <aside
+      ref={pane}
+      className="admin-pane build-log"
+      aria-label={`Build of ${name}`}
+      // Covering the page, a modal dialog, as the .source-pane sheets are (T611).
+      {...(narrow && active ? { role: 'dialog', 'aria-modal': true } : {})}
+    >
       {/* Tab stays in it while it covers the page, below 1,024 px (T640). */}
       {narrow && active ? <SheetTrap pane={pane} /> : null}
       <div className="admin-pane__head" data-testid="pane-head">
@@ -263,8 +291,14 @@ export function BuildLog({
               </section>
             )}
             {record.tokens.length > 1 ? (
-              <table className="query-log build-log__parts" aria-label="Partitions of this build">
-                <thead>
+              <table
+                ref={partsTable}
+                className="query-log build-log__parts"
+                aria-label="Partitions of this build"
+                tabIndex={-1}
+              >
+                {/* No header row drawn (B3; T611); its heads there for a screen reader. */}
+                <thead className="visually-hidden">
                   <tr>
                     <th scope="col">Partition</th>
                     <th scope="col">State</th>
@@ -272,7 +306,7 @@ export function BuildLog({
                   </tr>
                 </thead>
                 <tbody>
-                  {record.tokens.map((job) => (
+                  {partsOf(record.tokens, allParts).shown.map((job) => (
                     <tr key={job.token}>
                       <td>
                         {periodOfTable(job.table, record.granularity) ??
@@ -288,6 +322,20 @@ export function BuildLog({
                   ))}
                 </tbody>
               </table>
+            ) : null}
+            {/* The rest, all Done, in a line that lists them (B3; T611). */}
+            {record.tokens.length > 1 && partsOf(record.tokens, allParts).more > 0 ? (
+              <button
+                type="button"
+                className="link-button build-log__more"
+                onClick={() => {
+                  // Focus on the list it opens, before its button goes (T611's review).
+                  partsTable.current?.focus();
+                  setAllParts(true);
+                }}
+              >
+                {`…${String(partsOf(record.tokens, allParts).more)} more, all Done`}
+              </button>
             ) : null}
             <section className="build-log__section" aria-labelledby={`${id}-log`}>
               <h3 id={`${id}-log`}>Log · what Cube reported, when wechart saw it</h3>

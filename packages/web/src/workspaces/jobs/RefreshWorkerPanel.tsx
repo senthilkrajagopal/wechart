@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 
 import { clockOrWhenOf, exactOf } from '../../shell/formatTime';
 import { Status } from './StateBadge';
@@ -71,11 +71,15 @@ function summaryOf(status: RefreshWorkerStatus): string {
 export function RefreshWorkerPanel({
   id,
   report,
+  opener,
   onClose,
 }: {
   readonly id: string;
   readonly report: RefreshWorkerReport;
-  readonly onClose: () => void;
+  /** The badge that opened it: a click there toggles it, not a click elsewhere. */
+  readonly opener?: RefObject<HTMLElement | null>;
+  /** Closed: by Esc, focus back to the badge; by a click elsewhere, focus where it went (T611). */
+  readonly onClose: (back: boolean) => void;
 }) {
   const section = useRef<HTMLElement>(null);
   // Focus to it as it opens (rule 85), from where Escape closes it.
@@ -91,14 +95,30 @@ export function RefreshWorkerPanel({
       if (!(event.target instanceof Node) || section.current?.contains(event.target) !== true)
         return;
       event.preventDefault();
-      closing.current();
+      closing.current(true);
+    };
+    // A popover: a press outside it, and outside its badge, closes it (T611).
+    const onPress = (event: PointerEvent | MouseEvent) => {
+      const at = event.target;
+      if (!(at instanceof Node)) return;
+      if (section.current?.contains(at) === true || opener?.current?.contains(at) === true) return;
+      closing.current(false);
     };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, []);
+    document.addEventListener('mousedown', onPress);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onPress);
+    };
+  }, [opener]);
   const failing = report.modules.filter((module) => module.failing);
   return (
-    <section ref={section} id={id} className="refresh-worker-panel" aria-label="Refresh worker">
+    <section
+      ref={section}
+      id={id}
+      className="refresh-worker-panel popover"
+      aria-label="Refresh worker"
+    >
       <header className="refresh-worker-panel__head">
         <h2 ref={heading} tabIndex={-1}>
           Refresh worker

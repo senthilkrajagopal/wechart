@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { BuildLog, type BuildRecord } from './BuildLog';
@@ -127,11 +128,11 @@ describe('a build’s log (T374, AC-150)', () => {
     );
   });
 
-  it('lists every partition of one start, each with its state and token (B3)', async () => {
+  it('lists every partition of one start, each with its state and token, failures first (B3)', async () => {
     const day = (n: number) => String(n).padStart(2, '0');
     const tokens = Array.from({ length: 30 }, (_, at) => ({
       token: `tok${day(at)}aaaaaaaaaaaaaaaaaaaaaaaaaaa`,
-      status: at === 0 ? 'missing_partition' : at === 1 ? 'failure: boom' : 'done',
+      status: at === 5 ? 'missing_partition' : at === 12 ? 'failure: boom' : 'done',
       table: `prod_pre_aggregations.dach_orders_daily202609${day(at + 1)}_aaaaaaaa_bbbbbbbb_1d4kq0`,
       finished: true,
       finishedAt: '2026-09-29T05:57:00.000Z',
@@ -150,14 +151,23 @@ describe('a build’s log (T374, AC-150)', () => {
     );
 
     const parts = await screen.findByRole('table', { name: 'Partitions of this build' });
-    const rows = within(parts).getAllByRole('row').slice(1);
-    expect(rows).toHaveLength(30);
+    const rows = () => within(parts).getAllByRole('row').slice(1);
+    // Its failures first, then one Done, the rest said in a line (B3; T611).
+    expect(rows()).toHaveLength(3);
     // Each partition's token, whole in its title.
-    expect(text(within(rows[0]!).getByTitle(tokens[0]!.token))).toBe('tok00aaa…aaaa');
-    expect(text(rows[0])).toContain('1 Sep 2026');
-    expect(text(rows[0])).toContain('Missing partition');
-    expect(text(rows[1])).toContain('Failed');
-    expect(text(rows[2])).toContain('Done');
+    expect(text(within(rows()[0]!).getByTitle(tokens[5]!.token))).toBe('tok05aaa…aaaa');
+    expect(text(rows()[0])).toContain('6 Sep 2026');
+    expect(text(rows()[0])).toContain('Missing partition');
+    expect(text(rows()[1])).toContain('13 Sep 2026');
+    expect(text(rows()[1])).toContain('Failed');
+    expect(text(rows()[2])).toContain('Done');
+    // No header row drawn, as B3 has it; its heads there for a screen reader.
+    expect(parts.querySelector('thead')?.className).toBe('visually-hidden');
+    const more = screen.getByRole('button', { name: '…27 more, all Done' });
+    await userEvent.click(more);
+    expect(rows()).toHaveLength(30);
+    // Its button gone, focus on the list it opened, not dropped (T611's review).
+    expect(document.activeElement).toBe(parts);
     const pane = screen.getByRole('complementary', { name: /Build of dach\.orders_daily/ });
     expect(text(within(pane).getByTestId('build-outcome'))).toBe('Failed · 2 of 30');
     expect(text(pane)).toContain('by Weekday mornings, a wechart schedule');

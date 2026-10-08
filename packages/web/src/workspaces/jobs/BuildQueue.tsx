@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { ExportedToast } from '../../dashboard/export/ExportedToast';
+import { pageClipboard } from '../../dashboard/TileViewMenu';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import {
@@ -31,6 +32,7 @@ import {
   ReadError,
 } from './ListStates';
 import { ChoicePill } from './Pill';
+import { focusAfterClose } from './Sheet';
 import { Status } from './StateBadge';
 
 /**
@@ -187,7 +189,14 @@ function StartedBy({ starter }: { starter: QueueRow['starter'] }) {
   );
 }
 
-function StateOf({ row }: { row: QueueRow }) {
+function StateOf({
+  row,
+  now,
+}: {
+  row: QueueRow;
+  /** When the queue was read: how long is said as of then, read again every 5 s. */
+  now: number;
+}) {
   if (row.state === 'stalled')
     return (
       <>
@@ -195,10 +204,68 @@ function StateOf({ row }: { row: QueueRow }) {
         <span className="build-queue__sub">Cube takes it out at its next check</span>
       </>
     );
+  // How long, since it was added: "Building · for 9 min" (design 16, state C; T611).
+  // None where the queue gave no time it was added (T611's review).
+  const minutes = Math.max(1, Math.floor((now - Date.parse(row.addedAt)) / 60_000));
   return row.state === 'building' ? (
-    <Status kind="run" label="Building" testId="queue-state" state="building" />
+    <Status
+      kind="run"
+      label={`Building${Number.isFinite(minutes) ? ` · for ${String(minutes)} min` : ''}`}
+      testId="queue-state"
+      state="building"
+    />
   ) : (
     <Status kind="idle" label="Queued" testId="queue-state" state="queued" />
+  );
+}
+
+/**
+ * A token, copied (design 16, state C: "Hover a token to see it whole, or
+ * copy it"; T611): to the page's clipboard, where the page has one (research
+ * clipboard-and-image-export.md, "Support detection").
+ */
+function CopyToken({ token, onSaid }: { token: string; onSaid: (said: string) => void }) {
+  const clipboard = pageClipboard();
+  if (clipboard === null) return null;
+  return (
+    <button
+      type="button"
+      className="btn-ghost btn-sm build-queue__copy"
+      aria-label={`Copy the token ${shortToken(token)}`}
+      title="Copy"
+      onClick={() => {
+        // Said in the queue's toast, as the tile menu's copies are (T611's review).
+        clipboard.writeText(token).then(
+          () => {
+            onSaid(`Copied the token ${shortToken(token)}.`);
+          },
+          (error: unknown) => {
+            onSaid(
+              `Could not copy the token: ${error instanceof Error ? error.message : 'the browser refused'}.`,
+            );
+          },
+        );
+      }}
+    >
+      <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+        <rect
+          x="5"
+          y="5"
+          width="8.5"
+          height="8.5"
+          rx="1.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.4"
+        />
+        <path
+          d="M3 10.5V3.8C3 3.4 3.4 3 3.8 3h6.7"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.4"
+        />
+      </svg>
+    </button>
   );
 }
 
@@ -322,7 +389,23 @@ export function BuildQueue({
         setSaid('');
         setRefused({ reason: body.reason ?? 'gone', message: body.message ?? '' });
       }
-      void client.invalidateQueries({ queryKey: QUEUE_QUERY_KEY });
+      // Its row gone, focus on the next entry's Cancel, or the table where none is
+      // after it (design 16's keyboard table; T611).
+      const next = [...document.querySelectorAll<HTMLElement>('tr[data-key]')]
+        .slice(
+          [...document.querySelectorAll('tr[data-key]')].findIndex(
+            (each) => each.getAttribute('data-key') === row.key,
+          ) + 1,
+        )
+        .find((each) => each.querySelector('.build-queue__act') !== null)
+        ?.getAttribute('data-key');
+      // None left at all, and the queue's tab.
+      const table = 'table[aria-label="Build queue"]';
+      const tab = '[role="tab"][aria-selected="true"]';
+      void client.invalidateQueries({ queryKey: QUEUE_QUERY_KEY }).then(() => {
+        if (next === undefined || next === null) focusAfterClose(table, tab);
+        else focusAfterClose(`tr[data-key=${JSON.stringify(next)}] .build-queue__act`, table, tab);
+      });
     },
     // Refused: the queue read again, and where the entry went with it, access
     // was lost while the page was open, and it is said (design 16, G5; T560).
@@ -401,7 +484,8 @@ export function BuildQueue({
             onChange={onState}
           />
         )}
-        <p className="run-history__count" role="status">
+        {/* A count, read as it changes, not a state (T611: status-labels' sweep). */}
+        <p className="run-history__count" aria-live="polite">
           {`${String(rows.length)} ${rows.length === 1 ? 'entry' : 'entries'} · in queue order, oldest first`}
         </p>
       </div>
@@ -425,7 +509,7 @@ export function BuildQueue({
         </div>
       ) : (
         <TableScroll label="Build queue">
-          <table className="query-log build-queue__table" aria-label="Build queue">
+          <table className="query-log build-queue__table" aria-label="Build queue" tabIndex={-1}>
             <thead>
               <tr>
                 {[
@@ -462,7 +546,7 @@ export function BuildQueue({
                   <td>{folderTextOf(row.folderPath)}</td>
                   <td>{partitionOf(row)}</td>
                   <td className="build-queue__state">
-                    <StateOf row={row} />
+                    <StateOf row={row} now={queue.dataUpdatedAt} />
                   </td>
                   <td className="jobs-wide">
                     <StartedBy starter={row.starter} />
@@ -471,17 +555,25 @@ export function BuildQueue({
                     {row.token === null ? (
                       '—'
                     ) : (
-                      <code title={row.token}>{shortToken(row.token)}</code>
+                      <>
+                        <code title={row.token}>{shortToken(row.token)}</code>
+                        {/* Whole on hover, or copied (design 16, state C; T611). */}
+                        <CopyToken token={row.token} onSaid={setSaid} />
+                      </>
                     )}
                   </td>
                   <td>
+                    {/* Out of use while one is asked, not out of reach: focus can
+                        move on to the next entry's (T611). */}
                     {row.cancellable && row.state === 'queued' ? (
                       <button
                         type="button"
-                        className="btn btn-sm"
+                        className="btn btn-sm build-queue__act"
                         aria-label={`Cancel ${buildOf(row)}`}
-                        disabled={cancel.isPending}
-                        onClick={() => cancel.mutate({ row, stop: false })}
+                        aria-disabled={cancel.isPending}
+                        onClick={() => {
+                          if (!cancel.isPending) cancel.mutate({ row, stop: false });
+                        }}
                       >
                         Cancel
                       </button>
@@ -489,10 +581,12 @@ export function BuildQueue({
                       // A building one wechart started (T554, AC-394; design 16, P1).
                       <button
                         type="button"
-                        className="btn btn-sm"
+                        className="btn btn-sm build-queue__act"
                         aria-label={`Stop ${buildOf(row)}`}
-                        disabled={cancel.isPending}
-                        onClick={() => cancel.mutate({ row, stop: true })}
+                        aria-disabled={cancel.isPending}
+                        onClick={() => {
+                          if (!cancel.isPending) cancel.mutate({ row, stop: true });
+                        }}
                       >
                         {/* xcube answers once the build has stopped, up to 20 s (T554). */}
                         {cancel.isPending && cancel.variables.row.key === row.key
@@ -512,7 +606,7 @@ export function BuildQueue({
         refresh worker would queue its own again within 30 seconds, until its refresh key turns
         over, and a query’s build is one Cube started to answer a query. A token is the one Cube’s
         jobs API gave wechart; the worker’s and queries’ builds have none. A building one wechart
-        started can be stopped, and none of it is kept.
+        started can be stopped, and none of it is kept. Hover a token to see it whole, or copy it.
       </p>
       <ExportedToast
         message={said}

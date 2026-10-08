@@ -141,7 +141,9 @@ describe('a screen whose scope is missing', () => {
       </QueryClientProvider>,
     );
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Build orders.by_status' }));
+    // From its pane, a row click only selecting (design 16, J; T611).
+    await userEvent.click(await screen.findByRole('button', { name: /^orders\.by_status/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Build (all|now)/ }));
 
     const said = await screen.findByTestId('scope-unavailable');
     expect(said.textContent).toContain('jobs');

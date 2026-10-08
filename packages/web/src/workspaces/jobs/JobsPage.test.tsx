@@ -180,6 +180,34 @@ describe('Jobs’ tabs (T374, design 16 pin 1)', () => {
     expect(screen.getByRole('tab', { name: /^Queue/ }).getAttribute('aria-selected')).toBe('true');
   });
 
+  /** T611 (AC-399; design 16, pin 1 and the keyboard table): "Each tab's address is its own, so Back returns to it." */
+  it('asks for each tab’s own address as it opens, and opens the tab its address names', async () => {
+    serve();
+    const onTab = vi.fn();
+    window.history.replaceState(null, '', '/jobs');
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const page = (tab: 'preaggs' | 'history' | 'queue' | 'queries') => (
+      <QueryClientProvider client={client}>
+        <JobsPage tab={tab} onTab={onTab} />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(page('preaggs'));
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Run history' }));
+    expect(onTab).toHaveBeenLastCalledWith('history');
+    screen.getByRole('tab', { name: 'Run history' }).focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(onTab).toHaveBeenLastCalledWith('queue');
+
+    // Back, to an address naming another tab: that tab.
+    rerender(page('queries'));
+    expect(screen.getByRole('tab', { name: 'Queries' }).getAttribute('aria-selected')).toBe('true');
+    rerender(page('preaggs'));
+    expect(
+      screen.getByRole('tab', { name: 'Pre-aggregations' }).getAttribute('aria-selected'),
+    ).toBe('true');
+  });
+
   it('reads Run history only once its tab is opened', async () => {
     serve();
     shown();

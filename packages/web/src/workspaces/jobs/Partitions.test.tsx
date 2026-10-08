@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { clockOf, exactOf } from '../../shell/formatTime';
-import { Partitions } from './Partitions';
+import { failedAtOf, Partitions, type PartitionsAnswer } from './Partitions';
 
 /**
  * T375 / AC-145 (design 16, screen 1 pins 10–12 and state A): a rollup's
@@ -31,12 +32,15 @@ const PARTITIONED = {
   kind: 'partitioned',
   granularity: 'month',
   partitions: [
-    part('10', 'building'),
+    part('10', 'building', { since: '2026-10-02T12:31:00.000Z' }),
     part('09', 'built'),
     part('08', 'failed', {
       failed: { runId: 'r1', at: '2026-10-02T12:05:00.000Z', serving: '2026-10-02T12:01:00.000Z' },
     }),
-    part('07', 'queued', { startedBy: { kind: 'person', key: 'w', name: 'Wren Writer' } }),
+    part('07', 'queued', {
+      startedBy: { kind: 'person', key: 'w', name: 'Wren Writer' },
+      since: '2026-10-02T12:38:00.000Z',
+    }),
     part('06', 'stalled'),
     part('01', 'not-built'),
   ],
@@ -65,11 +69,13 @@ function serve(answers: unknown[], me?: unknown) {
   return { posted, asks: () => asks };
 }
 
-function shown(onStarted = vi.fn()) {
+function shown(onStarted = vi.fn(), children?: ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <Partitions id={ID} name={NAME} pollMs={20} onStarted={onStarted} />
+      <Partitions id={ID} name={NAME} pollMs={20} onStarted={onStarted}>
+        {children}
+      </Partitions>
     </QueryClientProvider>,
   );
   return onStarted;
@@ -109,8 +115,14 @@ describe('a rollup’s partitions (T375, AC-145)', () => {
       rows.map((row) => within(row).getByTestId('partition-state').getAttribute('data-state')),
     ).toEqual(['building', 'built', 'failed', 'queued', 'stalled', 'not-built']);
     // Cube's words as design 16 reads them: Building and Queued (pin 5).
-    expect(text(within(rows[0]!).getByTestId('partition-state'))).toBe('Building');
-    expect(text(within(rows[3]!).getByTestId('partition-state'))).toBe('Queued · Wren Writer');
+    // Since when, and by whom, with the time it was queued (pin 12; T611),
+    // its day too on another day than today (T477, Q8).
+    expect(text(within(rows[0]!).getByTestId('partition-state'))).toBe(
+      `Building · since ${dayOf('2026-10-02T12:31:00.000Z')}`,
+    );
+    expect(text(within(rows[3]!).getByTestId('partition-state'))).toBe(
+      `Queued · Wren Writer, ${dayOf('2026-10-02T12:38:00.000Z')}`,
+    );
     expect(text(within(rows[4]!).getByTestId('partition-state'))).toBe('Stalled');
     expect(text(within(rows[5]!).getByTestId('partition-state'))).toBe('Not built');
     expect(text(rows[5]!.querySelector('td:last-child'))).toBe('—');
@@ -197,6 +209,97 @@ describe('a rollup’s partitions (T375, AC-145)', () => {
     expect(text(screen.getByRole('status'))).toBe('Building all 6 partitions');
   });
 
+  /** T611 (design 16's keyboard table, "Starting a build"). */
+  it('keeps focus on Rebuild selected, and says each partition’s state as it changes', async () => {
+    let started = false;
+    let starts = 0;
+    let release = () => undefined as void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('/api/jobs/partitions'))
+          return Response.json(
+            started
+              ? {
+                  ...PARTITIONED,
+                  partitions: PARTITIONED.partitions.map((row) =>
+                    row.tableName === 't_20260901' ? { ...row, state: 'building' } : row,
+                  ),
+                }
+              : PARTITIONED,
+          );
+        if (url === '/api/builds') {
+          started = true;
+          starts += 1;
+          // Build all, the second start, answered once released.
+          if (starts === 2) await held;
+          return Response.json({ tokens: ['t1'], runId: 'run-1' });
+        }
+        return Response.json({ error: 'not here' }, { status: 404 });
+      }),
+    );
+    shown();
+
+    const table = await screen.findByRole('table', { name: `Partitions of ${NAME}` });
+    await userEvent.click(within(table).getByRole('checkbox', { name: 'Sep 2026, Built' }));
+    const rebuild = screen.getByRole('button', { name: `Rebuild 1 selected partition of ${NAME}` });
+    await userEvent.click(rebuild);
+
+    // Still on it, though nothing is selected now.
+    expect(document.activeElement?.textContent).toBe('Rebuild selected');
+    expect(document.activeElement?.getAttribute('aria-disabled')).toBe('true');
+    await vi.waitFor(() => {
+      expect(text(screen.getByRole('status'))).toBe('Sep 2026: Building');
+    });
+
+    // Build all too keeps focus while it starts: out of use, not out of reach.
+    const everyOne = screen.getByRole('button', { name: 'Build all 6' });
+    await userEvent.click(everyOne);
+    expect(document.activeElement).toBe(everyOne);
+    await vi.waitFor(() => {
+      expect(everyOne.getAttribute('aria-disabled')).toBe('true');
+    });
+    expect(everyOne.hasAttribute('disabled')).toBe(false);
+    release();
+    await vi.waitFor(() => {
+      expect(everyOne.getAttribute('aria-disabled')).toBe('false');
+    });
+  });
+
+  it('says no state as it changes until a build is started here (T611’s review)', async () => {
+    let reads = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (!String(input).startsWith('/api/jobs/partitions'))
+          return Response.json({ error: 'not here' }, { status: 404 });
+        reads += 1;
+        // Another's build: September building from the second read on.
+        return Response.json(
+          reads < 2
+            ? PARTITIONED
+            : {
+                ...PARTITIONED,
+                partitions: PARTITIONED.partitions.map((row) =>
+                  row.tableName === 't_20260901' ? { ...row, state: 'building' } : row,
+                ),
+              },
+        );
+      }),
+    );
+    shown();
+
+    const table = await screen.findByRole('table', { name: `Partitions of ${NAME}` });
+    await vi.waitFor(() => {
+      expect(text(within(table).getAllByTestId('partition-state')[1])).toBe('Building');
+    });
+    expect(text(screen.getByRole('status'))).toBe('');
+  });
+
   it('builds a rollup that isn’t partitioned whole: one row, and Build now', async () => {
     const { posted } = serve([
       {
@@ -260,6 +363,24 @@ describe('a rollup’s partitions (T375, AC-145)', () => {
     expect(document.querySelectorAll('.admin-pane__actions')).toHaveLength(0);
   });
 
+  it('puts a lambda’s Open in Model above its Partitions, as A3 draws it (T611)', async () => {
+    serve([
+      { id: ID, name: NAME, kind: 'combined', granularity: null, partitions: [], builtFrom: [] },
+    ]);
+    shown(
+      undefined,
+      <a className="btn btn-sm" href="/model">
+        Open in Model
+      </a>,
+    );
+
+    const head = await screen.findByRole('heading', { name: 'Partitions' });
+    const model = screen.getByRole('link', { name: 'Open in Model' });
+    expect(model.compareDocumentPosition(head) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
   it('asks again while Cube works the partitions out, and never shows none (A4)', async () => {
     const { asks } = serve([
       Response.json(
@@ -273,11 +394,14 @@ describe('a rollup’s partitions (T375, AC-145)', () => {
     expect(text(await screen.findByText(/Cube is still working out its partitions/))).toContain(
       'Asking again…',
     );
+    // Under its Partitions head, over skeleton rows, as A4 draws it (T611).
+    expect(text(screen.getByRole('heading', { name: 'Partitions' }))).toBe('Partitions');
+    expect(document.querySelectorAll('.partitions--pending .jobs-skeleton__bar')).toHaveLength(3);
     expect(screen.queryAllByRole('table')).toHaveLength(0);
     // Build all needs no list; Rebuild selected waits for it (A4).
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Build all' }).disabled).toBe(
-      false,
-    );
+    // In use: neither disabled nor, since T611, marked out of use.
+    const buildAll = screen.getByRole<HTMLButtonElement>('button', { name: 'Build all' });
+    expect([buildAll.disabled, buildAll.getAttribute('aria-disabled')]).toEqual([false, 'false']);
     expect(
       screen.getByRole<HTMLButtonElement>('button', { name: /^Rebuild 0 selected/ }).disabled,
     ).toBe(true);
@@ -345,5 +469,28 @@ describe('a rollup’s partitions (T375, AC-145)', () => {
     expect(text(await screen.findByText(/^Cube started no job/))).toBe(
       `Cube started no job: no partition of ${NAME} was built.`,
     );
+  });
+});
+
+/** T611 (design 16, pin 13): when the pane's Status says its newest failure was. */
+describe('when a rollup’s newest failure was (T611, T477)', () => {
+  const failedOn = (...at: Date[]) =>
+    failedAtOf({
+      kind: 'partitioned',
+      granularity: 'month',
+      partitions: at.map((each) => ({ failed: { at: each.toISOString() } })),
+    } as unknown as PartitionsAnswer);
+
+  it('is "at 05:05" today, as the design draws it, the newest of several', () => {
+    expect(failedOn(new Date(2026, 9, 8, 4, 0), new Date(2026, 9, 8, 5, 5))).toBe('at 05:05');
+  });
+
+  it('names an earlier day, never a bare clock read as today’s', () => {
+    expect(failedOn(new Date(2026, 9, 7, 5, 5))).toBe('yesterday 05:05');
+    expect(failedOn(new Date(2026, 9, 2, 5, 5))).toBe('2 Oct 05:05');
+  });
+
+  it('is nothing where no partition failed', () => {
+    expect(failedOn()).toBeUndefined();
   });
 });

@@ -36,6 +36,10 @@ const TABS = [
   ['queries', 'Queries'],
 ] as const;
 type Tab = (typeof TABS)[number][0];
+export type JobsTab = Tab;
+/** A tab by the name its address gives it, `?tab=`; none for one it doesn't know. */
+export const jobsTabOf = (asked: string | null): JobsTab | undefined =>
+  TABS.some(([key]) => key === asked) ? (asked as JobsTab) : undefined;
 
 function Queries() {
   const [ask, setAsk] = useState<QueryLogAsk>(FIRST_ASK);
@@ -121,13 +125,33 @@ function historyForUrl(): { id: string; name: string; opened: number } | undefin
 export function JobsPage({
   pollMs,
   buildId,
+  tab,
+  onTab,
 }: {
   pollMs?: number;
   /** A build's log at its address, `/jobs/builds/…` (T610; design 16, G6): Run history, open on it. */
   buildId?: string;
+  /**
+   * The tab its address names, and the way to give a tab its address as it
+   * opens (T611; design 16, pin 1: "Each tab's address is its own, so Back
+   * returns to it"). None, and the tabs are the page's own.
+   */
+  tab?: JobsTab;
+  onTab?: (tab: JobsTab) => void;
 }) {
-  const firstTab = (): Tab => (buildId === undefined ? tabOfUrl() : 'history');
-  const [open, setOpen] = useState<Tab>(firstTab);
+  const firstTab = (): Tab => tab ?? (buildId === undefined ? tabOfUrl() : 'history');
+  const [open, setOpenOnly] = useState<Tab>(firstTab);
+  /** A tab opened, at its own address where the page has one. */
+  const setOpen = (next: Tab) => {
+    setOpenOnly(next);
+    if (next !== open) onTab?.(next);
+  };
+  // Back or Forward to another tab's address: that tab (T611).
+  const [addressed, setAddressed] = useState(tab);
+  if (tab !== addressed) {
+    setAddressed(tab);
+    if (tab !== undefined) setOpenOnly(tab);
+  }
   /** The pre-aggregation Run history was opened on, from its pane (T375; design 16, pin 14). */
   const [historyFor, setHistoryFor] = useState(historyForUrl);
   /** The tabs opened so far: Run history is read once its tab first opens, then kept. */

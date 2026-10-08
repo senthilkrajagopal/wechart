@@ -332,6 +332,25 @@ describe('the refresh worker, as xcube reports it (T553, AC-393)', () => {
     expect(document.activeElement).toBe(opener);
   });
 
+  /** T611 (AC-399; design 16's keyboard table): "a non-modal popover, and Esc closes it". */
+  it('opens its panel as a popover by the badge, which a click elsewhere closes', async () => {
+    reporting(FAILING);
+    const opener = await screen.findByRole('button', { name: /Refresh runs failing/ });
+    await userEvent.click(opener);
+    const panel = screen.getByRole('region', { name: 'Refresh worker' });
+
+    // Anchored to the badge, over the page, not a block in its flow.
+    expect(panel.closest('.jobs-health__anchor')?.contains(opener)).toBe(true);
+    expect(panel.className).toContain('popover');
+    // Non-modal: what's in it is used, and a click on it keeps it open.
+    await userEvent.click(within(panel).getByTestId('model-revision'));
+    expect(screen.getByRole('region', { name: 'Refresh worker' })).toBe(panel);
+
+    await userEvent.click(document.body);
+    expect(screen.queryByRole('region', { name: 'Refresh worker' })).toBeNull();
+    expect(opener.getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('tells a member a module failed, and why they can’t see its error (F3, Q4)', async () => {
     const withoutError = Object.fromEntries(
       Object.entries(FAILING.modules[1]!).filter(([key]) => key !== 'error'),

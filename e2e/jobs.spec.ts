@@ -1,7 +1,26 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import { landed, ownCubeFile, PUBLISHED } from './model-files';
 import { psql } from './store';
+
+/** Words as a regular expression's own, a name with its dots. */
+const escaped = (words: string) => words.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** A row's name, a button read as the row is: its name first (T611). */
+const nameOf = (rollup: string) => new RegExp(`^${escaped(rollup)}(,|$)`);
+/**
+ * A pre-aggregation built from its pane, a row click only selecting (design
+ * 16, J; T611): its name in the list, then its pane's Build all or Build now.
+ */
+async function buildFromPane(page: Page, rollup: string, timeout = 30_000) {
+  await page
+    .getByRole('table', { name: 'Pre-aggregations' })
+    .getByRole('button', { name: nameOf(rollup) })
+    .click({ timeout });
+  await page
+    .getByRole('complementary', { name: 'Pre-aggregation details' })
+    .getByRole('button', { name: /^Build (all|now)/ })
+    .click({ timeout });
+}
 
 /**
  * AC-016: THE SYSTEM SHALL record, for every query it issues, the Cube
@@ -87,7 +106,7 @@ test('building a pre-aggregation follows its job to done, and Cube’s record of
   const started = page.waitForResponse(
     (response) => response.url().endsWith('/api/builds') && response.request().method() === 'POST',
   );
-  await row.getByRole('button', { name: `Build ${rollup}` }).click();
+  await buildFromPane(page, rollup);
   const { tokens } = (await (await started).json()) as { tokens: string[] };
   expect(tokens[0]).toMatch(/^[0-9a-f]{16,}$/);
 
@@ -136,14 +155,10 @@ test('Run history lists a build started from Jobs, its log naming its token and 
   const rollup = `${cube}.main`;
   expect(await ownCubeFile(request, cube, ownRollup(cube))).toBe(`cubes/${cube}.yml`);
   await page.goto('/jobs');
-  const row = page
-    .getByRole('table', { name: 'Pre-aggregations' })
-    .getByRole('row')
-    .filter({ hasText: rollup });
   const answered = page.waitForResponse(
     (response) => response.url().endsWith('/api/builds') && response.request().method() === 'POST',
   );
-  await row.getByRole('button', { name: `Build ${rollup}` }).click({ timeout: 30_000 });
+  await buildFromPane(page, rollup);
   const { tokens, runId } = (await (await answered).json()) as {
     tokens: string[];
     runId: string;
@@ -159,7 +174,7 @@ test('Run history lists a build started from Jobs, its log naming its token and 
   await expect(built.getByTestId('starter')).toHaveText('You');
 
   // Its log: the token, whole in its title, and Cube's end state.
-  await built.getByRole('button', { name: rollup }).click();
+  await built.getByRole('button', { name: nameOf(rollup) }).click();
   const pane = page.getByRole('complementary', { name: `Build of ${rollup}` });
   const log = pane.getByRole('region', { name: 'Log · what Cube reported, when wechart saw it' });
   await expect(pane.getByTitle(tokens[0]!)).toBeVisible();
@@ -240,10 +255,7 @@ test('a build wechart queued waits with its token, Cancel takes it out, and Run 
       (response) =>
         response.url().endsWith('/api/builds') && response.request().method() === 'POST',
     );
-    await page
-      .getByRole('table', { name: 'Pre-aggregations' })
-      .getByRole('button', { name: `Build ${rollup}` })
-      .click({ timeout: 60_000 });
+    await buildFromPane(page, rollup, 60_000);
     const { tokens, runId } = (await (await answered).json()) as {
       tokens: string[];
       runId: string;
@@ -328,10 +340,7 @@ test('Stop ends a building build wechart started, Run history reads Cancelled wh
       (response) =>
         response.url().endsWith('/api/builds') && response.request().method() === 'POST',
     );
-    await page
-      .getByRole('table', { name: 'Pre-aggregations' })
-      .getByRole('button', { name: `Build ${rollup}` })
-      .click({ timeout: 60_000 });
+    await buildFromPane(page, rollup, 60_000);
     const { tokens, runId } = (await (await answered).json()) as {
       tokens: string[];
       runId: string;
@@ -348,7 +357,8 @@ test('Stop ends a building build wechart started, Run history reads Cancelled wh
       .filter({ hasText: rollup })
       .filter({ has: page.getByRole('button', { name: /^Stop the/ }) });
     await expect(building).toHaveCount(1, { timeout: 30_000 });
-    await expect(building.getByTestId('queue-state')).toHaveText('Building');
+    // With how long, from when it was added (state C; T611).
+    await expect(building.getByTestId('queue-state')).toHaveText(/^Building · for \d+ min$/);
     const key = await building.getAttribute('data-key');
     // Every entry with Stop is one wechart started, by a person or a schedule:
     // another test's build may be building too, never the worker's or a query's.
@@ -730,7 +740,7 @@ test('each pre-aggregation’s row has its state, its trigger, and its name lead
       json: rows.map((each) => (each['id'] !== ROLLUP ? each : { ...each, ...phase })),
     });
   });
-  await row.getByRole('button', { name: `Build ${ROLLUP}` }).click();
+  await buildFromPane(page, ROLLUP);
   // Cube's `scheduled` and `processing`, in design 16's words (pin 5; T375).
   await expect(state).toHaveText('Queued · 2026', { timeout: 15_000 });
   await expect(state).toHaveText('Building · 2026', { timeout: 15_000 });
@@ -768,8 +778,8 @@ test('selecting a pre-aggregation fills the full-height pane with its state, tri
     .getByRole('table', { name: 'Pre-aggregations' })
     .getByRole('row')
     .filter({ hasText: ROLLUP });
-  // By the keyboard: the row focused, and Enter.
-  await row.focus();
+  // By the keyboard: the row's name focused, and Enter (T611).
+  await row.getByRole('button', { name: nameOf(ROLLUP) }).focus();
   await page.keyboard.press('Enter');
   await expect(row).toHaveAttribute('aria-selected', 'true');
 
@@ -779,7 +789,19 @@ test('selecting a pre-aggregation fills the full-height pane with its state, tri
   await expect(pane.getByTestId('pane-state')).toHaveText(
     (await row.getByTestId('row-state').textContent()) ?? '',
   );
-  await expect(pane.locator('dd').nth(1)).toHaveText('Every hour');
+  // Its facts as pin 13 draws them (T611): its refresh key named so, its model read-only.
+  const facts = pane.getByRole('group', { name: 'Facts' });
+  await expect(facts.locator('dt:text-is("Trigger") + dd')).toHaveText(
+    'Every hour · its refresh key',
+  );
+  await expect(facts.locator('dt:text-is("Model") + dd')).toHaveText(
+    'cubes/monthly_orders.yml · read-only in Shared',
+  );
+  await expect(pane.getByTestId('pane-folder')).toHaveText('Shared');
+  // Docked, × at the right end of its head (T611).
+  const close = await pane.getByRole('button', { name: 'Back to the list' }).boundingBox();
+  const title = await pane.getByRole('heading', { level: 2 }).boundingBox();
+  expect(close?.x ?? 0).toBeGreaterThan((title?.x ?? Infinity) + (title?.width ?? 0) - 1);
   // Deep into Model: its file, on its cube's Pre-aggs tab, this one open (T469, UX-080).
   await expect(pane.getByRole('link', { name: 'Open in Model' })).toHaveAttribute(
     'href',
@@ -838,8 +860,9 @@ test('below 1,024 px the list keeps name, folder and state, and the pane is a fu
   for (const moved of ['Last built', 'Started by', 'Trigger', 'Partitions'])
     await expect(table.getByRole('columnheader', { name: moved, exact: true })).toBeHidden();
   // No pane until one is chosen: the list has the width.
-  const pane = page.getByRole('complementary', { name: 'Pre-aggregation details' });
-  await expect(pane).toBeHidden();
+  await expect(page.getByRole('complementary', { name: 'Pre-aggregation details' })).toBeHidden();
+  // A sheet over the page: a modal dialog, as the .source-pane sheets are (T611).
+  const pane = page.getByRole('dialog', { name: 'Pre-aggregation details' });
 
   await row.click();
   await expect(pane.getByRole('heading', { level: 2 })).toHaveText(ROLLUP);
@@ -847,6 +870,11 @@ test('below 1,024 px the list keeps name, folder and state, and the pane is a fu
   expect([sheet?.x, sheet?.width]).toEqual([0, 390]);
   // Opened, the sheet has focus, at its head (rule 85).
   await expect(pane.getByRole('heading', { level: 2 })).toBeFocused();
+  // What the list leaves out, in the sheet (G8; T611).
+  await expect(pane.getByRole('group', { name: 'On the list' })).toBeVisible();
+  await expect(
+    pane.getByRole('group', { name: 'On the list' }).locator('dt:text-is("Last built")'),
+  ).toBeVisible();
   // Building stays possible, in the sheet, its actions pinned at its foot (G8; T610),
   // measured once its partitions are read and its actions drawn for them.
   await expect(pane.getByRole('table', { name: /^Partitions of/ })).toBeVisible();
@@ -858,8 +886,8 @@ test('below 1,024 px the list keeps name, folder and state, and the pane is a fu
   await pane.getByRole('button', { name: 'Back to the list' }).click();
   await expect(pane).toBeHidden();
   await expect(row).toBeVisible();
-  // Focus back on its row.
-  await expect(row).toBeFocused();
+  // Focus back on its row, its name the row's one stop (T611).
+  await expect(row.getByRole('button', { name: nameOf(ROLLUP) })).toBeFocused();
 });
 
 /**

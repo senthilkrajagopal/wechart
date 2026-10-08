@@ -424,6 +424,66 @@ describe('Schedules’ State filter (T558, R66)', () => {
     ).toEqual(['All 1', 'Cube’s refresh worker 0', 'wechart 1']);
   });
 
+  /** T611 (AC-399; design 16, pin 13): Jobs' "Also rebuilt by" opens a schedule at its address. */
+  it('opens at ?schedule= on that schedule’s pane', async () => {
+    window.history.replaceState(null, '', '/schedules?schedule=s-paused');
+    shownSchedules({ wechart: THREE });
+
+    const pane = await screen.findByRole('complementary', { name: 'Schedule details' });
+    expect(text(await within(pane).findByRole('heading', { level: 2 }))).toBe('Paused one');
+    expect(
+      screen
+        .getAllByRole('row')
+        .find((row) => row.getAttribute('data-schedule-id') === 's-paused')
+        ?.getAttribute('aria-selected'),
+    ).toBe('true');
+  });
+
+  it('gives the sheet opened at ?schedule= focus once its schedule is read, below 1,024 px (T611’s review)', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: true,
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+    window.history.replaceState(null, '', '/schedules?schedule=s-paused');
+    shownSchedules({ wechart: THREE });
+
+    const sheet = await screen.findByRole('dialog', { name: 'Schedule details' });
+    await vi.waitFor(() => {
+      expect(document.activeElement).toBe(within(sheet).getByRole('heading', { level: 2 }));
+    });
+  });
+
+  it('gives a suspended one’s sheet focus on Resume, as its pane opens (E1; T611’s review)', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: true,
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+    window.history.replaceState(null, '', '/schedules?schedule=s-suspended');
+    shownSchedules({ wechart: THREE });
+
+    const sheet = await screen.findByRole('dialog', { name: 'Schedule details' });
+    const resume = await within(sheet).findByRole('button', { name: 'Resume' });
+    await vi.waitFor(() => {
+      expect(document.activeElement).toBe(resume);
+    });
+  });
+
+  it('opens nothing at ?schedule= for one that isn’t listed, as one that doesn’t exist (T611’s review)', async () => {
+    window.history.replaceState(null, '', '/schedules?schedule=s-unknown');
+    shownSchedules({ wechart: THREE });
+    await screen.findByText('Running', { selector: '[data-testid="wechart-schedule-name"]' });
+
+    expect(screen.queryAllByRole('complementary', { name: 'Schedule details' })).toHaveLength(0);
+    // Nothing chosen: no row selected.
+    expect(
+      screen.getAllByRole('row').filter((row) => row.getAttribute('aria-selected') === 'true'),
+    ).toHaveLength(0);
+  });
+
   it('lists the active and the paused ones each by its own, and every one at Any', async () => {
     shownSchedules({ wechart: THREE });
     await screen.findByText('Running', { selector: '[data-testid="wechart-schedule-name"]' });
@@ -606,6 +666,10 @@ describe('Schedules’ states (T560, AC-399)', () => {
     await vi.waitFor(() => {
       expect(screen.queryByRole('complementary', { name: 'Schedule details' })).toBeNull();
     });
+    // Its row went with it: focus goes to the list's New schedule, docked (T640; rule 85; T611's e2e).
+    await vi.waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'New schedule' }));
+    });
   });
 
   it('says it when a row’s switch finds its schedule gone, another’s pane left open (G5)', async () => {
@@ -672,6 +736,29 @@ describe('Schedules’ wechart rows (T552, AC-154, AC-234)', () => {
     expect(owner.querySelector('svg')?.getAttribute('data-icon')).toBe('schedule');
   });
 
+  /** T611 (AC-399; design 16's keyboard table, "A row in a list"). */
+  it('names each row by a button read as the row is, and ↑ ↓ go from row to row', async () => {
+    shownSchedules({ wechart: [schedule()] });
+    const own = await wechartRow('Weekday mornings');
+    const key = own.previousElementSibling as HTMLElement;
+
+    const keyName = within(key).getByRole('button', {
+      name: 'orders.mornings, Sales, Daily at 08:00, Los Angeles, Cube’s refresh worker',
+    });
+    const ownName = within(own).getByRole('button', {
+      name: 'orders.mornings, Sales, Weekday mornings, Active, wechart',
+    });
+    // The rows themselves are no stops of their own: their names are.
+    expect([key.hasAttribute('tabindex'), own.hasAttribute('tabindex')]).toEqual([false, false]);
+    keyName.focus();
+    await user().keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(ownName);
+    await user().keyboard('{ArrowUp}');
+    expect(document.activeElement).toBe(keyName);
+    await user().keyboard('{Enter}');
+    expect(key.getAttribute('aria-selected')).toBe('true');
+  });
+
   it('applies a change at once, with no proposal', async () => {
     const { sent } = shownSchedules({ wechart: [schedule()] });
     await user().click(await wechartRow('Weekday mornings'));
@@ -726,6 +813,8 @@ describe('Schedules’ wechart rows (T552, AC-154, AC-234)', () => {
       'You can’t undo this.',
     ]);
     expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Cancel' }));
+    // A plain Cancel with the focus ring, its one primary the destructive one (D6; T611).
+    expect(within(dialog).getByRole('button', { name: 'Cancel' }).className).toBe('btn');
 
     await user().click(within(dialog).getByRole('button', { name: 'Delete schedule' }));
 

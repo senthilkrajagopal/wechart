@@ -15,6 +15,8 @@ import { PUBLISHED } from './model-files';
  *   (G5) leaves focus on the list.
  */
 const ROLLUP = 'monthly_orders.by_status_month';
+/** Its row's name, a button read as the row is, its name first (T611). */
+const NAMED = /^monthly_orders\.by_status_month,/;
 
 test.use({ viewport: { width: 900, height: 800 } });
 
@@ -39,7 +41,7 @@ test('the Jobs sheet: focus stays in it, Esc closes it, and focus goes back to i
     .getByRole('row')
     .filter({ hasText: ROLLUP });
   await row.click();
-  const sheet = page.getByRole('complementary', { name: 'Pre-aggregation details' });
+  const sheet = page.getByRole('dialog', { name: 'Pre-aggregation details' });
   await expect(sheet.getByRole('heading', { level: 2 })).toBeFocused();
 
   // Shift+Tab from × reaches nothing under the sheet.
@@ -49,7 +51,8 @@ test('the Jobs sheet: focus stays in it, Esc closes it, and focus goes back to i
 
   await page.keyboard.press('Escape');
   await expect(sheet.getByRole('heading', { level: 2 })).toHaveCount(0);
-  await expect(row).toBeFocused();
+  // On its row's name, the row's one stop (T611).
+  await expect(row.getByRole('button', { name: NAMED })).toBeFocused();
 });
 
 test('a sheet left for another tab keeps no hold on Tab there', async ({ page }) => {
@@ -59,7 +62,7 @@ test('a sheet left for another tab keeps no hold on Tab there', async ({ page })
     .getByRole('row')
     .filter({ hasText: ROLLUP })
     .click();
-  const sheet = page.getByRole('complementary', { name: 'Pre-aggregation details' });
+  const sheet = page.getByRole('dialog', { name: 'Pre-aggregation details' });
   await sheet.getByRole('link', { name: 'All its builds in Run history' }).click();
   await expect(page.getByRole('tab', { name: 'Run history' })).toHaveAttribute(
     'aria-selected',
@@ -84,7 +87,7 @@ test('a sheet left for another tab keeps no hold on Tab there', async ({ page })
 
 test('the Not found sheet, closed, leaves focus on the list', async ({ page }) => {
   await page.goto('/jobs?preagg=no_such.rollup');
-  const sheet = page.getByRole('complementary', { name: 'Pre-aggregation details' });
+  const sheet = page.getByRole('dialog', { name: 'Pre-aggregation details' });
   await expect(sheet.getByRole('heading', { level: 2 })).toHaveText('Not found');
   await expect(sheet.getByRole('heading', { level: 2 })).toBeFocused();
 
@@ -100,7 +103,7 @@ test('the build toast is over the sheet, its buttons in reach, never hidden unde
     route.fulfill({ json: { tokens: ['t-sheet'], runId: 'run-sheet' } }),
   );
   await page.goto(`/jobs?preagg=${encodeURIComponent(ROLLUP)}`);
-  const sheet = page.getByRole('complementary', { name: 'Pre-aggregation details' });
+  const sheet = page.getByRole('dialog', { name: 'Pre-aggregation details' });
   await sheet.getByRole('button', { name: /^Build (all|now)/ }).click();
 
   const toast = page.getByRole('status').filter({ hasText: 'Follow it in Queue' });
@@ -158,20 +161,22 @@ test('Run history’s build log sheet: Esc closes it, and focus goes back to its
   );
   await page.goto('/jobs?tab=history');
   const row = page.getByTestId('build-row-b-sheet');
-  await row.getByRole('button', { name: ROLLUP }).click();
-  const sheet = page.getByRole('complementary', { name: `Build of ${ROLLUP}` });
+  // Its row's name, a button read as the row is (T611).
+  const name = row.getByRole('button', { name: NAMED });
+  await name.click();
+  const sheet = page.getByRole('dialog', { name: `Build of ${ROLLUP}` });
   await expect(sheet).toBeVisible();
   await staysIn(page, sheet, 'Shift+Tab', 3);
 
   await page.keyboard.press('Escape');
   await expect(sheet).toHaveCount(0);
-  await expect(row.getByRole('button', { name: ROLLUP })).toBeFocused();
+  await expect(name).toBeFocused();
 
   // × too gives focus back to its row, not the page.
-  await row.getByRole('button', { name: ROLLUP }).click();
+  await name.click();
   await sheet.getByRole('button', { name: 'Close' }).click();
   await expect(sheet).toHaveCount(0);
-  await expect(row.getByRole('button', { name: ROLLUP })).toBeFocused();
+  await expect(name).toBeFocused();
 });
 
 test('the Schedules sheet: New schedule asks before Esc drops what was typed, and gives focus back', async ({
@@ -180,7 +185,7 @@ test('the Schedules sheet: New schedule asks before Esc drops what was typed, an
   await page.goto('/schedules');
   const opener = page.getByRole('button', { name: 'New schedule' });
   await expect(opener).toBeVisible(PUBLISHED);
-  const sheet = page.getByRole('complementary', { name: 'Schedule details' });
+  const sheet = page.getByRole('dialog', { name: 'Schedule details' });
 
   // × gives focus back to New schedule.
   await opener.click();
@@ -233,7 +238,7 @@ test('the Schedules sheet: New schedule asks before Esc drops what was typed, an
   await expect(sheet.getByRole('heading', { level: 2 })).toHaveText(ROLLUP);
   await page.keyboard.press('Escape');
   await expect(sheet).toHaveCount(0);
-  await expect(row).toBeFocused();
+  await expect(row.getByRole('button', { name: NAMED })).toBeFocused();
 });
 
 /** One of wechart's schedules as the API lists it, this browser's page's own (routed). */
@@ -271,7 +276,7 @@ test('a schedule’s sheet: Esc in its Delete dialog closes the dialog only; × 
     .getByRole('row')
     .filter({ hasText: 'Sheet mornings' })
     .click();
-  const sheet = page.getByRole('complementary', { name: 'Schedule details' });
+  const sheet = page.getByRole('dialog', { name: 'Schedule details' });
   await expect(sheet.getByRole('heading', { level: 2 })).toHaveText('Sheet mornings');
 
   const remove = sheet.getByRole('button', { name: 'Delete…' });
@@ -315,7 +320,7 @@ test('a schedule’s sheet closed because access went leaves focus on the list (
     .getByRole('row')
     .filter({ hasText: 'Sheet mornings' })
     .click();
-  const sheet = page.getByRole('complementary', { name: 'Schedule details' });
+  const sheet = page.getByRole('dialog', { name: 'Schedule details' });
   await sheet.getByRole('button', { name: 'Run now' }).click();
 
   await expect(page.getByText('You no longer have access to do this.')).toBeVisible();
@@ -346,7 +351,7 @@ test('Resume keeps focus in the sheet, on its heading', async ({ page }) => {
     .getByRole('row')
     .filter({ hasText: 'Sheet mornings' })
     .click();
-  const sheet = page.getByRole('complementary', { name: 'Schedule details' });
+  const sheet = page.getByRole('dialog', { name: 'Schedule details' });
   await sheet.getByRole('button', { name: 'Resume' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Resumed' })).toBeVisible();
   // Not a row under the sheet, nor the page: the sheet's own heading.
@@ -369,7 +374,7 @@ test('a sheet opened from ?preagg= takes focus once its pre-aggregation is read'
     page.getByRole('tabpanel', { name: 'Pre-aggregations' }).getByTestId('skeleton-rows'),
   ).toBeAttached();
   release();
-  const sheet = page.getByRole('complementary', { name: 'Pre-aggregation details' });
+  const sheet = page.getByRole('dialog', { name: 'Pre-aggregation details' });
   await expect(sheet.getByRole('heading', { level: 2 })).toHaveText(ROLLUP);
   await expect(sheet.getByRole('heading', { level: 2 })).toBeFocused();
 });
@@ -403,7 +408,7 @@ test('a sheet closed because access went leaves focus on the list (G5)', async (
     .getByRole('row')
     .filter({ hasText: ROLLUP })
     .click();
-  const sheet = page.getByRole('complementary', { name: 'Pre-aggregation details' });
+  const sheet = page.getByRole('dialog', { name: 'Pre-aggregation details' });
   await sheet.getByRole('button', { name: /^Build (all|now)/ }).click();
 
   await expect(page.getByText('You no longer have access to do this.')).toBeVisible();

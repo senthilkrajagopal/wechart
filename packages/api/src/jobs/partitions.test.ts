@@ -262,6 +262,7 @@ interface Partition {
   state: string;
   lastBuiltAt: string | null;
   failed?: { at: string; serving: string | null };
+  since?: string;
 }
 const partitionsOf = async (who: string, id: string) => {
   const answer = await as(who, {
@@ -372,6 +373,23 @@ describe('a rollup’s partitions (T375, AC-145)', () => {
       ['2026-02-01T00:00:00.000', 'queued', null],
       ['2026-01-01T00:00:00.000', 'built', '2026-10-02T14:01:00.000Z'],
     ]);
+    // Since when each is in the queue, for "Building · since 14:31" (design 16, pin 12; T611).
+    expect((body['partitions'] as Partition[]).map((each) => each.since ?? null)).toEqual([
+      null,
+      '2026-10-02T14:12:00.000Z',
+      '2026-10-02T14:31:00.000Z',
+      '2026-10-02T14:38:00.000Z',
+      null,
+    ]);
+
+    // An entry xcube gave no time: no since, never an empty one (T611's review).
+    queued = queued.map((each) => (each.key === 'k-queued' ? { ...each, addedAt: '' } : each));
+    const again = await partitionsOf('writer', byMonth());
+    expect(
+      (again.body['partitions'] as Partition[]).find(
+        (each) => each.start === '2026-02-01T00:00:00.000',
+      ),
+    ).not.toHaveProperty('since');
   });
 
   it('reads failed only after a build wechart started failed and nothing has built it since, naming what it serves', async () => {
@@ -623,10 +641,13 @@ describe('each pre-aggregation’s row (T550, AC-391)', () => {
   it('reads no partition failed whose build xcube stopped, as Stop asked (T554’s review)', async () => {
     items = quarter({ '10': all, '11': all, '12': all });
     queued = [];
-    // November rebuilt from Jobs at 14:20, then stopped while building: xcube's failure for it.
+    // November rebuilt from Jobs at 14:25, then stopped while building: xcube's failure for it.
+    // At a time of its own: the test before records November's failed build at 14:20 in
+    // the same history, and two builds of one time are in no set order (T611: this test
+    // passed or failed by which of the two came first).
     await ran(
       '11',
-      '2026-10-02T14:20:00Z',
+      '2026-10-02T14:25:00Z',
       'failure: xcube stopped this build: it was cancelled while building, and none of it is kept',
     );
 
