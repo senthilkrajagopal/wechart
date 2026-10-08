@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 import type { APIRequestContext } from '@playwright/test';
@@ -27,7 +28,10 @@ const PATH = `cubes/${CUBE}.yml`;
 const OTHER_PATH = `cubes/${OTHER}.yml`;
 const cubeOf = (name: string) =>
   `cubes:\n  - name: ${name}\n    sql: SELECT 1 AS n\n    dimensions:\n      - name: n\n        sql: n\n        type: number\n        primary_key: true\n        public: true\n    measures:\n      - name: total\n        sql: n\n        type: sum\n`;
-const JOINED = `${cubeOf(CUBE)}    joins:\n      - name: ${OTHER}\n        sql: "{CUBE}.n = {${OTHER}}.n"\n        relationship: many_to_one\n`;
+// With a measure of its own as well as the join, so what xcube serves shows
+// whether the proposal landed (AC-321: a refusal changes no published module).
+const PROPOSED_MEASURE = 'proposed_count';
+const JOINED = `${cubeOf(CUBE)}      - name: ${PROPOSED_MEASURE}\n        type: count\n    joins:\n      - name: ${OTHER}\n        sql: "{CUBE}.n = {${OTHER}}.n"\n        relationship: many_to_one\n`;
 // T456's data-source half (T713): a folder beneath, two data sources in the
 // folder, a parent cube on one, and a model to go beneath extending it.
 const INNER = `Inner ${RUN}`;
@@ -61,6 +65,40 @@ const filesOf = async (request: APIRequestContext) => {
   expect(answer.status(), await answer.text()).toBe(200);
   return ((await answer.json()) as { files: { path: string; content: string }[] }).files;
 };
+/** A model file's versions wechart keeps (AC-288), from the suite's own database. */
+function modelVersionsOf(fileId: string): { version: number; path: string; content: string }[] {
+  expect(fileId).toMatch(/^[0-9a-f-]{36}$/);
+  const rows = execFileSync(
+    'docker',
+    [
+      'exec',
+      'wechart-meta',
+      'psql',
+      '-U',
+      'wechart',
+      '-d',
+      'wechart_security',
+      '-Atc',
+      `SELECT json_agg(json_build_object('version', version, 'path', content->>'path', 'content', content->>'content') ORDER BY version) FROM item_versions WHERE kind = 'model' AND item_id = '${fileId}'`,
+    ],
+    { encoding: 'utf8' },
+  ).trim();
+  return rows === ''
+    ? []
+    : (JSON.parse(rows) as { version: number; path: string; content: string }[]);
+}
+
+/** The measures xcube serves on a cube, as the user's field list has them. */
+async function servedMeasures(request: APIRequestContext, cube: string) {
+  const meta = (await (await request.get('/api/meta')).json()) as {
+    cubes?: { name: string; measures?: { name: string }[] }[];
+  };
+  return (meta.cubes ?? [])
+    .find((each) => each.name === cube)
+    ?.measures?.map((measure) => measure.name)
+    .sort();
+}
+
 /** Through My workspace and a proposal `super` approves (T451, AC-278): the folder's files of it. */
 const publish = (request: APIRequestContext, path: string, content: string) =>
   landed(request, made.folder, [{ path, content }]);
@@ -190,6 +228,8 @@ test.describe('a proposal’s model, checked when proposed and at approval (T451
       page,
     }) => {
       const before = await filesOf(page.request);
+      const served = await servedMeasures(page.request, CUBE);
+      expect(served).toEqual([`${CUBE}.total`]);
       await page.goto(`/reviews/${made.proposal}`);
       await expect(
         page.getByRole('region', { name: 'Publish check' }).getByRole('status'),
@@ -208,6 +248,9 @@ test.describe('a proposal’s model, checked when proposed and at approval (T451
       expect(await filesOf(page.request)).toEqual(before);
       const proposal = await page.request.get(`/api/proposals/${made.proposal}`);
       expect(((await proposal.json()) as { status: string }).status).toBe('open');
+      // And what xcube serves (AC-321): the cube as published, without the
+      // proposed measure.
+      expect(await servedMeasures(page.request, CUBE)).toEqual(served);
     });
   });
 
@@ -232,11 +275,19 @@ test.describe('a proposal’s model, checked when proposed and at approval (T451
         timeout: 90_000,
       });
       expect(approved.status(), await approved.text()).toBe(200);
-      const landed = (await approved.json()) as { landed: { kind: string; version: number }[] };
+      const landed = (await approved.json()) as {
+        landed: { kind: string; id: string; version: number }[];
+      };
       expect(landed.landed).toEqual([expect.objectContaining({ kind: 'model', version: 2 })]);
       made.proposal = '';
       const files = await filesOf(page.request);
       expect(files.find((each) => each.path === PATH)?.content).toBe(JOINED);
+      // The version it replaced is kept in the file's history, a copy wechart
+      // holds, beside the one landed (AC-288).
+      expect(modelVersionsOf(landed.landed[0]!.id)).toEqual([
+        { version: 1, path: PATH, content: cubeOf(CUBE) },
+        { version: 2, path: PATH, content: JOINED },
+      ]);
     });
   });
 
@@ -255,6 +306,11 @@ test.describe('a proposal’s model, checked when proposed and at approval (T451
       expect(load.status(), await load.text()).toBe(200);
       const [row] = ((await load.json()) as { data: Record<string, unknown>[] }).data;
       expect(Number(row?.[`${prefix}${CUBE}.total`])).toBe(1);
+      // Landed, the proposed measure is served: what the refusal held back.
+      expect(await servedMeasures(page.request, CUBE)).toEqual([
+        `${CUBE}.${PROPOSED_MEASURE}`,
+        `${CUBE}.total`,
+      ]);
     });
   });
 

@@ -281,6 +281,7 @@ Admin routes, admin tokens and query tokens are unchanged. `routes.ts` is in non
   - A module's `version` is the content hash of its members' and copies' resolved files ([rt] L1868-1874).
   - Its compiled model's app id is `xcube:<model>:m:<id>:<version[0:12]>`, shared by every revision holding that version. So an unchanged module is not recompiled ([rt] L1235-1260, L1337-1353).
   - Tested: adding a cube compiles 1 of 3 modules ([t-mod] L226-232).
+  - **wechart's evidence for AC-321's "a module the change doesn't affect is recompiled"** (the coordinator's call, 2026-10-07, overturnable): this test of xcube's. No wechart test can show it: the e2e suites share one model, and xcube packs small groups of cubes into one module, so two unrelated test cubes may share a module. Later images keep the rule: an overlay compiles only its changed modules (`xcube-slice-5.md`, finding 4), and a connection's salt is added only to the app ids of modules holding a cube on it (`xcube-bc18f82c01.md`, "Modules").
 - **Activation.**
   - A new revision's uncompiled modules compile one by one in the lane at `Priority.Activate`. The switch happens once all have compiled ([rt] L1303-1390).
   - The first items revision compiles all its modules, because a files-mode revision's app id is `appIdOf(head)` ([rt] L203-205, L1250-1251).

@@ -9933,6 +9933,18 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - **AC-291's renames and moves.** A landed cube, view or data source is no longer renamed (T706, T722). A move is refused if it would leave any reference off its referrer's path (AC-425). T714 and T715 build that, so AC-291's direct actions are shown there rather than here.
     - **The dry run's refusals.** At propose and at approval, xcube now also refuses a name in use and a reference off its path. T701 reads those kinds, and T713 words them as AC-322 does.
     - This task's own remaining ticks (AC-321, AC-291, and AC-288 for the user) wait on those tasks as well.
+  - **Verified 2026-10-08 (group 3): AC-288 and AC-321 ticked.** AC-291 stays open (its folder rename needs write on the parent, T761).
+    - **AC-288, amended first:** its Fails-when now excepts the proposal's data sources, which land first and stay landed, following the user's R52 (the coordinator's call, 2026-10-07, overturnable). No route yet makes a proposal holding data sources and models together, so on the real surface a refused approval changes nothing.
+    - **Added to `e2e/security/publish-check.spec.ts`** (both passed at once, because the behaviour was built here):
+      - after the refused approval, the cube xcube serves is unchanged: `/api/meta` lists its measure `total` and not the proposed `proposed_count` (AC-321's "no published module changes");
+      - once landed, the model file's history holds version 1 (the replaced file) and version 2 (the landed one) (AC-288), and xcube serves `proposed_count`.
+    - **Passing in Chrome against compose's xcube:**
+      - `publish-check.spec.ts` (12): checked when proposed, refused at approval naming the file with nothing changed, landed and queried across the join, and T713's data-source half (an approval binding otherwise refused, naming both, then proposed again and landed);
+      - `review-view.spec.ts`: the folder shows version 3 at once, with versions 1–3 kept (AC-288);
+      - `cube-refuses.spec.ts` "with security on, a publish that breaks a folder's rollup is refused";
+      - `binding.spec.ts` "a delete of a cube a chart or a cube references is refused…" and `deleting.spec.ts`'s refused model-file and data-source deletes (a direct change).
+    - **API:** `routes/landed-names.test.ts` (T704): an approval refused for a name landed since lands nothing, its data sources included.
+    - **"A module the change doesn't affect is recompiled"** rests on xcube's own test ("adding a cube compiles 1 of 3 modules"), cited in `docs/research/xcube-slice-3b.md` as this clause's evidence (the coordinator's call, 2026-10-07, overturnable). The suites share one model, so no wechart test can show it.
 - [x] T427 (AC-322) Word a refused publish: breaks named in the folders the user may see, a count for the rest, all in the audit trail
   - Files: `packages/api/src/xcube/refusal.ts` (+ test), `packages/web/src/workspaces/reviews/Refusal.tsx` (+ test)
   - Failing test: `refusal.test.ts`:
