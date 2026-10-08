@@ -84,7 +84,16 @@ export function pickerGroupsOf(
     const own = cubes.filter((cube) => cube.inWorkspace === true);
     const landed = new Set(shared.map((cube) => key(cube.name)));
     for (const cube of own) if (landed.has(key(cube.name))) copies.set(key(cube.name), cube);
-    const fresh = own.filter((cube) => !copies.has(key(cube.name)));
+    // Only one going to a folder on the item's path: one that couldn't land
+    // under it isn't offered, as a copy off it isn't (R72; T718's follow-up).
+    const onPath = new Set(
+      steps.flatMap((step) => (step.xcubeId === undefined ? [] : [step.xcubeId])),
+    );
+    const fresh = own.filter(
+      (cube) =>
+        !copies.has(key(cube.name)) &&
+        (cube.xcube === undefined || onPath.has(cube.xcube.folderId)),
+    );
     if (fresh.length > 0)
       groups.push({
         label: MY_WORKSPACE.title,

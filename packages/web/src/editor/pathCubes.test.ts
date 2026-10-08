@@ -166,6 +166,17 @@ describe('the cube picker’s groups (T475, T718, AC-428)', () => {
       { label: 'A', rows: ['A orders (mine) · Your copy'] },
       { label: 'Shared', rows: ['Sales', 'Customers'] },
     ]);
+    // A copy, or a cube new in the workspace, going to a folder off the
+    // item's path is offered not at all: it couldn't land under it (R72; the
+    // coordinator's call on T718).
+    const offPath = [
+      ...overlay,
+      { ...kept('fad', 'widgets', 'Widgets (mine)'), inWorkspace: true },
+      { ...kept('fad', 'gadgets', 'Gadgets'), inWorkspace: true },
+    ];
+    expect(
+      shown(pickerGroupsOf(offPath, 'w', inWorkspace, 'b', onPaths)).flatMap((group) => group.rows),
+    ).not.toEqual(expect.arrayContaining([expect.stringMatching(/Widgets|Gadgets/)]));
     // `a_orders` once, the copy; each row its own key.
     const rows = groups.flatMap((group) => group.rows);
     expect(rows.filter((row) => row.cube.name === 'a_orders')).toHaveLength(1);
