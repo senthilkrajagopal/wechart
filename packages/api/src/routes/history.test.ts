@@ -712,8 +712,32 @@ describe('an item’s history (T354, AC-289)', () => {
         approved?: { version: number; at: string; by: { name: string } | null };
       }>();
       expect(approved?.version).toBe(source.version);
-      expect(approved?.by).toEqual({ key: ada.key, name: ada.name });
+      // The approver's name, as the line says it; their sign-in key isn't the reader's
+      // to know (T698's second review).
+      expect(approved?.by).toEqual({ name: ada.name });
       expect(Number.isNaN(Date.parse(approved?.at ?? ''))).toBe(false);
+    } finally {
+      await sources().remove(source.id);
+    }
+  });
+
+  it('says no approval where only an older version than the current one was kept (T698’s second review)', async () => {
+    const source = await sources().create({
+      folderId: 'root',
+      name: `older_${MARK}`,
+      driver: 'postgres',
+      authMethod: 'password',
+      fields: { host: 'db', port: 5432, database: 'sales', user: 'cube', ssl: false },
+      sealed: { password: SEALED as never },
+    });
+    try {
+      // Kept as version 0: not the one it is now.
+      await keep('data-source', source.id, source.version - 1, {
+        body: { name: `older_${MARK}`, driver: 'postgres' },
+      });
+      const read = await as('writer', { method: 'GET', url: `/api/data-sources/${source.id}` });
+      expect(read.statusCode, read.body).toBe(200);
+      expect(read.json<{ approved?: unknown }>().approved).toBeUndefined();
     } finally {
       await sources().remove(source.id);
     }

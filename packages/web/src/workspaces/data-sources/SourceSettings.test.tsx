@@ -181,7 +181,7 @@ describe('its head and version line as design 03 draws them (SRC-03, SRC-06, SRC
         approved: {
           version: 3,
           at: '2026-09-24T09:40:00.000Z',
-          by: { key: 'ada', name: 'Ada Admin' },
+          by: { name: 'Ada Admin' },
         },
       }),
     );
@@ -202,6 +202,17 @@ describe('its head and version line as design 03 draws them (SRC-03, SRC-06, SRC
     expect(head().querySelector('.badge.line')?.textContent).toBe('PostgreSQL');
   });
 
+  it('says a version kept with no approver as saved, as History does (T698’s second review)', async () => {
+    serve(source({ approved: { version: 3, at: '2026-09-24T09:40:00.000Z', by: null } }));
+    open('ds-1');
+    await screen.findByRole('heading', { level: 1, name: 'emea_replica' });
+    await waitFor(() => {
+      expect(document.querySelector('.source-settings__version')?.textContent).toBe(
+        'Version 3 · saved 24 Sep',
+      );
+    });
+  });
+
   it('says who approved it to a view-only reader, whose history is none, from its own answer (T698 follow-up; note J)', async () => {
     serve(
       source({
@@ -209,9 +220,9 @@ describe('its head and version line as design 03 draws them (SRC-03, SRC-06, SRC
         approved: {
           version: 3,
           at: '2026-09-24T09:40:00.000Z',
-          by: { key: 'ada', name: 'Ada Admin' },
+          by: { name: 'Ada Admin' },
         },
-      } as Partial<StoredSource>),
+      }),
       // Not theirs: the history answers as for none.
       { '/api/history/data-source/ds-1': null },
     );

@@ -278,7 +278,7 @@ export function registerDataSources(
       | {
           readonly version: number;
           readonly at: Date;
-          readonly by: { readonly key: string; readonly name: string } | null;
+          readonly by: { readonly name: string } | null;
         }
       | undefined
     >;

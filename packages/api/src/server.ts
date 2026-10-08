@@ -1373,16 +1373,20 @@ export function buildServer({
       // Each change recorded (T368, AC-294).
       ...(audit === undefined ? {} : { audit }),
       // Its current version's approval, on its own page's line (T698 follow-up;
-      // design 03 note J): the one History tags current, as its route does.
+      // design 03 note J): that version alone, as kept, and the approver by
+      // name only (T698's second review); none where it wasn't kept.
       ...(versions === undefined
         ? {}
         : {
             approvalOf: async (id: string, current: number) => {
-              const kept = await versions.list('data-source', id);
-              const shown = kept.find((each) => each.version === current) ?? kept[0];
-              return shown === undefined
+              const kept = await versions.get('data-source', id, current);
+              return kept === null
                 ? undefined
-                : { version: shown.version, at: shown.at, by: shown.approver };
+                : {
+                    version: kept.version,
+                    at: kept.at,
+                    by: kept.approver === null ? null : { name: kept.approver.name },
+                  };
             },
           }),
       ...(sqlRunnerSwitches === undefined ? {} : { switches: sqlRunnerSwitches }),

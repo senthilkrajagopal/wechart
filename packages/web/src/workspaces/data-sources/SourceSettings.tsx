@@ -93,7 +93,8 @@ export interface StoredSource {
   readonly approved?: {
     readonly version: number;
     readonly at: string;
-    readonly by: { readonly key: string; readonly name: string } | null;
+    /** Its approver by name: only what the line says (T698's second review). */
+    readonly by: { readonly name: string } | null;
   };
 }
 
