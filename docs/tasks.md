@@ -9007,7 +9007,41 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - the selected tile in edit mode looks as a focused tile does;
     - a disabled item's reason in a `MenuButton` is in its `title` alone;
     - direction.md's promised ⌘Z, F6, `/` and Ctrl+M aren't bound, though each action has its button or entry.
-- [ ] T631 (AC-176, AC-090, AC-091) Mark or cross-filter a series or a trellis panel from the tile's ⋯ menu *(added 2026-10-04, R63)*
+  - **The re-audit of 2026-10-08, after T631–T640** (the coordinator's order: re-audit with the Jobs and Schedules sheets, then re-tick). AC-176 still fails, so T405, AC-176 and the T63x tasks stay open. The audit read every surface's source; nothing was edited.
+    - **What passes:**
+      - T631, T632 and T634–T639 hold, and so do T640's Jobs and Schedules sheets.
+      - Every pointer handler on a part that can't take focus has a keyboard way to the same action. Every drag has a keyboard equivalent: well picks, the tile's arrows and Shift+arrows, Mark range…, Shift+arrows and Ctrl+Space for rectangle and lasso, and Choose file….
+      - Every `outline: none` has a `:focus-visible` ring in its place.
+      - Rule 85 holds on the delete dialog, Access, History, Generate cubes, the SQL runner, Bookmarks, the settings page, the gallery and the other dialogs.
+    - **The e2e for AC-176 and T631–T640 pass:**
+      - `crossfilter`, `field-list`, `markings`, `keyboard-coverage`, `sheets`, `schedules` and `chart-editor`: 182 of 182 (Chrome);
+      - the security suite's `access`, `bookmarks`, `calc-requests`, `preview-as`, `proposal-models` and `review-view`: 47 of 47.
+    - **What fails AC-176: four gaps, planned as T743.**
+      1. **The `.source-pane` sheets below 1,024 px don't keep Tab in.** These are the data source wizard, Import, Export and Generate cubes. Shift+Tab and Tab walk onto controls hidden under the sheet, where focus can't be seen: AC-176's "focus is invisible". Each is an `<aside role="dialog">` with a trap only on its discard question (`NewSourceWizard.tsx:455, 877`; `ImportPane.tsx:589, 1163`; `GenerateCubes.tsx:938, 1866`). ExportPane has none at all, and once focus is out, its Esc doesn't close it (`ExportPane.tsx:194-205`). T640's `SheetTrap` (jobs/Sheet.tsx) did this for Jobs and Schedules only.
+      2. **Import's "Keep going", or Esc over its discard question, drops focus to the page** (`ImportPane.tsx:1136-1138, 526`). Its siblings give it back (`NewSourceWizard.tsx:164-167`, `GenerateCubes.tsx:584-587`).
+      3. **Explore's folder-heading Rename drops focus to the page on Enter, Esc or blur** (`ExplorePage.tsx:932-942, 772-779`). The row's rename gives it back.
+      4. **"Back to current" from a version's view drops focus to the page** (`SourceVersion.tsx:58` with `SourceSettings.tsx:418`; `DashboardPage.tsx:441-443`).
+    - **To check in a browser with it** (the code shows the pattern): focus while a focused button is disabled or removed during its request. This applies to the delete dialog's failed delete, "Use in my workspace" while busy, the Pause switch and Run now, and IndexEditor's "Add column" and its last row's ×.
+    - **Ticked with it:** T631, T632 and T634–T639. Each one's own work is built, its tests pass in the runs above, and the re-audit found it holding. T405 and AC-176 stay open for T743.
+    - **Covered by T611 (AC-399), not AC-176's:** Jobs' queue focus after Cancel and after "Rebuild selected", ↑/↓ between rows, and the schedule Delete dialog's Esc. T611 builds them as design 16 asks. Whether AC-176 waits on them too is for the coordinator.
+- [ ] T743 (AC-176) Keep Tab inside the data source wizard, Import, Export and Generate cubes sheets below 1,024 px, and give focus back after Import's Keep going, the folder heading's Rename and "Back to current" *(added 2026-10-08, from T405's re-audit)*
+  - Files:
+    - `packages/web/src/workspaces/data-sources/NewSourceWizard.tsx`
+    - `packages/web/src/workspaces/explore/import/ImportPane.tsx`
+    - `packages/web/src/dashboard/export/ExportPane.tsx`
+    - `packages/web/src/workspaces/model/GenerateCubes.tsx`
+    - `packages/web/src/workspaces/explore/ExplorePage.tsx`
+    - `packages/web/src/workspaces/data-sources/{SourceVersion,SourceSettings}.tsx`
+    - `packages/web/src/dashboard/DashboardPage.tsx`
+    - each with its tests, plus `e2e/sheets.spec.ts` and `e2e/keyboard-coverage.spec.ts`
+  - Failing test:
+    - **Sheets, at 390 px:** in each of the four, Tab from its last stop goes to its first, and Shift+Tab from its first goes to its last; Esc closes it from anywhere in it; focus goes back to what opened it. This is T640's `SheetTrap`, or the same keeping.
+    - **Import:** "Keep going", and Esc over the question, put focus back where it was in the pane.
+    - **Explore:** Enter, Esc and blur in the heading's Rename give focus to the Rename button.
+    - **A version's view:** "Back to current" gives focus to the History button, or to the version's row if the panel is open.
+    - **In the browser:** check the disabled-while-busy cases listed under T405's re-audit, and fix those that drop focus.
+  - Depends on: T640
+- [x] T631 (AC-176, AC-090, AC-091) Mark or cross-filter a series or a trellis panel from the tile's ⋯ menu *(added 2026-10-04, R63)*
   - Files: `dashboard/TileViewMenu.tsx`, `dashboard/DashboardView.tsx`
   - Failing test: `TileViewMenu.test.tsx`: the tile's menu offers "Mark series ›" and "Mark panel ›" in its marked group, or "Filter by series ›" and "Filter by panel ›" first in cross-filter mode, each listing the tile's series or panels, and none where it has none. e2e: `keyboard-coverage.spec.ts` marks a whole series from the menu by the keyboard alone; `crossfilter.spec.ts` cross-filters by a series and by a panel the same way (AC-176).
   - Depends on: T405
@@ -9028,7 +9062,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **Tests:**
       - unit: `TileViewMenu.test.tsx`, `tileParts.test.ts`;
       - e2e, Chrome: `crossfilter.spec.ts`, `keyboard-coverage.spec.ts`, `markings.spec.ts`, `tile-menu.spec.ts`, 98/98. The folder tree's arrow-key test failed once on focus, and passed on its rerun.
-- [ ] T632 (AC-091, AC-117, AC-188) A trellis header's click names its own panel once a filter has dropped others; the tile menu writes values of time as the legend does *(added 2026-10-04, from T631's review; the coordinator)*
+- [x] T632 (AC-091, AC-117, AC-188) A trellis header's click names its own panel once a filter has dropped others; the tile menu writes values of time as the legend does *(added 2026-10-04, from T631's review; the coordinator)*
   - Files: `dashboard/DashboardView.tsx`, `dashboard/crossfilter/clicked.ts`, `dashboard/tileParts.ts`, `dashboard/TileViewMenu.tsx`, `@wechart/charts`' index (`nameWriter` exported)
   - Failing test:
     - `crossfilter.spec.ts`: on a trellis cross-filtered down to a later category's panel, a click on its header filters by that category. Before the fix the chip named the trellis's first panel as saved ("Products Category = Components", for Instruments).
@@ -9077,7 +9111,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - **Tests:**
     - unit: `fieldPicker.test.tsx` (6, failing first), the migrated filter tests, and the editor's, all passing;
     - e2e, Chrome: `filters.spec.ts`, `dashboard-edit.spec.ts`, `keyboard-coverage.spec.ts`, `chart-editor.spec.ts`, `field-list.spec.ts`, 105/105. The folder tree's arrow-key test failed once in the first run, as it did in T631's, and passed on its rerun.
-- [ ] T634 (AC-176) Ctrl+Enter on a "Mark series ›" or "Mark panel ›" entry adds it to the marking, as a Ctrl-click does *(added 2026-10-04, R64: "Ctrl+Enter adds")*
+- [x] T634 (AC-176) Ctrl+Enter on a "Mark series ›" or "Mark panel ›" entry adds it to the marking, as a Ctrl-click does *(added 2026-10-04, R64: "Ctrl+Enter adds")*
   - Files: `shell/Menu.tsx` (an item's `onAdd` and `addHint`), `dashboard/TileViewMenu.tsx`, `dashboard/DashboardView.tsx`
   - Failing test:
     - `Menu.test.tsx`: an item with an add runs it on Ctrl+Enter, ⌘+Enter or a Ctrl-click, and says so in its description; a plain Enter runs it as before.
@@ -9100,7 +9134,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - **Tests:**
     - unit: `Menu.test.tsx`, `TileViewMenu.test.tsx`, both failing first;
     - e2e, Chrome: `keyboard-coverage.spec.ts`, `markings.spec.ts`, `tile-menu.spec.ts`, `crossfilter.spec.ts`, 100/100. Each new e2e step read "1 marked" until `partsOn` passed the add on.
-- [ ] T635 (AC-091) A Ctrl- or ⌘-click on a trellis header adds its panel to the marking *(added 2026-10-07: the coordinator's call, overturnable, on T634's question)*
+- [x] T635 (AC-091) A Ctrl- or ⌘-click on a trellis header adds its panel to the marking *(added 2026-10-07: the coordinator's call, overturnable, on T634's question)*
   - **Why.** R64's "Ctrl+Enter adds… mirroring Ctrl-click" gave the tile menu's "Mark panel ›" an add (T634), but a header's own Ctrl-click still replaced the marking (`markFromPanel`, since T190). The coordinator chose (a): the pointer mirrors the keyboard and a legend entry's Ctrl-click, as Spotfire's Ctrl-click on a panel header does (`references-markings.md`).
   - Files: `web/tiles/ChartCanvas.tsx` (the header's click reads Ctrl and ⌘), `charts/interaction/panelMark.ts` (its note)
   - Failing test: `markings.spec.ts` "a trellis panel header marks the whole panel": after Components, a Ctrl/⌘-click on Instruments' header makes "2 marked", both in the chip. It read "1 marked" before.
@@ -9111,7 +9145,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - direction.md's gesture table now reads "Mark the panel; Ctrl/⌘ adds";
     - the e2e now shows a plain click replacing what was marked, and fewer bars faded once both panels are marked. The seed's orders with no product draw a panel of their own, still faded.
   - **Tests:** e2e, Chrome: `markings.spec.ts`, `crossfilter.spec.ts`, `keyboard-coverage.spec.ts`. All pass but `markings.spec.ts`'s "Invert marking and Mark all…", which failed with T635's change taken back too. It isn't T635's: with ports 4100 and 5173 free, it passes alone on a fresh seed. It is listed under T407.
-- [ ] T636 (AC-176, AC-093) Mark a range from the keyboard: "Mark range…" in the tile's ⋯ menu, asking a from and a to *(added 2026-10-07, R66: ""Mark range…" in tile menu")*
+- [x] T636 (AC-176, AC-093) Mark a range from the keyboard: "Mark range…" in the tile's ⋯ menu, asking a from and a to *(added 2026-10-07, R66: ""Mark range…" in tile menu")*
   - **Why.** T405's audit: a range, the marking whose bounds survive filtering and match pre-aggregations, is made only by a drag along an axis (`onMarkRange`). The tile's keys mark items, and Shift+arrows a run of items, never a range.
   - Files: `dashboard/MarkRangeDialog.tsx` (+ test), `dashboard/TileViewMenu.tsx` (the entry), `dashboard/DashboardView.tsx` (the range, as a drag's), `shell/styles.ts`, `e2e/markings.spec.ts`
   - Failing test: a tile that marks ranges offers "Mark range…" in its marked group. Its dialog takes a from and a to on the tile's axis and marks that range, as a drag over it does; Esc closes it, asking first over typed bounds (rule 85). e2e: a range marked from the keyboard alone.
@@ -9130,7 +9164,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - **Tests:**
     - unit: `MarkRangeDialog.test.tsx` and `TileViewMenu.test.tsx`, failing first;
     - e2e, Chrome: `markings.spec.ts` "in range mode a drag…" goes on to mark a second range. It goes from Shift+F10 to Enter on Mark, with the months chosen by `selectOption`, and the stripe shows its two months. It failed waiting for "Mark range…" before the entry. `markings`, `tile-menu` and `keyboard-coverage` 85/85.
-- [ ] T637 (AC-176) A review's YAML diff unfolds from the keyboard: "Show all lines" beside it, and each folded stretch a button *(added 2026-10-07, R66: ""Show all lines" toggle")*
+- [x] T637 (AC-176) A review's YAML diff unfolds from the keyboard: "Show all lines" beside it, and each folded stretch a button *(added 2026-10-07, R66: ""Show all lines" toggle")*
   - **Why.** T405's audit: `@codemirror/merge` draws each "N unchanged lines" bar as a div that only a click unfolds (research `codemirror-merge.md`, Gotchas).
   - Files: `workspaces/reviews/YamlDiff.tsx` (+ test), `shell/styles.ts`
   - Failing test: `YamlDiff.test.tsx`: "Show all lines" unfolds every stretch and folds them again (`aria-pressed`); each bar is a button with a tab stop, and Enter on it unfolds its stretch, focus going to the text it unfolded.
@@ -9151,7 +9185,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - **Tests:**
     - unit: `YamlDiff.test.tsx`, failing first;
     - e2e, Chrome: `security/proposal-models.spec.ts`. The review of a proposed model unfolds its stretch from its bar by Enter, focus in the text, and Show all lines folds and unfolds all. Its published model gained eight comment lines first, a stretch long enough to fold. `security/review-view.spec.ts` passes too.
-- [ ] T638 (AC-176) A visible focus ring wherever one was hidden or cut off, and Ctrl+Enter takes a marked series off *(added 2026-10-07, from T405's re-audit for AC-176; the coordinator's calls: E (a), F (b))*
+- [x] T638 (AC-176) A visible focus ring wherever one was hidden or cut off, and Ctrl+Enter takes a marked series off *(added 2026-10-07, from T405's re-audit for AC-176; the coordinator's calls: E (a), F (b))*
   - **Why.** T405's re-audit for AC-176 found four places where the focus ring couldn't be seen, and one action the keyboard couldn't take:
     - **A.** A list filter's chosen value drew its ring in the accent, on its own accent fill and border.
     - **B.** Segmented controls inside boxes that clip: the editor's "Actual size / Fit", and the connection form's "Sign in with" and shape choice. The ring was cut to a sliver on the next segment.
@@ -9187,7 +9221,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - `keyboard-coverage.spec.ts` and `markings.spec.ts`, 85 of 86. The folder tree's arrow-key test failed once, as in T631's and T633's runs, and passed alone and in a full run of its spec (29/29).
       - `security/sql-runner.spec.ts` 19/19, and after the review 18 of 19. "says a run was cut at 10,000 rows…", which T638 doesn't touch, failed once on a missing element and passed alone.
       - Each ring check failed without its rule. The series step failed on its hint before `partsOn` passed `marked`.
-- [ ] T639 (AC-176) The calculation request asks before a typed description is lost and gives focus back; the target tree keeps its tab stop *(added 2026-10-07, from T405's re-audit for AC-176: its rule-85 asides; the coordinator)*
+- [x] T639 (AC-176) The calculation request asks before a typed description is lost and gives focus back; the target tree keeps its tab stop *(added 2026-10-07, from T405's re-audit for AC-176: its rule-85 asides; the coordinator)*
   - **Why.** T405's re-audit for AC-176 found two rule-85 gaps outside its own findings:
     - `RequestCalcDialog`: Escape discarded a typed description without asking, and focus fell to the page on close.
     - `TargetTree`: it could lose its tab stop in `ImportPane` when the targets were fetched again.
@@ -14689,7 +14723,7 @@ These tasks are what group 3's check of the open criteria found missing. Each is
 | AC-154 | ~~T377~~ T551, T552 | AC-155 | T379, T504 | AC-157 | T364, T459 |
 | AC-158 | T363, T461, T497 | AC-159 | T361, T363 | AC-160 | T360, T454, T363 |
 | AC-161 | T335, T363, T365, T435, T442, T462, T497, T501, T728, T730 | AC-163 | T362, T363, T461, T462 | AC-164 | T335, T497 |
-| AC-176 | T405, T640 | AC-180 | T407 | AC-187 | T406, T466–T470, T476–T478 |
+| AC-176 | T405, T640, T743 | AC-180 | T407 | AC-187 | T406, T466–T470, T476–T478 |
 | AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
 | AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |
 | AC-234 | T378, T552, T504 | AC-246 | T404 | AC-249 | T336, T450, T724, T726, T727, T734 |
