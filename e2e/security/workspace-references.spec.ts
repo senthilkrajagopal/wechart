@@ -41,7 +41,8 @@ const CONTENT = [
   '',
 ].join('\n');
 const made = { folder: '', chart: '', project: '' };
-const full = () => `f${made.folder.replaceAll('-', '')}__${CUBE}`;
+/** The cube as Cube serves it: its own name in any folder (T728, AC-328; `[R71]`). */
+const full = () => CUBE;
 
 const yaml = (page: Page) => page.getByRole('textbox', { name: `${PATH}, as YAML` });
 const warning = (page: Page) =>
@@ -145,11 +146,11 @@ test.describe('a workspace model’s save lists what landing it would change (T5
       await expect(shown.locator('.model-references__lead')).toHaveText(
         `Landed in ${FOLDER}, this changes members that 1 chart and 0 dashboards use.`,
       );
-      // By the cube's own name in the folder it lands in, never its prefixed one (AC-329).
+      // By the cube's own name, and nothing of its folder's xcube id (AC-329, AC-328).
       await expect(shown.getByRole('list', { name: 'Charts' })).toHaveText(
         `${CHART} — uses ${CUBE}.count`,
       );
-      await expect(shown).not.toContainText(`${full()}`);
+      await expect(shown).not.toContainText(made.folder.replaceAll('-', ''));
 
       await shown.getByRole('button', { name: 'Cancel' }).click();
       await expect(warning(page)).toHaveCount(0);

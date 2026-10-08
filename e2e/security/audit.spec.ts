@@ -141,7 +141,8 @@ test.describe('builds and schedule changes in the trail', () => {
         ].join('\n'),
       };
       expect(await landed(page.request, folderId, [file])).toEqual([file]);
-      const preAggregation = `f${folderId.replaceAll('-', '')}__${cube}.main`;
+      // By its cube's own name in any folder (T728, AC-328).
+      const preAggregation = `${cube}.main`;
       // Build now, once Cube serves the model it landed in.
       await expect
         .poll(

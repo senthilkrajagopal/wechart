@@ -41,7 +41,6 @@ const OFF_VIEW_PATH = `views/${OFF_VIEW}.yml`;
 const made = {
   folder: '',
   west: '',
-  xcubeId: '',
   chart: '',
   request: '',
   asker: '',
@@ -52,8 +51,8 @@ const made = {
   east: '',
   eastChart: '',
 };
-const xcubeIdOf = (folderId: string) => `f${folderId.replaceAll('-', '')}`;
-const full = (name = CUBE) => `${made.xcubeId}__${name}`;
+/** A cube or view as Cube serves it: its own name in any folder (T728, AC-328; `[R71]`). */
+const full = (name = CUBE) => name;
 
 test.describe.configure({ mode: 'serial' });
 
@@ -112,7 +111,6 @@ test.describe('a calculation request opened in My workspace, and resolved by its
         data: { kind: 'folder', title: `Resolve ${RUN}`, folderId: 'root' },
       });
       made.folder = ((await folder.json()) as { id: string }).id;
-      made.xcubeId = `f${made.folder.replaceAll('-', '')}`;
       expect(
         (
           await request.put(`/api/folders/${made.folder}/access`, {
@@ -265,7 +263,7 @@ test.describe('a calculation request opened in My workspace, and resolved by its
       });
       expect(created.status(), await created.text()).toBe(201);
       made.eastChart = ((await created.json()) as { id: string }).id;
-      const onView = `${xcubeIdOf(made.east)}__${VIEW}`;
+      const onView = full(VIEW);
       const asked = await request.post('/api/calc-requests', {
         data: {
           chartId: made.eastChart,

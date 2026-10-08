@@ -13547,7 +13547,13 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
         - The fix (`server.ts`): it now leaves out every chart and dashboard kept in a workspace, and a workspace dashboard's own charts (AC-141, R55).
         - Tests: `routes/model-references.test.ts` (new), and `model-in-folder.spec.ts` on the image.
       - Known flake: `model-in-folder.spec.ts`'s first test can publish into a folder made a moment before, which xcube's tree doesn't hold yet ("Folder … is not in the folder tree"). It passed on two reruns.
-      - Still building `<folderId>__` names, in no task: `e2e/security/{calc-request-resolve,cube-refuses,workspace-references,audit,jobs-scope}.spec.ts`. Raised with the coordinator.
+      - Still building `<folderId>__` names, in no task: `e2e/security/{calc-request-resolve,cube-refuses,workspace-references,audit,jobs-scope}.spec.ts`. Raised with the coordinator, who gave them to this task.
+    - *Noted (2026-10-08), a third commit:* the five specs now name each cube, view and pre-aggregation by its own name, and pass on the image (33 tests in chrome).
+      - `cube-refuses.spec.ts`: each folder's gate is still asked through its folder's cube.
+      - `jobs-scope.spec.ts` and `workspace-references.spec.ts`: their guards that could not fail once no `__` name exists now look for the folder's id.
+      - On the first run, `audit.spec.ts` (the fixture's sign-in timed out in `newContext`) and `workspace-references.spec.ts` (a 120 s wait on Save anyway) each failed once, then passed on rerun.
+      - `picker.spec.ts`'s own `__` names are reworked with T729, whose file it is (T475's and T633's tests to (b), the coordinator's call).
+    - This entry names the references fix and AC-141 above, as the coordinator asked: T735 was not made, since the fix landed in the follow-up.
 
 - [ ] T729 (AC-272, AC-275, AC-371, AC-425) Rework the tests of T428, T429, T457 and T537 to bindings by name on the path
   - Files: `e2e/security/binding.spec.ts`, `e2e/security/picker.spec.ts` (T429's and T457's binding cases), `e2e/security/copy-on-use.spec.ts`, `packages/api/src/routes/copy-on-use.test.ts`, `packages/api/src/model/references.test.ts`

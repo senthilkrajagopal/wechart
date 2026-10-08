@@ -95,8 +95,9 @@ test.describe('Jobs and Schedules, scoped to the user’s read-write folders (T3
         await expect(row.getByTestId('preagg-folder')).toHaveText(folder);
       }
       // A build of their folder's, whose log `writer` may not open (T610, G6).
+      // By its cube's own name in any folder (T728, AC-328).
       const theirs = await page.request.post('/api/builds', {
-        data: { preAggregation: `f${ids.theirs.replaceAll('-', '')}__jobs_theirs_${RUN}.main` },
+        data: { preAggregation: `jobs_theirs_${RUN}.main` },
       });
       expect(theirs.status(), await theirs.text()).toBe(200);
       builds.theirs = ((await theirs.json()) as { runId: string }).runId;
@@ -166,7 +167,7 @@ test.describe('Jobs and Schedules, scoped to the user’s read-write folders (T3
       ).toBeVisible();
       // Another folder's, asked for by its published name, is refused.
       const refused = await page.request.post('/api/builds', {
-        data: { preAggregation: `f${ids.theirs.replaceAll('-', '')}__jobs_theirs_${RUN}.main` },
+        data: { preAggregation: `jobs_theirs_${RUN}.main` },
       });
       expect(refused.status()).toBe(403);
 
@@ -182,7 +183,8 @@ test.describe('Jobs and Schedules, scoped to the user’s read-write folders (T3
       // folder in a column of its own (T551; design 16, screen 2).
       await expect(row.getByRole('cell').first()).toHaveText(`jobs_mine_${RUN}.main`);
       await expect(row.getByRole('cell').nth(1)).toHaveText(`Jobs mine ${RUN}`);
-      await expect(schedules).not.toContainText('__jobs_');
+      // Nothing of a folder's xcube id (T728, AC-328).
+      await expect(schedules).not.toContainText(ids.mine.replaceAll('-', ''));
       await expect(schedules).not.toContainText(`jobs_theirs_${RUN}`);
     });
 

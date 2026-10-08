@@ -39,7 +39,15 @@ const CUBES = {
   policied: `refuses_p_${RUN}`,
 };
 const ids = { a: '', b: '', c: '', cd: '', n: '', r: '', board: '', chart: '' };
-const full = (folderId: string, name: string) => `f${folderId.replaceAll('-', '')}__${name}`;
+/**
+ * A folder's cube as Cube serves it: its own name in any folder (T728,
+ * AC-328; `[R71]`). The folder is kept for the reader: the gate is still
+ * that folder's.
+ */
+const full = (folderId: string, name: string) => {
+  void folderId;
+  return name;
+};
 
 async function folder(request: APIRequestContext, title: string, parent: string) {
   const made = await request.post('/api/documents', {
