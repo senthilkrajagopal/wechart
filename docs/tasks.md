@@ -13679,7 +13679,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - a draft's name changed before it lands: done in the form (`e2e/draft-file-names.spec.ts`, here);
       - a draft's file name not following its cube's: it follows, on the page, at its address, in the tree and through the API (`e2e/draft-file-names.spec.ts`), and at landing (`global-names.spec.ts`'s T707 case).
 
-- [ ] T738 (AC-141, AC-329, AC-132, AC-344, AC-313, AC-356, AC-357) Fix the phase-1 and security e2e failures the naming work caused
+- [x] T738 (AC-141, AC-329, AC-132, AC-344, AC-313, AC-356, AC-357) Fix the phase-1 and security e2e failures the naming work caused
   - *Added 2026-10-08 by the coordinator:* model-design's T481, model.spec:365, country-map's race and items-switch's index names are regressions from the naming work (R71–R73), so they are ours to fix. Run the whole phase-1 suite and the whole security suite in Chrome on the image, under the lock. Fix, test-first, every failure the naming work caused. List, unfixed, those it didn't cause.
   - Files: `packages/web/src/workspaces/model/{inFolder.ts,editedMembers.ts,ModelFilePage.tsx}` (+ `inFolder.test.ts`, `editedMembers.test.ts`), `e2e/model-files.ts`, `e2e/model-design.spec.ts`, `e2e/import-single-user.spec.ts`, `e2e/security/export-import.spec.ts`; and T737's `import.ts`, `draft-names.test.ts` and `ModelFilePage.tsx`, put to the formatter's layout
   - Failing test:
@@ -13706,7 +13706,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - After the move, the root's `monthly_orders` is planned as `xx3us3fz_by_status_month`, so its rollup would be rebuilt.
       - The cause is xcube 256d632371's R71 1.2 rule (`xcube-256d632371.md`, "Aliases and rollup tables"). It gives `x<hash7>` to any item whose rollup stem `<alias>_<pre-aggregation>` passes 25 characters, root items included. `monthly_orders_by_status_month` is 30. Before R71, root items had no alias.
       - Fixing it is xcube's, or a ruling on AC-336. It is a question for the coordinator. Nothing in wechart changes here. An authored `sql_alias` wouldn't help, since the stem would still be too long and the table would become `p<hash6>`. Shortening the seed's rollup name would only hide the problem.
-      - **AC-336 unticked** (T738's review): its one test fails on the image, at "a root cube's rollup is rebuilt because of the move".
+      - **AC-336 unticked** (T738's review): its one test fails on the image, at "a root cube's rollup is rebuilt because of the move". *Ticked again with T740: on xcube `2e611eae61`, `items-switch.spec.ts` passes. T738 is ticked with it.*
     - **The review (PASS), its fixes taken:**
       - AC-336 unticked, as above.
       - "imports nothing" also keeps items going to Elsewhere <run>, as the other lists do.
@@ -13729,6 +13729,21 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - Last full runs, before the last two fixes: phase 1 750 passed and 12 failed; security 337 passed and 2 failed. Every failure is listed above.
       - After the last fixes: `workspace-references`, `export-import` and `deleting` together twice, 59 of 60, the one being `deleting.spec.ts:507` under load. `model`, `model-design`, `model-unpublished`, `draft-file-names`, `folder-models`, `country-map` and `import-single-user`: 43 of 44, the one being T479.
       - API 1835/1835; web 2636/2636.
+
+- [x] T740 (AC-336) Pin xcube 2e611eae61, which keeps an item's own rollup table names (R38), and show the move to items rebuilds nothing
+  - *Added 2026-10-08 by the coordinator:* xcube's answer to T738's finding (`to-wechart/2026-10-08-1430-root-rollup-names.md`). The image is `ghcr.io/senthilkrajagopal/xcube:v1.7.45-2e611eae61@sha256:61c095d3…`. Its schema is still 14, so no reset is needed.
+  - Files: `docs/research/xcube-2e611eae61.md` (new), `docker-compose.yml`, `deploy/helm/wechart/values.yaml`, `deploy/helm/values/docker-desktop.yaml`, `infra/xcube/fresh-start.sh`, `docs/deploy.md`, `packages/api/src/deploy/cube-image.test.ts`
+  - Failing test: `cube-image.test.ts` pins the new image in compose, both Helm values files and `docs/deploy.md`. Six cases were red before the pins changed. `e2e/items-switch.spec.ts` (T430) runs on it.
+  - Depends on: T738
+  - *Done 2026-10-08:*
+    - **Research:** `xcube-2e611eae61.md`. Only names a pre-aggregation builds in the source database count against Postgres's 63, with their partition and version suffixes. A rollup in Cube Store keeps its name at any length. It corrects `xcube-256d632371.md`'s 25-character stem.
+    - **Pinned:** compose's Cube and refresh worker, the chart's and docker-desktop's `cube.image`, `fresh-start.sh` (image and revision `2e611eae61551bf4700eb11c1a5cbb52fd2962e4`, read from the image's label) and `docs/deploy.md`, with its upgrade note: change the image alone.
+    - The coordinator recreated compose's two Cube containers on it, under the locks.
+    - **On the image, in chrome:**
+      - `items-switch.spec.ts` passes. The seed rollup is planned as before the move, and nothing is rebuilt. AC-336 is ticked, and T738 with it.
+      - `global-names`, `data-source-binding`, `model-in-folder` and `fixed-names` (security) pass 21/21.
+      - `folder-models`, `preaggregations`, `model` and `acceleration` (phase 1) pass 33/35. The two failures are `acceleration.spec.ts:252`, a layout check that failed before the naming work, and `folder-models.spec.ts:23`, "Folder … is not in the folder tree" just after the folder is made, which T738 listed. That spec passed 5/6 run alone twice, and its other failure passed alone.
+    - `cube-image.test.ts` and the deploy tests pass 23/23.
 
 - [x] T739 (AC-323, AC-422) Keep xcube's overlay of My workspace holding exactly its drafts when a workspace folder is deleted
   - *Added 2026-10-08 by the coordinator:* verify.sh's fresh start on docker-desktop found it. The workspace's overlay `ws-6ea8…` still held `wechart_verify_probe` after the probe's folder and its row were gone from wechart. A new draft of that name in a new workspace folder was then refused as in use. Check every removal path: a folder's delete, a model file's delete, Clear My workspace, and a draft's move.
@@ -14125,7 +14140,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-325 | T441, T363, T581 | AC-326 | T420, T437 | AC-327 | T431, T442, T458 |
 | AC-328 | T341, T425, T449, T452, T435, T501, T702, T709, T710, T728 | AC-329 | T429, T450, T342, T347, T710, T718, T728, T732 | AC-330 | T419, T447, T425, T449, T436, T442 |
 | ~~AC-331~~ (retired, `[R30]`) | ~~T430~~ | AC-332 | T433 | AC-333 | T419, T447, T449, T425, T420 |
-| AC-334 | T421, T447 | AC-335 | T446, T447 | AC-336 | T430, T449 |
+| AC-334 | T421, T447 | AC-335 | T446, T447 | AC-336 | T430, T449, T740 |
 | AC-337 | T448 | AC-009 (again) | T426 | AC-189, AC-249 (again, folder items) | T450 |
 | AC-338 | T472 | AC-339 | T471 | AC-340 | T471 |
 | AC-341 | T356 | ~~AC-342~~ | retired 2026-10-07, `[R71]` (was T475, T633; their tests reworked by T732) | AC-343 | T471, T473, T474, T475, T462, T331, T348, T356, T357, T358, T367, T369, T371 |
