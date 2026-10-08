@@ -374,12 +374,14 @@ describe('Review: what an import would land, and what it may affect (T513, AC-35
       { kind: 'in-workspace', targetPath: [`Sales ${MARK}`] },
     ]);
     expect(byTitle.get(`Margin trend ${MARK}`)!.warnings).toEqual([]);
-    // Models wait for workspace models (design 13, state V): listed, not imported, no warning.
+    // Its cube's name has landed, in the target: mapped to it, not imported (T720, AC-357, R71).
     expect(byTitle.get(MODEL)).toEqual({
       kind: 'model',
       key: MODEL,
       title: MODEL,
-      lands: 'not-imported-yet',
+      lands: 'not-imported',
+      mappedTo: { name: `${MARK}_customers`, path: [`Sales ${MARK}`] },
+      held: true,
       warnings: [],
     });
     // Its name has landed, in the target: mapped to it, not imported (T719, AC-358, R71).
@@ -398,31 +400,45 @@ describe('Review: what an import would land, and what it may affect (T513, AC-35
     expect(await everything()).toEqual(before);
   });
 
-  it('warns of a model’s cube or view the target already has, where models import (AC-270)', () => {
+  it('lists a model of a name not held as not imported yet, where wechart holds no workspace models (design 13, state V)', async () => {
+    const fresh = `${MARK}/fresh.yml`;
+    const answer = await review(
+      'writer',
+      exportFile([
+        {
+          kind: 'model',
+          path: fresh,
+          content: `cubes:\n  - name: ${MARK}_fresh\n    sql_table: public.customers\n`,
+        },
+      ]),
+    );
+    expect(answer.statusCode, answer.body).toBe(200);
+    expect(answer.json<Reviewed>().items.find((item) => item.key === fresh)).toEqual({
+      kind: 'model',
+      key: fresh,
+      title: fresh,
+      lands: 'not-imported-yet',
+      warnings: [],
+    });
+  });
+
+  // T720 (AC-357, AC-424; R71): a model whose cube or view the target holds
+  // is mapped to it, so no warning names that cube's file; one of another path warns of nothing.
+  it('warns of a model file at its path in the target, and of no other model file there', () => {
     expect(
       warningsOf({
         kind: 'model',
         name: MODEL,
-        declares: [`${MARK}_customers`, `${MARK}_fresh`],
-        target: {
-          named: () => undefined,
-          models: [{ path: `${MARK}/customers.yml`, declares: [`${MARK}_customers`] }],
-        },
+        target: { named: () => undefined, models: [{ path: `${MARK}/customers.yml` }] },
         workspace: [],
       }),
-    ).toEqual([
-      { kind: 'cube-in-target', cube: `${MARK}_customers`, file: `${MARK}/customers.yml` },
-    ]);
+    ).toEqual([]);
     // And a model of its path, as a same-named item.
     expect(
       warningsOf({
         kind: 'model',
         name: `${MARK}/customers.yml`,
-        declares: [],
-        target: {
-          named: () => undefined,
-          models: [{ path: `${MARK}/customers.yml`, declares: [`${MARK}_customers`] }],
-        },
+        target: { named: () => undefined, models: [{ path: `${MARK}/customers.yml` }] },
         workspace: [],
       }),
     ).toEqual([{ kind: 'in-target', version: null }]);

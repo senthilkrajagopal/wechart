@@ -1,9 +1,16 @@
 import { randomUUID } from 'node:crypto';
 
-import { exportedBodyOf, readExport, type ExportedChart, type ExportFile } from '@wechart/core';
+import {
+  exportedBodyOf,
+  nameKey,
+  readExport,
+  type ExportedChart,
+  type ExportFile,
+} from '@wechart/core';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { USER } from '../auth/guard';
+import { namesDeclaredIn } from '../model/names';
 import { withChartsRenamed } from './workspace-copy';
 
 /**
@@ -19,21 +26,21 @@ import { withChartsRenamed } from './workspace-copy';
  *
  * - `POST /api/import/review` says what would land and what each draft may
  *   affect once proposed (AC-357): an item of the same kind and name in the
- *   target or the workspace; a model's cube or view the target already has
- *   (AC-270). A data source whose name is held is mapped to the one holding
- *   it, landed or a draft of the importer's (T719, AC-358); one off the
- *   target's path is the one warning that blocks. It writes nothing.
+ *   target or the workspace. A data source or model whose name is held is
+ *   mapped to the one holding it, landed or a draft of the importer's (T719,
+ *   T720; AC-358, AC-357; R71, R73); one off the target's path blocks, and so
+ *   does a model whose path My workspace's root already holds. It writes
+ *   nothing.
  * - `POST /api/import` makes the drafts, all together or none.
  *
  * Both read the whole file first (`readExport`): one it can't take is
  * refused with each part and why, and nothing is written (AC-359).
  *
- * Models are listed and not imported until the workspace holds models (T347,
- * T350; design 13, state V).
+ * A model of a name not held lands in My workspace's root as a draft going
+ * to the target, through the workspace's overlay (T720, T347): stored only as
+ * xcube takes it. Where wechart holds no workspace models (no xcube), models
+ * are listed and not imported (design 13, state V).
  */
-
-/** Until the workspace holds models (T347): listed, "not imported yet". */
-export const MODELS_IMPORT = false;
 
 /** Where an import is made, and where it is reviewed first. */
 const IMPORTS = `/api/import`;
@@ -45,14 +52,18 @@ export type Warning =
   | { readonly kind: 'in-target'; readonly version: number | null }
   /** The workspace has a draft of its kind and name: both are kept. */
   | { readonly kind: 'in-workspace'; readonly targetPath: readonly string[] | null }
-  /** A cube or view it defines is already in the target, in another model file (AC-270). */
-  | { readonly kind: 'cube-in-target'; readonly cube: string; readonly file: string }
   /**
-   * The data source its name means isn't in the target or a folder above it,
-   * so a model there couldn't use it: the import waits for a target on its
-   * path (T719; AC-358, AC-357's R73 clause). This one blocks.
+   * The data source, cube or view its name means isn't in the target or a
+   * folder above it, so the target couldn't use it: the import waits for a
+   * target on its path (T719, T720; AC-358, AC-357's R73 clause). This one
+   * blocks.
    */
   | { readonly kind: 'off-path' }
+  /**
+   * My workspace's root has a model file at its path, which it would land
+   * over (T720): it blocks until one of them is renamed or removed.
+   */
+  | { readonly kind: 'path-in-workspace' }
   /**
    * The data source its name means has another driver than the file's
    * (AC-361, the coordinator's call on T719): named where the importer may
@@ -68,7 +79,8 @@ export interface Holdings {
       kind: 'dashboard' | 'chart',
       title: string,
     ) => { readonly version: number } | undefined;
-    readonly models: readonly { readonly path: string; readonly declares: readonly string[] }[];
+    /** The target's model files' paths. */
+    readonly models: readonly { readonly path: string }[];
   };
   /** The workspace's drafts: their kind, name, and target's path (null for none or one not seen). */
   readonly workspace: readonly {
@@ -84,8 +96,6 @@ export function warningsOf(
     readonly kind: 'dashboard' | 'chart' | 'model' | 'data-source';
     /** Its title; a model's path; a data source's name. */
     readonly name: string;
-    /** A model's cubes and views. */
-    readonly declares?: readonly string[];
   } & Holdings,
 ): Warning[] {
   const warnings: Warning[] = [];
@@ -94,16 +104,10 @@ export function warningsOf(
     const same = target.named(item.kind, item.name);
     if (same !== undefined) warnings.push({ kind: 'in-target', version: same.version });
   }
-  if (item.kind === 'model') {
-    if (target.models.some((model) => model.path === item.name))
-      warnings.push({ kind: 'in-target', version: null });
-    for (const cube of item.declares ?? []) {
-      const holder = target.models.find(
-        (model) => model.path !== item.name && model.declares.includes(cube),
-      );
-      if (holder !== undefined) warnings.push({ kind: 'cube-in-target', cube, file: holder.path });
-    }
-  }
+  // A model whose cube or view the target has is mapped to it (T720; R71),
+  // so only its path is reckoned here.
+  if (item.kind === 'model' && target.models.some((model) => model.path === item.name))
+    warnings.push({ kind: 'in-target', version: null });
   // A dashboard's or library chart's draft of the name: both are kept.
   const drafted =
     item.kind === 'dashboard' || item.kind === 'chart'
@@ -125,11 +129,11 @@ export interface ReviewItem {
   /** A data source's driver. */
   readonly driver?: string;
   /**
-   * A data source mapped to an existing one (T514): its name and folder,
-   * none for a folder the importer can't see (T719).
+   * A data source or model mapped to an existing one (T514, T720): its name
+   * and folder, none for a folder the importer can't see (T719).
    */
   readonly mappedTo?: { readonly name: string; readonly path: readonly string[] | null };
-  /** Mapped because its name is that one's (T719, AC-358): not the importer's to decide. */
+  /** Mapped because its name is that one's (T719, T720; AC-358): not the importer's to decide. */
   readonly held?: true;
   readonly lands: 'draft' | 'not-imported-yet' | 'not-imported';
   readonly warnings: readonly Warning[];
@@ -166,6 +170,26 @@ export interface HeldSource {
   readonly created: boolean;
 }
 
+/**
+ * The cube or view an imported model's names already mean (T720, AC-357;
+ * R71, R72, R73): the landed one of a name it declares, in any folder and any
+ * case, else a draft of it in the importer's workspace.
+ */
+export interface HeldItem {
+  /** Its name, as the one holding it declares it. */
+  readonly name: string;
+  /** Its folder's path, where the importer may see its models; none where not. */
+  readonly path: readonly string[] | null;
+  /** In the target or a folder above it, or a draft going there: the target's charts may use it. */
+  readonly onPath: boolean;
+}
+
+/** A model saved in My workspace, or why it wasn't: the workspace's own answer (T347). */
+export interface ModelsAnswer {
+  readonly status: number;
+  readonly body: unknown;
+}
+
 /** A data source is created under its own name (T719, AC-358; R71: names never change). */
 const ownName = (name: string) => ({
   error: `A data source is created under its own name: “${name}”.`,
@@ -198,8 +222,30 @@ export interface ImportAccess {
     target: string,
     titles: readonly { readonly kind: 'dashboard' | 'chart'; readonly title: string }[],
   ) => Promise<Holdings>;
-  /** A model file's cubes and views. */
-  readonly declares: (path: string, content: string) => readonly string[];
+  /**
+   * The cube or view an imported model's names already mean, if any
+   * (`HeldItem`, T720).
+   */
+  readonly heldItem: (
+    request: FastifyRequest,
+    own: string,
+    target: string,
+    names: readonly string[],
+  ) => Promise<HeldItem | undefined>;
+  /**
+   * My workspace's models, where wechart holds them (xcube's overlays, T347);
+   * absent, an imported model is listed and not imported.
+   */
+  readonly models?: {
+    /** The paths of the model files in the workspace's root. */
+    readonly paths: (own: string) => Promise<ReadonlySet<string>>;
+    /** New files in the workspace's root, going to the target, as its overlay takes them. */
+    readonly save: (
+      own: string,
+      target: string,
+      files: readonly { readonly path: string; readonly content: string }[],
+    ) => Promise<ModelsAnswer>;
+  };
   /**
    * Whether a chart the dashboard names and the file doesn't hold may stay
    * on the imported dashboard: one this wechart has, the importer may open,
@@ -247,6 +293,31 @@ async function heldIn(
     if (item.kind === 'data-source') {
       const found = await access.heldSource(request, own, target, item.name);
       if (found !== undefined) held.set(item.name, found);
+    }
+  return held;
+}
+
+/**
+ * Each of the file's models whose name is held, by its path in the file, with
+ * the file's name that is (T720).
+ */
+async function heldModelsIn(
+  request: FastifyRequest,
+  access: ImportAccess,
+  own: string,
+  target: string,
+  file: ExportFile,
+): Promise<Map<string, { readonly holder: HeldItem; readonly asked: string }>> {
+  const held = new Map<string, { readonly holder: HeldItem; readonly asked: string }>();
+  for (const item of file.items)
+    if (item.kind === 'model') {
+      const names = namesDeclaredIn(item.content);
+      const holder = await access.heldItem(request, own, target, names);
+      if (holder !== undefined)
+        held.set(item.path, {
+          holder,
+          asked: names.find((name) => nameKey(name) === nameKey(holder.name)) ?? holder.name,
+        });
     }
   return held;
 }
@@ -413,6 +484,9 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
         mapped.set(name, found);
       }
     const holdings = await access.holdings(request, own, target.id, titles);
+    // Models whose names are held: mapped (T720); the workspace root's paths, for the rest.
+    const heldModels = await heldModelsIn(request, access, own, target.id, file);
+    const rootPaths = (await access.models?.paths(own)) ?? new Set<string>();
     const items = file.items.flatMap((item): ReviewItem[] => {
       if (item.kind === 'dashboard')
         return [
@@ -438,23 +512,38 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
               },
             ]
           : [];
-      if (item.kind === 'model')
+      if (item.kind === 'model') {
+        // One whose name is held: mapped to that one, not imported; off the
+        // target's path, it blocks (T720; AC-357, R73).
+        const holder = heldModels.get(item.path)?.holder;
+        if (holder !== undefined)
+          return [
+            {
+              kind: item.kind,
+              key: item.path,
+              title: item.path,
+              lands: 'not-imported',
+              mappedTo: { name: holder.name, path: holder.path },
+              held: true,
+              warnings: holder.onPath ? [] : [{ kind: 'off-path' }],
+            },
+          ];
         return [
           {
             kind: item.kind,
             key: item.path,
             title: item.path,
-            lands: MODELS_IMPORT ? 'draft' : 'not-imported-yet',
-            warnings: MODELS_IMPORT
-              ? warningsOf({
-                  kind: item.kind,
-                  name: item.path,
-                  declares: access.declares(item.path, item.content),
-                  ...holdings,
-                })
-              : [],
+            lands: access.models === undefined ? 'not-imported-yet' : 'draft',
+            warnings:
+              access.models === undefined
+                ? []
+                : [
+                    ...warningsOf({ kind: item.kind, name: item.path, ...holdings }),
+                    ...(rootPaths.has(item.path) ? [{ kind: 'path-in-workspace' } as const] : []),
+                  ],
           },
         ];
+      }
       // One whose name is held: mapped to that one, not imported, nothing
       // asked; off the target's path, it blocks (T719; AC-358, AC-357).
       const holder = held.get(item.name);
@@ -541,6 +630,34 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
         return reply.code(409).send({
           error: `“${name}” is the name of a data source that isn’t in ${where} or a folder above it, so a model there couldn’t use it. Choose a target on its path.`,
         });
+    // So too a model whose cube or view is held off its path (T720).
+    const heldModels = await heldModelsIn(request, access, own, target.id, file);
+    for (const { holder, asked } of heldModels.values())
+      if (!holder.onPath)
+        return reply.code(409).send({
+          error: `“${asked}” is the name of a cube or view that isn’t in ${where} or a folder above it, so the imported charts there couldn’t use it. Choose a target on its path.`,
+        });
+    // Every other model lands in My workspace's root, where none has its path (T720).
+    const landing =
+      access.models === undefined
+        ? []
+        : file.items.flatMap((item) =>
+            item.kind === 'model' && !heldModels.has(item.path)
+              ? [{ path: item.path, content: item.content }]
+              : [],
+          );
+    if (landing.length > 0) {
+      const taken = await access.models!.paths(own);
+      const clashes = landing.filter((model) => taken.has(model.path));
+      if (clashes.length > 0)
+        return reply.code(409).send({
+          error: REFUSED,
+          parts: clashes.map((model) => ({
+            part: `Model ${model.path}`,
+            why: 'My workspace already has a model file at this path. Rename or remove one of them, then import again.',
+          })),
+        });
+    }
     const undecided = file.items.flatMap((item) =>
       item.kind === 'data-source' &&
       !held.has(item.name) &&
@@ -629,10 +746,30 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
         },
       })),
     ];
+    /**
+     * The models first, as the workspace's overlay takes them (T720, T347):
+     * one xcube refuses is refused here, on its file, and nothing is written.
+     */
+    if (landing.length > 0) {
+      const saved = await access.models!.save(own, target.id, landing);
+      if (saved.status === 422 && Array.isArray((saved.body as { errors?: unknown }).errors))
+        return reply.code(422).send({
+          error: REFUSED,
+          parts: (saved.body as { errors: { path: string; message: string }[] }).errors.map(
+            (error) => ({ part: `Model ${error.path}`, why: error.message }),
+          ),
+        });
+      if (saved.status >= 300) return reply.code(saved.status).send(saved.body);
+    }
     await access.create(creates);
     return reply.code(201).send({
       dashboard: { id: boardId, title: dashboard.title },
-      created: { dashboards: 1, charts: charts.length, models: 0, dataSources: createdSources },
+      created: {
+        dashboards: 1,
+        charts: charts.length,
+        models: landing.length,
+        dataSources: createdSources,
+      },
       target,
     });
   });

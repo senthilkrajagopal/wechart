@@ -7,6 +7,7 @@ import {
   IMAGE_HEAD_BYTES,
   imageProblem,
   nameInUse,
+  nameKey,
   newDashboardBody,
   objectsOf,
   type AccessFolder,
@@ -73,7 +74,7 @@ import type { Changeset } from './xcube/changesets';
 import { XcubeError, type XcubeAdmin } from './xcube/client';
 import { ROOT_ONLY, type PublishedFolders } from './xcube/folders';
 import { cubesUsing, extendsIn } from './xcube/used-by';
-import { landedNamesOf, type Except } from './model/names';
+import { landedNamesOf, namesDeclaredIn, type Except } from './model/names';
 import { declaredIn } from './model/split';
 import type { PublicationStore } from './xcube/publications';
 import type { FolderMove, TreeResult } from './xcube/snapshot';
@@ -2033,10 +2034,7 @@ export function buildServer({
               const version = found.get(`${kind}:${title}`);
               return version === undefined ? undefined : { version };
             },
-            models: models.map((file) => ({
-              path: file.path,
-              declares: objectsOf(file.path, file.content).objects.map((each) => each.name),
-            })),
+            models: models.map((file) => ({ path: file.path })),
           },
           workspace: drafts
             .filter((draft) => draft.kind !== 'folder')
@@ -2048,7 +2046,53 @@ export function buildServer({
             })),
         };
       },
-      declares: (path, content) => objectsOf(path, content).objects.map((each) => each.name),
+      /**
+       * The cube or view an imported model's names already mean (T720,
+       * AC-357; R71, R73): a landed one of a name it declares, in any folder
+       * and any case, else a draft of it in the importer's workspace. Its
+       * folder is said only where the importer may see that folder's models.
+       */
+      heldItem: async (request, own, target, names) => {
+        if (modelFiles?.all === undefined || modelStore === undefined) return undefined;
+        const keys = new Set(names.map(nameKey));
+        const declared = (content: string) =>
+          namesDeclaredIn(content).find((name) => keys.has(nameKey(name)));
+        for (const file of await modelFiles.all()) {
+          const name = declared(file.content);
+          const folderId = file.folderId ?? ROOT_FOLDER_ID;
+          if (name === undefined || (await workspaceRootOf(folderId)) !== null) continue;
+          const seen = await visibilityOf(request);
+          const sees = seen === undefined || seen.rights.get(folderId)?.kinds === 'all';
+          return {
+            name,
+            path: sees ? ((await pathsOf(request))(folderId) ?? []) : null,
+            onPath: (await importPathOf(target)).includes(folderId),
+          };
+        }
+        for (const file of await modelStore.inFolders(await workspaceFolderIds(own))) {
+          const name = declared(file.content);
+          if (name === undefined) continue;
+          return {
+            name,
+            path: ['My workspace'],
+            onPath:
+              file.targetFolderId !== null &&
+              (await importPathOf(target)).includes(file.targetFolderId),
+          };
+        }
+        return undefined;
+      },
+      // Where the workspace holds models (T347): a new one lands in its root.
+      ...(wsModels === undefined || modelStore === undefined
+        ? {}
+        : {
+            models: {
+              paths: async (own: string) =>
+                new Set((await modelStore.inFolders([own])).map((file) => file.path)),
+              save: (own: string, target: string, files: readonly ModelFile[]) =>
+                wsModels.save(own, own, files, target),
+            },
+          }),
       keepsChart: async (request, chartId, own) => {
         let chart;
         try {

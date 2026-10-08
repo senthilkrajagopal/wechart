@@ -27,13 +27,14 @@ import type { Target } from '../NewItemDialog';
  *
  * - **File:** the file chosen (or dropped), read whole in the browser and
  *   refused there, naming each part and why, before anything is sent. What
- *   it holds is listed; models stay out until the workspace holds them
- *   (T347; state V).
+ *   it holds is listed, its models among it (T720).
  * - **Target:** design 04's picker of the folders the user may write.
  * - **Data sources:** each mapped or created (T514). Until then passed over.
  * - **Review:** what lands, each item with what it may affect once proposed,
- *   counted and never blocking (AC-357). The primary writes everything at
- *   once.
+ *   counted (AC-357). A model whose cube or view name is held is mapped to
+ *   that one (T720); one mapped off the target's path, or whose path My
+ *   workspace's root holds, stops the import until that changes. The
+ *   primary writes everything at once; a refusal names each part and why.
  *
  * Everything lands in My workspace as new drafts, with sign-in off too
  * (AC-356). Nothing is written until the last step, so leaving, or a
@@ -53,11 +54,26 @@ export interface Imported {
 type Warning =
   | { readonly kind: 'in-target'; readonly version: number | null }
   | { readonly kind: 'in-workspace'; readonly targetPath: readonly string[] | null }
-  | { readonly kind: 'cube-in-target'; readonly cube: string; readonly file: string }
-  /** The data source its name means is off the target's path: this one blocks (T719). */
+  /** The data source, cube or view its name means is off the target's path: this one blocks (T719, T720). */
   | { readonly kind: 'off-path' }
+  /** My workspace's root has a model file at its path: this one blocks (T720). */
+  | { readonly kind: 'path-in-workspace' }
   /** That one's driver differs: which, where its folder is seen (AC-361). */
   | { readonly kind: 'driver-differs'; readonly driver?: string };
+
+/** Whether a warning stops the import (T719, T720). */
+const stopsImport = (warning: Warning) =>
+  warning.kind === 'off-path' || warning.kind === 'path-in-workspace';
+
+/** A refusal of the import, with each part and why where the API names them (T720). */
+class Refused extends Error {
+  constructor(
+    message: string,
+    readonly parts: readonly { readonly part: string; readonly why: string }[],
+  ) {
+    super(message);
+  }
+}
 
 interface Reviewed {
   readonly target: { readonly id: string; readonly path: readonly string[] };
@@ -150,10 +166,12 @@ export function warningText(
             : `, → ${pathText(warning.targetPath)}`;
       return `Your workspace has a draft by this name${goes}. Both are kept${same ? '; the second approved replaces the first' : ''}.`;
     }
-    case 'cube-in-target':
-      return `Cube ${warning.cube} is already in ${target}, in ${warning.file}. Proposing this draft is refused until one of them is renamed.`;
     case 'off-path':
-      return `The data source of this name isn’t in ${target} or a folder above it, so a model there couldn’t use it. Choose a target on its path.`;
+      return item.kind === 'model'
+        ? `The cube or view of this name isn’t in ${target} or a folder above it, so the imported charts there couldn’t use it. Choose a target on its path.`
+        : `The data source of this name isn’t in ${target} or a folder above it, so a model there couldn’t use it. Choose a target on its path.`;
+    case 'path-in-workspace':
+      return 'My workspace already has a model file at this path. Rename or remove one of them, then import again.';
     case 'driver-differs':
       return driverMismatchText(
         { name: item.title, driver: item.driver ?? '' },
@@ -387,10 +405,29 @@ export function ImportPane({
               }),
         }),
       });
-      if (!response.ok)
-        throw new Error(
-          await saidBy(response, `It couldn’t be imported (${String(response.status)}).`),
+      if (!response.ok) {
+        const said = (await response.json().catch(() => null)) as {
+          error?: unknown;
+          parts?: unknown;
+        } | null;
+        // Each part refused and why, where the API names them (T720).
+        const parts = Array.isArray(said?.parts)
+          ? (said.parts as unknown[]).flatMap((part) =>
+              part !== null &&
+              typeof part === 'object' &&
+              typeof (part as { part?: unknown }).part === 'string' &&
+              typeof (part as { why?: unknown }).why === 'string'
+                ? [part as { part: string; why: string }]
+                : [],
+            )
+          : [];
+        throw new Refused(
+          typeof said?.error === 'string'
+            ? said.error
+            : `It couldn’t be imported (${String(response.status)}).`,
+          parts,
         );
+      }
       return (await response.json()) as Imported;
     },
     onSuccess: (imported) => {
@@ -453,9 +490,12 @@ export function ImportPane({
     if (dropped !== undefined) void take(dropped);
   };
 
-  const models = (file?.items ?? []).flatMap((item) => (item.kind === 'model' ? [item.path] : []));
   const board = file?.items.find((item) => item.kind === 'dashboard');
   const warnings = review.data?.items.reduce((sum, item) => sum + item.warnings.length, 0) ?? 0;
+  /** Those that stop the import (T720). */
+  const stops =
+    review.data?.items.reduce((sum, item) => sum + item.warnings.filter(stopsImport).length, 0) ??
+    0;
   const drafts = review.data?.items.filter((item) => item.lands === 'draft').length ?? 0;
   const targetPath =
     review.data === undefined
@@ -643,7 +683,7 @@ export function ImportPane({
                         : item.kind === 'chart'
                           ? [item.title, 'Library chart']
                           : item.kind === 'model'
-                            ? [item.path, 'Not imported yet']
+                            ? [item.path, 'Model']
                             : [item.name, `${driverLabel(item.driver)} · settings only`];
                     return [
                       <li key={`${item.kind}:${name}`}>
@@ -670,14 +710,6 @@ export function ImportPane({
                   <LockIcon />
                   No secrets: you enter them for any data source you create. No bookmarks.
                 </p>
-                {models.length === 0 ? null : (
-                  <p className="import-pane__info" role="note">
-                    <StatusIcon kind="info" />
-                    <span>
-                      {`This wechart doesn’t take models from a file yet, so ${listed(models)} ${models.length === 1 ? 'stays' : 'stay'} out. The dashboard’s charts will look up their cubes along the target folder’s path, as any workspace item’s do.`}
-                    </span>
-                  </p>
-                )}
               </>
             ) : (
               <div ref={refusal} tabIndex={-1} role="alert" className="import-pane__refused">
@@ -841,10 +873,10 @@ export function ImportPane({
                             ? `Dashboard and ${counted(item.ownCharts ?? 0, 'own chart')}`
                             : item.kind === 'chart'
                               ? 'Library chart'
-                              : item.kind === 'model'
-                                ? 'Model'
-                                : item.mappedTo !== undefined
-                                  ? `Mapped to ${item.mappedTo.name} in ${item.mappedTo.path === null ? 'a folder you can’t see' : pathText(item.mappedTo.path)}`
+                              : item.mappedTo !== undefined
+                                ? `Mapped to ${item.mappedTo.name} in ${item.mappedTo.path === null ? 'a folder you can’t see' : pathText(item.mappedTo.path)}`
+                                : item.kind === 'model'
+                                  ? 'Model'
                                   : item.lands === 'draft'
                                     ? `Data source, created · test passed ${(() => {
                                         const decision = decisions[item.key];
@@ -863,7 +895,7 @@ export function ImportPane({
                     </div>
                     {item.warnings.map((warning) => (
                       <p key={JSON.stringify(warning)} className="import-pane__warning">
-                        <StatusIcon kind="warn" />
+                        <StatusIcon kind={stopsImport(warning) ? 'err' : 'warn'} />
                         <span>{warningText(warning, item, targetPath, signedIn)}</span>
                       </p>
                     ))}
@@ -875,10 +907,27 @@ export function ImportPane({
         ) : null}
 
         {importing.isError ? (
-          <p className="source-pane__alert" role="alert">
-            <StatusIcon kind="err" />
-            {importing.error.message}
-          </p>
+          importing.error instanceof Refused && importing.error.parts.length > 0 ? (
+            <div role="alert" className="import-pane__refused">
+              <p className="import-pane__refused-head">
+                <StatusIcon kind="err" />
+                {importing.error.message}
+              </p>
+              <ul className="import-pane__parts">
+                {importing.error.parts.map((part) => (
+                  <li key={`${part.part}:${part.why}`} className="import-pane__part">
+                    <b>{part.part}</b>
+                    <span>{part.why}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="source-pane__alert" role="alert">
+              <StatusIcon kind="err" />
+              {importing.error.message}
+            </p>
+          )
         ) : null}
       </div>
 
@@ -905,8 +954,12 @@ export function ImportPane({
           </span>
         ) : null}
         {step === 3 && review.data !== undefined ? (
-          <span className="source-pane__foot-note">
-            {warnings === 0 ? 'No warnings' : NONE_BLOCKS}
+          <span id={`${ids}-stops`} className="source-pane__foot-note">
+            {stops > 0
+              ? `${counted(stops, 'warning')} ${stops === 1 ? 'stops' : 'stop'} the import`
+              : warnings === 0
+                ? 'No warnings'
+                : NONE_BLOCKS}
           </span>
         ) : null}
         {step === 3 ? null : (
@@ -968,7 +1021,8 @@ export function ImportPane({
           <button
             type="button"
             className="btn btn-primary"
-            disabled={review.data === undefined || importing.isPending}
+            disabled={review.data === undefined || importing.isPending || stops > 0}
+            aria-describedby={stops > 0 ? `${ids}-stops` : undefined}
             onClick={() => {
               importing.mutate();
             }}

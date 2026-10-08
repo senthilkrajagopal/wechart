@@ -200,7 +200,7 @@ describe('the Import pane: File (T513, AC-359)', () => {
     ).toBe(true);
   });
 
-  it('lists what a file it can read holds, and that models stay out for now', async () => {
+  it('lists what a file it can read holds, its models among it (T720; state I)', async () => {
     shown(serving);
     const pane = screen.getByRole('dialog', { name: 'Import a dashboard' });
     await choose(pane, JSON.stringify(FILE));
@@ -213,12 +213,11 @@ describe('the Import pane: File (T513, AC-359)', () => {
     ).toEqual([
       'Revenue overviewDashboard · 1 own chart',
       'Top productsLibrary chart',
-      'sales.ymlNot imported yet',
+      'sales.ymlModel',
       'emea_replicaPostgreSQL · settings only',
     ]);
-    expect(
-      within(pane).getByText(/doesn’t take models from a file yet, so sales\.yml stays out/),
-    ).toBeTruthy();
+    // Models import now (T720): state V's note is gone.
+    expect(within(pane).queryByText(/doesn’t take models from a file yet/)).toBeNull();
   });
 
   it('refuses a file it can’t read, saying where, and that nothing was imported', async () => {
@@ -501,6 +500,129 @@ describe('what a held data source of another driver means (T719, AC-361)', () =>
     expect(warningText({ kind: 'driver-differs' }, item, 'Sales / EMEA', true)).toBe(
       'emea_replica is MySQL in the file, and the data source it is mapped to has another driver: a model written for MySQL’s SQL may not run on it.',
     );
+  });
+});
+
+/**
+ * T720 (AC-356, AC-357; R71, R73): a model whose cube or view name is held is
+ * mapped to that one; any other lands as a new draft. One mapped off the
+ * target's path, or whose path My workspace's root holds, stops the import.
+ */
+describe('the models of an imported file (T720, AC-356, AC-357)', () => {
+  const reviewed = (model: Record<string, unknown>) => ({
+    ...REVIEWED,
+    items: REVIEWED.items.map((item) => (item.kind === 'model' ? { ...item, ...model } : item)),
+  });
+  async function toReview(pane: HTMLElement) {
+    await choose(pane, JSON.stringify(FILE));
+    await userEvent.click(within(pane).getByRole('button', { name: /Next: Target/ }));
+    await userEvent.click(await within(pane).findByRole('treeitem', { name: 'EMEA' }));
+    await userEvent.click(within(pane).getByRole('button', { name: /Next: Data sources/ }));
+    await mapReplica(pane);
+  }
+
+  it('lands one as a new draft, warning of a model file at its path in the target, none blocking', async () => {
+    shown((url, init) =>
+      url === '/api/import/review'
+        ? answer(
+            200,
+            reviewed({ lands: 'draft', warnings: [{ kind: 'in-target', version: null }] }),
+          )
+        : serving(url, init),
+    );
+    const pane = screen.getByRole('dialog', { name: 'Import a dashboard' });
+    await toReview(pane);
+    const model = await within(pane).findByTestId('lands-model-sales.yml');
+    expect(model.textContent).toContain('sales.ymlModelNew draft');
+    expect(model.textContent).toContain(
+      'Sales / EMEA has sales.yml. Proposed, this draft replaces it once approved.',
+    );
+    expect(within(pane).getByText(`None stops the import`)).toBeTruthy();
+    const primary = within(pane).getByRole('button', { name: `Import to My workspace` });
+    expect((primary as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('says one whose name is held is mapped to it, and not imported', async () => {
+    shown((url, init) =>
+      url === '/api/import/review'
+        ? answer(
+            200,
+            reviewed({
+              lands: 'not-imported',
+              mappedTo: { name: 'Orders', path: ['Sales'] },
+              held: true,
+              warnings: [],
+            }),
+          )
+        : serving(url, init),
+    );
+    const pane = screen.getByRole('dialog', { name: 'Import a dashboard' });
+    await toReview(pane);
+    const model = await within(pane).findByTestId('lands-model-sales.yml');
+    expect(model.textContent).toBe('sales.ymlMapped to Orders in SalesNot imported');
+  });
+
+  it('stops the import while one is mapped off the target’s path, or My workspace holds its path, saying why', async () => {
+    const off = reviewed({
+      lands: 'not-imported',
+      mappedTo: { name: 'orders', path: null },
+      held: true,
+      warnings: [{ kind: 'off-path' }],
+    });
+    shown((url, init) =>
+      url === '/api/import/review'
+        ? answer(200, {
+            ...off,
+            items: [
+              ...off.items,
+              {
+                kind: 'model',
+                key: 'lines.yml',
+                title: 'lines.yml',
+                lands: 'draft',
+                warnings: [{ kind: 'path-in-workspace' }],
+              },
+            ],
+          })
+        : serving(url, init),
+    );
+    const pane = screen.getByRole('dialog', { name: 'Import a dashboard' });
+    await toReview(pane);
+    const model = await within(pane).findByTestId('lands-model-sales.yml');
+    expect(model.textContent).toContain('Mapped to orders in a folder you can’t see');
+    expect(model.textContent).toContain(
+      'The cube or view of this name isn’t in Sales / EMEA or a folder above it, so the imported charts there couldn’t use it. Choose a target on its path.',
+    );
+    expect(within(pane).getByTestId('lands-model-lines.yml').textContent).toContain(
+      'My workspace already has a model file at this path. Rename or remove one of them, then import again.',
+    );
+    const primary = within(pane).getByRole('button', { name: `Import to My workspace` });
+    expect((primary as HTMLButtonElement).disabled).toBe(true);
+    const why = within(pane).getByText(`2 warnings stop the import`);
+    expect(primary.getAttribute('aria-describedby')).toBe(why.id);
+  });
+
+  it('shows a refused import’s parts, naming each, and lands nothing', async () => {
+    const { onImported } = shown((url, init) =>
+      url === `/api/import` && init?.method === 'POST'
+        ? answer(422, {
+            error: 'Refused: nothing was imported.',
+            parts: [{ part: 'Model sales.yml', why: 'Broken here' }],
+          })
+        : serving(url, init),
+    );
+    const pane = screen.getByRole('dialog', { name: 'Import a dashboard' });
+    await toReview(pane);
+    await within(pane).findByTestId('lands-model-sales.yml');
+    await userEvent.click(within(pane).getByRole('button', { name: `Import to My workspace` }));
+    const alert = await within(pane).findByRole('alert');
+    expect(alert.textContent).toContain('Refused: nothing was imported.');
+    expect(
+      within(alert)
+        .getAllByRole('listitem')
+        .map((part) => part.textContent),
+    ).toEqual(['Model sales.ymlBroken here']);
+    expect(onImported).not.toHaveBeenCalled();
   });
 });
 
