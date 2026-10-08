@@ -336,6 +336,15 @@ The user: these "will be deferred and not done in this phase". No task builds th
     - design 10's "Failed", "Duration vs average", "Trigger: Schedule" and "Recent builds";
     - design 07's last build outcome, and who started it.
   - xcube would record build events from Cube's logger in every process, map orchestrators to models, and serve `GET …/builds?after=`, each event tagged with its pre-aggregation and folder (`docs/inputs/2026-09-28-jobs-schedules-analysis.md`).
+- **TODO, phase 3: the tile menu's marking shortcuts (2026-10-08).** The user: "Leave the hints as is.. and add it as a todo in the logs.. we will be working on them in phase 3... not this phase".
+  - Design 08's tile ⋯ menu draws the hints "Ctrl+M" on Filter to marked and "Ctrl+Shift+M" on Filter out marked.
+  - wechart binds neither key, so T682 shows only the "Esc" hint on Unmark, which is bound and true.
+  - In phase 3: bind Ctrl+M and Ctrl+Shift+M on a focused tile, then show both hints, as design 08 draws them.
+  - This is new keyboard work, so it was held under R75.
+- **Phase 3 candidates: keyboard gaps held under R75 (2026-10-08).** The re-audit's four gaps (T743) are not built this phase. Building them, or any further keyboard reach, needs the user's approval:
+  - Tab kept inside the data source wizard, Import, Export and Generate cubes sheets below 1,024 px;
+  - focus given back after Import's "Keep going", Explore's heading Rename and the version view's "Back to current".
+  - Also not built: T692's screen-reader announcement as the target filter's arrows move the choice.
 
 ## 8. Deferred past phase 3
 
