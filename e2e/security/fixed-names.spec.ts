@@ -26,7 +26,14 @@ const KEY = JSON.parse(
   readFileSync(new URL('../../infra/xcube/dev-credential-key.pub.jwk', import.meta.url), 'utf8'),
 ) as XcubeKey;
 const FIELDS = { host: 'sample-db', port: 5432, database: 'sample', user: 'sample', ssl: false };
-const made = { folder: '', source: '', copyFolder: '', sourceCopy: '' };
+const made = {
+  folder: '',
+  source: '',
+  copyFolder: '',
+  sourceCopy: '',
+  /** An earlier copy's project folder, where a later "Edit in my workspace" made another. */
+  earlierCopies: [] as string[],
+};
 
 test.describe.configure({ mode: 'serial' });
 
@@ -47,13 +54,14 @@ test.describe('a landed name is fixed (T722, AC-423)', () => {
         if (folderId !== undefined && folderId !== 'mine')
           await own.request.delete(`/api/documents/folder/${folderId}`);
       }
-      if (made.copyFolder !== '') {
+      for (const copyFolder of [made.copyFolder, ...made.earlierCopies].filter(
+        (each) => each !== '',
+      )) {
         await own.request.delete(
-          `/api/model/files?folder=${encodeURIComponent(made.copyFolder)}&path=${encodeURIComponent(PATH)}`,
+          `/api/model/files?folder=${encodeURIComponent(copyFolder)}&path=${encodeURIComponent(PATH)}`,
           { timeout: 90_000 },
         );
-        if (made.copyFolder !== 'mine')
-          await own.request.delete(`/api/documents/folder/${made.copyFolder}`);
+        if (copyFolder !== 'mine') await own.request.delete(`/api/documents/folder/${copyFolder}`);
       }
       await own.close();
     }
@@ -179,6 +187,51 @@ test.describe('a landed name is fixed (T722, AC-423)', () => {
       );
       expect(now?.content).toContain(`name: ${CUBE}\n`);
       expect(now?.content).toContain('title: Fixed two');
+    });
+
+    /**
+     * T737's follow-up (AC-423): the YAML is no way round the form. The
+     * cube's name changed there is a problem at the name, in the form's
+     * words, and Save stays held. Discarded, nothing is saved.
+     */
+    test('is held from saving a changed name typed in an edit copy’s YAML', async ({ page }) => {
+      await page.goto(`/explore/folders/${made.folder}/models/${encodeURIComponent(PATH)}`);
+      await page.getByRole('button', { name: 'Edit in my workspace' }).click();
+      await expect(page).toHaveURL(
+        new RegExp(`/explore/folders/(?!${made.folder})[^/]+/models/cubes%2F${CUBE}\\.yml$`),
+      );
+      const copyFolder = decodeURIComponent(new URL(page.url()).pathname.split('/')[3] ?? '');
+      if (made.copyFolder !== '' && made.copyFolder !== copyFolder)
+        made.earlierCopies.push(made.copyFolder);
+      made.copyFolder = copyFolder;
+      const before = (await modelFilesIn(page.request, copyFolder)).find(
+        (file) => file.path === PATH,
+      )?.content;
+      expect(before).toContain(`name: ${CUBE}\n`);
+
+      await page.locator('.cm-line', { hasText: new RegExp(`- name: ${CUBE}$`) }).click();
+      await page.keyboard.press('End');
+      await page.keyboard.type('_renamed');
+
+      const problem = page
+        .getByRole('region', { name: 'Problems' })
+        .getByRole('listitem')
+        .filter({ hasText: 'has landed, so its name is fixed' });
+      await expect(problem).toContainText(
+        `“${CUBE}” has landed, so its name is fixed. Its title can still change.`,
+      );
+      await expect(problem.locator('.model-problems__where')).toHaveText(`${PATH}:2`);
+      const save = page.getByRole('button', { name: 'Save', exact: true });
+      await expect(save).toBeDisabled();
+
+      // The name put back: nothing held, and nothing changed to save.
+      for (let typed = '_renamed'.length; typed > 0; typed--)
+        await page.keyboard.press('Backspace');
+      await expect(problem).toHaveCount(0);
+      await expect(page.getByText('Saved · no changes')).toBeVisible();
+      expect(
+        (await modelFilesIn(page.request, copyFolder)).find((file) => file.path === PATH)?.content,
+      ).toBe(before);
     });
   });
 });

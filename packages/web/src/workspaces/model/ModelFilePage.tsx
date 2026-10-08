@@ -47,6 +47,7 @@ import { JoinEditor } from './JoinEditor';
 import { joinGraphOf } from './joinGraph';
 import { lossOf, type Loss } from './lossCheck';
 import { LossWarning } from './LossWarning';
+import { fixedNameProblems } from './fixedNames';
 import { problemsOf, type Problem } from './problems';
 import { ProblemsPanel, type CubeProblem } from './ProblemsPanel';
 import { draftJoinsOf } from './draftJoins';
@@ -831,6 +832,22 @@ function FileEditor({
    * for a file made here, so it has something to publish from the start.
    */
   const [saved, setSaved] = useState(published ? content : '');
+  /**
+   * A landed cube's or view's name changed in the YAML (T737's follow-up,
+   * AC-423): held, as the form holds it, against the saved text's names.
+   */
+  const fixedNames = useMemo(
+    () => (namesFixed && published ? orNone(fixedNameProblems(path, read, saved)) : NONE),
+    [namesFixed, published, path, read, saved],
+  );
+  /** Everything listed in Problems and marked in the code. */
+  const everyProblem = useMemo(
+    () =>
+      fixedNames.length === 0
+        ? listed
+        : [...listed, ...fixedNames].sort((a, b) => a.from - b.from),
+    [listed, fixedNames],
+  );
   /** What a use-only copy's "Request a change" asks about: its saved file's cube or view (T717). */
   const requestable = useMemo(() => declaredNameOf(saved), [saved]);
   const [publishing, setPublishing] = useState(false);
@@ -859,6 +876,8 @@ function FileEditor({
     errors.length === 0 &&
     // A name outside R72's grammar is wechart's to refuse: never sent (T723, AC-426).
     !invalid.some((problem) => problem.holds === true) &&
+    // A landed name changed in the YAML: the API would refuse it (T737's follow-up, AC-423).
+    fixedNames.length === 0 &&
     pending === null &&
     references === null &&
     !publishing;
@@ -969,7 +988,7 @@ function FileEditor({
   useEffect(() => {
     reportProblems.current = onProblems;
   }, [onProblems]);
-  const ownErrors = errors.length + invalid.length;
+  const ownErrors = errors.length + invalid.length + fixedNames.length;
   useEffect(() => {
     const byPath: Record<string, number> = { [path]: ownErrors };
     // The tree is this folder's files: another folder's file of the same
@@ -1506,7 +1525,7 @@ function FileEditor({
                 // Shared, it is read, not typed in (T342): fixed for the editor's
                 // life, which is keyed by it.
                 readOnly={where.readOnly}
-                problems={listed}
+                problems={everyProblem}
                 goTo={goTo}
                 wrap={wrap}
                 tinted={tinted}
@@ -1519,7 +1538,7 @@ function FileEditor({
           {/* Docked beneath the code, its own scroll (AC-223). */}
           <ProblemsPanel
             path={path}
-            problems={listed}
+            problems={everyProblem}
             cubeProblems={cubeProblems}
             folders={folders.data ?? []}
             folderId={where.folderId}

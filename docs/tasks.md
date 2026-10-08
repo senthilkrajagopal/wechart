@@ -13627,7 +13627,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - Runs:
       - API suite 1835/1835; `phase1-content.test.ts` failed once in the full run and passed alone.
       - web suite 2627/2627.
-      - On the image, in chrome: `draft-file-names`, `folder-models`, `model-design`, `generate-cubes`, `model-in-folder`, `generate-in-workspace`, `global-names` and `fixed-names` pass, with one exception below.
+      - On the image, in chrome: `draft-file-names`, `folder-models`, `model-design`, `generate-cubes`, `model-in-folder`, `generate-in-workspace`, `global-names` and `fixed-names` pass, except `model-design`'s T481, below.
       - Full chrome runs, phase 1 and security, before the review fixes. Every other failure also fails on feat/xcube's T722 without this task:
         - `model-design.spec.ts:757` (T481) expects "Unique across cubes and views" and gets T722's landed-name help;
         - `model.spec.ts:365`, a workspace copy's charts listed by project folder;
@@ -13636,9 +13636,15 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
         - `export-import.spec.ts:523` and `workspace-rebind.spec.ts`, which T733 and T731 rework;
         - `workspace-references.spec.ts`.
       - Not rerun on the base: the timing and layout checks that failed in `sql-runner`, `shell`, `admin`, `status-labels`, `design-conformance`, `editor-preview`, `marked-share`, `filters` and `acceleration`, and `folder-models.spec.ts:23` ("Folder … is not in the folder tree"). None of them saves a model under a path other than its cube's.
-    - AC-423 is not ticked yet. The coordinator found that the YAML pane still lets a landed name be edited, and only the save refuses it. That is this task's follow-up. Otherwise each Fails-when has a passing test:
+  - *Follow-up 2026-10-08, the coordinator's finding:* the YAML pane accepted an edit to a landed cube's or view's name, and only the API refused it, at save.
+    - `fixedNames.ts` (new) checks the text against the saved one's names, item by item. A changed name, case included, is a problem at the name, in the form's words: "“x” has landed, so its name is fixed. Its title can still change." It holds Save, like a name outside the grammar does (T723). It is listed in Problems and marked in the code.
+    - This applies wherever the form fixes the name (`namesFixedFor`): an edit copy, or a shared file. A draft's and a use-only copy's names stay free.
+    - Tests: `fixedNames.test.ts` (4) and `e2e/security/fixed-names.spec.ts`'s new case. The e2e case was red before the change. In an edit copy's YAML, the name is changed. Problems says it at `<path>:2` and Save is held. Put back, nothing is held, nothing is changed, and nothing is saved.
+    - web 2633/2633. fixed-names 4/4 on the image, in chrome. Phase-1 model, model-design, model-unpublished, model-form and draft-file-names pass, except T481 and model.spec:365, which fail as before this change (T738).
+    - AC-423 ticked, now that no way to change a landed name is offered. Each Fails-when has a passing test:
       - a landed name changed by the API, an edit copy's proposal or an approval: refused, and the name kept (`routes/fixed-names.test.ts`, T706);
       - a Rename offered on a landed cube, view, data source or model file: none (`e2e/security/fixed-names.spec.ts`, T722);
+      - a landed name changed in an edit copy's YAML: held from saving (`e2e/security/fixed-names.spec.ts`, this follow-up);
       - a landed cube's title changed: it lands through a proposal (`e2e/security/fixed-names.spec.ts`, T722);
       - a draft's name changed before it lands: done in the form (`e2e/draft-file-names.spec.ts`, here);
       - a draft's file name not following its cube's: it follows, on the page, at its address, in the tree and through the API (`e2e/draft-file-names.spec.ts`), and at landing (`global-names.spec.ts`'s T707 case).
