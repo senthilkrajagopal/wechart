@@ -372,14 +372,17 @@ describe('a landed cube’s or view’s name is fixed (T706, AC-423)', () => {
 
   it('takes a draft’s new name until it lands', async () => {
     const project = await copiedInto(shared(USED));
-    const path = `cubes/${MARK}_new.yml`;
+    // Its file follows its cube's name until it lands (T737).
+    const path = shared(`${MARK}_draft`);
 
     const first = await save(project, path, cube(`${MARK}_draft`), ids.sales);
     expect(first.statusCode, first.body).toBe(200);
     const renamed = await save(project, path, cube(`${MARK}_drafted`));
 
     expect(renamed.statusCode, renamed.body).toBe(200);
-    expect((await workspaceFile(project, path)).content).toBe(cube(`${MARK}_drafted`));
+    expect((await workspaceFile(project, shared(`${MARK}_drafted`))).content).toBe(
+      cube(`${MARK}_drafted`),
+    );
   });
 });
 

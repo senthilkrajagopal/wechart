@@ -13593,6 +13593,56 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - `generate-in-workspace.spec.ts`: the tables are generated as `t_2026_orders` and `t_class`, and the orders cube's join is `t_class` with `{t_class…}` references and no `{class…}` left. The `t_class` draft's name is edited in the model editor: `Class__2` is said in Problems and Save is held, then a free name is taken in its code and Save is offered. Nothing is saved, so no state is shared between browser projects. It passed on chrome with a fresh API server, which ran the stack preparation; phase-1 `generate-cubes.spec.ts` still passes.
     - AC-249 is not ticked: T727 is still open.
 
+- [x] T737 (AC-423) A draft's model file name follows its cube's name until it lands
+  - Files: `packages/api/src/routes/workspace-models.ts` (a draft's save stored at its cube's or view's name), `packages/web/src/workspaces/model/{publish.ts,ModelFilePage.tsx}` (the page and the tree follow the file), each with its test, `e2e/draft-file-names.spec.ts` (new)
+  - Failing test:
+    - `routes/draft-names.test.ts`, with the stub xcube (AC-423, R73):
+      - a draft saved at `cubes/new_cube_1.yml` declaring `orders_x` is stored at `cubes/orders_x.yml`;
+      - its cube renamed and saved again, it moves to the new name, its id and where it goes kept;
+      - a view's file follows its view's name;
+      - an edit copy's file never moves, its name being fixed (T706);
+      - a file at the new name's path in that folder refuses the save, naming the file.
+    - `e2e/draft-file-names.spec.ts`, on the image: New cube in My workspace, its Name changed in the form and saved. The page, its address and the model tree name the file for the cube, and no file of the old name is left. Renamed and saved again, it follows.
+  - Depends on: T705, T722
+  - *Added 2026-10-08 by the coordinator:* the binding agent's finding at T722. R73's "a draft's file name follows its cube's name until it lands" isn't built anywhere.
+  - *Done 2026-10-08:*
+    - The save (`workspaceModels().save`) stores a draft's file declaring one cube or view at `<its directory>/<name>.yml`. The save's answer says `moved: [{from, to}]`. A stored draft is moved by `modelFileStore.relocate`, keeping its id and where it goes. An edit copy's or use-only copy's file never moves, and nor does a file declaring more than one item. A file of the new path in that folder refuses the save, named: "`<path>` is already in this folder."
+    - The editor follows the answer. The page's address is replaced with the new path, and the tree and the page name the file there. "Saved." is still said. No file of the old path is left.
+    - Fallout from tests whose drafts sat at paths other than their cube's name:
+      - API: `draft-names`' T707 cases, `fixed-names`, `generate-names` and `proposal-landing`'s path clash now use paths named for the cube. The path clash is a sales file `cubes/<mark>_pathclash.yml` declaring another cube.
+      - E2E: `e2e/model-files.ts`'s `inMyWorkspace` and `landed` follow `moved`.
+      - `global-names.spec.ts`: T704's second draft is at `cubes/twin_<run>.yml`. T707's new file, written as `retake_<run>_again.yml`, lands at `cubes/retake_<run>.yml`, which is also a check of this task at landing.
+      - `generate-in-workspace.spec.ts`: T724's holder is at `cubes/stores_<run>/chrome_stores.yml`, still a path other than the generated file's.
+      - `folder-models.spec.ts` (T450): the root's and the folder's files no longer share one path. Each is at its cube's name.
+      - `security/model-in-folder.spec.ts` (T342): EMEA's orders file is at `cubes/t342_orders_<run>.yml`. Its premise was a folder's file at the root's `cubes/orders.yml`. Under R71 and R73 no file can share that path any more, so the test now shows only that the folder's own file opens.
+    - From the review:
+      - Import (`routes/import.ts`) calls the same save:
+        - its rollback removes each model where it was stored;
+        - its clash check and Review's `path-in-workspace` reckon the path a model will be stored at.
+        - `import-models.test.ts`: a new case takes back a model stored at its cube's name. T720's path-clash case is now a root file named otherwise than its cube.
+      - `draftPathOf` makes a path only of a name in the grammar (AC-426). The import route checks no names before the save.
+      - A new `draft-names` case copies a file named otherwise than its cube and shows the copy's file never moves. The old case couldn't fail.
+      - After a move, the old address shows "Reading the model…" until the page follows, not "There is no model file". "Saved." is said once, not again when the editor remounts.
+      - The new tests were red without the fixes.
+    - Runs:
+      - API suite 1835/1835; `phase1-content.test.ts` failed once in the full run and passed alone.
+      - web suite 2627/2627.
+      - On the image, in chrome: `draft-file-names`, `folder-models`, `model-design`, `generate-cubes`, `model-in-folder`, `generate-in-workspace`, `global-names` and `fixed-names` pass, with one exception below.
+      - Full chrome runs, phase 1 and security, before the review fixes. Every other failure also fails on feat/xcube's T722 without this task:
+        - `model-design.spec.ts:757` (T481) expects "Unique across cubes and views" and gets T722's landed-name help;
+        - `model.spec.ts:365`, a workspace copy's charts listed by project folder;
+        - `country-map.spec.ts`: the browser's two tests race to land one cube;
+        - `items-switch`'s pre-aggregation index names;
+        - `export-import.spec.ts:523` and `workspace-rebind.spec.ts`, which T733 and T731 rework;
+        - `workspace-references.spec.ts`.
+      - Not rerun on the base: the timing and layout checks that failed in `sql-runner`, `shell`, `admin`, `status-labels`, `design-conformance`, `editor-preview`, `marked-share`, `filters` and `acceleration`, and `folder-models.spec.ts:23` ("Folder … is not in the folder tree"). None of them saves a model under a path other than its cube's.
+    - AC-423 is not ticked yet. The coordinator found that the YAML pane still lets a landed name be edited, and only the save refuses it. That is this task's follow-up. Otherwise each Fails-when has a passing test:
+      - a landed name changed by the API, an edit copy's proposal or an approval: refused, and the name kept (`routes/fixed-names.test.ts`, T706);
+      - a Rename offered on a landed cube, view, data source or model file: none (`e2e/security/fixed-names.spec.ts`, T722);
+      - a landed cube's title changed: it lands through a proposal (`e2e/security/fixed-names.spec.ts`, T722);
+      - a draft's name changed before it lands: done in the form (`e2e/draft-file-names.spec.ts`, here);
+      - a draft's file name not following its cube's: it follows, on the page, at its address, in the tree and through the API (`e2e/draft-file-names.spec.ts`), and at landing (`global-names.spec.ts`'s T707 case).
+
 ### AC-353: R70's identity warning (with T509)
 
 - [x] T725 [P] (AC-353) Warn before Save that any change moving a data source's connection identity rebuilds its pre-aggregations
@@ -13963,7 +14013,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-347 | T489 | AC-348 | T490 | AC-349 | T491 |
 | AC-350 | T492 | AC-351 | T493 | AC-249 (again, drafts) | T488 |
 | AC-420 | T600 | AC-189, AC-235 (again, amended `[R60]`) | T451 | AC-254 (again, models) | T451 |
-| AC-421 | T700, T701, T702, T704 | AC-422 | T704, T705, T723, T724 | AC-423 | T706, T722 |
+| AC-421 | T700, T701, T702, T704 | AC-422 | T704, T705, T723, T724 | AC-423 | T706, T722, T737 |
 | AC-424 | T701, T702, T704, T705, T723, T724, T726 | AC-425 | T713, T714, T715, T729 | AC-426 | T700, T703, T708, T723 |
 | AC-427 | T707 | AC-428 | T718, T732 | | |
 

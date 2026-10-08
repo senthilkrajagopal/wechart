@@ -30,7 +30,12 @@ export async function referencesTo(
  * refusing come back on the files they are about.
  */
 export type PublishOutcome =
-  | { readonly kind: 'published'; readonly version: string }
+  | {
+      readonly kind: 'published';
+      readonly version: string;
+      /** A draft's file moved to its cube's name, as it was saved (T737, AC-423). */
+      readonly moved?: readonly { readonly from: string; readonly to: string }[];
+    }
   | {
       readonly kind: 'refused';
       readonly problems: readonly CubeProblem[];
@@ -113,9 +118,17 @@ export async function publishModel(
     errors?: CubeProblem[];
     error?: string;
     hidden?: number;
+    moved?: unknown;
   };
-  if (response.ok && typeof body.version === 'string')
-    return { kind: 'published', version: body.version };
+  if (response.ok && typeof body.version === 'string') {
+    const moved = Array.isArray(body.moved)
+      ? body.moved.flatMap((each: unknown) => {
+          const { from, to } = (each ?? {}) as { from?: unknown; to?: unknown };
+          return typeof from === 'string' && typeof to === 'string' ? [{ from, to }] : [];
+        })
+      : [];
+    return { kind: 'published', version: body.version, ...(moved.length === 0 ? {} : { moved }) };
+  }
   if (response.status === 422 && Array.isArray(body.errors))
     return {
       kind: 'refused',

@@ -956,6 +956,10 @@ export function buildServer({
           ...(modelFiles.remove === undefined
             ? {}
             : { remove: modelFiles.remove.bind(modelFiles) }),
+          // A draft's file follows its cube's name, its id kept (T737).
+          ...(modelFiles.relocate === undefined
+            ? {}
+            : { relocate: modelFiles.relocate.bind(modelFiles) }),
         };
   /**
    * The shared folder whose model declares a cube or view of this name, by

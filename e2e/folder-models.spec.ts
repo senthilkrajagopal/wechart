@@ -175,9 +175,11 @@ test('a folder’s rollup whose root member went while it waited is refused at a
   const request = page.request;
   const project = testInfo.project.name;
   const base = `t450_base_${project}`;
-  // One path in both folders: the root's declares `base`, the folder's a
-  // cube whose rollup names `base.total`.
-  const path = `cubes/t450_${project}.yml`;
+  // The root's declares `base`, the folder's a cube whose rollup names
+  // `base.total`. Each file is named for its cube (T737, AC-423; R73), so
+  // the two no longer share one path.
+  const path = `cubes/${base}.yml`;
+  const folderPath = `cubes/t450_summary_${project}.yml`;
   const rootFile = {
     path,
     content: [
@@ -210,7 +212,7 @@ test('a folder’s rollup whose root member went while it waited is refused at a
   // The folder's rollup on `base.total`, in My workspace, proposed while the
   // root's cube has `total`: the dry run passes.
   const folderFile = {
-    path,
+    path: folderPath,
     content: [
       'cubes:',
       `  - name: t450_summary_${project}`,
@@ -237,7 +239,7 @@ test('a folder’s rollup whose root member went while it waited is refused at a
   const copy = await ownModelCopy(request, path);
   let proposal = '';
   try {
-    const proposed = await proposedModel(request, held.folderOf(path), path);
+    const proposed = await proposedModel(request, held.folderOf(folderPath), folderPath);
     expect(proposed.status(), await proposed.text()).toBe(201);
     proposal = ((await proposed.json()) as { id: string }).id;
 
@@ -267,12 +269,12 @@ test('a folder’s rollup whose root member went while it waited is refused at a
     });
     const broken = page.locator('.review-refusal__break');
     await expect(broken).toHaveCount(1);
-    await expect(broken).toContainText(`${path} · ${title}`);
+    await expect(broken).toContainText(`${folderPath} · ${title}`);
     await expect(broken).toContainText(
       `Pre-aggregation spend names what the model doesn’t have: ${base}.total (measures).`,
     );
     // Nothing landed: the folder has no file of that path.
-    expect((await modelFilesIn(request, id)).map((file) => file.path)).not.toContain(path);
+    expect((await modelFilesIn(request, id)).map((file) => file.path)).not.toContain(folderPath);
   } finally {
     if (proposal !== '') await request.post(`/api/proposals/${proposal}/reject`, { data: {} });
     await held.drop();

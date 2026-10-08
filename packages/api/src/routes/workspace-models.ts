@@ -1,3 +1,5 @@
+import { NAME } from '@wechart/core';
+
 import { heldIn, namesDeclaredIn, type Names } from '../model/names';
 import { declaredIn } from '../model/split';
 import type { CompileError } from '../model/validate';
@@ -35,6 +37,12 @@ export interface WorkspaceModelDeps {
     inFolders(folderIds: readonly string[]): Promise<readonly StoredModelFile[]>;
     write(files: readonly WorkspaceModelFile[]): Promise<unknown>;
     remove?(folderId: string, path: string): Promise<unknown>;
+    /** A file moved to another path in its folder, its id kept (T737). */
+    relocate?(
+      folderId: string,
+      from: string,
+      file: { readonly path: string; readonly content: string },
+    ): Promise<unknown>;
   };
   readonly overlays: Pick<OverlaySync, 'push'>;
   /** The workspace's folders: its root and every folder in it. */
@@ -56,6 +64,21 @@ const NEEDS_TARGET =
 /** Why an edit copy can't take another name (T706, AC-423). */
 export const keepsItsName = (name: string) =>
   `“${name}” has landed, so its name is fixed: a copy of it keeps that name. Its title can still change.`;
+
+/**
+ * Where a new draft's file is stored (T737, AC-423; R73): beside where it
+ * was sent, at the name of the one cube or view it declares. A file
+ * declaring none or several, or a name outside the grammar (AC-426), stays
+ * where it was sent: no path is made of what the grammar doesn't take.
+ */
+export function draftPathOf(file: { readonly path: string; readonly content: string }): string {
+  const declared = declaredIn(file.content);
+  const name = declared.length === 1 ? declared[0]!.name : '';
+  if (!NAME.test(name) || !/^[^/]+\.ya?ml$/.test(file.path.split('/').at(-1) ?? ''))
+    return file.path;
+  const at = file.path.lastIndexOf('/');
+  return `${at < 0 ? '' : file.path.slice(0, at + 1)}${name}.yml`;
+}
 
 /** A workspace model file where its overlay puts it: its folder, its text, where it is to go. */
 type Placed = {
@@ -254,7 +277,38 @@ export function workspaceModels({
         );
         if (errors.length > 0) return { status: 422, body: { errors } };
       }
+      /**
+       * A draft's file is named for its cube or view until it lands (T737,
+       * AC-423; R73): saved under another path, it is stored at its name's,
+       * moved with its id and where it goes kept. An edit copy's name is
+       * fixed, and a use-only copy's is its original's: neither moves. A file
+       * of that path in the folder refuses it, named.
+       */
+      const moved: { readonly from: string; readonly to: string }[] = [];
+      const pathOf = (file: ModelFile): string => {
+        const stored = held.find((each) => each.folderId === folderId && each.path === file.path);
+        return stored?.origin != null ? file.path : draftPathOf(file);
+      };
+      const movedErrors: { path: string; message: string }[] = [];
+      for (const file of changed) {
+        const to = pathOf(file);
+        if (to === file.path) continue;
+        const taken =
+          held.some((each) => each.folderId === folderId && each.path === to) ||
+          changed.some((each) => each !== file && (each.path === to || pathOf(each) === to));
+        if (taken)
+          movedErrors.push({ path: file.path, message: `${to} is already in this folder.` });
+        else moved.push({ from: file.path, to });
+      }
+      if (movedErrors.length > 0) return { status: 422, body: { errors: movedErrors } };
+      const toOf = (path: string) => moved.find((each) => each.from === path)?.to ?? path;
+
       const writes: WorkspaceModelFile[] = [];
+      const relocations: {
+        readonly from: string;
+        readonly to: string;
+        readonly content: string;
+      }[] = [];
       const after: Placed[] = held.filter(
         (file) => !(file.folderId === folderId && changed.some((each) => each.path === file.path)),
       );
@@ -263,34 +317,68 @@ export function workspaceModels({
         // Where it is to go is kept as stored (as a workspace dashboard's is).
         const goesTo = stored === undefined ? (target ?? null) : stored.targetFolderId;
         if (goesTo === null) return { status: 400, body: { error: NEEDS_TARGET } };
-        writes.push({
-          folderId,
-          path: file.path,
-          content: file.content,
-          ...(stored === undefined ? { targetFolderId: goesTo } : {}),
-        });
-        after.push({ folderId, path: file.path, content: file.content, targetFolderId: goesTo });
+        const path = toOf(file.path);
+        if (stored !== undefined && path !== file.path)
+          relocations.push({ from: file.path, to: path, content: file.content });
+        else
+          writes.push({
+            folderId,
+            path,
+            content: file.content,
+            ...(stored === undefined ? { targetFolderId: goesTo } : {}),
+          });
+        after.push({ folderId, path, content: file.content, targetFolderId: goesTo });
       }
       const pushed = await pushWith(
         workspaceId,
         after,
         after.filter(
-          (file) => file.folderId === folderId && changed.some((each) => each.path === file.path),
+          (file) =>
+            file.folderId === folderId && changed.some((each) => toOf(each.path) === file.path),
         ),
       );
       if ('lost' in pushed) return pushed.lost;
       const { result, folders } = pushed;
-      if (result.kind !== 'stored' && result.kind !== 'empty')
-        return refusalOf(
+      if (result.kind !== 'stored' && result.kind !== 'empty') {
+        const refused = refusalOf(
           result,
           after,
-          writes.map((each) => ({ folderId, path: each.path })),
+          [...writes.map((each) => each.path), ...relocations.map((each) => each.to)].map(
+            (path) => ({ folderId, path }),
+          ),
           folders,
         );
+        // Said on the file as the caller sent it: a move refused is no move.
+        const fromOf = (path: unknown) => moved.find((each) => each.to === path)?.from ?? path;
+        const body = refused.body as { errors?: { path?: unknown }[] } | null;
+        return Array.isArray(body?.errors)
+          ? {
+              ...refused,
+              body: {
+                ...body,
+                errors: body.errors.map((error) => ({ ...error, path: fromOf(error.path) })),
+              },
+            }
+          : refused;
+      }
+      for (const { from, to, content } of relocations)
+        if (files.relocate !== undefined)
+          await files.relocate(folderId, from, { path: to, content });
+        else {
+          // A store that can't move one: written at its new path, the old one removed.
+          const stored = held.find((each) => each.folderId === folderId && each.path === from)!;
+          await files.write([
+            { folderId, path: to, content, targetFolderId: stored.targetFolderId },
+          ]);
+          await files.remove?.(folderId, from);
+        }
       await files.write(writes);
       return {
         status: 200,
-        body: { version: result.kind === 'stored' ? String(result.version) : '0' },
+        body: {
+          version: result.kind === 'stored' ? String(result.version) : '0',
+          ...(moved.length === 0 ? {} : { moved }),
+        },
       };
     },
 

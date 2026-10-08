@@ -172,7 +172,8 @@ test.describe('the first approval of a new name lands it (T704, AC-422)', () => 
 
     try {
       const first = await draftAndPropose(writerRequest, `cubes/${twin}.yml`, 'SELECT 1 AS n');
-      const second = await draftAndPropose(superRequest, `cubes/${twin}_b.yml`, 'SELECT 2 AS n');
+      // Each draft's file is named for its cube (T737, AC-423; R73).
+      const second = await draftAndPropose(superRequest, `cubes/${twin}.yml`, 'SELECT 2 AS n');
 
       const landedFirst = await approvedBy(superRequest, first);
       expect(landedFirst.status(), await landedFirst.text()).toBe(200);
@@ -238,7 +239,11 @@ test.describe('a deleted item’s name lands again (T707, AC-427)', () => {
       );
       expect(deleted.status(), await deleted.text()).toBe(200);
 
-      expect(await landed(request, target, [second])).toEqual([second]);
+      // A new file, written under another path: its draft follows its cube's
+      // name, and lands there (T737, AC-423; R73).
+      expect(await landed(request, target, [second])).toEqual([
+        { path: first.path, content: second.content },
+      ]);
       const items = (
         (await (await request.get(`${ROUTES}/items`, { headers: headers() })).json()) as {
           items: { folderId: string; name: string; yaml: string }[];
@@ -257,7 +262,7 @@ test.describe('a deleted item’s name lands again (T707, AC-427)', () => {
         { [`${retake}.total`]: expect.stringMatching(/^2(\.0+)?$/) },
       ]);
     } finally {
-      for (const path of [first.path, second.path])
+      for (const path of new Set([first.path, second.path]))
         await request.delete(
           `/api/model/files?folder=${encodeURIComponent(target)}&path=${encodeURIComponent(path)}`,
           LANDING,

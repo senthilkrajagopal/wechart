@@ -101,6 +101,11 @@ async function holdNames(files: readonly ModelFileText[]): Promise<() => Promise
 export interface InMyWorkspace {
   /** The workspace folder a file of the batch is in, by its path. */
   readonly folderOf: (path: string) => string;
+  /**
+   * Where a file of the batch is stored, by the path it was sent at: a new
+   * one at its cube's or view's name (T737, AC-423; R73).
+   */
+  readonly pathOf: (path: string) => string;
   /** The batch's files, and the folders made for them, removed from My workspace. */
   readonly drop: () => Promise<void>;
 }
@@ -127,6 +132,8 @@ export async function inMyWorkspace(
     ...existing.filter((file) => files.some((each) => each.path === file.path)),
   ]);
   const placed = new Map<string, string>();
+  // Where a new file is stored, when not at the path it was sent at (T737).
+  const storedAt = new Map<string, string>();
   // Removed in this order: a copy, which may name a new one, before the new.
   const written: { folderId: string; path: string }[] = [];
   const folders: string[] = [];
@@ -160,9 +167,15 @@ export async function inMyWorkspace(
         data: { folderId: fresh, targetFolderId: folderId, files: added },
         ...LANDING,
       });
+      // A new file is stored at its cube's or view's name (T737, AC-423; R73).
+      const moved = saved.ok()
+        ? (((await saved.json()) as { moved?: { from: string; to: string }[] }).moved ?? [])
+        : [];
       for (const file of added) {
+        const path = moved.find((each) => each.from === file.path)?.to ?? file.path;
         placed.set(file.path, fresh);
-        written.push({ folderId: fresh, path: file.path });
+        if (path !== file.path) storedAt.set(file.path, path);
+        written.push({ folderId: fresh, path });
       }
       expect(saved.status(), await saved.text()).toBe(200);
     }
@@ -195,6 +208,7 @@ export async function inMyWorkspace(
       if (folder === undefined) throw new Error(`${path} isn’t in this batch.`);
       return folder;
     },
+    pathOf: (path) => storedAt.get(path) ?? path,
     drop,
   };
 }
@@ -223,10 +237,13 @@ export async function landed(
   folderId: string,
   files: readonly ModelFileText[],
 ): Promise<ModelFileText[]> {
+  // A new file lands where its draft was stored: at its cube's or view's name (T737).
+  const landedAt = new Map<string, string>();
   const after = async () => {
     const now = await modelFilesIn(request, folderId);
     return files.flatMap((file) => {
-      const there = now.find((each) => each.path === file.path);
+      const path = landedAt.get(file.path) ?? file.path;
+      const there = now.find((each) => each.path === path);
       return there === undefined ? [] : [{ path: there.path, content: there.content }];
     });
   };
@@ -240,8 +257,10 @@ export async function landed(
     // Each proposed and approved, unless one before it took it along.
     for (const file of changing) {
       const now = await modelFilesIn(request, folderId);
-      if (now.find((each) => each.path === file.path)?.content === file.content) continue;
-      const proposed = await proposedModel(request, batch.folderOf(file.path), file.path);
+      const path = batch.pathOf(file.path);
+      if (path !== file.path) landedAt.set(file.path, path);
+      if (now.find((each) => each.path === path)?.content === file.content) continue;
+      const proposed = await proposedModel(request, batch.folderOf(file.path), path);
       expect(proposed.status(), await proposed.text()).toBe(201);
       const approved = await approvedBy(request, ((await proposed.json()) as { id: string }).id);
       expect(approved.status(), await approved.text()).toBe(200);

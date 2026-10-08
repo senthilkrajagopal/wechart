@@ -308,6 +308,8 @@ describe('a generated cube’s name, edited before it is saved (T734)', () => {
     const free = `classes_${MARK}`;
     const saved = await edited(free);
     expect(saved.statusCode, saved.body).toBe(200);
-    expect((await fileIn(folderId, path))?.content).toBe(cube(free, 'class'));
+    // Stored at its cube's name, as a draft's file is (T737).
+    expect((await fileIn(folderId, `cubes/${free}.yml`))?.content).toBe(cube(free, 'class'));
+    expect(await fileIn(folderId, path)).toBeUndefined();
   });
 });

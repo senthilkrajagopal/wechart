@@ -359,12 +359,23 @@ describe('the models of an imported file (T720, AC-357, AC-356)', () => {
   });
 
   it('maps one whose name a draft in My workspace holds to it, and refuses one of a path its root holds, writing nothing', async () => {
+    // A file in My workspace's root named otherwise than its cube, as one may
+    // be from before R73: a draft is stored at its cube's name (T737), so
+    // only such a file holds the path a new one would take.
+    await files().write([
+      {
+        folderId: workspace,
+        path: pathOf('stale'),
+        content: cube(name('elder')),
+        targetFolderId: folders.sales,
+      },
+    ]);
     const overlay = stub.overlay(MODEL, workspaceOverlayIdOf(workspace))?.version;
     const again = [
       // The name of the first file's lines, a draft now.
       { path: pathOf('lines_again'), content: cube(name('lines')) },
-      // The path of the first file's lines.yml, another name.
-      { path: pathOf('lines'), content: cube(name('fresh')) },
+      // Stored at stale.yml, its cube's name, which the root holds.
+      { path: pathOf('stale_sent'), content: cube(name('stale')) },
     ];
     const reviewed = await review(exportFile(again, `${MARK} again`));
     expect(reviewed.statusCode, reviewed.body).toBe(200);
@@ -377,7 +388,7 @@ describe('the models of an imported file (T720, AC-357, AC-356)', () => {
         warnings: [],
       }),
       expect.objectContaining({
-        key: pathOf('lines'),
+        key: pathOf('stale_sent'),
         lands: 'draft',
         warnings: [{ kind: 'path-in-workspace' }],
       }),
@@ -390,13 +401,14 @@ describe('the models of an imported file (T720, AC-357, AC-356)', () => {
       error: 'Refused: nothing was imported.',
       parts: [
         {
-          part: `Model ${pathOf('lines')}`,
+          part: `Model ${pathOf('stale_sent')}`,
           why: 'My workspace already has a model file at this path. Rename or remove one of them, then import again.',
         },
       ],
     });
     expect(await everything()).toEqual(before);
     expect(stub.overlay(MODEL, workspaceOverlayIdOf(workspace))?.version).toBe(overlay);
+    await files().remove(workspace, pathOf('stale'));
   });
 
   // T720's review: all together or none (AC-356), the models taken back if the documents fail.
@@ -416,6 +428,22 @@ describe('the models of an imported file (T720, AC-357, AC-356)', () => {
     const again = await land(exportFile(lone, `${MARK} lone`));
     expect(again.statusCode, again.body).toBe(201);
     expect(again.json<{ created: Record<string, number> }>().created.models).toBe(1);
+  });
+
+  // T737's review: one sent at a path other than its cube's name is stored
+  // at its name's (AC-423, R73), and taken back from there.
+  it('takes back one stored at its cube’s name when its documents can’t be written', async () => {
+    const sent = [{ path: pathOf('sent_here'), content: cube(name('stored_there')) }];
+    const before = await everything();
+    failCreate = true;
+    const failed = await land(exportFile(sent, `${MARK} sent`));
+    expect(failed.statusCode, failed.body).toBe(500);
+    expect(await everything()).toEqual(before);
+    const again = await land(exportFile(sent, `${MARK} sent`));
+    expect(again.statusCode, again.body).toBe(201);
+    expect((await files().inFolders([workspace])).map((file) => file.path)).toContain(
+      pathOf('stored_there'),
+    );
   });
 
   // T720's review (AC-357, AC-424): one in a folder the importer can't see is mapped, its folder unsaid.

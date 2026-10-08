@@ -24,6 +24,7 @@ import { xcubeAdmin, type XcubeAdmin } from '../xcube/client';
 import { fakeXcube, FAKE_ADMIN_TOKEN } from '../xcube/fake';
 import { itemsOf } from '../xcube/items';
 import { removeProjectFolders, TEST_TIME_ZONE } from './project-folder.fixture';
+import { draftPathOf } from './workspace-models';
 
 /**
  * T705 (AC-422, AC-424, AC-282; `[R71]` 5, 6): a draft's name is checked when
@@ -42,6 +43,9 @@ const MODEL = `dnm-${MARK}`;
 const SEED = `${MARK}_seed`;
 const ORDERS = `orders_${MARK}`;
 const WAREHOUSE = `warehouse_${MARK}`;
+/** A /Sales file named otherwise than its cube, as one may be from before R73 (T737). */
+const LEGACY = `${MARK}_legacyname`;
+const LEGACY_PATH = `cubes/${MARK}_legacy.yml`;
 const cube = (name: string, extra = '') =>
   `cubes:\n  - name: ${name}\n    sql_table: public.${name}\n${extra}`;
 const shared = (name: string) => `cubes/${name}.yml`;
@@ -87,6 +91,7 @@ beforeAll(async () => {
   }
   await files().write([
     { folderId: ids.sales, path: shared(SEED), content: cube(SEED) },
+    { folderId: ids.sales, path: LEGACY_PATH, content: cube(LEGACY) },
     { folderId: ids.ops, path: shared(ORDERS), content: cube(ORDERS) },
   ]);
   await sources().create({
@@ -544,10 +549,12 @@ describe('a deleted item’s name (T707, AC-427)', () => {
       ).statusCode,
     ).toBe(200);
 
-    const path = `cubes/${margin}_new.yml`;
-    const made = await save('writer', folderId, path, cube(`${margin}_draft`), ids.sales);
+    // A draft's file follows its cube's name (T737).
+    const draftPath = shared(`${margin}_draft`);
+    const path = shared(margin.toUpperCase());
+    const made = await save('writer', folderId, draftPath, cube(`${margin}_draft`), ids.sales);
     expect(made.statusCode, made.body).toBe(200);
-    const renamed = await save('writer', folderId, path, cube(margin.toUpperCase()));
+    const renamed = await save('writer', folderId, draftPath, cube(margin.toUpperCase()));
     expect(renamed.statusCode, renamed.body).toBe(200);
     const proposed = await propose('model', (await fileIn(folderId, path))!.id);
     expect(proposed.statusCode, proposed.body).toBe(201);
@@ -573,7 +580,8 @@ describe('a deleted item’s name (T707, AC-427)', () => {
     });
     expect(deleted.statusCode, deleted.body).toBe(200);
 
-    const again = `views/${lens}_new.yml`;
+    // A draft's file follows its view's name (T737).
+    const again = `views/${lens.toUpperCase()}.yml`;
     const made = await save('writer', folderId, again, view(lens.toUpperCase()), ids.sales);
     expect(made.statusCode, made.body).toBe(200);
     const proposed = await propose('model', (await fileIn(folderId, again))!.id);
@@ -628,5 +636,127 @@ describe('a deleted item’s name (T707, AC-427)', () => {
     const approved = await approve(proposed.json<{ id: string }>().id);
     expect(approved.statusCode, approved.body).toBe(200);
     expect((await sources().inFolder(ids.sales)).map((each) => each.name)).toContain(staging);
+  });
+});
+
+/**
+ * T737 (AC-423; R73): a draft's model file is named for its cube or view
+ * until it lands. Saved under another path, it is stored at its name's, and
+ * renamed and saved again it moves with it, its id and where it goes kept,
+ * the save saying where it went. An edit copy's name is fixed, so its file
+ * never moves. A file of the new name in the folder refuses it, naming that
+ * file.
+ */
+describe('a draft’s file name follows its cube’s (T737, AC-423)', () => {
+  const stored = async (folderId: string) =>
+    (await files().inFolders([folderId])).map(({ path, targetFolderId }) => ({
+      path,
+      targetFolderId,
+    }));
+
+  it('is stored at its cube’s name, and moves with it when renamed, its id and target kept', async () => {
+    const folderId = await project('writer');
+    const first = `follows_${MARK}`;
+    const saved = await save('writer', folderId, 'cubes/new_cube_1.yml', cube(first), ids.sales);
+    expect(saved.statusCode, saved.body).toBe(200);
+    expect(saved.json<{ moved?: unknown }>().moved).toEqual([
+      { from: 'cubes/new_cube_1.yml', to: shared(first) },
+    ]);
+    expect(await stored(folderId)).toEqual([{ path: shared(first), targetFolderId: ids.sales }]);
+    const id = (await fileIn(folderId, shared(first)))!.id;
+
+    const second = `${first}_renamed`;
+    const renamed = await save('writer', folderId, shared(first), cube(second));
+    expect(renamed.statusCode, renamed.body).toBe(200);
+    expect(renamed.json<{ moved?: unknown }>().moved).toEqual([
+      { from: shared(first), to: shared(second) },
+    ]);
+    expect(await stored(folderId)).toEqual([{ path: shared(second), targetFolderId: ids.sales }]);
+    expect((await fileIn(folderId, shared(second)))?.id).toBe(id);
+  });
+
+  it('names a view’s file for the view', async () => {
+    const folderId = await project('writer');
+    const view = `lens_follow_${MARK}`;
+    const content = `views:\n  - name: ${view}\n    cubes:\n      - join_path: ${SEED}\n        includes: "*"\n`;
+    const saved = await save('writer', folderId, 'views/new_view_1.yml', content, ids.sales);
+    expect(saved.statusCode, saved.body).toBe(200);
+    expect(await stored(folderId)).toEqual([
+      { path: `views/${view}.yml`, targetFolderId: ids.sales },
+    ]);
+  });
+
+  it('never moves an edit copy’s file, and says nothing moved where none did', async () => {
+    const copied = await as('writer', {
+      method: 'POST',
+      url: '/api/workspace/copies',
+      payload: { kind: 'model', folderId: ids.sales, path: shared(SEED), timeZone: TEST_TIME_ZONE },
+    });
+    expect([200, 201], copied.body).toContain(copied.statusCode);
+    const folderId = copied.json<{ folderId: string }>().folderId;
+    const saved = await save(
+      'writer',
+      folderId,
+      shared(SEED),
+      cube(SEED, `    title: Kept ${MARK}\n`),
+    );
+    expect(saved.statusCode, saved.body).toBe(200);
+    expect(saved.json<{ moved?: unknown }>().moved).toBeUndefined();
+    expect((await fileIn(folderId, shared(SEED)))?.content).toBe(
+      cube(SEED, `    title: Kept ${MARK}\n`),
+    );
+  });
+
+  // T737's review: an edit copy of a file named otherwise than its cube, as
+  // one may be from before R73, keeps its original's path too.
+  it('never moves an edit copy of a file named otherwise than its cube', async () => {
+    const copied = await as('writer', {
+      method: 'POST',
+      url: '/api/workspace/copies',
+      payload: { kind: 'model', folderId: ids.sales, path: LEGACY_PATH, timeZone: TEST_TIME_ZONE },
+    });
+    expect([200, 201], copied.body).toContain(copied.statusCode);
+    const folderId = copied.json<{ folderId: string }>().folderId;
+    const edited = cube(LEGACY, `    title: Kept ${MARK}\n`);
+    const saved = await save('writer', folderId, LEGACY_PATH, edited);
+    expect(saved.statusCode, saved.body).toBe(200);
+    expect(saved.json<{ moved?: unknown }>().moved).toBeUndefined();
+    expect((await files().inFolders([folderId])).map(({ path, content }) => ({ path, content }))).toEqual(
+      [{ path: LEGACY_PATH, content: edited }],
+    );
+  });
+
+  // T737's review: a path is made only of a name in the grammar (AC-426).
+  it('makes no path of a name outside the grammar', () => {
+    const declaring = (name: string) => `cubes:\n  - name: "${name}"\n    sql_table: public.x\n`;
+    expect(draftPathOf({ path: 'cubes/new_cube_1.yml', content: declaring('a/../../x') })).toBe(
+      'cubes/new_cube_1.yml',
+    );
+    expect(draftPathOf({ path: 'cubes/new_cube_1.yml', content: declaring('2026_orders') })).toBe(
+      'cubes/new_cube_1.yml',
+    );
+    expect(draftPathOf({ path: 'cubes/new_cube_1.yml', content: declaring('orders_x') })).toBe(
+      'cubes/orders_x.yml',
+    );
+  });
+
+  it('refuses a move over a file of the new name in the folder, naming it, and stores nothing', async () => {
+    const folderId = await project('writer');
+    const there = `there_${MARK}`;
+    // A file named otherwise than its cube, as one may be from before.
+    await files().write([
+      {
+        folderId,
+        path: shared(there),
+        content: cube(`elsewhere_${MARK}`),
+        targetFolderId: ids.sales,
+      },
+    ]);
+    const refused = await save('writer', folderId, 'cubes/new_cube_1.yml', cube(there), ids.sales);
+    expect(refused.statusCode, refused.body).toBe(422);
+    expect(refused.json<{ errors: unknown[] }>().errors).toEqual([
+      { path: 'cubes/new_cube_1.yml', message: `${shared(there)} is already in this folder.` },
+    ]);
+    expect((await stored(folderId)).map((each) => each.path)).toEqual([shared(there)]);
   });
 });

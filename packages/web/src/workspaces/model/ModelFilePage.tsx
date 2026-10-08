@@ -420,9 +420,12 @@ function FileEditor({
   drafts = NO_DRAFTS,
   onPublished,
   where,
+  said,
 }: {
   path: string;
   content: string;
+  /** What its save said, where the save moved it here (T737): said again as it opens. */
+  said?: { readonly ok: boolean; readonly text: string } | undefined;
   /** Where the file is, and whether it may be changed here (T342). */
   where: Place;
   /** Just made by New view: opens on its Cubes, a new one ready to pick (T493). */
@@ -430,7 +433,12 @@ function FileEditor({
   /** The model's other unpublished files: those this one's cubes join publish with it (T488). */
   drafts?: readonly ModelFile[];
   /** The files a save published: this one and the drafts it joins (T488). */
-  onPublished?: ((files: readonly ModelFile[]) => void) | undefined;
+  onPublished?:
+    | ((
+        files: readonly ModelFile[],
+        moved: readonly { readonly from: string; readonly to: string }[],
+      ) => void)
+    | undefined;
   /** A cube's tab to open on (T160). */
   openOn?: OpenOn | undefined;
   /** False for a file made here and not yet published: there is nothing to go back to. */
@@ -835,7 +843,7 @@ function FileEditor({
    * so when its file is opened.
    */
   const [refusedRollups, setRefusedRollups] = useState(readRefusedRollups);
-  const [outcome, setOutcome] = useState<{ ok: boolean; text: string } | null>(null);
+  const [outcome, setOutcome] = useState<{ ok: boolean; text: string } | null>(said ?? null);
   const queryClient = useQueryClient();
   /** Changes not yet published (AC-226): for a file made here, all of it. */
   const changed = text !== saved;
@@ -1072,7 +1080,16 @@ function FileEditor({
     if (result.kind === 'published') {
       setSaved(sent);
       // Stored now, drafts no longer: said at once, not once the files are read again (T488's review).
-      onPublished?.([{ path, content: sent }, ...joined]);
+      // Each where it was stored: a draft's file follows its cube's name (T737, AC-423).
+      const moved = result.moved ?? [];
+      const storedAt = (at: string) => moved.find((each) => each.from === at)?.to ?? at;
+      onPublished?.(
+        [{ path, content: sent }, ...joined].map((each) => ({
+          ...each,
+          path: storedAt(each.path),
+        })),
+        moved,
+      );
       setCubeProblems([]);
       setRefusedRollups(keepRefusedRollups([]));
       setOutcome({
@@ -1550,6 +1567,7 @@ function FileBody({
   drafts,
   onPublished,
   where,
+  said,
 }: {
   path: string;
   content: string;
@@ -1558,13 +1576,22 @@ function FileBody({
   fresh?: boolean;
   /** The model's other unpublished files (T488). */
   drafts: readonly ModelFile[];
-  onPublished: (files: readonly ModelFile[]) => void;
+  /**
+   * Stored: each file at its path as stored, and the drafts whose files
+   * followed their cube's name (T737, AC-423).
+   */
+  onPublished: (
+    files: readonly ModelFile[],
+    moved: readonly { readonly from: string; readonly to: string }[],
+  ) => void;
   openOn?: OpenOn | undefined;
   onProblems: (byPath: Readonly<Record<string, number>>) => void;
   onChanged: (changed: boolean) => void;
   onText?: ((text: string) => void) | undefined;
   onDiscard?: (() => void) | undefined;
   where: Place;
+  /** What its save said, where the save moved it here (T737): said again as it opens. */
+  said?: { readonly ok: boolean; readonly text: string } | undefined;
 }) {
   const read = useMemo(() => objectsOf(path, content), [path, content]);
   // Code or a template: its text in the code view, read-only, with the reason (T146, AC-140).
@@ -1588,6 +1615,7 @@ function FileBody({
       fresh={fresh}
       drafts={drafts}
       onPublished={onPublished}
+      {...(said === undefined ? {} : { said })}
       {...(onText === undefined ? {} : { onText })}
     />
   );
@@ -1757,6 +1785,15 @@ export function ModelFilePage({
   const queryClient = useQueryClient();
   const router = useRouter();
   const folders = useQuery(FOLDERS_QUERY);
+  /** The file a save just moved to its cube's name, and what the save said (T737). */
+  const [movedTo, setMovedTo] = useState<
+    | {
+        readonly from: string;
+        readonly path: string;
+        readonly said: { ok: boolean; text: string };
+      }
+    | undefined
+  >(undefined);
   /**
    * Whether it may be changed here (rules 70 and 71): a shared model is
    * read-only (`modelsAreWorkspaceOnly`); "Edit in my workspace" for those
@@ -1783,6 +1820,18 @@ export function ModelFilePage({
     inWorkspace,
   });
   const hrefOf = useCallback((each: string) => fileHref(each, folderId), [folderId]);
+  /**
+   * A save moved the open file to its cube's name (T737, AC-423): the page
+   * follows it, in place of the old address, once the editor has taken the
+   * save in (so leaving asks nothing).
+   */
+  useEffect(() => {
+    if (movedTo === undefined) return;
+    if (movedTo.from === path) router.history.replace(hrefOf(movedTo.path));
+    // Arrived: its editor has opened saying so, and says it no more after
+    // (T737's review).
+    else if (movedTo.path === path) setMovedTo(undefined);
+  }, [movedTo, path, router, hrefOf]);
   const words = folderWordsOf(folder, folders.data ?? []);
   const where = useMemo<Place>(
     () => ({
@@ -2202,7 +2251,8 @@ export function ModelFilePage({
                 </>
               )}
             </div>
-          ) : files.isPending ? (
+          ) : files.isPending || (file === undefined && movedTo?.from === path) ? (
+            // Read again, or on its way to where a save moved it (T737's review).
             // Untitled while it reads: the title comes once, with what it heads.
             <StateLine kind="run">Reading the model…</StateLine>
           ) : files.isError ? (
@@ -2223,22 +2273,44 @@ export function ModelFilePage({
                 made !== undefined && made.path === file.path && !named(made) && freshView(made)
               }
               drafts={otherDrafts}
-              onPublished={(sent) => {
+              {...(movedTo?.path === file.path ? { said: movedTo.said } : {})}
+              onPublished={(sent, moved) => {
+                // A draft's file that followed its cube's name is no longer at
+                // its old path (T737, AC-423): neither listed there nor a draft.
+                const left = new Set(moved.map((each) => each.from));
                 // In the store now: listed so at once, before the files are read again,
                 // and no longer drafts, so a second save doesn't send them as new
                 // (T488's review).
                 queryClient.setQueryData(
                   modelFilesQuery(folder).queryKey,
                   (old: readonly ModelFile[] | undefined) => [
-                    ...(old ?? []).filter((each) => !sent.some((one) => one.path === each.path)),
+                    ...(old ?? []).filter(
+                      (each) => !left.has(each.path) && !sent.some((one) => one.path === each.path),
+                    ),
                     ...sent,
                   ],
                 );
-                const paths = new Set(sent.map((each) => each.path));
+                const paths = new Set([...sent.map((each) => each.path), ...left]);
                 setDrafts(
                   Object.fromEntries(Object.entries(drafts).filter(([at]) => !paths.has(at))),
                 );
                 if (made !== undefined && paths.has(made.path)) setMade(undefined);
+                void queryClient.invalidateQueries({ queryKey: modelFilesQuery(folder).queryKey });
+                // This file moved: its page follows it, in place of the old
+                // address, saying it was saved as it opens there.
+                const here = moved.find((each) => each.from === file.path);
+                // Once the editor has taken the save in, so leaving asks nothing.
+                if (here !== undefined)
+                  setMovedTo({
+                    from: here.from,
+                    path: here.to,
+                    said: {
+                      ok: true,
+                      text: where.inWorkspace
+                        ? 'Saved. Previews in My workspace use it now.'
+                        : 'Published. Cube is reading the new model.',
+                    },
+                  });
               }}
               onProblems={(byPath) => {
                 setReported({ from: file.path, byPath });

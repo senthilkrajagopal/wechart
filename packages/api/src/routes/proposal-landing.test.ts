@@ -527,18 +527,23 @@ describe('a proposal’s models, landed through xcube’s changeset (T451)', () 
   });
 
   it('refuses one whose path in its folder another name’s file holds', async () => {
-    // New in the workspace, at the path of /Sales's kept, declaring another name.
-    const path = shared(KEPT);
+    // A draft's file is named for its cube (T737), so the clash is with a
+    // /Sales file named otherwise than its cube, as one may be from before.
+    const pathName = `${MARK}_pathclash`;
+    const holder = `${MARK}_holder`;
+    const path = shared(pathName);
+    await files().write([{ folderId: ids.sales, path, content: cube(holder) }]);
     const project = ids.project;
-    expect((await save(path, cube(`${MARK}_elsewhere`), project)).statusCode).toBe(200);
+    expect((await save(path, cube(pathName), project)).statusCode).toBe(200);
     try {
       const refused = await propose('model', (await workspaceFile(path, project)).id);
       expect(refused.statusCode, refused.body).toBe(409);
       expect(refused.json<{ error: string }>().error).toBe(
-        `“${path}” can’t land: its folder’s file at that path declares “${KEPT}”. Give yours another path in your workspace, and propose it again.`,
+        `“${path}” can’t land: its folder’s file at that path declares “${holder}”. Give yours another path in your workspace, and propose it again.`,
       );
     } finally {
       await files().remove(project, path);
+      await files().remove(ids.sales, path);
     }
   });
 

@@ -18,6 +18,7 @@ import { USER } from '../auth/guard';
 import { textTilesOf } from '../model/bind';
 import { namesDeclaredIn } from '../model/names';
 import { withChartsRenamed } from './workspace-copy';
+import { draftPathOf } from './workspace-models';
 
 /**
  * Importing a dashboard's export file (T513; F38, AC-356, AC-357, AC-359;
@@ -746,7 +747,10 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
                 ? []
                 : [
                     ...warningsOf({ kind: item.kind, name: item.path, ...holdings }),
-                    ...(rootPaths.has(item.path) ? [{ kind: 'path-in-workspace' } as const] : []),
+                    // Where it would be stored: at its cube's name (T737, AC-423).
+                    ...(rootPaths.has(draftPathOf({ path: item.path, content: item.content }))
+                      ? [{ kind: 'path-in-workspace' } as const]
+                      : []),
                   ],
           },
         ];
@@ -876,9 +880,12 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
               ? [{ path: item.path, content: item.content }]
               : [],
           );
+    /** Where a model was stored, by the path it was sent at, when not there (T737). */
+    const stored = new Map<string, string>();
     if (landing.length > 0) {
       const taken = await access.models!.paths(own);
-      const clashes = landing.filter((model) => taken.has(model.path));
+      // Where each would be stored: at its cube's name (T737, AC-423).
+      const clashes = landing.filter((model) => taken.has(draftPathOf(model)));
       if (clashes.length > 0)
         return reply.code(409).send({
           error: REFUSED,
@@ -1017,12 +1024,17 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
           ),
         });
       if (saved.status >= 300) return reply.code(saved.status).send(saved.body);
+      // Where each was stored, to take it back from (T737, AC-423).
+      for (const { from, to } of (saved.body as { moved?: { from: string; to: string }[] })
+        .moved ?? [])
+        stored.set(from, to);
     }
     // All together or none (AC-356): the models go back out if the documents fail (T720's review).
     try {
       await access.create(creates);
     } catch (failure) {
-      for (const model of landing) await access.models!.remove(own, model.path);
+      for (const model of landing)
+        await access.models!.remove(own, stored.get(model.path) ?? model.path);
       throw failure;
     }
     return reply.code(201).send({

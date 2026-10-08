@@ -111,7 +111,9 @@ test.describe('generating cubes into My workspace (T492, AC-350)', () => {
     expect(made.status(), await made.text()).toBe(201);
     const holder = ((await made.json()) as { id: string }).id;
     const held = {
-      path: `cubes/stores_${run}.yml`,
+      // Named for its cube (T737, AC-423; R73), in a directory of its own, so
+      // its path isn't the generated file's.
+      path: `cubes/stores_${run}/chrome_stores.yml`,
       content:
         'cubes:\n  - name: chrome_stores\n    sql_table: generate.chrome_stores\n\n    measures:\n      - name: count\n        type: count\n',
     };

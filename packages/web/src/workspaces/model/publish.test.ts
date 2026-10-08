@@ -85,6 +85,24 @@ describe('a refused publish (T427, AC-322)', () => {
     );
   });
 
+  // T737 (AC-423): a draft's file follows its cube's name; where it went is said.
+  it('carries where a draft’s file was moved to, and nothing where none was', async () => {
+    answering(200, {
+      version: '7',
+      moved: [{ from: 'cubes/new_cube_1.yml', to: 'cubes/orders_x.yml' }],
+    });
+    expect(await publishModel([{ path: 'cubes/new_cube_1.yml', content: 'x' }])).toEqual({
+      kind: 'published',
+      version: '7',
+      moved: [{ from: 'cubes/new_cube_1.yml', to: 'cubes/orders_x.yml' }],
+    });
+    answering(200, { version: '8' });
+    expect(await publishModel([{ path: 'cubes/orders_x.yml', content: 'x' }])).toEqual({
+      kind: 'published',
+      version: '8',
+    });
+  });
+
   it('carries no count when every break is named', async () => {
     answering(422, { errors: [{ path: 'a.yml', message: 'bad' }], hidden: 0 });
     expect(await publishModel([{ path: 'a.yml', content: 'x' }])).toEqual({

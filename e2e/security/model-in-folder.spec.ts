@@ -32,8 +32,11 @@ import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
  *
  * The fixture, made by `super`: "Sales", no group's own, holds a model file
  * and "EMEA" (read-write `sales-rw`, so `writer`, who only views Sales;
- * read-only `sales-ro`). EMEA's model is three files — one at
- * `cubes/orders.yml`, the path of the root's seeded orders cube.
+ * read-only `sales-ro`). EMEA's model is three files. One of them,
+ * `t342_orders_<run>`, was at `cubes/orders.yml`, the path of the root's
+ * seeded orders cube. Since R73 a file is named for its cube (T737,
+ * AC-423), and R71 holds each name once, so no folder's file can share
+ * the root's path. It is at `cubes/t342_orders_<run>.yml` now.
  */
 const RUN = Math.random().toString(36).slice(2, 8);
 const names = { sales: `Sales ${RUN}`, emea: `EMEA ${RUN}` };
@@ -48,7 +51,9 @@ const CUBE = {
   summary: `t342_summary_${RUN}`,
   region: `t342_region_${RUN}`,
 };
-const ORDERS = 'cubes/orders.yml';
+const ORDERS = `cubes/${CUBE.orders}.yml`;
+/** The orders file's name in the tree and in Explore. */
+const ORDERS_FILE = new RegExp(`^${CUBE.orders}\\.yml`);
 const CUSTOMERS = `cubes/${CUBE.customers}.yml`;
 const SUMMARY = `views/${CUBE.summary}.yml`;
 const REGION = `cubes/${CUBE.region}.yml`;
@@ -210,18 +215,18 @@ test.describe('a model in its folder, read-only when shared (T342; AC-222, AC-13
       expect(await landed(request, made.sales, [region])).toEqual([region]);
     });
 
-    test('opens a model row from Explore in its folder, never the root’s file of the same path', async ({
+    test('opens a model row from Explore in its folder, never the root’s file', async ({
       page,
     }) => {
       await page.goto(`/explore?folder=${made.emea}`);
       const row = page.getByTestId(`item-${ORDERS}`);
       await expect(row.getByRole('cell').nth(0)).toHaveText('Model');
-      // Its name, not its ⋯ "Actions for orders.yml" (T526).
-      await row.getByRole('button', { name: 'orders.yml', exact: true }).click();
+      // Its name, not its ⋯ "Actions for <name>.yml" (T526).
+      await row.getByRole('button', { name: `${CUBE.orders}.yml`, exact: true }).click();
 
       // The folder and the file in the address (AC-222), under the folder's breadcrumb (rule 70).
       await expect(page).toHaveURL(
-        new RegExp(`/explore/folders/${made.emea}/models/cubes%2Forders\\.yml$`),
+        new RegExp(`/explore/folders/${made.emea}/models/cubes%2F${CUBE.orders}\\.yml$`),
       );
       await expect(yaml(page, ORDERS)).toContainText(`name: ${CUBE.orders}`);
       await expect(yaml(page, ORDERS)).not.toContainText('name: orders');
@@ -232,12 +237,12 @@ test.describe('a model in its folder, read-only when shared (T342; AC-222, AC-13
       // The folder's files beside the editor, and only its own.
       await expect(tree(page).getByRole('link')).toHaveCount(3);
       for (const name of [
-        /^orders\.yml/,
+        ORDERS_FILE,
         new RegExp(`^${CUBE.customers}\\.yml`),
         new RegExp(`^${CUBE.summary}\\.yml`),
       ])
         await expect(tree(page).getByRole('link', { name })).toBeVisible();
-      await expect(tree(page).getByRole('link', { name: /^orders\.yml/ })).toHaveAttribute(
+      await expect(tree(page).getByRole('link', { name: ORDERS_FILE })).toHaveAttribute(
         'aria-current',
         'page',
       );
@@ -336,7 +341,7 @@ test.describe('a model in its folder, read-only when shared (T342; AC-222, AC-13
       await expect(
         tree(page).getByRole('link', { name: new RegExp(`^${CUBE.customers}\\.yml`) }),
       ).toContainText('problems');
-      await expect(tree(page).getByRole('link', { name: /^orders\.yml/ })).not.toContainText(
+      await expect(tree(page).getByRole('link', { name: ORDERS_FILE })).not.toContainText(
         'problems',
       );
       storeAs(made.emea, CUSTOMERS, CUSTOMERS_YAML);
