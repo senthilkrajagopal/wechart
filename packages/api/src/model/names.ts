@@ -41,6 +41,13 @@ export function namesDeclaredIn(content: string): string[] {
   return names;
 }
 
+/** What a change replaces, which keeps its names: files by id or by `<folderId>/<path>`, data sources by id. */
+export interface Except {
+  readonly files: ReadonlySet<string>;
+  readonly paths?: ReadonlySet<string>;
+  readonly dataSources: ReadonlySet<string>;
+}
+
 /** The names of each namespace. */
 export interface Names {
   /** Cubes and views, split views' included. */
@@ -58,16 +65,22 @@ export function landedNamesOf({
   dataSources,
   except = { files: new Set(), dataSources: new Set() },
 }: {
-  readonly files: readonly { readonly id: string; readonly content: string }[];
+  readonly files: readonly {
+    readonly id: string;
+    readonly folderId?: string;
+    readonly path?: string;
+    readonly content: string;
+  }[];
   readonly dataSources: readonly { readonly id: string; readonly name: string }[];
-  readonly except?: {
-    readonly files: ReadonlySet<string>;
-    readonly dataSources: ReadonlySet<string>;
-  };
+  readonly except?: Except;
 }): Names {
   return {
     items: files
-      .filter((file) => !except.files.has(file.id))
+      .filter(
+        (file) =>
+          !except.files.has(file.id) &&
+          !(except.paths?.has(`${file.folderId ?? ''}/${file.path ?? ''}`) ?? false),
+      )
       .flatMap((file) => namesDeclaredIn(file.content)),
     dataSources: dataSources
       .filter((source) => !except.dataSources.has(source.id))

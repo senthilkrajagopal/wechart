@@ -595,8 +595,9 @@ describe('items made in the workspace name their target folder (T345, AC-282)', 
 
       const clash = await post(source(`held_${MARK}`, { targetFolderId: sales }));
       expect(clash.statusCode).toBe(409);
+      // One name per data source, said only as in use (T705; AC-422, AC-424).
       expect(clash.json()).toEqual({
-        error: `Its target folder already holds a data source named “held_${MARK}”: only a copy of it replaces it. Give this one another name.`,
+        error: `The name “held_${MARK}” is already in use.`,
       });
       // Nor renamed to it (T345's review).
       const renamed = await as('writer', {

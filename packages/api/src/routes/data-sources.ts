@@ -1,4 +1,4 @@
-import type { FieldValue, SealedV1 } from '@wechart/core';
+import { nameKey, type FieldValue, type SealedV1 } from '@wechart/core';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { createHash, timingSafeEqual } from 'node:crypto';
@@ -22,6 +22,7 @@ import {
 import { XCUBE_PUBLIC_KEY, type XcubePublicKey } from '../secrets/xcube-key';
 import type { ConnectionTest, ConnectionTestStore } from '../repos/connection-tests';
 import { XcubeError } from '../xcube/client';
+import { nameInUse } from '../xcube/refusal';
 import {
   ConnectionRefused,
   type ConnectionHealth,
@@ -313,16 +314,20 @@ export function registerDataSources(
   const landingIn = async (folderId: string): Promise<Landing> =>
     landing === undefined ? {} : landing.prepare(folderId);
   /**
-   * Why a workspace source may not take this name: its target folder holds
-   * one of that name, which only a copy of it replaces (T345, AC-282; the
-   * user's answer to question 30).
+   * A data source's name, made or renamed, once in its namespace (T705;
+   * AC-421, AC-422, AC-424): taken by any landed data source, in any folder
+   * and in any case, or by another of its own workspace's; never by another
+   * workspace's draft. Said only as in use.
    */
-  const clashIn = async (targetFolderId: string, name: string) =>
-    (await store.inFolder(targetFolderId)).some((source) => source.name === name)
-      ? {
-          error: `Its target folder already holds a data source named “${name}”: only a copy of it replaces it. Give this one another name.`,
-        }
-      : undefined;
+  const nameTaken = async (name: string, workspace: string | null, except?: string) => {
+    const key = nameKey(name);
+    for (const source of await store.all()) {
+      if (source.id === except || nameKey(source.name) !== key) continue;
+      const theirs = (await workspaceOf?.(source.folderId)) ?? null;
+      if (theirs === null || theirs === workspace) return { error: nameInUse(name) };
+    }
+    return undefined;
+  };
   /** Whether it sits in a workspace, where xcube holds none of it until previews (T347). */
   const inAWorkspace = async (source: DataSource) => (await workspaceOf?.(source.folderId)) != null;
   const refused = (reply: FastifyReply, error: unknown) => {
@@ -773,9 +778,9 @@ export function registerDataSources(
     const name = String(value['name'] ?? '');
     /**
      * One made in the workspace names the shared folder it is to go to, where
-     * its author has read-write access, and takes no name that folder holds:
-     * only a copy replaces one (T345, AC-282; the user's answer to question
-     * 30). It isn't landed in xcube, whose tree holds no workspace, until the
+     * its author has read-write access (T345, AC-282). Like any made, it takes
+     * no name in use (T705, AC-422); only a copy stands in for a landed one.
+     * It isn't landed in xcube, whose tree holds no workspace, until the
      * workspace's preview (T347).
      */
     const workspace = (await workspaceOf?.(folderId)) ?? null;
@@ -794,9 +799,9 @@ export function registerDataSources(
       const targetRefusal = await access(request, targetFolderId, 'write');
       if (targetRefusal !== undefined)
         return reply.status(targetRefusal.status).send(targetRefusal.body);
-      const clash = await clashIn(targetFolderId, name);
-      if (clash !== undefined) return reply.status(409).send(clash);
     }
+    const taken = await nameTaken(name, workspace);
+    if (taken !== undefined) return reply.status(409).send(taken);
     const shape = {
       driver: String(value['driver'] ?? ''),
       authMethod: String(value['authMethod'] ?? ''),
@@ -900,15 +905,14 @@ export function registerDataSources(
         error: `“${source.name}” has landed, so its name is fixed. Its description can still change.`,
       });
     // A workspace's is changed in wechart alone, as it was made; renamed, it
-    // still takes no name its target holds (T345's review).
-    if (
-      workspaced &&
-      change.name !== undefined &&
-      change.name !== source.name &&
-      source.targetFolderId !== null
-    ) {
-      const clash = await clashIn(source.targetFolderId, change.name);
-      if (clash !== undefined) return reply.status(409).send(clash);
+    // is checked as one made is (T345's review; T705, AC-422).
+    if (workspaced && change.name !== undefined && change.name !== source.name) {
+      const taken = await nameTaken(
+        change.name,
+        (await workspaceOf?.(source.folderId)) ?? null,
+        source.id,
+      );
+      if (taken !== undefined) return reply.status(409).send(taken);
     }
     /**
      * A change to where or how it connects is saved only from a test of

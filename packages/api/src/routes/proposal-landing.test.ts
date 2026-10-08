@@ -542,22 +542,25 @@ describe('a proposal’s models, landed through xcube’s changeset (T451)', () 
     }
   });
 
-  it('moves the folder’s file of its name to its own path, keeping its id', async () => {
+  /**
+   * T705 (AC-422; `[R71]` 5): where T451 moved the folder's file of a name
+   * to a new draft's path declaring it, a draft takes no landed name at all.
+   * Only a copy made to edit the landed file changes it, at its own path.
+   */
+  it('refuses a draft at another path declaring the folder’s landed name, and leaves the landed file as it was', async () => {
     const before = (await salesFiles())[shared(MOVED)]!;
     const path = `models/${MOVED}.yml`;
-    expect((await save(path, measured(MOVED, 'weight'))).statusCode).toBe(200);
-    const proposed = await propose('model', (await workspaceFile(path)).id);
-    expect(proposed.statusCode, proposed.body).toBe(201);
-    const approved = await approve(proposed.json<{ id: string }>().id);
-    expect(approved.statusCode, approved.body).toBe(200);
+    const saved = await save(path, measured(MOVED, 'weight'));
+    expect(saved.statusCode, saved.body).toBe(422);
+    expect(saved.json<{ errors: unknown[] }>().errors).toEqual([
+      { path, message: `The name “${MOVED}” is already in use.` },
+    ]);
+    expect((await files().inFolders([ids.project])).map((file) => file.path)).not.toContain(path);
     const now = await salesFiles();
-    expect(now[shared(MOVED)]).toBeUndefined();
-    expect(now[path]).toEqual({
-      id: before.id,
-      version: before.version + 1,
-      content: measured(MOVED, 'weight'),
-    });
-    expect(headItem(MOVED)?.yaml).toBe(measured(MOVED, 'weight'));
+    expect(now[path]).toBeUndefined();
+    expect(now[shared(MOVED)]).toEqual(before);
+    expect(headItem(MOVED)?.yaml).toBe(before.content);
+    expect(headItem(MOVED)?.yaml).not.toBe(measured(MOVED, 'weight'));
   });
 
   // A landed name is fixed (T706, AC-423): where T451 refused a rename at

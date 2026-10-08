@@ -248,8 +248,9 @@ describe('data sources, cubes and model files: one of a name in a folder (T336, 
   });
 
   // A landed data source is renamed to nothing now (T706, AC-423), its
-  // folder's names or any other.
-  it('refuses renaming a landed data source, to a name its folder has too, and takes that name in another', async () => {
+  // folder's names or any other. T705 (AC-421, AC-424): nor is its name free
+  // in another folder, in any case.
+  it('refuses renaming a landed data source, to a name its folder has too, and refuses that name in another', async () => {
     const name = `warehouse_${MARK}`;
     await sources().create(source(folders.a, name));
     const other = await sources().create(source(folders.a, `ledger_${MARK}`));
@@ -263,7 +264,23 @@ describe('data sources, cubes and model files: one of a name in a folder (T336, 
       `“ledger_${MARK}” has landed, so its name is fixed. Its description can still change.`,
     );
     expect((await sources().get(other.id))?.name).toBe(`ledger_${MARK}`);
-    expect((await sources().create(source(folders.b, name))).folderId).toBe(folders.b);
+    const tested = await send({
+      method: 'POST',
+      url: '/api/data-sources/test',
+      payload: { ...source(folders.b, name), name: undefined },
+    });
+    const elsewhere = await send({
+      method: 'POST',
+      url: '/api/data-sources',
+      payload: {
+        ...source(folders.b, name.toUpperCase()),
+        testId: tested.json<{ testId: string }>().testId,
+      },
+    });
+    expect(elsewhere.statusCode, elsewhere.body).toBe(409);
+    expect(elsewhere.json<{ error: string }>().error).toBe(
+      `The name “${name.toUpperCase()}” is already in use.`,
+    );
   });
 
   // One name per item (R71, T709): another folder's cube of the name is
@@ -284,6 +301,16 @@ describe('data sources, cubes and model files: one of a name in a folder (T336, 
     expect(
       elsewhere.json<{ errors: { message: string }[] }>().errors.map((each) => each.message),
     ).toEqual([`The name “${orders}” is already in use.`]);
+    // In any case, by wechart's own check (T705, AC-421).
+    const upper = await publish(folders.b, 'cubes/orders.yml', orders.toUpperCase());
+    expect(upper.statusCode, upper.body).toBe(422);
+    expect(upper.json<{ errors: unknown[] }>().errors).toEqual([
+      {
+        path: 'cubes/orders.yml',
+        folderId: folders.b,
+        message: `The name “${orders.toUpperCase()}” is already in use.`,
+      },
+    ]);
   });
 
   it('refuses a new model file at a path its folder has, and takes that path in another folder', async () => {
@@ -412,7 +439,8 @@ describe('names in R72’s grammar (T703, AC-426)', () => {
       expect(refused.statusCode, name).toBe(400);
       expect(refused.json<{ error: string }>().error, name).toBe(grammar(name));
     }
-    for (const name of [`Warehouse_${MARK}`, 'table'])
+    // Not `warehouse_…`, which /A holds: names are one per data source (T705).
+    for (const name of [`Reservoir_${MARK}`, 'table'])
       expect((await made(name)).statusCode, name).toBe(201);
   });
 });

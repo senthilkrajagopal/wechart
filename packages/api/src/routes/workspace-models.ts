@@ -1,9 +1,11 @@
+import { heldIn, namesDeclaredIn, type Names } from '../model/names';
 import { declaredIn } from '../model/split';
 import type { CompileError } from '../model/validate';
 import type { ModelOrigin } from '../db/schema';
 import type { StoredModelFile, WorkspaceModelFile } from '../repos/model-files';
 import type { ModelFile } from '../server';
 import type { ItemError } from '../xcube/client';
+import { nameInUse } from '../xcube/refusal';
 import type { OverlayContent, OverlayModel, OverlaySync, PushResult } from '../xcube/overlays';
 import { SUBMITTED } from './submitted';
 
@@ -44,6 +46,8 @@ export interface WorkspaceModelDeps {
   ) => Promise<{ readonly content: OverlayContent; readonly folders: ReadonlyMap<string, string> }>;
   /** Whether a model file waits in an open proposal, and so is frozen (T350, AC-388). */
   readonly submitted?: (fileId: string) => Promise<boolean>;
+  /** Each namespace's landed names, a draft's to be checked against (T705, AC-422). */
+  readonly landedNames?: () => Promise<Names>;
 }
 
 const NEEDS_TARGET =
@@ -137,6 +141,7 @@ export function workspaceModels({
   foldersOf,
   contentWith,
   submitted,
+  landedNames,
 }: WorkspaceModelDeps) {
   /**
    * The workspace's models now, with these changed, as the overlay would
@@ -170,10 +175,13 @@ export function workspaceModels({
    * The landed name an edit copy keeps: its original's, as its folder has it
    * now. None for a draft, a use-only copy, or a copy whose original is gone.
    */
-  const fixedNameOf = async (file: StoredModelFile): Promise<string | undefined> => {
-    if (file.origin === null || file.origin.useOnly === true) return undefined;
-    const { id, folderId } = file.origin;
-    const original = (await files.inFolders([folderId])).find((each) => each.id === id);
+  const fixedNameOf = async (file: StoredModelFile): Promise<string | undefined> =>
+    file.origin === null || file.origin.useOnly === true ? undefined : originalNameOf(file.origin);
+  /** The name a copy's original declares now; none where it is gone. */
+  const originalNameOf = async (origin: { readonly id: string; readonly folderId: string }) => {
+    const original = (await files.inFolders([origin.folderId])).find(
+      (each) => each.id === origin.id,
+    );
     return original === undefined ? undefined : declaredIn(original.content)[0]?.name;
   };
 
@@ -204,13 +212,47 @@ export function workspaceModels({
        * over it (T706, AC-423, AC-422; `[R71]` 3, 5): its title changes, its
        * name doesn't. A use-only copy is no edit of its original (AC-283).
        */
+      /** Each changed file but an edit copy, with the name it may keep: a use-only copy's original's. */
+      const drafts: { readonly file: ModelFile; readonly keeps: string | undefined }[] = [];
       for (const file of changed) {
         const stored = held.find((each) => each.folderId === folderId && each.path === file.path);
         const fixed = stored === undefined ? undefined : await fixedNameOf(stored);
-        if (fixed === undefined) continue;
-        const declared = declaredIn(file.content).map(({ name }) => name);
-        if (declared.length !== 1 || declared[0] !== fixed)
-          return { status: 409, body: { error: keepsItsName(fixed) } };
+        if (fixed !== undefined) {
+          const declared = declaredIn(file.content).map(({ name }) => name);
+          if (declared.length !== 1 || declared[0] !== fixed)
+            return { status: 409, body: { error: keepsItsName(fixed) } };
+          continue;
+        }
+        // A use-only copy stands in for its original under that one's name;
+        // a copy whose original is gone keeps none.
+        drafts.push({
+          file,
+          keeps: stored?.origin?.useOnly === true ? await originalNameOf(stored.origin) : undefined,
+        });
+      }
+      /**
+       * A draft made or renamed takes no name that has landed, in any folder
+       * and in any case, nor one another of the workspace's models declares;
+       * another workspace's drafts reserve nothing (T705; AC-422, AC-424). Said
+       * only as in use, on its file.
+       */
+      if (drafts.length > 0 && landedNames !== undefined) {
+        const landed = await landedNames();
+        const others = held.filter(
+          (each) =>
+            !(each.folderId === folderId && drafts.some(({ file }) => file.path === each.path)),
+        );
+        const taken: Names = {
+          items: [...landed.items, ...others.flatMap((each) => namesDeclaredIn(each.content))],
+          dataSources: [],
+        };
+        const errors = drafts.flatMap(({ file, keeps }) =>
+          heldIn(taken, {
+            items: namesDeclaredIn(file.content).filter((name) => name !== keeps),
+            dataSources: [],
+          }).map((name) => ({ path: file.path, message: nameInUse(name) })),
+        );
+        if (errors.length > 0) return { status: 422, body: { errors } };
       }
       const writes: WorkspaceModelFile[] = [];
       const after: Placed[] = held.filter(

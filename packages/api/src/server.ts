@@ -73,7 +73,7 @@ import type { Changeset } from './xcube/changesets';
 import { XcubeError, type XcubeAdmin } from './xcube/client';
 import { ROOT_ONLY, type PublishedFolders } from './xcube/folders';
 import { cubesUsing, extendsIn } from './xcube/used-by';
-import { landedNamesOf } from './model/names';
+import { landedNamesOf, type Except } from './model/names';
 import { declaredIn } from './model/split';
 import type { PublicationStore } from './xcube/publications';
 import { registerModelPublishing } from './model/publish';
@@ -983,6 +983,24 @@ export function buildServer({
             app.log.warn({ details }, message);
           },
         });
+  /**
+   * Each namespace's landed names (T704, T705; AC-421): the shared folders'
+   * model files and data sources, those xcube's tree holds, all but what a
+   * change replaces.
+   */
+  const landedNames =
+    modelStore === undefined
+      ? undefined
+      : async (except?: Except) => {
+          const published = folders === undefined ? ROOT_ONLY : await folders();
+          return landedNamesOf({
+            files: await modelStore.inFolders([...published.ids.keys()]),
+            dataSources: ((await dataSources?.all()) ?? []).filter((source) =>
+              published.ids.has(source.folderId),
+            ),
+            ...(except === undefined ? {} : { except }),
+          });
+        };
   const wsModels =
     overlays === undefined || modelStore === undefined
       ? undefined
@@ -991,6 +1009,7 @@ export function buildServer({
           overlays,
           foldersOf: workspaceFolderIds,
           contentWith: overlayContentWith,
+          ...(landedNames === undefined ? {} : { landedNames: () => landedNames() }),
           // Frozen while it waits in a proposal (T350, AC-388).
           submitted: async (fileId) =>
             proposals !== undefined && (await proposals.openFor('model', fileId)) !== null,
@@ -1031,6 +1050,8 @@ export function buildServer({
       },
     },
     modelFiles,
+    // One name per item (T705, AC-421): a publish's new names.
+    ...(landedNames === undefined ? {} : { landedNames }),
     // With security on, only in a folder they may write in (T334, AC-262,
     // AC-266): one they can't see answers as one that isn't there.
     refusalIn: async (request, folderId) => {
@@ -1495,20 +1516,7 @@ export function buildServer({
       bind: (kind, folderId, body, resolver) => boundIn(kind, folderId, body, undefined, resolver),
       modelLanding,
       // One name per item (T704, AC-421): what the shared folders hold.
-      ...(modelFiles?.inFolders === undefined
-        ? {}
-        : {
-            landedNames: async (except: Parameters<typeof landedNamesOf>[0]['except']) => {
-              const published = folders === undefined ? ROOT_ONLY : await folders();
-              return landedNamesOf({
-                files: await modelFiles.inFolders!([...published.ids.keys()]),
-                dataSources: ((await dataSources?.all()) ?? []).filter((source) =>
-                  published.ids.has(source.folderId),
-                ),
-                ...(except === undefined ? {} : { except }),
-              });
-            },
-          }),
+      ...(landedNames === undefined ? {} : { landedNames }),
       // Held to what its items bound to when proposed (T456, AC-321).
       ...(proposalBindings === undefined ? {} : { bindings: proposalBindings }),
       folderOfName: async (kind: 'cube' | 'dataSource', name: string) => {

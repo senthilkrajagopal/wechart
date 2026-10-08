@@ -13074,7 +13074,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - `global-names.spec.ts`, on the image: two workspaces each propose a draft of one new name. The first approval lands it. The second is refused, and nothing of it lands (AC-422).
   - Depends on: T701, T702
 
-- [ ] T705 (AC-422, AC-424, AC-282, AC-270, AC-271) Check a draft's name when it is made, renamed and proposed: against every landed name and the workspace's other drafts, never another workspace's; an edit copy keeps its original's name
+- [x] T705 (AC-422, AC-424, AC-282, AC-270, AC-271) Check a draft's name when it is made, renamed and proposed: against every landed name and the workspace's other drafts, never another workspace's; an edit copy keeps its original's name
   - Files:
     - `packages/api/src/model/names.ts`;
     - `packages/api/src/routes/workspace-models.ts`: a save declaring a new name;
@@ -13089,6 +13089,13 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - A name that lands after a draft took it refuses the draft when it is proposed (AC-422).
       - An edit copy of `orders` saves and proposes under `orders` (AC-422).
     - `routes/names.test.ts`: model files and dashboards stay unique per folder and free across folders (AC-270, AC-271). A cube's or data source's name is no longer free across folders.
+  - *Done tasks' tests T705 brought to the rule (2026-10-07), each because its premise was two items of one name:*
+    - `routes/names.test.ts` (T336): a data source of a name another folder holds is refused as in use, where it was taken; a cube's, in any case (T709 had brought the cube cases).
+    - `access/workspaces.test.ts` (T345): a workspace data source under a held name is refused in T705's words.
+    - `routes/proposal-landing.test.ts` (T451): a new draft at another path declaring the folder's landed name, which T451 moved, is refused as in use.
+    - `routes/use-only-copy.test.ts` (T543): a use-only copy keeps its original's landed name, so it isn't proposed: now by wechart's own check at propose, before xcube's (T709 had it xcube's); T717 refuses it in words of its own.
+    - `routes/workspace-rebind.test.ts` (T542) and `access/models.test.ts` (T427): as T709 reworked them, unchanged; T705's cases for a new draft of a landed name, at save and at propose, are in `draft-names.test.ts`.
+    - `POST /api/documents` makes only folders, dashboards and charts, whose names stay per folder (AC-270): no change there.
   - Depends on: T704
 
 - [x] T706 [P] (AC-423, AC-291, AC-275) Keep a landed cube's, view's or data source's name: no rename through the API or an edit copy's proposal, while titles and drafts' names still change

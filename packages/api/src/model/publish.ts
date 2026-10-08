@@ -5,7 +5,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { actorOf, recordIn } from '../audit/record';
 import { USER } from '../auth/guard';
 import type { AuditStore } from '../repos/audit';
-import { refusalOf } from '../xcube/refusal';
+import { nameInUse, refusalOf } from '../xcube/refusal';
+import { heldIn, namesDeclaredIn, type Except, type Names } from './names';
 import type { CubeClient } from '../cube/client';
 import type { MetaCache } from '../cube/meta-cache';
 import type { Config } from '../config';
@@ -177,7 +178,10 @@ export function registerModelPublishing(
     seesModelsIn,
     audit,
     workspace,
+    landedNames,
   }: {
+    /** Each namespace's landed names, a publish's new names checked against (T705, AC-421). */
+    landedNames?: (except?: Except) => Promise<Names>;
     /**
      * Models in My workspace (T347; AC-222, AC-282): saved and removed
      * through the workspace's overlay, never published. Without it, a
@@ -777,6 +781,24 @@ export function registerModelPublishing(
           return reply.status(409).send({
             error: `“${renamed.name}” has landed, so its name is fixed. Its title can still change.`,
           });
+      }
+      // One name per item (T705; AC-421, AC-424): no file of another folder,
+      // nor another of this one's, holds a name this change declares, in any
+      // case. Said only as in use, on the file.
+      if (landedNames !== undefined) {
+        const landed = await landedNames({
+          files: new Set(),
+          dataSources: new Set(),
+          paths: new Set(changed.map((file) => `${folderId}/${file.path}`)),
+        });
+        const inUse = changed.flatMap((file) =>
+          heldIn(landed, { items: namesDeclaredIn(file.content), dataSources: [] }).map((name) => ({
+            path: file.path,
+            ...folderOfFile(file),
+            message: nameInUse(name),
+          })),
+        );
+        if (inUse.length > 0) return reply.status(422).send({ errors: inUse });
       }
       const paths = new Set(changed.map((file) => file.path));
       const overTemplate = inFolder.find(

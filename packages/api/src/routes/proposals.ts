@@ -1395,11 +1395,16 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
    * One name per item (T704; AC-421, AC-422, AC-424): an approval whose
    * cube, view, split view or data source takes a name that has landed, in
    * any folder and in any case, is refused before anything of it lands. An
-   * item it replaces keeps its name, as an edit copy lands over its original,
+   * edit copy keeps its original's name, landing over it in its own folder,
    * and so does a data source this proposal landed at an approval refused
-   * since (R52). The refusal says only that the name is in use.
+   * since (R52); a draft keeps none (T705). The refusal says only that the
+   * name is in use.
    */
-  const refuseNamesInUse = async (proposal: Proposal) => {
+  const refuseNamesInUse = async (
+    proposal: { readonly id?: string; readonly items: readonly ProposedItem[] },
+    /** Approving, or proposing (T705): checked again then, for one landed since it was drafted. */
+    phase: 'approval' | 'proposal' = 'approval',
+  ) => {
     if (routes.landedNames === undefined) return;
     const models = proposal.items.filter((item) => item.kind === 'model');
     const sources = proposal.items.filter((item) => item.kind === 'data-source');
@@ -1412,11 +1417,12 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
         ? origin.id
         : undefined;
     };
+    // Only a copy keeps its original's name: a draft's `replaces`, the item
+    // of its name its target held when proposed, is no original of it.
     const kept = (items: readonly ProposedItem[]) =>
-      items
-        .flatMap((item) => [item.replaces?.id, originOf(item)])
-        .filter((id): id is string => id !== undefined);
-    const before = (await routes.versions?.landedBy(proposal.id)) ?? [];
+      items.map(originOf).filter((id): id is string => id !== undefined);
+    const before =
+      proposal.id === undefined ? [] : ((await routes.versions?.landedBy(proposal.id)) ?? []);
     const landed = await routes.landedNames({
       files: new Set([
         ...kept(models),
@@ -1435,11 +1441,12 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     });
     if (held.length === 0) return;
     const said = held.map((name) => `“${name}”`);
+    const so = phase === 'approval' ? 'so nothing was approved' : 'so it wasn’t proposed';
     throw new Refused(
       409,
       held.length === 1
-        ? `The name ${said[0]!} is already in use, so nothing was approved.`
-        : `The names ${said.slice(0, -1).join(', ')} and ${said.at(-1)!} are already in use, so nothing was approved.`,
+        ? `The name ${said[0]!} is already in use, ${so}.`
+        : `The names ${said.slice(0, -1).join(', ')} and ${said.at(-1)!} are already in use, ${so}.`,
       { names: held },
     );
   };
@@ -1859,6 +1866,8 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
           proposalId: open.id,
         });
     }
+    // A name landed since the draft took it (T705; AC-422, AC-424).
+    await refuseNamesInUse({ items }, 'proposal');
     const models = items.filter((item) => item.kind === 'model');
     let checkedModels: Extract<LandingCheck, { kind: 'checked' }> | undefined;
     if (models.length > 0 && routes.modelLanding !== undefined) {

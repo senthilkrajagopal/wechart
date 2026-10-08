@@ -320,7 +320,8 @@ describe('a model of a folder one may only read, copied to use (T543, AC-283)', 
 
   // One name per item (R71 8, T709): the copy holds its original's name,
   // which has landed, so its proposal is refused, saying only that the name
-  // is in use. T717 refuses it for every folder before xcube is asked.
+  // is in use: by wechart's own check at propose, before xcube is asked
+  // (T705, AC-422, AC-424). T717 refuses it for every folder in its own words.
   it('is not proposed to the folder it goes to: its name is its original’s, landed', async () => {
     const [file] = await files().inFolders([ids.project]);
     const proposed = await as('writer', {
@@ -328,13 +329,12 @@ describe('a model of a folder one may only read, copied to use (T543, AC-283)', 
       url: '/api/proposals',
       payload: { kind: 'model', id: file!.id },
     });
-    expect(proposed.statusCode, proposed.body).toBe(422);
-    expect(proposed.json<{ errors: { path: string; message: string }[] }>().errors).toContainEqual(
-      expect.objectContaining({
-        path: PATH,
-        message: `The name “${REGIONS}” is already in use.`,
-      }),
-    );
+    expect(proposed.statusCode, proposed.body).toBe(409);
+    expect(proposed.json<{ error: string; names: string[] }>()).toEqual({
+      error: `The name “${REGIONS}” is already in use, so it wasn’t proposed.`,
+      names: [REGIONS],
+    });
+    expect(proposed.body).not.toContain(ids.viewing);
     expect(await proposalStore(getDb()).openFor('model', file!.id)).toBeNull();
   });
 
