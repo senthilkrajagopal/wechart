@@ -757,35 +757,51 @@ describe('My workspace, as design 04 draws it (T498)', () => {
     expect(onPropose).toHaveBeenCalledWith(model);
   });
 
-  // T543 (AC-283): a use-only copy goes to its folder as a new model.
-  it('says a use-only copy of a model goes as new', () => {
+  /**
+   * T543 (AC-283), as T717 has it (R73): a use-only copy goes to no folder,
+   * so its line says so rather than "Goes to", and its row offers no
+   * Propose….
+   */
+  const useOnlyCopy: CatalogItem = {
+    kind: 'model',
+    id: 'cubes/regions.yml',
+    title: 'regions.yml',
+    owner: null,
+    updatedAt: at,
+    declares: { cubes: 1, views: 0 },
+    targetFolderId: 'sales-emea',
+    fileId: 'file-2',
+    origin: {
+      kind: 'model',
+      id: 'm-orig',
+      version: 4,
+      folderId: 'sales-emea',
+      useOnly: true,
+    },
+  };
+  it('says a use-only copy of a model goes to no folder', () => {
+    render(<FolderContents items={[useOnlyCopy]} workspace={workspace} />);
+    expect(lineOf('cubes/regions.yml')?.textContent).toBe(
+      'A copy for use only of version 4 · proposed to no folder',
+    );
+  });
+
+  it('offers no Propose… on a use-only copy’s row (T717)', async () => {
     render(
       <FolderContents
-        items={[
-          {
-            kind: 'model',
-            id: 'cubes/regions.yml',
-            title: 'regions.yml',
-            owner: null,
-            updatedAt: at,
-            declares: { cubes: 1, views: 0 },
-            targetFolderId: 'finance',
-            fileId: 'file-2',
-            origin: {
-              kind: 'model',
-              id: 'm-orig',
-              version: 4,
-              folderId: 'sales-emea',
-              useOnly: true,
-            },
-          },
-        ]}
-        workspace={workspace}
+        items={[useOnlyCopy]}
+        workspace={{ ...workspace, onPropose: vi.fn() }}
+        onOpen={vi.fn()}
+        onDelete={vi.fn()}
+        deletes={() => true}
       />,
     );
-    expect(lineOf('cubes/regions.yml')?.textContent).toBe(
-      'Goes to Finance · new, a copy for use only of version 4',
-    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for regions.yml' }));
+    expect(
+      within(screen.getByRole('menu'))
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Open', 'Delete…']);
   });
 
   it('says a folder has no target, with how many items it holds', () => {

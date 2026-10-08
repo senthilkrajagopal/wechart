@@ -275,6 +275,44 @@ describe('a calculation request (T383, AC-050)', () => {
     expect(shown?.chart).toEqual({ id: ids.shared, title: `Shared ${MARK}` });
   });
 
+  /**
+   * T717 (AC-283, R73): a use-only copy's page asks for a change to its
+   * cube with no chart: its cube and the description, no fields in use,
+   * listed with no chart to those it is asked of.
+   */
+  it('is recorded with no chart, as a use-only copy’s page asks one: its cube and description alone', async () => {
+    const asked = await ask('manager', { cube: FULL, description: `No chart (${MARK})` });
+    expect(asked.statusCode, asked.body).toBe(201);
+    const { id } = asked.json<{ id: string }>();
+    const NONE = { measures: [], dimensions: [], timeDimensions: [], filters: [] };
+    expect(await calcRequestStore(getDb()).get(id)).toEqual(
+      expect.objectContaining({
+        chartId: null,
+        cube: FULL,
+        folderId: ids.sales,
+        modelPath: PATH,
+        fields: NONE,
+        description: `No chart (${MARK})`,
+        status: 'open',
+      }),
+    );
+    const shown = (await listOf('writer')).find((each) => each.id === id);
+    expect(shown).toEqual(expect.objectContaining({ chart: null, fromChart: false, fields: NONE }));
+    // One asked from a chart says so, whether or not the viewer may open it.
+    expect((await listOf('writer')).find((each) => each.id !== id)).toEqual(
+      expect.objectContaining({ fromChart: true }),
+    );
+    // Still a cube a shared folder's model defines, and a description.
+    expect((await ask('manager', { cube: `${MARK}_nothing`, description: 'x' })).statusCode).toBe(
+      409,
+    );
+    expect((await ask('manager', { cube: FULL, description: ' ' })).statusCode).toBe(400);
+    // Fields are a chart's: with no chart, none are taken.
+    expect(
+      (await ask('manager', { cube: FULL, fields: FIELDS, description: 'x' })).statusCode,
+    ).toBe(400);
+  });
+
   it('is refused without a chart the user may open, a cube a shared folder’s model defines, or a description', async () => {
     const valid = { chartId: ids.chart, cube: FULL, fields: FIELDS, description: DESCRIPTION };
     // Another's workspace chart is one that isn't there.

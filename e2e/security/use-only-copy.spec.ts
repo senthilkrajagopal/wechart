@@ -2,12 +2,15 @@ import { landed } from '../model-files';
 import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
 
 /**
- * T543 (AC-283; the user's answer "Yes, use-only copy", R53), against
- * compose's xcube: `writer` (`sales-rw`) writes /Parent/Child and so reads
- * every kind of item in /Parent, which `managers` write. They copy /Parent's
- * model into My workspace to use, choosing /Parent/Child for it to go to as a
- * new model. Its previews use it, Explore says it is for use only, and it is
- * proposed to /Parent/Child, never back to /Parent.
+ * T543 (AC-283; the user's answer "Yes, use-only copy", R53), as T717 has it
+ * (R73), against compose's xcube on the R71 image: `writer` (`sales-rw`)
+ * writes /Parent/Child and so reads every kind of item in /Parent, which
+ * `managers` write. They copy /Parent's model into My workspace to use,
+ * asked for no folder. Its previews use it, Explore says it is for use only
+ * and proposed to no folder, and offers no Propose…; the API refuses its
+ * proposal. Its page offers "Request a change", a calculation request for
+ * its cube with no chart; and a chart on it still offers "Request a
+ * calculation…" (AC-050).
  */
 const RUN = Math.random().toString(36).slice(2, 8);
 const PARENT = `Parent ${RUN}`;
@@ -16,7 +19,7 @@ const CUBE = `t543_${RUN}`;
 const PATH = `cubes/${CUBE}.yml`;
 const cubeOf = (n: number) =>
   `cubes:\n  - name: ${CUBE}\n    sql: SELECT ${String(n)} AS n\n    measures:\n      - name: n\n        sql: n\n        type: sum\n`;
-const made = { parent: '', child: '', project: '', proposal: '', board: '' };
+const made = { parent: '', child: '', project: '', board: '', chart: '' };
 
 test.describe.configure({ mode: 'serial' });
 
@@ -31,8 +34,7 @@ test.describe('a model of a folder one may only read, used in My workspace (T543
       await signInThroughDex(await context.newPage(), who);
       const { request } = context;
       if (who === 'writer') {
-        if (made.proposal !== '')
-          await request.post(`/api/proposals/${made.proposal}/reject`, { data: {} });
+        if (made.chart !== '') await request.delete(`/api/documents/chart/${made.chart}`);
         if (made.board !== '') await request.delete(`/api/documents/dashboard/${made.board}`);
         if (made.project !== '') {
           await request.delete(
@@ -85,7 +87,7 @@ test.describe('a model of a folder one may only read, used in My workspace (T543
   test.describe('as writer', () => {
     test.use({ role: 'writer' });
 
-    test('uses /Parent’s model in My workspace, going to /Parent/Child as a new model', async ({
+    test('uses /Parent’s model in My workspace, asked for no folder, proposed to none', async ({
       page,
     }) => {
       await page.goto(`/explore/folders/${made.parent}/models/${encodeURIComponent(PATH)}`);
@@ -94,12 +96,9 @@ test.describe('a model of a folder one may only read, used in My workspace (T543
       await page.getByRole('button', { name: 'Use in my workspace' }).click();
       const dialog = page.getByRole('dialog', { name: `Use ${CUBE}.yml in My workspace` });
       await expect(dialog.getByTestId('use-note')).toHaveText(
-        `You may only read ${PARENT}, so this copy can’t be proposed back there. Choose a folder you may write: it goes there as a new model when you propose it.`,
+        `You may only read ${PARENT}, so this copy is for use in My workspace only: it can’t be proposed to any folder. To change the shared cube, send ${PARENT} a request from the copy’s page.`,
       );
-      // Never /Parent itself: only folders they write.
-      const target = dialog.getByRole('combobox', { name: 'Target folder' });
-      await expect(target.locator(`option[value="${made.parent}"]`)).toHaveCount(0);
-      await target.selectOption(made.child);
+      await expect(dialog.getByRole('combobox')).toHaveCount(0);
       await dialog.getByRole('button', { name: 'Copy to My workspace' }).click();
 
       // The copy opens in its project folder in My workspace.
@@ -108,13 +107,18 @@ test.describe('a model of a folder one may only read, used in My workspace (T543
       made.project = /\/explore\/folders\/([0-9a-f-]{36})\//.exec(page.url())![1]!;
       await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeVisible();
 
+      // Explore says it goes nowhere, and offers no Propose… for it.
       await page.goto(`/explore?folder=${made.project}`);
       await expect(
-        page.getByText(`Goes to ${PARENT} / ${CHILD} · new, a copy for use only of version 1`),
+        page.getByText('A copy for use only of version 1 · proposed to no folder'),
       ).toBeVisible();
+      await page.getByRole('button', { name: `Actions for ${CUBE}.yml` }).click();
+      const menu = page.getByRole('menu', { name: `Actions for ${CUBE}.yml` });
+      await expect(menu.getByRole('menuitem', { name: 'Open' })).toBeVisible();
+      await expect(menu.getByRole('menuitem', { name: 'Propose…' })).toHaveCount(0);
     });
 
-    test('previews with it, and proposes it to /Parent/Child alone, as new', async ({ page }) => {
+    test('previews with it, and its proposal is refused, saying why', async ({ page }) => {
       const { request } = page;
       // A changed copy, previewed in a workspace dashboard going to /Parent/Child.
       const saved = await request.post('/api/model/publish', {
@@ -131,7 +135,8 @@ test.describe('a model of a folder one may only read, used in My workspace (T543
         },
       });
       made.board = ((await board.json()) as { id: string }).id;
-      const member = `f${made.child.replaceAll('-', '')}__${CUBE}.n`;
+      // Its one name, its original's (R71): the copy stands in for it.
+      const member = `${CUBE}.n`;
       const answer = await request.post('/api/load', {
         data: { query: { measures: [member] }, for: { kind: 'dashboard', id: made.board } },
         timeout: 90_000,
@@ -147,17 +152,70 @@ test.describe('a model of a folder one may only read, used in My workspace (T543
       const proposed = await request.post('/api/proposals', {
         data: { kind: 'model', id: file!.fileId },
       });
-      expect(proposed.status(), await proposed.text()).toBe(201);
-      const proposal = (await proposed.json()) as {
-        id: string;
-        targetFolderId: string;
-        items: { landsIn: string; replaces: unknown }[];
+      expect(proposed.status(), await proposed.text()).toBe(409);
+      expect(((await proposed.json()) as { error: string }).error).toBe(
+        `“${PATH}” is a copy for use only, so it can’t be proposed to any folder. To change “${CUBE}”, send its folder a request from the copy’s page.`,
+      );
+    });
+
+    test('asks /Parent for a change from the copy’s page, with no chart (R73)', async ({
+      page,
+    }) => {
+      await page.goto(`/explore/folders/${made.project}/models/${encodeURIComponent(PATH)}`);
+      await page.getByRole('button', { name: 'Request a change' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Request a change' });
+      await expect(dialog.getByTestId('request-note')).toHaveText(
+        `Describe the change you need to ${CUBE}. It goes to the people who may change the model that defines it.`,
+      );
+      await dialog
+        .getByRole('textbox', { name: 'What should change?' })
+        .fill(`A margin measure ${RUN}`);
+      const sent = page.waitForResponse(
+        (response) =>
+          response.url().endsWith('/api/calc-requests') && response.request().method() === 'POST',
+      );
+      await dialog.getByRole('button', { name: 'Send request' }).click();
+      expect((await sent).status()).toBe(201);
+      await expect(dialog.getByRole('status')).toHaveText(
+        'Sent. It’s listed for them under Reviews › Calculation requests.',
+      );
+    });
+
+    test('still offers "Request a calculation…" from a chart on it (AC-050)', async ({ page }) => {
+      const { request } = page;
+      const created = await request.post('/api/documents', {
+        data: {
+          kind: 'chart',
+          title: `On the copy ${RUN}`,
+          folderId: made.project,
+          targetFolderId: made.child,
+        },
+      });
+      expect(created.status(), await created.text()).toBe(201);
+      made.chart = ((await created.json()) as { id: string }).id;
+      const stored = (await (await request.get(`/api/documents/chart/${made.chart}`)).json()) as {
+        body: Record<string, unknown>;
+        version: number;
       };
-      made.proposal = proposal.id;
-      expect(proposal.targetFolderId).toBe(made.child);
-      expect(proposal.items.map(({ landsIn, replaces }) => ({ landsIn, replaces }))).toEqual([
-        { landsIn: made.child, replaces: null },
-      ]);
+      const saved = await request.put(`/api/documents/chart/${made.chart}`, {
+        data: {
+          version: stored.version,
+          body: {
+            ...stored.body,
+            chart: {
+              source: { cube: CUBE },
+              wells: { measures: [`${CUBE}.n`], dimensions: [], timeDimensions: [] },
+            },
+          },
+        },
+      });
+      expect(saved.status(), await saved.text()).toBe(200);
+
+      await page.goto(`/explore/charts/${made.chart}/edit`);
+      const pill = page.getByTestId(`in-measures-${CUBE}.n`);
+      await expect(pill).toBeVisible();
+      await pill.getByRole('button', { name: /^Calculations on / }).click();
+      await expect(page.getByRole('menuitem', { name: 'Request a calculation…' })).toBeVisible();
     });
   });
 });

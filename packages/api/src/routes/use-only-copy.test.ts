@@ -22,21 +22,25 @@ import { workspaceOverlayIdOf } from '../xcube/overlays';
 import { removeProjectFolders, TEST_TIME_ZONE } from './project-folder.fixture';
 
 /**
- * T543 (AC-283; the user's answer "Yes, use-only copy", R53): a model of a
- * folder the user may only read is copied into their workspace to use, going
- * to a folder they may write, as a new model there. It is marked so, and is
- * never proposed back to the folder it came from. Its previews use it.
+ * T543 (AC-283; the user's answer "Yes, use-only copy", R53), as T717 has it
+ * under R71 and R73: a model of a folder the user may only read is copied
+ * into their workspace to use, asking for no folder: it is placed where its
+ * original is, standing in for it in their previews, marked for use only, and
+ * proposed to no folder. A dashboard drawn on its cube is proposed without
+ * it, and lands on the landed cube.
  *
  * `writer` (`sales-rw`) writes /Viewing/Sales and /Ops, and so reads every
- * kind of item in /Viewing (AC-262), which is `managers`' to write; /Ops has
- * a cube of the copied one's name already. `reader` (`sales-ro`) reads
- * /Viewing's dashboards alone (AC-263), its models not at all. Against the
- * suite's database, the stub xcube and a stub Cube that records each query.
+ * kind of item in /Viewing (AC-262), which is `managers`' to write. `reader`
+ * (`sales-ro`) reads /Viewing's dashboards alone (AC-263), its models not at
+ * all. Against the suite's database, the stub xcube and a stub Cube that
+ * records each query.
  */
 const MARK = `uo${randomUUID().replaceAll('-', '').slice(0, 8)}`;
 const MODEL = `uoc-${MARK}`;
 const REGIONS = `${MARK}_regions`;
 const PATH = `cubes/${REGIONS}.yml`;
+const GLIMPSED = `${MARK}_glimpsed`;
+const GLIMPSED_PATH = `cubes/${GLIMPSED}.yml`;
 const cube = (name: string, extra = '') =>
   `cubes:\n  - name: ${name}\n    sql_table: public.${name}\n    measures:\n      - name: count\n        type: count\n${extra}`;
 
@@ -107,10 +111,10 @@ beforeAll(async () => {
     });
     ids[key] = id;
   }
+  // One item of a name (R71): /Glimpsed's cube is a name of its own.
   await files().write([
     { folderId: ids.viewing, path: PATH, content: cube(REGIONS) },
-    { folderId: ids.ops, path: PATH, content: cube(REGIONS, '    description: Ops’ own\n') },
-    { folderId: ids.glimpsed, path: PATH, content: cube(REGIONS) },
+    { folderId: ids.glimpsed, path: GLIMPSED_PATH, content: cube(GLIMPSED) },
   ]);
   ids.original = (await files().inFolders([ids.viewing]))[0]!.id;
   const xids = new Map([
@@ -136,7 +140,7 @@ beforeAll(async () => {
   ]);
   stub.holdItems(MODEL, [
     { folderId: 'fviewing', name: REGIONS, kind: 'cube', yaml: cube(REGIONS) },
-    { folderId: 'fops', name: REGIONS, kind: 'cube', yaml: cube(REGIONS) },
+    { folderId: 'fglimpsed', name: GLIMPSED, kind: 'cube', yaml: cube(GLIMPSED) },
   ]);
   app = buildServer({
     config: {
@@ -213,16 +217,14 @@ const copy = (target?: string, who = 'writer') =>
     },
   });
 
-describe('a model of a folder one may only read, copied to use (T543, AC-283)', () => {
-  it('asks for a folder they may write, never the one it came from, nor one with a cube of its name', async () => {
-    const none = await copy();
-    expect(none.statusCode, none.body).toBe(400);
-    expect(none.json<{ error: string }>().error).toBe(
-      'You may only read the folder this model is in, so a copy of it can’t go back there. Name a folder you may write for it to go to, as a new model.',
-    );
-    expect((await copy(ids.viewing)).statusCode).toBe(403);
-    // One who sees only its dashboards sees no model to copy (AC-263): one
-    // with no workspace is told so first, and one with a workspace finds none.
+describe('a model of a folder one may only read, copied to use (T543, T717, AC-283)', () => {
+  /**
+   * T543 asked for a folder the user writes, where the copy went as a new
+   * model; R73 takes that away with the copy's proposal (T717). Still: one
+   * with no workspace is told so, and one who sees only a folder's
+   * dashboards finds no model to copy there (AC-263).
+   */
+  it('is refused to one with no workspace, and finds none where only dashboards are seen', async () => {
     expect((await copy(undefined, 'reader')).statusCode).toBe(403);
     const glimpsed = await as('writer', {
       method: 'POST',
@@ -230,22 +232,15 @@ describe('a model of a folder one may only read, copied to use (T543, AC-283)', 
       payload: {
         kind: 'model',
         folderId: ids.glimpsed,
-        path: PATH,
+        path: GLIMPSED_PATH,
         timeZone: TEST_TIME_ZONE,
-        targetFolderId: ids.sales,
       },
     });
     expect(glimpsed.statusCode, glimpsed.body).toBe(404);
-    const taken = await copy(ids.ops);
-    expect(taken.statusCode, taken.body).toBe(409);
-    // Said only as in use, never where (T726's review, AC-424).
-    expect(taken.json<{ error: string }>().error).toBe(
-      `The name “${REGIONS}” is already in use. A use-only copy goes to its folder as a new model: choose another folder.`,
-    );
   });
 
-  it('is copied in, going to that folder, marked for use only, and its previews use it', async () => {
-    const copied = await copy(ids.sales);
+  it('is copied in asking for no folder, placed where its original is, marked for use only, and its previews use it', async () => {
+    const copied = await copy();
     expect(copied.statusCode, copied.body).toBe(201);
     ids.project = copied.json<{ folderId: string }>().folderId;
     ids.workspace = String((await docs().get('folder', ids.project))!.body['folderId']);
@@ -254,11 +249,11 @@ describe('a model of a folder one may only read, copied to use (T543, AC-283)', 
       expect.objectContaining({
         path: PATH,
         content: cube(REGIONS),
-        targetFolderId: ids.sales,
+        targetFolderId: ids.viewing,
         origin: { id: ids.original, folderId: ids.viewing, path: PATH, version: 1, useOnly: true },
       }),
     );
-    // Placed in its target, as a new model there.
+    // Placed where its original is, standing in for it.
     expect(
       stub
         .overlay(MODEL, workspaceOverlayIdOf(ids.workspace))
@@ -266,7 +261,7 @@ describe('a model of a folder one may only read, copied to use (T543, AC-283)', 
           folderId,
           name,
         })),
-    ).toEqual([{ folderId: 'fsales', name: REGIONS }]);
+    ).toEqual([{ folderId: 'fviewing', name: REGIONS }]);
     // Explore says it is for use only.
     const contents = await as('writer', {
       method: 'GET',
@@ -308,7 +303,7 @@ describe('a model of a folder one may only read, copied to use (T543, AC-283)', 
       overlay: workspaceOverlayIdOf(ids.workspace),
     });
 
-    // Copied again, the copy already there opens.
+    // Copied again, the copy already there opens; a folder sent is no target of its.
     const again = await copy(ids.sales);
     expect(again.statusCode, again.body).toBe(200);
     expect(again.json()).toEqual({
@@ -319,11 +314,11 @@ describe('a model of a folder one may only read, copied to use (T543, AC-283)', 
     });
   });
 
-  // One name per item (R71 8, T709): the copy holds its original's name,
-  // which has landed, so its proposal is refused, saying only that the name
-  // is in use: by wechart's own check at propose, before xcube is asked
-  // (T705, AC-422, AC-424). T717 refuses it for every folder in its own words.
-  it('is not proposed to the folder it goes to: its name is its original’s, landed', async () => {
+  /** The words a use-only copy's proposal is refused in, wherever it would go (T717). */
+  const USE_ONLY = `“${PATH}” is a copy for use only, so it can’t be proposed to any folder. To change “${REGIONS}”, send its folder a request from the copy’s page.`;
+
+  // T717 (AC-283): to no folder, in words of its own; nothing proposed.
+  it('is proposed to no folder: refused, saying why and what to do instead', async () => {
     const [file] = await files().inFolders([ids.project]);
     const proposed = await as('writer', {
       method: 'POST',
@@ -331,22 +326,79 @@ describe('a model of a folder one may only read, copied to use (T543, AC-283)', 
       payload: { kind: 'model', id: file!.id },
     });
     expect(proposed.statusCode, proposed.body).toBe(409);
-    expect(proposed.json<{ error: string; names: string[] }>()).toEqual({
-      error: `The name “${REGIONS}” is already in use, so it wasn’t proposed.`,
-      names: [REGIONS],
-    });
+    expect(proposed.json<{ error: string }>().error).toBe(USE_ONLY);
     expect(proposed.body).not.toContain(ids.viewing);
     expect(await proposalStore(getDb()).openFor('model', file!.id)).toBeNull();
-  });
-
-  it('is never proposed back to the folder it came from, even by one who may write it since', async () => {
-    // However it came to go there: no route sends it, so it is set here.
-    const [file] = await files().inFolders([ids.project]);
+    // Nor to a folder its maker writes, however it came to go there.
     await getDb()
       .updateTable('model_files')
-      .set({ target_folder_id: ids.viewing })
+      .set({ target_folder_id: ids.sales })
       .where('id', '=', file!.id)
       .execute();
+    try {
+      const elsewhere = await as('writer', {
+        method: 'POST',
+        url: '/api/proposals',
+        payload: { kind: 'model', id: file!.id },
+      });
+      expect(elsewhere.statusCode, elsewhere.body).toBe(409);
+      expect(elsewhere.json<{ error: string }>().error).toBe(USE_ONLY);
+    } finally {
+      await getDb()
+        .updateTable('model_files')
+        .set({ target_folder_id: ids.viewing })
+        .where('id', '=', file!.id)
+        .execute();
+    }
+  });
+
+  // T717: a dashboard drawn on its cube goes without it, landing on the landed cube.
+  it('stays behind when a dashboard drawn on its cube is proposed', async () => {
+    const board = randomUUID();
+    const chart = randomUUID();
+    await docs().create({
+      kind: 'chart',
+      id: chart,
+      body: {
+        schemaVersion: 1,
+        owner: 'admin',
+        title: `Tile ${MARK}`,
+        localToDashboardId: board,
+        chart: { source: { cube: REGIONS }, wells: { measures: [`${REGIONS}.count`] } },
+      },
+    });
+    await docs().create({
+      kind: 'dashboard',
+      id: board,
+      body: {
+        schemaVersion: 1,
+        owner: 'admin',
+        title: `Drawn ${MARK}`,
+        folderId: ids.project,
+        targetFolderId: ids.sales,
+        pages: [{ id: 'p1', items: [{ id: 't1', kind: 'chart', chartId: chart }] }],
+        charts: [chart],
+      },
+    });
+    const proposed = await as('writer', {
+      method: 'POST',
+      url: '/api/proposals',
+      payload: { kind: 'dashboard', id: board },
+    });
+    expect(proposed.statusCode, proposed.body).toBe(201);
+    expect(
+      proposed.json<{ items: { kind: string }[] }>().items.map((item) => item.kind),
+    ).not.toContain('model');
+    const withdrawn = await as('writer', {
+      method: 'POST',
+      url: `/api/proposals/${proposed.json<{ id: string }>().id}/reject`,
+      payload: {},
+    });
+    expect(withdrawn.statusCode, withdrawn.body).toBe(200);
+  });
+
+  it('is proposed to no folder even by one who may write its original’s since', async () => {
+    const [file] = await files().inFolders([ids.project]);
     const folder = (await docs().get('folder', ids.viewing))!;
     await docs().update({
       kind: 'folder',
@@ -361,15 +413,8 @@ describe('a model of a folder one may only read, copied to use (T543, AC-283)', 
         payload: { kind: 'model', id: file!.id },
       });
       expect(proposed.statusCode, proposed.body).toBe(409);
-      expect(proposed.json<{ error: string }>().error).toBe(
-        `“${PATH}” is a copy for use only of a model in a folder you could only read: it can’t be proposed back there.`,
-      );
+      expect(proposed.json<{ error: string }>().error).toBe(USE_ONLY);
     } finally {
-      await getDb()
-        .updateTable('model_files')
-        .set({ target_folder_id: ids.sales })
-        .where('id', '=', file!.id)
-        .execute();
       const now = (await docs().get('folder', ids.viewing))!;
       await docs().update({
         kind: 'folder',

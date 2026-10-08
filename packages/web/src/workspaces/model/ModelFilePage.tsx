@@ -65,13 +65,16 @@ import { AnnotationsBar } from './AnnotationsBar';
 import { memberLines } from './memberLines';
 import {
   copyModelToWorkspace,
+  declaredNameOf,
   draftTargetOf,
   filesBeside,
+  isUseOnlyCopy,
   keepDraftTarget,
   namedFileOf,
   savedTargetOf,
   targetsOf,
 } from './workspaceModels';
+import { RequestChange } from './RequestChange';
 import { UseInWorkspaceDialog } from './UseInWorkspaceDialog';
 
 /**
@@ -265,9 +268,9 @@ function EditInWorkspace({
 
 /**
  * "Use in my workspace" (T543, AC-283; R53), as one who may only read the
- * model's folder is offered it: asked which folder they write it goes to,
- * the file is copied into My workspace for use, or the copy already there
- * opened there. It is never proposed back to this folder.
+ * model's folder is offered it: the file is copied into My workspace for
+ * use, or the copy already there opened there. It is proposed to no folder,
+ * so no folder is asked for (T717, R73).
  */
 function UseInWorkspace({
   folderId,
@@ -283,7 +286,6 @@ function UseInWorkspace({
   const [asking, setAsking] = useState(false);
   const [copying, setCopying] = useState(false);
   const [failure, setFailure] = useState<string>();
-  const targets = useQuery({ queryKey: ['folder-targets'], queryFn: targetsOf, enabled: asking });
   const button = useRef<HTMLButtonElement>(null);
   return (
     <>
@@ -299,27 +301,20 @@ function UseInWorkspace({
         <PencilIcon />
         Use in my workspace
       </button>
-      {/* The folders it may go to couldn't be read: said, not left silent (T543's review). */}
-      {asking && targets.isError ? (
-        <StateLine kind="err" className="model-editor__with model-editor__blocked">
-          {targets.error.message}
-        </StateLine>
-      ) : null}
-      {asking && targets.isSuccess ? (
+      {asking ? (
         <UseInWorkspaceDialog
           path={path}
           folderWords={words}
-          targets={targets.data}
           busy={copying}
           failure={failure}
           onClose={() => {
             setAsking(false);
             button.current?.focus();
           }}
-          onCopy={(target) => {
+          onCopy={() => {
             setCopying(true);
             setFailure(undefined);
-            void copyModelToWorkspace(folderId, path, target).then((copied) => {
+            void copyModelToWorkspace(folderId, path).then((copied) => {
               setCopying(false);
               if ('error' in copied) {
                 setFailure(copied.error);
@@ -740,6 +735,13 @@ function FileEditor({
     enabled: where.inWorkspace,
     retry: false,
   });
+  /** A use-only copy, saved in My workspace: its page offers "Request a change" (T717, AC-283). */
+  const useOnly = useQuery({
+    queryKey: ['model-use-only', where.folderId, path],
+    queryFn: () => isUseOnlyCopy(where.folderId, path),
+    enabled: where.inWorkspace && published,
+    retry: false,
+  });
   const everyFile = useQuery({
     ...ALL_MODEL_FILES_QUERY,
     enabled: where.inWorkspace && landsIn.data != null,
@@ -806,6 +808,8 @@ function FileEditor({
    * for a file made here, so it has something to publish from the start.
    */
   const [saved, setSaved] = useState(published ? content : '');
+  /** What a use-only copy's "Request a change" asks about: its saved file's cube or view (T717). */
+  const requestable = useMemo(() => declaredNameOf(saved), [saved]);
   const [publishing, setPublishing] = useState(false);
   /** Cube's reasons for refusing the last save, by file (AC-136). */
   const [cubeProblems, setCubeProblems] = useState<readonly CubeProblem[]>([]);
@@ -1150,6 +1154,17 @@ function FileEditor({
             ) : null
           ) : (
             <>
+              {/* Proposed to no folder, a use-only copy asks its cube's folder
+                  for a change instead (T717, AC-283; R73): about the cube or
+                  view its saved file holds, its original's name. */}
+              {useOnly.data === true && requestable !== undefined ? (
+                <RequestChange cube={requestable} cubeTitle={requestable} />
+              ) : null}
+              {useOnly.isError ? (
+                <StateLine kind="err" className="model-editor__with model-editor__blocked">
+                  {useOnly.error.message}
+                </StateLine>
+              ) : null}
               {/* Both always there, as design 03 draws them; pressed only with a
                   change (D2) — a file made here always has one to discard. */}
               <button

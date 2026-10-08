@@ -9,6 +9,8 @@ import { proposedText } from './reviews';
 export interface CalcRequestRow {
   readonly id: string;
   readonly chart: { readonly id: string; readonly title: string } | null;
+  /** False for one asked from a use-only copy's page, with no chart and no fields (T717). */
+  readonly fromChart?: boolean;
   /** The chart's cube or view, by its full published name. */
   readonly cube: string;
   /** The folder whose model defines it, and its path below Shared. */

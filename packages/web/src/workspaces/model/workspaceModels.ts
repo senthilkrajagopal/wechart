@@ -1,3 +1,5 @@
+import { parseDocument } from 'yaml';
+
 import type { Target } from '../explore/NewItemDialog';
 import { browserTimeZone } from '../explore/projectFolder';
 import { objectsOf } from './objects';
@@ -54,8 +56,6 @@ export function filesBeside<Shared extends FileText & { readonly folderId?: stri
 export async function copyModelToWorkspace(
   folderId: string,
   path: string,
-  /** A use-only copy's: the folder the user writes it goes to, as a new model (T543, AC-283). */
-  targetFolderId?: string,
 ): Promise<{ readonly folderId: string; readonly path: string } | { readonly error: string }> {
   let response: Response;
   try {
@@ -67,7 +67,6 @@ export async function copyModelToWorkspace(
         folderId,
         path,
         timeZone: browserTimeZone(),
-        ...(targetFolderId === undefined ? {} : { targetFolderId }),
       }),
     });
   } catch {
@@ -104,6 +103,48 @@ export async function savedTargetOf(folderId: string, path: string): Promise<str
   }[];
   const target = rows.find((row) => row.kind === 'model' && row.id === path)?.targetFolderId;
   return typeof target === 'string' && target !== '' ? target : undefined;
+}
+
+/**
+ * The cube or view a model file declares, by name: its first cube's, else
+ * its first view's (T717's review, AC-283: a use-only copy's "Request a
+ * change" asks about the name its saved file holds). None where it declares
+ * nothing or doesn't parse.
+ */
+export function declaredNameOf(content: string): string | undefined {
+  let model: unknown;
+  try {
+    const document = parseDocument(content);
+    if (document.errors.length > 0) return undefined;
+    model = document.toJS();
+  } catch {
+    return undefined;
+  }
+  if (model === null || typeof model !== 'object') return undefined;
+  for (const key of ['cubes', 'views'] as const) {
+    const items = (model as Record<string, unknown>)[key];
+    const name = Array.isArray(items)
+      ? (items[0] as { name?: unknown } | undefined)?.name
+      : undefined;
+    if (typeof name === 'string' && name !== '') return name;
+  }
+  return undefined;
+}
+
+/**
+ * Whether a saved workspace file is a use-only copy (T543, T717, AC-283):
+ * proposed to no folder, its page offers "Request a change" instead.
+ */
+export async function isUseOnlyCopy(folderId: string, path: string): Promise<boolean> {
+  const response = await fetch(`/api/folders/${encodeURIComponent(folderId)}/contents`);
+  if (!response.ok)
+    throw new Error(`Could not read what the model was copied from (${String(response.status)}).`);
+  const rows = (await response.json()) as {
+    kind?: unknown;
+    id?: unknown;
+    origin?: { useOnly?: unknown } | null;
+  }[];
+  return rows.find((row) => row.kind === 'model' && row.id === path)?.origin?.useOnly === true;
 }
 
 /** The shared folders a new workspace item may go to: those the user writes (T345). */

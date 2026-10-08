@@ -5,15 +5,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { UseInWorkspaceDialog } from './UseInWorkspaceDialog';
 
 /**
- * T543 (AC-283; R53, "Yes, use-only copy"): a model of a folder the user may
- * only read is copied into My workspace to use. It can't go back to that
- * folder, so they choose one they write, where it goes as a new model.
+ * T543 (AC-283; R53, "Yes, use-only copy"), as T717 has it (R73): a model of
+ * a folder the user may only read is copied into My workspace to use. It is
+ * proposed to no folder, so the dialog asks for none: it says so, and that a
+ * change to the shared cube is asked of its folder from the copy's page.
  */
-const TARGETS = [
-  { id: 'sales', path: ['Viewing', 'Sales'] },
-  { id: 'ops', path: ['Ops'] },
-];
-
 function shown(over: Partial<Parameters<typeof UseInWorkspaceDialog>[0]> = {}) {
   const onCopy = vi.fn();
   const onClose = vi.fn();
@@ -21,7 +17,6 @@ function shown(over: Partial<Parameters<typeof UseInWorkspaceDialog>[0]> = {}) {
     <UseInWorkspaceDialog
       path="cubes/regions.yml"
       folderWords="Viewing"
-      targets={TARGETS}
       onCopy={onCopy}
       onClose={onClose}
       {...over}
@@ -34,45 +29,28 @@ function shown(over: Partial<Parameters<typeof UseInWorkspaceDialog>[0]> = {}) {
   };
 }
 
-describe('Use in my workspace (T543, AC-283)', () => {
-  it('says the copy can’t go back, and asks which folder it goes to as a new model', async () => {
+describe('Use in my workspace (T543, T717, AC-283)', () => {
+  it('says the copy is proposed to no folder, asks for none, and copies it', async () => {
     const { dialog, onCopy } = shown();
     expect(within(dialog).getByTestId('use-note').textContent).toBe(
-      'You may only read Viewing, so this copy can’t be proposed back there. Choose a folder you may write: it goes there as a new model when you propose it.',
+      'You may only read Viewing, so this copy is for use in My workspace only: it can’t be proposed to any folder. To change the shared cube, send Viewing a request from the copy’s page.',
     );
-    const copy = within(dialog).getByRole('button', { name: 'Copy to My workspace' });
-    expect(copy.hasAttribute('disabled')).toBe(true);
-    await userEvent.selectOptions(
-      within(dialog).getByRole('combobox', { name: 'Target folder' }),
-      'ops',
-    );
-    await userEvent.click(copy);
-    expect(onCopy).toHaveBeenCalledWith('ops');
-  });
-
-  it('chooses the one folder there is, and says where there is none', () => {
-    const { dialog } = shown({ targets: [TARGETS[1]!] });
-    expect(
-      (within(dialog).getByRole('combobox', { name: 'Target folder' }) as HTMLSelectElement).value,
-    ).toBe('ops');
-    expect(
-      within(dialog).getByRole('button', { name: 'Copy to My workspace' }).hasAttribute('disabled'),
-    ).toBe(false);
-  });
-
-  it('says there is nowhere for it to go without a folder to write, and why a copy was refused', () => {
-    const { dialog } = shown({
-      targets: [],
-      failure: 'Ops has a cube or view named “regions” already.',
-    });
     expect(within(dialog).queryByRole('combobox')).toBeNull();
-    expect(
-      within(dialog).getByText(
-        'You have read-write access to no shared folder, so there is nowhere for it to go.',
-      ),
-    ).toBeTruthy();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Copy to My workspace' }));
+    expect(onCopy).toHaveBeenCalledWith();
+  });
+
+  it('says why a copy was refused', () => {
+    const { dialog } = shown({ failure: 'wechart could not be reached, so nothing was copied.' });
     expect(within(dialog).getByRole('alert').textContent).toBe(
-      'Ops has a cube or view named “regions” already.',
+      'wechart could not be reached, so nothing was copied.',
+    );
+  });
+
+  it('is disabled while copying', () => {
+    const { dialog } = shown({ busy: true });
+    expect(within(dialog).getByRole('button', { name: 'Copying…' }).hasAttribute('disabled')).toBe(
+      true,
     );
   });
 

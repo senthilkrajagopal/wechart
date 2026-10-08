@@ -12,7 +12,8 @@ import type { OpenRequest } from './calc-resolution';
  */
 export interface CalcRequest {
   readonly id: string;
-  readonly chartId: string;
+  /** None for one asked from a use-only copy's page, with no fields in use (T717). */
+  readonly chartId: string | null;
   /** The chart's cube or view, by its full published name. */
   readonly cube: string;
   readonly folderId: string;

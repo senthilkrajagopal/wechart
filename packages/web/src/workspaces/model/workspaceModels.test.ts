@@ -1,6 +1,27 @@
 import { describe, expect, it } from 'vitest';
 
-import { filesBeside } from './workspaceModels';
+import { declaredNameOf, filesBeside } from './workspaceModels';
+
+/**
+ * T717's review (AC-283): "Request a change" asks about the cube or view the
+ * copy's saved file declares, a view's included, never the form's unsaved
+ * text.
+ */
+describe('the name a saved model file declares', () => {
+  it('is its cube’s, or its view’s where it declares only a view', () => {
+    expect(declaredNameOf('cubes:\n  - name: regions\n    sql_table: public.regions\n')).toBe(
+      'regions',
+    );
+    expect(
+      declaredNameOf('views:\n  - name: sales_view\n    cubes:\n      - join_path: orders\n'),
+    ).toBe('sales_view');
+  });
+
+  it('is none for text that declares nothing, or doesn’t parse', () => {
+    expect(declaredNameOf('')).toBeUndefined();
+    expect(declaredNameOf('cubes: [')).toBeUndefined();
+  });
+});
 
 const cube = (name: string) => `cubes:\n  - name: ${name}\n    sql_table: public.${name}\n`;
 

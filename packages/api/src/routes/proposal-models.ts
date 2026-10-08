@@ -140,14 +140,19 @@ const nowhereFor = (path: string) =>
   );
 
 /**
- * A use-only copy (T543, AC-283) goes to the folder its maker chose, as a
- * new model, and never back to the one it came from, whoever may write that
- * one since.
+ * A use-only copy (T543, AC-283) is proposed to no folder, whoever may write
+ * one since (T717; R73): its maker sends its folder a calculation request
+ * from the copy's page instead.
  */
-const usedOnly = (path: string) =>
-  new ModelRefusal(
-    `“${path}” is a copy for use only of a model in a folder you could only read: it can’t be proposed back there.`,
-  );
+export const useOnlyWords = (path: string, name: string) =>
+  `“${path}” is a copy for use only, so it can’t be proposed to any folder. To change “${name}”, send its folder a request from the copy’s page.`;
+const usedOnly = (path: string, name: string) => new ModelRefusal(useOnlyWords(path, name));
+
+/** What goes with a proposal: never a use-only copy, which goes nowhere (T717). */
+const going = (held: { placed: readonly Placed[]; unserved: readonly Placed[] }) => ({
+  placed: held.placed.filter((model) => model.file.origin?.useOnly !== true),
+  unserved: held.unserved.filter((model) => model.file.origin?.useOnly !== true),
+});
 
 export function proposalModels(deps: ProposalModelDeps) {
   /**
@@ -223,8 +228,7 @@ export function proposalModels(deps: ProposalModelDeps) {
   /** A model as a proposal holds it: what it is now, where it lands, what it replaces there. */
   const itemOf = async (model: Placed): Promise<ProposedItem> => {
     const landsIn = model.file.targetFolderId!;
-    if (model.file.origin?.useOnly === true && landsIn === model.file.origin.folderId)
-      throw usedOnly(model.file.path);
+    if (model.file.origin?.useOnly === true) throw usedOnly(model.file.path, model.name);
     // An edit copy keeps its landed original's name (T706, AC-423).
     if (model.file.origin !== null && model.file.origin.useOnly !== true) {
       const original = await deps.files.byId(model.file.origin.id);
@@ -257,7 +261,7 @@ export function proposalModels(deps: ProposalModelDeps) {
     async needed(workspaceId: string, items: readonly ProposedItem[]): Promise<ProposedItem[]> {
       const used = new Set(items.flatMap(cubesNamedBy));
       if (used.size === 0) return [];
-      const held = await placedIn(workspaceId);
+      const held = going(await placedIn(workspaceId));
       const away = held.unserved.find((model) => used.has(model.fullName));
       if (away !== undefined) throw nowhereFor(away.file.path);
       return itemsOf(
@@ -275,7 +279,10 @@ export function proposalModels(deps: ProposalModelDeps) {
     async alone(workspaceId: string, fileId: string): Promise<ProposedItem[] | undefined> {
       const held = await placedIn(workspaceId);
       const own = held.placed.find((model) => model.file.id === fileId);
-      return own === undefined ? undefined : itemsOf(await withWhatTheyName([own], held, true));
+      // Itself, a use-only copy refused as it is made an item; nothing else of that kind follows.
+      return own === undefined
+        ? undefined
+        : itemsOf(await withWhatTheyName([own], going(held), true));
     },
 
     /** The file a model item replaces, as its folder has it now; none once gone. */

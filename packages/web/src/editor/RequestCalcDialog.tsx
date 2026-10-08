@@ -36,12 +36,17 @@ export function RequestCalcDialog({
   onSend,
   onClose,
 }: {
-  /** The measure whose menu it was asked from. */
-  readonly measureTitle: string;
+  /** The measure whose menu it was asked from; none for a change asked with no chart (T717). */
+  readonly measureTitle?: string;
   /** The chart's cube or view, as the user knows it. */
   readonly cubeTitle: string;
-  readonly fields: RequestedFields;
-  readonly titleOf: (member: string) => string;
+  /**
+   * What the chart has in use. None for a change to a cube asked from a
+   * use-only copy's page, with no chart (T717, AC-283; R73): "Request a
+   * change".
+   */
+  readonly fields?: RequestedFields;
+  readonly titleOf?: (member: string) => string;
   /** Sends the request with this description; a refusal's message, thrown. */
   readonly onSend: (description: string) => Promise<void>;
   readonly onClose: () => void;
@@ -100,9 +105,14 @@ export function RequestCalcDialog({
     };
   }, []);
 
-  const said = GROUPS.flatMap(([group, label]) =>
-    fields[group].length === 0 ? [] : [`${label}: ${fields[group].map(titleOf).join(', ')}`],
-  ).join(' · ');
+  const said =
+    fields === undefined
+      ? undefined
+      : GROUPS.flatMap(([group, label]) =>
+          fields[group].length === 0
+            ? []
+            : [`${label}: ${fields[group].map(titleOf ?? ((member) => member)).join(', ')}`],
+        ).join(' · ');
   const written = description.trim();
   const over = written.length > DESCRIPTION_LIMIT;
 
@@ -115,16 +125,27 @@ export function RequestCalcDialog({
         aria-labelledby={heading}
         className="dialog new-item-dialog"
       >
-        <h2 id={heading}>Request a calculation</h2>
-        <p className="new-item-dialog__note" data-testid="request-note">
-          Describe the calculation you need on {measureTitle}. It goes, with this chart and its
-          fields, to the people who may change the model that defines {cubeTitle}.
-        </p>
-        <p className="new-item-dialog__note" data-testid="request-fields">
-          {said}
-        </p>
+        <h2 id={heading}>{said === undefined ? 'Request a change' : 'Request a calculation'}</h2>
+        {said === undefined ? (
+          <p className="new-item-dialog__note" data-testid="request-note">
+            Describe the change you need to {cubeTitle}. It goes to the people who may change the
+            model that defines it.
+          </p>
+        ) : (
+          <>
+            <p className="new-item-dialog__note" data-testid="request-note">
+              Describe the calculation you need on {measureTitle}. It goes, with this chart and its
+              fields, to the people who may change the model that defines {cubeTitle}.
+            </p>
+            <p className="new-item-dialog__note" data-testid="request-fields">
+              {said}
+            </p>
+          </>
+        )}
         <div className="field">
-          <label htmlFor={`${heading}-description`}>What should it calculate?</label>
+          <label htmlFor={`${heading}-description`}>
+            {said === undefined ? 'What should change?' : 'What should it calculate?'}
+          </label>
           <textarea
             id={`${heading}-description`}
             ref={writing}

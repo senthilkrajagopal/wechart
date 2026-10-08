@@ -7,7 +7,6 @@ import {
   IMAGE_HEAD_BYTES,
   imageProblem,
   nameInUse,
-  nameKey,
   newDashboardBody,
   objectsOf,
   type AccessFolder,
@@ -3970,35 +3969,15 @@ export function buildServer({
     return inTurn(own, async () => {
       /**
        * One they may only read (T543, AC-283; the user's answer "Yes, use-only
-       * copy", R53): copied to use, going to a folder they write as a new
-       * model, marked so it is never proposed back. Their copy already there
-       * opens. Decided in the workspace's turn, so a copy deleted meanwhile
-       * is never made again unmarked (T543's review).
+       * copy", R53): copied to use, marked so it is proposed to no folder
+       * (T717; R73: asked for no folder). It is placed where its original is,
+       * standing in for it in their previews, as an edit copy is. Their copy
+       * already there opens. Decided in the workspace's turn, so a copy
+       * deleted meanwhile is never made again unmarked (T543's review).
        */
-      let useOnly: { targetFolderId: string } | undefined;
       const held = await modelStore.inFolders(await workspaceFolderIds(own));
-      if (!mayWrite(seen, folderId) && !held.some((each) => each.origin?.id === file.id)) {
-        const target = (request.body as { targetFolderId?: unknown } | undefined)?.targetFolderId;
-        if (target === undefined || target === null || target === '')
-          return reply.code(400).send({
-            error:
-              'You may only read the folder this model is in, so a copy of it can’t go back there. Name a folder you may write for it to go to, as a new model.',
-          });
-        const refused = await targetRefusalOf(request, target);
-        if (refused !== undefined) return reply.code(refused.status).send(refused.body);
-        const name = declaredIn(file.content)[0]?.name;
-        // In any case, and said only as in use, never where (T726's review; AC-421, AC-424).
-        const there = (await modelStore.inFolders([target as string])).some(
-          (each) =>
-            name !== undefined &&
-            nameKey(declaredIn(each.content)[0]?.name ?? '') === nameKey(name),
-        );
-        if (there)
-          return reply.code(409).send({
-            error: `${nameInUse(name ?? path)} A use-only copy goes to its folder as a new model: choose another folder.`,
-          });
-        useOnly = { targetFolderId: target as string };
-      }
+      const useOnly =
+        !mayWrite(seen, folderId) && !held.some((each) => each.origin?.id === file.id);
       const project = await projectFolderIn(own, userOf(request).key, timeZone, {
         title: path.slice(path.lastIndexOf('/') + 1),
         fromFolderId: folderId,

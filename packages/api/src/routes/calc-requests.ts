@@ -84,11 +84,17 @@ export function registerCalcRequests(app: FastifyInstance, routes: CalcRequestRo
     const body = request.body as
       { chartId?: unknown; cube?: unknown; fields?: unknown; description?: unknown } | undefined;
     const { chartId, cube } = body ?? {};
-    const fields = fieldsOf(body?.fields);
+    // One with no chart, from a use-only copy's page (T717, AC-283; R73): its
+    // cube and description alone, no fields in use.
+    const chartless = chartId === undefined || chartId === null;
+    const fields = chartless
+      ? body?.fields === undefined
+        ? { measures: [], dimensions: [], timeDimensions: [], filters: [] }
+        : undefined
+      : fieldsOf(body?.fields);
     const description = typeof body?.description === 'string' ? body.description.trim() : '';
     if (
-      typeof chartId !== 'string' ||
-      chartId === '' ||
+      (!chartless && (typeof chartId !== 'string' || chartId === '')) ||
       typeof cube !== 'string' ||
       cube === '' ||
       fields === undefined ||
@@ -96,10 +102,10 @@ export function registerCalcRequests(app: FastifyInstance, routes: CalcRequestRo
       description.length > DESCRIPTION_LIMIT
     )
       return reply.code(400).send({
-        error: `Send the chart, its cube, the fields in use and a description of the calculation, up to ${String(DESCRIPTION_LIMIT)} characters: { chartId, cube, fields, description }.`,
+        error: `Send the chart, its cube, the fields in use and a description of the calculation, up to ${String(DESCRIPTION_LIMIT)} characters: { chartId, cube, fields, description }; or, with no chart, the cube and a description: { cube, description }.`,
       });
     const seen = await visibilityOf(request);
-    const chart = await openableChart(request, chartId, seen);
+    const chart = chartless ? null : await openableChart(request, chartId as string, seen);
     if (chart === undefined)
       return reply.code(404).send({ error: 'There’s no such chart, or it isn’t yours to open.' });
     const defined = await definedBy(cube);
@@ -110,7 +116,7 @@ export function registerCalcRequests(app: FastifyInstance, routes: CalcRequestRo
       });
     const user = userOf(request);
     const recorded = await store.record({
-      chartId: chart.id,
+      chartId: chart?.id ?? null,
       cube,
       folderId: defined.folderId,
       modelPath: defined.modelPath,
@@ -184,7 +190,8 @@ export function registerCalcRequests(app: FastifyInstance, routes: CalcRequestRo
     folderOf: (cube: string) => Promise<string | undefined>,
     each: CalcRequest,
   ) => {
-    const chart = await openableChart(request, each.chartId, seen);
+    const chart =
+      each.chartId === null ? undefined : await openableChart(request, each.chartId, seen);
     const shown = async (members: readonly string[]) => {
       const kept: string[] = [];
       for (const member of members) {
@@ -204,6 +211,8 @@ export function registerCalcRequests(app: FastifyInstance, routes: CalcRequestRo
     return {
       id: each.id,
       chart: chart ?? null,
+      // Asked from a chart, or from a use-only copy's page with none (T717).
+      fromChart: each.chartId !== null,
       cube: each.cube,
       folderId: each.folderId,
       // Listed to its read-write members alone, who see its path.

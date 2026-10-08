@@ -28,7 +28,7 @@ import type { LandingCheck, ModelLanding } from '../model/publish';
 import type { LandedModelFile } from '../repos/calc-resolution';
 import type { ProposalBindings, ProposalBindingStore } from '../repos/proposal-bindings';
 import type { XcubeAdmin } from '../xcube/client';
-import { ModelRefusal, type ProposalModels } from './proposal-models';
+import { ModelRefusal, useOnlyWords, type ProposalModels } from './proposal-models';
 import { withChartsRenamed } from './workspace-copy';
 
 /**
@@ -1673,6 +1673,8 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     let stored: Stored | null;
     let home: string | null;
     let target: unknown;
+    /** A workspace model file proposed, as read once (T350; T717's review). */
+    let modelFile: Awaited<ReturnType<NonNullable<typeof routes.models>['file']>>;
     if (proposing === 'data-source') {
       const source = sealedSource?.source;
       stored = source === undefined ? null : { id: source.id, body: {}, version: source.version };
@@ -1681,6 +1683,7 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
     } else if (proposing === 'model') {
       // A workspace model file, by its id (T350).
       const file = await routes.models?.file(id);
+      modelFile = file;
       stored = file === undefined ? null : { id: file.id, body: {}, version: file.version };
       home = file?.folderId ?? null;
       target = file?.targetFolderId;
@@ -1704,6 +1707,12 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
         ? new Refused(400, 'It is in a shared folder: edit it in your workspace, and propose that.')
         : new Refused(404, NOT_THERE.error);
     if (workspace !== own) throw new Refused(404, NOT_THERE.error);
+    // A use-only copy goes to no folder, wherever it is placed (T717, AC-283).
+    if (modelFile?.origin?.useOnly === true)
+      throw new Refused(
+        409,
+        useOnlyWords(modelFile.path, declaredIn(modelFile.content)[0]?.name ?? modelFile.path),
+      );
     if (typeof target !== 'string' || target === '')
       throw new Refused(
         400,

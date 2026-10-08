@@ -263,7 +263,8 @@ export interface BuildTokenTable {
  */
 export interface CalcRequestTable {
   id: Generated<string>;
-  chart_id: string;
+  /** None for one asked from a use-only copy's page (T717). */
+  chart_id: string | null;
   cube: string;
   folder_id: string;
   model_path: string;

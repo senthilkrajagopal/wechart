@@ -141,6 +141,30 @@ describe('calculation requests on the Reviews page (T383, AC-050)', () => {
     );
   });
 
+  // T717 (AC-283): one asked from a use-only copy's page has no chart and no fields.
+  it('says one was asked with no chart, from a copy for use only, and lists no fields', async () => {
+    serve([
+      {
+        ...REQUEST,
+        chart: null,
+        fromChart: false,
+        fields: { measures: [], dimensions: [], timeDimensions: [], filters: [] },
+      },
+    ]);
+    shown();
+    await userEvent.click(await screen.findByRole('button', { name: 'orders' }));
+    const summary = screen.getByRole('region', { name: 'Calculation on orders' });
+
+    expect(within(summary).getByTestId('request-chart').textContent).toBe(
+      'Asked from a copy for use only, with no chart.',
+    );
+    expect(within(summary).queryByTestId('request-fields')).toBeNull();
+    expect(within(summary).queryByRole('heading', { name: 'Fields in use' })).toBeNull();
+    expect(within(summary).getByTestId('request-description').textContent).toBe(
+      'Margin per order: amount less cost.',
+    );
+  });
+
   /**
    * T384 / AC-051: a read-write member opens it: its cube's model copied
    * into My workspace and taken up, then the model editor on the copy, the

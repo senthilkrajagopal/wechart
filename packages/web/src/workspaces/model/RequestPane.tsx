@@ -116,14 +116,19 @@ export function RequestPane({ requestId, now = new Date() }: { requestId: string
           <p className="reviews__description" data-testid="pane-request-description">
             {request.description}
           </p>
-          <h3 className="reviews__label">Fields in use</h3>
-          <p className="reviews__where" data-testid="pane-request-fields">
-            {GROUPS.flatMap(([group, label]) =>
-              request.fields[group].length === 0
-                ? []
-                : [`${label}: ${request.fields[group].map(shortName).join(', ')}`],
-            ).join(' · ')}
-          </p>
+          {/* None for one asked from a use-only copy's page, with no chart (T717). */}
+          {request.fromChart === false ? null : (
+            <>
+              <h3 className="reviews__label">Fields in use</h3>
+              <p className="reviews__where" data-testid="pane-request-fields">
+                {GROUPS.flatMap(([group, label]) =>
+                  request.fields[group].length === 0
+                    ? []
+                    : [`${label}: ${request.fields[group].map(shortName).join(', ')}`],
+                ).join(' · ')}
+              </p>
+            </>
+          )}
           {request.chart === null ? null : (
             <p className="reviews__where">
               From the chart{' '}

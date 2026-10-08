@@ -19,12 +19,15 @@ export function requestableChartId(
  * is shown to. Its id, or the API's reason for refusing it, thrown.
  */
 export async function requestCalculation(
-  asked: {
-    readonly chartId: string;
-    readonly cube: string;
-    readonly fields: RequestedFields;
-    readonly description: string;
-  },
+  asked:
+    | {
+        readonly chartId: string;
+        readonly cube: string;
+        readonly fields: RequestedFields;
+        readonly description: string;
+      }
+    /** A change to a cube asked from a use-only copy's page, with no chart (T717, AC-283). */
+    | { readonly cube: string; readonly description: string },
   fetchImpl: typeof fetch = fetch,
 ): Promise<string> {
   const response = await fetchImpl('/api/calc-requests', {

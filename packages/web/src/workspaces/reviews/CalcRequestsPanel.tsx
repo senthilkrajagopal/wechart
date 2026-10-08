@@ -244,12 +244,19 @@ function RequestSummary({
       <p className="reviews__description" data-testid="request-description">
         {row.description}
       </p>
-      <h3 className="reviews__label">Fields in use</h3>
-      <p className="reviews__where" data-testid="request-fields">
-        {fieldsText(row)}
-      </p>
+      {/* One asked from a use-only copy's page has no chart and no fields (T717, AC-283). */}
+      {row.fromChart === false ? null : (
+        <>
+          <h3 className="reviews__label">Fields in use</h3>
+          <p className="reviews__where" data-testid="request-fields">
+            {fieldsText(row)}
+          </p>
+        </>
+      )}
       <p className="reviews__where" data-testid="request-chart">
-        {row.chart === null ? (
+        {row.fromChart === false ? (
+          'Asked from a copy for use only, with no chart.'
+        ) : row.chart === null ? (
           // In its asker's workspace, a folder the viewer can't see, or gone.
           'From a chart you can’t open.'
         ) : (

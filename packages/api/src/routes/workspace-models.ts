@@ -336,9 +336,10 @@ export function workspaceModels({
       project: { readonly id: string; readonly make: () => Promise<unknown> },
       /**
        * A use-only copy (T543, AC-283): of a model in a folder its maker may
-       * only read, going to the folder they write named here, as a new model.
+       * only read, placed where its original is and proposed to no folder
+       * (T717, R73).
        */
-      useOnly?: { readonly targetFolderId: string },
+      useOnly = false,
     ): Promise<Answer> {
       const held = await files.inFolders(await foldersOf(workspaceId));
       const existing = held.find((file) => file.origin?.id === original.id);
@@ -352,13 +353,13 @@ export function workspaceModels({
         folderId: original.folderId,
         path: original.path,
         version: original.version,
-        ...(useOnly === undefined ? {} : { useOnly: true }),
+        ...(useOnly ? { useOnly: true } : {}),
       };
       const copied = {
         folderId: project.id,
         path: original.path,
         content: original.content,
-        targetFolderId: useOnly?.targetFolderId ?? original.folderId,
+        targetFolderId: original.folderId,
       };
       const pushed = await pushWith(workspaceId, [...held, copied], [copied]);
       if ('lost' in pushed) return pushed.lost;

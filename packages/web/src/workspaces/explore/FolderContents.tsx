@@ -57,7 +57,7 @@ export interface CatalogItem {
     readonly id: string;
     readonly version: number;
     readonly folderId: string;
-    /** A model's copy to use, going to its target as a new model (T543, AC-283). */
+    /** A model's copy to use, proposed to no folder (T543, T717, AC-283). */
     readonly useOnly?: true;
   } | null;
 }
@@ -154,6 +154,13 @@ function OriginLine({ item, workspace }: { item: CatalogItem; workspace: InWorks
       </span>
     );
   }
+  // A use-only copy goes to no folder (T717, AC-283; R73).
+  if (item.origin?.useOnly === true)
+    return (
+      <span className="folder-contents__origin">
+        A copy for use only of version {String(item.origin.version)} · proposed to no folder
+      </span>
+    );
   if (item.targetFolderId == null) return null;
   const target = workspace.pathOf(item.targetFolderId) ?? 'a folder you can no longer see';
   return (
@@ -163,12 +170,7 @@ function OriginLine({ item, workspace }: { item: CatalogItem; workspace: InWorks
       </svg>
       <span className="visually-hidden">Goes to </span>
       {target} ·{' '}
-      {item.origin == null
-        ? 'new'
-        : item.origin.useOnly === true
-          ? // Never proposed back to its original's folder (T543, AC-283).
-            `new, a copy for use only of version ${String(item.origin.version)}`
-          : `copied from version ${String(item.origin.version)}`}
+      {item.origin == null ? 'new' : `copied from version ${String(item.origin.version)}`}
     </span>
   );
 }
@@ -375,7 +377,8 @@ export function FolderContents({
       item.kind === 'model'
         ? [
             ...(deletable ? [{ key: 'open', label: 'Open', onSelect: () => onOpen?.(item) }] : []),
-            ...(workspace?.onPropose !== undefined
+            // Never a use-only copy, which goes to no folder (T717, AC-283).
+            ...(workspace?.onPropose !== undefined && item.origin?.useOnly !== true
               ? [
                   {
                     key: 'propose',

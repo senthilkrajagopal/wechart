@@ -158,6 +158,24 @@ describe('the request beside the model editor (T384, AC-051)', () => {
     );
   });
 
+  // T717's review (AC-283): one asked from a use-only copy's page has no chart and no fields.
+  it('lists no fields for a request asked with no chart', async () => {
+    shown([
+      {
+        ...REQUEST,
+        chart: null,
+        fromChart: false,
+        fields: { measures: [], dimensions: [], timeDimensions: [], filters: [] },
+      },
+    ]);
+    const pane = await screen.findByRole('complementary', { name: 'Calculation request' });
+    expect((await within(pane).findByTestId('pane-request-description')).textContent).toBe(
+      'Margin per order: amount less cost.',
+    );
+    expect(within(pane).queryByTestId('pane-request-fields')).toBeNull();
+    expect(within(pane).queryByRole('heading', { name: 'Fields in use' })).toBeNull();
+  });
+
   /** T590 (R64): on a view, the measure goes on a cube on the view's join paths, not the view. */
   it('says what to do while it is open, for a cube’s request and a view’s alike', async () => {
     shown([REQUEST]);
