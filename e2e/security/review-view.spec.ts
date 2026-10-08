@@ -262,7 +262,11 @@ test.describe('deciding a proposal in its review view (T356, AC-288)', () => {
           const sent = await page.request.post(`/api/proposals/${made.boardProposal}/${decision}`, {
             data: {},
           });
-          expect([decision, sent.status()]).toEqual([decision, 404]);
+          expect([decision, sent.status(), await sent.json()]).toEqual([
+            decision,
+            404,
+            { error: 'There is no such proposal.' },
+          ]);
         }
         // The folder's dashboard is as it was: version 2, by its versions kept.
         expect(versionsOf(made.board)).toEqual([`1:${BOARD}`, `2:${BOARD}`]);
