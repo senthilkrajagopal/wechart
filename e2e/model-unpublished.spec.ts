@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 
 import { inMyWorkspace } from './model-files';
-import { myModelCopy } from './workspace';
+import { chooseTarget, myModelCopy } from './workspace';
 
 /**
  * With sign-in off, the single user changes a model in My workspace, as a
@@ -197,7 +197,7 @@ async function stayingAndNew(
   const asking = page.getByRole('dialog', { name: 'New cube in My workspace' });
   await newCube.focus();
   await page.keyboard.press('Enter');
-  await asking.getByRole('combobox', { name: 'Target folder' }).selectOption('root');
+  await chooseTarget(asking, 'root');
   await asking.getByRole('button', { name: 'Create' }).click();
   await expect(ask).toBeVisible();
   await ask.getByRole('button', { name: 'Stay' }).click();
@@ -222,7 +222,7 @@ async function stayingAndNew(
     .getByRole('button', { name: 'Discard' })
     .click();
   await newCube.click();
-  await asking.getByRole('combobox', { name: 'Target folder' }).selectOption('root');
+  await chooseTarget(asking, 'root');
   await asking.getByRole('button', { name: 'Create' }).click();
   await expect(page).toHaveURL(
     new RegExp(`/explore/folders/${own.folder}/models/cubes%2Fnew_cube_1\\.yml$`),

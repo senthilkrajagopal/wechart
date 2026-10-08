@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { myModelCopy } from './workspace';
+import { chooseTarget, myModelCopy } from './workspace';
 
 /**
  * T737 (AC-423; R73): a draft's model file is named for its cube until it
@@ -19,7 +19,7 @@ async function madeInWorkspace(page: Page) {
     .getByRole('button', { name: 'New cube' })
     .click();
   const asking = page.getByRole('dialog', { name: 'New cube in My workspace' });
-  await asking.getByRole('combobox', { name: 'Target folder' }).selectOption('root');
+  await chooseTarget(asking, 'root');
   await asking.getByRole('button', { name: 'Create' }).click();
 }
 

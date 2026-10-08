@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { inMyWorkspace } from './model-files';
-import { myModelCopy } from './workspace';
+import { chooseTarget, myModelCopy } from './workspace';
 
 /**
  * The Model workspace drawn as phase-1 design 03
@@ -35,7 +35,7 @@ async function madeInWorkspace(page: Page, kind: 'cube' | 'view') {
     .getByRole('button', { name: `New ${kind}` })
     .click();
   const asking = page.getByRole('dialog', { name: `New ${kind} in My workspace` });
-  await asking.getByRole('combobox', { name: 'Target folder' }).selectOption('root');
+  await chooseTarget(asking, 'root');
   await asking.getByRole('button', { name: 'Create' }).click();
 }
 
@@ -833,7 +833,7 @@ test('T481: a cube’s General as design 03 state B — Basics, Refresh, Advance
     .getByRole('button', { name: 'New cube' })
     .click();
   const asking = page.getByRole('dialog', { name: 'New cube in My workspace' });
-  await asking.getByRole('combobox', { name: 'Target folder' }).selectOption('root');
+  await chooseTarget(asking, 'root');
   await asking.getByRole('button', { name: 'Create' }).click();
   await expect(page).toHaveURL(/\/models\/cubes%2Fnew_cube_\d+\.yml$/);
   const draft = page.getByRole('region', { name: /^Cube new_cube_\d+$/ }).getByRole('tabpanel');

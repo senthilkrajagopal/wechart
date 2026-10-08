@@ -2,7 +2,7 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 
 import { CUBE, serviceToken } from './api-process';
 import { inMyWorkspace, landed, modelFilesIn, PUBLISHED } from './model-files';
-import { myModelCopy, sharedIn } from './workspace';
+import { chooseTarget, myModelCopy, sharedIn } from './workspace';
 
 /**
  * T342, with sign-in off: one user, who changes a shared folder's model only
@@ -248,7 +248,7 @@ test('a folder’s model opens beside its files, one after another in place, rea
     // asked to (AC-282); discarded, the folder's model opens.
     await tree(page).getByRole('button', { name: 'New cube' }).click();
     const asking = page.getByRole('dialog', { name: 'New cube in My workspace' });
-    await asking.getByRole('combobox', { name: 'Target folder' }).selectOption(folderId);
+    await chooseTarget(asking, folderId);
     await asking.getByRole('button', { name: 'Create' }).click();
     await page
       .getByRole('alertdialog', { name: 'Leave with unpublished changes?' })

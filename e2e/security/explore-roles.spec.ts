@@ -303,19 +303,25 @@ test.describe('Explore and the top bar by role (T331; AC-001, AC-192, AC-194)', 
         '◢Chart',
         '◇Model',
         '◍Data source',
-        '▣Folder',
+        // The one kind with no target, set apart (design 13, state G; T692).
+        '▣Folderno target',
         '⤒Import a dashboard…from a file',
       ]);
       await newButton(page).click();
       const menu = page.getByRole('menu', { name: 'New' });
-      await expect(menu.getByRole('separator')).toHaveCount(1);
-      const [separator, folderItem, importItem] = await Promise.all([
-        menu.getByRole('separator').boundingBox(),
+      // A divider over Folder, and another over Import (state G).
+      await expect(menu.getByRole('separator')).toHaveCount(2);
+      const [aboveFolder, aboveImport, sourceItem, folderItem, importItem] = await Promise.all([
+        menu.getByRole('separator').nth(0).boundingBox(),
+        menu.getByRole('separator').nth(1).boundingBox(),
+        menu.getByRole('menuitem', { name: /Data source/ }).boundingBox(),
         menu.getByRole('menuitem', { name: /Folder/ }).boundingBox(),
         menu.getByRole('menuitem', { name: /Import a dashboard/ }).boundingBox(),
       ]);
-      expect(separator!.y).toBeGreaterThan(folderItem!.y);
-      expect(importItem!.y).toBeGreaterThan(separator!.y);
+      expect(aboveFolder!.y).toBeGreaterThan(sourceItem!.y);
+      expect(folderItem!.y).toBeGreaterThan(aboveFolder!.y);
+      expect(aboveImport!.y).toBeGreaterThan(folderItem!.y);
+      expect(importItem!.y).toBeGreaterThan(aboveImport!.y);
       await page.keyboard.press('Escape');
       await expect(plusFolder(page)).toBeVisible();
     });
@@ -435,7 +441,7 @@ test.describe('Explore and the top bar by role (T331; AC-001, AC-192, AC-194)', 
         '◢Chart',
         '◇Model',
         '◍Data source',
-        '▣Folder',
+        '▣Folderno target',
         '⤒Import a dashboard…from a file',
       ]);
     });

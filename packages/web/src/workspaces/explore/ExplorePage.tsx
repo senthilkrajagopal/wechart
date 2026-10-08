@@ -1032,6 +1032,8 @@ export function ExplorePage() {
             // read-write members a folder alone, the workspace every kind, a
             // reader nothing, and so no New.
             offers={role.creates}
+            // Headed in the workspace, as design 13 state G draws it (T692).
+            {...(role.inOwnWorkspace ? { heading: 'New in My workspace' } : {})}
             // Not until the open folder is known: until then, whether it is
             // in the workspace isn't (T345's review).
             // Nor while a data source is being added in its pane: something

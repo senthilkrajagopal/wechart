@@ -1,4 +1,4 @@
-import { useId, useRef, type KeyboardEvent } from 'react';
+import { useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
 
 import type { Target } from '../explore/NewItemDialog';
 import { SHARED_ROOT } from '../explore/roots';
@@ -15,6 +15,8 @@ interface Node {
   readonly level: number;
   /** The target it is, where it is one. */
   readonly id?: string;
+  /** Its folders from the root down. */
+  readonly path?: readonly string[];
 }
 
 /** Two paths in a tree's order: folder by folder, a parent before what it holds. */
@@ -54,9 +56,30 @@ function nodesOf(targets: readonly Target[]): Node[] {
   }
   return nodes
     .sort((a, b) => byPath(a.path, b.path) || (a.id ?? '').localeCompare(b.id ?? ''))
-    .map(({ key, name, level, id }) =>
-      id === undefined ? { key, name, level } : { key, name, level, id },
+    .map(({ key, name, level, id, path }) =>
+      id === undefined ? { key, name, level, path } : { key, name, level, id, path },
     );
+}
+
+/** Targets in the order a filtered tree lists them: by path, folder by folder. */
+export const inTreeOrder = (targets: readonly Target[]): Target[] =>
+  [...targets].sort((a, b) => byPath(a.path, b.path));
+
+/** A folder's whole path, as New's tree writes it (design 04, state A): "Sales / EMEA". */
+const pathOf = (path: readonly string[]) =>
+  path.length === 0 ? SHARED_ROOT.title : path.join(' / ');
+
+/** The label with the first match of `match` in bold (design 04, state B). */
+function marked(label: string, match: string): ReactNode {
+  const at = match === '' ? -1 : label.toLowerCase().indexOf(match.toLowerCase());
+  if (at < 0) return label;
+  return (
+    <>
+      {label.slice(0, at)}
+      <b>{label.slice(at, at + match.length)}</b>
+      {label.slice(at + match.length)}
+    </>
+  );
 }
 
 export function TargetTree({
@@ -64,13 +87,35 @@ export function TargetTree({
   chosen,
   onChoose,
   describedBy,
+  fullPaths = false,
+  match,
+  filter,
 }: {
   targets: readonly Target[];
   chosen: string;
   onChoose: (id: string) => void;
   describedBy?: string;
+  /** Each row by its whole path, "Sales / EMEA" (design 04, state A); by its name otherwise (design 01). */
+  fullPaths?: boolean;
+  /**
+   * What a filter typed matches (design 04, state B): the targets then listed
+   * flat, each by its whole path with the match in bold.
+   */
+  match?: string;
+  /** The filter box, under the label and over the tree (design 04, state B). */
+  filter?: ReactNode;
 }) {
-  const nodes = nodesOf(targets);
+  const nodes =
+    match === undefined
+      ? nodesOf(targets).map((node) =>
+          fullPaths && node.path !== undefined ? { ...node, name: pathOf(node.path) } : node,
+        )
+      : inTreeOrder(targets).map((target) => ({
+          key: `id:${target.id}`,
+          name: pathOf(target.path),
+          level: 1,
+          id: target.id,
+        }));
   const choosable = nodes.filter((node) => node.id !== undefined);
   /**
    * One tab stop: the folder chosen, or the first that can be while none of
@@ -99,6 +144,7 @@ export function TargetTree({
         <span>Target folder</span>
         <span className="field__req"> · required</span>
       </span>
+      {filter}
       <ul
         ref={tree}
         role="tree"
@@ -133,7 +179,7 @@ export function TargetTree({
               }}
             >
               <span className="target-tree__icon" aria-hidden="true" />
-              {node.name}
+              {match === undefined ? node.name : marked(node.name, match)}
             </li>
           );
         })}

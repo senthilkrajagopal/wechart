@@ -1,4 +1,10 @@
-import { expect, request as requests, type APIRequestContext, type Page } from '@playwright/test';
+import {
+  expect,
+  request as requests,
+  type APIRequestContext,
+  type Locator,
+  type Page,
+} from '@playwright/test';
 
 /**
  * T359 (AC-254, AC-308; `[R52]`, "Workspace-only now"): with security off,
@@ -58,8 +64,25 @@ export async function newInMyWorkspace(
     .getByRole('menuitem', { name: kind, exact: true })
     .click();
   const dialog = page.getByRole('dialog', { name: `New ${kind.toLowerCase()} in My workspace` });
-  await dialog.getByRole('combobox', { name: 'Target folder' }).selectOption(target);
+  await chooseTarget(dialog, target);
   await dialog.getByRole('button', { name: 'Create' }).click();
+}
+
+/**
+ * The folder a new workspace item is to go to, chosen in New's tree of full
+ * paths (2026-09-27 design 04, state A; T692): its row, by the folder's id.
+ */
+export function targetRow(dialog: Locator, folderId: string): Locator {
+  return dialog
+    .getByRole('tree', { name: 'Target folder' })
+    .locator(`[role="treeitem"][data-target="${folderId}"]`);
+}
+
+/** Chooses `folderId` in New's Target folder tree (T692). */
+export async function chooseTarget(dialog: Locator, folderId: string): Promise<void> {
+  const row = targetRow(dialog, folderId);
+  await row.click();
+  await expect(row).toHaveAttribute('aria-selected', 'true');
 }
 
 /**

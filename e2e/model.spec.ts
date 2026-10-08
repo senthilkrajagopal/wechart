@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 
 import { inMyWorkspace, modelFilesIn, ownCubeFile, ownModelCopy, PUBLISHED } from './model-files';
-import { myModelCopy } from './workspace';
+import { chooseTarget, myModelCopy } from './workspace';
 
 /**
  * With sign-in off, the single user changes a shared model only in a copy in
@@ -761,7 +761,7 @@ test('Model is one workspace: a tree beside full-height form and code panes, Pro
     await tree.getByRole('button', { name: 'New cube' }).click();
     const asking = (kind: string) =>
       page.getByRole('dialog', { name: `New ${kind} in My workspace` });
-    await asking('cube').getByRole('combobox', { name: 'Target folder' }).selectOption('root');
+    await chooseTarget(asking('cube'), 'root');
     await asking('cube').getByRole('button', { name: 'Create' }).click();
     await page
       .getByRole('alertdialog', { name: 'Leave with unpublished changes?' })
@@ -776,7 +776,7 @@ test('Model is one workspace: a tree beside full-height form and code panes, Pro
     await expect(tree.getByRole('link', { name: /^new_cube_1\.yml/ })).toContainText('unpublished');
     await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
     await tree.getByRole('button', { name: 'New view' }).click();
-    await asking('view').getByRole('combobox', { name: 'Target folder' }).selectOption('root');
+    await chooseTarget(asking('view'), 'root');
     await asking('view').getByRole('button', { name: 'Create' }).click();
     await expect(page).toHaveURL(
       new RegExp(`/explore/folders/${folder}/models/views%2Fnew_view_1\\.yml$`),
@@ -832,7 +832,7 @@ test('New cube and New view from the overview open their new file', async ({ pag
   const overview = '/explore/folders/mine/models';
   const made = async (kind: 'cube' | 'view') => {
     const asking = page.getByRole('dialog', { name: `New ${kind} in My workspace` });
-    await asking.getByRole('combobox', { name: 'Target folder' }).selectOption('root');
+    await chooseTarget(asking, 'root');
     await asking.getByRole('button', { name: 'Create' }).click();
   };
   await page.goto(overview);

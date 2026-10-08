@@ -31,15 +31,18 @@ describe('the folder a new workspace item is to go to (T345, AC-282)', () => {
     );
 
     expect(screen.getByRole('dialog', { name: 'New dashboard in My workspace' })).toBeDefined();
-    const picker = screen.getByRole('combobox', { name: 'Target folder' });
-    expect([...picker.querySelectorAll('option')].map((option) => option.textContent)).toEqual([
-      'Choose a folder…',
-      'Shared',
-      'Finance / Sales',
-    ]);
-    expect(
-      screen.getByText('It stays private in My workspace until you propose it to this folder.'),
-    ).toBeDefined();
+    // Design 04, state A (T692): a tree of full paths, a folder on a target's
+    // path that isn't one shown for where it is, and none chosen yet.
+    const picker = screen.getByRole('tree', { name: 'Target folder' });
+    expect([...picker.querySelectorAll('[role="treeitem"]')].map((row) => row.textContent)).toEqual(
+      ['Shared', 'Finance', 'Finance / Sales'],
+    );
+    expect(picker.querySelector('[aria-selected="true"]')).toBeNull();
+    // Both fields required, as the design marks them; its help line beneath.
+    expect(screen.getByText('Name').parentElement?.textContent).toBe('Name · required');
+    expect(screen.getByText(/^Only folders where/).textContent).toBe(
+      'Only folders where you have read-write access.',
+    );
     const make = screen.getByRole('button', { name: 'Create' });
     expect(make).toHaveProperty('disabled', true);
 
@@ -47,9 +50,74 @@ describe('the folder a new workspace item is to go to (T345, AC-282)', () => {
     expect(name).toHaveProperty('value', 'Untitled dashboard');
     await user.clear(name);
     await user.type(name, 'EMEA revenue');
-    await user.selectOptions(picker, 'f-sales');
+    await user.click(screen.getByRole('treeitem', { name: 'Finance / Sales' }));
+    // The note names the folder chosen, in bold, rather than "this folder".
+    const note = screen.getByText(/^It stays private in My workspace until you propose it to/);
+    expect(note.textContent).toBe(
+      'It stays private in My workspace until you propose it to Finance / Sales.',
+    );
+    expect(note.querySelector('b')?.textContent).toBe('Finance / Sales');
     await user.click(make);
     expect(onCreate).toHaveBeenCalledWith('EMEA revenue', 'f-sales');
+  });
+
+  /**
+   * Design 04, state B (T692): with more than about ten folders, a filter
+   * heads the tree and matches any part of a path; it says how many of all
+   * match. Type to filter, arrows to move, Enter to choose, as the design
+   * notes it.
+   */
+  it('filters many folders by any part of their paths, and says how many match', async () => {
+    const user = userEvent.setup();
+    const onCreate = vi.fn();
+    const many = [
+      { id: 'sales', path: ['Sales'] },
+      { id: 'emea', path: ['Sales', 'EMEA'] },
+      { id: 'dach', path: ['Sales', 'EMEA', 'DACH'] },
+      { id: 'nordics', path: ['Sales', 'EMEA', 'Nordics'] },
+      { id: 'support-emea', path: ['Support', 'EMEA'] },
+      ...Array.from({ length: 8 }, (_, at) => ({
+        id: `f${String(at)}`,
+        path: [`Ops ${String(at)}`],
+      })),
+    ];
+    render(
+      <NewItemDialog
+        kind="dashboard"
+        defaultTitle="Untitled dashboard"
+        targets={many}
+        onCreate={onCreate}
+        onClose={vi.fn()}
+      />,
+    );
+    const filter = screen.getByRole('searchbox', { name: 'Filter folders' });
+    await user.type(filter, 'emea');
+    const tree = screen.getByRole('tree', { name: 'Target folder' });
+    expect([...tree.querySelectorAll('[role="treeitem"]')].map((row) => row.textContent)).toEqual([
+      'Sales / EMEA',
+      'Sales / EMEA / DACH',
+      'Sales / EMEA / Nordics',
+      'Support / EMEA',
+    ]);
+    // The matching part in bold.
+    expect(tree.querySelector('[role="treeitem"] b')?.textContent).toBe('EMEA');
+    expect(screen.getByText(/folders where you have read-write access\.$/).textContent).toBe(
+      '4 of 13 folders where you have read-write access.',
+    );
+    // The arrows move the choice among what matches, from the filter.
+    await user.keyboard('{ArrowDown}{ArrowDown}');
+    expect(tree.querySelector('[aria-selected="true"]')?.textContent).toBe('Sales / EMEA / DACH');
+    await user.keyboard('{Enter}');
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+    expect(onCreate).toHaveBeenCalledWith('Untitled dashboard', 'dach');
+
+    // A choice the filter hides gives way to Enter: it chooses the first match
+    // (T692's review), rather than leaving the hidden one chosen.
+    await user.clear(filter);
+    await user.type(filter, 'ops 3');
+    expect(tree.querySelector('[aria-selected="true"]')).toBeNull();
+    await user.keyboard('{Enter}');
+    expect(tree.querySelector('[aria-selected="true"]')?.textContent).toBe('Ops 3');
   });
 
   it('chooses the one there is, needs a name, and says so where there is no folder', async () => {
@@ -64,10 +132,10 @@ describe('the folder a new workspace item is to go to (T345, AC-282)', () => {
         onClose={vi.fn()}
       />,
     );
-    expect(screen.getByRole('combobox', { name: 'Target folder' })).toHaveProperty(
-      'value',
-      'f-sales',
-    );
+    // The one there is, chosen for them (design 04, state A).
+    expect(
+      screen.getByRole('treeitem', { name: 'Finance / Sales' }).getAttribute('aria-selected'),
+    ).toBe('true');
     const make = screen.getByRole('button', { name: 'Create' });
     await user.clear(screen.getByRole('textbox', { name: 'Name' }));
     expect(make).toHaveProperty('disabled', true);
@@ -111,7 +179,7 @@ describe('the folder a new workspace item is to go to (T345, AC-282)', () => {
     expect(screen.getByRole('dialog', { name: 'New cube in My workspace' })).toBeDefined();
     await user.clear(screen.getByRole('textbox', { name: 'Name' }));
     await user.type(screen.getByRole('textbox', { name: 'Name' }), 'orders_emea');
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Target folder' }), 'f-sales');
+    await user.click(screen.getByRole('treeitem', { name: 'Finance / Sales' }));
     await user.click(screen.getByRole('button', { name: 'Create' }));
     expect(onCreate).toHaveBeenCalledWith('orders_emea', 'f-sales');
   });
@@ -194,13 +262,14 @@ describe('the folder a new workspace item is to go to (T345, AC-282)', () => {
     render(<Opener />);
     const opener = screen.getByRole('button', { name: 'New' });
     await user.click(opener);
-    await user.type(screen.getByLabelText('Name'), 'Revenue');
+    // The field by its accessible name: "· required" is said by aria-required (T692).
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Revenue');
     await user.keyboard('{Escape}');
     const asking = screen.getByRole('alertdialog', { name: 'Discard your changes?' });
     expect(asking.textContent).toContain('The name you typed isn’t kept.');
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('alertdialog')).toBeNull();
-    expect(document.activeElement).toBe(screen.getByLabelText('Name'));
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Name' }));
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     await user.click(screen.getByRole('button', { name: 'Discard changes' }));
     expect(screen.queryByRole('dialog')).toBeNull();

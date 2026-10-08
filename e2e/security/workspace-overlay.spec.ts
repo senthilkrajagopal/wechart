@@ -5,6 +5,7 @@ import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
 import { cubePicker } from '../cubePicker';
 import { landed } from '../model-files';
+import { chooseTarget, targetRow } from '../workspace';
 import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtures';
 
 /**
@@ -184,7 +185,7 @@ test.describe('My workspace’s overlay (T347, AC-323)', () => {
       // Each asks first for its name and where it is to go (AC-282).
       await tree.getByRole('button', { name: /New view/ }).click();
       const asking = page.getByRole('dialog', { name: 'New view in My workspace' });
-      await expect(asking.getByRole('combobox', { name: 'Target folder' })).toBeVisible();
+      await expect(asking.getByRole('tree', { name: 'Target folder' })).toBeVisible();
       await asking.getByRole('button', { name: 'Cancel' }).click();
       await expect(asking).toHaveCount(0);
 
@@ -217,9 +218,9 @@ test.describe('My workspace’s overlay (T347, AC-323)', () => {
       await dialog.getByRole('textbox', { name: 'Name' }).fill(`t347new_${RUN}`);
       const create = dialog.getByRole('button', { name: 'Create' });
       // The folders it may go to: those the writer writes, this one among them (rule 74).
-      const target = dialog.getByRole('combobox', { name: 'Target folder' });
-      await expect(target.locator(`option[value="${made.folder}"]`)).toHaveText(FOLDER);
-      await target.selectOption(made.folder);
+      // Its row in New's tree, by its whole path (design 04, state A; T692).
+      await expect(targetRow(dialog, made.folder)).toHaveText(FOLDER);
+      await chooseTarget(dialog, made.folder);
       await create.click();
 
       const path = `cubes/t347new_${RUN}.yml`;

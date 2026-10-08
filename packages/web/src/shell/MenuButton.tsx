@@ -44,6 +44,11 @@ export interface MenuButtonProps {
   readonly disabled?: boolean;
   /** The id of what says why, for a disabled button. */
   readonly describedBy?: string;
+  /**
+   * A head drawn over the items: "New in My workspace" (design 13, state G;
+   * T692). The menu keeps `label` as its name, which its button has too.
+   */
+  readonly heading?: string;
 }
 
 export function MenuButton({
@@ -55,6 +60,7 @@ export function MenuButton({
   testId,
   disabled = false,
   describedBy,
+  heading,
 }: MenuButtonProps) {
   const [open, setOpen] = useState(false);
   const menuId = useId();
@@ -159,6 +165,12 @@ export function MenuButton({
           className={`menu-button__menu menu-button__menu--${align}`}
           onKeyDown={onMenuKey}
         >
+          {heading === undefined ? null : (
+            // Drawn for the eye; the menu's name and its items say the same.
+            <div className="menu-button__head" aria-hidden="true">
+              {heading}
+            </div>
+          )}
           {items.map((item, index) => [
             item.separatorBefore === true ? (
               <div key={`${item.key} rule`} role="separator" className="menu-button__sep" />

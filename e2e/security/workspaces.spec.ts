@@ -1,5 +1,6 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 
+import { chooseTarget, targetRow } from '../workspace';
 import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
 
 /**
@@ -108,19 +109,16 @@ test.describe('each author’s own workspace (T343, AC-276, AC-277)', () => {
         .click();
 
       const dialog = page.getByRole('dialog', { name: 'New dashboard in My workspace' });
-      const picker = dialog.getByRole('combobox', { name: 'Target folder' });
+      const picker = dialog.getByRole('tree', { name: 'Target folder' });
       // Only folders they may write in, by path: both sales folders; not the
       // root, where they have none. With two, neither is chosen for them.
-      await expect(picker.locator(`option[value="${made.sales}"]`)).toHaveText(
-        `Workspace sales ${RUN}`,
-      );
-      await expect(picker.locator(`option[value="${made.also}"]`)).toHaveText(
-        `Workspace also ${RUN}`,
-      );
-      await expect(picker.locator('option[value="root"]')).toHaveCount(0);
+      await expect(targetRow(dialog, made.sales)).toHaveText(`Workspace sales ${RUN}`);
+      await expect(targetRow(dialog, made.also)).toHaveText(`Workspace also ${RUN}`);
+      await expect(targetRow(dialog, 'root')).toHaveCount(0);
+      await expect(picker.locator('[aria-selected="true"]')).toHaveCount(0);
       await expect(dialog.getByRole('button', { name: 'Create' })).toBeDisabled();
       await dialog.getByRole('textbox', { name: 'Name' }).fill(`targeted ${RUN}`);
-      await picker.selectOption(made.sales);
+      await chooseTarget(dialog, made.sales);
       await dialog.getByRole('button', { name: 'Create' }).click();
 
       await expect(page).toHaveURL(/\/explore\/dashboards\//);

@@ -803,6 +803,8 @@ main > .proposal-band:first-child,
 .menu-button__menu--end { right: 0; }
 .menu-button__menu--start { left: 0; }
 .menu-button__sep { height: 1px; margin: 4px 0; background: var(--wc-border-subtle); }
+/* A menu's head, design 13's .mhead (state G; T692). */
+.menu-button__head { padding: 6px 8px 2px; font-size: var(--wc-text-xs-size); line-height: var(--wc-text-xs-line); font-weight: 600; color: var(--wc-text-secondary); }
 .menu-button__item {
   display: flex;
   width: 100%;
@@ -5397,7 +5399,19 @@ main:has(.review-view) {
 .dialog button.btn-primary:hover:not(:disabled) { background: var(--wc-accent); filter: brightness(1.08); }
 /* New in My workspace (T345, AC-282): references.md's 520 px dialog, its
    Name and Target folder full width. */
-.dialog.new-item-dialog { width: min(520px, calc(100vw - 32px)); max-width: none; gap: 12px; }
+/* Design 04, state A: 520 px, padding 20, its parts 14 px apart (T692). */
+.dialog.new-item-dialog { width: min(520px, calc(100vw - 32px)); max-width: none; gap: 14px; padding: 20px; }
+/* The target: its label, the filter (state B), the tree and its help, 4 px apart (.field). */
+.new-item-dialog__target { display: grid; gap: 4px; }
+.new-item-dialog__target > .field { gap: 4px; }
+/* Its label as Name's: design 04's .field > label, 12/16 at 600 in text-secondary (T692's review). */
+.new-item-dialog .field__label { font-size: var(--wc-text-xs-size); line-height: var(--wc-text-xs-line); font-weight: 600; color: var(--wc-text-secondary); }
+/* The folder named in the note, in text-primary as design 04 draws it. */
+.new-item-dialog__note b { color: var(--wc-text-primary); }
+/* Design 04's .ptree: rows edge to edge, radius 4. */
+.new-item-dialog .target-tree { gap: 0; border-radius: 4px; }
+.new-item-dialog .new-item-dialog__filter { width: 100%; height: 32px; box-sizing: border-box; }
+.new-item-dialog .field__help { margin: 0; font-size: var(--wc-text-xs-size); line-height: var(--wc-text-xs-line); color: var(--wc-text-secondary); }
 .new-item-dialog .field input,
 .new-item-dialog .field select { height: 32px; }
 .dialog .new-item-dialog__note { margin: 0; font-size: var(--wc-text-xs-size); }

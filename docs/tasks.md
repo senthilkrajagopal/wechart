@@ -9416,7 +9416,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - "+ Data source" stays enabled, with its ring, while the pane is open.
   - Waits on: the model critique's Q3 ("All published"'s colour) and Q4 (comment lines tinted at rest), for those two items only.
   - Depends on: T684 (the pane head's icon button)
-- [ ] T692 (AC-343, AC-344, AC-192, AC-282, AC-356) Making things in My workspace: the New menu as design 13 state G draws it, and the target folder as design 04 states A and B draw it *(added 2026-10-08 by T406)*
+- [x] T692 (AC-343, AC-344, AC-192, AC-282, AC-356) Making things in My workspace: the New menu as design 13 state G draws it, and the target folder as design 04 states A and B draw it *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/workspaces/explore/{CreateMenu,NewItemDialog}.tsx` (+ tests), `e2e/explore.spec.ts`
   - Findings: MOD-07, EXP-06, EXP-08.
   - Failing test:
@@ -9425,6 +9425,31 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - its help line, and its note naming the folder;
     - past ten folders, a filter.
   - Depends on: none
+  - **Built 2026-10-08.**
+    - **The menu (design 13, state G).** In My workspace, New's menu is headed "New in My workspace" (design 13's `.mhead`: 12/16/600, text-secondary). It lists Dashboard, Chart, Model and Data source; then, under a divider, Folder with "no target"; then, under another divider, "Import a dashboard…" with "from a file".
+      - `MenuButton` takes a `heading`, drawn over the items. The menu keeps "New" as its name, the button's, so the head is drawn and not read twice.
+      - A shared folder's New, which offers Folder alone, has no head.
+    - **The target (design 04, states A and B)**, in New dashboard, chart, cube and view:
+      - "Name · required". The mark is shown and hidden from screen readers; the field carries `aria-required`, so its name stays "Name".
+      - "Target folder · required" as design 01's tree (`TargetTree`), its rows now by their whole paths ("Finance / Sales") and indented under their parents. A folder on a target's path that isn't one is shown for where it is. The one target there is is chosen for the user.
+      - The help line "Only folders where you have read-write access."
+      - The note names the folder chosen, in bold: "…until you propose it to **Finance / Sales**."
+      - The dialog is 520 px wide, padded 20, its parts 14 apart. The tree has rows edge to edge and a radius of 4 (design 04's `.ptree`).
+      - **Past ten folders (state B):** a filter box over the tree matches any part of a path. The tree is then flat, each row its whole path with the match in bold, and the help line reads "4 of 13 folders where you have read-write access.". The keyboard is as the design notes it: type to filter, ↑ ↓ to move the choice among what matches, Enter to choose.
+    - **Tests:**
+      - Unit tests, each failing first:
+        - `NewItemDialog.test.tsx`: the tree, the marks, the help line, the bold note, and state B's filter, count and keys;
+        - `CreateMenu.test.tsx`: state G's head, groups and "no target".
+      - The unit tests and e2e that chose a target from the old native select now choose it in the tree, through one helper (`chooseTarget` and `targetRow` in `e2e/workspace.ts`), each asserting the choice took. These are `model-design`, `model-unpublished`, `model`, `model-in-folder`, `draft-file-names`, and the security suite's `workspace-overlay` and `workspaces`. The security specs' checks on which folders are offered, and that none is chosen with two, stand as before, read from the tree.
+      - `explore.spec.ts` "New in My workspace: its menu as design 13 state G, its target as design 04 state A" (Chrome). The test of the menu's items now reads Folder's "no target".
+      - Results: the web suite's workspace and shell tests, 1,381 of 1,381. In e2e (Chrome), `explore`, `model-design`, `model-unpublished`, `model`, `model-in-folder`, `draft-file-names`, `new-dashboard`, `consistency` and `generate-cubes` pass; one test of a saved chart's drawn type, `explore.spec.ts:346`, passed on its second run. In the security suite, `workspace-overlay`, `workspaces` and `new-data-source` pass, 17 of 17.
+    - **The cold review (FAIL) found two bugs and two lesser defects, all fixed:**
+      1. Two tests in `security/explore-roles.spec.ts`, not run before, still pinned the old menu. They now read Folder's "no target", with its two dividers placed above Folder and above Import.
+      2. "Target folder"'s label had no style in the dialog (14 px, regular, text-primary). It is now Name's: design 04's `.field > label`, 12/600 in text-secondary. `explore.spec.ts` compares the two labels' styles.
+      3. The folder named in the note is now text-primary, as design 04 draws it.
+      4. With a choice the filter hides, Enter left it chosen. It now chooses the first match (`NewItemDialog.test.tsx`, failing first).
+      - After the fixes: `explore` 20 of 20; the security suite's `explore-roles`, `workspaces` and `workspace-overlay`, 32 of 32.
+      - Left, as the review's nits: the filter's arrows aren't announced (no live region), the design's search icon in the filter box, and the tree's own "· required", which is unchanged from design 01's tree.
 - [ ] T693 (AC-187, AC-343, AC-369, AC-370) Explore's list, head, tree and menus as designs 14 and 04 draw them *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/workspaces/explore/{ExplorePage,FolderContents,FolderTree}.tsx`, `packages/web/src/shell/{MenuButton.tsx,styles.ts}` (+ tests), `e2e/design-conformance.spec.ts`, `e2e/explore.spec.ts`
   - Findings: EXP-02, EXP-03, EXP-04, EXP-05, EXP-07, EXP-10, EXP-11, EXP-12, EXP-14, EXP-25, EXP-26, EXP-27 (`docs/design/critiques/2026-10-08-explore-access-signin.md`).

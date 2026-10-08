@@ -44,6 +44,12 @@ export interface CreateMenuProps {
    */
   readonly onImport?: () => void;
   readonly busy?: boolean;
+  /**
+   * The menu's head, in My workspace (design 13, state G; T692): "New in My
+   * workspace", Folder then set apart under a divider as the one kind with
+   * no target.
+   */
+  readonly heading?: string;
 }
 
 /** The prototype's order: what most people came to make, first. */
@@ -60,24 +66,31 @@ export function CreateMenu({
   onNewModel,
   onImport,
   busy = false,
+  heading,
 }: CreateMenuProps) {
   const items: MenuItem[] = OPTIONS.filter(
     (option) => offers === undefined || offers.includes(option.kind),
-  ).map((option) => ({
-    key: option.kind as string,
-    label: (
-      <>
-        <span className={option.chip} aria-hidden="true">
-          {option.icon}
-        </span>
-        {option.label}
-      </>
-    ),
-    disabled: busy,
-    onSelect: () => {
-      onCreate(option.kind);
-    },
-  }));
+  ).map((option) => {
+    // In the workspace, the one kind made at once, with no target (state G).
+    const noTarget = heading !== undefined && option.kind === 'folder';
+    return {
+      key: option.kind as string,
+      label: (
+        <>
+          <span className={option.chip} aria-hidden="true">
+            {option.icon}
+          </span>
+          {option.label}
+          {noTarget ? <span className="menu-button__aside">no target</span> : null}
+        </>
+      ),
+      ...(noTarget ? { separatorBefore: true } : {}),
+      disabled: busy,
+      onSelect: () => {
+        onCreate(option.kind);
+      },
+    };
+  });
   if (onNewModel !== undefined)
     // AC-192's order in the workspace: Dashboard, Chart, Model, Data source, Folder.
     items.splice(items.length - 1, 0, {
@@ -127,7 +140,12 @@ export function CreateMenu({
   // Nothing the user may make here: no New, rather than an empty menu (rule 68).
   if (items.length === 0) return null;
   return (
-    <MenuButton label="New" items={items} testId="explore-new">
+    <MenuButton
+      label="New"
+      items={items}
+      testId="explore-new"
+      {...(heading === undefined ? {} : { heading })}
+    >
       ＋ New ▾
     </MenuButton>
   );

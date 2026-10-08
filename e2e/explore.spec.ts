@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
-import { madeIn, sharedIn } from './workspace';
+import { chooseTarget, madeIn, sharedIn } from './workspace';
 
 /**
  * AC-017: WHEN the user opens Explore, THE SYSTEM SHALL show a folder tree and
@@ -158,7 +158,8 @@ test('creating is offered through one New menu: Dashboard, Chart and Folder', as
     /Chart$/,
     /Model$/,
     /Data source$/,
-    /Folder$/,
+    // The one kind with no target, as design 13 state G marks it (T692).
+    /Folderno target$/,
     /Import a dashboard…from a file$/,
   ]);
 
@@ -652,4 +653,57 @@ test('Explore keeps the open folder in its address, so Back and a reload return 
   await expect(heading(page)).toHaveText('Marketing');
   await page.goBack();
   await expect(heading(page)).toHaveText('Finance');
+});
+
+/**
+ * T692 (AC-192, AC-282, AC-343): making things in My workspace as the
+ * designs draw it. New's menu as design 13 state G: headed "New in My
+ * workspace", the four kinds that ask for a target, then Folder ("no
+ * target"), then Import ("from a file"). New dashboard's target as design 04
+ * state A: "Name · required", a tree of full paths, its help line, and the
+ * note naming the folder chosen.
+ */
+test('New in My workspace: its menu as design 13 state G, its target as design 04 state A', async ({
+  page,
+}) => {
+  await page.goto('/explore?folder=mine');
+  await page
+    .getByTestId('explore-contents')
+    .getByRole('button', { name: 'New', exact: true })
+    .click();
+  const menu = page.getByRole('menu', { name: 'New' });
+  await expect(menu.locator('.menu-button__head')).toHaveText('New in My workspace');
+  await expect(menu.getByRole('menuitem')).toHaveText([
+    /Dashboard$/,
+    /Chart$/,
+    /Model$/,
+    /Data source$/,
+    /Folderno target$/,
+    /Import a dashboard…from a file$/,
+  ]);
+  await expect(menu.getByRole('separator')).toHaveCount(2);
+
+  await menu.getByRole('menuitem', { name: 'Dashboard', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'New dashboard in My workspace' });
+  await expect(dialog.locator('label', { hasText: 'Name' })).toHaveText('Name · required');
+  // Both labels drawn as design 04's .field > label: 12/600 in text-secondary (T692's review).
+  const labelStyle = (label: ReturnType<Page['locator']>) =>
+    label.evaluate((node) => {
+      const style = getComputedStyle(node);
+      return [style.fontSize, style.fontWeight, style.color];
+    });
+  const nameStyle = await labelStyle(dialog.locator('label', { hasText: 'Name' }));
+  expect(nameStyle.slice(0, 2)).toEqual(['12px', '600']);
+  expect(await labelStyle(dialog.locator('.field__label', { hasText: 'Target folder' }))).toEqual(
+    nameStyle,
+  );
+  const tree = dialog.getByRole('tree', { name: 'Target folder' });
+  // The shared root, by its name, and its folders by their whole paths.
+  await expect(tree.locator('[data-target="root"]')).toHaveText('Shared');
+  await expect(tree.locator('[data-target="seed-folder-0"]')).toHaveText('Finance');
+  await expect(dialog.getByText('Only folders where you have read-write access.')).toBeVisible();
+  await chooseTarget(dialog, 'seed-folder-0');
+  await expect(dialog.locator('.new-item-dialog__note b')).toHaveText('Finance');
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toHaveCount(0);
 });

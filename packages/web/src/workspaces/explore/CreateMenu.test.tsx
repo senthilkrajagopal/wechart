@@ -72,6 +72,54 @@ describe('the New menu (AC-192, T331)', () => {
     ).toBeTruthy();
   });
 
+  /**
+   * T692 (design 13, state G; design 04, pin 5): the workspace's menu headed
+   * "New in My workspace", the four kinds that ask for a target, then Folder,
+   * which doesn't ("no target"), then Import, each group under a divider.
+   */
+  it('is headed and grouped in the workspace as design 13 state G draws it', async () => {
+    render(
+      <CreateMenu
+        offers={['dashboard', 'chart', 'folder']}
+        onCreate={vi.fn()}
+        onNewModel={vi.fn()}
+        onNewSource={vi.fn()}
+        onImport={vi.fn()}
+        heading="New in My workspace"
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'New' }));
+    const menu = screen.getByRole('menu', { name: 'New' });
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual([
+      '▦Dashboard',
+      '◢Chart',
+      '◇Model',
+      '◍Data source',
+      '▣Folderno target',
+      '⤒Import a dashboard…from a file',
+    ]);
+    expect(menu.querySelector('.menu-button__head')?.textContent).toBe('New in My workspace');
+    // Two dividers: before Folder, and before Import.
+    const order = [...menu.children].map((child) =>
+      child.getAttribute('role') === 'separator' ? '—' : (child.textContent ?? ''),
+    );
+    expect(order).toEqual([
+      'New in My workspace',
+      '▦Dashboard',
+      '◢Chart',
+      '◇Model',
+      '◍Data source',
+      '—',
+      '▣Folderno target',
+      '—',
+      '⤒Import a dashboard…from a file',
+    ]);
+  });
+
   // T347 (AC-192's Model entry, AC-282's model half): between Chart and Data source.
   it('offers Model in the workspace, after Chart, and calls for one when chosen', async () => {
     const onNewModel = vi.fn();
