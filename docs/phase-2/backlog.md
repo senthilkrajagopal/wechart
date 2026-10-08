@@ -169,6 +169,12 @@ These are not criteria. Each needs either a spec decision or research before it 
   - The likely cause: the test predates AC-097's marked share. Once the status tile marks "shipped", the category tile's Components bar is partly marked. Its marked share then draws a third path ("1 of 3", where "1 of 2" is expected) whenever the share's query answers before the first poll.
   - The fix: correct the expectation to the count the marked share gives, and wait for that share's query, so the test no longer races it.
 
+- **Known limit: a data source's name reused in another folder while xcube missed the deletion** (T765's review, 2026-10-08, AC-330; recorded here on the coordinator's call).
+  - **The case.** Folder A holds data source `wh` and a cube on it. While xcube misses the changes, A is deleted in wechart and `wh` is made again in folder B.
+  - **What happens.** The API's catch-up never converges. Its step 3 asks to move `wh` from A to B, and xcube refuses (`409 data_source_range`) because A's old cube still uses it. Its step 4 sends the items, and xcube refuses them (`422 data_source_range`) because B's new cube uses a `wh` that is still in A. Every 60 s reconcile repeats this, so B's cube isn't served.
+  - **The fix it needs.** An atomic snapshot from xcube that carries the connections together with the items.
+  - **Evidence.** Reasoned from `docs/research/xcube-256d632371.md` (lines 141 and 163) and `xcube-c2602ac72a.md`. No run has shown it.
+
 ## 3. Questions for the user, carried into phase 2
 
 Each is recorded where it arose.
