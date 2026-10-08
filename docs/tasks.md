@@ -13807,6 +13807,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - **Already T729's, kept as it has them:** T429's binding, the path's groups (AC-329), T475's no-hidden-row case, T633's "Filter on", T450's search and T457's join.
     - **`e2e/cubePicker.ts`:** `optionOf` no longer skips `.is-hidden` rows, since there are none.
     - **`fieldPicker.test.tsx`:** already reworked by T718, unchanged.
+    - **The review (PASS, on the version before the rebuild; its overlap finding is settled by the rebuild):** "Filter on"'s chip is now held to design 03's tree chip style, as the chart editor's is, in both pickers (`chipStyled`: 600 11/16, muted, a 1 px strong border, 3 px corners). This covers AC-428's "not in design 03's tree chip style". 8/8 in Chrome.
 
 - [ ] T733 (AC-357, AC-358, AC-361) Rework the tests of T513 and T514 to imports that map landed names
   - Files: `e2e/security/export-import.spec.ts`, `packages/api/src/routes/import.test.ts`, `packages/web/src/workspaces/explore/import/{ImportSources,ImportPane}.test.tsx`

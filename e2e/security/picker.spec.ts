@@ -1,4 +1,4 @@
-import type { APIRequestContext, Page } from '@playwright/test';
+import type { APIRequestContext, Locator, Page } from '@playwright/test';
 
 import { cubePicker, fieldPicker } from '../cubePicker';
 import { landed } from '../model-files';
@@ -61,6 +61,31 @@ const hiddenColour = (page: Page) =>
     probe.remove();
     return colour;
   });
+
+/**
+ * Design 03's tree chip, `.file .tag` (R73; AC-428): 600 11/16, muted, a 1 px
+ * strong border, 3 px corners — as `workspace-overlay.spec.ts` holds the
+ * chart editor's to it (T718).
+ */
+async function chipStyled(page: Page, chip: Locator) {
+  const ink = (token: string) =>
+    page.evaluate((name) => {
+      const probe = document.createElement('span');
+      probe.style.color = `var(${name})`;
+      document.body.append(probe);
+      const colour = getComputedStyle(probe).color;
+      probe.remove();
+      return colour;
+    }, token);
+  await expect(chip).toHaveCSS('font-size', '11px');
+  await expect(chip).toHaveCSS('font-weight', '600');
+  await expect(chip).toHaveCSS('line-height', '16px');
+  await expect(chip).toHaveCSS('border-top-width', '1px');
+  await expect(chip).toHaveCSS('border-top-left-radius', '3px');
+  await expect(chip).toHaveCSS('padding-left', '4px');
+  await expect(chip).toHaveCSS('color', await ink('--wc-text-muted'));
+  await expect(chip).toHaveCSS('border-top-color', await ink('--wc-border-strong'));
+}
 
 /** A chart made in a folder, as New › Chart makes one. */
 async function chartIn(request: APIRequestContext, folderId: string, title: string) {
@@ -292,6 +317,7 @@ test.describe('cubes bound and picked on a folder’s path (T429)', () => {
         list.getByRole('group', { name: AB, exact: true }).locator(`[data-cube="${CUBES.b.name}"]`),
       ).toHaveCount(1);
       await expect(ofB.locator('.cube-picker__chip')).toHaveText('Your copy');
+      await chipStyled(page, ofB.locator('.cube-picker__chip'));
       await expect(list.locator('[aria-disabled="true"]')).toHaveCount(0);
 
       const board = await request.post('/api/documents', {
@@ -313,7 +339,8 @@ test.describe('cubes bound and picked on a folder’s path (T429)', () => {
       await expect(fields.list.getByRole('group').first()).toHaveAttribute('aria-label', AB);
       const status = fields.list.locator(`[data-member="${CUBES.b.name}.status"]`);
       await expect(status).toHaveCount(1);
-      await expect(status).toContainText('Your copy');
+      await expect(status.locator('.cube-picker__chip')).toHaveText('Your copy');
+      await chipStyled(page, status.locator('.cube-picker__chip'));
       await expect(status).toContainText(`${CUBES.b.title} · ${AB}`);
       await expect(fields.list.locator('[aria-disabled="true"]')).toHaveCount(0);
     } finally {
