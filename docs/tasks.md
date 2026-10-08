@@ -13461,6 +13461,16 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - `import-models.test.ts`, 2 cases, red before. A cube on the file's `<mark>_warehouse`, mapped to Sales's `<mark>_emea`, is stored naming `<mark>_emea`. A cube naming the file's one in upper case, held by `<mark>_emea`, is stored naming `<mark>_emea`.
       - API 1826/1826, core 545/545, web 2621/2621.
     - **Not ticked:** AC-358 waits for T733's e2e on the image.
+    - **The review (FAIL), its fixes taken:**
+      - **Read as Cube reads it.** `rebound` parses with `CUBE_PARSE` and resolves each cube's keys (`toJS`). A cube naming its data source through a `<<:` merge is now rebound: it gets an explicit `data_source` beneath its name, which overrides the merge. Before, it kept the file's name. It is also no longer handed `default`'s choice over its merged one.
+      - **Only the values change.** Before, `toString()` re-rendered the whole file: lines folded at 80 characters, and indents reset to 2. Now `rebound` edits the text in place: a value's offsets are replaced, or a line is put beneath the cube's name at its column. Indents, long lines and comments are kept.
+      - **Jinja templates.** A template isn't YAML until Cube renders it, so it isn't rebound. `templateNeedsBinding` finds a data source it names, in any case, that would need another spelling. Import then refuses with 422 and names the part: "It is a Jinja template, which wechart can’t rebind: write “b” for “a” in it, then import again."
+      - **The index** exports `rebound` and `templateNeedsBinding`; `sourcesNamedIn` is the tests' alone.
+      - **Tests:**
+        - `importBinding.test.ts`: 3 cases, red before (the merge, the layout, the template).
+        - `import-models.test.ts`: 2 cases. The template refusal was red before. The cube extending another, stored with only its parent's key changed, is coverage.
+        - API 1828/1828, core 548/548.
+    - **Left as reported:** where the file's data source was created for the import (its own name), nothing is rebound, and only the core test pins that.
 
 ### The UI
 

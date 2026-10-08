@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { parse } from 'yaml';
 
-import { rebound, sourcesNamedIn } from './importBinding';
+import { rebound, sourcesNamedIn, templateNeedsBinding } from './importBinding';
 
 /**
  * T721 (AC-358; from T671's WIP): an import binds its models to the data
@@ -82,6 +83,59 @@ describe('a model rebound to the data sources chosen (T721, AC-358)', () => {
       { cube: 'orders', source: 'warehouse' },
       { cube: 'lines', source: 'warehouse' },
     ]);
+  });
+
+  // T721's review: as Cube reads it (CUBE_PARSE), a merged `<<:` key is the cube's own.
+  it('rebinds a cube whose data source comes through a merge key, and gives it no default over it', () => {
+    const merged = [
+      'x-base: &base',
+      '  data_source: warehouse',
+      'cubes:',
+      '  - name: orders',
+      '    <<: *base',
+      '    sql_table: public.orders',
+      '',
+    ].join('\n');
+    const read = (text: string) =>
+      (parse(text, { merge: true }) as { cubes: { name: string; data_source?: string }[] })
+        .cubes[0]!.data_source;
+    expect(read(rebound(merged, new Map([['warehouse', 'dw_main']])))).toBe('dw_main');
+    expect(read(rebound(merged, new Map([['default', 'dw_main']])))).toBe('warehouse');
+  });
+
+  // T721's review: only the binding changes; its layout stays (research yaml.md, "Round-trip").
+  it('keeps the file’s indent and long lines as they are', () => {
+    const wide = [
+      'cubes:',
+      '    -   name: orders',
+      '        sql: SELECT id, status, created_at, amount, customer_id, region FROM public.orders WHERE amount > 0',
+      '        data_source: warehouse',
+      '',
+    ].join('\n');
+    const after = rebound(wide, new Map([['warehouse', 'dw_main']]));
+    expect(after.split('\n').filter((line) => !line.includes('dw_main'))).toEqual(
+      wide.split('\n').filter((line) => !line.includes('warehouse')),
+    );
+    expect(after).toContain('data_source: dw_main');
+  });
+
+  // T721's review: a Jinja file isn't YAML until Cube renders it, so it isn't rebound here.
+  it('says which of a template’s data sources it would need rebound', () => {
+    const template = [
+      'cubes:',
+      '  {% for name in ["a", "b"] %}',
+      '  - name: {{ name }}',
+      '    sql_table: public.{{ name }}',
+      '    data_source: Warehouse',
+      '  {% endfor %}',
+      '',
+    ].join('\n');
+    expect(templateNeedsBinding(template, new Map([['warehouse', 'dw_main']]))).toEqual([
+      'warehouse',
+      'dw_main',
+    ]);
+    expect(templateNeedsBinding(template, new Map([['warehouse', 'Warehouse']]))).toBeUndefined();
+    expect(templateNeedsBinding(template, new Map([['sales_dw', 'dw_main']]))).toBeUndefined();
   });
 
   it('leaves a file as it is where every name chosen is the one it names, a new one created under its own', () => {

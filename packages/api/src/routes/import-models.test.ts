@@ -593,6 +593,63 @@ describe('the data source an imported model binds to (T721, AC-358)', () => {
     expect(stored).not.toContain(warehouse);
   });
 
+  // T721's review: a cube extending another is its parent's to bind.
+  it('leaves a cube extending another to its parent', async () => {
+    const warehouse = name('warehouse_x');
+    const { model, file } = bindingFile('extends', warehouse, warehouse);
+    const content = `${model.content}  - name: ${name('bound_child')}\n    extends: ${name('bound_extends')}\n`;
+    const withChild = {
+      ...file,
+      items: file.items.map((item) => (item.kind === 'model' ? { ...item, content } : item)),
+    };
+    const answer = await as('writer', {
+      method: 'POST',
+      url: IMPORTS,
+      payload: {
+        file: withChild,
+        targetFolderId: folders.sales,
+        dataSources: [{ name: warehouse, to: sourceId }],
+      },
+    });
+    expect(answer.statusCode, answer.body).toBe(201);
+    expect(await storedContentOf(model.path)).toBe(
+      content.replace(`data_source: ${warehouse}`, `data_source: ${SOURCE}`),
+    );
+  });
+
+  // T721's review: a Jinja template isn't YAML until Cube renders it, so it isn't rebound here.
+  it('refuses a template whose cubes would need another data source’s name, naming it, writing nothing', async () => {
+    const warehouse = name('warehouse_t');
+    const { model, file } = bindingFile('template', warehouse, warehouse);
+    const template = `{% set n = 1 %}\n${model.content}`;
+    const before = await everything();
+    const answer = await as('writer', {
+      method: 'POST',
+      url: IMPORTS,
+      payload: {
+        file: {
+          ...file,
+          items: file.items.map((item) =>
+            item.kind === 'model' ? { ...item, content: template } : item,
+          ),
+        },
+        targetFolderId: folders.sales,
+        dataSources: [{ name: warehouse, to: sourceId }],
+      },
+    });
+    expect(answer.statusCode, answer.body).toBe(422);
+    expect(answer.json()).toEqual({
+      error: 'Refused: nothing was imported.',
+      parts: [
+        {
+          part: `Model ${model.path}`,
+          why: `It is a Jinja template, which wechart can’t rebind: write “${SOURCE}” for “${warehouse}” in it, then import again.`,
+        },
+      ],
+    });
+    expect(await everything()).toEqual(before);
+  });
+
   it('binds a cube naming the file’s one in another case to the landed one holding its name, by that one’s name', async () => {
     const { model, file } = bindingFile('held', SOURCE.toUpperCase(), SOURCE.toUpperCase());
     const answer = await land(file);

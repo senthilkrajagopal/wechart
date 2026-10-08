@@ -4,7 +4,9 @@ import {
   exportedBodyOf,
   nameKey,
   readExport,
+  objectsOf,
   rebound,
+  templateNeedsBinding,
   tokenMembersOf,
   type ExportedChart,
   type ExportFile,
@@ -983,6 +985,24 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
      * one xcube refuses is refused here, on its file, and nothing is written.
      */
     if (landing.length > 0) {
+      /**
+       * A Jinja template isn't YAML until Cube renders it, so it isn't
+       * rebound here: one naming a data source given another name is refused,
+       * saying which (T721's review).
+       */
+      const templates = landing.flatMap((model) => {
+        if (objectsOf(model.path, model.content).code !== 'Jinja') return [];
+        const needs = templateNeedsBinding(model.content, chosen);
+        return needs === undefined
+          ? []
+          : [
+              {
+                part: `Model ${model.path}`,
+                why: `It is a Jinja template, which wechart can’t rebind: write “${needs[1]}” for “${needs[0]}” in it, then import again.`,
+              },
+            ];
+      });
+      if (templates.length > 0) return reply.code(422).send({ error: REFUSED, parts: templates });
       // Each cube bound to the data source given for the one it names (T721, AC-358).
       const saved = await access.models!.save(
         own,
