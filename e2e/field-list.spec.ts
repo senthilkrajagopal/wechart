@@ -1,6 +1,10 @@
+import { createPrivateKey } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+
 import { expect, test } from '@playwright/test';
 
 import { cubePicker } from './cubePicker';
+import { kidOf } from './tokens';
 
 /**
  * AC-025: WHEN the user opens the chart editor, THE SYSTEM SHALL list the cubes
@@ -104,4 +108,89 @@ test('no response reaching the browser carries the Cube secret (AC-007)', async 
   await expect(page.getByTestId('member-orders.count')).toBeVisible();
 
   expect(bodies.some((body) => body.includes('dev-secret'))).toBe(false);
+});
+
+/**
+ * AC-326: `Fails when: … a response to the browser contains the signing key
+ * or the service credential.` The API holds the development query signing key
+ * and service key (`infra/xcube/`); through a dashboard's queries, the
+ * chart editor's field list and the Security page's scope probes, no response or header reaching the browser holds
+ * either private key, in any form, nor a service token (one naming the
+ * service key's id).
+ */
+test('no response reaching the browser carries the query signing key or the service credential (AC-326)', async ({
+  page,
+}) => {
+  /** Each response's headers, and its body (`body`), as the browser got them. */
+  const said: { url: string; body: boolean; text: string }[] = [];
+  // Every response's reading, awaited before the checks, so none is missed.
+  const reading: Promise<void>[] = [];
+  page.on('response', (response) => {
+    const url = response.url();
+    if (!url.includes('/api/')) return;
+    reading.push(
+      (async () => {
+        said.push({ url, body: false, text: JSON.stringify(await response.allHeaders()) });
+        said.push({ url, body: true, text: await response.text().catch(() => '') });
+      })(),
+    );
+  });
+  const keys = ['dev-signing-key.pem', 'dev-service-key.pem'].map((file) =>
+    readFileSync(new URL(`../infra/xcube/${file}`, import.meta.url), 'utf8'),
+  );
+  // Each key as PEM lines and as its private JWK members.
+  const secrets = keys.flatMap((pem) => {
+    const jwk = createPrivateKey(pem).export({ format: 'jwk' });
+    return [
+      ...pem.split('\n').filter((line) => line.length >= 40),
+      ...(['d', 'p', 'q', 'dp', 'dq', 'qi'] as const).map((member) => String(jwk[member])),
+    ];
+  });
+  const serviceKid = kidOf(keys[1]!);
+
+  const loaded = page.waitForResponse(
+    (response) => response.url().endsWith('/api/load') && response.status() === 200,
+  );
+  await page.goto('/explore/dashboards/seed-root-dashboard-1');
+  await loaded;
+  // Read before leaving the page, which would discard the bodies.
+  await Promise.all(reading);
+  await page.goto('/explore/charts/seed-chart-empty/edit');
+  await cubePicker(page).selectOption({ label: 'Orders' });
+  await expect(page.getByTestId('member-orders.count')).toBeVisible();
+  await Promise.all(reading);
+  // And the Security page, whose scope probes sign query tokens and use the
+  // service credential (T437).
+  await page.goto('/security');
+  const scopes = page.getByRole('table', { name: 'Cube API scopes' });
+  await expect(scopes.getByTestId('scope-jobs')).toHaveText('Granted', { timeout: 15_000 });
+
+  await Promise.all(reading);
+
+  // It really did query, read the field list and probe the scopes, and their
+  // bodies were read: otherwise this proves nothing.
+  for (const route of ['/api/load', '/api/meta', '/api/cube-scopes'])
+    expect(
+      said.some(({ url, body, text }) => url.includes(route) && body && text !== ''),
+      route,
+    ).toBe(true);
+  const holding = (secret: string) =>
+    said.filter(({ text }) => text.includes(secret)).map(({ url }) => url);
+  for (const secret of secrets) expect(holding(secret)).toEqual([]);
+  expect(holding(serviceKid)).toEqual([]);
+  // A token's `kid` is in its base64url header, not in plain text: so each
+  // JWT-shaped string is read, and none is a service token.
+  const serviceTokens = said.flatMap(({ url, text }) =>
+    [...text.matchAll(/eyJ[\w-]+\.[\w-]+\.[\w-]+/g)].flatMap(([jwt]) => {
+      try {
+        const header = JSON.parse(
+          Buffer.from(jwt.split('.')[0]!, 'base64url').toString('utf8'),
+        ) as { kid?: unknown };
+        return header.kid === serviceKid ? [url] : [];
+      } catch {
+        return [];
+      }
+    }),
+  );
+  expect(serviceTokens).toEqual([]);
 });

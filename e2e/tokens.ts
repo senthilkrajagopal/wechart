@@ -12,25 +12,29 @@ import { CUBE, serviceToken } from './api-process';
  * xcube refuses an HS256 token, so no e2e helper signs one.
  */
 const PEM = readFileSync(new URL('../infra/xcube/dev-signing-key.pem', import.meta.url), 'utf8');
-const KEY = createPrivateKey(PEM);
 const { n, e } = createPublicKey(PEM).export({ format: 'jwk' }) as { n: string; e: string };
-/** The key's id, as the API computes it: RFC 7638, members in order, no whitespace. */
-export const DEV_SIGNING_KID = createHash('sha256')
-  .update(JSON.stringify({ e, kty: 'RSA', n }))
-  .digest('base64url');
+
+/** A key's id, as the API computes it: RFC 7638, members in order, no whitespace. */
+export function kidOf(pem: string): string {
+  const jwk = createPublicKey(pem).export({ format: 'jwk' }) as { n: string; e: string };
+  return createHash('sha256')
+    .update(JSON.stringify({ e: jwk.e, kty: 'RSA', n: jwk.n }))
+    .digest('base64url');
+}
+export const DEV_SIGNING_KID = kidOf(PEM);
 
 const part = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
 
-export function queryToken(
-  claims: {
-    readonly groups?: readonly string[];
-    readonly wechartModel?: string;
-    readonly wechartRevision?: number;
-  },
-  ttlSeconds = 300,
-): string {
+interface QueryClaims {
+  readonly groups?: readonly string[];
+  readonly wechartModel?: string;
+  readonly wechartRevision?: number;
+}
+
+/** A query token as the API signs one, under the given RSA key (T437's rotation). */
+export function queryTokenWith(pem: string, claims: QueryClaims, ttlSeconds = 300): string {
   const now = Math.floor(Date.now() / 1000);
-  const unsigned = `${part({ alg: 'RS256', kid: DEV_SIGNING_KID, typ: 'JWT' })}.${part({
+  const unsigned = `${part({ alg: 'RS256', kid: kidOf(pem), typ: 'JWT' })}.${part({
     aud: 'xcube',
     iss: 'wechart',
     role: 'user',
@@ -39,7 +43,11 @@ export function queryToken(
     iat: now,
     exp: now + ttlSeconds,
   })}`;
-  return `${unsigned}.${sign('sha256', Buffer.from(unsigned), KEY).toString('base64url')}`;
+  return `${unsigned}.${sign('sha256', Buffer.from(unsigned), createPrivateKey(pem)).toString('base64url')}`;
+}
+
+export function queryToken(claims: QueryClaims, ttlSeconds = 300): string {
+  return queryTokenWith(PEM, claims, ttlSeconds);
 }
 
 /**

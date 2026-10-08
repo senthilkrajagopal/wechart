@@ -10218,7 +10218,7 @@ Every step leaves both suites working. The slice-4 image takes HS256 tokens unti
     - AC-320's "a permission change recompiles a module" is shown only by xcube's own test (`xcube-slice-4.md`, [t-sec] L300-315). Here the model's revision is shared with the suite's other specs, so no test of wechart's can show it.
     - AC-263 waits on the user's question above.
     - AC-321 waits on T451 and T456.
-- [ ] T437 (AC-326, AC-008) Sign every query token RS256, carrying only the groups some policy or folder names, and push the keys to xcube *(rewritten 2026-09-26 to slice 4 as built, `[X4]`)*
+- [x] T437 (AC-326, AC-008) Sign every query token RS256, carrying only the groups some policy or folder names, and push the keys to xcube *(rewritten 2026-09-26 to slice 4 as built, `[X4]`)*
   - Files: `packages/api/src/cube/signing.ts` (+ test), `packages/api/src/cube/client.ts`, `packages/api/src/xcube/keys.ts` (+ test), `infra/cube/cube.js` (`contextToGroups` goes; xcube reads `groups`; the `wechartIntrospection` branch goes, T420's hand-on), the signing key in `docker-compose.yml` and a chart Secret generated once (`lookup`), and the e2e helpers that sign HS256 query tokens themselves (`items-switch.spec.ts`, `xcube-cutover.spec.ts`, `deploy/helm/verify.sh`). (`jose` came with T420.)
   - Failing test:
     - `signing.test.ts`:
@@ -10256,7 +10256,20 @@ Every step leaves both suites working. The slice-4 image takes HS256 tokens unti
       - `folder-models` "Schedules reads a folder rollup's key SQL" finds its row under the short name and folder path, not the prefixed name it looks for;
       - the rest are layout: `admin` Query log card, `design-conformance` T203 header gear and edit bar, `editor-preview` height (2 px), `a11y-tokens` (its context ended).
       - None of these touch a Cube token, and T437 changes no web code.
-  - **Not ticked:** AC-326's overlay clause is AC-323's (T347). AC-008's "configured security context", and the two phase-1 tests, wait on the user's answer above. The task is unticked until then.
+  - ~~**Not ticked:** AC-326's overlay clause is AC-323's (T347). AC-008's "configured security context", and the two phase-1 tests, wait on the user's answer above. The task is unticked until then.~~ The user answered in R49 ("Rewrite on groups"); T529 rewrote the sample policy and the two tests.
+  - **Finished 2026-10-08 (Chrome, on the pinned xcube 2e611eae61), after one review round. AC-008 and AC-326 ticked.**
+    - **AC-008 amended for R49:** the configured context reaches Cube as its groups alone, on every query made for no signed-in user and no preview (a preview's carries its chosen groups, AC-166); research `xcube-slice-4.md`, "User tokens".
+    - **New e2e:**
+      - `e2e/key-rotation.spec.ts`: an API on its own database and model, given `WECHART_SIGNING_NEXT_KEY_FILE`, pushes the current and next keys together and signs with the next. xcube takes a token under either key during the rotation and refuses a stranger key. Once the set is exactly the next key, as the API's drop pushes it (`keys.test.ts`, on its own clock), the next key's tokens and the API's own queries are taken, and the current key's are refused.
+      - `e2e/configured-context.spec.ts`: an API on its own database, configured with `managers` and a claim beside it, gets every status of the secured view. The suite's API, configured with no context, gets Cube's hidden member.
+      - `e2e/field-list.spec.ts`: through a dashboard's queries, the editor's field list and the Security page's scope probes, no response or header the browser gets holds either private key (PEM or JWK members) or a token whose `kid` is the service key's. Each body is read before the page is left, and is asserted non-empty.
+      - `e2e/tokens.ts`: `kidOf` and `queryTokenWith`.
+    - **Runs:**
+      - API unit: `signing`, `xcube/keys`, `cube/client`, `named-groups` and `service-wiring` pass 54 of 54; `proposal-overlay`, `workspace-overlay` and `xcube/client` pass 34 of 34.
+      - Phase-1 e2e (`cube-scopes`, `items-switch`, `xcube-cutover`, `security.spec.ts` with T172 and T174, `key-rotation`, `field-list`, `configured-context`): 25 of 25.
+      - Security e2e (`cube-groups`, `proposal-overlay`, `workspace-overlay`): 16 of 16.
+    - **AC-326's overlay clause:** a token names an overlay only for those AC-323 allows. Shown by `client.test.ts` (T347), `proposal-overlay.test.ts`, `workspace-overlay.test.ts`, and the security suite's `proposal-overlay` and `workspace-overlay` specs.
+    - **Unit-level only:** what a signed-in user's token carries (`client.test.ts`, `named-groups.test.ts`), the hour (`signing.test.ts`), and the rotation's order, versions and `409` (`keys.test.ts`). None of these Fails-when cases names a rendered surface.
 - [x] T438 (AC-166) Preview a dashboard as the chosen groups, with a token carrying exactly those *(header restored 2026-09-28: 6f46537 dropped the line and left its body under T437)*
   - Files: `packages/api/src/server.ts` (the preview), `packages/web/src/workspaces/security/PreviewAs.tsx`, `e2e/security/preview-as.spec.ts`
   - Failing test: `preview-as.spec.ts`:
