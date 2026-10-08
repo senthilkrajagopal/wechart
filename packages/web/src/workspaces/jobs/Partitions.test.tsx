@@ -409,6 +409,35 @@ describe('a rollup’s partitions (T375, AC-145)', () => {
     expect(asks()).toBeGreaterThanOrEqual(2);
   });
 
+  /** T611 follow-up (AC-176; sheets.spec): an action focused as the list comes keeps focus, not lost under a sheet. */
+  it('keeps each action, and focus on it, from while the partitions are read to once they are', async () => {
+    serve([
+      Response.json(
+        { error: 'Cube is still working out the partitions of x.', pending: true },
+        { status: 503 },
+      ),
+      PARTITIONED,
+    ]);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <Partitions id={ID} name={NAME} pollMs={20}>
+          <a href="/model">Open in Model</a>
+        </Partitions>
+      </QueryClientProvider>,
+    );
+    const buildAll = await screen.findByRole('button', { name: 'Build all' });
+    const model = screen.getByRole('link', { name: 'Open in Model' });
+    buildAll.focus();
+
+    await screen.findByRole('table', { name: `Partitions of ${NAME}` });
+
+    // The same elements, the list's count now on Build all, and focus where it was.
+    expect(screen.getByRole('button', { name: 'Build all 6' })).toBe(buildAll);
+    expect(screen.getByRole('link', { name: 'Open in Model' })).toBe(model);
+    expect(document.activeElement).toBe(buildAll);
+  });
+
   it('keeps Build all and its other actions, Open in Model, while its partitions can’t be read', async () => {
     const { posted } = serve([Response.json({ error: 'Cube didn’t answer.' }, { status: 502 })]);
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { clockOf, clockOrWhenOf, exactOf } from '../../shell/formatTime';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
@@ -386,11 +386,51 @@ export function Partitions({
       if (!build.isPending) build.mutate(undefined);
     },
   };
-  /** Build all needs no list (A4): offered while it's read, or can't be (AC-228; T375's review). */
-  const buildAll = (
-    <button type="button" className="btn btn-sm" {...startEvery}>
-      Build all
-    </button>
+  /**
+   * The actions in the pane's bar, or the sheet's foot: Rebuild selected,
+   * Build all (Build now for a whole one) and its others, Open in Model. One
+   * set, each by its key, from while the partitions are read to once they
+   * are, so one focused as the list comes keeps focus, never lost under the
+   * sheet (T611 follow-up; rule 85). Build all needs no list (A4): offered
+   * while it's read, or can't be (AC-228; T375's review); Rebuild selected
+   * waits for it.
+   */
+  const actionsOf = ({
+    rebuild,
+    all,
+  }: {
+    /** `waits`: there's no list yet to choose from (A4), so it can't be used at all. */
+    rebuild?:
+      | { label: string; shown: string; off: boolean; waits?: boolean; onClick?: () => void }
+      | undefined;
+    all: { shown: string; primary: boolean };
+  }) => (
+    <SheetActions>
+      {rebuild === undefined ? null : (
+        <button
+          key="rebuild"
+          type="button"
+          className="btn-primary btn-sm"
+          aria-label={rebuild.label}
+          disabled={rebuild.waits === true}
+          // Out of use, not out of reach: focus stays on it once it starts
+          // and the selection clears (design 16's keyboard table; T611).
+          aria-disabled={rebuild.off}
+          onClick={rebuild.onClick}
+        >
+          {rebuild.shown}
+        </button>
+      )}
+      <button
+        key="all"
+        type="button"
+        className={all.primary ? 'btn-primary btn-sm' : 'btn btn-sm'}
+        {...startEvery}
+      >
+        {all.shown}
+      </button>
+      <Fragment key="more">{children}</Fragment>
+    </SheetActions>
   );
   const liveRegion = (
     <p className="visually-hidden" role="status">
@@ -401,18 +441,15 @@ export function Partitions({
     return (
       <>
         {/* Build all needs no list; Rebuild selected waits for it (A4). */}
-        <SheetActions>
-          <button
-            type="button"
-            className="btn-primary btn-sm"
-            aria-label={`Rebuild 0 selected partitions of ${name}`}
-            disabled
-          >
-            Rebuild selected
-          </button>
-          {buildAll}
-          {children}
-        </SheetActions>
+        {actionsOf({
+          rebuild: {
+            label: `Rebuild 0 selected partitions of ${name}`,
+            shown: 'Rebuild selected',
+            off: true,
+            waits: true,
+          },
+          all: { shown: 'Build all', primary: false },
+        })}
         {failedToStart}
         {liveRegion}
         <section
@@ -438,10 +475,7 @@ export function Partitions({
   if (found.isPending || found.isError)
     return (
       <>
-        <SheetActions>
-          {buildAll}
-          {children}
-        </SheetActions>
+        {actionsOf({ all: { shown: 'Build all', primary: false } })}
         {failedToStart}
         {liveRegion}
         {found.isPending ? (
@@ -495,34 +529,20 @@ export function Partitions({
 
   return (
     <>
-      <SheetActions>
-        {whole ? (
-          <button type="button" className="btn-primary btn-sm" {...startEvery}>
-            Build now
-          </button>
-        ) : (
-          <>
-            <button
-              type="button"
-              className="btn-primary btn-sm"
-              aria-label={`Rebuild ${String(chosen.length)} selected ${chosen.length === 1 ? 'partition' : 'partitions'} of ${name}`}
-              // Out of use, not out of reach: focus stays on it once it starts
-              // and the selection clears (design 16's keyboard table; T611).
-              aria-disabled={chosen.length === 0 || build.isPending}
-              onClick={() => {
+      {whole
+        ? actionsOf({ all: { shown: 'Build now', primary: true } })
+        : actionsOf({
+            rebuild: {
+              label: `Rebuild ${String(chosen.length)} selected ${chosen.length === 1 ? 'partition' : 'partitions'} of ${name}`,
+              shown: `Rebuild selected${chosen.length === 0 ? '' : ` (${String(chosen.length)})`}`,
+              off: chosen.length === 0 || build.isPending,
+              onClick: () => {
                 if (chosen.length === 0 || build.isPending) return;
                 build.mutate(chosen.map((row) => row.start!));
-              }}
-            >
-              Rebuild selected{chosen.length === 0 ? '' : ` (${String(chosen.length)})`}
-            </button>
-            <button type="button" className="btn btn-sm" {...startEvery}>
-              Build all {parts.length}
-            </button>
-          </>
-        )}
-        {children}
-      </SheetActions>
+              },
+            },
+            all: { shown: `Build all ${String(parts.length)}`, primary: false },
+          })}
       {failedToStart}
       {liveRegion}
       <section className="build-log__section partitions" aria-labelledby={`${id}-parts`}>
