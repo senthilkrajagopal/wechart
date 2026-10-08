@@ -5201,6 +5201,18 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - AC-256 and AC-265 left open, traced on to the tasks where others are actually refused (AC-256: T325, T326; AC-265: T328, T369, T371). "Reaches every folder" is shown there too, since no route checks folder access yet;
       - stronger assertions and a stubbed Cube in the admin tests.
     - **For the user:** with security on and no Super-Admin group configured, nobody is a Super-Admin, and nothing says so at startup. Every other missing sign-in setting stops startup.
+      - *Since settled:* the API refuses to start with sign-in on and no group configured (`auth/admin.test.ts`).
+  - **Verified 2026-10-07 (group 3): AC-256 and AC-265 ticked.** The surfaces they waited on (T325, T326, T328, T369, T371, T473, T500) are all built. Passing, in Chrome against compose's xcube, and under the API tests' lock:
+    - AC-256:
+      - `auth/admin.test.ts`: the configured group read and required, and only its members are Super-Admins;
+      - `e2e/security/sign-in.spec.ts` "signed in as …": only `super` has `superAdmin: true`;
+      - others refused: `security-page.spec.ts` (state D), `audit.spec.ts` "as a writer sees it", `jobs-scope.spec.ts` "as reader", and `access/route-matrix.test.ts`.
+    - AC-265:
+      - every folder: `explore-roles.spec.ts` "as super, a Super-Admin" (every folder seen and counted, a Super-Admin in each), `access.spec.ts` "says when only Super-Admins can see a folder", and `access/route-matrix.test.ts`;
+      - folder permissions: `access.spec.ts` "as a Super-Admin";
+      - Jobs and Schedules: `jobs-scope.spec.ts` "as super" (every folder in each tab's Folder filter);
+      - Security: `security-page.spec.ts` "as a Super-Admin sees it";
+      - the audit trail: `audit.spec.ts` "as a Super-Admin sees it" and "builds and schedule changes in the trail".
 - [x] T324 (AC-257, AC-251) Run Dex beside wechart in the Helm release on docker-desktop and sign in there
   - Files: `deploy/helm/wechart/templates/{dex.yaml,dex-config.yaml}`, `deploy/helm/wechart/values.yaml` (`security.enabled`, `security.oidc.*`, `security.dex.*`, `security.superAdminGroup`), `deploy/helm/wechart/templates/{api.yaml,secrets.yaml,_helpers.tpl}` (the OIDC client secret and the session secret, generated once), `deploy/helm/values/docker-desktop.yaml`, `deploy/helm/verify.sh`
   - Failing test: `verify.sh` with security on: `/explore` without a cookie is redirected to Dex; a scripted sign-in as `writer` through Dex's form makes `/api/me` answer with that user (AC-257, Helm half).
@@ -5281,6 +5293,9 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - An empty search reads no tree.
     - **Left for later (performance, noted by the review):** every request reads the whole access tree (two queries) and aggregates `documents` for the counts. At 500+ users that wants a cached, versioned tree.
     - **Nothing ticked.** Each criterion's other half is another task's: AC-264 opening items (T326, T327), AC-194 the rendered pane (T331, T343), AC-261 opening and writing (T326–T329, T408).
+  - **Verified 2026-10-07 (group 3): AC-264 ticked.** T326's question (a chart's `folderId` naming a hidden folder) no longer arises: with copy on use (R49, AC-371) no dashboard shows a library chart off its own folder's path. Passing:
+    - the tree and listings, rendered (`e2e/security/explore-roles.spec.ts`, Chrome): writer "sees Roles and Inner … and nothing of Hidden", reader "sees Roles and Inner counted by their dashboards alone", nobody "has no root, no My workspace, nothing to make";
+    - search, links and the API: `repos/catalog-access.test.ts` (the tree, contents and search; a hidden folder answers 404 as a missing one does), `access/readonly.test.ts` (no library chart off their dashboards, no hidden folder; nothing for someone no grant reaches), `access/models.test.ts` and `access/data-sources.test.ts` (a folder they can't see gives nothing and refuses a change as missing), `access/route-matrix.test.ts`.
 - [x] T326 (AC-263, AC-266, AC-264) Read-only users read dashboards and change nothing
   - Files: `packages/api/src/server.ts` (write routes), `packages/api/src/access/readonly.test.ts`
   - Failing test: `readonly.test.ts`: a read-only user can open the folder's dashboards and their charts, load their data, export and bookmark; a model, data source or library chart answers 404; every create, change, move, delete, propose and access route answers 403 (AC-263, AC-266).
@@ -5310,6 +5325,11 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - export, and propose routes, which don't exist yet.
     - AC-263 and AC-266 stay unticked. A cached access tree would cut the queries each check costs (T325's note).
   - **For the user:** AC-263 lets a read-only user open "the charts on" their dashboards, even one kept in a folder they can't see. AC-264 says nothing of a hidden folder may appear. T326 follows AC-263, and such a chart's `folderId` names the hidden folder.
+    - *Since settled by R49 (copy on use), which struck that part of AC-263.*
+  - **Verified 2026-10-07 (group 3): AC-266 ticked** (T340, which it waited on, is done). Passing, in Chrome against compose's xcube and under the API tests' lock:
+    - rendered: `explore-roles.spec.ts` reader "views Roles and Inner, with nothing to make or rename"; `workspace-edit.spec.ts` reader "reads it, and is offered no way to change it"; `access.spec.ts` "as a read-only member" "has no Access button"; `bookmarks.spec.ts`'s reader tests; `history.spec.ts` "sees no History"; `deleting.spec.ts`'s reader;
+    - the API: `access/readonly.test.ts` (403 to every create, change, move and delete, changing nothing; still bookmarks), `access/models.test.ts`, `access/data-sources.test.ts`, `routes/proposals.test.ts` and `routes/proposal-check.test.ts` (no proposal from a reader), `routes/access.test.ts` (no permission change), `access/route-matrix.test.ts`.
+    - AC-263 stays open (group 3's report).
 - [x] T327 (AC-262) Read-write members see their folders' ancestors view-only
   - Files: `packages/api/src/access/ancestors.test.ts`
   - Failing test: `ancestors.test.ts`: a read-write member of /A/B lists and opens every dashboard, chart, model and data source in /A and the root, and every write there answers 403 (AC-262).
@@ -6636,6 +6656,12 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - AC-163 ticked.
     - AC-269 waits on models opened from their folder (T342).
     - AC-161 and AC-310 wait on T497.
+  - **Verified 2026-10-07 (group 3): AC-269 ticked** (T342 is done). Passing, in Chrome:
+    - `e2e/security/folder-data-sources.spec.ts` "a folder lists its data source as a data source, built on its driver, and a reader sees none";
+    - `e2e/security/data-sources.spec.ts` "opens its settings from Data sources and Explore…";
+    - `e2e/security/model-in-folder.spec.ts` "opens a model row from Explore in its folder, never the root's file of the same path";
+    - `e2e/security/explore-roles.spec.ts` "opens a root model from its row in Explore, in the model editor" and "shows the open folder by kind…";
+    - with sign-in off, `e2e/explore.spec.ts` "the root lists its model files as models, after its charts, and one opens in the model editor".
   - Files: `packages/web/src/workspaces/data-sources/SourceSettings.tsx`, `packages/web/src/workspaces/data-sources/{connectionSummary.ts,health.tsx,DataSourcesList.tsx,DataSourcesPage.tsx}` (+ tests), `packages/web/src/workspaces/explore/FolderContents.tsx` (+ test), `packages/web/src/router/routes.tsx`, `packages/web/src/shell/styles.ts`, `packages/api/src/routes/data-sources.ts`, `packages/api/src/access/data-sources.test.ts`, `e2e/security/data-sources.spec.ts`
   - Depends on: T461, T365
 - [x] T497 (AC-161, AC-310, AC-158, AC-164, AC-312) Change a data source on its settings page, saved only after a passing test of the change *(added 2026-09-27, split from T462; design 03 of 2026-09-27)*
@@ -9519,6 +9545,10 @@ Slice 7 is optional in the plan and has no criterion, so it has no task. It woul
     - **Failing, not T420's:**
       - `acceleration.spec.ts` "Data as of…" (known);
       - `editor-preview.spec.ts` "a tile resized in this session is previewed at its new height", off by 26 px: T402's uncommitted narrow-tile foot is in the tree (question 29).
+  - **Verified 2026-10-07 (group 3): AC-250 ticked.** T437 as built removed `cube.js`'s `wechartIntrospection` branch: xcube's `checkAuth` strips `introspection` from every verified user's token (`infra/cube/cube.js`). Passing, in Chrome against compose's xcube:
+    - `e2e/cube-scopes.spec.ts` "the real Cube lets the service credential browse sources, and no user's token": the service token browses; RS256 query tokens, with or without groups, get `API scope is missing: introspection`; T420's HS256 claim is refused outright;
+    - `e2e/generate-cubes.spec.ts` "a data source's tables become cubes…": no answer the page gets while browsing carries a token;
+    - `cube/service-wiring.test.ts` and `cube/service-token.test.ts`.
 - [x] T421 (AC-334, AC-319) Name the model and the revision in every query token, key the metadata cache by xcube's revision, and wait for the migration lock
   - Files: `packages/api/src/cube/client.ts` (the `wechartModel` and `wechartRevision` claims; a catching-up instance's `503` with `Retry-After` waited for and asked again), `packages/api/src/cube/meta-cache.ts` (keyed by the recorded revision read before each fetch, fetched again when it changes), `packages/api/src/db/migrate.ts` (`advisoryLockMode: 'wait'`), `packages/api/src/server.ts` and `packages/api/src/main.ts` (wiring), `packages/api/src/xcube/publications.ts` and `xcube/snapshot.ts` (the record only rises within a generation), tests `cube/model-claims.test.ts`, `cube/meta-cache-replicas.test.ts`, `cube/meta-cache.test.ts`, `xcube/query-claims.test.ts`, `xcube/publications.test.ts`, `db/migrate-concurrent.test.ts`
   - Failing test:

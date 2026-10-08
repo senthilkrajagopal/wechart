@@ -495,7 +495,7 @@ Traces to: `[docs/inputs §4b]`, direction.md §7b, rules 20, 26–28; `[researc
       > **Un-deferred 2026-09-25 `[R10]`.** Browsing and generating go through the data-source introspection API in the user's Cube fork (`research/cube/introspection-api.md`). The generated YAML is shown with the columns Cube left unmapped and each one's reason, ~~saved to wechart's model store, and published as any model change is~~ saved in the author's workspace, and published to xcube through a proposal and the whole-model check (AC-136, AC-137; amended 2026-09-25, AC-321).
 - [x] AC-249 IF a cube generated from a data source has the name or file name of a cube or file already in the target folder, THEN THE SYSTEM SHALL refuse to save it, name the existing cube or file, and leave the existing one unchanged (`[R10]`; phase 2: names are unique per folder, `[P2 input]`).
       Fails when: an existing model file changes; a clashing cube is saved into the same folder; a cube is refused for a name used only in another folder; or the refusal does not name what it clashes with.
-- [ ] AC-250 THE SYSTEM SHALL grant Cube's `introspection` scope only to wechart's service credential, used to browse a data source and generate cubes, never to a user's token, and never to the browser (`[R10]`; phase 2: `[AD 12, R27]`; ~~the short-lived tokens its API signs … never to a draft's token~~, amended 2026-09-25 and unticked until retested).
+- [x] AC-250 THE SYSTEM SHALL grant Cube's `introspection` scope only to wechart's service credential, used to browse a data source and generate cubes, never to a user's token, and never to the browser (`[R10]`; phase 2: `[AD 12, R27]`; ~~the short-lived tokens its API signs … never to a draft's token~~, amended 2026-09-25 and unticked until retested).
       Fails when: a user's token is granted `introspection`, or a response to the browser carries a credential that has it.
 - [x] AC-140 WHEN a model file uses Jinja, Python or JavaScript generation, THE SYSTEM SHALL open it read-only in the code view and say why it cannot be edited as a form. (Phase 2: such a file can't be published into a folder, AC-332.)
       Fails when: such a file opens in an editable form, or gives no reason.
@@ -1005,7 +1005,7 @@ Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R14, R15, R18, R19]`.
       Fails when: a sign-in is asked for, or any permission is refused, while security is disabled; or a shared item's content is changed in place.
 - [x] AC-255 WHILE security is enabled, WHEN a user belongs to 20 AD groups, THE SYSTEM SHALL grant them access through every one of them (`[R12, R19]`).
       Fails when: a folder granted only to the last of a 20-group user's groups is refused to them.
-- [ ] AC-256 THE SYSTEM SHALL take the Super-Admin group's name from the deployment's configuration, and treat that group's members as Super-Admins (`[R18]`).
+- [x] AC-256 THE SYSTEM SHALL take the Super-Admin group's name from the deployment's configuration, and treat that group's members as Super-Admins (`[R18]`).
       Fails when: a member of the configured group lacks a Super-Admin permission, or someone outside it has one.
 - [x] AC-318 WHERE security is enabled, IF the deployment names no Super-Admin group, THEN THE SYSTEM SHALL refuse to start and say that the Super-Admin group is missing, and the Helm chart SHALL refuse to render such a release (`[R26]`).
       Fails when: the API starts with security on and no Super-Admin group, its refusal doesn't name the missing setting, or `helm template` renders a release with security on and no Super-Admin group.
@@ -1029,11 +1029,11 @@ Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R17, R18, R19]`.
       Fails when: an item in an ancestor is hidden from them, or they can change it without a proposal.
 - [ ] AC-263 WHILE a user has only read-only access, THE SYSTEM SHALL show them the dashboards, and the charts on those dashboards, in the folders they may see (the folder, its descendants and its ancestors), and no models, data sources or library charts. ~~A chart on a dashboard they may see opens for them even when it is kept in a folder they can't see, without naming or linking that folder.~~ A dashboard shows only library charts found on its own folder's path: putting one from elsewhere on it makes it a chart of the dashboard's own (amended 2026-09-30, the user's answer, "Copy on use", `[R49]`; AC-371). Their dashboards query the cubes their charts were bound to at publish, which ~~Cube's generated policies~~ xcube's folder check (AC-320) admits them to (`[P2 input, R19]`; amended 2026-09-25, `[AD 3, AD 4, R27]`; ~~their dashboards still resolve cubes through the folder's path~~; the folder check, amended 2026-09-26, `[IP 6, X4]`).
       Fails when: a read-only user sees or opens a model, a data source or a library chart that is on none of their dashboards; a dashboard they may see fails because a model is hidden from them; or a chart opened through their dashboard names or links a folder they can't see.
-- [ ] AC-264 IF a user belongs to no group with access to a folder (set, inherited, or reaching up from a grant on a descendant), THEN THE SYSTEM SHALL neither list nor open that folder, nor anything in it, except a chart on a dashboard they may see (AC-263).
+- [x] AC-264 IF a user belongs to no group with access to a folder (set, inherited, or reaching up from a grant on a descendant), THEN THE SYSTEM SHALL neither list nor open that folder, nor anything in it, except a chart on a dashboard they may see (AC-263).
       Fails when: the folder's name, or any of its items other than such a chart, appears to that user anywhere: the tree, a listing, search, a link or the API.
-- [ ] AC-265 THE SYSTEM SHALL give Super-Admins read-write access to every folder, and every admin surface (Jobs, Schedules, Security, folder permissions and the audit trail) (`[P2 input, R12]`).
+- [x] AC-265 THE SYSTEM SHALL give Super-Admins read-write access to every folder, and every admin surface (Jobs, Schedules, Security, folder permissions and the audit trail) (`[P2 input, R12]`).
       Fails when: a Super-Admin is refused any folder or admin surface.
-- [ ] AC-266 WHILE a user has only read-only access to a folder, THE SYSTEM SHALL let them read its dashboards (filter, mark, drill, export, bookmark) and change nothing in it.
+- [x] AC-266 WHILE a user has only read-only access to a folder, THE SYSTEM SHALL let them read its dashboards (filter, mark, drill, export, bookmark) and change nothing in it.
       Fails when: a read-only user can create, change, move, delete or propose anything in the folder, or set its permissions.
 - [ ] AC-267 WHEN security is first enabled on a deployment holding phase-1 content, THE SYSTEM SHALL keep that content as the shared tree with no groups set, visible only to Super-Admins until groups are assigned (`[R17]`).
       Fails when: anyone but a Super-Admin sees phase-1 content before a group is assigned to it.
@@ -1047,7 +1047,7 @@ Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R17, R18, R19]`.
 Purpose: models and data sources become folder items like dashboards and charts, and the Model tab goes.
 Traces to: §P2.6 C, `[P2 input]`, `[R19]`. Rewritten phase-1 criteria: AC-001, AC-131, AC-192, AC-194, AC-222, AC-233.
 
-- [ ] AC-269 THE SYSTEM SHALL list a folder's models and data sources in Explore beside its dashboards and charts, each labelled with its kind, and SHALL open a model in the model editor, and a data source in its settings, from the folder.
+- [x] AC-269 THE SYSTEM SHALL list a folder's models and data sources in Explore beside its dashboards and charts, each labelled with its kind, and SHALL open a model in the model editor, and a data source in its settings, from the folder.
       Fails when: a model or data source in a folder the user may see (as AC-263 allows) isn't listed there, or can't be opened from it.
 
 ## F28. Names and resolution per folder
