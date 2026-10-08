@@ -461,9 +461,8 @@ describe('approving a proposal (T352, AC-288)', () => {
 
     const answer = await approve('many', proposalId);
     expect(answer.statusCode, answer.body).toBe(409);
-    expect(answer.json<{ error: string }>().error).toBe(
-      `This folder already has a data source named ${name}.`,
-    );
+    // Said only as in use, never where (T726, AC-424).
+    expect(answer.json<{ error: string }>().error).toBe(`The name “${name}” is already in use.`);
     expect((await proposalStore(getDb()).get(proposalId))!.status).toBe('open');
     expect((await sources().inFolder(ids.sales)).filter((each) => each.name === name)).toEqual([
       await sources().get(meanwhile.id),

@@ -1332,7 +1332,8 @@ describe('one cube or view per model file (T448, AC-337)', () => {
       422,
       {
         errors: [
-          { path: 'cubes/copy.yml', message: '`orders` is already a cube in cubes/orders.yml.' },
+          // Said only as in use, never which file has it (T726, AC-424).
+          { path: 'cubes/copy.yml', message: 'The name “orders” is already in use.' },
         ],
       },
     ]);
@@ -1344,7 +1345,7 @@ describe('one cube or view per model file (T448, AC-337)', () => {
     ]);
     expect(twice.statusCode).toBe(422);
     expect(twice.json<{ errors: { path: string; message: string }[] }>().errors).toEqual([
-      { path: 'cubes/b.yml', message: '`lines` is already a cube in cubes/a.yml.' },
+      { path: 'cubes/b.yml', message: 'The name “lines” is already in use.' },
     ]);
     expect(store.files).toEqual([ORDERS]);
     await app.close();
@@ -1505,7 +1506,7 @@ describe('publishing into a folder (T452)', () => {
       errors: [
         {
           path: 'cubes/more_orders.yml',
-          message: '`sales_orders` is already a cube in cubes/sales_orders.yml.',
+          message: 'The name “sales_orders” is already in use.',
         },
       ],
     });

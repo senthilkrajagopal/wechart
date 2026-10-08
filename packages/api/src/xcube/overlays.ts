@@ -4,6 +4,7 @@ import type { FieldValue, SealedV1 } from '@wechart/core';
 
 import type { OverlayAnswer, OverlayConnection, XcubeAdmin } from './client';
 import { itemsOf, type Item } from './items';
+import { itemMessageOf } from './refusal';
 
 /**
  * A workspace's content as an xcube overlay (T347; AC-281, AC-323, AC-280;
@@ -182,9 +183,12 @@ const problemOf = (result: Exclude<PushResult, { kind: 'stored' } | { kind: 'emp
   result.kind === 'refused'
     ? result.errors
         .map((error) =>
-          error.folderId === null || error.name === null
-            ? error.message
-            : `${error.folderId}/${error.name}: ${error.message}`,
+          // A name in use, said only as that: never where (T726's review, AC-424).
+          error.kind === 'name_in_use'
+            ? itemMessageOf(error)
+            : error.folderId === null || error.name === null
+              ? error.message
+              : `${error.folderId}/${error.name}: ${error.message}`,
         )
         .join('; ') || 'xcube refused it'
     : result.kind === 'older'

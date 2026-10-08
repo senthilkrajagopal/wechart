@@ -294,7 +294,7 @@ describe('data sources, cubes and model files: one of a name in a folder (T336, 
     expect(twice.statusCode, twice.body).toBe(422);
     expect(
       twice.json<{ errors: { message: string }[] }>().errors.map((each) => each.message),
-    ).toEqual([`\`${orders}\` is already a cube in cubes/orders.yml.`]);
+    ).toEqual([`The name “${orders}” is already in use.`]);
 
     const elsewhere = await publish(folders.b, 'cubes/orders.yml', orders);
     expect(elsewhere.statusCode, elsewhere.body).toBe(422);

@@ -4,6 +4,7 @@ import {
   dataSourceProblems,
   DRIVER_TYPES,
   DRIVERS,
+  nameInUse,
   nameProblem,
   targetChanges,
   type DriverType,
@@ -356,10 +357,10 @@ export function dataSourceStore(
     if (landing?.land === undefined) return;
     await landing.land((await getOn(id, tx))!, await sealedOn(id, tx), creating);
   };
-  /** A name the folder already holds, said as AC-270 has it. */
+  /** A name the folder already holds: said only as in use, never where (T726, AC-424). */
   const taken = (error: unknown, name: string) =>
     (error as { code?: string } | null)?.code === '23505'
-      ? new DataSourceRefused(409, `This folder already has a data source named ${name}.`)
+      ? new DataSourceRefused(409, nameInUse(name))
       : error;
 
   const store: DataSourceStore = {

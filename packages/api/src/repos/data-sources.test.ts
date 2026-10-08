@@ -118,8 +118,9 @@ describe('a folder’s data sources (AC-269, AC-164)', () => {
     // R72's grammar, upper case allowed, at most 40 (T703, AC-426).
     for (const name of ['order-items', 'a__b', 'x'.repeat(41)])
       await expect(store().create(postgres(folder, name)), name).rejects.toThrow(/name/);
+    // Said only as in use, never where (T726, AC-424).
     await expect(store().create(postgres(folder))).rejects.toThrow(
-      'This folder already has a data source named warehouse.',
+      'The name “warehouse” is already in use.',
     );
     // Another folder may.
     await expect(store().create(postgres(folderId()))).resolves.toMatchObject({
@@ -213,7 +214,7 @@ describe('landing in xcube before it is stored (T442)', () => {
     await store().create(postgres(folder, 'taken'));
     said.length = 0;
     await expect(store().update(made.id, { name: 'taken' }, tracking)).rejects.toThrow(
-      'This folder already has a data source named taken.',
+      'The name “taken” is already in use.',
     );
     expect(said).toEqual(['unland new_name', 'land new_name']);
     expect((await store().get(made.id))?.name).toBe('new_name');

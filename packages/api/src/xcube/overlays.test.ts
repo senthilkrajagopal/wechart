@@ -278,6 +278,28 @@ describe('keeping a workspace’s overlay in xcube (T347, AC-323)', () => {
     expect(pushed).toHaveLength(1);
   });
 
+  // T726's review (AC-424): a name in use is said as in use, nothing of where,
+  // where xcube's own words name the folders (research `xcube-256d632371.md`).
+  it('says a refusal for a name in use only as in use, naming no folder', async () => {
+    const { admin } = stubXcube([
+      {
+        kind: 'refused',
+        errors: [
+          {
+            folderId: 'fsales',
+            name: 'orders',
+            kind: 'name_in_use',
+            message: 'The overlay holds two items named "orders" (in fsales and fops)',
+          },
+        ],
+        cubeMessage: null,
+      },
+    ]);
+    const sync = overlaySync({ xcube: admin, contentOf: async () => one });
+
+    expect((await sync.ensure('ws:n'))?.problem).toBe('The name “orders” is already in use.');
+  });
+
   it('drops it at once when asked, and names it no more', async () => {
     const { admin, dropped } = stubXcube();
     const sync = overlaySync({ xcube: admin, contentOf: async () => one });

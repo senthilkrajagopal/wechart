@@ -6,6 +6,8 @@ import {
   folderRights,
   IMAGE_HEAD_BYTES,
   imageProblem,
+  nameInUse,
+  nameKey,
   newDashboardBody,
   objectsOf,
   type AccessFolder,
@@ -3812,15 +3814,16 @@ export function buildServer({
         const refused = await targetRefusalOf(request, target);
         if (refused !== undefined) return reply.code(refused.status).send(refused.body);
         const name = declaredIn(file.content)[0]?.name;
+        // In any case, and said only as in use, never where (T726's review; AC-421, AC-424).
         const there = (await modelStore.inFolders([target as string])).some(
-          (each) => name !== undefined && declaredIn(each.content)[0]?.name === name,
+          (each) =>
+            name !== undefined &&
+            nameKey(declaredIn(each.content)[0]?.name ?? '') === nameKey(name),
         );
-        if (there) {
-          const title = (await docs.get?.('folder', target as string))?.body['title'];
+        if (there)
           return reply.code(409).send({
-            error: `${typeof title === 'string' ? title : 'That folder'} has a cube or view named “${name ?? path}” already. A use-only copy goes to its folder as a new model: choose another folder.`,
+            error: `${nameInUse(name ?? path)} A use-only copy goes to its folder as a new model: choose another folder.`,
           });
-        }
         useOnly = { targetFolderId: target as string };
       }
       const project = await projectFolderIn(own, userOf(request).key, timeZone, {
@@ -4271,9 +4274,8 @@ export function buildServer({
         (source) => source.name === current.name && source.id !== existing?.id,
       );
       if (named !== undefined)
-        return reply.code(409).send({
-          error: `My workspace already has a data source named ${current.name}: rename or discard it first.`,
-        });
+        // Said only as in use, never where (T726, AC-424).
+        return reply.code(409).send({ error: nameInUse(current.name) });
       if (existing !== undefined) await dataSources.remove(existing.id);
       let draft;
       try {

@@ -648,6 +648,38 @@ describe('an item’s history (T354, AC-289)', () => {
     expect(draft.folderId).toBe(copiedTo);
   });
 
+  // T726 (AC-424): a name My workspace holds already, said only as in use.
+  it('refuses a data source’s version whose name My workspace holds, saying only that it is in use', async () => {
+    const name = `abacus_${MARK}`;
+    const settings = {
+      name,
+      driver: 'postgres',
+      authMethod: 'password',
+      fields: { host: 'db', port: 5432, database: 'sales', user: 'cube', ssl: false },
+      sealed: {
+        password: {
+          v: 1,
+          kid: 'kid-1',
+          enc: Buffer.alloc(32, `enc3-${MARK}`).toString('base64url'),
+          ct: Buffer.alloc(272, `ct3-${MARK}`).toString('base64url'),
+        } as never,
+      },
+    };
+    const source = await sources().create({ folderId: ids.sales, ...settings });
+    await keep('data-source', source.id, 1, { body: { ...settings, fields: settings.fields } });
+    // In My workspace's root, of that name, and no copy of it.
+    const there = await sources().create({
+      folderId: `ws:${writerKey}`,
+      targetFolderId: ids.sales,
+      ...settings,
+    });
+
+    const answer = await restore('writer', 'data-source', source.id, { version: 1 });
+    expect(answer.statusCode, answer.body).toBe(409);
+    expect(answer.json()).toEqual({ error: `The name “${name}” is already in use.` });
+    expect(await sources().get(there.id)).toEqual(there);
+  });
+
   it('tags the newest version current when a rename has moved the item on since (T354’s review)', async () => {
     const stored = (await docs().get('dashboard', ids.board))!;
     await docs().update({

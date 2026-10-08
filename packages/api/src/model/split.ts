@@ -1,4 +1,4 @@
-import { nameProblem } from '@wechart/core';
+import { nameInUse, nameKey, nameProblem } from '@wechart/core';
 import { Document, isMap, isNode, isScalar, isSeq, parseDocument, type YAMLSeq } from 'yaml';
 
 import { ROOT_FOLDER_ID } from '../repos/catalog';
@@ -157,20 +157,18 @@ export function redeclaredIn(
   live: readonly ModelFile[],
 ): { path: string; message: string }[] {
   const paths = new Set(changed.map((file) => file.path));
-  const names = new Map<string, { kind: Declared['kind']; path: string }>();
+  // In any case (AC-421).
+  const names = new Set<string>();
   for (const file of live.filter((each) => !paths.has(each.path)))
-    for (const { kind, name } of declaredIn(file.content))
-      if (name !== '' && !names.has(name)) names.set(name, { kind, path: file.path });
+    for (const { name } of declaredIn(file.content)) if (name !== '') names.add(nameKey(name));
   return changed.flatMap((file) =>
-    declaredIn(file.content).flatMap(({ kind, name }) => {
-      const found = names.get(name);
-      if (found === undefined) {
-        names.set(name, { kind, path: file.path });
+    declaredIn(file.content).flatMap(({ name }) => {
+      if (!names.has(nameKey(name))) {
+        names.add(nameKey(name));
         return [];
       }
-      return [
-        { path: file.path, message: `\`${name}\` is already a ${found.kind} in ${found.path}.` },
-      ];
+      // Said only as in use, never which file has it (T726, AC-424).
+      return [{ path: file.path, message: nameInUse(name) }];
     }),
   );
 }

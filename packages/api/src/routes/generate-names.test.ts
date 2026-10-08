@@ -49,6 +49,8 @@ const docs = () => documents(getDb());
 const files = () => modelFileStore(getDb());
 const made: { kind: DocumentKind; id: string }[] = [];
 const ids = { sales: '', ops: '' };
+/** The project folders this file made in the writer's workspace. */
+const projects: string[] = [];
 
 beforeAll(async () => {
   cubeServer = createServer((_request, response) => {
@@ -144,6 +146,11 @@ afterAll(async () => {
     .deleteFrom('audit_records')
     .where('folder_id', 'in', [ids.sales, ids.ops])
     .execute();
+  // This file's project folders and what it saved in them (T726's review).
+  if (projects.length > 0) {
+    await getDb().deleteFrom('model_files').where('folder_id', 'in', projects).execute();
+    for (const id of projects) await docs().remove('folder', id);
+  }
   await removeProjectFolders();
   await getDb().deleteFrom('model_files').where('folder_id', 'in', [ids.sales, ids.ops]).execute();
   for (const { kind, id } of made.reverse()) await docs().remove(kind, id);
@@ -165,7 +172,9 @@ async function project() {
     },
   });
   expect(answer.statusCode, answer.body).toBe(201);
-  return answer.json<{ id: string }>().id;
+  const id = answer.json<{ id: string }>().id;
+  projects.push(id);
+  return id;
 }
 /** Generated files saved as Generate cubes saves them: new, going to /Sales. */
 const generated = (folderId: string, generatedFiles: { path: string; content: string }[]) =>

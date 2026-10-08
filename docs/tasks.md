@@ -13391,6 +13391,15 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - No unit test proposes a cube of a taken name together with a new data source. The check runs before any data source lands, and `landed-names.test.ts` would catch it moving.
       - A data source's edit-copy approval with the name check on is shown only on the full stack, by `e2e/security/shared-change.ts`'s `changeSharedSource`.
 
+- [ ] T734 (AC-249) Generate cubes suggests a name in the grammar, editable before saving
+  - Files: where the scaffold's answer is read (`packages/api/src/model/introspection.ts`, or `GenerateCubes.tsx`; whichever the research on Cube's scaffold names supports), each with its test, `e2e/security/generate-in-workspace.spec.ts`
+  - Failing test:
+    - Following R73, tables `user__events`, `class` and `2024_orders` are suggested as cubes `user_events`, `t_class` and `t_2024_orders`: `__` becomes `_`, and a reserved word or a leading digit gets a `t_` prefix. The file and any join to it from another generated cube follow the suggested name.
+    - The suggestion, added as a draft, can be edited before it is saved. Where it is edited (in the pane, or in the draft's editor as any draft's name is) is to be settled when the task starts, from design 11 and the user if it is unclear. The edited name is checked as any draft name is: outside the grammar it is held (AC-426), and in use it is said only as in use (AC-422, AC-424).
+    - `generate-in-workspace.spec.ts`, on the image: a table whose name needs changing is suggested in the grammar, its name edited, and saved under the edited name.
+  - Depends on: T724, T726
+  - *Added 2026-10-08 by the coordinator:* the gap T724's review found. No task covered AC-249's R73 suggestions or the editable name.
+
 ### AC-353: R70's identity warning (with T509)
 
 - [x] T725 [P] (AC-353) Warn before Save that any change moving a data source's connection identity rebuilds its pre-aggregations
@@ -13411,7 +13420,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 
 ### Refusals that never say where, across the API
 
-- [ ] T726 (AC-424) Every name-in-use refusal the API answers holds nothing of where the name is held
+- [x] T726 (AC-424) Every name-in-use refusal the API answers holds nothing of where the name is held
   - Files: `packages/api/src/routes/name-refusals.test.ts` (new), and any route whose refusal says where
   - Failing test: `name-refusals.test.ts`. The user asking can't see the folder that holds the name. Each name-in-use refusal is read for the holder's folder id or path, workspace, owner and item title, and holds none (AC-424). It covers the refusals of:
     - a model save;
@@ -13421,6 +13430,18 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - a generated cube (AC-249);
     - an import.
   - Depends on: T704, T705, T708, T719, T720, T724
+  - *Noted (2026-10-08):*
+    - Done before T719 and T720, at the coordinator's word. The import case is shown in T720, which must meet AC-424 there: `routes/import.ts`, and the web's `ImportSources`/`ImportPane`, which still say "‹folder› already has a data source named …".
+    - Three API refusals said where, and now say only "The name “…” is already in use.":
+      - `model/split.ts` `redeclaredIn`: a second cube of a name among a folder's files, now compared in any case. It named the file that has it.
+      - `repos/data-sources.ts`: the store's unique-index refusal, reached when wechart's own check is not wired, as in `proposal-approve.test.ts`. It said "This folder already has …".
+      - `server.ts`: restoring a data source's version whose name My workspace's root holds. It said "My workspace already has …".
+    - Tests: `name-refusals.test.ts` (new) reads a model save (a landed name, and another file of the same project), a generated cube, a data source made and renamed, the store's refusal, a proposal and an approval for the holder's folder id, xcube id, title, file path, owner, item title and any workspace. `history.test.ts` covers the restore. Old wording updated in `publish.test.ts`, `names.test.ts`, `proposal-approve.test.ts` and `repos/data-sources.test.ts`.
+    - From the review, two more that said where:
+      - `server.ts`, a use-only copy whose target already holds its name: it named the folder's title. It now says "The name “…” is already in use." and the rest of its advice, and compares in any case (`use-only-copy.test.ts`).
+      - `xcube/overlays.ts` `problemOf`: an overlay's `name_in_use` reached the preview error with xcube's folder ids. It is now said through `itemMessageOf` (`overlays.test.ts`).
+    - Also from the review: the store's refusal is held to the whole message, and this file and T724's `generate-names.test.ts` remove the project folders and drafts they made. Earlier runs' rows in `wechart_test` are left; the reset clears them.
+    - AC-424 is not ticked until T720 shows the import case.
 
 ### Done tasks' tests, reworked by area
 
@@ -13526,7 +13547,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-176 | T405, T640 | AC-180 | T407 | AC-187 | T406, T466–T470, T476–T478 |
 | AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
 | AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |
-| AC-234 | T378, T552, T504 | AC-246 | T404 | AC-249 | T336, T450, T724, T726, T727 |
+| AC-234 | T378, T552, T504 | AC-246 | T404 | AC-249 | T336, T450, T724, T726, T727, T734 |
 | AC-251 | T318, T321, T324, T431 | AC-252 | T316, T319, T320 | AC-253 | T317, T321 |
 | AC-254 | T311, T319, T351, T359 | AC-255 | T312, T408 | AC-256 | T313, T323, T325, T326 |
 | AC-257 | T315, T320, T324 | AC-258 | T411 | AC-259 | T314, T330, T473 |

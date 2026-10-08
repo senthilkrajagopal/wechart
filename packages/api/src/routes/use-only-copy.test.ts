@@ -238,8 +238,9 @@ describe('a model of a folder one may only read, copied to use (T543, AC-283)', 
     expect(glimpsed.statusCode, glimpsed.body).toBe(404);
     const taken = await copy(ids.ops);
     expect(taken.statusCode, taken.body).toBe(409);
+    // Said only as in use, never where (T726's review, AC-424).
     expect(taken.json<{ error: string }>().error).toBe(
-      `ops ${MARK} has a cube or view named “${REGIONS}” already. A use-only copy goes to its folder as a new model: choose another folder.`,
+      `The name “${REGIONS}” is already in use. A use-only copy goes to its folder as a new model: choose another folder.`,
     );
   });
 
