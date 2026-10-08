@@ -274,11 +274,11 @@ All routes sit under Cube's `basePath` (`/cubejs-api`) and take admin auth: an `
 
 | Code | Status | Body | When | Source |
 | --- | --- | --- | --- | --- |
-| `invalid_connection` | 400 | `error`, `problems: string[]` | Unknown driver or auth method; a field not of the driver and auth method; a secret sent in `fields`; a required field missing; an envelope's shape; a bad name for its folder; folder not in the tree; the driver's config refusing (e.g. port) | [conn@c] L169-216, L239-251; [rt@c] L1512-1548 |
+| `invalid_connection` | 400 | `error`, `problems: string[]` | Unknown driver or auth method; a field not of the driver and auth method; a secret sent in `fields`; a required field missing; an envelope's shape; ~~a bad name for its folder~~ *Corrected:* names carry no folder; `default` outside the root or not in lower case is `400 default_outside_root` (R71 4.2) ([`xcube-256d632371.md`](./xcube-256d632371.md)); folder not in the tree; the driver's config refusing (e.g. port) | [conn@c] L169-216, L239-251; [rt@c] L1512-1548 |
 | `in_use` | 409 | `error`, `problems` | Dropping a connection published cubes use | [rt@c] L1595-1601 |
 | `driver_change` | 409 | `error`, `problems` | PUT with a driver other than the stored one's | [rt@c] L1512-1548 |
 | `invalid_secret` | 422 | `error` | An envelope doesn't open for this target, **or** its kid isn't held, or the secret is empty | [conn@c] L219-236; [cred] L152-172 |
-| `invalid_connection_name` | 400 | `error` | `{name}` isn't `^[a-z0-9_]{1,128}$` | [routes@c] L541-546 |
+| `invalid_connection_name` | 400 | `error` | `{name}` isn't ~~`^[a-z0-9_]{1,128}$`~~ *Corrected:* the bare name in an item's grammar (`^[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*$`, ≤ 40), without the reserved words (R71 2.2; `routes.ts` `connectionNameOf`) ([`xcube-256d632371.md`](./xcube-256d632371.md)). | [routes@c] L541-546 |
 | `unknown_connection` | 404 | `error` | Health of a missing connection | [routes@c] L571-578 |
 | `bad_request` | 400 | — | Joi failures | [routes@c] L155-176 |
 
@@ -299,15 +299,15 @@ All routes sit under Cube's `basePath` (`/cubejs-api`) and take admin auth: an `
 
 ### `PUT …/connections/{name}`
 
-- **Request** ([routes@c] L155-165):
+- **Request** ([routes@c] L155-165): *Corrected:* `baseVersion` is now required: `null` creates and never overwrites (`409 name_in_use`); a number edits or moves that version (`409 conflict` with `currentVersion`, `409 name_in_use` for another case, `409 data_source_range` with `cubes`); missing is `400 bad_request` (R71 2.5) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
   ```ts
   { folderId: string /* ≤64 */; driver: string; authMethod: string;
     fields?: Record<string, string | number | boolean | null>; sealed?: Record<string, SealedV1>;
     revisions?: Record<string, string /* ≤128 */> }
   ```
 - **The name** ([rt@c] L1512-1524; [items] L7-16, L65-67):
-  - it must be `fullNameOf(folderId, short)`: the short name when `folderId` is `froot`, `<folderId>__<short>` otherwise;
-  - the short name must match `^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$`;
+  - ~~it must be `fullNameOf(folderId, short)`: the short name when `folderId` is `froot`, `<folderId>__<short>` otherwise~~ *Corrected:* `{name}` is the bare name in every folder, one per model in any case (R71 1.1, 2.3) ([`xcube-256d632371.md`](./xcube-256d632371.md));
+  - ~~the short name must match `^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$`~~ *Corrected:* `^[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*$`, ≤ 40, no reserved words for data sources (`items.ts` `checkDataSourceName`) ([`xcube-256d632371.md`](./xcube-256d632371.md));
   - the folder must be `froot` or in the model's current tree.
   - Tested: `fnope__other` in an unknown folder is 400 ([t-conn] test 2).
 - **Checks, in order:**
@@ -345,7 +345,7 @@ All routes sit under Cube's `basePath` (`/cubejs-api`) and take admin auth: an `
 - **`GET`:** `200 { model, connections: [<the PUT answer's view>] }`, ordered by name ([routes@c] L548-551; [raw-rev] `connections`).
 - **`DELETE`** ([routes@c] L580-586; [rt@c] L1576-1605):
   - It refuses with `409 in_use` when any published cube (items mode only) is bound to the name. For `default`, that is any cube with no `data_source` that doesn't `extends`.
-  - `problems` holds one string listing up to 20 `folderId/name`s ("froot/orders uses it").
+  - `problems` holds one string listing up to 20 ~~`folderId/name`s ("froot/orders uses it")~~ *Corrected:* bare cube names, no folder (`orders uses it`; `runtime.ts` L2010-2018) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
   - Otherwise it deletes the row and that connection's reports, notifies, and answers **204 whether or not it existed**.
   - Live drivers then refuse calls with `Connection "<name>" was removed` ([sw] L73-76, L201-203).
   - Re-pushing restores them ([conn@c] L366-373).
@@ -395,12 +395,12 @@ All routes sit under Cube's `basePath` (`/cubejs-api`) and take admin auth: an `
   - with none, `data_source` is left as written ([t-names] L612-615).
 - **`bindDataSource`**, for `kind === 'cube'` only, on items this publish resolves ([pub] L217-258, L353-358):
   - `data_source` (or `dataSource`) must be a non-empty string.
-  - **A full name (containing `__`) is refused:** "is a full name; name the data source by its short name".
-  - The name binds to the first folder on `tree.chain(folderId)` (the cube's folder, then its ancestors) that holds it, written as the full name. None found gives "It uses the data source "<n>", which no folder on this item's path holds" (`kind: 'reference'`, so the publish answers 422).
-  - **No `data_source` and no `extends`:** the nearest `default`. When that is the root's (`default`), nothing is written.
+  - ~~**A full name (containing `__`) is refused:** "is a full name; name the data source by its short name".~~ *Corrected:* that refusal is gone; `__` is outside the name grammar (R71 3.4) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
+  - ~~The name binds to the first folder on `tree.chain(folderId)` (the cube's folder, then its ancestors) that holds it, written as the full name. None found gives "It uses the data source "<n>", which no folder on this item's path holds"~~ *Corrected:* the name means the one data source of that name, written as is; one the model doesn't hold is `It uses the data source "<n>", which the model doesn't hold`, and one off the cube's folder path is `data_source_range` (R71 4.1; `publish.ts` L393-407, L335-358) ([`xcube-256d632371.md`](./xcube-256d632371.md)) (`kind: 'reference'`, so the publish answers 422).
+  - **No `data_source` and no `extends`:** ~~the nearest `default`~~ *Corrected:* the root's `default`, the only one (R71 4.2) ([`xcube-256d632371.md`](./xcube-256d632371.md)). When that is the root's (`default`), nothing is written.
   - **Views are not bound** (`def.kind === 'cube'`).
   - Tested in [t-names] L581-610 and [t-conn] "…bound at publish to the nearest one (AC-273)".
-- **No rebinding.** Items not in the changeset keep their resolved YAML ([pub] L347-362; [raw-readme] "Binding at publish").
+- **No rebinding.** ~~Items not in the changeset keep their resolved YAML~~ *Corrected:* with one name per data source there is nothing to rebind; every cube's data source, published ones too, is checked against its folder path at each publish (R71 3.4, 4.3) ([`xcube-256d632371.md`](./xcube-256d632371.md)). ([pub] L347-362; [raw-readme] "Binding at publish").
 
 ### Serving: which driver Cube gets (6a; [raw-cfg]; [raw-srv])
 
@@ -489,11 +489,11 @@ xcube's `DRIVERS` ([drv] L89-291). The field keys of the five kept drivers match
 | **AC-160, T360, `drivers.ts`** | Six types incl. `databricks-jdbc` ([w-drv] L16-23; [w-spec] L674) | Eight types: add redshift, mysql, dremio with the fields above; drop databricks-jdbc ([indrv] L28-35). Needs the spec gate first (AC-160's text) |
 | **AC-312, T335** | "host, port, account, workspace, warehouse, project or connect string" ([w-spec] L1102-1103; [w-tasks] L5476) | xcube refuses a changed TLS field too (`422 invalid_secret`, [t-conn] test 2). wechart's clearing rule must use the same keys: add ssl, sslRejectUnauthorized, sslCa (postgres, redshift, mysql), encrypt and trustServerCertificate (mssql), url and ssl (dremio); drop "workspace". The user decided it ([ans6] L8-15); AC-312's text needs amending |
 | **T441** (AC-325, AC-298) | Plan: `V1_TARGET_KEYS` as [w-cs] L408-415 | `V1_TARGET_KEYS` = xcube's `target` at 1249dda9ca, frozen. The five AAD strings in [t-cred] L33-48 are ready-made cross-checks. Golden AAD and envelope vectors cover all eight drivers and the TLS fields ([ans6] L17-25). Envelopes must be unpadded base64url with exactly `v, kid, enc, ct`. A secret is ≤ 65,531 UTF-8 bytes (`ct` ≤ 65,552, [conn@c] L91-92). Seal and store `fields` exactly as the browser had them (Gotcha 2) |
-| **T442** (AC-161, AC-327) | Not built (Grep of `packages/api/src/xcube`: no connections code) | `PUT/GET/DELETE /cubejs-api/v1/semantic/models/{model}/connections/{name}`, name = `fullNameOf(folder's xcube id, short name)`. Push folders first; PUT only on a real change (Gotcha 3); map the error table; reconcile from `GET …/connections` (fields, `secrets`, `revisions`, `version`); on delete, handle `409 in_use`. Every call is from wechart's server (AC-327) |
+| **T442** (AC-161, AC-327) | Not built (Grep of `packages/api/src/xcube`: no connections code) | `PUT/GET/DELETE /cubejs-api/v1/semantic/models/{model}/connections/{name}`, name = ~~`fullNameOf(folder's xcube id, short name)`~~ *Corrected:* the bare name, with `baseVersion` required on PUT (R71 1.1, 2.5) ([`xcube-256d632371.md`](./xcube-256d632371.md)). Push folders first; PUT only on a real change (Gotcha 3); map the error table; reconcile from `GET …/connections` (fields, `secrets`, `revisions`, `version`); on delete, handle `409 in_use`. Every call is from wechart's server (AC-327) |
 | **T361** (AC-159) | Path `POST /v1/semantic/connections/test` ([w-tasks] L5630) | `POST /cubejs-api/v1/semantic/models/{model}/connections/test`, `{ driver, authMethod, fields, sealed }`. The answer is 200 with `ok: false` on failures; allow at least 60 s (two 30 s steps). The "SQLSTATE 28P01" expectation is UNVERIFIED: xcube's test asserts only "password authentication failed". Redshift's `schemas` check reads Cube's `CUBEJS_DB_NAME` (Gotcha 8) |
 | **T365** (AC-161) | "Waiting… until xcube reports every instance on the new settings" ([w-tasks] L5650-5657); path `PUT /v1/semantic/connections/{name}` | Per-model path. "Every instance live and current" needs a rule for rows of instances that are gone, and for instances that never built a driver (Gotcha 4; Open question 1). A type change is `409 driver_change`: it lands as a new data source name plus a republish of the cubes bound to the old one. xcube has no in-place type change |
 | **T346** (AC-280) | Byte copy of the ciphertext ([w-tasks] L5536-5545) | Works for tests and pushes while the target is unchanged, since the AAD has no id ([cred] L42-48). Previews using a workspace's copies are **in no commit or image** (uncommitted migration 7 and overlay code) |
-| **T435** (AC-273, AC-310) | Depends on T442 ([w-tasks] L6764-6772) | Built by xcube for models with connections. The e2e test must push folders and connections before publishing. Short names only: a hand-written full name is refused. Adding a nearer `default` or source later doesn't move published cubes until they are republished (Gotcha 5; Open question 3). Views aren't bound; `extends` inherits |
+| **T435** (AC-273, AC-310) | Depends on T442 ([w-tasks] L6764-6772) | Built by xcube for models with connections. The e2e test must push folders and connections before publishing. ~~Short names only: a hand-written full name is refused. Adding a nearer `default` or source later doesn't move published cubes until they are republished (Gotcha 5; Open question 3).~~ *Corrected:* bare names, one per model; only the root holds `default`; a data source off a cube's folder path is `data_source_range` (R71 4) ([`xcube-256d632371.md`](./xcube-256d632371.md)). Views aren't bound; `extends` inherits |
 | **T443** (AC-310) | Seed from Helm values ([w-tasks] L6773-6779) | PUT `default` in `froot`, with a sealed password. How the Helm value gets sealed without wechart holding it is [w-cs] Open question 8. xcube's dist exports `sealSecretV1` "for tests and tools" ([cred] L218-227), and CI seals with it through `node -e` in the image ([serving] L198-211). Until seeded, the root `default` is Cube's `CUBEJS_DB_*` ([w-compose] L11-16) |
 | **AC-145, T151 → T375** | Planned on the system route and playground secret ([w-tasks] L2784-2796, L5722-5725) | Use `POST /cubejs-api/v1/semantic/models/{model}/pre-aggregations/partitions` with the service token. Drop the playground secret. Keep [w-sp]'s derivation and zone rules (same Cube code). Treat a missing module result as possible (Gotcha 11). Rebuilds still go through the jobs API with the service token ([x4] "Jobs and Schedules") |
 | **Pre-aggregation schema** | `e2e/jobs.spec.ts` L59-61 expects `prod_pre_aggregations.monthly_orders_by_status_month` | Becomes `prod_pre_aggregations_<model>_<12 hex>.…`. Rollups build again after the upgrade ([raw-readme] "Pre-aggregation schemas") |
@@ -519,7 +519,7 @@ xcube's `DRIVERS` ([drv] L89-291). The field keys of the five kept drivers match
 5. **Binding is at publish, and nothing rebinds** ([pub] L347-362):
    - a cube published before its connection existed keeps `data_source` as written;
    - once the model has any connection, a non-`default` name that isn't a root connection fails at query time ([raw-srv] `resolveDriver`; [raw-cfg] `driverFactory`);
-   - adding a nearer `default` doesn't move cubes already bound to the root's.
+   - ~~adding a nearer `default` doesn't move cubes already bound to the root's.~~ *Corrected:* no nearer `default` can exist: `default` outside the root is `400 default_outside_root` (R71 4.2) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
    - Push connections first, and republish the affected cubes.
 6. **Only `default` may come from Cube's environment** in a model with connections ([raw-cfg]). wechart's compose `CUBEJS_DB_*` (sample-db) serves the root `default` until a root `default` connection exists ([w-compose] L11-16).
 7. **xcube starts without keys when `XCUBE_CREDENTIAL_KEY_IDS` is unset** ([set] L105-109). Connections then fail at use with "xcube holds no credential key…" ([conn@c] L220-222). AC-324's refusal needs the variable set on every Cube process. wechart's cross-check catches an empty list.
@@ -542,7 +542,7 @@ xcube's `DRIVERS` ([drv] L89-291). The field keys of the five kept drivers match
 12. **Rollups rebuild once, and the old tables stay behind.** Every model's schema changes ([raw-cfg]). Whether Cube removes `prod_pre_aggregations.*` tables no model uses any more is UNVERIFIED.
 13. **More than 100 models with connections on one process** evicts orchestrators. Their drivers and queues are released and rebuilt ([c-os] L8-22). This is churn, not failure.
 14. **Races, by reading.**
-    - `DELETE` checks users, then deletes, in separate steps with no lock against a concurrent publish ([rt@c] L1595-1605).
+    - `DELETE` checks users, then deletes, ~~in separate steps with no lock against a concurrent publish~~ *Corrected:* the removal is taken under the model's row lock only while the revision its users were read at is still current, else checked again (`revisions.ts` `deleteConnection`; `runtime.ts` L2010-2025) ([`xcube-256d632371.md`](./xcube-256d632371.md)) ([rt@c] L1595-1605).
     - `DELETE default` with no `default` connection still answers `409 in_use` while any cube names none ([rt@c] L1576-1593).
 15. **A name reused with another driver after a DELETE.**
     - PUT accepts it, since nothing is stored under the name ([rt@c] L1512-1548).
@@ -586,7 +586,7 @@ xcube's `DRIVERS` ([drv] L89-291). The field keys of the five kept drivers match
 
 1. **For xcube (through the Cube-expert agent):** expire `connection_reports` of instances no longer connected (e.g. against `pg_stat_activity`'s `xcube:v6:` names), or add a heartbeat, so "every instance" is decidable (Gotcha 4). **For the user:** until then, what should AC-161's UI show with stale rows present?
 2. **For xcube:** Redshift's `getSchemas` uses `CUBEJS_DB_NAME` (Gotcha 8). A fix could set the provider's `dbName`, or override `getSchemas` in the catalog view. UNVERIFIED by running; no Redshift, Snowflake, BigQuery, SQL Server or Oracle server was connected by xcube's tests ([c6a] message: PostgreSQL, MySQL 8.4, Dremio).
-3. **For the user (AC-310, AC-273):** when a nearer `default` or source is added, or one is dropped from the path, should wechart republish the cubes it would now bind differently? xcube never rebinds on its own (Gotcha 5).
+3. ~~**For the user (AC-310, AC-273):** when a nearer `default` or source is added, or one is dropped from the path, should wechart republish the cubes it would now bind differently? xcube never rebinds on its own (Gotcha 5).~~ *Corrected:* moot: names are one per model, there is no nearer namesake, and a change stranding a cube is refused (`data_source_range`) (R71 3.4, 4.3) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
 4. **For the user:** the image pin. The frontmatter names fddc376f25 as the caller asked, but the TLS decision needs 1249dda9ca, which also brings slice 8.
 5. **For xcube:** report "Continue wait" from the partitions route rather than dropping the module (Gotcha 11).
 6. **For the user:** require `https:` for Dremio Cloud URLs, and for Dremio Software `ssl: true` (Gotcha 19)?
@@ -630,8 +630,8 @@ xcube's `DRIVERS` ([drv] L89-291). The field keys of the five kept drivers match
 | 19 | Given an existing PEM, it writes the `.check` ([in6] L44) | Verified; it writes a `.pem` too | [kg] L7-9, L22-25 |
 | 20 | The Secret goes into every Cube process ([in6] L46) | Verified (README) | [raw-readme] "Credential keys" |
 | 21 | `GET /v1/semantic/credential-keys` answers `{ keys: [{ kid, x, active }] }` ([in6] L47) | Verified | [routes@c] L529-532; [t-conn] test 1 |
-| 22 | PUT body ([in6] L51-58) | Verified | [routes@c] L155-165 |
-| 23 | Name: short in the root, `<folderId>__<name>` elsewhere ([in6] L60) | Verified | [rt@c] L1512-1524; [items] L65-67 |
+| 22 | PUT body ([in6] L51-58) | Verified; *Corrected:* the body now also requires `baseVersion` (R71 2.5) ([`xcube-256d632371.md`](./xcube-256d632371.md)) | [routes@c] L155-165 |
+| 23 | Name: short in the root, `<folderId>__<name>` elsewhere ([in6] L60) | ~~Verified~~ *Corrected:* the bare name in every folder (R71 1.1) ([`xcube-256d632371.md`](./xcube-256d632371.md)) | [rt@c] L1512-1524; [items] L65-67 |
 | 24 | `fields` as the browser sealed with, secrets excepted; secrets bound to them ([in6] L61) | Verified | [conn@c] L169-216; [cred] L152-172 |
 | 25 | Only the driver's and auth method's fields; required present; every secret opens; nothing connects ([in6] L62) | Verified | [conn@c] L239-251 |
 | 26 | Answers `200` (secrets named), `400 invalid_connection`, `422 invalid_secret`, `409 driver_change` ([in6] L63-67) | Verified; also `400 invalid_connection_name` and `bad_request` | [routes@c] L298-303, L541-569; [t-conn] tests 2, 7 |
@@ -652,10 +652,10 @@ xcube's `DRIVERS` ([drv] L89-291). The field keys of the five kept drivers match
 | 41 | Every model gets `<schema>_<model>_<hash>`; rollups rebuild after upgrading ([in6] L105-106) | Verified | [raw-cfg]; [t-uconn] L148-155 |
 | 42 | Keep `CUBEJS_DATASOURCES` unset ([in6] L107) | Verified | [c-env] L80-89 |
 | 43 | An export bucket type such as `s3` stops BigQuery from building ([in6] L108) | Verified; Snowflake is affected too (Gotcha 9) | [c-bq] L155-159; [c-sf] L360-384 |
-| 44 | Binding nearest-first, never a sibling's or descendant's; the full name is written; unknown and hand-written full names refused (422) ([in6] L113-115) | Verified | [pub] L217-258; [t-names] L581-596; [t-conn] AC-273 test |
-| 45 | No `data_source` → nearest `default`; root's → nothing written ([in6] L116) | Verified | [pub] L250-256; [t-names] L598-610 |
+| 44 | Binding nearest-first, never a sibling's or descendant's; the full name is written; unknown and hand-written full names refused (422) ([in6] L113-115) | ~~Verified~~ *Corrected:* the one data source of the name, written bare; off the path is `data_source_range`; the full-name refusal is gone (R71 3.4, 4.1) ([`xcube-256d632371.md`](./xcube-256d632371.md)) | [pub] L217-258; [t-names] L581-596; [t-conn] AC-273 test |
+| 45 | No `data_source` → nearest `default`; root's → nothing written ([in6] L116) | ~~Verified~~ *Corrected:* the root's `default`, the only one (R71 4.2) ([`xcube-256d632371.md`](./xcube-256d632371.md)) | [pub] L250-256; [t-names] L598-610 |
 | 46 | `extends` inherits ([in6] L117) | Verified | [pub] L250; [t-names] L604-609 |
-| 47 | No rebinding ([in6] L118) | Verified by reading | [pub] L347-362 |
+| 47 | No rebinding ([in6] L118) | ~~Verified by reading~~ *Corrected:* nothing to rebind; every cube's data source is checked at each publish (R71 3.4, 4.3) ([`xcube-256d632371.md`](./xcube-256d632371.md)) | [pub] L347-362 |
 | 48 | Changesets, snapshots and overlays all bind ([in6] L119) | Verified by reading | [rt@c] L1290, L1365-1368, L1425, L2700, L2720 |
 | 49 | Introspection lists a model's connections ([in6] L121) | Verified | [gw] L589-594; [t-conn] AC-273 test |
 | 50 | AC-280 in previews not built ([in6] L125; [sum6] L45) | Verified for every commit and image | [raw-readme] (no mention); working tree only |

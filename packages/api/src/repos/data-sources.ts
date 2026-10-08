@@ -136,7 +136,12 @@ export interface Landed {
  * asks the database anything (T442's review).
  */
 export interface Landing {
-  readonly land?: (source: DataSource, landed: Landed) => Promise<void>;
+  /**
+   * `creating` for a new data source, which xcube lands over no other of its
+   * name; otherwise an edit of the one it holds (T701; research
+   * `xcube-256d632371.md`, 2.5).
+   */
+  readonly land?: (source: DataSource, landed: Landed, creating: boolean) => Promise<void>;
   /**
    * On a rename, the old name's connection, removed before the save: its
    * refusal (cubes use it) keeps the old name (T442's review).
@@ -346,9 +351,14 @@ export function dataSourceStore(
     };
   };
   /** As written, still in its transaction: landed, or the whole save undone (T442). */
-  const landIn = async (tx: Reader, id: string, landing: Landing | undefined) => {
+  const landIn = async (
+    tx: Reader,
+    id: string,
+    landing: Landing | undefined,
+    creating: boolean,
+  ) => {
     if (landing?.land === undefined) return;
-    await landing.land((await getOn(id, tx))!, await sealedOn(id, tx));
+    await landing.land((await getOn(id, tx))!, await sealedOn(id, tx), creating);
   };
   /** A name the folder already holds, said as AC-270 has it. */
   const taken = (error: unknown, name: string) =>
@@ -464,7 +474,7 @@ export function dataSourceStore(
             })
             .execute();
           await putSecrets(tx, id, input.sealed);
-          await landIn(tx, id, landing);
+          await landIn(tx, id, landing, true);
         });
       } catch (error) {
         throw taken(error, input.name);
@@ -562,12 +572,12 @@ export function dataSourceStore(
               .where('field', 'in', stale)
               .execute();
           await putSecrets(tx, id, sealed);
-          await landIn(tx, id, landing);
+          await landIn(tx, id, landing, false);
         });
       } catch (error) {
         if (renamed && landing.land !== undefined)
           // Best-effort: the start's reconcile puts it back if this fails too.
-          await landing.land(current, before!).catch(() => undefined);
+          await landing.land(current, before!, false).catch(() => undefined);
         throw taken(error, name);
       }
       return (await store.get(id))!;

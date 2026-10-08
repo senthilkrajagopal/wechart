@@ -23,11 +23,14 @@ cube:
   # when, and each run's state, from 2099b13f2d (T548), and a query Cube
   # Store's router runs followed to its real end from 46ca0ce708 (T549), and
   # a building build the queue's cancel takes out really stopped, none of it
-  # kept, from 74c933bdb8 (T554). The
+  # kept, from 74c933bdb8 (T554), and one name per item model-wide, every
+  # reference up its folder path and bare names from 256d632371 (T701, R71,
+  # R72), whose schema 14 refuses a folder-prefixed one: installed fresh
+  # (T702). The
   # fork's CI publishes it for amd64 and arm64, pinned here by digest
   # (docs/deploy.md). Cube and its refresh worker both run it, with the
   # image's own command.
-  image: ghcr.io/senthilkrajagopal/xcube:v1.7.45-74c933bdb8@sha256:262d59e434cd98eb0c1cf238fcbbc7168809e0fd31e103f87d127d9082e3df71
+  image: ghcr.io/senthilkrajagopal/xcube:v1.7.45-256d632371@sha256:838c70961a7957ed19068cdc7bf2db37683ade2160f6095aa901b57fd13fae04
   dataSource:
     type: postgres
     host: superset-postgresql.superset.svc.cluster.local

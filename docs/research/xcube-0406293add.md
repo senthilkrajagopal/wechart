@@ -69,13 +69,13 @@ This doc is the sibling of [xe53] (`e53cf2a8b8`). It covers the one commit from 
    - Aliases are now assigned after every item of a publish is resolved, and they follow `extends` ([pub] L110-121, L143-171, L429-434).
    - A kept child of a rebound parent gets its new alias in the same publish. Only its resolved YAML changes; its authored YAML and bindings stay ([pub] L445-446).
    - A child always has an alias of its own ([pub] L131-141).
-   - In `GET …/items`, a child's `dataSource` is now the source it inherits, and a new `extends` key gives its parent's full name ([rt] L2898-2909; [ovc] L18-35).
+   - In `GET …/items`, a child's `dataSource` is now the source it inherits, and a new `extends` key gives its parent's ~~full name~~ *Corrected:* name, which is the full name now that names are bare (R71 3.3) ([`xcube-256d632371.md`](./xcube-256d632371.md)) ([rt] L2898-2909; [ovc] L18-35).
    - **Gap 1: the upgrade list is incomplete.** More cubes are due a new alias than xcube's list names (Upgrade).
    - **Gap 2: "Tested with inheritance switched off" was not run here** (UNVERIFIED).
 2. **A new regression, found by reading, that xcube's account doesn't mention: folder views no longer get a generated `sql_alias`.**
    - At `e53cf2a8b8`, `finish` aliased every prefixed item, views included ([raw-e53] `finish`). At `0406293add`, only `assignAliases` sets an alias, and it filters to `kind === 'cube'` ([pub] L153). `finish` sets none ([pub] L178-195).
    - xcube's own docs still say otherwise: README L197-199 and the `finish` docblock ([pub] L173-174) say every folder item gets an alias.
-   - **Effect on wechart.** A wechart folder view's full name is at least 36 characters ([w-folders] L8-14, L22-25). xcube's 63-character check on member aliases ([pub] L261-271) can now refuse a folder view with ordinary names (Gotcha 1).
+   - ~~**Effect on wechart.** A wechart folder view's full name is at least 36 characters ([w-folders] L8-14, L22-25). xcube's 63-character check on member aliases ([pub] L261-271) can now refuse a folder view with ordinary names (Gotcha 1).~~ *Corrected:* names are bare (at most 40) in every folder, and a view whose member alias would pass 63 gets `x<hash7>` first, so this no longer arises (R71 1.2; `publish.ts` L178-188) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
    - This is **the main risk of pinning `0406293add`**.
 3. **"The model's next publish" means any publish.**
    - `assignAliases` runs over every entry, kept or upserted, on every changeset, snapshot, dry run and overlay ([pub] L429-434; [rt] L3039, L1465).
@@ -140,8 +140,8 @@ This doc is the sibling of [xe53] (`e53cf2a8b8`). It covers the one commit from 
    - `aliasedDataSource` reads a cube's own `data_source`. Failing that, it walks `extends` through the other entries by full name, guarding against loops ([pub] L110-121).
    - `default` counts as none ([pub] L116).
 3. **The alias a cube without an authored one gets** (`generatedAlias`, [pub] L131-141):
-   - **A root cube on `default`:** its own name if it `extends` another, else none (L134-136).
-   - **Any other cube:** `aliasOf(fullName, dataSource)`, with the short-hash form when a rollup stem would exceed 25 (L137-140; `aliasOf` L49-55).
+   - **A root cube on `default`:** its own name if it `extends` another, else none (L134-136). *Corrected:* at `256d632371` this holds for a cube on `default` in any folder, with the name lower-cased when it has upper case ([`xcube-256d632371.md`](./xcube-256d632371.md)).
+   - **Any other cube:** `aliasOf(~~fullName~~ name, dataSource)`, with the short-hash form when a rollup stem would exceed 25 (L137-140; `aliasOf` L49-55). *Corrected:* names are bare, so a folder cube on `default` isn't "other" ([`xcube-256d632371.md`](./xcube-256d632371.md)).
 4. **Re-aliasing kept cubes.**
    - `assignAliases` changes a cube's `sql_alias` when the computed one differs from what its doc holds ([pub] L157-163).
    - A kept cube changed this way is marked resolved and returned in `realiased` ([pub] L164-167).
@@ -189,7 +189,7 @@ Sources: [rt] L221-235 (`ItemRef`), L2898-2909 (`refOf`), L3225-3237 (`itemsOf`)
 
 - **`extends` is a new key.**
   - **Value:** the parent's full name, read from the cube's resolved YAML by `parentOf` ([rt] L2900, L2907; [roll] L33-40). xcube's rewrite always writes that line as the parent's full name ([rw] L340-344).
-    - A root parent is its bare name. A folder parent is `f<id>__<short>`.
+    - A root parent is its bare name. ~~A folder parent is `f<id>__<short>`.~~ *Corrected:* every parent is its bare name, in any folder (R71 1.1, 3.3) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
     - xcube's test expects `{ dataSource: 'fab__warehouse', extends: 'fab__where' }` for a child ([t-conn] L579).
   - **When it appears:** on a cube that has an `extends:` line, including one that also names its own `data_source`. It is absent, not `null`, on a cube that extends nothing ([rt] L2907).
   - **Never on views**, even though xcube parses `extends` on any item ([items] L228). `refOf` asks `parentOf` only when `item.kind === 'cube'` ([rt] L2900).
@@ -284,7 +284,7 @@ Sources: [pub] L49-55, L110-141; [t-names] L617-674.
 
 ## Gotchas
 
-1. **Folder views lose their generated `sql_alias` (by reading; a regression; not in xcube's account).**
+1. **Folder views lose their generated `sql_alias` (by reading; a regression; not in xcube's account).** *Corrected:* moot from `256d632371`: no item has a folder prefix, and any item, views included, gets a generated alias for upper case or a too-long member alias (R71 1.2; `publish.ts` L178-218) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
    - **What changed.**
      - At `e53cf2a8b8`, `finish` set `sql_alias = aliasOf(fullName)` on every prefixed item, views included: `if ((prefixed || dataSource !== undefined) && doc.sql_alias === undefined …)` ([raw-e53] `finish`).
      - At `0406293add`, `finish` sets no alias ([pub] L178-195). `assignAliases` handles cubes only ([pub] L153). No other code writes one (Grep of `xcube/src` for `sql_alias`).
@@ -343,7 +343,7 @@ Not asked.
 
 ## Open questions / unverified
 
-1. **For xcube (through the Cube-expert agent): restore folder views' generated `sql_alias`** (Gotcha 1).
+1. ~~**For xcube (through the Cube-expert agent): restore folder views' generated `sql_alias`** (Gotcha 1).~~ *Corrected:* closed by `256d632371`'s bare names and alias rules (R71 1.2) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
    - Give a prefixed view `aliasOf(fullName)` as at `e53cf2a8b8` ([raw-e53] `finish`), as README L197-199 still says.
    - Add a test with a folder id as long as wechart's (33 characters) so the plain and hashed forms differ.
    - Until then, pinning `0406293add` risks refusing wechart folder views, whole-model sends included. Pinning is the user's call.

@@ -14,7 +14,6 @@ import {
 } from '../repos/sql-runner-switches';
 import type { GoingRun, LostRun, SqlRunStore, StoppingRun } from '../repos/sql-runs';
 import { XcubeError } from '../xcube/client';
-import { connectionNameOf } from '../xcube/connections';
 import type { SqlAnswer, SqlRunState, SqlTarget, XcubeSqlRunner } from '../xcube/sql-runner';
 import { queryOf, tablesOf, type Catalog } from '../model/introspection';
 import type { DataSourceAccess } from './data-sources';
@@ -343,8 +342,8 @@ export function registerSqlRunner(
   ): Promise<SqlTarget | undefined> => {
     const ids = await options.folders();
     if (workspace === null) {
-      const xcubeId = ids.get(source.folderId);
-      if (xcubeId !== undefined) return { connection: connectionNameOf(xcubeId, source.name) };
+      // By its own name in any folder (T701; research `xcube-256d632371.md`, 1.1).
+      if (ids.has(source.folderId)) return { connection: source.name };
       await reply.status(409).send({
         outcome: 'unavailable',
         error: 'This data source’s folder isn’t in xcube yet, so SQL can’t run on it.',
@@ -374,7 +373,7 @@ export function registerSqlRunner(
       });
       return undefined;
     }
-    return { connection: connectionNameOf(placed, source.name), overlay: overlay.id };
+    return { connection: source.name, overlay: overlay.id };
   };
 
   /** A run its instance never finished, recorded once it is counted lost (T534's review). */
@@ -824,16 +823,12 @@ export function registerSqlRunner(
       });
     const ids = await runner.folders();
     if (workspace === null) {
-      const xcubeId = ids.get(source.folderId);
-      if (xcubeId === undefined)
+      if (!ids.has(source.folderId))
         return reply.status(409).send({
           error: 'This data source’s folder isn’t in xcube yet, so its tables can’t be read.',
         });
-      const { status, body } = await read(
-        runner.catalog,
-        connectionNameOf(xcubeId, source.name),
-        undefined,
-      );
+      // By its own name in any folder (T701).
+      const { status, body } = await read(runner.catalog, source.name, undefined);
       return reply.status(status).send(body);
     }
     // In its workspace's overlay, a copy stands in its original's folder, a
@@ -853,11 +848,7 @@ export function registerSqlRunner(
           overlay === undefined ? 'it holds nothing to preview' : overlay.problem
         }`,
       });
-    const { status, body } = await read(
-      runner.catalog,
-      connectionNameOf(placed, source.name),
-      overlay.id,
-    );
+    const { status, body } = await read(runner.catalog, source.name, overlay.id);
     // xcube's 404 here is the overlay, or its data source in it, gone since it
     // was made sure of: said as a run says it, never with its id (T547's review).
     if (status === 404)

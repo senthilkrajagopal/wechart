@@ -91,7 +91,7 @@ This doc is the sibling of [x22] (`22132c309c`), [x6] and [xmr]. It covers the o
    - T459 can map each string to a wechart data source by exact name with `connectionNameOf` ([w-conn] L111-113).
    - `null` (a cube that `extends` another) can't be resolved from this answer alone. It can be resolved using wechart's own `extends:` value and the child's `bindings` (API surface).
 3. **A cube bound to anything other than the literal `default` gets an SQL alias that names that data source** ([pub] L57-67, L118-133).
-   - For wechart's folder cubes, whose full names are always longer than 20 characters ([w-folders] L8-14, L22-25), the alias is `x` plus 7 base32 characters of SHA-256(`<fullName>@<dataSource>`).
+   - ~~For wechart's folder cubes, whose full names are always longer than 20 characters ([w-folders] L8-14, L22-25), the alias is `x` plus 7 base32 characters of SHA-256(`<fullName>@<dataSource>`).~~ *Corrected:* names are bare in every folder, so a cube on a non-`default` data source gets `<name>_<hash4>` when that is at most 20 characters, else `x` + hash(`name@dataSource`) (R71 1.2; `publish.ts` L52-58, L178-188) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
    - A rebind therefore produces new SQL, new result-cache keys and new rollup table names ([c-qc] L469-481; [c-bq] L4229-4246, L4393-4396).
 4. **Limits found by reading:**
    - **`extends` children.** xcube's advice to "publish the child again too" doesn't change a child's alias (Gotcha 2).
@@ -203,7 +203,7 @@ Every model route is `{CUBE_API_URL}/v1/semantic/models/{model}/…` ([x22] "API
   revision: number,
   mode: 'items' | 'files',             // head.mode ?? 'files'
   items: (
-    | { kind: 'cube', folderId, name, fullName, bindings: { [shortName]: fullName }, dataSource: string | null }
+    | { kind: 'cube', folderId, name, fullName, bindings: { [shortName]: fullName }, dataSource: string | null }   // Corrected at 256d632371: fullName == name, bindings { name: name } (xcube-256d632371.md)
     | { kind: 'view', folderId, name, fullName, bindings: { [shortName]: fullName } }     // no dataSource key
   )[]
 }
@@ -222,9 +222,9 @@ Sources: [rt] L3215-3227, L2891-2899; [routes] L529-536; [t-items] L196-203; [re
 
 | `dataSource` | When | Sources |
 | --- | --- | --- |
-| `<folderXcubeId>__<short>` | The cube, in a model with connections, names `<short>` or names none. The nearest folder on its path holding that name (or holding `default`) is a non-root folder | [pub] L248-251, L261-265, L267-271; [items] L65-67 |
-| `<short>` (bare) | The nearest holder is the root (`froot`), for a name other than `default` | [items] L65-67; [pub] L261-265 |
-| `'default'` | Any of: no `data_source` and no `extends`, with the nearest `default` the root's or none on the path (nothing written); an authored `data_source: default` that binds to the root's; or a model with no connections and no `data_source` | [pub] L266-271; [ovc] L14; [t-names] L591, L607-608 |
+| ~~`<folderXcubeId>__<short>`~~ | ~~The cube, in a model with connections, names `<short>` or names none. The nearest folder on its path holding that name (or holding `default`) is a non-root folder~~ *Corrected:* no prefixed data source names and no nearest-first binding; `dataSource` is the bare name the cube uses (own or inherited), which must be in its folder or an ancestor, and one naming none uses the root's `default` (R71 1.1, 3.4, 4.1-4.2) ([`xcube-256d632371.md`](./xcube-256d632371.md)). | [pub] L248-251, L261-265, L267-271; [items] L65-67 |
+| `<short>` (bare) | ~~The nearest holder is the root (`froot`), for a name other than `default`~~ *Corrected:* any data source's name, wherever it is ([`xcube-256d632371.md`](./xcube-256d632371.md)) | [items] L65-67; [pub] L261-265 |
+| `'default'` | Any of: no `data_source` and no `extends`, with ~~the nearest `default` the root's or none on the path~~ *Corrected:* only the root holds `default` ([`xcube-256d632371.md`](./xcube-256d632371.md)) (nothing written); an authored `data_source: default` that binds to the root's; or a model with no connections and no `data_source` | [pub] L266-271; [ovc] L14; [t-names] L591, L607-608 |
 | `<name as written>` | The model has no connections at publish, so `data_source` is left as written. This includes a cube published before any connection existed and not republished since | [pub] L369; [rt] L1795-1800; [t-names] L612-615; [x6] Gotcha 5 |
 | `null` | The cube `extends` another and names no `data_source` of its own. A cube with both `extends` and its own `data_source` gets its own binding | [pub] L252-266; [ovc] L14; [t-uov] L44 |
 
@@ -232,7 +232,7 @@ Sources: [rt] L3215-3227, L2891-2899; [routes] L529-536; [t-items] L196-203; [re
 
 - **A string `dataSource` is exactly the connection name Cube asks xcube's driver for.**
   - In a model with connections, a connection of that name serves it. Any other name but `default` is refused ([x6] L407-410).
-  - wechart names its connections `connectionNameOf(xcubeFolderId, name)`: the bare short name in the root, `<xcubeFolderId>__<name>` elsewhere ([w-conn] L111-113). That is the same rule as xcube's `fullNameOf` ([items] L65-67).
+  - wechart names its connections `connectionNameOf(xcubeFolderId, name)`: the bare short name in the root, ~~`<xcubeFolderId>__<name>` elsewhere ([w-conn] L111-113). That is the same rule as xcube's `fullNameOf` ([items] L65-67).~~ *Corrected:* xcube takes and serves every data source under its bare name in every folder, one per model in any case; `fullNameOf` is gone (R71 1.1, 3.4) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
 - **So match by exact name** over the data sources whose folder xcube holds (`PublishedFolders.ids`, [w-folders] L95-98):
 
 ```ts
@@ -273,21 +273,21 @@ const wechartFolderOf = new Map([...published.ids].map(([id, xcubeId]) => [xcube
 
 ### The SQL alias written at publish
 
-`finish` sets `sql_alias` when the item is in a folder, or when it is a cube with an aliased data source, and no `sql_alias`/`sqlAlias` was authored ([pub] L118-133). The "aliased data source" is `doc.data_source ?? doc.dataSource`, as bound (or written), unless it is the literal `'default'` ([pub] L64-67). The rules:
+~~`finish` sets `sql_alias` when the item is in a folder, or when it is a cube with an aliased data source, and no `sql_alias`/`sqlAlias` was authored~~ *Corrected:* xcube writes one, unless authored, only for a name with upper case (its lower-case form), a cube on a non-`default` data source (own or inherited), a cube that extends another, or a name whose rollup stem or member alias would be too long (`x<hash7>`); it writes no `title` (R71 1.2; `publish.ts` L165-188) ([`xcube-256d632371.md`](./xcube-256d632371.md)). ([pub] L118-133). The "aliased data source" is `doc.data_source ?? doc.dataSource`, as bound (or written), unless it is the literal `'default'` ([pub] L64-67). The rules:
 
-- **`aliasOf(fullName)`**, with no data source: the full name if it is at most 20 characters, else `x` plus 7 base32 characters of SHA-256(fullName) ([pub] L24, L33-40, L50-52).
+- ~~**`aliasOf(fullName)`**, with no data source: the full name if it is at most 20 characters, else `x` plus 7 base32 characters of SHA-256(fullName) ([pub] L24, L33-40, L50-52).~~ *Corrected:* with no data source, `aliasOf` returns the name (lower-cased for upper case); only a too-long stem or member alias makes it `x<hash7>` (`publish.ts` L52-58, L178-188) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
 - **`aliasOf(fullName, ds)`**: `<fullName>_<4 base32 of SHA-256(ds)>` if that is at most 20 characters, else `x` plus 7 base32 of SHA-256(`<fullName>@<ds>`) ([pub] L53-54).
 - **The rollup stem.** If any pre-aggregation's `<alias>_<pa sql_alias or name>` is over 25 characters, the alias becomes the 7-character hash form ([pub] L21, L127-131).
 
 | Cube | `sql_alias` written | Changes with the binding? |
 | --- | --- | --- |
-| wechart folder cube (full name `f<32 hex>__<short>`, ≥ 36 characters), bound to `default` or naming none with the root's nearest | `x` + hash(fullName), as before | No |
-| wechart folder cube bound to a folder's source, a folder's `default` included (`f…__default` is not the literal `default`) | `x` + hash(`fullName@dataSource`) | **Yes** ([t-names] L623-628) |
+| ~~wechart folder cube (full name `f<32 hex>__<short>`, ≥ 36 characters), bound to `default` or naming none with the root's nearest~~ *Corrected:* a cube on `default` in any folder is served under its bare name ([`xcube-256d632371.md`](./xcube-256d632371.md)) | ~~`x` + hash(fullName), as before~~ none, unless upper case, `extends` or a too-long stem calls for one | No |
+| wechart folder cube bound to a folder's source, ~~a folder's `default` included (`f…__default` is not the literal `default`)~~ *Corrected:* only the root holds `default` ([`xcube-256d632371.md`](./xcube-256d632371.md)) | ~~`x` + hash(`fullName@dataSource`)~~ `<name>_<hash4>`, or `x` + hash(`name@dataSource`) when over 20 | **Yes** ([t-names] L623-628) |
 | Root cube naming none, or bound to the root's `default` | none. Cube uses the cube's name, as before | No ([t-names] L622) |
 | Root cube bound to a root source other than `default` | `<name>_<4>` when the name is ≤ 15 characters and no rollup stem is over 25; else `x` + hash(`name@ds`). **New:** root cubes had no alias before | **Yes** ([t-names] L630-631) |
 | Any cube with an authored `sql_alias` | The authored one | No ([pub] L125; [t-names] L632) |
-| A cube that `extends` another and names no data source | Folder: `aliasOf(fullName)`. Root: none (see Gotcha 3) | No (Gotcha 2) |
-| Views | As before (`aliasOf(fullName)` in folders), never by data source | No ([pub] L124) |
+| A cube that `extends` another and names no data source | ~~Folder: `aliasOf(fullName)`. Root: none (see Gotcha 3)~~ *Corrected:* always an alias of its own, by its inherited data source when not `default` (R71 1.2; `publish.ts` L178-188) ([`xcube-256d632371.md`](./xcube-256d632371.md)) | No (Gotcha 2) |
+| Views | ~~As before (`aliasOf(fullName)` in folders)~~ *Corrected:* none unless the name has upper case or a member alias would be too long ([`xcube-256d632371.md`](./xcube-256d632371.md)), never by data source | No ([pub] L124) |
 
 - **Uniqueness is still checked across the model.** A clash answers `422 invalid_items` with kind `alias`: `Its SQL alias "<a>" is also <fullName>'s` ([pub] L170-182). The check reads each item's own `sql_alias ?? sqlAlias ?? name` only ([pub] L177).
 
@@ -359,7 +359,7 @@ const wechartFolderOf = new Map([...published.ids].map(([id, xcubeId]) => [xcube
 
 1. **An alias moves only when its cube is resolved again** ([pub] L382, L392-394).
    - In wechart, that happens when the cube's YAML changes ([w-cs] L29-32), or on a whole-model send, which re-resolves (and rebinds) everything ([pub] L75).
-   - Adding a nearer data source rebinds nothing, as before ([x6] Gotcha 5).
+   - ~~Adding a nearer data source rebinds nothing, as before ([x6] Gotcha 5).~~ *Corrected:* there is no nearer data source: names are one per model, bound exactly, and nothing is rebound (R71 3.4) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
 2. **A folder cube that `extends` a rebound parent keeps its alias, and republishing it doesn't help.**
    - **Its binding follows the parent.** The child names no data source, so `bindDataSource` writes none ([pub] L266). The child compiles against its parent's current binding through Cube's prototype ([c-sym] L537-541; [w-e2e-bind] L261-262).
    - **Its alias doesn't.** `aliasedDataSource` reads only the child's own `data_source` ([pub] L64-67, L124). The child's alias stays `aliasOf(fullName)` whenever it is published.
@@ -447,7 +447,7 @@ Not asked.
 | [xmr] L305 (Gotcha 7): "`GET …/items` never gives `dataSource`" | It does, from `e53cf2a8b8` | [rt] L3225; [t-conn] L553-555 |
 | [xmr] L340: "[x3a] L196: `GET …/items` is unchanged" | Changed | [rt] L3225 |
 | [x3a] L196: the `/items` item shape | `{ kind, folderId, name, fullName, bindings, dataSource? }` | [readme] L859 |
-| [x3a] L312: `sql_alias` = full name if ≤ 20, else `x` + hash(fullName) | Plus, for a cube on any data source other than `default`: `<fullName>_<4>` if ≤ 20, else `x` + hash(`fullName@dataSource`) | [pub] L49-55 |
+| [x3a] L312: `sql_alias` = full name if ≤ 20, else `x` + hash(fullName) | ~~Plus, for a cube on any data source other than `default`: `<fullName>_<4>` if ≤ 20, else `x` + hash(`fullName@dataSource`)~~ *Corrected:* names are bare, so no folder item gets its full name as an alias; the alias rules are R71 1.2's (upper case, non-`default` data source by `<name>_<4>` or `x` + hash(`name@ds`), `extends`, too long) ([`xcube-256d632371.md`](./xcube-256d632371.md)) | [pub] L49-55 |
 | [x3a] L314: "Root items get no … `sql_alias`" | Except root cubes whose `data_source` (bound or written) isn't `default` | [pub] L123-125; [t-names] L630-631 |
 | [x3a] L347: root items' SQL aliases and rollup table names "Unchanged: no alias added" | Except root cubes on a non-`default` data source | Same |
 | [x3a] L427: "it aliases only folder items" | Also root cubes on a non-`default` data source | Same |
@@ -461,7 +461,7 @@ Not asked.
 | 3 | Cube keys a cached result by its SQL and names a rollup by the cube's alias; neither includes the data source (L12) | Verified by reading | [c-qc] L469-481, L1301-1303 (= [u-qc]); [c-bq] L4229-4246, L4393-4396; [d-cube] |
 | 4 | A foreground-renewing query got the new source; the refresh-key check runs per data source (L13) | Partly | The identity includes the data source ([u-qc]). "The new key forced a fetch": UNVERIFIED, and by reading doubtful when the key values agree |
 | 5 | Stale-while-revalidate or background renewal got the old answer; rollups kept the old table (L14) | Verified by reading | [c-qc] L469-481; [c-bq] L4393-4396 |
-| 6 | Alias `<fullName>_<4-char hash>`, or a short hash alias when too long, for any data source other than `default` (L16) | Verified, with precision | [pub] L49-55, L64-67, L127-131. "Too long" means over 20 characters, or a rollup stem over 25. A folder's `default` counts as "other". Cubes only |
+| 6 | Alias `<fullName>_<4-char hash>`, or a short hash alias when too long, for any data source other than `default` (L16) | Verified, with precision | [pub] L49-55, L64-67, L127-131. "Too long" means over 20 characters, or a rollup stem over 25. ~~A folder's `default` counts as "other".~~ *Corrected:* only the root holds `default` (R71 4.2) ([`xcube-256d632371.md`](./xcube-256d632371.md)). Cubes only |
 | 7 | A rebind changes the alias, so the SQL and rollup tables are new (L17) | Verified by reading | Rollup half untested (Gotcha 6) |
 | 8 | Tested with stale-while-revalidate straight after the second publish: the new database (L20) | Partly | It answers the new database ([t-conn] L558-562; CI success). But the mode actually used is `stale-if-slow` (Gotcha 7). "Fix off → old database": UNVERIFIED |
 | 9 | Cubes on the root's `default` keep their alias; no rollups rebuild on the upgrade (L23) | Verified by reading | [pub] L64-67, L382, L392-394; [rev] L812 |

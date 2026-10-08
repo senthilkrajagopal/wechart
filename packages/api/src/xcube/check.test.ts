@@ -506,6 +506,53 @@ describe('a publish checked by the changeset’s dry run (T426)', () => {
   });
 
   /**
+   * T701 (AC-421, AC-424): xcube `256d632371` refuses a changeset whose item
+   * takes a name another item holds, in any case, on the caller's item
+   * (research `xcube-256d632371.md`, "The error kinds"). The publish is
+   * refused on that item's file, saying only that the name is in use.
+   */
+  it('refuses an item whose name another holds, in any case, on its own file, saying only that it is in use', async () => {
+    const files = store([USER]);
+    const { app, stub, afterPublish } = inItemsMode(files);
+    // As the image words it, a `people` landed in a folder this user may not
+    // see, and the changeset's own two of one name, in its folders by id.
+    stub.refuse([
+      {
+        folderId: 'froot',
+        name: 'people',
+        kind: 'name_in_use',
+        message:
+          'The name "people" is in use as "People": a landed name can\'t change, not even its case',
+      },
+      {
+        folderId: 'froot',
+        name: 'stock',
+        kind: 'name_in_use',
+        message:
+          'The changeset holds two items named "stock" (in froot and fops); names are one per model',
+      },
+    ]);
+    const people = { path: 'cubes/people.yml', content: 'cubes:\n  - name: people\n' };
+    const stock = { path: 'cubes/stock.yml', content: 'cubes:\n  - name: stock\n' };
+
+    const published = await publish(app, [people, stock]);
+
+    expect([published.statusCode, published.json()]).toEqual([
+      422,
+      {
+        errors: [
+          { path: 'cubes/people.yml', message: 'The name “people” is already in use.' },
+          { path: 'cubes/stock.yml', message: 'The name “stock” is already in use.' },
+        ],
+      },
+    ]);
+    expect(dryRuns(stub)).toHaveLength(1);
+    expect(files.files).toEqual([USER]);
+    expect(afterPublish).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  /**
    * T426's e2e: a file in wechart's store that xcube doesn't hold (a send
    * lost, or a row written straight to the store) is checked too, so a
    * rollup it breaks refuses the publish (R29). Where xcube's items aren't

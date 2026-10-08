@@ -233,7 +233,8 @@ describe('SQL on a shared folder’s data source (T532, AC-373)', () => {
       const asked = askedSince(before);
       expect(asked).toHaveLength(2);
       for (const ask of asked) {
-        expect(ask.target).toEqual({ connection: `fsales__${SOURCE}`, overlay: null });
+        // By its own name in any folder (T701).
+        expect(ask.target).toEqual({ connection: SOURCE, overlay: null });
         expect(ask).toMatchObject({ sql: 'SELECT 1', ...CAPS });
         expect(ask.runId).toMatch(/^[A-Za-z0-9_-]{1,64}$/);
       }
@@ -474,9 +475,9 @@ describe('SQL on a data source in My workspace (T532, AC-383)', () => {
     const before = stub.sqlAsked().length;
     const answer = await run('writer', copy.id);
     expect(answer.statusCode, answer.body).toBe(200);
-    // Under its original's folder and name, as its overlay brings it (T347).
+    // Under its original's name, as its overlay brings it (T347, T701).
     expect(askedSince(before).map((ask) => ask.target)).toEqual([
-      { connection: `fsales__unchanged_${MARK}`, overlay: workspaceOverlayIdOf(workspace) },
+      { connection: `unchanged_${MARK}`, overlay: workspaceOverlayIdOf(workspace) },
     ]);
     // Nobody else sees it: a Super-Admin neither (AC-276).
     expect((await run('super', copy.id)).statusCode).toBe(404);
@@ -500,7 +501,7 @@ describe('SQL on a data source in My workspace (T532, AC-383)', () => {
     expect(answer.statusCode, answer.body).toBe(200);
     expect(askedSince(before).map((ask) => ask.target)).toEqual([
       {
-        connection: `fsales__fresh_${MARK}`,
+        connection: `fresh_${MARK}`,
         overlay: workspaceOverlayIdOf(await workspaceOf(copy.folderId)),
       },
     ]);

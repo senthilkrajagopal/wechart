@@ -138,7 +138,7 @@ This doc is the sibling of [x3a], [x3b] and [x4]. It covers one commit, `d26ff42
   - Push each workspace as the overlay `<workspace id>` on every save, with `baseVersion`.
   - Add `overlayClaim: 'wechartOverlay'` to `infra/cube/cube.js`. Without it the claim is ignored and previews read the published model ([w-cube] L17-18; [cfg@c]).
   - The route is `…/v1/semantic/models/{model}/overlays/{id}`, not T347's `/v1/semantic/overlays/{id}` ([w-tasks] L5547; [routes@c]).
-- **T350 (AC-285).** One overlay per proposal can carry the dashboard's workspace-only models. But an overlay resolves names overlay-first, and the changeset that lands it at approval does not (Gotcha 5).
+- **T350 (AC-285).** One overlay per proposal can carry the dashboard's workspace-only models. But ~~an overlay resolves names overlay-first, and the changeset that lands it at approval does not (Gotcha 5).~~ *Corrected:* a name means the one item of that name; an overlay's items stand in for the published ones of their names, and only the overlay's own items are checked at the push, the rest when it lands (R71 2.6, 3.1, R72) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
 - **T440 (AC-323).**
   - xcube serves an overlay to any valid user token that names it. There is no author, owner or group check tied to the overlay.
   - So "only the author, read-write members and Super-Admins" is enforced only by which tokens wechart signs, and by Cube's refusal of unsigned tokens once the model has keys ([x4]).
@@ -270,8 +270,8 @@ All routes are under `{CUBE_API_URL}/v1/semantic/models/{model}`. Errors are `{ 
   9. **The answering instance** applies it at once (`overlayChanged`).
 - **What `applyOverlay` checks** ([rt@c] `applyOverlay` → `publish({ …, lenientDeletes: true, overlay: true })`; [pub@c]):
   - **Folders.** Each upsert's and delete's folder must be in the tree: an error of kind `folder`.
-  - **Replacement.** An upsert replaces the published item with the same `folderId/name`.
-  - **No two upserts share a short name** across folders: kind `item`, message `The overlay holds two items named "<n>" (in <a> and <b>); names in it resolve to its own items first, so they must differ` ([pub@c]; [t-names] "an overlay may not hold two items of one name").
+  - **Replacement.** An upsert replaces the published item ~~with the same `folderId/name`~~. *Corrected:* of the same name, in any folder: an item's identity is its name (R71 2.6; `publish.ts` L456-465) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
+  - **No two upserts share a short name** across folders: ~~kind `item`, message `The overlay holds two items named "<n>" (in <a> and <b>); names in it resolve to its own items first, so they must differ`~~ *Corrected:* kind `name_in_use`, compared in any case, message `The overlay holds two items named "<n>" (in <a> and <b>); names are one per model` (`publish.ts` L437; [`xcube-256d632371.md`](./xcube-256d632371.md)) ([pub@c]; [t-names] "an overlay may not hold two items of one name").
   - **Deletes.** Deleting an absent item is no error (`lenientDeletes`). Deleting an item that a kept item binds to is `422` (kind `reference`), as in 3a ([x3a] "Removal and renames").
   - **Every other 3a item rule applies** ([x3a] "Item content", "Names"; [x4] the reserved-group refusal).
 - **Answers** ([routes@c] PUT):
@@ -318,10 +318,10 @@ All routes are under `{CUBE_API_URL}/v1/semantic/models/{model}`. Errors are `{ 
 - **What it does** ([rt@c] `resolveNames`, from [d5]'s hunk, matching the tree):
   1. It reads the live overlay, or throws `410`.
   2. It removes the overlay's deletes from the published items and adds its upserts.
-  3. For each name, **an overlay upsert of that short name wins, whatever its folder**. Otherwise the nearest folder on `folderId`'s path wins. Otherwise `null`.
-- **Answer:** `{ model, revision, folderId, overlay, names: { [name]: fullName | null } }`.
+  3. For each name, **an overlay upsert of that short name wins, whatever its folder**. ~~Otherwise the nearest folder on `folderId`'s path wins.~~ Otherwise `null`. *Corrected:* otherwise the one published item of that name, matched in any case and answered by its stored name, from any folder; `folderId` is only checked to be in the tree (R71 3.3; `runtime.ts` `resolveNames`) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
+- **Answer:** `{ model, revision, folderId, overlay, names: { [name]: ~~fullName~~ | null } }`. *Corrected:* each value is the bare stored name (`{ Report: 'report' }`), as full names equal names (`overlays.test.ts` L268-269; [`xcube-256d632371.md`](./xcube-256d632371.md)).
 - **Tested** ([t-ov] L260-266). From `fb`, with `overlay: ws1`:
-  - `widgets` → `fc__widgets`, the overlay's copy from `fc`, a folder off `fb`'s path;
+  - `widgets` → ~~`fc__widgets`~~, the overlay's copy from `fc`, a folder off `fb`'s path; *Corrected:* answers are bare names, so `widgets` (and `orders` below), with no `<folderId>__` (R71 1.1) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
   - `orders` → `fa__orders`;
   - `customers` → `customers`;
   - `nothing` → `null`.
@@ -359,9 +359,9 @@ All routes are under `{CUBE_API_URL}/v1/semantic/models/{model}`. Errors are `{ 
   - the build applies the stored changeset to the base's items with `publish(…, overlay: true)`.
   - Tested: after an unrelated publish the preview still answers, and sees the new cube `extra` (L294-303); after a publish that deletes `customers`, which the overlay's `report` joins, it answers `409` (L305-310).
 - **What a later publish does to the overlay's items:**
-  - an upsert keeps replacing the published item of its `folderId/name`, even if a later publish changed that item (Gotcha 6);
+  - an upsert keeps replacing the published item of its ~~`folderId/name`~~ *Corrected:* name, wherever either is (R71 2.6; [`xcube-256d632371.md`](./xcube-256d632371.md)), even if a later publish changed that item (Gotcha 6);
   - published items keep their stored bindings ([t-names] "an overlay item's names resolve in the overlay first…", which asserts `fsales__orders` keeps `customers`);
-  - an overlay item's names resolve in the overlay first, then along its folder's path ([rw] L27-31, L39-48, L80; [t-names]).
+  - an overlay item's names resolve in the overlay first, ~~then along its folder's path~~ ([rw] L27-31, L39-48, L80; [t-names]). *Corrected:* then to the one published item of that name; its references must be up its folder path (`reference_range`, R72) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
 - **Only changed modules compile** ([rt@c] `applyOverlay` → `moduleGroups(previous, …)`).
   - Tested with `packMin: 1` (L137): one new module, the one holding `fa__orders` and `fa__v_orders`, was compiled; the rest were the published ones (L243-258).
   - With default packing a small model is one module ([x3b] L124). Then every overlay compiles the whole model (Gotcha 8).
@@ -419,14 +419,14 @@ All routes are under `{CUBE_API_URL}/v1/semantic/models/{model}`. Errors are `{ 
 - **Id.** 1-64 of `[A-Za-z0-9_-]` ([rt@c] `OVERLAY_ID`). A UUID fits.
 - **Push on every save** with `baseVersion`: `null` for the first push, then the last `version` returned. A `409 conflict` carries `currentVersion` ([routes@c]).
   - A same-content push is cheap: no compile unless the head or the tree moved. It is also how to extend the life.
-- **Place each item** in its origin folder (a copy) or its target folder (a new item). No two may share a short name ([pub@c]).
+- **Place each item** in its origin folder (a copy) or its target folder (a new item). No two may share a ~~short~~ name ([pub@c]). *Corrected:* a name, in any case (`name_in_use`); a copy in any folder stands in for the published item of its name (R71 2.6) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
 - **Expiry.** 24 h after the last push by default, and at most 7 days. Previews of an expired overlay answer `410`, so re-push from wechart's stored workspace before previewing, or on `410`.
 - **Drop** on publish or discard (AC-323).
 - **Failing-test bullets against xcube:**
   - "Uses the workspace's `sales` over its origin's" and "a copied item resolves along its origin's path, a new one along its target's": xcube's behaviour ([t-ov] L260-266; [t-names]).
-  - "Every model … the user may see can be used there" (AC-283): xcube resolves only overlay-first, then along the item's path. A cube in a folder off that path is reachable only by copying it into the overlay ([t-ov] L196-197, L263). Data sources: at `d26ff4238e` an overlay brings none. Workspace data sources (AC-280) are the uncommitted overlay-connection work, not this commit (Provenance).
+  - "Every model … the user may see can be used there" (AC-283): ~~xcube resolves only overlay-first, then along the item's path. A cube in a folder off that path is reachable only by copying it into the overlay~~ *Corrected:* a name means its one item; an overlay's own items may refer only up their folder path (R72 `reference_range`), and a copy in any folder stands in for the published item of its name (R71 2.6) ([`xcube-256d632371.md`](./xcube-256d632371.md)) ([t-ov] L196-197, L263). Data sources: at `d26ff4238e` an overlay brings none. Workspace data sources (AC-280) are the uncommitted overlay-connection work, not this commit (Provenance).
   - "Answers only its owner" (AC-323): enforced only by which tokens wechart signs (Gotcha 3).
-- **Pickers (AC-329).** Resolve with `overlay`, for workspace items only. It resolves overlay-first for any `folderId`.
+- **Pickers (AC-329).** Resolve with `overlay`, for workspace items only. It resolves overlay-first for any `folderId`. *Corrected:* then the published item of the name in any case; xcube offers it as wechart's check that a draft's name is free (R71 3.3) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
 
 ### T350 (AC-285)
 
@@ -466,9 +466,9 @@ All routes are under `{CUBE_API_URL}/v1/semantic/models/{model}`. Errors are `{ 
 4. **HS256 names any overlay** until the model has keys ([rt@c] `unverified` strips only `xcubeRole` and `xcubeModule`; [t-ov] L183). Anyone holding `CUBEJS_API_SECRET` can preview any overlay then.
 5. **An overlay's resolution isn't a changeset's.**
    - In an overlay, an item's names resolve among the overlay's items first, by short name, whatever their folder ([rw] L39-48, L80; [pub@c]).
-   - Published or landed, they resolve nearest-first along the item's path ([t-names] "without the overlay, the same items resolve nearest-first as ever").
+   - ~~Published or landed, they resolve nearest-first along the item's path~~ ([t-names] "without the overlay, the same items resolve nearest-first as ever"). *Corrected:* there is no nearest-first; landed, the same upserts in other folders are `name_in_use` clashes, and a reference off the path is `reference_range` (R71 3.4, R72; `names.test.ts` "without the overlay, the same upserts are clashes") ([`xcube-256d632371.md`](./xcube-256d632371.md)).
    - So a proposal whose overlay compiles can bind differently, or fail, when its items land by changeset. The copy of `widgets` from off-path `fc` in [t-ov] L196-197 is such a case.
-6. **No per-item base check.** An overlay upsert replaces the published item of that `folderId/name` whatever was published since ([pub@c]: upserted keys replace kept ones). A change published to that item after the workspace copied it is hidden in the preview, and nothing reports it. By reading.
+6. **No per-item base check.** An overlay upsert replaces the published item of that ~~`folderId/name`~~ name (*Corrected:* by name, wherever either is, R71 2.6; [`xcube-256d632371.md`](./xcube-256d632371.md)) whatever was published since ([pub@c]: upserted keys replace kept ones). A change published to that item after the workspace copied it is hidden in the preview, and nothing reports it. By reading.
 7. **`GET`'s `instance` is one instance's view.**
    - `broken` appears only after that instance tried the overlay over its current revision, and only for `idleMs`, or until any push or drop of the id clears it ([rt@c] `overlayStatus`, `overlayChanged`).
    - With 2+ Cube instances ([w-spec] AC-319), `GET` may answer `idle` for an overlay whose previews answer `409` elsewhere.
@@ -579,7 +579,7 @@ Everything else in [x3a], [x3b] and [x4] still holds for this commit. `gate.ts`,
 | 29 | `DELETE` answers `204`, always (L60) | Verified | [routes@c]; [t-ov] L377-378. Invalid ids are `400` |
 | 30 | Its queries answer `410` at once here, and on others when notified (L61) | Verified | [rt@c] `deleteOverlay`, `overlayChanged`; [t-ov] L379; [t-perm] L183-203. Up to 30 s without notices (Gotcha 17) |
 | 31 | Drop a proposal's on decision, a workspace's on publish or discard (L62) | n/a (wechart) | AC-323 ([w-spec] L1057-1058) |
-| 32 | `POST …/resolve` with `overlay`: overlay first, then along the folder's path (L64) | Verified | [rt@c] `resolveNames`; [t-ov] L260-266. Overlay-first by short name for any `folderId`; `410` when gone |
+| 32 | `POST …/resolve` with `overlay`: overlay first, ~~then along the folder's path~~ (L64) | Verified | [rt@c] `resolveNames`; [t-ov] L260-266. Overlay-first by short name for any `folderId`; `410` when gone. *Corrected:* then the published item of the name in any case, from any folder (R71 3.3) ([`xcube-256d632371.md`](./xcube-256d632371.md)) |
 | 33 | RS256 token with `wechartOverlay` plus slice-4 claims: every route answers from the overlay; `x-xcube-overlay: <id>@<version>` and `x-xcube-revision` (L70) | Partly | [rt@c] `pinFor`; [t-ov] L231-240, L268-277, L301. Needs `overlayClaim` set. `x-xcube-revision` is `<model>@<rev>`. Tested on load, meta and sql |
 | 34 | Expired, dropped or never → `410` (L71) | Verified | [rt@c] `gone`; [t-ov] L379-388. An invalid id is `403` |
 | 35 | No longer applies → `409` "…doesn't apply to what is published now: …", naming the item (L72) | Verified | [rt@c] `brokenOverlay`; [t-ov] L308-310 |

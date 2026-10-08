@@ -84,8 +84,9 @@ beforeAll(async () => {
       sealed: { password: sealed('sales') },
     })
   ).id;
-  // /Sales's connections, as xcube serves them to Cube.
-  const connection = 'fsales__';
+  // This file's connections, as xcube serves them to Cube: each by its own
+  // name in any folder (T701; research `xcube-256d632371.md`, 1.1).
+  const connection = new RegExp(`^${BASE}/[A-Za-z0-9_]+_${MARK}(?:/|$)`);
   const cube = new CubeClient({
     apiUrl: 'http://cube.invalid/cubejs-api',
     apiSecret: 'secret',
@@ -98,13 +99,13 @@ beforeAll(async () => {
         method: init.method ?? 'GET',
         body: init.body === undefined ? undefined : JSON.parse(String(init.body)),
       });
-      if (!parsed.pathname.startsWith(`${BASE}/${connection}`))
+      if (!connection.test(parsed.pathname))
         return json({ error: `Unknown data source: '${parsed.pathname}'` }, 404);
       // A workspace overlay's own data source, as xcube 93a5f7a73b reads it (T547):
       // its own catalog, never a landed one's.
       const overlay = parsed.searchParams.get('overlay');
       // An overlay gone from xcube, as 93a5f7a73b answers it.
-      if (overlay !== null && parsed.pathname.includes(`__expired_`))
+      if (overlay !== null && parsed.pathname.includes(`/expired_`))
         return json(
           {
             error: `No overlay "${overlay}": it expired, was dropped, or never was`,
@@ -255,7 +256,7 @@ describe('the schema browser of a data source (T539, AC-386)', () => {
     const named = await browse('writer', 'tables', '?schema=sales&overlay=ws-theirs');
     expect(named.statusCode, named.body).toBe(200);
     expect(asked.slice(before).map((each) => each.path)).toEqual([
-      `${BASE}/fsales__warehouse_${MARK}/tables?schema=sales`,
+      `${BASE}/warehouse_${MARK}/tables?schema=sales`,
     ]);
     const tables = await browse('writer', 'tables', '?schema=sales');
     expect(tables.statusCode, tables.body).toBe(200);
@@ -276,9 +277,9 @@ describe('the schema browser of a data source (T539, AC-386)', () => {
     // Asked of Cube by its connection's name, its query passed on.
     expect(asked.map((each) => each.path)).toEqual(
       expect.arrayContaining([
-        `${BASE}/fsales__warehouse_${MARK}/schemas`,
-        `${BASE}/fsales__warehouse_${MARK}/tables?schema=sales`,
-        `${BASE}/fsales__warehouse_${MARK}/columns`,
+        `${BASE}/warehouse_${MARK}/schemas`,
+        `${BASE}/warehouse_${MARK}/tables?schema=sales`,
+        `${BASE}/warehouse_${MARK}/columns`,
       ]),
     );
   });
@@ -396,7 +397,7 @@ describe('the schema browser in My workspace (T539, T547, AC-386, AC-383)', () =
     const schemas = await schemasOf('writer', copy.id);
     expect(schemas.statusCode, schemas.body).toBe(200);
     expect(asked.slice(before).map((each) => each.path)).toEqual([
-      `${BASE}/fsales__same_${MARK}/schemas?overlay=${overlay}`,
+      `${BASE}/same_${MARK}/schemas?overlay=${overlay}`,
     ]);
     expect((await schemasOf('super', copy.id)).statusCode).toBe(404);
   });
@@ -420,7 +421,7 @@ describe('the schema browser in My workspace (T539, T547, AC-386, AC-383)', () =
       expect(schemas.statusCode, schemas.body).toBe(200);
       expect(schemas.json()).toEqual({ schemas: [{ name: `own_${overlay.slice(-6)}` }] });
       expect(asked.slice(before).map((each) => each.path)).toEqual([
-        `${BASE}/fsales__${name}/schemas?overlay=${overlay}`,
+        `${BASE}/${name}/schemas?overlay=${overlay}`,
       ]);
     }
   });
@@ -452,10 +453,10 @@ describe('the schema browser in My workspace (T539, T547, AC-386, AC-383)', () =
     expect(asked.slice(before).map((each) => [each.method, each.path, each.body])).toEqual([
       // wechart's overlay first: a padded query can't push it past a parser's
       // limit on parameters (T547's review).
-      ['GET', `${BASE}/fsales__fresh_${MARK}/tables?overlay=${overlay}&schema=sales`, undefined],
+      ['GET', `${BASE}/fresh_${MARK}/tables?overlay=${overlay}&schema=sales`, undefined],
       [
         'POST',
-        `${BASE}/fsales__fresh_${MARK}/columns?overlay=${overlay}`,
+        `${BASE}/fresh_${MARK}/columns?overlay=${overlay}`,
         { tables: [{ schema: 'sales', table: 'orders' }] },
       ],
     ]);
@@ -472,9 +473,9 @@ describe('the schema browser in My workspace (T539, T547, AC-386, AC-383)', () =
     });
     expect(answer.statusCode, answer.body).toBe(200);
     const [path] = asked.slice(before).map((each) => each.path);
-    expect(
-      path?.startsWith(`${BASE}/fsales__padded_${MARK}/tables?overlay=${overlay}&schema=sales&`),
-    ).toBe(true);
+    expect(path?.startsWith(`${BASE}/padded_${MARK}/tables?overlay=${overlay}&schema=sales&`)).toBe(
+      true,
+    );
     expect(path).not.toContain('ws-theirs');
     expect(path).not.toContain('&=');
   });

@@ -31,7 +31,6 @@ import { versionStore } from '../repos/versions';
 import { scheduleStore, wechartScheduler } from '../scheduler/schedules';
 import { buildServer } from '../server';
 import { xcubeAdmin } from '../xcube/client';
-import { connectionNameOf } from '../xcube/connections';
 import { fakeXcube, FAKE_ADMIN_TOKEN } from '../xcube/fake';
 import { itemsOf } from '../xcube/items';
 import { xcubePartitions } from '../xcube/partitions';
@@ -362,12 +361,8 @@ const placeOfCube = (name: string): Place | undefined =>
 
 /** A data source Cube lists that is no wechart data source's connection, nor `default`. */
 const UNKNOWN_SOURCE = `${mark}_unknown_connection`;
-/** A data source's name in Cube: its connection's (T442). */
-const connectionOf = (place: Place) =>
-  connectionNameOf(
-    place === 'root' ? 'froot' : xcubeIds.get(folderIds[place])!,
-    at[place].sourceName,
-  );
+/** A data source's name in Cube: its connection's (T442), its own in any folder (T701). */
+const connectionOf = (place: Place) => at[place].sourceName;
 
 function cube(): CubeClient {
   return new CubeClient({

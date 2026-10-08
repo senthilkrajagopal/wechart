@@ -70,7 +70,7 @@ All three are admin routes, under the service credential only [answer, "The rout
 
 - **A stored (landed) connection** is addressed by its name, as the test route's are.
 - **A workspace overlay's own data source** is addressed with `?overlay=<id>`.
-  - Its name is the one the overlay's previews use: `<folderId>__<name>`, or a root one's short name.
+  - Its name is the one the overlay's previews use: ~~`<folderId>__<name>`, or a root one's short name~~. *Corrected:* its bare name in every folder; `{name}` on this route is always bare (R71 1.1, 3.4) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
   - With `?overlay=`, only the overlay's own data sources are found; it never falls back to a landed one.
   - The overlay keeps the data sources its push brought, sealed, and the run reads them from there.
 - **Request:** `{ "sql", "runId", "maxRows", "timeoutMs", "maxBytes" }`.

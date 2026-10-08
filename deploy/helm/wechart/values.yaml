@@ -71,13 +71,16 @@ cube:
   # and each run's state, from 2099b13f2d (T548), with xcube's migration 13,
   # and a query Cube Store's router runs followed to its real end from
   # 46ca0ce708 (T549), and a building build the queue's cancel takes out
-  # really stopped, none of it kept, from 74c933bdb8 (T554). The seed Job
+  # really stopped, none of it kept, from 74c933bdb8 (T554), and one name per
+  # item model-wide, every reference up its folder path and bare names from
+  # 256d632371 (T701, R71, R72), whose schema 14 refuses a folder-prefixed
+  # one: installed fresh (T702). The seed Job
   # stores the root `default` from `dataSource` below, the same
   # host, port, database and user Cube reads, so the root's cubes keep their
   # names: don't set those four again in `dataSource.env` or `seedFields`.
   # Published by the fork's CI for amd64 and arm64, and pinned by digest
   # (docs/deploy.md); a plain cubejs/cube image won't start with this cube.js.
-  image: ghcr.io/senthilkrajagopal/xcube:v1.7.45-74c933bdb8@sha256:262d59e434cd98eb0c1cf238fcbbc7168809e0fd31e103f87d127d9082e3df71
+  image: ghcr.io/senthilkrajagopal/xcube:v1.7.45-256d632371@sha256:838c70961a7957ed19068cdc7bf2db37683ade2160f6095aa901b57fd13fae04
   port: 4000
   # How long a Cube process may take to connect to xcube's schema, migrate it
   # and compile every model before it answers: its port stays closed until

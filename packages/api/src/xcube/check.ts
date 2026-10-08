@@ -13,6 +13,7 @@ import {
   type ItemsCheckAnswer,
   type XcubeAdmin,
 } from './client';
+import { itemMessageOf } from './refusal';
 import { plainYamlOf } from './snapshot';
 
 /**
@@ -197,12 +198,14 @@ export async function checkWithXcube({
                 ...(error.column === undefined ? {} : { column: error.column }),
               }
             : {};
+        // A name in use is said as in use, never where (T701, AC-424).
+        const message = itemMessageOf(error);
         return path !== undefined
-          ? [{ path, ...where, ...at, message: error.message }]
+          ? [{ path, ...where, ...at, message }]
           : placeOf(error.message, changed).map((file) => ({
               path: file.path,
               ...folderOfFile(file),
-              message: error.message,
+              message,
             }));
       });
       return {

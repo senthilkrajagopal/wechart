@@ -343,8 +343,14 @@ describe('xcube’s answers (T419, AC-333)', () => {
     );
   });
 
-  // T429, AC-272 (research 3a, "POST …/resolve", "GET …/items").
-  it('resolves names nearest first from a folder, each to its full name or none', async () => {
+  /**
+   * T429, AC-272 (research 3a, "POST …/resolve", "GET …/items"). T701
+   * (AC-421): from `256d632371` a name means the one item holding it, in any
+   * case and any folder, answered by its own stored name; the folder asked
+   * from is only checked to be in the tree (research `xcube-256d632371.md`,
+   * 3.3).
+   */
+  it('resolves each name to the item holding it, in any case and any folder, by its own name, or none', async () => {
     const asked: unknown[] = [];
     const admin = xcubeAdmin({
       cubeApiUrl: 'http://cube.invalid/cubejs-api',
@@ -357,21 +363,21 @@ describe('xcube’s answers (T419, AC-333)', () => {
             model: 'dev',
             revision: 4,
             folderId: 'fsales',
-            names: { sales: 'fsales__sales', orders: 'orders', nothing: null },
+            names: { Sales: 'sales', orders: 'orders', nothing: null },
           }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         );
       },
     });
 
-    expect(await admin.resolve('fsales', ['sales', 'orders', 'nothing'])).toEqual(
+    expect(await admin.resolve('fsales', ['Sales', 'orders', 'nothing'])).toEqual(
       new Map([
-        ['sales', 'fsales__sales'],
+        ['Sales', 'sales'],
         ['orders', 'orders'],
         ['nothing', null],
       ]),
     );
-    expect(asked).toEqual([{ folderId: 'fsales', names: ['sales', 'orders', 'nothing'] }]);
+    expect(asked).toEqual([{ folderId: 'fsales', names: ['Sales', 'orders', 'nothing'] }]);
     await expect(
       answering(400, {
         error: 'Folder fnope is not in the folder tree',
@@ -381,6 +387,7 @@ describe('xcube’s answers (T419, AC-333)', () => {
   });
 
   it('reads each item with its full name and the bindings it was published with', async () => {
+    // As `256d632371` answers: every name bare, `fullName` the name (T701).
     const items = await answering(200, {
       model: 'dev',
       revision: 4,
@@ -390,10 +397,13 @@ describe('xcube’s answers (T419, AC-333)', () => {
           folderId: 'fsales',
           name: 'sales',
           kind: 'cube',
-          fullName: 'fsales__sales',
-          bindings: { sales: 'fsales__sales', customers: 'customers' },
-          dataSource: 'fsales__warehouse',
+          fullName: 'sales',
+          bindings: { sales: 'sales', customers: 'customers' },
+          dataSource: 'warehouse',
         },
+        // An answer without `fullName`: the item is known by its own name, in
+        // any folder, never by a folder-prefixed one.
+        { folderId: 'fops', name: 'stock', kind: 'view', bindings: {} },
       ],
     }).items();
 
@@ -402,10 +412,11 @@ describe('xcube’s answers (T419, AC-333)', () => {
         folderId: 'fsales',
         name: 'sales',
         kind: 'cube',
-        fullName: 'fsales__sales',
-        bindings: { sales: 'fsales__sales', customers: 'customers' },
-        dataSource: 'fsales__warehouse',
+        fullName: 'sales',
+        bindings: { sales: 'sales', customers: 'customers' },
+        dataSource: 'warehouse',
       },
+      { folderId: 'fops', name: 'stock', kind: 'view', fullName: 'stock', bindings: {} },
     ]);
   });
 
@@ -572,6 +583,29 @@ describe('overlays (T347)', () => {
         instances: ['xcube:v6:abc'],
       }).admin.putOverlay('ws-1', pushed),
     ).toEqual({ kind: 'older', instances: ['xcube:v6:abc'] });
+    // T701 (AC-421): from `256d632371`, two of its data sources of one name,
+    // in any case, and a `default` anywhere but the root are its data
+    // sources' refusals (research `xcube-256d632371.md`, 2.6).
+    expect(
+      await recording(409, {
+        code: 'name_in_use',
+        error: 'The overlay brings two data sources named "Lake"; names are one per model',
+        problems: [],
+      }).admin.putOverlay('ws-1', pushed),
+    ).toEqual({
+      kind: 'connection',
+      error: 'The name “Lake” is already in use.',
+    });
+    expect(
+      await recording(400, {
+        code: 'default_outside_root',
+        error: 'Only the root folder (froot) holds the data source "default"',
+        problems: ['name any other data source explicitly'],
+      }).admin.putOverlay('ws-1', pushed),
+    ).toEqual({
+      kind: 'connection',
+      error: 'Only the shared root may have a data source named default.',
+    });
     await expect(
       recording(409, { code: 'too_many_overlays', error: 'too many' }).admin.putOverlay(
         'ws-1',

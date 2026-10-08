@@ -101,12 +101,12 @@ It checks every claim in the raw input [in] and in xcube's notes [n-ov] and [n-t
 
 **What `ed08180c37` builds** ([c] message; [readme] L346-366, L629-682):
 1. **`PUT …/overlays/{id}` takes `connections`**, at most 20 ([routes] L178-188).
-   - Each is a data source as it would land: `{ folderId, name, driver, authMethod, fields, sealed }`, named by its short name in its folder.
+   - Each is a data source as it would land: `{ folderId, name, driver, authMethod, fields, sealed }`, named by its ~~short name in its folder~~. *Corrected:* bare name, one per model; one of a published data source's name stands in for it, wherever it is; `default` only at the root (R71 1.1, 2.6) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
    - It is checked as `PUT …/connections/{name}` checks a connection. Every secret must open for its target, so a copy's envelopes open only while its target is the original's ([rt] L1574-1612).
    - It is stored in the overlay (migration 7, [mig] L229-241) and counted in its content hash ([rt] L1483-1489, L385-390).
 2. **`GET …/overlays/{id}` lists them** with `secrets` named and no envelope ([rt] L1556-1564).
-3. **Previews bind them as a publish would, nearest-first.**
-   - A copy under a published full name replaces it for every cube bound to it ([rt] L1405-1431; [pub] L223-258).
+3. **Previews bind them as a publish would, ~~nearest-first~~.** *Corrected:* by name, with no nearest-first; a cube's data source must be in its folder or an ancestor (`data_source_range`) (R71 3.4, 4.1) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
+   - A copy under a published ~~full~~ name (*Corrected:* the same name in any case, in any folder: `runtime.ts` `publishOverlay` `shadowed`) replaces it for every cube bound to it ([rt] L1405-1431; [pub] L223-258).
    - Those cubes' files are marked with the driver type. They compile apart, without rollups, in that dialect ([rt] L1425-1438; [ovc] L24-51; [srv] L116-128).
 4. **A separate Cube orchestrator per overlay version that brings data sources**, `<base>_<model>_O_<id>_<version>` ([cfg] L160-169).
    - It has its own drivers, queues and result cache. It never builds rollups (`externalRefresh`, [cfg] L220-229).
@@ -121,7 +121,7 @@ It checks every claim in the raw input [in] and in xcube's notes [n-ov] and [n-t
 **What it means for wechart** (details in "What wechart must change"):
 - **AC-280** ("the copy can't connect without the credentials being entered again" fails it, [w-spec] L1023-1024) can now hold in previews. A workspace copy pushed in its overlay is queried with its original's envelopes, so long as its target is unchanged ([t-conn] L361-379).
 - **AC-312** ([w-spec] L1102-1103) must clear the secret on a change to any v1 target key, TLS fields included. AC-312's text names "host, port, account, workspace, warehouse, project or connect string", which neither xcube's keys nor wechart's `drivers.ts` match ([drv]; [w-drv] L69-226).
-- **T346** copies the ciphertext byte for byte into the overlay's `connections`, under the original's folder and short name.
+- **T346** copies the ciphertext byte for byte into the overlay's `connections`, under the original's ~~folder and short name~~ name. *Corrected:* the name alone makes it the original's stand-in, wherever it is (R71 2.6) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
 - **T345** seals a new data source's secret in the browser (T441) and pushes it under its target folder.
 - **T347** pushes the workspace's whole set of data sources with its items on every save.
 - **T441** freezes `V1_TARGET_KEYS` to xcube's `target` lists.
@@ -171,7 +171,7 @@ Unchanged from [x5] and [x6]:
 type SealedV1 = { v: 1; kid: string; enc: string; ct: string };
 type OverlayConnection = {
   folderId: string;                 // ≤ 64; 'froot' or a folder in the model's tree
-  name: string;                     // ≤ 64; a short name, /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/
+  name: string;                     // ≤ 64; a short name, ~~/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/~~ Corrected (xcube-256d632371.md): /^[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*$/, ≤ 40, bare and one per model in any case
   driver: string;                   // one of the eight
   authMethod: string;
   fields?: Record<string, string | number | boolean | null>; // exactly as the browser sealed with
@@ -202,9 +202,9 @@ All model routes are `{CUBE_API_URL}/v1/semantic/models/{model}/…` ([routes] L
 The slice-5 codes are unchanged: `invalid_overlay_id`, `unknown_model`, `mode`, `too_many_overlays`, `conflict`, `invalid_items`, `busy` ([routes] L593-640; [x5]).
 
 **Connection checks** (`checkOverlayConnections`, [rt] L1574-1612), each refused as `invalid_connection`:
-- `name` must match `SHORT_NAME` ([items] L16): "has no valid short name";
+- `name` must match ~~`SHORT_NAME` ([items] L16): "has no valid short name"~~ *Corrected:* `checkDataSourceName` (the item grammar, ≤ 40, no reserved words), and `default` outside the root or not lower case is `400 default_outside_root` (`runtime.ts` `checkOverlayConnections`, `checkDefault`; [`xcube-256d632371.md`](./xcube-256d632371.md));
 - `folderId` must be `froot` or in the tree: "is in folder …, which is not in the folder tree";
-- a full name may appear only once: "is brought twice";
+- ~~a full name may appear only once: "is brought twice"~~ *Corrected:* a name may appear once, in any case: `409 name_in_use`, `The overlay brings two data sources named "<n>"; names are one per model` (`runtime.ts` `checkOverlayConnections`; [`xcube-256d632371.md`](./xcube-256d632371.md));
 - then `Connections.check` ([conn] L239-251): only the driver's and auth method's fields, no secret in `fields`, required fields present, envelope shapes and required secrets ([conn] L169-216); every secret opens for `(driver, field, fields)` ([conn] L219-236); the driver's config builds ([conn] L245-249). **Nothing connects.**
 - **Not checked:** that a copy keeps the published connection's driver. `putConnection`'s `driver_change` check ([rt] L1713-1718) has no counterpart here (Gotcha 1).
 
@@ -244,8 +244,8 @@ The slice-5 codes are unchanged: `invalid_overlay_id`, `unknown_model`, `mode`, 
 ### What a preview does with them
 
 **Binding** ([rt] L1398-1445; [pub] L223-258, L349-358):
-- `sources` is the model's published connections as `{ folderId, short name }` ([rt] L1753-1758), minus any whose full name an overlay connection has, plus the overlay's own ([rt] L1405-1410). `publish(…, overlay: true, dataSources: sources)` binds them.
-- **Only the overlay's upserted cubes are bound** ([pub] L349-358), nearest-first along the cube's folder chain ([pub] L232-235). A cube naming none gets the nearest `default`, and the root's is written as nothing ([pub] L250-256).
+- `sources` is the model's published connections as `{ folderId, short name }` ([rt] L1753-1758), minus any whose ~~full~~ name an overlay connection has (*Corrected:* the same name in any case, wherever either is: `runtime.ts` `publishOverlay`; [`xcube-256d632371.md`](./xcube-256d632371.md)), plus the overlay's own ([rt] L1405-1410). `publish(…, overlay: true, dataSources: sources)` binds them.
+- **Only the overlay's upserted cubes are bound** ([pub] L349-358), ~~nearest-first along the cube's folder chain ([pub] L232-235). A cube naming none gets the nearest `default`, and the root's is written as nothing ([pub] L250-256).~~ *Corrected:* by name, exactly; the data source must be in the cube's folder or an ancestor (`data_source_range`, own items only); a cube naming none uses the root's `default`, the only one (R71 4.1-4.3) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
 - **Published cubes keep their stored binding.** `boundDataSource` reads it from the resolved YAML: its `data_source`, `default` when none, `null` when it `extends` ([ovc] L9-15; [t-uov] L40-47).
 - **A cube, published or upserted, whose bound data source the overlay brings is "on" it** ([rt] L1425-1431):
   - its rollups are stripped, with everything reaching it and its `extends` ancestors ([rt] L1432; [rollups] L48-63);
@@ -287,7 +287,7 @@ The slice-5 codes are unchanged: `invalid_overlay_id`, `unknown_model`, `mode`, 
 
 ### Landing and testing (unchanged routes)
 
-- **Landing.** Use `PUT …/connections/{fullName}` with `{ folderId, driver, authMethod, fields, sealed, revisions }` ([routes] L162-165, L567-574; [rt] L1696-1732).
+- **Landing.** Use `PUT …/connections/{~~fullName~~}` with `{ folderId, driver, authMethod, fields, sealed, revisions }` (*Corrected:* `{name}` is the bare name, and `baseVersion` is required: `null` creates, a version edits or moves; R71 2.5; [`xcube-256d632371.md`](./xcube-256d632371.md)) ([routes] L162-165, L567-574; [rt] L1696-1732).
   - A different driver than the stored one's answers `409 driver_change` ([rt] L1713-1718).
   - Publish the items after. Binding needs the connection to exist ([x6] "the order of calls").
 - **Testing.** `POST …/connections/test` with `{ driver, authMethod, fields, sealed }` → `200 { ok, checks }` ([routes] L558-565; [x6]).
@@ -325,12 +325,12 @@ The slice-5 codes are unchanged: `invalid_overlay_id`, `unknown_model`, `mode`, 
 | **Image pin** (the user's decision, [handoff] L174-175) | `…-c0610bb768@sha256:d787e67c…` in compose L152, L182, Helm `values.yaml` L67, `docker-desktop.yaml` L23, and `cube-image.test.ts` L24 ([w-compose]; [w-helm-values]; [w-helm-dd]; [w-img-test]) | `…-ed08180c37@sha256:bc041aa2…`. Everything [x5] and [x6] require for slices 4-6 still applies |
 | **`cube.js`** ([w-cube] L17-18) | No `overlayClaim` | Add `overlayClaim: 'wechartOverlay'` ([x5] Gotcha 1; [cfg] L107) |
 | **T347** (AC-281, AC-283, AC-323; [w-tasks] L5582-5590) | Path `/v1/semantic/overlays/{id}`; items only | Path `…/models/{model}/overlays/{id}` ([x5]). Push `connections` on every save: the workspace's whole set, ≤ 20, each with exactly `folderId, name, driver, authMethod, fields, sealed` (no `revisions`). Map `400 invalid_connection` (`problems`), `422 invalid_secret` (ask for the named data source's secret) and `409 older_instances` (keep the workspace's data sources and retry after the roll-out; a push without them still works). Retry the `503` "no longer compiled here". Key any `/v1/meta` cache by overlay ([x5] Gotcha 18) |
-| **T346** (AC-280, AC-298; [w-tasks] L5572-5581) | Byte copy of the ciphertext | Push the copy with the original's `folderId` and short `name` (same full name, so it replaces the original in previews), its `driver` and `authMethod`, `fields` exactly as stored, and `sealed` byte for byte. It opens only while every target key is the original's ([rt] L1574-1612; [t-conn] L361-385). The AAD has no data-source id, so no re-seal is needed ([cred] L42-48; [w-cs] L23, L35) |
+| **T346** (AC-280, AC-298; [w-tasks] L5572-5581) | Byte copy of the ciphertext | Push the copy with the original's `folderId` and short `name` (~~same full name~~ *Corrected:* the same name is enough, in any folder, R71 2.6, [`xcube-256d632371.md`](./xcube-256d632371.md); so it replaces the original in previews), its `driver` and `authMethod`, `fields` exactly as stored, and `sealed` byte for byte. It opens only while every target key is the original's ([rt] L1574-1612; [t-conn] L361-385). The AAD has no data-source id, so no re-seal is needed ([cred] L42-48; [w-cs] L23, L35) |
 | **Driver changes** | — | The user decided a workspace copy keeps its driver ([ans-drv] L8). xcube accepts a changed driver in an overlay and would preview in the new dialect, so wechart must enforce this itself. `409 driver_change` at landing is the backstop ([rt] L1713-1718) |
-| **T345** (AC-282; [w-tasks] L5568-5571) | Target folder for new items | A data source created in the workspace is pushed with `folderId` = its target folder. Its secret is sealed in the browser for its own target (T441). A new name binds only the workspace's cubes on that folder's path ([pub] L232-235, L349-358). Under an existing published full name it **replaces** that data source for published cubes too (Open question 1) |
+| **T345** (AC-282; [w-tasks] L5568-5571) | Target folder for new items | A data source created in the workspace is pushed with `folderId` = its target folder. Its secret is sealed in the browser for its own target (T441). A new name binds only the workspace's cubes on that folder's path ([pub] L232-235, L349-358). Under an existing published ~~full~~ name it **replaces** that data source for published cubes too (Open question 1). *Corrected:* any folder; names are one per model, and a cube using it must be on its path (R71 2.6, 4.1) ([`xcube-256d632371.md`](./xcube-256d632371.md)) |
 | **AC-312** ([w-spec] L1102-1103) and its clearing rule | "host, port, account, workspace, warehouse, project or connect string" | Clear on a change to any v1 target key for the driver, TLS fields included (table above). Drop "workspace". The spec's text needs the spec gate ([x6] "What wechart must change") |
 | **T441** (AC-325, AC-298; [w-tasks] L6968-6976) | `packages/core/src/data-sources/drivers.ts` marks only host/port-style targets and still lists `databricks-jdbc` ([w-drv] L19, L72-73, L131-138, L179-180) | `V1_TARGET_KEYS` = xcube's `target` per driver, frozen; golden vectors from [t-cred] L33-48. Send `fields` exactly as sealed: no defaults filled, no `false` dropped. `ssl` absent and `ssl: true` bind differently ([n-tls] L37; [cred] L42-48) |
-| **T442 / landing** (AC-161, AC-327; [w-tasks] L6977-6983) | Not built | On approval, `PUT …/connections/{fullName}` for each workspace data source first (with `revisions`), then the items, then drop the overlay |
+| **T442 / landing** (AC-161, AC-327; [w-tasks] L6977-6983) | Not built | On approval, `PUT …/connections/{~~fullName~~ name}` (*Corrected:* bare name, with `baseVersion`, R71 2.5; [`xcube-256d632371.md`](./xcube-256d632371.md)) for each workspace data source first (with `revisions`), then the items, then drop the overlay |
 | **Preview checks** | — | A preview with data sources can fail with the redacted `Data source "<name>" of the overlay can't be used: …` when the copy can't connect ([conn] L344-356). Surface it on the tile. Test before pushing with `POST …/connections/test` |
 | **`xcubeAdmin` client** ([x5] "What wechart calls today") | `call` sends GET/PUT/POST only | Unchanged need: `DELETE` for overlays; a `putOverlay` with `connections`; `GET` overlay status with `connections` |
 
@@ -340,9 +340,9 @@ The slice-5 codes are unchanged: `invalid_overlay_id`, `unknown_model`, `mode`, 
    - `checkOverlayConnections` has no stored-driver comparison ([rt] L1574-1612). The copy is previewed in its own dialect ([ovc] L24-51).
    - Landing it answers `409 driver_change` ([rt] L1713-1718). wechart refuses it up front, by the user's decision ([ans-drv] L8).
 2. **Data sources bind by folder path, not overlay-first.**
-   - Items in an overlay resolve overlay-first by short name ([x5] Gotcha 5). Data sources resolve nearest-first along the cube's folder chain only ([pub] L232-235).
-   - **A copy replaces the original only with the same full name.** That means the same `folderId` and short `name` ([rt] L1405-1410).
-   - A copy placed elsewhere is a new data source. It binds only workspace cubes on that folder's path, and published cubes keep the original ([pub] L349-358).
+   - Items in an overlay resolve overlay-first by short name ([x5] Gotcha 5). ~~Data sources resolve nearest-first along the cube's folder chain only ([pub] L232-235).~~ *Corrected:* data sources bind by name, held to the cube's folder path (R71 3.4, 4.1) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
+   - **A copy replaces the original only with the same ~~full~~ name.** ~~That means the same `folderId` and short `name` ([rt] L1405-1410).~~ *Corrected:* the same name in any case, in any folder (R71 2.6; `runtime.ts` `publishOverlay`) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
+   - ~~A copy placed elsewhere is a new data source. It binds only workspace cubes on that folder's path, and published cubes keep the original ([pub] L349-358).~~ *Corrected:* a copy of that name placed elsewhere still stands in for the original (R71 2.6) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
 3. **Omitting `connections` drops them.** The field defaults to `[]` and replaces the stored set, so the overlay gets a new version without them ([routes] L185; [rev] L592).
 4. **Only six keys per connection.** Sending `revisions`, `fullName` or any other key answers `400 bad_request` ([routes] L155-160, L182-185).
 5. **Every push with connections opens every secret and re-runs the older-instances check, even with the same content** ([rt] L1482; [rev] L579-585).
@@ -398,7 +398,7 @@ Still true at `ed08180c37`:
 
 ## Open questions / unverified
 
-1. **For the user (T345):** a data source created in the workspace under the full name of a published one (same folder, same short name) replaces the published one in previews for published cubes too ([rt] L1405-1431). Should wechart allow that, or reserve replacement for copies?
+1. **For the user (T345):** a data source created in the workspace under the ~~full name of a published one (same folder, same short name)~~ name of a published one (*Corrected:* any folder, any case, R71 2.6; [`xcube-256d632371.md`](./xcube-256d632371.md)) replaces the published one in previews for published cubes too ([rt] L1405-1431). Should wechart allow that, or reserve replacement for copies?
 2. **UNVERIFIED by running** (by reading only):
    - a preview in a different dialect (e.g. a mysql copy);
    - Gotcha 7 (a model without published connections);
@@ -424,13 +424,13 @@ Still true at `ed08180c37`:
 | 1 | Built on `feat/xcube`, commit `ed08180c37`; README "Overlays" and "PUT …/overlays/{id}" ([in] L9) | Verified | [reflog] L16; [readme] L346-366, L629-670 |
 | 2 | `PUT` takes an optional `connections`, at most 20 ([in] L13) | Verified | [routes] L182-185; [rt] L1575-1577. More than 20 is Joi's `400 bad_request` |
 | 3 | The body example ([in] L15-19) | Verified | [readme] L633-638 |
-| 4 | Each is a data source as it would land, by its short name in the folder it would land in; fields and envelopes of `PUT …/connections/{name}`; the whole set each push ([in] L22) | Verified, with a limit | [rt] L1574-1612; [routes] L182-185. `revisions` is **not** accepted (Gotcha 4). Omitted means none (Gotcha 3) |
+| 4 | Each is a data source as it would land, by its short name in the folder it would land in; fields and envelopes of `PUT …/connections/{name}`; the whole set each push ([in] L22) | Verified, with a limit | [rt] L1574-1612; [routes] L182-185. `revisions` is **not** accepted (Gotcha 4). Omitted means none (Gotcha 3). *Corrected:* the name is bare and one per model, in any folder (R71 1.1, 2.6) ([`xcube-256d632371.md`](./xcube-256d632371.md)) |
 | 5 | A copy keeps envelopes byte for byte; they open only while its target, TLS included, is the original's; otherwise `422 invalid_secret` naming the data source ([in] L23) | Verified | [rt] L1592-1607; [cred] L152-172; [t-conn] L381-385 (the error contains `froot/default`) |
 | 6 | Checked as a connection is; a bad one → `400 invalid_connection` naming it; a refused push leaves the overlay ([in] L24) | Partly | [rt] L1574-1612; [t-conn] L386-389. No driver-change check (Gotcha 1) |
 | 7 | The same content changes only the expiry; envelopes are in the content, so re-sealing makes a new version ([in] L25) | Verified by reading | [rt] L385-390, L1483-1489; [rev] L586-598. Secrets are re-opened and older instances re-checked (Gotcha 5) |
 | 8 | `409 older_instances` while an older xcube serves; a push without connections is unaffected ([in] L26) | Verified | [rev] L579-585; [t-conn] L408-417 |
 | 9 | `GET` lists `{ folderId, name, fullName, driver, authMethod, fields, secrets }`; no envelope ([in] L27) | Verified | [rt] L1556-1564; [t-conn] L372-376 |
-| 10 | They bind as published data sources do, nearest-first from each cube's folder ([in] L31) | Verified | [pub] L223-258; [rt] L1411-1419 |
+| 10 | They bind as published data sources do, nearest-first from each cube's folder ([in] L31) | Verified | [pub] L223-258; [rt] L1411-1419. *Corrected:* ~~nearest-first~~ by name, held to the cube's folder path (R71 3.4, 4.1) ([`xcube-256d632371.md`](./xcube-256d632371.md)) |
 | 11 | A copy under a published name replaces it for every cube bound to it, published or in the workspace ([in] L32) | Verified | [rt] L1405-1431; [t-conn] L361-370 (a published cube previewed on the copy) |
 | 12 | A new name binds only the workspace's own cubes ([in] L33) | Verified | [pub] L349-358; [t-conn] L392-406 |
 | 13 | The cubes bound to one compile without rollups, in its dialect; a copy may change the driver ([in] L34) | Verified by reading; dialect change untested end to end | [rt] L1425-1438; [srv] L116-128; [t-uov] L49-57 |

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { refusalOf } from './refusal';
+import { itemMessageOf, refusalOf } from './refusal';
 
 /**
  * T427 (AC-322): WHEN the publish check refuses a change, THE SYSTEM SHALL
@@ -83,5 +83,60 @@ describe('a refused publish, as its user may see it (T427, AC-322)', () => {
       shown: { named: 1, counted: 3 },
     });
     expect(refusal.summary).toBe('4 breaks: 1 named to its user, 3 counted');
+  });
+});
+
+/**
+ * T701 (AC-421, AC-424): xcube `256d632371` refuses an item whose name another
+ * holds, in any case, as an error of kind `name_in_use` placed on the
+ * caller's own item (research `xcube-256d632371.md`, "The error kinds"). Its
+ * user is told only that the name is in use: no folder id, path, workspace or
+ * title of anything, the caller's own folders' ids included.
+ */
+describe('xcube’s name-in-use refusal of an item, as its user is told it (T701)', () => {
+  const inUse = (name: string, message: string) => ({
+    folderId: 'fsales',
+    name,
+    kind: 'name_in_use',
+    message,
+  });
+
+  it('says only that the name is in use, however xcube words it', () => {
+    for (const [error, said] of [
+      [
+        inUse('Orders', 'The name "Orders" is already in use'),
+        'The name “Orders” is already in use.',
+      ],
+      [
+        inUse(
+          'Orders',
+          'The name "Orders" is in use as "orders": a landed name can\'t change, not even its case',
+        ),
+        'The name “Orders” is already in use.',
+      ],
+      [
+        inUse(
+          'Stock',
+          'The changeset holds two items named "Stock" (in fsales and fops); names are one per model',
+        ),
+        'The name “Stock” is already in use.',
+      ],
+      [
+        inUse('overview', 'Its split view "overview_orders" would take a name already in use'),
+        'Its split view “overview_orders” would take a name already in use.',
+      ],
+    ] as const) {
+      expect(itemMessageOf(error), error.message).toBe(said);
+      expect(itemMessageOf(error), error.message).not.toMatch(/fsales|fops|froot/);
+    }
+  });
+
+  it('leaves the other kinds in xcube’s words: they name the caller’s item and what it refers to, never a folder', () => {
+    for (const message of [
+      'It uses the data source "lake", which isn\'t in its folder or one of its ancestors',
+      'It refers to "customers", which isn\'t in its folder or one of its ancestors',
+      'unknown member orders.net',
+    ])
+      expect(itemMessageOf({ name: 'orders', kind: 'reference_range', message })).toBe(message);
   });
 });

@@ -109,7 +109,7 @@ It also checks each claim in xcube's answers to wechart's eight questions ([in],
   - migration 3 (`revision_modules`, `minReader: 2`) ([rt] L1510-1522, L849, L905-906; [set] L88-91; [cfg] L95; [mig] L105-125).
 
 **c0610bb768: fixes.**
-- Folder items' titles now follow Cube's own `titleize` ([pub] L41-45).
+- ~~Folder items' titles now follow Cube's own `titleize`~~ ([pub] L41-45). *Corrected:* xcube writes no `title` at all; Cube's own title from the name applies (R71 1.2) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
 - Cube's compile errors name the item with no line or column ([rt] L1692-1704).
 - New tests:
   - a files-mode model switching to items with identical SQL and rollup load SQL ([t-switch] L156-166);
@@ -238,7 +238,7 @@ Admin routes, admin tokens and query tokens are unchanged. `routes.ts` is in non
 - **Fan-out.** Before Cube's route, `fanOutJobs` rewrites a `post` selector's `contexts` ([gw] L90-115; [rt] L729-754):
   - each context naming a model served in modules becomes one context per module owning the named `preAggregations` (the cube part) or `cubes`, or per module when neither is named;
   - each carries `securityContext.xcubeModule = <id>`.
-- **Selector ids** are `<cube>.<preAggregationName>`: the full cube name and the pre-aggregation's **name**, never its `sql_alias` ([c-ev] L598-615).
+- **Selector ids** are `<cube>.<preAggregationName>`: the full cube name and the pre-aggregation's **name**, never its `sql_alias` ([c-ev] L598-615). *Corrected:* the full name is the bare name in every folder, so `orders.main`, not ~~`fsales__orders.main`~~ (R71 1.1) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
 - **Tested** ([t-switch] L168-203):
   - `preAggregations: ['fsales__orders.main']` builds;
   - `get` by token reports `done`, with `table` matching `/fsales__orders_main/`;
@@ -325,7 +325,7 @@ Admin routes, admin tokens and query tokens are unchanged. `routes.ts` is in non
     - `kpi_2023_q4` → "Kpi2023 Q4";
     - `x_2_y` → "X2 Y";
     - `a2b_c` → "A2 B C".
-  - Only folder items get an xcube title ([pub] L89-94).
+  - ~~Only folder items get an xcube title~~ ([pub] L89-94). *Corrected:* no item gets an xcube title; `titleOf` is exported but unused by `publish` (R71 1.2; `publish.ts` L41-45, L220-224) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
 - **Compile errors without line or column** ([rt] L1692-1704; [d-fix]). YAML errors keep the author's lines ([items] L192-197).
   - No test asserts the absence. `items.test.ts` L219 uses `toMatchObject` (grep).
 - **`switch.test.ts`** ([t-switch]).
@@ -364,7 +364,7 @@ Admin routes, admin tokens and query tokens are unchanged. `routes.ts` is in non
 1. **Image reference.** Use the digest above. `v1.7.45-feat-xcube` moves with every passing push ([ci] L142).
 2. **`GET …/revision`** gains `modules`. It is additive, and `cubes` is a count of owned items ([rt] L1516-1521).
 3. **`422` compile errors** have no `line`/`column`. Don't derive positions from `cubeMessage` either (API surface above).
-4. **Folder-item titles** follow Cube's rules. Items published by an earlier image keep their old titles until they are republished: `publish` returns kept items with their stored resolved YAML ([pub] L273-280, L292-296).
+4. **Folder-item titles** follow Cube's rules. *Corrected:* from 256d632371 xcube writes no title, and its schema 14 is a fresh start, so no old title survives (R71 1.2, 6.2) ([`xcube-256d632371.md`](./xcube-256d632371.md)). Items published by an earlier image keep their old titles until they are republished: `publish` returns kept items with their stored resolved YAML ([pub] L273-280, L292-296).
 5. **Cross-module queries** can wait for a union compile inside the request, up to `XCUBE_COMPILE_WAIT_MS` (120 s), or answer `503` with `Retry-After: 120` ([rt] L840-853; [lane] L64-89).
    - wechart's Cube client has at least one 5 s timeout, `ASK_TIMEOUT_MS` ([w-client] L391-392).
    - Which calls could hit a union is UNVERIFIED.
@@ -393,7 +393,7 @@ Admin routes, admin tokens and query tokens are unchanged. `routes.ts` is in non
 | Open question 4: the rollup-stem budget unverified | Consistent by reading: 25 + 12 + 26 = 63 ([pub] L19-20; [c-prl] L605-624; [c-pa-ts] L882-888; [w-pn] L151, L189). Still not run with a minute partition |
 | Open question 9 and input rows 5 and 44: 3b not in the commit | Now committed. "Transparent" is partly true (Gotchas 3-7) |
 
-Everything else in [x3a] about names, resolution, bindings, the items hash, removal, aliases and admin routes still holds. `items.ts`, `rewrite.ts`, `expr.ts`, `routes.ts` and `snapshot.ts` are in none of the three diffs, and `publish.ts` changed only in `titleOf` ([c-3b]; [c-fix]; [d-fix]).
+Everything else in [x3a] about names, resolution, bindings, the items hash, removal, aliases and admin routes still holds. `items.ts`, `rewrite.ts`, `expr.ts`, `routes.ts` and `snapshot.ts` are in none of the three diffs, and `publish.ts` changed only in `titleOf` ([c-3b]; [c-fix]; [d-fix]). *Corrected:* at 256d632371 most of [x3a]'s names, resolution, bindings, removal and alias rules are overturned (bare names, one item per name, R72); see that doc's annotations ([`xcube-256d632371.md`](./xcube-256d632371.md)).
 
 ## Gotchas
 
@@ -433,7 +433,7 @@ Everything else in [x3a] about names, resolution, bindings, the items hash, remo
 
 1. **UNVERIFIED: the 3a image running on a 3b schema.** It is established by reading and by the runner's unit test ([migrate] L95-107; [t-store] L61-67), not by running 36aedeb6c4's image. [in] L66 reports a run I could not reproduce (read-only).
 2. **UNVERIFIED: the `pg_dump` way back.** Not tested.
-3. **UNVERIFIED: the jobs table name.** [in] L139's `prod_pre_aggregations.fsales__orders_main20260101_…`: the test asserts only `/fsales__orders_main/` ([t-switch] L173, L199).
+3. **UNVERIFIED: the jobs table name.** [in] L139's `prod_pre_aggregations.fsales__orders_main20260101_…`: the test asserts only `/fsales__orders_main/` ([t-switch] L173, L199). *Corrected:* no table stem holds a folder prefix now; the stem is the cube's alias or bare name (R71 1.1, 1.2) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
    - `prod_pre_aggregations` is Cube's non-dev default ([c-opts] L300-303).
    - `20260101` is the month partition suffix by Cube's rule ([c-prl] L605-624). Not observed.
 4. **UNVERIFIED: titles in the image.** In the image, xcube's `camelcase`/`inflection` resolve from `/cube/node_modules`. Whether that is the copy Cube's schema-compiler uses there was not checked. The CI image checks don't look at titles ([dockerfile] L34-35; [ci] L115-132).
@@ -462,9 +462,9 @@ Everything else in [x3a] about names, resolution, bindings, the items hash, remo
 | 1 | CI publishes public amd64+arm64 images, `:v1.7.45-<commit>` per passing push plus the moving `:v1.7.45-feat-xcube` (L9-11) | Verified | [ci] L133-160; [ghcr]; [ghcr-pkg]. Only pushes to `feat/xcube` touching `xcube/**` or the workflow; the commit part is 10 characters |
 | 2 | Pull by digest; the digest is in each run's summary (L13) | Partly | The workflow writes it ([ci] L161-172); the summary was not viewed. `d787e67c…` is confirmed on the package page ([ghcr]) |
 | 3 | Folder id `^f[a-z0-9]{1,40}$` (`items.ts:6`), root `froot` (`:8`), one root, known parents, no cycle (`FolderTree.check`, `:110`) (L20-22) | Verified | [items] L6, L8, L110-147. It also refuses bad ids and duplicates |
-| 4 | Full names use the xcube id (`fullNameOf`, `:62`); only `folderId` and short names are read (L23-26) | Verified | [items] L25-28, L62-64; [mig] L78-83 |
-| 5 | Ids stable, unique, never reused; a reused id re-points names (L27-30) | Verified (consequence) | Follows from `<folderId>__<name>` ([items] L62-64). The rule is wechart's to keep |
-| 6 | Encoding suggestions; stripping not injective (L31-34) | Verified | `f` + 32 or 24 hex fits 2-41 characters ([items] L6). Lower-case only |
+| 4 | Full names use the xcube id (`fullNameOf`, `:62`); only `folderId` and short names are read (L23-26) | ~~Verified~~ *Corrected:* no full name carries a folder id; `fullName` is the name (R71 1.1, [`xcube-256d632371.md`](./xcube-256d632371.md)) | [items] L25-28, L62-64; [mig] L78-83 |
+| 5 | Ids stable, unique, never reused; a reused id re-points names (L27-30) | Verified (consequence) | Follows from `<folderId>__<name>` ([items] L62-64). The rule is wechart's to keep. *Corrected:* ~~a reused id re-points names~~ no longer: names hold no folder id; a folder id only places an item for the gate and R71 4/R72 checks (R71 1.1, 1.4, [`xcube-256d632371.md`](./xcube-256d632371.md)) |
+| 6 | Encoding suggestions; stripping not injective (L31-34) | Verified | `f` + 32 or 24 hex fits 2-41 characters ([items] L6). Lower-case only. *Corrected:* "stripping" a prefix no longer arises: names are bare (R71 1.1, [`xcube-256d632371.md`](./xcube-256d632371.md)) |
 | 7 | Overlays not built; slice-5 design (L38-43) | Partly | None built (grep). The design is UNVERIFIED |
 | 8 | Keep workspaces out of the tree; everything published is served and listed in `/v1/meta` (L44-46) | Verified by reading | Every item → files → modules → meta ([rt] L1815-1843; [gw] L117-217). Slice 4 is UNVERIFIED |
 | 9 | Exactly one cube or view per item (`items.ts:172`, `:205`, `:212`); never splits (L50) | Verified | [items] L172-213 |
@@ -485,17 +485,17 @@ Everything else in [x3a] about names, resolution, bindings, the items hash, remo
 | 24 | `meta.xcube` on every cube and view (`publish.ts:114`) (L90) | Verified | [pub] L115-116 (L114 at f9f833d324) |
 | 25 | No groups at 3b: no folder check, no xcube policy; no authored policy means open (L91-94) | Verified by reading | [pub] L84-117 adds no policy; "no policy means open" per [w-gp] L283. Slice 4 is UNVERIFIED |
 | 26 | Revision headers on every response, `/v1/meta` included (`runtime.ts:837-838`) (L96) | Verified | [rt] L837-838, set in `extendContext` for every request ([cfg] L86-91) |
-| 27 | Every change to items or resolution makes a new revision; a folder-only push doesn't (L97-98) | Verified | [rt] L1776-1777; [rev] L221-229, L362-373 |
+| 27 | Every change to items or resolution makes a new revision; a folder-only push doesn't (L97-98) | Verified (still no revision; *Corrected:* a folder push may now be refused, `409 data_source_range`/`reference_range`, R71 4.3, R72, [`xcube-256d632371.md`](./xcube-256d632371.md)) | [rt] L1776-1777; [rev] L221-229, L362-373 |
 | 28 | Switch tested (`switch.test.ts:156-166`, `:164`): name, SQL, `tableName`, `loadSql`, `indexesSql`, `invalidateKeyQueries` identical (L102-106) | Verified | [t-switch] L156-166 |
 | 29 | "The structure version … is the same, and nothing is rebuilt" (L106) | Partly | Inferred. The structure version also hashes `structureVersionLoadSql`, `streamOffset` and `outputColumnTypes`, which are not compared ([c-pa] L64-76); in-source DuckDB only |
 | 30 | "The only visible change is `meta.xcube` in `/v1/meta`" (L107) | Partly | True of Cube's answers by reading (no file names in meta, [c-meta] grep). The admin API's `mode`, `contentHash`, `files`, `itemsHash` and `modules` change, and the revision number advances |
 | 31 | During the switch: compile in background, switch when all compiled (`runtime.ts:1309-1390`); first items revision compiles all modules (L111) | Verified | [rt] L1303-1390, L203-205, L1257 |
 | 32 | In-flight pins kept for the grace period (`:610`, `:1379`; 5 minutes); newer-revision requests wait 10 s or `503` + `Retry-After`; refresh one context per module (`:967`) (L112-114) | Verified | [rt] L609-620, L1377-1380, L910-960, L830-835, L962-1005; [set] L76, L85 |
 | 33 | Titles: old `titleOf` differs for digit words; table values (L119-127) | Verified | [x3a] L310; [camel]; [infl]; [c-meta] L16-20 |
-| 34 | Fixed (`publish.ts:42`) with Cube's steps, tested (`names.test.ts:541`); only folder items get an xcube title (L128-130) | Verified | [pub] L41-45, L89-94; [t-names] L541-550 |
+| 34 | Fixed (`publish.ts:42`) with Cube's steps, tested (`names.test.ts:541`); only folder items get an xcube title (L128-130) | ~~Verified~~ *Corrected:* no item gets an xcube title (R71 1.2, [`xcube-256d632371.md`](./xcube-256d632371.md)) | [pub] L41-45, L89-94; [t-names] L541-550 |
 | 35 | Rollup table name and 25 + 12 + 26 = 63; `PostgresDriver` `createTable` counts `schema.`; Cube Store has no limit; root stems unchanged (L132-136) | Verified by reading | [c-pa-ts] L882-888; [c-prl] L605-624; [c-pg] L444-450; [pub] L19-20, L155-158. A Postgres source also stages external rollups under the same name ([w-pn] L164), and the table part fits there too |
 | 36 | Jobs for folder items tested (`switch.test.ts:168-203`); selector uses full cube name and pre-aggregation name (L138-140) | Verified | [t-switch] L168-203; [c-ev] L598-615. The test's pre-aggregation has no alias, so "not its alias" is by reading |
-| 37 | `prod_pre_aggregations.fsales__orders_main20260101_…` (L139) | Partly | Only `/fsales__orders_main/` is asserted (Open question 3) |
+| 37 | `prod_pre_aggregations.fsales__orders_main20260101_…` (L139) | Partly; *Corrected:* no `fsales__` stem now (R71 1.1, [`xcube-256d632371.md`](./xcube-256d632371.md)) | Only `/fsales__orders_main/` is asserted (Open question 3) |
 | 38 | Contexts sent to the owning module (`gateway.ts:91-116`, `runtime.ts:734`); `xcubeModule` stored (`:202`); `get` works (L141) | Verified | [gw] L90-115; [rt] L729-754; [t-switch] L189-202. The test uses `packMin: 1` |
 | 39 | Golden vector (`names.test.ts:559`) and canonical form (L143-152) | Verified | [t-names] L552-561; [pub] L314-324; [readme] L329-335. CI passed ([run-fix]) |
 | 40 | `GET …/revision` adds `modules: [{ id, version, cubes, copies }]` (`runtime.ts:1510-1519`), additive (L156) | Verified | [rt] L1510-1522. `cubes`/`copies` are counts; `[]` for revisions without modules |

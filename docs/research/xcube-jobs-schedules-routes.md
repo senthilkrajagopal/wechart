@@ -40,7 +40,7 @@ Not yet checked against compose's running xcube: the routes come with compose's 
 
 ### `GET …/models/{model}/pre-aggregations/queue`
 
-The model's builds queued or running in its served epoch, oldest first [answer §1]:
+The model's builds queued or running in its served epoch, oldest first [answer §1]. *Corrected:* the example's ~~`"fsales__orders.main"`~~ is `"orders.main"` from 256d632371: cubes are served under their bare names in every folder (R71 1.1) ([`xcube-256d632371.md`](./xcube-256d632371.md)):
 
 ```json
 { "model": "dev", "queue": [{ "key", "dataSource", "preAggregation": "fsales__orders.main", "table", "targetTable",

@@ -5,7 +5,6 @@ import { DataSourceRefused, type DataSource } from '../repos/data-sources';
 import { XcubeError } from './client';
 import {
   ConnectionRefused,
-  connectionNameOf,
   connectionSync,
   xcubeConnections,
   type HeldConnection,
@@ -44,10 +43,34 @@ function stub(answer: (sent: Sent) => { status: number; body?: unknown }) {
   return { sent, connections };
 }
 
+/**
+ * T701 (AC-421): a data source's connection was `<folderId>__<name>` outside
+ * the root. From xcube `256d632371` names are one per model, and the image
+ * refuses a prefixed one (research `xcube-256d632371.md`, 1.1, 2.2).
+ */
 describe('a connection’s name in xcube', () => {
-  it('is the short name in the root, and <folderId>__<name> in any other folder', () => {
-    expect(connectionNameOf('froot', 'warehouse')).toBe('warehouse');
-    expect(connectionNameOf('fa1b2', 'warehouse')).toBe('fa1b2__warehouse');
+  it('is the data source’s own name, in the root and in any other folder', async () => {
+    const { sent, connections } = stub(() => ({ status: 200, body: {} }));
+    const sync = connectionSync({
+      connections,
+      folders: async () => tree({ 'folder-a': 'fa1b2' }),
+    });
+    const sealed = { sealed: { password: ENVELOPE }, revisions: { password: 'r1' } };
+
+    await (
+      await sync.prepare(ROOT_FOLDER_ID)
+    ).land(source({ folderId: ROOT_FOLDER_ID }), sealed, true);
+    await (await sync.prepare('folder-a')).land(source({ name: 'lake' }), sealed, true);
+
+    const puts = sent.filter(({ method }) => method === 'PUT');
+    expect(puts.map(({ url }) => url)).toEqual([
+      `${BASE}/connections/warehouse`,
+      `${BASE}/connections/lake`,
+    ]);
+    expect(puts.map(({ body }) => (body as { folderId: string }).folderId)).toEqual([
+      'froot',
+      'fa1b2',
+    ]);
   });
 });
 
@@ -59,18 +82,32 @@ describe('xcube’s connection routes, called from wechart’s server (AC-327)',
     fields: { host: 'db', port: 5432, ssl: false },
     sealed: { password: ENVELOPE },
     revisions: { password: 'r1' },
+    baseVersion: null,
   };
 
-  it('puts one whole, with the service credential', async () => {
-    const { sent, connections } = stub(() => ({ status: 200, body: { name: 'fa1b2__warehouse' } }));
+  /**
+   * T701 (AC-421): from xcube `256d632371` a data source is named once per
+   * model, so its connection goes by its own name in any folder, and every
+   * PUT says the version it edits, `null` to create one (research
+   * `xcube-256d632371.md`, 2.5).
+   */
+  it('puts one whole, by its own name, with the version it edits and the service credential', async () => {
+    const { sent, connections } = stub(() => ({ status: 200, body: { name: 'warehouse' } }));
 
-    await connections.put('fa1b2__warehouse', body);
+    await connections.put('warehouse', body);
+    await connections.put('warehouse', { ...body, baseVersion: 4 });
 
     expect(sent).toEqual([
       {
         method: 'PUT',
-        url: `${BASE}/connections/fa1b2__warehouse`,
+        url: `${BASE}/connections/warehouse`,
         body,
+        authorization: 'Bearer service-token',
+      },
+      {
+        method: 'PUT',
+        url: `${BASE}/connections/warehouse`,
+        body: { ...body, baseVersion: 4 },
         authorization: 'Bearer service-token',
       },
     ]);
@@ -81,12 +118,17 @@ describe('xcube’s connection routes, called from wechart’s server (AC-327)',
       [400, 'invalid_connection', ['port must be 1–65535']],
       [409, 'driver_change', ['The driver never changes.']],
       [422, 'invalid_secret', undefined],
+      // T701: the image's own (research `xcube-256d632371.md`, "The error kinds").
+      [400, 'default_outside_root', ['name any other data source explicitly']],
+      [409, 'name_in_use', undefined],
+      [409, 'conflict', ['it changed since: read it again']],
+      [409, 'data_source_range', ['a cube may use a data source in its own folder']],
     ] as const) {
       const { connections } = stub(() => ({
         status,
         body: { code, error: `refused: ${code}`, ...(problems ? { problems } : {}) },
       }));
-      const refused = await connections.put('fa1b2__warehouse', body).catch((e: unknown) => e);
+      const refused = await connections.put('warehouse', body).catch((e: unknown) => e);
       expect(refused, code).toBeInstanceOf(ConnectionRefused);
       expect(refused, code).toMatchObject({
         status,
@@ -96,7 +138,7 @@ describe('xcube’s connection routes, called from wechart’s server (AC-327)',
       });
     }
     const { connections } = stub(() => ({ status: 503, body: { error: 'starting' } }));
-    const failed = await connections.put('fa1b2__warehouse', body).catch((e: unknown) => e);
+    const failed = await connections.put('warehouse', body).catch((e: unknown) => e);
     expect(failed).toBeInstanceOf(XcubeError);
     expect(failed).not.toBeInstanceOf(ConnectionRefused);
   });
@@ -110,13 +152,18 @@ describe('xcube’s connection routes, called from wechart’s server (AC-327)',
 
     const used = stub(() => ({
       status: 409,
-      body: { code: 'in_use', error: 'In use', problems: ['froot/orders uses it'] },
+      // By the cubes' own names, with no folder, from `256d632371`.
+      body: { code: 'in_use', error: 'In use', problems: ['orders uses it'] },
     }));
-    await expect(used.connections.remove('warehouse')).rejects.toMatchObject({
-      status: 409,
-      code: 'in_use',
-      problems: ['froot/orders uses it'],
-    });
+    const refused = (await used.connections
+      .remove('warehouse')
+      .catch((e: unknown) => e)) as ConnectionRefused;
+    expect(refused).toBeInstanceOf(ConnectionRefused);
+    expect([refused.status, refused.code, refused.problems]).toEqual([
+      409,
+      'in_use',
+      ['orders uses it'],
+    ]);
   });
 
   it('asks xcube to test one, reading its checks (T361, AC-159)', async () => {
@@ -155,7 +202,7 @@ describe('xcube’s connection routes, called from wechart’s server (AC-327)',
   it('reads each instance’s report of one, and says when xcube holds none of that name (T365)', async () => {
     const report = {
       model: 'dev',
-      name: 'fa__warehouse',
+      name: 'warehouse',
       version: 7,
       revisions: { password: 'r2' },
       instances: [
@@ -170,20 +217,20 @@ describe('xcube’s connection routes, called from wechart’s server (AC-327)',
       ],
     };
     const { sent, connections } = stub(() => ({ status: 200, body: report }));
-    expect(await connections.health('fa__warehouse')).toEqual({
+    expect(await connections.health('warehouse')).toEqual({
       version: 7,
       instances: report.instances,
     });
-    expect(sent[0]?.url).toBe(`${BASE}/connections/fa__warehouse/health`);
+    expect(sent[0]?.url).toBe(`${BASE}/connections/warehouse/health`);
 
     const unknown = stub(() => ({
       status: 404,
       body: { code: 'unknown_connection', error: 'No such connection' },
     }));
-    expect(await unknown.connections.health('fa__gone')).toBeUndefined();
+    expect(await unknown.connections.health('gone')).toBeUndefined();
   });
 
-  it('lists the ones it holds', async () => {
+  it('lists the ones it holds, each with the version an edit of it names (T701)', async () => {
     const held: HeldConnection = {
       name: 'warehouse',
       folderId: 'froot',
@@ -192,10 +239,11 @@ describe('xcube’s connection routes, called from wechart’s server (AC-327)',
       fields: { host: 'db' },
       secrets: ['password'],
       revisions: { password: 'r1' },
+      version: 7,
     };
     const { sent, connections } = stub(() => ({
       status: 200,
-      body: { model: 'dev', connections: [{ ...held, version: 7, updatedAt: 'now' }] },
+      body: { model: 'dev', connections: [{ ...held, updatedAt: 'now' }] },
     }));
     expect(await connections.list()).toEqual([held]);
     expect(sent[0]?.url).toBe(`${BASE}/connections`);
@@ -229,19 +277,21 @@ describe('a data source landing in xcube before it is stored (T442)', () => {
     revisions: { password: 'r1' },
   });
 
-  it('puts it under its full name, with its folder’s xcube id, and never a secret in plain text', async () => {
+  it('puts a new one under its own name, with its folder’s xcube id, to be created, and never a secret in plain text', async () => {
     const { sent, connections } = stub(() => ({ status: 200, body: {} }));
     const sync = connectionSync({ connections, folders: async () => tree({ 'folder-a': 'fa' }) });
 
-    await (await sync.prepare('folder-a')).land(source(), landed());
+    await (await sync.prepare('folder-a')).land(source(), landed(), true);
     await (
       await sync.prepare(ROOT_FOLDER_ID)
-    ).land(source({ folderId: ROOT_FOLDER_ID, name: 'default' }), landed());
+    ).land(source({ folderId: ROOT_FOLDER_ID, name: 'default' }), landed(), true);
 
+    // A create is `baseVersion: null`, which xcube never lands over another
+    // data source of the name, in any case (research `xcube-256d632371.md`, 2.5).
     expect(sent.map(({ method, url, body }) => ({ method, url, body }))).toEqual([
       {
         method: 'PUT',
-        url: `${BASE}/connections/fa__warehouse`,
+        url: `${BASE}/connections/warehouse`,
         body: {
           folderId: 'fa',
           driver: 'postgres',
@@ -249,10 +299,124 @@ describe('a data source landing in xcube before it is stored (T442)', () => {
           fields: { host: 'db', port: 5432, ssl: false },
           sealed: { password: ENVELOPE },
           revisions: { password: 'r1' },
+          baseVersion: null,
         },
       },
       expect.objectContaining({ url: `${BASE}/connections/default` }) as Sent,
     ]);
+  });
+
+  it('edits the version xcube holds under its name, and creates it where xcube holds none (T701)', async () => {
+    const held = [
+      { name: 'warehouse', folderId: 'fa', version: 4 },
+      // Another data source's name in another case: never this one's version.
+      { name: 'Lake', folderId: 'froot', version: 9 },
+    ];
+    const { sent, connections } = stub(({ method }) =>
+      method === 'GET'
+        ? { status: 200, body: { model: 'dev', connections: held } }
+        : { status: 200, body: {} },
+    );
+    const prepared = await connectionSync({
+      connections,
+      folders: async () => tree({ 'folder-a': 'fa' }),
+    }).prepare('folder-a');
+
+    await prepared.land(source(), landed(), false);
+    await prepared.land(source({ name: 'lake' }), landed(), false);
+
+    expect(
+      sent.map(({ method, url, body }) => [
+        method,
+        url.slice(BASE.length),
+        (body as { baseVersion?: unknown } | undefined)?.baseVersion,
+      ]),
+    ).toEqual([
+      ['GET', '/connections', undefined],
+      ['PUT', '/connections/warehouse', 4],
+      ['GET', '/connections', undefined],
+      ['PUT', '/connections/lake', null],
+    ]);
+  });
+
+  /**
+   * T701 (AC-421, AC-424): xcube refuses a data source's name another holds,
+   * in any case, and says where neither (research `xcube-256d632371.md`,
+   * "On the connection route"). The save is refused as its own item's: the
+   * name is in use, and nothing says which folder, workspace or item holds it.
+   */
+  it('refuses a name another data source holds, saying only that it is in use', async () => {
+    for (const error of [
+      'The name "Warehouse" is already in use',
+      'The name "Warehouse" is in use as "warehouse": a data source\'s name can\'t change, not even its case',
+    ]) {
+      const refused = await (
+        await connectionSync({
+          connections: stub(() => ({
+            status: 409,
+            body: { code: 'name_in_use', error, problems: [] },
+          })).connections,
+          folders: async () => tree({ 'folder-a': 'fa' }),
+        }).prepare('folder-a')
+      )
+        .land(source({ name: 'Warehouse' }), landed(), true)
+        .catch((e: unknown) => e);
+      expect(refused, error).toBeInstanceOf(DataSourceRefused);
+      expect(said(refused), error).toEqual({
+        status: 409,
+        message: 'The name “Warehouse” is already in use.',
+        problems: ['The name “Warehouse” is already in use.'],
+      });
+    }
+  });
+
+  it('refuses a save over a version since changed, a move that would strand cubes, and `default` outside the root', async () => {
+    const changed =
+      'This data source changed in xcube meanwhile, so nothing was saved. Open it again, and save your change on what it is now.';
+    expect(
+      said(
+        await landedBy({
+          status: 409,
+          body: {
+            code: 'conflict',
+            error: 'Data source "warehouse" isn\'t at version 4',
+            problems: ['it changed since: read it again'],
+            currentVersion: 5,
+          },
+        }).catch((e: unknown) => e),
+      ),
+    ).toEqual({ status: 409, message: changed, problems: [changed] });
+    // The cubes xcube names are in folders the saver may not see: none is
+    // said here (T715 names those they may see, AC-425).
+    const stranded = await landedBy({
+      status: 409,
+      body: {
+        code: 'data_source_range',
+        error:
+          'Moving data source "warehouse" would leave cubes using it outside their folder\'s range',
+        problems: ['a cube may use a data source in its own folder or an ancestor of it'],
+        cubes: ['deep', 'sales'],
+      },
+    }).catch((e: unknown) => e);
+    const range =
+      'Cubes using this data source would be left outside its folder and its subfolders, so nothing was saved.';
+    expect(said(stranded)).toEqual({ status: 409, message: range, problems: [range] });
+    expect(JSON.stringify(said(stranded))).not.toMatch(/deep|sales/);
+    const root = 'Only the shared root may have a data source named default.';
+    expect(
+      said(
+        await landedBy({
+          status: 400,
+          body: {
+            code: 'default_outside_root',
+            error: 'Only the root folder (froot) holds the data source "default"',
+            problems: [
+              'a cube that names no data source uses the root\'s "default"; name any other data source explicitly',
+            ],
+          },
+        }).catch((e: unknown) => e),
+      ),
+    ).toEqual({ status: 400, message: root, problems: [root] });
   });
 
   it('puts xcube’s tree before the save, reading nothing after, and refuses a folder no tree holds', async () => {
@@ -277,7 +441,7 @@ describe('a data source landing in xcube before it is stored (T442)', () => {
     });
     const prepared = await sync.prepare('folder-a');
     const before = asked;
-    await prepared.land(source(), landed());
+    await prepared.land(source(), landed(), true);
     expect(order).toEqual(['tree', 'PUT']);
     expect(asked).toBe(before);
 
@@ -296,7 +460,12 @@ describe('a data source landing in xcube before it is stored (T442)', () => {
         connections: stub(() => answer).connections,
         folders: async () => tree({ 'folder-a': 'fa' }),
       }).prepare('folder-a')
-    ).land(source(), landed());
+    ).land(source(), landed(), true);
+  /** A refusal as its saver is told it. */
+  const said = (refused: unknown) => {
+    const { status, message, problems } = refused as DataSourceRefused;
+    return { status, message, problems };
+  };
 
   it('refuses the save with xcube’s own reason, saying what xcube answered otherwise', async () => {
     await expect(
@@ -340,17 +509,23 @@ describe('a data source landing in xcube before it is stored (T442)', () => {
       connections: away,
       folders: async () => tree({ 'folder-a': 'fa' }),
     });
-    await expect((await sync.prepare('folder-a')).land(source(), landed())).rejects.toMatchObject({
-      status: 503,
-      message: 'xcube can’t be reached, so nothing was saved. Try again once it is back.',
-    });
+    const unsaved = 'xcube can’t be reached, so nothing was saved. Try again once it is back.';
+    expect(
+      said(
+        await (
+          await sync.prepare('folder-a')
+        )
+          .land(source(), landed(), true)
+          .catch((e: unknown) => e),
+      ),
+    ).toEqual({ status: 503, message: unsaved, problems: [unsaved] });
     await expect(sync.unland(source())).rejects.toMatchObject({
       status: 503,
       message: 'xcube can’t be reached, so nothing was removed. Try again once it is back.',
     });
   });
 
-  it('asks xcube for its instances’ reports under its full name (T365)', async () => {
+  it('asks xcube for its instances’ reports under its own name (T365)', async () => {
     const { sent, connections } = stub(() => ({
       status: 200,
       body: { version: 3, instances: [] },
@@ -358,7 +533,7 @@ describe('a data source landing in xcube before it is stored (T442)', () => {
     const sync = connectionSync({ connections, folders: async () => tree({ 'folder-a': 'fa' }) });
 
     expect(await sync.healthOf(source())).toEqual({ version: 3, instances: [] });
-    expect(sent.map(({ url }) => url)).toEqual([`${BASE}/connections/fa__warehouse/health`]);
+    expect(sent.map(({ url }) => url)).toEqual([`${BASE}/connections/warehouse/health`]);
     // In a folder xcube's tree doesn't hold: never landed, so none.
     expect(await sync.healthOf(source({ folderId: 'workspace-folder' }))).toBeUndefined();
   });
@@ -366,25 +541,25 @@ describe('a data source landing in xcube before it is stored (T442)', () => {
   it('removes it from xcube first, refusing while published cubes use it', async () => {
     const used = stub(() => ({
       status: 409,
-      body: { code: 'in_use', error: 'In use', problems: ['fa/orders uses it'] },
+      body: { code: 'in_use', error: 'In use', problems: ['orders uses it'] },
     }));
     const sync = connectionSync({
       connections: used.connections,
       folders: async () => tree({ 'folder-a': 'fa' }),
     });
-    await expect(sync.unland(source())).rejects.toMatchObject({
+    const inUse = {
       status: 409,
-      message: 'Published cubes use this data source: fa/orders uses it',
-    });
+      message: 'Published cubes use this data source: orders uses it',
+      problems: ['orders uses it'],
+    };
+    expect(said(await sync.unland(source()).catch((e: unknown) => e))).toEqual(inUse);
     // Renamed: the old name's connection, under the folder prepared.
-    await expect((await sync.prepare('folder-a')).unland(source())).rejects.toMatchObject({
-      status: 409,
-      message: 'Published cubes use this data source: fa/orders uses it',
-      problems: ['fa/orders uses it'],
-    });
+    expect(
+      said(await (await sync.prepare('folder-a')).unland(source()).catch((e: unknown) => e)),
+    ).toEqual(inUse);
     expect(used.sent.map(({ method, url }) => [method, url])).toEqual([
-      ['DELETE', `${BASE}/connections/fa__warehouse`],
-      ['DELETE', `${BASE}/connections/fa__warehouse`],
+      ['DELETE', `${BASE}/connections/warehouse`],
+      ['DELETE', `${BASE}/connections/warehouse`],
     ]);
   });
 });
@@ -392,21 +567,22 @@ describe('a data source landing in xcube before it is stored (T442)', () => {
 describe('xcube’s connections brought up to wechart’s at start (AC-330)', () => {
   const stored = (over: Partial<DataSource> = {}) => source(over);
   const heldAs = (over: Partial<HeldConnection> = {}): HeldConnection => ({
-    name: 'fa__warehouse',
+    name: 'warehouse',
     folderId: 'fa',
     driver: 'postgres',
     authMethod: 'password',
     fields: { host: 'db', port: 5432, ssl: false },
     secrets: ['password'],
     revisions: { password: 'r1' },
+    version: 1,
     ...over,
   });
 
   it('puts each one xcube lacks or holds otherwise, removes one wechart has not, and leaves the rest', async () => {
     const held = [
       heldAs(),
-      heldAs({ name: 'fa__lake', revisions: { password: 'old' } }),
-      heldAs({ name: 'fa__gone' }),
+      heldAs({ name: 'lake', revisions: { password: 'old' }, version: 6 }),
+      heldAs({ name: 'gone' }),
     ];
     const { sent, connections } = stub(({ method }) =>
       method === 'GET'
@@ -429,13 +605,19 @@ describe('xcube’s connections brought up to wechart’s at start (AC-330)', ()
 
     expect(sent.map(({ method, url }) => `${method} ${url.slice(BASE.length)}`)).toEqual([
       'GET /connections',
-      'PUT /connections/fa__lake',
-      'PUT /connections/fa__new',
-      'DELETE /connections/fa__gone',
+      'PUT /connections/lake',
+      'PUT /connections/new',
+      'DELETE /connections/gone',
     ]);
+    // Each over the version xcube holds, or created where it holds none (T701).
+    expect(
+      sent
+        .filter(({ method }) => method === 'PUT')
+        .map(({ body }) => (body as { baseVersion: unknown }).baseVersion),
+    ).toEqual([6, null]);
     expect(report).toEqual({
-      put: ['fa__lake', 'fa__new'],
-      removed: ['fa__gone'],
+      put: ['lake', 'new'],
+      removed: ['gone'],
       unopened: [],
       failed: [],
     });
@@ -443,11 +625,11 @@ describe('xcube’s connections brought up to wechart’s at start (AC-330)', ()
 
   it('puts one whose folder, driver, sign-in or fields xcube holds otherwise', async () => {
     const held = [
-      heldAs({ name: 'fa__moved', folderId: 'fb' }),
-      heldAs({ name: 'fa__typed', driver: 'redshift' }),
-      heldAs({ name: 'fa__signed', authMethod: 'client-certificate' }),
-      heldAs({ name: 'fa__fielded', fields: { host: 'db', port: 5433, ssl: false } }),
-      heldAs({ name: 'fa__fewer', fields: { host: 'db', port: 5432 } }),
+      heldAs({ name: 'moved', folderId: 'fb' }),
+      heldAs({ name: 'typed', driver: 'redshift' }),
+      heldAs({ name: 'signed', authMethod: 'client-certificate' }),
+      heldAs({ name: 'fielded', fields: { host: 'db', port: 5433, ssl: false } }),
+      heldAs({ name: 'fewer', fields: { host: 'db', port: 5432 } }),
     ];
     const { sent, connections } = stub(({ method }) =>
       method === 'GET'
@@ -464,9 +646,9 @@ describe('xcube’s connections brought up to wechart’s at start (AC-330)', ()
     });
 
     expect(sent.filter(({ method }) => method === 'PUT').map(({ url }) => url)).toEqual(
-      names.map((name) => `${BASE}/connections/fa__${name}`),
+      names.map((name) => `${BASE}/connections/${name}`),
     );
-    expect(report.put).toEqual(names.map((name) => `fa__${name}`));
+    expect(report.put).toEqual(names);
   });
 
   it('keeps a stored secret xcube can’t open, saying so, for a key xcube lacks is no stale secret (T442’s review)', async () => {
@@ -492,20 +674,20 @@ describe('xcube’s connections brought up to wechart’s at start (AC-330)', ()
     expect(report).toEqual({
       put: [],
       removed: [],
-      unopened: ['fa__warehouse: password: xcube holds no credential key kid-0'],
+      unopened: ['warehouse: password: xcube holds no credential key kid-0'],
       failed: [],
     });
   });
 
   it('says which it couldn’t put or remove, and goes on with the rest', async () => {
-    const held = [heldAs({ name: 'fa__used' })];
+    const held = [heldAs({ name: 'used' })];
     const { sent, connections } = stub(({ method }) =>
       method === 'GET'
         ? { status: 200, body: { model: 'dev', connections: held } }
         : method === 'DELETE'
           ? {
               status: 409,
-              body: { code: 'in_use', error: 'In use', problems: ['fa/orders uses it'] },
+              body: { code: 'in_use', error: 'In use', problems: ['orders uses it'] },
             }
           : { status: 500, body: { error: 'boom' } },
     );
@@ -522,7 +704,7 @@ describe('xcube’s connections brought up to wechart’s at start (AC-330)', ()
       put: [],
       removed: [],
       unopened: [],
-      failed: ['fa__broken: xcube answered 500: boom', 'fa__used: In use'],
+      failed: ['broken: xcube answered 500: boom', 'used: In use'],
     });
   });
 

@@ -12991,7 +12991,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - **Not a namespace matter, noted:** on CI, Chrome and Edge both have `browserName` `chromium`, so root cubes named `<prefix>_${browserName}` (jobs, schedules, markings, model-schedule) are written by both at once, in one folder.
     - Tests: `seed.test.ts` (4 pass); the full unit suite (core 535, web 2582; API 1687 of 1691: `route-matrix.test.ts`'s three time out under the full run and pass alone, and `jobs/history.test.ts`'s Super-Admin listing finds none of its builds, alone too, with no API source changed here); e2e in Chrome on the image then pinned (`v1.7.45-74c933bdb8`): `folder-models.spec.ts` 3/3, `security/model-in-folder`, `folder-data-sources` and `sql-runner` 27/28. The one failure, `sql-runner`'s "Cancelled after N s" (it showed "Cancelled at <time>"), is a run's duration, not a name: it fails the same alone.
 
-- [ ] T701 (AC-421, AC-424) Pin xcube's R71 image (to be published), and read its new refusals
+- [x] T701 (AC-421, AC-424) Pin xcube's R71 image (to be published), and read its new refusals
   - Files:
     - `docs/research/xcube-<commit>.md` (frontmatter: `packages: []`, the image's exact tag and digest as `version:`, `researched:`);
     - the pin: `docker-compose.yml` (Cube and its refresh worker), `deploy/helm/wechart/values.yaml`, `deploy/helm/values/docker-desktop.yaml`, `docs/deploy.md` (the upgrade is T702's reset), `packages/api/src/deploy/cube-image.test.ts`;
@@ -13147,6 +13147,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - `packages/api/src/routes/{calc-requests,proposal-models,proposals,export,sql-runner}.ts`;
     - `packages/api/src/cube/preaggMatch.ts`, `packages/api/src/server.ts`;
     - the API's unit tests that read `f…__` names, brought to bare ones.
+    - *Note (T701, 2026-10-07):* T701 taught the stub xcube the image's name refusals behind `namesOnePerModel(true)`, off by default, since on they refuse the per-folder namesakes of ~25 done tasks' tests. T709 turns it on by default (and makes the stub's items, `fullName` and `POST …/resolve` bare, as the image answers), bringing those tests to one name per item, with T727 … T733 for the rest.
   - Failing test:
     - `xcube/items.test.ts` and `publish.test.ts`: a cube, a view and a data source in /Sales publish under their own names, and are read back under them.
     - `jobs/scope.test.ts`, `repos/calc-resolution.test.ts` and `xcube/sql-runner.test.ts` read the bare names xcube now returns (AC-328).

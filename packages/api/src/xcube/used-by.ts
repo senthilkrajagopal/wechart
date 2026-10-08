@@ -1,7 +1,6 @@
 import { parse } from 'yaml';
 
 import type { HeldItem } from './client';
-import { connectionNameOf } from './connections';
 import type { PublishedFolders } from './folders';
 
 /**
@@ -10,8 +9,8 @@ import type { PublishedFolders } from './folders';
  *
  * xcube binds a cube at publish, nearest first from its folder, and never
  * rebinds it (AC-273), so only its items say which data source a cube uses:
- * `dataSource` is the connection's full name, which is `connectionNameOf` a
- * wechart data source's folder and name. A cube that `extends` another has
+ * `dataSource` is the connection's name, which from xcube `256d632371` is the
+ * wechart data source's own name in any folder (T701). A cube that `extends` another has
  * none of its own (`null`) and queries its parent's current one: the parent
  * is the name it extends, as wechart's YAML writes it, bound to a full name
  * in its bindings. One whose data source can't be told — from an image that
@@ -45,10 +44,15 @@ export function cubesUsing({
   readonly fileOf?: (xcubeFolderId: string, name: string) => string | undefined;
 }): Map<string, CubeUsing[]> {
   const byConnection = new Map<string, string>();
-  for (const source of sources) {
-    const xcubeId = published.ids.get(source.folderId);
-    if (xcubeId !== undefined) byConnection.set(connectionNameOf(xcubeId, source.name), source.id);
-  }
+  // A landed data source's connection is its own name (T701). A name two
+  // hold, which nothing landed can be, is said of neither.
+  const twice = new Set<string>();
+  for (const source of sources)
+    if (published.ids.has(source.folderId)) {
+      if (byConnection.has(source.name)) twice.add(source.name);
+      byConnection.set(source.name, source.id);
+    }
+  for (const name of twice) byConnection.delete(name);
   const wechartIdOf = new Map([...published.ids].map(([id, xcubeId]) => [xcubeId, id]));
   const byFullName = new Map(held.map((item) => [item.fullName, item]));
 

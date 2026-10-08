@@ -3,6 +3,7 @@ import type { FieldValue, SealedV1 } from '@wechart/core';
 import type { ModelFile } from '../server';
 import type { TreeFolder } from './folders';
 import type { Item } from './items';
+import { DEFAULT_AT_ROOT, nameInUse } from './refusal';
 
 /**
  * xcube's admin routes for one model (T419; `docs/research/xcube-slice-2.md`,
@@ -108,17 +109,19 @@ export interface XcubeAdmin {
    */
   items(options?: { readonly timeoutMs?: number }): Promise<readonly HeldItem[]>;
   /**
-   * Names resolved nearest first from a folder, as xcube binds them at
-   * publish: each one's full name, or `null` where no folder on the path
-   * holds it (T429, AC-272; research 3a, "POST …/resolve").
+   * Each name to the one item holding it, in any case and in any folder, by
+   * that item's own stored name, or `null` where none does (T429, AC-272;
+   * T701, AC-421; research `xcube-256d632371.md`, 3.3). The folder asked
+   * from is only checked to be in the tree: a folder outside it answers
+   * `400 invalid_folders`, thrown.
    */
   resolve(
     folderId: string,
     names: readonly string[],
     /**
      * Through an overlay (T347, AC-329; research `xcube-slice-5.md`, "POST
-     * …/resolve with overlay"): its items first, by short name, whatever
-     * their folder, then the folder's path. One gone answers `410`, thrown.
+     * …/resolve with overlay"): its items first, wherever they are, then the
+     * published model. One gone answers `410`, thrown.
      */
     overlay?: string,
   ): Promise<Map<string, string | null>>;
@@ -226,7 +229,12 @@ export interface HeldItem {
   readonly dataSource?: string | null;
 }
 
-/** An error xcube places on an item, or on none (research 3a, `ItemError`). */
+/**
+ * An error xcube places on an item, or on none (research 3a, `ItemError`).
+ * From `256d632371` its kinds include `name_in_use`, `data_source_range` and
+ * `reference_range`, each on the caller's own item and naming no other
+ * item's folder (T701; research `xcube-256d632371.md`, "The error kinds").
+ */
 export interface ItemError {
   readonly folderId: string | null;
   readonly name: string | null;
@@ -497,12 +505,9 @@ export function xcubeAdmin({
             ...(kind === 'cube' && (typeof dataSource === 'string' || dataSource === null)
               ? { dataSource }
               : {}),
-            fullName:
-              typeof item['fullName'] === 'string'
-                ? item['fullName']
-                : folderId === 'froot'
-                  ? name
-                  : `${folderId}__${name}`,
+            // Its own name in any folder, as `256d632371` gives it (T701;
+            // research `xcube-256d632371.md`, 1.1).
+            fullName: typeof item['fullName'] === 'string' ? item['fullName'] : name,
             bindings: Object.fromEntries(
               Object.entries(
                 bindings !== null && typeof bindings === 'object'
@@ -568,6 +573,13 @@ export function xcubeAdmin({
         };
       if (status === 422 && code === 'invalid_secret') return { kind: 'secret', error };
       if (status === 400 && code === 'invalid_connection') return { kind: 'connection', error };
+      // Its data sources' refusals from `256d632371` (T701; research
+      // `xcube-256d632371.md`, 2.6): two of one name, said only as in use,
+      // and a `default` anywhere but the root.
+      if (status === 409 && code === 'name_in_use')
+        return { kind: 'connection', error: nameInUse(/"([^"]+)"/.exec(error)?.[1] ?? '') };
+      if (status === 400 && code === 'default_outside_root')
+        return { kind: 'connection', error: DEFAULT_AT_ROOT };
       if (status === 422)
         return {
           kind: 'refused',

@@ -34,6 +34,15 @@ import { contentHashOf } from './snapshot';
  *   `unknown_connection` unless the overlay holds the connection; held until
  *   cancelled when told to hold.
  * - `401 unauthorized` without `Bearer <admin token>`.
+ * - With `namesOnePerModel(true)`, names one per model, in any case, as
+ *   `256d632371` holds them (T701; research `xcube-256d632371.md`): a
+ *   changeset, an items snapshot or an
+ *   overlay whose item takes a name another holds is refused, `422
+ *   invalid_items` with errors of kind `name_in_use` on the caller's item;
+ *   an overlay bringing two data sources of one name is `409 name_in_use`,
+ *   and one bringing `default` outside the root `400 default_outside_root`.
+ *   Items are still answered by `<folderId>__<name>` full names, and names
+ *   resolved nearest first, until T709 and T711 bring the API to bare names.
  */
 export const FAKE_ADMIN_TOKEN = 'fake-xcube-admin-token-0123456789abcdef';
 
@@ -140,6 +149,14 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
     }
   >();
   let overlayVersions = 0;
+  /**
+   * Whether names are one per model across folders, as `256d632371` holds
+   * them (T701): on by `namesOnePerModel(true)`. Off by default until T709
+   * brings the API's own tests to bare names, which hold per-folder namesakes
+   * of the rule before R71. An overlay's two items of one name are refused
+   * either way, as they were before.
+   */
+  let oneNamePerModel = false;
   /** Overlay pushes to refuse as told, in order: `422 invalid_secret`, say. */
   const overlayRefusals: { status: number; body: Record<string, unknown>; id?: string }[] = [];
   /** Each SQL run asked (T532), and how the test answers one: `undefined` is one row. */
@@ -235,6 +252,65 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
           });
     }
     return bindings;
+  };
+
+  /**
+   * Names one per model, in any case (T701; research `xcube-256d632371.md`,
+   * "The error kinds", 2.6, 2.7; xcube's `publish` in `names/publish.ts`):
+   * two upserts of one name, or an upsert of a name another kept item holds,
+   * are each refused on the caller's item, `name_in_use`, never saying where
+   * the other is. A delete and an upsert of one name is a move; an
+   * overlay's upsert stands in for the published item of its name.
+   */
+  const namesRefused = (
+    what: 'changeset' | 'overlay',
+    current: readonly Item[],
+    upserts: readonly Item[],
+    deletes: readonly { folderId: string; name: string }[],
+  ): ItemError[] => {
+    const key = (name: string) => name.toLowerCase();
+    const errors: ItemError[] = [];
+    const upserted = new Map<string, Item>();
+    for (const item of upserts) {
+      const other = upserted.get(key(item.name));
+      // The same item twice is kind `item` (research, "In `422 invalid_items`").
+      if (other !== undefined && other.folderId === item.folderId && other.name === item.name)
+        errors.push({
+          folderId: item.folderId,
+          name: item.name,
+          kind: 'item',
+          message: `The item is in the ${what} twice`,
+        });
+      else if (other !== undefined)
+        errors.push({
+          folderId: item.folderId,
+          name: item.name,
+          kind: 'name_in_use',
+          message: `The ${what} holds two items named "${item.name}" (in ${other.folderId} and ${item.folderId}); names are one per model`,
+        });
+      upserted.set(key(item.name), item);
+    }
+    if (errors.length > 0 || what === 'overlay') return errors;
+    const kept = new Map(current.map((item) => [key(item.name), item]));
+    for (const gone of deletes) {
+      const known = kept.get(key(gone.name));
+      if (known?.folderId === gone.folderId && known.name === gone.name)
+        kept.delete(key(gone.name));
+    }
+    for (const [name, item] of upserted) {
+      const known = kept.get(name);
+      if (known !== undefined && (known.folderId !== item.folderId || known.name !== item.name))
+        errors.push({
+          folderId: item.folderId,
+          name: item.name,
+          kind: 'name_in_use',
+          message:
+            known.folderId === item.folderId
+              ? `The name "${item.name}" is in use as "${known.name}": a landed name can't change, not even its case`
+              : `The name "${item.name}" is already in use`,
+        });
+    }
+    return errors;
   };
 
   /**
@@ -339,10 +415,11 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
             fullName: fullNameOf({ folderId, name }),
           })),
           deletes: [],
+          // A data source by its own name in any folder (T701).
           connections: stored.connections.map(({ folderId, name, driver }) => ({
             folderId,
             name,
-            fullName: fullNameOf({ folderId, name }),
+            fullName: name,
             driver,
           })),
           instance: { revision: headOf(model)?.revision ?? null, state: 'idle' },
@@ -365,24 +442,34 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
         const at = overlayRefusals.findIndex((each) => each.id === undefined || each.id === id);
         const refused = at < 0 ? undefined : overlayRefusals.splice(at, 1)[0];
         if (refused !== undefined) return answer(refused.status, refused.body);
-        const seen = new Map<string, string>();
-        for (const item of put.upserts) {
-          const other = seen.get(item.name);
-          if (other !== undefined)
-            return answer(422, {
-              error: 'The overlay does not apply',
-              code: 'invalid_items',
-              errors: [
-                {
-                  folderId: item.folderId,
-                  name: item.name,
-                  kind: 'item',
-                  message: `The overlay holds two items named "${item.name}" (in ${other} and ${item.folderId}); names in it resolve to its own items first, so they must differ`,
-                },
+        // Two items of one name, in any case (T701).
+        const twice = namesRefused('overlay', [], put.upserts, []);
+        if (twice.length > 0)
+          return answer(422, {
+            error: 'The overlay does not apply',
+            code: 'invalid_items',
+            errors: twice,
+            cubeMessage: null,
+          });
+        // Two data sources of one name, in any case; `default` the root's
+        // alone (T701; research `xcube-256d632371.md`, 2.6).
+        const named = new Set<string>();
+        for (const connection of oneNamePerModel ? (put.connections ?? []) : []) {
+          if (connection.name.toLowerCase() === 'default' && connection.folderId !== 'froot')
+            return answer(400, {
+              error: 'Only the root folder (froot) holds the data source "default"',
+              code: 'default_outside_root',
+              problems: [
+                'a cube that names no data source uses the root\'s "default"; name any other data source explicitly',
               ],
-              cubeMessage: null,
             });
-          seen.set(item.name, item.folderId);
+          if (named.has(connection.name.toLowerCase()))
+            return answer(409, {
+              error: `The overlay brings two data sources named "${connection.name}"; names are one per model`,
+              code: 'name_in_use',
+              problems: [],
+            });
+          named.add(connection.name.toLowerCase());
         }
         const content = JSON.stringify([put.upserts, put.connections ?? []]);
         const version = stored?.content === content ? stored.version : (overlayVersions += 1);
@@ -447,7 +534,8 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
             statement: null,
             redactedSql: null,
           });
-        if (!held.connections.some((each) => fullNameOf(each) === connection))
+        // By its own name, in any folder (T701; research `xcube-256d632371.md`, 1.1).
+        if (!held.connections.some((each) => each.name === connection))
           return answer(404, {
             error: `No connection "${connection}"`,
             code: 'unknown_connection',
@@ -644,8 +732,18 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
           kind: 'folder',
           message: `Folder ${item.folderId} is not in the folder tree`,
         }));
+      // Names one per model, in any case (T701), checked over the head.
+      const nameErrors = !oneNamePerModel
+        ? []
+        : namesRefused(
+            'changeset',
+            headOf(model)?.items ?? [],
+            change.upserts ?? [],
+            change.deletes ?? [],
+          );
+      const placed = [...folderErrors, ...nameErrors];
       const refused: readonly (ModelError | ItemError)[] | undefined =
-        folderErrors.length > 0 ? [...folderErrors, ...(refusal ?? [])] : refusal;
+        placed.length > 0 ? [...placed, ...(refusal ?? [])] : refusal;
       const keyOf = (item: { folderId: string; name: string }) => `${item.folderId}/${item.name}`;
       const applied = (items: readonly Item[]) => {
         const gone = new Set((change.deletes ?? []).map(keyOf));
@@ -870,11 +968,13 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
             currentRevision: current?.revision ?? null,
             currentItemsHash: current?.itemsHash ?? null,
           });
-        if (refusal !== undefined)
+        // A whole send: two of its items of one name, in any case (T701).
+        const twice = oneNamePerModel ? namesRefused('changeset', [], snapshot.items, []) : [];
+        if (refusal !== undefined || twice.length > 0)
           return answer(422, {
             error: 'The items do not compile',
             code: 'invalid_items',
-            errors: refusal,
+            errors: [...twice, ...(refusal ?? [])],
             cubeMessage: refusalMessage,
           });
         const revision = (current?.revision ?? 0) + 1;
@@ -990,6 +1090,10 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
         files: [],
         items,
       });
+    },
+    /** Names one per model across folders, as `256d632371` holds them (T701). */
+    namesOnePerModel: (on: boolean) => {
+      oneNamePerModel = on;
     },
     /** The check answers without its probes' results, as a garbled answer would. */
     dropProbes: (on: boolean) => {

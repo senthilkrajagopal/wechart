@@ -102,12 +102,7 @@ import type { CalcRequestStore } from './repos/calc-requests';
 import { resolutionsOf, withViewCubes, type OpenRequest } from './repos/calc-resolution';
 import { signsInOtherwise } from './routes/sql-runner-switch';
 import type { DataSourceLanding } from './routes/data-sources';
-import {
-  connectionNameOf,
-  type ConnectionHealth,
-  type TestAnswer,
-  type TestedConnection,
-} from './xcube/connections';
+import type { ConnectionHealth, TestAnswer, TestedConnection } from './xcube/connections';
 import type { DeletedFolderStore } from './repos/deleted-folders';
 import type { ProposalBindingStore } from './repos/proposal-bindings';
 import { settingOf, type FolderAccessStore } from './repos/folder-access';
@@ -1224,8 +1219,9 @@ export function buildServer({
     ...(introspectionRetryMs === undefined ? {} : { retryMs: introspectionRetryMs }),
     /**
      * Only one the user may see (T408, AC-268, AC-263): Cube names a wechart
-     * data source by its connection (`connectionNameOf` its folder and
-     * name), and Cube's own `default`, from its settings, is the shared
+     * data source by its connection, its own name in any folder (T701;
+     * research `xcube-256d632371.md`), and Cube's own `default`, from its
+     * settings, is the shared
      * root's. A name that is neither is a Super-Admin's alone (T408's
      * review): what it reads, and whose, isn't known here.
      */
@@ -1234,11 +1230,17 @@ export function buildServer({
       if (seen === undefined) return () => true;
       const published = folders === undefined ? ROOT_ONLY : await folders();
       const folderOf = new Map<string, string>([['default', ROOT_FOLDER_ID]]);
-      for (const source of (await dataSources?.all()) ?? []) {
-        const xcubeId = published.ids.get(source.folderId);
-        if (xcubeId !== undefined)
-          folderOf.set(connectionNameOf(xcubeId, source.name), source.folderId);
-      }
+      // Landed ones alone: a workspace's copy keeps its original's name. A
+      // name two hold, which nothing landed can be, is no one folder's: a
+      // Super-Admin's alone, as an unknown one is.
+      const twice = new Set<string>();
+      for (const source of (await dataSources?.all()) ?? [])
+        if (published.ids.has(source.folderId)) {
+          if (folderOf.has(source.name) && folderOf.get(source.name) !== source.folderId)
+            twice.add(source.name);
+          folderOf.set(source.name, source.folderId);
+        }
+      for (const name of twice) folderOf.delete(name);
       const superAdmin = userOf(request).superAdmin;
       return (source) => {
         const folder = folderOf.get(source);

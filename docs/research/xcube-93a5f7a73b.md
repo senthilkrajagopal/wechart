@@ -32,7 +32,7 @@ Under the service credential, four routes take `?overlay=<id>`:
 - `POST …/{ds}/scaffold?overlay=<id>`.
 
 With an overlay named:
-- **`{ds}` is one of that overlay's own data sources,** named as its previews and the SQL route name it: `<folderId>__<name>`, or a root one by its short name.
+- **`{ds}` is one of that overlay's own data sources,** named as its previews and the SQL route name it: ~~`<folderId>__<name>`, or a root one by its short name~~. *Corrected:* by its bare name in every folder; no `<folderId>__` is built or parsed for overlay names (R71 1.1, 3.4) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
 - **The request is pinned to the overlay's version,** as a preview of it is. The catalog is read on the overlay's own orchestrator, with its driver for the data source.
 - **It never falls back** to a landed connection of the same name, nor to a data source the model names. xcube tested an overlay bringing its own root `default`, aimed at another database: it lists that database's tables, and the published `default` still lists its own.
 - **The answers are the routes' own:** `{ schemas }`, the page of `{ tables }`, `{ tables: [{ …, columns }] }`, `{ cubes }`.

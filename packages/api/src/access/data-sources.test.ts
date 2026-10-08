@@ -113,9 +113,10 @@ beforeAll(async () => {
     access: { readOnly: null, readWrite: ['managers'] },
   });
   held.root = (await sources().create(postgres('root', `${MARK}_root`))).id;
-  held.a = (await sources().create(postgres(ids.a, 'warehouse'))).id;
+  // One name per data source (T701, AC-421): its connection in xcube is that name.
+  held.a = (await sources().create(postgres(ids.a, 'warehouse_a'))).id;
   held.b = (await sources().create(postgres(ids.b, 'warehouse'))).id;
-  held.c = (await sources().create(postgres(ids.c, 'warehouse'))).id;
+  held.c = (await sources().create(postgres(ids.c, 'warehouse_c'))).id;
 
   app = buildServer({
     config: secured,
@@ -327,25 +328,25 @@ describe('every data source the user may see, in every folder (T364, AC-157)', (
               folderId: 'fa',
               name: 'base',
               kind: 'cube',
-              fullName: 'fa__base',
+              fullName: 'base',
               bindings: {},
-              dataSource: 'fa__warehouse',
+              dataSource: 'warehouse_a',
             },
             {
               folderId: 'fb',
               name: 'child',
               kind: 'cube',
-              fullName: 'fb__child',
-              bindings: { base: 'fa__base' },
+              fullName: 'child',
+              bindings: { base: 'base' },
               dataSource: null,
             },
             {
               folderId: 'fc',
               name: 'secret',
               kind: 'cube',
-              fullName: 'fc__secret',
+              fullName: 'secret',
               bindings: {},
-              dataSource: 'fa__warehouse',
+              dataSource: 'warehouse_a',
             },
           ];
         },
@@ -419,17 +420,17 @@ describe('every data source the user may see, in every folder (T364, AC-157)', (
             folderId: 'fb',
             name: 'orders',
             kind: 'cube',
-            fullName: 'fb__orders',
+            fullName: 'orders',
             bindings: {},
-            dataSource: 'fb__warehouse',
+            dataSource: 'warehouse',
           },
           {
             folderId: 'fc',
             name: 'secret',
             kind: 'cube',
-            fullName: 'fc__secret',
+            fullName: 'secret',
             bindings: {},
-            dataSource: 'fb__warehouse',
+            dataSource: 'warehouse',
           },
         ],
       } as never,

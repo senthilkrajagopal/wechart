@@ -23,11 +23,16 @@ const published: PublishedFolders = {
     ['b', 'a'],
   ]),
 };
+/**
+ * T701 (AC-421): from xcube `256d632371` a data source's name is one per
+ * model and its connection is that name; every item is named bare (research
+ * `xcube-256d632371.md`, 1.1).
+ */
 const sources = [
   { id: 'ds-root-default', folderId: 'root', name: 'default' },
   { id: 'ds-a-warehouse', folderId: 'a', name: 'warehouse' },
-  { id: 'ds-b-warehouse', folderId: 'b', name: 'warehouse' },
-  { id: 'ds-unpublished', folderId: 'elsewhere', name: 'warehouse' },
+  { id: 'ds-b-lake', folderId: 'b', name: 'lake' },
+  { id: 'ds-unpublished', folderId: 'elsewhere', name: 'stray' },
 ];
 const cube = (
   folderId: string,
@@ -38,19 +43,20 @@ const cube = (
   folderId,
   name,
   kind: 'cube',
-  fullName: folderId === 'froot' ? name : `${folderId}__${name}`,
+  fullName: name,
   bindings,
   ...(dataSource === undefined ? {} : { dataSource }),
 });
 
 describe('the cubes bound to each data source (T459, AC-157)', () => {
-  it('matches each cube’s bound connection to its data source, by folder and name', () => {
+  it('matches each cube’s bound connection to its data source, by its name', () => {
     const using = cubesUsing({
       held: [
-        cube('fb', 'sales', 'fa__warehouse'),
-        cube('fb', 'returns', 'fb__warehouse'),
+        cube('fb', 'sales', 'warehouse'),
+        cube('fb', 'returns', 'lake'),
         cube('froot', 'orders', 'default'),
-        { folderId: 'fb', name: 'summary', kind: 'view', fullName: 'fb__summary', bindings: {} },
+        cube('fb', 'strays', 'stray'),
+        { folderId: 'fb', name: 'summary', kind: 'view', fullName: 'summary', bindings: {} },
       ],
       published,
       sources,
@@ -58,7 +64,7 @@ describe('the cubes bound to each data source (T459, AC-157)', () => {
     });
 
     expect(using.get('ds-a-warehouse')).toEqual([{ name: 'sales', folderId: 'b' }]);
-    expect(using.get('ds-b-warehouse')).toEqual([{ name: 'returns', folderId: 'b' }]);
+    expect(using.get('ds-b-lake')).toEqual([{ name: 'returns', folderId: 'b' }]);
     expect(using.get('ds-root-default')).toEqual([{ name: 'orders', folderId: 'root' }]);
     expect(using.has('ds-unpublished')).toBe(false);
   });
@@ -66,11 +72,11 @@ describe('the cubes bound to each data source (T459, AC-157)', () => {
   it('gives a cube that extends another its parent’s, through its own YAML and bindings', () => {
     const using = cubesUsing({
       held: [
-        cube('fa', 'base', 'fa__warehouse'),
-        cube('fb', 'child', null, { base: 'fa__base', customers: 'fb__customers' }),
-        cube('fb', 'grandchild', null, { child: 'fb__child' }),
+        cube('fa', 'base', 'warehouse'),
+        cube('fb', 'child', null, { base: 'base', customers: 'customers' }),
+        cube('fb', 'grandchild', null, { child: 'child' }),
         // Its parent isn't there: it's said to use none rather than a guess.
-        cube('fb', 'orphan', null, { gone: 'fa__gone' }),
+        cube('fb', 'orphan', null, { gone: 'gone' }),
       ],
       published,
       sources,
@@ -93,7 +99,7 @@ describe('the cubes bound to each data source (T459, AC-157)', () => {
 
   it('never loops on cubes that extend each other', () => {
     const using = cubesUsing({
-      held: [cube('fb', 'x', null, { y: 'fb__y' }), cube('fb', 'y', null, { x: 'fb__x' })],
+      held: [cube('fb', 'x', null, { y: 'y' }), cube('fb', 'y', null, { x: 'x' })],
       published,
       sources,
       extendsOf: (_folderId, name) => (name === 'x' ? 'y' : 'x'),
@@ -114,7 +120,7 @@ describe('the cubes bound to each data source (T459, AC-157)', () => {
 
   it('names each cube’s model file, where wechart holds it (T499; design 03, state F)', () => {
     const using = cubesUsing({
-      held: [cube('fb', 'sales', 'fb__warehouse'), cube('fb', 'returns', 'fb__warehouse')],
+      held: [cube('fb', 'sales', 'lake'), cube('fb', 'returns', 'lake')],
       published,
       sources,
       extendsOf: () => undefined,
@@ -122,11 +128,24 @@ describe('the cubes bound to each data source (T459, AC-157)', () => {
         folderId === 'fb' && name === 'sales' ? 'cubes/sales.yml' : undefined,
     });
 
-    expect(using.get('ds-b-warehouse')).toEqual([
+    expect(using.get('ds-b-lake')).toEqual([
       { name: 'sales', folderId: 'b', file: 'cubes/sales.yml' },
       // One whose file isn't known is listed without one, never a guess.
       { name: 'returns', folderId: 'b' },
     ]);
+  });
+
+  // T701's review: a name two of wechart's data sources hold, which nothing
+  // landed can be under R71, is said of neither rather than of either.
+  it('says the cubes on a name two data sources hold of neither', () => {
+    const using = cubesUsing({
+      held: [cube('fb', 'sales', 'warehouse')],
+      published,
+      sources: [...sources, { id: 'ds-b-warehouse', folderId: 'b', name: 'warehouse' }],
+      extendsOf: () => undefined,
+    });
+
+    expect([...using.values()].flat()).toEqual([]);
   });
 
   it('counts none from an older image, which says no cube’s data source', () => {

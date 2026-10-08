@@ -156,7 +156,7 @@ This doc checks xcube's three answers (`to-wechart/2026-09-28-0400-â€¦`, `0600-â
 ### What a revision is served as
 
 - `residentsOf` passes `withIdentityAliases` only the identities of connections moved from their base (`runtime.ts` L2629-2635, L2475-2479).
-  - A cube on a connection at its base is served exactly as published. That covers its publish-time alias, or an authored `sql_alias`, or none for a root cube.
+  - A cube on a connection at its base is served exactly as published. That covers its publish-time alias, or an authored `sql_alias`, or none ~~for a root cube~~ *Corrected:* for any cube, in any folder, that R71 1.2's rules leave unaliased ([`xcube-256d632371.md`](./xcube-256d632371.md)).
   - The tests compare the served file byte for byte (`connections.test.ts` L644-649, L700-703).
 - A module's app id gains `:c<salt>` only when it holds a moved cube (L2636-2662). At base it is the app id it always had.
 - **The epoch still hashes every connection's identity**, moved or not (`servedRevision` L2595-2597; `aliases.ts` L55-58). So any change of target still gives the whole model a new orchestrator, `<base>_<model>_<epoch>` (`config.ts` L177-179).

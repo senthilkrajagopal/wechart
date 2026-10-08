@@ -205,33 +205,33 @@ All model routes are `{CUBE_API_URL}/v1/semantic/models/{model}/…` ([routes] L
 // [rt] L221-229, L2858-2866
 type ItemRef = {
   folderId: string; name: string; fullName: string;
-  bindings: Record<string, string>;   // { shortName: fullName }: the same field GET …/items gives
+  bindings: Record<string, string>;   // ~~{ shortName: fullName }~~ Corrected: { name: name }, fullName == name (R71 3.3; xcube-256d632371.md): the same field GET …/items gives
   dataSource?: string | null;         // cubes only; views have no key
 };
 ```
 
 | Route | Answer | `items` holds | Bound | Source |
 | --- | --- | --- | --- | --- |
-| `POST …/changesets` → `201`/`200` | `{ model, generation, revision, created, contentHash, itemsHash, items }` | The upserted items only; deletes aren't listed | Nearest-first along each item's path | [rt] L2999, L3025, L3060; [routes] L218-245 |
+| `POST …/changesets` → `201`/`200` | `{ model, generation, revision, created, contentHash, itemsHash, items }` | The upserted items only; deletes aren't listed | ~~Nearest-first along each item's path~~ *Corrected:* each name means the one item of that name, matched exactly (R71 3.1) ([`xcube-256d632371.md`](./xcube-256d632371.md)) | [rt] L2999, L3025, L3060; [routes] L218-245 |
 | `POST …/changesets?dryRun=true` → `200` | `{ model, valid, errors, cubeMessage, probes, itemsHash, currentRevision, items }` | The upserted items; `[]` when names or bindings fail (Gotcha 12) | As the changeset would land them, over the database head `currentRevision` and the published data sources | [rt] L236-246, L2930-2952, L3003-3014, L3043-3045 |
-| `PUT …/snapshot` with items | As changesets | Every item (`replaceAll`) | Afresh, nearest-first | [rt] L2956-2973 |
+| `PUT …/snapshot` with items | As changesets | Every item (`replaceAll`) | Afresh, ~~nearest-first~~ *Corrected:* by name, one item per name (R71 3.1) ([`xcube-256d632371.md`](./xcube-256d632371.md)) | [rt] L2956-2973 |
 | `PUT …/overlays/{id}` → `201`/`200` | `{ model, id, version, created, revision, expiresAt, items }` | The upserted items | Overlay-first ([x5] Gotcha 5) | [rt] L1540-1545; [routes] L640-648 |
-| `GET …/items` | Unchanged: `{ folderId, name, kind, fullName, bindings }` | Every item at the head | As stored | [rt] L3161-3173 |
+| `GET …/items` | Unchanged: `{ folderId, name, kind, fullName, bindings }` *Corrected:* at 256d632371 also `dataSource?` and `extends?`, with `fullName` == `name` (README "GET …/items") ([`xcube-256d632371.md`](./xcube-256d632371.md)) | Every item at the head | As stored | [rt] L3161-3173 |
 
 **`bindings`:**
 - It holds only references to other cubes and views, resolved by `rewriteReferences` ([rw] L138-173).
 - A name that resolves to nothing is left out, and Cube's compile reports it. Where only a cube can stand (a join, `extends`, a join path), it is an item error instead ([rw] L131-137, L197, L296, L346).
 - **Data sources are not in `bindings`.** Cubes carry them separately as `dataSource`.
-- **Root vs folder targets.** A full name is the short name in `froot`, and `<folderId>__<name>` elsewhere ([items] L65-67). So a binding to a root item is `{ customers: 'customers' }` ([t-items] L196-202, L229-232), and one to a folder item is `{ widgets: 'fc__widgets' }` ([t-ov] L231-232). An item that names nothing has `bindings: {}` ([t-items] L220-222).
+- **Root vs folder targets.** ~~A full name is the short name in `froot`, and `<folderId>__<name>` elsewhere ([items] L65-67).~~ *Corrected:* every binding is `{ name: name }` in every folder; there is no prefix (R71 1.1, 3.3) ([`xcube-256d632371.md`](./xcube-256d632371.md)). So a binding to a root item is `{ customers: 'customers' }` ([t-items] L196-202, L229-232), and one to a folder item is `{ widgets: 'fc__widgets' }` ([t-ov] L231-232). An item that names nothing has `bindings: {}` ([t-items] L220-222).
 
 **`dataSource`** is `boundDataSource(item)`, read from xcube's own YAML dump ([ovc] L4-15):
-- **The cube names one:** its bound full name, nearest-first along the cube's folder chain. That is `x` in the root, `<folderId>__x` in a folder ([pub] L223-249).
+- **The cube names one:** ~~its bound full name, nearest-first along the cube's folder chain. That is `x` in the root, `<folderId>__x` in a folder~~ *Corrected:* that name, bare, the model's one data source of it (R71 1.1, 4.1) ([`xcube-256d632371.md`](./xcube-256d632371.md)) ([pub] L223-249).
 - **It names none and doesn't extend:**
-  - `'default'` when the nearest `default` is the root's, since that one is written as nothing ([pub] L250-256; [ovc] L14);
-  - `'<folderId>__default'` when a nearer folder holds a `default`.
+  - `'default'` ~~when the nearest `default` is the root's~~, since that one is written as nothing ([pub] L250-256; [ovc] L14);
+  - ~~`'<folderId>__default'` when a nearer folder holds a `default`.~~ *Corrected:* only the root holds `default` (R71 4.2) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
 - **It extends and names none:** `null` ([ovc] L14).
 - **Binding happens only when the model has published connections, or the overlay brings some** ([pub] L353-358; [rt] L1785-1790, L1446-1457). Otherwise `dataSource` is the short name as written, or `'default'`.
-- Tested: `{ folderId: 'fops', name: 'returns', fullName: 'fops__returns', bindings: {}, dataSource: 'default' }` ([t-items] L220-222).
+- Tested: `{ folderId: 'fops', name: 'returns', fullName: ~~'fops__returns'~~ 'returns', bindings: {}, dataSource: 'default' }` ([t-items] L220-222). *Corrected:* `fullName` is the name (`test/integration/items.test.ts` L233) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
 
 ### `GET …/overlays/{id}`
 
@@ -251,15 +251,15 @@ type ItemRef = {
 - **The answer.** Each upsert gets its `ItemRef` fields, and `boundRevision` = `head.revision` ([rt] L1581-1586).
 - **`boundRevision: null`, with no upsert fields,** when there is no head, the head is in files mode, or `publish` reports an error. Such errors are:
   - a folder not in the tree;
-  - two overlay items with one short name;
+  - two overlay items with one ~~short~~ name *Corrected:* in any case, kind `name_in_use` (R71 2.6) ([`xcube-256d632371.md`](./xcube-256d632371.md));
   - a reference to a removed item;
   - an alias clash;
-  - a `data_source` found on no folder on the path.
+  - ~~a `data_source` found on no folder on the path.~~ *Corrected:* a `data_source` the model doesn't hold (`reference`), or one off the cube's path (`data_source_range`), and a reference off the item's path (`reference_range`) (R71 4.3, R72) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
   - Sources: [pub] L265-295, L317-319, L337-345, L370-372; [rt] L1558-1565.
 - **It doesn't compile.** An overlay that still resolves but no longer compiles keeps its bindings and a non-null `boundRevision` (Gotcha 16).
 - **Tested** ([t-ov] L222-233):
   - `boundRevision` equals the published revision;
-  - `fb/report`'s `bindings` contain `widgets: 'fc__widgets'`, the workspace's copy from `fc`, which isn't on `fb`'s path;
+  - ~~`fb/report`'s `bindings` contain `widgets: 'fc__widgets'`, the workspace's copy from `fc`, which isn't on `fb`'s path~~ *Corrected:* bindings are `{ widgets: 'widgets' }`, and an overlay's own item referring off its path is refused at the push (`reference_range`, R72) ([`xcube-256d632371.md`](./xcube-256d632371.md));
   - the push answer's `items` for `report` have the same `bindings`.
 
 ### Comparing a preview with a landing (T456)
@@ -302,16 +302,16 @@ type ItemRef = {
    - These don't match: `can't be followed on this instance` ([rt] L2016), and `xcube's database is not reachable` ([routes] L331-333).
 5. **The wait is per request, on the answering instance.** It is one fresh read plus any compile, raced against 10 s. It can end sooner without reaching `n` ([rt] L2014-2034, L2320-2322). Three asks by `#send` fit in about 34 s ([w-client] L50-58).
 6. **The route is unfiltered,** by design ([x4] L533). Jobs and Schedules must filter per folder themselves (T371).
-7. **`bindings` never holds data sources, and `GET …/items` never gives `dataSource`** ([rw] L138-153; [rt] L3171). A published item's bound data source appears only in the answer that published it.
+7. **`bindings` never holds data sources, and ~~`GET …/items` never gives `dataSource`~~** *Corrected:* at 256d632371 `GET …/items` gives a cube's `dataSource` and `extends` (R71 3.3) ([`xcube-256d632371.md`](./xcube-256d632371.md)) ([rw] L138-153; [rt] L3171). A published item's bound data source appears only in the answer that published it.
 8. **What `dataSource` means depends on the model** (API surface). With no published connections, and none brought, it is the unbound name as written.
 9. **Views have no `dataSource` key** ([rt] L2864, L1583). Compare presence as well as value.
 10. **A copy under the same full name gives the same `dataSource` string.** A workspace copy that replaces a published data source ([xov] Gotcha 2) can't be told apart by this field.
 11. **The dry run can't carry the proposal's data sources.** `changesetCheckSchema` has no `connections` ([routes] L125-147), and the dry run binds against published connections only ([rt] L2951).
-    - A cube naming a data source the proposal brings will either fail (`It uses the data source "<n>", which no folder on this item's path holds`, [pub] L245-248), making `items` `[]`, or bind to a farther published namesake.
+    - A cube naming a data source the proposal brings will either fail (`It uses the data source "<n>", which no folder on this item's path holds`, [pub] L245-248), making `items` `[]`, ~~or bind to a farther published namesake~~ *Corrected:* the message is now `…, which the model doesn't hold`, and no namesake can exist (R71 2.1, 3.4) ([`xcube-256d632371.md`](./xcube-256d632371.md)).
     - It compares correctly only after that data source is landed (T442). See Open question 1.
 12. **A dry run whose names or bindings fail has `items: []`.** `publish` returns `changed: []` on those errors ([pub] L293-295, L317-319, L370-372; [rt] L2985-2987, L3011-3014). Compile errors still list the items ([t-items] L217-222).
 13. **Dry-run deletes are strict; overlay deletes are lenient.** Deleting an absent item is an error in the dry run ("There is no such item to delete"), which empties `items` ([rt] L2985; [pub] L300-304; [rt] L1455).
-14. **Equal revisions don't prove equal bindings.** `PUT …/folders` and `PUT …/connections/{name}` don't move `current_rev` ([rev] L364-396, L642-662), and both change how names bind. wechart is their only writer, so it can serialise an approval against its own folder and data-source writes.
+14. **Equal revisions don't prove equal bindings.** `PUT …/folders` and `PUT …/connections/{name}` don't move `current_rev` ([rev] L364-396, L642-662), ~~and both change how names bind~~ *Corrected:* neither changes a binding now; both are checked under the model's lock, and a publish is stored only while the data sources and tree are as it was checked against, else `409 conflict` (R71 2.4) ([`xcube-256d632371.md`](./xcube-256d632371.md)). wechart is their only writer, so it can serialise an approval against its own folder and data-source writes.
 15. **`boundRevision` is the head at the `GET`, not what an approver saw.**
     - Previews are answered from an instance's active revision, at least `wechartRevision` ([x5] "Querying a preview").
     - Bindings are recomputed at every `GET`, independent of `validatedRevision` ([rt] L1556-1565).
@@ -376,7 +376,7 @@ Still true at `40efaef823`:
 | 10 | `revision` is a whole number from 1; anything else is `400 bad_request` (L14) | Verified | [routes] L488-491: at most 10 digits, no leading zero, one value; [t-sec] L379-380 |
 | 11 | Without it, the answer is as before (L14) | Verified for the body | Plus `x-xcube-revision` and `x-xcube-generation` headers ([rt] L1900-1901) |
 | 12 | Tested: a changeset followed at once by `meta?revision=<new>` holds the new cube (L15) | Verified | [t-sec] L376-390; CI passed ([jobs]). One process only; the 503 path is untested |
-| 13 | Every item reference carries `bindings` `{ shortName: fullName }`, exactly as `GET …/items` gives them (L19) | Verified | Both come from `PublishedItem.bindings` ([rt] L2862, L3171; [items] L44-49) |
+| 13 | Every item reference carries `bindings` `{ shortName: fullName }`, exactly as `GET …/items` gives them (L19) | Verified; *Corrected:* now `{ name: name }` (R71 3.3) ([`xcube-256d632371.md`](./xcube-256d632371.md)) | Both come from `PublishedItem.bindings` ([rt] L2862, L3171; [items] L44-49) |
 | 14 | A cube's `dataSource`: as bound; `default` when it names none; `null` when it inherits through `extends` (L19) | Partly | [ovc] L9-15. A folder's nearer `default` gives `<folderId>__default` ([pub] L250-256). With no connections anywhere it is the unbound name as written ([pub] L353) |
 | 15 | Applies to `items` of changesets (applied and dry run), snapshot with items, and overlay push (L20) | Verified | [rt] L1544, L2999, L3011, L3025, L3060; [routes] L218-245, L640-648. A failed dry run's `items` is `[]` (Gotcha 12) |
 | 16 | The dry run's `items` are its bindings as the changeset would land them (L21) | Verified | Same `publishItems`/`publish` path, without `overlay` ([rt] L2950-2952, L2985); [t-items] L229-232. Over the published data sources only (Gotcha 11) |

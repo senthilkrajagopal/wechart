@@ -36,6 +36,35 @@ export interface Refusal {
 
 const plural = (n: number, one: string, many: string) => `${String(n)} ${n === 1 ? one : many}`;
 
+/**
+ * A name refused because something else holds it, said as AC-424 has it: in
+ * use, and never where (T701, AC-421).
+ */
+export const nameInUse = (name: string): string => `The name “${name}” is already in use.`;
+
+/** xcube's `default_outside_root`, said without the root's xcube id (T701, AC-310). */
+export const DEFAULT_AT_ROOT = 'Only the shared root may have a data source named default.';
+
+/**
+ * An item xcube refused, as its user is told it (T701; research
+ * `xcube-256d632371.md`, "The error kinds"). xcube's `name_in_use` names the
+ * caller's own item, but some of its words say more than that the name is in
+ * use: the holder's own spelling ("in use as …"), or the caller's two items'
+ * folder ids. Only the name is said. Every other kind is said in xcube's
+ * words, which name the item and what it refers to, never a folder.
+ */
+export function itemMessageOf(error: {
+  readonly kind: string;
+  readonly name: string | null;
+  readonly message: string;
+}): string {
+  if (error.kind !== 'name_in_use') return error.message;
+  // A view's `split: true` cube, named `<view>_<cube alias>`, takes a name too.
+  const split = /^Its split view "([^"]+)"/.exec(error.message)?.[1];
+  if (split !== undefined) return `Its split view “${split}” would take a name already in use.`;
+  return nameInUse(error.name ?? /"([^"]+)"/.exec(error.message)?.[1] ?? '');
+}
+
 export function refusalOf(
   errors: readonly CompileError[],
   /** Whether the user may see a folder's models: every folder for a Super-Admin, or with sign-in off. */

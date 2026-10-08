@@ -2,7 +2,8 @@ import type { FieldValue, SealedV1 } from '@wechart/core';
 
 import { DataSourceRefused, type DataSource, type Landed } from '../repos/data-sources';
 import { XcubeError } from './client';
-import { XCUBE_ROOT, type PublishedFolders } from './folders';
+import type { PublishedFolders } from './folders';
+import { DEFAULT_AT_ROOT, nameInUse } from './refusal';
 
 /**
  * Each folder's data source landed in xcube as a connection (T442; AC-327,
@@ -25,6 +26,8 @@ export interface HeldConnection {
   readonly fields: Readonly<Record<string, FieldValue>>;
   readonly secrets: readonly string[];
   readonly revisions: Readonly<Record<string, string>>;
+  /** The version an edit of it names (T701; research `xcube-256d632371.md`, 2.5). */
+  readonly version: number;
 }
 
 export interface ConnectionBody {
@@ -34,10 +37,17 @@ export interface ConnectionBody {
   readonly fields: Readonly<Record<string, FieldValue>>;
   readonly sealed: Readonly<Record<string, SealedV1>>;
   readonly revisions: Readonly<Record<string, string>>;
+  /**
+   * The version it edits, in place or moved to `folderId`; `null` creates it,
+   * which xcube never lands over another data source of its name, in any
+   * case (T701; research `xcube-256d632371.md`, 2.5). Required from
+   * `256d632371`.
+   */
+  readonly baseVersion: number | null;
 }
 
 /** A connection as tested: what xcube opens and connects with, stored or not (T361). */
-export type TestedConnection = Omit<ConnectionBody, 'folderId' | 'revisions'>;
+export type TestedConnection = Omit<ConnectionBody, 'folderId' | 'revisions' | 'baseVersion'>;
 
 /**
  * A connection test's checks, as xcube ran them (research, "`POST
@@ -86,6 +96,10 @@ export interface XcubeConnections {
  * What xcube refuses every time for the same connection (research, "Errors
  * added by slice 6"): its config or name (400), a change of driver or a
  * connection published cubes use (409), an envelope that won't open (422).
+ * From `256d632371` (T701; research `xcube-256d632371.md`, "On the connection
+ * route"): `default` outside the root (400); a name another data source
+ * holds, in any case, a version since changed, and a move that would leave
+ * cubes off their data source's path (409).
  */
 export class ConnectionRefused extends Error {
   constructor(
@@ -103,14 +117,14 @@ const REFUSALS: Readonly<Record<string, 400 | 409 | 422>> = {
   invalid_connection: 400,
   invalid_connection_name: 400,
   bad_request: 400,
+  default_outside_root: 400,
   driver_change: 409,
   in_use: 409,
+  name_in_use: 409,
+  conflict: 409,
+  data_source_range: 409,
   invalid_secret: 422,
 };
-
-/** A connection's name in xcube: the short name in the root, `<folderId>__<name>` elsewhere. */
-export const connectionNameOf = (xcubeFolderId: string, name: string): string =>
-  xcubeFolderId === XCUBE_ROOT ? name : `${xcubeFolderId}__${name}`;
 
 /**
  * xcube checks a connection and builds its driver's configuration, and never
@@ -162,9 +176,12 @@ export function xcubeConnections({
     const refusal = code === undefined ? undefined : REFUSALS[code];
     if (refusal !== undefined && refusal === status) {
       const message = error ?? code!;
-      const problems = Array.isArray(answer['problems'])
-        ? (answer['problems'] as unknown[]).map(String)
-        : [message];
+      // `name_in_use` comes with no problems (research `xcube-256d632371.md`):
+      // its words are its one problem, as where none are given.
+      const problems =
+        Array.isArray(answer['problems']) && answer['problems'].length > 0
+          ? (answer['problems'] as unknown[]).map(String)
+          : [message];
       return new ConnectionRefused(refusal, code!, message, problems);
     }
     return new XcubeError(
@@ -211,6 +228,7 @@ export function xcubeConnections({
         fields: (row['fields'] ?? {}) as Record<string, FieldValue>,
         secrets: Array.isArray(row['secrets']) ? (row['secrets'] as unknown[]).map(String) : [],
         revisions: (row['revisions'] ?? {}) as Record<string, string>,
+        version: Number(row['version']),
       }));
     },
 
@@ -244,7 +262,14 @@ export interface Reconciled {
  * transaction opens: it asks nothing more of the database (T442's review).
  */
 export interface PreparedLanding {
-  land(source: DataSource, landed: Landed): Promise<void>;
+  /**
+   * Its connection put whole: created where `creating` (a new data source),
+   * which xcube refuses while any data source holds its name in any case;
+   * otherwise an edit of the version xcube holds under its name, or created
+   * where it holds none, as after a rename (T701; research
+   * `xcube-256d632371.md`, 2.5).
+   */
+  land(source: DataSource, landed: Landed, creating: boolean): Promise<void>;
   /** The connection of a name it leaves, on a rename. */
   unland(source: DataSource): Promise<void>;
 }
@@ -255,7 +280,7 @@ const sameRecord = (a: Readonly<Record<string, unknown>>, b: Readonly<Record<str
 };
 
 /** xcube's answer, as the reason a save or a removal is refused. */
-function refusalOf(error: unknown, doing: 'saved' | 'removed'): unknown {
+function refusalOf(error: unknown, doing: 'saved' | 'removed', name?: string): unknown {
   if (error instanceof DataSourceRefused) return error;
   if (error instanceof ConnectionRefused) {
     if (error.code === 'in_use')
@@ -269,6 +294,25 @@ function refusalOf(error: unknown, doing: 'saved' | 'removed'): unknown {
         422,
         `xcube can’t open a secret: ${error.message}. Enter it again.`,
       );
+    /**
+     * T701 (AC-421, AC-424): the name is in use, and nothing more. xcube's
+     * "in use as" names the holder's own spelling: not said either.
+     */
+    if (error.code === 'name_in_use') return new DataSourceRefused(409, nameInUse(name ?? ''));
+    if (error.code === 'conflict')
+      return new DataSourceRefused(
+        409,
+        'This data source changed in xcube meanwhile, so nothing was saved. Open it again, and save your change on what it is now.',
+      );
+    // The cubes xcube names may be in folders the saver can't see (AC-322):
+    // none is said here.
+    if (error.code === 'data_source_range')
+      return new DataSourceRefused(
+        409,
+        'Cubes using this data source would be left outside its folder and its subfolders, so nothing was saved.',
+      );
+    // xcube's words name the root by its xcube id.
+    if (error.code === 'default_outside_root') return new DataSourceRefused(400, DEFAULT_AT_ROOT);
     return new DataSourceRefused(error.status, error.problems.join(' '), error.problems);
   }
   // Another answer — a service key xcube won't take, say — is no outage (T442's review).
@@ -293,14 +337,23 @@ export function connectionSync({
   /** Puts xcube's tree, so a folder made a moment ago is in it (T452). */
   readonly pushTree?: () => Promise<unknown>;
 }) {
-  const bodyOf = (source: DataSource, xcubeId: string, landed: Landed): ConnectionBody => ({
+  const bodyOf = (
+    source: DataSource,
+    xcubeId: string,
+    landed: Landed,
+    baseVersion: number | null,
+  ): ConnectionBody => ({
     folderId: xcubeId,
     driver: source.driver,
     authMethod: source.authMethod,
     fields: source.fields,
     sealed: landed.sealed,
     revisions: landed.revisions,
+    baseVersion,
   });
+  /** The version xcube holds under exactly this name, or null where it holds none. */
+  const heldVersion = async (name: string) =>
+    (await connections.list()).find((held) => held.name === name)?.version ?? null;
 
   return {
     /**
@@ -323,27 +376,28 @@ export function connectionSync({
         );
       const id = xcubeId;
       return {
-        async land(source, landed) {
-          await connections
-            .put(connectionNameOf(id, source.name), bodyOf(source, id, landed))
-            .catch((error: unknown) => {
-              throw refusalOf(error, 'saved');
-            });
+        async land(source, landed, creating) {
+          try {
+            // By its own name in any folder (T701; research
+            // `xcube-256d632371.md`, 1.1).
+            const baseVersion = creating ? null : await heldVersion(source.name);
+            await connections.put(source.name, bodyOf(source, id, landed, baseVersion));
+          } catch (error) {
+            throw refusalOf(error, 'saved', source.name);
+          }
         },
         async unland(source) {
-          await connections.remove(connectionNameOf(id, source.name)).catch((error: unknown) => {
+          await connections.remove(source.name).catch((error: unknown) => {
             throw refusalOf(error, 'saved');
           });
         },
       };
     },
 
-    /** Its instances' reports, under its full name; none where it never landed (T365). */
+    /** Its instances' reports, under its own name; none where it never landed (T365). */
     async healthOf(source: DataSource): Promise<ConnectionHealth | undefined> {
       const xcubeId = (await folders()).ids.get(source.folderId);
-      return xcubeId === undefined
-        ? undefined
-        : connections.health(connectionNameOf(xcubeId, source.name));
+      return xcubeId === undefined ? undefined : connections.health(source.name);
     },
 
     /** Removes it from xcube, or refuses while published cubes use it. */
@@ -352,7 +406,7 @@ export function connectionSync({
         const xcubeId = (await folders()).ids.get(source.folderId);
         // Never landed: nothing in xcube to remove.
         if (xcubeId === undefined) return;
-        await connections.remove(connectionNameOf(xcubeId, source.name));
+        await connections.remove(source.name);
       } catch (error) {
         throw refusalOf(error, 'removed');
       }
@@ -383,7 +437,7 @@ export function connectionSync({
         const xcubeId = published.ids.get(source.folderId);
         // A workspace's, which xcube's tree doesn't hold until slice 5.
         if (xcubeId === undefined) continue;
-        const name = connectionNameOf(xcubeId, source.name);
+        const name = source.name;
         wanted.add(name);
         const landed = await store.sealedOf(source.id);
         const was = heldBy.get(name);
@@ -397,7 +451,9 @@ export function connectionSync({
         )
           continue;
         try {
-          await connections.put(name, bodyOf(source, xcubeId, landed));
+          // Over the version xcube holds, moved to its folder where it isn't
+          // there; created where xcube holds none (T701).
+          await connections.put(name, bodyOf(source, xcubeId, landed, was?.version ?? null));
           report.put.push(name);
         } catch (error) {
           const said = `${name}: ${reasonOf(error)}`;
