@@ -950,6 +950,19 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R77 — closing design conformance faster** (2026-10-08, the user)
+- The user, choosing all three options Claude offered: "Accept small visual differences and Skip the review round on pure-styling tasks and Close AC-187, the overall prototype check, on the per-surface results."
+- *Decided:*
+  1. **Small visual differences are accepted** and recorded rather than fixed. A difference is small when all of these hold:
+     - it is at most 4 px in a size, spacing or position;
+     - any colour stays within the same token role;
+     - it changes no structure, control, wording, state or behaviour the design draws;
+     - it breaks no hard rule: the 12 px floor, WCAG AA contrast, the 400/600 weights, or no horizontal scroll at 390 px.
+
+     Each one accepted is listed, with the task, in `docs/design/accepted-differences.md`. That list counts as the recorded decision that AC-343, AC-344 and AC-352's escape clause asks for.
+  2. **A task that changes only styling** (CSS and tokens, with no change to behaviour, wording, structure or a test's logic) skips the cold spec-review round. Its tests still fail first and pass after. Any task touching behaviour keeps its review.
+  3. **AC-187 closes on the per-surface results.** It is ticked once T682–T698 and T742 have landed and AC-343, AC-344 and AC-352 are ticked. T406's full re-critique is not repeated.
+
 **R76 — the design critique's 56 questions, decided under the user's delegation** (2026-10-08)
 - The user: "Go ahead and make decisions.. if you think the design is incorrect.. do the right thing and make your own decisions. If you need help in answering the question.. use combination of cube expert and ui expert."
 - *A UI-expert agent decided each of the 56 questions (the 2026-10-08 critiques, design 10's included, and design 16's J1–J3 from T613). The coordinator reviewed them, and the Cube expert answered the one Cube question. They can be overturned like any other decision.*
