@@ -13832,6 +13832,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - The test-integrity hook flagged the removed assertions.
       - AC-378's and AC-379's Cube Store sayings stay shown by the unit and component tests named in T548 and T549, not on the image: the stop, "runs to its end", the held next run, and no Cancel.
       - On the image, a stopped Cube Store run would need a single catalog read, or a join of Cube Store's own tables, lasting over 30 s, and compose's Cube Store holds nothing that large. Whether AC-378 and AC-379 keep their ticks on that basis is a question.
+      - **AC-378 and AC-379 unticked** (the coordinator, 2026-10-08): a tick needs a passing real-surface test, and their Cube Store e2e can no longer reach that state. A follow-up builds a fixture large enough, and they are ticked again when it passes.
     - **Runs:**
       - API: 1835 of 1836. `phase1-content.test.ts` failed, the known flake.
       - Web: 2636 of 2637. `UnplacedCodes.test.tsx` failed in the full run and passed alone.
