@@ -11705,7 +11705,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
       - Bars' marking is `markings.spec.ts`'s (T190).
       - The touched specs pass in Chrome: 150 tests.
     - AC-096 stays ticked, now on every chart type and table.
-- [ ] T508 (AC-354, AC-355, AC-356, AC-357, AC-358, AC-359) Export a dashboard with the dependencies chosen, and import one into My workspace *(added 2026-09-28, R43)*
+- [x] T508 (AC-354, AC-355, AC-356, AC-357, AC-358, AC-359) Export a dashboard with the dependencies chosen, and import one into My workspace *(added 2026-09-28, R43)*
   - Designed first: `docs/design/reviews/2026-09-28/designs/13-dashboard-export-import.html`. This entry is split into tasks once the user approves the design.
   - Importing models waits on T347 and T350 (workspace models).
   - *2026-09-28, R44:* an import always lands in My workspace as new drafts and never replaces anything; it warns of same-named items, cubes and data sources (AC-357 amended), and the usual Propose and Approve takes each draft to its folder. The design agent is redrawing design 13's Import to this.
@@ -11718,6 +11718,17 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
       - Its "nearest first" wording for where a mapped or created data source binds becomes "the one data source of that name, held on the target's path".
     - **Tasks.** T719 maps the data sources, and T733 reworks T513's and T514's tests.
     - **When it is ticked.** This entry stays the umbrella. It is ticked with T720, T721, T733 and T359's sign-in-off parts.
+  - *2026-10-08, AC-356's sign-in-off clause (the coordinator's item 3):*
+    - `e2e/import-single-user.spec.ts` (new) runs under the phase-1 config, sign-in off. A dashboard of the single user's own, with its own chart, is exported through `POST /api/export/dashboards/:id`. It is imported from My workspace's New to a new shared folder that already holds a dashboard. The test checks each of these:
+      - the pane says the import lands in My workspace and that the user may approve their own proposal;
+      - the toast says "1 dashboard and 1 chart. Nothing in <target> changed.";
+      - the drafts are new in `mine`, going to the target;
+      - the target, and the dashboard exported, are as they were;
+      - proposed from the toast and approved by its own author in Reviews, the draft lands in the target beside the dashboard it held, which is unchanged;
+      - no response is a 401 or 403 (AC-254).
+    - It passed on the image, in chrome, 1/1. It is a test of what T359 and T513 built, so it was green from its first run.
+    - "A user with no workspace can import" was shown by no e2e: the reader's UI offers no My workspace (`explore-roles.spec.ts`), but the API was untested. `security/export-import.spec.ts` now has a reader case: Review and the import itself are each refused, 403, "Importing needs My workspace: an import lands there, and view-only access comes without one." The spec passes 13/13 on the image.
+    - AC-356 ticked. With sign-in on, its other clauses are shown by `security/export-import.spec.ts` (T513, T733). AC-354 to AC-361 are all ticked now, so this umbrella is ticked.
 - [x] T509 (AC-353) Warn that switching a data source's sign-in to a key or token rebuilds its rollups *(added 2026-09-28, from T506's review)*
   - **Why.** T506 warns when a stored BigQuery key, or a Snowflake or Dremio token, is replaced. Switching the sign-in method to one of them also stores a new key holder, so it rebuilds the rollups in the same way. It said nothing.
   - Files: `packages/web/src/workspaces/data-sources/ConnectionForm.tsx` (+ test)

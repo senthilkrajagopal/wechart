@@ -63,6 +63,9 @@ const published: { folderId: string; name: string }[] = [];
 const envelopes: SealedV1[] = [];
 /** The file the export downloaded, which the import then takes (T513). */
 const exported = { text: '' };
+/** Where drafts are made from a file, and where they are reviewed first (T513). */
+const MAKE_URL = `/api/import`;
+const REVIEW_URL = `${MAKE_URL}/review`;
 /** What the imports made in writer's workspace, removed after. */
 const drafts: { kind: string; id: string }[] = [];
 /** The model files an import landed in writer's workspace root, removed after (T733). */
@@ -1193,6 +1196,23 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
       await expect(pane.getByRole('group', { name: 'Library charts it shows' })).toBeVisible();
       await expect(pane.getByRole('group', { name: 'Models its charts use' })).toHaveCount(0);
       await expect(pane).not.toContainText(names.emea);
+    });
+
+    // AC-356: a user with no workspace can't make an import (view-only access comes without one, AC-277).
+    test('can’t make an import, having no workspace, at Review or at the end', async ({ page }) => {
+      expect(exported.text).not.toBe('');
+      const file = JSON.parse(exported.text) as unknown;
+      const refusedAt = async (step: 'review' | 'make') => {
+        const answer = await page.request.post(step === 'review' ? REVIEW_URL : MAKE_URL, {
+          data: { file, targetFolderId: ids.sales },
+        });
+        expect(answer.status(), await answer.text()).toBe(403);
+        expect(((await answer.json()) as { error: string }).error).toBe(
+          'Importing needs My workspace: an import lands there, and view-only access comes without one.',
+        );
+      };
+      await refusedAt('review');
+      await refusedAt('make');
     });
   });
 });
