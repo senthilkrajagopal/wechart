@@ -38,8 +38,9 @@ namespace="${NAMESPACE:-wechart}"
 release="${RELEASE:-wechart}"
 values="${VALUES:-$here/values/docker-desktop.yaml}"
 probe_table="${PROBE_TABLE:-public.orders}"
-probe_path='wechart-verify/data-source-probe.yml'
 probe_cube='wechart_verify_probe'
+# A draft's model file is named for its cube (T737, AC-423): the probe's path is that name.
+probe_path="wechart-verify/${probe_cube}.yml"
 
 install=1
 if [[ "${1:-}" == '--no-install' ]]; then install=0; fi
@@ -480,7 +481,8 @@ xcube_checks() {
   }
   # Each replica's field list cached before the publish.
   for pod in $pods; do replica_meta "$pod" > /dev/null; done
-  local replica_path='wechart-verify/replica-probe.yml' replica_cube='wechart_verify_replica'
+  local replica_cube='wechart_verify_replica'
+  local replica_path="wechart-verify/${replica_cube}.yml"
   local content request
   content="$(printf 'cubes:\n  - name: %s\n    sql_table: %s\n    measures:\n      - name: count\n        type: count\n' \
     "$replica_cube" "$probe_table")"
@@ -536,8 +538,9 @@ stop_one_checks() {
   # so no cached answer stands in for it: longer than a stopped Cube instance
   # lives on (a 5 s preStop, then up to 16 s of graceful shutdown), so the
   # one that took it can't finish it.
-  local slow_path='wechart-verify/slow-probe.yml' slow_cube content request
+  local slow_path slow_cube content request
   slow_cube="wechart_verify_slow_$(date +%s)"
+  slow_path="wechart-verify/${slow_cube}.yml"
   content="$(printf 'cubes:\n  - name: %s\n    sql: SELECT 1 AS id, pg_sleep(60) AS slept\n    measures:\n      - name: count\n        type: count\n' \
     "$slow_cube")"
   status="$(land_in_root "$slow_path" "$content")"
