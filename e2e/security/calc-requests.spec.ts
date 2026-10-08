@@ -21,8 +21,9 @@ const CUBE = `t383_${RUN}`;
 const PATH = `cubes/${CUBE}.yml`;
 const MODEL = `cubes:\n  - name: ${CUBE}\n    sql: SELECT 1 AS n, 'a' AS kind\n    dimensions:\n      - name: kind\n        sql: kind\n        type: string\n    measures:\n      - name: n\n        sql: n\n        type: sum\n`;
 const DESCRIPTION = `Margin per order, amount less cost (${RUN})`;
-const made = { folder: '', west: '', xcubeId: '', chart: '' };
-const full = () => `${made.xcubeId}__${CUBE}`;
+const made = { folder: '', west: '', chart: '' };
+/** The cube as Cube serves it: its own name in any folder (T728, AC-328; `[R71]`). */
+const full = () => CUBE;
 
 test.describe.configure({ mode: 'serial' });
 
@@ -61,7 +62,6 @@ test.describe('a calculation request (T383, AC-050)', () => {
         data: { kind: 'folder', title: `Calc ${RUN}`, folderId: 'root' },
       });
       made.folder = ((await folder.json()) as { id: string }).id;
-      made.xcubeId = `f${made.folder.replaceAll('-', '')}`;
       expect(
         (
           await request.put(`/api/folders/${made.folder}/access`, {

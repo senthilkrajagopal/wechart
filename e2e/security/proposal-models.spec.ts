@@ -24,8 +24,9 @@ const CHART = `Doubled chart ${RUN}`;
 // Comment lines first, a stretch long enough for the review to fold (T637).
 const PUBLISHED = `${Array.from({ length: 8 }, (_, at) => `# note ${String(at + 1)}\n`).join('')}cubes:\n  - name: ${CUBE}\n    sql: SELECT 1 AS n\n    measures:\n      - name: n\n        sql: n\n        type: sum\n`;
 const CHANGED = `${PUBLISHED}      - name: doubled\n        sql: n * 2\n        type: sum\n`;
-const made = { folder: '', xcubeId: '', project: '', chart: '', board: '', proposal: '' };
-const full = () => `${made.xcubeId}__${CUBE}`;
+const made = { folder: '', project: '', chart: '', board: '', proposal: '' };
+/** The cube as Cube serves it: its own name in any folder (T728, AC-328; `[R71]`). */
+const full = () => CUBE;
 
 async function stored(request: APIRequestContext, kind: 'chart' | 'dashboard', id: string) {
   const answer = await request.get(`/api/documents/${kind}/${id}`);
@@ -90,7 +91,6 @@ test.describe('a dashboard proposed with the workspace model it resolves through
         data: { kind: 'folder', title: FOLDER, folderId: 'root' },
       });
       made.folder = ((await folder.json()) as { id: string }).id;
-      made.xcubeId = `f${made.folder.replaceAll('-', '')}`;
       const access = await page.request.put(`/api/folders/${made.folder}/access`, {
         data: { readOnly: [], readWrite: ['sales-rw'] },
       });

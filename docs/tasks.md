@@ -13500,7 +13500,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - MW-20 … MW-25 have no tests of those ids in `model-design.spec.ts`. The design 11 states they named are T485's test there and `GenerateCubes.test.tsx`.
     - AC-249 ticked: T724, T726, T734 and this task together show every Fails-when.
 
-- [ ] T728 (AC-328, AC-271, AC-273, AC-161, AC-329) Rework the tests of T341, T425, T450, T452, T460 and T501 to items published under their own names
+- [x] T728 (AC-328, AC-271, AC-273, AC-161, AC-329) Rework the tests of T341, T425, T450, T452, T460 and T501 to items published under their own names
   - Files:
     - `e2e/security/isolation.spec.ts`. T341's two same-named cubes went with AC-274. It now shows one cube per name, its rollup table within 63 bytes, and no published name changed by a folder's rename or move.
     - `e2e/folder-models.spec.ts`, `e2e/security/changed-in-place.spec.ts`, `e2e/xcube-cutover.spec.ts`;
@@ -13514,6 +13514,25 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - A data source changed in place is served from its new target (AC-161).
     - Members are shown by title (AC-329).
   - Depends on: T709, T710
+  - *Noted (2026-10-08):*
+    - `isolation.spec.ts` now publishes three cubes of their own names, `iso_root_<run>`, `iso_a_<run>` and `iso_c_<run>`, over different rows of one table. It reads back from the image:
+      - `/api/meta` holds them with no `__` name at all;
+      - xcube's `/items` holds each in its folder's stored xcube id (`froot`, `f<hex>`);
+      - each chart answers from its own;
+      - the three rollup tables are apart, each stem `<cube>_by_status` (no alias for a plain cube on `default`, research `xcube-256d632371.md`, R72's last smaller call), and every identifier is at most 63 bytes;
+      - renaming /A and moving it beneath /C keeps its cube's name, its xcube id, its answer and its rollup build, and every chart's count.
+
+      T341's path-resolution step goes: `resolve` from /A of /C's cube was `null` before the move. From `256d632371` a folder changes nothing in `resolve` (research, "`POST …/resolve` stays"), and references on a path are wechart's own check (T714, T715).
+    - `folder-models.spec.ts`: a cube published into a new folder is served under its own name, held in that folder's xcube id, with no `__` name in `/api/meta`.
+    - `xcube-cutover.spec.ts` and `changed-in-place.spec.ts` passed on the image as they were (AC-161, AC-330, AC-333 to AC-335).
+    - The unit tests named (`xcube/folders`, `publish-serial`, `rollupReferences`, `refreshKeys`, `clashes`, `globalSearch`) already read bare names after T709 and T710, and pass. `ModelFilePage` has no test file of its own.
+    - Added at the coordinator's word (2026-10-08): `e2e/security/proposal-models.spec.ts` and `e2e/security/calc-requests.spec.ts` built `<folderId>__<cube>` names. They now name the cube as served, its own name, and pass on the image. T717 had not landed, so the calc-requests spec was moved before it.
+    - Left for its own task: `repos/calc-requests.test.ts` stores `fsales__orders` as plain strings (T717's area).
+    - AC-328 ticked. Each Fails-when has a passing test:
+      - published under its own name: `isolation.spec.ts`, `folder-models.spec.ts`;
+      - xcube ids stored and never reused: `repos/folder-xcube-ids.test.ts`, `xcube/folders.test.ts`;
+      - 63 bytes: `isolation.spec.ts`;
+      - a rename or move changing no name, breaking no chart and rebuilding no rollup: `isolation.spec.ts`.
 
 - [ ] T729 (AC-272, AC-275, AC-371, AC-425) Rework the tests of T428, T429, T457 and T537 to bindings by name on the path
   - Files: `e2e/security/binding.spec.ts`, `e2e/security/picker.spec.ts` (T429's and T457's binding cases), `e2e/security/copy-on-use.spec.ts`, `packages/api/src/routes/copy-on-use.test.ts`, `packages/api/src/model/references.test.ts`

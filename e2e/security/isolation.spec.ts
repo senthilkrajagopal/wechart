@@ -7,21 +7,16 @@ import { seedRootDefault } from './root-default';
 import { changeShared } from './shared-change';
 
 /**
- * T341:
- * - AC-274: WHEN two folders define cubes of the same short name, THE
- *   SYSTEM SHALL publish them under different prefixed names, answer each
- *   folder's items from the cube they were bound to, and keep their
- *   pre-aggregations apart.
- * - AC-328: the shared root's under its short name, any other folder's as
- *   `<folderId>__<shortName>`, the folder's stored xcube id. `Fails when: …
- *   a table or column name Cube builds for it exceeds the database's
- *   identifier limit (63 bytes on Postgres); or renaming or moving a folder
- *   changes a published name, breaks a stored reference, or rebuilds a
- *   pre-aggregation.`
+ * T341, reworked by T728 to R71 (AC-274's same-named cubes went with it):
+ * AC-328, each cube published under its own name in any folder, the shared
+ * root's and two folders', one cube per name. `Fails when: … a table or
+ * column name Cube builds for it exceeds the database's identifier limit (63
+ * bytes on Postgres); or renaming or moving a folder changes a published
+ * name, breaks a stored reference, or rebuilds a pre-aggregation.`
  *
- * Against compose's xcube, as `super`: three `iso_sales` over different rows
- * of one table — the root's the orders not completed, /A's every order, /C's
- * the completed ones — so a chart answered from any cube but its own shows
+ * Against compose's xcube, as `super`: three cubes over different rows of one
+ * table — the root's the orders not completed, /A's every order, /C's the
+ * completed ones — so a chart answered from any cube but its own shows
  * another count.
  */
 const RUN = Math.random().toString(36).slice(2, 8);
@@ -31,7 +26,8 @@ const charts: Record<'root' | 'a' | 'c', string> = { root: '', a: '', c: '' };
 /** xcube's admin routes for this suite's model, as its API is given them (the security config). */
 const XCUBE = 'http://localhost:54000/cubejs-api/v1/semantic/models/e2e-security';
 const xcubeIdOf = (folderId: string) => `f${folderId.replaceAll('-', '')}`;
-const full = (folderId: string) => `${xcubeIdOf(folderId)}__iso_sales`;
+/** Each folder's cube, by its own name: one item per name (AC-421). */
+const cubes = { root: `iso_root_${RUN}`, a: `iso_a_${RUN}`, c: `iso_c_${RUN}` } as const;
 
 async function folder(request: APIRequestContext, title: string, parent: string) {
   const made = await request.post('/api/documents', {
@@ -41,10 +37,10 @@ async function folder(request: APIRequestContext, title: string, parent: string)
   return ((await made.json()) as { id: string }).id;
 }
 
-const salesYaml = (source: string) =>
+const salesYaml = (name: string, source: string) =>
   [
     'cubes:',
-    '  - name: iso_sales',
+    `  - name: ${name}`,
     `    ${source}`,
     '    measures:',
     '      - name: count',
@@ -61,13 +57,13 @@ const salesYaml = (source: string) =>
   ].join('\n');
 
 /** Through My workspace and a proposal `super` approves (T451, AC-278). */
-async function publish(request: APIRequestContext, folderId: string, source: string) {
-  const file = { path: 'cubes/iso_sales.yml', content: salesYaml(source) };
+async function publish(request: APIRequestContext, folderId: string, name: string, source: string) {
+  const file = { path: `cubes/${name}.yml`, content: salesYaml(name, source) };
   expect(await landed(request, folderId, [file])).toEqual([file]);
 }
 
-/** A chart made in a folder and saved on `iso_sales`, as the editor saves one; its id. */
-async function chartIn(request: APIRequestContext, folderId: string, title: string) {
+/** A chart made in a folder and saved on its cube, as the editor saves one; its id. */
+async function chartIn(request: APIRequestContext, folderId: string, title: string, cube: string) {
   const made = await request.post('/api/documents', {
     data: { kind: 'chart', title, folderId },
   });
@@ -77,8 +73,8 @@ async function chartIn(request: APIRequestContext, folderId: string, title: stri
   const landed = await changeShared(request, 'chart', id, (body) => ({
     ...body,
     chart: {
-      source: { cube: 'iso_sales' },
-      wells: { measures: ['iso_sales.count'], dimensions: [], timeDimensions: [] },
+      source: { cube },
+      wells: { measures: [`${cube}.count`], dimensions: [], timeDimensions: [] },
     },
   }));
   expect(landed).toEqual([{ kind: 'chart', id, version: 2 }]);
@@ -175,10 +171,10 @@ async function sqlOf(request: APIRequestContext, cube: string) {
 
 test.describe.configure({ mode: 'serial' });
 
-test.describe('two folders’ same-named cubes, kept apart (T341, AC-274, AC-328)', () => {
+test.describe('cubes in the root and in folders, each under its own name (T341, T728; AC-328)', () => {
   test.use({ role: 'super' });
 
-  test('each folder’s cube publishes under its own name, and each chart answers from the one it was bound to', async ({
+  test('each folder’s cube publishes under its own name, with no folder prefix, and each chart answers from the one it was bound to', async ({
     page,
   }) => {
     const request = page.request;
@@ -193,17 +189,43 @@ test.describe('two folders’ same-named cubes, kept apart (T341, AC-274, AC-328
     await publish(
       request,
       'root',
+      cubes.root,
       `sql: "SELECT * FROM public.orders WHERE status <> 'completed'"`,
     );
-    await publish(request, ids.a, 'sql_table: public.orders');
-    await publish(request, ids.c, `sql: "SELECT * FROM public.orders WHERE status = 'completed'"`);
+    await publish(request, ids.a, cubes.a, 'sql_table: public.orders');
+    await publish(
+      request,
+      ids.c,
+      cubes.c,
+      `sql: "SELECT * FROM public.orders WHERE status = 'completed'"`,
+    );
 
     const names = (
       (await (await request.get('/api/meta')).json()) as {
         cubes: { name: string }[];
       }
     ).cubes.map((cube) => cube.name);
-    expect(names).toEqual(expect.arrayContaining(['iso_sales', full(ids.a), full(ids.c)]));
+    expect(names).toEqual(expect.arrayContaining([cubes.root, cubes.a, cubes.c]));
+    // No folder's prefix on any (AC-328).
+    expect(names.filter((name) => name.includes('__'))).toEqual([]);
+    // Each held by xcube in its folder's stored xcube id.
+    const held = (
+      (await (
+        await request.get(`${XCUBE}/items`, {
+          headers: { authorization: `Bearer ${serviceToken()}` },
+        })
+      ).json()) as { items: { folderId: string; name: string }[] }
+    ).items
+      .filter((item) => Object.values(cubes).includes(item.name as never))
+      .map(({ folderId, name }) => ({ folderId, name }));
+    expect(held).toEqual(
+      expect.arrayContaining([
+        { folderId: 'froot', name: cubes.root },
+        { folderId: xcubeIdOf(ids.a), name: cubes.a },
+        { folderId: xcubeIdOf(ids.c), name: cubes.c },
+      ]),
+    );
+    expect(held).toHaveLength(3);
 
     // Each folder's chart, bound to its own at save: its source and its
     // measure both name it.
@@ -212,8 +234,8 @@ test.describe('two folders’ same-named cubes, kept apart (T341, AC-274, AC-328
       ['a', ids.a],
       ['c', ids.c],
     ] as const) {
-      charts[key] = await chartIn(request, folderId, `Isolation ${key} ${RUN}`);
-      const bound = folderId === 'root' ? 'iso_sales' : full(folderId);
+      const bound = cubes[key];
+      charts[key] = await chartIn(request, folderId, `Isolation ${key} ${RUN}`, bound);
       const stored = await measureOf(request, charts[key]);
       expect({ cube: stored.cube, measures: stored.measures }).toEqual({
         cube: bound,
@@ -236,9 +258,9 @@ test.describe('two folders’ same-named cubes, kept apart (T341, AC-274, AC-328
   test('their rollups build into tables of their own, none over 63 bytes', async ({ page }) => {
     const request = page.request;
     const tables = [
-      await built(request, 'iso_sales.by_status'),
-      await built(request, `${full(ids.a)}.by_status`),
-      await built(request, `${full(ids.c)}.by_status`),
+      await built(request, `${cubes.root}.by_status`),
+      await built(request, `${cubes.a}.by_status`),
+      await built(request, `${cubes.c}.by_status`),
     ];
 
     // Apart by name, not only by the version Cube adds.
@@ -246,17 +268,18 @@ test.describe('two folders’ same-named cubes, kept apart (T341, AC-274, AC-328
     for (const table of tables)
       for (const part of table.split('.'))
         expect(Buffer.byteLength(part, 'utf8'), table).toBeLessThanOrEqual(63);
-    // The root's is the root's own name, as it was before folders: a cube on
-    // a connection still at its first identity keeps its names (the user,
-    // 2026-09-28: alias only once a target changes; AC-328).
-    expect(stemOf(tables[0]!)).toMatch(/(^|_)iso_sales_by_status$/);
+    // Each is its own name, in the root and in a folder alike: a plain
+    // lower-case cube on `default` with short names gets no alias in any
+    // folder (research `xcube-256d632371.md`, R72's last smaller call; AC-328).
+    for (const [index, cube] of [cubes.root, cubes.a, cubes.c].entries())
+      expect(stemOf(tables[index]!)).toMatch(new RegExp(`(^|_)${cube}_by_status$`));
 
     // And the SQL each query runs, the root's and each folder's, reads its
     // own table, naming no identifier over 63 bytes.
     for (const [cube, table] of [
-      ['iso_sales', tables[0]!],
-      [full(ids.a), tables[1]!],
-      [full(ids.c), tables[2]!],
+      [cubes.root, tables[0]!],
+      [cubes.a, tables[1]!],
+      [cubes.c, tables[2]!],
     ] as const) {
       const sql = await sqlOf(request, cube);
       expect(sql, cube).toContain(stemOf(table));
@@ -269,31 +292,31 @@ test.describe('two folders’ same-named cubes, kept apart (T341, AC-274, AC-328
     page,
   }) => {
     const request = page.request;
-    const before = await asked(request, `${full(ids.a)}.count`, `${full(ids.a)}.status`);
-    expect(before.builtAt).toBeDefined();
+    const before = await asked(request, `${cubes.a}.count`, `${cubes.a}.status`);
+    expect(typeof before.builtAt).toBe('number');
     const chartsBefore = {
       a: await chartCount(request, charts.a),
       c: await chartCount(request, charts.c),
     };
-    // Something only /C holds: /A reaches it once xcube has /A beneath /C.
-    const onlyC = {
-      path: 'cubes/iso_only_c.yml',
-      // A measure, so the field list has something to list it by.
-      content:
-        'cubes:\n  - name: iso_only_c\n    sql_table: public.orders\n    measures:\n      - name: count\n        type: count\n',
-    };
-    expect(await landed(request, ids.c, [onlyC])).toEqual([onlyC]);
-    const onlyCFull = `${xcubeIdOf(ids.c)}__iso_only_c`;
-    const resolvedFromA = async () =>
+    /** Where xcube holds /A's cube: its folder's stored xcube id, never another. */
+    const heldA = async () =>
       (
         (await (
-          await request.post(`${XCUBE}/resolve`, {
+          await request.get(`${XCUBE}/items`, {
             headers: { authorization: `Bearer ${serviceToken()}` },
-            data: { folderId: xcubeIdOf(ids.a), names: ['iso_only_c'] },
           })
-        ).json()) as { names?: Record<string, string | null> }
-      ).names?.['iso_only_c'] ?? null;
-    expect(await resolvedFromA()).toBe(null);
+        ).json()) as { items: { folderId: string; name: string }[] }
+      ).items
+        .filter((item) => item.name === cubes.a)
+        .map(({ folderId, name }) => ({ folderId, name }));
+    expect(await heldA()).toEqual([{ folderId: xcubeIdOf(ids.a), name: cubes.a }]);
+    // Something only /C holds, published after: the model as it is now.
+    const onlyC = {
+      path: `cubes/iso_only_c_${RUN}.yml`,
+      // A measure, so the field list has something to list it by.
+      content: `cubes:\n  - name: iso_only_c_${RUN}\n    sql_table: public.orders\n    measures:\n      - name: count\n        type: count\n`,
+    };
+    expect(await landed(request, ids.c, [onlyC])).toEqual([onlyC]);
 
     expect(
       (
@@ -307,24 +330,24 @@ test.describe('two folders’ same-named cubes, kept apart (T341, AC-274, AC-328
         await request.patch(`/api/documents/folder/${ids.a}`, { data: { folderId: ids.c } })
       ).status(),
     ).toBe(200);
-    // xcube has the tree with /A beneath /C, and Cube serves the revision
-    // that holds /C's new cube: what follows is asked of the model as it is now.
-    await expect.poll(resolvedFromA).toBe(onlyCFull);
+    // Cube serves the revision that holds /C's new cube: what follows is
+    // asked of the model as it is now.
     await expect
       .poll(
         async () =>
           (
             (await (await request.get('/api/meta')).json()) as { cubes: { name: string }[] }
-          ).cubes.some((cube) => cube.name === onlyCFull),
+          ).cubes.some((cube) => cube.name === `iso_only_c_${RUN}`),
         { timeout: 60_000 },
       )
       .toBe(true);
 
-    // Served as before: the same name, the same answer, from the same
-    // rollup build.
+    // Served as before: the same name, held in the same xcube id, the same
+    // answer, from the same rollup build.
+    expect(await heldA()).toEqual([{ folderId: xcubeIdOf(ids.a), name: cubes.a }]);
     await expect
       .poll(async () => {
-        const after = await asked(request, `${full(ids.a)}.count`, `${full(ids.a)}.status`);
+        const after = await asked(request, `${cubes.a}.count`, `${cubes.a}.status`);
         return { count: after.count, builtAt: after.builtAt };
       })
       .toEqual({ count: before.count, builtAt: before.builtAt });
@@ -333,7 +356,8 @@ test.describe('two folders’ same-named cubes, kept apart (T341, AC-274, AC-328
         cubes: { name: string }[];
       }
     ).cubes.map((cube) => cube.name);
-    expect(names).toContain(full(ids.a));
+    expect(names).toContain(cubes.a);
+    expect(names.filter((name) => name.includes('__'))).toEqual([]);
     // And the charts stored before the move answer as they did.
     expect({
       a: await chartCount(request, charts.a),

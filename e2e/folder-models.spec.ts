@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { CUBE, serviceToken } from './api-process';
 import {
   inMyWorkspace,
   landed,
@@ -10,16 +11,16 @@ import {
 } from './model-files';
 
 /**
- * T452, AC-328: WHEN a cube is published, THE SYSTEM SHALL publish it under
- * its short name in the shared root, and as `<folderId>__<shortName>` in any
- * other folder, the folder id being the xcube id stored with the folder (`f`
- * and the 32 hex digits of a folder with a UUID).
+ * T452, AC-328, reworked by T728 to R71: a cube is published under its own
+ * name in whatever folder it is kept, with no folder prefix. The folder id
+ * stays the xcube id stored with the folder (`f` and the 32 hex digits of a
+ * folder with a UUID), which xcube holds the item in.
  *
  * Against compose's xcube, through wechart's API: a cube published into a
- * folder made here is served under that folder's id, and the root's `orders`
- * stays `orders`.
+ * folder made here is served under its own name, held in that folder's
+ * xcube id, as the root's `orders` is under its own.
  */
-test('a cube published into a new folder is served under the folder’s id, and the root’s stay bare', async ({
+test('a cube published into a new folder is served under its own name, held in the folder’s xcube id', async ({
   request,
 }, testInfo) => {
   const made = await request.post('/api/documents', {
@@ -49,23 +50,35 @@ test('a cube published into a new folder is served under the folder’s id, and 
   };
   expect(stored.files.map((file) => file.path)).toEqual([`cubes/${name}.yml`]);
 
-  // Served as the folder's: `f`, its UUID's hex digits, `__`, the short name.
-  const full = `f${id.replaceAll('-', '').toLowerCase()}__${name}`;
+  // Served under its own name, as the root's `orders` is under its own.
+  const xcubeId = `f${id.replaceAll('-', '').toLowerCase()}`;
   const count = async (cube: string) => {
     const answer = (await (
       await request.post('/api/load', { data: { query: { measures: [`${cube}.count`] } } })
     ).json()) as { data?: Record<string, unknown>[] };
     return answer.data?.[0]?.[`${cube}.count`];
   };
-  await expect.poll(() => count(full), { timeout: 30_000 }).toBeDefined();
-  // The same table as the root's `orders`, which keeps its bare name.
-  expect(await count(full)).toBe(await count('orders'));
+  // The same table as the root's `orders`, once it is served.
+  const orders = await count('orders');
+  expect(String(orders)).toMatch(/^[1-9][0-9]*$/);
+  await expect.poll(() => count(name), { timeout: 30_000 }).toBe(orders);
 
   const meta = (await (await request.get('/api/meta')).json()) as { cubes?: { name: string }[] };
   const names = (meta.cubes ?? []).map((cube) => cube.name);
-  expect(names).toContain(full);
+  expect(names).toContain(name);
   expect(names).toContain('orders');
-  expect(names).not.toContain(name);
+  // No folder prefix, this folder's or any (AC-328).
+  expect(names.filter((each) => each.includes('__'))).toEqual([]);
+
+  // Held by xcube in the folder's stored xcube id.
+  const items = (
+    (await (
+      await request.get(`${CUBE}/v1/semantic/models/e2e/items`, {
+        headers: { authorization: `Bearer ${serviceToken()}` },
+      })
+    ).json()) as { items: { folderId: string; name: string }[] }
+  ).items.filter((item) => item.name === name);
+  expect(items).toEqual([expect.objectContaining({ folderId: xcubeId, name })]);
 });
 
 /**
