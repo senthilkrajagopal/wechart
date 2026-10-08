@@ -75,6 +75,13 @@ This is the evidence for AC-321's "a module the change doesn't affect is recompi
 - **The test:** `xcube/test/integration/modules.test.ts`, "adding a cube compiles only its module". It upserts a fourth cube through `POST …/changesets`, then asserts `{ modules: 3, compiledModules: 1 }` on the serve log (line 231 at 2e611eae61, read in the fork). Slice 3b's doc called it "compiles 1 of 3 modules", which is what it asserts.
 - **It passes at the pinned image:** in CI run 37790993205, the run that published `v1.7.45-2e611eae61` (`PASS test/integration/modules.test.ts`; the log names suites, not single tests), and alone with `--verbose`, 6 of 6 in the suite ([module answer], `to-wechart/2026-10-08-1500-module-test-at-2e611eae61.md`).
 
+## AC-320's gate test
+
+This is the evidence for AC-320's "a permission change recompiles a module", which no wechart test can read: compose's xcube answers `/v1/meta` with no `compilerId` (tasks.md, T764).
+
+- **The test:** `xcube/test/integration/security.test.ts`, "a permission change applies at once on every compiled module, with no compile". It notes Cube's compiler cache keys, narrows a folder's allowed groups through `PUT …/folders`, checks the group is refused at once, puts them back, and checks the cache keys are the same as before (line 314 at 2e611eae61, read in the fork).
+- **It passes at the pinned image:** in CI run 37790993205, which published `v1.7.45-2e611eae61`, and alone, 14 of 14 in its suite (xcube's answer, relayed by the coordinator on 2026-10-08).
+
 ## Corrections to earlier docs
 
 - `xcube-256d632371.md`, "Aliases and rollup tables (1.2)": "a name whose rollup table stem (`<alias>_<pre-aggregation>`, at most 25) … would be too long: `x<hash7>`" holds no longer. From 2e611eae61, only names built in the source database count, measured with their real suffixes against 63, and a rollup in Cube Store is never hashed for its length. The table row there for "a name whose rollup stem … would be too long" is corrected by this doc.

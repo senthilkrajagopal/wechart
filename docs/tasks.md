@@ -14674,7 +14674,7 @@ These tasks are what group 3's check of the open criteria found missing. Each is
     - Both red first in `use-only-copy.test.ts`'s new case, then passing with the file's other 6.
   - **AC-279 ticked.** `workspace-edit-models.spec.ts`: a dashboard copied with nothing ticked brings its library chart, as a copy, and no model or data source. With its model ticked, the model's copy is in the dashboard copy's project folder, and the dashboard shows the writer's chart copy. `workspace-copy.test.ts` shows local and library charts copied (T344).
 
-- [ ] T764 (AC-320) Show a folder's grant and its revocation reaching every Cube instance within 60 seconds, on docker-desktop's Cube pods
+- [x] T764 (AC-320) Show a folder's grant and its revocation reaching every Cube instance within 60 seconds, on docker-desktop's Cube pods
   - Files: `deploy/helm/verify.sh` (step 8; `land_in_root` takes the shared folder it lands in)
   - Failing test: `verify.sh` step 8, with sign-in on, against the release's two Cube pods:
     - before any grant, each pod refuses a token whose one group no folder grants, asked of the folder's cube (403);
@@ -14688,6 +14688,12 @@ These tasks are what group 3's check of the open criteria found missing. Each is
     - An unsigned token is said and stops the step, and the revocation is checked only once the grant reached every pod.
     - Cleanup says what it couldn't remove, after a failed landing too. A shared folder's delete leaves its deleted-folder record (T540), one per run.
   - Ticks on its run: AC-320's multi-instance clause only. Its recompile clause waits on xcube's confirmation of its own test at `2e611eae61`.
+  - **Run 2026-10-08 by the coordinator,** on docker-desktop at 05109700 with sign-in on: `verify.sh` passed 45 of 45. In step 8, with 2 Cube instances, both refused the group by the folder gate before the grant. The grant reached both in 2 s, and the revocation reached both in 2 s.
+  - **AC-320 ticked.** Each clause shown:
+    - a token none of whose groups a folder allows gets nothing from its cubes; /A/B's group gets the /A cube; an authored row-level policy still filters; a folder no group reaches admits only Super-Admins; with security off every token is admitted: `e2e/security/cube-refuses.spec.ts` and `cube-groups.spec.ts`, against compose's xcube (T436);
+    - every folder's allowed groups and the security flag sent with the tree, at start and after each change: `core/access/allowed.test.ts` and `api/xcube/folders.test.ts` (T436);
+    - every Cube instance applies a change within 60 s: this step's run;
+    - no module recompiled by a permission change: xcube's own test, `security.test.ts` "a permission change applies at once on every compiled module, with no compile", passing at the pinned `2e611eae61` (`docs/research/xcube-2e611eae61.md`, "AC-320's gate test"; the coordinator's call that xcube's test is this clause's evidence, as for AC-321).
   - **AC-320's other open clause,** "a permission change recompiles a module", has no observable a wechart test can read. Compose's xcube (`2e611eae61`) answers `/v1/meta` and `/v1/meta?extended=true` with `cubes` alone: Cube adds a `compilerId` only on its SQL API's path (`cubejs-api-gateway` `gateway.ts`, `meta({ includeCompilerId })`, read in the fork). Its evidence is xcube's own test (`xcube-slice-4.md`, [t-sec] L300-315), as AC-321's is; put to the coordinator.
 
 - [ ] T765 (AC-330) Show an API's start bringing xcube's copy of a model up to date, folders, groups and data sources included, and Cube answering with every API process of it stopped
