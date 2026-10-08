@@ -14319,6 +14319,16 @@ These tasks are what group 3's check of the open criteria found missing. Each is
     - **Tests:** `use-only-copy.test.ts` (an edit copy and a use-only copy each `into` the folder, no project folder made; `into` a shared folder refused), with `workspace-copy` and `workspace-models` under the lock; `EditInWorkspaceDialog.test.tsx` (11); the full web suite (2644); in Chrome against compose's xcube, `workspace-edit-models.spec.ts` and `workspace-edit.spec.ts` (8).
   - **AC-279 ticked.** `workspace-edit-models.spec.ts`: a dashboard copied with nothing ticked brings its library chart, as a copy, and no model or data source. With its model ticked, the model's copy is in the dashboard copy's project folder, and the dashboard shows the writer's chart copy. `workspace-copy.test.ts` shows local and library charts copied (T344).
 
+- [ ] T764 (AC-320) Show a folder's grant and its revocation reaching every Cube instance within 60 seconds, on docker-desktop's Cube pods
+  - Files: `deploy/helm/verify.sh` (step 8; `land_in_root` takes the shared folder it lands in)
+  - Failing test: `verify.sh` step 8, with sign-in on, against the release's two Cube pods:
+    - before any grant, each pod refuses a token whose one group no folder grants, asked of the folder's cube (403);
+    - once that group is granted read-only on the folder, each pod admits it within 60 s;
+    - once the grant is taken away, each pod refuses it again within 60 s (AC-320).
+  - Q7, the coordinator's answer (3) of 2026-10-07: not a second Cube container in the shared compose, whose instance report would stay for an hour where the other agents' checks read it. The coordinator runs it at the next deploy, and AC-320's multi-instance clause is ticked on that run.
+  - **Written 2026-10-08, not yet run.** It needs a docker-desktop deploy with sign-in on, which the coordinator does. `bash -n` passes.
+  - **AC-320's other open clause,** "a permission change recompiles a module", has no observable a wechart test can read. Compose's xcube (`2e611eae61`) answers `/v1/meta` and `/v1/meta?extended=true` with `cubes` alone: Cube adds a `compilerId` only on its SQL API's path (`cubejs-api-gateway` `gateway.ts`, `meta({ includeCompilerId })`, read in the fork). Its evidence is xcube's own test (`xcube-slice-4.md`, [t-sec] L300-315), as AC-321's is; put to the coordinator.
+
 - [ ] T762 (AC-429) List phase 1's bookmarks to Super-Admins with sign-in on
   - Files: `packages/api/src/server.ts` (the bookmarks listing), `packages/api/src/access/bookmarks.test.ts`, `e2e/security/bookmarks.spec.ts`
   - Failing test: `access/bookmarks.test.ts`: with sign-in on, a bookmark whose owner is phase 1's single user (`admin`) is listed on its dashboard for `super`, and for neither `writer` nor `reader`, who may see the dashboard (AC-429).
@@ -14406,5 +14416,6 @@ These tasks are what group 3's check of the open criteria found missing. Each is
 | AC-323, AC-422 (again, the overlay after a workspace folder's delete) | T739 | | | | |
 | AC-141, AC-329 (again, the naming work's regressions) | T738 | AC-132, AC-344 (again, T481 after T722) | T738 | AC-313, AC-356, AC-357 (again, races under one name per item) | T738 |
 | AC-277 (again, group 3) | T760 | AC-291 (again, a folder's rename) | T761 | AC-429 | T762 |
+| AC-279 (again, its models) | T763 | AC-320 (again, every instance) | T764 | | |
 
 AC-009, AC-136 and AC-137 are ticked from phase 1. ~~They stay ticked until slice 3 changes how publishing works; T426 and T432 then reword them and retest them (R28 Q9).~~ They keep their wording and their ticks while their tests pass: T447 re-runs them against xcube at slice 2's cut-over, and T426 and T432 again in slice 3 (2026-09-26, `[R29]`). AC-235 was unticked by R29 and is ticked again by T445 and T447.

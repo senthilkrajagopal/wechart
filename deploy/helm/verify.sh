@@ -28,6 +28,9 @@
 # Step 7 (T423) stops one Cube instance and one API replica with a slow query
 # in flight, and checks the query, the session and both Deployments.
 #
+# Step 8 (T764), with sign-in on, grants a folder to a group and takes it away
+# again, and checks each reaches every Cube pod within 60 s (AC-320).
+#
 # Needs helm, kubectl, curl and jq (docs/deploy.md).
 
 set -uo pipefail
@@ -162,7 +165,8 @@ fetch_long() { curl -sS -o "$body" -w '%{http_code}' --max-time 120 -b "$jar" "$
 # removed again once landed; with sign-in off, published in place. Prints the
 # last call's status, its answer in $body.
 land_in_root() {
-  local path="$1" content="$2" files status folder file proposal kept
+  # $3, the shared folder it lands in: the root unless named (step 8, T764).
+  local path="$1" content="$2" target="${3:-root}" files status folder file proposal kept
   files="$(jq -n --arg path "$path" --arg content "$content" '{files: [{path: $path, content: $content}]}')"
   if [[ "${security:-false}" != true ]]; then
     fetch_long -X POST -H 'content-type: application/json' --data "$files" "$url/api/model/publish"
@@ -179,7 +183,7 @@ land_in_root() {
   local at
   at="folder=$folder&path=$(jq -rn --arg p "$path" '$p | @uri')"
   status="$(fetch_long -X POST -H 'content-type: application/json' \
-    --data "$(jq --arg f "$folder" '. + {folderId: $f, targetFolderId: "root"}' <<< "$files")" \
+    --data "$(jq --arg f "$folder" --arg t "$target" '. + {folderId: $f, targetFolderId: $t}' <<< "$files")" \
     "$url/api/model/publish")"
   if [[ "$status" == 200 ]]; then
     status="$(fetch "$url/api/model/files/dependents?$at")"
@@ -684,6 +688,124 @@ stop_one_checks() {
   rm -f "$me_body"
 }
 
+# 8. With sign-in on, a folder's grant and its revocation reach every Cube
+# instance within 60 seconds (T764, AC-320): "every Cube instance SHALL apply
+# a change within 60 seconds". Shown on the release's Cube pods, asked one by
+# one from inside each; compose runs one query-serving Cube, and a second
+# container there would leave a stale instance report for the hour (the
+# coordinator's call, 2026-10-08). A folder of its own, a cube landed in it,
+# and a token whose one group is granted on it and then taken away again.
+gate_checks() {
+  local cube_deploy model pods count stamp group gate_cube gate_path content gate_folder
+  local token query pod status elapsed wanted
+  cube_deploy="$(component_of deployments cube)"
+  pods="$(component_of pods cube)"
+  count="$(wc -w <<< "$pods" | tr -d ' ')"
+  if ((count < 2)); then
+    fail "8. the release runs $count Cube instance(s); the gate needs two to show 'every instance'"
+    return
+  fi
+  model="$(jq -r '.api.xcubeModel' <<< "$release_values")"
+  stamp="$(date +%s)"
+  group="wechart-verify-gate-$stamp"
+  gate_cube="wechart_verify_gate_$stamp"
+  gate_path="wechart-verify/${gate_cube}.yml"
+  content="$(printf 'cubes:\n  - name: %s\n    sql_table: %s\n    measures:\n      - name: count\n        type: count\n' \
+    "$gate_cube" "$probe_table")"
+
+  status="$(fetch -X POST -H 'content-type: application/json' \
+    --data "$(jq -n --arg t "wechart-verify gate $stamp" '{kind: "folder", title: $t, folderId: "root"}')" \
+    "$url/api/documents")"
+  if [[ "$status" != 201 ]]; then
+    fail "8. making the gate's folder answered $status: $(head -c 300 "$body")"
+    return
+  fi
+  gate_folder="$(jq -r '.id' "$body")"
+  status="$(land_in_root "$gate_path" "$content" "$gate_folder")"
+  if [[ "$status" != 200 ]]; then
+    fail "8. landing $gate_path in the gate's folder answered $status: $(head -c 300 "$body")"
+    fetch -X DELETE "$url/api/documents/folder/$gate_folder" > /dev/null
+    return
+  fi
+
+  # Signed in Cube's pod as step 6 signs its token, with the one group.
+  token="$(k get secret "$(component_of secrets secrets)" -o jsonpath='{.data.signing-key\.pem}' \
+    | base64 -d \
+    | k exec -i "deployment/$cube_deploy" -c cube -- node -e '
+      const { createHash, createPrivateKey, createPublicKey, sign } = require("node:crypto");
+      let pem = "";
+      process.stdin.on("data", (chunk) => (pem += chunk)).on("end", () => {
+        const { n, e } = createPublicKey(pem).export({ format: "jwk" });
+        const kid = createHash("sha256").update(JSON.stringify({ e, kty: "RSA", n })).digest("base64url");
+        const part = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
+        const now = Math.floor(Date.now() / 1000);
+        const unsigned = part({ alg: "RS256", kid, typ: "JWT" }) + "." + part({
+          aud: "xcube", iss: "wechart", role: "user", groups: [process.argv[2]],
+          wechartModel: process.argv[1], iat: now, exp: now + 900,
+        });
+        console.log(unsigned + "." + sign("sha256", Buffer.from(unsigned), createPrivateKey(pem)).toString("base64url"));
+      });
+    ' "$model" "$group" 2> /dev/null)"
+  query="$(jq -rn --arg m "$gate_cube.count" '{measures: [$m]} | tojson | @uri')"
+  # One Cube pod's answer to the token, by its status: 200 admitted ("Continue
+  # wait" included), 403 the folder gate's refusal.
+  asked_on() {
+    k exec "pod/$1" -c cube -- node -e '
+      fetch("http://localhost:4000/cubejs-api/v1/load?query=" + process.argv[1], {
+        headers: { authorization: "Bearer " + process.argv[2] },
+      }).then((r) => console.log(r.status), () => console.log(0));
+    ' "$query" "$token" 2> /dev/null
+  }
+  # Every pod answers $1 within $2 s of now; prints the slowest pod's seconds, or fails.
+  every_pod() {
+    local want="$1" within="$2" started=$SECONDS slowest=0 pod seen
+    for pod in $pods; do
+      seen=''
+      while ((SECONDS - started <= within)); do
+        seen="$(asked_on "$pod")"
+        [[ "$seen" == "$want" ]] && break
+        sleep 1
+      done
+      [[ "$seen" == "$want" ]] || return 1
+      ((SECONDS - started > slowest)) && slowest=$((SECONDS - started))
+    done
+    echo "$slowest"
+  }
+
+  # Before any grant: the gate refuses the group on every instance. Waited on
+  # up to two minutes, while the landed cube reaches each.
+  if wanted="$(every_pod 403 120)"; then
+    pass "8. before its grant, every Cube instance ($count) refuses the group the folder's cube"
+  else
+    fail "8. before its grant, not every Cube instance refused the group with 403"
+  fi
+  status="$(fetch -X PUT -H 'content-type: application/json' \
+    --data "$(jq -n --arg g "$group" '{readOnly: [$g], readWrite: null}')" \
+    "$url/api/folders/$gate_folder/access")"
+  if [[ "$status" != 200 ]]; then
+    fail "8. granting the group answered $status: $(head -c 300 "$body")"
+  elif elapsed="$(every_pod 200 60)"; then
+    pass "8. the grant reached every Cube instance ($count) within 60 s (${elapsed} s)"
+  else
+    fail "8. the grant hadn't reached every Cube instance 60 s after it was saved"
+  fi
+  status="$(fetch -X PUT -H 'content-type: application/json' \
+    --data '{"readOnly": null, "readWrite": null}' "$url/api/folders/$gate_folder/access")"
+  if [[ "$status" != 200 ]]; then
+    fail "8. revoking the group answered $status: $(head -c 300 "$body")"
+  elif elapsed="$(every_pod 403 60)"; then
+    pass "8. the revocation reached every Cube instance ($count) within 60 s (${elapsed} s)"
+  else
+    fail "8. the revocation hadn't reached every Cube instance 60 s after it was saved"
+  fi
+
+  # Its cube, then its folder, through the API.
+  fetch_long -X DELETE \
+    "$url/api/model/files?folder=$gate_folder&path=$(jq -rn --arg p "$gate_path" '$p | @uri')" > /dev/null
+  status="$(fetch -X DELETE "$url/api/documents/folder/$gate_folder")"
+  [[ "$status" == 204 ]] || fail "8. could not remove the gate's folder ($status); remove $gate_folder"
+}
+
 status="$(fetch "$url/api/model/files")"
 if [[ "$status" != 200 ]]; then
   fail "5. /api/model/files answered $status"
@@ -716,6 +838,7 @@ else
       pass "5. /api/load counted $count rows of $probe_table in $source"
       xcube_checks
       stop_one_checks
+      if [[ "$security" == true ]]; then gate_checks; fi
     else
       fail "5. /api/load answered $status: $(head -c 600 "$body")"
     fi
