@@ -8,6 +8,7 @@ import { healthOf, HealthBadge } from './health';
 import { TableScroll } from '../../shell/TableScroll';
 import { MY_WORKSPACE, SHARED_ROOT } from '../explore/roots';
 import { CUBE_STORE_ID } from './cubeStore';
+import { ActionIcon } from '../jobs/ActionIcon';
 
 /**
  * Every data source the user may see, in every folder (T364, AC-157), as
@@ -93,7 +94,8 @@ function UsedBy({ cubes, hidden = 0 }: { cubes: ListedSource['usedBy']; hidden?:
     setAt(null);
   };
   if (cubes === null) return <span className="sources-muted">Not known: Cube didn’t answer</span>;
-  if (cubes.length === 0 && hidden === 0) return <span className="sources-muted">No cube</span>;
+  // Counted as the others are (data-sources-Q2; references.md surface 10).
+  if (cubes.length === 0 && hidden === 0) return <span className="sources-muted">0 cubes</span>;
   const count = cubes.length + hidden;
   return (
     <span className="sources-used-by" onMouseEnter={open} onMouseLeave={close}>
@@ -139,6 +141,24 @@ function UsedBy({ cubes, hidden = 0 }: { cubes: ListedSource['usedBy']; hidden?:
   );
 }
 
+/** The list's columns (design 01). */
+function SourcesHead() {
+  return (
+    <thead>
+      <tr>
+        <th scope="col">Name</th>
+        <th scope="col">Folder</th>
+        <th scope="col">Driver</th>
+        <th scope="col">Health</th>
+        <th scope="col" className="sources-num">
+          Used by
+        </th>
+        <th scope="col">Updated</th>
+      </tr>
+    </thead>
+  );
+}
+
 export function DataSourcesList({
   sources,
   seesEveryFolder = false,
@@ -158,17 +178,24 @@ export function DataSourcesList({
   const [health, setHealth] = useState('');
   const [search, setSearch] = useState('');
 
-  if (sources.length === 0 && !cubeStore && seesEveryFolder)
+  // None yet: the table keeps its header, its only row design 14's empty
+  // line, in place of a note (data-sources-Q3; T698).
+  if (sources.length === 0 && !cubeStore && (seesEveryFolder || readWrite))
     return (
-      <InfoBar>
-        <p>No data source has been added yet.</p>
-      </InfoBar>
-    );
-  if (sources.length === 0 && !cubeStore && readWrite)
-    return (
-      <InfoBar>
-        <p>No data source has been added to your folders, or to the folders above them, yet.</p>
-      </InfoBar>
+      <TableScroll label="Data sources">
+        <table className="query-log" aria-label="Data sources">
+          <SourcesHead />
+          <tbody>
+            <tr>
+              <td className="sources-empty-row" colSpan={6}>
+                {seesEveryFolder
+                  ? 'No data source has been added yet.'
+                  : 'No data source has been added to your folders, or to the folders above them, yet.'}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </TableScroll>
     );
   if (sources.length === 0 && !cubeStore)
     return (
@@ -239,29 +266,22 @@ export function DataSourcesList({
             <option value="idle">Not tested</option>
           </select>
         </label>
-        <input
-          type="search"
-          className="sources-filters__search"
-          aria-label="Search data sources"
-          placeholder="Search by name"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
+        {/* With its search icon at its head, as design 01 draws it (T698, SRC-17). */}
+        <span className="sources-filters__find">
+          <ActionIcon name="search" />
+          <input
+            type="search"
+            className="sources-filters__search"
+            aria-label="Search data sources"
+            placeholder="Search by name"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </span>
       </div>
       <TableScroll label="Data sources">
         <table className="query-log" aria-label="Data sources">
-          <thead>
-            <tr>
-              <th scope="col">Name</th>
-              <th scope="col">Folder</th>
-              <th scope="col">Driver</th>
-              <th scope="col">Health</th>
-              <th scope="col" className="sources-num">
-                Used by
-              </th>
-              <th scope="col">Updated</th>
-            </tr>
-          </thead>
+          <SourcesHead />
           <tbody>
             {shown.map((source) => {
               return (
@@ -273,7 +293,7 @@ export function DataSourcesList({
                       {source.name}
                     </a>
                   </td>
-                  <td>
+                  <td className="sources-folder">
                     <a href={`/explore?folder=${encodeURIComponent(source.folderId)}`}>
                       {pathLabel(source)}
                     </a>
@@ -306,7 +326,7 @@ export function DataSourcesList({
                 <td className="sources-name">
                   <a href={`/explore/data-sources/${CUBE_STORE_ID}`}>Cube Store</a>
                 </td>
-                <td>
+                <td className="sources-folder">
                   <a href={`/explore?folder=${SHARED_ROOT.id}`}>{SHARED_ROOT.title}</a>
                 </td>
                 <td>Cube Store</td>

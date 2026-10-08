@@ -528,6 +528,9 @@ test.describe('exporting a dashboard (T511, AC-354, AC-355, AC-360)', () => {
         .click();
       await page.getByRole('menuitem', { name: 'Export…' }).click();
       const pane = page.getByRole('dialog', { name: 'Export dashboard' });
+      // Its link buttons keep their own padding: the data source wizard's link
+      // style is the wizard's alone (T698's review).
+      await expect(pane.getByRole('button', { name: 'None' })).toHaveCSS('padding', '4px 6px');
       await pane.getByRole('button', { name: 'None' }).click();
       await expect(pane.getByTestId('export-counts')).toHaveText(
         'In the file: 1 dashboard · 2 charts',

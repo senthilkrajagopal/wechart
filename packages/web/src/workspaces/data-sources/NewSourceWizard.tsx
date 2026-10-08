@@ -391,7 +391,7 @@ export function NewSourceWizard({
           // Back to the settings it will test.
           <button
             type="button"
-            className="link-button source-pane__edit"
+            className="link-button source-pane__link source-pane__edit"
             onClick={() => {
               goTo(1);
             }}
@@ -539,7 +539,8 @@ export function NewSourceWizard({
           </span>
           <button
             type="button"
-            className="link-button"
+            // A link at 12/600, as design 01's .btn.link (T698, SRC-11).
+            className="link-button source-pane__link"
             onClick={() => {
               goTo(0);
             }}

@@ -47,12 +47,10 @@ test('Data sources shows its title and says what it is for, never that it waits'
   await expect(notes.first()).toContainText('Every data source you can see, in every folder');
   await expect(notes.first().locator('[data-icon]')).toHaveCount(1);
   await expect(main).not.toContainText(/not part of this phase/i);
-  // It read them: a list, or the note that there are none — never an error.
-  await expect(
-    main
-      .getByRole('table', { name: 'Data sources' })
-      .or(main.getByText('No data source has been added yet.')),
-  ).toBeVisible();
+  // It read them: the list, which with none says so as its one row
+  // (data-sources-Q3; T698) — never an error.
+  await expect(main.getByRole('table', { name: 'Data sources' })).toBeVisible();
+  await expect(main.getByRole('alert')).toHaveCount(0);
 });
 
 test('"/sources" opens Data sources', async ({ page }) => {

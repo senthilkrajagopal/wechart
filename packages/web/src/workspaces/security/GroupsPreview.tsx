@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Fragment, useId, useRef, useState } from 'react';
 
 import { StateLine } from '../../shell/StatusIcon';
-import { DASHBOARD_LIMIT, modelHref, previewHref, useDashboards } from './ContextPreview';
+import { DASHBOARD_LIMIT, modelHref, previewHref, useDashboards } from './dashboardPreview';
 import { AccessIcon } from '../explore/AccessChip';
 import { effectiveAccess, type Access, type AccessModel } from './policies';
 

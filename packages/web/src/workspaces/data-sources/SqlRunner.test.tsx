@@ -97,6 +97,21 @@ function serve({
           tables: [{ schema: 'public', name: 'orders', type: 'table', rawType: 'BASE TABLE' }],
           total: 1,
         });
+      // The folder's groups, as the Access panel reads them (T698, SRC-21).
+      if (url === '/api/folders/emea/access')
+        return Response.json({
+          folderId: 'emea',
+          setting: { readOnly: null, readWrite: ['sales-emea-rw'] },
+          effective: {
+            readOnly: [],
+            readWrite: [
+              { group: 'sales-emea-rw', from: 'emea', setHere: true },
+              { group: 'sales-rw', from: 'sales', setHere: false },
+            ],
+          },
+          inherited: { readOnly: [], readWrite: [] },
+          onlySuperAdmins: false,
+        });
       if (url.endsWith('/sql-runner') && method === 'PUT') {
         const next = switched.shift();
         if (next === undefined) return Response.json({ on: (body as { on: boolean }).on });
@@ -666,6 +681,34 @@ describe('the SQL tab, the runner off (T535, AC-373; design 15’s P1 and screen
     expect(panel.textContent).toContain('Only a Super-Admin can turn it on.');
     expect(within(panel).queryByRole('button', { name: /Turn on/ })).toBeNull();
     expect(document.querySelector('.sql-editor')).toBeNull();
+  });
+
+  it('draws the off panel as design 15 does: the off icon, the login in the code face, the folder’s groups named (T698, SRC-20, SRC-21, SRC-05)', async () => {
+    serve();
+    open({ ...SOURCE, sqlRunner: OFF }, true);
+    const panel = screen.getByRole('region', { name: 'The SQL runner is off for emea_replica' });
+    expect(within(panel).getByRole('heading').querySelector('svg')?.getAttribute('data-icon')).toBe(
+      'off',
+    );
+    expect(within(panel).getByText('cube_reader').tagName).toBe('CODE');
+    const who = panel.querySelector('dl')!;
+    expect(who.className).toBe('sql-off__who');
+    // The folder's read-write groups, each in the code face, once read.
+    await waitFor(() => {
+      expect(who.querySelector('dd')?.textContent).toBe(
+        'Super-Admins, and read-write members of Sales / EMEA: sales-emea-rw, sales-rw',
+      );
+    });
+    expect([...who.querySelectorAll('dd code')].map((code) => code.textContent)).toEqual([
+      'sales-emea-rw',
+      'sales-rw',
+    ]);
+    expect(
+      within(panel)
+        .getByRole('button', { name: 'Turn on the SQL runner…' })
+        .querySelector('svg')
+        ?.getAttribute('data-icon'),
+    ).toBe('shield');
   });
 
   it('lets a Super-Admin turn it on only once they confirm the login can only read', async () => {

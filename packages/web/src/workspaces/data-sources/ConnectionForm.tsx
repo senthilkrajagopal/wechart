@@ -533,7 +533,7 @@ export function ConnectionForm({
       </fieldset>
 
       {tls.length === 0 && tlsNote === undefined ? null : (
-        <fieldset className="connection-form__group">
+        <fieldset className="connection-form__group connection-form__tls">
           <legend className="connection-form__legend">TLS</legend>
           {tlsNote === undefined ? null : <p className="connection-form__note">{tlsNote}</p>}
           {tls.map((field) =>

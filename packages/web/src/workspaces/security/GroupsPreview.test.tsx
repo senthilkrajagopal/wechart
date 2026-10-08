@@ -280,6 +280,39 @@ describe('previewing as groups (T438, AC-166; design 08, state E)', () => {
     expect(JSON.parse(preview!)).toEqual({ groups: ['sales-ro', 'emea-viewers'] });
   });
 
+  it('lists at most eight dashboards, saying when more match, and says a failed search failed (AC-232; kept from ContextPreview.test, T698)', async () => {
+    serve();
+    const served = globalThis.fetch;
+    let failing = false;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (!url.startsWith('/api/search?')) return served(input);
+        if (failing) return new Response('down', { status: 500 });
+        return Response.json(
+          Array.from({ length: 9 }, (_, index) => ({
+            kind: 'dashboard',
+            id: `d${String(index)}`,
+            title: `Sales ${String(index)}`,
+          })),
+        );
+      }),
+    );
+    open();
+    await addGroup('finance');
+    const search = screen.getByRole('searchbox', { name: 'Dashboard to preview' });
+    await userEvent.type(search, 'Sales');
+    await screen.findByRole('link', { name: 'Preview Sales 0' });
+    expect(screen.getAllByRole('link', { name: /^Preview Sales/ })).toHaveLength(8);
+    expect(screen.getByText('More dashboards match: narrow the search.')).toBeTruthy();
+
+    failing = true;
+    await userEvent.type(search, 'x');
+    expect(await screen.findByText('The search failed (HTTP 500).')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /^Preview Sales/ })).toBeNull();
+  });
+
   it('keeps the groups for the session, so coming back finds them (AC-232)', async () => {
     serve();
     open();

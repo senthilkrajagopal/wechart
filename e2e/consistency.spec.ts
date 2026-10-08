@@ -75,6 +75,20 @@ test.describe('one page frame (UX-109)', () => {
         )
         .toBe(true);
       await expect(notes.locator(':scope > svg[data-icon="idle"]'), path).toHaveCount(0);
+      // At 12/16, as the designs' .notebar, its bold at 600 (T698, SRC-18, data-sources-Q4).
+      for (const note of await notes.all()) {
+        expect(
+          await note.evaluate((node) => {
+            const style = getComputedStyle(node);
+            const bold = document.createElement('b');
+            node.append(bold);
+            const weight = getComputedStyle(bold).fontWeight;
+            bold.remove();
+            return [style.fontSize, style.lineHeight, weight];
+          }),
+          path,
+        ).toEqual(['12px', '16px', '600']);
+      }
     }
   });
 

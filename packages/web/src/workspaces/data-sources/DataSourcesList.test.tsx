@@ -141,7 +141,8 @@ describe('the data sources a user may see (T364, AC-157)', () => {
         .getAllByRole('listitem', { hidden: true })
         .map((item) => item.textContent),
     ).toEqual(['sales · Finance / Sales', 'orders · Shared']);
-    expect(none?.textContent).toBe('No cube');
+    // "0 cubes", as references.md surface 10 counts them (data-sources-Q2).
+    expect(none?.textContent).toBe('0 cubes');
     // "Cube", not "xcube", in what the user reads (design 01 note 10).
     expect(unknown?.textContent).toBe('Not known: Cube didn’t answer');
     expect(screen.getByRole('columnheader', { name: 'Used by' })).toBeDefined();
@@ -246,20 +247,33 @@ describe('the data sources a user may see (T364, AC-157)', () => {
     expect(rows().map((row) => cellsOf(row)[0]?.textContent)).toEqual(['warehouse']);
   });
 
-  it('says none has been added yet, to one who sees every folder', () => {
+  it('says none has been added yet, to one who sees every folder, as the table’s one row (data-sources-Q3)', () => {
     render(<DataSourcesList sources={[]} seesEveryFolder />);
 
-    expect(screen.queryByRole('table')).toBeNull();
-    expect(screen.getByRole('note').textContent).toBe('No data source has been added yet.');
+    // The table keeps its header; its only row is design 14's empty line, in place of a note.
+    const table = screen.getByRole('table', { name: 'Data sources' });
+    expect(
+      within(table)
+        .getAllByRole('columnheader')
+        .map((header) => header.textContent),
+    ).toEqual(['Name', 'Folder', 'Driver', 'Health', 'Used by', 'Updated']);
+    const rows = within(table).getAllByRole('row');
+    expect(rows).toHaveLength(2);
+    const cell = within(rows[1]!).getByRole('cell');
+    expect(cell.textContent).toBe('No data source has been added yet.');
+    expect(cell.getAttribute('colspan')).toBe('6');
+    expect(cell.className).toBe('sources-empty-row');
+    expect(screen.queryByRole('note')).toBeNull();
   });
 
-  it('says none is in their folders yet, to a read-write member who sees none (T364’s review)', () => {
+  it('says none is in their folders yet, to a read-write member who sees none, as the table’s one row (T364’s review; data-sources-Q3)', () => {
     render(<DataSourcesList sources={[]} readWrite />);
 
-    expect(screen.queryByRole('table')).toBeNull();
-    expect(screen.getByRole('note').textContent).toBe(
+    const table = screen.getByRole('table', { name: 'Data sources' });
+    expect(within(table).getAllByRole('row')[1]?.textContent).toBe(
       'No data source has been added to your folders, or to the folders above them, yet.',
     );
+    expect(screen.queryByRole('note')).toBeNull();
     expect(screen.queryByRole('link', { name: 'Open Explore' })).toBeNull();
   });
 

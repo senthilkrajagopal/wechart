@@ -150,6 +150,34 @@ describe('what is asked for again, as the API asks (T497’s review)', () => {
 });
 
 describe('testing and saving (T497’s review)', () => {
+  it('draws a check not yet run as design 03’s dashed circle, and one skipped as the clock (T698, SRC-09)', async () => {
+    serve({
+      'POST /api/data-sources/ds-1/test': [
+        {
+          body: {
+            ok: false,
+            testId: 't-1',
+            checks: [
+              { id: 'secrets', status: 'passed', durationMs: 1 },
+              { id: 'config', status: 'passed', durationMs: 0 },
+              { id: 'connect', status: 'failed', durationMs: 4, error: 'ENOTFOUND' },
+              { id: 'schemas', status: 'skipped' },
+            ],
+          },
+        },
+      ],
+    });
+    open(stored());
+    const icons = () =>
+      [...beside().querySelectorAll('.connection-checks__row > svg')].map((icon) =>
+        icon.getAttribute('data-icon'),
+      );
+    expect(icons()).toEqual(['draft', 'draft', 'draft', 'draft']);
+    await userEvent.click(testButton());
+    await within(beside()).findByText('Skipped');
+    expect(icons()).toEqual(['ok', 'ok', 'err', 'idle']);
+  });
+
   it('tests the stored settings when nothing changed, and saves nothing', async () => {
     const sent = serve({ 'POST /api/data-sources/ds-1/test': [{ body: passed('t-1') }] });
     open(stored());

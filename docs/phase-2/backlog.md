@@ -301,7 +301,7 @@ R37 asks for both UI reviews' designs to be built, with the 2026-09-27 ones winn
 - **Proposals, approval and history** (T349 → T351 → T352, T353 → T354 → T355 → T356 → T357):
   - all of 2026-09-27 designs 05 and 06;
   - design 04's statuses, "Propose to…" and History;
-  - design 03's Propose, History and version line;
+  - ~~design 03's Propose, History and version line;~~ *built: History by T515; Propose and the version line by T698, 2026-10-08*
   - design 09's Reviews control.
 - **Model copies in the workspace** (T437, paused in a stash by R33's order, then T347 → T350 → T358; T440; T456):
   - design 04's Model in New and model copies;

@@ -299,7 +299,11 @@ test.describe('a data source added in the workspace (T363)', () => {
       await expect(wizard.getByText(/so the token would travel unencrypted/)).toHaveCount(0);
 
       // BigQuery's key: its account read in the browser, nothing sent (AC-340).
-      await wizard.getByRole('button', { name: 'Change type' }).click();
+      // A link at 12/600 in the accent, as design 01's .btn.link (T698, SRC-11).
+      const changeType = wizard.getByRole('button', { name: 'Change type' });
+      await expect(changeType).toHaveCSS('font-size', '12px');
+      await expect(changeType).toHaveCSS('font-weight', '600');
+      await changeType.click();
       await wizard.getByRole('radio', { name: 'BigQuery' }).click();
       await wizard.getByRole('button', { name: 'Next: Connection' }).click();
       await wizard.getByLabel(/^Key \(JSON\)/).fill(

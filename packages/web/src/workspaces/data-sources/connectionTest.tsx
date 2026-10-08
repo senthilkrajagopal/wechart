@@ -116,7 +116,11 @@ export function ConnectionChecks({
                       ? 'err'
                       : state === 'running'
                         ? 'run'
-                        : 'idle'
+                        : // Not run yet: design 01's and 03's s-pend, a dashed
+                          // circle; the clock is for one skipped (T698, SRC-09).
+                          state === 'not-run'
+                          ? 'draft'
+                          : 'idle'
                 }
               />
               <span className="connection-checks__label">{each.label}</span>

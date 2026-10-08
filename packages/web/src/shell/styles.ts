@@ -3360,19 +3360,29 @@ fieldset > .connection-form__legend { float: left; width: 100%; }
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 7V5a4 4 0 0 1 8 0v2h1v8H3V7zm2 0h4V5a2 2 0 0 0-4 0z'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 .connection-form__add { justify-self: start; color: var(--wc-accent); font-weight: 600; }
+/* A form's links as design 01's .btn.link: 12/600 in the accent, no box
+   (01:90; T698, SRC-11): Replace, Change type, Add a CA certificate. */
+.connection-form .link-button,
+.source-pane .link-button.source-pane__link {
+  padding: 0;
+  color: var(--wc-accent);
+  font-size: 12px;
+  font-weight: 600;
+}
 /* Choices seen at once: segmented for two, rows for three, cards where each
    needs saying (design 02, pins 1 and 3). */
+/* Design 01–03's .seg: 28 px options in a 1 px border, so 30 outside, at 12 (T698, SRC-15). */
 .choice--segmented {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   border: 1px solid var(--wc-border-strong);
-  border-radius: 6px;
+  border-radius: 4px;
   overflow: hidden;
 }
 .choice--segmented > .choice__option {
   min-height: 0;
-  height: 30px;
+  height: 28px;
   padding: 0 8px;
   border: 0;
   border-left: 1px solid var(--wc-border-subtle);
@@ -3462,6 +3472,8 @@ input.switch:focus-visible { outline: 2px solid var(--wc-accent); outline-offset
 .connection-checks__check:first-child { border-top: 0; }
 .connection-checks__row { display: flex; align-items: center; gap: 8px; font-size: var(--wc-text-sm-size); }
 .connection-checks__row > svg { flex: none; }
+/* Not run yet: design 01's and 03's s-pend, a dashed circle in border-strong (T698, SRC-09). */
+.connection-checks__row > svg[data-icon='draft'] { color: var(--wc-border-strong); }
 .connection-checks__time { margin-left: auto; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
 .connection-checks__check.is-passed .connection-checks__row > svg { color: var(--wc-status-success); }
 .connection-checks__check.is-failed .connection-checks__label { font-weight: 600; }
@@ -3547,8 +3559,15 @@ input.switch:focus-visible { outline: 2px solid var(--wc-accent); outline-offset
   border-radius: 6px;
   background: var(--wc-bg-accent-soft);
   color: var(--wc-text-primary);
+  /* At 12/16, as every design's .notebar (T698, SRC-18). */
+  font-size: 12px;
+  line-height: 16px;
 }
 .info-bar p { margin: 0; }
+/* Bold in a note at 600, not the browser's 700 (direction §3; data-sources-Q4). */
+.info-bar b,
+.info-bar strong,
+.source-settings__changed b { font-weight: 600; }
 /* The note's "i" in the accent, as the prototype draws it (T466's review). */
 svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 
@@ -3761,7 +3780,21 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 .sources-filters input.sources-filters__search:not([type='checkbox']):not([type='radio']):not([type='file']) {
   width: 220px;
   height: 28px;
+  padding-left: 27px;
   font-size: 12px;
+}
+/* The search's icon at its head (01:135; T698, SRC-17). */
+.sources-filters__find { position: relative; display: inline-block; }
+.sources-filters__find > svg { position: absolute; top: 7px; left: 9px; color: var(--wc-text-muted); pointer-events: none; }
+/* The table's links in the accent, no underline (01:236; SRC-17). */
+.sources-folder a { color: var(--wc-accent); text-decoration: none; }
+.sources-folder a:hover { text-decoration: underline; }
+/* With none yet, design 14's empty-folder line as the table's one row (data-sources-Q3). */
+.query-log td.sources-empty-row {
+  height: 34px;
+  color: var(--wc-text-secondary);
+  font-size: 14px;
+  text-align: left;
 }
 .select-pill {
   display: inline-flex;
@@ -3814,11 +3847,54 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
    breadcrumb, a head with its name in the code face, its type and state, a
    line of where it is and how it is, then five tabs on one card. */
 .source-settings { display: grid; gap: 10px; align-content: start; min-width: 0; }
+/* Its head as design 03's .pagehead (T698, SRC-07): one white band across
+   the page holding the crumbs, the head and its lines, the tabs edge to edge
+   at its foot; the chosen tab's panel on white under it. */
+.source-settings__pagehead {
+  display: grid;
+  gap: 8px;
+  margin: 0 calc(-1 * var(--wc-surface-padding));
+  padding: 12px var(--wc-surface-padding) 0;
+  background: var(--wc-bg-surface);
+}
+.source-settings > .source-settings__pagehead:first-child { margin-top: calc(-1 * var(--wc-surface-padding)); }
+.source-settings > .workspace-band + .source-settings__pagehead,
+.source-settings > .proposal-band + .source-settings__pagehead { margin-top: -10px; }
+.source-settings__pagehead > .source-settings__tabs {
+  margin: 4px calc(-1 * var(--wc-surface-padding)) 0;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
+.source-settings__pagehead + .source-settings__panel,
+.source-settings__pagehead ~ .source-settings__panel {
+  margin: 0 calc(-1 * var(--wc-surface-padding));
+  padding: 16px var(--wc-surface-padding);
+  background: var(--wc-bg-surface);
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
+.source-settings__pagehead + .source-settings__panel { margin-top: -10px; }
+/* Beside an open History, the band stops at the page's column. */
+.with-panel[data-open='true'] .source-settings__pagehead,
+.with-panel[data-open='true'] .source-settings__pagehead ~ .source-settings__panel { margin-right: 0; }
+.with-panel[data-open='true'] .source-settings__pagehead > .source-settings__tabs { margin-right: 0; }
+/* The item's mark, "◍" at 28 px (03:125; data-sources-Q6). */
+.itemicon.source-settings__mark { width: 28px; height: 28px; border-radius: 6px; font-size: 14px; font-weight: 600; }
+/* The head's badges (03:95–97; SRC-06): 22 px at 12/400 on bg-subtle, the
+   driver's outlined in border-strong. */
+.source-settings__pagehead .badge {
+  gap: 4px;
+  height: 22px;
+  border: 0;
+  background: var(--wc-bg-subtle);
+  font-weight: 400;
+}
+.source-settings__pagehead .badge.line { border: 1px solid var(--wc-border-strong); background: none; }
+.source-settings__pagehead .badge > svg { flex: none; }
 .source-settings__crumbs { color: var(--wc-text-secondary); font-size: 12px; line-height: 16px; }
 .source-settings__crumbs a { color: var(--wc-text-secondary); text-decoration: none; }
 .source-settings__crumbs a:hover { text-decoration: underline; }
 .source-settings__crumbs [aria-current='page'] { color: var(--wc-text-primary); }
-.source-settings__head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.source-settings__head { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; }
 .source-settings__name { margin: 0; font-size: 20px; line-height: 26px; font-weight: 600; }
 .source-settings__spacer { flex: 1; }
 .source-settings__line {
@@ -3877,11 +3953,12 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 .source-settings__checks { display: inline-flex; gap: 2px; }
 /* Changing it (T497; design 03 pins 5–10): the form, "Test to save" beside it,
    changed fields tinted with their old value, and a bar under the card. */
+/* Test to save beside the form at 420 px on white (03:202, 228; T698, SRC-09). */
 .source-settings__edit {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+  grid-template-columns: minmax(0, 1fr) 420px;
   gap: 0;
-  margin: -16px;
+  margin: -16px calc(-1 * var(--wc-surface-padding));
 }
 .source-settings__form { display: grid; gap: 16px; align-content: start; min-width: 0; padding: 16px; }
 .source-settings__test {
@@ -3890,25 +3967,53 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
   align-content: start;
   padding: 16px;
   border-left: 1px solid var(--wc-border-subtle);
-  background: var(--wc-bg-subtle);
+  background: var(--wc-bg-surface);
 }
+/* Test connection as wide as its words (03:242). */
+.source-settings__test > .btn { justify-self: start; }
+/* Its checks as design 03's .chk rows: at least 30 px, a rule between. */
+.source-settings__test .connection-checks__check { padding: 0; }
+.source-settings__test .connection-checks__row { min-height: 30px; }
 @media (max-width: 1023.98px) {
   .source-settings__edit { grid-template-columns: minmax(0, 1fr); }
   .source-settings__test { border-left: 0; border-top: 1px solid var(--wc-border-subtle); }
 }
-.source-settings__type { max-width: 420px; }
-.source-settings__type-label { color: var(--wc-text-secondary); font-size: 12px; font-weight: 600; }
+/* The editor as design 03 groups it (03:204–225; SRC-08): the type a section
+   of its own, a 220 px locked field with its help to its right; rows to
+   680 px, Port 110; the sign-in segment 320; TLS's switches side by side,
+   the CA certificate's link beside them. */
+.source-settings__type {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 10px 12px;
+  align-items: center;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+}
+.source-settings__type-label { grid-column: 1 / -1; }
 .source-settings__type-value {
   display: inline-flex;
   gap: 8px;
   align-items: center;
   height: 32px;
-  padding: 0 10px;
+  padding: 0 8px;
   border: 1px solid var(--wc-border-subtle);
   border-radius: 4px;
   background: var(--wc-bg-subtle);
   color: var(--wc-text-secondary);
 }
+.source-settings__form .connection-form__pair { grid-template-columns: minmax(0, 1fr) 110px; max-width: 680px; }
+.source-settings__form .connection-form .field { max-width: 680px; }
+.source-settings__form .choice--segmented { width: 320px; max-width: 100%; }
+.source-settings__form .connection-form__tls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+  align-items: center;
+}
+.source-settings__form .connection-form__tls > :not(.switch-row):not(.connection-form__add) { flex-basis: 100%; }
+.source-settings__form .connection-form__tls > .switch-row { flex: 0 1 280px; align-self: start; }
+.source-settings__form .connection-form__tls > .connection-form__add { align-self: start; margin-top: 1px; }
 .source-settings__changed {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr);
@@ -3926,16 +4031,24 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 .source-settings__general { display: grid; gap: 14px; max-width: 520px; margin-bottom: 16px; }
 /* A description keeps the lines it was written in (T499). */
 .source-settings__description { white-space: pre-line; }
+/* The save bar pinned across the window's foot, as design 03's .formbar
+   (03:135, 247; T698, SRC-10); the page keeps room for it at its end. */
 .source-settings__foot {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 5;
   display: flex;
   flex-wrap: wrap;
   gap: 8px 12px;
   align-items: center;
-  padding: 10px 16px;
-  border: 1px solid var(--wc-border-subtle);
-  border-radius: 6px;
+  padding: 10px 24px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--wc-border-subtle);
   background: var(--wc-bg-surface);
 }
+.source-settings:has(> .source-settings__foot) { padding-bottom: 64px; }
 .source-settings__count { color: var(--wc-text-secondary); font-size: 12px; }
 .source-settings__dot {
   display: inline-block;
@@ -3959,6 +4072,17 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 .switch-row.is-changed input.switch { box-shadow: 0 0 0 2px var(--wc-bg-accent-soft); }
 /* A stored secret, never drawn: said kept, with Replace (state D). */
 .secret-kept { font-family: inherit; font-size: var(--wc-text-sm-size); color: var(--wc-text-secondary); }
+/* As design 03's .input.stored (03:80; T698, SRC-11): a 32 px field on
+   bg-subtle, its border subtle, Replace at its end. */
+.secret-pasted.secret-kept {
+  min-height: 0;
+  height: 32px;
+  padding: 0 8px;
+  border-color: var(--wc-border-subtle);
+  border-radius: 4px;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-primary);
+}
 .secret-replacing { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
 .secret-replacing > .link-button { color: var(--wc-accent); font-size: var(--wc-text-xs-size); }
 /* A field a stored secret is bound to (AC-312): the link icon beside its label. */
@@ -4526,8 +4650,24 @@ code.schedules__sub { font-family: var(--wc-font-code); }
   display: grid; gap: 12px; max-width: 680px; padding: 22px 24px; border-radius: 6px;
   background: var(--wc-bg-surface); border: 1px solid var(--wc-border-subtle);
 }
-.sql-off h2 { display: flex; gap: 8px; align-items: center; margin: 0; font-size: 16px; line-height: 22px; }
+/* As design 15's .offpanel (15:212–214, 430–431; T698, SRC-20): its heading
+   16/600 with the off icon in text-secondary, the login in the code face,
+   who could run SQL as a .kv of 110 px keys at 12/16. */
+.sql-off h2 { display: flex; gap: 8px; align-items: center; margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; }
+.sql-off h2 > svg[data-icon='off'] { color: var(--wc-text-secondary); }
 .sql-off p { margin: 0; color: var(--wc-text-secondary); }
+.sql-off code { font-family: var(--wc-font-code); font-size: 12px; }
+.sql-off__who {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 6px 12px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+}
+.sql-off__who dt { color: var(--wc-text-secondary); }
+.sql-off__who dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.sql-off__act .btn > svg { flex: none; }
 .sql-off__act { display: flex; gap: 10px; align-items: center; }
 .sql-off__note { font-size: 12px; color: var(--wc-text-secondary); }
 
@@ -5329,38 +5469,14 @@ main:has(.review-view) {
   background: color-mix(in srgb, var(--wc-status-error) 8%, var(--wc-bg-surface));
 }
 .auth-check p { margin: 0; color: var(--wc-text-primary); font-size: 13px; }
-/* The policies, and beside them the prototype's right pane, "Preview a
-   security context" (T172); stacked when there is no room for both. */
-.security-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 16px;
-  align-items: start;
-}
-@media (max-width: 1100px) { .security-layout { grid-template-columns: minmax(0, 1fr); } }
-.context-preview {
-  display: grid;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--wc-border-subtle);
-  border-radius: 6px;
-  background: var(--wc-bg-surface);
-}
-.context-preview h2 { margin: 0; font-size: var(--wc-text-sm-size); line-height: var(--wc-text-sm-line); font-weight: 600; }
-.context-preview textarea { font-family: var(--wc-font-code); font-size: 12px; }
+/* Preview as groups' parts, named for phase 1's context pane they came from. */
 .context-preview__note { font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
-.context-preview__problem { font-size: 12px; line-height: 16px; color: var(--wc-status-error); }
 .context-preview__found { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
-/* Docked as the full-height pane beside the policies (AC-228, AC-232): the
-   pane's edge, not a card's box. */
-.context-preview.admin-pane { padding: 12px 16px; border: 0; border-left: 1px solid var(--wc-border-subtle); border-radius: 0; }
-@media (max-width: 1100px) { .context-preview.admin-pane { position: static; height: auto; border-left: 0; } }
 .context-preview__presets { display: flex; flex-wrap: wrap; gap: 6px; }
 .context-preview__access h3 { margin: 0 0 6px; font-size: var(--wc-text-xs-size); font-weight: 600; color: var(--wc-text-secondary); }
 .context-preview__access ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .context-preview__access li { display: flex; flex-wrap: wrap; gap: 2px 6px; align-items: center; font-size: 12px; line-height: 16px; }
 .context-preview__object { font-family: var(--wc-font-code); font-weight: 600; }
-.context-preview__why { flex-basis: 100%; color: var(--wc-text-secondary); overflow-wrap: anywhere; }
 .context-preview__source { overflow-wrap: anywhere; }
 /* The chart type card (AC-217), the prototype's reco-row: the type by name,
    how it was chosen, and Change; and a manual choice's warning (AC-218). */
@@ -5759,7 +5875,6 @@ svg[data-icon] { flex: none; }
 /* An icon set in a line of words, rather than beside a block of them. */
 .tile-no-rows__headline > svg[data-icon],
 .model-field__problem > svg[data-icon],
-.context-preview__problem > svg[data-icon],
 .filter-widget__cut > svg[data-icon],
 .tile-not-covered > svg[data-icon],
 .well__reason > svg[data-icon],

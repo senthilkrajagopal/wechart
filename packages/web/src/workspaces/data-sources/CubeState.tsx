@@ -42,20 +42,44 @@ export function cubeStateLabel(view: CubeStateView): { kind: StateKind; label: s
   }
 }
 
+const counted = (n: number) => (n === 1 ? '1 instance' : `${String(n)} instances`);
+
+/**
+ * What follows the state on its line, as design 03's states G and H write it
+ * (T698, SRC-19): live, its version and how many instances; waiting, how many
+ * of them have it; failed, how many failed; nothing for the others.
+ */
+export function cubeStateDetail(view: CubeStateView): string | undefined {
+  if (view.state === 'unlanded' || view.instances.length === 0) return undefined;
+  const instances = view.instances;
+  switch (view.state) {
+    case 'live':
+      return `version ${String(view.version)} · ${counted(instances.length)}`;
+    case 'waiting': {
+      const have = instances.filter((each) => each.current && each.state === 'live').length;
+      return `version ${String(view.version)} · ${String(have)} of ${counted(instances.length)}`;
+    }
+    case 'failed':
+      return counted(instances.filter((each) => each.current && each.state === 'failed').length);
+    case 'unused':
+      return undefined;
+  }
+}
+
 export function CubeState({ view }: { view: CubeStateView }) {
   const { kind, label } = cubeStateLabel(view);
   const instances = view.state === 'unlanded' ? [] : view.instances;
   const failed = instances.filter((each) => each.current && each.state === 'failed');
+  const detail = cubeStateDetail(view);
   return (
     <div className="cube-state">
-      <Status kind={kind} label={label} testId="cube-state" state={view.state} />
-      {instances.length > 0 && (
-        <p className="cube-state__heard">
-          {instances.length === 1
-            ? '1 Cube instance reported within the hour'
-            : `${String(instances.length)} Cube instances reported within the hour`}
-        </p>
-      )}
+      <Status
+        kind={kind}
+        label={label}
+        testId="cube-state"
+        state={view.state}
+        {...(detail === undefined ? {} : { detail })}
+      />
       {failed.length > 0 && (
         <ul className="cube-state__errors">
           {failed.map((each) => (

@@ -6,7 +6,7 @@ import { TableScroll } from '../../shell/TableScroll';
 import { MODEL_FILES_QUERY } from '../model/FileList';
 import { AuditTrail, NO_FILTERS, type AuditFilters } from './AuditTrail';
 import { AuthWarning } from './AuthWarning';
-import { modelHref } from './ContextPreview';
+import { modelHref } from './dashboardPreview';
 import { GroupsPreview } from './GroupsPreview';
 import { Scopes } from './Scopes';
 import {

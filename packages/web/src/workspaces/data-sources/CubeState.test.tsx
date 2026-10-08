@@ -67,11 +67,40 @@ describe('whether Cube uses a data source’s settings (T365, AC-161)', () => {
     );
 
     const badge = screen.getByTestId('cube-state');
-    expect(badge.textContent).toBe('Cube couldn’t take these settings');
+    // On one line, how many failed after it (design 03, state H; T698, SRC-19).
+    expect(badge.textContent).toBe('Cube couldn’t take these settings · 1 instance');
     expect(badge.getAttribute('data-state')).toBe('failed');
     expect(badge.querySelector('svg')).not.toBeNull();
     expect(screen.getByRole('listitem').textContent).toBe('password authentication failed');
-    expect(screen.getByText('2 Cube instances reported within the hour').tagName).toBe('P');
+  });
+
+  it('says its version and the instances on the state’s own line, as design 03 writes it (T698, SRC-19)', () => {
+    const said = (view: CubeStateView) => {
+      const { unmount } = render(<CubeState view={view} />);
+      const text = screen.getByTestId('cube-state').textContent;
+      // Nothing said again under it.
+      expect(document.querySelector('.cube-state__heard')).toBeNull();
+      unmount();
+      return text;
+    };
+    expect(
+      said({
+        state: 'live',
+        version: 4,
+        instances: [instance(), instance({ instance: 'cube-2/1/bbbbbb' })],
+      }),
+    ).toBe('Cube uses these settings · version 4 · 2 instances');
+    expect(
+      said({
+        state: 'waiting',
+        version: 4,
+        instances: [instance(), instance({ instance: 'cube-2/1/bbbbbb', current: false })],
+      }),
+    ).toBe('Waiting for Cube to pick up the change · version 4 · 1 of 2 instances');
+    expect(said({ state: 'unused', version: 4, instances: [] })).toBe(
+      'No Cube instance has reported on it in the last hour',
+    );
+    expect(said({ state: 'unlanded' })).toBe('Not yet published to Cube');
   });
 
   it('never asks for a restart', () => {

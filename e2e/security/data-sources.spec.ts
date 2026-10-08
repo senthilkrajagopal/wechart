@@ -243,6 +243,26 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
         ),
       ).toBe(28);
 
+      // The search with its icon, and the table's links in the accent with no
+      // underline, as design 01 draws them (T698, SRC-17).
+      await expect(main.locator('.sources-filters__find > svg')).toHaveAttribute(
+        'data-icon',
+        'search',
+      );
+      const accent = await page.evaluate(() => {
+        const probe = document.createElement('a');
+        probe.style.color = 'var(--wc-accent)';
+        document.body.append(probe);
+        const said = getComputedStyle(probe).color;
+        probe.remove();
+        return said;
+      });
+      await expect(path).toHaveCSS('text-decoration-line', 'none');
+      await expect(path).toHaveCSS('color', accent);
+      // The page's note at 12/16 (T698, SRC-18).
+      await expect(main.getByRole('note').first()).toHaveCSS('font-size', '12px');
+      await expect(main.getByRole('note').first()).toHaveCSS('line-height', '16px');
+
       // A folder's filter narrows it to that folder's.
       await main
         .getByLabel('Folder')
@@ -297,12 +317,10 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
         '⋯',
       ]);
       for (const name of ['History', 'Generate cubes…', 'Edit in my workspace']) {
-        const drawn = await head
-          .getByRole('button', { name, exact: true })
-          .evaluate((node) => ({
-            height: Math.round(node.getBoundingClientRect().height),
-            font: getComputedStyle(node).fontSize,
-          }));
+        const drawn = await head.getByRole('button', { name, exact: true }).evaluate((node) => ({
+          height: Math.round(node.getBoundingClientRect().height),
+          font: getComputedStyle(node).fontSize,
+        }));
         expect(drawn, name).toEqual({ height: 32, font: '14px' });
       }
       // History with its clock, Edit in my workspace with its pencil (15:424).
@@ -317,6 +335,96 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
           return { width: Math.round(box.width), height: Math.round(box.height) };
         }),
       ).toEqual({ width: 32, height: 32 });
+    });
+
+    test('draws its page as design 03 state A does: one white head band, the tabs across its foot, its mark and badges, and Cube’s use on one line (T698)', async ({
+      page,
+    }) => {
+      await page.goto('/data-sources');
+      await page
+        .getByRole('main')
+        .getByRole('table', { name: 'Data sources' })
+        .getByRole('link', { name: `sales_${RUN}`, exact: true })
+        .click();
+      const main = page.getByRole('main');
+      await expect(main.getByRole('heading', { level: 1 })).toHaveText(`sales_${RUN}`);
+      const token = (name: string) =>
+        page.evaluate((variable) => {
+          const probe = document.createElement('div');
+          probe.style.backgroundColor = `var(${variable})`;
+          document.body.append(probe);
+          const said = getComputedStyle(probe).backgroundColor;
+          probe.remove();
+          return said;
+        }, name);
+      const [surface, subtle] = [await token('--wc-bg-surface'), await token('--wc-bg-subtle')];
+
+      // The crumbs, the head, its two lines and the tabs in one white band
+      // across the page, the tabs edge to edge at its foot (03:126, 200; SRC-07).
+      const band = main.locator('.source-settings__pagehead');
+      await expect(band).toHaveCSS('background-color', surface);
+      const tabs = band.getByRole('tablist', { name: 'Data source' });
+      const [bandBox, tabsBox, mainBox] = await Promise.all([
+        band.boundingBox(),
+        tabs.boundingBox(),
+        main.boundingBox(),
+      ]);
+      expect([bandBox?.x, bandBox?.width]).toEqual([mainBox?.x, mainBox?.width]);
+      expect([tabsBox?.x, tabsBox?.width]).toEqual([bandBox?.x, bandBox?.width]);
+      expect(Math.round((tabsBox?.y ?? 0) + (tabsBox?.height ?? 0))).toBe(
+        Math.round((bandBox?.y ?? 0) + (bandBox?.height ?? 0)),
+      );
+      // The panel on white under it, not on a card of its own.
+      const panel = main.getByRole('tabpanel', { name: 'Connection' });
+      await expect(panel).toHaveCSS('background-color', surface);
+      await expect(panel).toHaveCSS('border-top-width', '0px');
+
+      // The item's mark, "◍" at 28 px (data-sources-Q6).
+      const mark = band.locator('.source-settings__mark');
+      await expect(mark).toHaveText('◍');
+      expect(await mark.evaluate((node) => [node.clientWidth, node.clientHeight])).toEqual([
+        28, 28,
+      ]);
+      // The driver an outlined badge at 12/400; the access a 22 px badge on
+      // bg-subtle with no border, with its eye (03:95–97, 290; SRC-06).
+      const driver = band.locator('.source-settings__driver');
+      await expect(driver).toHaveCSS('font-size', '12px');
+      await expect(driver).toHaveCSS('font-weight', '400');
+      await expect(driver).toHaveCSS('border-top-width', '1px');
+      await expect(driver).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+      const access = band.locator('.source-settings__access');
+      await expect(access).toHaveCSS('background-color', subtle);
+      await expect(access).toHaveCSS('border-top-width', '0px');
+      await expect(access).toHaveCSS('font-weight', '400');
+      expect(Math.round((await access.boundingBox())?.height ?? 0)).toBe(22);
+      await expect(access.locator('svg')).toHaveAttribute('data-icon', 'eye');
+      // State A's meta on two lines: its access and version, then its health.
+      const lines = band.locator('.source-settings__line');
+      await expect(lines).toHaveCount(2);
+      await expect(lines.nth(0)).toContainText(/Version \d+/);
+      await expect(lines.nth(1).getByTestId('source-health')).toBeVisible();
+
+      // In Cube says its state, its version and its instances on one line (03:399; SRC-19).
+      await tabs.getByRole('tab', { name: 'In Cube' }).click();
+      const state = main.getByRole('tabpanel', { name: 'In Cube' }).getByTestId('cube-state');
+      await expect(state).toBeVisible();
+      await expect(main.locator('.cube-state__heard')).toHaveCount(0);
+      expect(Math.round((await state.boundingBox())?.height ?? 0)).toBeLessThanOrEqual(20);
+
+      // A note at 12/16, its bold at 600 (T698, SRC-18, data-sources-Q4).
+      await tabs.getByRole('tab', { name: 'Usage' }).click();
+      const note = main.getByRole('tabpanel', { name: 'Usage' }).getByRole('note');
+      await expect(note).toHaveCSS('font-size', '12px');
+      await expect(note).toHaveCSS('line-height', '16px');
+      expect(
+        await note.evaluate((node) => {
+          const bold = document.createElement('b');
+          node.append(bold);
+          const weight = getComputedStyle(bold).fontWeight;
+          bold.remove();
+          return weight;
+        }),
+      ).toBe('600');
     });
 
     test('opens its settings from Data sources and Explore: read-only in its folder, with its tests and Cube’s use', async ({
@@ -467,6 +575,91 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
   });
 
   /**
+   * T698 (AC-284, AC-343; design 03, pin 3 and state A; SRC-02, SRC-03): a
+   * copy proposes itself from its head, waiting while a change is unsaved;
+   * once approved, its original's version line says who approved it.
+   */
+  test.describe('as writer, proposing a copy', () => {
+    test.use({ role: 'writer' });
+
+    test('proposes its copy from its head once saved, and its original then says who approved its version', async ({
+      page,
+    }) => {
+      await page.goto('/data-sources');
+      await page
+        .getByRole('main')
+        .getByRole('table', { name: 'Data sources' })
+        .getByRole('link', { name: `sales_${RUN}`, exact: true })
+        .click();
+      const main = page.getByRole('main');
+      await expect(main.getByRole('heading', { level: 1 })).toHaveText(`sales_${RUN}`);
+      const original = page.url();
+      const before = Number(
+        /^Version (\d+)/.exec(
+          (await main.locator('.source-settings__version').textContent()) ?? '',
+        )?.[1],
+      );
+      await main.getByRole('button', { name: 'Edit in my workspace' }).click();
+      await expect(main.locator('.source-settings__status')).toHaveText('Draft');
+      const copyId = decodeURIComponent(page.url().split('/').pop() ?? '');
+      made.sources.push(copyId);
+      const project = await projectFolderOf(page.request, 'data-source', copyId);
+
+      // Its head's primary, last (pin 3).
+      const target = `Sources parent ${RUN} / Sources ${RUN}`;
+      const head = main.locator('.source-settings__head');
+      await expect(head.getByRole('button')).toHaveText([
+        'Discard my copy…',
+        `Propose to ${target}…`,
+      ]);
+      const propose = head.getByRole('button', { name: `Propose to ${target}…` });
+      expect(
+        await propose.evaluate((node) => ({
+          height: Math.round(node.getBoundingClientRect().height),
+          font: getComputedStyle(node).fontSize,
+          weight: getComputedStyle(node).fontWeight,
+        })),
+      ).toEqual({ height: 32, font: '14px', weight: '600' });
+
+      // A change unsaved: it waits, saying why, and opens nothing.
+      const tabs = main.getByRole('tablist', { name: 'Data source' });
+      await tabs.getByRole('tab', { name: 'General' }).click();
+      await main.getByLabel('Description').fill('For the review.');
+      await expect(propose).toHaveAttribute('aria-disabled', 'true');
+      await expect(propose).toHaveAttribute('title', 'Save or discard your changes first.');
+      await expect(propose).toHaveAccessibleDescription('Save or discard your changes first.');
+      // Pressed anyway (Playwright waits on aria-disabled, as a person can't).
+      await propose.click({ force: true });
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await main.getByRole('button', { name: 'Discard changes' }).click();
+      await expect(propose).not.toHaveAttribute('aria-disabled', 'true');
+
+      // Proposed, then approved by the writer, who decides in its folder.
+      await propose.click();
+      const dialog = page.getByRole('dialog');
+      await dialog.getByRole('button', { name: 'Propose', exact: true }).click();
+      await expect(dialog).toHaveCount(0);
+      const proposal = (await (
+        await page.request.get(`/api/proposals?kind=data-source&itemId=${copyId}`)
+      ).json()) as { id: string };
+      const approved = await page.request.post(`/api/proposals/${proposal.id}/approve`, {
+        data: {},
+      });
+      expect(approved.status(), await approved.text()).toBe(200);
+
+      // Its original's line: the version, approved by whom and when (03:290).
+      const me = ((await (await page.request.get('/api/me')).json()) as { name: string }).name;
+      await page.goto(original);
+      await expect(main.locator('.source-settings__version')).toHaveText(
+        new RegExp(`^Version ${String(before + 1)} · approved \\d{1,2} [A-Z][a-z]{2} by ${me}$`),
+      );
+      // The copy, its work done, removed with its project folder.
+      await page.request.delete(`/api/data-sources/${copyId}`);
+      await removeProjectFolder(page.request, project);
+    });
+  });
+
+  /**
    * T497 (AC-158, AC-161, AC-164, AC-312; design 03 of 2026-09-27, pins 5–10
    * and states B, C, I): changing a data source on its page, in the user's
    * copy — saved only from a passing test of exactly the changed settings,
@@ -475,6 +668,149 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
    */
   test.describe('as writer, changing one', () => {
     test.use({ role: 'writer' });
+
+    test('draws its editor as design 03 does: the type fixed beside its help, rows to 680, Test to save at 420, and the save bar at the window’s foot (T698)', async ({
+      page,
+    }) => {
+      await page.goto('/data-sources');
+      await page
+        .getByRole('main')
+        .getByRole('table', { name: 'Data sources' })
+        .getByRole('link', { name: `sales_${RUN}`, exact: true })
+        .click();
+      const main = page.getByRole('main');
+      await main.getByRole('button', { name: 'Edit in my workspace' }).click();
+      await expect(main.locator('.source-settings__status')).toHaveText('Draft');
+      const copyId = decodeURIComponent(page.url().split('/').pop() ?? '');
+      made.sources.push(copyId);
+      const project = await projectFolderOf(page.request, 'data-source', copyId);
+      const panel = main.getByRole('tabpanel', { name: 'Connection' });
+      const box = async (locator: ReturnType<typeof page.locator>) =>
+        (await locator.boundingBox())!;
+      const token = (name: string, property = 'backgroundColor') =>
+        page.evaluate(
+          ([variable, prop]) => {
+            const probe = document.createElement('div');
+            probe.style.setProperty(
+              prop === 'color' ? 'color' : 'background-color',
+              `var(${variable})`,
+            );
+            document.body.append(probe);
+            const style = getComputedStyle(probe);
+            const said = prop === 'color' ? style.color : style.backgroundColor;
+            probe.remove();
+            return said;
+          },
+          [name, property] as const,
+        );
+
+      // The type a 220 px locked field, its help to its right (03:205–206; SRC-08).
+      const type = panel.locator('.source-settings__type-value');
+      const typeHelp = panel.locator('.source-settings__type .connection-form__note');
+      expect(Math.round((await box(type)).width)).toBe(220);
+      expect((await box(typeHelp)).x).toBeGreaterThan((await box(type)).x + 220);
+      expect(Math.round((await box(typeHelp)).y)).toBeLessThan(
+        Math.round((await box(type)).y + (await box(type)).height),
+      );
+      // Host and Port on a row of at most 680 px, Port 110 (03:210–214).
+      const host = panel.getByLabel(/^Host/);
+      const port = panel.getByLabel(/^Port/);
+      expect(Math.round((await box(port)).width)).toBe(110);
+      expect(Math.round((await box(port)).x + (await box(port)).width - (await box(host)).x)).toBe(
+        680,
+      );
+      expect(Math.round((await box(panel.getByLabel(/^Database/))).width)).toBe(680);
+      // "Sign in with" a 320 px segment, each option 28 px at 12 (03:218; SRC-15).
+      const segment = panel.getByRole('radiogroup', { name: 'Sign in with' });
+      expect(Math.round((await box(segment)).width)).toBe(320);
+      const option = segment.getByRole('radio').first();
+      expect(Math.round((await box(option)).height)).toBe(28);
+      await expect(option).toHaveCSS('font-size', '12px');
+      // The password kept, a 32 px field on bg-subtle, its Replace a 12/600 link (03:80; SRC-11).
+      const kept = panel.locator('.secret-kept');
+      expect(Math.round((await box(kept)).height)).toBe(32);
+      await expect(kept).toHaveCSS('background-color', await token('--wc-bg-subtle'));
+      await expect(kept).toHaveCSS('border-top-color', await token('--wc-border-subtle', 'color'));
+      await expect(kept).toHaveCSS('border-top-left-radius', '4px');
+      const replace = kept.getByRole('button', { name: /^Replace/ });
+      await expect(replace).toHaveCSS('font-size', '12px');
+      await expect(replace).toHaveCSS('font-weight', '600');
+      // TLS on, as design 03 draws it: its switches side by side, the CA
+      // certificate's link beside them (03:225).
+      const tls = panel.locator('fieldset').filter({ hasText: 'TLS' });
+      const switches = tls.getByRole('switch');
+      await switches.first().check();
+      await expect(switches).toHaveCount(2);
+      const add = tls.getByRole('button', { name: /Add a CA certificate/ });
+      const [first, second, link] = [
+        await box(switches.nth(0)),
+        await box(switches.nth(1)),
+        await box(add),
+      ];
+      expect(second.x).toBeGreaterThan(first.x + first.width);
+      expect(Math.abs(second.y - first.y)).toBeLessThan(4);
+      expect(link.x).toBeGreaterThan(second.x);
+      expect(Math.abs(link.y + link.height / 2 - (second.y + second.height / 2))).toBeLessThan(8);
+      // Links at 12/600 (01:90; SRC-11).
+      await expect(add).toHaveCSS('font-size', '12px');
+      await expect(add).toHaveCSS('font-weight', '600');
+
+      // Test to save at 420 px on white, each check at least 30 px, "Not run"
+      // as the dashed circle, Test connection as wide as its words (03:202–242; SRC-09).
+      const beside = main.getByRole('region', { name: 'Test to save' });
+      expect(Math.round((await box(beside)).width)).toBe(420);
+      await expect(beside).toHaveCSS('background-color', await token('--wc-bg-surface'));
+      const check = beside.locator('.connection-checks__row').first();
+      expect(Math.round((await box(check)).height)).toBeGreaterThanOrEqual(30);
+      await expect(check.locator('svg')).toHaveAttribute('data-icon', 'draft');
+      const test = beside.getByRole('button', { name: 'Test connection' });
+      expect((await box(test)).width).toBeLessThan(200);
+
+      // The save bar across the window's foot: 10 by 24, a top rule, on white (03:135, 247; SRC-10).
+      const foot = main.locator('.source-settings__foot');
+      const viewport = page.viewportSize()!;
+      const footBox = await box(foot);
+      expect(Math.round(footBox.y + footBox.height)).toBe(viewport.height);
+      expect([Math.round(footBox.x), Math.round(footBox.width)]).toEqual([0, viewport.width]);
+      await expect(foot).toHaveCSS('padding', '10px 24px');
+      await expect(foot).toHaveCSS('border-top-width', '1px');
+      await expect(foot).toHaveCSS('background-color', await token('--wc-bg-surface'));
+      // Nothing of the page hidden under it: scrolled to its end, the form ends above it.
+      await page.mouse.wheel(0, 5000);
+      await expect
+        .poll(async () => {
+          const form = await box(panel.locator('.source-settings__edit'));
+          const bar = await box(foot);
+          return form.y + form.height <= bar.y + 1;
+        })
+        .toBe(true);
+      // Nor when the bar grows: narrow, with a change that warns of a rebuild
+      // beside Save, it wraps, and the page's end still clears it (T698's review).
+      await page.setViewportSize({ width: 820, height: viewport.height });
+      await panel.getByLabel(/^Database/).fill('sample_elsewhere');
+      await expect(
+        foot.getByText(/Saving rebuilds this data source’s pre-aggregations/),
+      ).toBeVisible();
+      expect((await box(foot)).height).toBeGreaterThan(70);
+      await page.mouse.wheel(0, 5000);
+      await expect
+        .poll(async () => {
+          const form = await box(panel.locator('.source-settings__edit'));
+          const bar = await box(foot);
+          return form.y + form.height <= bar.y + 1;
+        })
+        .toBe(true);
+      await page.setViewportSize(viewport);
+      await main.getByRole('button', { name: 'Discard changes' }).click();
+
+      await main.getByRole('button', { name: 'Discard my copy…' }).click();
+      await page
+        .getByRole('alertdialog', { name: 'Discard your copy?' })
+        .getByRole('button', { name: 'Discard' })
+        .click();
+      await expect(page).toHaveURL(/\/explore\?folder=/);
+      await removeProjectFolder(page.request, project);
+    });
 
     test('changes its copy: tested before it saves, a target field asking for the password again, leaving asked about', async ({
       page,
@@ -807,12 +1143,13 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
         await expect(parent.locator('.sources-used-by__tip')).toHaveText(
           `uses_${RUN} · Sources parent ${RUN} / Sources ${RUN}`,
         );
-        // The folder's own data source, which the cube doesn't name: none.
+        // The folder's own data source, which the cube doesn't name: none,
+        // counted as the others are (data-sources-Q2; T698).
         await expect(
           rowOf(`sales_${RUN}`, `Sources parent ${RUN} / Sources ${RUN}`).getByTestId(
             'source-used-by',
           ),
-        ).toHaveText('No cube');
+        ).toHaveText('0 cubes');
         // Managers' cube counted, never named (as AC-322 counts what can't be seen).
         const root = rowOf(`root_${RUN}`, 'Shared').getByTestId('source-used-by');
         await expect(root.locator('.sources-used-by__count')).toHaveText('1 cube');
@@ -871,7 +1208,7 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
           usedBy(`parent_${RUN}`, `Sources parent ${RUN}`).locator('.sources-used-by__tip'),
         ).toHaveText(`uses_${RUN} · Sources parent ${RUN} / Sources ${RUN}`);
         await expect(usedBy(`sales_${RUN}`, `Sources parent ${RUN} / Sources ${RUN}`)).toHaveText(
-          'No cube',
+          '0 cubes',
         );
       });
     });

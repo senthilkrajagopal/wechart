@@ -724,6 +724,33 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
         'The SQL runner is off. Turning it on again asks for the confirmation again.',
       );
       await expect(off.getByRole('button', { name: 'Turn on the SQL runner…' })).toBeFocused();
+      // As design 15 draws it (T698, SRC-20, SRC-21, SRC-05): its heading 16/600
+      // with the off icon; the login in the code face; who could run SQL as a
+      // 110 px key column at 12/16, the folder's read-write group named; Turn on
+      // with its shield; the SQL tab with its terminal.
+      const heading = off.getByRole('heading', { level: 2 });
+      await expect(heading).toHaveCSS('font-size', '16px');
+      await expect(heading).toHaveCSS('font-weight', '600');
+      await expect(heading.locator('svg')).toHaveAttribute('data-icon', 'off');
+      await expect(off.locator('p code')).toHaveText('sample');
+      await expect(off.locator('p code')).toHaveCSS('font-family', /IBM Plex Mono/);
+      const who = off.locator('dl.sql-off__who');
+      await expect(who.locator('dd').first()).toHaveText(
+        /^Super-Admins, and read-write members of .+: sales-rw$/,
+      );
+      await expect(who.locator('dd').first().locator('code')).toHaveText('sales-rw');
+      await expect(who).toHaveCSS('font-size', '12px');
+      await expect(who).toHaveCSS('line-height', '16px');
+      expect(Math.round((await who.locator('dt').first().boundingBox())?.width ?? 0)).toBe(110);
+      await expect(
+        off.getByRole('button', { name: 'Turn on the SQL runner…' }).locator('svg'),
+      ).toHaveAttribute('data-icon', 'shield');
+      await expect(
+        page
+          .getByRole('tablist', { name: 'Data source' })
+          .getByRole('tab', { name: 'SQL' })
+          .locator('svg'),
+      ).toHaveAttribute('data-icon', 'sql');
       await off.getByRole('button', { name: 'Turn on the SQL runner…' }).click();
       const dialog = page.getByRole('dialog', { name: `Turn on the SQL runner for ${SOURCE}?` });
       await expect(dialog.getByRole('button', { name: 'Turn on' })).toBeDisabled();

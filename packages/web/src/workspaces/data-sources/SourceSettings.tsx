@@ -21,7 +21,7 @@ import { ProposeFlow } from '../explore/ProposeFlow';
 import { CubeState, cubeStateLabel, type CubeStateView } from './CubeState';
 import type { ListedSource } from './DataSourcesList';
 import { CHECK_LABELS } from './connectionTest';
-import { DriverMark } from './driverMarks';
+import { AccessIcon } from '../explore/AccessChip';
 import { storedRowsOf, storedValuesOf } from './connectionSummary';
 import { HealthBadge } from './health';
 import {
@@ -129,6 +129,28 @@ const sharedPathText = (path: readonly Folder[] | undefined) =>
     ? SHARED_ROOT.title
     : path.map((folder) => folder.title).join(' / ');
 const folderHref = (id: string) => `/explore?folder=${encodeURIComponent(id)}`;
+
+/** Why Propose waits, on hover and to a screen reader (design 03, pin 3). */
+const SAVE_FIRST = 'Save or discard your changes first.';
+
+/** Design 15's i-sql: a terminal, on the SQL tab (SRC-05). */
+function SqlIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      aria-hidden="true"
+      data-icon="sql"
+    >
+      <rect x="1.8" y="2.8" width="12.4" height="10.4" rx="1.5" />
+      <path d="M4.5 6.2L6.8 8l-2.3 1.8M8.3 10.2h3.2" />
+    </svg>
+  );
+}
 
 const TABS = [
   ['general', 'General'],
@@ -269,6 +291,41 @@ function Settings({ source }: { source: StoredSource }) {
     globalThis.location.assign(folderHref(MY_WORKSPACE.id));
   };
 
+  /**
+   * Where a workspace one is proposed to, from its head (pin 3, AC-284): its
+   * target, where it has one, for one who may change it and has a workspace.
+   */
+  const proposeTo =
+    source.inWorkspace &&
+    source.canWrite &&
+    viaWorkspace &&
+    viewing === undefined &&
+    source.targetFolderId !== null &&
+    source.targetPath !== undefined
+      ? {
+          label: `Propose to ${sharedPathText(source.targetPath)}…`,
+          path: [SHARED_ROOT.title, ...source.targetPath.map((folder) => folder.title)],
+        }
+      : undefined;
+  /** Its version, and who approved it when, where its history says (state A; SRC-03). */
+  const kept = history.data?.versions.find((each) => each.current);
+  const versionLine = (
+    <span className="source-settings__version">
+      Version {String(source.version)}
+      {kept === undefined || kept.version !== source.version ? '' : ` · ${approvedText(kept)}`}
+    </span>
+  );
+  const health = (
+    <>
+      {listed === undefined ? null : (
+        <span className="source-settings__health">
+          <HealthBadge source={listed} phrased />
+        </span>
+      )}
+      <CubeUse id={source.id} />
+    </>
+  );
+
   const page = (
     <div className="source-settings">
       {/* In the user's workspace, the page says so across its width (T498;
@@ -296,145 +353,162 @@ function Settings({ source }: { source: StoredSource }) {
           }}
         />
       ) : null}
-      {/* Under its folder's breadcrumb, wherever it was opened from (pin 1). */}
-      {/* Followed in the app, so leaving with unsaved changes is asked about (state I, T497). */}
-      <nav aria-label="Breadcrumb" className="source-settings__crumbs">
-        <a href="/explore" onClick={inApp}>
-          Explore
-        </a>
-        <span aria-hidden="true"> / </span>
-        <a href={folderHref(root.id)} onClick={inApp}>
-          {root.title}
-        </a>
-        {source.folderPath.map((folder) => (
-          <span key={folder.id}>
-            <span aria-hidden="true"> / </span>
-            <a href={folderHref(folder.id)} onClick={inApp}>
-              {folder.title}
-            </a>
-          </span>
-        ))}
-        <span aria-hidden="true"> / </span>
-        <span aria-current="page">{source.name}</span>
-      </nav>
+      {/* The page's head as one white band: its crumbs, its head, its line,
+          and the tabs across its foot (design 03, .pagehead; T698, SRC-07). */}
+      <div className="source-settings__pagehead">
+        {/* Under its folder's breadcrumb, wherever it was opened from (pin 1). */}
+        {/* Followed in the app, so leaving with unsaved changes is asked about (state I, T497). */}
+        <nav aria-label="Breadcrumb" className="source-settings__crumbs">
+          <a href="/explore" onClick={inApp}>
+            Explore
+          </a>
+          <span aria-hidden="true"> / </span>
+          <a href={folderHref(root.id)} onClick={inApp}>
+            {root.title}
+          </a>
+          {source.folderPath.map((folder) => (
+            <span key={folder.id}>
+              <span aria-hidden="true"> / </span>
+              <a href={folderHref(folder.id)} onClick={inApp}>
+                {folder.title}
+              </a>
+            </span>
+          ))}
+          <span aria-hidden="true"> / </span>
+          <span aria-current="page">{source.name}</span>
+        </nav>
 
-      {/* Its name in the code face, its type and its state (pin 2). */}
-      <div className="source-settings__head">
-        <DriverMark type={source.driver} />
-        <h1 className="is-code source-settings__name">{source.name}</h1>
-        <span className="badge source-settings__driver">{DRIVERS[source.driver].label}</span>
-        {source.inWorkspace ? <span className="badge source-settings__status">Draft</span> : null}
-        <span className="source-settings__spacer" />
-        {/* History first, with its clock, as every item head has it (design
+        {/* Its name in the code face, its type and its state (pin 2). */}
+        <div className="source-settings__head">
+          {/* The item-kind mark, as designs 03 and 15 draw it; the driver's
+            monogram stays in the wizard (data-sources-Q6). */}
+          <span className="itemicon ic-source source-settings__mark" aria-hidden="true">
+            ◍
+          </span>
+          <h1 className="is-code source-settings__name">{source.name}</h1>
+          {/* The driver an outlined badge (03:95–97; SRC-06). */}
+          <span className="badge line source-settings__driver">{DRIVERS[source.driver].label}</span>
+          {source.inWorkspace ? <span className="badge source-settings__status">Draft</span> : null}
+          <span className="source-settings__spacer" />
+          {/* History first, with its clock, as every item head has it (design
             15:424; T684): a .btn, pressed while its panel is open. */}
-        {history.data == null ? null : (
-          <button
-            ref={historyButton}
-            type="button"
-            className={historyOpen ? 'btn pressed dashboard__history' : 'btn dashboard__history'}
-            data-history-button=""
-            aria-pressed={historyOpen}
-            onClick={() => {
-              setHistoryOpen((was) => !was);
-              setViewing(undefined);
-            }}
-          >
-            <HistoryIcon />
-            History
-          </button>
-        )}
-        {/* A copy only: one made new in the workspace is the only one there is. */}
-        {source.inWorkspace && source.canWrite && source.origin !== null ? (
-          <button
-            ref={discardButton}
-            type="button"
-            className="btn"
-            onClick={() => {
-              setAsking(true);
-            }}
-          >
-            Discard my copy…
-          </button>
-        ) : null}
-        {/* Its tables as cubes (T492; the user, 2026-10-02: "add generate cube
+          {history.data == null ? null : (
+            <button
+              ref={historyButton}
+              type="button"
+              className={historyOpen ? 'btn pressed dashboard__history' : 'btn dashboard__history'}
+              data-history-button=""
+              aria-pressed={historyOpen}
+              onClick={() => {
+                setHistoryOpen((was) => !was);
+                setViewing(undefined);
+              }}
+            >
+              <HistoryIcon />
+              History
+            </button>
+          )}
+          {/* A copy only: one made new in the workspace is the only one there is. */}
+          {source.inWorkspace && source.canWrite && source.origin !== null ? (
+            <button
+              ref={discardButton}
+              type="button"
+              className="btn"
+              onClick={() => {
+                setAsking(true);
+              }}
+            >
+              Discard my copy…
+            </button>
+          ) : null}
+          {/* Its tables as cubes (T492; the user, 2026-10-02: "add generate cube
             within the datasource details page"): into My workspace's model,
             to go to its folder, wherever models are workspace-only, with
             sign-in off too (T451's switch). */}
-        {mayGenerate && inCube !== undefined && viewing === undefined ? (
-          <button
-            type="button"
-            className="btn"
-            onClick={() => {
-              router.history.push(
-                generateFrom(queryClient, {
-                  source: inCube,
-                  target: source.folderId,
-                  workspaceOnly: modelsAreWorkspaceOnly(me.data),
-                }),
-              );
-            }}
-          >
-            Generate cubes…
-          </button>
-        ) : null}
-        {/* Not while an old version shows (design 06, state A). */}
-        {copies && viewing === undefined ? (
-          <button type="button" className="btn btn-primary" onClick={() => void editInWorkspace()}>
-            <PencilIcon />
-            Edit in my workspace
-          </button>
-        ) : null}
-        {/* Delete data source…, last, in the header's ⋯ (T526; design 14,
+          {mayGenerate && inCube !== undefined && viewing === undefined ? (
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                router.history.push(
+                  generateFrom(queryClient, {
+                    source: inCube,
+                    target: source.folderId,
+                    workspaceOnly: modelsAreWorkspaceOnly(me.data),
+                  }),
+                );
+              }}
+            >
+              Generate cubes…
+            </button>
+          ) : null}
+          {/* Proposing it is its page's primary, last; it waits for a save,
+            saying why, so what is proposed is what was tested and saved
+            (pin 3, AC-284; T698, SRC-02). */}
+          {proposeTo === undefined ? null : (
+            <>
+              <button
+                type="button"
+                className="btn btn-primary"
+                aria-disabled={edit.count > 0 ? 'true' : undefined}
+                aria-describedby={edit.count > 0 ? `${base}-propose-why` : undefined}
+                title={edit.count > 0 ? SAVE_FIRST : undefined}
+                onClick={() => {
+                  if (edit.count === 0) setProposingAgain(proposeTo.path);
+                }}
+              >
+                {proposeTo.label}
+              </button>
+              {edit.count > 0 ? (
+                <span id={`${base}-propose-why`} className="visually-hidden">
+                  {SAVE_FIRST}
+                </span>
+              ) : null}
+            </>
+          )}
+          {/* Not while an old version shows (design 06, state A). */}
+          {copies && viewing === undefined ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => void editInWorkspace()}
+            >
+              <PencilIcon />
+              Edit in my workspace
+            </button>
+          ) : null}
+          {/* Delete data source…, last, in the header's ⋯ (T526; design 14,
             state C1): a shared one, for those who may change its folder. A
             workspace copy keeps Discard my copy…, since no published cube is
             ever bound to a copy (AC-280). */}
-        {!source.inWorkspace && source.canWrite && viewing === undefined ? (
-          <span ref={moreButton}>
-            <MenuButton
-              label={`More actions for ${source.name}`}
-              className="icon-button"
-              items={[
-                {
-                  key: 'delete',
-                  label: 'Delete data source…',
-                  danger: true,
-                  onSelect: () => {
-                    setDeleting(true);
+          {!source.inWorkspace && source.canWrite && viewing === undefined ? (
+            <span ref={moreButton}>
+              <MenuButton
+                label={`More actions for ${source.name}`}
+                className="icon-button"
+                items={[
+                  {
+                    key: 'delete',
+                    label: 'Delete data source…',
+                    danger: true,
+                    onSelect: () => {
+                      setDeleting(true);
+                    },
                   },
-                },
-              ]}
-            >
-              <span aria-hidden="true">⋯</span>
-            </MenuButton>
-          </span>
-        ) : null}
-      </div>
-      {failed === null ? null : <StateLine kind="err">{failed}</StateLine>}
-      {restoredFrom !== null && source.inWorkspace ? (
-        <StateLine kind="idle" testId="restored-draft">
-          Restored from version {restoredFrom}. Test its connection, then propose it: a change to
-          where or how it connects is proposed only once a test of it passes.
-        </StateLine>
-      ) : null}
-      {viewing === undefined ? null : (
-        <SourceVersion
-          source={source}
-          version={viewing}
-          onClose={() => {
-            setViewing(undefined);
-          }}
-          onRestore={() => {
-            const kept = history.data?.versions.find((each) => each.version === viewing);
-            if (kept !== undefined) restore.start({ ...kept, approvedText: approvedText(kept) });
-          }}
-          lastTest={listed === undefined ? undefined : <HealthBadge source={listed} phrased />}
-        />
-      )}
+                ]}
+              >
+                <span aria-hidden="true">⋯</span>
+              </MenuButton>
+            </span>
+          ) : null}
+        </div>
 
-      {/* Where it is, where it came from and is to go, its health and Cube's use (pin 4). */}
-      <div className="source-settings__line">
+        {/* Where it is, where it came from and is to go, its health and Cube's
+          use (pin 4): a shared one's on two lines, its access and version,
+          then its health (state A); a copy's version said once, as where it
+          was copied from (T698, SRC-03). */}
         {source.inWorkspace ? (
-          <>
+          <div className="source-settings__line">
             {source.origin === null ? null : (
               <span className="source-settings__origin">
                 Copied from {sharedPathText(source.originPath)} ›{' '}
@@ -449,24 +523,24 @@ function Settings({ source }: { source: StoredSource }) {
                 Target: <b>{sharedPathText(source.targetPath)}</b>
               </span>
             )}
+            {source.origin === null ? versionLine : null}
+            {health}
+          </div>
+        ) : (
+          <>
+            <div className="source-settings__line">
+              {editable ? null : (
+                <span className="badge source-settings__access">
+                  <AccessIcon name="eye" />
+                  Read-only · in {pathText(source, source.folderPath)}
+                </span>
+              )}
+              {versionLine}
+            </div>
+            <div className="source-settings__line">{health}</div>
           </>
-        ) : editable ? null : (
-          <span className="badge source-settings__access">
-            Read-only · in {pathText(source, source.folderPath)}
-          </span>
         )}
-        {/* Its version, as the line of a shared one says it (state A). */}
-        <span className="source-settings__version">Version {String(source.version)}</span>
-        {listed === undefined ? null : (
-          <span className="source-settings__health">
-            <HealthBadge source={listed} phrased />
-          </span>
-        )}
-        <CubeUse id={source.id} />
-      </div>
 
-      {/* The tabs and the chosen one's panel, on one card. */}
-      <div className="source-settings__card">
         <div
           role="tablist"
           aria-label="Data source"
@@ -490,6 +564,8 @@ function Settings({ source }: { source: StoredSource }) {
                 });
               }}
             >
+              {/* SQL with its terminal, as design 15 draws the tab (SRC-05). */}
+              {key === 'sql' ? <SqlIcon /> : null}
               {label}
               {/* A tab with unsaved changes carries a dot (pin 6). */}
               {editable &&
@@ -503,71 +579,92 @@ function Settings({ source }: { source: StoredSource }) {
             </button>
           ))}
         </div>
-        <div
-          role="tabpanel"
-          id={`${base}-${tab}-panel`}
-          aria-labelledby={`${base}-${tab}`}
-          className="source-settings__panel"
-        >
-          {tab === 'general' ? (
-            <>
-              {editable ? <EditableGeneral source={source} edit={edit} /> : null}
-              <dl className="source-settings__rows">
-                {editable ? null : (
-                  <>
-                    <dt>Name</dt>
-                    <dd className="is-code">{source.name}</dd>
-                    <dt>Description</dt>
-                    <dd className="source-settings__description">{source.description ?? '—'}</dd>
-                  </>
-                )}
-                <dt>Folder</dt>
-                <dd>{pathText(source, source.folderPath)}</dd>
-                <dt>Version</dt>
-                <dd>{String(source.version)}</dd>
-              </dl>
-            </>
-          ) : tab === 'connection' && editable ? (
-            <EditableConnection source={source} edit={edit} />
-          ) : tab === 'connection' ? (
+      </div>
+      {failed === null ? null : <StateLine kind="err">{failed}</StateLine>}
+      {restoredFrom !== null && source.inWorkspace ? (
+        <StateLine kind="idle" testId="restored-draft">
+          Restored from version {restoredFrom}. Test its connection, then propose it: a change to
+          where or how it connects is proposed only once a test of it passes.
+        </StateLine>
+      ) : null}
+      {viewing === undefined ? null : (
+        <SourceVersion
+          source={source}
+          version={viewing}
+          onClose={() => {
+            setViewing(undefined);
+          }}
+          onRestore={() => {
+            const kept = history.data?.versions.find((each) => each.version === viewing);
+            if (kept !== undefined) restore.start({ ...kept, approvedText: approvedText(kept) });
+          }}
+          lastTest={listed === undefined ? undefined : <HealthBadge source={listed} phrased />}
+        />
+      )}
+      <div
+        role="tabpanel"
+        id={`${base}-${tab}-panel`}
+        aria-labelledby={`${base}-${tab}`}
+        className="source-settings__panel"
+      >
+        {tab === 'general' ? (
+          <>
+            {editable ? <EditableGeneral source={source} edit={edit} /> : null}
             <dl className="source-settings__rows">
-              {storedRowsOf(
-                source.driver,
-                storedValuesOf(source.driver, source.authMethod, source.fields),
-                Object.entries(source.secrets)
-                  .filter(([, secret]) => secret.stored)
-                  .map(([field]) => field),
-              ).map(([label, value]) => (
-                <Row key={label} label={label} value={value} />
-              ))}
+              {editable ? null : (
+                <>
+                  <dt>Name</dt>
+                  <dd className="is-code">{source.name}</dd>
+                  <dt>Description</dt>
+                  <dd className="source-settings__description">{source.description ?? '—'}</dd>
+                </>
+              )}
+              <dt>Folder</dt>
+              <dd>{pathText(source, source.folderPath)}</dd>
+              <dt>Version</dt>
+              <dd>{String(source.version)}</dd>
             </dl>
-          ) : tab === 'history' ? (
-            <TestHistory id={source.id} />
-          ) : tab === 'usage' ? (
-            list.isError ? (
-              <StateLine kind="err">{list.error.message}</StateLine>
-            ) : (
-              <Usage source={source} listed={source.origin === null ? listed : original} />
-            )
-          ) : tab === 'sql' && source.sqlAccess !== undefined ? (
-            <SqlTab
-              source={{
-                id: source.id,
-                version: source.version,
-                name: source.name,
-                driver: source.driver,
-                fields: source.fields,
-                folderPath: source.folderPath,
-                inWorkspace: source.inWorkspace,
-                sqlRunner: { on: false, ...source.sqlRunner, ...source.sqlAccess },
-              }}
-              // With sign-in off, the one user holds every permission (AC-254).
-              superAdmin={me.data?.superAdmin === true || me.data?.security === 'off'}
-            />
+          </>
+        ) : tab === 'connection' && editable ? (
+          <EditableConnection source={source} edit={edit} />
+        ) : tab === 'connection' ? (
+          <dl className="source-settings__rows">
+            {storedRowsOf(
+              source.driver,
+              storedValuesOf(source.driver, source.authMethod, source.fields),
+              Object.entries(source.secrets)
+                .filter(([, secret]) => secret.stored)
+                .map(([field]) => field),
+            ).map(([label, value]) => (
+              <Row key={label} label={label} value={value} />
+            ))}
+          </dl>
+        ) : tab === 'history' ? (
+          <TestHistory id={source.id} />
+        ) : tab === 'usage' ? (
+          list.isError ? (
+            <StateLine kind="err">{list.error.message}</StateLine>
           ) : (
-            <InCube id={source.id} />
-          )}
-        </div>
+            <Usage source={source} listed={source.origin === null ? listed : original} />
+          )
+        ) : tab === 'sql' && source.sqlAccess !== undefined ? (
+          <SqlTab
+            source={{
+              id: source.id,
+              version: source.version,
+              name: source.name,
+              driver: source.driver,
+              fields: source.fields,
+              folderPath: source.folderPath,
+              inWorkspace: source.inWorkspace,
+              sqlRunner: { on: false, ...source.sqlRunner, ...source.sqlAccess },
+            }}
+            // With sign-in off, the one user holds every permission (AC-254).
+            superAdmin={me.data?.superAdmin === true || me.data?.security === 'off'}
+          />
+        ) : (
+          <InCube id={source.id} />
+        )}
       </div>
       {editable ? (
         <>

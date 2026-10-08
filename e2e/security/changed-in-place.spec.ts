@@ -227,7 +227,10 @@ async function liveOnItsPage(page: Page, before: number) {
   };
   const { main, panel } = await look();
   const state = panel.getByTestId('cube-state');
-  await expect(state).toHaveText('Cube uses these settings');
+  // Its version and the instances on its own line (design 03, state H; T698, SRC-19).
+  await expect(state).toHaveText(
+    new RegExp(`^Cube uses these settings · version ${String(version)} · \\d+ instances?$`),
+  );
   await expect(state).toHaveAttribute('data-state', 'live');
   const rows = panel.getByRole('table', { name: 'Cube instances' }).locator('tbody tr');
   await expect(rows.first()).toBeVisible();

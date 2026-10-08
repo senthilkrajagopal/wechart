@@ -1,8 +1,11 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DriverType, FieldValue } from '@wechart/core';
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import type { Me } from '../../shell/AccountMenu';
+import { folderAccessQuery } from '../explore/access/AccessPanel';
+import { AccessIcon } from '../explore/AccessChip';
+import { SHARED_ROOT } from '../explore/roots';
 import { clockOf as clock, exactOf, whenOf as momentOf } from '../../shell/formatTime';
 import { ME_QUERY } from '../../shell/me';
 import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
@@ -214,10 +217,23 @@ function OffPanel({
     source.cubeStore === true
       ? 'Turn on the SQL runner for Cube Store…'
       : 'Turn on the SQL runner…';
+  /**
+   * The folder's read-write groups, named as design 15 names them (pin 1;
+   * T698, SRC-21): as the Access panel reads them, for one who may see them.
+   * None named where they can't be read.
+   */
+  const folderId = source.folderPath.at(-1)?.id ?? SHARED_ROOT.id;
+  const access = useQuery({
+    ...folderAccessQuery(folderId),
+    enabled: !source.inWorkspace && source.cubeStore !== true,
+    retry: false,
+  });
+  const groups = [...new Set(access.data?.effective.readWrite.map((grant) => grant.group) ?? [])];
   return (
     <section className="sql-off" aria-labelledby={heading}>
       <h2 id={heading}>
-        <StatusIcon kind="idle" />
+        {/* Off, design 15's s-off (SRC-20). */}
+        <StatusIcon kind="off" />
         The SQL runner is off for {source.name}
       </h2>
       {turnedOff ? (
@@ -237,12 +253,32 @@ function OffPanel({
         <>
           <p>
             Once on, it runs SELECT and EXPLAIN on this database directly, as the data source’s own
-            login{login.as === null ? '' : `, ${login.as}`}, past folder permissions and access
-            policies. Every data source starts with it off.
+            login
+            {login.as === null ? (
+              ''
+            ) : (
+              <>
+                , <code>{login.as}</code>
+              </>
+            )}
+            , past folder permissions and access policies. Every data source starts with it off.
           </p>
-          <dl className="source-settings__rows">
+          <dl className="sql-off__who">
             <dt>Who could run SQL</dt>
-            <dd>Super-Admins, and read-write members of {pathText(source.folderPath)}</dd>
+            <dd>
+              Super-Admins, and read-write members of {pathText(source.folderPath)}
+              {groups.length === 0 ? null : (
+                <>
+                  {': '}
+                  {groups.map((group, at) => (
+                    <Fragment key={group}>
+                      {at === 0 ? '' : ', '}
+                      <code>{group}</code>
+                    </Fragment>
+                  ))}
+                </>
+              )}
+            </dd>
             <dt>Who couldn’t</dt>
             <dd>Members who see it from a folder below, and read-only members</dd>
           </dl>
@@ -258,6 +294,8 @@ function OffPanel({
               setAsking(true);
             }}
           >
+            {/* With its shield, as design 15 draws it (SRC-05). */}
+            <AccessIcon name="shield" />
             {turnOnLabel}
           </button>
           <span className="sql-off__note">Only Super-Admins see this button.</span>

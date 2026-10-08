@@ -345,7 +345,8 @@ export function EditableConnection({ source, edit }: { source: StoredSource; edi
       <div className="source-settings__form">
         {/* The type is fixed, and the way to another said (pin 5, AC-161). */}
         <div className="field source-settings__type">
-          <span className="source-settings__type-label">Type</span>
+          {/* A section of its own, headed as the form's others are (03:205; SRC-08). */}
+          <span className="connection-form__legend source-settings__type-label">Type</span>
           <span className="source-settings__type-value">
             <span className="secret-pasted__lock" aria-hidden="true" />
             {DRIVERS[source.driver].label}
