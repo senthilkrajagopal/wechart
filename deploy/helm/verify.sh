@@ -697,7 +697,7 @@ stop_one_checks() {
 # and a token whose one group is granted on it and then taken away again.
 gate_checks() {
   local cube_deploy model pods count stamp group gate_cube gate_path content gate_folder
-  local token query pod status elapsed wanted
+  local token query status elapsed
   cube_deploy="$(component_of deployments cube)"
   pods="$(component_of pods cube)"
   count="$(wc -w <<< "$pods" | tr -d ' ')"
@@ -721,10 +721,19 @@ gate_checks() {
     return
   fi
   gate_folder="$(jq -r '.id' "$body")"
+  # Its cube, then its folder, through the API; each said where it fails.
+  gate_cleanup() {
+    status="$(fetch_long -X DELETE \
+      "$url/api/model/files?folder=$gate_folder&path=$(jq -rn --arg p "$gate_path" '$p | @uri')")"
+    [[ "$status" == 200 || "$status" == 404 ]] ||
+      fail "8. could not remove $gate_path ($status); remove it from the folder $gate_folder"
+    status="$(fetch -X DELETE "$url/api/documents/folder/$gate_folder")"
+    [[ "$status" == 204 ]] || fail "8. could not remove the gate's folder ($status); remove $gate_folder"
+  }
   status="$(land_in_root "$gate_path" "$content" "$gate_folder")"
   if [[ "$status" != 200 ]]; then
     fail "8. landing $gate_path in the gate's folder answered $status: $(head -c 300 "$body")"
-    fetch -X DELETE "$url/api/documents/folder/$gate_folder" > /dev/null
+    gate_cleanup
     return
   fi
 
@@ -746,17 +755,31 @@ gate_checks() {
         console.log(unsigned + "." + sign("sha256", Buffer.from(unsigned), createPrivateKey(pem)).toString("base64url"));
       });
     ' "$model" "$group" 2> /dev/null)"
+  if [[ -z "$token" ]]; then
+    fail "8. could not sign a query token with the release's signing key"
+    gate_cleanup
+    return
+  fi
   query="$(jq -rn --arg m "$gate_cube.count" '{measures: [$m]} | tojson | @uri')"
-  # One Cube pod's answer to the token, by its status: 200 admitted ("Continue
-  # wait" included), 403 the folder gate's refusal.
+  # One Cube pod's answer to the token: `admitted` for a 200 ("Continue wait"
+  # included), `gate` for the folder gate's own refusal (403, "None of these
+  # groups reaches folder …", research xcube-256d632371.md), else its status.
+  # Each asked with a 10 s limit, so a late answer can't pass the 60 s.
   asked_on() {
     k exec "pod/$1" -c cube -- node -e '
       fetch("http://localhost:4000/cubejs-api/v1/load?query=" + process.argv[1], {
         headers: { authorization: "Bearer " + process.argv[2] },
-      }).then((r) => console.log(r.status), () => console.log(0));
+        signal: AbortSignal.timeout(10000),
+      }).then(async (r) => {
+        const text = await r.text();
+        console.log(r.status === 200 ? "admitted"
+          : r.status === 403 && /None of these groups reaches folder/.test(text) ? "gate"
+          : String(r.status));
+      }, () => console.log("none"));
     ' "$query" "$token" 2> /dev/null
   }
-  # Every pod answers $1 within $2 s of now; prints the slowest pod's seconds, or fails.
+  # Every pod answers $1, each answer arriving within $2 s of now; prints the
+  # slowest pod's seconds, or fails.
   every_pod() {
     local want="$1" within="$2" started=$SECONDS slowest=0 pod seen
     for pod in $pods; do
@@ -766,7 +789,8 @@ gate_checks() {
         [[ "$seen" == "$want" ]] && break
         sleep 1
       done
-      [[ "$seen" == "$want" ]] || return 1
+      # The answer itself within the limit, not only the asking.
+      [[ "$seen" == "$want" ]] && ((SECONDS - started <= within)) || return 1
       ((SECONDS - started > slowest)) && slowest=$((SECONDS - started))
     done
     echo "$slowest"
@@ -774,36 +798,38 @@ gate_checks() {
 
   # Before any grant: the gate refuses the group on every instance. Waited on
   # up to two minutes, while the landed cube reaches each.
-  if wanted="$(every_pod 403 120)"; then
-    pass "8. before its grant, every Cube instance ($count) refuses the group the folder's cube"
+  if every_pod gate 120 > /dev/null; then
+    pass "8. before its grant, every Cube instance ($count) refuses the group by the folder gate"
   else
-    fail "8. before its grant, not every Cube instance refused the group with 403"
+    fail "8. before its grant, not every Cube instance refused the group by the folder gate"
   fi
+  local granted=0
   status="$(fetch -X PUT -H 'content-type: application/json' \
     --data "$(jq -n --arg g "$group" '{readOnly: [$g], readWrite: null}')" \
     "$url/api/folders/$gate_folder/access")"
   if [[ "$status" != 200 ]]; then
     fail "8. granting the group answered $status: $(head -c 300 "$body")"
-  elif elapsed="$(every_pod 200 60)"; then
+  elif elapsed="$(every_pod admitted 60)"; then
+    granted=1
     pass "8. the grant reached every Cube instance ($count) within 60 s (${elapsed} s)"
   else
     fail "8. the grant hadn't reached every Cube instance 60 s after it was saved"
   fi
+  # The revocation only once the grant was seen everywhere: else a refusal
+  # shows nothing.
   status="$(fetch -X PUT -H 'content-type: application/json' \
     --data '{"readOnly": null, "readWrite": null}' "$url/api/folders/$gate_folder/access")"
   if [[ "$status" != 200 ]]; then
     fail "8. revoking the group answered $status: $(head -c 300 "$body")"
-  elif elapsed="$(every_pod 403 60)"; then
-    pass "8. the revocation reached every Cube instance ($count) within 60 s (${elapsed} s)"
-  else
-    fail "8. the revocation hadn't reached every Cube instance 60 s after it was saved"
+  elif ((granted)); then
+    if elapsed="$(every_pod gate 60)"; then
+      pass "8. the revocation reached every Cube instance ($count) within 60 s (${elapsed} s)"
+    else
+      fail "8. the revocation hadn't reached every Cube instance 60 s after it was saved"
+    fi
   fi
 
-  # Its cube, then its folder, through the API.
-  fetch_long -X DELETE \
-    "$url/api/model/files?folder=$gate_folder&path=$(jq -rn --arg p "$gate_path" '$p | @uri')" > /dev/null
-  status="$(fetch -X DELETE "$url/api/documents/folder/$gate_folder")"
-  [[ "$status" == 204 ]] || fail "8. could not remove the gate's folder ($status); remove $gate_folder"
+  gate_cleanup
 }
 
 status="$(fetch "$url/api/model/files")"

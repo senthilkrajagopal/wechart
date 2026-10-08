@@ -14348,7 +14348,25 @@ These tasks are what group 3's check of the open criteria found missing. Each is
     - once the grant is taken away, each pod refuses it again within 60 s (AC-320).
   - Q7, the coordinator's answer (3) of 2026-10-07: not a second Cube container in the shared compose, whose instance report would stay for an hour where the other agents' checks read it. The coordinator runs it at the next deploy, and AC-320's multi-instance clause is ticked on that run.
   - **Written 2026-10-08, not yet run.** It needs a docker-desktop deploy with sign-in on, which the coordinator does. `bash -n` passes.
+  - **The review (one round, FAIL), fixed:**
+    - The 60 s was checked only when asking: an answer arriving later could pass. Each answer must now arrive within it, and each ask has a 10 s limit.
+    - Any 403 counted as the gate's refusal. Now only the gate's own words count ("None of these groups reaches folder …", research `xcube-256d632371.md`).
+    - An unsigned token is said and stops the step, and the revocation is checked only once the grant reached every pod.
+    - Cleanup says what it couldn't remove, after a failed landing too. A shared folder's delete leaves its deleted-folder record (T540), one per run.
+  - Ticks on its run: AC-320's multi-instance clause only. Its recompile clause waits on xcube's confirmation of its own test at `2e611eae61`.
   - **AC-320's other open clause,** "a permission change recompiles a module", has no observable a wechart test can read. Compose's xcube (`2e611eae61`) answers `/v1/meta` and `/v1/meta?extended=true` with `cubes` alone: Cube adds a `compilerId` only on its SQL API's path (`cubejs-api-gateway` `gateway.ts`, `meta({ includeCompilerId })`, read in the fork). Its evidence is xcube's own test (`xcube-slice-4.md`, [t-sec] L300-315), as AC-321's is; put to the coordinator.
+
+- [ ] T765 (AC-330) Show an API's start bringing xcube's copy of a model up to date, folders, groups and data sources included, and Cube answering with every API process of it stopped
+  - Files: `e2e/security/xcube-restart.spec.ts` (new)
+  - Failing test: `xcube-restart.spec.ts`, against compose's xcube. `super` publishes a folder granted to `sales-ro`, a data source of the folder's own on the sample server's `template1`, and a cube on it. A second API process then starts on the suite's database under the model `e2e-security-restart`, which xcube lacks on its first run and holds behind on every later one. Cube answers the cube under that model from `template1` to a token of `sales-ro`, and refuses one of `managers` (403). With that process stopped, it still answers (AC-330).
+  - Q8, the coordinator's answer (2) of 2026-10-07: one fixed model id. xcube has no route to empty a model, and the shared schema's rows are no test's to delete.
+  - AC-330's model part with sign-in off is `e2e/xcube-cutover.spec.ts`'s (T447); this is its folders, groups and data sources (T447's and T442's notes).
+  - **Found 2026-10-08, waiting on xcube.** The spec passes on its first run, with xcube lacking the model. On every later run xcube's copy is behind: the earlier run's folder, deleted in wechart, still holds items in xcube. The API's start then fails in a chain, by its log:
+    - the tree push is refused, `409 folder_in_use` ("Folders still holding items can't be removed");
+    - the new folder's connection is refused ("Folder … is not in the folder tree");
+    - the items snapshot is refused ("It uses the data source …, which the model doesn't hold");
+    - the 60 s reconcile repeats it, so the cube is never served.
+    That is AC-330's failing state. The coordinator's call (B), 2026-10-08: xcube is asked for a read of its folder tree with parents, or an atomic snapshot carrying tree, connections and items. This task is built on that image. Until then the spec stays out of the suite, uncommitted, so the suite stays green. AC-330 stays open.
 
 - [ ] T762 (AC-429) List phase 1's bookmarks to Super-Admins with sign-in on
   - Files: `packages/api/src/server.ts` (the bookmarks listing), `packages/api/src/access/bookmarks.test.ts`, `e2e/security/bookmarks.spec.ts`
