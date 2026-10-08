@@ -8202,6 +8202,13 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - The refresh worker's panel: F2 draws a Super-Admin's with no summary line, and F3 a member's with two status lines and no "Model revision", but F3's caption says "the same, without module errors", which reads as keeping the tables. As built: both have the summary and the tables.
     - The list below 1,024 px: G8 draws stacked rows; as built it is a table of name, folder and state, which keeps a screen reader's row and column reading.
     - D5's two columns: drawn in a frame wider than the 400 px pane; as built, one column.
+  - **Settled 2026-10-08 (R76: jobs-J1, jobs-J2, jobs-J3; `docs/design/decisions-2026-10-08.md`).** T613 stays ticked. What J1 and J2 call for is still to be built, and no task builds it yet.
+    - **jobs-J1, as drawn:**
+      - a Super-Admin's refresh worker panel (F2) has the worker and module panel with Cube's error, and no summary line;
+      - a member's (F3) has the status lines only: the badge, and that a module failed, without the error. It has no Workers or Modules tables and no "Model revision".
+      - This is design 16 Q4's default, which the user accepted in R56.
+    - **jobs-J2:** below 1,024 px the Jobs and Schedules lists are G8's stacked rows. They keep table semantics for screen readers, for example `role=table` with `rowgroup` and `row` on the stacked blocks, not display changes that strip them.
+    - **jobs-J3:** a refresh key's pane stays one column, as built. D5 is drawn wider than its 400 px pane. Nothing to build.
 
 ## P2.11 Quick calculations and calculation requests (F6, returned)
 
@@ -9294,13 +9301,22 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - Files: `packages/web/src/tiles/{ChartTile,DataAsOf,AccelerationBadge}.tsx`, `packages/web/src/dashboard/{dataAsOf.ts,TileViewMenu.tsx}` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/refresh.spec.ts`, `e2e/acceleration.spec.ts`
   - Findings: DSH-01, DSH-21, DSH-23 (`docs/design/critiques/2026-10-08-dashboard.md`).
   - Failing test: the head says "● Live" or "✓ Pre-agg · 3m" alone, with the time to the second in the badge's tooltip ("Live query · as of … · n ms · no pre-aggregation"). The menu's footer has two lines with the clock. The submenu has state D's "Data as of: Today 09:27:42 / when Cube answered". AC-148's refresh test reads the submenu's time to the second.
-  - Waits on: the dashboard critique's Q9 (badge focusable). Q1 (Table view) may land with it.
+  - ~~Waits on: the dashboard critique's Q9 (badge focusable). Q1 (Table view) may land with it.~~
+  - **Settled 2026-10-08 (R76: dashboard-Q9, dashboard-Q1, chart-editor-Q5; `docs/design/decisions-2026-10-08.md`).** Build:
+    - **dashboard-Q9:** the badge doesn't take focus (R75). Keyboard users read the time to the second in the Data as of submenu, so DSH-01 and DSH-21 land together in this task, which keeps AC-148 met.
+    - **chart-editor-Q5:** the word is "Live" everywhere ("● Live", paired with "✓ Pre-agg"), as the head already says.
+    - **dashboard-Q1:** Table view moves into ⋯ as "View as table", and every chart of 4 or fewer series draws end-point direct labels (design 04 pins 5–6). Rule 5 then holds through the labels, and AC-178 through ⋯. It may land with this task.
   - Depends on: T477
 - [ ] T682 (AC-352, AC-199, AC-245, AC-247) The tile ⋯ menu's groups, order, heading and rows as design 08 draws them *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/dashboard/TileViewMenu.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/tile-menu.spec.ts`
   - Findings: DSH-18, DSH-19, DSH-20, DSH-22.
   - Failing test: design 08's three groups in order, with R63's and R66's rows in the marking group. The three-line heading with the swatch. Icons on the rows; each disabled row's reason; the Details panel checkbox; "View marked rows…" with its ellipsis; the Ctrl+M hints. One "View … rows" item at a time.
-  - Waits on: the dashboard critique's Q6 (the menu's width, and its length past the cap). `acceleration.spec.ts:252` is the test to settle with it (T680).
+  - ~~Waits on: the dashboard critique's Q6 (the menu's width, and its length past the cap).~~ `acceleration.spec.ts:252` is the test to settle with it (T680).
+  - **Settled 2026-10-08 (R76: dashboard-Q6).** Build:
+    - the menu 284 px wide, as design 08 draws it;
+    - its height grows to the window's height minus 16 px, in place of the fixed 480 px cap;
+    - the heading and the Data as of footer stay pinned, and only the action list scrolls. The footer carries AC-148's time to the second (DSH-21).
+    - The footer stays inside the same `role=menu`, so the arrow-key order is unchanged.
   - Depends on: T681
 - [ ] T683 (AC-352, AC-187) The dashboard view's remaining differences: whole-number count axes, a table tile's row count, the KPI ramp, and backlog §1's residuals *(added 2026-10-08 by T406)*
   - Files: the chart renderer's options (`packages/web/src/charts/…`), `packages/web/src/tiles/{ChartTile,Kpi}.tsx`, `packages/web/src/dashboard/edit/…`, `packages/web/src/shell/styles.ts` (+ tests), `e2e/dashboard.spec.ts`
@@ -9314,7 +9330,11 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - the filter pill's value control with no border or ground, height 28, at 600, padding 0, radius 0 (CMP-11);
     - legend at the left with 10 × 10 round swatches 8 px apart, bars at most 36 px wide with 4 px rounded ends (CMP-12);
     - link and image tiles with no padding, border or ground; button links at radius 6, 600 for primary; text links at 600 (CMP-13).
-  - Waits on: the dashboard critique's Q3 (the KPI label) and Q4 (a table tile's row height); the components critique's Q2 (the pill label's weight).
+  - ~~Waits on: the dashboard critique's Q3 (the KPI label) and Q4 (a table tile's row height); the components critique's Q2 (the pill label's weight).~~
+  - **Settled 2026-10-08 (R76: dashboard-Q3, dashboard-Q4, components-Q2).** Build:
+    - **dashboard-Q3:** a KPI tile's label at 14/20/600 in the primary colour (`text-sm-strong`, the tile-title style), and the KPI tile padded 16 px as every tile is (rule 16), not 12/16;
+    - **dashboard-Q4:** a table tile's rows at 24 px, §4's dense row and the editor's results grid (direction §4 amended);
+    - **components-Q2:** a filter pill's label at 400 and its value at 600, as design 04 draws them.
   - Depends on: none
 - [ ] T684 (AC-187, AC-352) One button rule and one pressed state: every `.btn` 32/14, item heads at one height with History first, and the designs' `.btn.pressed` *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/shell/styles.ts`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/workspaces/data-sources/SourceSettings.tsx`, `packages/web/src/workspaces/explore/ExplorePage.tsx` (+ tests), `e2e/consistency.spec.ts`
@@ -9325,7 +9345,10 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - the data source's head reads History, Generate cubes…, then Edit in my workspace, all 32 px, with ⋯ a 32 px icon button (design 15:424; "Generate cubes…" per R57);
     - History pressed, `.seg`'s pressed segment and Access pressed all draw accent-soft, the accent border and ink, at 600;
     - Access closed is a ghost.
-  - Waits on: the components critique's Q1 (⋯ in list heads), and the dashboard critique's Q2 (the header: design 04 pin 1 or state E), for those items.
+  - ~~Waits on: the components critique's Q1 (⋯ in list heads), and the dashboard critique's Q2 (the header: design 04 pin 1 or state E), for those items.~~
+  - **Settled 2026-10-08 (R76: components-Q1, dashboard-Q2).** Build:
+    - **components-Q1:** the ⋯ in list and admin heads is the same 32 px icon button as on item heads. That includes the Data sources list's ⋯, which holds Cube Store's switch and is 30 × 24 today.
+    - **dashboard-Q2:** the dashboard header follows state E: its ownership line and its actions, with no Markings button (backlog §3). The description stays under the title in `text-sm`, text-secondary, as design 14 draws an item's, and nothing shows when there is none.
   - Depends on: none
 - [ ] T685 (AC-352, AC-070, AC-073) The dashboard settings page as design 05 draws it *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/dashboard/settings/SettingsPage.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/dashboard.spec.ts`
@@ -9337,7 +9360,12 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - the current nav row has the accent edge;
     - General's controls are 28/12;
     - the discard question names what changed.
-  - Waits on: the dashboard critique's Q5 (design 05's metrics or the prototype's).
+  - ~~Waits on: the dashboard critique's Q5 (design 05's metrics or the prototype's).~~
+  - **Settled 2026-10-08 (R76: dashboard-Q5).** Build design 05's metrics in §4's tokens:
+    - cards padded 16 px, with a border-subtle border and a 16 px gap between them;
+    - the card radius at §4's 6 px, where the design draws 8;
+    - the content padded 24/32, where the design's top of 20 is off the spacing scale;
+    - the bar at 44 px, the designs' pane-head height.
   - Depends on: T684 (the bar's buttons)
 - [ ] T686 (AC-352, AC-126, AC-022) The chart page as design 06 draws it, with "Add to a dashboard…" as its picker *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/workspaces/explore/LibraryChartPage.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/chart-page.spec.ts`
@@ -9350,13 +9378,18 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - the tile head's row count;
     - the pane and the type badge as drawn ("Bar, grouped · auto");
     - "＋ Add to a dashboard…" opens a searchable picker.
-  - Waits on: the dashboard critique's Q7 (what takes the place of the two in-place edit buttons).
+  - ~~Waits on: the dashboard critique's Q7 (what takes the place of the two in-place edit buttons).~~
+  - **Settled 2026-10-08 (R76: dashboard-Q7).** Build, on the page of a chart that lives only on a shared dashboard, the dashboard's own button in place of design 06's two in-place edit buttons:
+    - "Edit in my workspace", or "Open my copy" when a copy exists (rule 71). Its dialog (design 04 state D) names the dashboard it copies.
+    - "Open ‹dashboard›" stays in ⋯, as design 06 pin 5 draws it.
+    - A view-only user gets neither button.
   - Depends on: T681 (the tile head's badge, which the chart page's tile shares)
 - [ ] T687 (AC-354, AC-360, AC-352) The Export pane docks beside the dashboard, which narrows, as design 13 draws it *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/dashboard/export/ExportPane.tsx`, `packages/web/src/shell/styles.ts`, `e2e/export.spec.ts`
   - Findings: DSH-17.
   - Failing test: with Export open, the dashboard's header and tiles end at the pane's left edge, and the ⋯ shows pressed.
-  - Waits on: the dashboard critique's Q8 (empty groups).
+  - ~~Waits on: the dashboard critique's Q8 (empty groups).~~
+  - **Settled 2026-10-08 (R76: dashboard-Q8).** Build: a group with nothing to export is left out, with no "0 of 0". If all three groups are empty, the "Choose what goes with it" heading goes too, and "Always in the file" still says what goes.
   - Depends on: T684 (the header's buttons beside the pane)
 - [ ] T688 (AC-352, AC-187) The chart editor's inspector, field list and type gallery as design 01 and the prototype draw them *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/editor/{ChartEditor,FieldList,Wells,ChartTypeGallery}.tsx` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/chart-editor.spec.ts`
@@ -9370,9 +9403,14 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - the "+" picker has its filter, groups, used rows marked "✓ in chart", and the keyboard foot;
     - "The rest" doesn't clip, and its label is in the `.lbl` style;
     - the gallery's cards have their icons and words.
-  - Waits on: the chart editor critique's Q1 ("The rest" and "Result limit"), Q7 (joined members' names) and Q8 (Customize); the components critique's Q3 (the title field at 15 px), for those items.
+  - ~~Waits on: the chart editor critique's Q1 ("The rest" and "Result limit"), Q7 (joined members' names) and Q8 (Customize); the components critique's Q3 (the title field at 15 px), for those items.~~
+  - **Settled 2026-10-08 (R76: chart-editor-Q1, chart-editor-Q7, chart-editor-Q8, components-Q3).** Build:
+    - **chart-editor-Q1:** "The rest" shows only once Top N is set. It is a 28/12 native select in Sort by's row grid (pin 8), offering the full wording "Fold into Other (n)" and "Leave out". This replaces the failing test's "doesn't clip". Result limit stays as built and always visible (AC-041).
+    - **chart-editor-Q7:** a joined cube's field pill takes the member's full title ("Products Category") wherever its source isn't evident, as AC-220 says. Design 01's short "Country" is not built. The tooltip can still say "via join".
+    - **chart-editor-Q8:** Customize is checked against the prototype (UX-064, cleanup 47).
+    - **components-Q3:** the title field at 16/600 (`text-md`), not 15 px.
   - Depends on: T684 (the pressed segment)
-- [ ] T689 (AC-352, AC-028, AC-029, AC-217) The recommendation in the inspector: the type card, quick picks, the Recommended card, "Why this recommendation?" and the aggregation menu, as design 01 draws them *(added 2026-10-08 by T406)*
+- [ ] T689 (AC-352, AC-028, AC-029, AC-217, AC-032, AC-220) The recommendation in the inspector: the type card, quick picks, the Recommended card, "Why this recommendation?" and the aggregation menu, as design 01 draws them *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/editor/{ChartTypeCard,WhyThisChart,Wells}.tsx` (+ tests), `e2e/chart-editor.spec.ts`
   - Findings: EDI-06, EDI-07, EDI-10, EDI-12.
   - Failing test:
@@ -9381,7 +9419,15 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - the Recommended card only when the pick differs, with a reason built from the data and Use;
     - the Why checklist collapsed last, with its link to every rule;
     - the measure's tag offers the aggregations the model allows.
-  - Waits on: the chart editor critique's Q2 (AC-217), Q3 (AC-029) and Q6 (aggregations or calculations on the tag).
+  - ~~Waits on: the chart editor critique's Q2 (AC-217), Q3 (AC-029) and Q6 (aggregations or calculations on the tag).~~
+  - **Settled 2026-10-08 (R76: chart-editor-Q2, chart-editor-Q3, chart-editor-Q6).** AC-217, AC-032, AC-029 and AC-220 are amended and unticked, and this task's tests tick them again. Build:
+    - **chart-editor-Q2:** the "Auto" quick pick replaces "Back to recommended" (AC-217, AC-032). It is pressed while the recommended type is drawn, and choosing it returns a manually chosen type to the recommendation. Use on the Recommended card does the same. Auto is drawn pressed in Auto, as design 02 pin 7 draws it, not hidden as design 01's caption says.
+    - **chart-editor-Q3:** "Why this recommendation?" (AC-029) is a checklist with ✓/⚠ icons of the signature, the cardinalities and the rules that decided, with "Show every rule for every type" opening the full table of every hard rule for every type. Members are named by title in both (AC-220).
+    - **chart-editor-Q6:** the measure's tag opens one menu, in this order:
+      - the aggregations the model allows, meaning the sibling measures the model declares on the same cube over the same `sql` (read from `/v1/meta?extended`), with the current one checked. The section is left out when there are none.
+      - a divider;
+      - AC-047's six quick calculations.
+      - Making aggregations on demand needs xcube and is in backlog §6(b).
   - Depends on: T688 (the inspector's sections)
 - [ ] T690 (AC-352, AC-036, AC-147, AC-301) The results drawer and the answer's facts as design 02 draws them *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/editor/{ResultsDrawer,ChartEditor}.tsx` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/chart-editor.spec.ts`
@@ -9398,7 +9444,16 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - Cube query's JSON | SQL with Copy and its foot;
     - the cap note and Acceleration's panel styled as drawn;
     - the collapsed strip keeps its count.
-  - Waits on: the chart editor critique's Q4 (AC-147), Q5 ("Live" or "Raw query") and Q9 (a local chart's ownership chip in the head), for those items.
+  - ~~Waits on: the chart editor critique's Q4 (AC-147), Q5 ("Live" or "Raw query") and Q9 (a local chart's ownership chip in the head), for those items.~~
+  - **Settled 2026-10-08 (R76: chart-editor-Q4, chart-editor-Q5, chart-editor-Q9).** AC-147 is amended and unticked, and this task's tests tick it again. Build:
+    - **chart-editor-Q5:** the head's badge says "● Live" (paired with "✓ Pre-agg"), not "Raw query", here, in the drawer and on tiles. Its tooltip reads "Not served by a pre-aggregation · Cube queried the source database".
+    - **chart-editor-Q4 (AC-147):**
+      - The banner at the top of every chart's canvas goes.
+      - A chart whose query would fail under rollup-only mode has the Live badge, with the rollup-only sentence in the badge's tooltip.
+      - The Acceleration tab carries design 02 state D's info note, saying Cube would refuse the chart in rollup-only mode.
+      - A warning banner shows only where wechart knows the mode is on. Until wechart pins the xcube image whose `GET …/revision` reports `rollupOnly` per model, that is once a query has failed with Cube's "No pre-aggregation table has been built for this query yet", which Cube 1.7.45 throws only in rollup-only mode (the Cube expert's answer, `to-wechart/2026-10-08-1830-rollup-only-mode.md`).
+      - **The revision route's `rollupOnly: true` waits on that xcube image.** It is built once the image is published and pinned by digest.
+    - **chart-editor-Q9:** a local chart's ownership is a plain note, as designs 01 and 02 draw it ("Shared chart · on 2 dashboards · edits change both", with ⚠ when it matters), in place of the bordered "Local to a dashboard" chip.
   - Depends on: T681 (the badge's words, which the head's badges share)
 - [ ] T691 (AC-344, AC-343, AC-187) The Model workspace's remaining differences and the shared pane chrome of Generate cubes and the data source wizard *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/workspaces/model/{FileTree,FileList,GenerateCubes}.tsx`, `packages/web/src/workspaces/data-sources/NewSourceWizard.tsx`, `packages/web/src/shell/styles.ts` (+ tests), `e2e/model-design.spec.ts`, `e2e/consistency.spec.ts`
@@ -9414,7 +9469,13 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - the 32 px mark;
     - the chosen-type bar as drawn;
     - "+ Data source" stays enabled, with its ring, while the pane is open.
-  - Waits on: the model critique's Q3 ("All published"'s colour) and Q4 (comment lines tinted at rest), for those two items only.
+  - ~~Waits on: the model critique's Q3 ("All published"'s colour) and Q4 (comment lines tinted at rest), for those two items only.~~
+  - **Settled 2026-10-08 (R76: model-Q3, model-Q4, model-Q1, model-Q2, components-Q5).** Build:
+    - **model-Q3:** "All published" with its label in text-secondary and only its icon green, as designs 11 and 12 draw it.
+    - **model-Q4:** comment lines stay tinted only after "Show in YAML", as built (T482). Nothing to build.
+    - **model-Q1:** a read-only shared model file's head takes design 03 state A's look for the same state. That is a 32 px primary "Edit in my workspace" in the title row and the 22 px badge on the meta line, in the model's head and the overview, in place of the 24 px button and the "Read-only · in Shared" pill.
+    - **model-Q2:** backlog §6(a)'s eight calls are accepted as built. Nothing to build.
+    - **components-Q5:** MOD-01's 11 px headings and step numbers go to 12 px; the floor is absolute.
   - Depends on: T684 (the pane head's icon button)
 - [x] T692 (AC-343, AC-344, AC-192, AC-282, AC-356) Making things in My workspace: the New menu as design 13 state G draws it, and the target folder as design 04 states A and B draw it *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/workspaces/explore/{CreateMenu,NewItemDialog}.tsx` (+ tests), `e2e/explore.spec.ts`
@@ -9464,7 +9525,12 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - the Access head at 44 px;
     - the Type column in text-primary;
     - a row's ⋯ at 24 × 24.
-  - Waits on: the Explore critique's Q2 (tree text size), Q3 (the tree with sign-in off), Q4 (Show in My workspace) and Q5 (the header with a panel docked), for those items.
+  - ~~Waits on: the Explore critique's Q2 (tree text size), Q3 (the tree with sign-in off), Q4 (Show in My workspace) and Q5 (the header with a panel docked), for those items.~~
+  - **Settled 2026-10-08 (R76: explore-Q2, explore-Q3, explore-Q4, explore-Q5).** Build:
+    - **explore-Q2:** the folder tree's rows at 14 px (`text-sm`) and its heading at 16 px (`text-md`), as designs 04, 07, 09 and 14 draw them. direction §3's 12 px "tree rows" now names only the field and file trees.
+    - **explore-Q3:** My workspace is the first root in both modes, sign-in off included, with the person icon and the divider.
+    - **explore-Q4:** the Show (kind) filter stays in My workspace, as built.
+    - **explore-Q5:** while a panel such as Access is docked, the folder header's search is hidden, so the header keeps one row with New on it.
   - Depends on: T684 (Access's ghost and pressed states)
 - [ ] T694 (AC-343, AC-278, AC-284, AC-289, AC-281) Each row's ⋯ by its kind and place, and My workspace's rows on two lines *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/workspaces/explore/FolderContents.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/explore.spec.ts`, `e2e/security/workspace-edit.spec.ts`
@@ -9483,9 +9549,12 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - an item with a kept version lists its newest, tagged Current, as design 06 pin 3 draws it; an item at "version 1" with nothing kept shows what Q6 decides (listed as Current, or a line saying none is kept yet);
     - rows under rules, with the time at the right and View · More · Propose restoring… as link buttons.
   - First, find why the panel was empty for a version-1 dashboard and a version-1 data source. Was it the content made before proposals, or an API gap?
-  - Waits on: the Explore critique's Q6 and the data sources critique's Q5, the same question (an item with no kept version). Explore's Q7 is settled by design 15 (History stays in the head).
+  - ~~Waits on: the Explore critique's Q6 and the data sources critique's Q5, the same question (an item with no kept version).~~ Explore's Q7 is settled by design 15 (History stays in the head).
+  - **Settled 2026-10-08 (R76: explore-Q6, data-sources-Q5).** Build: History always lists the current version, tagged Current, as design 06 pin 3 draws it, so the panel agrees with the head's "version 1".
+    - An item with no kept version, such as phase-1 content saved before proposals, lists it described as "before proposals", a phrase the panel already has.
+    - The Current row offers View only, with no restore.
   - Depends on: T684 (History's pressed state)
-- [ ] T696 (AC-187, AC-004, AC-252, AC-254, AC-287, AC-304) The app bar, the account menu and the single-user chip as design 09 draws them *(added 2026-10-08 by T406)*
+- [ ] T696 (AC-187, AC-004, AC-252, AC-254, AC-287, AC-304, AC-190) The app bar, the account menu and the single-user chip as design 09 draws them *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/shell/{AppShell,AccountMenu}.tsx`, `packages/web/src/workspaces/reviews/ReviewsControl.tsx`, `packages/web/src/shell/styles.ts` (+ tests), `e2e/shell.spec.ts`, `e2e/consistency.spec.ts`, `docs/phase-2/backlog.md` §6(a) (its "Explore and the top bar below 1,024 px: neither review designs them" is half answered: design 09 state H draws the top bar)
   - Findings: CMP-04, CMP-05, CMP-06, CMP-07, EXP-16, EXP-17, EXP-18, SEC-18, SEC-19, SRC-23.
   - Failing test:
@@ -9494,7 +9563,12 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - the account button 36 px, and its menu at 280 with the identity in the code face, the accent Super-Admin badge, and Sign out as a 30/14 item with its icon;
     - icon buttons and the search never shrink;
     - below 1,024, state H's order.
-  - Waits on: the Explore critique's Q1 (the avatar beside the chip), Q8 (the access chip with sign-in off); the components critique's Q4 (1,024–1,279) and Q5 (11 px against the floor).
+  - ~~Waits on: the Explore critique's Q1 (the avatar beside the chip), Q8 (the access chip with sign-in off); the components critique's Q4 (1,024–1,279) and Q5 (11 px against the floor).~~
+  - **Settled 2026-10-08 (R76: explore-Q1, explore-Q8, components-Q4, components-Q5).** AC-190 is amended and unticked, and this task's tests tick it again. Build:
+    - **explore-Q1 (AC-190):** with sign-in off, the "Single-user mode" chip takes the avatar's place, and no avatar shows beside it.
+    - **explore-Q8:** with sign-in off, a folder's header shows no access chip, as built.
+    - **components-Q4:** below 1,280 px the single-user chip shows its icon only, the warning-coloured open padlock. Its label moves to its accessible name and tooltip, and "Sign-in is off" stays one click away in its menu. The search and Reviews keep their labels.
+    - **components-Q5:** every 11 px text in the bar and its menus goes to 12 px; the floor is absolute (direction §3).
   - Depends on: none
 - [ ] T697 (AC-251, AC-253, AC-343) wechart's own pages after signing out, when sign-in fails, and when no group list comes back, as design 09 states C–E draw them *(added 2026-10-08 by T406)*
   - Files: `packages/api/src/auth/routes.ts` (+ test), `packages/web/src/shell/SignInPages.tsx` (+ test), `e2e/security/sign-in.spec.ts`
@@ -9521,7 +9595,13 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - In Cube's one line;
     - the off panel at 16/600 with the off icon, the login in the code face, and the folder's groups named.
   - Clear backlog §6(c)'s "design 03's Propose, History and version line", and correct status.md's stale rows.
-  - Waits on: the data sources critique's Q1 (cell padding), Q2 (Used by with none), Q3 (an empty list), Q4 (bold at 700) and Q6 (the item mark), for those items.
+  - ~~Waits on: the data sources critique's Q1 (cell padding), Q2 (Used by with none), Q3 (an empty list), Q4 (bold at 700) and Q6 (the item mark), for those items.~~
+  - **Settled 2026-10-08 (R76: data-sources-Q1, data-sources-Q2, data-sources-Q3, data-sources-Q4, data-sources-Q6).** Build:
+    - **data-sources-Q1:** table cells keep §4's 8 px side padding, as built, not the designs' 10.
+    - **data-sources-Q2:** "Used by" reads "0 cubes" when no cube uses a source, in place of "No cube".
+    - **data-sources-Q3:** with no data sources, the table keeps its header, and its only row is design 14's empty-folder line (`td.one.empty`: a 34 px row, 14 px, text-secondary, left-aligned) reading "No data source has been added yet." This replaces the info bar. "+ Data source" stays the head's primary.
+    - **data-sources-Q4:** bold words in notes at 600, not the browser's 700.
+    - **data-sources-Q6:** the settings page shows the item-kind mark "◍", as designs 03 and 15 draw it. The driver monogram stays in the wizard.
   - Depends on: T684 (the head's buttons)
 - [ ] T699 (AC-343, AC-165, AC-166, AC-169, AC-287, AC-290, AC-294, AC-295, AC-187) Security, the audit trail and reviews as designs 08 and 05 draw them *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/workspaces/security/{AuditTrail,SecurityPage,GroupsPreview}.tsx`, `packages/web/src/workspaces/security/policies.ts`, `packages/web/src/workspaces/reviews/{ReviewsPage,ReviewView,SettingsDiff}.tsx`, `packages/web/src/workspaces/reviews/reviews.ts`, `packages/web/src/workspaces/explore/ProposalBand.tsx`, `packages/web/src/shell/styles.ts` (+ tests), `e2e/security/audit.spec.ts`, `e2e/security/reviews.spec.ts`, `e2e/security/review-view.spec.ts`
@@ -9541,7 +9621,14 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - the band's bold lead;
     - Preview as groups without its repeated heading;
     - Security's preview fields at 28/12.
-  - Waits on: the security critique's Q1 (Security with sign-in off), Q2 (Policies' columns), Q3 (cell padding and filter heights), Q4 ("Publish refused"), Q5 (the count at 0) and Q6 (a test's time in its record).
+  - ~~Waits on: the security critique's Q1 (Security with sign-in off), Q2 (Policies' columns), Q3 (cell padding and filter heights), Q4 ("Publish refused"), Q5 (the count at 0) and Q6 (a test's time in its record).~~
+  - **Settled 2026-10-08 (R76: security-Q1 to security-Q6).** Build:
+    - **security-Q1:** with sign-in off, Security offers Preview as groups, as with sign-in on. Phase 1's floating JSON pane and its unexplained "Find a dashboard" (UX-085) go.
+    - **security-Q2:** Policies keeps phase 1's columns (Cube / view, Group, Members, Rows, Conditions, Masked, Source) and adds the drawn "No policy" row.
+    - **security-Q3:** cell padding stays 8 px and filters 28 px, as built.
+    - **security-Q4:** a refused publish is "Publish refused" in the filter, the row and the inspector, as built.
+    - **security-Q5:** the "To review" tab shows no count at 0.
+    - **security-Q6:** a data source change's audit record keeps the time its connection test passed, and shows it (design 08 state A, "· 14:21:07"). This is a change to wechart's own audit record in the API, with no xcube involvement.
   - Depends on: none
 - [ ] T742 (AC-329, AC-343, AC-293, AC-187) Design 10's cube picker and Bookmarks as drawn: every item's cubes under their folder with their paths, the pickers' search box, and the Bookmarks popover *(added 2026-10-08 by T406, from its cold review: design 10 hadn't been judged)*
   - Files: `packages/web/src/editor/{CubePicker,PathPicker,pathCubes}.ts(x)`, the chart route's `folderId` (`packages/web/src/router/routes.tsx`), `packages/web/src/dashboard/bookmarks/Bookmarks.tsx`, `packages/web/src/shell/styles.ts` (+ tests), `e2e/field-list.spec.ts`, `e2e/security/bookmarks.spec.ts`
@@ -9551,7 +9638,16 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - the pickers' search text starts after its icon and a 6 px gap;
     - the C/V chip per the components critique's Q5;
     - the Bookmarks footer, row dates, button icon and chevron, the popover's border-subtle edge, the 8 px gap, 10 px above "Shared", the menu's words, and a row's ⋯ as a 24 px icon button, per Q1–Q5.
-  - Waits on: the design 10 critique's Q1–Q7.
+  - ~~Waits on: the design 10 critique's Q1–Q7.~~
+  - **Settled 2026-10-08 (R76: design-10-Q1 to design-10-Q7, components-Q5).** Build:
+    - **design-10-Q1:** the Bookmarks footer is "＋ Bookmark this view…", design 10's accent link (`.btn.link`, 12/600, the plus icon, no border, padding 8 12), with an ellipsis because it asks for a name.
+    - **design-10-Q2:** each row shows the date the bookmark was first saved, the one the list is ordered by (R61), day first ("today", "22 Sep").
+    - **design-10-Q3:** the Bookmarks button carries design 10's bookmark icon, and its chevron becomes the SVG the designs draw.
+    - **design-10-Q4:** "…" stays on every item that asks for more before acting, as built. An item that acts at once takes none.
+    - **design-10-Q5:** with no bookmarks, "No bookmarks yet" and then the footer, with no "Mine" heading, as built.
+    - **design-10-Q6:** Filter on's field rows read the member's short title ("Name"), with "Customers · Shared" at the right.
+    - **design-10-Q7:** every saved chart and dashboard stores its folder, and the picker groups cubes by it. The first failing test then holds through the stored folder rather than a guess. The flat list stays only where the Cube isn't xcube (no folder on any cube, as `pathCubes.ts` detects). R71's no-migration reseed means no stored item needs rewriting.
+    - **components-Q5:** the C/V chip at 12 px, not 11.
   - Depends on: none
 - [x] T741 (AC-199, AC-245, AC-187, AC-231) A tile menu opened before its tile's answer is placed again as it grows; Explore's spacing as design 14 draws it; two layout tests re-based on their designs *(added 2026-10-08: the coordinator's calls on T680's three reported tests)*
   - Files: `packages/web/src/dashboard/TileViewMenu.tsx`, `packages/web/src/shell/styles.ts`, `e2e/tile-menu.spec.ts`, `e2e/admin.spec.ts`, `e2e/design-conformance.spec.ts`

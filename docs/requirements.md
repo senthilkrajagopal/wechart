@@ -950,6 +950,31 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R76 — the design critique's 56 questions, decided under the user's delegation** (2026-10-08)
+- The user: "Go ahead and make decisions.. if you think the design is incorrect.. do the right thing and make your own decisions. If you need help in answering the question.. use combination of cube expert and ui expert."
+- *A UI-expert agent decided each of the 56 questions (the 2026-10-08 critiques, design 10's included, and design 16's J1–J3 from T613). The coordinator reviewed them, and the Cube expert answered the one Cube question. They can be overturned like any other decision.*
+- *The principles:*
+  1. *R37: the latest approved design wins on structure, placement, controls, wording and states.*
+  2. *AC-343 and AC-352 bind those designs "in the tokens of direction.md §3–5". Where a design draws a value off the token scale and no exception is recorded, the nearest token wins: 15 px type, 10 px cell padding, 20 px padding, an 8 px card radius. Where a design picks one existing token over another, the design wins: 14 px tree rows, 24 px dense rows.*
+  3. *The 12 px floor (rule 1, AC-004) and the 400/600 weights (§3) beat any drawing.*
+  4. *R75 holds: no decision adds new keyboard behaviour. Where an option needs it, the option that needs none is taken.*
+  5. *A drawing that contradicts its own caption, or doesn't fit the space it is drawn for, gives way to the caption or the space.*
+- *Each decision, with its reason and whether it departs from a design, is in `docs/design/decisions-2026-10-08.md`. The tasks that waited on them (T681–T691, T693, T695, T696, T698, T699, T742, and T613's design-16 note) name the decisions that settle them.*
+- *Criteria amended, each unticked until retested:*
+  - *AC-217 (chart-editor-Q2): the "Auto" quick pick, pressed while the recommended type is drawn, replaces "Back to recommended" (design 01 pin 4, design 02 pin 7).*
+  - *AC-032 (chart-editor-Q2): a manual pick holds until the user chooses Auto, or Use on the Recommended card.*
+  - *AC-029 (chart-editor-Q3): "Why this recommendation?" is a ✓/⚠ checklist of the rules that decided, with every hard rule for every type one link away. AC-220 names the checklist and its table in place of "the 'Why this chart?' trace".*
+  - *AC-147 (chart-editor-Q4): the chart's badge reads "Live", with the rollup-only sentence in its tooltip, and the Acceleration tab says Cube would refuse the chart in rollup-only mode. A banner shows only where wechart knows the mode is on.*
+    - *The Cube expert's answer (`to-wechart/2026-10-08-1830-rollup-only-mode.md`): Cube 1.7.45 reports rollup-only mode nowhere. "No pre-aggregation table has been built for this query yet" is thrown only in rollup-only mode; a matched but unbuilt rollup gives different text. xcube will add `rollupOnly`, per model, to `GET …/revision`.*
+    - *So the banner shows where the revision route reports `rollupOnly: true`, or, until that image is pinned, once a query has failed with that exact error. The revision-route part waits on the xcube image.*
+  - *AC-190 (explore-Q1): with sign-in off, the "Single-user mode" chip takes the avatar's place, and no avatar shows beside it.*
+- *direction.md changes (each marked "(R76, 2026-10-08)"):*
+  - *principle 2 and rules 10 and 29 take the amended words of AC-032 and AC-029, and §6's recommendation panel drops its "Pinned · Back to recommended" chip;*
+  - *§3's tree-rows note names only the field and file trees, since Explore's folder tree is 14 px with a 16 px heading (explore-Q2);*
+  - *§4's table-tile rows are 24 px dense, not 34 (dashboard-Q4);*
+  - *the 12 px floor is absolute, and no 11 px glyph chip is an exception (components-Q5). The WebKit native select stays §3's one platform exception.*
+- *model-Q2: the Model workspace's eight "left as built" calls, recorded in backlog §6(a), are accepted as recorded decisions. model-Q1 decides that list's read-only shared model file as design 03 state A draws a data source's.*
+
 **R75 — keyboard reach as built** (2026-10-08, the user)
 - The user: "AC-176 change this for now.. every action need not be reachable by keyboard. Whatever is already done is great. If anything new has to be done.. please check with me before proceeding. Dont want t waste iterations on this."
 - *AC-176 is amended to keep the keyboard reach built through T640, and ticked on its passing tests. T743 (four gaps the re-audit found: Tab kept in four narrow sheets, and focus given back after Import's "Keep going", Explore's heading Rename and the version view's "Back to current") is not built. Any further keyboard work needs the user's approval first.*

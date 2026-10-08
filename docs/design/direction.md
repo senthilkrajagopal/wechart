@@ -23,7 +23,7 @@ User roles are **provisional** until the requirements interview. Input IDs (IN-x
 
 1. **One object, many views.** A measure edited by the model engineer is the same object the analyst drags and the consumer reads in a tooltip. Any object opens in its other views ("Open in model", "Used by 4 charts") without changing applications.
    _Evidence:_ Looker's "Go to LookML" from its PDT page, and the shared tree/canvas/inspector shape of Superset Explore, the Looker IDE, and Metabase's metadata admin. _Roles:_ all three.
-2. **Recommend, explain, never override silently.** The system proposes a chart and shows ranked runners-up, each with a one-line reason. A manual pick is pinned until the user clicks "Back to recommended".
+2. **Recommend, explain, never override silently.** The system proposes a chart and shows ranked runners-up, each with a one-line reason. A manual pick is pinned ~~until the user clicks "Back to recommended"~~ through later field changes until the user chooses Auto, or Use on the Recommended card (R76, 2026-10-08; AC-032).
    _Evidence:_ Tableau Show Me explains requirements; Power BI has the manual-pick rule; Metabase splits "recommended" from "More charts". None of them ranks with reasons, which is exactly IN-3. _Role:_ analyst.
 3. **Linked by default, in the dashboard's chosen mode.** Each dashboard picks one interaction mode in its settings (user decision 2026-09-19, `docs/inputs` §11–12):
    - **Markings** (Spotfire): clicking marks items in a named, coloured marking. Every tile using that marking, on every page tab, shows the marked share and fades the rest. Details tiles are limited by markings.
@@ -133,7 +133,7 @@ Family: **Inter**, falling back to `system-ui, -apple-system, "Segoe UI", sans-s
 
 | Token            | px size / line height | Weight      | Use                                                          | From                                                  |
 | ---------------- | --------------------- | ----------- | ------------------------------------------------------------ | ----------------------------------------------------- |
-| `text-xs`        | 12/16                 | 400         | axis ticks, legend, data labels, tree rows, inspector fields | Superset charts (12 px measured), Fluent Caption 1    |
+| `text-xs`        | 12/16                 | 400         | axis ticks, legend, data labels, field-tree and file-tree rows, inspector fields (R76, 2026-10-08: Explore's folder tree is `text-sm` rows under a `text-md` heading, as designs 04, 07, 09 and 14 draw it) | Superset charts (12 px measured), Fluent Caption 1    |
 | `text-xs-strong` | 12/16                 | 600         | grid headers, inspector section labels, well pills           | Fluent Caption 1 Strong                               |
 | `text-sm`        | 14/20                 | 400         | forms, menus, dialogs, Markdown body, tables                 | Superset body (14 px measured), Fluent Body 1         |
 | `text-sm-strong` | 14/20                 | 600         | tile titles                                                  | Metabase card titles 14/700 (measured)                |
@@ -144,6 +144,7 @@ Family: **Inter**, falling back to `system-ui, -apple-system, "Segoe UI", sans-s
 | `text-kpi-solo`  | 40/52                 | 600, `tnum` | a tile with a single KPI                                     | Metabase scalar 54 px (measured) sets the upper bound |
 
 - **Floor:** no text smaller than 12 px.
+  - **The floor is absolute** (R76, 2026-10-08, components-Q5). No design drawing overrides it. A design's 11 px text, glyph chips and tags included (the cube picker's C/V chip, design 03's tree tag), is built at 12 px, and no 11 px exception is recorded in §7d. The WebKit native select below is a platform limit, not a design choice, and stays the only exception.
   - **One platform exception, found at T019 and corrected by measurement on 2026-09-20.** The original wording said WebKit "ignores author `font-size` on `<option>`" and that "the closed control inherits our type". Both halves were wrong; measuring each engine directly (`docs/research/webkit-select-font-size.md`) gives:
     - `font: inherit` on a `select` does **not** take in WebKit — the control computes to **11 px**, its UA default, where Firefox honours it and reports 14 px.
     - An explicit `font-size` on `option` **is** honoured: WebKit reports 20 px for `option { font-size: 20px }`. So the option half is fixable and was never the platform limit.
@@ -159,7 +160,7 @@ Family: **Inter**, falling back to `system-ui, -apple-system, "Segoe UI", sans-s
 | Base unit      | 4 px                                                                                                                                                      |
 | Spacing scale  | 4, 8, 12, 16, 24, 32, 40. Use 2 and 6 only for icon alignment.                                                                                            |
 | Control height | **32** by default (buttons, inputs, filter widgets; Metabase measured 32); **28** compact (tree rows, inspector rows); **24** small (well pills, chips)   |
-| Table rows     | **34** by default (admin lists, table tiles); **24** dense (result grids, logs). Superset's list rows measured 45–48, and wechart is deliberately denser. |
+| Table rows     | **34** by default (admin lists); **24** dense (result grids, table tiles, logs). Superset's list rows measured 45–48, and wechart is deliberately denser. Table tiles moved from 34 to 24 dense, the editor's results grid, as design 04 note 7 draws them (R76, 2026-10-08, dashboard-Q4). |
 | Cell padding   | 8 px inline                                                                                                                                               |
 | Tile           | 16 px padding, **6 px radius** (Superset and Metabase both measured 6 px), 1 px border in `border-subtle`. Tiles have no shadow at rest.                  |
 | Radius         | 6 px for containers, 4 px for controls and pills, and 999 px for chips                                                                                    |
@@ -267,7 +268,7 @@ Two further changes made at the same time, neither of them a contrast failure:
   - The **Recommended** card shows the top pick with a one-line reason (for example "Time × 1 measure, 184 dense points → line").
   - **Runners-up**, up to 4, each with a reason (for example "42 categories: color would be unreadable, so faceted instead").
   - **Not applicable** types are greyed, and hovering one shows the requirement (the Tableau pattern).
-  - Choosing a different type pins it and shows a "Pinned · Back to recommended" chip.
+  - Choosing a different type pins it ~~and shows a "Pinned · Back to recommended" chip~~. The type card reads "Chosen manually", and the Auto quick pick, pressed while the recommended type is drawn, returns to the recommendation, as does Use on the Recommended card (R76, 2026-10-08; AC-217, AC-032).
 - **States:**
   - Empty: an illustration, a sentence, and a primary action.
   - Loading: a skeleton of the chart form, not a spinner.
@@ -532,7 +533,7 @@ Nothing in §2–§7d changes. No new colour and no new type size is added: ever
 
 ## 9. Checklist (numbered rules for design-critic and write-spec)
 
-1. No text is smaller than 12 px. Tables, axes and KPIs use tabular numerals.
+1. No text is smaller than 12 px, whatever a design draws; the WebKit native select (§3) is the only exception (R76, 2026-10-08). Tables, axes and KPIs use tabular numerals.
 2. All text meets WCAG AA contrast (4.5:1 for body text, 3:1 for text ≥ 18.66 px bold or ≥ 24 px) in both themes.
 3. Every status, validation, or job state shows an icon and a text label, never colour alone.
 4. A legend appears when a chart has 2 or more series. A single-series chart has no legend box.
@@ -541,7 +542,7 @@ Nothing in §2–§7d changes. No new colour and no new type size is added: ever
 7. A member keeps the same colour in every tile on a dashboard and after any filter.
 8. The recommender never proposes a dual y-axis.
 9. The recommendation panel shows the top pick and at least one runner-up, each with a reason of 80 characters or fewer.
-10. After the user picks a chart type manually, the choice stays pinned until "Back to recommended" is clicked.
+10. After the user picks a chart type manually, the choice stays pinned through later field changes ~~until "Back to recommended" is clicked~~ until the user chooses Auto, or Use on the Recommended card (R76, 2026-10-08; AC-032).
 11. Every drop target can also be filled from a keyboard-reachable "+" picker.
 12. During a drag, illegal wells show the reason they are illegal.
 13. Every dashboard uses exactly one interaction mode, set in Settings › Interactions: Markings or Cross-filtering. In cross-filter mode, clicking a mark filters or highlights the other tiles on the tab, and a clearable chip appears. In Markings mode, rules 43–56 apply.
@@ -560,7 +561,7 @@ Nothing in §2–§7d changes. No new colour and no new type size is added: ever
 26. Every key the Cube YAML schema accepts for a cube or view can be edited in the Form view, and every enum offers exactly the validator's allowed values.
 27. A form edit appears in the YAML within one render, and a valid YAML edit appears in the form within 500 ms.
 28. A YAML parse error names its line in Problems and puts the form in read-only mode until the error is fixed.
-29. Every chart recommendation offers a "Why this chart?" trace listing the signature, the cardinalities, and each hard rule's pass or fail.
+29. Every chart recommendation offers ~~a "Why this chart?" trace listing the signature, the cardinalities, and each hard rule's pass or fail~~ "Why this recommendation?": a checklist with ✓/⚠ icons of the signature, the cardinalities and the rules that decided, with every hard rule's pass or fail for every type one link away ("Show every rule for every type") (R76, 2026-10-08; AC-029).
 30. A dual-axis (combo) chart is reachable only as a manual pick, and while it's active it shows a warning.
 31. Clicking a mark in Explore offers Drill into (when a hierarchy exists), Keep only, Exclude, and View underlying rows. Drill-down shows a breadcrumb that goes back.
 32. In cross-filter mode, Settings › Cross-filtering sets Filter, Highlight or None for every source → target tile pair. The default comes from "Default for tile pairs", which starts at Filter.

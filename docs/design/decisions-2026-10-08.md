@@ -1,0 +1,166 @@
+# The design critique's 56 questions, decided (2026-10-08)
+
+The critiques of 2026-10-08 (`docs/design/critiques/2026-10-08-*.md`, design 10's included) and the design 16 audit (T613) left 56 questions for the user. On 2026-10-08 the user handed them over:
+
+> "Go ahead and make decisions.. if you think the design is incorrect.. do the right thing and make your own decisions. If you need help in answering the question.. use combination of cube expert and ui expert."
+
+A UI-expert agent decided each question and the coordinator reviewed the decisions. They are recorded in requirements.md as **R76**. They can be overturned like any other decision.
+
+## Principles
+
+1. **R37:** the latest approved design wins on structure, placement, controls, wording and states.
+2. **Tokens:** AC-343 and AC-352 bind those designs "in the tokens of direction.md §3–5". Where a design draws a value off the token scale and no exception is recorded, the nearest token wins. Examples are 15 px type, 10 px cell padding, 20 px padding and an 8 px card radius. Where a design picks one existing token over another, the design wins, as with 14 px tree rows and 24 px dense rows.
+3. **The 12 px floor** (rule 1, AC-004) and the 400/600 weights (§3) beat any drawing.
+4. **R75:** no decision adds new keyboard behaviour. Where an option needs it, the option that needs none is taken.
+5. **Caption and space:** a drawing that contradicts its own caption, or doesn't fit the space it is drawn for, gives way to the caption or the space.
+
+## What they change elsewhere
+
+- **Criteria amended in spec.md, each unticked until retested:**
+  - AC-217 and AC-032: the Auto quick pick replaces "Back to recommended" (chart-editor-Q2).
+  - AC-029 and AC-220: "Why this recommendation?" replaces "Why this chart?" (chart-editor-Q3).
+  - AC-147: the rollup-only warning moves to the badge and the Acceleration tab (chart-editor-Q4).
+  - AC-190: the single-user chip takes the avatar's place (explore-Q1).
+- **direction.md:**
+  - principle 2 and rules 10 and 29 take AC-032's and AC-029's words;
+  - §3's tree-rows note names only the field and file trees;
+  - §4's table-tile rows are 24 px dense;
+  - the 12 px floor is absolute.
+- **tasks.md:** T681–T691, T693, T695, T696, T698, T699 and T742 carry the decisions they waited on. T613's design-16 note carries J1–J3.
+- **backlog.md §6(a):** the Model workspace's eight calls are accepted (model-Q2), and the read-only shared model file is decided (model-Q1).
+
+## chart-editor-Q4's banner: the Cube expert's answer, and what waits on the xcube image
+
+AC-147 shows a banner only where wechart knows that Cube runs in rollup-only mode. No Cube Core API in `docs/research/` exposes `CUBEJS_ROLLUP_ONLY`; `configuration-deployment.md` lists it as an environment and config setting only. So the question went to the Cube expert:
+- Does Cube Core 1.7.x tell an API client whether `rollupOnlyMode` / `CUBEJS_ROLLUP_ONLY` is on? It might do so through `/v1/meta`, `/readyz`, `/livez`, a `/v1/load` or `/v1/dry-run` response field, or another authenticated route.
+- If not, can xcube expose it, for example on its meta-revision or refresh-worker status route?
+- Under rollup-only mode, does a query that no pre-aggregation matches always fail with the distinguishable "No pre-aggregation table has been built for this query yet" error?
+- Can that same error also occur outside rollup-only mode, for example for a matched rollup whose table isn't built yet? If it can, wechart can't infer the mode from it.
+
+**The answer** (2026-10-08, `to-wechart/2026-10-08-1830-rollup-only-mode.md`, relayed by the coordinator):
+- Cube 1.7.45 reports rollup-only mode nowhere.
+- "No pre-aggregation table has been built for this query yet" is thrown only in rollup-only mode. A matched rollup whose table isn't built gives different text.
+- xcube will add `rollupOnly`, per model, to `GET …/revision`. Its image is not yet published.
+
+**So the banner shows:**
+- where xcube's revision route reports `rollupOnly: true`. **This part waits on the xcube image** that adds it, and is built once that image is pinned by digest;
+- until then, once a query has failed with that exact error.
+
+The rest of chart-editor-Q4 (the Live badge with its tooltip, and the Acceleration tab's note) is decided and does not wait.
+
+## The decisions
+
+"Departs" says whether the decision builds something other than what a design draws. Where it does, the reason is the principle cited in the Why column.
+
+### Components
+
+| ID | Question | Decision | Why | Departs |
+|---|---|---|---|---|
+| components-Q1 | How big is the ⋯ button in list and admin heads? | **32 px**, the same button as on item heads. | Every drawn head uses a 32 px ⋯ (designs 13, 14, 15), and §4 makes 32 the default control height. One head-control height keeps list and item heads aligned (CMP-02). | No |
+| components-Q2 | Should a filter pill's label and value have different weights? | **Yes: the label at 400, the value at 600**, as design 04 draws it. | Design 04 wins over the prototype (R37). The contrast in weight lets a reader scan for values, and both weights are tokens. | No |
+| components-Q3 | Should the chart title field's 15 px be recorded as an exception, or go to 16 px? | **16 px**, `text-md` (16/600). | AC-352 binds design 01 "in the tokens of direction.md §3–5", and 15 px is not a token. `text-md` is the scale's step for a pane header. The 1 px change keeps the scale free of a one-off exception. | Yes: design 01's 15 px |
+| components-Q4 | Between 1,024 and 1,279 px the top bar doesn't fit. What gives way? | **The single-user chip shows its icon only.** The warning-coloured open padlock stays. The label moves to the chip's accessible name and tooltip, and "Sign-in is off" is one click away in its menu. | The overflow happens only with sign-in off, where the chip takes the account's place. Design 09 already drops the account's name below 1,280 px, so the chip in that slot follows the same rule. A search icon would break AC-190's "search field that names the shortcut", and Reviews would lose its label in every mode. | No |
+| components-Q5 | Several designs draw 11 px text, against the 12 px floor. Which wins? | **The 12 px floor wins:** every 11 px text goes to 12 px, the C/V chip and design 03's tree tag included. No glyph-chip exception is recorded. | Rule 1 and AC-004 make 12 px a hard floor, checked on every text node. 11 px glyph chips would need AC-004 to be weakened. The designs' 11 px is a drawing slip, not an accessibility-reviewed exception. | Yes: 11 px in 12 designs |
+
+### Dashboard
+
+| ID | Question | Decision | Why | Departs |
+|---|---|---|---|---|
+| dashboard-Q1 | Should a tile's Table view button stay in the head, or move into ⋯? | **Into ⋯, with direct labels.** Table view moves into ⋯ as "View as table", and every chart of 4 or fewer series draws end-point labels. | Design 04 pins 5–6 move Table view into ⋯ and draw end-point labels for ≤ 4 series, which direction §6 already requires. Rule 5 then holds through the direct labels. AC-178's "reachable from the tile" holds through ⋯ › View as table, which the existing keyboard path reaches. | No |
+| dashboard-Q2 | Should the dashboard header follow design 04 pin 1 or state E? | **State E plus the description:** state E's ownership line and actions, with the description under the title. The description is `text-sm` in text-secondary, and nothing shows when there is none. There is no Markings button (backlog §3). | State E is later, so it wins for the ownership line and the actions. The description is the author's own stored content (Settings › General). Design 14, the latest, puts an item's description under its name in `text-sm` secondary and shows nothing when there is none, so dropping it here would be inconsistent. State E and design 13 simply draw a dashboard without one. | Yes: state E draws no description |
+| dashboard-Q3 | How should a KPI tile's label and padding look? | **As the designs draw it:** the label at 14/20/600 in the primary colour (`text-sm-strong`, the tile-title style), in a tile padded 16 px. | The later designs 04 and 06 win over the prototype (R37). Rule 16 asks for a 16 px tile, and the KPI-only 12 px padding breaks it. | No |
+| dashboard-Q4 | How tall are a table tile's rows? | **24 px**, §4's dense row, the same grid as the editor's results. | Design 04 note 7 answers UX-024 itself with the product's one data grid (§4's dense 24 px token), and it postdates direction §4's 34 px row for table tiles. A 24 px row still meets the 24 px minimum target size. | No (direction §4 changes) |
+| dashboard-Q5 | Should the settings page's cards and spacing follow design 05 or the prototype? | **Design 05's metrics, in §4's tokens:** cards padded 16 px with a border-subtle border and a 16 px gap; the card radius at §4's 6 px, where the design draws 8; the content padded 24/32, where the design's top is 20; and the 44 px bar, the pane-head height the designs use throughout. | Design 05 is later than the prototype (R37), but AC-352 binds it in direction §3–5's tokens. Its two off-scale values, the 8 px radius and the 20 px padding, snap to the nearest token. | Yes: design 05's 8 px radius and 20 px top |
+| dashboard-Q6 | How wide is a tile's ⋯ menu, and what happens when it is longer than fits? | **284 px wide, as design 08 draws it.** The menu grows to the window's height minus 16 px instead of a fixed 480. Its heading and its Data as of footer stay pinned, and only the action list scrolls. The footer stays inside the same `role=menu`. | Design 08 is the tile menu's own design. Its icons, "mark first" reasons and shortcut hints need 284 px. Design 04 state B was a sketch of the prototype's picker. The footer is pinned because it carries AC-148's time to the second (DSH-21). Keeping it in the same menu leaves the arrow-key order unchanged. | No |
+| dashboard-Q7 | On the page of a chart that lives only on a shared dashboard, what replaces design 06's two edit buttons? | **The dashboard's own button:** "Edit in my workspace", or "Open my copy" when a copy exists. The dialog (design 04 state D) names the dashboard it copies. "Open ‹dashboard›" stays in ⋯, as design 06 pin 5 draws it. A view-only user gets neither button. | Rule 71 gives a shared item's editing only one route. The drawn "Edit on Company dashboard 01" therefore maps to the dashboard's own route. | Yes: design 06's in-place edit buttons |
+| dashboard-Q8 | Should the Export pane list groups with nothing in them ("0 of 0")? | **Leave them out.** If all three groups are empty, the "Choose what goes with it" heading goes too. | A "0 of 0" group with All · None offers controls that do nothing. "Always in the file" still says what goes. | No |
+| dashboard-Q9 | Should keyboard users reach the tile freshness badge's tooltip? | **No; they rely on the submenu.** Keyboard users read the time to the second in the tile menu's Data as of submenu. DSH-01 and DSH-21 land in one task. | Making the badge focusable is new keyboard work, which R75 holds back. Design 08 state D's submenu ("Data as of · Today 09:27:42") already gives keyboard users the time to the second. Landing DSH-01 and DSH-21 together keeps AC-148 met. | No |
+
+### Chart editor
+
+| ID | Question | Decision | Why | Departs |
+|---|---|---|---|---|
+| chart-editor-Q1 | How should the editor show "The rest" and "Result limit"? | **"The rest" appears only once Top N is set, as a select.** It is a 28/12 native select in Sort by's row grid (pin 8), offering the full wording "Fold into Other (n)" and "Leave out". Result limit stays as built and always visible. | "The rest" means something only once Top N cuts the list. Short labels, or a full-width row, would add weight to a choice most charts never use. AC-041 asks for Result limit whether or not Top N is set. A native select is §3's accepted WebKit exception. | No |
+| chart-editor-Q2 | Should "Back to recommended" give way to design 01's Auto quick pick? | **Yes; AC-217 and AC-032 are amended.** The Auto quick pick replaces "Back to recommended", and it is pressed while the recommended type is drawn. Use on the Recommended card also returns to the recommendation. | Design 01 pin 4's Auto replaces the button. Its caption hides Auto while in Auto, but design 02 pin 7 draws Auto pressed while in Auto, and that drawing wins. A pressed Auto shows the mode. It also avoids pressing the top pick, which would mean "pinned manually". | Yes: design 01's caption (Auto hidden while in Auto) |
+| chart-editor-Q3 | "Why this chart?" (AC-029) or "Why this recommendation?" (design 01)? | **"Why this recommendation?"; AC-029 and AC-220 are amended.** It is a checklist with ✓/⚠ icons, with the full rule table for every type one link away ("Show every rule for every type"). | The panel explains the recommender's pick. After a manual pick, the drawn chart is not the one explained, so "Why this chart?" would be wrong exactly when the panel matters most. AC-029's full rule table stays one link away. | No |
+| chart-editor-Q4 | Does the badge's tooltip satisfy AC-147's "warn on the chart", and how does wechart know rollup-only mode is on? | **AC-147 is amended (unticked).** The chart's badge reads "Live", with the rollup-only sentence in its tooltip. The Acceleration tab says Cube would refuse the chart in rollup-only mode. A banner shows only where wechart knows rollup-only mode is on: where xcube's revision route reports `rollupOnly: true`, or, until that image is pinned, once a query has failed with "No pre-aggregation table has been built for this query yet". **The revision-route part waits on the xcube image** (see "chart-editor-Q4's banner" above). | A hover-only tooltip isn't a warning on the chart, and making the badge focusable is new keyboard work (R75). The note's keyboard-reachable home is the Acceleration tab, which is always visible in the drawer and carries design 02 state D's info note. Cube 1.7.45 reports the mode nowhere, but its "No pre-aggregation table…" error is thrown only in rollup-only mode, and xcube will report `rollupOnly` per model (the Cube expert's answer). | No |
+| chart-editor-Q5 | Should one word be used everywhere for a query the database answered? | **"Live", everywhere:** "● Live", paired with "✓ Pre-agg", in the editor's head, the drawer and the tiles. The tooltip reads "Not served by a pre-aggregation · Cube queried the source database". | Designs 04 and 08, and the app, already say Live ("● Live · from the database"). "Raw query" is jargon and misleading, since Cube still generates the SQL. Research settles what "Live" can honestly mean: `/v1/load` reports `usedPreAggregations` and `external`. The as-of time comes from `lastRefreshTime`, which also covers an answer from Cube's result cache (`refresh-jobs-caching.md`). | Yes: designs 01 and 02's "Raw query" |
+| chart-editor-Q6 | What should a measure tag's menu offer: aggregations, quick calculations, or both? | **One menu:** first the aggregations the model allows, then a divider, then AC-047's six quick calculations. The aggregations are the sibling measures the model declares on the same cube over the same `sql` (read from `/v1/meta?extended`), with the current one checked; the section is left out when there are none. Making new aggregations on demand would need xcube and goes to the backlog. | The REST query schema has no key that changes a measure's aggregation (`data-apis.md` §2). The SQL API requires the aggregate to match the measure's type. "Where the model allows" can therefore only mean swapping to another declared measure. One menu keeps AC-047 as written and adds no new keyboard path. | No |
+| chart-editor-Q7 | Should a joined cube's field pill show its short name or its full title? | **The full title, as AC-220 says** ("Products Category"). The short title is used only where the source is evident, as in a one-source chart. The tooltip can still say "via join". | Design 01's own field list shows why short names fail: "Count" under Orders and "Count" under Customers would both read "Count" on two pills. AC-220's rule never leaves a pill ambiguous. | Yes: design 01's "Country" |
+| chart-editor-Q8 | What is the Customize tab checked against? | **The prototype** (UX-064, cleanup 47). | The prototype is the approved component source (direction §7d, AC-187). No design is planned for Customize, so waiting would leave it unjudged indefinitely. | No |
+| chart-editor-Q9 | How does the editor show that a chart belongs to one dashboard? | **A plain note, as the designs draw it,** in place of the bordered chip. | Designs 01 and 02 draw ownership as a plain note ("Shared chart · on 2 dashboards · edits change both", with ⚠ when it matters), as the dashboard's ownership line does. A bordered chip reads as a control. | No |
+
+### Data sources
+
+| ID | Question | Decision | Why | Departs |
+|---|---|---|---|---|
+| data-sources-Q1 | Table cells' side padding: 10 px or 8 px? | **8 px**, direction §4's token, as built. One padding for every table in the product. | direction §4 names 8 px as the cell padding token, and 10 is off the 4-step spacing scale. AC-343 binds designs in §3–5's tokens. security-Q3 holds the same. | Yes: designs 01 and 03's 10 px |
+| data-sources-Q2 | What does "Used by" say when no cube uses a source? | **"0 cubes"**, the count, as for any other number. | Zero is a real count, not a missing value, so a dash would be wrong. "0 cubes" keeps the column a uniform, sortable count in tabular figures, and fixes today's ungrammatical "No cube". | No |
+| data-sources-Q3 | What does the list show with no data sources at all? | **The table keeps its header, with design 14's empty-folder line as its only row:** `td.one.empty`, a 34 px row at 14 px in text-secondary, left-aligned, reading "No data source has been added yet." "+ Data source" stays the head's primary. | This reuses the latest design's own empty-list pattern (design 14, E2, F3 and I2) rather than inventing one. §6's illustrated empty state is drawn for charts. An info bar in place of the table is inconsistent with every other list. | No |
+| data-sources-Q4 | Bold words in notes: 700 or 600? | **600.** | direction §3 allows only 400 and 600. The designs' 700 is the browser's default for an unstyled `<b>`, not a drawn choice. | Yes: the designs' 700 |
+| data-sources-Q5 | What does a History panel show with no earlier versions? | **It lists the current version, tagged Current.** The Current row offers View only, with no restore. | Design 06 pin 3 draws the newest row tagged Current and says the header's version line "says the same". An empty panel beside a header reading "Version 1" contradicts it. | No |
+| data-sources-Q6 | Which mark does a data source's settings page show? | **"◍" on the settings page**, and the driver monogram in the wizard. | Designs 03 and 15 (15 is the latest) draw the item-kind mark ◍ on the page, matching Explore's kind icons (◇ model, ▦ dashboard). The head's driver badge already names the driver. The monogram belongs to the wizard, where the driver is the choice being made. | No |
+
+### Design 10: Bookmarks and the cube picker
+
+| ID | Question | Decision | Why | Departs |
+|---|---|---|---|---|
+| design-10-Q1 | What does the Bookmarks footer button say, and how does it look? | **"＋ Bookmark this view…"**: design 10's words and look, with an ellipsis. It is design 10's accent link (`.btn.link`, 12/600, the plus icon, no border, padding 8 12). | The ellipsis follows design-10-Q4's rule, because the action asks for a name before saving. | Yes: the ellipsis design 10 doesn't draw |
+| design-10-Q2 | Which date does each bookmark show? | **The date it was first saved**, the one the list is ordered by (R61). It is written day first, as since T477 ("today", "22 Sep"). | Design 10 draws a date on each row. Showing the date the list is ordered by makes the order explain itself. | No |
+| design-10-Q3 | Should the Bookmarks button carry a bookmark icon? | **Yes, design 10's icon.** The chevron becomes the SVG all three designs draw. | Design 10 (2026-09-27) is later than designs 04 and 06 (R37). | No |
+| design-10-Q4 | Should menu items that open a dialog end in "…"? | **Yes, "…" everywhere:** on every command that asks for more before acting. An item that acts at once takes no "…". | This is the product's convention across designs 06, 13, 14 and 15 ("Propose restoring…", "Export…", "Move to…", "Clear My workspace…"), and the platform's convention. Design 10's three items are the outliers. | Yes: design 10's "Rename" and "Save a copy to mine" |
+| design-10-Q5 | What does the list show with no bookmarks? | **As built:** "No bookmarks yet", then the footer, with no "Mine" heading. | A "Mine" heading over an empty line adds a label with nothing under it. "No bookmarks yet" and then the footer's action tell the whole story. | No |
+| design-10-Q6 | How do field rows read in a dashboard filter's "Filter on" picker? | **The short title** ("Name"), with "Customers · Shared" at the right. | The row's right side already names the cube, so AC-220's rule gives the short title. The full title would repeat the cube on the same row. | No |
+| design-10-Q7 | When a chart's folder isn't stored, how does its cube picker group the cubes? | **Every saved chart and dashboard stores its folder.** The flat list stays only where the Cube isn't xcube, with no folder on any cube, as `pathCubes.ts` already detects. | AC-329 needs the item's folder path, and "no folder" is ambiguous. R53's call reads it as the single user's own with sign-in off, but as the Shared root elsewhere. Storing every item's folder removes the guess, and R71's no-migration reseed makes it clean. | No |
+
+### Explore, access and sign-in
+
+| ID | Question | Decision | Why | Departs |
+|---|---|---|---|---|
+| explore-Q1 | With sign-in off, does the top bar show the chip alone, or the chip and an avatar? | **The chip only, in the avatar's place; AC-190 is amended.** | Design 09 state B and rule 59 put the chip in the account button's place. Showing both duplicates the identity slot, and is part of why the bar overflows at 1,024 px. | No |
+| explore-Q2 | What text size does the folder tree use? | **As the designs draw it:** rows at 14 px (`text-sm`) and the heading at 16 px (`text-md`). direction §3's tree-rows note now names only the field and file trees. | Four approved designs (04, 07, 09, 14) agree on 14 px rows and a 16 px heading, and both are tokens. Explore's tree is navigation, not a dense inspector. | No |
+| explore-Q3 | With sign-in off, where does My workspace sit in the tree? | **First, in both modes,** with the person icon and the divider. | Design 04 pin 1 and rule 72 put My workspace first. R52 says workspaces work the same with sign-in off. T498 kept the phase-1 order only as a call open to change. | No |
+| explore-Q4 | Does the Show (kind) filter appear in My workspace? | **Yes, as built.** | Design 14 puts the kind filter "over the open folder in Explore", and My workspace is an open folder holding every kind. Its frames F and G2 show other states; they are silent on the filter, not drawn against it. | No |
+| explore-Q5 | With a panel such as Access docked, what happens to the folder header's search? | **The search is hidden while a panel is docked.** | This matches both designs at once: design 07 draws the header without search while Access is docked, and design 14 draws search with no panel open. It also stops New dropping to a second row. | No |
+| explore-Q6 | What does History show for an item with no kept version, such as phase-1 content? | **It lists the current version, tagged Current, described as "before proposals"**, a phrase the panel already has. | It is the same rule as data-sources-Q5: History always lists the current version, as design 06 pin 3 draws it. That matches the page's "version 1". | No |
+| explore-Q8 | With sign-in off, does a folder's header show an access chip? | **No chip, as built.** | With sign-in off, every folder grants the one user the same full access, so a chip on each folder carries no information. The top bar's "Single-user mode" chip already states the mode. Labelling an unauthenticated user "Super-Admin" would misdescribe an AD-group role that doesn't exist in this mode. | No |
+
+Explore's Q7 was settled by design 15 before this round (R37), so it is not among the 56.
+
+### Model workspace
+
+| ID | Question | Decision | Why | Departs |
+|---|---|---|---|---|
+| model-Q1 | How should a read-only shared model file, with "Edit in my workspace", look? No design draws it. | **As design 03 state A draws the same state for data sources:** a 32 px primary "Edit in my workspace" in the head, with the 22 px badge on the meta line, in the model's head and the overview. | It is the same state: a shared item, read-only, with rule 71's primary. One look serves every shared item's head. A 24 px primary would break the one-head-height rule (components-Q1). | No |
+| model-Q2 | Do the Model workspace's "left as built" calls, recorded only in tasks.md, count as recorded decisions? | **Accepted as recorded decisions** (all eight; listed below). They move from backlog §6(a)'s waiting list to R76. | Each call rests on correctness or fit, not preference. The head shows the path the URL names (AC-002). A select can't hold a d3 specifier. The design's tab spacing and its 642 px split overflow. 12/16 code is §3. "Cube's validator" and the Description placeholder would be false statements. Refresh holds `sql` and `immutable` for checklist 26. The time-zone wording follows the later design 12. Title's placeholder waits on research. | Yes: each keeps the app's value over design 03's |
+| model-Q3 | Is "All published" a green label, or a grey label with a green icon? | **A grey label with a green icon**, as designs 11 and 12 draw it. | The later designs 11 and 12 win over design 03 (R37). The icon carries the status colour, the label stays readable secondary text, and rule 3 holds. | No |
+| model-Q4 | Are comment lines in a model's YAML tinted all the time, or only after "Show in YAML"? | **Only after "Show in YAML", as built** (T482). | Design 03 tints comments at rest because the form would drop them (note 9). Since T482 the form keeps comments, so a tint at rest would flag a problem that no longer exists. | Yes: design 03's tint at rest |
+
+**model-Q2's eight calls, accepted** (`docs/design/critiques/2026-10-08-model-workspace.md`, Q2; backlog §6(a)):
+1. **The editor's head without `model/`.** It reads "cubes/orders.yml", the path as the address names it (T479, T494; AC-002). Design 03 writes "model/cubes/orders.yml".
+2. **Format as a text field.** Cube also takes d3 format specifiers, which a select can't hold (T494; research `data-modeling.md`, Formats).
+3. **The tab strip at 8/0.** The tablist is padded 8 with no gap, and each tab is padded 0 8. At the design's spacing (0 8 with a 2 px gap, tabs 0 9) the eight tabs overflow (T470).
+4. **The 676:524 split.** It follows design 03's drawing. Its note 8 ("1.15 fr : 1 fr", 642:558) disagrees, and the tabs don't fit at 642 (T470).
+5. **"Checked against Cube's rules as you type"** in place of "Checked with Cube's validator on every change". The check is wechart's, so "Cube's validator" would be false.
+6. **Code at 12/16**, direction §3's value, in place of design 03's 12/19.
+7. **Refresh as a titled group, the time zone's wording, and Title's placeholder.** Refresh holds `sql` and `immutable` for checklist 26. The time-zone wording follows the later design 12. Title has no placeholder until research gives one.
+8. **Description with no placeholder.** The drawn placeholder would be a false statement.
+
+### Security and reviews
+
+| ID | Question | Decision | Why | Departs |
+|---|---|---|---|---|
+| security-Q1 | What does the Security page show with sign-in off? | **Preview as groups, the same as with sign-in on.** Phase 1's floating JSON pane and its unexplained "Find a dashboard" go. | Since decision 12, tokens carry groups only (AC-166 as amended). A JSON payload with arbitrary claims would preview a state no real token can reach. One Preview as groups in both modes is honest and consistent, and removes UX-085's floating pane. Design 16 G7's "Security stays phase 1's page" records what was built, not a design of this page. | Yes: design 16 G7's note |
+| security-Q2 | Which columns does the Policies table have? | **Phase 1's columns** (Cube / view, Group, Members, Rows, Conditions, Masked, Source), **plus the drawn "No policy" row.** | State F's own text says "Phase 1's listing stays (AC-165, AC-169, AC-170)". AC-165 requires conditions and masking, which the drawn five columns drop. The caption beats the drawing. | Yes: state F's five drawn columns |
+| security-Q3 | Do Security's cell padding and filter heights follow design 08 or direction? | **The mix, as built:** 8 px cell padding (§4's token, as data-sources-Q1) and 28 px filters (§4's compact control height, the product's filter-pill height, as design 08 draws). | Each value is the token that fits its use. | Yes: design 08's 10 px padding |
+| security-Q4 | What does the audit trail call a publish the publish check refused? | **"Publish refused"**, as built: one name in the filter, the row and the inspector. | Design 16 state I is later than design 08 state B (R37). | No |
+| security-Q5 | Does the "To review" tab show a count of 0? | **No; it is hidden at 0.** | Design 05 state C hides the top bar's pill at 0, and the tab follows the same rule. The empty list's own text says nothing is waiting. | No |
+| security-Q6 | Does a data source change's audit record show when its connection test passed? | **Yes: record the test's time and show it.** | Design 08 state A draws it, and it is audit evidence that rule 23's test-before-save held. The time is known at save. Recording it is a small change to wechart's own audit record, with no xcube involvement. | No |
+
+### Jobs and Schedules (design 16, from T613)
+
+| ID | Question | Decision | Why | Departs |
+|---|---|---|---|---|
+| jobs-J1 | What does the refresh worker's panel show a Super-Admin (F2) and a member (F3)? | **Exactly as drawn.** A Super-Admin gets the worker and module panel with Cube's error, and no summary line. A member gets the status lines only: the badge, and that a module failed, without the error. A member sees no tables and no "Model revision". | The drawings match design 16 Q4's default, which the user accepted in R56. The module tables, with their opaque module ids, are what the drawing deliberately withholds, so the caption's "the same" is the loose part. | No |
+| jobs-J2 | Below 1,024 px, is the Jobs and Schedules list stacked rows or a table? | **Stacked rows, as G8 draws them,** keeping list or table semantics for screen readers. For example, the stacked blocks take `role=table` with `rowgroup` and `row`, not display changes that strip the semantics. | G8 is drawn and approved (R56). | No |
+| jobs-J3 | Is a refresh key's pane laid out in two columns or one? | **One column, as built.** | D5 is drawn wider than the 400 px pane it lives in. Two columns of about 180 px would squeeze the `refresh_key` block and the "Mon 5 Oct 07:00 · 05:00 UTC" run rows into wraps. The drawing doesn't fit its space, so one column stays. | Yes: D5's two columns |
