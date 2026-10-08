@@ -14,3 +14,5 @@ This list is the recorded decision that the escape clause of AC-343, AC-344 and 
 
 | Surface | Design and state | What the design draws | What the app does | Difference | Task |
 | --- | --- | --- | --- | --- | --- |
+| Dashboard tile | 2026-09-24 design 04, pins 5–6 (R76 dashboard-Q1) | End-point labels on every chart of 4 or fewer series | Direct labels on line, area and bar charts only; combo, scatter-by-colour and box plot name their series by the legend alone | Recorded as the coordinator's call (overturnable), not a small difference: ECharts' end labels are researched for line, area and bar only (`docs/research/echarts-end-labels.md`), and the legend keeps rule 5 for the others | T681 follow-up |
+| Dashboard tile | 2026-09-24 design 04, pins 5–6 | A series' name at its end, whole | A name past 120 px is cut short with "…" | wechart's figure, not the design's: a third of the 360 px a half-width tile draws in, so a long name never takes the plot's room. The legend still names it whole. The coordinator's call | T681 follow-up |

@@ -76,6 +76,10 @@ The rest of chart-editor-Q4 (the Live badge with its tooltip, and the Accelerati
 | dashboard-Q8 | Should the Export pane list groups with nothing in them ("0 of 0")? | **Leave them out.** If all three groups are empty, the "Choose what goes with it" heading goes too. | A "0 of 0" group with All · None offers controls that do nothing. "Always in the file" still says what goes. | No |
 | dashboard-Q9 | Should keyboard users reach the tile freshness badge's tooltip? | **No; they rely on the submenu.** Keyboard users read the time to the second in the tile menu's Data as of submenu. DSH-01 and DSH-21 land in one task. | Making the badge focusable is new keyboard work, which R75 holds back. Design 08 state D's submenu ("Data as of · Today 09:27:42") already gives keyboard users the time to the second. Landing DSH-01 and DSH-21 together keeps AC-148 met. | No |
 
+**dashboard-Q1, as built (T681 follow-up; the coordinator's calls, 2026-10-08, overturnable):**
+- **Direct labels are drawn on line, area and bar charts only.** Those are what `docs/research/echarts-end-labels.md` covers. Combo, scatter-by-colour and box-plot charts keep their legend, which still names each series, so rule 5 holds for them through the legend.
+- **A direct label is cut short past 120 px** (truncated with "…"). This is wechart's figure, not a design one: a third of the 360 px a half-width tile draws in, so a long name never takes the plot's room. Recorded in `accepted-differences.md`.
+
 ### Chart editor
 
 | ID | Question | Decision | Why | Departs |
