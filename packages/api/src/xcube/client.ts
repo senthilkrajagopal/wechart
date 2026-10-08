@@ -227,6 +227,8 @@ export interface HeldItem {
    * new target as a new epoch, with no rebinding (xcube-bc18f82c01.md).
    */
   readonly dataSource?: string | null;
+  /** The cube it extends, by name, where it extends one (research `xcube-0406293add.md`, 3.3). */
+  readonly extends?: string;
 }
 
 /**
@@ -506,6 +508,7 @@ export function xcubeAdmin({
             ...(kind === 'cube' && (typeof dataSource === 'string' || dataSource === null)
               ? { dataSource }
               : {}),
+            ...(typeof item['extends'] === 'string' ? { extends: item['extends'] } : {}),
             // Its own name in any folder, as `256d632371` gives it (T701;
             // research `xcube-256d632371.md`, 1.1).
             fullName: typeof item['fullName'] === 'string' ? item['fullName'] : name,

@@ -139,4 +139,37 @@ describe('xcube’s name-in-use refusal of an item, as its user is told it (T701
     ])
       expect(itemMessageOf({ name: 'orders', kind: 'reference_range', message })).toBe(message);
   });
+
+  /**
+   * T713 (AC-425, AC-322): a reference refusal is on the referring item, so
+   * it is named where its user sees the referrer's folder and counted where
+   * not; what it refers to is named by its name alone, never by its folder.
+   */
+  it('names a reference refusal on the referrer where its folder is seen, and counts the rest', () => {
+    const offPath = (name: string) =>
+      itemMessageOf({
+        name: 'lines',
+        kind: 'reference_range',
+        message: `It refers to "${name}", which isn't in its folder or one of its ancestors`,
+      });
+    const refusal = refusalOf(
+      [
+        { path: 'cubes/lines.yml', folderId: 'east', message: offPath('side') },
+        { path: 'cubes/other.yml', folderId: 'hidden', message: offPath('base') },
+      ],
+      (folderId) => folderId === 'east',
+    );
+    expect(refusal.answer).toEqual({
+      errors: [
+        {
+          path: 'cubes/lines.yml',
+          folderId: 'east',
+          message: `It refers to "side", which isn't in its folder or one of its ancestors`,
+        },
+      ],
+      hidden: 1,
+      error: '1 item in folders you can’t see would break.',
+    });
+    expect(refusal.recorded.shown).toEqual({ named: 1, counted: 1 });
+  });
 });

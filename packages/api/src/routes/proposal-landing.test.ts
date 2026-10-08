@@ -770,15 +770,11 @@ async function publishedIn(folderId: string, xcubeId: string, name: string, cont
 }
 
 /**
- * T456 (AC-321, amended 2026-10-01; R52, "a submitted item is frozen"): an
- * approval is refused when any of its items would bind to a cube or data
- * source other than the one it bound to when it was proposed, naming each
- * item and both bindings, so what lands is what was submitted. Its author
- * withdraws it and proposes it again. A model's bindings are the changeset's
- * dry run's, when proposed and at approval; a chart's or a dashboard's, its
- * names bound in the folder it lands in, as an approval binds them (T502).
- * Under one name per item (R71) a name means one item wherever it is used,
- * so the nearer namesake that would have rebound one can't be published.
+ * T456 (AC-321; R52, "a submitted item is frozen"), under one name per item
+ * (R71): a name means one item wherever it is used, so a nearer namesake
+ * can't be published to rebind one, and an approval lands what was proposed.
+ * A name whose item is gone since is refused by the approval's binding
+ * (T502's 422). T456's own comparison is retired (T713).
  */
 describe('an approval binding an item otherwise than when it was proposed (T456)', () => {
   const eastItem = (name: string) =>
@@ -850,8 +846,7 @@ describe('an approval binding an item otherwise than when it was proposed (T456)
    * Under R71 the case T456's refusal still meets (the coordinator's call,
    * 2026-10-07): a cube the proposal binds to is deleted between its
    * proposal and its approval. The approval is refused, naming the item and
-   * the name, and nothing lands. The binding's refusal (T502) says it, before
-   * the comparison with what it bound when proposed is reached.
+   * the name, and nothing lands. The approval's binding (T502) refuses it.
    */
   it('is refused for a chart whose cube was deleted since it was proposed, and lands nothing', async () => {
     const gone = `${MARK}_gone`;

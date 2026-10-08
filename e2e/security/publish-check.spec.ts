@@ -1,7 +1,10 @@
+import { readFileSync } from 'node:fs';
+
 import type { APIRequestContext } from '@playwright/test';
+import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
 import { approvedBy, landed, modelFilesIn, proposedModel } from '../model-files';
-import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
+import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtures';
 
 /**
  * T451 (AC-321, AC-288, AC-322; design 05, state L): a proposal's model is
@@ -25,11 +28,24 @@ const OTHER_PATH = `cubes/${OTHER}.yml`;
 const cubeOf = (name: string) =>
   `cubes:\n  - name: ${name}\n    sql: SELECT 1 AS n\n    dimensions:\n      - name: n\n        sql: n\n        type: number\n        primary_key: true\n        public: true\n    measures:\n      - name: total\n        sql: n\n        type: sum\n`;
 const JOINED = `${cubeOf(CUBE)}    joins:\n      - name: ${OTHER}\n        sql: "{CUBE}.n = {${OTHER}}.n"\n        relationship: many_to_one\n`;
-// T456's: a folder beneath, and a model to go there joined to the other cube.
+// T456's data-source half (T713): a folder beneath, two data sources in the
+// folder, a parent cube on one, and a model to go beneath extending it.
 const INNER = `Inner ${RUN}`;
+const SOURCE_ONE = `t456_one_${RUN}`;
+const SOURCE_TWO = `t456_two_${RUN}`;
+const PARENT = `t456_parent_${RUN}`;
+const PARENT_PATH = `cubes/${PARENT}.yml`;
+const parentOn = (source: string) =>
+  cubeOf(PARENT).replace(
+    '    sql: SELECT 1 AS n\n',
+    `    sql: SELECT 1 AS n\n    data_source: ${source}\n`,
+  );
 const LINES_NAME = `t456_lines_${RUN}`;
 const LINES_PATH = `cubes/${LINES_NAME}.yml`;
-const LINES = `${cubeOf(LINES_NAME)}    joins:\n      - name: ${OTHER}\n        sql: "{CUBE}.n = {${OTHER}}.n"\n        relationship: many_to_one\n`;
+const LINES = `cubes:\n  - name: ${LINES_NAME}\n    extends: ${PARENT}\n`;
+const KEY = JSON.parse(
+  readFileSync(new URL('../../infra/xcube/dev-credential-key.pub.jwk', import.meta.url), 'utf8'),
+) as XcubeKey;
 const made = {
   folder: '',
   project: '',
@@ -37,6 +53,7 @@ const made = {
   inner: '',
   linesProject: '',
   rebound: '',
+  sources: [] as string[],
 };
 
 const filesOf = async (request: APIRequestContext) => {
@@ -79,7 +96,7 @@ test.describe('a proposal’s model, checked when proposed and at approval (T451
         // What joins first: the folder beneath's, then the folder's.
         for (const [folder, path] of [
           [made.inner, LINES_PATH],
-          [made.inner, OTHER_PATH],
+          [made.folder, PARENT_PATH],
           [made.folder, PATH],
           [made.folder, OTHER_PATH],
         ] as const)
@@ -88,6 +105,8 @@ test.describe('a proposal’s model, checked when proposed and at approval (T451
               `/api/model/files?folder=${folder}&path=${encodeURIComponent(path)}`,
               { timeout: 90_000 },
             );
+        for (const source of made.sources)
+          await request.delete(`/api/data-sources/${source}`, { timeout: 90_000 });
         if (made.inner !== '') await request.delete(`/api/documents/folder/${made.inner}`);
         await request.delete(`/api/documents/folder/${made.folder}`);
       }
@@ -225,7 +244,8 @@ test.describe('a proposal’s model, checked when proposed and at approval (T451
     test.use({ role: 'super' });
 
     test('queries across the join the landed model makes', async ({ page }) => {
-      const prefix = `f${made.folder.replaceAll('-', '')}__`;
+      // Every cube under its own name (T709, AC-328).
+      const prefix = '';
       const load = await page.request.post('/api/load', {
         data: {
           query: { measures: [`${prefix}${CUBE}.total`], dimensions: [`${prefix}${OTHER}.n`] },
@@ -239,29 +259,60 @@ test.describe('a proposal’s model, checked when proposed and at approval (T451
   });
 
   /**
-   * T456 (AC-321, amended 2026-10-01; R52, "a submitted item is frozen"): an
-   * approval is refused when an item would bind otherwise than when it was
-   * proposed, naming it and both bindings, and nothing lands; withdrawn and
-   * proposed again, it lands as it binds now. `writer` proposes a model to
-   * /Checked/Inner joined to /Checked's other cube; `super` then lands a
-   * nearer cube of that name in /Checked/Inner.
+   * T456's data-source half (AC-321; R31, R52, "a submitted item is frozen"),
+   * as T713 keeps it under R71: an approval is refused when a model would run
+   * on a data source other than the one it ran on when it was proposed,
+   * naming both, and nothing lands; withdrawn and proposed again, it lands as
+   * it runs now. `writer` proposes to /Checked/Inner a cube extending
+   * /Checked's parent, which runs on /Checked's first data source; `super`
+   * then lands the parent again on /Checked's second. Its cube-name half
+   * (a nearer cube of a joined name) can't arise under one name per item.
    */
   test.describe('as super, for T456', () => {
     test.use({ role: 'super' });
 
-    test('makes a folder beneath the first', async ({ page }) => {
-      const inner = await page.request.post('/api/documents', {
+    test('makes a folder beneath the first, two data sources and the parent on the first', async ({
+      page,
+    }) => {
+      test.setTimeout(240_000);
+      const { request } = page;
+      const inner = await request.post('/api/documents', {
         data: { kind: 'folder', title: INNER, folderId: made.folder },
       });
       expect(inner.status(), await inner.text()).toBe(201);
       made.inner = ((await inner.json()) as { id: string }).id;
+      for (const name of [SOURCE_ONE, SOURCE_TWO]) {
+        const fields = {
+          host: 'sample-db',
+          port: 5432,
+          database: 'sample',
+          user: 'sample',
+          ssl: false,
+        };
+        const source = await request.post('/api/data-sources', {
+          data: await testedSource(request, {
+            folderId: made.folder,
+            name,
+            driver: 'postgres',
+            authMethod: 'password',
+            fields,
+            sealed: { password: await sealSecretV1(KEY, 'postgres', 'password', fields, 'sample') },
+          }),
+          timeout: 90_000,
+        });
+        expect(source.status(), await source.text()).toBe(201);
+        made.sources.push(((await source.json()) as { id: string }).id);
+      }
+      expect(await publish(request, PARENT_PATH, parentOn(SOURCE_ONE))).toEqual([
+        { path: PARENT_PATH, content: parentOn(SOURCE_ONE) },
+      ]);
     });
   });
 
   test.describe('as writer, for T456', () => {
     test.use({ role: 'writer' });
 
-    test('proposes a model to it, joined to its parent’s other cube', async ({ page }) => {
+    test('proposes a model to it, extending its parent’s cube', async ({ page }) => {
       const { request } = page;
       const project = await request.post('/api/documents', {
         data: { kind: 'folder', title: `Lines ${RUN}`, folderId: 'mine' },
@@ -286,26 +337,28 @@ test.describe('a proposal’s model, checked when proposed and at approval (T451
   test.describe('as super, meanwhile, for T456', () => {
     test.use({ role: 'super' });
 
-    test('lands a cube of the joined name in the folder beneath', async ({ page }) => {
-      const nearer = { path: OTHER_PATH, content: cubeOf(OTHER) };
-      expect(await landed(page.request, made.inner, [nearer])).toEqual([nearer]);
+    test('lands the parent again on the folder’s second data source', async ({ page }) => {
+      test.setTimeout(240_000);
+      expect(await publish(page.request, PARENT_PATH, parentOn(SOURCE_TWO))).toEqual([
+        { path: PARENT_PATH, content: parentOn(SOURCE_TWO) },
+      ]);
     });
   });
 
   test.describe('as writer, approving, for T456', () => {
     test.use({ role: 'writer' });
 
-    test('is refused, naming the model and both bindings, and nothing lands', async ({ page }) => {
+    test('is refused, naming the model and both data sources, and nothing lands', async ({
+      page,
+    }) => {
       await page.goto(`/reviews/${made.rebound}`);
       await page.getByRole('button', { name: 'Approve my own proposal' }).click();
       await page.getByRole('button', { name: 'Approve and publish' }).click();
       await expect(page.getByRole('alert')).toHaveText(
-        `Can’t approve: “${LINES_PATH}” would bind otherwise than when it was proposed: “${OTHER}” would be the one in ${FOLDER} / ${INNER}, not the one in ${FOLDER}. Nothing was approved; its author can withdraw it and propose it again.`,
+        `Can’t approve: “${LINES_PATH}” would bind otherwise than when it was proposed: its data source would be “${SOURCE_TWO}”, not “${SOURCE_ONE}”. Nothing was approved; its author can withdraw it and propose it again.`,
         { timeout: 90_000 },
       );
-      expect((await modelFilesIn(page.request, made.inner)).map((file) => file.path)).toEqual([
-        OTHER_PATH,
-      ]);
+      expect((await modelFilesIn(page.request, made.inner)).map((file) => file.path)).toEqual([]);
       const proposal = await page.request.get(`/api/proposals/${made.rebound}`);
       expect(((await proposal.json()) as { status: string }).status).toBe('open');
     });

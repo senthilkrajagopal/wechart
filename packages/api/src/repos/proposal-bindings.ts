@@ -3,9 +3,12 @@ import { type Kysely } from 'kysely';
 import type { Database } from '../db/schema';
 
 /**
- * What each item of a proposal bound to when it was proposed (T456, AC-321;
- * R52, "a submitted item is frozen"): an approval binding any of them
- * otherwise is refused, naming it, so what lands is what was submitted.
+ * What each model of a proposal ran on when it was proposed (T456, AC-321;
+ * R31, R52, "a submitted item is frozen"): an approval that would run one on
+ * another data source is refused, naming both, so what lands is what was
+ * submitted. Under R71 only the data source is held (T713): a name is one
+ * item's, so a cube's names can't bind otherwise; rows written before keep
+ * their `bindings`, which nothing reads.
  *
  * A document of its own kind beside the proposal, as a deleted folder's
  * record is (T540): no table of its own, and no migration. The record is
@@ -15,14 +18,9 @@ import type { Database } from '../db/schema';
  */
 export const PROPOSAL_BINDINGS = 'proposal-bindings';
 
-/** One item's bindings: each name it uses, to the full name it bound to. */
+/** One model's data source as it ran when proposed: its own, or its parent's through `extends`. */
 export interface ItemBindings {
-  readonly bindings: Readonly<Record<string, string>>;
-  /**
-   * A cube model's data source as bound (research
-   * `xcube-meta-revision-and-bindings.md`, "`dataSource`"): absent on a view
-   * and on a dashboard or chart, `null` for a cube that `extends` another.
-   */
+  /** `default` for a cube naming none; null where none can be told (a view). */
   readonly dataSource?: string | null;
 }
 

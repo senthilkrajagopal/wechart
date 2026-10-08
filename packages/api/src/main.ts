@@ -15,7 +15,6 @@ import { connectionTestStore } from './repos/connection-tests';
 import { dataSourceStore } from './repos/data-sources';
 import { deletedFolderStore } from './repos/deleted-folders';
 import { documents } from './repos/documents';
-import { proposalBindingStore } from './repos/proposal-bindings';
 import { folderXcubeIds } from './repos/folder-xcube-ids';
 import { folderAccessStore } from './repos/folder-access';
 import { auditStore } from './repos/audit';
@@ -44,6 +43,7 @@ import { publicationStore } from './xcube/publications';
 import { modelSync } from './xcube/snapshot';
 import { seedDevData } from './seed';
 import { seedDefault } from './seed-default';
+import { proposalBindingStore } from './repos/proposal-bindings';
 import { proposalStore } from './repos/proposals';
 import { versionStore } from './repos/versions';
 import { buildServer } from './server';
@@ -252,7 +252,7 @@ async function main(): Promise<void> {
     audit: auditStore(db),
     // Workspace items proposed to their target folders (T349, AC-284).
     proposals: proposalStore(db),
-    // What each proposal's items bound to when made, held to at approval (T456, AC-321).
+    // The data source each proposal's models ran on when made, held to at approval (T456, T713).
     proposalBindings: proposalBindingStore(db),
     // The versions of what approvals land, kept (T352, AC-288).
     versions: versionStore(db),

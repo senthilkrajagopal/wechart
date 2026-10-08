@@ -214,8 +214,8 @@ export interface BuildOptions {
    */
   readonly deletedFolders?: DeletedFolderStore;
   /**
-   * What each proposal's items bound to when it was made (T456, AC-321): an
-   * approval binding one otherwise is refused.
+   * What each proposal's models ran on when it was made (T456, T713;
+   * AC-321): an approval running one on another data source is refused.
    */
   readonly proposalBindings?: ProposalBindingStore;
   /** The audit trail (T368, AC-294): where sign-ins and changes are recorded. */
@@ -1517,15 +1517,8 @@ export function buildServer({
       modelLanding,
       // One name per item (T704, AC-421): what the shared folders hold.
       ...(landedNames === undefined ? {} : { landedNames }),
-      // Held to what its items bound to when proposed (T456, AC-321).
+      // Held to the data source each model ran on when proposed (T456, T713).
       ...(proposalBindings === undefined ? {} : { bindings: proposalBindings }),
-      folderOfName: async (kind: 'cube' | 'dataSource', name: string) => {
-        if (kind === 'cube') return folderDeclaring(name);
-        const served = (folders === undefined ? ROOT_ONLY : await folders()).ids;
-        return ((await dataSources?.all()) ?? []).find(
-          (source) => source.name === name && served.has(source.folderId),
-        )?.folderId;
-      },
       // The open calculation requests listed to the user count with the
       // proposals (R60): those of the folders they write, as the list has them.
       ...(calcRequests === undefined

@@ -110,6 +110,18 @@ export interface FakeSqlAsk {
   readonly maxBytes?: number;
 }
 
+/** A folder and each one above it in a tree, to `froot` (T712, T713). */
+function folderPathOf(tree: readonly TreeFolder[], folderId: string): Set<string> {
+  const parents = new Map(tree.map((folder) => [folder.id, folder.parentId]));
+  const path = new Set<string>();
+  let at: string | null | undefined = folderId;
+  while (at != null && !path.has(at)) {
+    path.add(at);
+    at = parents.get(at);
+  }
+  return path;
+}
+
 /** Every literal as `?`, as xcube's `redactedSql` has it: strings and numbers. */
 const redactedOf = (sql: string) =>
   sql.replace(/'(?:[^']|'')*'/g, '?').replace(/\b\d+(?:\.\d+)?\b/g, '?');
@@ -272,13 +284,7 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
       ...held.filter((each) => !brought.some((own) => key(own.name) === key(each.name))),
       ...brought,
     ];
-    const parents = new Map(tree.map((folder) => [folder.id, folder.parentId]));
-    const pathOf = (folderId: string) => {
-      const path = new Set<string>();
-      for (let at: string | null | undefined = folderId; at != null && !path.has(at);)
-        (path.add(at), (at = parents.get(at)));
-      return path;
-    };
+    const pathOf = (folderId: string) => folderPathOf(tree, folderId);
     const ownOf = (item: Item) => {
       const parsed = (parseYaml(item.yaml) ?? {}) as Record<string, unknown>;
       return ((parsed['cubes'] as Record<string, unknown>[] | undefined)?.[0] ?? {}) as Record<
@@ -325,6 +331,60 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
             through === undefined
               ? `It uses the data source "${name}", which isn't in its folder or one of its ancestors`
               : `It uses the data source "${name}" (through ${through}, which it extends), which isn't in its folder or one of its ancestors`,
+        },
+      ];
+    });
+  };
+
+  /**
+   * R72's rule (T713; research `xcube-256d632371.md`, "R72: every reference
+   * up the referrer's folder path"): an item whose join, `extends` or view
+   * `join_path` segment names an item kept off its folder's path is refused,
+   * `reference_range`, on the referrer, naming what it refers to and never
+   * that item's folder. A self-reference, or a name no item holds, is not
+   * this rule's. Over the items it is given, against `all`. Of the image's
+   * references this stub reads joins, `extends` and views' join paths, not
+   * `{cube.member}` or `FILTER_PARAMS`; it says several as one sentence each
+   * name sorted, `aren't` for more than one, as the research has it.
+   */
+  const pathRefused = (
+    items: readonly Item[],
+    all: readonly Item[],
+    tree: readonly TreeFolder[],
+  ): ItemError[] => {
+    const pathOf = (folderId: string) => folderPathOf(tree, folderId);
+    return items.flatMap((item): ItemError[] => {
+      if (item.yaml === '') return [];
+      const parsed = (parseYaml(item.yaml) ?? {}) as Record<string, unknown>;
+      const own =
+        ((parsed['cubes'] ?? parsed['views']) as Record<string, unknown>[] | undefined)?.[0] ?? {};
+      const named = new Set<string>();
+      for (const join of (own['joins'] ?? []) as { name?: unknown }[])
+        if (typeof join.name === 'string') named.add(join.name);
+      if (typeof own['extends'] === 'string') named.add(own['extends']);
+      if (item.kind === 'view')
+        for (const entry of (Array.isArray(own['cubes']) ? own['cubes'] : []) as {
+          join_path?: unknown;
+        }[])
+          if (typeof entry.join_path === 'string')
+            for (const segment of entry.join_path.split('.')) named.add(segment);
+      named.delete(item.name);
+      const path = pathOf(item.folderId);
+      const off = [...named]
+        .filter((name) => {
+          const held = all.find((each) => each.name === name);
+          return held !== undefined && !path.has(held.folderId);
+        })
+        .sort();
+      if (off.length === 0) return [];
+      return [
+        {
+          folderId: item.folderId,
+          name: item.name,
+          kind: 'reference_range',
+          message: `It refers to ${off.map((name) => `"${name}"`).join(', ')}, which ${
+            off.length === 1 ? "isn't" : "aren't"
+          } in its folder or one of its ancestors`,
         },
       ];
     });
@@ -542,6 +602,8 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
             modelOf(model).tree ?? [],
             put.connections ?? [],
           ),
+          // Its own items' references on their paths (T713; research, R72).
+          ...pathRefused(put.upserts, standing, modelOf(model).tree ?? []),
         ];
         if (twice.length > 0)
           return answer(422, {
@@ -866,7 +928,17 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
               result,
               held.tree,
             );
-      const placed = [...folderErrors, ...nameErrors, ...rangeErrors];
+      // Its upserts' references on their paths (T713; research, R72): as narrow,
+      // a published referrer a move strands being T715's to add.
+      const pathErrors =
+        nameErrors.length > 0
+          ? []
+          : pathRefused(
+              result.filter((item) => touched.has(item.name)),
+              result,
+              held.tree,
+            );
+      const placed = [...folderErrors, ...nameErrors, ...rangeErrors, ...pathErrors];
       const refused: readonly (ModelError | ItemError)[] | undefined =
         placed.length > 0 ? [...placed, ...(refusal ?? [])] : refusal;
       if (url.searchParams.get('dryRun') === 'true') {

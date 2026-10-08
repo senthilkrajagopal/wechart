@@ -184,8 +184,10 @@ describe('the stub xcube’s data-source rule (T712)', () => {
       { folderId: 'fsales', name: 'warehouse' },
       { folderId: 'fops', name: 'lake' },
     ]);
+    // The root's `w`, on /Sales's path, runs on /Ops's `lake` (as held before
+    // the rule): a child extending it inherits a data source off its own path.
     stub.holdItems('dev', [
-      { ...cube('fops', 'w'), yaml: 'cubes:\n  - name: w\n    data_source: lake\n' },
+      { ...cube('froot', 'w'), yaml: 'cubes:\n  - name: w\n    data_source: lake\n' },
     ]);
     const check = (upserts: ReturnType<typeof cube>[]) =>
       admin.checkChangeset({ upserts, deletes: [], securityContext: {}, probes: [] });

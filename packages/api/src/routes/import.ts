@@ -193,7 +193,10 @@ export interface ImportAccess {
 }
 
 /** Each imported data source's name, and what was decided for it. */
-type Decided = ReadonlyMap<string, { readonly map?: string; readonly create?: string; readonly to?: string }>;
+type Decided = ReadonlyMap<
+  string,
+  { readonly map?: string; readonly create?: string; readonly to?: string }
+>;
 
 /** The decisions a body sends, one per name: `{ name, map | create | to }` (T514). */
 function decisionsIn(value: unknown): Decided | undefined {
@@ -216,7 +219,8 @@ function decisionsIn(value: unknown): Decided | undefined {
 }
 
 const NO_SUCH_SOURCE = {
-  error: 'There’s no such data source for a model in the target to bind to, or it isn’t yours to use.',
+  error:
+    'There’s no such data source for a model in the target to bind to, or it isn’t yours to use.',
 };
 
 /** A refusal of the file, in the pane's words (design 13, states J and K). */
@@ -496,20 +500,18 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
           targetFolderId: target.id,
         },
       },
-      ...charts.map(
-        (chart): Create => ({
-          kind: 'chart',
-          id: renamed.get(chart.id)!,
-          body: {
-            ...exportedBodyOf(chart.body),
-            title: chart.title,
-            owner,
-            ...(chart.dashboardId === undefined
-              ? { folderId: own, targetFolderId: target.id }
-              : { localToDashboardId: boardId }),
-          },
-        }),
-      ),
+      ...charts.map((chart): Create => ({
+        kind: 'chart',
+        id: renamed.get(chart.id)!,
+        body: {
+          ...exportedBodyOf(chart.body),
+          title: chart.title,
+          owner,
+          ...(chart.dashboardId === undefined
+            ? { folderId: own, targetFolderId: target.id }
+            : { localToDashboardId: boardId }),
+        },
+      })),
     ];
     await access.create(creates);
     return reply.code(201).send({

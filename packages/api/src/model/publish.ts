@@ -18,7 +18,6 @@ import { clashesOf, compiledIn } from './clashes';
 import { refreshKeyProblemsOf } from './refreshKeys';
 import { rollupProblemsOf, type RollupProblem } from './rollupReferences';
 import type { StoredModelFile } from '../repos/model-files';
-import type { ItemBindings } from '../repos/proposal-bindings';
 import type { Changeset } from '../xcube/changesets';
 import { itemsOf } from '../xcube/items';
 import type { HeldItem } from '../xcube/client';
@@ -26,6 +25,7 @@ import { chainOf, ROOT_ONLY, type PublishedFolders } from '../xcube/folders';
 import { sharedInPlace } from '../routes/shared-in-place';
 import { planLanding, type LandingModel, type LandingWrite } from './landing';
 import { declaredIn, misnamedIn, redeclaredIn, severalIn, unreadableIn } from './split';
+import { extendsIn } from '../xcube/used-by';
 import type { CompileError } from './validate';
 
 /**
@@ -989,32 +989,12 @@ export function registerModelPublishing(
       if (rollups.kind === 'unasked') return no(502, rollups.error);
       if (rollups.kind === 'unjoinable') return breaks(rollups.errors);
 
-      // What each model would bind to, by its workspace file's id: the dry
-      // run's item of its name in the folder it lands in (T456, AC-321).
-      const bound = new Map(
-        models.flatMap((model) => {
-          const xcubeId = served.ids.get(model.folderId);
-          const name = declaredIn(model.content)[0]?.name;
-          const item = checked.items?.find(
-            (each) => each.folderId === xcubeId && each.name === name,
-          );
-          return item === undefined
-            ? []
-            : [
-                [
-                  model.fileId,
-                  {
-                    bindings: item.bindings,
-                    ...(item.dataSource === undefined ? {} : { dataSource: item.dataSource }),
-                  },
-                ] as const,
-              ];
-        }),
-      );
       return {
         kind: 'checked',
         writes: plan.writes,
-        bound,
+        sources: await sourcesOf(models, checked.items ?? [], served, () =>
+          xcube === undefined ? Promise.resolve([]) : xcube.items(),
+        ),
         // Sent whole where xcube isn't what the store holds (T426): then what
         // it will hold is the draft's items alone, never its head's (T451's review).
         resolver:
@@ -1052,6 +1032,55 @@ export function registerModelPublishing(
     },
   };
   return { landing };
+}
+
+/**
+ * Each landing cube model's data source (T456, T713): its item's `dataSource`
+ * in the dry run; where that is none (a cube that `extends`: research
+ * `xcube-e53cf2a8b8.md`), its parent's, named by its YAML's `extends` and
+ * found among the landing items, then the held ones, whose `dataSource` is
+ * the one a child inherits (research `xcube-0406293add.md`), however far up.
+ */
+async function sourcesOf(
+  models: readonly LandingModel[],
+  landing: readonly {
+    readonly name: string;
+    readonly folderId: string;
+    readonly dataSource?: string | null;
+  }[],
+  served: PublishedFolders,
+  held: () => Promise<readonly HeldItem[]>,
+): Promise<Map<string, string>> {
+  const sources = new Map<string, string>();
+  let heldItems: readonly HeldItem[] | undefined;
+  const heldNamed = async (name: string) =>
+    (heldItems ??= await held()).find((item) => item.name === name);
+  /** What a cube of this name extends: its landing model's YAML, else xcube's `extends`. */
+  const parentOf = async (name: string) => {
+    const model = models.find((each) => declaredIn(each.content)[0]?.name === name);
+    return model === undefined
+      ? (await heldNamed(name))?.extends
+      : extendsIn(model.content)?.extends;
+  };
+  const sourceNamed = async (name: string) =>
+    landing.find((item) => item.name === name)?.dataSource ?? (await heldNamed(name))?.dataSource;
+  for (const model of models) {
+    const xcubeId = served.ids.get(model.folderId);
+    const [declared] = declaredIn(model.content);
+    if (declared?.kind !== 'cube') continue;
+    let name: string | undefined = declared.name;
+    let source = landing.find(
+      (each) => each.folderId === xcubeId && each.name === declared.name,
+    )?.dataSource;
+    const seen = new Set<string>();
+    while (typeof source !== 'string' && name !== undefined && !seen.has(name)) {
+      seen.add(name);
+      name = await parentOf(name);
+      source = name === undefined ? undefined : await sourceNamed(name);
+    }
+    if (typeof source === 'string') sources.set(model.fileId, source);
+  }
+  return sources;
 }
 
 /**
@@ -1112,10 +1141,12 @@ export type LandingCheck =
       readonly kind: 'checked';
       readonly writes: readonly LandingWrite[];
       /**
-       * What each model would bind to as it lands, by its workspace file's id
-       * (T456): none for one the dry run gives no item for.
+       * The data source each cube model would run on as it lands, by its
+       * workspace file's id (T456, T713; AC-321): its own, or its parent's
+       * through `extends`, however far up. None for a view, or where the dry
+       * run gives no item.
        */
-      readonly bound: ReadonlyMap<string, ItemBindings>;
+      readonly sources: ReadonlyMap<string, string>;
       /** Names as xcube will resolve them once it lands: what a proposal's charts bind with. */
       readonly resolver: Pick<XcubeAdmin, 'resolve' | 'items'>;
       /** Written, sent to xcube and seen: each model's file as it landed, by its workspace file's id. */
