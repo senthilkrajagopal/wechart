@@ -13509,6 +13509,13 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - **AC-423:** its R73 clause, "a draft's file name follows its cube's name until it lands", isn't built here or in any task I hold. That is a question.
       - **AC-291:** it holds more than this task shows.
     - **Test-integrity hook:** it flagged the e2e's two URL assertions being merged into one stronger one (a negative lookahead on the folder), in a file never committed. That was a false positive.
+    - **The review (PASS), its fixes taken:**
+      - **Use-only copies stay renamable.** A use-only copy's names now stay editable, as T706's API allows. Only a landed file and an edit copy are fixed.
+      - **Fixed while unknown.** A saved workspace file whose kind is still being read, or can't be read, is held fixed until it is known (`namesFixedFor`).
+      - **Tests:** `workspaceModels.test.ts`, 2 cases, red before. Web model tests 358/358; `fixed-names` and `use-only-copy` 8/8 in Chrome.
+    - **Left as reported:**
+      - The YAML pane still accepts an edit to a landed name, which T706's API refuses at save. AC-423's Fails-when names "a Rename action".
+      - AC-423's file-name clause is T737 (the coordinator, 2026-10-08).
 
 - [x] T723 (AC-424, AC-426, AC-422) Say a refused name in the UI as in use, never where, and refuse a name outside the grammar before it is sent
   - Files: `packages/web/src/workspaces/model/{publish.ts,ModelFilePage.tsx}`, `packages/web/src/workspaces/data-sources/{NewSourceWizard,SourceEditor}.tsx`, `packages/web/src/workspaces/explore/{NewItemDialog,ProposeDialog}.tsx`, `packages/web/src/workspaces/reviews/Refusal.tsx`, each with its test

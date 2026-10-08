@@ -1,6 +1,30 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { copyOf, declaredNameOf, filesBeside } from './workspaceModels';
+import { copyOf, declaredNameOf, filesBeside, namesFixedFor } from './workspaceModels';
+
+/**
+ * T722's review (AC-423; T706's API): a file's cube and view names are fixed
+ * where it has landed, and in an edit copy of it; a draft's, and a use-only
+ * copy's, which the API lets change, are not. While it isn't yet known which
+ * a saved workspace file is, or can't be read, they are held fixed.
+ */
+describe('whether a model file’s names are fixed (T722)', () => {
+  it('fixes a landed file’s and an edit copy’s, not a draft’s nor a use-only copy’s', () => {
+    expect(namesFixedFor({ inWorkspace: false, published: true, copy: undefined })).toBe(true);
+    expect(namesFixedFor({ inWorkspace: true, published: true, copy: { useOnly: false } })).toBe(
+      true,
+    );
+    expect(namesFixedFor({ inWorkspace: true, published: true, copy: { useOnly: true } })).toBe(
+      false,
+    );
+    expect(namesFixedFor({ inWorkspace: true, published: true, copy: null })).toBe(false);
+    expect(namesFixedFor({ inWorkspace: true, published: false, copy: undefined })).toBe(false);
+  });
+
+  it('holds them fixed while a saved workspace file’s kind isn’t known', () => {
+    expect(namesFixedFor({ inWorkspace: true, published: true, copy: undefined })).toBe(true);
+  });
+});
 
 /**
  * T722 (AC-423): a saved workspace file that copies a landed one keeps its

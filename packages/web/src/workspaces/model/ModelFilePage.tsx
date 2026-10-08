@@ -71,6 +71,7 @@ import {
   filesBeside,
   keepDraftTarget,
   namedFileOf,
+  namesFixedFor,
   savedTargetOf,
   targetsOf,
 } from './workspaceModels';
@@ -748,10 +749,14 @@ function FileEditor({
   });
   /**
    * Its cubes' and views' names are fixed where they have landed: the file in
-   * its shared folder, or a copy of it in My workspace (T722, AC-423). A
-   * draft's stay editable until it lands.
+   * its shared folder, or an edit copy of it in My workspace (T722, AC-423).
+   * A draft's, and a use-only copy's, stay editable (`namesFixedFor`).
    */
-  const namesFixed = !where.inWorkspace || copy.data != null;
+  const namesFixed = namesFixedFor({
+    inWorkspace: where.inWorkspace,
+    published,
+    copy: copy.data,
+  });
   const everyFile = useQuery({
     ...ALL_MODEL_FILES_QUERY,
     enabled: where.inWorkspace && landsIn.data != null,

@@ -153,6 +153,29 @@ export async function copyOf(
   return origin === null || origin === undefined ? null : { useOnly: origin.useOnly === true };
 }
 
+/**
+ * Whether a model file's cube and view names are fixed on its page (T722,
+ * AC-423): where it has landed, in its shared folder, and in an edit copy of
+ * it, which lands over it under its name. A draft's, and a use-only copy's,
+ * which the API lets change (T706), are not. A saved workspace file whose
+ * kind isn't known yet (`copy` undefined: asked, or unanswered) is held fixed
+ * until it is (T722's review).
+ */
+export function namesFixedFor({
+  inWorkspace,
+  published,
+  copy,
+}: {
+  readonly inWorkspace: boolean;
+  /** Saved: a file not yet saved is a draft. */
+  readonly published: boolean;
+  readonly copy: { readonly useOnly: boolean } | null | undefined;
+}): boolean {
+  if (!inWorkspace) return true;
+  if (!published || copy === null) return false;
+  return copy === undefined || !copy.useOnly;
+}
+
 /** The shared folders a new workspace item may go to: those the user writes (T345). */
 export async function targetsOf(): Promise<readonly Target[]> {
   const response = await fetch('/api/folders/targets');
