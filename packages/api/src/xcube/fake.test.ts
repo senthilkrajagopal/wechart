@@ -171,6 +171,61 @@ describe('the stub xcube’s names, one per model (T701)', () => {
 });
 
 /**
+ * T712 (AC-273): with connections held, a changeset is refused for a cube
+ * whose data source, its own or inherited through `extends`, is kept off its
+ * folder's path (research `xcube-256d632371.md`, "In `422 invalid_items`",
+ * 4.4), on the cube, never naming the data source's folder.
+ */
+describe('the stub xcube’s data-source rule (T712)', () => {
+  it('refuses a cube on a data source off its path, its own or its parent’s, and takes one on its path', async () => {
+    const { stub, admin } = stubbed();
+    await admin.folders(TREE);
+    stub.holdConnections('dev', [
+      { folderId: 'fsales', name: 'warehouse' },
+      { folderId: 'fops', name: 'lake' },
+    ]);
+    stub.holdItems('dev', [
+      { ...cube('fops', 'w'), yaml: 'cubes:\n  - name: w\n    data_source: lake\n' },
+    ]);
+    const check = (upserts: ReturnType<typeof cube>[]) =>
+      admin.checkChangeset({ upserts, deletes: [], securityContext: {}, probes: [] });
+
+    expect(
+      (
+        await check([
+          { ...cube('fsales', 'own'), yaml: 'cubes:\n  - name: own\n    data_source: lake\n' },
+        ])
+      ).errors,
+    ).toEqual([
+      {
+        folderId: 'fsales',
+        name: 'own',
+        kind: 'data_source_range',
+        message: `It uses the data source "lake", which isn't in its folder or one of its ancestors`,
+      },
+    ]);
+    expect(
+      (
+        await check([
+          { ...cube('fsales', 'child'), yaml: 'cubes:\n  - name: child\n    extends: w\n' },
+        ])
+      ).errors,
+    ).toEqual([
+      {
+        folderId: 'fsales',
+        name: 'child',
+        kind: 'data_source_range',
+        message: `It uses the data source "lake" (through w, which it extends), which isn't in its folder or one of its ancestors`,
+      },
+    ]);
+    const fine = await check([
+      { ...cube('fsales', 'mine'), yaml: 'cubes:\n  - name: mine\n    data_source: warehouse\n' },
+    ]);
+    expect([fine.valid, fine.errors]).toEqual([true, []]);
+  });
+});
+
+/**
  * T711 (AC-272): `POST …/resolve` answers the one item of a name, in any
  * case and in any folder, by its stored name; the folder asked from is only
  * checked to be in the tree (research `xcube-256d632371.md`, 3.3). Whether

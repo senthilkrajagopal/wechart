@@ -156,6 +156,8 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
    * items of one name are refused either way, as they were before.
    */
   let oneNamePerModel = true;
+  /** Each model's landed connections, where a test gives them (`holdConnections`, T712). */
+  const connectionsOf = new Map<string, { folderId: string; name: string }[]>();
   /** Overlay pushes to refuse as told, in order: `422 invalid_secret`, say. */
   const overlayRefusals: { status: number; body: Record<string, unknown>; id?: string }[] = [];
   /** Each SQL run asked (T532), and how the test answers one: `undefined` is one row. */
@@ -226,6 +228,12 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
         const bound = resolveIn(items, join.name);
         if (bound !== null) bindings[join.name] = bound;
       }
+    // What it extends too (research `xcube-256d632371.md`, R72: `bindings`).
+    const parent = declared?.[0]?.['extends'];
+    if (typeof parent === 'string' && parent !== item.name) {
+      const bound = resolveIn(items, parent);
+      if (bound !== null) bindings[parent] = bound;
+    }
     if (item.kind === 'view') {
       const others = items.filter((other) => other !== item);
       const paths = (declared?.[0]?.['cubes'] ?? []) as { join_path?: unknown }[];
@@ -237,6 +245,89 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
           });
     }
     return bindings;
+  };
+
+  /**
+   * Each cube's data source held to its folder's path (T712; research
+   * `xcube-256d632371.md`, "The data-source rule" 4.1–4.4, "In `422
+   * invalid_items`"): the one it names, or its parent's through `extends`,
+   * however far up; `default` the root's, Cube's own. One no connection
+   * holds is kind `reference`; one held off the path, `data_source_range`.
+   * Each error is on the cube, naming the data source and never its folder.
+   * Only for a model given connections (`holdConnections`), and only over
+   * the cubes it is given (a changeset's touched ones; an overlay's own).
+   */
+  const rangeRefused = (
+    model: string,
+    cubes: readonly Item[],
+    all: readonly Item[],
+    tree: readonly TreeFolder[],
+    brought: readonly { folderId: string; name: string }[] = [],
+  ): ItemError[] => {
+    const held = connectionsOf.get(model);
+    if (held === undefined) return [];
+    // A brought connection stands in for the held one of its name (research 2.6).
+    const key = (name: string) => name.toLowerCase();
+    const connections = [
+      ...held.filter((each) => !brought.some((own) => key(own.name) === key(each.name))),
+      ...brought,
+    ];
+    const parents = new Map(tree.map((folder) => [folder.id, folder.parentId]));
+    const pathOf = (folderId: string) => {
+      const path = new Set<string>();
+      for (let at: string | null | undefined = folderId; at != null && !path.has(at);)
+        (path.add(at), (at = parents.get(at)));
+      return path;
+    };
+    const ownOf = (item: Item) => {
+      const parsed = (parseYaml(item.yaml) ?? {}) as Record<string, unknown>;
+      return ((parsed['cubes'] as Record<string, unknown>[] | undefined)?.[0] ?? {}) as Record<
+        string,
+        unknown
+      >;
+    };
+    /** The data source a cube uses, and the parent it comes through, if it is inherited. */
+    const sourceOf = (item: Item, seen: Set<string>): { name: string; through?: string } => {
+      const own = ownOf(item);
+      const written = own['data_source'] ?? own['dataSource'];
+      if (typeof written === 'string') return { name: written };
+      const parentName = own['extends'];
+      const parent =
+        typeof parentName === 'string' && !seen.has(parentName)
+          ? all.find((each) => each.name === parentName && each.kind === 'cube')
+          : undefined;
+      if (parent === undefined) return { name: 'default' };
+      seen.add(parentName as string);
+      return { name: sourceOf(parent, seen).name, through: parent.name };
+    };
+    return cubes.flatMap((item): ItemError[] => {
+      if (item.kind !== 'cube' || item.yaml === '') return [];
+      const { name, through } = sourceOf(item, new Set([item.name]));
+      if (name === 'default') return [];
+      const holders = connections.filter((each) => each.name === name);
+      if (holders.length === 0)
+        return [
+          {
+            folderId: item.folderId,
+            name: item.name,
+            kind: 'reference',
+            message: `It uses the data source "${name}", which the model doesn't hold`,
+          },
+        ];
+      const path = pathOf(item.folderId);
+      if (holders.some((each) => path.has(each.folderId))) return [];
+      return [
+        {
+          folderId: item.folderId,
+          name: item.name,
+          kind: 'data_source_range',
+          message:
+            through === undefined
+              ? `It uses the data source "${name}", which isn't in its folder or one of its ancestors`
+              : `It uses the data source "${name}" (through ${through}, which it extends), which isn't in its folder or one of its ancestors`,
+        },
+      ];
+    });
   };
 
   /**
@@ -432,8 +523,26 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
         const at = overlayRefusals.findIndex((each) => each.id === undefined || each.id === id);
         const refused = at < 0 ? undefined : overlayRefusals.splice(at, 1)[0];
         if (refused !== undefined) return answer(refused.status, refused.body);
-        // Two items of one name, in any case (T701).
-        const twice = namesRefused('overlay', [], put.upserts, []);
+        // Two items of one name, in any case (T701); and its own cubes' data
+        // sources on their paths, with the connections it brings (T712).
+        const headItems = headOf(model)?.items ?? [];
+        const standing = [
+          ...headItems.filter(
+            (item) =>
+              !put.upserts.some((own) => own.name.toLowerCase() === item.name.toLowerCase()),
+          ),
+          ...put.upserts,
+        ];
+        const twice = [
+          ...namesRefused('overlay', [], put.upserts, []),
+          ...rangeRefused(
+            model,
+            put.upserts,
+            standing,
+            modelOf(model).tree ?? [],
+            put.connections ?? [],
+          ),
+        ];
         if (twice.length > 0)
           return answer(422, {
             error: 'The overlay does not apply',
@@ -727,9 +836,6 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
             change.upserts ?? [],
             change.deletes ?? [],
           );
-      const placed = [...folderErrors, ...nameErrors];
-      const refused: readonly (ModelError | ItemError)[] | undefined =
-        placed.length > 0 ? [...placed, ...(refusal ?? [])] : refusal;
       const keyOf = (item: { folderId: string; name: string }) => `${item.folderId}/${item.name}`;
       const applied = (items: readonly Item[]) => {
         const gone = new Set((change.deletes ?? []).map(keyOf));
@@ -741,6 +847,28 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
       };
       const current = headOf(model);
       const result = applied(current?.items ?? []);
+      // Each cube the change touches, held to its path (T712): its upserts and
+      // the cubes extending them. NARROWER than the image, which checks every
+      // cube (research 4.3), so leftovers of other tests in a shared store
+      // don't trip it; a move's stranded cubes are T715's to add.
+      const touched = new Set((change.upserts ?? []).map((item) => item.name));
+      const extendsOne = (item: Item) => {
+        const own = (parseYaml(item.yaml) ?? {}) as { cubes?: { extends?: unknown }[] };
+        const parent = own.cubes?.[0]?.extends;
+        return typeof parent === 'string' && touched.has(parent);
+      };
+      const rangeErrors =
+        nameErrors.length > 0
+          ? []
+          : rangeRefused(
+              model,
+              result.filter((item) => touched.has(item.name) || extendsOne(item)),
+              result,
+              held.tree,
+            );
+      const placed = [...folderErrors, ...nameErrors, ...rangeErrors];
+      const refused: readonly (ModelError | ItemError)[] | undefined =
+        placed.length > 0 ? [...placed, ...(refusal ?? [])] : refusal;
       if (url.searchParams.get('dryRun') === 'true') {
         const valid = refused === undefined;
         const asFiles = result.map((item) => ({ path: `${item.name}.yml`, content: item.yaml }));
@@ -1076,6 +1204,15 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
         files: [],
         items,
       });
+    },
+    /**
+     * The model's landed connections, by folder and name (T712): from then
+     * on a cube's data source is held to its folder's path, as the image
+     * holds it. A model never given any is one with no connections: its
+     * cubes' data sources are answered as written, unchecked.
+     */
+    holdConnections: (model: string, held: readonly { folderId: string; name: string }[]) => {
+      connectionsOf.set(model, [...held]);
     },
     /** Names one per model across folders, as `256d632371` holds them (T701). */
     namesOnePerModel: (on: boolean) => {

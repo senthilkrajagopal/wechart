@@ -352,7 +352,9 @@ export async function dependenciesOf(
   for (const key of reachedFrom(cubesOfDashboard(dashboard.body), dashboardFrom))
     byDashboard.add(key);
 
-  // The data source each cube binds to, nearest first from its model's folder.
+  // The data source each cube binds to: the one of its name, which its
+  // model's folder or one above it keeps (T712, AC-273; R71, R72). Looked
+  // for up that path, so a workspace's copy, kept with the model, stands in.
   const sourcesByFolder = new Map<string, DataSource[]>();
   for (const each of sources) {
     const held = sourcesByFolder.get(each.folderId) ?? [];
