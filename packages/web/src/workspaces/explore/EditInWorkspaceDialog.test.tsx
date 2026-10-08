@@ -21,7 +21,26 @@ const offered = {
     { id: 'l2', title: 'B' },
   ],
   libraryCharts: [{ id: 'c1', title: 'Margin', path: ['Shared', 'Sales'], chartIds: ['c1'] }],
-  models: [],
+  // Each by its folder and path, as the export offer keys them (T763). Each
+  // folder path is the folders' titles below the shared root, as the offer
+  // gives it (`routes/export.ts`'s `pathOf`; `export.test.ts`): the root's is
+  // none.
+  models: [
+    {
+      id: 'emea::cubes/sales.yml',
+      path: 'cubes/sales.yml',
+      folderPath: ['Sales', 'EMEA'],
+      chartIds: ['l1'],
+      byDashboard: false,
+    },
+    {
+      id: 'root::cubes/orders.yml',
+      path: 'cubes/orders.yml',
+      folderPath: [],
+      chartIds: ['l2'],
+      byDashboard: false,
+    },
+  ],
   dataSources: [
     {
       id: 'ds1',
@@ -30,7 +49,7 @@ const offered = {
       authMethod: 'password',
       fields: {},
       description: null,
-      folderPath: ['Shared', 'Sales', 'EMEA'],
+      folderPath: ['Sales', 'EMEA'],
       boundBy: [],
       chartIds: ['l1'],
       byDashboard: false,
@@ -42,7 +61,7 @@ const offered = {
       authMethod: 'password',
       fields: {},
       description: null,
-      folderPath: ['Shared', 'Finance'],
+      folderPath: ['Finance'],
       boundBy: [],
       chartIds: ['l2'],
       byDashboard: false,
@@ -266,6 +285,40 @@ describe('the folder a dashboard’s copies go into (T523, AC-368; design 14, st
       `POST /api/workspace/copies {"kind":"dashboard","id":"d1","timeZone":"${ZONE}"}`,
       'POST /api/data-sources/ds1/copy {"into":"p1"}',
       'POST /api/data-sources/ds1/copy {"into":"p1"}',
+    ]);
+  });
+});
+
+/**
+ * T763 (AC-279, AC-368; design 04, state D): the dashboard's models are
+ * offered unticked beside its data sources, each with its folder's path.
+ * Only a ticked one is copied, after the dashboard, into the folder its copy
+ * made; one in a folder the user only reads becomes a use-only copy there,
+ * which the API decides (AC-283, R73).
+ */
+describe('the models a copied dashboard uses (T763, AC-279)', () => {
+  it('offers each unticked, with its folder', async () => {
+    shown();
+    const dialog = screen.getByRole('dialog', { name: 'Edit in my workspace' });
+    const also = within(await within(dialog).findByRole('group', { name: /Also copy/ }));
+    const sales = (await also.findByRole('checkbox', { name: /sales\.yml/ })) as HTMLInputElement;
+    const orders = also.getByRole('checkbox', { name: /orders\.yml/ }) as HTMLInputElement;
+    expect([sales.checked, orders.checked]).toEqual([false, false]);
+    expect(sales.closest('label')?.textContent).toContain('Model · Sales / EMEA');
+    expect(orders.closest('label')?.textContent).toContain('Model · Shared');
+  });
+
+  it('copies a ticked model after the dashboard, into the folder its copy made', async () => {
+    const { sent, onCopied } = shown();
+    const dialog = screen.getByRole('dialog', { name: 'Edit in my workspace' });
+    await userEvent.click(await within(dialog).findByRole('checkbox', { name: /orders\.yml/ }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Copy and edit' }));
+    await vi.waitFor(() => {
+      expect(onCopied).toHaveBeenCalledWith('copy1');
+    });
+    expect(sent).toEqual([
+      `POST /api/workspace/copies {"kind":"dashboard","id":"d1","timeZone":"${ZONE}"}`,
+      'POST /api/workspace/copies {"kind":"model","folderId":"root","path":"cubes/orders.yml","into":"p1"}',
     ]);
   });
 });

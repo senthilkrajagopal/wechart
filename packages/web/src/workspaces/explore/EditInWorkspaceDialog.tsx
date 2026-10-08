@@ -12,11 +12,19 @@ import { browserTimeZone, projectNameAt } from './projectFolder';
  * own charts and the library charts it shows — and its data sources offered
  * unticked, "only if you'll change them". Only what is ticked is copied;
  * anything else is used from its folder. The copy then opens to be edited.
- * (Models join the list once workspaces hold them, T347.)
+ * Its models are offered the same way (T763, AC-279): a ticked one is copied
+ * into the folder the dashboard's copy made, as a use-only copy where its
+ * folder is only the user's to read (AC-283, R73), which the API decides.
  */
 interface Offered {
   readonly ownCharts: readonly unknown[];
   readonly libraryCharts: readonly unknown[];
+  /** Each by `<folderId>::<path>`, as the export offer keys them (`routes/export.ts`). */
+  readonly models: readonly {
+    readonly id: string;
+    readonly path: string;
+    readonly folderPath: readonly string[];
+  }[];
   readonly dataSources: readonly {
     readonly id: string;
     readonly name: string;
@@ -36,7 +44,12 @@ function alwaysText(own: number, library: number): string {
   return parts.length === 1 ? parts[0]! : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)!}`;
 }
 
-const pathText = (path: readonly string[]) => path.slice(1).join(' / ') || 'Shared';
+/**
+ * A folder's path as the export offer gives it: the titles below the shared
+ * root, none for the root itself (`routes/export.ts`'s `pathOf`; T763, which
+ * found its first title dropped).
+ */
+const pathText = (path: readonly string[]) => path.join(' / ') || 'Shared';
 
 export function EditInWorkspaceDialog({
   dashboardId,
@@ -114,6 +127,9 @@ export function EditInWorkspaceDialog({
   const made = useRef<{ readonly id: string; readonly folderId?: string } | null>(null);
   /** The data sources copied already. */
   const sourcesCopied = useRef(new Set<string>());
+  /** The models ticked, and those copied already. */
+  const [modelsTicked, setModelsTicked] = useState<ReadonlySet<string>>(() => new Set());
+  const modelsCopied = useRef(new Set<string>());
   const copy = useMutation({
     mutationFn: async () => {
       // The dashboard first: its copy makes the folder the rest go into.
@@ -155,6 +171,26 @@ export function EditInWorkspaceDialog({
         }
         sourcesCopied.current.add(id);
       }
+      // Then the models, after the data sources they may bind to, into the same folder.
+      for (const key of modelsTicked) {
+        if (modelsCopied.current.has(key)) continue;
+        const at = key.indexOf('::');
+        const answer = await fetch('/api/workspace/copies', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            kind: 'model',
+            folderId: key.slice(0, at),
+            path: key.slice(at + 2),
+            ...(folderId === undefined ? { timeZone: browserTimeZone() } : { into: folderId }),
+          }),
+        });
+        if (!answer.ok) {
+          const said = (await answer.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(said?.error ?? `A model could not be copied (${String(answer.status)}).`);
+        }
+        modelsCopied.current.add(key);
+      }
       return copyId;
     },
     onSuccess: (copyId) => {
@@ -187,9 +223,33 @@ export function EditInWorkspaceDialog({
               Always copied:{' '}
               {alwaysText(offered.data.ownCharts.length, offered.data.libraryCharts.length)}.
             </p>
-            {offered.data.dataSources.length === 0 ? null : (
+            {offered.data.dataSources.length === 0 && offered.data.models.length === 0 ? null : (
               <fieldset className="edit-in-workspace__also">
                 <legend>Also copy, only if you’ll change them</legend>
+                {/* Its models first, as design 04's state D lists them (T763, AC-279). */}
+                {offered.data.models.map((model) => (
+                  <label key={model.id} className="edit-in-workspace__option">
+                    <input
+                      type="checkbox"
+                      checked={modelsTicked.has(model.id)}
+                      onChange={(event) => {
+                        const on = event.target.checked;
+                        setModelsTicked((was) => {
+                          const next = new Set(was);
+                          if (on) next.add(model.id);
+                          else next.delete(model.id);
+                          return next;
+                        });
+                      }}
+                    />
+                    <span className="edit-in-workspace__name">
+                      {model.path.slice(model.path.lastIndexOf('/') + 1)}
+                    </span>
+                    <span className="edit-in-workspace__where">
+                      Model · {pathText(model.folderPath)}
+                    </span>
+                  </label>
+                ))}
                 {offered.data.dataSources.map((source) => (
                   <label key={source.id} className="edit-in-workspace__option">
                     <input

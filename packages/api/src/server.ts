@@ -4050,9 +4050,17 @@ export function buildServer({
    */
   const copyModel = async (request: FastifyRequest, reply: FastifyReply, seen: Visibility) => {
     const body = request.body as
-      { folderId?: unknown; path?: unknown; timeZone?: unknown } | undefined;
+      { folderId?: unknown; path?: unknown; timeZone?: unknown; into?: unknown } | undefined;
     const folderId = body?.folderId;
     const path = body?.path;
+    /**
+     * Chosen with a dashboard in Edit in my workspace (T763, AC-279,
+     * AC-368): copied into the folder the dashboard's copy made, a folder of
+     * the user's own workspace, rather than a project folder of its own.
+     */
+    const into = body?.into;
+    if (into !== undefined && (typeof into !== 'string' || into === ''))
+      throw new BadRequest('Name the folder to copy it into as { into }.');
     if (typeof folderId !== 'string' || folderId === '' || typeof path !== 'string' || path === '')
       throw new BadRequest(
         'Name the model to copy by its folder and path: { kind, folderId, path }.',
@@ -4073,8 +4081,13 @@ export function buildServer({
     if (seen.rights.get(folderId)?.kinds !== 'all') return reply.code(404).send(missing);
     const file = (await modelStore.inFolders([folderId])).find((each) => each.path === path);
     if (file === undefined) return reply.code(404).send(missing);
+    if (
+      typeof into === 'string' &&
+      ((await workspaceRootOf(into)) !== own || (await docs.get?.('folder', into)) == null)
+    )
+      throw new BadRequest('A model is copied into a folder of your own workspace.');
     const timeZone = timeZoneOf(body?.timeZone);
-    if (timeZone === undefined) throw new BadRequest(NO_TIME_ZONE);
+    if (timeZone === undefined && into === undefined) throw new BadRequest(NO_TIME_ZONE);
     return inTurn(own, async () => {
       /**
        * One they may only read (T543, AC-283; the user's answer "Yes, use-only
@@ -4087,16 +4100,18 @@ export function buildServer({
       const held = await modelStore.inFolders(await workspaceFolderIds(own));
       const useOnly =
         !mayWrite(seen, folderId) && !held.some((each) => each.origin?.id === file.id);
-      const project = await projectFolderIn(own, userOf(request).key, timeZone, {
-        title: path.slice(path.lastIndexOf('/') + 1),
-        fromFolderId: folderId,
-      });
-      const answer = await wsModels.copy(
-        own,
-        file,
-        { id: project.id, make: () => docs.create(project) },
-        useOnly,
-      );
+      const target =
+        typeof into === 'string'
+          ? { id: into, make: async () => undefined }
+          : await (async () => {
+              if (timeZone === undefined) throw new BadRequest(NO_TIME_ZONE);
+              const project = await projectFolderIn(own, userOf(request).key, timeZone, {
+                title: path.slice(path.lastIndexOf('/') + 1),
+                fromFolderId: folderId,
+              });
+              return { id: project.id, make: () => docs.create(project) };
+            })();
+      const answer = await wsModels.copy(own, file, target, useOnly);
       return reply.code(answer.status).send(answer.body);
     });
   };

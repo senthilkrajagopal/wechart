@@ -425,3 +425,88 @@ describe('a model of a folder one may only read, copied to use (T543, T717, AC-2
     }
   });
 });
+
+/**
+ * T763 (AC-279, AC-368): a model chosen with a dashboard in Edit in my
+ * workspace is copied `into` the folder the dashboard's copy made, not a
+ * project folder of its own: an edit copy from a folder the user writes, a
+ * use-only copy (AC-283, R73) from one they only read. An `into` anywhere but
+ * their own workspace is refused, copying nothing.
+ */
+describe('a model copied into the folder a dashboard’s copy made (T763, AC-279, AC-368)', () => {
+  const WRITABLE = `${MARK}_sold`;
+  const READABLE = `${MARK}_stock`;
+  const pathOf = (name: string) => `cubes/${name}.yml`;
+  const copyInto = (folderId: string, path: string, into: string) =>
+    as('writer', {
+      method: 'POST',
+      url: '/api/workspace/copies',
+      payload: { kind: 'model', folderId, path, timeZone: TEST_TIME_ZONE, into },
+    });
+
+  it('puts each in that folder, an edit copy and a use-only copy, and refuses one outside their workspace', async () => {
+    await files().write([
+      { folderId: ids.sales, path: pathOf(WRITABLE), content: cube(WRITABLE) },
+      { folderId: ids.viewing, path: pathOf(READABLE), content: cube(READABLE) },
+    ]);
+    stub.holdItems(MODEL, [
+      { folderId: 'fviewing', name: REGIONS, kind: 'cube', yaml: cube(REGIONS) },
+      { folderId: 'fglimpsed', name: GLIMPSED, kind: 'cube', yaml: cube(GLIMPSED) },
+      { folderId: 'fsales', name: WRITABLE, kind: 'cube', yaml: cube(WRITABLE) },
+      { folderId: 'fviewing', name: READABLE, kind: 'cube', yaml: cube(READABLE) },
+    ]);
+    // The folder a dashboard's copy made, in the writer's workspace.
+    const project = await as('writer', {
+      method: 'POST',
+      url: '/api/documents',
+      payload: { kind: 'folder', title: `Project ${MARK}`, folderId: ids.workspace },
+    });
+    expect(project.statusCode, project.body).toBe(201);
+    const into = project.json<{ id: string }>().id;
+    // Removed after, with what is copied into it (below, and afterAll).
+    made.push({ kind: 'folder', id: into });
+    /** The folders at the top of their workspace, where a project folder is made. */
+    const workspaceFolders = async () =>
+      (
+        await getDb()
+          .selectFrom('documents')
+          .select('id')
+          .where('kind', '=', 'folder')
+          .where(({ eb, ref }) => eb(ref('body', '->>').key('folderId'), '=', ids.workspace))
+          .execute()
+      ).length;
+    const foldersBefore = await workspaceFolders();
+
+    // Into a shared folder: refused, nothing copied.
+    const outside = await copyInto(ids.sales, pathOf(WRITABLE), ids.ops);
+    expect(outside.statusCode, outside.body).toBe(400);
+    expect(await files().inFolders([ids.ops])).toEqual([]);
+
+    const edited = await copyInto(ids.sales, pathOf(WRITABLE), into);
+    expect(edited.statusCode, edited.body).toBe(201);
+    expect(edited.json()).toEqual({
+      kind: 'model',
+      created: true,
+      folderId: into,
+      path: pathOf(WRITABLE),
+    });
+    const used = await copyInto(ids.viewing, pathOf(READABLE), into);
+    expect(used.statusCode, used.body).toBe(201);
+    expect(used.json<{ folderId: string }>().folderId).toBe(into);
+
+    const copied = await files().inFolders([into]);
+    expect(
+      copied
+        .map((file) => [file.path, file.origin?.folderId, file.origin?.useOnly === true])
+        .sort(),
+    ).toEqual(
+      [
+        [pathOf(READABLE), ids.viewing, true],
+        [pathOf(WRITABLE), ids.sales, false],
+      ].sort(),
+    );
+    // No project folder of their own was made.
+    expect(await workspaceFolders()).toBe(foldersBefore);
+    await getDb().deleteFrom('model_files').where('folder_id', '=', into).execute();
+  });
+});
