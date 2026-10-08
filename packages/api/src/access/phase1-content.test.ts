@@ -192,8 +192,11 @@ describe('phase 1’s content with security first on, and no groups set (T328, A
   });
 
   /**
-   * What reaches up from Finance to the root's own items follows R12 (a grant
-   * shows its folder's ancestors): asked of the user, not asserted here.
+   * A grant reaching up counts as assigned (the user's 2026-09-27 answer,
+   * "if you have a recommendation go with it"; recorded 2026-10-07, the
+   * coordinator's call, overturnable): a grant on Finance shows its members
+   * the root's own phase-1 dashboards, view-only, as R12 shows a folder's
+   * ancestors, and still no library chart to a read-only member (AC-263).
    */
   it('shows Finance to a group’s members once a Super-Admin assigns it, and nothing of Operations', async () => {
     const set = await as('super', {
@@ -215,5 +218,21 @@ describe('phase 1’s content with security first on, and no groups set (T328, A
       expect(await folderIds(who), who).not.toContain(ids.finance);
       expect((await open(who, 'dashboard', ids.dashboard)).statusCode, who).toBe(404);
     }
+    // Reaching up: the root's own dashboard is the reader's to read now, and
+    // to find; its library chart, on no dashboard of theirs, is not.
+    expect((await open('reader', 'dashboard', ids.rootDashboard)).statusCode).toBe(200);
+    expect(await rootIds('reader')).toEqual(
+      expect.arrayContaining([ids.finance, ids.rootDashboard]),
+    );
+    expect(await rootIds('reader')).not.toContain(ids.rootChart);
+    expect((await open('reader', 'chart', ids.rootChart)).statusCode).toBe(404);
+    expect(await found('reader')).toContain(ids.rootDashboard);
+    // Nothing reaches the others.
+    for (const who of ['writer', 'nobody'])
+      for (const [kind, id] of [
+        ['dashboard', ids.rootDashboard],
+        ['chart', ids.rootChart],
+      ] as const)
+        expect((await open(who, kind, id)).statusCode, `${who} opens ${kind}`).toBe(404);
   });
 });

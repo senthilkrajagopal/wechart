@@ -5371,6 +5371,13 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - **For the user:** with sign-in on, phase-1 items in "My workspace" (`mine`) are hidden from everyone, Super-Admins included. T343's plan moves them to `ws:admin`, a workspace no signed-in user can own, because users' keys come from the provider. Where should they go?
       - Items with no folder at all, which only the development seed writes, are hidden from Super-Admins too.
     - AC-267 stays open until those are settled, and T334 and T335 land.
+  - **Verified 2026-10-08 (group 3): AC-267 ticked.** The questions above are settled:
+    - **A grant reaching up counts as assigned.** The user answered T328's question on 2026-09-27 with "if you have a recommendation go with it" (handoff, item 2). This is recorded as that recommendation, by the coordinator on 2026-10-07, overturnable, and written into AC-267. AC-264, AC-262 and AC-320 already count a grant reaching up from a descendant as access.
+    - **`mine`'s phase-1 items:** the user's "it is okay if phase 1 items aer not reachable.. this phase overrides phase 1 items" (2026-09-27, question 3).
+    - T334 and T335 have landed. Items with no folder at all are written only by the development seed and aren't in the shared tree, so AC-267 doesn't cover them.
+    - **The test:** `access/phase1-content.test.ts`'s third case now also shows the reach-up, and passed at once. Once Finance is granted to `sales-ro`, `reader` opens, lists and finds the root's own phase-1 dashboard, but not its library chart (AC-263). `writer` and `nobody` still get 404 on both. Passing under the API tests' lock, 3 of 3.
+    - **On the rendered page:** `e2e/security/explore-roles.spec.ts` "as nobody" ("has no root, no My workspace…") passes in Chrome on the security suite, whose API seeds phase-1 content (`WECHART_SEED`).
+    - **Not part of AC-267:** the user's "Yes" of 2026-09-27 (item 7) to listing phase 1's bookmarks for Super-Admins with sign-in on. It is AC-429, planned as T762.
 - [x] T329 (AC-291) Apply subfolders, permissions, renames, moves and deletes at once for read-write members
   - Files: `packages/api/src/server.ts` (`POST /api/documents` for folders, `PATCH`, `DELETE`), `packages/api/src/access/direct.test.ts`
   - Failing test: `direct.test.ts`: a read-write member creates a subfolder, sets its groups, renames, moves and deletes, each applied at once; a move needs read-write on both folders and answers 403 otherwise; a read-only member gets 403 for each (AC-291).
@@ -14116,6 +14123,30 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - **AC-423:** waits for T737's file-name clause. Every other clause is shown by `fixed-names.spec.ts` and T706's API tests.
       - **AC-329** was already ticked.
 
+## Phase 2 — group 3's verification passes (added 2026-10-08)
+
+These tasks are what group 3's check of the open criteria found missing. Each is test-first.
+
+- [ ] T760 (AC-277) Offer no create or edit action to a user who is read-only everywhere: the chart page's Add to dashboard and its Edit chart, and the tile menu's Copy › To dashboard…
+  - Files: `packages/web/src/shell/me.ts` (`hasWorkspace`, + test), `packages/web/src/workspaces/explore/LibraryChartPage.tsx`, `packages/web/src/dashboard/DashboardPage.tsx`, `packages/web/src/dashboard/DashboardView.tsx` (+ test), `e2e/security/deleting.spec.ts`
+  - Failing test:
+    - `deleting.spec.ts`, as `reader`, who is read-only everywhere: on the page of the chart their dashboard shows, and on the page of a chart they can't open, there is no Dashboard picker, no Add to dashboard and no Edit chart. On the dashboard, the chart tile's ⋯ › Copy offers no "To dashboard…" (AC-277).
+    - `me.test.ts`: a user has a workspace with sign-in off, as a Super-Admin, or as a read-write member somewhere, and not otherwise.
+    - `DashboardView.test.tsx`: without the copy, Copy › offers no "To dashboard…".
+  - Found by group 3: `LibraryChartPage` always renders "Used in"'s Dashboard picker and Add to dashboard, and its Edit chart link wherever the chart isn't a shared one read (a chart it can't open included). `DashboardView` offers Copy › To dashboard… unless previewing or in a review.
+
+- [ ] T761 (AC-291) A folder's rename needs read-write access to the folder holding it too
+  - Files: `docs/spec.md` (AC-291 amended), `packages/api/src/server.ts` (a folder's rename), `packages/api/src/access/direct.test.ts`, `packages/web/src/workspaces/explore/folderRole.ts` (+ test), `e2e/security/explore-roles.spec.ts`
+  - Failing test:
+    - `direct.test.ts`: a read-write member of /W who only views the root is refused a rename of /W (403), and its title is unchanged. A read-write member of the root, and a Super-Admin, rename it.
+    - `folderRole.test.ts` and `explore-roles.spec.ts`: such a member is offered no Rename beside /W's heading or on its row.
+  - The user's 2026-09-27 answer to item 6, "renaming a folder needs write on its parent": "Yes" (handoff). Neither AC-291 nor the code had it: a folder's rename checks only the folder itself.
+
+- [ ] T762 (AC-429) List phase 1's bookmarks to Super-Admins with sign-in on
+  - Files: `packages/api/src/server.ts` (the bookmarks listing), `packages/api/src/access/bookmarks.test.ts`, `e2e/security/bookmarks.spec.ts`
+  - Failing test: `access/bookmarks.test.ts`: with sign-in on, a bookmark whose owner is phase 1's single user (`admin`) is listed on its dashboard for `super`, and for neither `writer` nor `reader`, who may see the dashboard (AC-429).
+  - The user's 2026-09-27 answer to item 7: "Yes". Today a bookmark is listed for its owner alone, or for everyone once shared, so phase 1's are listed for no one.
+
 ## Phase 2 coverage: acceptance criterion → task
 
 | AC | Tasks | AC | Tasks | AC | Tasks |
@@ -14197,5 +14228,6 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-427 | T707 | AC-428 | T718, T732 | | |
 | AC-323, AC-422 (again, the overlay after a workspace folder's delete) | T739 | | | | |
 | AC-141, AC-329 (again, the naming work's regressions) | T738 | AC-132, AC-344 (again, T481 after T722) | T738 | AC-313, AC-356, AC-357 (again, races under one name per item) | T738 |
+| AC-277 (again, group 3) | T760 | AC-291 (again, a folder's rename) | T761 | AC-429 | T762 |
 
 AC-009, AC-136 and AC-137 are ticked from phase 1. ~~They stay ticked until slice 3 changes how publishing works; T426 and T432 then reword them and retest them (R28 Q9).~~ They keep their wording and their ticks while their tests pass: T447 re-runs them against xcube at slice 2's cut-over, and T426 and T432 again in slice 3 (2026-09-26, `[R29]`). AC-235 was unticked by R29 and is ticked again by T445 and T447.

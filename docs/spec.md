@@ -1044,7 +1044,7 @@ Traces to: §P2.2, §P2.4, `[P2 input]`, `[R11, R12, R17, R18, R19]`.
       Fails when: a Super-Admin is refused any folder or admin surface.
 - [x] AC-266 WHILE a user has only read-only access to a folder, THE SYSTEM SHALL let them read its dashboards (filter, mark, drill, export, bookmark) and change nothing in it.
       Fails when: a read-only user can create, change, move, delete or propose anything in the folder, or set its permissions.
-- [ ] AC-267 WHEN security is first enabled on a deployment holding phase-1 content, THE SYSTEM SHALL keep that content as the shared tree with no groups set, visible only to Super-Admins until groups are assigned (`[R17]`).
+- [x] AC-267 WHEN security is first enabled on a deployment holding phase-1 content, THE SYSTEM SHALL keep that content as the shared tree with no groups set, visible only to Super-Admins until groups are assigned (`[R17]`). A group granted on a folder counts as assigned to that folder's ancestors as well, which its members then see as AC-262 and AC-263 allow (the user's 2026-09-27 answer, "if you have a recommendation go with it", recorded 2026-10-07 as the coordinator's call, overturnable).
       Fails when: anyone but a Super-Admin sees phase-1 content before a group is assigned to it.
 - [x] AC-268 THE SYSTEM SHALL enforce folder access on every API route, not only in the UI. An automated suite SHALL ask every route as users in and out of each group, and nothing outside their permitted folders SHALL come back (S1, `[R13]`).
       Fails when: any route returns, lists, counts or finds by search an item the asking user may not see, or accepts a change they may not make.
@@ -1171,6 +1171,8 @@ Traces to: §P2.6 F, `[R12]`.
       Fails when: another user sees a bookmark its owner hasn't shared.
 - [x] AC-293 WHEN a user shares a bookmark, THE SYSTEM SHALL list it for everyone who may see the dashboard, labelled with who shared it, until its owner stops sharing or deletes it, or a Super-Admin deletes it. Only its owner SHALL be able to change or unshare it~~.~~, and only its owner or a Super-Admin SHALL be able to delete it (amended 2026-10-04, `[R61]`: an owner who can no longer open the dashboard can no longer remove a bookmark they shared, so a Super-Admin may).
       Fails when: someone who may see the dashboard doesn't see a shared bookmark, ~~or~~ someone other than its owner can change or unshare it, someone other than its owner or a Super-Admin can delete it, or a Super-Admin can't delete another user's shared bookmark (amended 2026-10-04, `[R61]`).
+- [ ] AC-429 WHILE sign-in is on, THE SYSTEM SHALL list to Super-Admins, on the dashboard each belongs to, the bookmarks saved before sign-in was turned on, whose owner is phase 1's single user, and SHALL list them to no one else (the user's 2026-09-27 answer to item 7, "Yes"; written 2026-10-07 by the coordinator).
+      Fails when: with sign-in on, a Super-Admin opening a dashboard doesn't see a bookmark phase 1 saved on it, or anyone who isn't a Super-Admin sees one.
 
 ## F32. Audit trail
 
@@ -1513,7 +1515,7 @@ The criteria phase 1 moved to its backlog on 2026-09-25 are back in this spec un
 | §P2.4 Slices 4–6 as built: the folder gate with allowed groups and the security flag; RS256 for every query token, key push and rotation, the service credential; overlays named in the token, with the workspace's data sources, what lands being what was previewed; eight drivers; connections landed and health within the hour; no change of type; binding at publish with no rebinding; the seeding Job; the TLS target; the key-id check; only copies replace; saves refused while xcube is unreachable; the image `ed08180c37` `[X4, X5, X6, XD, XOV, R31]` | AC-320, AC-263, AC-326, AC-333, AC-321, AC-323, AC-160, AC-159, AC-161, AC-273, AC-310, AC-312, AC-324, AC-280, AC-282, AC-272 |
 | §P2.6 E Workspaces: private, copy in, resolution, target folders `[P2 input, R12, R17, R18]` | AC-276 … AC-283 |
 | §P2.6 E Proposals, approval, rejection, history, direct actions `[R12, R17, R18]`; a submitted item frozen, a deleted target folder recreated at approval `[R52]`; the review's collapsible panels, drawn as design 05 `[R54]` | AC-284 … AC-291, AC-388 … AC-390 |
-| §P2.6 F Personal bookmarks, shareable `[R12]` | AC-292, AC-293 |
+| §P2.6 F Personal bookmarks, shareable `[R12]`; phase 1's bookmarks listed to Super-Admins (the user's 2026-09-27 answer, item 7) | AC-292, AC-293, AC-429 |
 | §P2.4 Groups in Cube's security context `[R14, AD 12]` | AC-008, AC-326 |
 | §P2.4 Audit trail and its retention `[R14, R18]` | AC-294, AC-295, AC-296 |
 | §P2.2 Jobs and Schedules for a folder's read-write members `[R18]` | AC-297 |
