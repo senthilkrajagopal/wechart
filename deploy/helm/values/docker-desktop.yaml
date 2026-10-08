@@ -30,7 +30,7 @@ cube:
   # fork's CI publishes it for amd64 and arm64, pinned here by digest
   # (docs/deploy.md). Cube and its refresh worker both run it, with the
   # image's own command.
-  image: ghcr.io/senthilkrajagopal/xcube:v1.7.45-2e611eae61@sha256:61c095d3763c401c5530a84ee8531335170fce991ad27adacbcd88f242307312
+  image: ghcr.io/senthilkrajagopal/xcube:v1.7.45-c2602ac72a@sha256:c7334a52800d8fe30faa7277e9b0ebcc68701b6f10ad394ad267e5e361871884
   dataSource:
     type: postgres
     host: superset-postgresql.superset.svc.cluster.local

@@ -364,31 +364,44 @@ async function main(): Promise<void> {
 
   // Sent at start, and reconciled every 60 s: a send lost between wechart's
   // commit and xcube is made then (T419, AC-333). Neither holds up the start.
+  /** The data sources xcube lacks or holds otherwise put, and those it holds and wechart hasn't dropped (T442). */
+  const connectionsLevel = async () => {
+    if (landing === undefined) return;
+    const report = await landing.reconcile(dataSources).catch((error: unknown) => {
+      app.log.warn({ err: error }, 'could not bring xcube’s connections up to wechart’s');
+      return undefined;
+    });
+    if (report === undefined) return;
+    const said = 'xcube’s connections brought up to wechart’s';
+    // A secret xcube can't open, or a connection it refused: said as a warning.
+    if (report.unopened.length + report.failed.length > 0) app.log.warn(report, said);
+    else if (report.put.length + report.removed.length > 0) app.log.info(report, said);
+  };
   const reconciling =
     sync === undefined
       ? undefined
       : setInterval(() => {
-          // The tree too, so a push lost with xcube away is made (T449's review).
-          void sync.pushTree('reconcile').then(() => sync.sync('reconcile'));
+          // The tree too, so a push lost with xcube away is made (T449's review);
+          // and caught up where xcube still holds folders wechart deleted (T765).
+          void sync
+            .pushTree('reconcile')
+            .then((pushed) =>
+              pushed.kind === 'in-use' ? sync.catchUp('reconcile', connectionsLevel) : undefined,
+            )
+            .then(() => sync.sync('reconcile'));
         }, 60_000);
   reconciling?.unref();
   // The tree first, then the items (T449): a model xcube holds as a file set
   // is moved to items mode by this first send. Between them, the data sources
   // xcube lacks or holds otherwise (T442, AC-330), so an item bound to one
-  // finds its connection there.
+  // finds its connection there. A tree refused for folders xcube still holds
+  // things in, deleted here while it missed it, is caught up in xcube's six
+  // steps instead (T765, AC-330; research `xcube-c2602ac72a.md`).
   void sync
     ?.pushTree('start')
-    .then(async () => {
-      if (landing === undefined) return;
-      const report = await landing.reconcile(dataSources).catch((error: unknown) => {
-        app.log.warn({ err: error }, 'could not bring xcube’s connections up to wechart’s');
-        return undefined;
-      });
-      if (report === undefined) return;
-      const said = 'xcube’s connections brought up to wechart’s';
-      // A secret xcube can't open, or a connection it refused: said as a warning.
-      if (report.unopened.length + report.failed.length > 0) app.log.warn(report, said);
-      else if (report.put.length + report.removed.length > 0) app.log.info(report, said);
+    .then(async (pushed) => {
+      if (pushed.kind === 'in-use') await sync.catchUp('start', connectionsLevel);
+      else await connectionsLevel();
     })
     .then(() => sync.sync('start'));
 

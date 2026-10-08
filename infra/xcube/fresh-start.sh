@@ -45,9 +45,10 @@
 set -euo pipefail
 
 # T740: `2e611eae61`, R71's image with R38's rollup names kept; schema 14 still
-# (docs/research/xcube-2e611eae61.md).
-R71_IMAGE='ghcr.io/senthilkrajagopal/xcube:v1.7.45-2e611eae61@sha256:61c095d3763c401c5530a84ee8531335170fce991ad27adacbcd88f242307312'
-REVISION='2e611eae61551bf4700eb11c1a5cbb52fd2962e4'
+# (docs/research/xcube-2e611eae61.md). T765: `c2602ac72a`, the same with its
+# folder tree to read, for a start's catch-up (docs/research/xcube-c2602ac72a.md).
+R71_IMAGE='ghcr.io/senthilkrajagopal/xcube:v1.7.45-c2602ac72a@sha256:c7334a52800d8fe30faa7277e9b0ebcc68701b6f10ad394ad267e5e361871884'
+REVISION='c2602ac72a3fdc4fe9cb7c87fc1403af78c6b8dc'
 
 if [[ "${1:-}" != '--yes' ]]; then
   sed -n '2,41p' "$0" | sed 's/^# \{0,1\}//'

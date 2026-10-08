@@ -14731,7 +14731,7 @@ These tasks are what group 3's check of the open criteria found missing. Each is
     - no module recompiled by a permission change: xcube's own test, `security.test.ts` "a permission change applies at once on every compiled module, with no compile", passing at the pinned `2e611eae61` (`docs/research/xcube-2e611eae61.md`, "AC-320's gate test"; the coordinator's call that xcube's test is this clause's evidence, as for AC-321).
   - **AC-320's other open clause,** "a permission change recompiles a module", has no observable a wechart test can read. Compose's xcube (`2e611eae61`) answers `/v1/meta` and `/v1/meta?extended=true` with `cubes` alone: Cube adds a `compilerId` only on its SQL API's path (`cubejs-api-gateway` `gateway.ts`, `meta({ includeCompilerId })`, read in the fork). Its evidence is xcube's own test (`xcube-slice-4.md`, [t-sec] L300-315), as AC-321's is; put to the coordinator.
 
-- [ ] T765 (AC-330) Show an API's start bringing xcube's copy of a model up to date, folders, groups and data sources included, and Cube answering with every API process of it stopped
+- [x] T765 (AC-330) Show an API's start bringing xcube's copy of a model up to date, folders, groups and data sources included, and Cube answering with every API process of it stopped
   - Files: `e2e/security/xcube-restart.spec.ts` (new)
   - Failing test: `xcube-restart.spec.ts`, against compose's xcube. `super` publishes a folder granted to `sales-ro`, a data source of the folder's own on the sample server's `template1`, and a cube on it. A second API process then starts on the suite's database under the model `e2e-security-restart`, which xcube lacks on its first run and holds behind on every later one. Cube answers the cube under that model from `template1` to a token of `sales-ro`, and refuses one of `managers` (403). With that process stopped, it still answers (AC-330).
   - Q8, the coordinator's answer (2) of 2026-10-07: one fixed model id. xcube has no route to empty a model, and the shared schema's rows are no test's to delete.
@@ -14742,6 +14742,19 @@ These tasks are what group 3's check of the open criteria found missing. Each is
     - the items snapshot is refused ("It uses the data source …, which the model doesn't hold");
     - the 60 s reconcile repeats it, so the cube is never served.
     That is AC-330's failing state. The coordinator's call (B), 2026-10-08: xcube is asked for a read of its folder tree with parents, or an atomic snapshot carrying tree, connections and items. This task is built on that image. Until then the spec stays out of the suite, uncommitted, so the suite stays green. AC-330 stays open.
+  - **xcube built it at `c2602ac72a`** (`docs/research/xcube-c2602ac72a.md`): `GET …/models/{model}/folders` reads its tree, each folder with its parent, groups, item count and data sources. The coordinator's call, 2026-10-08: pin `c2602ac72a` everywhere in place of `2e611eae61`, and build the catch-up test-first.
+  - Files added: `docker-compose.yml`, `deploy/helm/wechart/values.yaml`, `deploy/helm/values/docker-desktop.yaml`, `infra/xcube/fresh-start.sh`, `docs/deploy.md`, `packages/api/src/deploy/cube-image.test.ts` (the pin); `packages/api/src/xcube/client.ts`, `snapshot.ts`, `fake.ts`, `snapshot.test.ts`, `packages/api/src/main.ts` (the catch-up).
+  - **Done 2026-10-08.** Red first: `snapshot.test.ts`'s "keeps the folders xcube holds things in until their items are gone, then puts wechart's tree" failed against the fake, which now refuses as xcube does (a tree dropping a folder that holds items or a connection: `409 folder_in_use`; an items snapshot leaving one in a dropped folder).
+    - **The catch-up** (`snapshot.ts`, `catchUp`). When the start's or the 60 s reconcile's tree is refused with `folder_in_use`, the API:
+      1. reads xcube's tree;
+      2. puts wechart's tree with every folder xcube still holds things in, and that folder's parents;
+      3. lands the connections;
+      4. sends the items snapshot on step 2's tree;
+      5. lands the connections again, which drops the unused ones;
+      6. puts wechart's own tree.
+      Any refusal stops it, and the next reconcile tries again.
+    - **Tests:** `src/xcube` 205 of 205, and the full API suite under the lock, 1,843 of 1,843. `e2e/security/xcube-restart.spec.ts` (Chrome) ran 4 times, its first run on a model xcube lacked and the other 3 on one held behind. It also checks that the restarted model's tree in xcube lists exactly the folders the suite's own model lists, so no folder deleted in wechart is left.
+  - **AC-330 ticked.**
 
 - [x] T762 (AC-429) List phase 1's bookmarks to Super-Admins with sign-in on
   - Files: `packages/api/src/server.ts` (the bookmarks listing), `packages/api/src/access/bookmarks.test.ts`, `packages/web/src/dashboard/bookmarks/Bookmarks.tsx` (+ test), `e2e/security/bookmarks.spec.ts`

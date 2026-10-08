@@ -72,9 +72,14 @@ import { describe, expect, it } from 'vitest';
  * holding only names built in the source database to Postgres's 63, so the
  * move to items rebuilds no root rollup; schema 14 still, no reset
  * (research xcube-2e611eae61.md).
+ *
+ * T765, AC-330: `c2602ac72a` answers its folder tree (`GET …/folders`, with
+ * each folder's parent and what it holds), so a start catches up a folder
+ * deleted while xcube missed it; schema 14 still, no reset (research
+ * xcube-c2602ac72a.md).
  */
 const IMAGE =
-  'ghcr.io/senthilkrajagopal/xcube:v1.7.45-2e611eae61@sha256:61c095d3763c401c5530a84ee8531335170fce991ad27adacbcd88f242307312';
+  'ghcr.io/senthilkrajagopal/xcube:v1.7.45-c2602ac72a@sha256:c7334a52800d8fe30faa7277e9b0ebcc68701b6f10ad394ad267e5e361871884';
 /** Slice 2's image, built locally: only the way back names it. */
 const SLICE_2_IMAGE = 'xcube:v1.7.45-83cb9f0888';
 
@@ -104,7 +109,7 @@ describe('docs/deploy.md pulls the fork’s published image by digest (T449, AC-
 
   it('names the image the release runs, and slice 2’s only for the way back, with how to build it', () => {
     // No other xcube tag, and no build of the package under its old name.
-    expect(deploy).not.toMatch(/xcube:v1\.7\.45-(?!2e611eae61@|83cb9f0888|feat-xcube|\$|<)/);
+    expect(deploy).not.toMatch(/xcube:v1\.7\.45-(?!c2602ac72a@|83cb9f0888|feat-xcube|\$|<)/);
     expect(deploy).not.toContain('cube:v1.7.45-introspection-');
     // Slice 2's image was built locally and never published: the way back says how.
     const back = deploy.slice(deploy.indexOf('### Items mode, and the way back'));

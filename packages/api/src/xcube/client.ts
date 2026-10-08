@@ -65,6 +65,15 @@ export interface CheckAnswer {
   }[];
 }
 
+/** A folder as xcube holds it, with what it holds (T765; `GET …/folders`). */
+export interface HeldFolder {
+  readonly id: string;
+  readonly parentId: string | null;
+  readonly allowedGroups: readonly string[];
+  readonly items: number;
+  readonly dataSources: number;
+}
+
 export interface XcubeAdmin {
   revision(): Promise<XcubeHead>;
   /** Checks the files, and runs each probe's SQL planning against them, storing nothing. */
@@ -90,6 +99,12 @@ export interface XcubeAdmin {
    * given (T436, AC-320; research `xcube-slice-4.md`, "PUT …/folders").
    */
   folders(tree: readonly TreeFolder[], security?: boolean): Promise<{ readonly hash: string }>;
+  /**
+   * The tree as xcube holds it (T765, AC-330; research `xcube-c2602ac72a.md`,
+   * "GET …/folders"): each folder's parent, allowed groups, and how many
+   * items and data sources it holds. None for a model xcube doesn't know.
+   */
+  heldFolders(): Promise<readonly HeldFolder[]>;
   /**
    * A changeset checked, storing nothing (T426; research 3a, "POST
    * …/changesets?dryRun=true"): its errors on items, and each probe's answer.
@@ -419,6 +434,30 @@ export function xcubeAdmin({
       });
       if (status !== 200) throw failed(status, answer);
       return { hash: String(answer['hash'] ?? '') };
+    },
+
+    async heldFolders() {
+      const { status, answer } = await call('GET', '/folders');
+      if (status === 404 && answer['code'] === 'unknown_model') return [];
+      if (status !== 200) throw failed(status, answer);
+      const folders = Array.isArray(answer['folders']) ? (answer['folders'] as unknown[]) : [];
+      return folders.flatMap((each): HeldFolder[] => {
+        const folder = each as Record<string, unknown> | null;
+        if (folder === null || typeof folder['id'] !== 'string') return [];
+        return [
+          {
+            id: folder['id'],
+            parentId: typeof folder['parentId'] === 'string' ? folder['parentId'] : null,
+            allowedGroups: Array.isArray(folder['allowedGroups'])
+              ? folder['allowedGroups'].filter(
+                  (group): group is string => typeof group === 'string',
+                )
+              : [],
+            items: typeof folder['items'] === 'number' ? folder['items'] : 0,
+            dataSources: typeof folder['dataSources'] === 'number' ? folder['dataSources'] : 0,
+          },
+        ];
+      });
     },
 
     async check({ files, securityContext, probes }) {

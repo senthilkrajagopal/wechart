@@ -1028,6 +1028,52 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
       });
     }
 
+    /**
+     * The folders a new tree drops that still hold something (research
+     * `xcube-c2602ac72a.md`): items of the head, or, with `dataSourcesOnly`,
+     * data sources alone, as an items snapshot that replaces the items
+     * checks them.
+     */
+    const inUseDropped = (folders: readonly TreeFolder[], dataSourcesOnly = false) => {
+      const kept = new Set(folders.map((folder) => folder.id));
+      const holding = new Set([
+        ...(dataSourcesOnly ? [] : (head?.items ?? []).map((item) => item.folderId)),
+        ...(connectionsOf.get(model) ?? []).map((each) => each.folderId),
+      ]);
+      return (models.get(model)?.tree ?? [])
+        .map((folder) => folder.id)
+        .filter((id) => !kept.has(id) && holding.has(id))
+        .sort();
+    };
+    const folderInUse = (folders: readonly string[]) =>
+      answer(409, {
+        error: `Folders still holding items can't be removed: ${folders.join(', ')}`,
+        code: 'folder_in_use',
+        folders,
+      });
+
+    /** The tree as xcube holds it (research `xcube-c2602ac72a.md`, "GET …/folders"). */
+    if (route[2] === 'folders' && method === 'GET') {
+      const known = models.get(model);
+      if (known?.tree === undefined)
+        return answer(404, { error: `Unknown model "${model}"`, code: 'unknown_model' });
+      const items = known.mode === 'items' ? (head?.items ?? []) : [];
+      const connections = connectionsOf.get(model) ?? [];
+      return answer(200, {
+        model,
+        revision: head?.revision ?? null,
+        security: known.security ?? false,
+        hash: treeHashOf(known.tree),
+        folders: known.tree.map((folder) => ({
+          id: folder.id,
+          parentId: folder.parentId,
+          allowedGroups: folder.allowedGroups ?? [],
+          items: items.filter((item) => item.folderId === folder.id).length,
+          dataSources: connections.filter((each) => each.folderId === folder.id).length,
+        })),
+      });
+    }
+
     /** The tree (research 3a, "PUT …/folders"): one root, `froot`; it creates the model. */
     if (route[2] === 'folders' && method === 'PUT') {
       const { folders, security } = body as {
@@ -1050,6 +1096,9 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
           instances: ['xcube-v3-old'],
         });
       }
+      // A folder still holding items or a data source can't go (research 3a, `409 folder_in_use`).
+      const dropped = inUseDropped(folders);
+      if (dropped.length > 0) return folderInUse(dropped);
       // What the new tree strands that the held one didn't (T715; research
       // `xcube-256d632371.md`, "On `PUT …/folders`"): cubes from their data
       // sources, items from what they refer to, by name, never a folder.
@@ -1149,6 +1198,10 @@ export function fakeXcube({ tokens = [FAKE_ADMIN_TOKEN] }: { tokens?: readonly s
             code: 'invalid_folders',
             problems: ['The tree has no root folder froot'],
           });
+        // Its tree may not drop a folder holding a data source (research
+        // `xcube-c2602ac72a.md`, "The snapshot's new refusal"): its items it replaces.
+        const droppedSources = inUseDropped(folders, true);
+        if (droppedSources.length > 0) return folderInUse(droppedSources);
         const held = modelOf(model);
         // Another replica's snapshot lands between this one's read and its send.
         if (conflicts > 0) {

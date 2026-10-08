@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 import type { ModelFile } from '../server';
 import type { Changeset } from './changesets';
-import { XcubeError, type XcubeAdmin } from './client';
+import { XcubeError, type HeldFolder, type XcubeAdmin } from './client';
 import { treeHashOf, type TreeFolder } from './folders';
 import { itemsHashOf, itemsOf } from './items';
 import type { PublicationStore } from './publications';
@@ -67,12 +67,42 @@ export type TreeResult =
       readonly kind: 'refused';
       readonly cubes: readonly string[];
       readonly items: readonly string[];
-    };
+    }
+  /**
+   * The tree drops folders xcube still holds items or data sources in
+   * (`409 folder_in_use`): ones wechart deleted while xcube missed it. A
+   * catch-up (`catchUp`) brings xcube level (T765, AC-330).
+   */
+  | { readonly kind: 'in-use'; readonly folders: readonly string[] };
 
 /** A folder's move not yet written: `folder` held by `to` (T715). */
 export interface FolderMove {
   readonly folder: string;
   readonly to: string;
+}
+
+/**
+ * wechart's tree with each folder xcube still holds items or data sources in
+ * (T765, AC-330; research `xcube-c2602ac72a.md`, step 2): kept under its
+ * parent there, and that parent too where wechart has it no more, up to a
+ * folder of wechart's. Where a folder is in both, wechart's parent stands.
+ */
+export function keptTree(
+  ours: readonly TreeFolder[],
+  held: readonly HeldFolder[],
+): readonly TreeFolder[] {
+  const tree = new Map(ours.map((folder) => [folder.id, folder]));
+  const byId = new Map(held.map((folder) => [folder.id, folder]));
+  for (const folder of held) {
+    if (folder.items === 0 && folder.dataSources === 0) continue;
+    for (
+      let at: HeldFolder | undefined = folder;
+      at !== undefined && !tree.has(at.id);
+      at = at.parentId === null ? undefined : byId.get(at.parentId)
+    )
+      tree.set(at.id, { id: at.id, parentId: at.parentId, allowedGroups: at.allowedGroups });
+  }
+  return [...tree.values()];
 }
 
 /** A tree whose hash xcube answers wrong is put this many more times. */
@@ -129,7 +159,11 @@ export function modelSync({
   let running: Promise<SyncResult> | undefined;
   let waiting: Promise<SyncResult> | undefined;
 
-  const once = async (reason: SyncReason): Promise<SyncResult> => {
+  /** A send; with `heldTree`, the items go with that tree, a catch-up's (T765). */
+  const once = async (
+    reason: SyncReason,
+    heldTree?: readonly TreeFolder[],
+  ): Promise<SyncResult> => {
     try {
       for (let attempt = 0; attempt <= RETRIES; attempt += 1) {
         // xcube's head first, then the files: a base older than the files is
@@ -164,7 +198,7 @@ export function modelSync({
 
         const answer = await admin.itemsSnapshot({
           baseRevision: head.current?.revision ?? null,
-          folders: await tree(),
+          folders: heldTree ?? (await tree()),
           items,
           source: { reason },
         });
@@ -259,6 +293,24 @@ export function modelSync({
         try {
           ({ hash } = await admin.folders(folders, turningOn));
         } catch (error) {
+          // Folders xcube still holds things in, deleted here while it missed
+          // it: for a catch-up (T765, AC-330).
+          if (
+            error instanceof XcubeError &&
+            error.status === 409 &&
+            error.code === 'folder_in_use' &&
+            moving === undefined
+          ) {
+            const held = error.details?.['folders'];
+            const folders = Array.isArray(held)
+              ? held.filter((each): each is string => typeof each === 'string')
+              : [];
+            log.warn(
+              { model, reason, folders },
+              'xcube still holds items or data sources in folders wechart has deleted: catching up',
+            );
+            return { kind: 'in-use', folders };
+          }
           // A tree that would strand what is published: refused, said by name (T715).
           if (
             error instanceof XcubeError &&
@@ -372,6 +424,49 @@ export function modelSync({
      * merged with another. `sent` holds it in xcube already; `refused` leaves
      * xcube's tree as it was.
      */
+    /**
+     * Catching xcube up to wechart where its tree was refused `in-use` (T765,
+     * AC-330): folders wechart deleted while xcube missed it still hold
+     * items or data sources there. In xcube's six steps, each valid alone, so
+     * one cut short starts over at the next push (research
+     * `xcube-c2602ac72a.md`, "The catch-up, in order"):
+     * 1. xcube's tree read;
+     * 2. wechart's tree put with each folder xcube holds anything in, under
+     *    its parent there, its chain kept up to a folder of wechart's;
+     * 3. the data sources put (`connections`);
+     * 4. the items sent with step 2's tree, so the old folders' items go;
+     * 5. the data sources again, the old ones now unused and dropped;
+     * 6. wechart's own tree put, the old folders going.
+     * After whatever tree push is under way.
+     */
+    catchUp(reason: SyncReason, connections: () => Promise<void>): Promise<TreeResult> {
+      const steps = async (): Promise<TreeResult> => {
+        try {
+          const held = await admin.heldFolders();
+          const ours = await tree();
+          const kept = keptTree(ours, held);
+          await admin.folders(kept, security);
+          await connections();
+          const sent = await once(reason, kept);
+          if (sent.kind === 'refused' || sent.kind === 'failed') {
+            log.warn({ model, reason, sent: sent.kind }, 'xcube’s catch-up stopped at its items');
+            return { kind: 'failed' };
+          }
+          await connections();
+        } catch (error) {
+          log.warn({ model, reason, err: error }, 'could not catch xcube up to wechart');
+          return { kind: 'failed' };
+        }
+        return putTree(reason);
+      };
+      const prior = treeRunning ?? Promise.resolve();
+      const run = prior.then(steps, steps).finally(() => {
+        if (treeRunning === run) treeRunning = undefined;
+      });
+      treeRunning = run;
+      return run;
+    },
+
     checkMove(moving: FolderMove): Promise<TreeResult> {
       const prior = treeRunning ?? Promise.resolve();
       const run = prior

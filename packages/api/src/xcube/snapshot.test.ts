@@ -639,3 +639,89 @@ describe('the folder tree (T449, AC-333)', () => {
     expect(await sync.sync('reconcile')).toEqual({ kind: 'same', revision: 1 });
   });
 });
+
+/**
+ * T765 (AC-330): WHEN wechart's API starts, THE SYSTEM SHALL bring xcube's
+ * copy up to what wechart has published, a copy behind it included. A folder
+ * deleted in wechart while xcube missed it, still holding a cube and its data
+ * source there, refuses wechart's tree (`409 folder_in_use`). The start then
+ * catches up in xcube's six steps (research `xcube-c2602ac72a.md`): its tree
+ * read; wechart's tree with the folders xcube still holds things in, under
+ * their parents there; the data sources; the items with that tree; the data
+ * sources again, the old ones now unused; and wechart's own tree.
+ */
+describe('catching up a folder deleted while xcube missed it (T765, AC-330)', () => {
+  const OLD = 'cubes:\n  - name: old_sales\n    sql_table: public.old\n';
+  const NEW = 'cubes:\n  - name: new_sales\n    sql_table: public.new\n';
+
+  it('keeps the folders xcube holds things in until their items are gone, then puts wechart’s tree', async () => {
+    const stub = fakeXcube();
+    let files: readonly ModelFile[] = [
+      { path: 'cubes/old_sales.yml', content: OLD, folderId: 'w-old' },
+    ];
+    let tree: readonly TreeFolder[] = [
+      { id: 'froot', parentId: null },
+      { id: 'fold', parentId: 'froot' },
+    ];
+    let folderIds = new Map([
+      ['root', 'froot'],
+      ['w-old', 'fold'],
+    ]);
+    const sync = modelSync({
+      model: 'dev',
+      admin: xcubeAdmin({
+        cubeApiUrl: CUBE_API_URL,
+        model: 'dev',
+        token: FAKE_ADMIN_TOKEN,
+        fetch: stub.fetch,
+      }),
+      files: async () => files,
+      tree: async () => tree,
+      folderIds: async () => folderIds,
+      publications: memoryPublications(),
+      log: { warn: vi.fn(), info: vi.fn() },
+    });
+    // xcube's copy as an earlier start left it: /old's cube on /old's own data source.
+    expect(await sync.pushTree('start')).toEqual({ kind: 'sent', hash: treeHashOf(tree) });
+    expect((await sync.sync('start')).kind).toBe('sent');
+    stub.holdConnections('dev', [{ folderId: 'fold', name: 'old_wh' }]);
+
+    // wechart since: /old deleted, /new holding new_sales on /new's own data source.
+    files = [{ path: 'cubes/new_sales.yml', content: NEW, folderId: 'w-new' }];
+    tree = [
+      { id: 'froot', parentId: null },
+      { id: 'fnew', parentId: 'froot' },
+    ];
+    folderIds = new Map([
+      ['root', 'froot'],
+      ['w-new', 'fnew'],
+    ]);
+    expect(await sync.pushTree('start')).toEqual({ kind: 'in-use', folders: ['fold'] });
+
+    // The data sources, as wechart's landing puts them and drops those nothing uses.
+    const treesAtConnections: string[][] = [];
+    const connections = async () => {
+      treesAtConnections.push((stub.tree('dev') ?? []).map((folder) => folder.id).sort());
+      const used = new Set((stub.head('dev')?.items ?? []).map((item) => item.folderId));
+      stub.holdConnections('dev', [
+        ...(used.has('fold') ? [{ folderId: 'fold', name: 'old_wh' }] : []),
+        { folderId: 'fnew', name: 'new_wh' },
+      ]);
+    };
+    expect(await sync.catchUp('start', connections)).toEqual({
+      kind: 'sent',
+      hash: treeHashOf(tree),
+    });
+
+    // Steps 3 and 5: the data sources put with /old still kept, then again once its items had gone.
+    expect(treesAtConnections).toEqual([
+      ['fnew', 'fold', 'froot'],
+      ['fnew', 'fold', 'froot'],
+    ]);
+    // Step 6: wechart's tree, and its items alone.
+    expect(stub.tree('dev')).toEqual(tree);
+    expect(stub.head('dev')?.items.map(({ folderId, name }) => ({ folderId, name }))).toEqual([
+      { folderId: 'fnew', name: 'new_sales' },
+    ]);
+  });
+});
