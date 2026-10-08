@@ -13474,14 +13474,41 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 
 ### The UI
 
-- [ ] T722 (AC-423, AC-291) Offer no Rename for a landed cube, view or data source; its title stays editable, and a draft's name too
+- [x] T722 (AC-423, AC-291) Offer no Rename for a landed cube, view or data source; its title stays editable, and a draft's name too
   - Files: `packages/web/src/workspaces/data-sources/{SourceSettings,SourceEditor}.tsx` (+ tests), `packages/web/src/workspaces/model/form/ObjectForm.tsx` and `ModelFilePage.tsx` (+ tests), `e2e/security/fixed-names.spec.ts` (new)
   - Failing test:
     - `SourceEditor.test.tsx`: a landed data source's name is read-only, and a draft's is editable (AC-423).
     - `ObjectForm.test.tsx`: in an edit copy, a cube's or view's name is read-only and its title editable. In a draft, both are editable (AC-423).
     - `fixed-names.spec.ts`: no Rename is offered for a landed data source or for a landed cube's name. A title changed in an edit copy lands through a proposal (AC-423, AC-291).
-  - *Before this is built, put to the user:* whether Explore's Rename on a model file (`FolderContents.tsx`) stays. See the report.
+  - *Before this is built, put to the user:* whether Explore's Rename on a model file (`FolderContents.tsx`) stays. See the report. *(Settled by R73: a landed model file offers no Rename. Explore's model rows already offered none: Open, Propose… and Delete… only, T334.)*
   - Depends on: T706
+  - **Done 2026-10-08.**
+    - **Cubes and views** (`form/ObjectForm.tsx`, `form/CubeForm.tsx`, `ModelFilePage.tsx`, `workspaceModels.ts`):
+      - `CubeForm` takes `nameFixed`, and `ObjectForm` a `fixed` key. With it, a cube's or view's General shows its name read-only with its help: "“x” has landed, so its name is fixed. Its title can still change." The title stays editable.
+      - The model page fixes the names of the files that have landed: a file in its shared folder, and a saved copy of one in My workspace, edit or use-only (`copyOf`, which replaces `isUseOnlyCopy`). A draft of the user's own keeps its names editable.
+    - **Data sources** (`SourceEditor.tsx`):
+      - A landed one is read on its page, never edited there: its General shows its name as text, and an edit copy keeps its name read-only. This was already so.
+      - `EditableGeneral` now also holds a landed one's name read-only, saying "“x” has landed, so its name is fixed. Its description can still change.", should it ever be shown editable.
+      - The AC-275 warning of published cubes still naming a renamed data source goes with the rename, and so does its `listed` prop.
+    - **Explore** already offered no Rename on a data source or a model file. Its comment now says so.
+    - **Tests:**
+      - `CubeForm.test.tsx` (where the form's tests live; there is no `ObjectForm.test.tsx`): 3 cases, a cube's and a view's red before.
+      - `SourceEditor.test.tsx`:
+        - a landed one read-only, red before;
+        - a draft's editable;
+        - the AC-275 rename case retired, its premise gone.
+      - `workspaceModels.test.ts`: `copyOf`, an edit copy, a use-only copy and a draft told apart. Written beside the change, not before it.
+      - `e2e/security/fixed-names.spec.ts` (new), in Chrome on the R71 image, 3/3. In the steps below, `super` makes the folder and lands the data source and cube; everything after is done as `writer`.
+        - A landed data source's General shows its name with no field.
+        - Its edit copy holds the name read-only with the copy's note.
+        - Explore offers no Rename on the data source or the model file.
+        - An edit copy of the cube shows the name read-only and says why.
+        - Its title, changed there, saved, proposed and approved, lands with the name as it was.
+      - web 2626/2626.
+    - **Not ticked:**
+      - **AC-423:** its R73 clause, "a draft's file name follows its cube's name until it lands", isn't built here or in any task I hold. That is a question.
+      - **AC-291:** it holds more than this task shows.
+    - **Test-integrity hook:** it flagged the e2e's two URL assertions being merged into one stronger one (a negative lookahead on the folder), in a file never committed. That was a false positive.
 
 - [x] T723 (AC-424, AC-426, AC-422) Say a refused name in the UI as in use, never where, and refuse a name outside the grammar before it is sent
   - Files: `packages/web/src/workspaces/model/{publish.ts,ModelFilePage.tsx}`, `packages/web/src/workspaces/data-sources/{NewSourceWizard,SourceEditor}.tsx`, `packages/web/src/workspaces/explore/{NewItemDialog,ProposeDialog}.tsx`, `packages/web/src/workspaces/reviews/Refusal.tsx`, each with its test

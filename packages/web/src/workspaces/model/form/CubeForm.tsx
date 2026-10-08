@@ -44,6 +44,7 @@ export function CubeForm({
   value,
   onChange,
   readOnly = false,
+  nameFixed = false,
   rollupProblems = [],
   initialTab,
   initialMember,
@@ -73,6 +74,11 @@ export function CubeForm({
    * the tabs and members can still be browsed.
    */
   readOnly?: boolean;
+  /**
+   * Its name has landed, so it is fixed here: shown read-only, saying why,
+   * its title still editable (T722, AC-423). A draft's stays editable.
+   */
+  nameFixed?: boolean;
   /** This cube's rollups a publish was refused for (T207, AC-189), shown on their rows. */
   rollupProblems?: readonly CubeProblem[];
   /** The member open in a list tab, by its list and place, or none (T482, design 03 note 9). */
@@ -195,6 +201,14 @@ export function CubeForm({
                 onChange={onChange}
                 only={(field) => !listed.has(field.key)}
                 legacyInAdvanced
+                fixed={
+                  nameFixed
+                    ? {
+                        key: 'name',
+                        note: `“${name}” has landed, so its name is fixed. Its title can still change.`,
+                      }
+                    : undefined
+                }
               />
             ) : (
               <MemberList

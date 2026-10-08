@@ -505,7 +505,7 @@ function Settings({ source }: { source: StoredSource }) {
         >
           {tab === 'general' ? (
             <>
-              {editable ? <EditableGeneral source={source} edit={edit} listed={listed} /> : null}
+              {editable ? <EditableGeneral source={source} edit={edit} /> : null}
               <dl className="source-settings__rows">
                 {editable ? null : (
                   <>

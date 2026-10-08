@@ -67,8 +67,8 @@ import {
   copyModelToWorkspace,
   declaredNameOf,
   draftTargetOf,
+  copyOf,
   filesBeside,
-  isUseOnlyCopy,
   keepDraftTarget,
   namedFileOf,
   savedTargetOf,
@@ -735,13 +735,23 @@ function FileEditor({
     enabled: where.inWorkspace,
     retry: false,
   });
-  /** A use-only copy, saved in My workspace: its page offers "Request a change" (T717, AC-283). */
-  const useOnly = useQuery({
-    queryKey: ['model-use-only', where.folderId, path],
-    queryFn: () => isUseOnlyCopy(where.folderId, path),
+  /**
+   * A copy of a landed file, saved in My workspace: a use-only one's page
+   * offers "Request a change" (T717, AC-283); either keeps its original's
+   * name (T722, AC-423).
+   */
+  const copy = useQuery({
+    queryKey: ['model-copy-of', where.folderId, path],
+    queryFn: () => copyOf(where.folderId, path),
     enabled: where.inWorkspace && published,
     retry: false,
   });
+  /**
+   * Its cubes' and views' names are fixed where they have landed: the file in
+   * its shared folder, or a copy of it in My workspace (T722, AC-423). A
+   * draft's stay editable until it lands.
+   */
+  const namesFixed = !where.inWorkspace || copy.data != null;
   const everyFile = useQuery({
     ...ALL_MODEL_FILES_QUERY,
     enabled: where.inWorkspace && landsIn.data != null,
@@ -1157,12 +1167,12 @@ function FileEditor({
               {/* Proposed to no folder, a use-only copy asks its cube's folder
                   for a change instead (T717, AC-283; R73): about the cube or
                   view its saved file holds, its original's name. */}
-              {useOnly.data === true && requestable !== undefined ? (
+              {copy.data?.useOnly === true && requestable !== undefined ? (
                 <RequestChange cube={requestable} cubeTitle={requestable} />
               ) : null}
-              {useOnly.isError ? (
+              {copy.isError ? (
                 <StateLine kind="err" className="model-editor__with model-editor__blocked">
-                  {useOnly.error.message}
+                  {copy.error.message}
                 </StateLine>
               ) : null}
               {/* Both always there, as design 03 draws them; pressed only with a
@@ -1335,6 +1345,7 @@ function FileEditor({
                   kind="cube"
                   value={value}
                   readOnly={readOnly}
+                  nameFixed={namesFixed}
                   // The file's notes, under the first form's tabs (design 03 note 4).
                   banner={place === 0 ? notesBar : null}
                   onOpenMember={openIn('cubes', at)}
@@ -1360,6 +1371,7 @@ function FileEditor({
                   kind="view"
                   value={value}
                   readOnly={readOnly}
+                  nameFixed={namesFixed}
                   // New, it opens on its Cubes with one ready to pick (T493, MW-19).
                   addingOn={fresh && place === 0 ? 'cubes' : undefined}
                   banner={place === 0 && cubes.length === 0 ? notesBar : null}

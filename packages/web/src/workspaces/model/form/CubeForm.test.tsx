@@ -652,6 +652,50 @@ function Held({
   );
 }
 
+/**
+ * T722 (AC-423; R71 3, 5): a landed cube's or view's name is fixed — its
+ * file, or an edit copy of it, offers no way to change it — and its title
+ * stays editable. A draft's name stays editable until it lands.
+ */
+describe('a landed cube’s or view’s name (T722, AC-423)', () => {
+  it('is read-only, saying why, while its title stays editable', async () => {
+    const onChange = vi.fn();
+    render(<CubeForm kind="cube" value={ORDERS} onChange={onChange} nameFixed />);
+    const panel = screen.getByRole('tabpanel');
+    const name = within(panel).getByLabelText('Name', { exact: true }) as HTMLInputElement;
+    expect(name.readOnly).toBe(true);
+    expect(name.value).toBe('orders');
+    expect(helpOf(name)).toBe(
+      '“orders” has landed, so its name is fixed. Its title can still change.',
+    );
+    await userEvent.type(name, 'x');
+    expect(onChange).not.toHaveBeenCalled();
+    await userEvent.type(within(panel).getByLabelText('Title', { exact: true }), 'O');
+    expect(onChange).toHaveBeenLastCalledWith({ ...ORDERS, title: 'O' });
+  });
+
+  it('is read-only on a view too', () => {
+    render(
+      <CubeForm kind="view" value={{ name: 'overview', cubes: [] }} onChange={vi.fn()} nameFixed />,
+    );
+    const name = within(screen.getByRole('tabpanel')).getByLabelText('Name', {
+      exact: true,
+    }) as HTMLInputElement;
+    expect(name.readOnly).toBe(true);
+  });
+
+  it('stays editable in a draft', async () => {
+    const onChange = vi.fn();
+    render(<CubeForm kind="cube" value={ORDERS} onChange={onChange} />);
+    const name = within(screen.getByRole('tabpanel')).getByLabelText('Name', {
+      exact: true,
+    }) as HTMLInputElement;
+    expect(name.readOnly).toBe(false);
+    await userEvent.type(name, 's');
+    expect(onChange).toHaveBeenLastCalledWith({ ...ORDERS, name: 'orderss' });
+  });
+});
+
 describe('editing a cube’s members', () => {
   it('takes several references typed with commas, where no picker scopes them', async () => {
     // Drill members are picked (AC-224, MemberPicker.test.tsx); a multi-stage

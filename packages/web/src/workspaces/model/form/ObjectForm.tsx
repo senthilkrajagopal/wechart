@@ -686,6 +686,34 @@ function FieldRow({
   );
 }
 
+/** A key that can't change here, as written, with why (T722, AC-423). */
+function FixedRow({ field, value, note }: { field: Field; value: Value; note: string }) {
+  const id = useId();
+  const own = read(value, field.key);
+  return (
+    <div
+      className={`field model-field${field.required === true ? ' is-required' : ''}`}
+      data-key={field.key}
+    >
+      <label id={`${id}-label`} htmlFor={id}>
+        {field.label}
+      </label>
+      <input
+        id={id}
+        type="text"
+        className="is-code"
+        readOnly
+        aria-required={field.required === true ? true : undefined}
+        aria-describedby={`${id}-help`}
+        value={typeof own === 'string' ? own : ''}
+      />
+      <span id={`${id}-help`} className="model-field__help">
+        {note}
+      </span>
+    </div>
+  );
+}
+
 /**
  * Two keys of which Cube takes exactly one, as one row: which, as a segmented
  * control, and its value (design 03 state B's "Reads from", T481). Switching
@@ -871,12 +899,18 @@ export function ObjectForm({
   onChange,
   only,
   legacyInAdvanced = false,
+  fixed,
 }: {
   schema: ObjectSchema;
   value: Value;
   onChange: (next: Value) => void;
   /** Which fields to show; all by default. */
   only?: (field: Field) => boolean;
+  /**
+   * A key that can't change here, shown read-only with why: a landed cube's
+   * or view's name (T722, AC-423).
+   */
+  fixed?: { readonly key: string; readonly note: string } | undefined;
   /**
    * The legacy keys under Advanced's caret, not a fold of their own: a cube's
    * or a view's General, as design 03 state B and MW-08 ask (T481's review).
@@ -948,6 +982,8 @@ export function ObjectForm({
       return own === undefined || typeof own === 'string';
     });
   const rowOf = (field: Field) => {
+    if (fixed?.key === field.key)
+      return <FixedRow key={field.key} field={field} value={value} note={fixed.note} />;
     const pair = fields.find((each) => each.oneOf?.key === field.key);
     if (pair !== undefined && textual(pair)) return null;
     const { oneOf } = field;

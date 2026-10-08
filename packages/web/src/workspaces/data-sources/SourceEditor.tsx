@@ -28,7 +28,6 @@ import {
   type Check,
   type Seal,
 } from './connectionTest';
-import type { ListedSource } from './DataSourcesList';
 import { DATA_SOURCES_QUERY } from './query';
 import type { StoredSource } from './SourceSettings';
 
@@ -493,38 +492,16 @@ function TestToSave({ source, edit }: { source: StoredSource; edit: SourceEdit }
 }
 
 /**
- * Said under a rename when published cubes still name it (AC-275; state B):
- * saving it is refused until they change too, and the refusal names them.
+ * Its name, where it may be renamed: a draft's, until it lands (T722,
+ * AC-423). A landed one's is fixed, and a copy keeps its original's (AC-280;
+ * state B).
  */
-function stillNamedBy(listed: ListedSource | undefined, was: string): string | null {
-  const cubes = listed?.usedBy ?? [];
-  const hidden = listed?.usedElsewhere ?? 0;
-  const count = cubes.length + hidden;
-  if (count === 0) return null;
-  const folders = [...new Set(cubes.map((cube) => pathText(cube.folderPath)))];
-  const where = hidden === 0 && folders.length === 1 ? ` in ${folders[0]!}` : '';
-  const what =
-    count === 1
-      ? `1 published cube${where} names`
-      : `${String(count)} published cubes${where} name`;
-  return `${what} ${was}. Saving this rename is refused until they’re changed too; the refusal names them.`;
-}
-
-/** Its name, where it may be renamed: a copy keeps its original's (AC-280; state B). */
-export function EditableGeneral({
-  source,
-  edit,
-  listed,
-}: {
-  source: StoredSource;
-  edit: SourceEdit;
-  /** Its row in Data sources, with the cubes that name it. */
-  listed?: ListedSource | undefined;
-}) {
+export function EditableGeneral({ source, edit }: { source: StoredSource; edit: SourceEdit }) {
   const copy = source.origin !== null;
+  const landed = !source.inWorkspace;
+  const fixed = copy || landed;
   const typed = edit.name.trim();
   const invalid = !edit.nameOk || edit.nameRefused !== null;
-  const still = edit.nameChanged && !copy ? stillNamedBy(listed, source.name) : null;
   return (
     <div className="source-settings__general">
       <div className={`field${edit.nameChanged ? ' is-changed' : ''}`}>
@@ -538,16 +515,18 @@ export function EditableGeneral({
           spellCheck={false}
           autoComplete="off"
           value={edit.name}
-          readOnly={copy}
+          readOnly={fixed}
           aria-invalid={invalid ? true : undefined}
           aria-describedby="source-name-note"
           onChange={(event) => {
-            edit.setName(event.target.value);
+            if (!fixed) edit.setName(event.target.value);
           }}
         />
         <span id="source-name-note" className={invalid ? 'field__error' : 'connection-form__note'}>
           {copy ? (
             'A copy keeps its original’s name, which it stands in for in your workspace.'
+          ) : landed ? (
+            `“${source.name}” has landed, so its name is fixed. Its description can still change.`
           ) : edit.nameRefused !== null ? (
             <>
               <StatusIcon kind="err" />
@@ -561,12 +540,6 @@ export function EditableGeneral({
             'Cubes name it as data_source. A new name needs no test.'
           )}
         </span>
-        {still === null ? null : (
-          <p className="field__warning">
-            <StatusIcon kind="warn" />
-            {still}
-          </p>
-        )}
       </div>
       {/* What it is for: no part of the connection, so it needs no test (state B). */}
       <div className={`field${edit.descriptionChanged ? ' is-changed' : ''}`}>

@@ -132,10 +132,15 @@ export function declaredNameOf(content: string): string | undefined {
 }
 
 /**
- * Whether a saved workspace file is a use-only copy (T543, T717, AC-283):
- * proposed to no folder, its page offers "Request a change" instead.
+ * Whether a saved workspace file is a copy of a landed one, and of what kind
+ * (T543, T717, T722): a use-only copy is proposed to no folder, its page
+ * offering "Request a change" instead (AC-283); either kind keeps its
+ * original's name (AC-423). None for a draft of its own.
  */
-export async function isUseOnlyCopy(folderId: string, path: string): Promise<boolean> {
+export async function copyOf(
+  folderId: string,
+  path: string,
+): Promise<{ readonly useOnly: boolean } | null> {
   const response = await fetch(`/api/folders/${encodeURIComponent(folderId)}/contents`);
   if (!response.ok)
     throw new Error(`Could not read what the model was copied from (${String(response.status)}).`);
@@ -144,7 +149,8 @@ export async function isUseOnlyCopy(folderId: string, path: string): Promise<boo
     id?: unknown;
     origin?: { useOnly?: unknown } | null;
   }[];
-  return rows.find((row) => row.kind === 'model' && row.id === path)?.origin?.useOnly === true;
+  const origin = rows.find((row) => row.kind === 'model' && row.id === path)?.origin;
+  return origin === null || origin === undefined ? null : { useOnly: origin.useOnly === true };
 }
 
 /** The shared folders a new workspace item may go to: those the user writes (T345). */

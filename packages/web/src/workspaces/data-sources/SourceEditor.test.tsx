@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { SealedV1 } from '@wechart/core';
 
-import type { ListedSource } from './DataSourcesList';
 import { EditableConnection, EditableGeneral, EditFoot, useSourceEdit } from './SourceEditor';
 import type { StoredSource } from './SourceSettings';
 
@@ -76,22 +75,22 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function Page({ source, listed }: { source: StoredSource; listed?: ListedSource }) {
+function Page({ source }: { source: StoredSource }) {
   const edit = useSourceEdit(source, { seal: async () => envelope });
   return (
     <>
-      <EditableGeneral source={source} edit={edit} listed={listed} />
+      <EditableGeneral source={source} edit={edit} />
       <EditableConnection source={source} edit={edit} />
       <EditFoot edit={edit} />
     </>
   );
 }
 
-function open(source: StoredSource, listed?: ListedSource) {
+function open(source: StoredSource) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = render(
     <QueryClientProvider client={client}>
-      <Page source={source} {...(listed === undefined ? {} : { listed })} />
+      <Page source={source} />
     </QueryClientProvider>,
   );
   return {
@@ -300,34 +299,34 @@ describe('a rename (state B)', () => {
     expect(saveButton()).toHaveProperty('disabled', true);
   });
 
-  it('says up front which published cubes still name it (AC-275)', async () => {
-    const sales = [
-      { id: 'sales', title: 'Sales' },
-      { id: 'emea', title: 'EMEA' },
-    ];
-    open(stored({ inWorkspace: false }), {
-      id: 'ds-1',
-      name: 'emea_replica',
-      folderId: 'emea',
-      folderPath: sales,
-      driver: 'postgres',
-      authMethod: 'password',
-      updatedAt: '2026-09-27T10:00:00.000Z',
-      lastTest: null,
-      usedBy: [
-        { name: 'orders', folderId: 'emea', folderPath: sales },
-        { name: 'returns', folderId: 'emea', folderPath: sales },
-      ],
-    });
-    const name = screen.getByLabelText(/^Name/);
-    await userEvent.clear(name);
-    await userEvent.type(name, 'emea_replica_eu');
+  // T722 (AC-423; R71 3, 5): a draft's name changes until it lands; this one is a draft.
+  it('is offered on a draft in My workspace', () => {
+    open(stored());
+    expect((screen.getByLabelText(/^Name/) as HTMLInputElement).readOnly).toBe(false);
+  });
+});
 
-    expect(
-      screen.getByText(
-        '2 published cubes in Sales / EMEA name emea_replica. Saving this rename is refused until they’re changed too; the refusal names them.',
-      ),
-    ).toBeTruthy();
+/**
+ * T722 (AC-423, AC-291; R71 3, 5): a landed data source's name is fixed: its
+ * page offers no way to change it, and says why. Its description, the only
+ * other thing it is called by, still changes. The AC-275 warning of cubes
+ * still naming a renamed one goes with the rename.
+ */
+describe('a landed data source’s name (T722, AC-423)', () => {
+  it('is read-only, saying why, while its description still changes', async () => {
+    const sent = serve({ 'PUT /api/data-sources/ds-1': [{ body: { id: 'ds-1' } }] });
+    open(stored({ inWorkspace: false, folderId: 'sales' }));
+    const name = screen.getByLabelText(/^Name/) as HTMLInputElement;
+    expect(name.readOnly).toBe(true);
+    expect(document.getElementById('source-name-note')?.textContent).toBe(
+      '“emea_replica” has landed, so its name is fixed. Its description can still change.',
+    );
+    await userEvent.type(name, '_eu');
+    expect(name.value).toBe('emea_replica');
+    await userEvent.type(screen.getByLabelText(/^Description/), 'Read replica.');
+    await userEvent.click(saveButton());
+    await screen.findByText('Saved 1 change.');
+    expect(sent.at(-1)?.body).toEqual({ description: 'Read replica.' });
   });
 });
 

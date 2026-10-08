@@ -403,7 +403,7 @@ export function FolderContents({
       : others;
   };
   const otherActions = (item: CatalogItem, targets: readonly FolderMove[]): MenuItem[] => [
-    // A data source is renamed on its own page (T497).
+    // A data source's name changes only on its own page, and only a draft's (T497, T722).
     ...(onRename !== undefined && item.kind !== 'data-source'
       ? [
           {

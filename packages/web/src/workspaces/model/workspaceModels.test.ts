@@ -1,6 +1,37 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { declaredNameOf, filesBeside } from './workspaceModels';
+import { copyOf, declaredNameOf, filesBeside } from './workspaceModels';
+
+/**
+ * T722 (AC-423): a saved workspace file that copies a landed one keeps its
+ * original's name; a draft of its own doesn't. A use-only copy says so too.
+ */
+describe('whether a saved workspace file is a copy of a landed one', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('says an edit copy, a use-only copy, and a draft of its own apart', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json([
+          { kind: 'model', id: 'cubes/orders.yml', origin: { id: 'f1', folderId: 'sales' } },
+          {
+            kind: 'model',
+            id: 'cubes/stock.yml',
+            origin: { id: 'f2', folderId: 'ops', useOnly: true },
+          },
+          { kind: 'model', id: 'cubes/fresh.yml', origin: null },
+        ]),
+      ),
+    );
+    expect(await copyOf('mine', 'cubes/orders.yml')).toEqual({ useOnly: false });
+    expect(await copyOf('mine', 'cubes/stock.yml')).toEqual({ useOnly: true });
+    expect(await copyOf('mine', 'cubes/fresh.yml')).toBeNull();
+    expect(await copyOf('mine', 'cubes/gone.yml')).toBeNull();
+  });
+});
 
 /**
  * T717's review (AC-283): "Request a change" asks about the cube or view the
