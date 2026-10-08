@@ -252,6 +252,82 @@ test.describe('cubes bound and picked on a folder’s path (T429)', () => {
   });
 
   /**
+   * T732 (T718; AC-428, AC-329): a workspace chart and a workspace dashboard
+   * going to /A/B, while My workspace holds an edit copy of /A/B's cube: each
+   * picker, the chart editor's and "Filter on", lists the copy once, in the
+   * landed cube's place under /A/B, marked "Your copy", and nothing dimmed.
+   */
+  test('lists My workspace’s copy in the landed cube’s place, marked, in the chart editor and in Filter on (AC-428)', async ({
+    page,
+  }) => {
+    const { request } = page;
+    const A = `Picker A ${RUN}`;
+    const AB = `${A} / Picker B ${RUN}`;
+    const path = `cubes/${CUBES.b.name}.yml`;
+    const copied = await request.post('/api/workspace/copies', {
+      data: { kind: 'model', folderId: ids.b, path, timeZone: 'UTC' },
+      timeout: 90_000,
+    });
+    expect(copied.status(), await copied.text()).toBe(201);
+    const copyFolder = ((await copied.json()) as { folderId: string }).folderId;
+    const made = { chart: '', board: '' };
+    try {
+      const chart = await request.post('/api/documents', {
+        data: {
+          kind: 'chart',
+          title: `Copy chart ${RUN}`,
+          folderId: 'mine',
+          targetFolderId: ids.b,
+        },
+      });
+      expect(chart.status()).toBe(201);
+      made.chart = ((await chart.json()) as { id: string }).id;
+      await page.goto(`/explore/charts/${made.chart}/edit?new=true`);
+      const picker = cubePicker(page);
+      const list = await picker.open();
+      await expect(list.getByRole('group').first()).toHaveAttribute('aria-label', AB);
+      const ofB = list.locator(`.cube-picker__option[data-cube="${CUBES.b.name}"]`);
+      await expect(ofB).toHaveCount(1);
+      await expect(
+        list.getByRole('group', { name: AB, exact: true }).locator(`[data-cube="${CUBES.b.name}"]`),
+      ).toHaveCount(1);
+      await expect(ofB.locator('.cube-picker__chip')).toHaveText('Your copy');
+      await expect(list.locator('[aria-disabled="true"]')).toHaveCount(0);
+
+      const board = await request.post('/api/documents', {
+        data: {
+          kind: 'dashboard',
+          title: `Copy board ${RUN}`,
+          folderId: 'mine',
+          targetFolderId: ids.b,
+        },
+      });
+      expect(board.status()).toBe(201);
+      made.board = ((await board.json()) as { id: string }).id;
+      await page.goto(`/explore/dashboards/${made.board}`);
+      await page.getByRole('button', { name: 'Edit', exact: true }).click();
+      await page.getByTestId('add-filter').click();
+      await page.getByTestId('add-filter-list').click();
+      const fields = fieldPicker(page.getByRole('complementary', { name: 'Edit sidebar' }));
+      await fields.button.click();
+      await expect(fields.list.getByRole('group').first()).toHaveAttribute('aria-label', AB);
+      const status = fields.list.locator(`[data-member="${CUBES.b.name}.status"]`);
+      await expect(status).toHaveCount(1);
+      await expect(status).toContainText('Your copy');
+      await expect(status).toContainText(`${CUBES.b.title} · ${AB}`);
+      await expect(fields.list.locator('[aria-disabled="true"]')).toHaveCount(0);
+    } finally {
+      if (made.board !== '') await request.delete(`/api/documents/dashboard/${made.board}`);
+      if (made.chart !== '') await request.delete(`/api/documents/chart/${made.chart}`);
+      await request.delete(
+        `/api/model/files?folder=${encodeURIComponent(copyFolder)}&path=${encodeURIComponent(path)}`,
+        { timeout: 90_000 },
+      );
+      if (copyFolder !== 'mine') await request.delete(`/api/documents/folder/${copyFolder}`);
+    }
+  });
+
+  /**
    * T450, AC-329: search names a folder's field by its short name, with its
    * cube's title and folder path, and never shows the prefixed name.
    */

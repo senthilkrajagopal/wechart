@@ -19,14 +19,17 @@ export function cubePicker(scope: Page | Locator) {
     if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click();
     return list;
   };
-  /** A cube that can be picked: by its title as listed, or by its name. */
+  /**
+   * A cube to pick: by its title as listed, or by its name. Every row can be
+   * picked: a name is one item's, so none is hidden (R71; T718, T732).
+   */
   const optionOf = (cube: string | { label: string } | { value: string }) =>
     typeof cube !== 'string' && 'label' in cube
       ? list
-          .locator('.cube-picker__option:not(.is-hidden)')
+          .locator('.cube-picker__option')
           .filter({ has: list.page().getByText(cube.label, { exact: true }) })
       : list.locator(
-          `.cube-picker__option:not(.is-hidden)[data-cube="${typeof cube === 'string' ? cube : cube.value}"]`,
+          `.cube-picker__option[data-cube="${typeof cube === 'string' ? cube : cube.value}"]`,
         );
   return {
     button,

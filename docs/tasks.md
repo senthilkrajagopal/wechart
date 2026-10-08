@@ -13794,7 +13794,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - **Collateral:** this case's failure, a 409 that left a cube naming a data source that was never made, broke `workspace-overlay.spec.ts`'s previews in the same run. That spec passes alone and with the fix.
     - **Not ticked:** the ACs are left to the coordinator's run on the image, as with T729.
 
-- [ ] T732 (AC-329, AC-428) Rework the tests of T475 and T633 to a picker with no hidden cubes and the user's copy in place
+- [x] T732 (AC-329, AC-428) Rework the tests of T475 and T633 to a picker with no hidden cubes and the user's copy in place
   - Files: `e2e/security/picker.spec.ts` (T475's dimmed hidden cube goes, AC-342 being retired), `packages/web/src/filters/fieldPicker.test.tsx`, `e2e/cubePicker.ts`
   - Failing test: in both the chart editor and the "Filter on" picker (AC-329, AC-428), design 10's picker:
     - groups the cubes on the item's path by folder, by title;
@@ -13802,6 +13802,11 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - lists a workspace copy in the landed cube's place, marked.
   - Depends on: T718
   - *Noted (2026-10-08, T729):* `picker.spec.ts`'s T475 and T633 tests were reworked minimally by T729, by the coordinator's call, so the file passes on the R71 image. They now show no hidden row, no `__`, cubes listed by folder, and /A's cube pickable. This task adds AC-428's "Your copy" to them.
+  - **Done 2026-10-08,** rebuilt on T729's `picker.spec.ts` (the coordinator, 2026-10-08). On the R71 image in Chrome the spec passes 8/8, and the phase-1 `field-list.spec.ts` passes on the changed helper.
+    - **`picker.spec.ts`, AC-428 in both pickers.** A new case, on T729's per-run fixture. My workspace holds an edit copy of /A/B's cube (`POST /api/workspace/copies`). A workspace chart and a workspace dashboard going to /A/B then list it once, in the landed cube's place in /A/B's group, in the chart editor and in "Filter on" alike. It is marked "Your copy", and no row is disabled. The copy is removed afterwards.
+    - **Already T729's, kept as it has them:** T429's binding, the path's groups (AC-329), T475's no-hidden-row case, T633's "Filter on", T450's search and T457's join.
+    - **`e2e/cubePicker.ts`:** `optionOf` no longer skips `.is-hidden` rows, since there are none.
+    - **`fieldPicker.test.tsx`:** already reworked by T718, unchanged.
 
 - [ ] T733 (AC-357, AC-358, AC-361) Rework the tests of T513 and T514 to imports that map landed names
   - Files: `e2e/security/export-import.spec.ts`, `packages/api/src/routes/import.test.ts`, `packages/web/src/workspaces/explore/import/{ImportSources,ImportPane}.test.tsx`
