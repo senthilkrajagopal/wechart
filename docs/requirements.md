@@ -950,6 +950,9 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R74 — ancestors are visible, the shared root included** (2026-10-08, the user)
+- Q (from AC-267's check): under R12's ancestor rule, with a grant on a subfolder counting as assigned, a group granted on any top-level folder sees every root-level phase-1 dashboard, view-only. Is that wanted? A: "Yes, as R12 says". *Ancestors are visible, view-only, to anyone granted below them, the shared root included.*
+
 **R73 — gaps found while planning R71/R72's tasks** (2026-10-07, the coordinator's calls under the standing instruction, overturnable)
 - **An import naming a draft already in the workspace.** One name means one item, so the imported item maps to that draft, as it would map to a landed item (R72). Review lists it as mapped.
 - **An import mapped to a landed item off the target folder's path.** The imported charts couldn't use it (R72's path rule). Review names those items, and the import can't be made until the importer picks a target on that item's path or leaves those charts out.
