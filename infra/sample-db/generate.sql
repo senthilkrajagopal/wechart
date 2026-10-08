@@ -87,3 +87,10 @@ CREATE TABLE IF NOT EXISTS generate."2026_orders" (
   class_id  integer NOT NULL REFERENCES generate."class" (id),
   total     numeric(10, 2) NOT NULL
 );
+
+-- Cube Store's long run (T650's follow-up; AC-378, AC-379): 200,000 rows,
+-- whose rollup, joined with itself on Cube Store's select workers, runs past
+-- the SQL runner's 30 s cap and is ended by Cube Store's own timeout. Also
+-- run by the security suite's stack preparation, and created only if missing.
+CREATE TABLE IF NOT EXISTS generate.long_run_rows AS
+  SELECT g AS id FROM generate_series(1, 200000) AS g;

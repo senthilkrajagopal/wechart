@@ -58,7 +58,7 @@ export default defineConfig({
     {
       name: 'chrome',
       use: { ...devices['Desktop Chrome'], channel: 'chrome' },
-      testIgnore: /xcube-unreachable\.spec\.ts/,
+      testIgnore: /(xcube-unreachable|cube-store-long-run)\.spec\.ts/,
     },
     // xcube's binding, and a data source changed in place, are shown through
     // the API, in no browser, so once: their copies in three browsers would
@@ -71,13 +71,23 @@ export default defineConfig({
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
       testIgnore:
-        /(data-source-binding|changed-in-place|xcube-unreachable|workspace-clear)\.spec\.ts/,
+        /(data-source-binding|changed-in-place|xcube-unreachable|workspace-clear|cube-store-long-run)\.spec\.ts/,
     },
     {
       name: 'safari',
       use: { ...devices['Desktop Safari'] },
       testIgnore:
-        /(data-source-binding|changed-in-place|xcube-unreachable|workspace-clear)\.spec\.ts/,
+        /(data-source-binding|changed-in-place|xcube-unreachable|workspace-clear|cube-store-long-run)\.spec\.ts/,
+    },
+    // Cube Store's long run holds `super`'s next SQL run, and keeps Cube
+    // Store's workers busy, until its timeout (T650's follow-up): after all
+    // three browsers, once, as xcube-unreachable is. On its own:
+    // `--project=cube-store-long-run --no-deps`.
+    {
+      name: 'cube-store-long-run',
+      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+      testMatch: /cube-store-long-run\.spec\.ts/,
+      dependencies: ['chrome', 'firefox', 'safari'],
     },
     // A save while xcube can't be reached stops compose's Cube, which every
     // other spec needs: after all three browsers, once (T457's review). On
@@ -86,7 +96,8 @@ export default defineConfig({
       name: 'xcube-unreachable',
       use: { ...devices['Desktop Chrome'], channel: 'chrome' },
       testMatch: /xcube-unreachable\.spec\.ts/,
-      dependencies: ['chrome', 'firefox', 'safari'],
+      // After Cube Store's long run too, which needs compose's Cube up.
+      dependencies: ['chrome', 'firefox', 'safari', 'cube-store-long-run'],
     },
   ],
   webServer: [

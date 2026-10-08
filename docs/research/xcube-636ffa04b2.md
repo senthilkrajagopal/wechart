@@ -51,3 +51,7 @@ This is T650's research doc (R64, "refusing router-join queries before they run 
 
 - The SQL client reads `reason: "cubestore_router_join"` as a router join (`xcube/sql-runner.ts`, `routerJoin`), and the API and the page say it in their own words rather than as a statement that isn't a SELECT (T650).
 - **Observed on compose's `2e611eae61`** (T650's e2e): the `VALUES` cross join that T548's and T549's e2e used to stop at 30 seconds is refused in about 2 s. So the image can no longer produce a router query stopped at its cap from a join. A stopped router read without a join would need a single catalog read longer than 30 s, which compose's Cube Store has none of.
+- **Observed on compose (T650's follow-up, 2026-10-08):**
+  - A join of Cube Store's own tables runs under `ClusterSend`: an `EXPLAIN` of a cross join of a rollup with itself plans `ClusterSend` above `Join`, and it runs.
+  - Cube Store caps a join's partitions per batch: "Max number of joined partitions per batch limit is hit. Max limit is 5", answered `422`.
+  - It answers `count(*)` over a cross join of two 200,000-row rollups in about 5 s, without reading each row. A `sum` over 4 * 10^10 rows took 23–29 s, and over 1.2 * 10^11 rows ran past the 30 s cap. That run was answered stopped, with `endsBy`, and ended within Cube Store's own 120 s.

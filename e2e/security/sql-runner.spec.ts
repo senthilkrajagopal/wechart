@@ -766,7 +766,9 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
         );
         await expect(panel.locator('.sql-editor .cm-content')).toBeFocused();
         // At the cursor, and the editor keeps focus: on to run it.
-        await page.keyboard.type(' LIMIT 1');
+        // Inserted whole, at the cursor: a keystroke typed one by one can be
+        // dropped under load, as " LIMIT 1"'s space once was.
+        await page.keyboard.insertText(' LIMIT 1');
         await page.keyboard.press('ControlOrMeta+Enter');
         await expect(panel.getByRole('table', { name: 'Result: 1 row, 6 columns' })).toBeVisible();
       } finally {

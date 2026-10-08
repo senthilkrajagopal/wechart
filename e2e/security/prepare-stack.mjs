@@ -44,10 +44,11 @@ if (psql(`SELECT 1 FROM pg_database WHERE datname = '${DATABASE}'`).trim() !== '
 }
 
 /**
- * The sample database's tables whose names break the grammar (T734, AC-249):
- * `infra/sample-db/generate.sql`'s R73 block, from its marker to its end,
- * run on a sample database made before it was added. Every statement in it
- * is `CREATE TABLE IF NOT EXISTS`: nothing is dropped or changed.
+ * The sample database's tables whose names break the grammar (T734, AC-249),
+ * and Cube Store's long run's 200,000 rows (T650's follow-up):
+ * `infra/sample-db/generate.sql` from its R73 marker to its end, run on a
+ * sample database made before they were added. Every statement in it is
+ * `CREATE TABLE IF NOT EXISTS`: nothing is dropped or changed.
  */
 const MARKER = '-- R73 names (T734, AC-249)';
 const generateSql = readFileSync(

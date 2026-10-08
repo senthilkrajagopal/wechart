@@ -13833,6 +13833,30 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - AC-378's and AC-379's Cube Store sayings stay shown by the unit and component tests named in T548 and T549, not on the image: the stop, "runs to its end", the held next run, and no Cancel.
       - On the image, a stopped Cube Store run would need a single catalog read, or a join of Cube Store's own tables, lasting over 30 s, and compose's Cube Store holds nothing that large. Whether AC-378 and AC-379 keep their ticks on that basis is a question.
       - **AC-378 and AC-379 unticked** (the coordinator, 2026-10-08): a tick needs a passing real-surface test, and their Cube Store e2e can no longer reach that state. A follow-up builds a fixture large enough, and they are ticked again when it passes.
+  - *Follow-up 2026-10-08 (the coordinator's word): a Cube Store run stopped at 30 seconds, on the image again.*
+    - **The fixture:**
+      - `generate.long_run_rows` holds 200,000 rows, made by `infra/sample-db/generate.sql` with `CREATE TABLE IF NOT EXISTS … AS`, and by the security suite's `prepare-stack.mjs` on a database made before it. Nothing is dropped.
+      - The spec lands the cube `t650_long_rows` on it in the shared root, with a rollup on its `id`, and builds it through the usual build (`POST /api/builds`, until done). It removes the cube after.
+    - **The run:** `SELECT sum(a.id + b.id + c.id)` over the rollup joined with itself three ways, `c` limited to 3 rows, 1.2 * 10^11 rows, on Cube Store's select workers, under `ClusterSend`.
+      - A `count(*)` was answered in 5 s without reading the rows.
+      - Two-way, the sum took 23–29 s.
+      - Cube Store refuses a join of more than 5 partitions per batch.
+    - **`e2e/security/cube-store-long-run.spec.ts`:**
+      - The run shows no Cancel, and says so.
+      - It is stopped at 30 seconds, with `endsBy`. The note and the hold above the editor say "until <endsBy> at the latest".
+      - Run is held, and the API refuses a next run, 409.
+      - Once it has ended, Run is offered again and `SELECT 1` runs.
+    - **Its own project:** `cube-store-long-run`, after the three browsers, and before `xcube-unreachable`, which now depends on it. Its run holds `super`'s next run, which `sql-runner.spec.ts` runs as, and keeps Cube Store's workers busy. On its own: `--project=cube-store-long-run --no-deps`.
+    - **AC-378's router case with no `endsBy`** would need a single catalog or system table read lasting past 30 s. Compose's Cube Store has none that large, and no expression made one slow enough without risking its memory. It stays shown by T549's unit and component tests.
+    - **`sql-runner.spec.ts:727`:** " LIMIT 1" is inserted whole rather than typed key by key. A dropped keystroke had typed `public.ordersLIMIT 1`.
+    - **Runs (all under `lockf -k` on both locks, the e2e ports checked free first):**
+      - the long run 3/3, twice;
+      - in Chrome, `sql-runner`, `workspace-overlay-removal`, `workspace-clear`, `export-import`, `use-only-copy`, `fixed-names`, `global-names`, `data-source-binding`, `model-in-folder`, `data-sources` and `generate-in-workspace`, 83/83;
+      - phase 1, `items-switch`, `import-single-user`, `draft-file-names`, `model`, `model-design`, `folder-models`, `country-map` and `generate-cubes`, 46/46.
+    - The earlier runs of T739, T740 and T650 may have overlapped other agents' (the coordinator's lock rule, 2026-10-08). These reruns stand for them.
+    - **AC-378 and AC-379 ticked again.**
+      - Data sources: `sql-runner.spec.ts`, cases 226 and 262.
+      - Cube Store: this spec, and T650's refusal.
     - **Runs:**
       - API: 1835 of 1836. `phase1-content.test.ts` failed, the known flake.
       - Web: 2636 of 2637. `UnplacedCodes.test.tsx` failed in the full run and passed alone.
