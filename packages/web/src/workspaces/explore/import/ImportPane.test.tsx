@@ -744,6 +744,80 @@ describe('leaving out the charts that use a cube off the target’s path (T736, 
     ]);
   });
 
+  // T736's follow-up (the coordinator, 2026-10-08): the dashboard's own uses can't be left out.
+  it('stops the import while the dashboard’s own filter or text uses it, whatever is left out', async () => {
+    shown((url, init) =>
+      url === '/api/import/review'
+        ? answer(200, {
+            ...REVIEWED,
+            items: REVIEWED.items.map((item) =>
+              item.kind === 'model'
+                ? {
+                    ...item,
+                    lands: 'not-imported',
+                    mappedTo: { name: 'orders', path: ['Ops'] },
+                    held: true,
+                    warnings: [
+                      {
+                        kind: 'off-path',
+                        charts: [{ key: 'c1', title: 'Revenue', leftOut: true }],
+                        dashboard: [
+                          { kind: 'filter', member: 'orders.status' },
+                          { kind: 'text', member: 'orders.count' },
+                        ],
+                      },
+                    ],
+                  }
+                : item,
+            ),
+          })
+        : serving(url, init),
+    );
+    const pane = screen.getByRole('dialog', { name: 'Import a dashboard' });
+    await toReview(pane);
+    const model = await within(pane).findByTestId('lands-model-sales.yml');
+    expect(model.textContent).toContain(
+      'The cube or view of this name isn’t in Sales / EMEA or a folder above it, so the imported dashboard there couldn’t use it in its filter on orders.status and its text’s orders.count. Choose a target on its path.',
+    );
+    const primary = within(pane).getByRole('button', { name: `Import to My workspace` });
+    expect((primary as HTMLButtonElement).disabled).toBe(true);
+    expect(within(pane).getByText(`1 warning stops the import`)).toBeTruthy();
+  });
+
+  // T736's review: Review's last answer, kept while it asks again, enables no Import.
+  it('offers no Import while Review is asked again after a chart is put back', async () => {
+    let unleft = 0;
+    shown((url, init) => {
+      if (url !== '/api/import/review') return serving(url, init);
+      const { leaveOut, dataSources } = JSON.parse(String(init?.body)) as {
+        leaveOut?: string[];
+        dataSources?: unknown;
+      };
+      // Review's own asks (the Data sources step's asks what is held, with none decided).
+      if (dataSources !== undefined && leaveOut === undefined && (unleft += 1) > 1)
+        return new Promise<Response>(() => {});
+      return answer(
+        200,
+        offPath([{ key: 'c1', title: 'Revenue', leftOut: leaveOut?.includes('c1') ?? false }]),
+      );
+    });
+    const pane = screen.getByRole('dialog', { name: 'Import a dashboard' });
+    await toReview(pane);
+    const leave = await within(pane).findByRole('checkbox', {
+      name: 'Leave out Revenue, and its tile',
+    });
+    await userEvent.click(leave);
+    const primary = () =>
+      within(pane).getByRole('button', { name: `Import to My workspace` }) as HTMLButtonElement;
+    await vi.waitFor(() => {
+      expect(primary().disabled).toBe(false);
+    });
+    await userEvent.click(
+      within(pane).getByRole('checkbox', { name: 'Leave out Revenue, and its tile' }),
+    );
+    expect(primary().disabled).toBe(true);
+  });
+
   it('stops nothing for one that no chart in the file uses', async () => {
     shown((url, init) =>
       url === '/api/import/review' ? answer(200, offPath([])) : serving(url, init),

@@ -13429,8 +13429,21 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - API 1819/1819, web 2618/2618.
     - **Not ticked:** AC-357 waits for T733's e2e on the image.
     - **Left as questions:**
-      - A dashboard's own filters or text tiles on an off-path cube aren't counted as a chart's use. AC-357 names only charts.
+      - A dashboard's own filters or text tiles on an off-path cube aren't counted as a chart's use. AC-357 names only charts. *(Settled in the follow-up below.)*
       - Leaving out a library chart that the dashboard doesn't show is allowed whenever it uses the off-path cube.
+    - **The review (PASS).**
+    - **Follow-up (the coordinator's call, 2026-10-08):** a dashboard's own references to a cube off the path block too. R72's path rule covers a dashboard's references to a cube or view.
+      - **The API:**
+        - Review's model `off-path` warning gains `dashboard`, listed only where there are any. It names each filter (`{ kind: 'filter', member }`) and each text tile's measure token (`{ kind: 'text', member }`) on such a name.
+        - These can't be left out. Import refuses, 409, "“x” is the name of a cube or view that isn’t in <target> or a folder above it, so the imported dashboard there couldn’t use it in its filter on m and its text’s m. Choose a target on its path.", whatever is left out.
+      - **The web:** the warning says the same, and stops the import while there are any.
+      - **From the review:**
+        - Import is disabled while Review's previous answer is shown as it asks again (`isPlaceholderData`). Before, unticking "Leave out" could leave Import enabled until the new answer came back.
+        - Review's 400s are now tested: a malformed `leaveOut`, and a chart that can't be left out.
+      - **Tests:**
+        - `import-models.test.ts`: 2 cases. The dashboard's filter and text one was red before; the Review 400s are coverage.
+        - `ImportPane.test.tsx`: 2 cases, the dashboard's uses and the race, each red before (the race was checked with the guard taken out).
+        - API 1824/1824, web 2621/2621.
 
 - [ ] T721 (AC-358) Bind an imported model's cubes to the data source chosen for, or mapped to, the file's one
   - Files: `packages/core/src/importBinding.ts` (+ test, from the same WIP), `packages/api/src/routes/import.ts`

@@ -800,6 +800,59 @@ describe('leaving out the charts that use an item off the target’s path (T736,
     expect(await everything()).toEqual(before);
   });
 
+  // T736's follow-up (AC-357, R72; the coordinator, 2026-10-08): the dashboard's own references block too.
+  it('blocks while the dashboard’s own filter or text uses it, naming each, whatever is left out', async () => {
+    const { ids, file } = usingFile();
+    const board = (file.items[0] as { body: Record<string, unknown> }).body;
+    board['filters'] = [{ id: 'f1', widget: 'list', member: `${name('ops')}.count` }];
+    (board['pages'] as { items: unknown[] }[])[1]!.items.push({
+      id: 'm1',
+      kind: 'markdown',
+      text: `Ops: {{measure:${name('ops')}.count}}`,
+      w: 6,
+      h: 10,
+    });
+    const reviewed = await reviewLeaving(file, [ids.b, ids.c]);
+    expect(reviewed.statusCode, reviewed.body).toBe(200);
+    expect(offPathOf(reviewed.json<Reviewed>())).toEqual({
+      kind: 'off-path',
+      charts: [
+        { key: ids.b, title: `B ${MARK}`, leftOut: true },
+        { key: ids.c, title: `C ${MARK}`, leftOut: true },
+      ],
+      dashboard: [
+        { kind: 'filter', member: `${name('ops')}.count` },
+        { kind: 'text', member: `${name('ops')}.count` },
+      ],
+    });
+    const before = await everything();
+    const answer = await landLeaving(file, [ids.b, ids.c]);
+    expect(answer.statusCode, answer.body).toBe(409);
+    expect(answer.json<{ error: string }>().error).toBe(
+      `“${name('ops')}” is the name of a cube or view that isn’t in Sales ${MARK} or a folder above it, so the imported dashboard there couldn’t use it in its filter on ${name('ops')}.count and its text’s ${name('ops')}.count. Choose a target on its path.`,
+    );
+    expect(await everything()).toEqual(before);
+  });
+
+  // T736's review: a list to leave out is checked at Review as at Import.
+  it('refuses at Review a list to leave out that isn’t one, or names a chart that uses nothing off the path', async () => {
+    const { ids, file } = usingFile();
+    const malformed = await as('writer', {
+      method: 'POST',
+      url: REVIEWS,
+      payload: { file, targetFolderId: folders.sales, leaveOut: ids.b },
+    });
+    expect(malformed.statusCode, malformed.body).toBe(400);
+    expect(malformed.json<{ error: string }>().error).toBe(
+      'Send the charts to leave out as a list of their ids.',
+    );
+    const notLeavable = await reviewLeaving(file, [ids.a]);
+    expect(notLeavable.statusCode, notLeavable.body).toBe(400);
+    expect(notLeavable.json<{ error: string }>().error).toBe(
+      'Only a chart that uses a cube or view off the target’s path can be left out.',
+    );
+  });
+
   it('blocks nothing for one that no chart in the file uses', async () => {
     const file = exportFile(OFF, `${MARK} unused`);
     const reviewed = await review(file);

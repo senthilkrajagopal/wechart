@@ -65,6 +65,11 @@ type Warning =
         readonly title: string;
         readonly leftOut: boolean;
       }[];
+      /** The dashboard's own uses of it, which can't be left out (T736's follow-up). */
+      readonly dashboard?: readonly {
+        readonly kind: 'filter' | 'text';
+        readonly member: string;
+      }[];
     }
   /** My workspace's root has a model file at its path: this one blocks (T720). */
   | { readonly kind: 'path-in-workspace' }
@@ -76,7 +81,10 @@ const stopsImport = (warning: Warning) =>
   warning.kind === 'path-in-workspace' ||
   // A cube or view off the path: while a chart that uses it stays in (T736).
   (warning.kind === 'off-path' &&
-    (warning.charts === undefined || warning.charts.some((chart) => !chart.leftOut)));
+    (warning.charts === undefined ||
+      warning.charts.some((chart) => !chart.leftOut) ||
+      // The dashboard's own uses: whatever is left out (T736's follow-up).
+      (warning.dashboard?.length ?? 0) > 0));
 
 /** A refusal of the import, with each part and why where the API names them (T720). */
 class Refused extends Error {
@@ -227,6 +235,13 @@ export function warningText(
     case 'off-path':
       if (item.kind !== 'model')
         return `The data source of this name isn’t in ${target} or a folder above it, so a model there couldn’t use it. Choose a target on its path.`;
+      // The dashboard's own uses: only a target on its path will do (T736's follow-up).
+      if (warning.dashboard !== undefined && warning.dashboard.length > 0)
+        return `The cube or view of this name isn’t in ${target} or a folder above it, so the imported dashboard there couldn’t use it in ${listed(
+          warning.dashboard.map((use) =>
+            use.kind === 'filter' ? `its filter on ${use.member}` : `its text’s ${use.member}`,
+          ),
+        )}. Choose a target on its path.`;
       // The charts that use it may be left out instead (T736); none using it, nothing stops.
       return warning.charts?.length === 0
         ? `The cube or view of this name isn’t in ${target} or a folder above it, and no chart in the file uses it.`
@@ -1097,7 +1112,13 @@ export function ImportPane({
           <button
             type="button"
             className="btn btn-primary"
-            disabled={review.data === undefined || importing.isPending || stops > 0}
+            disabled={
+              review.data === undefined ||
+              // Its last answer, kept while it asks again, decides nothing (T736's review).
+              review.isPlaceholderData ||
+              importing.isPending ||
+              stops > 0
+            }
             aria-describedby={stops > 0 ? `${ids}-stops` : undefined}
             onClick={() => {
               importing.mutate();

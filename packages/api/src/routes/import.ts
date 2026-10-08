@@ -4,6 +4,7 @@ import {
   exportedBodyOf,
   nameKey,
   readExport,
+  tokenMembersOf,
   type ExportedChart,
   type ExportFile,
 } from '@wechart/core';
@@ -11,6 +12,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { cubesOfChartBody } from '../access/queries';
 import { USER } from '../auth/guard';
+import { textTilesOf } from '../model/bind';
 import { namesDeclaredIn } from '../model/names';
 import { withChartsRenamed } from './workspace-copy';
 
@@ -67,6 +69,8 @@ export type Warning =
         readonly title: string;
         readonly leftOut: boolean;
       }[];
+      /** The dashboard's own uses of it, which can't be left out: present where there are any. */
+      readonly dashboard?: readonly DashboardUse[];
     }
   /**
    * My workspace's root has a model file at its path, which it would land
@@ -323,6 +327,7 @@ async function heldModelsIn(
 ): Promise<Map<string, HeldModel>> {
   const held = new Map<string, HeldModel>();
   const charts = file.items.filter((item): item is ExportedChart => item.kind === 'chart');
+  const board = file.items.find((item) => item.kind === 'dashboard')?.body;
   for (const item of file.items)
     if (item.kind === 'model') {
       const names = namesDeclaredIn(item.content);
@@ -333,7 +338,17 @@ async function heldModelsIn(
           holders.filter((each) => !each.onPath).map((each) => nameKey(each.name)),
         );
         const taken = new Set(holders.map((each) => nameKey(each.name)));
+        const offCube = (member: string) => off.has(nameKey(member.split('.')[0] ?? ''));
         held.set(item.path, {
+          // The dashboard's own references to it: its filters', its text's tokens' (T736's follow-up).
+          dashboardUses: [
+            ...filtersOf(board).flatMap((member) =>
+              offCube(member) ? [{ kind: 'filter' as const, member }] : [],
+            ),
+            ...textTilesOf(board)
+              .flatMap(tokenMembersOf)
+              .flatMap((member) => (offCube(member) ? [{ kind: 'text' as const, member }] : [])),
+          ],
           holder,
           asked: names.find((name) => nameKey(name) === nameKey(holder.name)) ?? holder.name,
           // The file's charts that use a name of it held off the path (T736).
@@ -354,10 +369,39 @@ interface HeldModel {
   readonly asked: string;
   /** The file's charts that use a name of it held off the target's path (T736). */
   readonly using: readonly ExportedChart[];
+  /**
+   * The dashboard's own references to such a name, its filters' members and
+   * its text's tokens' (T736's follow-up): never left out, so they block.
+   */
+  readonly dashboardUses: readonly DashboardUse[];
   /** Its names held, and those new, as the file has them. */
   readonly heldNames: readonly string[];
   readonly fresh: readonly string[];
 }
+
+/** A dashboard's own reference to a member: a filter on it, or a token in its text (T736's follow-up). */
+interface DashboardUse {
+  readonly kind: 'filter' | 'text';
+  readonly member: string;
+}
+
+/** The members a dashboard's filters are on. */
+const filtersOf = (body: unknown): string[] => {
+  const filters = (body as { filters?: unknown } | null | undefined)?.filters;
+  return (Array.isArray(filters) ? (filters as { member?: unknown }[]) : []).flatMap((filter) =>
+    typeof filter.member === 'string' ? [filter.member] : [],
+  );
+};
+
+/** "its filter on a.b and its text’s a.c": a dashboard's own uses, in words. */
+const dashboardUsesText = (uses: readonly DashboardUse[]) => {
+  const words = uses.map((use) =>
+    use.kind === 'filter' ? `its filter on ${use.member}` : `its text’s ${use.member}`,
+  );
+  return words.length <= 1
+    ? (words[0] ?? '')
+    : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1] ?? ''}`;
+};
 
 const quoted = (names: readonly string[]) => names.map((name) => `“${name}”`).join(', ');
 
@@ -681,6 +725,9 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
                         title: chart.title,
                         leftOut: leaveOut.has(chart.id),
                       })),
+                      ...(mapped.dashboardUses.length === 0
+                        ? {}
+                        : { dashboard: mapped.dashboardUses }),
                     },
                   ],
             },
@@ -801,11 +848,18 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
         .code(400)
         .send({ error: 'Send the charts to leave out as a list of their ids.' });
     if (!leavable(heldModels, leaveOut)) return reply.code(400).send(NOT_LEAVABLE);
-    for (const { holder, asked, using } of heldModels.values())
-      if (!holder.onPath && using.some((chart) => !leaveOut.has(chart.id)))
+    for (const { holder, asked, using, dashboardUses } of heldModels.values()) {
+      if (holder.onPath) continue;
+      // The dashboard's own uses can't be left out: only a target on its path will do.
+      if (dashboardUses.length > 0)
+        return reply.code(409).send({
+          error: `“${asked}” is the name of a cube or view that isn’t in ${where} or a folder above it, so the imported dashboard there couldn’t use it in ${dashboardUsesText(dashboardUses)}. Choose a target on its path.`,
+        });
+      if (using.some((chart) => !leaveOut.has(chart.id)))
         return reply.code(409).send({
           error: `“${asked}” is the name of a cube or view that isn’t in ${where} or a folder above it, so the imported charts there couldn’t use it. Choose a target on its path, or leave out the charts that use it.`,
         });
+    }
     const charts = file.items.filter(
       (item): item is ExportedChart => item.kind === 'chart' && !leaveOut.has(item.id),
     );
