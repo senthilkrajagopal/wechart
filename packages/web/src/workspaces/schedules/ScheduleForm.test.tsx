@@ -44,6 +44,11 @@ describe('New schedule (T552, AC-234)', () => {
 
     expect(text(within(pane).getByRole('heading', { level: 2 }))).toBe('New schedule');
     const picker = within(pane).getByRole('combobox', { name: 'Pre-aggregation' });
+    // With the pre-aggregation's cube beside it, its names in the code face (pin 9; T613).
+    expect(
+      picker.closest('.schedule-form__picker')?.querySelector('svg')?.getAttribute('data-icon'),
+    ).toBe('cube');
+    expect(picker.classList.contains('is-code')).toBe(true);
     // What Jobs lists in their folders, by short name with its folder; never a
     // lambda, which isn't built itself (T375).
     expect(
@@ -89,12 +94,14 @@ describe('New schedule (T552, AC-234)', () => {
     });
     expect(text(within(pane).getByText(/^Next runs/))).toBe('Next runs · Europe/Berlin, then UTC');
     // Named as design 16's keyboard table names it, and the change explained (D4; T612).
-    expect(
-      within(pane).getAllByRole('list', { name: 'Next 5 runs, Europe/Berlin' }),
-    ).toHaveLength(1);
+    expect(within(pane).getAllByRole('list', { name: 'Next 5 runs, Europe/Berlin' })).toHaveLength(
+      1,
+    );
     expect(text(within(pane).getByText(/follow the zone’s clock/))).toBe(
       'wechart’s schedules follow the zone’s clock, so 07:00 stays 07:00.',
     );
+    // The change with its warning (D4; T613).
+    expect(pane.querySelector('.schedules__change svg')?.getAttribute('data-icon')).toBe('warn');
   });
 
   it('names a cron it can’t read, shows no runs, and Create waits (D3)', async () => {
@@ -122,9 +129,13 @@ describe('New schedule (T552, AC-234)', () => {
     await user().type(field(pane, 'Cron expression'), '0 6 * * *');
     await user().type(field(pane, 'Time zone'), 'Europe/Berlin');
 
-    expect(text(await within(pane).findByTestId('refresh-key-could'))).toBe(
+    const could = await within(pane).findByTestId('refresh-key-could');
+    expect(text(could)).toBe(
       'A refresh key could run this. Set in the model as every: "0 6 * * *" with timezone: Europe/Berlin, Cube’s refresh worker runs it, and it changes by proposal. This schedule works too.',
     );
+    // With its icons (T613): D2's info, and the cron's reading its tick.
+    expect(could.querySelector('svg')?.getAttribute('data-icon')).toBe('info');
+    expect(pane.querySelector('.schedule-form__reading svg')?.getAttribute('data-icon')).toBe('ok');
     // And takes it: with a pre-aggregation and a name, Create is offered.
     await user().selectOptions(
       within(pane).getByRole('combobox', { name: 'Pre-aggregation' }),

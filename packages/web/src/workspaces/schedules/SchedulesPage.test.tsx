@@ -1022,7 +1022,9 @@ describe('Schedules’ words (T612, AC-399)', () => {
       wechart: [schedule({ timezone: 'Etc/UTC', runs: ['2026-10-01T13:00:00.000Z'] })],
     });
 
-    expect(text(cell(await wechartRow('Weekday mornings'), 'Next run'))).toBe('Today 13:00in 20 min');
+    expect(text(cell(await wechartRow('Weekday mornings'), 'Next run'))).toBe(
+      'Today 13:00in 20 min',
+    );
   });
 
   it('gives a wechart schedule in your zone no UTC, its run today as Today, and its last run as “Done · today”', async () => {

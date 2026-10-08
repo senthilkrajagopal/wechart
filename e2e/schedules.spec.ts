@@ -254,7 +254,27 @@ test('a schedule made on the page starts its build within its minute, and Run hi
     await page.goto('/schedules');
     await page.getByRole('button', { name: 'New schedule' }).click();
     const pane = page.getByRole('complementary', { name: 'Schedule details' });
+    // Docked at 400 px, its title in the UI face, as screen 2's pane is (T613).
+    await expect(pane).toHaveCSS('width', '400px');
+    await expect(pane.getByRole('heading', { level: 2 })).toHaveCSS('font-family', /^Inter/);
+    // Its foot pinned to the pane's foot (screen 2, pin 15).
+    const paneBox = (await pane.boundingBox())!;
+    const footBox = (await pane.locator('.schedule-form__foot').boundingBox())!;
+    const gap = paneBox.y + paneBox.height - (footBox.y + footBox.height);
+    // Within the pane, never below it out of view, and at its foot (T613's review).
+    expect(gap).toBeGreaterThanOrEqual(0);
+    expect(gap).toBeLessThanOrEqual(24);
+    // A clock change among the runs, between dashed rules (D4): every other month
+    // spans one of Berlin's two a year, whenever this runs.
+    await pane.getByRole('textbox', { name: 'Cron expression' }).fill('0 7 1 */2 *');
+    await pane.getByRole('combobox', { name: 'Time zone' }).fill('Europe/Berlin');
+    const change = pane.locator('.schedules__change > span');
+    await expect(change).toHaveCSS('border-top-style', 'dashed');
+    await expect(change).toHaveCSS('border-bottom-style', 'dashed');
+    await expect(change).toHaveCSS('font-weight', '600');
     const picker = pane.getByRole('combobox', { name: 'Pre-aggregation' });
+    // Its names in the code face (pin 9).
+    await expect(picker).toHaveCSS('font-family', /^"IBM Plex Mono"/);
     // A rollup whose refresh key Cube's refresh worker runs: it runs too, and both run (AC-392).
     await picker.selectOption(`${cube}.nightly`);
     await expect(pane.getByTestId('refresh-key-runs')).toContainText(

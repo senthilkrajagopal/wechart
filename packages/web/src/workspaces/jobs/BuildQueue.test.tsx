@@ -433,5 +433,7 @@ describe('the build queue (T376, AC-151)', () => {
     expect(text(said)).toContain(
       'Builds of pre-aggregations in your folders show here while they wait and while they run, whoever started them.',
     );
+    // With Queued's icon, as C4 draws it (T613).
+    expect(said?.querySelector('svg')?.getAttribute('data-icon')).toBe('idle');
   });
 });

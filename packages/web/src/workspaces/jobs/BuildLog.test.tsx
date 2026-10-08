@@ -129,6 +129,15 @@ describe('a build’s log (T374, AC-150)', () => {
     expect(text(within(log).getByTitle('9f2c41e0aa7d4b1c8e3f00ab12cda41e'))).toBe(
       '1 job · token 9f2c…a41e',
     );
+    // The list that takes focus is named by its head (T613).
+    expect(
+      within(log).getByRole('list', { name: 'Log · what Cube reported, when wechart saw it' })
+        .tabIndex,
+    ).toBe(0);
+    // Its title in the UI face, the pre-aggregation in the code face (B1; T613).
+    const title = screen.getByRole('heading', { level: 2 });
+    expect(title.classList.contains('admin-pane__title--ui')).toBe(true);
+    expect(title.querySelector('code')?.textContent).toBe('orders_emea.by_month');
   });
 
   it('lists every partition of one start, each with its state and token, failures first (B3)', async () => {
@@ -175,6 +184,8 @@ describe('a build’s log (T374, AC-150)', () => {
     // Of how many partitions, said as B3's head says it (T612).
     expect(text(within(pane).getByTestId('build-outcome'))).toBe('Failed · 2 of 30 partitions');
     expect(text(pane)).toContain('by Weekday mornings, a wechart schedule');
+    // Said once, in Started: no line of its own repeating it (T613).
+    expect(within(pane).queryAllByTestId('starter')).toHaveLength(0);
   });
 
   it('says a Run now was one, on its schedule, by the person who chose it (T555’s review)', async () => {

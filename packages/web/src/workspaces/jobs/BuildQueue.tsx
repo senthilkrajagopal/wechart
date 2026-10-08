@@ -501,6 +501,8 @@ export function BuildQueue({
       {queue.data.entries.length === 0 ? (
         // Nothing queued or building (state C4); a state chosen with none in it lists none.
         <div className="run-history__empty">
+          {/* With Queued's icon, as C4 draws it (T613). */}
+          <StatusIcon kind="idle" />
           <b>Nothing is queued or building</b>
           <span>
             Builds of pre-aggregations in your folders show here while they wait and while they run,

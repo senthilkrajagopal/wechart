@@ -19,6 +19,7 @@ import {
   type Starter,
 } from './builds';
 import { OwnerIcon } from '../schedules/OwnerLabel';
+import { ActionIcon } from './ActionIcon';
 import { readWechartSchedules, WECHART_SCHEDULES_KEY } from '../schedules/wechart';
 import {
   failedAtOf,
@@ -871,7 +872,11 @@ export function BuildPanel({
                     Not found
                   </h2>
                 </div>
-                <p>There’s no pre-aggregation by that name in your folders.</p>
+                {/* With the search's icon, as G6 draws it (T613). */}
+                <div className="admin-pane__notfound">
+                  <ActionIcon name="search" size={24} />
+                  <p>There’s no pre-aggregation by that name in your folders.</p>
+                </div>
               </div>
             ) : shown === undefined ? (
               <p className="admin-pane__empty">

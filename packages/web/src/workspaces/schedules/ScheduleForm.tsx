@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { shownOf } from '../jobs/BuildPanel';
+import { OwnerIcon } from './OwnerLabel';
 import { SheetActions } from '../jobs/Sheet';
 import { dayIn, timeIn, type Schedule } from './schedule';
 import {
@@ -61,6 +62,8 @@ export function RefreshKeyRuns({ refreshKey }: { refreshKey: Schedule | undefine
   const name = shownOf(refreshKey).name;
   return (
     <p className="notebar" data-testid="refresh-key-runs">
+      {/* With Cube's cube, as screen 2's pin 12 draws it (T613). */}
+      <OwnerIcon owner="cube" />
       <span>
         <b>Its refresh key also runs:</b> Cube’s refresh worker rebuilds {name}
         {runOn(refreshKey.when.replace(/\.$/, ''))}. Both run; this schedule adds builds.
@@ -209,26 +212,31 @@ export function ScheduleForm({
       {schedule === undefined ? (
         <div className="field">
           <label htmlFor={`${id}-preagg`}>Pre-aggregation</label>
-          <select
-            id={`${id}-preagg`}
-            value={fields.preAggregation}
-            onChange={(event) => {
-              set({ preAggregation: event.target.value });
-            }}
-            aria-describedby={`${id}-preagg-help`}
-          >
-            <option value="">Choose a pre-aggregation</option>
-            {(pickable.data ?? [])
-              .filter((row) => row.buildable !== false)
-              .map((row) => {
-                const shown = shownOf(row);
-                return (
-                  <option key={row.id} value={row.id}>
-                    {`${shown.name} · ${shown.folder ?? 'Shared'}`}
-                  </option>
-                );
-              })}
-          </select>
+          {/* With the pre-aggregation's cube, its names in the code face (pin 9; T613). */}
+          <div className="schedule-form__picker">
+            <OwnerIcon owner="cube" />
+            <select
+              id={`${id}-preagg`}
+              className="is-code"
+              value={fields.preAggregation}
+              onChange={(event) => {
+                set({ preAggregation: event.target.value });
+              }}
+              aria-describedby={`${id}-preagg-help`}
+            >
+              <option value="">Choose a pre-aggregation</option>
+              {(pickable.data ?? [])
+                .filter((row) => row.buildable !== false)
+                .map((row) => {
+                  const shown = shownOf(row);
+                  return (
+                    <option key={row.id} value={row.id}>
+                      {`${shown.name} · ${shown.folder ?? 'Shared'}`}
+                    </option>
+                  );
+                })}
+            </select>
+          </div>
           <p className="help field__help" id={`${id}-preagg-help`}>
             From the folders where you have read-write access.
           </p>
@@ -268,7 +276,11 @@ export function ScheduleForm({
         </p>
         <div id={`${id}-cron-reading`} aria-live="polite">
           {words !== undefined ? (
-            <p className="schedule-form__reading">{words}</p>
+            // Read, with its tick, as the form's cron draws it (pin 10; T613).
+            <p className="schedule-form__reading">
+              <StatusIcon kind="ok" />
+              <span>{words}</span>
+            </p>
           ) : read?.ok === false && cronWrong ? (
             <p className="field__error">
               <StatusIcon kind="err" />
@@ -330,7 +342,9 @@ export function ScheduleForm({
               return read.change !== undefined && read.change.before === at
                 ? [
                     <li key="change" className="schedules__change">
+                      {/* With its warning, as D4 draws it (T613). */}
                       <span>
+                        <StatusIcon kind="warn" />
                         {clockChangeLine(
                           dayIn(shownZone, new Date(read.change.at)),
                           read.change.back,
@@ -352,6 +366,8 @@ export function ScheduleForm({
       ) : null}
       {read?.ok === true && read.refreshKeyCould ? (
         <p className="notebar" data-testid="refresh-key-could">
+          {/* With its info icon, as D2 draws it (T613). */}
+          <StatusIcon kind="info" />
           <span>
             <b>A refresh key could run this.</b> Set in the model as{' '}
             <code>{`every: "${cron}"`}</code>

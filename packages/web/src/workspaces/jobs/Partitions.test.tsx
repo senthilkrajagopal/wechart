@@ -184,10 +184,13 @@ describe('a rollup’s partitions (T375, AC-145)', () => {
       name: 'Select all 6 partitions',
     });
     expect(all.indeterminate).toBe(true);
+    const rebuild = screen.getByRole('button', {
+      name: `Rebuild 2 selected partitions of ${NAME}`,
+    });
+    // With its icon, as screen 1's pin 10 draws it (T613).
+    expect(rebuild.querySelector('svg')?.getAttribute('data-icon')).toBe('refresh');
 
-    await userEvent.click(
-      screen.getByRole('button', { name: `Rebuild 2 selected partitions of ${NAME}` }),
-    );
+    await userEvent.click(rebuild);
     expect(posted).toEqual([
       { preAggregation: ID, partitions: ['2026-09-01T00:00:00.000', '2026-08-01T00:00:00.000'] },
     ]);

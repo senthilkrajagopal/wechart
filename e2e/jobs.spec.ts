@@ -180,6 +180,10 @@ test('Run history lists a build started from Jobs, its log naming its token and 
   await expect(pane.getByTitle(tokens[0]!)).toBeVisible();
   await expect(log.getByRole('listitem').last()).toContainText('done');
   await expect(pane.getByTestId('build-outcome')).toHaveText('Done');
+  // "Build of" in the UI face, the pre-aggregation in the code face (B1; T613).
+  const title = pane.getByRole('heading', { level: 2 });
+  await expect(title).toHaveCSS('font-family', /^Inter/);
+  await expect(title.locator('code')).toHaveCSS('font-family', /^"IBM Plex Mono"/);
 
   // A day and an hour on, Cube's record of the job long gone: still listed.
   expect(runId).toMatch(/^[0-9a-f-]+$/);
@@ -614,6 +618,8 @@ test('the Jobs header shows Cube’s health and the refresh worker’s, and a de
   await expect(worker).toHaveText(/^Refresh worker running · last run \d\d:\d\d$/, {
     timeout: 15_000,
   });
+  // Its last run in the lighter style, as screen 1's badge draws it (T613).
+  await expect(worker.locator('.status__detail')).toHaveCSS('font-weight', '400');
   const said = (await worker.textContent())!.slice(-5);
   const { status, modelRevision, workers } = await report();
   const minutesOf = (clock: string) => Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 5));
@@ -785,6 +791,17 @@ test('selecting a pre-aggregation fills the full-height pane with its state, tri
 
   const pane = page.getByRole('complementary', { name: 'Pre-aggregation details' });
   await expect(pane.getByRole('heading', { level: 2 })).toHaveText(ROLLUP);
+  // The header's badges as pills, 28 px high, as screen 1 draws them (T613).
+  for (const badge of [page.getByTestId('cube-health'), page.getByTestId('worker-health')]) {
+    const pill = badge.locator('xpath=ancestor-or-self::*[contains(@class, "jobs-badge")][1]');
+    await expect(pill).toHaveCSS('border-radius', '999px');
+    await expect(pill).toHaveCSS('height', '28px');
+  }
+  // A rollup's name in the code face: the pane's title (T613).
+  await expect(pane.getByRole('heading', { level: 2 })).toHaveCSS(
+    'font-family',
+    /^"IBM Plex Mono"/,
+  );
   // Its state as its row has it (T550, AC-391).
   await expect(pane.getByTestId('pane-state')).toHaveText(
     (await row.getByTestId('row-state').textContent()) ?? '',

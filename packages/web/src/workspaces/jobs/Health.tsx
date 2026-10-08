@@ -122,10 +122,13 @@ export function Health({ pollMs = 10_000 }: { pollMs?: number }) {
     xcubeSaid !== undefined && report !== undefined && 'lastRunAt' in report.status
       ? report.status.lastRunAt
       : undefined;
+  // "· last run 14:38" in the lighter style, as screen 1's badge draws it (T613).
+  const [workerHead = workerLabel, ...workerMore] = workerLabel.split(' · ');
   const badge = (
     <Status
       kind={workerKind}
-      label={workerLabel}
+      label={workerHead}
+      {...(workerMore.length === 0 ? {} : { detail: workerMore.join(' · ') })}
       testId="worker-health"
       {...(lastRun === undefined ? {} : { title: `Last run ${exactOf(new Date(lastRun))}` })}
     />
@@ -135,15 +138,18 @@ export function Health({ pollMs = 10_000 }: { pollMs?: number }) {
     // keyboard table; T611): Esc closes it back to the badge, a click elsewhere too.
     <div className="jobs-health__anchor">
       <div className="jobs-health" role="status" aria-label="Cube">
-        <Status kind={cubeKind} label={cubeLabel} testId="cube-health" />
+        {/* Each a pill, as screen 1's header draws them (T613). */}
+        <span className="jobs-badge">
+          <Status kind={cubeKind} label={cubeLabel} testId="cube-health" />
+        </span>
         {report === undefined ? (
-          badge
+          <span className="jobs-badge">{badge}</span>
         ) : (
           // It opens the panel of each worker and module (F2).
           <button
             ref={opener}
             type="button"
-            className="jobs-health__worker"
+            className="jobs-health__worker jobs-badge"
             aria-expanded={open}
             aria-controls={panelId}
             onClick={() => setOpen((was) => !was)}

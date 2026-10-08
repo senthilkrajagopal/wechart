@@ -11,7 +11,6 @@ import {
   partitionsOf,
   periodOfTable,
   shortToken,
-  StarterLabel,
   useSingleUser,
   whenOf,
   type BuildSummary,
@@ -223,7 +222,12 @@ export function BuildLog({
       {/* Tab stays in it while it covers the page, below 1,024 px (T640). */}
       {narrow && active ? <SheetTrap pane={pane} /> : null}
       <div className="admin-pane__head" data-testid="pane-head">
-        <h2 className="admin-pane__title build-log__title" ref={heading} tabIndex={-1}>
+        {/* In the UI face, the pre-aggregation in the code face (B1; T613). */}
+        <h2
+          className="admin-pane__title admin-pane__title--ui build-log__title"
+          ref={heading}
+          tabIndex={-1}
+        >
           Build of <code>{name}</code>
         </h2>
         <button type="button" className="btn-ghost btn-sm" aria-label="Close" onClick={onClose}>
@@ -276,11 +280,7 @@ export function BuildLog({
                   : `${sameDay(record.endedAt, record.startedAt) ? clockOf(record.endedAt) : whenOf(record.endedAt).shown} · ${durationOf(record.durationMs)}, as wechart saw it`}
               </dd>
             </dl>
-            {record.starter.kind === 'schedule' ? (
-              <p className="build-log__starter">
-                <StarterLabel starter={record.starter} />
-              </p>
-            ) : null}
+            {/* Who started it is Started's, said once (B1, B3; T613). */}
             {record.outcome === 'expired' ? (
               <p className="help build-log__help">
                 Cube no longer knew this job when wechart asked again: it keeps a job’s record for
@@ -344,7 +344,7 @@ export function BuildLog({
               <h3 id={`${id}-log`}>Log · what Cube reported, when wechart saw it</h3>
               {/* A list that scrolls and takes focus, as TableScroll's region does (design 16, keyboard). */}
               {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
-              <ol className="build-log__lines" tabIndex={0}>
+              <ol className="build-log__lines" tabIndex={0} aria-labelledby={`${id}-log`}>
                 {linesOf(record).map((line, at) => (
                   <li
                     key={at}

@@ -49,6 +49,7 @@ export function Status({
   testId,
   state,
   title,
+  detail,
 }: {
   kind: StateKind;
   label: string;
@@ -57,6 +58,8 @@ export function Status({
   state?: string;
   /** More, on hover: the words of what couldn't be read (T550). */
   title?: string;
+  /** After the state, in the lighter style: "· last run 14:38" (design 16's `.t`; T613). */
+  detail?: string;
 }) {
   return (
     <span
@@ -67,6 +70,12 @@ export function Status({
     >
       <StatusIcon kind={kind} />
       {label}
+      {detail === undefined ? null : (
+        <>
+          {' '}
+          <span className="status__detail">{`· ${detail}`}</span>
+        </>
+      )}
     </span>
   );
 }

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { TableScroll } from '../../shell/TableScroll';
+import { ActionIcon } from './ActionIcon';
 import { BuildLog } from './BuildLog';
 import { FolderFilter, ScopeNote, useJobsFolders } from './FolderFilter';
 import { ListError, ListLoading, NoFolderLeft, noFolderLeft, ReadError } from './ListStates';
@@ -295,6 +296,8 @@ export function RunHistory({
         {page.data !== undefined && records.length === 0 ? (
           // Nothing to list (state B4): naming no folder.
           <div className="empty-state run-history__empty">
+            {/* With history's clock, as B4 draws it (T613). */}
+            <ActionIcon name="hist" size={16} />
             <b>{narrowed ? 'No builds match these filters' : `No builds ${time[2]}`}</b>
             <span>
               Builds you or others start from Jobs, and builds wechart’s schedules start, in your

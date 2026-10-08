@@ -478,6 +478,59 @@ describe('pausing and resuming a schedule (T556, AC-396)', () => {
   });
 });
 
+/** T613 (AC-399; design 16, screen 2, D1, D2, D4 and E1): Schedules' icons, and its panes' heads. */
+describe('Schedules’ icons and heads (T613, AC-399)', () => {
+  const icon = (element: Element | null) =>
+    element?.querySelector('svg')?.getAttribute('data-icon');
+
+  it('draws New schedule with its plus, and the form’s title in the UI face', async () => {
+    shownSchedules();
+    const add = await screen.findByRole('button', { name: 'New schedule' });
+    expect(icon(add)).toBe('plus');
+
+    await user().click(add);
+    const title = within(paneOf()).getByRole('heading', { level: 2 });
+    expect(title.classList.contains('admin-pane__title--ui')).toBe(true);
+  });
+
+  it('heads a wechart schedule’s pane with its name alone, in the UI face, its rollup in the code face (D1)', async () => {
+    shownSchedules({ wechart: [schedule()] });
+    await user().click(await wechartRow('Weekday mornings'));
+    const pane = paneOf();
+
+    const head = pane.querySelector('.admin-pane__head') as HTMLElement;
+    expect(within(head).queryAllByTestId('owner')).toHaveLength(0);
+    expect(
+      within(head).getByRole('heading', { level: 2 }).classList.contains('admin-pane__title--ui'),
+    ).toBe(true);
+    const builds = within(pane).getByText('Builds').nextElementSibling as HTMLElement;
+    expect(builds.querySelector('code')?.textContent).toBe('orders.mornings');
+    // Delete… with its bin, Run now with its play (D1).
+    expect(icon(within(pane).getByRole('button', { name: 'Delete…' }))).toBe('trash');
+    expect(icon(within(pane).getByRole('button', { name: 'Run now' }))).toBe('play');
+  });
+
+  it('marks the refresh key that runs too with its cube', async () => {
+    shownSchedules();
+    await user().click(await screen.findByRole('button', { name: 'New schedule' }));
+    await user().selectOptions(
+      within(paneOf()).getByRole('combobox', { name: 'Pre-aggregation' }),
+      'fsales__orders.mornings',
+    );
+
+    expect(icon(within(paneOf()).getByTestId('refresh-key-runs'))).toBe('cube');
+  });
+
+  it('marks a suspended one’s note with its icon, and Resume with its play (E1)', async () => {
+    shownSchedules({ wechart: [suspended()], runs: SUSPENDED_RUNS });
+    await user().click(await wechartRow('Weekday mornings'));
+    const pane = paneOf();
+
+    expect(icon(within(pane).getByTestId('suspended-note'))).toBe('susp');
+    expect(icon(within(pane).getByRole('button', { name: 'Resume' }))).toBe('play');
+  });
+});
+
 /** T612 (AC-399; design 16, E1 and E3): when a resumed schedule next runs, in words, from Europe/Berlin. */
 describe('Resume’s words (T612, AC-399)', () => {
   viewedFrom('Europe/Berlin');
@@ -499,8 +552,8 @@ describe('Resume’s words (T612, AC-399)', () => {
 
     await user().click(within(paneOf()).getByRole('button', { name: 'Resume' }));
 
-    expect(
-      text(await screen.findByText(/^Resumed “Weekday mornings”/, { selector: 'span' })),
-    ).toBe('Resumed “Weekday mornings”. Its next run is today at 15:00.');
+    expect(text(await screen.findByText(/^Resumed “Weekday mornings”/, { selector: 'span' }))).toBe(
+      'Resumed “Weekday mornings”. Its next run is today at 15:00.',
+    );
   });
 });

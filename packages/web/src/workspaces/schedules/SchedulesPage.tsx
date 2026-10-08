@@ -8,6 +8,7 @@ import { InfoBar } from '../../shell/InfoBar';
 import { NotFound } from '../../shell/NotFound';
 import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
+import { ActionIcon } from '../jobs/ActionIcon';
 import { shownOf } from '../jobs/BuildPanel';
 import {
   EVERY_FOLDER,
@@ -321,9 +322,7 @@ export function SchedulesPage() {
   // `?schedule=` opens one of wechart's schedules: Jobs' "Also rebuilt by" links to it (pin 13; T611).
   const [selected, setSelected] = useState<Open | null>(() => {
     const asked = new URLSearchParams(window.location.search).get('schedule');
-    return asked === null || asked === ''
-      ? null
-      : { kind: 'wechart', id: asked, addressed: true };
+    return asked === null || asked === '' ? null : { kind: 'wechart', id: asked, addressed: true };
   });
   const client = useQueryClient();
   /** Access lost while the page was open (design 16, G5; T560), said once the lists are read again. */
@@ -518,7 +517,8 @@ export function SchedulesPage() {
         <>
           <div className="admin-pane__head">
             {backToList}
-            <h2 className="admin-pane__title" tabIndex={-1}>
+            {/* A title in the UI face, not a rollup's in the code face (screen 2's pane; T613). */}
+            <h2 className="admin-pane__title admin-pane__title--ui" tabIndex={-1}>
               New schedule
             </h2>
           </div>
@@ -612,6 +612,8 @@ export function SchedulesPage() {
                 setSelected({ kind: 'new' });
               }}
             >
+              {/* With its plus, as screen 2's head draws it (T613). */}
+              <ActionIcon name="plus" />
               New schedule
             </button>
           ) : null}
@@ -821,9 +823,8 @@ export function SchedulesPage() {
             <p className="jobs-foot">
               {/* Which zone is yours, as screen 2's foot names it (T612). */}
               {`Times are your local time, ${viewerZone()}, unless a schedule names its own zone.`}{' '}
-              For a refresh key,
-              Last run is when Cube last built the rollup; who started it and how it ended aren’t
-              recorded yet, until the refresh worker’s history is.
+              For a refresh key, Last run is when Cube last built the rollup; who started it and how
+              it ended aren’t recorded yet, until the refresh worker’s history is.
             </p>
           </>
         )}

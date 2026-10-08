@@ -4098,6 +4098,69 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 .run-history .audit-trail__pager { justify-content: flex-start; align-items: center; }
 .run-history__note { font-size: 12px; color: var(--wc-text-secondary); }
 .owner { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; white-space: nowrap; }
+/* Design 16's icons and styling (T613). An action's icon before its words. */
+.action-icon { flex: none; }
+button:has(> .action-icon) { display: inline-flex; gap: 6px; align-items: center; }
+/* The header's badges as pills, as screen 1 draws them (its .hbadge). */
+.jobs-health .jobs-badge {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--wc-border-subtle);
+  border-radius: 999px;
+  background: var(--wc-bg-surface);
+  color: var(--wc-text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.jobs-health button.jobs-badge:hover:not(:disabled) { background: var(--wc-bg-subtle); }
+/* A title in the UI face: a schedule's, New schedule; a rollup's stays in the code face. */
+.admin-pane__title.admin-pane__title--ui { font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif; }
+/* G6's Not found: the search's icon over its words. */
+.admin-pane__notfound { display: grid; justify-items: center; gap: 8px; padding: 24px 16px; text-align: center; }
+.admin-pane__notfound > svg { color: var(--wc-text-muted); }
+/* The cron read back, with its tick (pin 10); the refresh key's cube in its note (pin 12). */
+.schedule-form__reading { display: flex; gap: 6px; align-items: flex-start; }
+.schedule-form__reading > svg { margin-top: 2px; color: var(--wc-status-success); }
+[data-testid='refresh-key-runs'] > svg { color: var(--wc-text-secondary); }
+.schedules__change svg { vertical-align: -2px; margin-right: 6px; }
+/* D4's clock change between dashed rules, tinted as its warning (its .dst). */
+.schedules__runs > .schedules__change > span {
+  margin: 2px 0;
+  padding: 2px 0;
+  border-top: 1px dashed color-mix(in srgb, var(--wc-status-warning-icon) 60%, transparent);
+  border-bottom: 1px dashed color-mix(in srgb, var(--wc-status-warning-icon) 60%, transparent);
+  font-weight: 600;
+}
+/* The worker badge's chevron in the secondary colour, as screen 1 draws it. */
+.jobs-health .jobs-badge > svg:last-child { color: var(--wc-text-secondary); }
+/* "Build of" in the UI face, the pre-aggregation in the code face (B1). */
+.build-log__title code { font-family: var(--wc-font-code); }
+/* A badge's "· last run 14:38", lighter (screen 1's .t). */
+.status__detail { font-weight: 400; color: var(--wc-text-secondary); }
+/* The pre-aggregation picker: its cube beside it, its names in the code face (pin 9). */
+.schedule-form__picker { display: flex; gap: 8px; align-items: center; }
+.schedule-form__picker > svg { flex: none; color: var(--wc-text-secondary); }
+.schedule-form .field select.is-code { font: 400 13px var(--wc-font-code); }
+@media (min-width: 1024px) {
+  /* Schedules' pane docked at 400 px, as screen 2 draws it; a sheet below 1,024 px. */
+  .admin-page--docked:has(.schedules__pane) { grid-template-columns: minmax(0, 1fr) 400px; }
+  /* Its form's foot pinned to the pane's foot, as screen 2 draws it (pin 15). */
+  .admin-page .schedules__pane { display: flex; flex-direction: column; }
+  .admin-page .schedules__pane > .admin-pane__body { display: flex; flex: 1 0 auto; flex-direction: column; }
+  .admin-page .schedules__pane .schedule-form { display: flex; flex: 1 0 auto; flex-direction: column; }
+  .admin-page .schedules__pane .schedule-form__foot {
+    position: sticky;
+    bottom: 0;
+    margin-top: auto;
+    padding-bottom: 4px;
+    background: var(--wc-bg-surface);
+  }
+}
 .owner svg { color: var(--wc-text-secondary); flex: none; }
 .build-log__title code { font-size: 13px; }
 .build-log__section { display: grid; gap: 6px; }

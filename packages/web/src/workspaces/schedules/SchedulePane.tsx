@@ -5,6 +5,7 @@ import { ExportedToast } from '../../dashboard/export/ExportedToast';
 import { dayOf } from '../../shell/formatTime';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
+import { ActionIcon } from '../jobs/ActionIcon';
 import { shownOf } from '../jobs/BuildPanel';
 import { whenOf } from '../jobs/builds';
 import { narrowNow, SheetActions } from '../jobs/Sheet';
@@ -13,15 +14,7 @@ import { rollupHref } from '../model/inFolder';
 import { lagInWords } from '../model/preagg/RefreshSchedule';
 import { OwnerLabel } from './OwnerLabel';
 import { PauseSwitch } from './PauseSwitch';
-import {
-  changeWords,
-  dayIn,
-  momentWords,
-  runsOf,
-  timeIn,
-  zoneOf,
-  type Schedule,
-} from './schedule';
+import { changeWords, dayIn, momentWords, runsOf, timeIn, zoneOf, type Schedule } from './schedule';
 import { RefreshKeyRuns, ScheduleForm } from './ScheduleForm';
 import {
   deleteSchedule,
@@ -169,7 +162,12 @@ export function LastRunStatus({ run, when }: { run: LastRun; when?: string }) {
       return <Status kind="cancel" label={`Cancelled${at}`} testId="last-run" state="cancelled" />;
     case 'expired':
       return (
-        <Status kind="warn" label={`Cube’s record expired${at}`} testId="last-run" state="expired" />
+        <Status
+          kind="warn"
+          label={`Cube’s record expired${at}`}
+          testId="last-run"
+          state="expired"
+        />
       );
     default:
       return <Status kind="run" label={`Under way${at}`} testId="last-run" state="open" />;
@@ -245,13 +243,13 @@ export function WechartPane({
     <>
       <div className="admin-pane__head">
         {back}
-        <h2 className="admin-pane__title" tabIndex={-1}>
+        {/* Its name alone, in the UI face, as D1 heads it; its owner is its row's (T613). */}
+        <h2 className="admin-pane__title admin-pane__title--ui" tabIndex={-1}>
           {schedule.name}
         </h2>
         <span className="spacer" />
         {/* On, or paused by hand (T556; design 16, P3). */}
         <PauseSwitch schedule={schedule} />
-        <OwnerLabel owner="wechart" />
       </div>
       {/* What scrolls under the head, the sheet's body below 1,024 px (T640). */}
       <div className="admin-pane__body">
@@ -321,7 +319,11 @@ export function WechartPane({
             )}
           </dd>
           <dt>Builds</dt>
-          <dd>{`${shown.name} · ${shown.folder ?? 'Shared'}`}</dd>
+          {/* The rollup in the code face, as D1 draws it (T613). */}
+          <dd>
+            <code className="run-history__name">{shown.name}</code>
+            {` · ${shown.folder ?? 'Shared'}`}
+          </dd>
           <dt>Made by</dt>
           <dd>
             {`${schedule.createdBy.name}, ${dateOf(schedule.createdAt)}`}
@@ -364,6 +366,8 @@ export function WechartPane({
               setDeleting(true);
             }}
           >
+            {/* With its bin, as D1 draws it (T613). */}
+            <ActionIcon name="trash" />
             Delete…
           </button>
           {/* Run now, on the right (design 16, D1 and P2): suspended or not (R59). */}
@@ -374,9 +378,7 @@ export function WechartPane({
             disabled={runNow.isPending}
             onClick={() => runNow.mutate()}
           >
-            <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-              <path d="M5 3.2v9.6L12.6 8z" fill="currentColor" />
-            </svg>
+            <ActionIcon name="play" />
             Run now
           </button>
         </ScheduleForm>
@@ -463,6 +465,8 @@ function Suspension({
   return (
     <section className="build-log__section" aria-label="Suspended">
       <p className="notebar notebar--err" data-testid="suspended-note">
+        {/* With its suspended icon, as E1 draws it (T613). */}
+        <StatusIcon kind="susp" />
         <span>
           <b>{`Suspended after ${String(count)} failed ${count === 1 ? 'run' : 'runs'} in a row,`}</b>{' '}
           {`${momentOf(schedule.suspendedAt ?? '')}. It won’t run again until it’s resumed.`}
@@ -478,6 +482,7 @@ function Suspension({
             resume.mutate();
           }}
         >
+          <ActionIcon name="play" />
           Resume
         </button>
         <span className="help" data-testid="resume-help">

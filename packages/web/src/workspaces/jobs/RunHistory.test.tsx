@@ -178,7 +178,9 @@ describe('Run history (T374, AC-150)', () => {
   /** T612 (AC-399; design 16, state B): a folder deep under Shared, by its last two. */
   it('names a folder three deep by its last two, "…/ EMEA / DACH", the whole path on hover and to a reader', async () => {
     api(() =>
-      listOf([summary({ name: 'dach.orders_daily', folderPath: ['Shared', 'Sales', 'EMEA', 'DACH'] })]),
+      listOf([
+        summary({ name: 'dach.orders_daily', folderPath: ['Shared', 'Sales', 'EMEA', 'DACH'] }),
+      ]),
     );
     shown();
 
@@ -323,6 +325,8 @@ describe('Run history (T374, AC-150)', () => {
 
     const empty = await screen.findByText('No builds in the last 7 days');
     const said = empty.parentElement!;
+    // With history's icon, as B4 draws it (T613).
+    expect(said.querySelector('svg')?.getAttribute('data-icon')).toBe('hist');
     expect(text(said)).toContain('in your folders');
     expect(text(said)).toContain('Cube’s refresh worker’s own builds aren’t listed yet');
     // No page speaks of phases (UX-111; T551's review): nor its note under the pager.

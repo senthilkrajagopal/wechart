@@ -240,6 +240,10 @@ describe('the refresh worker, as xcube reports it (T553, AC-393)', () => {
       );
     });
     expect(badge('worker-health').getAttribute('title')).toContain(exactOf(yesterday));
+    // Its last run in the lighter style, as screen 1's badge draws it (T613).
+    expect(badge('worker-health').querySelector('.status__detail')?.textContent).toBe(
+      '· last run Yesterday 14:39',
+    );
 
     await userEvent.click(screen.getByRole('button', { name: /Refresh worker running/ }));
     const panel = screen.getByRole('region', { name: 'Refresh worker' });

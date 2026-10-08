@@ -461,6 +461,10 @@ describe('G6 · out of scope, read as Not found (T560, AC-399; rule 67)', () => 
         text(within(missing).getByRole('heading', { level: 2 })),
         text(missing.querySelector('p')),
       ]).toEqual(['Not found', 'There’s no pre-aggregation by that name in your folders.']);
+      // With the search's icon, as G6 draws it (T613).
+      expect(missing.querySelector('.admin-pane__notfound svg')?.getAttribute('data-icon')).toBe(
+        'search',
+      );
       // Below 1,024 px it is a sheet like any: × goes back to the list (T560's review).
       await user().click(within(missing).getByRole('button', { name: 'Back to the list' }));
       expect(within(pane).queryByTestId('not-found')).toBeNull();

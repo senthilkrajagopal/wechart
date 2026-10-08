@@ -12,6 +12,7 @@ import {
   type Starter,
 } from './builds';
 import { isRefused, ReadError } from './ListStates';
+import { ActionIcon } from './ActionIcon';
 import { SheetActions } from './Sheet';
 import { Status } from './StateBadge';
 
@@ -418,6 +419,8 @@ export function Partitions({
           aria-disabled={rebuild.off}
           onClick={rebuild.onClick}
         >
+          {/* With its arrow, as pin 10 draws it (T613). */}
+          <ActionIcon name="refresh" />
           {rebuild.shown}
         </button>
       )}
