@@ -62,3 +62,13 @@ Rules that go with it:
 - `.claude/hooks/*.mjs` are the workflow gates. `.claude/state/` holds runtime state and is gitignored.
 - `.claude/skills/{test-driven-development,verification-before-completion,systematic-debugging}` are copied verbatim from superpowers v6.4.1 (see `.claude/skills/VENDORED.md`). Don't edit them.
 - Don't install the superpowers plugin. Its SessionStart hook and brainstorming flow conflict with this workflow.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
