@@ -13025,7 +13025,8 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - `refusal.test.ts` and `changesets.test.ts`: xcube's name-in-use refusal of a changeset, and of a connection PUT, is read as a refusal of the caller's item. It says only that the name is in use, and holds no folder id, path or title (AC-421, AC-424).
   - Depends on: xcube's R71 image (to be published)
 
-- [ ] T702 (AC-328, AC-310, AC-421, AC-424) Fresh start: drop wechart's metadata and xcube's schema in every environment and seed them again under one name per item
+- [x] T702 (AC-328, AC-310, AC-421, AC-424) Fresh start: drop wechart's metadata and xcube's schema in every environment and seed them again under one name per item
+  - **Helm part done 2026-10-08 (the coordinator):** docker-desktop was uninstalled, its PVCs `data-wechart-meta-0` and `data-wechart-cubestore-0` deleted, and the release installed fresh at images `3b5b4734` with sign-in on. `verify.sh --no-install` passed all 42 checks (adb3b95f names its probes' files for their cubes, as T737 does). These include the install Job seeding the root's `default` (4a), no other folder holding a data source named `default` (4a), the probe landing through the workspace and a self-approved proposal, and a query reaching the data source the values name (5). **AC-310 ticked** on this run, with T708's `root-default-only.test.ts` and `root-default.spec.ts` and T730's e2e. The first run, before adb3b95f, found T739 (a workspace folder's delete leaves its drafts in xcube's overlay).
   - Files:
     - `docs/deploy.md` (the R71 reset, in order);
     - `docker-compose.yml` (`xcube-db-init`);
