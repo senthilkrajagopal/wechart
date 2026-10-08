@@ -8066,6 +8066,37 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
   - **Implementer's calls, for the user to confirm or change:**
     - A read-only user at `/jobs` or `/schedules` sees the page's frame for as long as `/api/jobs/folders` takes to refuse, then Not found. No folder or item is named in that time, and `/jobs/builds/<theirs>` and `/jobs/builds/<none>` behave the same, so rule 67 holds. Holding the page until that answer would put every writer's first list read behind it.
     - The review's doubt that the sheet's 72 px of room is too little under New schedule's two-line foot at 390 px was measured and doesn't arise: its last line ends above the foot (`schedules.spec.ts`).
+- [x] T640 (AC-176, AC-399) Jobs' and Schedules' sheets below 1,024 px act as sheets: Esc, Tab kept in them, their toast over them, focus back to what opened them *(added 2026-10-07 by the coordinator, from group 6's read-only audit of T560; the user: reuse the `.source-pane` sheets of designs 01, 11 and 13)*
+  - Files: `packages/web/src/workspaces/jobs/{Sheet (new),BuildPanel,BuildLog,RunHistory,Partitions,JobsPage}.tsx`, `packages/web/src/workspaces/schedules/{SchedulesPage,SchedulePane,ScheduleForm}.tsx`, `packages/web/src/shell/{useFocusTrap.ts,styles.ts}` (+ `useFocusTrap.test.tsx`, `Partitions.test.tsx`, `States.test.tsx`, `SchedulesPage.test.tsx`), `e2e/sheets.spec.ts` (new), `e2e/schedules.spec.ts`, `e2e/jobs.spec.ts`, `e2e/security/jobs-scope.spec.ts`
+  - Failing test: `e2e/sheets.spec.ts` at 900 px, one or more per gap:
+    - Esc closes the Jobs pane's sheet, a build log's and a schedule's, and asks first over a half-typed New schedule, Keep editing keeping it;
+    - Tab and Shift+Tab stay in each sheet;
+    - the build toast is over the sheet, and Tab reaches its buttons there;
+    - × and Cancel on New schedule give focus back to New schedule;
+    - closing a build log, by Esc or ×, gives focus back to its row;
+    - Resume keeps focus in the sheet, on its head;
+    - a sheet opened from `?preagg=` before the list answers takes focus once it does;
+    - a sheet closed because access went (G5) leaves focus on the list;
+    - a sheet left for another tab, by its link to Run history, keeps no hold on Tab there, and takes focus again as its tab is shown;
+    - the Not found sheet, closed, leaves focus on the list; a schedule's sheet closed by access lost does too;
+    - Esc in the Delete dialog over a schedule's sheet closes the dialog only; × asks over a change typed;
+    - the toast sits above the sheet's pinned foot.
+    - `useFocusTrap.test.tsx`: Shift+Tab from a heading that took focus, and Tab from a log after the last control, stay in.
+    - `States.test.tsx`: below 1,024 px, G5's toast is the live region that was there before it spoke; Esc in the docked pane on a wide window closes it.
+    - Tests changed: the empty-foot checks look for no actions row, the foot now being `.source-pane__foot`; the 390 px foot check scrolls the sheet's body; Jobs' G8 check measures Build once the partitions are read, as the actions are drawn anew for them. `security/jobs-scope.spec.ts`'s Folder lists look at this run's folders only (group 3's baseline: propose.spec.ts's folders of writer's, made beside it).
+  - Depends on: T610
+  - **Done 2026-10-07.**
+    - **The pattern, reused (the user's direction).** Each sheet is built as the `.source-pane` sheets are: over the page under the app bar at z-index 40, its head in place, only its body scrolling (`.admin-pane__body`), and its actions pinned in `.source-pane__foot`. T610's fixed-position foot is gone. Below 1,024 px a pane's actions are portalled into that foot (`SheetActions`), so on a wide window they stay where design 16 draws them; a form's submit keeps its form by `form=`. Esc is read as the `.source-pane` sheets read it (in the sheet, or on the page while the sheet covers it), on the window after the document's own listeners, so the Delete dialog over the sheet keeps its own Esc. Focus goes back to the row, New schedule, or the list. Tab is kept by the shared `useFocusTrap`, mounted while a sheet covers the page and its tab is the one shown.
+    - **The toast** stays where it was, so a screen reader still hears each message as it comes; while a sheet covers the page it is drawn over the sheet, above its foot (`--sheet-foot-height`), and Tab reaches it, the trap's box holding the sheet and its toasts (`.sheet-over`, `display: contents`).
+    - **The shared trap** now also keeps Tab in a box from a focused element Tab doesn't stop at (a heading that took focus as it opened), which let Shift+Tab out of every dialog whose heading takes focus.
+    - **The review's fixes:** the toast no longer moves (it went unannounced when it moved as it spoke); a sheet shown again by its tab takes focus; the Not found sheet's close falls back to the list; a question over a pane gone since goes with it; the toast sits above the foot.
+  - **Implementer's calls, for the user to confirm or change:**
+    - Esc and × ask before dropping what's typed in a schedule's form; Cancel doesn't, as design 16's pin 15 has it ("Cancel loses only what's typed in the form") and T552's test holds, where the `.source-pane` sheets' Cancel asks. The question says "What you typed isn’t kept."
+    - Esc closes the pane on a wide window too, where it is docked, as rule 85 has every panel close.
+    - The pattern's shared pieces are reused (`.source-pane__foot`, `DiscardQuestion`, `useFocusTrap`, the same Esc rule); the panes keep their own head and a body class of theirs, `.admin-pane__body`, as their head is design 16's 44 px one, not design 01's.
+    - After Resume below 1,024 px, focus goes to the sheet's head; design 16's "focus stays on the row" holds on a wide window.
+    - When a sheet closes because its row went (G5, or a schedule deleted), focus goes to the list's region, else the selected tab (Jobs) or New schedule (Schedules).
+    - The sheets keep their `complementary` role; the `.source-pane` sheets are `dialog`s. Changing it is a T611 candidate.
 - [ ] T611 (AC-399) Design 16's structure and behaviour still unbuilt *(added 2026-10-07, from the design 16 audit during T610; the coordinator: "T611 (structure and behaviour), T612 (wording) and T613 (icons and styling), one commit each")*
   - What design 16 draws that isn't built:
     - Jobs' tabs write `?tab=` and Back returns to a tab (pin 1, keyboard);
@@ -12869,7 +12900,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-154 | ~~T377~~ T551, T552 | AC-155 | T379, T504 | AC-157 | T364, T459 |
 | AC-158 | T363, T461, T497 | AC-159 | T361, T363 | AC-160 | T360, T454, T363 |
 | AC-161 | T335, T363, T365, T435, T442, T462, T497, T501 | AC-163 | T362, T363, T461, T462 | AC-164 | T335, T497 |
-| AC-176 | T405 | AC-180 | T407 | AC-187 | T406, T466–T470, T476–T478 |
+| AC-176 | T405, T640 | AC-180 | T407 | AC-187 | T406, T466–T470, T476–T478 |
 | AC-192 | T331, T345 | AC-194 | T325, T331 | AC-201 | T402 |
 | AC-220 | T403 | AC-222 | T342 | AC-233 | T364 |
 | AC-234 | T378, T552, T504 | AC-246 | T404 | AC-249 | T336, T450 |
@@ -12904,7 +12935,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-388 | T541 | AC-389 | T540 | AC-390 | T544 |
 | AC-391 | T550 | AC-392 | T552 | AC-393 | T553 |
 | AC-394 | T554 | AC-395 | T555 | AC-396 | T556 |
-| AC-397 | T557 | AC-398 | T558 | AC-399 | T559, T560, T473, T610, T611, T612, T613 |
+| AC-397 | T557 | AC-398 | T558 | AC-399 | T559, T560, T473, T610, T640, T611, T612, T613 |
 | AC-281 (again, rebinding) | T542 | AC-283 (again, use-only copies) | T543 | | |
 | AC-354 (again, copy on use) | T538 | | | | |
 | AC-296 | T370 | AC-297 | T371, T378, T559, T504 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441, T581 |

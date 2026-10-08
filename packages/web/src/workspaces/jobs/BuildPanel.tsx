@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
 import { ExportedToast } from '../../dashboard/export/ExportedToast';
+import { useNarrowWindow } from '../../dashboard/useNarrowWindow';
 import { missingScopeOf, ScopeUnavailable, useScopes } from '../../query/scopes';
 import { StateLine, type StateKind } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
@@ -37,6 +38,14 @@ import {
   readErrorOf,
 } from './ListStates';
 import { ChoicePill } from './Pill';
+import {
+  focusAfterClose,
+  narrowNow,
+  SheetFootContext,
+  SheetTrap,
+  useFootHeight,
+  useSheetEscape,
+} from './Sheet';
 import { Status } from './StateBadge';
 
 /**
@@ -171,6 +180,12 @@ async function send<T>(url: string, init?: { body: unknown; signal?: AbortSignal
     );
   return body;
 }
+
+/** The list, or Jobs' tab where none is listed: focus, once a sheet with no row to go back to closes (T640). */
+const TO_THE_LIST = [
+  '.build-panel [role="region"][aria-label="Pre-aggregations"]',
+  '[role="tab"][aria-selected="true"]',
+] as const;
 
 /** States a build is under way in: the row is read again soon (AC-229). */
 const UNDER_WAY = new Set(['building', 'queued', 'stalled']);
@@ -336,6 +351,7 @@ function RecentBuilds({
 
 export function BuildPanel({
   pollMs = 1500,
+  active = true,
   selectedFirst = null,
   onOpenHistory,
   onOpenQueue,
@@ -347,6 +363,11 @@ export function BuildPanel({
   onSearch,
 }: {
   pollMs?: number;
+  /**
+   * Whether its tab is the one shown: its pane is a sheet that keeps Tab and
+   * takes Esc only then, not from under Run history or the queue (T640).
+   */
+  active?: boolean;
   /** The folder listed (T559), where Jobs holds it; none, and the panel does. */
   folderChoice?: FolderChoice;
   onFolderChoice?: (choice: FolderChoice) => void;
@@ -426,16 +447,39 @@ export function BuildPanel({
    * in, for the filter and the note (T559).
    */
   /**
-   * Below 1,024 px the pane is a sheet over the list (design 16, G8): opened,
-   * it takes focus at its head; closed, focus goes back to its row (rule 85).
+   * Below 1,024 px the pane is a sheet over the list (design 16, G8; T640),
+   * as designs 01, 11 and 13 have theirs: opened, it takes focus at its
+   * head, once what it shows is read, so one opened from `?preagg=` before
+   * the list answers takes it too; Tab stays in it; Esc or × closes it, and
+   * focus goes back to its row (rule 85).
    */
+  const narrow = useNarrowWindow();
+  const pane = useRef<HTMLElement>(null);
+  const [foot, setFoot] = useState<HTMLElement | null>(null);
   const sheetHead = useRef<HTMLHeadingElement>(null);
+  const showing =
+    selected === null
+      ? null
+      : buildable.data?.some((each) => each.id === selected) === true
+        ? selected
+        : selected === selectedFirst && buildable.data !== undefined
+          ? 'not-found'
+          : null;
+  const sheetOpen = narrow && active && showing !== null;
+  /** The sheet and its toasts, Tab's box while it covers the page (T640's review). */
+  const over = useRef<HTMLDivElement>(null);
+  useFootHeight(sheetOpen ? foot : null, over);
+  // Its head takes focus as it opens, and as its tab is shown again over it (T640's review).
   useEffect(() => {
-    const narrow =
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(max-width: 1023.98px)').matches;
-    if (selected !== null && narrow) sheetHead.current?.focus();
-  }, [selected]);
+    if (showing !== null && active && narrowNow()) sheetHead.current?.focus();
+  }, [showing, active]);
+  /** Back to the list: the sheet closed, focus on its row, else the list (rule 85). */
+  const closePane = () => {
+    const was = selected;
+    setSelected(null);
+    if (was !== null) focusAfterClose(`tr[data-preagg=${JSON.stringify(was)}]`, ...TO_THE_LIST);
+  };
+  useSheetEscape(pane, active && showing !== null, closePane);
   const [ownChoice, setOwnChoice] = useState<FolderChoice>(EVERY_FOLDER);
   const folderChoice = folderChosen ?? ownChoice;
   const setFolderChoice = onFolderChoice ?? setOwnChoice;
@@ -468,6 +512,8 @@ export function BuildPanel({
     if (rows.some((row) => row.id === id)) return;
     setSelected((was) => (was === id ? null : was));
     setLost(true);
+    // Its row went with it: focus on the list, or Jobs' tab where none is left (T640).
+    focusAfterClose(...TO_THE_LIST);
   };
   const start = useMutation({
     mutationFn: (id: string) =>
@@ -518,20 +564,37 @@ export function BuildPanel({
   }
   const shown = buildable.data.find((each) => each.id === selected);
   const openQueue = onOpenQueue ?? (() => window.location.assign('/jobs?tab=queue'));
+  const toasts = (
+    <>
+      <ExportedToast
+        message={toast === null ? '' : `${toast.said}.`}
+        action={
+          toast === null
+            ? undefined
+            : {
+                label: toast.jobs > 1 ? 'Follow them in Queue' : 'Follow it in Queue',
+                onSelect: openQueue,
+              }
+        }
+        onDismiss={() => setToast(null)}
+      />
+      {/* Access lost while the page was open (design 16, G5; T560). */}
+      <ExportedToast
+        message={lost ? ACCESS_LOST : ''}
+        kind="err"
+        onDismiss={() => {
+          setLost(false);
+        }}
+      />
+    </>
+  );
   /** The sheet's ×, back to the list, focus back on its row (design 16, G8; rule 85). */
   const backToList = (
     <button
       type="button"
       className="btn-ghost btn-sm admin-pane__close"
       aria-label="Back to the list"
-      onClick={() => {
-        const was = selected;
-        setSelected(null);
-        if (was !== null)
-          requestAnimationFrame(() => {
-            document.querySelector<HTMLElement>(`tr[data-preagg=${JSON.stringify(was)}]`)?.focus();
-          });
-      }}
+      onClick={closePane}
     >
       ×
     </button>
@@ -748,112 +811,109 @@ export function BuildPanel({
         docked under the app bar at the window's right, its full height (T469,
         UX-081; styles.ts).
       */}
-      <aside className="admin-pane" aria-label="Pre-aggregation details">
-        {shown === undefined && selected !== null && selected === selectedFirst ? (
-          // `?preagg=` out of scope reads as one that doesn't exist (design 16, G6; rule 67).
-          <div className="admin-pane__missing" data-testid="not-found">
-            <div className="admin-pane__head">
-              {backToList}
-              <h2 className="admin-pane__title" tabIndex={-1} ref={sheetHead}>
-                Not found
-              </h2>
-            </div>
-            <p>There’s no pre-aggregation by that name in your folders.</p>
-          </div>
-        ) : shown === undefined ? (
-          <p className="admin-pane__empty">
-            Select a pre-aggregation to see its state, what rebuilds it, and to build it.
-          </p>
-        ) : (
-          <>
-            {/* The prototype's 44 px pane head (T469, UX-081). */}
-            <div className="admin-pane__head" data-testid="pane-head">
-              {/* Below 1,024 px the pane is a sheet: × first in its head goes back to the list (design 16, G8). */}
-              {backToList}
-              <h2 className="admin-pane__title" tabIndex={-1} ref={sheetHead}>
-                {shownOf(shown).name}
-              </h2>
-            </div>
-            {/* Its folder, so /A's and /A/B's `sales.main` are told apart (T371's review). */}
-            {shownOf(shown).folder === undefined ? null : (
-              <p className="build-panel__folder" data-testid="pane-folder">
-                {shownOf(shown).folder}
+      {/* The sheet and what's said over it, as one, for Tab (T640). */}
+      <div ref={over} className="sheet-over">
+        <aside ref={pane} className="admin-pane" aria-label="Pre-aggregation details">
+          {/* Below 1,024 px, its actions pinned in the sheet's foot (G8; T640). */}
+          <SheetFootContext.Provider value={sheetOpen ? foot : null}>
+            {shown === undefined && selected !== null && selected === selectedFirst ? (
+              // `?preagg=` out of scope reads as one that doesn't exist (design 16, G6; rule 67).
+              <div className="admin-pane__missing" data-testid="not-found">
+                <div className="admin-pane__head">
+                  {backToList}
+                  <h2 className="admin-pane__title" tabIndex={-1} ref={sheetHead}>
+                    Not found
+                  </h2>
+                </div>
+                <p>There’s no pre-aggregation by that name in your folders.</p>
+              </div>
+            ) : shown === undefined ? (
+              <p className="admin-pane__empty">
+                Select a pre-aggregation to see its state, what rebuilds it, and to build it.
               </p>
-            )}
-            <dl className="admin-pane__facts">
-              <dt>Status</dt>
-              <dd>
-                <RowStatus row={shown} testId="pane-state" />
-              </dd>
-              <dt>Trigger</dt>
-              <dd>{shown.trigger ?? '—'}</dd>
-              <dt>Type</dt>
-              <dd>{shown.type}</dd>
-              <dt>Partition granularity</dt>
-              <dd>{shown.partitionGranularity ?? 'none'}</dd>
-            </dl>
-            {/*
+            ) : (
+              <>
+                {/* The prototype's 44 px pane head (T469, UX-081). */}
+                <div className="admin-pane__head" data-testid="pane-head">
+                  {/* Below 1,024 px the pane is a sheet: × first in its head goes back to the list (design 16, G8). */}
+                  {backToList}
+                  <h2 className="admin-pane__title" tabIndex={-1} ref={sheetHead}>
+                    {shownOf(shown).name}
+                  </h2>
+                </div>
+                {/* What scrolls under the head, the sheet's body below 1,024 px (T640). */}
+                <div className="admin-pane__body">
+                  {/* Its folder, so /A's and /A/B's `sales.main` are told apart (T371's review). */}
+                  {shownOf(shown).folder === undefined ? null : (
+                    <p className="build-panel__folder" data-testid="pane-folder">
+                      {shownOf(shown).folder}
+                    </p>
+                  )}
+                  <dl className="admin-pane__facts">
+                    <dt>Status</dt>
+                    <dd>
+                      <RowStatus row={shown} testId="pane-state" />
+                    </dd>
+                    <dt>Trigger</dt>
+                    <dd>{shown.trigger ?? '—'}</dd>
+                    <dt>Type</dt>
+                    <dd>{shown.type}</dd>
+                    <dt>Partition granularity</dt>
+                    <dd>{shown.partitionGranularity ?? 'none'}</dd>
+                  </dl>
+                  {/*
               Its partitions, with Rebuild selected and Build all, or Build now
               for one not partitioned (T375, AC-145; design 16, pins 10–12):
               24 px actions, the prototype's btn sm (T469, UX-081). Keyed by
               it, so another's selection is never carried over.
             */}
-            <Partitions
-              key={shown.id}
-              id={shown.id}
-              name={shownOf(shown).name}
-              pollMs={Math.max(pollMs, 5_000)}
-              // A refused start: access may be lost (design 16, G5; T560).
-              onRefused={() => void refusedFor(shown.id)}
-              onStarted={(begun: Started) => {
-                follow(shown.id);
-                // A start that made no job is said in the pane, not toasted (T375's review).
-                setToast(
-                  begun.tokens.length === 0
-                    ? null
-                    : { said: begun.said, jobs: begun.tokens.length },
-                );
-              }}
-            >
-              {shown.fileName === undefined ? null : (
-                <a className="btn btn-sm" href={memberHref({ ...shown, fileName: shown.fileName })}>
-                  Open in Model
-                </a>
-              )}
-            </Partitions>
-            <RecentBuilds
-              key={`recent-${shown.id}`}
-              id={shown.id}
-              name={shownOf(shown).name}
-              onOpenHistory={onOpenHistory}
-            />
-            <p className="help build-log__help">
-              Building and wechart schedules need no proposal. The refresh key is part of the model:
-              to change it, edit the model in My workspace and propose it.
-            </p>
-          </>
-        )}
-      </aside>
-      <ExportedToast
-        message={toast === null ? '' : `${toast.said}.`}
-        action={
-          toast === null
-            ? undefined
-            : {
-                label: toast.jobs > 1 ? 'Follow them in Queue' : 'Follow it in Queue',
-                onSelect: openQueue,
-              }
-        }
-        onDismiss={() => setToast(null)}
-      />
-      {/* Access lost while the page was open (design 16, G5; T560). */}
-      <ExportedToast
-        message={lost ? ACCESS_LOST : ''}
-        kind="err"
-        onDismiss={() => {
-          setLost(false);
-        }}
-      />
+                  <Partitions
+                    key={shown.id}
+                    id={shown.id}
+                    name={shownOf(shown).name}
+                    pollMs={Math.max(pollMs, 5_000)}
+                    // A refused start: access may be lost (design 16, G5; T560).
+                    onRefused={() => void refusedFor(shown.id)}
+                    onStarted={(begun: Started) => {
+                      follow(shown.id);
+                      // A start that made no job is said in the pane, not toasted (T375's review).
+                      setToast(
+                        begun.tokens.length === 0
+                          ? null
+                          : { said: begun.said, jobs: begun.tokens.length },
+                      );
+                    }}
+                  >
+                    {shown.fileName === undefined ? null : (
+                      <a
+                        className="btn btn-sm"
+                        href={memberHref({ ...shown, fileName: shown.fileName })}
+                      >
+                        Open in Model
+                      </a>
+                    )}
+                  </Partitions>
+                  <RecentBuilds
+                    key={`recent-${shown.id}`}
+                    id={shown.id}
+                    name={shownOf(shown).name}
+                    onOpenHistory={onOpenHistory}
+                  />
+                  <p className="help build-log__help">
+                    Building and wechart schedules need no proposal. The refresh key is part of the
+                    model: to change it, edit the model in My workspace and propose it.
+                  </p>
+                </div>
+              </>
+            )}
+          </SheetFootContext.Provider>
+          {narrow ? <footer className="source-pane__foot" ref={setFoot} /> : null}
+        </aside>
+        {/* Kept in one place, so each is announced as it comes; over the sheet,
+          above its foot, and in its Tab order while it covers the page (T640). */}
+        {toasts}
+      </div>
+      {sheetOpen ? <SheetTrap pane={over} /> : null}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
 import { shownOf } from '../jobs/BuildPanel';
 import { whenOf } from '../jobs/builds';
+import { narrowNow, SheetActions } from '../jobs/Sheet';
 import { Status } from '../jobs/StateBadge';
 import { rollupHref } from '../model/inFolder';
 import { lagInWords } from '../model/preagg/RefreshSchedule';
@@ -70,72 +71,75 @@ export function SchedulePane({
         <span className="spacer" />
         <OwnerLabel owner={schedule.owner} />
       </div>
-      <section className="build-log__section" aria-labelledby={`${schedule.id}-schedule`}>
-        <h3 id={`${schedule.id}-schedule`}>Schedule</h3>
-        <p>{schedule.when}</p>
-        <pre className="schedules__written" data-testid="schedule-written">
-          {writtenBlock(schedule.written)}
-        </pre>
-        {/* Why Cube can't run it, as the model editor says it (T551's review). */}
-        {schedule.problem === undefined ? null : (
-          <StateLine kind="err">{schedule.problem}</StateLine>
-        )}
-        <p className="help build-log__help" data-testid="schedule-where">
-          {schedule.fileName === undefined
-            ? `Set in its model in ${folder}, so it’s read-only here.`
-            : `Set in ${schedule.fileName} in ${folder}, so it’s read-only here.`}{' '}
-          To change it, edit the model in My workspace and propose it.
-        </p>
-        {/* Pinned at the sheet's foot below 1,024 px (design 16, G8); none, and no empty bar (T610's review). */}
-        {modelHref === undefined && schedule.public === false ? null : (
-          <div className="admin-pane__actions sheet-foot">
-            {modelHref === undefined ? null : (
-              <a className="btn btn-sm" href={modelHref}>
-                Open in Model
-              </a>
-            )}
-            {/* Jobs reads only what queries reach: a hidden cube isn't there (T551's review). */}
-            {schedule.public === false ? null : (
-              <a className="btn btn-sm" href={`/jobs?preagg=${encodeURIComponent(schedule.id)}`}>
-                Open in Jobs
-              </a>
-            )}
-          </div>
-        )}
-        {schedule.public === false ? (
-          <p className="help build-log__help" data-testid="schedule-not-in-jobs">
-            Its cube isn’t public, so Jobs doesn’t list it.
+      {/* What scrolls under the head, the sheet's body below 1,024 px (T640). */}
+      <div className="admin-pane__body">
+        <section className="build-log__section" aria-labelledby={`${schedule.id}-schedule`}>
+          <h3 id={`${schedule.id}-schedule`}>Schedule</h3>
+          <p>{schedule.when}</p>
+          <pre className="schedules__written" data-testid="schedule-written">
+            {writtenBlock(schedule.written)}
+          </pre>
+          {/* Why Cube can't run it, as the model editor says it (T551's review). */}
+          {schedule.problem === undefined ? null : (
+            <StateLine kind="err">{schedule.problem}</StateLine>
+          )}
+          <p className="help build-log__help" data-testid="schedule-where">
+            {schedule.fileName === undefined
+              ? `Set in its model in ${folder}, so it’s read-only here.`
+              : `Set in ${schedule.fileName} in ${folder}, so it’s read-only here.`}{' '}
+            To change it, edit the model in My workspace and propose it.
           </p>
-        ) : null}
-      </section>
-      {runs.length === 0 && change === undefined ? null : (
-        <section className="build-log__section" aria-labelledby={`${schedule.id}-runs`}>
-          <h3 id={`${schedule.id}-runs`}>Next runs · {zone ?? 'your time'}</h3>
-          {runs.length === 0 ? null : (
-            <ol className="schedules__runs" aria-label="Next runs">
-              {runs.map((run) => (
-                <li key={run.getTime()}>
-                  <span>{dayIn(zone, run)}</span>
-                  <span>{timeIn(zone, run)}</span>
-                  <span className="schedules__utc">{`${timeIn('UTC', run)} UTC`}</span>
-                </li>
-              ))}
-            </ol>
+          {/* Pinned in the sheet's foot below 1,024 px (design 16, G8; T640); none, and no empty bar (T610's review). */}
+          {modelHref === undefined && schedule.public === false ? null : (
+            <SheetActions>
+              {modelHref === undefined ? null : (
+                <a className="btn btn-sm" href={modelHref}>
+                  Open in Model
+                </a>
+              )}
+              {/* Jobs reads only what queries reach: a hidden cube isn't there (T551's review). */}
+              {schedule.public === false ? null : (
+                <a className="btn btn-sm" href={`/jobs?preagg=${encodeURIComponent(schedule.id)}`}>
+                  Open in Jobs
+                </a>
+              )}
+            </SheetActions>
           )}
-          {change === undefined ? null : (
-            <p className="refresh-schedule__warn" data-testid="schedule-clock-change">
-              <StatusIcon kind="warn" />
-              {changeWords(change, zone)}
+          {schedule.public === false ? (
+            <p className="help build-log__help" data-testid="schedule-not-in-jobs">
+              Its cube isn’t public, so Jobs doesn’t list it.
             </p>
-          )}
-          {lag === undefined ? null : (
-            <p className="help build-log__help">
-              Cube’s refresh worker checks the key on its own cadence, so a run can start up to
-              about {lagInWords(lag)} after its time.
-            </p>
-          )}
+          ) : null}
         </section>
-      )}
+        {runs.length === 0 && change === undefined ? null : (
+          <section className="build-log__section" aria-labelledby={`${schedule.id}-runs`}>
+            <h3 id={`${schedule.id}-runs`}>Next runs · {zone ?? 'your time'}</h3>
+            {runs.length === 0 ? null : (
+              <ol className="schedules__runs" aria-label="Next runs">
+                {runs.map((run) => (
+                  <li key={run.getTime()}>
+                    <span>{dayIn(zone, run)}</span>
+                    <span>{timeIn(zone, run)}</span>
+                    <span className="schedules__utc">{`${timeIn('UTC', run)} UTC`}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+            {change === undefined ? null : (
+              <p className="refresh-schedule__warn" data-testid="schedule-clock-change">
+                <StatusIcon kind="warn" />
+                {changeWords(change, zone)}
+              </p>
+            )}
+            {lag === undefined ? null : (
+              <p className="help build-log__help">
+                Cube’s refresh worker checks the key on its own cadence, so a run can start up to
+                about {lagInWords(lag)} after its time.
+              </p>
+            )}
+          </section>
+        )}
+      </div>
     </>
   );
 }
@@ -181,11 +185,14 @@ export function WechartPane({
   schedule,
   refreshKeys,
   onDeleted,
+  onTyped,
   back = null,
 }: {
   schedule: WechartSchedule;
   refreshKeys: readonly Schedule[];
   onDeleted: () => void;
+  /** Whether a change typed in its fields would be lost on closing (rule 85; T640). */
+  onTyped?: (typed: boolean) => void;
   /** The sheet's ×, first in its head below 1,024 px (design 16, G8; T560). */
   back?: ReactNode;
 }) {
@@ -234,139 +241,150 @@ export function WechartPane({
         <PauseSwitch schedule={schedule} />
         <OwnerLabel owner="wechart" />
       </div>
-      {schedule.suspendedAt === null ? null : (
-        <Suspension
-          schedule={schedule}
-          nextWords={nextWords}
-          focus={focusResume}
-          onResumed={(resumed) => {
-            const at = resumed.runs?.[0];
-            setFocusResume(false);
-            setResumedSaid(
-              `Resumed “${resumed.name}”.${
-                at === undefined
-                  ? ''
-                  : ` Its next run is ${dayIn(zone, new Date(at))}, ${timeIn(zone, new Date(at))}.`
-              }`,
-            );
-            // Focus stays on its row (design 16's keyboard table), not lost with Resume.
-            document.querySelector<HTMLElement>(`tr[data-schedule-id="${resumed.id}"]`)?.focus();
-          }}
-        />
-      )}
-      {/* There from the start, so what it comes to say is read (E3). */}
-      {/* The pane's one live region: a resume said (E3), or a Run now started (T555). */}
-      <p role="status" className="schedules__resumed">
-        {schedule.suspendedAt === null ? (resumedSaid ?? '') : ''}
-        <span data-testid="ran-now">
-          {!runNow.isSuccess
-            ? ''
-            : runNow.data.tokens.length === 0
-              ? // Cube started no job: nothing to list (T555's review).
-                `Cube started no job: nothing of “${schedule.name}” was built.`
-              : `Started “${schedule.name}” now. Run history lists it.`}
-        </span>
-      </p>
-      <dl className="admin-pane__facts">
-        <dt>State</dt>
-        <dd>
-          {schedule.suspendedAt !== null ? (
-            <Status kind="susp" label="Suspended" testId="schedule-state" state="suspended" />
-          ) : schedule.pausedAt !== null ? (
-            // Paused by hand, by whom (T556; design 16, P3).
-            <Status
-              kind="idle"
-              label={`Paused · by ${schedule.pausedBy?.name ?? 'someone'}`}
-              testId="schedule-state"
-              state="paused"
-            />
-          ) : (
-            <>
-              <Status kind="ok" label="Active" testId="schedule-state" state="active" />
-              {nextWords === undefined ? null : ` · next ${nextWords}`}
-            </>
-          )}
-        </dd>
-        <dt>Builds</dt>
-        <dd>{`${shown.name} · ${shown.folder ?? 'Shared'}`}</dd>
-        <dt>Made by</dt>
-        <dd>
-          {`${schedule.createdBy.name}, ${dateOf(schedule.createdAt)}`}
-          {schedule.updatedAt === schedule.createdAt
-            ? null
-            : ` · changed ${minuteOf(schedule.updatedAt, true)}`}
-        </dd>
-        <dt>Last run</dt>
-        <dd>
-          {lastRun === null ? (
-            'Not run yet'
-          ) : (
-            <>
-              <LastRunStatus run={lastRun} />
-              {` · ${minuteOf(lastRun.startedAt, true)} · `}
-              <a
-                className="btn-link"
-                href={`/jobs?tab=history&preagg=${encodeURIComponent(schedule.preAggregation)}`}
-              >
-                Run history
-              </a>
-            </>
-          )}
-        </dd>
-      </dl>
-      <RefreshKeyRuns refreshKey={refreshKey} />
-      {/* Keyed by its id and last change: another schedule, or one changed, starts afresh. */}
-      <ScheduleForm
-        key={`${schedule.id}-${schedule.updatedAt}`}
-        schedule={schedule}
-        refreshKeys={refreshKeys}
-        onSaved={() => undefined}
-      >
-        <button
-          type="button"
-          ref={opener}
-          className="btn-sm btn-danger"
-          onClick={() => {
-            setDeleting(true);
-          }}
-        >
-          Delete…
-        </button>
-        {/* Run now, on the right (design 16, D1 and P2): suspended or not (R59). */}
-        <span className="spacer" />
-        <button
-          type="button"
-          className="btn-sm"
-          disabled={runNow.isPending}
-          onClick={() => runNow.mutate()}
-        >
-          <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-            <path d="M5 3.2v9.6L12.6 8z" fill="currentColor" />
-          </svg>
-          Run now
-        </button>
-      </ScheduleForm>
-      {runNow.isError ? (
-        <p className="schedules__ran-refused" data-testid="ran-now-refused" role="alert">
-          <StatusIcon kind="err" />
-          {`Not started: ${runNow.error.message}`}
+      {/* What scrolls under the head, the sheet's body below 1,024 px (T640). */}
+      <div className="admin-pane__body">
+        {schedule.suspendedAt === null ? null : (
+          <Suspension
+            schedule={schedule}
+            nextWords={nextWords}
+            focus={focusResume}
+            onResumed={(resumed) => {
+              const at = resumed.runs?.[0];
+              setFocusResume(false);
+              setResumedSaid(
+                `Resumed “${resumed.name}”.${
+                  at === undefined
+                    ? ''
+                    : ` Its next run is ${dayIn(zone, new Date(at))}, ${timeIn(zone, new Date(at))}.`
+                }`,
+              );
+              // Focus stays on its row (design 16's keyboard table), not lost with Resume;
+              // below 1,024 px the sheet covers the row, so on the sheet's head (T640).
+              document
+                .querySelector<HTMLElement>(
+                  narrowNow()
+                    ? '.schedules__pane .admin-pane__title'
+                    : `tr[data-schedule-id="${resumed.id}"]`,
+                )
+                ?.focus();
+            }}
+          />
+        )}
+        {/* There from the start, so what it comes to say is read (E3). */}
+        {/* The pane's one live region: a resume said (E3), or a Run now started (T555). */}
+        <p role="status" className="schedules__resumed">
+          {schedule.suspendedAt === null ? (resumedSaid ?? '') : ''}
+          <span data-testid="ran-now">
+            {!runNow.isSuccess
+              ? ''
+              : runNow.data.tokens.length === 0
+                ? // Cube started no job: nothing to list (T555's review).
+                  `Cube started no job: nothing of “${schedule.name}” was built.`
+                : `Started “${schedule.name}” now. Run history lists it.`}
+          </span>
         </p>
-      ) : null}
-      {deleting ? (
-        <DeleteScheduleDialog
+        <dl className="admin-pane__facts">
+          <dt>State</dt>
+          <dd>
+            {schedule.suspendedAt !== null ? (
+              <Status kind="susp" label="Suspended" testId="schedule-state" state="suspended" />
+            ) : schedule.pausedAt !== null ? (
+              // Paused by hand, by whom (T556; design 16, P3).
+              <Status
+                kind="idle"
+                label={`Paused · by ${schedule.pausedBy?.name ?? 'someone'}`}
+                testId="schedule-state"
+                state="paused"
+              />
+            ) : (
+              <>
+                <Status kind="ok" label="Active" testId="schedule-state" state="active" />
+                {nextWords === undefined ? null : ` · next ${nextWords}`}
+              </>
+            )}
+          </dd>
+          <dt>Builds</dt>
+          <dd>{`${shown.name} · ${shown.folder ?? 'Shared'}`}</dd>
+          <dt>Made by</dt>
+          <dd>
+            {`${schedule.createdBy.name}, ${dateOf(schedule.createdAt)}`}
+            {schedule.updatedAt === schedule.createdAt
+              ? null
+              : ` · changed ${minuteOf(schedule.updatedAt, true)}`}
+          </dd>
+          <dt>Last run</dt>
+          <dd>
+            {lastRun === null ? (
+              'Not run yet'
+            ) : (
+              <>
+                <LastRunStatus run={lastRun} />
+                {` · ${minuteOf(lastRun.startedAt, true)} · `}
+                <a
+                  className="btn-link"
+                  href={`/jobs?tab=history&preagg=${encodeURIComponent(schedule.preAggregation)}`}
+                >
+                  Run history
+                </a>
+              </>
+            )}
+          </dd>
+        </dl>
+        <RefreshKeyRuns refreshKey={refreshKey} />
+        {/* Keyed by its id and last change: another schedule, or one changed, starts afresh. */}
+        <ScheduleForm
+          key={`${schedule.id}-${schedule.updatedAt}`}
           schedule={schedule}
-          refreshKey={refreshKey}
-          name={shown.name}
-          onCancel={() => {
-            setDeleting(false);
-            opener.current?.focus();
-          }}
-          onDeleted={() => {
-            setDeleting(false);
-            onDeleted();
-          }}
-        />
-      ) : null}
+          refreshKeys={refreshKeys}
+          onSaved={() => undefined}
+          {...(onTyped === undefined ? {} : { onTyped })}
+        >
+          <button
+            type="button"
+            ref={opener}
+            className="btn-sm btn-danger"
+            onClick={() => {
+              setDeleting(true);
+            }}
+          >
+            Delete…
+          </button>
+          {/* Run now, on the right (design 16, D1 and P2): suspended or not (R59). */}
+          <span className="spacer" />
+          <button
+            type="button"
+            className="btn-sm"
+            disabled={runNow.isPending}
+            onClick={() => runNow.mutate()}
+          >
+            <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+              <path d="M5 3.2v9.6L12.6 8z" fill="currentColor" />
+            </svg>
+            Run now
+          </button>
+        </ScheduleForm>
+        {runNow.isError ? (
+          <p className="schedules__ran-refused" data-testid="ran-now-refused" role="alert">
+            <StatusIcon kind="err" />
+            {`Not started: ${runNow.error.message}`}
+          </p>
+        ) : null}
+        {deleting ? (
+          <DeleteScheduleDialog
+            schedule={schedule}
+            refreshKey={refreshKey}
+            name={shown.name}
+            onCancel={() => {
+              setDeleting(false);
+              opener.current?.focus();
+            }}
+            onDeleted={() => {
+              setDeleting(false);
+              onDeleted();
+            }}
+          />
+        ) : null}
+      </div>
     </>
   );
 }
@@ -533,7 +551,10 @@ function DeleteScheduleDialog({
   useEffect(() => {
     cancel.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') cancelling.current();
+      if (event.key !== 'Escape') return;
+      // Its Esc, not the sheet's under it as well (T640).
+      event.preventDefault();
+      cancelling.current();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {

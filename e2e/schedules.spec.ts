@@ -793,8 +793,10 @@ test('below 1,024 px the sheet’s pinned foot hides nothing, and its dialog is 
     /** Scrolled to its end: the last line's bottom, and the foot's top. */
     const atEnd = () =>
       pane.evaluate((sheet) => {
-        sheet.scrollTop = sheet.scrollHeight;
-        const foot = sheet.querySelector('.sheet-foot');
+        // Its body scrolls, under its head and over its foot, as `.source-pane`'s (T640).
+        const body = sheet.querySelector('.admin-pane__body') ?? sheet;
+        body.scrollTop = body.scrollHeight;
+        const foot = sheet.querySelector('.source-pane__foot');
         const lines = [...sheet.querySelectorAll('*')].filter(
           (each) =>
             foot?.contains(each) !== true &&
@@ -829,7 +831,7 @@ test('below 1,024 px the sheet’s pinned foot hides nothing, and its dialog is 
     const dialog = page.getByRole('alertdialog', { name: `Delete “${name}”?` });
     await expect(dialog).toBeVisible();
     const over = await page.evaluate(
-      ({ x, y }) => document.elementFromPoint(x, y)?.closest('.sheet-foot') === null,
+      ({ x, y }) => document.elementFromPoint(x, y)?.closest('.source-pane__foot') === null,
       { x: (box?.x ?? 0) + (box?.width ?? 0) / 2, y: (box?.y ?? 0) + (box?.height ?? 0) / 2 },
     );
     expect(over).toBe(true);

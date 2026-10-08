@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 
+import { useNarrowWindow } from '../../dashboard/useNarrowWindow';
 import { StateLine } from '../../shell/StatusIcon';
 import {
   BuildOutcomeStatus,
@@ -15,6 +16,7 @@ import {
   type BuildSummary,
 } from './builds';
 import { readErrorOf } from './ListStates';
+import { SheetTrap, useSheetEscape } from './Sheet';
 import { StateBadge } from './StateBadge';
 
 /**
@@ -160,7 +162,16 @@ export const buildQueryOf = (id: string) => ({
   },
 });
 
-export function BuildLog({ id, onClose }: { id: string; onClose: () => void }) {
+export function BuildLog({
+  id,
+  onClose,
+  active = true,
+}: {
+  id: string;
+  onClose: () => void;
+  /** Whether Run history's tab is shown: a sheet keeps Tab and takes Esc only then (T640). */
+  active?: boolean;
+}) {
   const single = useSingleUser();
   const found = useQuery({
     ...buildQueryOf(id),
@@ -169,11 +180,17 @@ export function BuildLog({ id, onClose }: { id: string; onClose: () => void }) {
   });
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => heading.current?.focus(), [id]);
+  // Esc closes it, as the `.source-pane` sheets close (T640; rule 85).
+  const pane = useRef<HTMLElement>(null);
+  const narrow = useNarrowWindow();
+  useSheetEscape(pane, active, onClose);
   const record = found.data;
   const name = record?.name ?? '';
 
   return (
-    <aside className="admin-pane build-log" aria-label={`Build of ${name}`}>
+    <aside ref={pane} className="admin-pane build-log" aria-label={`Build of ${name}`}>
+      {/* Tab stays in it while it covers the page, below 1,024 px (T640). */}
+      {narrow && active ? <SheetTrap pane={pane} /> : null}
       <div className="admin-pane__head" data-testid="pane-head">
         <h2 className="admin-pane__title build-log__title" ref={heading} tabIndex={-1}>
           Build of <code>{name}</code>
@@ -182,123 +199,126 @@ export function BuildLog({ id, onClose }: { id: string; onClose: () => void }) {
           ×
         </button>
       </div>
-      {found.isPending ? <StateLine kind="run">Reading the build…</StateLine> : null}
-      {found.isError ? <StateLine kind="err">{found.error.message}</StateLine> : null}
-      {record === undefined ? null : (
-        <>
-          <dl className="admin-pane__facts" role="group" aria-label="Build">
-            <dt>Outcome</dt>
-            <dd>
-              <BuildOutcomeStatus
-                build={{
-                  ...record,
-                  jobs: record.tokens.length,
-                  progress: {
-                    done: record.tokens.filter((job) => job.finished).length,
-                    building: record.tokens.filter(
-                      (job) => !job.finished && job.status === 'processing',
-                    ).length,
-                  },
-                }}
-              />
-            </dd>
-            <dt>{record.partitions?.length === 1 ? 'Partition' : 'Partitions'}</dt>
-            <dd>
-              {partitionsOf({ ...record, jobs: record.tokens.length })}
-              {record.granularity === null ? '' : ' · UTC'}
-            </dd>
-            <dt>Folder</dt>
-            <dd>{record.folderPath.join(' / ')}</dd>
-            <dt>Started</dt>
-            <dd>
-              <time dateTime={record.startedAt} title={whenOf(record.startedAt).utc}>
-                {whenOf(record.startedAt).shown}
-              </time>{' '}
-              {howOf(record, single)}
-            </dd>
-            <dt>Ended</dt>
-            <dd>
-              {record.endedAt === null || record.durationMs === null
-                ? record.outcome === null
-                  ? 'Not yet'
-                  : '—'
-                : `${sameDay(record.endedAt, record.startedAt) ? clockOf(record.endedAt) : whenOf(record.endedAt).shown} · ${durationOf(record.durationMs)}, as wechart saw it`}
-            </dd>
-          </dl>
-          {record.starter.kind === 'schedule' ? (
-            <p className="build-log__starter">
-              <StarterLabel starter={record.starter} />
-            </p>
-          ) : null}
-          {record.outcome === 'expired' ? (
-            <p className="help build-log__help">
-              Cube no longer knew this job when wechart asked again: it keeps a job’s record for 24
-              hours. How the build ended can’t be known, so it isn’t counted as Done or Failed.
-            </p>
-          ) : null}
-          {record.error === null ? null : (
-            <section className="build-log__section" aria-labelledby={`${id}-error`}>
-              <h3 id={`${id}-error`}>Cube’s error</h3>
-              <pre className="build-log__error">{record.error}</pre>
-            </section>
-          )}
-          {record.tokens.length > 1 ? (
-            <table className="query-log build-log__parts" aria-label="Partitions of this build">
-              <thead>
-                <tr>
-                  <th scope="col">Partition</th>
-                  <th scope="col">State</th>
-                  <th scope="col">Token</th>
-                </tr>
-              </thead>
-              <tbody>
-                {record.tokens.map((job) => (
-                  <tr key={job.token}>
-                    <td>
-                      {periodOfTable(job.table, record.granularity) ??
-                        (record.granularity === null ? 'Whole' : '—')}
-                    </td>
-                    <td>
-                      <StateBadge status={job.status ?? ''} />
-                    </td>
-                    <td>
-                      <code title={job.token}>{shortToken(job.token)}</code>
-                    </td>
+      {/* What scrolls under the head, the sheet's body below 1,024 px (T640). */}
+      <div className="admin-pane__body">
+        {found.isPending ? <StateLine kind="run">Reading the build…</StateLine> : null}
+        {found.isError ? <StateLine kind="err">{found.error.message}</StateLine> : null}
+        {record === undefined ? null : (
+          <>
+            <dl className="admin-pane__facts" role="group" aria-label="Build">
+              <dt>Outcome</dt>
+              <dd>
+                <BuildOutcomeStatus
+                  build={{
+                    ...record,
+                    jobs: record.tokens.length,
+                    progress: {
+                      done: record.tokens.filter((job) => job.finished).length,
+                      building: record.tokens.filter(
+                        (job) => !job.finished && job.status === 'processing',
+                      ).length,
+                    },
+                  }}
+                />
+              </dd>
+              <dt>{record.partitions?.length === 1 ? 'Partition' : 'Partitions'}</dt>
+              <dd>
+                {partitionsOf({ ...record, jobs: record.tokens.length })}
+                {record.granularity === null ? '' : ' · UTC'}
+              </dd>
+              <dt>Folder</dt>
+              <dd>{record.folderPath.join(' / ')}</dd>
+              <dt>Started</dt>
+              <dd>
+                <time dateTime={record.startedAt} title={whenOf(record.startedAt).utc}>
+                  {whenOf(record.startedAt).shown}
+                </time>{' '}
+                {howOf(record, single)}
+              </dd>
+              <dt>Ended</dt>
+              <dd>
+                {record.endedAt === null || record.durationMs === null
+                  ? record.outcome === null
+                    ? 'Not yet'
+                    : '—'
+                  : `${sameDay(record.endedAt, record.startedAt) ? clockOf(record.endedAt) : whenOf(record.endedAt).shown} · ${durationOf(record.durationMs)}, as wechart saw it`}
+              </dd>
+            </dl>
+            {record.starter.kind === 'schedule' ? (
+              <p className="build-log__starter">
+                <StarterLabel starter={record.starter} />
+              </p>
+            ) : null}
+            {record.outcome === 'expired' ? (
+              <p className="help build-log__help">
+                Cube no longer knew this job when wechart asked again: it keeps a job’s record for
+                24 hours. How the build ended can’t be known, so it isn’t counted as Done or Failed.
+              </p>
+            ) : null}
+            {record.error === null ? null : (
+              <section className="build-log__section" aria-labelledby={`${id}-error`}>
+                <h3 id={`${id}-error`}>Cube’s error</h3>
+                <pre className="build-log__error">{record.error}</pre>
+              </section>
+            )}
+            {record.tokens.length > 1 ? (
+              <table className="query-log build-log__parts" aria-label="Partitions of this build">
+                <thead>
+                  <tr>
+                    <th scope="col">Partition</th>
+                    <th scope="col">State</th>
+                    <th scope="col">Token</th>
                   </tr>
+                </thead>
+                <tbody>
+                  {record.tokens.map((job) => (
+                    <tr key={job.token}>
+                      <td>
+                        {periodOfTable(job.table, record.granularity) ??
+                          (record.granularity === null ? 'Whole' : '—')}
+                      </td>
+                      <td>
+                        <StateBadge status={job.status ?? ''} />
+                      </td>
+                      <td>
+                        <code title={job.token}>{shortToken(job.token)}</code>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : null}
+            <section className="build-log__section" aria-labelledby={`${id}-log`}>
+              <h3 id={`${id}-log`}>Log · what Cube reported, when wechart saw it</h3>
+              {/* A list that scrolls and takes focus, as TableScroll's region does (design 16, keyboard). */}
+              {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+              <ol className="build-log__lines" tabIndex={0}>
+                {linesOf(record).map((line, at) => (
+                  <li
+                    key={at}
+                    className={
+                      line.gap ? 'build-log__gap' : line.bad === true ? 'build-log__bad' : undefined
+                    }
+                  >
+                    <span className="build-log__time">
+                      {line.at === undefined ? '' : timeOf(line.at, record.startedAt)}
+                    </span>
+                    <span {...(line.title === undefined ? {} : { title: line.title })}>
+                      {line.text}
+                    </span>
+                  </li>
                 ))}
-              </tbody>
-            </table>
-          ) : null}
-          <section className="build-log__section" aria-labelledby={`${id}-log`}>
-            <h3 id={`${id}-log`}>Log · what Cube reported, when wechart saw it</h3>
-            {/* A list that scrolls and takes focus, as TableScroll's region does (design 16, keyboard). */}
-            {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
-            <ol className="build-log__lines" tabIndex={0}>
-              {linesOf(record).map((line, at) => (
-                <li
-                  key={at}
-                  className={
-                    line.gap ? 'build-log__gap' : line.bad === true ? 'build-log__bad' : undefined
-                  }
-                >
-                  <span className="build-log__time">
-                    {line.at === undefined ? '' : timeOf(line.at, record.startedAt)}
-                  </span>
-                  <span {...(line.title === undefined ? {} : { title: line.title })}>
-                    {line.text}
-                  </span>
-                </li>
-              ))}
-            </ol>
-            <a
-              className="link-button"
-              href={`/jobs?preagg=${encodeURIComponent(record.preAggregation)}`}
-            >
-              Show {name} in Pre-aggregations
-            </a>
-          </section>
-        </>
-      )}
+              </ol>
+              <a
+                className="link-button"
+                href={`/jobs?preagg=${encodeURIComponent(record.preAggregation)}`}
+              >
+                Show {name} in Pre-aggregations
+              </a>
+            </section>
+          </>
+        )}
+      </div>
     </aside>
   );
 }

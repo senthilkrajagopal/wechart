@@ -3663,7 +3663,7 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
    rather than under it; its 44 px head holds the pre-aggregation's name. */
 .build-panel { grid-template-columns: minmax(0, 1fr); }
 .jobs-workspace:has(> [role='tabpanel']:not([hidden]) .build-panel) { margin-right: 400px; }
-.build-panel > .admin-pane {
+.build-panel .admin-pane {
   position: fixed;
   top: var(--wc-app-bar-height);
   right: 0;
@@ -3672,7 +3672,7 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
   height: auto;
   padding: 0 16px 16px;
 }
-.build-panel > .admin-pane > .admin-pane__empty { padding-top: 12px; }
+.build-panel .admin-pane > .admin-pane__empty { padding-top: 12px; }
 .admin-pane__head {
   display: flex;
   align-items: center;
@@ -3963,7 +3963,7 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
   .admin-pane { position: static; height: auto; border-left: 0; }
   /* Narrow, Jobs' pane is under its list, not docked beside it. */
   .jobs-workspace:has(> [role='tabpanel']:not([hidden]) .build-panel) { margin-right: 0; }
-  .build-panel > .admin-pane { position: static; width: auto; }
+  .build-panel .admin-pane { position: static; width: auto; }
 }
 /* Below 1,024 px (T560; design 16, state G8): each list keeps its name, its
    folder and its state, one row each, the rest moving into the sheet; the
@@ -3972,35 +3972,54 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 @media (max-width: 1023.98px) {
   .jobs-wide { display: none; }
   .jobs-workspace:has(> [role='tabpanel']:not([hidden]) .build-panel) { margin-right: 0; }
-  .build-panel > .admin-pane:has(> .admin-pane__empty) { display: none; }
-  .build-panel > .admin-pane,
-  .admin-page > .schedules__pane {
+  .build-panel .admin-pane:has(> .admin-pane__empty) { display: none; }
+  /* The sheet as the .source-pane sheets are (designs 01, 11 and 13; T640):
+     over the page under the app bar, its head in place, only its body
+     scrolling, and its actions pinned in its foot (.source-pane__foot),
+     as G8 draws it ("its actions stay pinned at the bottom"). */
+  .build-panel .admin-pane,
+  .admin-page .schedules__pane {
     position: fixed;
     inset: var(--wc-app-bar-height) 0 0 0;
     width: auto;
     height: auto;
     z-index: 40;
-    /* Room for the actions pinned at its foot. */
-    padding: 0 16px 72px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
     border-left: 0;
-    overflow: auto;
+    overflow: hidden;
   }
-  .admin-pane .admin-pane__close { display: inline-flex; }
-  /* The sheet's actions stay pinned at its foot (T610; G8: "its actions stay pinned at the bottom"). */
-  .build-panel > .admin-pane .sheet-foot,
-  .admin-page > .schedules__pane .sheet-foot {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    /* In the sheet's own stacking: over its sticky table heads (1), under its dialog (30) (T610's review). */
-    z-index: 2;
+  :is(.build-panel .admin-pane, .admin-page .schedules__pane) > .admin-pane__head {
+    flex: none;
     margin: 0;
-    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
-    border-top: 1px solid var(--wc-border-subtle);
-    background: var(--wc-bg-surface);
+  }
+  :is(.build-panel .admin-pane, .admin-page .schedules__pane) > :is(.admin-pane__body, .admin-pane__missing) {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 12px 16px;
+  }
+  :is(.build-panel .admin-pane, .admin-page .schedules__pane) > .source-pane__foot {
+    flex: none;
+    flex-wrap: wrap;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  .source-pane__foot > .schedule-form__foot { flex: 1; padding-top: 0; border-top: 0; }
+  .admin-pane .admin-pane__close { display: inline-flex; }
+  /* A toast over the sheet, above its pinned foot (T640's review). */
+  .sheet-over > .undo-toast {
+    z-index: 45;
+    bottom: calc(var(--sheet-foot-height, 0px) + 16px);
   }
 }
+/* The sheet and what's said over it: one box for Tab, none for layout (T640). */
+.sheet-over { display: contents; }
+/* What scrolls under a pane's head: the sheet's body below 1,024 px (T640). */
+.admin-pane__body { display: grid; gap: 12px; align-content: start; min-width: 0; }
+/* A sheet's foot with nothing pinned in it is no bar at all (T610's review). */
+.source-pane__foot:empty { display: none; }
 /* The skeleton's bars under the list's heads (T610; G1). */
 .jobs-skeleton__bar { display: block; height: 12px; width: 70%; border-radius: 3px; background: var(--wc-bg-subtle); }
 .jobs-no-folder { justify-items: center; text-align: center; }

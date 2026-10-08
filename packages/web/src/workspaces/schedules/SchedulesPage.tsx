@@ -2,6 +2,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { ExportedToast } from '../../dashboard/export/ExportedToast';
+import { useNarrowWindow } from '../../dashboard/useNarrowWindow';
+import { DiscardQuestion } from '../../shell/DiscardQuestion';
 import { InfoBar } from '../../shell/InfoBar';
 import { NotFound } from '../../shell/NotFound';
 import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
@@ -27,6 +29,14 @@ import {
   readErrorOf,
 } from '../jobs/ListStates';
 import { ChoicePill } from '../jobs/Pill';
+import {
+  focusAfterClose,
+  narrowNow,
+  SheetFootContext,
+  SheetTrap,
+  useFootHeight,
+  useSheetEscape,
+} from '../jobs/Sheet';
 import { BuiltWhen } from '../jobs/builds';
 import { Status } from '../jobs/StateBadge';
 import { OwnerFilter, type ShownOwner } from './OwnerFilter';
@@ -52,6 +62,14 @@ import {
  * wechart schedule is made here, with New schedule, and changed and deleted
  * in its pane, at once, with no proposal (AC-234).
  */
+
+/** New schedule, where focus goes back to as its form closes (rule 85; T640). */
+const NEW_SCHEDULE = '.schedules__new';
+/** The list, else New schedule where none is listed: focus, once a sheet's row went with it (T640). */
+const TO_THE_LIST = [
+  '.admin-page [role="region"][aria-label="Refresh schedules"]',
+  NEW_SCHEDULE,
+] as const;
 
 /** The icon a schedule's words wear, where its kind has one (design 07, pin 4; design 16). */
 const ICONS: Partial<Record<Schedule['kind'], StateKind>> = {
@@ -288,42 +306,81 @@ export function SchedulesPage() {
           const target =
             typeof asked === 'string' ? asked : was?.kind === 'wechart' ? was.id : undefined;
           if (target !== undefined && listed(target)) return;
-          if (was?.kind === 'wechart' && !listed(was.id)) setSelected(null);
+          if (was?.kind === 'wechart' && !listed(was.id)) {
+            setSelected(null);
+            // Its row went with it: focus on the list (T640; rule 85).
+            focusAfterClose(...TO_THE_LIST);
+          }
           setLost(true);
         })();
       }),
     [client],
   );
   /**
-   * Below 1,024 px the pane is a sheet over the list (design 16, G8): opened,
-   * it takes focus at its head; its × gives focus back to the row (rule 85).
+   * Below 1,024 px the pane is a sheet over the list (design 16, G8; T640),
+   * as designs 01, 11 and 13 have theirs: opened, it takes focus at its
+   * head; Tab stays in it; Esc or × closes it, asking first over what's
+   * typed in its form, and focus goes back to what opened it: its row, or
+   * New schedule (rule 85).
    */
   useEffect(() => {
-    const narrow =
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(max-width: 1023.98px)').matches;
-    if (selected !== null && narrow)
+    if (selected !== null && narrowNow())
       document.querySelector<HTMLElement>('.schedules__pane .admin-pane__title')?.focus();
   }, [selected]);
+  const narrow = useNarrowWindow();
+  const sheet = useRef<HTMLElement>(null);
+  /** The sheet and its toast, Tab's box while it covers the page (T640's review). */
+  const over = useRef<HTMLDivElement>(null);
+  const [foot, setFoot] = useState<HTMLElement | null>(null);
+  /** Whether the open form holds what was typed and not saved, and whether it's being asked about. */
+  const [typed, setTyped] = useState(false);
+  /**
+   * The pane the question was asked over: a pane gone since, by a save, a
+   * delete or access lost, takes its question with it (T640's review).
+   */
+  const [askedOver, setAskedOver] = useState<Open | null>(null);
+  const asking = askedOver !== null && askedOver === selected;
+  const setAsking = (on: boolean) => {
+    setAskedOver(on ? selected : null);
+  };
+  const askedFrom = useRef<HTMLElement | null>(null);
+  const closePane = () => {
+    const was = selected;
+    setSelected(null);
+    setAsking(false);
+    if (was === null) return;
+    focusAfterClose(
+      was.kind === 'new'
+        ? NEW_SCHEDULE
+        : was.kind === 'wechart'
+          ? `tr[data-schedule-id=${JSON.stringify(was.id)}]`
+          : `tr[data-key-id=${JSON.stringify(was.id)}]`,
+      ...TO_THE_LIST,
+    );
+  };
+  const requestClose = () => {
+    if (!typed) {
+      closePane();
+      return;
+    }
+    askedFrom.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setAsking(true);
+  };
+  const keepEditing = () => {
+    setAsking(false);
+    askedFrom.current?.focus();
+  };
+  useSheetEscape(sheet, selected !== null, () => {
+    if (asking) keepEditing();
+    else requestClose();
+  });
   const backToList = (
     <button
       type="button"
       className="btn-ghost btn-sm admin-pane__close"
       aria-label="Back to the list"
-      onClick={() => {
-        const was = selected;
-        setSelected(null);
-        if (was !== null && was.kind !== 'new')
-          requestAnimationFrame(() => {
-            document
-              .querySelector<HTMLElement>(
-                was.kind === 'wechart'
-                  ? `tr[data-schedule-id=${JSON.stringify(was.id)}]`
-                  : `tr[data-key-id=${JSON.stringify(was.id)}]`,
-              )
-              ?.focus();
-          });
-      }}
+      onClick={requestClose}
     >
       ×
     </button>
@@ -388,15 +445,18 @@ export function SchedulesPage() {
               New schedule
             </h2>
           </div>
-          <ScheduleForm
-            refreshKeys={keys}
-            onCancel={() => {
-              setSelected(null);
-            }}
-            onSaved={(saved) => {
-              setSelected({ kind: 'wechart', id: saved.id, held: saved });
-            }}
-          />
+          {/* What scrolls under the head, the sheet's body below 1,024 px (T640). */}
+          <div className="admin-pane__body">
+            <ScheduleForm
+              refreshKeys={keys}
+              // Cancel loses what's typed, as design 16 says it does (pin 15): no question.
+              onCancel={closePane}
+              onTyped={setTyped}
+              onSaved={(saved) => {
+                setSelected({ kind: 'wechart', id: saved.id, held: saved });
+              }}
+            />
+          </div>
         </>
       );
     if (selected.kind === 'wechart') {
@@ -409,7 +469,10 @@ export function SchedulesPage() {
           refreshKeys={keys}
           onDeleted={() => {
             setSelected(null);
+            // Its row gone, focus on the list (design 16's keyboard table, D6; T640).
+            focusAfterClose(...TO_THE_LIST);
           }}
+          onTyped={setTyped}
           back={backToList}
         />
       );
@@ -428,6 +491,20 @@ export function SchedulesPage() {
   };
   const isSelected = (kind: 'cube' | 'wechart', id: string) =>
     selected !== null && selected.kind === kind && selected.id === id;
+
+  /** Whether the pane is a sheet over the page now; its toast above its foot (T640's review). */
+  const sheetOpen = narrow && pane !== null;
+  useFootHeight(sheetOpen ? foot : null, over);
+  /** Access lost while the page was open (design 16, G5; T560). */
+  const lostToast = (
+    <ExportedToast
+      message={lost ? ACCESS_LOST : ''}
+      kind="err"
+      onDismiss={() => {
+        setLost(false);
+      }}
+    />
+  );
 
   // Schedules to one who writes no folder reads as the app's Not found page (G6, rule 67; T610).
   if (neverTheirs(folders)) return <NotFound />;
@@ -453,7 +530,7 @@ export function SchedulesPage() {
           {schedules.isSuccess || wechart.isSuccess ? (
             <button
               type="button"
-              className="btn-primary"
+              className="btn-primary schedules__new"
               onClick={() => {
                 setSelected({ kind: 'new' });
               }}
@@ -666,19 +743,31 @@ export function SchedulesPage() {
           </>
         )}
       </div>
-      {pane === null ? null : (
-        <aside className="admin-pane schedules__pane" aria-label="Schedule details">
-          {pane}
-        </aside>
-      )}
-      {/* Access lost while the page was open (design 16, G5; T560). */}
-      <ExportedToast
-        message={lost ? ACCESS_LOST : ''}
-        kind="err"
-        onDismiss={() => {
-          setLost(false);
-        }}
-      />
+      {/* The sheet and what's said over it, as one, for Tab (T640). */}
+      <div ref={over} className="sheet-over">
+        {pane === null ? null : (
+          <aside ref={sheet} className="admin-pane schedules__pane" aria-label="Schedule details">
+            {/* Below 1,024 px, its actions pinned in the sheet's foot (G8; T640). */}
+            <SheetFootContext.Provider value={narrow ? foot : null}>
+              {pane}
+            </SheetFootContext.Provider>
+            {narrow ? <footer className="source-pane__foot" ref={setFoot} /> : null}
+            {/* Asked over what's typed, in the sheet (rule 85; T640). */}
+            {asking ? (
+              <DiscardQuestion
+                body="What you typed isn’t kept."
+                onKeep={keepEditing}
+                onDiscard={closePane}
+              />
+            ) : null}
+          </aside>
+        )}
+        {/* Kept in one place, so it's announced as it comes; over the sheet,
+            above its foot, and in its Tab order while it covers the page (T640). */}
+        {lostToast}
+      </div>
+      {/* Tab kept in the sheet, the question over it keeping its own (T640). */}
+      {sheetOpen && !asking ? <SheetTrap pane={over} /> : null}
     </div>
   );
 }

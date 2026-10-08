@@ -256,6 +256,8 @@ export function JobsPage({
       >
         <BuildPanel
           {...(pollMs === undefined ? {} : { pollMs })}
+          // Its pane a sheet only while its tab is shown (T640).
+          active={open === 'preaggs'}
           status={status}
           onStatus={setStatus}
           folderChoice={preaggsFolder}
@@ -285,6 +287,7 @@ export function JobsPage({
         <RunHistory
           key={historyFor === undefined ? '' : `${historyFor.id}-${String(historyFor.opened)}`}
           enabled={opened.has('history')}
+          active={open === 'history'}
           preAggregation={historyFor}
           // The build at its address, once: not again when a pane opens Run history anew (T610's review).
           openFirst={historyFor === undefined ? (buildId ?? null) : null}

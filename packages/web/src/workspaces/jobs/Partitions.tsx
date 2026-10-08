@@ -11,6 +11,7 @@ import {
   type Starter,
 } from './builds';
 import { isRefused, ReadError } from './ListStates';
+import { SheetActions } from './Sheet';
 import { Status } from './StateBadge';
 
 /**
@@ -280,7 +281,7 @@ export function Partitions({
     return (
       <>
         {/* Build all needs no list; Rebuild selected waits for it (A4). */}
-        <div className="admin-pane__actions sheet-foot">
+        <SheetActions>
           <button
             type="button"
             className="btn-primary btn-sm"
@@ -291,7 +292,7 @@ export function Partitions({
           </button>
           {buildAll}
           {children}
-        </div>
+        </SheetActions>
         {failedToStart}
         {liveRegion}
         <section
@@ -311,10 +312,10 @@ export function Partitions({
   if (found.isPending || found.isError)
     return (
       <>
-        <div className="admin-pane__actions sheet-foot">
+        <SheetActions>
           {buildAll}
           {children}
-        </div>
+        </SheetActions>
         {failedToStart}
         {liveRegion}
         {found.isPending ? (
@@ -351,7 +352,7 @@ export function Partitions({
           ))}
         </ul>
         {/* None of its own, Open in Model only: no empty bar pinned at the sheet's foot (T610's review). */}
-        {children == null ? null : <div className="admin-pane__actions sheet-foot">{children}</div>}
+        {children == null ? null : <SheetActions>{children}</SheetActions>}
       </section>
     );
 
@@ -366,7 +367,7 @@ export function Partitions({
 
   return (
     <>
-      <div className="admin-pane__actions sheet-foot">
+      <SheetActions>
         {whole ? (
           <button
             type="button"
@@ -398,7 +399,7 @@ export function Partitions({
           </>
         )}
         {children}
-      </div>
+      </SheetActions>
       {failedToStart}
       {liveRegion}
       <section className="build-log__section partitions" aria-labelledby={`${id}-parts`}>

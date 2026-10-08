@@ -241,7 +241,7 @@ describe('a rollup’s partitions (T375, AC-145)', () => {
     expect(link.getAttribute('href')).toBe('/jobs?preagg=femea__orders_emea.by_month');
     expect(screen.queryAllByRole('button', { name: /Build|Rebuild/ })).toHaveLength(0);
     // Nothing of its own to act on: no empty bar pinned at the sheet's foot (T610's review).
-    expect(document.querySelectorAll('.sheet-foot')).toHaveLength(0);
+    expect(document.querySelectorAll('.admin-pane__actions')).toHaveLength(0);
   });
 
   it('asks again while Cube works the partitions out, and never shows none (A4)', async () => {

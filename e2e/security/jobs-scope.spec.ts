@@ -230,9 +230,11 @@ test.describe('Jobs and Schedules, scoped to the user’s read-write folders (T3
         await expect(shown.getByRole('note', { name: 'Scope' })).toHaveText(notes[panel]);
         const folder = shown.getByRole('combobox', { name: 'Folder' });
         await expect(folder.locator('option').first()).toHaveText('All of mine');
-        // Their folders by path, each indented by its depth below their own (H2; T610).
-        expect(await folder.locator('option').allTextContents()).toEqual([
-          'All of mine',
+        // Their folders by path, each indented by its depth below their own (H2; T610):
+        // this run's, as other specs running beside it make folders of writer's too.
+        const options = await folder.locator('option').allTextContents();
+        expect(options[0]).toBe('All of mine');
+        expect(options.filter((each) => each.includes(RUN))).toEqual([
           at(1, `Jobs mine ${RUN}`),
           at(2, `Jobs mine ${RUN} / Below ${RUN}`),
         ]);
@@ -290,8 +292,10 @@ test.describe('Jobs and Schedules, scoped to the user’s read-write folders (T3
       );
       const folder = page.getByRole('main').getByRole('combobox', { name: 'Folder' });
       await expect(folder.locator('option').first()).toHaveText('All of mine');
-      expect(await folder.locator('option').allTextContents()).toEqual([
-        'All of mine',
+      // This run's, as other specs running beside it make folders of writer's too.
+      const options = await folder.locator('option').allTextContents();
+      expect(options[0]).toBe('All of mine');
+      expect(options.filter((each) => each.includes(RUN))).toEqual([
         at(1, `Jobs mine ${RUN}`),
         at(2, `Jobs mine ${RUN} / Below ${RUN}`),
       ]);

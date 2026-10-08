@@ -829,7 +829,7 @@ describe('Schedules, as Cube runs them (T551’s review)', () => {
     );
     // With no link of its own either, no empty bar is pinned at the sheet's foot (T610's review).
     expect(within(pane).queryAllByRole('link', { name: 'Open in Model' })).toHaveLength(0);
-    expect(pane.querySelectorAll('.sheet-foot')).toHaveLength(0);
+    expect(pane.querySelectorAll('.admin-pane__actions')).toHaveLength(0);
   });
 
   it('says why Cube can’t run a key, in the words the model editor uses', async () => {

@@ -6,6 +6,7 @@ import { BuildLog } from './BuildLog';
 import { FolderFilter, ScopeNote, useJobsFolders } from './FolderFilter';
 import { ListError, ListLoading, NoFolderLeft, noFolderLeft, ReadError } from './ListStates';
 import { Pill } from './Pill';
+import { focusAfterClose } from './Sheet';
 import {
   BuildOutcomeStatus,
   durationOf,
@@ -107,10 +108,13 @@ function queryOf(filters: Filters, before: string | undefined): string {
 
 export function RunHistory({
   enabled = true,
+  active = true,
   preAggregation,
   openFirst = null,
 }: {
   enabled?: boolean;
+  /** Whether its tab is the one shown: a log's sheet is one only then (T640). */
+  active?: boolean;
   /**
    * Opened on one pre-aggregation's builds, of all time: its pane's "All its
    * builds in Run history" (T375; design 16, pin 14).
@@ -415,7 +419,18 @@ export function RunHistory({
         </aside>
       ) : (
         // Read by its id: one opened at its address need not be on this page (T610).
-        <BuildLog id={openId} onClose={() => setOpenId(null)} />
+        // Closed, focus goes back to its row's name, which opened it (T640; rule 85).
+        <BuildLog
+          id={openId}
+          active={active}
+          onClose={() => {
+            setOpenId(null);
+            focusAfterClose(
+              `[data-testid=${JSON.stringify(`build-row-${openId}`)}] .run-history__name`,
+              '.build-panel [role="region"][aria-label="Run history"]',
+            );
+          }}
+        />
       )}
     </div>
   );

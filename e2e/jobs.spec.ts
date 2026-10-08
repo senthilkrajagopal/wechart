@@ -843,7 +843,9 @@ test('below 1,024 px the list keeps name, folder and state, and the pane is a fu
   expect([sheet?.x, sheet?.width]).toEqual([0, 390]);
   // Opened, the sheet has focus, at its head (rule 85).
   await expect(pane.getByRole('heading', { level: 2 })).toBeFocused();
-  // Building stays possible, in the sheet, its actions pinned at its foot (G8; T610).
+  // Building stays possible, in the sheet, its actions pinned at its foot (G8; T610),
+  // measured once its partitions are read and its actions drawn for them.
+  await expect(pane.getByRole('table', { name: /^Partitions of/ })).toBeVisible();
   const build = pane.getByRole('button', { name: /^Build/ }).first();
   await expect(build).toBeVisible();
   const actions = await build.boundingBox();

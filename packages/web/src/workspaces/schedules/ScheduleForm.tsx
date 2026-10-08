@@ -1,8 +1,9 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { shownOf } from '../jobs/BuildPanel';
+import { SheetActions } from '../jobs/Sheet';
 import { dayIn, timeIn, type Schedule } from './schedule';
 import {
   clockChangeLine,
@@ -73,6 +74,7 @@ export function ScheduleForm({
   refreshKeys,
   onSaved,
   onCancel,
+  onTyped,
   children,
 }: {
   /** The schedule to change; none, a new one. */
@@ -81,6 +83,8 @@ export function ScheduleForm({
   readonly refreshKeys: readonly Schedule[];
   readonly onSaved: (saved: WechartSchedule) => void;
   readonly onCancel?: () => void;
+  /** Whether something typed would be lost on closing: Esc and × ask first then (rule 85; T640). */
+  readonly onTyped?: (typed: boolean) => void;
   /** More of the pane's actions, after Save: Delete. */
   readonly children?: ReactNode;
 }) {
@@ -152,6 +156,29 @@ export function ScheduleForm({
     fields.timezone !== schedule.timezone ||
     fields.missed !== schedule.missed ||
     suspendAfter !== schedule.suspendAfter;
+  /** Typed and not saved: a new schedule's fields as they started, or a schedule's own changed. */
+  const typed =
+    schedule === undefined
+      ? fields.preAggregation !== '' ||
+        fields.name !== '' ||
+        fields.cron !== '' ||
+        fields.timezone !== '' ||
+        fields.missed !== 'once' ||
+        limit !== String(SUSPEND_AFTER)
+      : changed;
+  const told = useRef(onTyped);
+  useEffect(() => {
+    told.current = onTyped;
+  });
+  useEffect(() => {
+    told.current?.(typed);
+  }, [typed]);
+  useEffect(
+    () => () => {
+      told.current?.(false);
+    },
+    [],
+  );
   const refreshKey = refreshKeys.find((each) => each.id === fields.preAggregation);
   const shownZone = read?.ok === true ? (read.timezone ?? zone) : zone;
   // Which field is wrong, said under that field; the cron's words kept when it's the zone.
@@ -168,6 +195,7 @@ export function ScheduleForm({
 
   return (
     <form
+      id={`${id}-form`}
       className="schedule-form"
       aria-label={schedule === undefined ? 'New schedule' : `Change ${schedule.name}`}
       onSubmit={(event) => {
@@ -386,8 +414,9 @@ export function ScheduleForm({
         ) : null}
       </div>
       {save.isError ? <StateLine kind="err">{save.error.message}</StateLine> : null}
-      {/* Pinned at the sheet's foot below 1,024 px (design 16, G8). */}
-      <div className="schedule-form__foot sheet-foot">
+      {/* Pinned in the sheet's foot below 1,024 px (design 16, G8; T640), its
+          submit the form's wherever it is (`form`). */}
+      <SheetActions className="schedule-form__foot">
         {/* Recorded with who made it (T505, AC-294; design 16, state I). */}
         <p className="help" data-testid="applies-at-once">
           Applies at once, with no proposal. Recorded in the audit trail.
@@ -398,7 +427,12 @@ export function ScheduleForm({
               <button type="button" onClick={onCancel}>
                 Cancel
               </button>
-              <button type="submit" className="btn-primary" disabled={!complete || save.isPending}>
+              <button
+                type="submit"
+                form={`${id}-form`}
+                className="btn-primary"
+                disabled={!complete || save.isPending}
+              >
                 Create schedule
               </button>
             </>
@@ -406,6 +440,7 @@ export function ScheduleForm({
             <>
               <button
                 type="submit"
+                form={`${id}-form`}
                 className="btn-primary btn-sm"
                 disabled={!complete || !changed || save.isPending}
               >
@@ -415,7 +450,7 @@ export function ScheduleForm({
             </>
           )}
         </div>
-      </div>
+      </SheetActions>
     </form>
   );
 }

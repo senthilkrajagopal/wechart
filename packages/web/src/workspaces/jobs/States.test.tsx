@@ -148,6 +148,15 @@ afterEach(() => {
 });
 
 const user = () => userEvent.setup({ delay: null });
+/** A window narrower than 1,024 px: the pane a sheet over the page (design 16, G8). */
+const narrowWindow = () => {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: true,
+    media: query,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  }));
+};
 const text = (element: Element | null | undefined) => element?.textContent ?? '';
 const panelOf = (tab: string | RegExp) => screen.getByRole('tabpanel', { name: tab });
 const TABS = [
@@ -330,6 +339,31 @@ describe('G4 · a refusal in the API’s words, and G5 · access lost while open
         'Select a pre-aggregation to see its state, what rebuilds it, and to build it.',
       ]);
     });
+  });
+
+  it('says it below 1,024 px from a toast kept where it was, so it is announced (T640’s review)', async () => {
+    narrowWindow();
+    let gone = false;
+    serve({
+      preaggregations: () => (gone ? [] : [ROW]),
+      build: () => {
+        gone = true;
+        return Response.json(REFUSED, { status: 403 });
+      },
+    });
+    shown('?preagg=orders.main');
+    const pane = await screen.findByRole('complementary', { name: 'Pre-aggregation details' });
+    await within(pane).findByTestId('pane-head');
+    // Every live region there is as the sheet covers the page.
+    const regions = [...document.querySelectorAll('[role="status"]')];
+
+    await user().click(await within(pane).findByRole('button', { name: /^Build now/ }));
+
+    const toast = (await screen.findByText('You no longer have access to do this.')).closest(
+      '[role="status"]',
+    );
+    // The same region, there before what it says: a screen reader reads it as it changes.
+    expect(regions).toContain(toast);
   });
 
   it('reads the queue again when a cancel finds access lost, and says so', async () => {
@@ -589,6 +623,33 @@ describe('G7 · sign-in off: the single user is "You" (T610, AC-399)', () => {
     shown();
 
     expect(text(await within(panelOf('Pre-aggregations')).findByTestId('starter'))).toBe('admin');
+  });
+});
+
+/**
+ * T640 (AC-176; rule 85): Esc closes the pane on a wide window too, where it
+ * is docked beside the list, as Esc closes every panel; focus goes back to
+ * its row.
+ */
+describe('Esc in the docked pane (T640, AC-176)', () => {
+  it('closes it, and gives focus back to its row', async () => {
+    serve();
+    shown();
+    const row = within(await screen.findByRole('table', { name: 'Pre-aggregations' }))
+      .getByText('orders.main', { selector: '[data-testid="preagg-name"]' })
+      .closest('tr') as HTMLElement;
+    await user().click(row);
+    const pane = screen.getByRole('complementary', { name: 'Pre-aggregation details' });
+    within(pane).getByRole('heading', { level: 2, name: 'orders.main' }).focus();
+
+    await user().keyboard('{Escape}');
+
+    expect(text(within(pane).getByText(/^Select a pre-aggregation/))).toBe(
+      'Select a pre-aggregation to see its state, what rebuilds it, and to build it.',
+    );
+    await vi.waitFor(() => {
+      expect(document.activeElement).toBe(row);
+    });
   });
 });
 

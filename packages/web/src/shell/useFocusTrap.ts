@@ -47,7 +47,19 @@ export function useFocusTrap(dialog: RefObject<HTMLElement | null>) {
       // In another modal, opened over this one — search over a dialog: its
       // Tab is that modal's to keep, not this one's to take back.
       if (!inside && at?.closest('[aria-modal="true"]') != null) return;
-      if (event.shiftKey ? !inside || at === first : !inside || at === last) {
+      // On something inside that Tab doesn't stop at — a heading that took
+      // focus as it opened, a log that did: at the edge where the browser
+      // would leave it, with no control before (Shift) or after it (T640).
+      const atEdge =
+        inside &&
+        !stops.includes(at as HTMLElement) &&
+        !stops.some((stop) => {
+          const where = stop.compareDocumentPosition(at);
+          return event.shiftKey
+            ? (where & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+            : (where & Node.DOCUMENT_POSITION_PRECEDING) !== 0;
+        });
+      if (event.shiftKey ? !inside || at === first || atEdge : !inside || at === last || atEdge) {
         event.preventDefault();
         (event.shiftKey ? last : first).focus();
       }

@@ -94,4 +94,42 @@ describe('a modal dialog’s Tab', () => {
 
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'First' }));
   });
+
+  it('keeps Shift+Tab in it from its heading, which took focus as it opened (T640)', async () => {
+    render(<Headed />);
+    screen.getByRole('heading', { name: 'Sheet' }).focus();
+
+    await userEvent.tab({ shift: true });
+
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }));
+  });
+
+  it('keeps Tab in it from text after its last control that took focus (T640)', async () => {
+    render(<Headed />);
+    screen.getByRole('region', { name: 'Log' }).focus();
+
+    await userEvent.tab();
+
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Back' }));
+  });
 });
+
+/** A sheet whose heading takes focus as it opens, its controls after it, and a log after them. */
+function Headed() {
+  const sheet = useRef<HTMLDivElement>(null);
+  useFocusTrap(sheet);
+  return (
+    <>
+      <button type="button">Under</button>
+      <div ref={sheet} aria-label="Sheet">
+        <h2 tabIndex={-1}>Sheet</h2>
+        <button type="button">Back</button>
+        <button type="button">Close</button>
+        <div role="region" aria-label="Log" tabIndex={-1}>
+          lines
+        </div>
+      </div>
+      <button type="button">Over</button>
+    </>
+  );
+}
