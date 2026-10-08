@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-import type { APIRequestContext } from '@playwright/test';
+import type { APIRequestContext, Page } from '@playwright/test';
 import { sealSecretV1, type XcubeKey } from '@wechart/core';
 
 import { landed } from '../model-files';
@@ -203,6 +203,50 @@ async function moveTo(request: APIRequestContext, database: string) {
     .toBe('live');
 }
 
+/**
+ * AC-161 on its page, once the API says live: the In Cube tab says Cube uses
+ * these settings, and every instance that reported within the hour is on the
+ * landed version, live; its head line says the same. Looked at an hour and a
+ * minute later, by the page's clock, no instance's report is shown.
+ */
+async function liveOnItsPage(page: Page) {
+  // The connection's version xcube holds now, as Cube's use of it says it.
+  const { version } = (await (
+    await page.request.get(`/api/data-sources/${sourceId}/cube-state`)
+  ).json()) as { version: number };
+  const look = async () => {
+    await page.goto(`/explore/data-sources/${sourceId}`);
+    const main = page.getByRole('main');
+    await main
+      .getByRole('tablist', { name: 'Data source' })
+      .getByRole('tab', { name: 'In Cube' })
+      .click();
+    return { main, panel: main.getByRole('tabpanel', { name: 'In Cube' }) };
+  };
+  const { main, panel } = await look();
+  const state = panel.getByTestId('cube-state');
+  await expect(state).toHaveText('Cube uses these settings');
+  await expect(state).toHaveAttribute('data-state', 'live');
+  const rows = panel.getByRole('table', { name: 'Cube instances' }).locator('tbody tr');
+  await expect(rows.first()).toBeVisible();
+  for (const row of await rows.all()) {
+    await expect(row).toContainText(`Version ${String(version)}`);
+    await expect(row).toContainText('Live');
+  }
+  await expect(main.locator('.source-settings__cube-use')).toHaveText(
+    /^Cube uses these settings · \d+ instances?$/,
+  );
+
+  // An hour and a minute on: every report is older than the hour, so none is shown.
+  await page.clock.install({ time: new Date(Date.now() + 61 * 60 * 1000) });
+  const later = await look();
+  await expect(later.panel.getByTestId('cube-state')).toBeVisible();
+  await expect(later.panel.getByRole('table', { name: 'Cube instances' })).toHaveCount(0);
+  await expect(later.main.locator('.source-settings__cube-use')).toHaveText(
+    'Cube uses these settings',
+  );
+}
+
 test.describe.configure({ mode: 'serial' });
 
 test.describe('a data source changed in place (T501, AC-161)', () => {
@@ -261,6 +305,8 @@ test.describe('a data source changed in place (T501, AC-161)', () => {
     // own answer is the new target's at once, not its cache of the old.
     await moveTo(request, 'template1');
     expect(await read(request, { rollup: false })).toEqual({ db: 'template1' });
+    // And said so on its page, with no restart (AC-161).
+    await liveOnItsPage(page);
     // The rollup answers "not built yet" at most, until it is built anew.
     const before = await read(request);
     if (before.db === undefined)

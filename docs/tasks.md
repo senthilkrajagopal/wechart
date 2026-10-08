@@ -6805,6 +6805,11 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - `connections.test.ts` 20;
     - `access/data-sources.test.ts` 20;
     - `CubeState.test.tsx` 7.
+  - **Verified 2026-10-08 (group 3): AC-161 ticked.** Its page had been shown only as "the badge is visible". `e2e/security/changed-in-place.spec.ts` gained `liveOnItsPage`. After the approved move lands and the API says live, the In Cube tab says "Cube uses these settings" (`data-state` live). Every instance row reads "Live" on the version Cube's use reports, and the head line says the same with its count. With the page's clock an hour and a minute on, no instance's report is shown and the line has no count. The behaviour was built. The step's first run compared the rows with the data source's own version and failed: the rows show xcube's connection version, as Cube's use reports it, which the step now uses. Passing in Chrome against compose's xcube:
+    - live only when every instance within the hour is current and live, with no restart: that test (the change approved through a proposal, served from its new target at once), with `cube-state.test.ts` and `CubeState.test.tsx` for the states that aren't live;
+    - older reports not shown: the clock step, and `cube-state.test.ts`'s hour;
+    - the type never changed, saved or proposed: `data-sources.spec.ts` "changes its copy…" ("The type is fixed…"), `access/data-sources.test.ts`, `repos/data-sources.test.ts` and `routes/workspace-copy-source.test.ts`;
+    - an instance whose driver outlives the hour keeps reporting: xcube's heartbeat (`xcube-bc18f82c01.md`, "connections.ts L365-375"), asked for above.
 
 ## P2.8 Bookmarks (F31)
 
