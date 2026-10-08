@@ -1800,14 +1800,15 @@ export function buildServer({
                 return back === 'none' ? 'none' : 'there';
               // A push that failed says so, as `pushTree` answers it, rather
               // than throwing (T540's review): nothing is bound against a
-              // tree xcube doesn't hold.
+              // tree xcube doesn't hold. Nor is one refused for folders xcube
+              // still holds things in (`in-use`), until the reconcile's
+              // catch-up has put it (T765's review).
               const pushed = await afterFolderChange().catch((error: unknown) => {
                 app.log.warn({ err: error }, 'could not put the folder tree to xcube');
                 return { kind: 'failed' };
               });
-              return (pushed as { kind?: unknown } | undefined)?.kind === 'failed'
-                ? 'unpushed'
-                : 'there';
+              const kind = (pushed as { kind?: unknown } | undefined)?.kind;
+              return kind === 'failed' || kind === 'in-use' ? 'unpushed' : 'there';
             },
           }),
     });

@@ -14755,6 +14755,14 @@ These tasks are what group 3's check of the open criteria found missing. Each is
       Any refusal stops it, and the next reconcile tries again.
     - **Tests:** `src/xcube` 205 of 205, and the full API suite under the lock, 1,843 of 1,843. `e2e/security/xcube-restart.spec.ts` (Chrome) ran 4 times, its first run on a model xcube lacked and the other 3 on one held behind. It also checks that the restarted model's tree in xcube lists exactly the folders the suite's own model lists, so no folder deleted in wechart is left.
   - **AC-330 ticked.**
+  - **Spec review, 2026-10-08: PASS on every AC-330 clause.** It found these:
+    - **Fixed: a recreated folder counted as pushed when the push was refused.** `pushTree` now answers `in-use` where it used to answer `failed`, and the proposal's `recreate` in `server.ts` (T540, AC-389) took `in-use` for `there`. It now answers `unpushed`, so nothing is approved until the reconcile's catch-up has put the tree. Red first: `routes/folder-recreate.test.ts`, "approves nothing where xcube refuses the tree for folders it still holds things in", was approved with 200.
+    - **Open, put to the coordinator: a data source name reused in another folder can't catch up.** Folder A, holding data source `wh` and a cube on it, is deleted in wechart, and `wh` is made again in folder B, all while xcube missed it. Step 3's move of `wh` to B is refused (`409 data_source_range`), because A's old cube still uses it. Step 4's items are then refused (`422 data_source_range`), because B's new cube uses a `wh` that is still in A. Every reconcile repeats this. Only a snapshot carrying the connections with the items, done as one atomic step, would land it. Reasoned from `xcube-256d632371.md` (lines 141 and 163); not run.
+    - **Left as they are (low, benign):**
+      - step 2 skips `putTree`'s `older_instances` fallback, which only matters on an upgrade from before slice 4;
+      - the catch-up's items send doesn't go through the items queue, so a publish during a catch-up can be refused and is then tried again;
+      - a tree push queued before the catch-up can run beside it, but it puts wechart's own tree and is refused `in-use` until the old folders are gone;
+      - a step-3 failure can hold the items back for the 10-minute refusal window.
 
 - [x] T762 (AC-429) List phase 1's bookmarks to Super-Admins with sign-in on
   - Files: `packages/api/src/server.ts` (the bookmarks listing), `packages/api/src/access/bookmarks.test.ts`, `packages/web/src/dashboard/bookmarks/Bookmarks.tsx` (+ test), `e2e/security/bookmarks.spec.ts`

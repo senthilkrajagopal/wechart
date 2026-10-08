@@ -283,6 +283,43 @@ describe('a deleted target folder, made again at approval (T540, AC-389)', () =>
     }
   });
 
+  it('approves nothing where xcube refuses the tree for folders it still holds things in (T765’s review)', async () => {
+    const pushing = buildServer({
+      config: secured,
+      sessions: pgSessionStore(getDb()),
+      documents: docs(),
+      catalog: catalog(getDb()),
+      folderAccess: folderAccessStore(getDb()),
+      deletedFolders: deletedFolderStore(getDb()),
+      audit: auditStore(getDb()),
+      proposals: proposalStore(getDb()),
+      versions: versionStore(getDb()),
+      // As `pushTree` answers a tree refused `409 folder_in_use`: not put.
+      afterFolderChange: () => Promise.resolve({ kind: 'in-use', folders: ['gone'] }),
+    });
+    try {
+      const writer = await signIn(pushing, USERS['writer']!);
+      const x = await doc('folder', {
+        title: `X ${MARK}`,
+        folderId: 'root',
+        access: { readOnly: null, readWrite: ['sales-rw'] },
+      });
+      const proposalId = await proposedTo(x, 'Held');
+      await removed(x);
+      const refused = await pushing.inject({
+        method: 'POST',
+        url: `/api/proposals/${proposalId}/approve`,
+        payload: {},
+        headers: { cookie: writer },
+      });
+      expect(refused.statusCode, refused.body).toBe(503);
+      const open = await as({ method: 'GET', url: `/api/proposals/${proposalId}` });
+      expect(open.json<{ status: string }>().status).toBe('open');
+    } finally {
+      await pushing.close();
+    }
+  });
+
   it('is refused, and left open, where wechart has no record of the folder', async () => {
     const s = await doc('folder', {
       title: `S ${MARK}`,
