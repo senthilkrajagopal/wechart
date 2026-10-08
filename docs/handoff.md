@@ -1,5 +1,13 @@
 # Handoff — 2026-09-24
 
+> **PAUSED 2026-10-08 at the user's word** ("pause at a logical point. And deploy the work done to docker-desktop k8s.. and also publish the images to ghcr.io. Keep it paused until i request to continue"). feat/xcube is at 260e59aa, and that is what is deployed and published. 388 of 403 ACs are ticked.
+> - **Open ACs, 10 active** (design conformance): AC-029, 032, 147, 187, 190, 217, 220, 343, 344, 352. **5 held** until the user asks for the **Phase 2 End Run**: AC-180, 258, 307, 308, 319.
+> - **Agents paused, each with WIP on its own branch (not on feat/xcube):**
+>   - **Jobs agent** (worktree agent-a5f03f39b812af47a, branch `a5f0-t688c`, HEAD cf24f276, based on e46e63ad): T688 is built, and its review FAILED on 7 findings. Two failing tests are written; the fixes aren't. Then come T689, T690 (pin xcube 407622a6b8 for `rollupOnly`; compose already runs it) and T691. **Open question for the user:** the field list's distinct counts each run a full GROUP BY `/api/load` and are logged. Options: (a) keep them, (b) count only from the chart's own result, or (c) count on hover.
+>   - **Group 6** (worktree agent-a83beb1a6c745ebb6, branch `agent-a83-t683`, HEAD 3fe545db, based on f44df003): T683 WIP. Left to do: wire `measureTypesOf(meta)` into the app, an e2e for count ticks, the notes and accepted differences, a full Chrome run, the review, and a fresh branch. Then T685–T687, T693–T696 and T742, then the AC ticks; AC-187 closes on the per-surface results (R77).
+> - **Rules in force:** R75 (no new keyboard work; phase 3 list in backlog §7); R76 (the design decisions); R77 (accept differences ≤4 px, no review for pure-styling tasks); `lockf -k` on both locks; COMPOSE_PROJECT_NAME and COMPOSE_FILE set; no stray servers; each agent uses its own e2e script, never a shared scratchpad one.
+> - **xcube:** compose runs 407622a6b8, the repo pins c2602ac72a, and T690 pins 407622a6b8.
+
 > **RESUMED 2026-10-07, after the weekly-limit stop below.** feat/xcube is at 0e704d9 (T510 ticked on R69). Nothing has been deployed since 645537e.
 > - **Agents running, each in its own worktree. Cherry-pick each commit as it's reported.**
 >   - **Jobs** (agent-a5f03f39b812af47a): T610 is picked (d02acc3). Next is T640, the narrow sheets as rule-85 dialogs in the `.source-pane` pattern of designs 01, 11 and 13. Then T611, T612 and T613, and then AC-399's tick.
