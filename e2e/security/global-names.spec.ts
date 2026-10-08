@@ -327,3 +327,92 @@ test.describe('a deleted item’s name lands again (T707, AC-427)', () => {
     }
   });
 });
+
+/**
+ * T723 (AC-426, AC-424, AC-422): in the model editor, a cube's name outside
+ * R72's grammar is said in Problems and holds Save, so nothing is sent; one
+ * the root's landed `orders` holds is refused on Save, said as in use and
+ * nothing of where.
+ */
+test.describe('a draft cube’s name in the model editor (T723)', () => {
+  test.use({ role: 'super' });
+
+  test('holds Save for a name outside the grammar, and says a landed name only as in use', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    const request = page.request;
+    const held = `held_${RUN}`;
+    const path = `cubes/${held}.yml`;
+    const made: string[] = [];
+    let project = '';
+    const folderIn = async (parent: string, title: string) => {
+      const answer = await request.post('/api/documents', {
+        data: { kind: 'folder', title, folderId: parent },
+      });
+      expect(answer.status(), await answer.text()).toBe(201);
+      const id = ((await answer.json()) as { id: string }).id;
+      made.unshift(id);
+      return id;
+    };
+    try {
+      const target = await folderIn('root', `Held ${RUN}`);
+      project = await folderIn('mine', `Held draft ${RUN}`);
+      const saved = await request.post('/api/model/publish', {
+        data: {
+          folderId: project,
+          targetFolderId: target,
+          files: [
+            {
+              path,
+              content: `cubes:\n  - name: ${held}\n    sql: SELECT 1 AS n\n    measures:\n      - name: count\n        type: count\n`,
+            },
+          ],
+        },
+        timeout: 90_000,
+      });
+      expect(saved.status(), await saved.text()).toBe(200);
+
+      await page.goto(
+        `/explore/folders/${encodeURIComponent(project)}/models/${encodeURIComponent(path)}`,
+      );
+      const name = page
+        .getByRole('region', { name: `Cube ${held}` })
+        .getByRole('tabpanel')
+        .getByLabel('Name', { exact: true });
+      const save = page.getByRole('button', { name: 'Save', exact: true });
+      const problems = page.getByRole('region', { name: 'Problems' });
+
+      await name.fill('Orders__2');
+      await expect(problems.getByRole('listitem')).toContainText([
+        'Cube Orders__2: “Orders__2” isn’t a name: start with a letter, then use letters, digits and single underscores, not ending in one, at most 40 characters.',
+      ]);
+      await expect(save).toBeDisabled();
+
+      const sent: string[] = [];
+      page.on('request', (each) => {
+        if (each.url().endsWith('/api/model/publish')) sent.push(each.method());
+      });
+      await page
+        .getByRole('region', { name: 'Cube Orders__2' })
+        .getByRole('tabpanel')
+        .getByLabel('Name', { exact: true })
+        .fill('orders');
+      await save.click();
+      await expect(page.getByRole('alert').filter({ hasText: 'already in use' })).toHaveText(
+        'The name “orders” is already in use, so nothing was saved.',
+      );
+      await expect(problems.getByRole('listitem')).toContainText([
+        'The name “orders” is already in use.',
+      ]);
+      // Sent once, on Save: never for the name outside the grammar.
+      expect(sent).toEqual(['POST']);
+    } finally {
+      if (project !== '')
+        await request.delete(
+          `/api/model/files?folder=${encodeURIComponent(project)}&path=${encodeURIComponent(path)}`,
+        );
+      for (const id of made) await request.delete(`/api/documents/folder/${id}`);
+    }
+  });
+});

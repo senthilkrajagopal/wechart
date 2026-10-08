@@ -1,4 +1,4 @@
-import { refreshEveryRefusal } from '@wechart/core';
+import { nameProblem, refreshEveryRefusal } from '@wechart/core';
 import { parseDocument, type Document, type Node } from 'yaml';
 
 import { dimensionShape, MEASURE_TYPES, SCHEMA, type Field, type SectionId } from './form/schema';
@@ -55,6 +55,13 @@ const snake = (text: string) => text.replace(/[A-Z]/g, (letter) => `_${letter.to
 const required = (key: string) => `"${key}" is required.`;
 const missing = (value: Value, keys: readonly string[]) =>
   keys.filter((key) => !has(value, key)).map(required);
+
+/**
+ * A cube's or view's name outside R72's grammar, or a reserved word (T723,
+ * AC-426): wechart's own rule, which the API refuses, so unlike what Cube
+ * would refuse it holds the save, and nothing is sent.
+ */
+const MISNAMED: Readonly<Record<string, 'cube' | 'view'>> = { 'Y.3': 'cube', 'Y.10': 'view' };
 
 /** The measure types Cube takes only with `multi_stage: true` (§Y.17). */
 const STAGED = new Set(
@@ -247,10 +254,18 @@ export function validationProblems(path: string, text: string): Problem[] {
   if (!isPlain(model)) return [];
 
   const problems: Problem[] = [];
-  const at = (where: Path, message: string) => {
+  const at = (where: Path, message: string, holds = false) => {
     const node = document.getIn(where, true) as Node | undefined;
     const [from = 0, to = from] = node?.range ?? [];
-    problems.push({ path, ...placeOf(text, from), message, from, to, severity: 'error' });
+    problems.push({
+      path,
+      ...placeOf(text, from),
+      message,
+      from,
+      to,
+      severity: 'error',
+      ...(holds ? { holds: true } : {}),
+    });
   };
 
   const visit = (
@@ -263,6 +278,18 @@ export function validationProblems(path: string, text: string): Problem[] {
   ) => {
     const called = calledOf(section, value, index);
     for (const said of RULES[section]?.(value, context) ?? []) at(where, `${called}: ${said}`);
+    const kind = MISNAMED[section];
+    const name = lookUp(value, 'name');
+    // YAML reads `true` or `2026` as no string; the API reads it as written (T723's review).
+    const written =
+      typeof name?.own === 'string' ||
+      typeof name?.own === 'number' ||
+      typeof name?.own === 'boolean'
+        ? String(name.own)
+        : undefined;
+    const misnamed =
+      kind !== undefined && written !== undefined ? nameProblem(written, kind) : undefined;
+    if (misnamed !== undefined) at([...where, ...name!.at], `${called}: ${misnamed}`, true);
 
     for (const field of fields) {
       const found = lookUp(value, field.key);

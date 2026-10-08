@@ -36,6 +36,16 @@ export type NamedKind = 'cube' | 'view' | 'data-source';
 /** A name as names compare: in any case (AC-421). */
 export const nameKey = (name: string): string => name.toLowerCase();
 
+/**
+ * A name refused because something else holds it, said as AC-424 has it: in
+ * use, and never where (T701, AC-421; shared with the web, T723).
+ */
+export const nameInUse = (name: string): string => `The name “${name}” is already in use.`;
+
+/** The name a refusal says is in use, where those are its words; else `undefined` (T723). */
+export const nameInUseOf = (message: string): string | undefined =>
+  /^The name “(.+)” is already in use\.$/.exec(message)?.[1];
+
 /** Why a name isn't one this kind takes, or `undefined` where it is (AC-426). */
 export function nameProblem(name: string, kind: NamedKind): string | undefined {
   if (name.length > MAX_NAME || !NAME.test(name))

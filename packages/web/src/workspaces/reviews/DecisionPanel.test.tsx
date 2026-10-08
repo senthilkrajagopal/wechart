@@ -240,6 +240,20 @@ describe('deciding a proposal (T356)', () => {
     expect(screen.getByRole('button', { name: 'Approve' })).toBeTruthy();
   });
 
+  // T723 (AC-424, AC-422): a name landed since, said in the API's words
+  // alone: nothing of where it is held.
+  it('says an approval refused for a name in use as the API does, and decides nothing', async () => {
+    const said = 'The names “orders” and “Lines” are already in use, so nothing was approved.';
+    const { onDecided } = shown(proposal({ replaces: null }), {
+      status: 409,
+      body: { error: said, names: ['orders', 'Lines'] },
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Approve and publish' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(`Can’t approve: ${said}`);
+    expect(onDecided).not.toHaveBeenCalled();
+  });
+
   it('says a refusal naming what still uses a name in its own words, counted dependents and all (T451’s review)', async () => {
     shown(proposal({}), {
       status: 409,

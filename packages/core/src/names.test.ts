@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MAX_NAME, nameKey, nameProblem } from './names';
+import { MAX_NAME, nameInUse, nameInUseOf, nameKey, nameProblem } from './names';
 
 /**
  * T703 (AC-426): a cube's, view's or data source's name is an ASCII letter,
@@ -56,5 +56,22 @@ describe('a name, in R72’s grammar (T703, AC-426)', () => {
   it('compares names in any case', () => {
     expect(nameKey('Orders')).toBe(nameKey('orders'));
     expect(nameKey('ORDER_items')).toBe('order_items');
+  });
+});
+
+/**
+ * T723 (AC-424): a name refused as in use is said in one set of words, by
+ * the API and read back by the web, which holds nothing of where.
+ */
+describe('a name in use (T723, AC-424)', () => {
+  it('is said as in use and nothing more, and read back for its name alone', () => {
+    expect(nameInUse('Orders')).toBe('The name “Orders” is already in use.');
+    expect(nameInUseOf(nameInUse('Orders'))).toBe('Orders');
+    for (const other of [
+      'The name “Orders” is already in use, so nothing was approved.',
+      'Cube refused the model.',
+      '',
+    ])
+      expect(nameInUseOf(other), other).toBeUndefined();
   });
 });

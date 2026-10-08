@@ -429,15 +429,12 @@ describe('the Name and target step (design 01, states G and H)', () => {
     expect(button(pane, 'Create in My workspace')).toHaveProperty('disabled', false);
   });
 
-  it('shows a name the folder already has on the name field, keeping the passed test', async () => {
+  it('shows a name in use on the name field, saying nothing of where, keeping the passed test', async () => {
     const user = userEvent.setup();
     serve([passed], {
       status: 409,
-      // As the API words it (routes/data-sources.ts `clashIn`).
-      body: {
-        error:
-          'Its target folder already holds a data source named “sales_replica”: only a copy of it replaces it. Give this one another name.',
-      },
+      // As the API words it (routes/data-sources.ts `nameTaken`; T705, AC-424).
+      body: { error: 'The name “sales_replica” is already in use.' },
     });
     const { pane, onCreated } = open();
     await connect(user, pane);
@@ -448,11 +445,12 @@ describe('the Name and target step (design 01, states G and H)', () => {
     await user.click(button(pane, 'Create in My workspace'));
 
     expect(name.getAttribute('aria-invalid')).toBe('true');
-    expect(
-      within(pane).getByText(
-        'Its target folder already holds a data source named “sales_replica”: only a copy of it replaces it. Give this one another name.',
-      ).isConnected,
-    ).toBe(true);
+    const said = within(pane).getByText('The name “sales_replica” is already in use.');
+    expect(said.isConnected).toBe(true);
+    // The field's line is the API's words alone: no folder, path or owner (T723, AC-424).
+    expect(said.closest('.field__error')?.textContent).toBe(
+      'The name “sales_replica” is already in use.',
+    );
     expect(onCreated).not.toHaveBeenCalled();
     // Only the name needs changing.
     await user.type(name, '_2');

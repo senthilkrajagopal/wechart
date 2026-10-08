@@ -284,7 +284,15 @@ export {
   type DriverSpec,
   type DriverType,
 } from './data-sources/drivers';
-export { MAX_NAME, NAME, nameKey, nameProblem, type NamedKind } from './names';
+export {
+  MAX_NAME,
+  NAME,
+  nameInUse,
+  nameInUseOf,
+  nameKey,
+  nameProblem,
+  type NamedKind,
+} from './names';
 export {
   dataSourceProblems,
   targetChanges,

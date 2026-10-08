@@ -19,6 +19,11 @@ export interface Problem {
    * (AC-223 counts each). Absent is an error, as every parse problem is.
    */
   readonly severity?: 'error' | 'warning';
+  /**
+   * An error by wechart's own rule, which its API refuses (a name outside
+   * R72's grammar, T723): it holds the save, as what Cube would refuse does not.
+   */
+  readonly holds?: true;
 }
 
 /** An offset's line and column, from 1. */

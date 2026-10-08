@@ -228,13 +228,11 @@ describe('testing and saving (T497’s review)', () => {
     expect(document.activeElement).toBe(count());
   });
 
-  it('keeps its failure line mounted, and marks a name refused as taken on the field', async () => {
+  it('keeps its failure line mounted, and marks a name refused as in use on the field, in the API’s words', async () => {
     serve({
       'PUT /api/data-sources/ds-1': [
-        {
-          status: 409,
-          body: { error: 'Sales / EMEA already has a data source named eu_replica.' },
-        },
+        // As the API words it (T705, AC-424).
+        { status: 409, body: { error: 'The name “eu_replica” is already in use.' } },
       ],
     });
     open(stored());
@@ -245,7 +243,9 @@ describe('testing and saving (T497’s review)', () => {
     await userEvent.type(name, 'eu_replica');
     await userEvent.click(saveButton());
 
-    expect(await screen.findByText(/already has a data source named eu_replica/)).toBeTruthy();
+    expect((await screen.findByText('The name “eu_replica” is already in use.')).isConnected).toBe(
+      true,
+    );
     expect(name.getAttribute('aria-invalid')).toBe('true');
     expect(document.querySelector('.source-settings__foot [role="alert"]')).toBe(failure);
   });

@@ -1,3 +1,5 @@
+import { nameInUseOf } from '@wechart/core';
+
 import type { CubeProblem } from './ProblemsPanel';
 import type { MemberReferences } from './ReferencesWarning';
 
@@ -51,6 +53,17 @@ export function refusedText(
   hidden?: { readonly count: number; readonly said: string },
 ): string {
   if (problems.length === 0 && hidden !== undefined) return `Nothing was published: ${hidden.said}`;
+  // Names in use, said as the API says them: in use, never where (T723, AC-424).
+  const held = problems.map((problem) => nameInUseOf(problem.message));
+  if (problems.length > 0 && held.every((name) => name !== undefined)) {
+    const said = [...new Set(held)].map((name) => `“${name}”`);
+    const why =
+      said.length === 1
+        ? `The name ${said[0]!} is already in use, so nothing was saved.`
+        : `The names ${said.slice(0, -1).join(', ')} and ${said.at(-1)!} are already in use, so nothing was saved.`;
+    // The breaks it can't name, still counted (AC-322; T723's review).
+    return hidden === undefined ? why : `${why} ${hidden.said}`;
+  }
   const why = problems.every((problem) => problem.preAggregation?.unknown !== undefined)
     ? 'A pre-aggregation names members the model doesn’t have, so nothing was published.'
     : problems.every((problem) => problem.preAggregation !== undefined)

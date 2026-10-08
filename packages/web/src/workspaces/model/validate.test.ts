@@ -1,8 +1,10 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { nameProblem } from '@wechart/core';
 import { describe, expect, it } from 'vitest';
 
+import { placeOf } from './problems';
 import { validationProblems } from './validate';
 
 /**
@@ -201,6 +203,64 @@ view_groups:
   it('reads nothing into a file that does not parse, or is not YAML', () => {
     expect(validationProblems('cubes/orders.yml', 'cubes: [')).toEqual([]);
     expect(validationProblems('cubes/orders.js', 'cube(`orders`, {})')).toEqual([]);
+  });
+});
+
+/**
+ * T723 (AC-426): a cube's or view's name outside R72's grammar, or a
+ * reserved word, is listed in Problems as an error, which holds the save, so
+ * nothing is sent.
+ */
+describe('a cube’s or view’s name outside the grammar (T723, AC-426)', () => {
+  it('lists a cube named outside the grammar, and one named a reserved word, at its name, holding the save', () => {
+    for (const [name, said] of [
+      [
+        'Orders__2',
+        '“Orders__2” isn’t a name: start with a letter, then use letters, digits and single underscores, not ending in one, at most 40 characters.',
+      ],
+      ['class', '“class” is a reserved word, so a cube or view can’t take it.'],
+    ] as const) {
+      const text = ORDERS.replace('name: orders', `name: ${name}`);
+      const from = text.indexOf(`name: ${name}`) + 'name: '.length;
+      expect(validationProblems('cubes/orders.yml', text)).toEqual([
+        {
+          path: 'cubes/orders.yml',
+          ...placeOf(text, from),
+          message: `Cube ${name}: ${said}`,
+          from,
+          to: from + name.length,
+          severity: 'error',
+          holds: true,
+        },
+      ]);
+    }
+  });
+
+  // T723's review: YAML reads `true` and `2026` as no string; held all the same.
+  it('lists a cube whose name YAML reads as no string, holding the save', () => {
+    for (const [written, read] of [
+      ['true', 'true'],
+      ['2026', '2026'],
+    ] as const) {
+      const text = ORDERS.replace('name: orders', `name: ${written}`);
+      expect(
+        validationProblems('cubes/orders.yml', text).map(({ message, holds }) => ({
+          message,
+          holds,
+        })),
+      ).toEqual([{ message: `Cube #1: ${nameProblem(read, 'cube')!}`, holds: true }]);
+    }
+  });
+
+  it('lists a view named outside the grammar, and nothing for one in it', () => {
+    const view = (name: string) =>
+      `views:\n  - name: ${name}\n    cubes:\n      - join_path: orders\n        includes: "*"\n`;
+    expect(validationProblems('views/v.yml', view('summary_2026'))).toEqual([]);
+    expect(
+      validationProblems('views/v.yml', view('2026_summary')).map((each) => each.message),
+    ).toEqual([
+      'View 2026_summary: “2026_summary” isn’t a name: start with a letter, then use letters, digits and single underscores, not ending in one, at most 40 characters.',
+    ]);
   });
 });
 

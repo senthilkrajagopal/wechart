@@ -830,6 +830,8 @@ function FileEditor({
     changed &&
     text === read &&
     errors.length === 0 &&
+    // A name outside R72's grammar is wechart's to refuse: never sent (T723, AC-426).
+    !invalid.some((problem) => problem.holds === true) &&
     pending === null &&
     references === null &&
     !publishing;

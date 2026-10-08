@@ -57,6 +57,34 @@ describe('a refused publish (T427, AC-322)', () => {
     ).toBe('Nothing was published: 2 items in folders you can’t see would break.');
   });
 
+  // T723 (AC-424, AC-422): the API's name-in-use refusal is said as that,
+  // and as nothing of where: never as Cube's.
+  it('says a save refused for a name in use as that, naming only the names', () => {
+    const inUse = (name: string) => ({
+      path: `cubes/${name}.yml`,
+      message: `The name “${name}” is already in use.`,
+    });
+    expect(refusedText([inUse('orders')])).toBe(
+      'The name “orders” is already in use, so nothing was saved.',
+    );
+    expect(refusedText([inUse('orders'), inUse('Lines'), inUse('items')])).toBe(
+      'The names “orders”, “Lines” and “items” are already in use, so nothing was saved.',
+    );
+    // With breaks in folders the user can't see, still counted (AC-322; T723's review).
+    expect(
+      refusedText([inUse('orders')], {
+        count: 1,
+        said: '1 item in folders you can’t see would break.',
+      }),
+    ).toBe(
+      'The name “orders” is already in use, so nothing was saved. 1 item in folders you can’t see would break.',
+    );
+    // With another problem among them, Cube's refusal is said as before.
+    expect(refusedText([inUse('orders'), { path: 'a.yml', message: 'bad' }])).toBe(
+      'Cube refused the model, so nothing was published.',
+    );
+  });
+
   it('carries no count when every break is named', async () => {
     answering(422, { errors: [{ path: 'a.yml', message: 'bad' }], hidden: 0 });
     expect(await publishModel([{ path: 'a.yml', content: 'x' }])).toEqual({

@@ -1,3 +1,5 @@
+import { nameInUse } from '@wechart/core';
+
 import type { CompileError } from '../model/validate';
 import { ROOT_FOLDER_ID } from '../repos/catalog';
 
@@ -38,9 +40,9 @@ const plural = (n: number, one: string, many: string) => `${String(n)} ${n === 1
 
 /**
  * A name refused because something else holds it, said as AC-424 has it: in
- * use, and never where (T701, AC-421).
+ * use, and never where (T701, AC-421). Core's, which the web reads back (T723).
  */
-export const nameInUse = (name: string): string => `The name “${name}” is already in use.`;
+export { nameInUse };
 
 /** xcube's `default_outside_root`, said without the root's xcube id (T701, AC-310). */
 export const DEFAULT_AT_ROOT = 'Only the shared root may have a data source named default.';

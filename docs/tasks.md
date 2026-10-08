@@ -13341,13 +13341,23 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
   - *Before this is built, put to the user:* whether Explore's Rename on a model file (`FolderContents.tsx`) stays. See the report.
   - Depends on: T706
 
-- [ ] T723 (AC-424, AC-426, AC-422) Say a refused name in the UI as in use, never where, and refuse a name outside the grammar before it is sent
+- [x] T723 (AC-424, AC-426, AC-422) Say a refused name in the UI as in use, never where, and refuse a name outside the grammar before it is sent
   - Files: `packages/web/src/workspaces/model/{publish.ts,ModelFilePage.tsx}`, `packages/web/src/workspaces/data-sources/{NewSourceWizard,SourceEditor}.tsx`, `packages/web/src/workspaces/explore/{NewItemDialog,ProposeDialog}.tsx`, `packages/web/src/workspaces/reviews/Refusal.tsx`, each with its test
   - Failing test: each surface's test (AC-424, AC-426, AC-422):
     - the model editor's save, the data source wizard's Create and its rename, the Propose dialog and the review's Approve each show a name-in-use refusal;
     - that refusal holds no folder, path, workspace, owner or title;
     - a name outside AC-426's grammar is refused before anything is sent.
   - Depends on: T703, T705
+  - *Noted (2026-10-07):*
+    - The API's words for one name in use come from core's `nameInUse`, and the web reads them back with `nameInUseOf`. A proposal's and an approval's refusals still build their own "The name(s) … so …" sentences in `routes/proposals.ts`, which the web shows as they come.
+    - After the review: the headline keeps the count of breaks in folders the user can't see (AC-322). A cube or view name that YAML reads as no string, such as `true` or `2026`, is held too. An assertion in `SourceEditor.test.tsx` that could never fail was dropped: the fixture no longer holds a folder.
+    - A model save refused only for names in use is headed "The name “…” is already in use, so nothing was saved." (or "The names … are …"), not "Cube refused the model". Each file's line in Problems is the API's own words.
+    - The data source wizard and editor, the Propose dialog and the review's Approve already showed the API's words verbatim. Their tests now hold them to the R71 wording, with nothing of where; those tests passed on the code as it was.
+    - The grammar was already enforced before sending in New cube and New view, the wizard, the editor and the import (T703).
+    - The model editor now lists a cube's or view's name outside the grammar at its name, as an error marked `holds`, and Save waits for it. Unlike what Cube would refuse (AC-136), it is wechart's own rule, which the API refuses anyway.
+    - Tests: `validate.test.ts`, `publish.test.ts`, `names.test.ts` (core), `NewSourceWizard`, `SourceEditor`, `ProposeFlow` and `DecisionPanel`. On the image, `global-names.spec.ts` "a draft cube’s name in the model editor": Save is held for `Orders__2`, and `orders` is refused as in use with one POST sent.
+    - The Files list named `ProposeDialog.tsx` and `Refusal.tsx`. Neither needed a change: the refusal reaches `ProposeFlow` and `DecisionPanel` as the API's `error`, never as `Refusal`'s breaks.
+    - AC-426 ticked: with T703, T708 and this, every surface refuses a name outside the grammar. AC-422 is left unticked: approvals racing past wechart's check, where only xcube sees the clash, could leave a proposal's data source landed (raised at T704). AC-424 waits on T724 and T726.
 
 ### Generate cubes
 

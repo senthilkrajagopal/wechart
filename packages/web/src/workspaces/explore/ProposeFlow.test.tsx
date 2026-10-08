@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -97,6 +97,31 @@ describe('proposing a workspace item (T358, AC-284)', () => {
     expect((await within(dialog).findByRole('alert')).textContent).toBe(
       'Can’t propose: It is waiting for review already: its proposal must be decided first.',
     );
+  });
+
+  // T723 (AC-424, AC-422): a name in use, from the check or the proposal,
+  // said in the API's words alone: nothing of where it is held.
+  it('says a name in use as the API does, from the check and from the proposal', async () => {
+    const inUse = 'The name “Margin_cube” is already in use, so it wasn’t proposed.';
+    shown((url) =>
+      url === '/api/proposals/check'
+        ? answer(409, { error: inUse, names: ['Margin_cube'] })
+        : answer(404, {}),
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Propose to Sales / EMEA' });
+    expect((await within(dialog).findByRole('alert')).textContent).toBe(`Can’t propose: ${inUse}`);
+    cleanup();
+
+    shown((url, init) => {
+      if (url === '/api/proposals/check') return answer(200, CHECKED);
+      if (url === '/api/proposals' && init?.method === 'POST')
+        return answer(409, { error: inUse, names: ['Margin_cube'] });
+      return answer(404, {});
+    });
+    const again = await screen.findByRole('dialog', { name: 'Propose to Sales / EMEA' });
+    await within(again).findByTestId('propose-item');
+    await userEvent.click(within(again).getByRole('button', { name: 'Propose' }));
+    expect((await within(again).findByRole('alert')).textContent).toBe(inUse);
   });
 
   it('says a refused proposal in the API’s words, and stays open', async () => {
