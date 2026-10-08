@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
+import { exactOf } from '../../shell/formatTime';
 import { shortDay } from '../../shell/relativeAge';
 import { DataSourcesList, type ListedSource } from './DataSourcesList';
 
@@ -75,8 +76,9 @@ describe('the data sources a user may see (T364, AC-157)', () => {
     expect(ok?.querySelector('svg')).not.toBeNull();
     // When, as design 01 writes it, the time itself on hover (item 9, T490).
     expect(ok?.textContent).toBe('Passed · 2 h ago');
+    // The exact local time with UTC beside it (T477; the coordinator's Q9).
     expect(ok?.querySelector('.status__when')?.getAttribute('title')).toBe(
-      new Date('2026-09-26T11:00:00.000Z').toLocaleString(),
+      exactOf(new Date('2026-09-26T11:00:00.000Z')),
     );
     expect(bad?.getAttribute('data-state')).toBe('err');
     expect(bad?.textContent).toContain('Failed at connect');
@@ -184,7 +186,9 @@ describe('the data sources a user may see (T364, AC-157)', () => {
     );
     const then = new Date('2026-09-26T10:00:00.000Z');
     expect(cells[5]?.textContent).toBe(shortDay(then, new Date()));
-    expect(cells[5]?.querySelector('time')?.getAttribute('title')).toBe(then.toLocaleString());
+    // Day first, "26 Sep" (T477), its exact time with UTC in the title.
+    expect(cells[5]?.textContent).toMatch(/^\d{1,2} [A-Z][a-z]{2}( \d{4})?$/);
+    expect(cells[5]?.querySelector('time')?.getAttribute('title')).toBe(exactOf(then));
     expect(cells[5]?.querySelector('time')?.getAttribute('datetime')).toBe(
       '2026-09-26T10:00:00.000Z',
     );

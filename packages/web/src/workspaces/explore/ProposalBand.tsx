@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { clockOrWhenOf } from '../../shell/formatTime';
 import { StatusIcon } from '../../shell/StatusIcon';
 
 /**
@@ -38,16 +39,13 @@ const folderText = (path: readonly string[]) => {
   return below.length === 0 ? 'Shared' : below.join(' / ');
 };
 
-/** "14:05" today, "Yesterday 16:40", else "26 Sep, 16:40". */
+/**
+ * "14:05" today, in a band's sentence ("since 14:05", as design 05 draws
+ * it); else as every moment is written, "Yesterday 16:40", "26 Sep 16:40"
+ * (T477; the coordinator's Q8).
+ */
 function whenText(iso: string, now: Date): string {
-  const then = new Date(iso);
-  const clock = then.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-  const day = (at: Date) => new Date(at.getFullYear(), at.getMonth(), at.getDate()).getTime();
-  const days = Math.round((day(now) - day(then)) / (24 * 3600 * 1000));
-  if (days === 0) return clock;
-  if (days === 1) return `Yesterday ${clock}`;
-  // The month as "Sep" (design 05): en-GB's short month is "Sept".
-  return `${String(then.getDate())} ${then.toLocaleDateString('en-US', { month: 'short' })}, ${clock}`;
+  return clockOrWhenOf(new Date(iso), now);
 }
 
 export function ProposalBand({

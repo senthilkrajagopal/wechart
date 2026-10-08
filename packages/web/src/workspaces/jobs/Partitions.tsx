@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
+import { clockOrWhenOf, exactOf } from '../../shell/formatTime';
 import { StateLine } from '../../shell/StatusIcon';
 import {
   BuiltWhen,
@@ -56,9 +57,11 @@ interface PartitionsAnswer {
 /** Cube is still working the partitions out: asked again (A4). */
 class StillWorking extends Error {}
 
-/** A time of day, "14:05". */
-const hourOf = (iso: string) =>
-  new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+/**
+ * "14:05", as design 16 draws it, with its day where it isn't today's
+ * ("2 Oct 14:05"), so an older failure isn't read as today's (T477, Q8).
+ */
+const hourOf = (iso: string) => clockOrWhenOf(new Date(iso));
 
 /** A state in design 16's words, with its icon (pins 5, 12; the legend). */
 function StateOf({ row }: { row: PartitionRow }) {
@@ -85,10 +88,15 @@ function StateOf({ row }: { row: PartitionRow }) {
             label={`Failed${row.failed === undefined ? '' : ` · ${hourOf(row.failed.at)}`}`}
             testId="partition-state"
             state="failed"
+            // Its exact time, with UTC beside it (T477, Q9).
+            {...(row.failed === undefined ? {} : { title: exactOf(new Date(row.failed.at)) })}
           />
           {row.failed?.serving === null || row.failed === undefined ? null : (
             <span className="build-queue__sub">
-              Serving the build of {hourOf(row.failed.serving)}
+              Serving the build of{' '}
+              <time dateTime={row.failed.serving} title={exactOf(new Date(row.failed.serving))}>
+                {hourOf(row.failed.serving)}
+              </time>
             </span>
           )}
         </>

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
 
+import { exactOf } from '../../shell/formatTime';
 import { minuteOf, RefreshWorkerPanel, type RefreshWorkerReport } from './RefreshWorkerPanel';
 import { Status, type StateKind } from './StateBadge';
 
@@ -116,7 +117,19 @@ export function Health({ pollMs = 10_000 }: { pollMs?: number }) {
             : ['run', 'Asking xcube…'];
   const [workerKind, workerLabel] =
     xcubeSaid ?? probesSaid ?? (['warn', 'Refresh worker unknown'] as const);
-  const badge = <Status kind={workerKind} label={workerLabel} testId="worker-health" />;
+  // Its last run's exact time and UTC on hover, where the badge names it (T477, Q9).
+  const lastRun =
+    xcubeSaid !== undefined && report !== undefined && 'lastRunAt' in report.status
+      ? report.status.lastRunAt
+      : undefined;
+  const badge = (
+    <Status
+      kind={workerKind}
+      label={workerLabel}
+      testId="worker-health"
+      {...(lastRun === undefined ? {} : { title: `Last run ${exactOf(new Date(lastRun))}` })}
+    />
+  );
   return (
     <>
       <div className="jobs-health" role="status" aria-label="Cube">

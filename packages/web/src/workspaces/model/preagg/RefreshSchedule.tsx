@@ -62,14 +62,20 @@ export function lagInWords(seconds: number): string {
 /** Keys that need `every` beside them: Cube's validator requires `every` or `sql` (research, "Where each key is allowed"). */
 const NEEDS_EVERY = ['incremental', 'update_window', 'updateWindow'];
 
-/** The day of a clock change in its zone: "Sun 1 Nov". */
-const dayIn = (zone: string, at: Date) =>
-  new Intl.DateTimeFormat('en-GB', {
+/**
+ * The day of a clock change in its zone: "Sun 1 Nov", its month as every
+ * design writes it, never en-GB's "Sept" (T477).
+ */
+const dayIn = (zone: string, at: Date) => {
+  const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: zone,
     weekday: 'short',
     day: 'numeric',
     month: 'short',
-  }).format(at);
+  }).formatToParts(at);
+  const part = (type: string) => parts.find((each) => each.type === type)?.value ?? '';
+  return `${part('weekday')} ${part('day')} ${part('month')}`;
+};
 
 export function RefreshSchedule({
   id,
@@ -118,7 +124,9 @@ export function RefreshSchedule({
       ? { runs: [], change: undefined }
       : nextRefreshesBeforeChange(every, read.cron ? zone : undefined, new Date(), 5);
   const shownIn = read?.cron === true ? (zone ?? 'UTC') : 'UTC';
-  const format = new Intl.DateTimeFormat('en-GB', {
+  // "Thu 24 Sep 08:00" in its zone: the day first, "Sep" never en-GB's
+  // "Sept", one 24-hour clock, no comma (T477; Q6, Q8, Q10).
+  const runParts = new Intl.DateTimeFormat('en-US', {
     timeZone: shownIn,
     weekday: 'short',
     day: 'numeric',
@@ -127,6 +135,13 @@ export function RefreshSchedule({
     minute: '2-digit',
     hourCycle: 'h23',
   });
+  const format = {
+    format: (at: Date) => {
+      const parts = runParts.formatToParts(at);
+      const part = (type: string) => parts.find((each) => each.type === type)?.value ?? '';
+      return `${part('weekday')} ${part('day')} ${part('month')} ${part('hour')}:${part('minute')}`;
+    },
+  };
   const lag = every === '' ? undefined : refreshLagSeconds(every);
 
   return (

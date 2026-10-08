@@ -391,7 +391,8 @@ test.describe('deciding a proposal in its review view (T356, AC-288)', () => {
         `Approved. ${FOLDER} now shows version 3.`,
       );
       await expect(inspector.getByTestId('review-decision')).toHaveText(
-        /^Approved by Super Admin · \d{1,2} \w{3} \d{4}, \d\d:\d\d$/,
+        // Just now, as every moment is written (T477, Q8): "Today 14:05".
+        /^Approved by Super Admin · (Today|Yesterday) \d\d:\d\d$/,
       );
       await expect(inspector.getByRole('button', { name: /^Approve/ })).toHaveCount(0);
 

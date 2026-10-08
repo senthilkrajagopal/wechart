@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { clockOf, exactOf } from '../../shell/formatTime';
 import { Partitions } from './Partitions';
 
 /**
@@ -75,11 +76,18 @@ function shown(onStarted = vi.fn()) {
 }
 
 const text = (element: Element | null | undefined) => element?.textContent ?? '';
-const clock = (iso: string) =>
-  new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+const clock = (iso: string) => clockOf(new Date(iso));
+/** "2 Oct 14:05": a moment of another day, read on 8 Oct (the faked today below). */
+const dayOf = (iso: string) => `${String(new Date(iso).getDate())} Oct ${clock(iso)}`;
+// Today is 8 Oct 2026, so 2 Oct is another day; only Date is faked.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 9, 8, 12, 0));
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('a rollup’s partitions (T375, AC-145)', () => {
@@ -107,8 +115,16 @@ describe('a rollup’s partitions (T375, AC-145)', () => {
     expect(text(within(rows[5]!).getByTestId('partition-state'))).toBe('Not built');
     expect(text(rows[5]!.querySelector('td:last-child'))).toBe('—');
     // Failed, when, and the build it still serves (pin 12).
-    expect(text(rows[2])).toContain(`Failed · ${clock('2026-10-02T12:05:00.000Z')}`);
-    expect(text(rows[2])).toContain(`Serving the build of ${clock('2026-10-02T12:01:00.000Z')}`);
+    // On another day than today, its day too, never a bare clock (T477, Q8).
+    expect(text(rows[2])).toContain(`Failed · ${dayOf('2026-10-02T12:05:00.000Z')}`);
+    expect(text(rows[2])).toContain(`Serving the build of ${dayOf('2026-10-02T12:01:00.000Z')}`);
+    // Its exact time and UTC on hover (Q9).
+    expect(within(rows[2]!).getByTestId('partition-state').getAttribute('title')).toBe(
+      exactOf(new Date('2026-10-02T12:05:00.000Z')),
+    );
+    expect(rows[2]!.querySelector('.build-queue__sub time')?.getAttribute('title')).toBe(
+      exactOf(new Date('2026-10-02T12:01:00.000Z')),
+    );
     expect(text(screen.getByRole('heading', { name: /Partitions/ }))).toContain(
       'UTC, newest first',
     );
@@ -149,7 +165,7 @@ describe('a rollup’s partitions (T375, AC-145)', () => {
     await userEvent.click(within(table).getByRole('checkbox', { name: 'Sep 2026, Built' }));
     await userEvent.click(
       within(table).getByRole('checkbox', {
-        name: `Aug 2026, Failed at ${clock('2026-10-02T12:05:00.000Z')}`,
+        name: `Aug 2026, Failed at ${dayOf('2026-10-02T12:05:00.000Z')}`,
       }),
     );
     const all = within(table).getByRole<HTMLInputElement>('checkbox', {

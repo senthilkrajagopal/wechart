@@ -9,6 +9,7 @@ import {
   type SealedV1,
 } from '@wechart/core';
 
+import { clockOf } from '../../shell/formatTime';
 import { InfoBar } from '../../shell/InfoBar';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
@@ -79,13 +80,8 @@ const listed = (names: readonly string[]) =>
     ? (names[0] ?? '')
     : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1] ?? ''}`;
 
-const clock = () =>
-  new Date().toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
+/** Now, "14:05:12", on the one 24-hour clock (T477). */
+const clock = () => clockOf(new Date(), { seconds: true });
 
 export function NewSourceWizard({
   folderId,

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
+import { dayOf } from '../../shell/formatTime';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
 import { shownOf } from '../jobs/BuildPanel';
@@ -168,11 +169,9 @@ export function minuteOf(iso: string, lower = false): string {
 
 /** "2 Sep": a day, three-letter months, as design 16 writes them. */
 function dateOf(iso: string): string {
-  const parts = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short' }).formatToParts(
-    new Date(iso),
-  );
-  const part = (type: string) => parts.find((each) => each.type === type)?.value ?? '';
-  return `${part('day')} ${part('month')}`;
+  const at = new Date(iso);
+  // The day alone, read against itself, so no year (T477's one format).
+  return dayOf(at, at);
 }
 
 /**

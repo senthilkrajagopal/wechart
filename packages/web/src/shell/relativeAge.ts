@@ -1,3 +1,5 @@
+import { dayOf } from './formatTime';
+
 /**
  * How long ago, as design 01's health column writes it: "45 s ago",
  * "25 min ago", "2 h ago", "3 d ago", "2 w ago" (item 9; T490's review).
@@ -16,15 +18,13 @@ export function shortAgo(then: Date, now: Date): string {
 }
 
 /**
- * A day, as design 01's Updated column writes it: "Sep 26", with the year
- * only when it isn't this one's (T496). The exact time goes in its title.
+ * A day, as the Updated columns write it: "26 Sep", with the year only when
+ * it isn't this one's (T496; T477's day first). The exact time goes in its
+ * title (`exactOf`).
  */
 export function shortDay(then: Date, now: Date): string {
-  return then.toLocaleDateString('en', {
-    month: 'short',
-    day: 'numeric',
-    ...(then.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
-  });
+  // Day first, as the later designs write it (T477; the coordinator's Q6).
+  return dayOf(then, now);
 }
 
 /**

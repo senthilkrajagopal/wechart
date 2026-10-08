@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-import { clockOf } from './builds';
+import { clockOrWhenOf, exactOf } from '../../shell/formatTime';
 import { Status } from './StateBadge';
 
 /**
@@ -39,17 +39,22 @@ export interface RefreshWorkerReport {
   readonly errorsShown: boolean;
 }
 
-/** "14:39": a time of day in the badge and the modules' table. */
-export const minuteOf = (iso: string) =>
-  new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+/**
+ * "14:39": a time of day in the badge and the modules' table, with its day
+ * where it isn't today's ("Yesterday 14:39"), so an old run isn't read as
+ * today's (T477, Q8).
+ */
+export const minuteOf = (iso: string) => clockOrWhenOf(new Date(iso));
+/** "14:39:52", to the second, as the summary and the workers' table say it. */
+const lastRunOf = (iso: string) => clockOrWhenOf(new Date(iso), new Date(), { seconds: true });
 
 /** The panel's first line, as F3 says it. */
 function summaryOf(status: RefreshWorkerStatus): string {
   switch (status.state) {
     case 'running':
-      return `Running · last run ${clockOf(status.lastRunAt)}, on the current revision`;
+      return `Running · last run ${lastRunOf(status.lastRunAt)}, on the current revision`;
     case 'behind':
-      return `Behind · on revision ${String(status.revision)} of ${String(status.of)}, last run ${clockOf(status.lastRunAt)}`;
+      return `Behind · on revision ${String(status.revision)} of ${String(status.of)}, last run ${lastRunOf(status.lastRunAt)}`;
     case 'failing':
       return `${status.modules === 1 ? '1 module’s last run' : `${String(status.modules)} modules’ last runs`} failed · ${minuteOf(status.lastRunAt)}`;
     default:
@@ -118,7 +123,12 @@ export function RefreshWorkerPanel({
                     <code>{worker.instance}</code>
                   </td>
                   <td>revision {String(worker.revision)}</td>
-                  <td>last run {clockOf(worker.lastRunAt)}</td>
+                  <td>
+                    last run{' '}
+                    <time dateTime={worker.lastRunAt} title={exactOf(new Date(worker.lastRunAt))}>
+                      {lastRunOf(worker.lastRunAt)}
+                    </time>
+                  </td>
                   <td>
                     {/* Its run ended, or stopped waiting on builds still running. */}
                     {worker.finished ? (
@@ -150,7 +160,11 @@ export function RefreshWorkerPanel({
                   <td>
                     <code>{module.module}</code>
                   </td>
-                  <td>{minuteOf(module.lastRunAt)}</td>
+                  <td>
+                    <time dateTime={module.lastRunAt} title={exactOf(new Date(module.lastRunAt))}>
+                      {minuteOf(module.lastRunAt)}
+                    </time>
+                  </td>
                   <td>
                     {module.failing ? (
                       <Status

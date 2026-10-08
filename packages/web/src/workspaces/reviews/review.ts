@@ -1,3 +1,4 @@
+import { clockOf, whenOf } from '../../shell/formatTime';
 import type { Break } from './Refusal';
 import type { ReviewKind, ReviewStatus } from './reviews';
 
@@ -156,15 +157,16 @@ export async function decide(
 
 /** "14:05": a moment's time of day, as the inspector writes it. */
 export function clockText(iso: string): string {
-  return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return clockOf(new Date(iso));
 }
 
-/** "27 Sep 2026, 14:05", as the review view's inspector writes a moment. */
-export function momentText(iso: string): string {
-  const at = new Date(iso);
-  // The month as "Sep": en-GB's short month is "Sept".
-  const month = at.toLocaleDateString('en-US', { month: 'short' });
-  return `${String(at.getDate())} ${month} ${String(at.getFullYear())}, ${clockText(iso)}`;
+/**
+ * A moment as the review view's inspector writes it: "Today 14:05",
+ * "Yesterday 16:40", "27 Sep 14:05", the year only when not this one's, as
+ * every moment is written (T477; the coordinator's Q8).
+ */
+export function momentText(iso: string, now: Date = new Date()): string {
+  return whenOf(new Date(iso), now);
 }
 
 /** The items a reviewer is shown: a dashboard's own charts are part of it. */

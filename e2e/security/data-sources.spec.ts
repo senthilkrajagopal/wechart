@@ -221,7 +221,8 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
             return [style.fontFamily.split(',')[0]?.replace(/"/g, ''), style.fontWeight];
           }),
       ).toEqual(['IBM Plex Mono', '600']);
-      await expect(row.getByRole('cell').nth(5)).toHaveText(/^[A-Z][a-z]{2} \d{1,2}(, \d{4})?$/);
+      // Day first (T477, Q6): "19 Sep", "30 Dec 2025".
+      await expect(row.getByRole('cell').nth(5)).toHaveText(/^\d{1,2} [A-Z][a-z]{2}( \d{4})?$/);
       expect(
         await row
           .getByTestId('source-used-by')

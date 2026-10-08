@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
+import { exactOf } from '../shell/formatTime';
 import { AccelerationBadge, accelerationOf } from './AccelerationBadge';
 
 /**
@@ -99,8 +100,9 @@ describe('the badge (AC-013)', () => {
     expect(badge.querySelector('.visually-hidden')?.textContent).toBe(
       'Accelerated · built 40 minutes ago',
     );
+    // Its age, then the exact build time with UTC beside it (T477, Q9).
     expect(badge.getAttribute('title')).toBe(
-      'Accelerated: served from orders.main, built 40 minutes ago',
+      `Accelerated: served from orders.main, built 40 minutes ago, ${exactOf(new Date(1789816800000))}`,
     );
   });
 

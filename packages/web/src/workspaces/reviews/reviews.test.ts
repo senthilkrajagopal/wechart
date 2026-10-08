@@ -72,7 +72,8 @@ describe('the Reviews lists’ words (T355)', () => {
     const now = new Date(2026, 8, 27, 18, 0);
     expect(proposedText(new Date(2026, 8, 27, 14, 5).toISOString(), now)).toBe('Today 14:05');
     expect(proposedText(new Date(2026, 8, 26, 9, 0).toISOString(), now)).toBe('Yesterday');
-    expect(proposedText(new Date(2026, 8, 24, 9, 0).toISOString(), now)).toBe('Sep 24');
-    expect(proposedText(new Date(2025, 11, 30, 9, 0).toISOString(), now)).toBe('Dec 30, 2025');
+    // Day first, as design 05 draws it (T477; Q6).
+    expect(proposedText(new Date(2026, 8, 24, 9, 0).toISOString(), now)).toBe('24 Sep');
+    expect(proposedText(new Date(2025, 11, 30, 9, 0).toISOString(), now)).toBe('30 Dec 2025');
   });
 });

@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { exactOf } from '../../shell/formatTime';
+
 import {
   AuditTrail,
   auditFiltersFrom,
@@ -194,7 +196,8 @@ describe('the audit trail (T369, AC-295)', () => {
     ]);
     // Local time with seconds, UTC on hover (pin 4).
     const time = within(rows[2]!).getByText('Today 11:48:03');
-    expect(time.getAttribute('title')).toBe(`${RECORDS[1]!.at.slice(0, 19).replace('T', ' ')} UTC`);
+    // The exact local time with UTC beside it (T477; the coordinator's Q9).
+    expect(time.getAttribute('title')).toBe(exactOf(new Date(RECORDS[1]!.at)));
     // An event as icon and label (pin 5).
     expect(within(rows[2]!).getByText('Access change').previousElementSibling?.tagName).toBe('svg');
     expect(within(rows[3]!).getAllByRole('cell')[3]?.textContent).toBe('—');
@@ -318,6 +321,15 @@ describe('the audit trail (T369, AC-295)', () => {
     expect(inspector.textContent).toContain('ada@corp.example');
     expect(inspector.textContent).toContain('Super-Admin');
     expect(inspector.textContent).toContain('Shared / Sales / EMEA');
+    // Local time with seconds, then UTC's clock, as design 08's inspector
+    // writes it: "Today 11:48:03 (09:48:03 UTC)" (T477).
+    const at = new Date(RECORDS[1]!.at);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    expect(inspector.querySelector('.audit-trail__inspector-where')?.textContent).toMatch(
+      new RegExp(
+        `Today 11:48:03 \\((\\d{1,2} [A-Z][a-z]{2} )?${pad(at.getUTCHours())}:48:03 UTC\\)$`,
+      ),
+    );
     const readWrite = within(inspector).getByRole('group', { name: 'Read-write groups' });
     expect(within(readWrite).getByText('Before').nextElementSibling?.textContent).toBe(
       'sales-emea-rw old-rw',

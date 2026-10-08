@@ -3,6 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { exactOf } from '../../shell/formatTime';
 import { BuildPanel } from './BuildPanel';
 import { JobsPage } from './JobsPage';
 
@@ -143,7 +144,9 @@ describe('each pre-aggregation’s row (T550, AC-391)', () => {
     expect(text(cellsOf(row)[1])).toBe('Shared');
     const built = cellsOf(row)[3]!.querySelector('time');
     expect(built?.getAttribute('dateTime')).toBe('2026-10-02T12:01:00.000Z');
-    expect(built?.getAttribute('title')).toBe('2026-10-02 12:01:00 UTC');
+    // The exact local time with UTC beside it (T477; the coordinator's Q9).
+    expect(built?.getAttribute('title')).toBe(exactOf(new Date('2026-10-02T12:01:00.000Z')));
+    expect(built?.getAttribute('title')).toContain('12:01:00 UTC');
     expect(text(within(row).getByTestId('starter'))).toBe('Wren Writer');
     expect(text(cellsOf(row)[5])).toBe('Every 1 hour');
     expect(text(cellsOf(row)[6])).toBe('8');

@@ -1,3 +1,5 @@
+import { whenOf } from '../shell/formatTime';
+
 /**
  * What a refresh of a pre-aggregation-served tile can and cannot do (T154,
  * AC-148 as reworded at the user's decision, 2026-09-22): Cube answers it
@@ -21,7 +23,8 @@ export function RollupRefreshNote({
         ⚡
       </span>{' '}
       Served from pre-aggregation <code>{preAggregation}</code>: its data is as of its last build
-      {builtAt === null ? '' : `, ${builtAt.toLocaleString()}`}. Rebuild it in{' '}
+      {/* As every moment is written, to the second (T477; Q8). */}
+      {builtAt === null ? '' : `, ${whenOf(builtAt, new Date(), { seconds: true })}`}. Rebuild it in{' '}
       <a href="/jobs">Jobs</a>.
       <button type="button" aria-label="Dismiss" onClick={onDismiss}>
         <span aria-hidden="true">×</span>

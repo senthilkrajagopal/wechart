@@ -2,6 +2,7 @@ import type { RenderSpec } from '@wechart/core';
 import { render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { exactOf } from '../shell/formatTime';
 import { ChartTile } from './ChartTile';
 import { DataAsOf } from './DataAsOf';
 
@@ -54,13 +55,8 @@ describe('when a chart’s data is from', () => {
     const asOf = within(head as HTMLElement).getByTestId('data-as-of');
     expect(asOf.tagName).toBe('TIME');
     expect(asOf.getAttribute('datetime')).toBe(at.toISOString());
-    expect(asOf.textContent).toBe(
-      `Data as of ${at.toLocaleTimeString(undefined, {
-        hour: 'numeric',
-        minute: '2-digit',
-        second: '2-digit',
-      })}`,
-    );
+    // One 24-hour clock (T477; the coordinator's Q10).
+    expect(asOf.textContent).toBe('Data as of 10:32:18');
   });
 
   it('shows "as of" and the time, the whole sentence for a screen reader and in its tooltip', () => {
@@ -69,14 +65,11 @@ describe('when a chart’s data is from', () => {
     render(<DataAsOf at={at.toISOString()} now={new Date(2026, 8, 21, 23, 0, 0)} />);
 
     const time = screen.getByTestId('data-as-of');
-    const shown = at.toLocaleTimeString(undefined, {
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-    });
     expect(time.querySelector('.visually-hidden')?.textContent).toBe('Data ');
-    expect(time.textContent).toBe(`Data as of ${shown}`);
-    expect(time.getAttribute('title')).toBe(`Data as of ${shown}`);
+    // 24-hour, never "10:32:18 PM" (T477; Q10).
+    expect(time.textContent).toBe('Data as of 22:32:18');
+    // Its tooltip the exact local time with UTC beside it (T477; Q9).
+    expect(time.getAttribute('title')).toBe(`Data as of ${exactOf(at)}`);
   });
 
   it('is shown for an answer with no rows too — a refresh can come back empty', () => {
@@ -95,18 +88,10 @@ describe('when a chart’s data is from', () => {
     const at = new Date(2026, 8, 20, 22, 32, 18);
     render(<DataAsOf at={at.toISOString()} now={new Date(2026, 8, 21, 9, 0, 0)} />);
 
-    expect(screen.getByTestId('data-as-of').textContent).toBe(
-      `Data as of ${at.toLocaleString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        second: '2-digit',
-      })}`,
-    );
-    expect(screen.getByTestId('data-as-of').textContent).toContain(
-      at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-    );
+    // As every moment is written (T477; Q8): "Yesterday", else the day first.
+    expect(screen.getByTestId('data-as-of').textContent).toBe('Data as of Yesterday 22:32:18');
+    render(<DataAsOf at={at.toISOString()} now={new Date(2026, 8, 24, 9, 0, 0)} />);
+    expect(screen.getAllByTestId('data-as-of')[1]?.textContent).toBe('Data as of 20 Sep 22:32:18');
   });
 
   it('is left out when Cube gave no time, or one that is not a time', () => {

@@ -3,6 +3,8 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { exactOf } from '../../shell/formatTime';
+
 import { Health } from './Health';
 
 /**
@@ -219,6 +221,40 @@ describe('the refresh worker, as xcube reports it (T553, AC-393)', () => {
       expect(badge('worker-health').textContent).toBe(words);
     });
     expect(iconOf('worker-health')).toBe(icon);
+  });
+
+  it('names the day of a last run that wasn’t today, the exact time and UTC on hover (T477, Q8, Q9)', async () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(14, 39, 52, 0);
+    const iso = yesterday.toISOString();
+    reporting({
+      ...RUNNING,
+      status: { state: 'running', lastRunAt: iso },
+      workers: [{ instance: 'cube-refresh-0', revision: 12, lastRunAt: iso, finished: true }],
+      modules: [{ module: 'all', lastRunAt: iso, lastOkAt: iso, failing: false }],
+    });
+    await vi.waitFor(() => {
+      expect(badge('worker-health').textContent).toBe(
+        'Refresh worker running · last run Yesterday 14:39',
+      );
+    });
+    expect(badge('worker-health').getAttribute('title')).toContain(exactOf(yesterday));
+
+    await userEvent.click(screen.getByRole('button', { name: /Refresh worker running/ }));
+    const panel = screen.getByRole('region', { name: 'Refresh worker' });
+    expect(within(panel).getByTestId('refresh-summary').textContent).toBe(
+      'Running · last run Yesterday 14:39:52, on the current revision',
+    );
+    const worker = within(within(panel).getByRole('table', { name: 'Workers' })).getAllByRole(
+      'row',
+    )[0]!;
+    expect(worker.textContent).toContain('last run Yesterday 14:39:52');
+    expect(worker.querySelector('time')?.getAttribute('title')).toBe(exactOf(yesterday));
+    const module = within(within(panel).getByRole('table', { name: 'Modules' })).getAllByRole(
+      'row',
+    )[1]!;
+    expect(within(module).getAllByRole('cell')[1]?.textContent).toBe('Yesterday 14:39');
   });
 
   it('says the worker’s state is unknown while xcube’s report can’t be read, never running (T553’s review)', async () => {

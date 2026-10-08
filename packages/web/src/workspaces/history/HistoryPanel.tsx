@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 
+import { dayOf, whenOf } from '../../shell/formatTime';
 import { StateLine } from '../../shell/StatusIcon';
 
 /**
@@ -44,23 +45,20 @@ export const historyQuery = (kind: HistoryKind, id: string) => ({
   },
 });
 
-const month = (at: Date) => at.toLocaleDateString('en-US', { month: 'short' });
-const clock = (at: Date) => at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-
-/** "Today, 15:02", "22 Sep, 10:14", or with its year when not this one's. */
+/**
+ * "Today 15:02", "Yesterday 09:30", "22 Sep 10:14", with its year when not
+ * this one's: as every moment is written (T477; the coordinator's Q8).
+ */
 export function whenText(iso: string, now: Date): string {
-  const at = new Date(iso);
-  if (at.toDateString() === now.toDateString()) return `Today, ${clock(at)}`;
-  const year = at.getFullYear() === now.getFullYear() ? '' : ` ${String(at.getFullYear())}`;
-  return `${String(at.getDate())} ${month(at)}${year}, ${clock(at)}`;
+  return whenOf(new Date(iso), now);
 }
 
 /** "approved 22 Sep by Ada Admin", for a restore's description (design 06, state C). */
 export function approvedText(version: KeptVersion): string {
   const at = new Date(version.at);
-  return version.approver === null
-    ? `saved ${String(at.getDate())} ${month(at)}`
-    : `approved ${String(at.getDate())} ${month(at)} by ${version.approver.name}`;
+  // The day alone, as design 06 writes it ("22 Sep"): read against itself, no year.
+  const day = dayOf(at, at);
+  return version.approver === null ? `saved ${day}` : `approved ${day} by ${version.approver.name}`;
 }
 
 const byText = (version: KeptVersion, now: Date) => {

@@ -1,3 +1,4 @@
+import { exactOf } from '../../shell/formatTime';
 import { shortAgo } from '../../shell/relativeAge';
 import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
 import type { ListedSource } from './DataSourcesList';
@@ -48,7 +49,7 @@ export function HealthBadge({
       {/* On its own page, what it is the health of is said (design 03 pin 4). */}
       {phrased && kind !== 'idle' ? `Last test ${label.toLowerCase()}` : label}
       {ran === null ? null : (
-        <span className="status__when" title={ran.toLocaleString()}>
+        <span className="status__when" title={exactOf(ran)}>
           {' · '}
           {shortAgo(ran, now)}
         </span>

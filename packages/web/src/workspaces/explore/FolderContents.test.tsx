@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
+import { exactOf } from '../../shell/formatTime';
 import { cubeStoreItem } from '../data-sources/cubeStore';
 import { FolderContents, opensFromExplore, type CatalogItem } from './FolderContents';
 
@@ -86,17 +87,22 @@ describe('folder contents (AC-017)', () => {
     render(<FolderContents items={items} />);
 
     const folder = within(screen.getByTestId('item-f1')).getAllByRole('cell');
-    expect(folder[2]?.textContent).toMatch(/^Sep 1(, 2026)?$/);
+    // Day first (T477; Q6).
+    expect(folder[2]?.textContent).toMatch(/^1 Sep( 2026)?$/);
     expect(folder[3]?.textContent).toBe('—');
   });
 
   it('carries a machine-readable timestamp alongside the shown one', () => {
     render(<FolderContents items={items} />);
 
-    const time = within(screen.getByTestId('item-d1')).getByText(/^Sep 19(, 2026)?$/);
+    const time = within(screen.getByTestId('item-d1')).getByText(/^19 Sep( 2026)?$/);
     expect(time.closest('time')?.getAttribute('datetime')).toBe('2026-09-19T12:00:00.000Z');
-    // The prototype's short date, the moment in full on hover (recheck-shell-explore F19).
+    // The short date, the moment in full on hover (recheck-shell-explore F19):
+    // the exact local time with UTC beside it (T477; Q9).
     expect(time.closest('time')?.getAttribute('title')).toContain('2026');
+    expect(time.closest('time')?.getAttribute('title')).toBe(
+      exactOf(new Date('2026-09-19T12:00:00.000Z')),
+    );
   });
 
   it('opens an item when its name is activated', async () => {

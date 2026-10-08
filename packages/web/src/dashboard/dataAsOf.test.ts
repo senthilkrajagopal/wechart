@@ -335,6 +335,10 @@ describe('a time as the menu says it', () => {
   it('is the clock alone today, and the day beside it otherwise', () => {
     const now = new Date(2026, 8, 25, 23, 30);
     expect(clockTimeOf(new Date(2026, 8, 25, 9, 15), now)).toBe('09:15');
-    expect(clockTimeOf(new Date(2026, 8, 26, 0, 0), now)).toBe('26 Sept, 00:00');
+    // "Sep", never "Sept", and no comma (T477; Q6, Q8).
+    expect(clockTimeOf(new Date(2026, 8, 26, 0, 0), now)).toBe('26 Sep 00:00');
+    // Yesterday's data says so, as the tile's badge does (T477's review, Q8).
+    expect(clockTimeOf(new Date(2026, 8, 24, 22, 32), now)).toBe('Yesterday 22:32');
+    expect(clockTimeOf(new Date(2026, 8, 20, 22, 32), now)).toBe('20 Sep 22:32');
   });
 });

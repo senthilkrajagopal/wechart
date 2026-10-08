@@ -87,9 +87,10 @@ describe('an item’s history (T357, AC-289)', () => {
       'Version 1',
     ]);
     expect(rows.map((row) => within(row).getByTestId('version-by').textContent)).toEqual([
-      'Today, 15:02 by Mo Manager · approved by Ada Admin',
-      '22 Sep, 10:14 by Ada Admin · self-approved',
-      '25 Aug, 17:30 · before proposals',
+      // No comma between a day and its time (T477; Q8).
+      'Today 15:02 by Mo Manager · approved by Ada Admin',
+      '22 Sep 10:14 by Ada Admin · self-approved',
+      '25 Aug 17:30 · before proposals',
     ]);
     expect(within(rows[1]!).getByTestId('version-description').textContent).toBe('No description');
     expect(panel.textContent).toContain(

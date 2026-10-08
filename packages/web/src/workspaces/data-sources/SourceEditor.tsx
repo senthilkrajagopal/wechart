@@ -9,6 +9,7 @@ import {
 } from '@wechart/core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { clockOf } from '../../shell/formatTime';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
 import {
@@ -61,7 +62,7 @@ const printOf = (source: StoredSource, values: ConnectionValues) =>
   JSON.stringify([values.authMethod, fieldsToSend(source.driver, values), values.secrets]);
 
 /** A time as the test line says it. */
-const clock = (at: Date) => at.toLocaleTimeString('en-GB');
+const clock = (at: Date) => clockOf(at, { seconds: true });
 
 /** "A", "A and B", "A, B and C". */
 const listed = (names: readonly string[]) =>
@@ -569,7 +570,7 @@ export function EditFoot({ edit }: { edit: SourceEdit }) {
   const need = edit.connects
     ? edit.passed === null
       ? 'Save needs a passing test of these settings.'
-      : `tested ${edit.passed.at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
+      : `tested ${clockOf(edit.passed.at)}`
     : edit.nameChanged && edit.descriptionChanged
       ? 'no test needed'
       : edit.descriptionChanged

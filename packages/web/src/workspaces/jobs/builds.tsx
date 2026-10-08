@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { periodOf, periodsOf } from '@wechart/core';
 
+import { clockOf as shownClock, exactOf, whenOf as momentOf } from '../../shell/formatTime';
 import { ME_QUERY } from '../../shell/me';
 import { Status } from './StateBadge';
 
@@ -61,34 +62,19 @@ export interface BuildSummary {
 }
 
 /** A time of day on one 24-hour clock, "14:05:12", or "14:05:12.204" in a log. */
-export const clockOf = (iso: string, ms = false): string =>
-  new Date(iso).toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-    ...(ms ? { fractionalSecondDigits: 3 } : {}),
-  });
+export const clockOf = (iso: string, ms = false): string => {
+  const at = new Date(iso);
+  const clock = shownClock(at, { seconds: true });
+  return ms ? `${clock}.${String(at.getMilliseconds()).padStart(3, '0')}` : clock;
+};
 
-/** "Today 14:05:12", "Yesterday 16:20:31", then "29 Sep 07:55:00", with UTC for the title. */
+/**
+ * "Today 14:05:12", "Yesterday 16:20:31", then "29 Sep 07:55:00" (never en-GB's
+ * "29 Sept"), with the exact local time and UTC for the title (T477; Q8, Q9).
+ */
 export function whenOf(iso: string, now: Date = new Date()): { shown: string; utc: string } {
   const at = new Date(iso);
-  const day = new Date(at);
-  day.setHours(0, 0, 0, 0);
-  const midnight = new Date(now);
-  midnight.setHours(0, 0, 0, 0);
-  const days = Math.round((midnight.getTime() - day.getTime()) / 86_400_000);
-  const date =
-    days === 0
-      ? 'Today'
-      : days === 1
-        ? 'Yesterday'
-        : at.toLocaleDateString('en-GB', {
-            day: 'numeric',
-            month: 'short',
-            ...(at.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
-          });
-  return { shown: `${date} ${clockOf(iso)}`, utc: `${iso.slice(0, 19).replace('T', ' ')} UTC` };
+  return { shown: momentOf(at, now, { seconds: true }), utc: exactOf(at) };
 }
 
 /**
@@ -189,13 +175,7 @@ export function BuildOutcomeStatus({
             ? 'you'
             : build.cancelledBy.name;
       const at =
-        typeof build.cancelledAt === 'string'
-          ? new Date(build.cancelledAt).toLocaleTimeString('en-GB', {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: false,
-            })
-          : undefined;
+        typeof build.cancelledAt === 'string' ? shownClock(new Date(build.cancelledAt)) : undefined;
       return (
         <Status
           kind="cancel"

@@ -275,7 +275,8 @@ test('Data as of says what served a tile, how fresh it is and where that is set'
     'Refreshed every hour',
     'As written: every: "1 hour"',
     // The day too, when the next hour is tomorrow's (T273's review).
-    /^Next run (\d{1,2} \w{3,4}, )?\d{2}:\d{2}, may start up to 5½ min late$/,
+    // Day first, no comma, never "Sept" (T477; Q6, Q8).
+    /^Next run (\d{1,2} [A-Z][a-z]{2} )?\d{2}:\d{2}, may start up to 5½ min late$/,
     'Refresh now',
     'Open in Jobs',
     'Edit schedule in Model',

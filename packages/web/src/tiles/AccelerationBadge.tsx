@@ -7,6 +7,7 @@
  * hides that a number is an hour old, and labelling everything "accelerated"
  * claims a freshness guarantee that is not there.
  */
+import { exactOf } from '../shell/formatTime';
 import { relativeAge } from '../shell/relativeAge';
 
 export interface Acceleration {
@@ -81,7 +82,8 @@ export function AccelerationBadge({ result, now = new Date() }: AccelerationBadg
     <span
       className="acceleration acceleration--accelerated"
       data-testid="acceleration"
-      title={`Accelerated: served from ${preAggregation ?? 'a pre-aggregation'}, ${built}`}
+      // Its age, then the exact build time with UTC beside it (T477, Q9).
+      title={`Accelerated: served from ${preAggregation ?? 'a pre-aggregation'}, ${built}${lastUpdatedAt ? `, ${exactOf(lastUpdatedAt)}` : ''}`}
     >
       <span data-icon="accelerated" aria-hidden="true">
         ⚡

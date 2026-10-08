@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
+import { exactOf, utcOf, whenOf as momentOf } from '../../shell/formatTime';
 import { StateLine } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { FOLDERS_QUERY, targetPathOf } from '../explore/folders';
@@ -199,26 +200,18 @@ async function getJson<T>(url: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-/** "Today 15:02:11", "Yesterday 16:40:12", then "24 Sep 09:40:55" (pin 4). */
-function whenOf(iso: string): { shown: string; utc: string } {
+/**
+ * "Today 15:02:11", "Yesterday 16:40:12", then "24 Sep 09:40:55" (pin 4),
+ * never en-GB's "24 Sept"; its title the exact local time with UTC beside it
+ * (T477; the coordinator's Q8, Q9).
+ */
+function whenOf(iso: string): { shown: string; utc: string; exact: string } {
   const at = new Date(iso);
-  const time = at.toLocaleTimeString('en-GB', { hour12: false });
-  const day = new Date(at);
-  day.setHours(0, 0, 0, 0);
-  const midnight = new Date();
-  midnight.setHours(0, 0, 0, 0);
-  const days = Math.round((midnight.getTime() - day.getTime()) / 86_400_000);
-  const date =
-    days === 0
-      ? 'Today'
-      : days === 1
-        ? 'Yesterday'
-        : at.toLocaleDateString('en-GB', {
-            day: 'numeric',
-            month: 'short',
-            ...(at.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' }),
-          });
-  return { shown: `${date} ${time}`, utc: `${iso.slice(0, 19).replace('T', ' ')} UTC` };
+  return {
+    shown: momentOf(at, new Date(), { seconds: true }),
+    utc: utcOf(at),
+    exact: exactOf(at),
+  };
 }
 
 /** "1 year", "2 years", "90 days": how long records are kept (pin 8). */
@@ -565,7 +558,7 @@ export function AuditTrail({
                       className={record.id === openId ? 'is-selected' : undefined}
                     >
                       <td className="audit-trail__time">
-                        <time dateTime={record.at} title={when.utc}>
+                        <time dateTime={record.at} title={when.exact}>
                           {when.shown}
                         </time>
                       </td>
@@ -852,7 +845,7 @@ function Inspector({ id, record, onClose }: { id: string; record: Record_; onClo
           <>
             <dt>Suspended since</dt>
             <dd>
-              <time dateTime={details['suspendedAt']} title={whenOf(details['suspendedAt']).utc}>
+              <time dateTime={details['suspendedAt']} title={whenOf(details['suspendedAt']).exact}>
                 {whenOf(details['suspendedAt']).shown}
               </time>
             </dd>
@@ -867,7 +860,7 @@ function Inspector({ id, record, onClose }: { id: string; record: Record_; onClo
           <>
             <dt>Paused since</dt>
             <dd>
-              <time dateTime={details['pausedAt']} title={whenOf(details['pausedAt']).utc}>
+              <time dateTime={details['pausedAt']} title={whenOf(details['pausedAt']).exact}>
                 {whenOf(details['pausedAt']).shown}
               </time>
             </dd>

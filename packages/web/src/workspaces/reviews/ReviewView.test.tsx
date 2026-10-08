@@ -238,7 +238,8 @@ describe('the review view (T356)', () => {
     shown(proposal({}));
     const inspector = await screen.findByRole('complementary', { name: 'About this proposal' });
     expect(within(inspector).getByTestId('review-author').textContent).toBe(
-      'Wren Writer · 27 Sep 2026, 14:05',
+      // As every moment is written, the day before the view's "now" (T477; Q8).
+      'Wren Writer · Yesterday 14:05',
     );
     expect(within(inspector).getByTestId('review-description').textContent).toBe(
       'Adds a monthly EMEA revenue chart.\nAvg order value uses the mean.',
@@ -262,7 +263,7 @@ describe('the review view (T356)', () => {
     );
     const inspector = await screen.findByRole('complementary', { name: 'About this proposal' });
     expect(within(inspector).getByTestId('review-decision').textContent).toBe(
-      'Rejected by Ada Admin · 27 Sep 2026, 16:40',
+      'Rejected by Ada Admin · Yesterday 16:40',
     );
     expect(within(inspector).getByRole('blockquote').textContent).toBe('Keep the median.');
     expect(within(inspector).queryByRole('button', { name: /Approve|Reject/ })).toBeNull();

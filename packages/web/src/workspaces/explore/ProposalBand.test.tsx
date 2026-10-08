@@ -115,7 +115,8 @@ describe('the band on the author’s item (T358, AC-290)', () => {
     );
   });
 
-  it('writes an older day as design 05 does, "20 Sep, 09:15"', async () => {
+  // Amended by T477 (the coordinator's Q8): no comma between a day and its time.
+  it('writes an older day as "20 Sep 09:15"', async () => {
     shown(
       proposal({
         status: 'rejected',
@@ -128,7 +129,7 @@ describe('the band on the author’s item (T358, AC-290)', () => {
     );
     const band = await screen.findByRole('status', { name: 'Proposal' });
     expect(within(band).getByTestId('band-decision').textContent).toBe(
-      'Rejected by Ada Admin · 20 Sep, 09:15',
+      'Rejected by Ada Admin · 20 Sep 09:15',
     );
   });
 

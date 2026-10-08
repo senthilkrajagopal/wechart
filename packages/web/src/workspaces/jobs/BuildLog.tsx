@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 
 import { useNarrowWindow } from '../../dashboard/useNarrowWindow';
+import { dayOf } from '../../shell/formatTime';
 import { StateLine } from '../../shell/StatusIcon';
 import {
   BuildOutcomeStatus,
@@ -83,8 +84,8 @@ const sameDay = (a: string, b: string) => new Date(a).toDateString() === new Dat
  */
 function timeOf(at: string, startedAt: string): string {
   if (sameDay(at, startedAt)) return clockOf(at, true);
-  const day = new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-  return `${day} ${clockOf(at)}`;
+  // "26 Sep", never en-GB's "26 Sept" (T477).
+  return `${dayOf(new Date(at))} ${clockOf(at)}`;
 }
 
 interface Line {

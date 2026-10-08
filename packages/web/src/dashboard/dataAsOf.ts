@@ -2,6 +2,7 @@ import { nextRefreshes, refreshLagSeconds } from '@wechart/core';
 
 import type { AnswerMeta } from '../query/answerMeta';
 import { rollupHref } from '../workspaces/model/inFolder';
+import { clockOrWhenOf, whenOf } from '../shell/formatTime';
 import type { MenuEntry } from '../shell/Menu';
 
 /**
@@ -66,7 +67,8 @@ export function dataAsOf(
     onOpen: (href: string) => void;
   },
   now: Date,
-  timeOf: (date: Date) => string = (date) => date.toLocaleString(),
+  // As every moment is written (T477), never the browser's locale.
+  timeOf: (date: Date) => string = (date) => whenOf(date, now),
 ): { label: string; entries: MenuEntry[] } | undefined {
   if (answered === undefined) return undefined;
   const used = usedOf(answered);
@@ -246,10 +248,9 @@ function nextRun(
  * "Data as of 09:15", and the day beside it otherwise.
  */
 export function clockTimeOf(date: Date, now: Date = new Date()): string {
-  const clock = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-  return date.toDateString() === now.toDateString()
-    ? clock
-    : `${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}, ${clock}`;
+  // The day first, "Sep" never "Sept", no comma, and "Yesterday" as the
+  // tile's badge says it (T477; Q6, Q8).
+  return clockOrWhenOf(date, now);
 }
 
 /**

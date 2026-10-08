@@ -4,6 +4,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { exactOf, whenOf } from '../../shell/formatTime';
 import { SqlTab, type SqlRunnerState, type SqlSource } from './SqlRunner';
 
 /**
@@ -156,6 +157,12 @@ describe('the SQL tab, the runner on (T535)', () => {
     expect(screen.getByTestId('sql-switch').textContent).toContain(
       'SQL runner on · turned on by Ada Admin, who confirmed the login can only read',
     );
+    // When, as every moment is written (T477, Q8): no comma, the year only
+    // when it isn't this one's, the exact time with UTC on hover (Q9).
+    const confirmedAt = new Date(ON.confirmedAt!);
+    const when = screen.getByTestId('sql-switch').querySelector('time')!;
+    expect(when.textContent).toBe(whenOf(confirmedAt));
+    expect(when.getAttribute('title')).toBe(exactOf(confirmedAt));
     const warning = screen.getByTestId('sql-warning');
     expect(warning.textContent).toBe(
       'This SQL runs on the database directly, as cube_reader. Folder permissions and access policies don’t apply here: you can read whatever that login can read.',

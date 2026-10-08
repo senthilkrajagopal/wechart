@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import { clockOf } from '../../shell/formatTime';
 import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
 
 /**
@@ -64,8 +65,8 @@ const seconds = (ms: number) =>
 const NUMERIC =
   /^(int|smallint|bigint|tinyint|mediumint|float|double|real|numeric|decimal|number|money)/i;
 const isNumeric = (type: string | null) => type !== null && NUMERIC.test(type);
-const clock = (at: Date) =>
-  at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+/** "14:05:12", the one 24-hour clock (T477). */
+const clock = (at: Date) => clockOf(at, { seconds: true });
 const article = (word: string) => (/^[AEIOU]/.test(word) ? 'an' : 'a');
 
 /**

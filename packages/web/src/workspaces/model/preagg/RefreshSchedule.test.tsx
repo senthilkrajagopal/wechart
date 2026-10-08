@@ -83,6 +83,8 @@ describe('a pre-aggregation’s refresh schedule', () => {
     const items = within(runs).getAllByRole('listitem');
     expect(items).toHaveLength(5);
     for (const item of items) expect(item.textContent).toMatch(/08:00/);
+    // Day first, "Fri 25 Sep 08:00": "Sep", never "Sept", no comma (T477; Q6, Q8).
+    expect(items[0]?.textContent).toMatch(/^[A-Z][a-z]{2} \d{1,2} Sep 08:00 /);
     // How late one can start: 300 s of staleness and the 30 s beat (research).
     expect(screen.getByText(/can start up to about 5½ minutes after its time/)).toBeDefined();
   });

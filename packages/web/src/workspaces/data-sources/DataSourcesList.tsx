@@ -2,6 +2,7 @@ import { DRIVERS, type DriverType } from '@wechart/core';
 import { useId, useRef, useState } from 'react';
 
 import { InfoBar } from '../../shell/InfoBar';
+import { exactOf } from '../../shell/formatTime';
 import { shortDay } from '../../shell/relativeAge';
 import { healthOf, HealthBadge } from './health';
 import { TableScroll } from '../../shell/TableScroll';
@@ -292,10 +293,7 @@ export function DataSourcesList({
                   </td>
                   <td className="sources-muted">
                     {/* The day, the time on hover (design 01 item 9). */}
-                    <time
-                      dateTime={source.updatedAt}
-                      title={new Date(source.updatedAt).toLocaleString()}
-                    >
+                    <time dateTime={source.updatedAt} title={exactOf(new Date(source.updatedAt))}>
                       {shortDay(new Date(source.updatedAt), now)}
                     </time>
                   </td>

@@ -1,6 +1,7 @@
 import { useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { useCallback, useState, useSyncExternalStore, type ReactNode } from 'react';
 
+import { clockOf } from '../../shell/formatTime';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { OwnerIcon } from '../schedules/OwnerLabel';
 
@@ -50,7 +51,7 @@ export async function readErrorOf(
 /** G2's Details: "502 Bad Gateway · GET /api/preaggregations · 14:40:02". */
 export function detailsOf(error: Error): string {
   if (!(error instanceof ReadError)) return error.message;
-  const time = error.at.toTimeString().slice(0, 8);
+  const time = clockOf(error.at, { seconds: true });
   return [`${String(error.status)} ${error.statusText}`.trim(), error.asked, time]
     .filter((part) => part !== '')
     .join(' · ');

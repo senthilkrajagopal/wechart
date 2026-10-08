@@ -1,5 +1,6 @@
 import { Fragment, useId, useRef, type ReactNode } from 'react';
 
+import { clockOf as shownClock, dayOf as shownDay, exactOf } from '../../shell/formatTime';
 import { Status } from './StateBadge';
 
 /**
@@ -86,18 +87,17 @@ const dayOf = (at: Date) => new Date(at.getFullYear(), at.getMonth(), at.getDate
 
 /**
  * A day as the log heads it (T469, UX-082): "Today", "Yesterday", else its
- * date, "Sep 24, 2026".
+ * date, day first, "24 Sep", the year only when not this one's (T477; Q6).
  */
 function dayLabel(at: Date, now: Date): string {
   const days = Math.round((dayOf(now) - dayOf(at)) / 86_400_000);
   if (days === 0) return 'Today';
   if (days === 1) return 'Yesterday';
-  return at.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return shownDay(at, now);
 }
 
 /** A time of day on one 24-hour clock, "03:59:16". */
-const clockOf = (at: Date) =>
-  at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const clockOf = (at: Date) => shownClock(at, { seconds: true });
 
 export function QueryLog({
   records,
@@ -219,7 +219,7 @@ export function QueryLog({
                 return (
                   <tr key={record.id} data-testid="query-row">
                     <td>
-                      <time dateTime={record.createdAt} title={when.toString()}>
+                      <time dateTime={record.createdAt} title={exactOf(when)}>
                         {day === undefined
                           ? `${dayLabel(when, now)} ${clockOf(when)}`
                           : clockOf(when)}

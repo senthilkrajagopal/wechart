@@ -372,6 +372,51 @@ test.describe('control sizes by surface (T476)', () => {
   });
 });
 
+/**
+ * T477 (AC-187; UX-110; the coordinator's Q6–Q10 under R37): one date and
+ * time format. Days first ("19 Sep"), one 24-hour clock, and each time's
+ * tooltip the exact local time with UTC beside it.
+ */
+test.describe('one date and time format (T477)', () => {
+  const UPDATED = /^\d{1,2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)( \d{4})?$/;
+  const EXACT =
+    /^\d{1,2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} \((\d{1,2} [A-Z][a-z]{2} )?\d{2}:\d{2}:\d{2} UTC\)$/;
+
+  test('Explore’s Updated: the day first, the exact time with UTC on hover', async ({ page }) => {
+    await page.goto('/explore');
+    const time = page.getByTestId('explore-contents').locator('td time').first();
+    await expect(time).toBeVisible();
+    await expect(time).toHaveText(UPDATED);
+    await expect(time).toHaveAttribute('title', EXACT);
+  });
+
+  test('a tile’s “as of”: a 24-hour clock, its tooltip the exact time with UTC', async ({
+    page,
+  }) => {
+    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    const asOf = page.getByTestId('data-as-of').first();
+    await expect(asOf).toBeVisible();
+    await expect(asOf).toHaveText(/^Data as of (\d{2}:\d{2}:\d{2}|.* \d{2}:\d{2}:\d{2})$/);
+    await expect(asOf).not.toHaveText(/AM|PM/);
+    await expect(asOf).toHaveAttribute('title', new RegExp(`^Data as of ${EXACT.source.slice(1)}`));
+  });
+
+  test('the query log: day headings first, each time’s exact moment with UTC', async ({ page }) => {
+    await page.goto('/explore/dashboards/seed-root-dashboard-1');
+    await expect(page.getByTestId('chart-canvas').first()).toBeVisible();
+    await page.goto('/jobs?tab=queries');
+    const time = page.getByTestId('query-row').first().locator('time');
+    // Under its day's heading, the clock alone, to the second.
+    await expect(time).toHaveText(/^\d{2}:\d{2}:\d{2}$/);
+    await expect(time).toHaveAttribute('title', EXACT);
+    // Each day's heading: Today, Yesterday, or the day first ("24 Sep"), never "Sep 24, 2026".
+    const headings = page.locator('.query-log__day > th');
+    await expect(headings.first()).toBeVisible();
+    for (const heading of await headings.allTextContents())
+      expect(heading).toMatch(/^(Today|Yesterday|\d{1,2} [A-Z][a-z]{2}( \d{4})?)$/);
+  });
+});
+
 test.describe('members by title (UX-102)', () => {
   test('the search palette names fields and their cubes by title, never by id', async ({
     page,

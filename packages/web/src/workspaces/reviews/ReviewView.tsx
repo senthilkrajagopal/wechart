@@ -282,7 +282,7 @@ export function ReviewView({
                   <span className="review-view__author-name">{proposal.author.name}</span>
                   <span className="review-view__author-when">
                     {' '}
-                    · {momentText(proposal.proposedAt)}
+                    · {momentText(proposal.proposedAt, now)}
                   </span>
                 </p>
               </div>
@@ -339,7 +339,7 @@ export function ReviewView({
             ) : (
               <section className="review-view__sect">
                 <p className="reviews__decision" data-testid="review-decision">
-                  {decisionText(proposal)}
+                  {decisionText(proposal, now)}
                 </p>
                 {proposal.status === 'rejected' || proposal.status === 'withdrawn' ? (
                   <blockquote className="reviews__reason">
@@ -373,7 +373,7 @@ function StateOf({ proposal }: { readonly proposal: ProposalDetail }) {
   );
 }
 
-const decisionText = (proposal: ProposalDetail) => {
+const decisionText = (proposal: ProposalDetail, now: Date) => {
   const word =
     proposal.status === 'approved'
       ? 'Approved'
@@ -382,7 +382,7 @@ const decisionText = (proposal: ProposalDetail) => {
         : 'Withdrawn';
   return proposal.decision === null
     ? word
-    : `${word} by ${proposal.decision.by.name} · ${momentText(proposal.decision.at)}`;
+    : `${word} by ${proposal.decision.by.name} · ${momentText(proposal.decision.at, now)}`;
 };
 
 /**

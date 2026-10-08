@@ -3,6 +3,7 @@ import type { DriverType, FieldValue } from '@wechart/core';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import type { Me } from '../../shell/AccountMenu';
+import { clockOf as clock, exactOf, whenOf as momentOf } from '../../shell/formatTime';
 import { ME_QUERY } from '../../shell/me';
 import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
 import { useFocusTrap } from '../../shell/useFocusTrap';
@@ -131,23 +132,21 @@ function useUserKey(): string {
 
 const pathText = (path: readonly { readonly title: string }[]) =>
   path.length === 0 ? 'Shared' : path.map((folder) => folder.title).join(' / ');
-const clockOf = (iso: string) =>
-  new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-/** Three letters, as design 15 writes a month ("24 Sep"); ICU's en-GB says "Sept". */
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const dayOf = (at: Date, withYear: boolean) =>
-  `${String(at.getDate())} ${MONTHS[at.getMonth()] ?? ''}${withYear ? ` ${String(at.getFullYear())}` : ''}`;
-const dayAndTime = (iso: string) => `${dayOf(new Date(iso), true)}, ${clockOf(iso)}`;
-/** A past run's time, with its day where it wasn't today, as design 15's My runs says it. */
-function whenOf(iso: string): string {
+/** "14:05", on the one 24-hour clock (T477). */
+const clockOf = (iso: string) => clock(new Date(iso));
+/**
+ * A past run's time, with its day where it wasn't today, as design 15's My
+ * runs says it: "Today 14:05", "Yesterday 16:40", "24 Sep 09:40" (T477, Q8).
+ */
+const whenOf = (iso: string) => momentOf(new Date(iso));
+/** A moment with its exact time and UTC on hover (T477, Q9). */
+function When({ iso, className }: { iso: string; className?: string }) {
   const at = new Date(iso);
-  const now = new Date();
-  const midnight = (date: Date) =>
-    new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-  const days = Math.round((midnight(now) - midnight(at)) / 86_400_000);
-  if (days === 0) return `Today ${clockOf(iso)}`;
-  if (days === 1) return `Yesterday ${clockOf(iso)}`;
-  return `${dayOf(at, at.getFullYear() !== now.getFullYear())} ${clockOf(iso)}`;
+  return (
+    <time dateTime={iso} title={exactOf(at)} {...(className === undefined ? {} : { className })}>
+      {momentOf(at)}
+    </time>
+  );
 }
 
 /** An answer of the run route, as a result to show. */
@@ -492,12 +491,7 @@ interface Going {
 /** AC-379, amended by R64: Cube Store offers no Cancel, and says so. */
 const NO_CANCEL = 'Cube Store can’t stop a query, so there’s no Cancel.';
 
-const clockWithSeconds = (iso: string) =>
-  new Date(iso).toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+const clockWithSeconds = (iso: string) => clock(new Date(iso), { seconds: true });
 
 /** Once on (screen 1): where it runs, the warning, the editor, the result, and My runs. */
 function Runner({
@@ -687,7 +681,12 @@ function Runner({
               {onCubeStore
                 ? 'everyone allowed may read every folder’s rollups'
                 : 'the login can only read'}
-              {runner.confirmedAt === undefined ? '' : ` · ${dayAndTime(runner.confirmedAt)}`}
+              {runner.confirmedAt === undefined ? null : (
+                <>
+                  {' · '}
+                  <When iso={runner.confirmedAt} />
+                </>
+              )}
               {superAdmin ? <TurnOff source={source} onTurnedOff={onTurnedOff} /> : null}
             </span>
           ) : null}
@@ -1074,7 +1073,7 @@ function MyRuns({
                     {run.rowCount === 1 ? '1 row' : `${run.rowCount.toLocaleString('en')} rows`}
                   </span>
                 )}
-                <span className="sql-runs__when">{whenOf(run.startedAt)}</span>
+                <When iso={run.startedAt} className="sql-runs__when" />
               </span>
               {scope === 'all' ? (
                 <span className="sql-runs__source">

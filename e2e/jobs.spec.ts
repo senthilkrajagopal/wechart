@@ -557,7 +557,11 @@ test('a rollup Cube’s refresh worker built reads Built, with when, and no star
   const cells = row.getByRole('cell');
   await expect(cells.nth(1)).toHaveText('Shared');
   await expect(cells.nth(3)).toHaveText(/^(Today|Yesterday) \d{2}:\d{2}$/);
-  await expect(cells.nth(3).locator('time')).toHaveAttribute('title', /UTC$/);
+  // The exact local time with UTC beside it (T477, Q9): "29 Sep 2026 14:01:00 (12:01:00 UTC)".
+  await expect(cells.nth(3).locator('time')).toHaveAttribute(
+    'title',
+    /^\d{1,2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} \(.*UTC\)$/,
+  );
   // Not started from wechart, and not partitioned.
   await expect(cells.nth(4)).toHaveText('—');
   await expect(cells.nth(6)).toHaveText('—');

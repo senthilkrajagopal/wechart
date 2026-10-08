@@ -10818,7 +10818,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - Not here: the audit trail's pills, which the security suite reaches; and the chart page's "Add to a dashboard…" picker, which design 06 draws and the app doesn't have yet. That is T406's, with AC-352.
     - A stray backtick in a CSS comment ended the stylesheet's template string early, and every page failed to draw. It went into the WIP commit; this commit fixes it, so the two belong together.
     - Tests: `consistency.spec.ts` 25/25 in Chrome; with `data-source`, `a11y-tokens` and `design-conformance`, 143 of 144. The one, `design-conformance.spec.ts:942`, fails without T476's change too.
-- [ ] T477 (AC-187) One date and time format, with the exact time in a tooltip
+- [x] T477 (AC-187) One date and time format, with the exact time in a tooltip
   - Files: `packages/web/src/shell/formatTime.ts` (+ test), each date shown (Explore, Data sources, Jobs, a tile's badge and menu), `e2e/consistency.spec.ts`
   - Failing test: `consistency.spec.ts`, and `formatTime.test.ts`: recent times relative ("4 min ago"), older ones ~~"Sep 27, 03:27"~~ "27 Sep 03:27" *(amended by the coordinator's Q6 and Q8 calls below)*, a clock "03:27", all on one 24-hour clock, each with its exact time in a tooltip (UX-110).
   - Depends on: T466
@@ -10833,6 +10833,30 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - **Q9 (a), the tooltip:** the exact local time, with UTC beside it.
     - **Q10, the clock:** 24-hour everywhere, the tile badge's tooltip included.
     - **"Sept":** en-GB writes September's short month "Sept" in this runtime. Every design writes "Sep", so the one format fixes it.
+  - **Built 2026-10-08.** One module, `packages/web/src/shell/formatTime.ts`, writes every date and time the web app shows, from the local clock's parts and its own month names, so no runtime's locale data ("Sept") reaches the page. No source file outside it formats a moment with `toLocale…String` or `Intl.DateTimeFormat` any more, except where a time is written in a schedule's own zone rather than the viewer's (Schedules' next runs, `schedule.tsx`; a pre-aggregation's refresh runs, `RefreshSchedule.tsx`, whose parts are put together as "Thu 24 Sep 08:00").
+    - `dayOf`: "27 Sep", "31 Dec 2025" (Q6, Q8);
+    - `clockOf`: "14:05", or "14:05:12" where a design draws seconds (Q8, Q10);
+    - `whenOf`: "Today 14:05", "Yesterday 16:40", "24 Sep 09:40", "30 Dec 2025 09:40" (Q8);
+    - `clockOrWhenOf`, where a design draws a bare clock ("last run 14:39", "since 14:05", "Failed · 14:05"): the clock alone today, and the moment with its day otherwise, so an earlier day's time is never read as today's (Q8);
+    - `exactOf`, every tooltip: "27 Sep 2026 14:05:12 (12:05:12 UTC)", the UTC day written too where it differs, and its year where that differs (Q9).
+    - **Where it is used:** Explore's Updated; Data sources' Updated, health and settings; the SQL runner's switch line and My runs; the query log's day headings and times; a tile's "Data as of" badge and its menu line, which now agree ("Yesterday 22:32"); a tile's pre-aggregation badge; a rollup's refresh note; Jobs' Last built, run history, build log, partitions, and the refresh worker's badge and panel; the audit trail; reviews and a proposal's band; an item's history; Schedules' pane; a pre-aggregation's refresh runs.
+    - **Stamps of the moment just now** (a test's "Every check passed · 14:05:12", the wizard's and import's test lines, a SQL result's "at 14:05:12", a read error's Details) use `clockOf` and carry no tooltip: they are today's by definition.
+    - **Relative only where a design draws it (Q7):** data source health ("2 h ago", design 01) and a pre-aggregation's age in a tile's badge ("⚡ 40m", T158; design 04's "Pre-agg · 3m") keep their ages, each with its exact time in the tooltip.
+    - **Not here, put to the coordinator:** design 04's note 4 also moves the "as of 22:32:18" clock out of the tile's head into the badge's tooltip, leaving "● Live" alone in the head. That is the head's anatomy (04-1, UX-021; T252's), and it would change what AC-148's refresh shows. The head keeps its clock, now in the one format; status.md's "the badge's relative time (T477)" for design 04 is the age above.
+    - **Left as their designs write them:** Schedules' next runs with the weekday ("Mon 5 Oct, 07:55", design 16); a partition's period ("Sep 2026"); and data values in tables and on axes, which their granularity formats (AC-220), not this task.
+    - **Tests:**
+      - `formatTime.test.ts`, failing first: each form, the year only when it isn't this one, never "Sept", and a 24-hour clock. A UTC day and year other than the local ones are checked in fixed zones (Tokyo, Los Angeles). The file passes in Los Angeles' and Tokyo's time zones.
+      - The unit tests that pinned the old forms ("Sep 26", "Sept", "Sep 20, 09:15", a 12-hour tooltip) now assert the calls' forms.
+      - From the cold review, each failing first: the SQL runner's switch line ("1 Oct 2026, 09:12" had a comma and always its year); the tile menu's label, which wrote yesterday as "24 Sep 22:32" where the badge says "Yesterday"; a partition's failure and the refresh worker's last run, which showed a bare clock for an earlier day; the pre-aggregation badge's tooltip, which had only the age; the audit inspector's UTC line.
+      - The web suite: 2,651 of 2,652. The one, `UnplacedCodes.test.tsx`, fails now and then alone too, and this task doesn't touch it.
+      - `consistency.spec.ts` "one date and time format (T477)" (Chrome): Explore's Updated; a tile's "Data as of", its tooltip the exact form; the query log's clock and every day heading ("Today", "Yesterday" or "24 Sep"), each with the exact time and UTC on hover.
+      - Seven e2e assertions that pinned an old form now assert the calls' forms, each as strict as before:
+        - the month-first day ("Sep 19, 2026"): `explore.spec.ts`, `design-conformance.spec.ts`, `security/data-sources.spec.ts`;
+        - a tooltip ending in "UTC": `jobs.spec.ts`;
+        - a day with a comma ("9 Oct, 14:00", "Today, 14:05", "27 Sep 2026, 14:05"): `acceleration.spec.ts`'s next run, `security/history.spec.ts`'s version line, `security/review-view.spec.ts`'s decision, now "Today 14:05".
+      - e2e in Chrome: `jobs`, `acceleration`, `refresh`, `explore`, `data-source` and `schedules`, 50 of 51; the security suite's `history`, `review-view`, `data-sources`, `audit`, `reviews` and `sql-runner`, 48 of 49. The two that fail aren't about dates. `acceleration.spec.ts:252` can't click "Data as of" at the foot of a tile menu that now scrolls; it is one of the layout failures reported with T477. `security/sql-runner.spec.ts:981`, Cube Store's long run, got "Not run" where it expects "Stopped at 30 seconds", Cube Store's own answer.
+    - **The cold review (FAIL):** the SQL runner's switch line; the tile menu's yesterday; the bare clocks in Jobs' partitions and refresh worker; the badge tooltip with only an age; claims of the Built entry broader than the code; a weak query-log check; the UTC-day branch untested. All fixed above, with the entry made exact. Two nits stay as they are: the field `utc` in `builds.tsx` holds `exactOf`'s text; a version's or a run's day read against itself shows no year, as before.
+    - No AC ticked: AC-187's Fails-when names component styles, not dates, and it stays open for the rest of its list.
 - [x] T478 (AC-187, AC-220) Members by title in the search palette and the query log
   - Files: `packages/web/src/shell/SearchPalette.tsx`, `packages/web/src/workspaces/jobs/…` (+ tests), `e2e/consistency.spec.ts`
   - Failing test: `consistency.spec.ts`: the palette's field results and the query log name members by title, never by id (UX-102's parts AC-220 covers, UX-013, UX-082).

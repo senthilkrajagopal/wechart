@@ -1,3 +1,4 @@
+import { clockOf } from '../../shell/formatTime';
 import { shortDay } from '../../shell/relativeAge';
 import type { StateKind } from '../../shell/StatusIcon';
 
@@ -148,15 +149,14 @@ export function statusOf(row: ReviewRow): { kind: StateKind; text: string } {
 
 /**
  * When, as design 05's lists write it: "Today 14:05", "Yesterday", or else
- * the day as the rest of the app writes one (`shortDay`: "Sep 24", with the
- * year only when it isn't this one's; the design draws "24 Sep").
+ * the day as the rest of the app writes one (`shortDay`: "24 Sep", with the
+ * year only when it isn't this one's; T477's day first).
  */
 export function proposedText(iso: string, now: Date): string {
   const then = new Date(iso);
   const day = (at: Date) => new Date(at.getFullYear(), at.getMonth(), at.getDate()).getTime();
   const days = Math.round((day(now) - day(then)) / (24 * 3600 * 1000));
-  if (days === 0)
-    return `Today ${then.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
+  if (days === 0) return `Today ${clockOf(then)}`;
   if (days === 1) return 'Yesterday';
   return shortDay(then, now);
 }

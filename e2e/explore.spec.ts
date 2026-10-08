@@ -374,7 +374,8 @@ test('a saved automatic chart is listed by its drawn type, and its row opens fro
   const row = page.getByTestId(`item-${chart}`);
   const cells = row.getByRole('cell');
   await expect(cells.nth(0)).toHaveText(drawnAs);
-  await expect(cells.nth(2)).toHaveText(/^[A-Z][a-z]{2} \d{1,2}(, \d{4})?$/);
+  // Day first, as every day is written (T477, Q6): "19 Sep", "30 Dec 2025".
+  await expect(cells.nth(2)).toHaveText(/^\d{1,2} [A-Z][a-z]{2}( \d{4})?$/);
 
   // Any cell opens it, as the prototype's rows do.
   await cells.nth(1).click();

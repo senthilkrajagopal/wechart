@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
+import { exactOf } from '../../shell/formatTime';
 import { FIRST_ASK, QUERY_LOG_PAGE, QueryLog, queryStringOf, type QueryRecord } from './QueryLog';
 
 /**
@@ -113,7 +114,8 @@ describe('the query log by day, its members by title (T469, UX-082)', () => {
     expect(days.map((group) => within(group).getAllByRole('rowheader')[0]?.textContent)).toEqual([
       'Today',
       'Yesterday',
-      'Sep 24, 2026',
+      // Day first, the year only for another year (T477; Q6, Q8).
+      '24 Sep',
     ]);
     expect(within(days[0]!).getAllByTestId('query-row')).toHaveLength(2);
     expect(
@@ -122,7 +124,8 @@ describe('the query log by day, its members by title (T469, UX-082)', () => {
     // The exact moment, for a machine and as a tooltip.
     const first = screen.getAllByTestId('query-row')[0]?.querySelector('time');
     expect(first?.getAttribute('dateTime')).toBe(byDay[0]?.createdAt);
-    expect(first?.getAttribute('title')).toBe(new Date(byDay[0]!.createdAt).toString());
+    // The exact local time with UTC beside it (T477; Q9).
+    expect(first?.getAttribute('title')).toBe(exactOf(new Date(byDay[0]!.createdAt)));
   });
 
   it('says each row’s day with its time when sorted by duration, days then being mixed', () => {
@@ -137,7 +140,7 @@ describe('the query log by day, its members by title (T469, UX-082)', () => {
     expect(screen.queryAllByRole('rowheader')).toHaveLength(0);
     expect(
       screen.getAllByTestId('query-row').map((row) => row.querySelector('time')?.textContent),
-    ).toEqual(['Today 03:59:16', 'Today 01:02:03', 'Yesterday 23:00:00', 'Sep 24, 2026 09:30:05']);
+    ).toEqual(['Today 03:59:16', 'Today 01:02:03', 'Yesterday 23:00:00', '24 Sep 09:30:05']);
   });
 
   it('names members by their titles, and one without a title by its name, as code', () => {

@@ -138,7 +138,8 @@ test.describe('an item’s history, and restoring a version (T357, AC-289)', () 
       const rows = panel.getByRole('listitem');
       await expect(rows.getByTestId('version-head')).toHaveText(['Version 2Current', 'Version 1']);
       await expect(rows.first().getByTestId('version-by')).toHaveText(
-        /^Today, \d\d:\d\d by Wren Writer · approved by Super Admin$/,
+        // No comma after the day, as every moment is written (T477, Q8).
+        /^Today \d\d:\d\d by Wren Writer · approved by Super Admin$/,
       );
       await expect(rows.first().getByTestId('version-description')).toHaveText(
         `Adds a summary tab (${RUN}).`,

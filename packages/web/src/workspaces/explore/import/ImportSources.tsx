@@ -9,6 +9,7 @@ import {
 } from '@wechart/core';
 import { useEffect, useId, useRef, useState } from 'react';
 
+import { clockOf } from '../../../shell/formatTime';
 import { StateLine, StatusIcon } from '../../../shell/StatusIcon';
 import { fieldLabel } from '../../data-sources/ConnectionForm';
 import { signsInOf, storedValuesOf, tlsOf, whereOf } from '../../data-sources/connectionSummary';
@@ -120,13 +121,8 @@ interface Row {
   readonly failure?: string | undefined;
 }
 
-const clock = () =>
-  new Date().toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
+/** Now, "14:05:12", on the one 24-hour clock (T477). */
+const clock = () => clockOf(new Date(), { seconds: true });
 const pathText = (path: readonly string[]) => (path.length === 0 ? 'Shared' : path.join(' / '));
 const driverLabel = (driver: string) =>
   (DRIVERS as Record<string, { label: string } | undefined>)[driver]?.label ?? driver;

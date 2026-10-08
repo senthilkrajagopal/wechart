@@ -4,6 +4,7 @@ import { DRIVERS, type DriverType, type FieldValue } from '@wechart/core';
 import { useEffect, useId, useRef, useState, type MouseEvent } from 'react';
 
 import { ME_QUERY } from '../../shell/me';
+import { exactOf, whenOf } from '../../shell/formatTime';
 import { shortAgo, shortDay } from '../../shell/relativeAge';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
@@ -721,12 +722,12 @@ const withinTheHour = (view: CubeStateView, now: Date) =>
         (instance) => now.getTime() - new Date(instance.reportedAt).getTime() <= HOUR,
       );
 
-/** When a test ran, short, on one 24-hour clock: "Today 14:21", "Sep 24, 09:40" (state E). */
+/**
+ * When a test ran, on one 24-hour clock: "Today 14:21", "Yesterday 16:40",
+ * "24 Sep 09:40", as design 03's state E writes it (T477; Q8).
+ */
 function shortWhen(then: Date, now: Date): string {
-  const clock = then.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-  return then.toDateString() === now.toDateString()
-    ? `Today ${clock}`
-    : `${shortDay(then, now)}, ${clock}`;
+  return whenOf(then, now);
 }
 
 /**
@@ -767,7 +768,7 @@ function TestHistory({ id }: { id: string }) {
             return (
               <tr key={test.id}>
                 <td>
-                  <time dateTime={test.ranAt} title={new Date(test.ranAt).toLocaleString()}>
+                  <time dateTime={test.ranAt} title={exactOf(new Date(test.ranAt))}>
                     {shortWhen(new Date(test.ranAt), now)}
                   </time>
                 </td>
@@ -930,7 +931,7 @@ function InCube({ id }: { id: string }) {
                               : 'Failed'}
                         </span>
                       </td>
-                      <td title={new Date(instance.reportedAt).toLocaleString()}>
+                      <td title={exactOf(new Date(instance.reportedAt))}>
                         {shortAgo(new Date(instance.reportedAt), now)}
                       </td>
                     </tr>

@@ -1093,7 +1093,8 @@ test.describe('T244: Explore’s tree, header and table', () => {
     // A folder row keeps its date and owner, though browse() leaves them
     // blank (F20): AC-017 fails on a blank column for an item that has the
     // value (T244's review).
-    await expect(cells(sub).nth(2)).toHaveText(/^[A-Z][a-z]{2} \d{1,2}(, \d{4})?$/);
+    // Day first (T477, Q6): "19 Sep", "30 Dec 2025".
+    await expect(cells(sub).nth(2)).toHaveText(/^\d{1,2} [A-Z][a-z]{2}( \d{4})?$/);
     await expect(cells(sub).nth(3)).toHaveText('admin');
 
     // .grid-table tbody tr:hover td { background: var(--bg-hover) } (mismatch 22).

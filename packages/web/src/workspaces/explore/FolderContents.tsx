@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { MenuButton, type MenuItem } from '../../shell/MenuButton';
 import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
+import { dayOf, exactOf } from '../../shell/formatTime';
 import { CUBE_STORE_ID } from '../data-sources/cubeStore';
 import { chartTypeText } from './chartTypeLabels';
 
@@ -284,18 +285,12 @@ function targetsFor(item: CatalogItem, folders: readonly FolderMove[]): FolderMo
 }
 
 /**
- * The Updated column's date, as the prototype writes it: "Sep 19", with the
- * year where it is not this one (recheck-shell-explore F19). The moment in
- * full is the element's title, and its `dateTime` the machine's.
+ * The Updated column's date, day first: "19 Sep", with the year where it is
+ * not this one (recheck-shell-explore F19; T477's Q6). The moment in full is
+ * the element's title (`exactOf`), and its `dateTime` the machine's.
  */
 function shortDate(iso: string): string {
-  const at = new Date(iso);
-  const thisYear = at.getFullYear() === new Date().getFullYear();
-  return at.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    ...(thisYear ? {} : { year: 'numeric' }),
-  });
+  return dayOf(new Date(iso));
 }
 
 /**
@@ -632,7 +627,7 @@ export function FolderContents({
                   AC-017 fails on a blank column for an item that has the
                   value (T244's review). */}
               <td>
-                <time dateTime={item.updatedAt} title={new Date(item.updatedAt).toLocaleString()}>
+                <time dateTime={item.updatedAt} title={exactOf(new Date(item.updatedAt))}>
                   {shortDate(item.updatedAt)}
                 </time>
               </td>
