@@ -349,7 +349,10 @@ function clashesWith(
   created: readonly { readonly path: string; readonly content: string }[],
 ): Map<string, Clash[]> {
   const folderOf = (file: Held) => (file.folderId === undefined ? {} : { folderId: file.folderId });
-  const paths = new Map(existing.map((file) => [file.path, folderOf(file)] as const));
+  // The first file of a path: My workspace's own before the folder's, so a
+  // clash with both opens the workspace's, here (T485, T451's switch).
+  const paths = new Map<string, ReturnType<typeof folderOf>>();
+  for (const file of existing) if (!paths.has(file.path)) paths.set(file.path, folderOf(file));
   // In any case, and said only as in use: never which file holds it (T724, AC-424).
   const names = new Set(
     existing.flatMap((file) =>

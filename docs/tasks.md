@@ -13484,7 +13484,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 
 ### Done tasks' tests, reworked by area
 
-- [ ] T727 (AC-249, AC-270, AC-271) Rework the tests of T276, T336, T485 and T488 to names held once across the system
+- [x] T727 (AC-249, AC-270, AC-271) Rework the tests of T276, T336, T485 and T488 to names held once across the system
   - Files: `e2e/generate-cubes.spec.ts`, `e2e/model-design.spec.ts` (MW-20 … MW-25), `packages/web/src/workspaces/model/GenerateCubes.test.tsx`, `packages/api/src/routes/names.test.ts`, `packages/api/src/publish.test.ts` (T488's drafts)
   - Failing test, on the R71 image in Chrome:
     - T276's clash: generating `orders` is refused while the root's `orders` has landed. The refusal says the name is in use, and the file is unchanged (AC-249).
@@ -13492,6 +13492,13 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - T485's design 11 states show the global check.
     - T488's drafts publish, with the drafts they join, under their own names (AC-249).
   - Depends on: T705, T724
+  - *Noted (2026-10-08):*
+    - Most of the assertions were reworked as T724 and T726 changed the wording: `publish.test.ts`, `names.test.ts`, `GenerateCubes.test.tsx` and `generate-cubes.spec.ts` already held to "in use" and the file named. This task reworks what still said otherwise: the docblocks and titles of T276's and T336's tests, which still read "name the existing cube" and "one of a name in a folder".
+    - T485: `model-design.spec.ts` "T485: Generate cubes docks…" now asserts the global check on the image: the file named, and the name said only as in use. It also showed a T724 regression, now fixed: when My workspace's copy and the target folder both hold a file's path, the pane must name the workspace's copy and open it in place. T724 made the target's win, giving a link to another tab. `GenerateCubes.tsx` `clashesWith` now takes the first file of a path again.
+    - On the image, in Chrome: `generate-cubes.spec.ts` 4/4, including T488's drafts published with the drafts they join under their own names (read back from `/api/meta`) and T276's clash; `model-design.spec.ts` T485; and the security `generate-in-workspace.spec.ts` 4/4.
+    - T336's case (model files and dashboards one per folder and free across folders; cubes and data sources never) is shown by `names.test.ts`, against the stub xcube. The image's own refusal of a second cube across folders is T702's `global-names.spec.ts`.
+    - MW-20 … MW-25 have no tests of those ids in `model-design.spec.ts`. The design 11 states they named are T485's test there and `GenerateCubes.test.tsx`.
+    - AC-249 ticked: T724, T726, T734 and this task together show every Fails-when.
 
 - [ ] T728 (AC-328, AC-271, AC-273, AC-161, AC-329) Rework the tests of T341, T425, T450, T452, T460 and T501 to items published under their own names
   - Files:

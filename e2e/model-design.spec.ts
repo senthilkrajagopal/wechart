@@ -466,6 +466,13 @@ test('T485: Generate cubes docks 480 px beside the model, and stays docked as a 
   await pane.getByRole('button', { name: 'Generate 1 cube' }).click();
   const orders = pane.getByRole('region', { name: 'cubes/orders.yml' });
   await expect(orders.locator('.generate-pane__status')).toHaveText('Clashes');
+  // The global check (T727; AC-249, AC-424): the file named, the name said only as in use.
+  await expect(
+    orders.locator('.generate-pane__file-body > .generate-pane__note.is-err p'),
+  ).toHaveText([
+    'cubes/orders.yml is already in the model.',
+    'The name “orders” is already in use.',
+  ]);
   expect(await footAt()).toBe(first);
   // To go to Shared, whose orders.yml it clashes with too, the file named is
   // still this folder's own, opened here, not in a tab of its own (T451's switch).

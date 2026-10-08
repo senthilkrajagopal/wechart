@@ -447,12 +447,11 @@ describe('generating cubes from a data source (AC-139)', () => {
   });
 
   /**
-   * T276 / AC-249: IF a cube generated from a data source has the name or file
-   * name of a cube or file already in the model store, THEN THE SYSTEM SHALL
-   * refuse to save it, name the existing cube or file, and leave the existing
-   * one unchanged.
+   * T276 / AC-249, reworked by T727 to R71's one name per item: a generated
+   * cube whose file the model has is marked, naming the file; one whose name
+   * it holds, in any case, is marked as in use, never where; nothing is added.
    */
-  it('marks a generated cube whose name or file the model has, naming it, and adds nothing', async () => {
+  it('marks a generated cube whose file the model has, naming it, and one whose name it holds, as in use, and adds nothing', async () => {
     const asked = api();
     const { dialog, onShow, onAdded } = pane({
       existing: [

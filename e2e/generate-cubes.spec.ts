@@ -277,11 +277,10 @@ test('Cube’s scaffold keeps every column of a table that once lost three, and 
 });
 
 /**
- * T276 / AC-249: IF a cube generated from a data source has the name or file
- * name of a cube or file already in the model store, THEN THE SYSTEM SHALL
- * refuse to save it, name the existing cube or file, and leave the existing
- * one unchanged. `Fails when: an existing model file changes, or a clashing
- * cube is saved, or the refusal does not name what it clashes with.`
+ * T276 / AC-249, reworked by T727 to R71's one name per item: a cube
+ * generated from a data source is refused while its name is held, saying
+ * only that the name is in use, or while its file's path is the folder's,
+ * naming that file; the existing one is unchanged.
  *
  * The sample database's `public.orders` generates `orders` in `orders.yml`:
  * the seeded model's own cube, in its own file. Generated there, it is marked

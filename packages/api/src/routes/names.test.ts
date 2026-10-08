@@ -15,14 +15,15 @@ import { xcubeAdmin } from '../xcube/client';
 import { fakeXcube, FAKE_ADMIN_TOKEN } from '../xcube/fake';
 
 /**
- * T336 (AC-270, AC-271, AC-249): in one folder, a second cube of a name
- * (across its models), model file, dashboard or data source is refused,
- * naming the one it has; the same names in two folders are fine. A
- * generated cube is refused only where its folder has the name. Drafts in
- * My workspace may share a name (AC-357): they are held to it when proposed.
+ * T336 (AC-270, AC-271, AC-249), reworked by T727 to R71's one name per
+ * item: a model file or a dashboard is one of a name in its folder, naming
+ * the one it has, and free in another folder. A cube's or a data source's
+ * name is one across every folder, in any case: a second is refused in its
+ * own folder or any other, a generated cube too, saying only that the name
+ * is in use. Drafts in My workspace may share a dashboard's name (AC-357).
  *
  * Against the suite's database and the stub xcube, with sign-in off: the
- * rule is the folders', whoever the user is.
+ * rule is the same whoever the user is.
  */
 const config: Config = {
   port: 0,
@@ -231,7 +232,7 @@ describe('dashboards: one of a name in a folder (T336, AC-270, AC-271)', () => {
   });
 });
 
-describe('data sources, cubes and model files: one of a name in a folder (T336, AC-270, AC-271, AC-249)', () => {
+describe('data sources and cubes: one of a name across every folder; model files: one of a path in a folder (T336, T727; AC-270, AC-271, AC-249)', () => {
   const sealed = {
     v: 1 as const,
     kid: 'kid-1',
@@ -285,7 +286,7 @@ describe('data sources, cubes and model files: one of a name in a folder (T336, 
 
   // One name per item (R71, T709): another folder's cube of the name is
   // refused too, as xcube refuses it, saying only that the name is in use.
-  it('refuses a second cube of a name across a folder’s files, naming the file that has it, and in another folder', async () => {
+  it('refuses a second cube of a name among a folder’s files and in another folder, saying only that it is in use', async () => {
     const orders = `orders_${MARK}`;
     const first = await publish(folders.a, 'cubes/orders.yml', orders);
     expect(first.statusCode, first.body).toBe(200);
