@@ -351,6 +351,50 @@ describe('Cube Store, listed and run (T536, AC-384; design 15’s state H and Q7
     }
   });
 
+  /**
+   * T650 (R64; xcube 636ffa04b2): a join Cube Store's router would run itself,
+   * which nothing could stop once it started, is refused before it runs. Said
+   * as that, never as a statement that isn't a SELECT, and audited so.
+   */
+  it('refuses a join Cube Store’s router would run, saying so, and audits it so', async () => {
+    await turnOn();
+    stub.answerSql(() => ({
+      status: 400,
+      body: {
+        error:
+          'Cube Store’s router would run this query’s join itself, and nothing stops that work once it starts, not even Cube Store’s own timeout: join Cube Store’s tables, whose joins run on its select workers, or read one catalog or system table without a join',
+        code: 'not_read_only',
+        reason: 'cubestore_router_join',
+        statement: 'select',
+        redactedSql: 'SELECT * FROM (VALUES (?)) a CROSS JOIN (VALUES (?)) b',
+      },
+    }));
+    try {
+      const sql = `SELECT * FROM (VALUES (1)) a CROSS JOIN (VALUES (2)) b -- ${MARK}`;
+      const refused = await run('super', sql);
+      expect(refused.statusCode, refused.body).toBe(400);
+      expect(refused.json()).toEqual({
+        outcome: 'refused',
+        error:
+          'Not run: Cube Store’s router would run this join itself, and nothing could stop it once it started, not even Cube Store’s own timeout.',
+        reason:
+          'Cube Store’s router would run this query’s join itself, and nothing stops that work once it starts, not even Cube Store’s own timeout: join Cube Store’s tables, whose joins run on its select workers, or read one catalog or system table without a join',
+        statement: 'select',
+        routerJoin: true,
+      });
+      // Its audit event says it so (AC-382), never as a SELECT that writes or locks.
+      const event = (await cubeStoreEvents()).find(
+        (record) =>
+          record.event === 'sql-run' &&
+          (record.details as { sql?: string } | undefined)?.sql ===
+            'SELECT * FROM (VALUES (?)) a CROSS JOIN (VALUES (?)) b',
+      );
+      expect(event?.summary).toBe('Not run · a join Cube Store’s router would run');
+    } finally {
+      await turn('super', { on: false });
+    }
+  });
+
   it('keeps each run in its user’s history as Cube Store’s, and audits it at the root (AC-381, AC-382)', async () => {
     await turnOn();
     try {

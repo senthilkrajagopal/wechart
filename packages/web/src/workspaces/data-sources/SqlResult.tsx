@@ -50,6 +50,8 @@ export type SqlOutcome =
       readonly error: string;
       readonly reason: string;
       readonly statement: string | null;
+      /** A join Cube Store's router would run, which nothing could stop (T650, R64). */
+      readonly routerJoin?: true;
     }
   | { readonly outcome: 'failed'; readonly error: string; readonly durationMs: number | null }
   /** Not run for a reason of wechart's or xcube's: busy, away, another run going. */
@@ -352,10 +354,18 @@ export function SqlResult({
       return (
         <div className="sql-result" data-testid="sql-result">
           <Head kind="err" label="Not run" detail={at} />
-          <Note>
-            {result.error} {refusalSentence(result, sql, onCubeStore)} Nothing reached{' '}
-            {onCubeStore ? 'Cube Store' : 'the database'}.
-          </Note>
+          {result.routerJoin === true ? (
+            // Refused before it ran, which nothing could have stopped (T650, R64).
+            <Note>
+              {result.error} Join Cube Store’s tables, whose joins its workers run, or read one
+              catalog or system table without a join.
+            </Note>
+          ) : (
+            <Note>
+              {result.error} {refusalSentence(result, sql, onCubeStore)} Nothing reached{' '}
+              {onCubeStore ? 'Cube Store' : 'the database'}.
+            </Note>
+          )}
         </div>
       );
     case 'failed':

@@ -13784,6 +13784,34 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - After the last fixes: `workspace-references`, `export-import` and `deleting` together twice, 59 of 60, the one being `deleting.spec.ts:507` under load. `model`, `model-design`, `model-unpublished`, `draft-file-names`, `folder-models`, `country-map` and `import-single-user`: 43 of 44, the one being T479.
       - API 1835/1835; web 2636/2636.
 
+- [x] T650 (AC-375, AC-378) Refuse a Cube Store join its router would run, before it runs, and say why
+  - *R64 (2026-10-04):* refusing router-join queries before they run is yes, asked of xcube. Built at xcube `636ffa04b2` (`to-wechart/2026-10-07-2015-cube-store-refuse-router-joins.md`), which is in `2e611eae61` (T740). The coordinator queued it, 2026-10-08.
+  - Files: `docs/research/xcube-636ffa04b2.md` (new), `packages/api/src/xcube/sql-runner.ts`, `packages/api/src/routes/sql-runner.ts`, `packages/web/src/workspaces/data-sources/SqlResult.tsx`, each with its test, `e2e/security/sql-runner.spec.ts`
+  - Failing test:
+    - `xcube/sql-runner.test.ts`: a `400 not_read_only` with `reason: "cubestore_router_join"` is read as a router join, by `reason`, never `error`'s text.
+    - `routes/sql-cube-store.test.ts`: answered 400 in wechart's words, and audited as "Not run · a join Cube Store's router would run".
+    - `SqlResult.test.tsx`: the result says so, and what to run instead.
+    - `e2e/security/sql-runner.spec.ts`, on the image.
+  - Depends on: T549, T740
+  - *Done 2026-10-08:*
+    - **Before:** such a refusal read as a statement that isn't a SELECT: "On Cube Store, only SELECT and EXPLAIN run, one statement at a time." followed by xcube's words, and "Nothing reached Cube Store". Its audit summary was "Not run · a SELECT that writes or locks".
+    - **The client** reads `reason: "cubestore_router_join"` as `routerJoin: true`.
+    - **The API** answers `400 { outcome: 'refused', error, reason, statement: 'select', routerJoin: true }`. The `error` is "Not run: Cube Store’s router would run this join itself, and nothing could stop it once it started, not even Cube Store’s own timeout." The audit summary is "Not run · a join Cube Store’s router would run".
+    - **The page** says that, then "Join Cube Store’s tables, whose joins its workers run, or read one catalog or system table without a join."
+    - **The e2e** on compose's `2e611eae61`: the writer runs a 7-way cross join of `VALUES` on Cube Store's SQL tab.
+      - It is refused in about 2 s, in those words.
+      - Nothing is going, Run isn't held, and the API answers the same body.
+      - The next run, `SELECT 1`, finishes.
+      - It was red with the change set aside: the page said "On Cube Store, only SELECT and EXPLAIN run…".
+    - **Replaced, for the coordinator:** this case replaces T548's and T549's e2e of a router query stopped at 30 seconds and run to its end. That query was a join of `VALUES`, the kind now refused, so the image can't run it.
+      - The test-integrity hook flagged the removed assertions.
+      - AC-378's and AC-379's Cube Store sayings stay shown by the unit and component tests named in T548 and T549, not on the image: the stop, "runs to its end", the held next run, and no Cancel.
+      - On the image, a stopped Cube Store run would need a single catalog read, or a join of Cube Store's own tables, lasting over 30 s, and compose's Cube Store holds nothing that large. Whether AC-378 and AC-379 keep their ticks on that basis is a question.
+    - **Runs:**
+      - API: 1835 of 1836. `phase1-content.test.ts` failed, the known flake.
+      - Web: 2636 of 2637. `UnplacedCodes.test.tsx` failed in the full run and passed alone.
+      - `sql-runner.spec.ts`: 18/19 in chrome. `:727` typed `public.ordersLIMIT 1`, a keystroke dropped under load, unrelated.
+
 - [x] T740 (AC-336) Pin xcube 2e611eae61, which keeps an item's own rollup table names (R38), and show the move to items rebuilds nothing
   - *Added 2026-10-08 by the coordinator:* xcube's answer to T738's finding (`to-wechart/2026-10-08-1430-root-rollup-names.md`). The image is `ghcr.io/senthilkrajagopal/xcube:v1.7.45-2e611eae61@sha256:61c095d3…`. Its schema is still 14, so no reset is needed.
   - Files: `docs/research/xcube-2e611eae61.md` (new), `docker-compose.yml`, `deploy/helm/wechart/values.yaml`, `deploy/helm/values/docker-desktop.yaml`, `infra/xcube/fresh-start.sh`, `docs/deploy.md`, `packages/api/src/deploy/cube-image.test.ts`

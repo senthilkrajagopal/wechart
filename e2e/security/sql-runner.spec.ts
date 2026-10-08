@@ -966,23 +966,23 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
     });
 
     /**
-     * T548, T549 (AC-378, AC-379; R62, R64): Cube Store can't stop a query.
-     * One over `VALUES`, as here, its router runs, which its timeout can't
-     * end either: xcube says no end, and follows it until Cube Store answers
-     * (xcube 46ca0ce708, research xcube-46ca0ce708.md). The page offers no
-     * Cancel and says so, says the stopped run runs to its end, and holds its
-     * user's next run, on Cube Store and on a data source alike, until xcube
-     * says it has ended.
+     * T650 (R64; xcube 636ffa04b2, research xcube-636ffa04b2.md): a join
+     * Cube Store's router would run itself, which nothing could stop once it
+     * started, not even Cube Store's timeout, is refused before it runs. The
+     * page says so at once and why, Run isn't held, nothing is going, and the
+     * next run runs.
      *
-     * The query's work is bounded by its size: Cube Store's router computes
-     * one on past any timeout, starving every other (research
-     * xcube-2099b13f2d.md, "Correction").
+     * It replaces T548's and T549's case of a router query stopped at 30
+     * seconds and run to its end (AC-378, AC-379): that query, a join of
+     * `VALUES`, is the kind now refused, so the image runs no such query. A
+     * stop's sayings and the held next run stay shown by `SqlResult.test.tsx`,
+     * `SqlRunner.test.tsx` and `routes/sql-cube-store.test.ts`.
      */
-    test('says a stopped run is run to its end in Cube Store, offering no Cancel, and holds Run until it has ended (AC-378, AC-379)', async ({
+    test('refuses a join Cube Store’s router would run, at once, saying why, and holds nothing (T650)', async ({
       page: admin,
       browser,
     }) => {
-      test.setTimeout(300_000);
+      test.setTimeout(120_000);
       const on = await admin.request.put('/api/cube-store/sql-runner', {
         data: { on: true, readOnlyConfirmed: true },
       });
@@ -998,60 +998,35 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
         await page.keyboard.type(slow);
         const started = Date.now();
         await panel.getByRole('button', { name: 'Run', exact: true }).click();
-        await expect(panel.getByRole('button', { name: 'Running…' })).toBeDisabled();
-        // Nothing to cancel, and said so: Cube Store can't stop it (AC-379, R64).
-        await expect(panel.getByRole('button', { name: 'Cancel', exact: true })).toHaveCount(0);
-        await expect(panel.getByTestId('sql-no-cancel')).toHaveText(
-          'Cube Store can’t stop a query, so there’s no Cancel.',
-        );
         await expect(panel.getByTestId('sql-result-head')).toHaveText(
-          /^Stopped at 30 seconds at \d\d:\d\d:\d\d$/,
-          { timeout: 45_000 },
+          /^Not run at \d\d:\d\d:\d\d$/,
+          { timeout: 15_000 },
+        );
+        // Refused before it ran: as fast as Cube Store explains it.
+        expect(Date.now() - started).toBeLessThan(15_000);
+        await expect(panel.getByTestId('sql-result-note')).toHaveText(
+          'Not run: Cube Store’s router would run this join itself, and nothing could stop it once it started, not even Cube Store’s own timeout. Join Cube Store’s tables, whose joins its workers run, or read one catalog or system table without a join.',
         );
 
-        // No end, as xcube says: its router runs it to its end (T549).
-        const stopping = {
-          dataSource: null,
-          cubeStore: true,
-          startedAt: expect.any(String),
-          stopping: true,
-          endsBy: null,
-        };
+        // Nothing going, nothing held: Run is offered, and the next run runs.
         expect(await (await page.request.get('/api/sql-runs/going')).json()).toEqual({
-          going: stopping,
+          going: null,
         });
-        await expect(panel.getByTestId('sql-result-note')).toHaveText(
-          'The run hadn’t finished after 30 seconds, so wechart stopped waiting for it. Cube Store runs this query to its end; it can’t be stopped. Your next run waits until it has ended. Nothing came back. Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.',
-        );
-        const held = panel.getByTestId('sql-going-elsewhere');
-        await expect(held).toHaveText(
-          'Cube Store is running your last query to its end; it can’t be stopped. One run at a time: your next one runs once it has ended.',
-        );
-        await expect(panel.getByRole('button', { name: 'Run', exact: true })).toBeDisabled();
-
-        // Held on a data source too, the API refusing it, nothing run.
-        const elsewhere = await runOn(page.request, world.sourceId, 'SELECT 1');
-        expect(elsewhere.status(), await elsewhere.text()).toBe(409);
-        expect(await elsewhere.json()).toEqual({
-          outcome: 'going',
-          error:
-            'Cube Store is still finishing your last query. One run at a time: your next one runs once it has ended.',
-          going: stopping,
-        });
-        const again = await page.request.post('/api/cube-store/sql', {
-          data: { sql: 'SELECT 1' },
-        });
-        expect(again.status(), await again.text()).toBe(409);
-
-        // Ended, as xcube says once Cube Store answers it: Run is offered
-        // again, the result says so, and a run runs.
-        await expect(held).toHaveCount(0, { timeout: 150_000 });
-        // Lifted when Cube Store answered it, past the cap, not at the cap.
-        expect(Date.now() - started).toBeGreaterThan(35_000);
+        await expect(panel.getByTestId('sql-going-elsewhere')).toHaveCount(0);
         await expect(panel.getByRole('button', { name: 'Run', exact: true })).toBeEnabled();
-        await expect(panel.getByTestId('sql-result-note')).toHaveText(
-          'The run hadn’t finished after 30 seconds, so wechart stopped waiting for it. Cube Store can’t stop a query, so it finished this one on its own: it has since ended. Nothing came back. Narrow it with WHERE or LIMIT, or EXPLAIN it to see its plan.',
-        );
+        const answered = await page.request.post('/api/cube-store/sql', {
+          data: { sql: slow },
+        });
+        expect(answered.status(), await answered.text()).toBe(400);
+        expect(await answered.json()).toEqual({
+          outcome: 'refused',
+          error:
+            'Not run: Cube Store’s router would run this join itself, and nothing could stop it once it started, not even Cube Store’s own timeout.',
+          reason:
+            "Cube Store's router would run this query's join itself, and nothing stops that work once it starts, not even Cube Store's own timeout: join Cube Store's tables, whose joins run on its select workers, or read one catalog or system table without a join",
+          statement: 'select',
+          routerJoin: true,
+        });
         await panel.locator('.sql-editor .cm-content').click();
         await page.keyboard.press('ControlOrMeta+A');
         await page.keyboard.type('SELECT 1 AS one');

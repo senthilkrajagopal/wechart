@@ -60,6 +60,13 @@ export type SqlAnswer =
       readonly reason: string;
       readonly statement: string | null;
       readonly redactedSql: string | null;
+      /**
+       * A Cube Store join its router would run itself, which nothing could
+       * stop once it started (xcube 636ffa04b2, `reason:
+       * "cubestore_router_join"`; T650, R64). Read by `reason`, never by
+       * `error`'s text.
+       */
+      readonly routerJoin?: true;
     }
   /**
    * Stopped at its time cap, or cancelled, with the rows it read before the
@@ -209,7 +216,14 @@ export function xcubeSqlRunner({
         };
       // The SQL refused; any other 400 refuses the request, and is thrown (T532's review).
       if (status === 400 && code !== null && SQL_REFUSALS.has(code))
-        return { kind: 'refused', code, reason: error, statement, redactedSql };
+        return {
+          kind: 'refused',
+          code,
+          reason: error,
+          statement,
+          redactedSql,
+          ...(answer['reason'] === 'cubestore_router_join' ? { routerJoin: true as const } : {}),
+        };
       if (status === 422 && (code === 'timeout' || code === 'cancelled'))
         return {
           kind: 'stopped',

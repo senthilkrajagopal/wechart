@@ -139,6 +139,18 @@ describe('a run asked of xcube (T532)', () => {
           durationMs: 0,
         },
       },
+      // T650 (xcube 636ffa04b2): a Cube Store join its router would run, refused before it runs.
+      routerJoin: {
+        status: 400,
+        body: {
+          error:
+            'Cube Store’s router would run this query’s join itself, and nothing stops that work once it starts, not even Cube Store’s own timeout: join Cube Store’s tables, whose joins run on its select workers, or read one catalog or system table without a join',
+          code: 'not_read_only',
+          reason: 'cubestore_router_join',
+          statement: 'select',
+          redactedSql: 'SELECT * FROM (VALUES (?)) a CROSS JOIN (VALUES (?)) b',
+        },
+      },
       unconnected: {
         status: 502,
         body: {
@@ -174,6 +186,14 @@ describe('a run asked of xcube (T532)', () => {
       code: 'several_statements',
       statement: null,
     });
+    // Its reason read by `reason`, never by `error`'s text (T650; xcube's answer).
+    expect(await run('routerJoin')).toMatchObject({
+      kind: 'refused',
+      code: 'not_read_only',
+      statement: 'select',
+      routerJoin: true,
+    });
+    expect(await run('insert')).not.toHaveProperty('routerJoin');
     expect(await run('timeout')).toEqual({
       kind: 'stopped',
       how: 'timeout',

@@ -209,6 +209,31 @@ describe('a run on Cube Store (T536, AC-384; design 15’s H3)', () => {
     );
   });
 
+  // T650 (R64; xcube 636ffa04b2): refused before it ran, which nothing could
+  // have stopped; never said as a SELECT that writes, nor as one that reached Cube Store.
+  it('says a join Cube Store’s router would run wasn’t run, why, and what to run instead', () => {
+    render(
+      <SqlResult
+        result={{
+          outcome: 'refused',
+          error:
+            'Not run: Cube Store’s router would run this join itself, and nothing could stop it once it started, not even Cube Store’s own timeout.',
+          reason:
+            'Cube Store’s router would run this query’s join itself, and nothing stops that work once it starts, not even Cube Store’s own timeout: join Cube Store’s tables, whose joins run on its select workers, or read one catalog or system table without a join',
+          statement: 'select',
+          routerJoin: true,
+        }}
+        sql="SELECT * FROM (VALUES (1)) a CROSS JOIN (VALUES (2)) b"
+        startedAt={AT}
+        onDownload={vi.fn()}
+        onCubeStore
+      />,
+    );
+    expect(screen.getByTestId('sql-result-note').textContent).toBe(
+      'Not run: Cube Store’s router would run this join itself, and nothing could stop it once it started, not even Cube Store’s own timeout. Join Cube Store’s tables, whose joins its workers run, or read one catalog or system table without a join.',
+    );
+  });
+
   it('gives xcube’s own words where it says why, as for system.cache, and after a SHOW (T536’s review)', () => {
     const say = (statement: string, reason: string, sql: string) =>
       refusalSentence({ statement, reason }, sql, true);

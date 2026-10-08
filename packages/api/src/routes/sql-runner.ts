@@ -165,6 +165,13 @@ const CUBE_STORE_ITEM = { kind: 'cube-store', id: CUBE_STORE_TARGET, title: 'Cub
 const CUBE_STORE_ONLY_READS =
   'On Cube Store, only SELECT and EXPLAIN run, one statement at a time.';
 /**
+ * A join Cube Store's router would run itself: nothing could stop it once it
+ * started, not even Cube Store's timeout, so xcube refuses it before it runs
+ * (T650, R64; research xcube-636ffa04b2.md).
+ */
+const CUBE_STORE_ROUTER_JOIN =
+  'Not run: Cube Store’s router would run this join itself, and nothing could stop it once it started, not even Cube Store’s own timeout.';
+/**
  * Cube Store can't stop a query: a run stopped at its cap, or cancelled, runs
  * on in it until its own timeout at the latest, `endsBy` (T548, AC-378; R62;
  * xcube 2099b13f2d, research `xcube-2099b13f2d.md`).
@@ -230,9 +237,15 @@ function replyOf(answer: SqlAnswer, onCubeStore = false): RunReply {
         status: 400,
         body: {
           outcome: 'refused',
-          error: onCubeStore ? CUBE_STORE_ONLY_READS : ONLY_READS,
+          error:
+            answer.routerJoin === true
+              ? CUBE_STORE_ROUTER_JOIN
+              : onCubeStore
+                ? CUBE_STORE_ONLY_READS
+                : ONLY_READS,
           reason: answer.reason,
           statement: answer.statement,
+          ...(answer.routerJoin === true ? { routerJoin: true } : {}),
         },
       };
     case 'stopped': {
@@ -1011,6 +1024,7 @@ function summaryOf(
       return `${head} · ${rowsText(answer.rowCount)} · ${secondsText(answer.durationMs)}`;
     }
     case 'refused': {
+      if (answer.routerJoin === true) return 'Not run · a join Cube Store’s router would run';
       const kind = answer.statement;
       if (kind === null)
         return answer.code === 'several_statements'
