@@ -3657,7 +3657,9 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
 .refresh-worker-panel__head { display: flex; align-items: baseline; gap: 8px; }
 .refresh-worker-panel__head h2 { margin: 0; font-size: 14px; font-weight: 600; }
 .refresh-worker-panel__revision { margin-left: auto; font-size: 12px; color: var(--wc-text-secondary); }
-.refresh-worker-panel__summary { margin: 0; font-size: 12px; }
+/* F3's status lines, each with its icon (J1; T614). */
+.refresh-worker-panel__line { display: flex; gap: 6px; align-items: flex-start; margin: 0; font-size: 12px; }
+.refresh-worker-panel__line > svg { flex: none; margin-top: 1px; }
 .refresh-worker-panel h3 { margin: 4px 0 0; font-size: 12px; font-weight: 600; }
 .refresh-worker-panel__error {
   margin: 0;
@@ -4009,6 +4011,30 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
    it, and × goes back. Nothing is taken away. */
 @media (max-width: 1023.98px) {
   .jobs-wide { display: none; }
+  /* Pre-aggregations' rows stacked, as G8 draws them: the name, its folder
+     under it, then its state; no header row, its heads a reader's (J2, the
+     user's call R76; T614). Its roles are set on it, so it reads as a table. */
+  .build-panel__list,
+  .build-panel__list > tbody,
+  .build-panel__list > tbody > tr,
+  .build-panel__list > tbody > tr > td:not(.jobs-wide) { display: block; }
+  .build-panel__list > .build-panel__heads {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .build-panel__list > tbody > tr {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--wc-border-subtle);
+  }
+  .build-panel__list > tbody > tr > td { height: auto; padding: 1px 0; border: 0; }
+  .build-panel__list > tbody > tr > [data-testid='preagg-folder'] {
+    font-size: var(--wc-text-xs-size);
+    color: var(--wc-text-secondary);
+  }
   .jobs-workspace:has(> [role='tabpanel']:not([hidden]) .build-panel) { margin-right: 0; }
   .build-panel .admin-pane:has(> .admin-pane__empty) { display: none; }
   /* The sheet as the .source-pane sheets are (designs 01, 11 and 13; T640):

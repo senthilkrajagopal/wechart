@@ -732,35 +732,54 @@ export function BuildPanel({
               </span>
             </div>
             <TableScroll label="Pre-aggregations">
-              <table className="query-log" aria-label="Pre-aggregations">
-                <thead>
-                  <tr>
-                    <th scope="col">Pre-aggregation</th>
+              {/*
+                Below 1,024 px its rows are drawn stacked, as G8 draws them
+                (J2, the user's call R76; T614): a table's roles, set here,
+                are kept whatever display draws it (research table.md).
+              */}
+              {/* A td's own role, cell, given it explicitly: no other role is given it. */}
+              {/* eslint-disable jsx-a11y/no-redundant-roles, jsx-a11y/no-interactive-element-to-noninteractive-role */}
+              <table
+                className="query-log build-panel__list"
+                aria-label="Pre-aggregations"
+                role="table"
+              >
+                {/* G8 draws no header row over its stacked rows: the heads are a reader's there. */}
+                <thead className="build-panel__heads" role="rowgroup">
+                  <tr role="row">
+                    <th scope="col" role="columnheader">
+                      Pre-aggregation
+                    </th>
                     {/* Each row's folder, after its name (pin 4). */}
-                    <th scope="col">Folder</th>
-                    <th scope="col">Status</th>
+                    <th scope="col" role="columnheader">
+                      Folder
+                    </th>
+                    <th scope="col" role="columnheader">
+                      Status
+                    </th>
                     {/* Below 1,024 px, these move into the sheet (design 16, G8). */}
-                    <th scope="col" className="jobs-wide">
+                    <th scope="col" role="columnheader" className="jobs-wide">
                       Last built
                     </th>
-                    <th scope="col" className="jobs-wide">
+                    <th scope="col" role="columnheader" className="jobs-wide">
                       Started by
                     </th>
-                    <th scope="col" className="jobs-wide">
+                    <th scope="col" role="columnheader" className="jobs-wide">
                       Trigger
                     </th>
-                    <th scope="col" className="num jobs-wide">
+                    <th scope="col" role="columnheader" className="num jobs-wide">
                       Partitions
                     </th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody role="rowgroup">
                   {listed.map((row) => {
                     const { id, trigger } = row;
                     const shownAs = shownOf(row);
                     return (
                       <tr
                         key={id}
+                        role="row"
                         // The sheet's × gives focus back to it (G8).
                         data-preagg={id}
                         // Selecting a row shows it in the pane (AC-228): a click
@@ -772,7 +791,7 @@ export function BuildPanel({
                           setSelected(id);
                         }}
                       >
-                        <td className="query-log__query">
+                        <td role="cell" className="query-log__query">
                           {/* Its name, a button read as the row is (design 16's
                             keyboard table): Enter or Space selects it, ↑ ↓ go
                             to the next row's (T611). Its pane's Open in Model
@@ -790,19 +809,21 @@ export function BuildPanel({
                             <span data-testid="preagg-name">{shownAs.name}</span>
                           </button>
                         </td>
-                        <td data-testid="preagg-folder">{shownAs.folder ?? 'Shared'}</td>
-                        <td>
+                        <td role="cell" data-testid="preagg-folder">
+                          {shownAs.folder ?? 'Shared'}
+                        </td>
+                        <td role="cell">
                           {/* The state of its partitions that most needs attention (AC-391, rule 22). */}
                           <RowStatus row={row} testId="row-state" />
                         </td>
-                        <td className="jobs-wide">
+                        <td role="cell" className="jobs-wide">
                           {row.lastBuiltAt == null ? (
                             <span className="muted">—</span>
                           ) : (
                             <BuiltWhen iso={row.lastBuiltAt} />
                           )}
                         </td>
-                        <td className="jobs-wide">
+                        <td role="cell" className="jobs-wide">
                           {/* Who started that build from wechart; "—" when wechart didn't (pin 7). */}
                           {row.startedBy == null ? (
                             <span className="muted">—</span>
@@ -810,7 +831,7 @@ export function BuildPanel({
                             <StarterLabel starter={row.startedBy} />
                           )}
                         </td>
-                        <td className="jobs-wide">
+                        <td role="cell" className="jobs-wide">
                           {/* "Not scheduled" has its icon (design 16, pin 8; T551). */}
                           {row.triggerKind === 'not-scheduled' ? (
                             <Status
@@ -822,7 +843,7 @@ export function BuildPanel({
                             (trigger ?? '—')
                           )}
                         </td>
-                        <td className="num jobs-wide">
+                        <td role="cell" className="num jobs-wide">
                           {row.partitions == null ? (
                             <span className="muted">—</span>
                           ) : (
@@ -834,6 +855,7 @@ export function BuildPanel({
                   })}
                 </tbody>
               </table>
+              {/* eslint-enable jsx-a11y/no-redundant-roles, jsx-a11y/no-interactive-element-to-noninteractive-role */}
             </TableScroll>
           </>
         )}

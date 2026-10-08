@@ -243,6 +243,33 @@ describe('each pre-aggregation’s row (T550, AC-391)', () => {
     );
   });
 
+  /**
+   * T614 (AC-399; design 16, G8; J2, the user's call R76): below 1,024 px the
+   * rows are drawn stacked, so the table's roles are set on it explicitly,
+   * which no display it is drawn with can take away (research table.md).
+   */
+  it('gives its table, row groups, rows, heads and cells their roles explicitly', async () => {
+    shown([[ROW]]);
+    const row = await rowOf(ID);
+    const table = row.closest('table') as HTMLElement;
+
+    expect(table.getAttribute('role')).toBe('table');
+    expect(
+      [...table.querySelectorAll('thead, tbody')].map((group) => group.getAttribute('role')),
+    ).toEqual(['rowgroup', 'rowgroup']);
+    expect(
+      [...table.querySelectorAll('tr')].every((each) => each.getAttribute('role') === 'row'),
+    ).toBe(true);
+    expect(
+      [...table.querySelectorAll('thead th')].map((head) => head.getAttribute('role')),
+    ).toEqual(Array(7).fill('columnheader'));
+    expect([...row.querySelectorAll('td')].map((cell) => cell.getAttribute('role'))).toEqual(
+      Array(7).fill('cell'),
+    );
+    // Its heads drawn for a reader alone: G8 draws no header row over the stacked rows.
+    expect(table.querySelector('thead')?.classList.contains('build-panel__heads')).toBe(true);
+  });
+
   /** T611 (AC-399; design 16's keyboard table, "A row in a list"). */
   it('names each row by a button read as the row is, and ↑ ↓ go from row to row', async () => {
     shown([

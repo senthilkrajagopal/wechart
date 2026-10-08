@@ -1,6 +1,7 @@
 import { useEffect, useRef, type RefObject } from 'react';
 
 import { clockOrWhenOf, exactOf } from '../../shell/formatTime';
+import { StatusIcon, type StateKind } from '../../shell/StatusIcon';
 import { Status } from './StateBadge';
 
 /**
@@ -48,18 +49,44 @@ export const minuteOf = (iso: string) => clockOrWhenOf(new Date(iso));
 /** "14:39:52", to the second, as the summary and the workers' table say it. */
 const lastRunOf = (iso: string) => clockOrWhenOf(new Date(iso), new Date(), { seconds: true });
 
-/** The panel's first line, as F3 says it. */
-function summaryOf(status: RefreshWorkerStatus): string {
+/**
+ * F3's first line: the workers' state, "Running · last run 14:39:52, on the
+ * current revision", or behind it. While a module fails, xcube's status is
+ * the failure's, so the workers' state is read from the workers themselves
+ * against the model's revision (J1; T614).
+ */
+function workerLineOf(report: RefreshWorkerReport): { kind: StateKind; words: string } {
+  const { status } = report;
+  const behind = (revision: number, of: number, at: string) => ({
+    kind: 'warn' as const,
+    words: `Behind · on revision ${String(revision)} of ${String(of)}, last run ${lastRunOf(at)}`,
+  });
+  const running = (at: string) => ({
+    kind: 'ok' as const,
+    words: `Running · last run ${lastRunOf(at)}, on the current revision`,
+  });
   switch (status.state) {
     case 'running':
-      return `Running · last run ${lastRunOf(status.lastRunAt)}, on the current revision`;
+      return running(status.lastRunAt);
     case 'behind':
-      return `Behind · on revision ${String(status.revision)} of ${String(status.of)}, last run ${lastRunOf(status.lastRunAt)}`;
-    case 'failing':
-      return `${status.modules === 1 ? '1 module’s last run' : `${String(status.modules)} modules’ last runs`} failed · ${minuteOf(status.lastRunAt)}`;
+      return behind(status.revision, status.of, status.lastRunAt);
+    case 'failing': {
+      const oldest = Math.min(...report.workers.map((worker) => worker.revision));
+      return report.modelRevision !== null &&
+        report.workers.length > 0 &&
+        oldest < report.modelRevision
+        ? behind(oldest, report.modelRevision, status.lastRunAt)
+        : running(status.lastRunAt);
+    }
     default:
-      return 'No refresh worker has run this model';
+      return { kind: 'idle', words: 'No refresh worker has run this model' };
   }
+}
+
+/** F3's second line, while a module fails: "1 module's last run failed · 14:39". */
+function failingLineOf(status: RefreshWorkerStatus): string | undefined {
+  if (status.state !== 'failing') return undefined;
+  return `${status.modules === 1 ? '1 module’s last run' : `${String(status.modules)} modules’ last runs`} failed · ${minuteOf(status.lastRunAt)}`;
 }
 
 /**
@@ -112,6 +139,8 @@ export function RefreshWorkerPanel({
     };
   }, [opener]);
   const failing = report.modules.filter((module) => module.failing);
+  const workerLine = workerLineOf(report);
+  const failingLine = failingLineOf(report.status);
   return (
     <section
       ref={section}
@@ -123,16 +152,37 @@ export function RefreshWorkerPanel({
         <h2 ref={heading} tabIndex={-1}>
           Refresh worker
         </h2>
-        {report.modelRevision === null ? null : (
+        {/* A Super-Admin's, as F2 heads it; F3 draws a member's without it (J1). */}
+        {!report.errorsShown || report.modelRevision === null ? null : (
           <span className="refresh-worker-panel__revision" data-testid="model-revision">
             Model revision {String(report.modelRevision)}
           </span>
         )}
       </header>
-      <p className="refresh-worker-panel__summary" data-testid="refresh-summary">
-        {summaryOf(report.status)}
-      </p>
-      {report.workers.length === 0 ? null : (
+      {/*
+        A member's panel is F3's status lines, the help under a failure, and
+        no tables; a Super-Admin's is F2's tables with no summary over them,
+        save where there is nothing to list (J1, the user's call R76; T614).
+      */}
+      {!report.errorsShown || (report.workers.length === 0 && report.modules.length === 0) ? (
+        <p className="refresh-worker-panel__line" data-testid="refresh-summary">
+          <StatusIcon kind={workerLine.kind} />
+          <span>{workerLine.words}</span>
+        </p>
+      ) : null}
+      {report.errorsShown || failingLine === undefined ? null : (
+        <>
+          <p className="refresh-worker-panel__line" data-testid="refresh-failing">
+            <StatusIcon kind="err" />
+            <span>{failingLine}</span>
+          </p>
+          <p className="help">
+            A module can hold cubes from several folders, so its error can name some you can’t see.
+            A Super-Admin can see it.
+          </p>
+        </>
+      )}
+      {!report.errorsShown || report.workers.length === 0 ? null : (
         <>
           <h3>Workers</h3>
           <table className="query-log" aria-label="Workers">
@@ -163,7 +213,7 @@ export function RefreshWorkerPanel({
           </table>
         </>
       )}
-      {report.modules.length === 0 ? null : (
+      {!report.errorsShown || report.modules.length === 0 ? null : (
         <>
           <h3>Modules</h3>
           <table className="query-log" aria-label="Modules">
@@ -202,24 +252,19 @@ export function RefreshWorkerPanel({
           </table>
         </>
       )}
-      {failing.length === 0 ? null : report.errorsShown ? (
-        failing.map((module) =>
-          module.error === undefined ? null : (
-            <pre
-              key={module.module}
-              className="refresh-worker-panel__error"
-              data-testid={`module-error-${module.module}`}
-            >
-              {module.error}
-            </pre>
-          ),
-        )
-      ) : (
-        <p className="help">
-          A module can hold cubes from several folders, so its error can name some you can’t see. A
-          Super-Admin can see it.
-        </p>
-      )}
+      {!report.errorsShown
+        ? null
+        : failing.map((module) =>
+            module.error === undefined ? null : (
+              <pre
+                key={module.module}
+                className="refresh-worker-panel__error"
+                data-testid={`module-error-${module.module}`}
+              >
+                {module.error}
+              </pre>
+            ),
+          )}
     </section>
   );
 }

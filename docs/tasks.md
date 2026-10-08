@@ -8202,13 +8202,19 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - The refresh worker's panel: F2 draws a Super-Admin's with no summary line, and F3 a member's with two status lines and no "Model revision", but F3's caption says "the same, without module errors", which reads as keeping the tables. As built: both have the summary and the tables.
     - The list below 1,024 px: G8 draws stacked rows; as built it is a table of name, folder and state, which keeps a screen reader's row and column reading.
     - D5's two columns: drawn in a frame wider than the 400 px pane; as built, one column.
-  - **Settled 2026-10-08 (R76: jobs-J1, jobs-J2, jobs-J3; `docs/design/decisions-2026-10-08.md`).** T613 stays ticked. What J1 and J2 call for is still to be built, and no task builds it yet.
-    - **jobs-J1, as drawn:**
-      - a Super-Admin's refresh worker panel (F2) has the worker and module panel with Cube's error, and no summary line;
-      - a member's (F3) has the status lines only: the badge, and that a module failed, without the error. It has no Workers or Modules tables and no "Model revision".
-      - This is design 16 Q4's default, which the user accepted in R56.
-    - **jobs-J2:** below 1,024 px the Jobs and Schedules lists are G8's stacked rows. They keep table semantics for screen readers, for example `role=table` with `rowgroup` and `row` on the stacked blocks, not display changes that strip them.
-    - **jobs-J3:** a refresh key's pane stays one column, as built. D5 is drawn wider than its 400 px pane. Nothing to build.
+  - **Settled 2026-10-08 (R76: jobs-J1, jobs-J2, jobs-J3; `docs/design/decisions-2026-10-08.md`).** T613 stays ticked. All three were decided as J1–J3 and are built or kept in T614 (below).
+- [x] T614 (AC-399) Design 16's refresh worker panel as F2 and F3 draw it, and Jobs' list below 1,024 px as G8 draws it *(added 2026-10-08; the coordinator, under the user's delegation, R76: J1 (a), J2 (a), J3 (b))*
+  - What: J1, the refresh worker's panel exactly as drawn: a Super-Admin's (F2) with Model revision and the Workers and Modules tables, and no summary line; a member's (F3) with its two status lines, the help under the failed one, and no tables or Model revision. J2, Pre-aggregations' rows stacked below 1,024 px, the name, its folder, then its state, no header row drawn, with the table's roles set explicitly so it still reads as rows of cells. J3, D5 stays one column, as two don't fit the 400 px pane.
+  - Depends on: T613
+  - Files: `packages/web/src/workspaces/jobs/{RefreshWorkerPanel,BuildPanel}.tsx`, `packages/web/src/shell/styles.ts` (+ `Health.test.tsx`, `BuildPanel.test.tsx`), `e2e/jobs.spec.ts`
+  - Failing test: `Health.test` (F2 with no summary line; F3's two lines with their icons, the help, no tables, no Model revision; a member told "Behind" from the workers while a module fails; the day named in a member's line and in a Super-Admin's tables), `BuildPanel.test` (the table's, row groups', rows', heads' and cells' roles set explicitly; its heads a reader's); e2e at 390 px (each row a block, the name over the folder over the state, three cells read in it, no header row drawn).
+  - **Done 2026-10-08.**
+    - **As built.** As above. While a module fails, xcube's status is the failure's, so a member's first line reads the workers against the model's revision: "Behind · on revision 11 of 12, …" where one is behind, else "Running · …, on the current revision".
+    - **Implementer's calls, for the user to confirm or change:**
+      - A Super-Admin whose model no worker has run sees the one line "No refresh worker has run this model", rather than an empty panel: F2 draws no such case.
+      - The stacked rows are Pre-aggregations' alone, the list G8 draws; Run history, the queue and Schedules keep their narrow tables.
+      - Health.test's T477 test was split in two, a member's line and a Super-Admin's tables, since one panel no longer has both: every assertion is kept, in one or the other.
+    - **AC-399 ticked.** Every item of the design 16 audit (T610) is built, each with a passing test on the rendered surface (T559, T560, T473, T610, T640, T611–T614: their unit tests, and `e2e/{jobs,schedules,sheets,acceleration,keyboard-coverage,status-labels}.spec.ts`, `e2e/security/jobs-scope.spec.ts`), or kept by a recorded decision: R68 ("Cube's default: every hour", "wechart didn't see how it ended"), UX-111 (no page speaks of phases, over "…in the next phase"), R76 (J3, D5 in one column), and the implementers' calls of T611–T614, each for the user to confirm or change.
 
 ## P2.11 Quick calculations and calculation requests (F6, returned)
 
@@ -14920,7 +14926,7 @@ These tasks are what group 3's check of the open criteria found missing. Each is
 | AC-388 | T541 | AC-389 | T540 | AC-390 | T544 |
 | AC-391 | T550 | AC-392 | T552 | AC-393 | T553 |
 | AC-394 | T554 | AC-395 | T555 | AC-396 | T556 |
-| AC-397 | T557 | AC-398 | T558 | AC-399 | T559, T560, T473, T610, T640, T611, T612, T613 |
+| AC-397 | T557 | AC-398 | T558 | AC-399 | T559, T560, T473, T610, T640, T611, T612, T613, T614 |
 | AC-281 (again, rebinding) | T542 | AC-283 (again, use-only copies) | T543 | | |
 | AC-354 (again, copy on use) | T538 | | | | |
 | AC-296 | T370 | AC-297 | T371, T378, T559, T504 | AC-298 | T332, T333, T335, T346, T352, T362, T368, T441, T581 |

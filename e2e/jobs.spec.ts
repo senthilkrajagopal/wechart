@@ -876,6 +876,22 @@ test('below 1,024 px the list keeps name, folder and state, and the pane is a fu
     await expect(table.getByRole('columnheader', { name: shown, exact: true })).toBeVisible();
   for (const moved of ['Last built', 'Started by', 'Trigger', 'Partitions'])
     await expect(table.getByRole('columnheader', { name: moved, exact: true })).toBeHidden();
+  // Stacked rows as G8 draws them: the name, its folder under it, then its
+  // state, each row a block (J2, the user's call R76; T614), still read as a
+  // table's row of cells.
+  await expect(row).toHaveCSS('display', 'block');
+  const tops = await Promise.all(
+    [
+      row.getByTestId('preagg-name'),
+      row.getByTestId('preagg-folder'),
+      row.getByTestId('row-state'),
+    ].map(async (each) => (await each.boundingBox())?.y ?? Number.NaN),
+  );
+  expect(tops[1]! > tops[0]! && tops[2]! > tops[1]!, JSON.stringify(tops)).toBe(true);
+  await expect(row.getByRole('cell')).toHaveCount(3);
+  // No header row drawn over them, as G8 has none; its heads there for a reader.
+  await expect(table.locator('thead')).toHaveClass(/\bbuild-panel__heads\b/);
+  expect((await table.locator('thead').boundingBox())?.height ?? 0).toBeLessThanOrEqual(1);
   // No pane until one is chosen: the list has the width.
   await expect(page.getByRole('complementary', { name: 'Pre-aggregation details' })).toBeHidden();
   // A sheet over the page: a modal dialog, as the .source-pane sheets are (T611).
