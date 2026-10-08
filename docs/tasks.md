@@ -13416,6 +13416,24 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - `generate-in-workspace.spec.ts`, on the image: a table whose name needs changing is suggested in the grammar, its name edited, and saved under the edited name.
   - Depends on: T724, T726
   - *Added 2026-10-08 by the coordinator:* the gap T724's review found. No task covered AC-249's R73 suggestions or the editable name.
+  - *Noted (2026-10-08):*
+    - Where the name is suggested, by the coordinator's call: in the API's scaffold step, `model/introspection.ts` `checked`, through `model/suggestNames.ts`. Each cube's name, its file, and every join in the batch that targets it (its `name`, and the `{cube}`/`{cube.member}` references in its `sql`) are renamed together. The rest of the file stays as Cube wrote it, so the pane, its clash check and the drafts all read the suggested name. Source: research `cube/introspection-api.md`, "Generation rules" and "Cube names and the rest of the model": scaffold names depend on the batch, joins are named for their target cube and are only between the batch's tables, and a renamed cube needs the joins that target it rewritten.
+    - Only R73's two rules are applied; any other name outside the grammar keeps Cube's, and the model editor holds it (T723) until the user edits it.
+    - After the review:
+      - A suggestion another cube of the batch holds, in any case, is numbered `_2`, `_3`… as Cube's scaffold numbers a name the batch has ("Generation rules"). So `class` beside `t_class` becomes `t_class_2`, never a second `t_class` that would overwrite the first draft.
+      - A file the YAML library can't read keeps Cube's text: only its cube and file names change.
+      - A rewritten file keeps Cube's lines: no folding (`lineWidth: 0`) and no padding in flow maps (`flowCollectionPadding: false`). Research `yaml.md` now records both, and that `toString()` throws on a document with errors.
+      - The reviewer reads the fork's `toSnakeCase` as already collapsing a run of `_`, so the scaffold would answer `user__events` as `user_events` itself. That is not verified here, and the research doesn't say it. The `__` rule is kept, since it is harmless either way, but the e2e should use a reserved word or a leading digit.
+    - Where it is edited, by the coordinator's call: in the model editor, as any draft's name is, before its first Save. The Generate pane gets no field, since design 11 has none.
+    - Tests:
+      - `model/suggestNames.test.ts`: the three examples, a joined batch renamed together, and a batch already in the grammar left untouched.
+      - `model/introspection.test.ts`: the route answers `class` as `t_class` in `t_class.yml`.
+      - `routes/generate-names.test.ts`: a generated cube's name edited before its first save is held to the grammar, then said only as in use, and a free name saves. This passed on T703's and T705's checks as they were; it shows the edit is checked like any draft's name.
+    - **Not done: the e2e on the image.** The sample database has no table whose name breaks the grammar, so `generate-in-workspace.spec.ts` can't generate one. There are two ways to get one, both outside my brief, so they go to the coordinator:
+      - add a table such as `generate."1_<project>_orders"` to `infra/sample-db/generate.sql` and re-seed;
+      - have the spec make and drop it itself through `docker exec wechart-sample-db psql`, as `e2e/security/sql-runner.spec.ts` already does.
+
+      The task stays unticked until that is settled.
 
 ### AC-353: R70's identity warning (with T509)
 

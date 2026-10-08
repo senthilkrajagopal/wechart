@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { USER } from '../auth/guard';
 import type { CubeClient } from '../cube/client';
 import { checkScaffold, type UnmappedColumn } from './scaffoldCheck';
+import { withSuggestedNames } from './suggestNames';
 
 /**
  * The browser's way to a data source's catalog (T145, AC-139): the five
@@ -279,6 +280,8 @@ interface Answer {
 }
 
 interface ScaffoldedCube {
+  readonly cube: string;
+  readonly fileName: string;
   readonly content: string;
   readonly table?: Table;
   readonly unmappedColumns: readonly UnmappedColumn[];
@@ -289,7 +292,8 @@ function checked(scaffold: unknown, columns: unknown): unknown {
   const tables =
     (columns as { tables?: { schema: string; name: string; columns: Column[] }[] } | null)
       ?.tables ?? [];
-  const cubes = (scaffold as { cubes?: ScaffoldedCube[] } | null)?.cubes ?? [];
+  // Each named in the grammar, its joins with it (T734, AC-249; R73).
+  const cubes = withSuggestedNames((scaffold as { cubes?: ScaffoldedCube[] } | null)?.cubes ?? []);
   return {
     cubes: cubes.map((cube) => {
       const table = tables.find(

@@ -277,3 +277,37 @@ describe('a generated cube’s name (T724, AC-249, AC-424)', () => {
     expect(await fileIn(folderId, shared(STOCK))).toBeUndefined();
   });
 });
+
+/**
+ * T734 (AC-249, AC-426, AC-422; R73): a generated cube's suggested name,
+ * edited in the model editor before its first save, is checked as any
+ * draft's name is: outside the grammar it is refused, in use it is said only
+ * as in use, and a free name in the grammar saves.
+ */
+describe('a generated cube’s name, edited before it is saved (T734)', () => {
+  it('is checked as any draft’s name: the grammar, then in use, and a free one saves', async () => {
+    const folderId = await project();
+    const path = `cubes/t_class_${MARK}.yml`;
+    const edited = (name: string) => generated(folderId, [{ path, content: cube(name, 'class') }]);
+
+    const misnamed = await edited('Class__2');
+    expect(misnamed.statusCode, misnamed.body).toBe(422);
+    expect(misnamed.json<{ errors: { message: string }[] }>().errors.map((e) => e.message)).toEqual(
+      [
+        '“Class__2” isn’t a name: start with a letter, then use letters, digits and single underscores, not ending in one, at most 40 characters.',
+      ],
+    );
+
+    const taken = await edited(ORDERS);
+    expect(taken.statusCode, taken.body).toBe(422);
+    expect(taken.json<{ errors: unknown[] }>().errors).toEqual([
+      { path, message: `The name “${ORDERS}” is already in use.` },
+    ]);
+    expect(await fileIn(folderId, path)).toBeUndefined();
+
+    const free = `classes_${MARK}`;
+    const saved = await edited(free);
+    expect(saved.statusCode, saved.body).toBe(200);
+    expect((await fileIn(folderId, path))?.content).toBe(cube(free, 'class'));
+  });
+});

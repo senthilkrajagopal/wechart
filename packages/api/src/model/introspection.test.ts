@@ -174,6 +174,71 @@ describe('browsing a data source through wechart (AC-139)', () => {
     await app.close();
   });
 
+  /**
+   * T734 (AC-249; R73): a cube whose table's name breaks the grammar is
+   * answered under its suggested name, its file named for it, and still
+   * checked against its table.
+   */
+  it('answers a generated cube under its name suggested in the grammar', async () => {
+    const { app } = cubeAnswering((path) =>
+      path.endsWith('/columns')
+        ? json({
+            tables: [
+              { schema: 'public', name: 'class', columns: [{ name: 'id', rawType: 'integer' }] },
+            ],
+          })
+        : json({
+            cubes: [
+              {
+                cube: 'class',
+                fileName: 'class.yml',
+                table: { schema: 'public', table: 'class' },
+                content: [
+                  'cubes:',
+                  '  - name: class',
+                  '    sql_table: public.class',
+                  '    dimensions:',
+                  '      - {name: id, sql: id, type: number, primary_key: true}',
+                  '    measures:',
+                  '      - {name: count, type: count}',
+                  '',
+                ].join('\n'),
+                unmappedColumns: [],
+              },
+            ],
+          }),
+    );
+
+    const scaffold = await app.inject({
+      method: 'POST',
+      url: '/api/introspection/sources/default/scaffold',
+      payload: { tables: [{ schema: 'public', table: 'class' }] },
+    });
+    expect(scaffold.json()).toEqual({
+      cubes: [
+        {
+          cube: 't_class',
+          fileName: 't_class.yml',
+          table: { schema: 'public', table: 'class' },
+          content: [
+            'cubes:',
+            '  - name: t_class',
+            '    sql_table: public.class',
+            '    dimensions:',
+            '      - {name: id, sql: id, type: number, primary_key: true}',
+            '    measures:',
+            '      - {name: count, type: count}',
+            '',
+          ].join('\n'),
+          unmappedColumns: [],
+          countMeasure: true,
+          unmarkedKeys: [],
+        },
+      ],
+    });
+    await app.close();
+  });
+
   /** AC-139 `Fails when: … a column is dropped without saying so` (research, "Silent losses"). */
   it('says which columns a generated cube lost that Cube did not say, and whether its count is left', async () => {
     const { app } = cubeAnswering((path) =>
