@@ -13090,7 +13090,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - `routes/names.test.ts`: model files and dashboards stay unique per folder and free across folders (AC-270, AC-271). A cube's or data source's name is no longer free across folders.
   - Depends on: T704
 
-- [ ] T706 [P] (AC-423, AC-291, AC-275) Keep a landed cube's, view's or data source's name: no rename through the API or an edit copy's proposal, while titles and drafts' names still change
+- [x] T706 [P] (AC-423, AC-291, AC-275) Keep a landed cube's, view's or data source's name: no rename through the API or an edit copy's proposal, while titles and drafts' names still change
   - Files:
     - `packages/api/src/routes/data-sources.ts`: a change of a landed data source's `name` is refused, and a workspace draft's is taken;
     - `packages/api/src/routes/workspace-models.ts` and `proposal-models.ts`: an edit copy declaring a name other than its original's;
@@ -13105,6 +13105,16 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - A draft's name changes before it lands (AC-423).
     - A delete of a name a chart still uses is still refused, naming that chart (AC-275).
   - Depends on: none
+  - **Done 2026-10-07.**
+    - `routes/data-sources.ts`: a rename of a data source outside a workspace (landed; with sign-in off, every one) is refused, 409, "“<name>” has landed, so its name is fixed. Its description can still change." A workspace draft's is taken as before; a copy's was already refused. So a landed one's name never reaches xcube's landing.
+    - `routes/workspace-models.ts`: saving an edit copy whose cube or view declares a name other than its original's, as its folder has it now, is refused, 409, saying the name is fixed and the title can still change. A draft, a use-only copy (T717's) and a copy whose original is gone are not held to it.
+    - `routes/proposal-models.ts`: proposing such a copy is refused the same way (a copy stored before the rule).
+    - `model/landing.ts`: `planLanding` refuses, at approval, a copy declaring a name other than its original's, at its path or elsewhere (where it would have landed beside it). Its rename case and `renamedAway` are gone; so is the approval's "still used" check of a name renamed away (`publish.ts`), which nothing can now reach.
+    - `model/publish.ts`: a direct publish (no workspaces) of a file declaring other names than its folder's file at that path is refused, whether or not anything uses the name. The delete's "still used" refusal stays (`inUse`).
+    - `model/references.ts` had no rename refusal of its own: it was `publish.ts`'s, above.
+    - **Done tasks' tests brought to the rule:** `model-delete.test.ts` (T428's renames, now refused outright), `model/landing.test.ts` (T451's rename case is a refusal; a title-only copy lands over its original), `routes/proposal-landing.test.ts` (T451's "rename at approval while a chart uses it" is refused at the copy's save), `routes/names.test.ts` (T336's data-source rename), `routes/shared-in-place.test.ts` (T502's in-place data-source rename), `access/data-sources.test.ts` (T362's health kept through a description, not a rename).
+    - **Tests:** `routes/fixed-names.test.ts` (8): a landed data source's rename refused and its name kept; a workspace draft's taken; an edit copy's cube and view renames refused at save, its file unchanged; such a copy refused at propose, and at approval with nothing landed; a title-only copy saved, proposed and landed; a draft model renamed; a delete of a used cube refused naming the chart. Full unit suite: API 1699/1700, the one being `jobs/history.test.ts`, which fails alone on the branch's base too (see T700).
+    - **ACs not ticked:** AC-423 also asks that no way to rename be offered, and that a landed model file offer no Rename (T722). AC-291's move rules are T714's and T715's. AC-275 stays ticked; its delete half is shown again here.
 
 - [ ] T707 (AC-427) Let a deleted cube's, view's or data source's name be taken again
   - Files: `packages/api/src/model/names.ts` (landed names read after deletes), `packages/api/src/routes/draft-names.test.ts`, `e2e/security/global-names.spec.ts`

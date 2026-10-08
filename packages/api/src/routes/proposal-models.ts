@@ -7,6 +7,7 @@ import { declaredIn } from '../model/split';
 import type { StoredModelFile } from '../repos/model-files';
 import type { ProposedItem } from '../repos/proposals';
 import { XCUBE_ROOT, xcubeIdOf } from '../xcube/folders';
+import { keepsItsName } from './workspace-models';
 
 /**
  * The workspace models a proposal holds (T350, AC-285; design 05, states A
@@ -230,6 +231,12 @@ export function proposalModels(deps: ProposalModelDeps) {
     const landsIn = model.file.targetFolderId!;
     if (model.file.origin?.useOnly === true && landsIn === model.file.origin.folderId)
       throw usedOnly(model.file.path);
+    // An edit copy keeps its landed original's name (T706, AC-423).
+    if (model.file.origin !== null && model.file.origin.useOnly !== true) {
+      const original = await deps.files.byId(model.file.origin.id);
+      const fixed = original === undefined ? undefined : declaredIn(original.content)[0]?.name;
+      if (fixed !== undefined && fixed !== model.name) throw new ModelRefusal(keepsItsName(fixed));
+    }
     const replaced = await replacedIn(landsIn, model.name);
     return {
       kind: 'model',

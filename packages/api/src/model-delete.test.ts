@@ -391,8 +391,12 @@ describe('a folder holding models (T428)', () => {
   });
 });
 
-describe('renaming a model item (T428, AC-275)', () => {
-  it('refuses a publish that renames a cube a chart still names, naming the chart', async () => {
+/**
+ * A landed name is fixed (T706, AC-423; `[R71]` 3): T428's refusal of a
+ * rename while something still names it gives way to a refusal of any rename.
+ */
+describe('renaming a model item (T428, AC-275; T706, AC-423)', () => {
+  it('refuses a publish that renames a cube a chart still names, and one nothing names', async () => {
     const { app, store } = await serving([
       {
         kind: 'dashboard',
@@ -407,21 +411,25 @@ describe('renaming a model item (T428, AC-275)', () => {
       url: '/api/model/publish',
       payload: { folderId: 'sales', files: [cubeFile('cubes/orders.yml', 'purchases')] },
     });
+    const unused = await app.inject({
+      method: 'POST',
+      url: '/api/model/publish',
+      payload: { folderId: 'sales', files: [cubeFile('cubes/summary.yml', 'overview')] },
+    });
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toEqual({
-      error: '“orders” is still used by the dashboard “Sales”.',
-      views: [],
-      cubes: [],
-      charts: [],
-      dashboards: [{ id: 'd1', title: 'Sales' }],
-      hidden: 0,
+      error: '“orders” has landed, so its name is fixed. Its title can still change.',
+    });
+    expect(unused.statusCode).toBe(409);
+    expect(unused.json()).toEqual({
+      error: '“summary” has landed, so its name is fixed. Its title can still change.',
     });
     expect(store.files).toEqual(FILES);
     await app.close();
   });
 
-  it('names a cube that joins to it, unless the same publish sends that cube again (T520’s review)', async () => {
+  it('refuses it even when the publish sends the cube that joins to it again (T520’s review)', async () => {
     const { app, stub } = await serving();
     const ids = (await folders()).ids;
     // /Sales's `summary` joins its `orders`, as xcube recorded at its publish.
@@ -437,11 +445,11 @@ describe('renaming a model item (T428, AC-275)', () => {
     });
     expect(alone.statusCode).toBe(409);
     expect(alone.json<{ error: string }>().error).toBe(
-      '“orders” is still used by the cube “summary”.',
+      '“orders” has landed, so its name is fixed. Its title can still change.',
     );
 
-    // With `summary` sent again, joined to the new name: its old binding is no
-    // dependence, and xcube's check judges its new one.
+    // With `summary` sent again, joined to the new name: still a rename of a
+    // landed name, so refused too.
     const together = await app.inject({
       method: 'POST',
       url: '/api/model/publish',
@@ -457,7 +465,10 @@ describe('renaming a model item (T428, AC-275)', () => {
         ],
       },
     });
-    expect(together.statusCode, together.body).toBe(200);
+    expect(together.statusCode, together.body).toBe(409);
+    expect(together.json<{ error: string }>().error).toBe(
+      '“orders” has landed, so its name is fixed. Its title can still change.',
+    );
     await app.close();
   });
 });

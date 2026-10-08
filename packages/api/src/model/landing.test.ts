@@ -10,8 +10,9 @@ import { planLanding, type LandingModel } from './landing';
  * - a file of its name at another path is moved to its path, keeping its id,
  *   or the folder would declare the name twice;
  * - a file at its path declaring another name is refused, or it would be
- *   overwritten, unless it is the one the model was copied from, which the
- *   model renames (AC-275 then asks what still uses the old name).
+ *   overwritten;
+ * - a copy declaring a name other than the file it was copied from is
+ *   refused: a landed name is fixed (T706, AC-423), where T451 renamed it.
  */
 const cube = (name: string) => `cubes:\n  - name: ${name}\n    sql_table: public.${name}\n`;
 const stored = (
@@ -62,7 +63,6 @@ describe('where a proposal’s models land (T451)', () => {
           over: null,
         },
       ],
-      renamedAway: new Map(),
       resent: new Map([['sales', ['orders', 'customers']]]),
     });
   });
@@ -82,7 +82,6 @@ describe('where a proposal’s models land (T451)', () => {
           from: 'models/orders.yml',
         },
       ],
-      renamedAway: new Map(),
       resent: new Map([['sales', ['orders']]]),
     });
   });
@@ -96,11 +95,33 @@ describe('where a proposal’s models land (T451)', () => {
     });
   });
 
-  it('renames the file it was copied from, saying the name renamed away', () => {
+  it('refuses a copy that renames the file it was copied from, at its path or another (T706, AC-423)', () => {
     const shared = [stored('s-orders', 'cubes/orders.yml', cube('orders'))];
-    const plan = planLanding(shared, [
-      model('w-orders', 'cubes/orders.yml', cube('sales_orders'), 's-orders'),
-    ]);
+    const refused = {
+      kind: 'refused',
+      error:
+        '“cubes/orders.yml” can’t land: “orders” has landed, so its name is fixed: a copy of it keeps that name.',
+    };
+    expect(
+      planLanding(shared, [
+        model('w-orders', 'cubes/orders.yml', cube('sales_orders'), 's-orders'),
+      ]),
+    ).toEqual(refused);
+    // Elsewhere, it would land beside its original as a second item.
+    expect(
+      planLanding(shared, [
+        model('w-orders', 'models/sales_orders.yml', cube('sales_orders'), 's-orders'),
+      ]),
+    ).toEqual({
+      ...refused,
+      error: refused.error.replace('cubes/orders.yml', 'models/sales_orders.yml'),
+    });
+  });
+
+  it('lands a copy that keeps its original’s name over it, its title changed', () => {
+    const shared = [stored('s-orders', 'cubes/orders.yml', cube('orders'))];
+    const titled = cube('orders') + '    title: Sales orders\n';
+    const plan = planLanding(shared, [model('w-orders', 'cubes/orders.yml', titled, 's-orders')]);
     expect(plan).toEqual({
       kind: 'planned',
       writes: [
@@ -108,12 +129,11 @@ describe('where a proposal’s models land (T451)', () => {
           fileId: 'w-orders',
           folderId: 'sales',
           path: 'cubes/orders.yml',
-          content: cube('sales_orders'),
+          content: titled,
           over: shared[0],
         },
       ],
-      renamedAway: new Map([['sales', ['orders']]]),
-      resent: new Map([['sales', ['sales_orders']]]),
+      resent: new Map([['sales', ['orders']]]),
     });
   });
 
@@ -129,7 +149,7 @@ describe('where a proposal’s models land (T451)', () => {
     ).toEqual({
       kind: 'refused',
       error:
-        '“cubes/orders.yml” can’t land: it renames its folder’s “orders” to “sales_orders”, which another file there declares.',
+        '“cubes/orders.yml” can’t land: “orders” has landed, so its name is fixed: a copy of it keeps that name.',
     });
   });
 
@@ -162,6 +182,7 @@ describe('where a proposal’s models land (T451)', () => {
 
   it('refuses two models that would land over one file of their folder (T451’s review)', () => {
     // A renames its origin away from "orders"; B, new elsewhere, declares it.
+    // A's rename is refused first now: a landed name is fixed (T706).
     const shared = [stored('s-orders', 'cubes/orders.yml', cube('orders'))];
     expect(
       planLanding(shared, [
@@ -171,7 +192,7 @@ describe('where a proposal’s models land (T451)', () => {
     ).toEqual({
       kind: 'refused',
       error:
-        '“cubes/orders.yml” and “models/orders.yml” would both land over its folder’s cubes/orders.yml.',
+        '“cubes/orders.yml” can’t land: “orders” has landed, so its name is fixed: a copy of it keeps that name.',
     });
   });
 

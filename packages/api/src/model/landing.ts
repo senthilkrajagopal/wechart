@@ -11,9 +11,10 @@ import { declaredIn } from './split';
  *   keeping its id, so the folder declares the name once and the item's
  *   history goes on.
  * - A file at its path declaring another name is refused, never written
- *   over, unless it is the very file the model was copied from: then the
- *   model renames it, and the name renamed away is said for AC-275's check
- *   of what still uses it.
+ *   over.
+ * - A copy declaring a name other than its original's is refused: a landed
+ *   name is fixed, and a copy lands over its original under it (T706,
+ *   AC-423, AC-422). So nothing a landing writes over is renamed away.
  */
 export interface LandingModel {
   /** The workspace file proposed: the proposal item's id. */
@@ -43,8 +44,6 @@ export type LandingPlan =
   | {
       readonly kind: 'planned';
       readonly writes: readonly LandingWrite[];
-      /** Per folder, the names no file there declares once it lands (AC-275). */
-      readonly renamedAway: ReadonlyMap<string, readonly string[]>;
       /** Per folder, the names it sends again, which bind anew. */
       readonly resent: ReadonlyMap<string, readonly string[]>;
     };
@@ -88,7 +87,6 @@ export function planLanding(
   }
 
   const writes: LandingWrite[] = [];
-  const over: StoredModelFile[] = [];
   for (const each of models) {
     const [name] = namesOf(each.content);
     if (name === undefined)
@@ -97,6 +95,14 @@ export function planLanding(
         error: `“${each.title}” declares no cube or view, so it can’t land.`,
       };
     const own = shared.filter((file) => file.folderId === each.folderId);
+    // A landed name is fixed: a copy of its file lands only under it (T706, AC-423).
+    const origin = own.find((file) => file.id === each.originId);
+    const kept = origin === undefined ? undefined : namesOf(origin.content)[0];
+    if (kept !== undefined && kept !== name)
+      return {
+        kind: 'refused',
+        error: `“${each.title}” can’t land: “${kept}” has landed, so its name is fixed: a copy of it keeps that name.`,
+      };
     const atPath = own.find((file) => file.path === each.path);
     const named = own.find((file) => namesOf(file.content).includes(name));
     const write = {
@@ -105,27 +111,19 @@ export function planLanding(
       path: each.path,
       content: each.content,
     };
-    if (atPath !== undefined && namesOf(atPath.content).includes(name)) {
+    if (atPath !== undefined && namesOf(atPath.content).includes(name))
       writes.push({ ...write, over: atPath });
-      over.push(atPath);
-    } else if (atPath !== undefined) {
-      const was = namesOf(atPath.content);
-      if (atPath.id !== each.originId)
-        return {
-          kind: 'refused',
-          error: `“${each.title}” can’t land: its folder’s file at that path declares ${was.map((one) => `“${one}”`).join(', ')}. Give yours another path in your workspace, and propose it again.`,
-        };
-      if (named !== undefined)
-        return {
-          kind: 'refused',
-          error: `“${each.title}” can’t land: it renames its folder’s ${was.map((one) => `“${one}”`).join(', ')} to “${name}”, which another file there declares.`,
-        };
-      writes.push({ ...write, over: atPath });
-      over.push(atPath);
-    } else if (named !== undefined) {
-      writes.push({ ...write, over: named, from: named.path });
-      over.push(named);
-    } else writes.push({ ...write, over: null });
+    else if (atPath !== undefined)
+      return {
+        kind: 'refused',
+        error: `“${each.title}” can’t land: its folder’s file at that path declares ${namesOf(
+          atPath.content,
+        )
+          .map((one) => `“${one}”`)
+          .join(', ')}. Give yours another path in your workspace, and propose it again.`,
+      };
+    else if (named !== undefined) writes.push({ ...write, over: named, from: named.path });
+    else writes.push({ ...write, over: null });
   }
 
   // One model over one file: two over the same one, a rename and a move of
@@ -141,13 +139,9 @@ export function planLanding(
       };
   }
 
-  // What each folder declares once they land, and what it declared that it no longer does.
+  // What each folder declares once they land.
   const resent = new Map<string, string[]>();
   for (const each of writes)
     for (const name of namesOf(each.content)) push(resent, each.folderId, name);
-  const renamedAway = new Map<string, string[]>();
-  for (const file of over)
-    for (const name of namesOf(file.content))
-      if (!(resent.get(file.folderId) ?? []).includes(name)) push(renamedAway, file.folderId, name);
-  return { kind: 'planned', writes, renamedAway, resent };
+  return { kind: 'planned', writes, resent };
 }

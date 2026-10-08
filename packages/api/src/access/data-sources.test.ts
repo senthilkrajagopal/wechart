@@ -935,12 +935,13 @@ describe('a connection test, run by xcube (T361, AC-159, AC-312)', () => {
       const inC = await sources().create(postgres(ids.c, `${MARK}_in_c`));
       expect(await listed(inC.id)).toBeDefined();
 
-      // A rename changes no connection setting, so it keeps that health. A
-      // new password is saved only from its passing test (T461), which is
-      // then its health; untested, it is never saved (T364's review; R32).
+      // A description changes no connection setting, so it keeps that health
+      // (a landed one's name no longer changes at all, T706). A new password
+      // is saved only from its passing test (T461), which is then its health;
+      // untested, it is never saved (T364's review; R32).
       const save = (payload: Record<string, unknown>) =>
         app.inject({ method: 'PUT', url: `/api/data-sources/${made.id}`, payload });
-      expect((await save({ name: `${MARK}_renamed` })).statusCode).toBe(200);
+      expect((await save({ description: `Described ${MARK}` })).statusCode).toBe(200);
       expect((await listed(made.id))?.lastTest).toMatchObject({ ok: true, current: true });
       const changed = { sealed: { password: sealed('changed') } };
       expect((await save(changed)).statusCode).toBe(422);

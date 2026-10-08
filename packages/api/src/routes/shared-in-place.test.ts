@@ -20,7 +20,8 @@ import { removeProjectFolders, TEST_TIME_ZONE } from './project-folder.fixture';
  * changes through a copy in the workspace, proposed and approved. A `PUT` of
  * content answers `409`, "Edit in my workspace", and changes nothing. The
  * same in a workspace saves. Moving and renaming are as they were, and so are
- * a folder's settings. With sign-in off too, since R52 (T359, AC-254).
+ * a folder's settings, but a landed data source's name is fixed (T706,
+ * AC-423). With sign-in off too, since R52 (T359, AC-254).
  *
  * `writer` (`sales-rw`) and `super` write /Sales.
  */
@@ -421,7 +422,7 @@ describe('a shared item is never changed in place (T502, AC-278)', () => {
     expect(await stored('chart', ids.local)).toEqual(before);
   });
 
-  it('still moves and renames a shared item, and saves a folder’s settings', async () => {
+  it('still moves and renames a shared dashboard, keeps a landed data source’s name, and saves a folder’s settings', async () => {
     const moved = await as('writer', {
       method: 'PATCH',
       url: `/api/documents/dashboard/${ids.board}`,
@@ -456,14 +457,16 @@ describe('a shared item is never changed in place (T502, AC-278)', () => {
     expect(retitled.statusCode, retitled.body).toBe(200);
     expect((await stored('dashboard', ids.board)).body['title']).toBe(`Revenue ${MARK}`);
 
+    // A shared data source's name is fixed once landed (T706, AC-423): its
+    // rename is refused, in place or otherwise.
     const source = (await sources().get(ids.source))!;
     const sourceRenamed = await as('writer', {
       method: 'PUT',
       url: `/api/data-sources/${ids.source}`,
       payload: { name: `store_${MARK}` },
     });
-    expect(sourceRenamed.statusCode, sourceRenamed.body).toBe(200);
-    expect((await sources().get(ids.source))?.name).toBe(`store_${MARK}`);
+    expect(sourceRenamed.statusCode, sourceRenamed.body).toBe(409);
+    expect((await sources().get(ids.source))?.name).toBe(source.name);
     expect((await sources().get(ids.source))?.fields).toEqual(source.fields);
 
     const folder = await stored('folder', ids.sales);

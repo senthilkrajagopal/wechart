@@ -30,8 +30,9 @@ import { removeProjectFolders, TEST_TIME_ZONE, workspaceKeyOf } from './project-
  * dry run when it is proposed, and again at approval, where it is applied:
  * models first, then the charts and dashboard that bind to them. A refusal
  * leaves every folder and the proposal as they were, names each break the
- * approver may see, counts the rest, and is recorded. An approval is AC-275's
- * trigger too: a name renamed away that a chart still uses refuses it.
+ * approver may see, counts the rest, and is recorded. A copy renaming a name
+ * a chart uses is refused before that, at its save: a landed name is fixed
+ * (T706, AC-423).
  *
  * `writer` (`sales-rw`) proposes into /Sales; `super` approves. Against the
  * suite's database, the stub xcube, applying what is sent, and a stub Cube.
@@ -563,15 +564,12 @@ describe('a proposal’s models, landed through xcube’s changeset (T451)', () 
     expect(headItem(MOVED)?.yaml).toBe(measured(MOVED, 'weight'));
   });
 
-  it('refuses at approval a rename of a name a chart started using meanwhile (AC-275)', async () => {
+  // A landed name is fixed (T706, AC-423): where T451 refused a rename at
+  // approval while a chart used the name, the copy can't take another name
+  // at all, so nothing of it is proposed or lands.
+  it('refuses a copy’s rename of a name a chart uses, at its save, before any proposal (AC-275, AC-423)', async () => {
     const kept = await copiedInto(shared(KEPT));
     const renamed = `${MARK}_renamed`;
-    expect((await save(shared(KEPT), cube(renamed), kept)).statusCode).toBe(200);
-    const proposed = await propose('model', (await workspaceFile(shared(KEPT), kept)).id);
-    expect(proposed.statusCode, proposed.body).toBe(201);
-    const proposalId = proposed.json<{ id: string }>().id;
-
-    // A chart in /Sales on the name the model renames away.
     const chart = randomUUID();
     made.push({ kind: 'chart', id: chart });
     await docs().create({
@@ -589,15 +587,21 @@ describe('a proposal’s models, landed through xcube’s changeset (T451)', () 
       },
     });
     const before = await salesFiles();
-    const refused = await approve(proposalId);
-    expect(refused.statusCode, refused.body).toBe(409);
-    expect(refused.json<{ error: string }>().error).toBe(
-      `“${KEPT}” is still used by the chart “Kept chart ${MARK}”.`,
+    const chartBefore = (await docs().get('chart', chart))?.body;
+    const from = stub.calls.length;
+
+    const saved = await save(shared(KEPT), cube(renamed), kept);
+    expect(saved.statusCode, saved.body).toBe(409);
+    expect(saved.json<{ error: string }>().error).toBe(
+      `“${KEPT}” has landed, so its name is fixed: a copy of it keeps that name. Its title can still change.`,
     );
+    // Nothing of it kept, checked or landed; the chart still names what it did.
+    expect((await workspaceFile(shared(KEPT), kept)).content).toBe(cube(KEPT));
+    expect(dryRunsSince(from)).toEqual([]);
     expect(await salesFiles()).toEqual(before);
     expect(headItem(KEPT)?.yaml).toBe(cube(KEPT));
-    expect(await statusOf(proposalId)).toBe('open');
-    expect((await withdraw(proposalId)).statusCode).toBe(200);
+    expect(headItem(renamed)).toBeUndefined();
+    expect((await docs().get('chart', chart))?.body).toEqual(chartBefore);
   });
 
   it('lands its data sources first, and leaves them landed when its models are refused (R52)', async () => {

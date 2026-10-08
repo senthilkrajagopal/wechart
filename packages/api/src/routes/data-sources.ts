@@ -889,9 +889,18 @@ export function registerDataSources(
       return reply.status(409).send({
         error: `A copy keeps its original’s name, “${source.name}”, which it stands in for in your workspace. Make a new data source for another name.`,
       });
+    const workspaced = await inAWorkspace(source);
+    /**
+     * A landed one's name is fixed: only a draft in a workspace is renamed
+     * (T706, AC-423; `[R71]` 3). Its description is what changes instead,
+     * since a data source has no title of its own (`[R72]`).
+     */
+    if (!workspaced && change.name !== undefined && change.name !== source.name)
+      return reply.status(409).send({
+        error: `“${source.name}” has landed, so its name is fixed. Its description can still change.`,
+      });
     // A workspace's is changed in wechart alone, as it was made; renamed, it
     // still takes no name its target holds (T345's review).
-    const workspaced = await inAWorkspace(source);
     if (
       workspaced &&
       change.name !== undefined &&
@@ -954,14 +963,13 @@ export function registerDataSources(
       // Over the version its test was of, or refused (T461's review): two
       // saves never mix into settings nobody tested.
       // Landed in xcube only for a change xcube holds: where or how it
-      // connects, or its name. Each landing swaps every instance's driver, so
-      // a description changes wechart alone (T499's review; research
-      // xcube-slice-6.md, "PUT only on a real change").
-      const renamed = change.name !== undefined && change.name !== source.name;
+      // connects (a landed one's name never changes, T706). Each landing
+      // swaps every instance's driver, so a description changes wechart alone
+      // (T499's review; research xcube-slice-6.md, "PUT only on a real change").
       const updated = await store.update(
         source.id,
         change,
-        workspaced || !(connects || renamed) ? {} : await landingIn(source.folderId),
+        workspaced || !connects ? {} : await landingIn(source.folderId),
         source.version,
       );
       // The test it was saved from is its health now (AC-163, AC-157).

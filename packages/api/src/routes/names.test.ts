@@ -242,7 +242,9 @@ describe('data sources, cubes and model files: one of a name in a folder (T336, 
     sealed: { password: sealed },
   });
 
-  it('refuses renaming a data source to a name its folder has, and takes it in another', async () => {
+  // A landed data source is renamed to nothing now (T706, AC-423), its
+  // folder's names or any other.
+  it('refuses renaming a landed data source, to a name its folder has too, and takes that name in another', async () => {
     const name = `warehouse_${MARK}`;
     await sources().create(source(folders.a, name));
     const other = await sources().create(source(folders.a, `ledger_${MARK}`));
@@ -253,7 +255,7 @@ describe('data sources, cubes and model files: one of a name in a folder (T336, 
     });
     expect(renamed.statusCode, renamed.body).toBe(409);
     expect(renamed.json<{ error: string }>().error).toBe(
-      `This folder already has a data source named ${name}.`,
+      `“ledger_${MARK}” has landed, so its name is fixed. Its description can still change.`,
     );
     expect((await sources().get(other.id))?.name).toBe(`ledger_${MARK}`);
     expect((await sources().create(source(folders.b, name))).folderId).toBe(folders.b);

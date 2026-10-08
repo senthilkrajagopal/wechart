@@ -777,22 +777,19 @@ export function registerModelPublishing(
       // review), and free in another folder (AC-271, T452).
       const redeclared = redeclaredIn(changed, inFolder);
       if (redeclared.length > 0) return reply.status(422).send({ errors: redeclared });
-      // A name a changed file no longer declares is renamed away: refused while
-      // a chart or dashboard still names it (T428, AC-275).
-      const declaring = new Set(
-        changed.flatMap((file) => declaredIn(file.content)).map(({ name }) => name),
-      );
-      const renamedAway = inFolder
-        .filter((file) => changed.some((each) => each.path === file.path))
-        .flatMap((file) => declaredIn(file.content).map(({ name }) => name))
-        .filter((name) => name !== '' && !declaring.has(name));
-      // An item this publish sends again binds anew, as xcube's check judges:
-      // its old bindings are no dependence (T520's review).
-      const resent = changed
-        .flatMap((file) => declaredIn(file.content).map(({ name }) => name))
-        .filter((name) => name !== '');
-      const used = await inUse(request, renamedAway, served.ids.get(folderId)!, resent);
-      if (used !== undefined) return reply.status(409).send(used);
+      // A landed name is fixed (T706, AC-423; `[R71]` 3): a changed file
+      // declares what its folder's file at that path declares, whether or not
+      // anything uses the name. Its title is what changes.
+      for (const file of changed) {
+        const was = inFolder.find((each) => each.path === file.path);
+        if (was === undefined) continue;
+        const now = new Set(declaredIn(file.content).map(({ name }) => name));
+        const renamed = declaredIn(was.content).find(({ name }) => name !== '' && !now.has(name));
+        if (renamed !== undefined)
+          return reply.status(409).send({
+            error: `“${renamed.name}” has landed, so its name is fixed. Its title can still change.`,
+          });
+      }
       const paths = new Set(changed.map((file) => file.path));
       const overTemplate = inFolder.find(
         (file) => paths.has(file.path) && JINJA.test(file.content),
@@ -901,16 +898,6 @@ export function registerModelPublishing(
           409,
           `${template.over!.path} is a Jinja template, and templates are read-only here, so ${nothing}.`,
         );
-      // A name renamed away is refused while a chart or dashboard names it (AC-275).
-      for (const [folderId, names] of plan.renamedAway) {
-        const used = await inUse(
-          request,
-          names,
-          served.ids.get(folderId)!,
-          plan.resent.get(folderId) ?? [],
-        );
-        if (used !== undefined) return { kind: 'refused', status: 409, body: used };
-      }
 
       const live = (await modelFiles.all?.()) ?? (await modelFiles.list());
       const keyOf = (folderId: string, path: string) => `${folderId}\n${path}`;

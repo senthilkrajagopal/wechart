@@ -49,6 +49,10 @@ export interface WorkspaceModelDeps {
 const NEEDS_TARGET =
   'Name the shared folder this model is to go to: one where you have read-write access.';
 
+/** Why an edit copy can't take another name (T706, AC-423). */
+export const keepsItsName = (name: string) =>
+  `“${name}” has landed, so its name is fixed: a copy of it keeps that name. Its title can still change.`;
+
 /** A workspace model file where its overlay puts it: its folder, its text, where it is to go. */
 type Placed = {
   readonly folderId: string;
@@ -162,6 +166,17 @@ export function workspaceModels({
     return { result: await overlays.push(workspaceId, content), folders };
   };
 
+  /**
+   * The landed name an edit copy keeps: its original's, as its folder has it
+   * now. None for a draft, a use-only copy, or a copy whose original is gone.
+   */
+  const fixedNameOf = async (file: StoredModelFile): Promise<string | undefined> => {
+    if (file.origin === null || file.origin.useOnly === true) return undefined;
+    const { id, folderId } = file.origin;
+    const original = (await files.inFolders([folderId])).find((each) => each.id === id);
+    return original === undefined ? undefined : declaredIn(original.content)[0]?.name;
+  };
+
   return {
     /**
      * A save in the workspace (T347, AC-282): each file over the one at its
@@ -184,6 +199,19 @@ export function workspaceModels({
           (await submitted?.(file.id)) === true
         )
           return { status: 409, body: SUBMITTED };
+      /**
+       * A copy made to edit a landed cube or view keeps its name, and lands
+       * over it (T706, AC-423, AC-422; `[R71]` 3, 5): its title changes, its
+       * name doesn't. A use-only copy is no edit of its original (AC-283).
+       */
+      for (const file of changed) {
+        const stored = held.find((each) => each.folderId === folderId && each.path === file.path);
+        const fixed = stored === undefined ? undefined : await fixedNameOf(stored);
+        if (fixed === undefined) continue;
+        const declared = declaredIn(file.content).map(({ name }) => name);
+        if (declared.length !== 1 || declared[0] !== fixed)
+          return { status: 409, body: { error: keepsItsName(fixed) } };
+      }
       const writes: WorkspaceModelFile[] = [];
       const after: Placed[] = held.filter(
         (file) => !(file.folderId === folderId && changed.some((each) => each.path === file.path)),
