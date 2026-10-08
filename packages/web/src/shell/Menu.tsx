@@ -50,6 +50,14 @@ export type MenuEntry =
       readonly disabled?: string | undefined;
       /** An element already saying why, to describe it by instead. */
       readonly describedBy?: string | undefined;
+      /** Its icon, before its label (design 08; T682). */
+      readonly icon?: ReactNode;
+      /**
+       * A short word at its right, for the eye: its key ("Esc"), or what it
+       * needs while off ("mark first"). Its name and its description stay
+       * the label and the reason (T682).
+       */
+      readonly hint?: string | undefined;
     }
   | {
       readonly kind: 'checkbox';
@@ -58,6 +66,7 @@ export type MenuEntry =
       readonly checked: boolean;
       readonly onToggle: () => void;
       readonly disabled?: string | undefined;
+      readonly icon?: ReactNode;
     }
   | {
       readonly kind: 'submenu';
@@ -65,6 +74,9 @@ export type MenuEntry =
       readonly label: string;
       readonly entries: readonly MenuEntry[];
       readonly disabled?: string | undefined;
+      readonly hint?: string | undefined;
+      /** Kept in view at the menu's foot while the rest of it scrolls (design 08, R76 dashboard-Q6). */
+      readonly pinned?: boolean;
       /** A second line under its label, as design 08's Data as of footer (T681). */
       readonly detail?: ReactNode;
       /** An icon before it, the footer's clock (T681). */
@@ -298,6 +310,20 @@ export function Menu({
               </span>
             ),
           };
+  /** A row's icon, for the eye (T682). */
+  const iconOf = (icon: ReactNode) =>
+    icon === undefined ? null : (
+      <span className="menu__icon" aria-hidden="true">
+        {icon}
+      </span>
+    );
+  /**
+   * A row's short word at its right (T682): drawn from its attribute by the
+   * stylesheet, so it is no part of the row's text or name; the reason a row
+   * is off stays its description.
+   */
+  const hintOf = (hint: string | undefined) =>
+    hint === undefined ? null : <span className="menu__hint" aria-hidden="true" data-hint={hint} />;
   const render = (entry: MenuEntry) => {
     switch (entry.kind) {
       case 'separator':
@@ -370,7 +396,11 @@ export function Menu({
       case 'submenu': {
         const open = openKey === entry.key;
         return (
-          <div key={entry.key} role="none" className="menu__sub">
+          <div
+            key={entry.key}
+            role="none"
+            className={entry.pinned === true ? 'menu__sub menu__sub--pinned' : 'menu__sub'}
+          >
             {/* Its keys are the menu's, taken on the container (APG menu). */}
             {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events */}
             <div
@@ -387,19 +417,16 @@ export function Menu({
                 setOpenKey(open ? undefined : entry.key);
               }}
             >
-              {entry.icon === undefined ? null : (
-                <span className="menu__icon" aria-hidden="true">
-                  {entry.icon}
-                </span>
-              )}
+              {iconOf(entry.icon)}
               {entry.detail === undefined ? (
-                entry.label
+                <span className="menu__label">{entry.label}</span>
               ) : (
                 <span className="menu__lines">
-                  <span className="menu__main">{entry.label}</span>{' '}
+                  <span className="menu__main menu__label">{entry.label}</span>{' '}
                   <span className="menu__detail">{entry.detail}</span>
                 </span>
               )}
+              {hintOf(entry.hint)}
               <span aria-hidden="true" className="menu__chevron">
                 {' ›'}
               </span>
@@ -442,10 +469,15 @@ export function Menu({
                 run(entry, 'click');
               }}
             >
-              <span aria-hidden="true" className="menu__check">
-                {entry.checked ? '✓' : ''}
-              </span>
-              {entry.label}
+              {iconOf(entry.icon)}
+              <span className="menu__label">{entry.label}</span>
+              {/* Its box at its right, as design 08 draws it (T682); its
+                  state is aria-checked, the box only shows it. */}
+              <span
+                aria-hidden="true"
+                className="menu__box"
+                data-checked={entry.checked ? 'true' : 'false'}
+              />
             </div>
             {why(entry).words}
           </Fragment>
@@ -468,7 +500,9 @@ export function Menu({
                 run(entry, 'click', event.ctrlKey || event.metaKey);
               }}
             >
-              {entry.label}
+              {iconOf(entry.icon)}
+              <span className="menu__label">{entry.label}</span>
+              {hintOf(entry.hint)}
             </div>
             {why(entry).words}
             {entry.addHint === undefined || entry.disabled !== undefined ? null : (

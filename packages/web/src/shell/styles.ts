@@ -7842,16 +7842,86 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   position: fixed;
   inset: auto;
   z-index: 20;
-  width: 250px;
-  max-height: min(480px, calc(100vh - 16px));
+  /* Design 08's .ctx: 284 px, as tall as the window allows less 8 px each
+     side; its heading and Data as of stay, and its actions scroll between
+     them (T682; R76 dashboard-Q6). */
+  display: flex;
+  flex-direction: column;
+  width: 284px;
+  max-height: calc(100vh - 16px);
   margin: 0;
   padding: 4px;
-  overflow: auto;
+  overflow: hidden;
   border: 1px solid var(--wc-border-strong);
   border-radius: 6px;
   background: var(--wc-bg-raised);
   color: var(--wc-text-primary);
   box-shadow: var(--wc-shadow-pop);
+}
+/* Its actions scroll; a row the arrows reach is brought clear of the pinned
+   Data as of below it, never under it (WCAG 2.4.11; T682's review). */
+.tile-view-menu > .menu { flex: 1 1 auto; min-height: 0; overflow: auto; scroll-padding-bottom: 52px; }
+.tile-view-menu > :not(.menu) { flex: none; }
+/* Its heading (pin 5): the title 12/16/600 in the primary ink, then the
+   marking with its swatch, then what it holds, muted; 6 px 8 px round it. */
+.tile-view-menu > .tile-menu__heading {
+  display: grid;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--wc-border-subtle);
+  margin-bottom: 4px;
+  color: var(--wc-text-secondary);
+  font-weight: 400;
+}
+.tile-menu__title,
+.tile-menu__line {
+  overflow: hidden;
+  font-size: var(--wc-text-xs-size);
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tile-menu__title { color: var(--wc-text-primary); font-weight: 600; }
+.tile-menu__line { display: flex; gap: 6px; align-items: center; }
+.tile-menu__line--muted { display: block; color: var(--wc-text-muted); }
+.tile-menu__swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px var(--wc-border-strong);
+}
+/* Its rows (.ctx .it): 28 px, padding 0 8, an 8 px gap, the icon 14 px in
+   the secondary ink, a hint or a box at the right. */
+.tile-view-menu .menu__item { gap: 8px; padding: 0 8px; }
+.tile-view-menu .menu__icon { display: inline-flex; flex: none; align-self: center; margin-top: 0; color: var(--wc-text-secondary); }
+/* The two-line footer's clock sits by its first line (T681). */
+.tile-view-menu .menu__item:has(> .menu__lines) > .menu__icon { align-self: flex-start; margin-top: 1px; }
+.tile-view-menu .menu__item[aria-disabled='true'] .menu__icon { color: var(--wc-text-muted); opacity: 0.7; }
+.menu__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.menu__hint { margin-left: auto; color: var(--wc-text-muted); font-size: var(--wc-text-xs-size); }
+.menu__hint::after { content: attr(data-hint); }
+.menu__hint + .menu__chevron { margin-left: 4px; }
+.menu__box {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-left: auto;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 3px;
+  background: var(--wc-bg-surface);
+}
+.menu__box[data-checked='true'] {
+  border-color: var(--wc-accent);
+  background: var(--wc-accent)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.3l3 3 6-6.3' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / 12px no-repeat;
+}
+/* Data as of, kept at the foot as the rest scrolls (R76 dashboard-Q6). */
+.menu__sub--pinned {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: var(--wc-bg-raised);
 }
 /* A menu (shell/Menu.tsx): its items the picker's 28 px at 12 px. */
 .menu { display: grid; }
@@ -7883,7 +7953,6 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
   white-space: normal;
   cursor: default;
 }
-.menu__check { width: 12px; flex: 0 0 auto; color: var(--wc-accent); }
 .menu__chevron { margin-left: auto; color: var(--wc-text-muted); }
 /* Two lines in one item or line (T681; design 08, pin 10 and state D): the
    Data as of footer, its clock before it; a heading line; a key-value line. */

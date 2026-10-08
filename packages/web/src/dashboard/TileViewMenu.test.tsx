@@ -493,7 +493,8 @@ describe('a tile’s view-mode menu', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: 'Actions for By country' }));
     const group = screen.getByRole('group', { name: 'Marking · Status: shipped · 0 of 6 marked' });
-    for (const name of ['Unmark', 'View marked rows'])
+    // "View marked rows…", with its ellipsis, as design 08 writes it (T682).
+    for (const name of ['Unmark', 'View marked rows…'])
       expect(
         [...group.querySelectorAll('[role="menuitem"]')]
           .find((item) => item.textContent === name)
@@ -676,6 +677,150 @@ describe('a tile’s view-mode menu', () => {
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('menu')).toBeNull();
     expect(document.activeElement).toBe(trigger);
+  });
+});
+
+/**
+ * T682 (AC-352, AC-199, AC-245, AC-247; design 08, main screen and state H;
+ * DSH-18 to DSH-20, DSH-22): the tile menu's groups, order, heading and rows
+ * as design 08 draws them. The marking's actions; then its rows, Drill by,
+ * Create details tile and Details panel; then the views, Copy, Export and
+ * Edit chart; then Data as of, last. One "View … rows" at a time. Each row
+ * with its icon; a row off says "mark first"; Unmark says Esc. Ctrl+M and
+ * Ctrl+Shift+M aren't bound, so no hint says them (phase 3: backlog §7).
+ */
+describe('the tile menu as design 08 draws it (T682)', () => {
+  /** Each row's own label, or a bar for a separator, in the order drawn. */
+  const shape = () => {
+    const menu = screen.getByRole('menu', { name: /^Actions for / });
+    return [
+      ...menu.querySelectorAll(
+        ':scope [role="menuitem"], :scope [role="menuitemcheckbox"], :scope [role="separator"]',
+      ),
+    ]
+      .filter((node) => node.closest('[role="menu"]') === menu)
+      .map((node) =>
+        node.getAttribute('role') === 'separator'
+          ? '|'
+          : (node.querySelector('.menu__label')?.textContent ?? node.textContent ?? ''),
+      );
+  };
+  const full = (count: number) => ({
+    name: 'Marking',
+    colour: 'rgb(214, 39, 40)',
+    count,
+    values: 'Country: Norway, Spain',
+    onTile: () => ({ marked: count, of: 6 }),
+    onUnmark: vi.fn(),
+    filterTo: count === 0 ? { refused: 'Nothing is marked.' } : vi.fn(),
+    filterOut: count === 0 ? { refused: 'Nothing is marked.' } : vi.fn(),
+    onViewMarkedRows: vi.fn(),
+    drillBy: { items: 'Norway, Spain', options: () => [], onDrill: vi.fn() },
+    detailsPanel: { on: true, onToggle: vi.fn() },
+    onInvert: vi.fn(),
+    onMarkAll: vi.fn(),
+    onCreateDetails: vi.fn(),
+  });
+  const menuOf = (count: number) => (
+    <TileViewMenu
+      tileId="t1"
+      title="Total Amount by country"
+      spec={SPEC}
+      save={vi.fn()}
+      marked={full(count)}
+      onTableView={vi.fn()}
+      onViewQuery={vi.fn()}
+      onViewRows={vi.fn()}
+      onEditChart={vi.fn()}
+      dataAsOf={() => ({
+        label: 'Data as of 09:04',
+        detail: 'Live · from the database',
+        served: 'live',
+        entries: [],
+      })}
+    />
+  );
+
+  it('draws its three groups in design 08’s order, Data as of last', async () => {
+    render(menuOf(2));
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Total Amount by country' }));
+    expect(shape()).toEqual([
+      'Filter to marked',
+      'Filter out marked',
+      'Invert marking',
+      'Mark all',
+      'Unmark',
+      '|',
+      'View marked rows…',
+      'Drill by',
+      'Create details tile',
+      'Details panel',
+      '|',
+      'View as table',
+      'View query',
+      'Copy',
+      'Export',
+      'Edit chart',
+      '|',
+      'Data as of 09:04',
+    ]);
+  });
+
+  it('offers View underlying rows… in View marked rows’ place with nothing marked, and says “mark first”', async () => {
+    render(menuOf(0));
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Total Amount by country' }));
+    const rows = shape();
+    expect(rows.filter((row) => row.startsWith('View ') && row.endsWith('rows…'))).toEqual([
+      'View underlying rows…',
+    ]);
+    expect(rows.indexOf('View underlying rows…')).toBe(rows.indexOf('Drill by') - 1);
+    // Each row off says what it needs, on its right (state H).
+    for (const name of ['Filter to marked', 'Filter out marked', 'Drill by']) {
+      const row = screen.getByRole('menuitem', { name: new RegExp(`^${name}`) });
+      expect(row.getAttribute('aria-disabled'), name).toBe('true');
+      expect(row.querySelector('.menu__hint')?.getAttribute('data-hint'), name).toBe('mark first');
+    }
+    // Unmark off, and no Esc on it.
+    const unmark = screen.getByRole('menuitem', { name: 'Unmark' });
+    expect(unmark.querySelectorAll('.menu__hint').length).toBe(0);
+  });
+
+  it('heads it in three lines: the title, the marking with its swatch, and its values or how to mark', async () => {
+    const { rerender } = render(menuOf(2));
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Total Amount by country' }));
+    const lines = () =>
+      [...document.querySelectorAll('.tile-menu__heading > *')].map((line) => line.textContent);
+    expect(lines()).toEqual(['Total Amount by country', 'Marking · 2 of 6 marked', 'Country: Norway, Spain']);
+    const swatch = document.querySelector<HTMLElement>('.tile-menu__swatch');
+    expect(swatch?.style.background).toBe('rgb(214, 39, 40)');
+    await userEvent.keyboard('{Escape}');
+
+    rerender(menuOf(0));
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Total Amount by country' }));
+    expect(lines()).toEqual([
+      'Total Amount by country',
+      'Marking · nothing marked',
+      'Click or drag on the chart to mark',
+    ]);
+  });
+
+  it('draws an icon on each row, Esc on Unmark, a box for Details panel, and no Ctrl+M', async () => {
+    render(menuOf(2));
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Total Amount by country' }));
+    const menu = screen.getByRole('menu', { name: /^Actions for / });
+    const rows = [...menu.querySelectorAll('[role="menuitem"], [role="menuitemcheckbox"]')].filter(
+      (node) => node.closest('[role="menu"]') === menu,
+    );
+    for (const row of rows)
+      expect(row.querySelectorAll('.menu__icon svg').length, row.textContent ?? '').toBe(1);
+    const unmark = screen.getByRole('menuitem', { name: 'Unmark' });
+    expect(unmark.querySelector('.menu__hint')?.getAttribute('data-hint')).toBe('Esc');
+    expect(menu.querySelectorAll('[data-hint^="Ctrl"]').length).toBe(0);
+    // The box on the right, checked as the panel is on.
+    const panel = screen.getByRole('menuitemcheckbox', { name: 'Details panel' });
+    expect(panel.querySelector('.menu__box')?.getAttribute('data-checked')).toBe('true');
+    // Hints and boxes are for the eye: the rows' names stay theirs.
+    expect(unmark.textContent).toBe('Unmark');
   });
 });
 

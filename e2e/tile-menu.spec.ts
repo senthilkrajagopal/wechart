@@ -204,6 +204,70 @@ test('a tile menu opened before the answer stays in the window as it grows', asy
   await expect(tile.getByRole('menu', { name: /^Data as of \d/ })).toBeVisible();
 });
 
+/**
+ * T682 (AC-352; design 08; R76 dashboard-Q6): the menu is 284 px wide and as
+ * tall as the window allows less 8 px at each side. Its heading and its Data
+ * as of stay in view while its actions scroll between them, Data as of in the
+ * same menu, so the arrows still reach it last.
+ */
+test('the menu is 284 px wide, its heading and Data as of in view while its actions scroll', async ({
+  page,
+}) => {
+  // Short enough that the actions can't all show.
+  await page.setViewportSize({ width: 1280, height: 420 });
+  await page.goto('/explore/dashboards/seed-root-dashboard-1');
+  const tile = page.locator('[data-tile="tile-status"]');
+  await expect(tile.getByTestId('chart-canvas')).toBeVisible();
+  await tile.getByRole('button', { name: /^Actions for / }).click();
+  const menu = page.locator('.tile-view-menu').first();
+  await expect(menu).toBeVisible();
+  const asOf = tile.getByRole('menuitem', { name: /^Data as of \d/ });
+  await expect(asOf).toHaveCount(1);
+  const box = (await menu.boundingBox())!;
+  expect(Math.round(box.width)).toBe(284);
+  expect(box.y).toBeGreaterThanOrEqual(8);
+  expect(box.y + box.height).toBeLessThanOrEqual(420 - 8);
+  // Its actions scroll; its heading and Data as of don't leave it.
+  const list = menu.locator(':scope > [role="menu"]');
+  expect(await list.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
+  await list.evaluate((node) => {
+    node.scrollTop = node.scrollHeight;
+  });
+  for (const part of [menu.locator('.tile-menu__heading'), asOf]) {
+    const own = (await part.boundingBox())!;
+    expect(own.y).toBeGreaterThanOrEqual(box.y);
+    expect(own.y + own.height).toBeLessThanOrEqual(box.y + box.height + 0.5);
+  }
+  await list.evaluate((node) => {
+    node.scrollTop = 0;
+  });
+  const foot = (await asOf.boundingBox())!;
+  expect(foot.y + foot.height).toBeLessThanOrEqual(box.y + box.height + 0.5);
+  // Each row the arrows reach is in view, clear of the pinned footer (T682's
+  // review: WCAG 2.4.11), and its icon in the row's middle.
+  const first = menu.locator('[role="menuitem"], [role="menuitemcheckbox"]').first();
+  await first.focus();
+  const rows = await menu
+    .locator(':scope > [role="menu"] [role^="menuitem"]:not([data-key="as-of"])')
+    .count();
+  for (let step = 1; step < rows; step += 1) {
+    await page.keyboard.press('ArrowDown');
+    const focused = page.locator(':focus');
+    if ((await focused.getAttribute('data-key')) === 'as-of') break;
+    const [row, footer] = [(await focused.boundingBox())!, (await asOf.boundingBox())!];
+    expect(row.y + row.height, `row ${String(step)}`).toBeLessThanOrEqual(footer.y + 0.5);
+    expect(row.y, `row ${String(step)}`).toBeGreaterThanOrEqual(box.y);
+  }
+  const icon = (await menu.locator('[data-key="query"] .menu__icon').boundingBox())!;
+  const query = (await menu.locator('[data-key="query"]').boundingBox())!;
+  expect(
+    Math.abs(icon.y + icon.height / 2 - (query.y + query.height / 2)),
+  ).toBeLessThanOrEqual(1);
+  // Last by the arrows, as before: End reaches it.
+  await page.keyboard.press('End');
+  await expect(asOf).toBeFocused();
+});
+
 /** A chart of the dashboard's own, from its wells and, if chosen, its type. */
 async function localChart(
   request: APIRequestContext,

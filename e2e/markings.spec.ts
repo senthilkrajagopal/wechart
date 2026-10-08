@@ -1587,22 +1587,22 @@ test('a chart tile’s menu offers its views, its query, a download and Edit cha
   const marked = menu.getByRole('group', {
     name: 'Marking · Orders Status: shipped · 1 of 3 marked',
   });
-  // Filter to and out of marked first, as the prototype's group (T119, AC-113);
-  // Drill by after View marked rows, as the context-menu mockup has it (T270).
+  // Design 08's order (T682): the marking's actions, then its rows, Drill by
+  // and Create details tile (T119, T270).
   await expect(marked.getByRole('menuitem')).toHaveText([
     'Filter to marked',
     'Filter out marked',
-    'View marked rows',
-    'Drill by ›',
     'Invert marking',
     'Mark all',
     'Unmark',
+    'View marked rows…',
+    'Drill by ›',
     'Create details tile',
   ]);
   await expect(
     menu.getByRole('menuitem').filter({
       hasNotText:
-        /^(Filter to marked|Filter out marked|View marked rows|Drill by ›|Invert marking|Mark all|Unmark|Create details tile)$/,
+        /^(Filter to marked|Filter out marked|View marked rows…|Drill by ›|Invert marking|Mark all|Unmark|Create details tile)$/,
     }),
     // Export holds the CSV now, with the images (T272, AC-244).
   ).toHaveText([
@@ -1767,8 +1767,15 @@ test('the tile menu is headed by its marking, the marked values by title, and ho
   const trigger = status.getByRole('button', { name: 'Actions for By status' });
   await trigger.click();
   const menu = status.getByRole('menu', { name: 'Actions for By status' });
+  // Design 08's three lines (T682): the title; the marking, its swatch and
+  // how much of the tile; what it holds.
   const heading = status.locator('.tile-menu__heading');
-  await expect(heading).toHaveText('● Marking · Orders Status: shipped, completed · 2 of 3 marked');
+  await expect(heading.locator(':scope > *')).toHaveText([
+    'By status',
+    'Marking · 2 of 3 marked',
+    'Orders Status: shipped, completed',
+  ]);
+  await expect(heading.locator('.tile-menu__swatch')).toHaveCount(1);
   // It names the group it heads.
   await expect(
     menu.getByRole('group', {
@@ -1793,8 +1800,11 @@ test('the tile menu is headed by its marking, the marked values by title, and ho
   const category = tile(page, 'tile-category');
   await category.getByRole('button', { name: /^Actions for / }).click();
   const other = category.getByRole('menu', { name: /^Actions for / });
-  await expect(category.locator('.tile-menu__heading')).toHaveText(
-    /^● Marking · Orders Status: shipped · 0 of \d+ marked$/,
+  await expect(category.locator('.tile-menu__heading .tile-menu__line').first()).toHaveText(
+    /^Marking · 0 of \d+ marked$/,
+  );
+  await expect(category.locator('.tile-menu__heading .tile-menu__line').last()).toHaveText(
+    'Orders Status: shipped',
   );
   for (const name of ['Unmark', 'View marked rows'])
     await expect(other.getByRole('menuitem', { name })).not.toHaveAttribute(

@@ -2038,7 +2038,16 @@ test.describe('T253: tile menus, the grip and the edit grid', () => {
     await expect(firstChart(page).getByTestId('chart-canvas')).toBeVisible();
   });
 
-  const pickerOf = async (page: Page, menu: Locator) => {
+  /**
+   * The edit menu is the prototype's .picker, 250 px with rows padded 0 6;
+   * the view menu is design 08's .ctx, 284 px with rows padded 0 8 (T682;
+   * R76 dashboard-Q6). Both bordered and shadowed alike.
+   */
+  const pickerOf = async (
+    page: Page,
+    menu: Locator,
+    drawn: { width: string; pad: string } = { width: '250px', pad: '6px' },
+  ) => {
     // .picker { width: 250px; border: 1px solid var(--border-strong); box-shadow: var(--shadow-pop) }
     const pop = await page.evaluate(() => {
       const probe = document.createElement('div');
@@ -2049,7 +2058,7 @@ test.describe('T253: tile menus, the grip and the edit grid', () => {
       return value;
     });
     expect(await style(menu, 'width', 'border-top-color', 'box-shadow')).toEqual({
-      width: '250px',
+      width: drawn.width,
       'border-top-color': await token(page, 'border-strong'),
       'box-shadow': pop,
     });
@@ -2065,7 +2074,7 @@ test.describe('T253: tile menus, the grip and the edit grid', () => {
       ),
     ).toEqual({
       height: '28px',
-      'padding-left': '6px',
+      'padding-left': drawn.pad,
       'border-top-left-radius': '4px',
       'font-size': '12px',
     });
@@ -2075,8 +2084,8 @@ test.describe('T253: tile menus, the grip and the edit grid', () => {
     const tile = firstChart(page);
     await tile.hover();
     await tile.getByRole('button', { name: /^Actions for / }).click();
-    // The picker is the popup the menu sits in, with its heading (T266).
-    await pickerOf(page, viewMenuOf(tile));
+    // The popup the menu sits in, with its heading (T266): design 08's (T682).
+    await pickerOf(page, viewMenuOf(tile), { width: '284px', pad: '8px' });
   });
 
   test('the edit menu is the picker too, its heading muted and Delete in the error ink', async ({

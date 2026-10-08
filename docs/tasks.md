@@ -9383,7 +9383,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
       - `refresh.spec.ts` (AC-148, now read from the submenu).
 
       Each now asserts the new design as exactly. `dataAsOf.test.ts`'s database case asserts state D's lines and the footer's second line. `DataAsOf.test.tsx`, `editHead.test.tsx`, `refreshTile.test.tsx` and `refreshPage.test.tsx` read the badge.
-- [ ] T682 (AC-352, AC-199, AC-245, AC-247) The tile ⋯ menu's groups, order, heading and rows as design 08 draws them *(added 2026-10-08 by T406)*
+- [x] T682 (AC-352, AC-199, AC-245, AC-247) The tile ⋯ menu's groups, order, heading and rows as design 08 draws them *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/dashboard/TileViewMenu.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/tile-menu.spec.ts`
   - Findings: DSH-18, DSH-19, DSH-20, DSH-22.
   - Failing test: design 08's three groups in order, with R63's and R66's rows in the marking group. The three-line heading with the swatch. Icons on the rows; each disabled row's reason; the Details panel checkbox; "View marked rows…" with its ellipsis; the Ctrl+M hints. One "View … rows" item at a time.
@@ -9394,6 +9394,46 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - the heading and the Data as of footer stay pinned, and only the action list scrolls. The footer carries AC-148's time to the second (DSH-21).
     - The footer stays inside the same `role=menu`, so the arrow-key order is unchanged.
   - Depends on: T681
+  - **Built 2026-10-08.**
+    - **The groups, in design 08's order:**
+      1. the marking's actions: Filter to marked, Filter out marked, Invert marking, Mark all, then R66's Mark range… and R63's Mark series › and Mark panel ›, then Unmark;
+      2. its rows and its tile: View marked rows… (or View underlying rows… with nothing marked; one at a time), Drill by ›, Create details tile, Details panel;
+      3. the views: View as table, View query, Copy ›, Export ›, Edit chart;
+      4. Data as of, last.
+    - The first two groups are the one `role=group` named by the marking, as before (AC-199, AC-247), with a separator between them. In cross-filter mode, with no marking, View underlying rows… heads the views in a group of its own (state H, right).
+    - **The heading's three lines (pin 5):**
+      - the tile's title, 12/16/600 in the primary ink;
+      - the marking with its swatch, in the marking's colour, and how much of the tile ("2 of 6 marked", "nothing marked");
+      - what it holds by the members' titles, or "Click or drag on the chart to mark" (muted).
+      - In cross-filter mode: the title, then "Cross-filtering · no markings".
+      - The heading is for the eye. The menu is named by ⋯, and the marking's group by the same words, unchanged.
+    - **The rows:**
+      - each with design 08's 14 px icon (`dashboard/menuIcons.tsx`);
+      - a row off says "mark first" at its right (Filter to/out, Drill by), its full reason still its description;
+      - Unmark says "Esc" while it can run;
+      - Details panel has its box at the right;
+      - "View marked rows…" and "View underlying rows…" take their ellipses.
+      - The hints are drawn from a `data-hint` attribute by the stylesheet, so they are no part of a row's name or text.
+    - **No Ctrl+M or Ctrl+Shift+M hint:** the keys aren't bound. Binding them is a phase 3 TODO, `docs/phase-2/backlog.md` §7 (the user, 2026-10-08), recorded in `accepted-differences.md`.
+    - **The menu (R76 dashboard-Q6):**
+      - 284 px wide, as tall as the window allows less 8 px at each side;
+      - the heading, above, and Data as of, pinned at the foot (sticky), stay in view while the actions scroll between them;
+      - Data as of is in the same `role=menu`, so End still reaches it last.
+    - **`Menu` gains:**
+      - an item's and a checkbox's `icon`;
+      - an item's and a submenu's `hint`;
+      - a submenu's `pinned`;
+      - a `.menu__label` round each label;
+      - a checkbox's box at its right, in place of the ✓ at its left.
+    - **Tests changed with the design:**
+      - `markings.spec.ts`: the group's order, the heading's lines;
+      - `design-conformance.spec.ts` T253: the view menu at 284 px with rows padded 0 8; the edit menu stays the prototype's picker at 250 and 0 6;
+      - `TileViewMenu.test.tsx`: "View marked rows…" with its ellipsis.
+    - **Recorded in `accepted-differences.md`:** the Ctrl+M hints left out, icons on the rows design 08 doesn't draw, and no divider of its own over the pinned footer while scrolled. The coordinator's calls on T681's follow-up went in a commit of their own.
+    - **The review (FAIL, three real bugs, fixed):**
+      - Every row's icon sat at the top of its row, from the footer's own rule for its two lines. Icons are now centred, and the footer's clock alone sits by its first line.
+      - The pinned footer could hide the row the arrows had just focused. The list now keeps 52 px of scroll padding below. `tile-menu.spec.ts` checks every row the arrows reach ends above the footer, and that an icon is centred.
+      - The dashboard-Q1 note broke the Dashboard table in the decisions file. It now sits below the table.
 - [ ] T683 (AC-352, AC-187) The dashboard view's remaining differences: whole-number count axes, a table tile's row count, the KPI ramp, and backlog §1's residuals *(added 2026-10-08 by T406)*
   - Files: the chart renderer's options (`packages/web/src/charts/…`), `packages/web/src/tiles/{ChartTile,Kpi}.tsx`, `packages/web/src/dashboard/edit/…`, `packages/web/src/shell/styles.ts` (+ tests), `e2e/dashboard.spec.ts`
   - Findings: DSH-02, DSH-03, DSH-04, CMP-09, CMP-10, CMP-11, CMP-12, CMP-13.

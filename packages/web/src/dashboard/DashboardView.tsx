@@ -1466,6 +1466,8 @@ function Elements({
                     ? undefined
                     : {
                         name: shown.marking.name,
+                        // Its swatch in the menu's heading (T682; design 08, pin 5).
+                        colour: shown.colour,
                         // The marking's own, which its actions go by; the
                         // tile's "n of N" is `onTile` (T267's review).
                         count: shown.markedCount,

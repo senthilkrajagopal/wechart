@@ -4,6 +4,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Menu, type MenuEntry } from '../shell/Menu';
 // The clock every History button carries is the footer's too (design 08, pin 10).
 import { HistoryIcon } from '../workspaces/history/HistoryPanel';
+import { MenuIcon } from './menuIcons';
 import { StateLine, StatusIcon, type StateKind } from '../shell/StatusIcon';
 import { chartSvg, drawnChartIn, imageFileName, surfaceOf, svgToPng } from '../tiles/chartImage';
 
@@ -268,6 +269,8 @@ export function TileViewMenu({
   marked?:
     | {
         name: string;
+        /** The marking's colour, for the heading's swatch (design 08, pin 5; T682). */
+        colour?: string | undefined;
         /**
          * How many the marking holds: what Unmark and View marked rows go by,
          * since both act on the marking, not on this tile (T267's review).
@@ -654,6 +657,7 @@ export function TileViewMenu({
                   kind: 'submenu' as const,
                   key: 'part-series',
                   label: parts.verb === 'mark' ? 'Mark series' : 'Filter by series',
+                  icon: <MenuIcon name={parts.verb === 'mark' ? 'series' : 'funnel'} />,
                   entries: parts.series.map((one) => ({
                     kind: 'item' as const,
                     key: `series-${one.value}`,
@@ -674,6 +678,7 @@ export function TileViewMenu({
                   kind: 'submenu' as const,
                   key: 'part-panel',
                   label: parts.verb === 'mark' ? 'Mark panel' : 'Filter by panel',
+                  icon: <MenuIcon name={parts.verb === 'mark' ? 'detailsTile' : 'funnel'} />,
                   entries: parts.panels.map((panel) => ({
                     kind: 'item' as const,
                     key: `panel-${String(panel.index)}`,
@@ -688,6 +693,31 @@ export function TileViewMenu({
                 },
               ]),
         ];
+
+  /**
+   * How much of the tile the marking holds (AC-247): "2 of 6 marked" where
+   * its items can be counted — read only while the menu is open, as it reads
+   * every item the tile draws (T267's review) — else "2 marked"; "nothing
+   * marked" with nothing marked (design 08, state H).
+   */
+  const own = open ? marked?.onTile?.() : undefined;
+  // A marking holding another tile's items is "0 of 6" here (T267's review).
+  const counted =
+    marked === undefined
+      ? ''
+      : own === undefined
+        ? `${marked.count.toLocaleString('en-GB')} marked`
+        : `${own.marked.toLocaleString('en-GB')} of ${own.of.toLocaleString('en-GB')} marked`;
+  const howMuch = marked !== undefined && marked.count === 0 ? 'nothing marked' : counted;
+  /** The marking's group's name: the marking, what it holds, and how much of the tile. */
+  const markingLabel =
+    marked === undefined
+      ? ''
+      : [
+          marked.name,
+          ...(marked.values === undefined || marked.values === '' ? [] : [marked.values]),
+          counted,
+        ].join(' · ');
 
   /** Runs one of its actions; the menu closes itself after (`Menu`). */
   const entries: MenuEntry[] = [
@@ -705,7 +735,9 @@ export function TileViewMenu({
           {
             kind: 'group' as const,
             key: 'marked',
-            labelledBy: `${why}-marked`,
+            // Named by the marking, what it holds and how much of the tile
+            // (AC-247), as the heading above says it in its lines.
+            label: markingLabel,
             entries: [
               // The marking as a dashboard filter, or its negation, which then
               // clears it (AC-113, direction.md rule 53).
@@ -722,22 +754,92 @@ export function TileViewMenu({
                         kind: 'item',
                         key,
                         label,
+                        icon: <MenuIcon name={key === 'to' ? 'funnel' : 'funnelMinus'} />,
                         onSelect: typeof action === 'function' ? action : () => undefined,
                         disabled: typeof action === 'function' ? undefined : action.refused,
+                        // What it needs, at its right (design 08, state H).
+                        ...(typeof action !== 'function' && marked.count === 0
+                          ? { hint: 'mark first' }
+                          : {}),
                       },
                     ],
               ),
-              ...(marked.onViewMarkedRows === undefined
+              // On this tile's items alone, other tiles' left as they are
+              // (AC-115); offered where the tile has items to name.
+              ...(marked.onInvert === undefined
                 ? []
                 : [
                     {
                       kind: 'item' as const,
-                      key: 'rows',
-                      label: 'View marked rows',
-                      onSelect: marked.onViewMarkedRows,
-                      disabled: marked.count === 0 ? 'Nothing is marked.' : undefined,
+                      key: 'invert',
+                      label: 'Invert marking',
+                      icon: <MenuIcon name="invert" />,
+                      onSelect: marked.onInvert,
                     },
                   ]),
+              ...(marked.onMarkAll === undefined
+                ? []
+                : [
+                    {
+                      kind: 'item' as const,
+                      key: 'all',
+                      label: 'Mark all',
+                      icon: <MenuIcon name="all" />,
+                      onSelect: marked.onMarkAll,
+                    },
+                  ]),
+              // A range, from the keyboard, as a drag along the axis marks one (T636).
+              ...(marked.onMarkRange === undefined
+                ? []
+                : [
+                    {
+                      kind: 'item' as const,
+                      key: 'range',
+                      label: 'Mark range…',
+                      icon: <MenuIcon name="range" />,
+                      onSelect: marked.onMarkRange,
+                    },
+                  ]),
+              // A series or a panel, as its legend entry or header marks it (T631).
+              ...(parts?.verb === 'mark' ? partEntries : []),
+              {
+                kind: 'item' as const,
+                key: 'unmark',
+                label: 'Unmark',
+                icon: <MenuIcon name="x" />,
+                onSelect: marked.onUnmark,
+                disabled: marked.count === 0 ? 'Nothing is marked.' : undefined,
+                // Its key, as Esc unmarks a focused tile (design 08). Ctrl+M
+                // and Ctrl+Shift+M aren't bound, so no hint says them
+                // (phase 3: docs/phase-2/backlog.md §7).
+                ...(marked.count === 0 ? {} : { hint: 'Esc' }),
+              },
+              // What the marking holds, in rows and in a tile beside this one
+              // (design 08's second group).
+              { kind: 'separator' as const, key: 'before-rows' },
+              // One "View … rows" at a time (design 08, state H): the marked
+              // rows while something is marked, else the whole tile's (T268).
+              ...(marked.count > 0 && marked.onViewMarkedRows !== undefined
+                ? [
+                    {
+                      kind: 'item' as const,
+                      key: 'rows',
+                      label: 'View marked rows…',
+                      icon: <MenuIcon name="rows" />,
+                      onSelect: marked.onViewMarkedRows,
+                    },
+                  ]
+                : onViewRows !== undefined
+                  ? [
+                      {
+                        kind: 'item' as const,
+                        key: 'underlying',
+                        label: 'View underlying rows…',
+                        icon: <MenuIcon name="rows" />,
+                        onSelect: onViewRows,
+                      },
+                    ]
+                  : []),
               // Offered with nothing marked too, and said why it can't be used,
               // so the menu keeps its shape (the mockup's state H).
               ...(marked.drillBy === undefined
@@ -747,7 +849,9 @@ export function TileViewMenu({
                       kind: 'submenu' as const,
                       key: 'drill',
                       label: 'Drill by',
+                      icon: <MenuIcon name="drill" />,
                       disabled: marked.count === 0 ? 'Mark something to drill into.' : undefined,
+                      ...(marked.count === 0 ? { hint: 'mark first' } : {}),
                       entries:
                         open && marked.count > 0
                           ? drillEntries(
@@ -760,6 +864,17 @@ export function TileViewMenu({
                           : [],
                     },
                   ]),
+              ...(marked.onCreateDetails === undefined
+                ? []
+                : [
+                    {
+                      kind: 'item' as const,
+                      key: 'details',
+                      label: 'Create details tile',
+                      icon: <MenuIcon name="detailsTile" />,
+                      onSelect: marked.onCreateDetails,
+                    },
+                  ]),
               // Offered with nothing marked too: the panel says so, and fills
               // as the marking does.
               ...(marked.detailsPanel === undefined
@@ -769,66 +884,30 @@ export function TileViewMenu({
                       kind: 'checkbox' as const,
                       key: 'details-panel',
                       label: 'Details panel',
+                      icon: <MenuIcon name="panel" />,
                       checked: marked.detailsPanel.on,
                       onToggle: marked.detailsPanel.onToggle,
-                    },
-                  ]),
-              // On this tile's items alone, other tiles' left as they are
-              // (AC-115); offered where the tile has items to name.
-              ...(marked.onInvert === undefined
-                ? []
-                : [
-                    {
-                      kind: 'item' as const,
-                      key: 'invert',
-                      label: 'Invert marking',
-                      onSelect: marked.onInvert,
-                    },
-                  ]),
-              ...(marked.onMarkAll === undefined
-                ? []
-                : [
-                    {
-                      kind: 'item' as const,
-                      key: 'all',
-                      label: 'Mark all',
-                      onSelect: marked.onMarkAll,
-                    },
-                  ]),
-              // A range, from the keyboard, as a drag along the axis marks one (T636).
-              ...(marked.onMarkRange === undefined
-                ? []
-                : [
-                    {
-                      kind: 'item' as const,
-                      key: 'range',
-                      label: 'Mark range…',
-                      onSelect: marked.onMarkRange,
-                    },
-                  ]),
-              // A series or a panel, as its legend entry or header marks it (T631).
-              ...(parts?.verb === 'mark' ? partEntries : []),
-              {
-                kind: 'item' as const,
-                key: 'unmark',
-                label: 'Unmark',
-                onSelect: marked.onUnmark,
-                disabled: marked.count === 0 ? 'Nothing is marked.' : undefined,
-              },
-              ...(marked.onCreateDetails === undefined
-                ? []
-                : [
-                    {
-                      kind: 'item' as const,
-                      key: 'details',
-                      label: 'Create details tile',
-                      onSelect: marked.onCreateDetails,
                     },
                   ]),
             ],
           },
           { kind: 'separator' as const, key: 'after-marked' },
         ]),
+    // With no marking (cross-filter mode), the whole tile's rows, in a group
+    // of their own (design 08, state H, right).
+    ...(marked === undefined && onViewRows !== undefined
+      ? [
+          {
+            kind: 'item' as const,
+            key: 'underlying',
+            label: 'View underlying rows…',
+            icon: <MenuIcon name="rows" />,
+            onSelect: onViewRows,
+          },
+          { kind: 'separator' as const, key: 'after-underlying' },
+        ]
+      : []),
+    // The views, Copy, Export and Edit chart (design 08's third group).
     ...(onTableView === undefined
       ? []
       : [
@@ -836,30 +915,30 @@ export function TileViewMenu({
             kind: 'item' as const,
             key: 'table',
             label: tableView ? 'View as chart' : 'View as table',
+            icon: <MenuIcon name={tableView ? 'chart' : 'table'} />,
             onSelect: () => {
               onTableView(!tableView);
             },
           },
         ]),
-    ...(onViewRows === undefined || (marked !== undefined && marked.count > 0)
+    ...(onViewQuery === undefined
       ? []
       : [
           {
             kind: 'item' as const,
-            key: 'underlying',
-            label: 'View underlying rows',
-            onSelect: onViewRows,
+            key: 'query',
+            label: 'View query',
+            icon: <MenuIcon name="code" />,
+            onSelect: onViewQuery,
           },
         ]),
-    ...(onViewQuery === undefined
-      ? []
-      : [{ kind: 'item' as const, key: 'query', label: 'View query', onSelect: onViewQuery }]),
     // Copy (T271; the mockup's): the marked values as text, the chart as an
     // image, or the chart onto another dashboard.
     {
       kind: 'submenu',
       key: 'copy',
       label: 'Copy',
+      icon: <MenuIcon name="copy" />,
       entries: [
         ...(marked?.valuesTsv === undefined
           ? []
@@ -911,6 +990,7 @@ export function TileViewMenu({
       kind: 'submenu',
       key: 'export',
       label: 'Export',
+      icon: <MenuIcon name="export" />,
       entries: [
         {
           kind: 'item',
@@ -957,7 +1037,15 @@ export function TileViewMenu({
     },
     ...(onEditChart === undefined
       ? []
-      : [{ kind: 'item' as const, key: 'edit', label: 'Edit chart', onSelect: onEditChart }]),
+      : [
+          {
+            kind: 'item' as const,
+            key: 'edit',
+            label: 'Edit chart',
+            icon: <MenuIcon name="pencil" />,
+            onSelect: onEditChart,
+          },
+        ]),
     // Last, as the mockup's footer: how fresh the answer is, and where that
     // is set (T273, AC-245). Read only while the menu is open.
     ...((): MenuEntry[] => {
@@ -971,6 +1059,9 @@ export function TileViewMenu({
               key: 'as-of',
               label: said.label,
               entries: said.entries,
+              // Kept at the foot while the actions above it scroll (R76
+              // dashboard-Q6): it carries AC-148's time to the second.
+              pinned: true,
               // Two lines with the clock (T681; design 08, pin 10): when,
               // then who served it.
               icon: <HistoryIcon />,
@@ -1046,27 +1137,36 @@ export function TileViewMenu({
             event.preventDefault();
           }}
         >
-          {/* The marked-rows group's heading, outside the menu itself, which
-              holds items only (APG): the tile's marking and how much it holds
-              (AC-199). */}
-          {marked === undefined ? null : (
-            <div id={`${why}-marked`} className="tile-menu__heading">
-              <span aria-hidden="true">● </span>
-              {/* The marking, what it holds by the members' titles, and how
-                  many of the tile's items (AC-247; the mockup's "Region =
-                  West, East · 2 of 6"). */}
-              {(() => {
-                const own = marked.onTile?.();
-                return [
-                  marked.name,
-                  ...(marked.values === undefined || marked.values === '' ? [] : [marked.values]),
-                  own === undefined
-                    ? `${marked.count.toLocaleString('en-GB')} marked`
-                    : `${own.marked.toLocaleString('en-GB')} of ${own.of.toLocaleString('en-GB')} marked`,
-                ].join(' · ');
-              })()}
-            </div>
-          )}
+          {/* Its heading, outside the menu itself, which holds items only
+              (APG), in design 08's three lines (pin 5, state H; T682): the
+              tile's title; its marking, with the marking's swatch, and how
+              much of the tile it holds (AC-247); what it holds, by the
+              members' titles, or how to mark. In cross-filter mode, that
+              there are no markings. For the eye: the menu is named by ⋯, its
+              marking group by the same words (AC-199). */}
+          <div className="tile-menu__heading" aria-hidden="true">
+            <div className="tile-menu__title">{title}</div>
+            {marked !== undefined ? (
+              <>
+                <div className="tile-menu__line">
+                  <span
+                    className="tile-menu__swatch"
+                    style={marked.colour === undefined ? undefined : { background: marked.colour }}
+                  />
+                  {`${marked.name} · ${howMuch}`}
+                </div>
+                <div className="tile-menu__line tile-menu__line--muted">
+                  {marked.count === 0 || marked.values === undefined || marked.values === ''
+                    ? 'Click or drag on the chart to mark'
+                    : marked.values}
+                </div>
+              </>
+            ) : parts?.verb === 'filter' ? (
+              <div className="tile-menu__line tile-menu__line--muted">
+                Cross-filtering · no markings
+              </div>
+            ) : null}
+          </div>
           <Menu
             labelledBy={`${why}-trigger`}
             entries={entries}
