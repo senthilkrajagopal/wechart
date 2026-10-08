@@ -19,6 +19,11 @@ const SHELL_CSS = `
    Mono, then the platform's monospace — named, as Inter is, not shipped. */
 :root { --wc-font-code: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
 :root[data-theme='dark'] { --wc-shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4); }
+/* The theme's own native controls (T476; UX-108, UX-090): checkboxes,
+   radios and ranges in the accent, never the browser's blue; and the dark
+   theme says so, so native checkboxes, selects and scrollbars draw dark. */
+:root { accent-color: var(--wc-accent); color-scheme: light; }
+:root[data-theme='dark'] { color-scheme: dark; }
 
 /* Form controls do not inherit type by default, and Safari's default button
    font-size is 11px -- below the 12px floor (AC-004). The rendered audit in
@@ -3254,9 +3259,12 @@ fieldset > .connection-form__legend { float: left; width: 100%; }
 .source-pane .field__label {
   font-size: var(--wc-text-xs-size);
   font-weight: 600;
-  color: var(--wc-text-primary);
+  /* Designs 01, 02, 03 and 13's .field > label, and their .req (T476's review). */
+  color: var(--wc-text-secondary);
 }
-.field__req { font-weight: 400; color: var(--wc-text-secondary); }
+.field__req { font-weight: 400; color: var(--wc-text-muted); }
+/* Design 16's .req is text-secondary, beside its text-primary label. */
+.schedule-form .field__req { color: var(--wc-text-secondary); }
 .connection-form input:not([type='checkbox']),
 .source-pane .field input:not([type='checkbox']) { width: 100%; height: 32px; }
 .connection-form textarea { width: 100%; }
@@ -4142,6 +4150,8 @@ code.schedules__sub { font-family: var(--wc-font-code); }
 }
 .schedule-form .field input[type='text'],
 .schedule-form .field select { width: 100%; height: 32px; box-sizing: border-box; }
+/* The cron in the code face at 13 px, design 16's .input.mono (T476). */
+.schedule-form .field input.is-code { font: 400 13px var(--wc-font-code); }
 .schedule-form [aria-invalid='true'] { border-color: var(--wc-status-error); }
 .schedule-form .field__help,
 .schedule-form__foot > .help { margin: 0; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }

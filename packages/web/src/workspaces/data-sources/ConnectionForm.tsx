@@ -699,7 +699,10 @@ function Field({
           {...shared}
           type={field.kind === 'number' ? 'number' : 'text'}
           autoComplete="off"
-          className={field.kind === 'number' ? undefined : 'is-code'}
+          // In the code face, a number too: designs 01 and 02 draw Port as
+          // `.input.mono tnum`, whose figures the code face already sets
+          // in even widths (T476's review).
+          className="is-code"
           onChange={(event) => {
             const typed = event.target.value;
             onField(

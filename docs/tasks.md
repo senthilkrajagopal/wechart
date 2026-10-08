@@ -10780,10 +10780,49 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - controls 32/14 in forms and dialogs, 28/12 in panes and filter bars, labels stacked 12/600 above them (UX-107);
     - `accent-color` on the root and `color-scheme: dark` under the dark theme, with `.switch` for booleans (UX-108, UX-090).
   - Depends on: T466
+  - **Sizes by design, the coordinator's calls (2026-10-07, under the user's R37; overturnable).** Each surface follows its own latest approved design, and a later design supersedes an earlier one. UX-107 is a finding from our own review, not the user's decision, so where it differs from an approved design, the design wins. The research behind these calls compared direction.md, every approved design, and UX-107, UX-105 and UX-108.
+    - **Q1 (a), inputs in panes.** Each pane takes its own latest design: 32/14 in the wizard and driver forms (2026-09-27 01, 02), the Access panel (07), Generate cubes' foot (11), export and import (13) and the schedule pane (16). They are 28/12 in the inspector (2026-09-24 01), the Model form (09-24 03, 09-27 12), Security's preview (09-27 08) and the chart page (09-24 06, 14).
+    - **Q2 (a), settings forms.** Each follows its own design: dashboard settings at 28/12 (09-24 05), data source settings at 32/14 (09-27 03).
+    - **Q3 (a), the dashboard's filter bar.** It keeps 32/13, with "Label: value" in the pill, as 09-24 04 and 08 and the prototype draw it, and as direction.md §4 and §7d have it.
+    - **Q4 (a), page filter rows.** They are 28/12 with the label in the pill ("Folder **All**"), as the designs draw them. Explore's "Show" is drawn as design 14 draws it.
+    - **Q5, the rest.** Segmented heights, switches, buttons in a pane's head or foot, menus, label colour and the required marker each follow the surface's latest design.
+  - **Step 1, built 2026-10-07: the theme's own controls.**
+    - The root sets `accent-color: var(--wc-accent)`, so native checkboxes, radios and ranges take the accent, never the browser's blue.
+    - It also sets `color-scheme: light`, and `color-scheme: dark` under the dark theme, as the prototype does, so native chrome draws dark there.
+    - direction.md says nothing on either; the designs draw their checkboxes accent-filled.
+    - Test: `consistency.spec.ts` "the theme's own controls", in both themes, failing first (`auto` and `normal`). The theme specs pass with it: `a11y-tokens`, `consistency`, `colours`, `theme`, `keyboard-coverage` and `explore`, 117/117 in Chrome.
+  - **Step 2, built 2026-10-08: each surface's controls at its own design's size.** `consistency.spec.ts` "control sizes by surface (T476)" checks one control on each surface against its latest design:
+    - the data source wizard (2026-09-27 01): 32/14 fields, identifiers 32/12 in the code face (its `.input.mono`), labels 12/600;
+    - a dialog's field, New dashboard (2026-09-27 04): 32/14;
+    - the schedule pane (2026-10-01 16): Name 32/14, the cron 32/13 in the code face;
+    - the chart editor's inspector (2026-09-24 01): Sort by and Top N, 28/12;
+    - Jobs' and Schedules' filter pills (2026-09-27 10, 2026-10-01 16): 28/12, the label in the pill;
+    - Explore's search (2026-09-30 14): 28/12;
+    - the dashboard's filter pill (2026-09-24 04): 32/13.
+    - Gaps found and fixed, each check failing first:
+      - the schedule pane's cron was 12 px, where design 16 draws 13. It is now 13 px in the code face;
+      - **from the cold review (FAIL):** Port was 14 px in the UI face, where designs 01 and 02 draw it `.input.mono`. Every field of the connection form is now in the code face;
+      - **from the cold review:** the connection form's and the docked panes' labels were text-primary, and "· required" text-secondary. Designs 01, 02, 03 and 13 draw them text-secondary and text-muted. Design 16's form keeps its own: text-primary labels and a text-secondary "required".
+    - Also from the review: the filter row's "in the pill" check now measures the label's middle within the pill (it could not fail before), and the dashboard pill's check reads its "Status:".
+    - **What T476 checks, and what it leaves open.** The checks above cover seven surfaces. The other surfaces named in Q1 and Q2, and Q5's details (segmented heights, switches, buttons in a pane's head or foot, menus), are measured against their designs in T406's critique, which plans a task for each difference it finds.
+    - Not here: the audit trail's pills, which the security suite reaches; and the chart page's "Add to a dashboard…" picker, which design 06 draws and the app doesn't have yet. That is T406's, with AC-352.
+    - A stray backtick in a CSS comment ended the stylesheet's template string early, and every page failed to draw. It went into the WIP commit; this commit fixes it, so the two belong together.
+    - Tests: `consistency.spec.ts` 25/25 in Chrome; with `data-source`, `a11y-tokens` and `design-conformance`, 143 of 144. The one, `design-conformance.spec.ts:942`, fails without T476's change too.
 - [ ] T477 (AC-187) One date and time format, with the exact time in a tooltip
   - Files: `packages/web/src/shell/formatTime.ts` (+ test), each date shown (Explore, Data sources, Jobs, a tile's badge and menu), `e2e/consistency.spec.ts`
-  - Failing test: `consistency.spec.ts`, and `formatTime.test.ts`: recent times relative ("4 min ago"), older ones "Sep 27, 03:27", a clock "03:27", all on one 24-hour clock, each with its exact time in a tooltip (UX-110).
+  - Failing test: `consistency.spec.ts`, and `formatTime.test.ts`: recent times relative ("4 min ago"), older ones ~~"Sep 27, 03:27"~~ "27 Sep 03:27" *(amended by the coordinator's Q6 and Q8 calls below)*, a clock "03:27", all on one 24-hour clock, each with its exact time in a tooltip (UX-110).
   - Depends on: T466
+  - **The format, the coordinator's calls (2026-10-07, under the user's R37; overturnable).** The later approved designs win. UX-110 is our own review's finding, not the user's decision. direction.md has no rule on dates.
+    - **Q6 (a), day first:** "27 Sep", as the 2026-09-27 designs 03–08 and the 2026-10-01 designs 15 and 16 write it.
+    - **Q7 (a), relative or absolute:** a time is relative only where a design draws it relative, and absolute everywhere else.
+    - **Q8, how it is written:**
+      - "Today 14:05" and "Yesterday 16:40";
+      - "24 Sep 09:40", with no comma;
+      - the year only when it isn't this year;
+      - seconds only where those designs draw them: the audit trail, run history and test stamps.
+    - **Q9 (a), the tooltip:** the exact local time, with UTC beside it.
+    - **Q10, the clock:** 24-hour everywhere, the tile badge's tooltip included.
+    - **"Sept":** en-GB writes September's short month "Sept" in this runtime. Every design writes "Sep", so the one format fixes it.
 - [x] T478 (AC-187, AC-220) Members by title in the search palette and the query log
   - Files: `packages/web/src/shell/SearchPalette.tsx`, `packages/web/src/workspaces/jobs/…` (+ tests), `e2e/consistency.spec.ts`
   - Failing test: `consistency.spec.ts`: the palette's field results and the query log name members by title, never by id (UX-102's parts AC-220 covers, UX-013, UX-082).

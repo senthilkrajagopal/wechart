@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-import { myCopyOf } from './workspace';
+import { IN_MY_WORKSPACE, myCopyOf } from './workspace';
 
 /**
  * T466 (AC-187; UX-106, UX-109, UX-111): one page frame and one dialog
@@ -182,6 +182,196 @@ test.describe('one dialog pattern (UX-106)', () => {
  * is `jobs.spec.ts`'s "the query log is grouped by day, its members by title"
  * (T469).
  */
+/**
+ * T476 (AC-187; UX-108, UX-090, the 2026-09-27 re-check): the theme's own
+ * native controls. A checkbox or radio takes the accent, never the browser's
+ * blue; and in the dark theme the root says so, so native checkboxes,
+ * selects and scrollbars draw dark chrome.
+ */
+test.describe('the theme’s own controls (UX-108, UX-090)', () => {
+  /** The accent as the browser resolves it, to compare with a computed colour. */
+  const accentOf = (page: Page) =>
+    page.evaluate(() => {
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--wc-accent)';
+      document.body.append(probe);
+      const colour = getComputedStyle(probe).color;
+      probe.remove();
+      return colour;
+    });
+
+  for (const theme of ['light', 'dark'] as const) {
+    test(`native controls take the accent, and the root's scheme is ${theme}`, async ({ page }) => {
+      await page.addInitScript((value) => {
+        window.localStorage.setItem('wechart.theme', value);
+      }, theme);
+      await page.goto('/data-sources');
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      const root = await page.evaluate(() => {
+        const style = getComputedStyle(document.documentElement);
+        return { accent: style.accentColor, scheme: style.colorScheme };
+      });
+      expect(root).toEqual({ accent: await accentOf(page), scheme: theme });
+    });
+  }
+});
+
+/**
+ * T476 (AC-187; the coordinator's calls under R37): each surface's controls
+ * at the size its own latest approved design draws them. Forms and dialogs
+ * at 32/14, the inspector and the compact panes at 28/12, page filter rows
+ * at 28/12 with the label in the pill, the dashboard's filter bar at 32/13.
+ */
+test.describe('control sizes by surface (T476)', () => {
+  /** A control's drawn height and font size. */
+  const sizeOf = (control: Locator) =>
+    control.evaluate((node) => ({
+      height: Math.round(node.getBoundingClientRect().height),
+      font: getComputedStyle(node).fontSize,
+    }));
+  /** A colour token as the browser resolves it. */
+  const tokenOf = (page: Page, token: string) =>
+    page.evaluate((name) => {
+      const probe = document.createElement('span');
+      probe.style.color = `var(${name})`;
+      document.body.append(probe);
+      const colour = getComputedStyle(probe).color;
+      probe.remove();
+      return colour;
+    }, token);
+  /** A label's size and weight. */
+  const labelOf = (label: Locator) =>
+    label.evaluate((node) => ({
+      font: getComputedStyle(node).fontSize,
+      weight: getComputedStyle(node).fontWeight,
+    }));
+
+  test('the data source wizard: 32/14 fields, identifiers 32/12 in the code face, under 12/600 labels (2026-09-27 01)', async ({
+    page,
+  }) => {
+    await page.goto('/data-sources');
+    await page.getByRole('button', { name: '+ Data source' }).click();
+    const wizard = page.getByRole('dialog', { name: 'New data source' });
+    await wizard.getByRole('radio', { name: 'PostgreSQL' }).click();
+    await wizard.getByRole('button', { name: 'Next: Connection' }).click();
+    // The design's `.input.mono`: an identifier, typed exactly (pin 4).
+    const host = wizard.getByRole('textbox', { name: /^Host/ });
+    expect(await sizeOf(host)).toEqual({ height: 32, font: '12px' });
+    // Its plain `.input`.
+    expect(await sizeOf(wizard.getByLabel(/^Password/))).toEqual({ height: 32, font: '14px' });
+    // Port too is `.input.mono tnum` in designs 01 and 02 (T476's review).
+    const port = wizard.getByRole('spinbutton', { name: /^Port/ });
+    expect(await sizeOf(port)).toEqual({ height: 32, font: '12px' });
+    expect(await port.evaluate((node) => getComputedStyle(node).fontFamily)).toMatch(/Plex Mono/);
+    const hostLabel = wizard.locator('label', { hasText: /^Host/ }).first();
+    expect(await labelOf(hostLabel)).toEqual({ font: '12px', weight: '600' });
+    // In text-secondary, its "· required" in text-muted (design 01's .field > label, .req).
+    expect(await hostLabel.evaluate((node) => getComputedStyle(node).color)).toBe(
+      await tokenOf(page, '--wc-text-secondary'),
+    );
+    expect(
+      await hostLabel.locator('.field__req').evaluate((node) => getComputedStyle(node).color),
+    ).toBe(await tokenOf(page, '--wc-text-muted'));
+  });
+
+  test('a dialog: a 32/14 field (2026-09-27 04)', async ({ page }) => {
+    await page.goto('/explore?folder=mine');
+    await page
+      .getByTestId('explore-contents')
+      .getByRole('button', { name: 'New', exact: true })
+      .click();
+    await page
+      .getByRole('menu', { name: 'New' })
+      .getByRole('menuitem', { name: 'Dashboard', exact: true })
+      .click();
+    const dialog = page.getByRole('dialog', { name: 'New dashboard in My workspace' });
+    expect(await sizeOf(dialog.getByRole('textbox', { name: 'Name' }))).toEqual({
+      height: 32,
+      font: '14px',
+    });
+  });
+
+  test('the schedule pane: 32/14 fields, the cron 32/13 in the code face (2026-10-01 16)', async ({
+    page,
+  }) => {
+    await page.goto('/schedules');
+    await page.getByRole('button', { name: 'New schedule' }).click();
+    expect(await sizeOf(page.getByRole('textbox', { name: /^Name/ }))).toEqual({
+      height: 32,
+      font: '14px',
+    });
+    // The design's `.input.mono`, 13 px in design 16.
+    const cron = page.getByRole('textbox', { name: 'Cron expression' });
+    expect(await sizeOf(cron)).toEqual({ height: 32, font: '13px' });
+  });
+
+  test('the inspector: 28/12 (2026-09-24 01)', async ({ page }) => {
+    await page.goto('/explore/charts/seed-chart-status/edit');
+    expect(await sizeOf(page.getByLabel('Sort by'))).toEqual({ height: 28, font: '12px' });
+    expect(await sizeOf(page.getByLabel('Top N (+ Other)'))).toEqual({ height: 28, font: '12px' });
+  });
+
+  test('page filter rows: 28/12 pills, the label in the pill (2026-09-27 01, 10; 2026-10-01 16)', async ({
+    page,
+  }) => {
+    // The audit trail's are the security suite's to check, where it is shown.
+    for (const [path, word] of [
+      ['/jobs', 'Status'],
+      ['/schedules', 'State'],
+    ] as const) {
+      await page.goto(path);
+      const pill = page.locator('main .select-pill', { hasText: word }).first();
+      await expect(pill, path).toBeVisible();
+      expect(await sizeOf(pill), path).toEqual({ height: 28, font: '12px' });
+      // Its label inside it, on its row, not above it: the label's middle
+      // within the pill's height.
+      const [own, label] = [await pill.boundingBox(), await pill.getByText(word).boundingBox()];
+      expect(own, path).not.toBeNull();
+      expect(label, path).not.toBeNull();
+      const middle = (label?.y ?? 0) + (label?.height ?? 0) / 2;
+      expect(middle, path).toBeGreaterThan(own?.y ?? 0);
+      expect(middle, path).toBeLessThan((own?.y ?? 0) + (own?.height ?? 0));
+    }
+  });
+
+  test('Explore’s search: 28/12 (2026-09-30 14)', async ({ page }) => {
+    await page.goto('/explore');
+    const search = page.getByRole('searchbox', { name: 'Search dashboards and charts' });
+    expect(await sizeOf(search)).toEqual({ height: 28, font: '12px' });
+  });
+
+  test('the dashboard’s filter bar: 32/13 pills (2026-09-24 04)', async ({ page, request }) => {
+    const title = `Sizes ${String(Date.now())}`;
+    const made = (await (
+      await request.post('/api/documents', {
+        data: { kind: 'dashboard', title, ...IN_MY_WORKSPACE },
+      })
+    ).json()) as { id: string };
+    const saved = await request.put(`/api/documents/dashboard/${made.id}`, {
+      data: {
+        version: 1,
+        body: {
+          schemaVersion: 1,
+          title,
+          ...IN_MY_WORKSPACE,
+          owner: 'admin',
+          pages: [{ id: 'only', title: 'Only', items: [] }],
+          filters: [{ id: 'f-list', widget: 'list', member: 'orders.status' }],
+        },
+      },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    await page.goto(`/explore/dashboards/${made.id}`);
+    // The pill, the design's `.fw`; its value's button sits inside it.
+    const pill = page.locator('[data-filter-id="f-list"]');
+    await expect(pill).toBeVisible();
+    expect(await sizeOf(pill)).toEqual({ height: 32, font: '13px' });
+    // "Label: value" inside it, on its row.
+    await expect(pill.locator('button[aria-expanded]')).toBeVisible();
+    await expect(pill).toContainText(/Status\s*:/);
+  });
+});
+
 test.describe('members by title (UX-102)', () => {
   test('the search palette names fields and their cubes by title, never by id', async ({
     page,
