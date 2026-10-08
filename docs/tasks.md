@@ -13767,7 +13767,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - the rebuild warning shows on an identity change and on a replaced key (AC-353).
   - Depends on: T708, T712, T722, T725
 
-- [ ] T731 (AC-281, AC-282, AC-283, AC-323, AC-280) Rework the tests of T345, T347, T363, T471, T542 and T543 to workspaces under one name per item
+- [x] T731 (AC-281, AC-282, AC-283, AC-323, AC-280) Rework the tests of T345, T347, T363, T471, T542 and T543 to workspaces under one name per item
   - Files:
     - `packages/web/src/workspaces/explore/NewItemDialog.test.tsx` and T345's `targets.test.ts`;
     - `e2e/security/workspace-overlay.spec.ts`: T347's along-the-path cases give way to the landed cube of the name;
@@ -13780,6 +13780,19 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - the workspace's copy of a data source answers in place of the original (AC-280);
     - a use-only copy previews and is proposed nowhere (AC-283).
   - Depends on: T705, T716, T717
+  - **Done 2026-10-08.** On the R71 image in Chrome, the five specs pass 28/28.
+    - **Already reworked by earlier tasks, and passing as they stand:**
+      - `workspace-overlay.spec.ts`, by T716 and T718: previews from the workspace's copy, else the landed cube.
+      - `use-only-copy.spec.ts`, by T717: proposed nowhere, "Request a change".
+      - `NewItemDialog.test.tsx`, by T703: R72's grammar.
+      - There is no `targets.test.ts`. T345's target cases are `NewItemDialog.test.tsx`'s.
+    - **`workspace-rebind.spec.ts` (T542, AC-281), rewritten.** A workspace tile holds the cube's one bare name and answers 1. The workspace's edit copy of the cube (`POST /api/workspace/copies`), changed to 5 and saved, answers first through the overlay: the tile answers 5. The tile's stored `source.cube` is the name it was saved with, since nothing rebinds it. The folder's own dashboard still answers 1. The old premise, a draft of that name going to another folder and the `<folderId>__` member, can't arise under R71.
+    - **`new-data-source.spec.ts` (T363, AC-422, AC-282).** `super` lands `e2e_<run>_landed` in the target. In the wizard's Name step, that name in upper case is refused on the field, in the API's words "The name “…” is already in use.", naming no folder. The wizard then makes the new one under its own name.
+    - **`data-sources.spec.ts` (T459, AC-157), outside this task's list and owned by no rework task: the coordinator's call, 2026-10-08.**
+      - **Removed:** the nearer `parent_<run>` of the same name, its "No cube", and the two "again" describes in which a republish rebinds the cube to it. R71 retires that premise (AC-274 retired), and the test-integrity hook flagged the removal.
+      - **Replacement:** at the same step, making the nearer `parent_<run>` in /Sources parent/Sources is refused, 409 `{ error: 'The name “parent_<run>” is already in use.' }`, which names no folder (AC-421, AC-424). The cube stays bound to the parent's, as the writer's step shows.
+      - **Collateral:** this case's failure, a 409 that left a cube naming a data source that was never made, broke `workspace-overlay.spec.ts`'s previews in the same run. That spec passes alone and with the fix.
+    - **Not ticked:** the ACs are left to the coordinator's run on the image, as with T729.
 
 - [ ] T732 (AC-329, AC-428) Rework the tests of T475 and T633 to a picker with no hidden cubes and the user's copy in place
   - Files: `e2e/security/picker.spec.ts` (T475's dimmed hidden cube goes, AC-342 being retired), `packages/web/src/filters/fieldPicker.test.tsx`, `e2e/cubePicker.ts`

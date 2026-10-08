@@ -1,6 +1,9 @@
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 
-import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
+import { sealSecretV1, type XcubeKey } from '@wechart/core';
+
+import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtures';
 
 /**
  * T363 (AC-158, AC-159, AC-160, AC-325, AC-282, AC-163): `writer` adds a data
@@ -13,7 +16,13 @@ import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
 const RUN = Math.random().toString(36).slice(2, 8);
 const CANARY = `canary-${RUN}-typed`;
 const NAME = `e2e_${RUN}_wizard`;
-const made = { folder: '', source: '' };
+/** A data source that has landed in the target, whose name a new one can't take (AC-422). */
+const TAKEN = `e2e_${RUN}_landed`;
+const KEY = JSON.parse(
+  readFileSync(new URL('../../infra/xcube/dev-credential-key.pub.jwk', import.meta.url), 'utf8'),
+) as XcubeKey;
+const FIELDS = { host: 'sample-db', port: 5432, database: 'sample', user: 'sample', ssl: false };
+const made = { folder: '', source: '', taken: '' };
 
 /**
  * Every row of the suite's metadata database, every table's, as its admin
@@ -42,6 +51,8 @@ test.describe('a data source added in the workspace (T363)', () => {
     }
     if (made.folder !== '') {
       await signInThroughDex(page, 'super');
+      if (made.taken !== '')
+        await context.request.delete(`/api/data-sources/${made.taken}`, { timeout: 90_000 });
       await context.request.delete(`/api/documents/folder/${made.folder}`);
     }
     await context.close();
@@ -50,7 +61,7 @@ test.describe('a data source added in the workspace (T363)', () => {
   test.describe('as super', () => {
     test.use({ role: 'super' });
 
-    test('makes a folder writer writes in', async ({ page }) => {
+    test('makes a folder writer writes in, holding a data source of its own', async ({ page }) => {
       const folder = await page.request.post('/api/documents', {
         data: { kind: 'folder', title: `New source target ${RUN}`, folderId: 'root' },
       });
@@ -59,6 +70,22 @@ test.describe('a data source added in the workspace (T363)', () => {
         data: { readOnly: [], readWrite: ['sales-rw'] },
       });
       expect(granted.status()).toBe(200);
+      // A landed name, for the wizard's Name step (T731, AC-422).
+      const landedSource = await page.request.post('/api/data-sources', {
+        data: await testedSource(page.request, {
+          folderId: made.folder,
+          name: TAKEN,
+          driver: 'postgres',
+          authMethod: 'password',
+          fields: FIELDS,
+          sealed: {
+            password: await sealSecretV1(KEY, 'postgres', 'password', FIELDS, 'sample'),
+          },
+        }),
+        timeout: 90_000,
+      });
+      expect(landedSource.status(), await landedSource.text()).toBe(201);
+      made.taken = ((await landedSource.json()) as { id: string }).id;
     });
   });
 
@@ -172,11 +199,20 @@ test.describe('a data source added in the workspace (T363)', () => {
       ]);
       await wizard.getByRole('button', { name: 'Next: Name and target' }).click();
 
-      await wizard.getByRole('textbox', { name: /^Name/ }).fill(NAME);
+      // A name that has landed, in another case, is refused as in use, and
+      // nothing more (T731; AC-422, AC-424, AC-282).
+      const nameField = wizard.getByRole('textbox', { name: /^Name/ });
+      await nameField.fill(TAKEN.toUpperCase());
       await wizard
         .getByRole('tree', { name: 'Target folder' })
         .getByRole('treeitem', { name: `New source target ${RUN}` })
         .click();
+      await wizard.getByRole('button', { name: 'Create in My workspace' }).click();
+      await expect(nameField).toHaveAttribute('aria-invalid', 'true');
+      await expect(wizard.locator('.field__error')).toHaveText(
+        `The name “${TAKEN.toUpperCase()}” is already in use.`,
+      );
+      await nameField.fill(NAME);
       const created = page.waitForResponse(
         (response) =>
           response.url() === `${BASE_URL}/api/data-sources` &&

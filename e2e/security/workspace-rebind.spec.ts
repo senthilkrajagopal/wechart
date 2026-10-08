@@ -4,39 +4,39 @@ import { landed } from '../model-files';
 import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
 
 /**
- * T542 (AC-281; the user's answer "Rebind in the workspace", R53), against
- * compose's xcube: a workspace dashboard's tile saved against a folder's
- * cube keeps that name. Once the workspace makes its own cube of that name,
- * to go to another folder, off the first one's path, the tile's preview
- * answers from the workspace's cube, under the name the tile holds. The
- * folder's own dashboard still answers from the folder's.
+ * T542 (AC-281; the user's answer "Rebind in the workspace", R53), as T731
+ * reworks it to one name per item (R71; T716), against compose's xcube on the
+ * R71 image: a workspace dashboard's tile saved against a folder's cube holds
+ * its one name. Once the workspace holds its own copy of that cube, changed,
+ * the tile's preview answers from the copy — the workspace's overlay first —
+ * under the name the tile holds, which nothing rebinds. The folder's own
+ * dashboard still answers from the folder's cube.
  *
- * `super` makes two folders `writer` (`sales-rw`) writes, and publishes the
- * cube in the first.
+ * `super` makes a folder `writer` (`sales-rw`) writes, and publishes the cube
+ * in it.
  */
 const RUN = Math.random().toString(36).slice(2, 8);
 const FIRST = `Rebind ${RUN}`;
-const SECOND = `Rebind elsewhere ${RUN}`;
 const CUBE = `t542_${RUN}`;
 const PATH = `cubes/${CUBE}.yml`;
+const MEMBER = `${CUBE}.n`;
 const cubeOf = (n: number) =>
   `cubes:\n  - name: ${CUBE}\n    sql: SELECT ${String(n)} AS n\n    measures:\n      - name: n\n        sql: n\n        type: sum\n`;
-const made = { first: '', second: '', xcubeId: '', project: '', board: '', chart: '', shared: '' };
-const member = () => `${made.xcubeId}__${CUBE}.n`;
+const made = { first: '', project: '', copyFolder: '', board: '', chart: '', shared: '' };
 
 async function answered(request: APIRequestContext, kind: 'dashboard', id: string) {
   const answer = await request.post('/api/load', {
-    data: { query: { measures: [member()] }, for: { kind, id } },
+    data: { query: { measures: [MEMBER] }, for: { kind, id } },
     timeout: 90_000,
   });
   expect(answer.status(), await answer.text()).toBe(200);
   const [row] = ((await answer.json()) as { data: Record<string, unknown>[] }).data;
-  return Number(row?.[member()]);
+  return Number(row?.[MEMBER]);
 }
 
 test.describe.configure({ mode: 'serial' });
 
-test.describe('a workspace tile’s stored name, rebound to the workspace’s own cube (T542, AC-281)', () => {
+test.describe('a workspace tile’s one name, answered from the workspace’s copy first (T542, AC-281)', () => {
   test.afterAll(async ({ browser }) => {
     test.setTimeout(180_000);
     for (const who of ['writer', 'super'] as const) {
@@ -49,13 +49,15 @@ test.describe('a workspace tile’s stored name, rebound to the workspace’s ow
       if (who === 'writer') {
         if (made.board !== '') await request.delete(`/api/documents/dashboard/${made.board}`);
         if (made.chart !== '') await request.delete(`/api/documents/chart/${made.chart}`);
-        if (made.project !== '') {
+        if (made.copyFolder !== '') {
           await request.delete(
-            `/api/model/files?folder=${encodeURIComponent(made.project)}&path=${encodeURIComponent(PATH)}`,
+            `/api/model/files?folder=${encodeURIComponent(made.copyFolder)}&path=${encodeURIComponent(PATH)}`,
             { timeout: 90_000 },
           );
-          await request.delete(`/api/documents/folder/${made.project}`);
+          if (made.copyFolder !== 'mine')
+            await request.delete(`/api/documents/folder/${made.copyFolder}`);
         }
+        if (made.project !== '') await request.delete(`/api/documents/folder/${made.project}`);
       }
       if (who === 'super') {
         if (made.shared !== '') await request.delete(`/api/documents/dashboard/${made.shared}`);
@@ -66,7 +68,6 @@ test.describe('a workspace tile’s stored name, rebound to the workspace’s ow
           );
           await request.delete(`/api/documents/folder/${made.first}`);
         }
-        if (made.second !== '') await request.delete(`/api/documents/folder/${made.second}`);
       }
       await context.close();
     }
@@ -75,22 +76,16 @@ test.describe('a workspace tile’s stored name, rebound to the workspace’s ow
   test.describe('as super', () => {
     test.use({ role: 'super' });
 
-    test('makes the folders and publishes the cube in the first', async ({ page }) => {
+    test('makes the folder and publishes the cube in it', async ({ page }) => {
       const { request } = page;
-      for (const [key, title] of [
-        ['first', FIRST],
-        ['second', SECOND],
-      ] as const) {
-        const folder = await request.post('/api/documents', {
-          data: { kind: 'folder', title, folderId: 'root' },
-        });
-        made[key] = ((await folder.json()) as { id: string }).id;
-        const access = await request.put(`/api/folders/${made[key]}/access`, {
-          data: { readOnly: [], readWrite: ['sales-rw'] },
-        });
-        expect(access.status()).toBe(200);
-      }
-      made.xcubeId = `f${made.first.replaceAll('-', '')}`;
+      const folder = await request.post('/api/documents', {
+        data: { kind: 'folder', title: FIRST, folderId: 'root' },
+      });
+      made.first = ((await folder.json()) as { id: string }).id;
+      const access = await request.put(`/api/folders/${made.first}/access`, {
+        data: { readOnly: [], readWrite: ['sales-rw'] },
+      });
+      expect(access.status()).toBe(200);
       // Through My workspace and a proposal `super` approves (T451, AC-278).
       const file = { path: PATH, content: cubeOf(1) };
       expect(await landed(request, made.first, [file])).toEqual([file]);
@@ -104,7 +99,7 @@ test.describe('a workspace tile’s stored name, rebound to the workspace’s ow
   test.describe('as writer', () => {
     test.use({ role: 'writer' });
 
-    test('a tile saved against the folder’s cube answers from it, then from the workspace’s own once made', async ({
+    test('a tile saved against the folder’s cube answers from it, then from the workspace’s copy, its name as it was', async ({
       page,
     }) => {
       const { request } = page;
@@ -138,8 +133,8 @@ test.describe('a workspace tile’s stored name, rebound to the workspace’s ow
       await change('chart', made.chart, (body) => ({
         ...body,
         chart: {
-          source: { cube: `${made.xcubeId}__${CUBE}` },
-          wells: { measures: [member()], dimensions: [], timeDimensions: [] },
+          source: { cube: CUBE },
+          wells: { measures: [MEMBER], dimensions: [], timeDimensions: [] },
         },
       }));
       made.board = await create('dashboard', `Board ${RUN}`);
@@ -151,17 +146,25 @@ test.describe('a workspace tile’s stored name, rebound to the workspace’s ow
       }));
       expect(await answered(request, 'dashboard', made.board)).toBe(1);
 
-      // The workspace's own cube of the name, to go to the second folder.
+      // The workspace's own copy of the cube, changed: the overlay answers first.
+      const copied = await request.post('/api/workspace/copies', {
+        data: { kind: 'model', folderId: made.first, path: PATH, timeZone: 'UTC' },
+        timeout: 90_000,
+      });
+      expect(copied.status(), await copied.text()).toBeLessThan(300);
+      const copy = (await copied.json()) as { folderId: string; path: string };
+      made.copyFolder = copy.folderId;
       const saved = await request.post('/api/model/publish', {
-        data: {
-          folderId: made.project,
-          files: [{ path: PATH, content: cubeOf(5) }],
-          targetFolderId: made.second,
-        },
+        data: { folderId: copy.folderId, files: [{ path: copy.path, content: cubeOf(5) }] },
         timeout: 90_000,
       });
       expect(saved.status(), await saved.text()).toBe(200);
       expect(await answered(request, 'dashboard', made.board)).toBe(5);
+      // Its tile holds the name it was saved with: nothing rebound it.
+      const tile = (await (await request.get(`/api/documents/chart/${made.chart}`)).json()) as {
+        body: { chart: { source: { cube: string } } };
+      };
+      expect(tile.body.chart.source.cube).toBe(CUBE);
       // The folder's own dashboard answers from the folder's cube still.
       expect(await answered(request, 'dashboard', made.shared)).toBe(1);
     });

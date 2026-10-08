@@ -684,21 +684,37 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
 
   /**
    * T459 (AC-157): beside each data source, the cubes xcube bound to it at
-   * publish. A cube in the sales folder naming `parent_…` binds its parent's;
-   * a nearer `parent_…` added after rebinds nothing (AC-273), so the cube
-   * stays beside the first. A root data source's cube in managers' folder is
-   * no business of `writer`'s.
+   * publish. A cube in the sales folder naming `parent_…` binds its parent's,
+   * the one data source of that name (R71; T731: a nearer one of the name, and
+   * its rebinding, can no longer be made). A root data source's cube in
+   * managers' folder is no business of `writer`'s.
    */
   test.describe('the cubes bound to each', () => {
     test.describe('as super, who publishes them', () => {
       test.use({ role: 'super' });
 
-      test('publishes a cube on the parent’s, then adds a nearer one of that name, and a cube only managers reach', async ({
+      test('publishes a cube on the parent’s, is refused a nearer one of that name, and publishes a cube only managers reach', async ({
         page,
       }) => {
         const request = page.request;
         await cube(request, made.folder, `uses_${RUN}`, `parent_${RUN}`);
-        await dataSource(request, made.folder, `parent_${RUN}`);
+        // A nearer one of the name is refused as in use, saying nowhere where (AC-421, AC-424).
+        const nearer = await request.post('/api/data-sources', {
+          data: await testedSource(request, {
+            folderId: made.folder,
+            name: `parent_${RUN}`,
+            driver: 'postgres',
+            authMethod: 'password',
+            fields: FIELDS,
+            sealed: {
+              password: await sealSecretV1(KEY, 'postgres', 'password', FIELDS, 'sample'),
+            },
+          }),
+        });
+        expect(nearer.status()).toBe(409);
+        expect(await nearer.json()).toEqual({
+          error: `The name “parent_${RUN}” is already in use.`,
+        });
         await dataSource(request, 'root', `root_${RUN}`);
         await cube(request, made.hidden, `secret_${RUN}`, `root_${RUN}`);
 
@@ -730,7 +746,7 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
     test.describe('as writer', () => {
       test.use({ role: 'writer' });
 
-      test('sees each cube beside the source it was bound to, never rebound, and none it can’t reach', async ({
+      test('sees each cube beside the source it was bound to, and none it can’t reach', async ({
         page,
       }) => {
         await page.goto('/data-sources');
@@ -749,11 +765,6 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
         await expect(parent.locator('.sources-used-by__tip')).toHaveText(
           `uses_${RUN} · Sources parent ${RUN} / Sources ${RUN}`,
         );
-        await expect(
-          rowOf(`parent_${RUN}`, `Sources parent ${RUN} / Sources ${RUN}`).getByTestId(
-            'source-used-by',
-          ),
-        ).toHaveText('No cube');
         // Managers' cube counted, never named (as AC-322 counts what can't be seen).
         const root = rowOf(`root_${RUN}`, 'Shared').getByTestId('source-used-by');
         await expect(root.locator('.sources-used-by__count')).toHaveText('1 cube');
@@ -782,36 +793,6 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
           `uses_${RUN}.yml`,
           `Sources parent ${RUN} / Sources ${RUN}`,
         ]);
-      });
-    });
-
-    test.describe('as super, again', () => {
-      test.use({ role: 'super' });
-
-      test('publishes the cube again, which binds it to the nearer one', async ({ page }) => {
-        await cube(page.request, made.folder, `uses_${RUN}`, `parent_${RUN}`, 'Uses, again');
-      });
-    });
-
-    test.describe('as writer, again', () => {
-      test.use({ role: 'writer' });
-
-      test('sees it beside the nearer one once it’s published again, and the first with none', async ({
-        page,
-      }) => {
-        await page.goto('/data-sources');
-        const table = page.getByRole('main').getByRole('table', { name: 'Data sources' });
-        const usedBy = (folder: string) =>
-          table
-            .getByRole('row')
-            .filter({ hasText: `parent_${RUN}` })
-            .filter({ has: page.getByRole('link', { name: folder, exact: true }) })
-            .getByTestId('source-used-by');
-
-        await expect(
-          usedBy(`Sources parent ${RUN} / Sources ${RUN}`).locator('.sources-used-by__tip'),
-        ).toHaveText(`uses_${RUN} · Sources parent ${RUN} / Sources ${RUN}`);
-        await expect(usedBy(`Sources parent ${RUN}`)).toHaveText('No cube');
       });
     });
   });
