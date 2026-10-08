@@ -550,6 +550,60 @@ describe('the models of an imported file (T720, AC-357, AC-356)', () => {
 });
 
 /**
+ * T721 (AC-358): an imported model's cubes bind to the data source chosen
+ * for the file's one they name, or the one it was mapped to, by that one's
+ * name: the landed `<mark>_emea` here, which /Sales, the target, holds.
+ */
+describe('the data source an imported model binds to (T721, AC-358)', () => {
+  /** A file whose data source is `source`, and whose model's cube names `named`. */
+  const bindingFile = (tag: string, source: string, named: string) => {
+    const model = {
+      path: pathOf(`bound_${tag}`),
+      content: `${cube(name(`bound_${tag}`))}    data_source: ${named}\n`,
+    };
+    const file = exportFile([model], `${MARK} ${tag}`);
+    return {
+      model,
+      file: {
+        ...file,
+        items: file.items.map((item) =>
+          item.kind === 'data-source' ? { ...item, name: source } : item,
+        ),
+      },
+    };
+  };
+  const storedContentOf = async (path: string) =>
+    (await files().inFolders([workspace])).find((file) => file.path === path)?.content;
+
+  it('binds a cube to the landed one the file’s data source was mapped to, by its name', async () => {
+    const warehouse = name('warehouse');
+    const { model, file } = bindingFile('mapped', warehouse, warehouse);
+    const answer = await as('writer', {
+      method: 'POST',
+      url: IMPORTS,
+      payload: {
+        file,
+        targetFolderId: folders.sales,
+        dataSources: [{ name: warehouse, to: sourceId }],
+      },
+    });
+    expect(answer.statusCode, answer.body).toBe(201);
+    const stored = await storedContentOf(model.path);
+    expect(stored).toContain(`    data_source: ${SOURCE}\n`);
+    expect(stored).not.toContain(warehouse);
+  });
+
+  it('binds a cube naming the file’s one in another case to the landed one holding its name, by that one’s name', async () => {
+    const { model, file } = bindingFile('held', SOURCE.toUpperCase(), SOURCE.toUpperCase());
+    const answer = await land(file);
+    expect(answer.statusCode, answer.body).toBe(201);
+    const stored = await storedContentOf(model.path);
+    expect(stored).toContain(`    data_source: ${SOURCE}\n`);
+    expect(stored).not.toContain(SOURCE.toUpperCase());
+  });
+});
+
+/**
  * T720's second follow-up (AC-357, AC-356; the coordinator's rulings,
  * 2026-10-08): a model declaring a held name beside a new one is refused,
  * naming it, neither mapped whole nor split; two new models of one name in a

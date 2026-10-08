@@ -13445,12 +13445,22 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
         - `ImportPane.test.tsx`: 2 cases, the dashboard's uses and the race, each red before (the race was checked with the guard taken out).
         - API 1824/1824, web 2621/2621.
 
-- [ ] T721 (AC-358) Bind an imported model's cubes to the data source chosen for, or mapped to, the file's one
+- [x] T721 (AC-358) Bind an imported model's cubes to the data source chosen for, or mapped to, the file's one
   - Files: `packages/core/src/importBinding.ts` (+ test, from the same WIP), `packages/api/src/routes/import.ts`
   - Failing test: `importBinding.test.ts` and `import-models.test.ts` (AC-358):
     - A cube naming the file's `warehouse` binds to the one chosen for it, by that data source's name, held on the target's path. The one chosen is either the landed `dw_main` it was mapped to, or the new `warehouse` it was created as.
     - A cube extending another takes its parent's data source.
   - Depends on: T720
+  - **Done 2026-10-08.**
+    - **Core** (`importBinding.ts`, from the WIP; exported from the index): `rebound(content, chosen)` gives each cube naming one of the file's data sources the name of the one chosen for it, in the key it uses (`data_source` or `dataSource`). A cube naming none and extending none gets the name chosen for `default`, where that differs. A cube extending another is left to its parent. Nothing else in the file changes.
+      - **The lookup is in any case (R71), and the cube is given the chosen one's stored spelling.** The research says names are unique in any case, not that a cube's `data_source` binds in any case, so the stored spelling is written.
+      - **Dropped from the WIP:** `modelsBinding`, which nothing used.
+    - **The API** (`routes/import.ts`): Import maps each of the file's data sources to the name it is given. That is the holder's for one whose name is held (which covers one created for the import, a draft of its own name), else the one the importer mapped it to. Each model is rebound so before it lands through the overlay.
+    - **Tests:**
+      - `importBinding.test.ts`, 5 cases, red before (no module). They cover the keys, `default`, `extends`, case, and an unchanged file.
+      - `import-models.test.ts`, 2 cases, red before. A cube on the file's `<mark>_warehouse`, mapped to Sales's `<mark>_emea`, is stored naming `<mark>_emea`. A cube naming the file's one in upper case, held by `<mark>_emea`, is stored naming `<mark>_emea`.
+      - API 1826/1826, core 545/545, web 2621/2621.
+    - **Not ticked:** AC-358 waits for T733's e2e on the image.
 
 ### The UI
 

@@ -57,6 +57,7 @@ export {
   type ExportFile,
   type ExportItem,
 } from './exportFile';
+export { rebound, sourcesNamedIn } from './importBinding';
 export {
   clockChangeBetween,
   nextRefreshes,

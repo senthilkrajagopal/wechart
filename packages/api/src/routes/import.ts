@@ -4,6 +4,7 @@ import {
   exportedBodyOf,
   nameKey,
   readExport,
+  rebound,
   tokenMembersOf,
   type ExportedChart,
   type ExportFile,
@@ -897,10 +898,13 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
         error: `Map each data source to one a model in ${where} can bind to, or create it: ${undecided.join(', ')}.`,
       });
     let createdSources = 0;
+    /** Each of the file's data sources, by its name, to the name of the one it is given (T721). */
+    const chosen = new Map<string, string>();
     for (const item of file.items)
       if (item.kind === 'data-source') {
         const holder = held.get(item.name);
         if (holder !== undefined) {
+          chosen.set(item.name, holder.name);
           // Counted only where the import names it as the one it made (the pane's Create).
           if (holder.created && decided.get(item.name)?.to === holder.id) createdSources += 1;
           continue;
@@ -909,6 +913,7 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
         if (found === undefined) return reply.code(404).send(NO_SUCH_SOURCE);
         // One made for it is made under its own name, which would be held (T719).
         if (found.created) return reply.code(400).send(ownName(item.name));
+        chosen.set(item.name, found.name);
       }
 
     // New ids for everything: nothing saved is written over (AC-356).
@@ -978,7 +983,12 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
      * one xcube refuses is refused here, on its file, and nothing is written.
      */
     if (landing.length > 0) {
-      const saved = await access.models!.save(own, target.id, landing);
+      // Each cube bound to the data source given for the one it names (T721, AC-358).
+      const saved = await access.models!.save(
+        own,
+        target.id,
+        landing.map((model) => ({ ...model, content: rebound(model.content, chosen) })),
+      );
       if (saved.status === 422 && Array.isArray((saved.body as { errors?: unknown }).errors))
         return reply.code(422).send({
           error: REFUSED,
