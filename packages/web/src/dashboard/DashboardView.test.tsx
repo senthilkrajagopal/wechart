@@ -769,3 +769,66 @@ describe('the assignment survives a re-render (AC-039)', () => {
     expect(result.current['c1']?.colours?.['paid']).toBe(paid);
   });
 });
+
+/**
+ * T760 (AC-277): a user read-only everywhere has no workspace, so no
+ * dashboard to copy a chart to: the tile's Copy › offers no "To dashboard…".
+ */
+describe('Copy › To dashboard… only for one with a workspace (T760, AC-277)', () => {
+  const ONE: DashboardDocument = {
+    ...DOC,
+    pages: [
+      {
+        id: 'p1',
+        title: 'Overview',
+        items: [{ id: 't1', kind: 'chart', w: 6, h: 40, chartId: 'c1' }],
+      },
+    ],
+  };
+  const documents = {
+    c1: {
+      schemaVersion: 1,
+      title: 'By status',
+      chart: {
+        source: { cube: 'orders' },
+        wells: { measures: [COUNT], dimensions: [STATUS], timeDimensions: [] },
+      },
+    },
+  } as unknown as NonNullable<Parameters<typeof DashboardView>[0]['documents']>;
+  const copyItems = async () => {
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for By status' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Copy/ }));
+    return within(screen.getByRole('menu', { name: /^Copy/ }))
+      .getAllByRole('menuitem')
+      .map((item) => item.textContent);
+  };
+
+  it('is offered by default', async () => {
+    render(
+      <DashboardView
+        dashboardId="d1"
+        document={ONE}
+        specs={SPECS}
+        documents={documents}
+        onSave={vi.fn()}
+      />,
+    );
+    expect(await copyItems()).toContain('To dashboard…');
+  });
+
+  it('is not offered where the user may copy to no dashboard', async () => {
+    render(
+      <DashboardView
+        dashboardId="d1"
+        document={ONE}
+        specs={SPECS}
+        documents={documents}
+        mayCopyToDashboard={false}
+        onSave={vi.fn()}
+      />,
+    );
+    const items = await copyItems();
+    expect(items.length).toBeGreaterThan(0);
+    expect(items).not.toContain('To dashboard…');
+  });
+});

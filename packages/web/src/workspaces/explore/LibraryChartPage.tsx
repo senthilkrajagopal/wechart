@@ -9,7 +9,7 @@ import { NOTHING_CHOSEN } from '../../dashboard/edit/templates';
 import { specFor } from '../../dashboard/DashboardPage';
 import { allMembers } from '../../filters/FilterBar';
 import { metaQueryOf } from '../../query/meta';
-import { ME_QUERY } from '../../shell/me';
+import { hasWorkspace, ME_QUERY } from '../../shell/me';
 import { ProposalBand } from './ProposalBand';
 import { ProposeFlow } from './ProposeFlow';
 import { approvedText, HistoryPanel, historyQuery } from '../history/HistoryPanel';
@@ -98,6 +98,11 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
    * the single user, since R52 (T359, AC-254).
    */
   const viaWorkspace = me.data !== undefined;
+  /**
+   * Whether the user may create or edit at all: one read-only everywhere has
+   * no workspace, so neither Edit chart nor Add to dashboard (T760, AC-277).
+   */
+  const mayChange = me.data !== undefined && hasWorkspace(me.data);
   // Its History (T357, AC-289): offered only where the API shows it.
   const history = useQuery({ ...historyQuery('chart', chartId), enabled: viaWorkspace });
   const mayHistory = viaWorkspace && history.data != null;
@@ -345,8 +350,8 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
     router.history.push(exploreHref(stored.data?.body.folderId ?? SHARED_ROOT.id));
   };
 
-  /** Putting it on another dashboard (AC-022). */
-  const addTo = (
+  /** Putting it on another dashboard (AC-022): only with a workspace (T760, AC-277). */
+  const addTo = !mayChange ? null : (
     <div className="chart-page__add">
       <label htmlFor="add-to-dashboard">Dashboard</label>
       <select
@@ -463,7 +468,7 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
             saved to folders first (AC-127); never in an editor that can't
             save it (T463, UX-040). A library chart is edited here. */}
             {localTo === undefined ? (
-              stored.isPending ? null : place?.kind === 'shared' ? (
+              stored.isPending || !mayChange ? null : place?.kind === 'shared' ? (
                 // A shared one is changed in a copy, never in place (T348,
                 // AC-278): the user's copy opens, or one is made and opened.
                 place.copy === undefined ? null : (

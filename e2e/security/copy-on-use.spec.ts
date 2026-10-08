@@ -341,6 +341,19 @@ test.describe('as a read-only member of F (T527, T537, AC-263, AC-371)', () => {
         expect(Number(data[0]?.['orders.count'])).toBeGreaterThan(0);
       }
     });
+
+  test('is offered no Copy › To dashboard… on a tile, being read-only everywhere (T760, AC-277)', async ({
+    page,
+  }) => {
+    await page.goto(`/explore/dashboards/${ids.board}`);
+    const tile = page.locator('[data-tile]').first();
+    await tile.getByRole('button', { name: /^Actions for / }).click();
+    await tile.getByRole('menuitem', { name: 'Copy' }).click();
+    const copy = tile.getByRole('menu', { name: 'Copy' });
+    // What a reader may copy is still offered; a dashboard to copy to is not.
+    await expect(copy.getByRole('menuitem').first()).toBeVisible();
+    await expect(copy.getByRole('menuitem', { name: 'To dashboard…' })).toHaveCount(0);
+  });
 });
 
 test.describe('cleaning up', () => {

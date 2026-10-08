@@ -19,7 +19,7 @@ import { checkDashboard, removeDashboard } from '../workspaces/explore/deleteChe
 import { sayOnExplore } from '../workspaces/explore/deletedToast';
 import { ProposalBand } from '../workspaces/explore/ProposalBand';
 import { ProposeFlow } from '../workspaces/explore/ProposeFlow';
-import { ME_QUERY } from '../shell/me';
+import { hasWorkspace, ME_QUERY } from '../shell/me';
 import {
   approvedText,
   HistoryPanel,
@@ -682,6 +682,9 @@ function LoadedDashboard({
   onExitPreview: (() => void) | undefined;
 }) {
   const queryClient = useQueryClient();
+  // As the shell asks it (T760, AC-277): one read-only everywhere copies a
+  // chart to no dashboard. Not offered until who is signed in is known.
+  const me = useQuery({ ...ME_QUERY, retry: false });
   /**
    * The charts' place in the query cache: keyed by the context they were
    * asked as too, so a preview (T172) never draws answers Cube gave wechart's
@@ -1043,6 +1046,7 @@ function LoadedDashboard({
         refreshable={!charts.isFetching}
         preview={preview}
         onExitPreview={onExitPreview}
+        mayCopyToDashboard={me.data !== undefined && hasWorkspace(me.data)}
         onHistory={onHistory}
         historyOpen={historyOpen}
         onEditingChange={onEditingChange}

@@ -129,6 +129,28 @@ test.describe('deleting a library chart (T517, AC-362)', () => {
       await expect(page.getByText(LONE)).toHaveCount(0);
       expect((await page.request.get(`/api/documents/chart/${made.lone}`)).status()).toBe(404);
     });
+
+    test('is offered no way to put a chart on a dashboard, or to edit one, being read-only everywhere (T760, AC-277)', async ({
+      page,
+    }) => {
+      for (const [chartId, title] of [
+        [made.chart, CHART],
+        [made.lone, 'Chart'],
+      ] as const) {
+        await page.goto(`/explore/charts/${chartId}`);
+        await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+        // Once its details have come: "Used in" or the chart that isn't there.
+        await expect(
+          page
+            .getByTestId('used-by-none')
+            .or(page.getByRole('list', { name: 'Dashboards using this chart' }))
+            .or(page.getByText('This chart is no longer available.')),
+        ).toBeVisible();
+        await expect(page.getByLabel('Dashboard', { exact: true })).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'Add to dashboard' })).toHaveCount(0);
+        await expect(page.getByRole('link', { name: /Edit chart/ })).toHaveCount(0);
+      }
+    });
   });
 
   test.describe('as writer', () => {

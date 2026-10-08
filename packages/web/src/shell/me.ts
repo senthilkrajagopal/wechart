@@ -17,6 +17,16 @@ export const ME_QUERY = {
   },
 };
 
+/**
+ * Whether the user has a workspace, so may create and edit at all (T343,
+ * AC-276, AC-277; T760): the single user with sign-in off, a Super-Admin,
+ * and a read-write member of some folder. A user read-only everywhere has
+ * none, and is offered no action that creates or edits.
+ */
+export function hasWorkspace(me: Me): boolean {
+  return me.security === 'off' || me.superAdmin || me.readWrite === true;
+}
+
 /** An answer from `/api/me` that says who and in which mode. */
 export function isMe(value: unknown): value is Me {
   const me = value as Partial<Me> | null;

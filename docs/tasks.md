@@ -14159,13 +14159,19 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 
 These tasks are what group 3's check of the open criteria found missing. Each is test-first.
 
-- [ ] T760 (AC-277) Offer no create or edit action to a user who is read-only everywhere: the chart page's Add to dashboard and its Edit chart, and the tile menu's Copy › To dashboard…
-  - Files: `packages/web/src/shell/me.ts` (`hasWorkspace`, + test), `packages/web/src/workspaces/explore/LibraryChartPage.tsx`, `packages/web/src/dashboard/DashboardPage.tsx`, `packages/web/src/dashboard/DashboardView.tsx` (+ test), `e2e/security/deleting.spec.ts`
+- [x] T760 (AC-277) Offer no create or edit action to a user who is read-only everywhere: the chart page's Add to dashboard and its Edit chart, and the tile menu's Copy › To dashboard…
+  - Files: `packages/web/src/shell/me.ts` (`hasWorkspace`, + test), `packages/web/src/workspaces/explore/LibraryChartPage.tsx`, `packages/web/src/dashboard/DashboardPage.tsx`, `packages/web/src/dashboard/DashboardView.tsx` (+ test), `e2e/security/deleting.spec.ts`, `e2e/security/copy-on-use.spec.ts`
   - Failing test:
-    - `deleting.spec.ts`, as `reader`, who is read-only everywhere: on the page of the chart their dashboard shows, and on the page of a chart they can't open, there is no Dashboard picker, no Add to dashboard and no Edit chart. On the dashboard, the chart tile's ⋯ › Copy offers no "To dashboard…" (AC-277).
+    - `deleting.spec.ts`, as `reader`, who is read-only everywhere: on the page of the chart their dashboard shows, and on the page of a chart they can't open, there is no Dashboard picker, no Add to dashboard and no Edit chart. In `copy-on-use.spec.ts`, as F's reader: a chart tile's ⋯ › Copy offers no "To dashboard…" (AC-277).
     - `me.test.ts`: a user has a workspace with sign-in off, as a Super-Admin, or as a read-write member somewhere, and not otherwise.
     - `DashboardView.test.tsx`: without the copy, Copy › offers no "To dashboard…".
   - Found by group 3: `LibraryChartPage` always renders "Used in"'s Dashboard picker and Add to dashboard, and its Edit chart link wherever the chart isn't a shared one read (a chart it can't open included). `DashboardView` offers Copy › To dashboard… unless previewing or in a review.
+  - **Done 2026-10-08.** Red first, for the right reason: the e2e found the Dashboard picker and "To dashboard…", and the unit tests found no `hasWorkspace` and "To dashboard…" still offered.
+    - **The rule** (`shell/me.ts`, `hasWorkspace`): the single user with sign-in off, a Super-Admin, or a read-write member somewhere (`/api/me`'s `readWrite`) has a workspace. Explore's switcher and New menu already read `/api/me` the same way.
+    - **The chart page** offers Edit chart, Edit in my workspace and the Dashboard picker with Add to dashboard only with a workspace, and none until who is signed in is known.
+    - **The dashboard:** `DashboardView` takes `mayCopyToDashboard` (offered unless said otherwise), and `DashboardPage` passes it only with a workspace.
+    - **Tests:** `me.test.ts` (2); `DashboardView.test.tsx` (2: offered by default, not offered when refused); the e2e above, on Chrome against compose's xcube, with `workspace-edit` and `explore-roles` (54 passed). Sign-in off (the phase-1 suite, Chrome): `chart-page`, `library-chart`, and `markings.spec.ts` "Copy puts … the chart on another dashboard" still pass. The full web suite passes (2640).
+  - **AC-277 ticked.** "My workspace" never appears to a reader: `workspaces.spec.ts` "has no My workspace in the tree", `explore-roles.spec.ts`'s reader tests, and `access/workspaces.test.ts` (no workspace; every create answers 403). No create or edit action appears: these tests, plus the reader tests in `workspace-edit` (no Edit, Edit in my workspace or settings), `access` (no Access button), `history` (no History), `data-sources` (pointed to Explore), `jobs-scope` (Jobs and Schedules not found) and `deleting` (no Delete).
 
 - [ ] T761 (AC-291) A folder's rename needs read-write access to the folder holding it too
   - Files: `docs/spec.md` (AC-291 amended), `packages/api/src/server.ts` (a folder's rename), `packages/api/src/access/direct.test.ts`, `packages/web/src/workspaces/explore/folderRole.ts` (+ test), `e2e/security/explore-roles.spec.ts`

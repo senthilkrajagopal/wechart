@@ -1111,7 +1111,7 @@ Traces to: §P2.2, §P2.6 E, `[P2 input]`, `[R12, R17, R18]`.
 
 - [x] AC-276 THE SYSTEM SHALL give every Super-Admin and every member of any read-write group a private workspace, shown as "My workspace" in the folder tree. No other user, Super-Admins included, SHALL be able to list, open, search or reach it through the API (`[P2 input, R12]`).
       Fails when: anyone but its owner sees or opens anything in a workspace.
-- [ ] AC-277 WHILE a user has only read-only access everywhere, THE SYSTEM SHALL give them no workspace and no action that creates or edits content (`[R12]`).
+- [x] AC-277 WHILE a user has only read-only access everywhere, THE SYSTEM SHALL give them no workspace and no action that creates or edits content (`[R12]`).
       Fails when: "My workspace", or any create or edit action, appears to them.
 - [x] AC-278 WHILE an item is in a shared folder, THE SYSTEM SHALL offer no editing of it in place. "Edit in my workspace" SHALL copy the item into the user's workspace, or open their copy already there, for editing (`[P2 input]`).
       Fails when: a shared dashboard, chart, model or data source can be changed without a proposal.

@@ -324,6 +324,12 @@ export interface DashboardViewProps {
    * its review view (T356; design 05, pin 3), as readers would see it.
    */
   readonly readOnly?: boolean | undefined;
+  /**
+   * Whether a tile's chart may be copied to another dashboard: not for one
+   * read-only everywhere, who has no workspace and no dashboard to change
+   * (T760, AC-277). Offered unless said otherwise.
+   */
+  readonly mayCopyToDashboard?: boolean | undefined;
   /** Its folder's breadcrumb over it; none where it is drawn in a review (T544, AC-390). */
   readonly crumbs?: boolean | undefined;
   /** Open or close its History panel (T357); absent, no History is offered. */
@@ -2124,6 +2130,7 @@ export function DashboardView({
   preview,
   onExitPreview,
   readOnly = false,
+  mayCopyToDashboard = true,
   crumbs = true,
   onHistory,
   historyOpen = false,
@@ -4076,7 +4083,8 @@ export function DashboardView({
     // A saved chart to copy: not while previewing another context, whose
     // answers are not the chart.
     // Nor in a review's read-only drawing (T356's review): nothing is taken from it.
-    ...(preview === undefined && !readOnly
+    // Nor for one with no dashboard to change (T760, AC-277).
+    ...(preview === undefined && !readOnly && mayCopyToDashboard
       ? {
           onCopyToDashboard: (chartId: string, tileId: string) => {
             if (drawn.documents?.[chartId] !== undefined) setCopyFor({ chartId, tileId });
