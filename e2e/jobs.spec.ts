@@ -780,10 +780,11 @@ test('selecting a pre-aggregation fills the full-height pane with its state, tri
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/jobs');
-  const row = page
-    .getByRole('table', { name: 'Pre-aggregations' })
-    .getByRole('row')
-    .filter({ hasText: ROLLUP });
+  const preaggs = page.getByRole('table', { name: 'Pre-aggregations' });
+  const row = preaggs.getByRole('row').filter({ hasText: ROLLUP });
+  // Docked, a table drawn as one, its rows stacked only below 1,024 px (T614's fix).
+  await expect(preaggs).toHaveCSS('display', 'table');
+  await expect(row).toHaveCSS('display', 'table-row');
   // By the keyboard: the row's name focused, and Enter (T611).
   await row.getByRole('button', { name: nameOf(ROLLUP) }).focus();
   await page.keyboard.press('Enter');
@@ -880,6 +881,11 @@ test('below 1,024 px the list keeps name, folder and state, and the pane is a fu
   // state, each row a block (J2, the user's call R76; T614), still read as a
   // table's row of cells.
   await expect(row).toHaveCSS('display', 'block');
+  // The list around the table keeps its own grid, the stacking the table's alone (T614's fix).
+  await expect(page.locator('.build-panel > .build-panel__list').first()).toHaveCSS(
+    'display',
+    'grid',
+  );
   const tops = await Promise.all(
     [
       row.getByTestId('preagg-name'),

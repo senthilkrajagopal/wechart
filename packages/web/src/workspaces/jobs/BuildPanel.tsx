@@ -740,7 +740,7 @@ export function BuildPanel({
               {/* A td's own role, cell, given it explicitly: no other role is given it. */}
               {/* eslint-disable jsx-a11y/no-redundant-roles, jsx-a11y/no-interactive-element-to-noninteractive-role */}
               <table
-                className="query-log build-panel__list"
+                className="query-log build-panel__table"
                 aria-label="Pre-aggregations"
                 role="table"
               >

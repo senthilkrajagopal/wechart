@@ -4014,11 +4014,11 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
   /* Pre-aggregations' rows stacked, as G8 draws them: the name, its folder
      under it, then its state; no header row, its heads a reader's (J2, the
      user's call R76; T614). Its roles are set on it, so it reads as a table. */
-  .build-panel__list,
-  .build-panel__list > tbody,
-  .build-panel__list > tbody > tr,
-  .build-panel__list > tbody > tr > td:not(.jobs-wide) { display: block; }
-  .build-panel__list > .build-panel__heads {
+  .build-panel__table,
+  .build-panel__table > tbody,
+  .build-panel__table > tbody > tr,
+  .build-panel__table > tbody > tr > td:not(.jobs-wide) { display: block; }
+  .build-panel__table > .build-panel__heads {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -4026,12 +4026,12 @@ svg[data-icon='info'] { flex: none; margin-top: 1px; color: var(--wc-accent); }
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  .build-panel__list > tbody > tr {
+  .build-panel__table > tbody > tr {
     padding: 8px 12px;
     border-bottom: 1px solid var(--wc-border-subtle);
   }
-  .build-panel__list > tbody > tr > td { height: auto; padding: 1px 0; border: 0; }
-  .build-panel__list > tbody > tr > [data-testid='preagg-folder'] {
+  .build-panel__table > tbody > tr > td { height: auto; padding: 1px 0; border: 0; }
+  .build-panel__table > tbody > tr > [data-testid='preagg-folder'] {
     font-size: var(--wc-text-xs-size);
     color: var(--wc-text-secondary);
   }
