@@ -245,8 +245,9 @@ describe('the build queue (T376, AC-151)', () => {
     expect(text(rows[2])).toContain('Aug 2026');
     expect(text(rows[2])).toContain('Wren Writer');
     // The token wechart has, shortened, whole in its title; "—" where there is none (Q5).
+    // Four and four, as state C draws it, "7c1e…09ab" (T612).
     expect(within(rows[2]!).getByTitle('7c1e0000000000000000000000009ab').textContent).toBe(
-      '7c1e0000…09ab',
+      '7c1e…09ab',
     );
     expect(text(within(rows[0]!).getByTestId('queue-token'))).toBe('—');
   });
@@ -309,12 +310,12 @@ describe('the build queue (T376, AC-151)', () => {
       // Added 12:38:41, building since: a minute and more, "for 1 min" (C).
       expect(text(within(rows[1]!).getByTestId('queue-state'))).toBe('Building · for 1 min');
       await userEvent.click(
-        within(rows[2]!).getByRole('button', { name: 'Copy the token 7c1e0000…09ab' }),
+        within(rows[2]!).getByRole('button', { name: 'Copy the token 7c1e…09ab' }),
       );
       expect(copied).toEqual(['7c1e0000000000000000000000009ab']);
       // Said, as the tile menu's copies are (T611's review).
-      expect(text(await screen.findByText('Copied the token 7c1e0000…09ab.'))).toBe(
-        'Copied the token 7c1e0000…09ab.',
+      expect(text(await screen.findByText('Copied the token 7c1e…09ab.'))).toBe(
+        'Copied the token 7c1e…09ab.',
       );
       expect(text(screen.getByTestId('queue-foot'))).toContain(
         'Hover a token to see it whole, or copy it.',

@@ -3,7 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { clockOf, exactOf } from '../../shell/formatTime';
+import { clockOf, exactOf, whenOf } from '../../shell/formatTime';
 import { BuildPanel } from './BuildPanel';
 import { JobsPage } from './JobsPage';
 
@@ -610,5 +610,10 @@ describe('the pane (AC-228, AC-245; T469, T375)', () => {
     ]);
     expect(text(rows[0])).toContain('All 8');
     expect(text(within(rows[0]!).getByTestId('starter'))).toBe('admin');
+    // When, to the minute, as pin 14 draws it ("Today 14:05"), exact on hover (T612).
+    const started = new Date('2026-10-02T12:05:12.000Z');
+    const at = rows[0]!.querySelector('time');
+    expect(text(at)).toBe(whenOf(started));
+    expect(at?.getAttribute('title')).toBe(exactOf(started));
   });
 });

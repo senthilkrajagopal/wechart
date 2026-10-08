@@ -3,7 +3,15 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { KEY_ROWS, paneOf, paused, schedule, shownSchedules, suspended } from './schedules.fixture';
+import {
+  KEY_ROWS,
+  paneOf,
+  paused,
+  schedule,
+  shownSchedules,
+  suspended,
+  viewedFrom,
+} from './schedules.fixture';
 import { SchedulesPage } from './SchedulesPage';
 
 /**
@@ -109,6 +117,8 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
+// Read from Los Angeles unless a test says otherwise: UTC beside a time turns on the viewer's zone (T612).
+viewedFrom('America/Los_Angeles');
 
 describe('Schedules’ refresh-key rows (T551, AC-154)', () => {
   it('shows each row’s schedule in words and as written, its next run, its last, and its owner with an icon', async () => {
@@ -124,8 +134,9 @@ describe('Schedules’ refresh-key rows (T551, AC-154)', () => {
     expect(text(cell(row, 'Schedule'))).toBe(
       'Daily at 08:00, Los Angelesevery: "0 8 * * *" · timezone: America/Los_Angeles',
     );
-    // In its own zone, with UTC and how long until it (design 16, screen 2).
-    expect(text(cell(row, 'Next run'))).toBe('Thu 24 Sep, 08:0015:00 UTC · in 3 h');
+    // In its own zone, today's as Today, and how long until it (design 16, screen 2);
+    // no UTC, its zone being the viewer's (T612).
+    expect(text(cell(row, 'Next run'))).toBe('Today 08:00in 3 h');
     expect(cell(row, 'Last run').querySelector('time')?.getAttribute('dateTime')).toBe(
       '2026-09-24T09:01:00.000Z',
     );
@@ -729,7 +740,8 @@ describe('Schedules’ wechart rows (T552, AC-154, AC-234)', () => {
     );
     expect(text(cell(row, 'Next run'))).toBe('Mon 5 Oct, 07:5505:55 UTC · in 3 days');
     const last = cell(row, 'Last run');
-    expect(text(last)).toMatch(/^DoneToday \d{2}:\d{2}$/);
+    // As one: "Done · today 07:55" (T612).
+    expect(text(last)).toMatch(/^Done · today \d{2}:\d{2}$/);
     expect(last.querySelector('[data-state="done"]')).not.toBeNull();
     const owner = cell(row, 'Owner');
     expect(text(owner)).toBe('wechartby Wren Writer');
@@ -941,5 +953,114 @@ describe('Schedules, as Cube runs them (T551’s review)', () => {
     expect(text(within(pane).getByRole('alert'))).toBe(
       'Cube’s refresh worker can’t run "55 7 * * 1-5": no ranges.',
     );
+  });
+});
+
+/**
+ * T612 (AC-399; design 16, screen 2): Schedules in design 16's words, read,
+ * as the design is, from Europe/Berlin at 14:40 on Thu 1 Oct 2026.
+ */
+describe('Schedules’ words (T612, AC-399)', () => {
+  viewedFrom('Europe/Berlin');
+  const AT = '2026-10-01T12:40:00Z';
+  const key = (id: string, runs: Record<string, string>) => ({
+    ...KEY_ROWS[0],
+    id,
+    name: id.split('.')[1],
+    when: id,
+    written: id,
+    runs,
+  });
+  const wechartRow = async (name: string) =>
+    (await screen.findByText(name, { selector: '[data-testid="wechart-schedule-name"]' })).closest(
+      'tr',
+    ) as HTMLElement;
+
+  it('says under the list which zone your local time is', async () => {
+    shownSchedules({ at: AT });
+
+    expect(text(await screen.findByText(/^Times are your local time/))).toBe(
+      'Times are your local time, Europe/Berlin, unless a schedule names its own zone. For a refresh key, Last run is when Cube last built the rollup; who started it and how it ended aren’t recorded yet, until the refresh worker’s history is.',
+    );
+  });
+
+  it('says a run due today is Today, and gives UTC only for a time set in another zone than yours', async () => {
+    shownSchedules({
+      at: AT,
+      keys: [
+        // Every 30 minutes: no zone of its own, today at 15:00.
+        key('fsales__orders.half_hourly', { every: '30 minute' }),
+        // A cron with no zone runs in UTC, so its UTC time is beside yours.
+        key('fsales__orders.nightly', { every: '0 2 * * *' }),
+        // A zone of its own, Los Angeles: shown in it, today there, with UTC.
+        key('fsales__orders.mornings', { every: '0 8 * * *', timezone: 'America/Los_Angeles' }),
+      ],
+    });
+
+    expect(text(cell(await rowOf('orders.half_hourly'), 'Next run'))).toBe('Today 15:00in 20 min');
+    expect(text(cell(await rowOf('orders.nightly'), 'Next run'))).toBe(
+      'Fri 2 Oct, 04:0002:00 UTC · in 13 h',
+    );
+    expect(text(cell(await rowOf('orders.mornings'), 'Next run'))).toBe(
+      'Today 08:0015:00 UTC · in 2 h',
+    );
+  });
+
+  it('gives an interval no UTC, a zone it names too, which Cube ignores for one (T612’s review)', async () => {
+    shownSchedules({
+      at: AT,
+      keys: [key('fsales__orders.hourly', { every: '1 hour', timezone: 'America/Los_Angeles' })],
+    });
+
+    expect(text(cell(await rowOf('orders.hourly'), 'Next run'))).toBe('Today 06:00in 20 min');
+  });
+
+  it('reads two names of one zone as one: no UTC for a schedule in “Etc/UTC” seen from UTC (T612’s review)', async () => {
+    process.env['TZ'] = 'UTC';
+    shownSchedules({
+      at: AT,
+      wechart: [schedule({ timezone: 'Etc/UTC', runs: ['2026-10-01T13:00:00.000Z'] })],
+    });
+
+    expect(text(cell(await wechartRow('Weekday mornings'), 'Next run'))).toBe('Today 13:00in 20 min');
+  });
+
+  it('gives a wechart schedule in your zone no UTC, its run today as Today, and its last run as “Done · today”', async () => {
+    shownSchedules({
+      at: AT,
+      wechart: [
+        schedule({
+          runs: ['2026-10-02T05:55:00.000Z'],
+          lastRun: {
+            id: 'run-1',
+            outcome: 'done',
+            startedAt: '2026-10-01T05:55:00.000Z',
+            endedAt: '2026-10-01T05:57:04.000Z',
+            error: null,
+          },
+        }),
+        schedule({
+          id: 'sched-2',
+          name: 'Trading hours',
+          runs: ['2026-10-01T13:00:00.000Z'],
+          lastRun: null,
+        }),
+      ],
+    });
+
+    const mornings = await wechartRow('Weekday mornings');
+    expect(text(cell(mornings, 'Next run'))).toBe('Fri 2 Oct, 07:55in 17 h');
+    expect(text(within(cell(mornings, 'Last run')).getByTestId('last-run'))).toBe(
+      'Done · today 07:55',
+    );
+    expect(text(cell(await wechartRow('Trading hours'), 'Next run'))).toBe('Today 15:00in 20 min');
+  });
+
+  it('says Suspended where the next run would be, with “after 3 failures” beneath', async () => {
+    shownSchedules({ at: AT, wechart: [suspended()] });
+
+    const next = cell(await wechartRow('Weekday mornings'), 'Next run');
+    expect(text(within(next).getByTestId('schedule-state'))).toBe('Suspended');
+    expect(text(next.querySelector('.schedules__sub'))).toBe('after 3 failures');
   });
 });

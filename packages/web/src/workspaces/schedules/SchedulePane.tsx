@@ -13,7 +13,15 @@ import { rollupHref } from '../model/inFolder';
 import { lagInWords } from '../model/preagg/RefreshSchedule';
 import { OwnerLabel } from './OwnerLabel';
 import { PauseSwitch } from './PauseSwitch';
-import { changeWords, dayIn, runsOf, timeIn, zoneOf, type Schedule } from './schedule';
+import {
+  changeWords,
+  dayIn,
+  momentWords,
+  runsOf,
+  timeIn,
+  zoneOf,
+  type Schedule,
+} from './schedule';
 import { RefreshKeyRuns, ScheduleForm } from './ScheduleForm';
 import {
   deleteSchedule,
@@ -146,19 +154,25 @@ export function SchedulePane({
   );
 }
 
-/** How a schedule's last run went, as an icon and a word (design 16's legend). */
-export function LastRunStatus({ run }: { run: LastRun }) {
+/**
+ * How a schedule's last run went, as an icon and a word (design 16's
+ * legend), with when where it's said: "Done · today 07:55" (T612).
+ */
+export function LastRunStatus({ run, when }: { run: LastRun; when?: string }) {
+  const at = when === undefined ? '' : ` · ${when}`;
   switch (run.outcome) {
     case 'done':
-      return <Status kind="ok" label="Done" testId="last-run" state="done" />;
+      return <Status kind="ok" label={`Done${at}`} testId="last-run" state="done" />;
     case 'failed':
-      return <Status kind="err" label="Failed" testId="last-run" state="failed" />;
+      return <Status kind="err" label={`Failed${at}`} testId="last-run" state="failed" />;
     case 'cancelled':
-      return <Status kind="cancel" label="Cancelled" testId="last-run" state="cancelled" />;
+      return <Status kind="cancel" label={`Cancelled${at}`} testId="last-run" state="cancelled" />;
     case 'expired':
-      return <Status kind="warn" label="Cube’s record expired" testId="last-run" state="expired" />;
+      return (
+        <Status kind="warn" label={`Cube’s record expired${at}`} testId="last-run" state="expired" />
+      );
     default:
-      return <Status kind="run" label="Under way" testId="last-run" state="open" />;
+      return <Status kind="run" label={`Under way${at}`} testId="last-run" state="open" />;
   }
 }
 
@@ -209,10 +223,8 @@ export function WechartPane({
   });
   const next = schedule.runs?.[0];
   const zone = schedule.timezone;
-  const nextWords =
-    next === undefined
-      ? undefined
-      : `${dayIn(zone, new Date(next))}, ${timeIn(zone, new Date(next))}`;
+  // "today at 15:00", else "Mon 5 Oct, 07:55" (design 16, E1; T612).
+  const nextWords = next === undefined ? undefined : momentWords(zone, new Date(next), new Date());
   /** Said once Resume has started it again (design 16, E3). */
   const [resumedSaid, setResumedSaid] = useState<string | undefined>(undefined);
   /**
@@ -255,7 +267,7 @@ export function WechartPane({
                 `Resumed “${resumed.name}”.${
                   at === undefined
                     ? ''
-                    : ` Its next run is ${dayIn(zone, new Date(at))}, ${timeIn(zone, new Date(at))}.`
+                    : ` Its next run is ${momentWords(zone, new Date(at), new Date())}.`
                 }`,
               );
               // Focus stays on its row (design 16's keyboard table), its name, not lost

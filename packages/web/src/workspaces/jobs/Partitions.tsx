@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { clockOf, clockOrWhenOf, exactOf } from '../../shell/formatTime';
-import { StateLine } from '../../shell/StatusIcon';
+import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import {
   BuiltWhen,
   folderTextOf,
@@ -365,10 +365,14 @@ export function Partitions({
   });
 
   // Not started, in the API's words (design 16, G4; T560).
+  // In a bar, "Not started." in bold (G4; T612).
   const failedToStart = build.isError ? (
-    <StateLine kind="err" testId="not-started">
-      Not started. <span>{build.error.message}</span>
-    </StateLine>
+    <p className="notebar notebar--err" role="alert" data-testid="not-started">
+      <StatusIcon kind="err" />
+      <span>
+        <b>Not started.</b> {build.error.message}
+      </span>
+    </p>
   ) : unstarted === '' ? null : (
     <StateLine kind="warn">{unstarted}</StateLine>
   );

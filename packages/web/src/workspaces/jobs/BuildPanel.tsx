@@ -15,7 +15,6 @@ import {
   periodOf,
   StarterLabel,
   stepRows,
-  whenOf,
   type BuildSummary,
   type Starter,
 } from './builds';
@@ -389,13 +388,11 @@ function RecentBuilds({
         <table className="query-log build-panel__recent" aria-label="Builds started from wechart">
           <tbody>
             {recent.data.map((build) => {
-              const when = whenOf(build.startedAt);
               return (
                 <tr key={build.id}>
                   <td>
-                    <time dateTime={build.startedAt} title={when.utc}>
-                      {when.shown}
-                    </time>
+                    {/* To the minute, "Today 14:05", as pin 14 draws it (T612). */}
+                    <BuiltWhen iso={build.startedAt} />
                   </td>
                   <td>{partitionsOf(build)}</td>
                   <td>

@@ -13,6 +13,7 @@ import {
   suspended,
   SUSPENDED_RUNS,
   text,
+  viewedFrom,
 } from './schedules.fixture';
 
 /**
@@ -27,6 +28,8 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
+// Read from Los Angeles unless a test says otherwise: UTC beside a time turns on the viewer's zone (T612).
+viewedFrom('America/Los_Angeles');
 
 const user = () => userEvent.setup({ delay: null });
 
@@ -145,7 +148,8 @@ describe('Suspended after its failed runs in a row, and Resume (T379, AC-155)', 
 
     // Where its next run would be, with its icon: design 16's paused one (pin 7, s-susp).
     const next = cellOf(row, 'Next run');
-    expect(text(next)).toBe('Suspended after 3 failures');
+    // "Suspended", with "after 3 failures" beneath (T612).
+    expect(text(next)).toBe('Suspendedafter 3 failures');
     expect(next.querySelector('[data-state="suspended"] svg')?.getAttribute('data-icon')).toBe(
       'susp',
     );
@@ -471,5 +475,32 @@ describe('pausing and resuming a schedule (T556, AC-396)', () => {
     const row = await wechartRow('Weekday mornings');
 
     expect(switchOn(row).getAttribute('aria-label')).toBe('On: Weekday mornings');
+  });
+});
+
+/** T612 (AC-399; design 16, E1 and E3): when a resumed schedule next runs, in words, from Europe/Berlin. */
+describe('Resume’s words (T612, AC-399)', () => {
+  viewedFrom('Europe/Berlin');
+  // Its next run today at 15:00 Berlin time, an hour after the tests' noon UTC.
+  const dueToday = () => suspended({ runs: ['2026-10-02T13:00:00.000Z'] });
+
+  it('says a suspended one’s next run would be today at 15:00 (E1)', async () => {
+    shownSchedules({ wechart: [dueToday()], runs: SUSPENDED_RUNS });
+    await user().click(await wechartRow('Weekday mornings'));
+
+    expect(text(within(paneOf()).getByTestId('resume-help'))).toBe(
+      'Its next run would be today at 15:00. The count of failures starts again from 0.',
+    );
+  });
+
+  it('says, resumed, that its next run is today at 15:00 (E3)', async () => {
+    shownSchedules({ wechart: [dueToday()], runs: SUSPENDED_RUNS });
+    await user().click(await wechartRow('Weekday mornings'));
+
+    await user().click(within(paneOf()).getByRole('button', { name: 'Resume' }));
+
+    expect(
+      text(await screen.findByText(/^Resumed “Weekday mornings”/, { selector: 'span' })),
+    ).toBe('Resumed “Weekday mornings”. Its next run is today at 15:00.');
   });
 });

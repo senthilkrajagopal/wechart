@@ -197,23 +197,25 @@ export function ListError({
   readonly onRetry: () => void;
 }) {
   if (isRefused(error)) return <StateLine kind="err">{error.message}</StateLine>;
+  // Three lines, as G2 draws them: the error, what it means, then Retry and Details (T612).
   return (
-    <div className="notebar notebar--err jobs-error" role="alert">
-      <StatusIcon kind="err" />
-      <div>
-        <p>
-          <b data-testid="read-error">{`Couldn’t read ${what}.`}</b> <span>{error.message}</span>
-          {carryOn === undefined ? null : ` ${carryOn}`}
-        </p>
-        <div className="jobs-error__actions">
-          <button type="button" className="btn btn-sm" onClick={onRetry}>
-            Retry
-          </button>
-          <details>
-            <summary>Details</summary>
-            <code data-testid="read-details">{detailsOf(error)}</code>
-          </details>
-        </div>
+    <div className="jobs-error" role="alert">
+      <p className="state-line">
+        <StatusIcon kind="err" />
+        <span data-testid="read-error">{`Couldn’t read ${what}.`}</span>
+      </p>
+      <p className="help">
+        {error.message}
+        {carryOn === undefined ? null : ` ${carryOn}`}
+      </p>
+      <div className="jobs-error__actions">
+        <button type="button" className="btn btn-sm" onClick={onRetry}>
+          Retry
+        </button>
+        <details>
+          <summary>Details</summary>
+          <code data-testid="read-details">{detailsOf(error)}</code>
+        </details>
       </div>
     </div>
   );

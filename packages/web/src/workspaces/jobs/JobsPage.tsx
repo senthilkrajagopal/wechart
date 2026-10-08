@@ -1,6 +1,7 @@
 import { keepPreviousData, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { useId, useMemo, useRef, useState } from 'react';
 
+import { useNarrowWindow } from '../../dashboard/useNarrowWindow';
 import { titlesOf } from '../../editor/fields';
 import { META_QUERY } from '../../query/meta';
 import { NotFound } from '../../shell/NotFound';
@@ -158,6 +159,7 @@ export function JobsPage({
   const [opened, setOpened] = useState<ReadonlySet<Tab>>(() => new Set([firstTab()]));
   if (!opened.has(open)) setOpened(new Set([...opened, open]));
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const narrow = useNarrowWindow();
   const base = useId();
   const client = useQueryClient();
   /** Pre-aggregations' Status and the queue's State, which the summary's links set (T558). */
@@ -257,7 +259,8 @@ export function JobsPage({
               refs.current[next]?.focus();
             }}
           >
-            {label}
+            {/* "History" below 1,024 px, as G8's frame names it (T612). */}
+            {narrow && key === 'history' ? 'History' : label}
             {key === 'queue' && queued > 0 ? (
               <>
                 {' '}

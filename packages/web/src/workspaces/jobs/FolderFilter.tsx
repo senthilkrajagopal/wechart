@@ -164,7 +164,8 @@ export function FolderFilter({
               choices
             ) : (
               <optgroup
-                label={`${personName(me.data, single)} · ${folders?.everyFolder === true ? 'Super-Admin' : 'read-write'}`}
+                // By first name, "Wren · read-write", as H2's menu heads it (T612).
+                label={`${personName(me.data, single).split(' ')[0] ?? ''} · ${folders?.everyFolder === true ? 'Super-Admin' : 'read-write'}`}
               >
                 {choices}
               </optgroup>

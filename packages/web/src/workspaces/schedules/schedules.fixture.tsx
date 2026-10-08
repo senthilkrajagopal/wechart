@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
-import { vi } from 'vitest';
+import { afterEach, beforeEach, vi } from 'vitest';
 
 import { SchedulesPage } from './SchedulesPage';
 import type { CronPreview, WechartSchedule } from './wechart';
@@ -458,6 +458,21 @@ export function shownSchedules({
 
 export const text = (element: Element | null | undefined) => element?.textContent ?? '';
 
+/**
+ * The viewer's zone for the tests of the describe it's called in, whatever
+ * the machine's: whether a time needs UTC beside it turns on it (T612).
+ */
+export function viewedFrom(zone: string) {
+  const was = process.env['TZ'];
+  beforeEach(() => {
+    process.env['TZ'] = zone;
+  });
+  afterEach(() => {
+    if (was === undefined) delete process.env['TZ'];
+    else process.env['TZ'] = was;
+  });
+}
+
 /** "2 Sep": the day `iso` falls on in the zone the tests run in, as the pane writes it. */
 export function localDay(iso: string): string {
   const parts = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short' }).formatToParts(
@@ -469,8 +484,9 @@ export function localDay(iso: string): string {
 
 export const paneOf = () => screen.getByRole('complementary', { name: 'Schedule details' });
 
-/** The rows of the next runs a list shows, each as its text. */
+/** The rows of the next runs a list shows, each as its text: a pane's, or the form's "Next 5 runs, Europe/Berlin" (T612). */
+export const NEXT_RUNS = /^Next (\d+ )?runs\b/;
 export const runsIn = (container: HTMLElement) =>
-  within(within(container).getByRole('list', { name: 'Next runs' }))
+  within(within(container).getByRole('list', { name: NEXT_RUNS }))
     .getAllByRole('listitem')
     .map((item) => text(item));

@@ -159,9 +159,9 @@ describe('Pre-aggregations’ Folder column and filter, and its scope note (T559
         at(2, 'Sales / EMEA / DACH'),
       ]);
     });
-    // Headed by whose they are, as H2's menu is (T611).
+    // Headed by whose they are, as H2's menu is (T611), by their first name, "Wren · read-write" (T612).
     await vi.waitFor(() => {
-      expect(within(panel).getByRole('group', { name: 'Wren Writer · read-write' }).tagName).toBe(
+      expect(within(panel).getByRole('group', { name: 'Wren · read-write' }).tagName).toBe(
         'OPTGROUP',
       );
     });
@@ -202,7 +202,7 @@ describe('Pre-aggregations’ Folder column and filter, and its scope note (T559
       ]);
     });
     await vi.waitFor(() => {
-      expect(within(panel).getByRole('group', { name: 'Ada Admin · Super-Admin' }).tagName).toBe(
+      expect(within(panel).getByRole('group', { name: 'Ada · Super-Admin' }).tagName).toBe(
         'OPTGROUP',
       );
     });

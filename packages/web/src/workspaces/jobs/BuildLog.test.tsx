@@ -117,14 +117,17 @@ describe('a build’s log (T374, AC-150)', () => {
       .map((line) => line.textContent);
     expect(lines).toEqual([
       `${clock('2026-10-02T12:05:12.204Z', true)}Asked Cube to build Aug 2026`,
-      `${clock('2026-10-02T12:05:12.391Z', true)}1 job · token 9f2c41e0…a41e`,
+      // The range it asked Cube for, under the ask (B1; T612).
+      'dateRange 2026-08-01T00:00:00.000',
+      // A token as four and four, as design 16 draws them (T612).
+      `${clock('2026-10-02T12:05:12.391Z', true)}1 job · token 9f2c…a41e`,
       `${clock('2026-10-02T12:05:13.902Z', true)}scheduled`,
       `${clock('2026-10-02T12:05:16.418Z', true)}processing · table …by_month20260801_abcd…`,
       `${clock('2026-10-02T12:05:53.117Z', true)}failure: canceling statement due to statement timeout`,
     ]);
     // The whole token is there to copy, not only its short form.
     expect(text(within(log).getByTitle('9f2c41e0aa7d4b1c8e3f00ab12cda41e'))).toBe(
-      '1 job · token 9f2c41e0…a41e',
+      '1 job · token 9f2c…a41e',
     );
   });
 
@@ -155,7 +158,7 @@ describe('a build’s log (T374, AC-150)', () => {
     // Its failures first, then one Done, the rest said in a line (B3; T611).
     expect(rows()).toHaveLength(3);
     // Each partition's token, whole in its title.
-    expect(text(within(rows()[0]!).getByTitle(tokens[5]!.token))).toBe('tok05aaa…aaaa');
+    expect(text(within(rows()[0]!).getByTitle(tokens[5]!.token))).toBe('tok0…aaaa');
     expect(text(rows()[0])).toContain('6 Sep 2026');
     expect(text(rows()[0])).toContain('Missing partition');
     expect(text(rows()[1])).toContain('13 Sep 2026');
@@ -169,7 +172,8 @@ describe('a build’s log (T374, AC-150)', () => {
     // Its button gone, focus on the list it opened, not dropped (T611's review).
     expect(document.activeElement).toBe(parts);
     const pane = screen.getByRole('complementary', { name: /Build of dach\.orders_daily/ });
-    expect(text(within(pane).getByTestId('build-outcome'))).toBe('Failed · 2 of 30');
+    // Of how many partitions, said as B3's head says it (T612).
+    expect(text(within(pane).getByTestId('build-outcome'))).toBe('Failed · 2 of 30 partitions');
     expect(text(pane)).toContain('by Weekday mornings, a wechart schedule');
   });
 
@@ -225,7 +229,7 @@ describe('a build’s log (T374, AC-150)', () => {
       .getAllByRole('listitem')
       .map((line) => line.textContent);
     expect(lines.at(-2)).toContain('Aug 2026: done');
-    expect(lines.at(-1)).toContain('bbbb3333…4444: not_found');
+    expect(lines.at(-1)).toContain('bbbb…4444: not_found');
   });
 
   it('names the gap when Cube’s record expired before wechart saw the end (B2)', async () => {

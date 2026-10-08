@@ -212,6 +212,23 @@ const COLUMNS: Record<(typeof TABS)[number][2], string[]> = {
   queue: ['Added', 'Pre-aggregation', 'Folder', 'Partition', 'State', 'Started by', 'Token'],
 };
 
+describe('G8 · the tabs below 1,024 px (T612, AC-399)', () => {
+  it('names Run history “History”, as the narrow frame does', async () => {
+    narrowWindow();
+    serve({});
+    shown('?tab=history');
+
+    expect(
+      within(screen.getByRole('tablist', { name: 'Jobs' }))
+        .getAllByRole('tab')
+        .map((tab) => text(tab)),
+    ).toEqual(['Pre-aggregations', 'History', expect.stringMatching(/^Queue/), 'Queries']);
+    expect(panelOf('History').id).toBe(
+      screen.getByRole('tab', { name: 'History' }).getAttribute('aria-controls'),
+    );
+  });
+});
+
 describe('G2 · an error, with Retry and Details (T560, AC-399; rule 18)', () => {
   it.each(TABS)(
     'says %s couldn’t be read, with Retry and Details',
@@ -223,6 +240,17 @@ describe('G2 · an error, with Retry and Details (T560, AC-399; rule 18)', () =>
       const said = await within(panel).findByRole('alert');
       expect(text(within(said).getByTestId('read-error'))).toBe(`Couldn’t read ${what}.`);
       expect(text(said)).toContain('xcube didn’t answer.');
+      // Three lines, as G2 draws them: the error with its icon, then what it
+      // means as help, then Retry and Details (T612).
+      const lines = [...said.children];
+      expect(lines.map((line) => line.className)).toEqual([
+        'state-line',
+        'help',
+        'jobs-error__actions',
+      ]);
+      expect(lines[0]?.querySelector('svg')?.getAttribute('data-icon')).toBe('err');
+      expect(text(lines[0])).toBe(`Couldn’t read ${what}.`);
+      expect(text(lines[1])).toMatch(/^xcube didn’t answer\./);
       expect(text(within(said).getByText('Details'))).toBe('Details');
       // The status, what was asked, and when it failed (G2; T560's review).
       expect(text(within(said).getByTestId('read-details'))).toMatch(
@@ -302,9 +330,11 @@ describe('G4 · a refusal in the API’s words, and G5 · access lost while open
 
     await user().click(await within(pane).findByRole('button', { name: /^Build now/ }));
 
-    expect(text(await within(pane).findByTestId('not-started'))).toBe(
-      `Not started. ${REFUSED.error}`,
-    );
+    const notStarted = await within(pane).findByTestId('not-started');
+    expect(text(notStarted)).toBe(`Not started. ${REFUSED.error}`);
+    // In a bar, "Not started." in bold, as G4 draws it (T612).
+    expect(notStarted.classList.contains('notebar')).toBe(true);
+    expect(text(notStarted.querySelector('b'))).toBe('Not started.');
   });
 
   it('reads the list again when access is lost, closes the pane, and says so, as an error', async () => {

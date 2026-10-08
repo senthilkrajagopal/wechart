@@ -11,6 +11,7 @@ import {
   announced,
   BuildOutcomeStatus,
   durationOf,
+  folderShownOf,
   folderTextOf,
   outcomeOf,
   partitionsOf,
@@ -374,7 +375,10 @@ export function RunHistory({
                           {record.name}
                         </button>
                       </td>
-                      <td>{folderTextOf(record.folderPath)}</td>
+                      {/* Three deep or more by its last two, whole on hover (state B; T612). */}
+                      <td title={folderTextOf(record.folderPath)}>
+                        {folderShownOf(record.folderPath)}
+                      </td>
                       <td className="jobs-wide">{partitionsOf(record)}</td>
                       <td>
                         <BuildOutcomeStatus build={record} />

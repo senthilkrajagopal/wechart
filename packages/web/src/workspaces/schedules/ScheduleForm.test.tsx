@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { paneOf, runsIn, shownSchedules, text } from './schedules.fixture';
+import { NEXT_RUNS, paneOf, runsIn, shownSchedules, text } from './schedules.fixture';
 
 /**
  * T552 / AC-234 (design 16, screen 2 pins 9–15 and states D2–D4): New
@@ -68,7 +68,7 @@ describe('New schedule (T552, AC-234)', () => {
       'minute · hour · day of month · month · day of week',
     );
     // No zone yet: no next runs.
-    expect(within(pane).queryAllByRole('list', { name: 'Next runs' })).toHaveLength(0);
+    expect(within(pane).queryAllByRole('list', { name: NEXT_RUNS })).toHaveLength(0);
   });
 
   it('lists the next five runs in the zone and in UTC, with a clock change among them marked (D4)', async () => {
@@ -88,6 +88,13 @@ describe('New schedule (T552, AC-234)', () => {
       ]);
     });
     expect(text(within(pane).getByText(/^Next runs/))).toBe('Next runs · Europe/Berlin, then UTC');
+    // Named as design 16's keyboard table names it, and the change explained (D4; T612).
+    expect(
+      within(pane).getAllByRole('list', { name: 'Next 5 runs, Europe/Berlin' }),
+    ).toHaveLength(1);
+    expect(text(within(pane).getByText(/follow the zone’s clock/))).toBe(
+      'wechart’s schedules follow the zone’s clock, so 07:00 stays 07:00.',
+    );
   });
 
   it('names a cron it can’t read, shows no runs, and Create waits (D3)', async () => {
@@ -105,7 +112,7 @@ describe('New schedule (T552, AC-234)', () => {
       'The hour is 25; it must be 0 to 23.',
     );
     expect(field(pane, 'Cron expression').getAttribute('aria-invalid')).toBe('true');
-    expect(within(pane).queryAllByRole('list', { name: 'Next runs' })).toHaveLength(0);
+    expect(within(pane).queryAllByRole('list', { name: NEXT_RUNS })).toHaveLength(0);
     expect(button(pane, 'Create schedule').disabled).toBe(true);
   });
 

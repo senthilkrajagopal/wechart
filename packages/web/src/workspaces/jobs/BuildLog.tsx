@@ -111,6 +111,8 @@ function linesOf(record: BuildRecord): Line[] {
   const many = record.tokens.length > 1;
   const lines: Line[] = [
     { at: record.startedAt, text: `Asked Cube to build ${asked}` },
+    // Each partition's range as it was asked of Cube, under the ask (B1; T612).
+    ...(record.partitions ?? []).map((start) => ({ text: `dateRange ${start}` })),
     many
       ? { at: record.answeredAt, text: `${String(record.tokens.length)} jobs, one per partition` }
       : {
@@ -238,6 +240,7 @@ export function BuildLog({
               <dt>Outcome</dt>
               <dd>
                 <BuildOutcomeStatus
+                  ofPartitions
                   build={{
                     ...record,
                     jobs: record.tokens.length,

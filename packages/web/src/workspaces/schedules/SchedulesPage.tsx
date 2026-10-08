@@ -43,7 +43,18 @@ import { OwnerFilter, type ShownOwner } from './OwnerFilter';
 import { OwnerLabel } from './OwnerLabel';
 import { PauseSwitch } from './PauseSwitch';
 import { LastRunStatus, minuteOf, SchedulePane, WechartPane } from './SchedulePane';
-import { dayIn, runsOf, timeIn, untilIn, zoneOf, type Schedule } from './schedule';
+import {
+  dayIn,
+  keyZoneOf,
+  momentIn,
+  offZone,
+  runsOf,
+  timeIn,
+  untilIn,
+  viewerZone,
+  zoneOf,
+  type Schedule,
+} from './schedule';
 import { ScheduleForm } from './ScheduleForm';
 import {
   failuresWords,
@@ -79,18 +90,38 @@ const ICONS: Partial<Record<Schedule['kind'], StateKind>> = {
   unrunnable: 'warn',
 };
 
-/** Its next run, in its zone (else yours), with UTC and how long until it. */
+/**
+ * A run's moment and how long until it: "Today 15:00", "in 20 min", with
+ * its UTC time only where it's set in another zone than yours (T612).
+ */
+function RunAt({
+  at,
+  now,
+  zone,
+  setIn,
+}: {
+  at: Date;
+  now: Date;
+  zone: string | undefined;
+  setIn: string | undefined;
+}) {
+  return (
+    <>
+      {momentIn(zone, at, now)}
+      <span className="schedules__sub">
+        {`${offZone(setIn) ? `${timeIn('UTC', at)} UTC · ` : ''}${untilIn(at, now)}`}
+      </span>
+    </>
+  );
+}
+
+/** Its next run, in its zone (else yours), with UTC where set in another, and how long until it. */
 function NextRun({ schedule, now }: { schedule: Schedule; now: Date }) {
   const { runs, change } = runsOf(schedule, now, 1);
   const zone = zoneOf(schedule);
   const next = runs[0];
   if (next !== undefined)
-    return (
-      <>
-        {`${dayIn(zone, next)}, ${timeIn(zone, next)}`}
-        <span className="schedules__sub">{`${timeIn('UTC', next)} UTC · ${untilIn(next, now)}`}</span>
-      </>
-    );
+    return <RunAt at={next} now={now} zone={zone} setIn={keyZoneOf(schedule)} />;
   if (change !== undefined)
     return (
       <span className="schedules__sub">After the clocks change on {dayIn(zone, change.at)}</span>
@@ -120,12 +151,13 @@ function LastRun({ schedule }: { schedule: Schedule }): ReactNode {
 function WechartNextRun({ schedule, now }: { schedule: WechartSchedule; now: Date }) {
   if (schedule.suspendedAt !== null)
     return (
-      <Status
-        kind="susp"
-        label={`Suspended after ${failuresWords(schedule.failuresInARow || schedule.suspendAfter)}`}
-        testId="schedule-state"
-        state="suspended"
-      />
+      <>
+        <Status kind="susp" label="Suspended" testId="schedule-state" state="suspended" />
+        {/* Its failures beneath (screen 2, pin 7; T612). */}
+        <span className="schedules__sub">
+          {`after ${failuresWords(schedule.failuresInARow || schedule.suspendAfter)}`}
+        </span>
+      </>
     );
   const failing =
     schedule.failuresInARow > 0 ? (
@@ -155,11 +187,9 @@ function WechartNextRun({ schedule, now }: { schedule: WechartSchedule; now: Dat
         {failing}
       </>
     );
-  const at = new Date(next);
   return (
     <>
-      {`${dayIn(schedule.timezone, at)}, ${timeIn(schedule.timezone, at)}`}
-      <span className="schedules__sub">{`${timeIn('UTC', at)} UTC · ${untilIn(at, now)}`}</span>
+      <RunAt at={new Date(next)} now={now} zone={schedule.timezone} setIn={schedule.timezone} />
       {failing}
     </>
   );
@@ -229,10 +259,8 @@ function WechartRow({
         {lastRun === null ? (
           <span className="schedules__sub">Not run yet</span>
         ) : (
-          <>
-            <LastRunStatus run={lastRun} />
-            <span className="schedules__sub">{minuteOf(lastRun.startedAt)}</span>
-          </>
+          // "Done · today 07:55", as one (screen 2, pin 8; T612).
+          <LastRunStatus run={lastRun} when={minuteOf(lastRun.startedAt, true)} />
         )}
       </td>
       <td>
@@ -791,7 +819,9 @@ export function SchedulesPage() {
             </TableScroll>
             {/* What Last run means for a refresh key (design 16, screen 2's foot). */}
             <p className="jobs-foot">
-              Times are your local time unless a schedule names its own zone. For a refresh key,
+              {/* Which zone is yours, as screen 2's foot names it (T612). */}
+              {`Times are your local time, ${viewerZone()}, unless a schedule names its own zone.`}{' '}
+              For a refresh key,
               Last run is when Cube last built the rollup; who started it and how it ended aren’t
               recorded yet, until the refresh worker’s history is.
             </p>

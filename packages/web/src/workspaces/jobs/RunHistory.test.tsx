@@ -3,6 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { folderShownOf } from './builds';
 import { RunHistory, type BuildSummary } from './RunHistory';
 
 /**
@@ -172,6 +173,23 @@ describe('Run history (T374, AC-150)', () => {
     expect(text(rows[0])).toContain('All 30');
     // Failed, saying how many of its partitions (B3).
     expect(text(within(rows[0]!).getByTestId('build-outcome'))).toBe('Failed · 2 of 30');
+  });
+
+  /** T612 (AC-399; design 16, state B): a folder deep under Shared, by its last two. */
+  it('names a folder three deep by its last two, "…/ EMEA / DACH", the whole path on hover and to a reader', async () => {
+    api(() =>
+      listOf([summary({ name: 'dach.orders_daily', folderPath: ['Shared', 'Sales', 'EMEA', 'DACH'] })]),
+    );
+    shown();
+
+    const table = await screen.findByRole('table', { name: 'Run history' });
+    const folder = within(table).getByText('…/ EMEA / DACH');
+    expect(folder.getAttribute('title')).toBe('Sales / EMEA / DACH');
+    expect(
+      within(table).getByRole('button', { name: /^dach\.orders_daily, Sales \/ EMEA \/ DACH,/ }),
+    ).toBeInstanceOf(HTMLButtonElement);
+    // Two deep, whole (state B's "Sales / EMEA").
+    expect(folderShownOf(['Shared', 'Sales', 'EMEA'])).toBe('Sales / EMEA');
   });
 
   /** T611 (AC-399; design 16's keyboard table, "A row in a list"). */

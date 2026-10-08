@@ -64,13 +64,14 @@ test('a sheet left for another tab keeps no hold on Tab there', async ({ page })
     .click();
   const sheet = page.getByRole('dialog', { name: 'Pre-aggregation details' });
   await sheet.getByRole('link', { name: 'All its builds in Run history' }).click();
-  await expect(page.getByRole('tab', { name: 'Run history' })).toHaveAttribute(
+  // "History" below 1,024 px, as G8's frame names it (T612).
+  await expect(page.getByRole('tab', { name: 'History' })).toHaveAttribute(
     'aria-selected',
     'true',
   );
 
   // Tab moves on Run history, to what can be seen, not into the sheet left under Pre-aggregations.
-  await page.getByRole('tab', { name: 'Run history' }).focus();
+  await page.getByRole('tab', { name: 'History' }).focus();
   for (let at = 0; at < 3; at += 1) {
     const was = await page.evaluate(() => document.activeElement?.outerHTML ?? '');
     await page.keyboard.press('Tab');
@@ -80,7 +81,7 @@ test('a sheet left for another tab keeps no hold on Tab there', async ({ page })
 
   // Back on Pre-aggregations, by ← in the tabs, the sheet over it takes focus again,
   // not the tab it covers (T640's review).
-  await page.getByRole('tab', { name: 'Run history' }).focus();
+  await page.getByRole('tab', { name: 'History' }).focus();
   await page.keyboard.press('ArrowLeft');
   await expect(sheet.getByRole('heading', { level: 2 })).toBeFocused();
 });

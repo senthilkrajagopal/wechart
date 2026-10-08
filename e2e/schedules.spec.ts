@@ -86,8 +86,12 @@ test('Schedules lists each refresh schedule as Cube’s, a hidden cube’s too, 
   const owner = mornings.getByTestId('owner');
   await expect(owner).toHaveText('Cube’s refresh worker');
   await expect(owner.locator('svg[data-icon="cube"]')).toHaveCount(1);
-  // Its next run, with UTC; its pane's five, a grid of day, time and UTC.
-  await expect(mornings.getByRole('cell').nth(3)).toContainText(/\d{2}:\d{2} UTC · in /);
+  // Its next run, with UTC only where Los Angeles isn't the browser's own zone
+  // (T612; both cases in SchedulesPage.test); its pane's five, a grid of day, time and UTC.
+  const here = await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
+  await expect(mornings.getByRole('cell').nth(3)).toContainText(
+    here === 'America/Los_Angeles' ? /\d{2}:\d{2}in \d/ : /\d{2}:\d{2}\d{2}:\d{2} UTC · in \d/,
+  );
   await mornings.click();
   const runs = page
     .getByRole('complementary', { name: 'Schedule details' })
@@ -265,9 +269,10 @@ test('a schedule made on the page starts its build within its minute, and Run hi
     await pane.getByRole('combobox', { name: 'Time zone' }).fill('UTC');
     // Read back in words, with its next five runs.
     await expect(pane.getByText('Every minute.', { exact: true })).toBeVisible();
-    await expect(pane.getByRole('list', { name: 'Next runs' }).getByRole('listitem')).toHaveCount(
-      5,
-    );
+    // Named as design 16's keyboard table names it (T612).
+    await expect(
+      pane.getByRole('list', { name: 'Next 5 runs, UTC' }).getByRole('listitem'),
+    ).toHaveCount(5);
     await pane.getByRole('button', { name: 'Create schedule' }).click();
 
     // Made at once: its pane, and its row beside the rollup's refresh key.
@@ -298,7 +303,8 @@ test('a schedule made on the page starts its build within its minute, and Run hi
       .filter({ hasText: rollup });
     await expect(rows).toHaveCount(2);
     const own = rows.filter({ hasText: name });
-    await expect(own.getByTestId('last-run')).toHaveText('Done');
+    // "Done · today 10:18", as one (screen 2, pin 8; T612).
+    await expect(own.getByTestId('last-run')).toHaveText(/^Done · today \d{2}:\d{2}$/);
 
     // Changed in its pane, at once, with no proposal; the model as it was.
     await own.click();
@@ -391,10 +397,12 @@ ${measures}    pre_aggregations:
       .filter({ hasText: name });
     await expect(async () => {
       await page.reload();
-      await expect(row.getByTestId('schedule-state')).toHaveText('Suspended after 1 failure', {
+      await expect(row.getByTestId('schedule-state')).toHaveText('Suspended', {
         timeout: 2_000,
       });
     }).toPass({ timeout: 120_000 });
+    // Its failures beneath, as pin 7 has them (T612).
+    await expect(row.getByText('after 1 failure', { exact: true })).toBeVisible();
 
     // Its pane: suspended, Cube's words, what to do, and Resume (E1, E4).
     await row.click();

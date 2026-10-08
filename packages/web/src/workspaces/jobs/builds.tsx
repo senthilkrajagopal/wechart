@@ -141,6 +141,7 @@ export function partitionsOf(
 /** How a build ended, or how far it has got while open, as an icon and words. */
 export function BuildOutcomeStatus({
   build,
+  ofPartitions = false,
 }: {
   build: Pick<
     BuildSummary,
@@ -152,11 +153,15 @@ export function BuildOutcomeStatus({
     | 'cancelledAt'
     | 'cancelledWhileBuilding'
   >;
+  /** A failure's count said of partitions, "Failed · 2 of 30 partitions", as a log's head says it (B3; T612). */
+  ofPartitions?: boolean;
 }) {
   // With sign-in off, the one user is "you" (G7; T610).
   const single = useSingleUser();
   const { kind, label, state } = outcomeOf(build, single);
-  return <Status kind={kind} label={label} testId="build-outcome" state={state} />;
+  const said =
+    ofPartitions && state === 'failed' && build.jobs > 1 ? `${label} partitions` : label;
+  return <Status kind={kind} label={said} testId="build-outcome" state={state} />;
 }
 
 /**
@@ -308,6 +313,16 @@ export function StarterLabel({ starter }: { starter: Starter }) {
 export const folderTextOf = (path: readonly string[]): string =>
   path.length <= 1 ? (path[0] ?? 'Shared') : path.slice(1).join(' / ');
 
-/** A long token shortened, "9f2c41e0…a41e"; the whole of it in the title. */
+/**
+ * A folder where a narrow column shows it (design 16, state B; T612): from
+ * Shared down, and three deep or more by its last two, "…/ EMEA / DACH".
+ */
+export const folderShownOf = (path: readonly string[]): string =>
+  path.length <= 3 ? folderTextOf(path) : `…/ ${path.slice(-2).join(' / ')}`;
+
+/**
+ * A long token shortened, "9f2c…a41e", four and four as design 16 draws its
+ * tokens (T612); the whole of it in the title.
+ */
 export const shortToken = (token: string): string =>
-  token.length <= 14 ? token : `${token.slice(0, 8)}…${token.slice(-4)}`;
+  token.length <= 10 ? token : `${token.slice(0, 4)}…${token.slice(-4)}`;

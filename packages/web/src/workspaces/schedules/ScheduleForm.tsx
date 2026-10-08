@@ -181,6 +181,9 @@ export function ScheduleForm({
   );
   const refreshKey = refreshKeys.find((each) => each.id === fields.preAggregation);
   const shownZone = read?.ok === true ? (read.timezone ?? zone) : zone;
+  /** Its first run's clock, which a clock change keeps (D4; T612). */
+  const firstRun = read?.ok === true ? read.runs[0] : undefined;
+  const keptClock = firstRun === undefined ? '' : timeIn(shownZone, new Date(firstRun));
   // Which field is wrong, said under that field; the cron's words kept when it's the zone.
   const cronWrong = read?.ok === false && read.field !== 'timezone';
   const zoneWrong = read?.ok === false && read.field === 'timezone';
@@ -309,7 +312,11 @@ export function ScheduleForm({
           <span className="field__label" id={`${id}-runs`}>
             Next runs <span className="field__req">· {shownZone}, then UTC</span>
           </span>
-          <ol className="schedules__runs" aria-label="Next runs">
+          {/* Named as design 16's keyboard table names it: "Next 5 runs, Europe/Berlin" (T612). */}
+          <ol
+            className="schedules__runs"
+            aria-label={`Next ${String(read.runs.length)} runs, ${shownZone}`}
+          >
             {read.runs.flatMap((iso, at) => {
               const run = new Date(iso);
               const item = (
@@ -335,6 +342,12 @@ export function ScheduleForm({
                 : [item];
             })}
           </ol>
+          {/* Across a clock change, the runs keep the zone's clock (D4; T612; research pg-boss-12.33.2-installed.md). */}
+          {read.change === undefined ? null : (
+            <p className="help">
+              {`wechart’s schedules follow the zone’s clock, so ${keptClock} stays ${keptClock}.`}
+            </p>
+          )}
         </div>
       ) : null}
       {read?.ok === true && read.refreshKeyCould ? (

@@ -1,4 +1,4 @@
-import { nextRefreshesBeforeChange, type ClockChange } from '@wechart/core';
+import { nextRefreshesBeforeChange, refreshPeriodOf, type ClockChange } from '@wechart/core';
 
 /**
  * A refresh-key schedule as Schedules shows it (T551, AC-154; design 16,
@@ -69,6 +69,54 @@ export function dayIn(zone: string | undefined, at: Date): string {
 /** "08:00" in a zone. */
 export const timeIn = (zone: string | undefined, at: Date) =>
   format(zone, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(at);
+
+/** The viewer's own zone: "Europe/Berlin". */
+export const viewerZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+/**
+ * A run's moment, in a zone (else yours), as design 16's lists say it:
+ * "Today 15:00" on that zone's today, else "Fri 2 Oct, 04:00" (T612).
+ */
+export function momentIn(zone: string | undefined, at: Date, now: Date): string {
+  return dayIn(zone, at) === dayIn(zone, now)
+    ? `Today ${timeIn(zone, at)}`
+    : `${dayIn(zone, at)}, ${timeIn(zone, at)}`;
+}
+
+/** The same, in a sentence (design 16, E1 and E3): "today at 15:00", else "Mon 5 Oct, 07:55". */
+export function momentWords(zone: string | undefined, at: Date, now: Date): string {
+  return dayIn(zone, at) === dayIn(zone, now)
+    ? `today at ${timeIn(zone, at)}`
+    : `${dayIn(zone, at)}, ${timeIn(zone, at)}`;
+}
+
+/**
+ * Whether a time set in a zone needs its UTC time beside it (design 16,
+ * screen 2): only one set in another zone than the viewer's (T612).
+ */
+export const offZone = (setIn: string | undefined): boolean =>
+  setIn !== undefined && canonicalZone(setIn) !== canonicalZone(viewerZone());
+
+/** A zone by its one name, "Etc/UTC" as "UTC", so two names of one zone are one (T612's review). */
+function canonicalZone(zone: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone: zone }).resolvedOptions().timeZone;
+  } catch {
+    return zone;
+  }
+}
+
+/**
+ * The zone a refresh key's times are set in: for a cron, its own, else UTC,
+ * which Cube runs it in; none for an interval, which has no clock, a zone it
+ * names included, as Cube ignores one there (research
+ * cube/refresh-key-schedule.md; T612's review).
+ */
+export function keyZoneOf(schedule: Schedule): string | undefined {
+  if (schedule.runs === undefined) return undefined;
+  if (refreshPeriodOf(schedule.runs.every)?.cron !== true) return undefined;
+  return schedule.runs.timezone ?? 'UTC';
+}
 
 /** "in 20 min", "in 3 h", "in 31 days". */
 export function untilIn(at: Date, now: Date): string {
