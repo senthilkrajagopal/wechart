@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process';
+
 import type { Browser } from '@playwright/test';
 
 import { BASE_URL, expect, signInThroughDex, test, type Role } from './fixtures';
@@ -18,6 +20,26 @@ const CLEAR_FOLDER = `Clear here ${RUN}`;
 const CLEAR_BOARD = `Clear board ${RUN}`;
 const clearing = { folder: '', board: '', copy: '', project: '', chart: '' };
 
+/** How many of the suite model's live overlays hold an item of this name (T739). */
+const overlaysHolding = (name: string) =>
+  Number(
+    execFileSync(
+      'docker',
+      [
+        'exec',
+        'wechart-meta',
+        'psql',
+        '-U',
+        'wechart',
+        '-d',
+        'wechart_meta',
+        '-Atc',
+        `select count(*) from xcube.overlays, jsonb_array_elements(upserts) item where model = 'e2e-security' and item->>'name' = '${name}'`,
+      ],
+      { encoding: 'utf8' },
+    ).trim(),
+  );
+
 /** A signed-in context of `who`'s own, for set-up and clean-up. */
 async function as(browser: Browser, who: Role) {
   const context = await browser.newContext({
@@ -34,6 +56,12 @@ test.describe('clearing My workspace (T522, AC-367)', () => {
   test.afterAll(async ({ browser }) => {
     // Should the test stop short of clearing it.
     const manager = await as(browser, 'manager');
+    // T739's draft, should its test stop short of clearing it.
+    if (clearing.project !== '')
+      await manager.request.delete(
+        `/api/model/files?folder=${clearing.project}&path=${encodeURIComponent(`cubes/t739_cleared_${RUN}.yml`)}`,
+        { timeout: 90_000 },
+      );
     for (const [kind, id] of [
       ['dashboard', clearing.copy],
       ['chart', clearing.chart],
@@ -161,6 +189,43 @@ test.describe('clearing My workspace (T522, AC-367)', () => {
       const shared = await page.request.get(`/api/documents/dashboard/${clearing.board}`);
       expect(shared.status()).toBe(200);
       expect(((await shared.json()) as { version: number }).version).toBe(1);
+    });
+
+    /**
+     * T739 (AC-323, AC-422): cleared, xcube's overlay of the workspace holds
+     * none of its drafts, so none of their names stays held there.
+     */
+    test('leaves xcube’s overlay holding none of the drafts it cleared', async ({ page }) => {
+      const name = `t739_cleared_${RUN}`;
+      const project = await page.request.post('/api/documents', {
+        data: { kind: 'folder', title: `Cleared model ${RUN}`, folderId: 'mine' },
+      });
+      expect(project.status(), await project.text()).toBe(201);
+      clearing.project = ((await project.json()) as { id: string }).id;
+      const saved = await page.request.post('/api/model/publish', {
+        data: {
+          folderId: clearing.project,
+          targetFolderId: clearing.folder,
+          files: [
+            {
+              path: `cubes/${name}.yml`,
+              content: `cubes:\n  - name: ${name}\n    sql_table: public.orders\n    measures:\n      - name: count\n        type: count\n`,
+            },
+          ],
+        },
+        timeout: 90_000,
+      });
+      expect(saved.status(), await saved.text()).toBe(200);
+      expect(overlaysHolding(name)).toBe(1);
+
+      const cleared = await page.request.post('/api/workspace/clear', {
+        data: {},
+        timeout: 90_000,
+      });
+      expect(cleared.status(), await cleared.text()).toBe(200);
+      clearing.project = '';
+      // Pushed once the clear has answered.
+      await expect.poll(() => overlaysHolding(name), { timeout: 30_000 }).toBe(0);
     });
   });
 });

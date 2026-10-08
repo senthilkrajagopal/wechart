@@ -13712,6 +13712,27 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - After the last fixes: `workspace-references`, `export-import` and `deleting` together twice, 59 of 60, the one being `deleting.spec.ts:507` under load. `model`, `model-design`, `model-unpublished`, `draft-file-names`, `folder-models`, `country-map` and `import-single-user`: 43 of 44, the one being T479.
       - API 1835/1835; web 2636/2636.
 
+- [x] T739 (AC-323, AC-422) Keep xcube's overlay of My workspace holding exactly its drafts when a workspace folder is deleted
+  - *Added 2026-10-08 by the coordinator:* verify.sh's fresh start on docker-desktop found it. The workspace's overlay `ws-6ea8…` still held `wechart_verify_probe` after the probe's folder and its row were gone from wechart. A new draft of that name in a new workspace folder was then refused as in use. Check every removal path: a folder's delete, a model file's delete, Clear My workspace, and a draft's move.
+  - Files: `packages/api/src/server.ts` (`DELETE /api/documents/folder/:id`), `e2e/security/workspace-overlay-removal.spec.ts` (new), `e2e/security/workspace-clear.spec.ts`
+  - Failing test: `workspace-overlay-removal.spec.ts`. A draft whose row is removed outside wechart is no longer in the overlay once its emptied folder is deleted, and its name is free again (AC-422).
+  - Depends on: T347, T737
+  - *Done 2026-10-08:*
+    - **What happened**, reproduced on compose:
+      - A workspace folder holding a draft can't be deleted: 409, "This folder holds 1 model". Nothing cascades.
+      - verify.sh's `remove_probe` deletes `model_files` rows by path in the database. Since verify names probes for their cubes (adb3b95f), that path matched the moved draft too, so the row went with no push of the overlay.
+      - The folder, now empty, was then deleted, and nothing pushed the overlay either. It kept the probe until a later push of the same workspace, which is pushed whole and would replace it.
+      - On compose, a new draft of the name in that same workspace was taken. I couldn't reproduce the refusal itself.
+    - **Fix:** a workspace folder's delete now pushes its workspace's overlay before it answers, as the workspace is stored. Emptied, the overlay is dropped. A failed push is logged and doesn't undo the delete.
+    - **Each removal path, checked against `xcube.overlays` on the image** (`workspace-overlay-removal.spec.ts`, as `super`):
+      - a model file's delete: the overlay no longer holds it;
+      - a draft's move (T737): its name is held once, and after a rename only the new name;
+      - a folder holding a draft: its delete is refused, and the overlay keeps the draft;
+      - a draft's row removed outside wechart, then its folder deleted: the overlay no longer holds it, and a new draft of the name is taken. This was red before the fix when run alone, and passes now.
+      - Clear My workspace: `workspace-clear.spec.ts`'s new case, as `manager`. A draft is cleared, and the overlay no longer holds it once the clear has answered (pushed in `onResponse`, as before).
+    - The red case can pass falsely in a full run: other specs' saves in `super`'s workspace push it whole and replace the stale content. Run alone, it fails without the fix.
+    - Runs: API 1835/1835; in chrome, `workspace-overlay-removal`, `workspace-clear`, `workspace-overlay` and `deleting` pass 31/31.
+
 ### AC-353: R70's identity warning (with T509)
 
 - [x] T725 [P] (AC-353) Warn before Save that any change moving a data source's connection identity rebuilds its pre-aggregations
@@ -14097,6 +14118,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-421 | T700, T701, T702, T704 | AC-422 | T704, T705, T723, T724 | AC-423 | T706, T722, T737 |
 | AC-424 | T701, T702, T704, T705, T723, T724, T726 | AC-425 | T713, T714, T715, T729 | AC-426 | T700, T703, T708, T723 |
 | AC-427 | T707 | AC-428 | T718, T732 | | |
+| AC-323, AC-422 (again, the overlay after a workspace folder's delete) | T739 | | | | |
 | AC-141, AC-329 (again, the naming work's regressions) | T738 | AC-132, AC-344 (again, T481 after T722) | T738 | AC-313, AC-356, AC-357 (again, races under one name per item) | T738 |
 
 AC-009, AC-136 and AC-137 are ticked from phase 1. ~~They stay ticked until slice 3 changes how publishing works; T426 and T432 then reword them and retest them (R28 Q9).~~ They keep their wording and their ticks while their tests pass: T447 re-runs them against xcube at slice 2's cut-over, and T426 and T432 again in slice 3 (2026-09-26, `[R29]`). AC-235 was unticked by R29 and is ticked again by T445 and T447.

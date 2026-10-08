@@ -5812,9 +5812,11 @@ export function buildServer({
     )
       await withdrawWithDelete({ store: proposals, audit }, request, kind, id);
 
+    // The workspace a folder is in, if it is in one (T739).
+    const folderWorkspace = kind === 'folder' ? await workspaceRootOf(id) : null;
     // A shared folder as it is now, to keep a record of once it is gone (T540).
     const recorded =
-      kind === 'folder' && deletedFolders !== undefined && (await workspaceRootOf(id)) === null
+      kind === 'folder' && deletedFolders !== undefined && folderWorkspace === null
         ? (found.stored ?? (await docs.get?.('folder', id)) ?? null)
         : null;
 
@@ -5823,6 +5825,20 @@ export function buildServer({
     const removed = await docs.remove(kind, id);
     if (removed && recorded !== null && (await stillWanted(id)))
       await deletedFolders!.keep({ id, body: recorded.body });
+    /**
+     * A workspace folder gone: its workspace's overlay pushed as the
+     * workspace is stored now, so xcube holds exactly its drafts, and no
+     * name a draft held outside wechart's knowing stays held there (T739,
+     * AC-323, AC-422). Emptied, it is dropped. Said, never refused: the
+     * folder is gone either way.
+     */
+    if (removed && folderWorkspace !== null && overlays !== undefined)
+      await overlays.push(folderWorkspace).catch((error: unknown) => {
+        app.log.warn(
+          { err: error },
+          'could not push a workspace’s overlay after a folder’s delete',
+        );
+      });
     if (removed && kind === 'dashboard') {
       for (const chart of own) await docs.remove('chart', chart.id);
       // Its bookmarks are of it too (T127's review).
