@@ -7770,6 +7770,20 @@ fieldset.filter-widget { border: 0; margin: 0; padding: 0; min-width: 0; }
 }
 .menu__check { width: 12px; flex: 0 0 auto; color: var(--wc-accent); }
 .menu__chevron { margin-left: auto; color: var(--wc-text-muted); }
+/* Two lines in one item or line (T681; design 08, pin 10 and state D): the
+   Data as of footer, its clock before it; a heading line; a key-value line. */
+.menu__item:has(> .menu__lines) { height: auto; min-height: 28px; padding-block: 4px; white-space: normal; }
+.menu__icon { display: inline-flex; flex: none; align-self: flex-start; margin-top: 1px; color: var(--wc-text-secondary); }
+.menu__lines { display: grid; gap: 2px; min-width: 0; line-height: 16px; }
+.menu__detail { display: inline-flex; align-items: center; gap: 5px; color: var(--wc-text-secondary); }
+.menu__bolt { color: var(--wc-status-success); }
+.menu__dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--wc-text-secondary); }
+.menu__text--heading > .menu__dot { align-self: flex-start; margin-top: 5px; }
+.menu__sub-line { color: var(--wc-text-secondary); }
+.menu__text--heading .menu__main { color: var(--wc-text-primary); font-weight: 600; }
+.menu__text--kv { align-items: flex-start; gap: 12px; }
+.menu__term { flex: none; width: 72px; color: var(--wc-text-secondary); line-height: 16px; }
+.menu__text--kv .menu__main { color: var(--wc-text-primary); font-variant-numeric: tabular-nums; }
 .menu__separator { height: 1px; margin: 4px 0; background: var(--wc-border-subtle); }
 /* Fixed, placed by its item's box (Menu), so a menu that scrolls does not
    clip it (T266's review; research §6). */
@@ -8496,15 +8510,13 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
   font-size: var(--wc-text-xs-size);
   font-weight: 600;
 }
-/* Where the chart's answer came from (T014, AC-013) and when its data is from
-   (T154): the prototype's .badge in the tile head, where its tiles carry their
-   data's age — "ok"-coloured when a pre-aggregation served it. */
-.tile-freshness,
-.acceleration,
-.tile-as-of {
+/* Where the chart's answer came from (T014, AC-013): the editor head's badge,
+   the prototype's .badge, "ok"-coloured when a pre-aggregation served it. */
+.acceleration {
   display: inline-flex;
   flex: none;
   align-items: center;
+  gap: 4px;
   height: 22px;
   padding: 0 8px;
   border-radius: 999px;
@@ -8513,29 +8525,30 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
   font-size: 12px;
   white-space: nowrap;
 }
-.tile-freshness,
-.acceleration { gap: 4px; }
-/* Gives way to the title (T250): shrinks far faster than it, cutting its
-   words short rather than the title's — but never below "● Live…" or
-   "⚡ 40m…", its state's icon and word (rule 3); the whole in its tooltip. */
-.tile-freshness {
-  display: block;
-  flex: 0 100 auto;
-  min-width: 64px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 22px;
-}
-/* Its two parts are one badge's text (T252): no pill of their own inside it.
-   Kept on screen while the marking badge shows, where the prototype hides it:
-   AC-013 fails on an accelerated tile without its mark. */
-.tile-freshness > .acceleration,
-.tile-freshness > .tile-as-of { display: inline; height: auto; padding: 0; background: none; }
-/* The badge's 4 px between its parts, as inline text now (T250's review):
-   its gap no longer applies, and the markup has no spaces of its own. */
-.tile-freshness > * + * { margin-left: 4px; }
-.tile-freshness .acceleration--accelerated > .acceleration__short { margin-left: 4px; }
 .acceleration--accelerated { color: var(--wc-status-success); }
+/* A tile's one freshness badge (T681; design 04's .fresh, note 4; DSH-23):
+   20 px, padding 0 7, a 5 px gap, a 6 px dot or the check, "ok"-coloured
+   for a pre-aggregation. Never cut short, as the design's flex: none: where
+   the head has no room for it and the whole title, it goes to the tile's
+   foot whole (T464's placement), so its word and age always show (AC-013;
+   T681's review). */
+.tile-freshness {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--wc-bg-subtle);
+  color: var(--wc-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.tile-freshness.is-ok { color: var(--wc-status-success); }
+.tile-freshness__dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.tile-freshness > svg { flex: none; width: 11px; height: 11px; color: var(--wc-status-success-icon); }
 @media (hover: none) {
   .tile-refresh,
   .tile-pencil { opacity: 1; }

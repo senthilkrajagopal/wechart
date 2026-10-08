@@ -139,9 +139,8 @@ import {
 import { DOWNLOADED, MarkedRows } from './markings/MarkedRows';
 import { markedValuesTsv } from './markings/markedValues';
 import { CopyToDashboard } from './CopyToDashboard';
-import { clockTimeOf, dataAsOf, type ScheduleSaid } from './dataAsOf';
+import { clockTimeOf, dataAsOf, type DataAsOfSaid, type ScheduleSaid } from './dataAsOf';
 import { WhyNotAccelerated } from './WhyNotAccelerated';
-import type { MenuEntry } from '../shell/Menu';
 import { markingOf, withMarking, type MarkingState } from './markings/store';
 import { interactionsOf, type InteractionMode } from './settings/interactionMode';
 import { describeFilter } from '../filters/describe';
@@ -1018,7 +1017,7 @@ interface TileCharts {
     | ((
         chartId: string,
         tileId: string,
-      ) => () => { label: string; entries: MenuEntry[] } | undefined)
+      ) => () => DataAsOfSaid | undefined)
     | undefined;
   /** Copy › To dashboard (T271, AC-243): the dialog that picks one. */
   readonly onCopyToDashboard?: ((chartId: string, tileId: string) => void) | undefined;

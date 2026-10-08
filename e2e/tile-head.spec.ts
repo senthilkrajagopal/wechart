@@ -92,6 +92,8 @@ interface Head {
    * at its least width: the only reason for the badge to be in the foot.
    */
   readonly noRoom: boolean;
+  /** The freshness badge's parts are drawn whole, none cut short. */
+  readonly badgeWhole: boolean;
 }
 
 /** Each KPI tile's head, measured as drawn, once the fonts are ready. */
@@ -120,6 +122,10 @@ async function headsOf(page: Page): Promise<Head[]> {
         )
         .reduce((sum, item) => sum + item.getBoundingClientRect().width + gap, 0);
       const content = head.clientWidth - padLeft - padRight;
+      // The freshness badge never gives way now (T681; design 04's flex:
+      // none): its least width is its whole width, wherever it is drawn.
+      const badge = tile.querySelector<HTMLElement>('.tile-freshness');
+      const least = badge === null ? 0 : badge.getBoundingClientRect().width;
       return {
         title: title.textContent ?? '',
         cut: title.scrollWidth > title.clientWidth,
@@ -130,7 +136,17 @@ async function headsOf(page: Page): Promise<Head[]> {
         fits: items.every(
           (item) => item.getBoundingClientRect().right <= box.right - padRight + 0.5,
         ),
-        noRoom: whole + others + 64 + gap > content + 0.5,
+        noRoom: whole + others + least + gap > content + 0.5,
+        // Its word and age whole, never cut short (AC-013; T681's review).
+        badgeWhole: (() => {
+          const label = badge?.querySelector<HTMLElement>('.tile-freshness__label');
+          return (
+            label === null ||
+            label === undefined ||
+            (label.scrollWidth <= label.clientWidth + 0.5 &&
+              label.getBoundingClientRect().right <= (badge?.getBoundingClientRect().right ?? 0))
+          );
+        })(),
       };
     });
   }, KPIS.length);
@@ -153,6 +169,8 @@ function expectTheHeadIsTheTitles(heads: readonly Head[], when: string) {
     );
     // Its badge in one place: the head or the foot, not both, not neither.
     expect(head.badgeInHead !== head.inFoot, `${when}: "${head.title}"`).toBe(true);
+    // And whole wherever it is (T681's review).
+    expect(head.badgeWhole, `${when}: "${head.title}" ${JSON.stringify(head)}`).toBe(true);
     // In the head only while all of it fits there (T464's review: the badge
     // has to move, not just the title stay whole) ...
     if (head.badgeInHead)

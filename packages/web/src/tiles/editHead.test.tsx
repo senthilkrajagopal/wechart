@@ -67,7 +67,15 @@ describe('a chart tile’s head while editing (UX-032)', () => {
   });
 
   it('keeps both in view mode', () => {
-    render(<ChartTile spec={area} title="Orders by month" asOf={served.lastRefreshTime} />);
+    // Its answer's facts with its time, as every caller gives them (T681).
+    render(
+      <ChartTile
+        spec={area}
+        title="Orders by month"
+        asOf={served.lastRefreshTime}
+        served={served}
+      />,
+    );
     expect(screen.getByTestId('tile-freshness')).toBeTruthy();
     expect(screen.getByTestId('toggle-table-view')).toBeTruthy();
   });

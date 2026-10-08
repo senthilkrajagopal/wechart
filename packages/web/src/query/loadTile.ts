@@ -75,7 +75,27 @@ export interface LoadTileOptions {
   readonly item?: QueryItem | undefined;
 }
 
+/**
+ * How long each answer took, from the first ask to the answer, its polls
+ * included (T681; design 04 note 4's "· 42 ms ·"). Kept beside the answer,
+ * not in it, so Cube's answer reaches everything that reads it unchanged.
+ */
+const elapsed = new WeakMap<object, number>();
+
+/** How long `loadTile` took to get this answer, in whole ms; unknown for any other. */
+export function elapsedOf(result: unknown): number | undefined {
+  return typeof result === 'object' && result !== null ? elapsed.get(result) : undefined;
+}
+
 export async function loadTile(options: LoadTileOptions): Promise<unknown> {
+  const began = performance.now();
+  const answer = await loadAnswer(options);
+  if (typeof answer === 'object' && answer !== null)
+    elapsed.set(answer, Math.round(performance.now() - began));
+  return answer;
+}
+
+async function loadAnswer(options: LoadTileOptions): Promise<unknown> {
   /**
    * Quick calculations (AC-048): a running total over a range and another
    * calculation over time can't share a query in xcube, so they are asked

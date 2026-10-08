@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { CONTINUE_WAIT, TileLoadError, loadTile } from './loadTile';
+import { answerMetaOf } from './answerMeta';
+import { CONTINUE_WAIT, TileLoadError, elapsedOf, loadTile } from './loadTile';
 
 /**
  * AC-010: WHILE Cube replies "Continue wait" for a query, THE SYSTEM SHALL keep
@@ -452,5 +453,35 @@ describe('a query asking for quick calculations (AC-048)', () => {
         'orders.total_amount': '5757.50',
       },
     ]);
+  });
+});
+
+/**
+ * T681 (design 04 note 4): the badge's tooltip says how long the answer took,
+ * "· 42 ms ·". Measured around the whole ask, its polls included, and kept
+ * beside the answer rather than in it, so Cube's answer is unchanged.
+ */
+describe('how long an answer took (T681)', () => {
+  it('is measured from the first ask to the answer, polls included, and read with the answer’s facts', async () => {
+    const clock = vi.spyOn(performance, 'now');
+    clock.mockReturnValueOnce(1_000).mockReturnValue(1_042);
+    const { impl } = fetchReturning(
+      { body: { error: CONTINUE_WAIT } },
+      { body: { data: [], lastRefreshTime: '2026-09-22T05:44:13.000Z' } },
+    );
+    const result = await loadTile({ query, fetchImpl: impl, retryDelayMs: 0 });
+    clock.mockRestore();
+
+    expect(elapsedOf(result)).toBe(42);
+    // Cube's answer as it came: nothing of wechart's added to it.
+    expect(result).toEqual({ data: [], lastRefreshTime: '2026-09-22T05:44:13.000Z' });
+    expect(answerMetaOf(result)).toEqual({
+      lastRefreshTime: '2026-09-22T05:44:13.000Z',
+      elapsedMs: 42,
+    });
+  });
+
+  it('is unknown for an answer it didn’t ask for', () => {
+    expect(elapsedOf({ data: [] })).toBeUndefined();
   });
 });

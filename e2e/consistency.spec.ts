@@ -540,11 +540,20 @@ test.describe('one date and time format (T477)', () => {
     page,
   }) => {
     await page.goto('/explore/dashboards/seed-root-dashboard-1');
-    const asOf = page.getByTestId('data-as-of').first();
-    await expect(asOf).toBeVisible();
-    await expect(asOf).toHaveText(/^Data as of (\d{2}:\d{2}:\d{2}|.* \d{2}:\d{2}:\d{2})$/);
+    // The tile's one badge (T681): its time, read out with "Live", and its
+    // tooltip's, exact with UTC.
+    const badge = page.getByTestId('tile-freshness').first();
+    await expect(badge).toBeVisible();
+    const asOf = badge.locator('time');
+    await expect(asOf).toHaveText(/^(\d{2}:\d{2}:\d{2}|.* \d{2}:\d{2}:\d{2})$/);
     await expect(asOf).not.toHaveText(/AM|PM/);
-    await expect(asOf).toHaveAttribute('title', new RegExp(`^Data as of ${EXACT.source.slice(1)}`));
+    await expect(badge).toHaveAttribute(
+      'title',
+      // Live or a rollup's, whichever answered the seed's first tile.
+      new RegExp(
+        `^(Live query|Pre-aggregation \\S+) · as of ${EXACT.source.slice(1, -1)} · \\d+ ms · (no pre-aggregation|built .+ ago)$`,
+      ),
+    );
   });
 
   test('the query log: day headings first, each time’s exact moment with UTC', async ({ page }) => {

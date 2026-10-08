@@ -1,3 +1,5 @@
+import { elapsedOf } from './loadTile';
+
 /**
  * What Cube says about an answer besides its rows, as a tile shows it: when
  * its data is from — `lastRefreshTime` (T154, AC-148) — and the
@@ -15,6 +17,8 @@ export interface AnswerMeta {
    * query asked for it, as a box plot's does (T401, AC-315).
    */
   readonly total?: number;
+  /** How long the answer took, in ms, where wechart asked for it (T681; `loadTile`). */
+  readonly elapsedMs?: number;
 }
 
 export function answerMetaOf(result: unknown): AnswerMeta {
@@ -24,7 +28,9 @@ export function answerMetaOf(result: unknown): AnswerMeta {
     usedPreAggregations?: unknown;
     total?: unknown;
   };
+  const elapsedMs = elapsedOf(result);
   return {
+    ...(elapsedMs === undefined ? {} : { elapsedMs }),
     ...(typeof total === 'number' && Number.isFinite(total) ? { total } : {}),
     ...(typeof lastRefreshTime === 'string' ? { lastRefreshTime } : {}),
     ...(typeof usedPreAggregations === 'object' && usedPreAggregations !== null

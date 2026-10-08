@@ -97,7 +97,7 @@ export function AccelerationBadge({ result, now = new Date() }: AccelerationBadg
 }
 
 /** The age as the prototype's badge writes it: "45s", "40m", "3h", "2d", "1w". */
-function shortAge(then: Date, now: Date): string {
+export function shortAge(then: Date, now: Date): string {
   const seconds = Math.max(0, Math.round((now.getTime() - then.getTime()) / 1000));
   const units: [number, string][] = [
     [7 * 24 * 3600, 'w'],

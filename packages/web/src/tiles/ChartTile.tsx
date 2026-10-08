@@ -5,10 +5,9 @@ import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from '
 import type { ClickedItem } from '../dashboard/crossfilter/clicked';
 import type { AnswerMeta } from '../query/answerMeta';
 import { StateLine, StatusIcon } from '../shell/StatusIcon';
-import { AccelerationBadge, accelerationOf } from './AccelerationBadge';
 import { ChartCanvas, type ChartCanvasProps } from './ChartCanvas';
 import { badgesIn, badgesNeeded, nextPlace, roomIn, type BadgePlace } from './badgePlace';
-import { DataAsOf, dataAsOfText } from './DataAsOf';
+import { FreshnessBadge } from './FreshnessBadge';
 import { DataTable, type DataTableProps } from './DataTable';
 import { Kpi } from './Kpi';
 import { PivotTable } from './PivotTable';
@@ -289,36 +288,10 @@ export function ChartTile({
           Updating…
         </span>
       ) : null}
-      {/* One badge, the prototype's .badge, for where the data is from and
-          when (T252, recheck-dashboard F8): two pills took the title's room. */}
-      {served === undefined && asOf === undefined ? null : (
-        <span
-          className="tile-freshness"
-          data-testid="tile-freshness"
-          // Its whole sentence, however little of it the head has room for
-          // (T250's review).
-          title={[
-            served === undefined
-              ? undefined
-              : accelerationOf(served).accelerated
-                ? 'Accelerated'
-                : 'Live',
-            asOf === undefined ? undefined : dataAsOfText(asOf),
-          ]
-            .filter((part) => part !== undefined)
-            .join(' · ')}
-        >
-          {served === undefined ? null : <AccelerationBadge result={served} />}
-          {/* Only between two parts: DataAsOf draws nothing for a time it
-              cannot read (T252's review). */}
-          {served === undefined ||
-          asOf === undefined ||
-          Number.isNaN(new Date(asOf).getTime()) ? null : (
-            <span aria-hidden="true">·</span>
-          )}
-          {asOf === undefined ? null : <DataAsOf at={asOf} />}
-        </span>
-      )}
+      {/* One small badge for where the data came from, "● Live" or
+          "✓ Pre-agg · 3m", its time to the second in its tooltip (T681;
+          design 04 note 4). */}
+      {served === undefined ? null : <FreshnessBadge served={served} asOf={asOf} />}
     </>
   );
   // Not while editing, where the head names the kind instead (UX-032).

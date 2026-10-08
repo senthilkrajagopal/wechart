@@ -2772,7 +2772,7 @@ test('Drill by regroups a tile’s marked items in place, with its own answer, a
   const accelerated = Object.keys(asked.usedPreAggregations ?? {}).length > 0;
   await expect(status.getByTestId('tile-freshness')).toHaveAttribute(
     'title',
-    new RegExp(`^${accelerated ? 'Accelerated' : 'Live'}`),
+    new RegExp(`^${accelerated ? 'Pre-aggregation' : 'Live query'}`),
   );
 
   // Every other tile as it was, and the saved chart untouched.

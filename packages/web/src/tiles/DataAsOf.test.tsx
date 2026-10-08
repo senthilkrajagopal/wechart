@@ -48,15 +48,22 @@ describe('when a chart’s data is from', () => {
         title="Orders"
         spec={spec([{ 'orders.status': 'shipped', 'orders.count': 3 }])}
         asOf={at.toISOString()}
+        served={{ lastRefreshTime: at.toISOString() }}
       />,
     );
 
+    // T681 (design 04 note 4): the head's one badge says "Live"; the time to
+    // the second is its tooltip's, and its words for a screen reader. The
+    // keyboard reads it in Data as of (dataAsOf.test.ts, refresh.spec.ts).
     const head = screen.getByTestId('chart-tile').querySelector('.tile-head');
-    const asOf = within(head as HTMLElement).getByTestId('data-as-of');
-    expect(asOf.tagName).toBe('TIME');
-    expect(asOf.getAttribute('datetime')).toBe(at.toISOString());
+    const badge = within(head as HTMLElement).getByTestId('tile-freshness');
+    const asOf = badge.querySelector('time');
+    expect(asOf?.tagName).toBe('TIME');
+    expect(asOf?.getAttribute('datetime')).toBe(at.toISOString());
     // One 24-hour clock (T477; the coordinator's Q10).
-    expect(asOf.textContent).toBe('Data as of 10:32:18');
+    expect(asOf?.textContent).toBe('10:32:18');
+    // Its tooltip the exact local time with UTC beside it (T477; Q9).
+    expect(badge.getAttribute('title')).toBe(`Live query · as of ${exactOf(at)} · no pre-aggregation`);
   });
 
   it('shows "as of" and the time, the whole sentence for a screen reader and in its tooltip', () => {
@@ -73,11 +80,17 @@ describe('when a chart’s data is from', () => {
   });
 
   it('is shown for an answer with no rows too — a refresh can come back empty', () => {
-    render(<ChartTile spec={spec([])} asOf="2026-09-21T10:32:18.000Z" />);
-
-    expect(screen.getByTestId('data-as-of').getAttribute('datetime')).toBe(
-      '2026-09-21T10:32:18.000Z',
+    render(
+      <ChartTile
+        spec={spec([])}
+        asOf="2026-09-21T10:32:18.000Z"
+        served={{ lastRefreshTime: '2026-09-21T10:32:18.000Z' }}
+      />,
     );
+
+    expect(
+      screen.getByTestId('tile-freshness').querySelector('time')?.getAttribute('datetime'),
+    ).toBe('2026-09-21T10:32:18.000Z');
   });
 
   it('names the day too when the data is not from today', () => {

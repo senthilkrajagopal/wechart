@@ -163,7 +163,9 @@ function dashboard(onRefresh = vi.fn(), preview?: Record<string, unknown>) {
 }
 
 const tile = (id: string) => document.querySelector(`[data-tile="${id}"]`) as HTMLElement;
-const asOfOn = (id: string) => within(tile(id)).getByTestId('data-as-of').getAttribute('datetime');
+// The answer's time, as the tile's badge carries it (T681; its time to the second).
+const asOfOn = (id: string) =>
+  within(tile(id)).getByTestId('tile-freshness').querySelector('time')?.getAttribute('datetime');
 
 describe('refreshing a tile a filter reaches', () => {
   it('asks its filtered query again past Cube’s cache, and shows that answer’s time', async () => {
@@ -272,7 +274,8 @@ describe('what served a filtered tile’s answer', () => {
   it('is its filtered answer’s, and a tile no filter reaches keeps its own', async () => {
     servedByRollup = true;
     dashboard();
-    const badgeOn = (id: string) => within(tile(id)).getByTestId('acceleration');
+    // The tile's one badge, "● Live" or "✓ Pre-agg · 3m" (T681).
+    const badgeOn = (id: string) => within(tile(id)).getByTestId('tile-freshness');
     // Unfiltered, as loaded: from the database.
     expect(badgeOn('t-status').textContent).toMatch(/Live/);
 
@@ -284,7 +287,7 @@ describe('what served a filtered tile’s answer', () => {
     );
 
     await vi.waitFor(() => {
-      expect(badgeOn('t-status').textContent).toMatch(/Accelerated/);
+      expect(badgeOn('t-status').textContent).toMatch(/Pre-agg/);
     });
     expect(badgeOn('t-status').getAttribute('title')).toMatch(/orders\.by_status/);
     expect(badgeOn('t-region').textContent).toMatch(/Live/);
@@ -339,8 +342,8 @@ describe('refreshing a tile a pre-aggregation serves', () => {
     // The filtered answer drawn — a rollup's — and still nothing said, since
     // no refresh was asked for (T154's review: waited for, not assumed).
     await vi.waitFor(() => {
-      expect(within(tile('t-status')).getByTestId('acceleration').textContent).toMatch(
-        /Accelerated/,
+      expect(within(tile('t-status')).getByTestId('tile-freshness').textContent).toMatch(
+        /Pre-agg/,
       );
     });
     expect(within(tile('t-status')).queryByTestId('rollup-refresh-note')).toBeNull();

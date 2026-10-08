@@ -1906,14 +1906,17 @@ test.describe('T252: a chart tile’s badges, head and incomplete state', () => 
     await page.goto('/explore/dashboards/seed-root-dashboard-1');
     const tile = firstChart(page);
     const head = tile.locator('.tile-head').first();
-    await expect(head.getByTestId('data-as-of')).toBeVisible();
 
-    // One .badge — 22 px, bg-subtle, secondary — holding where the data is
-    // from and when (F8, mismatch 10); two pills took the title's room.
+    // One badge — design 04's .fresh (note 4; T681, DSH-01, DSH-23): 20 px,
+    // padding 0 7, a 5 px gap, bg-subtle, secondary, its 6 px dot and the one
+    // word "Live"; the time is its tooltip's (F8, mismatch 10: two pills took
+    // the title's room).
     const badges = head.getByTestId('tile-freshness');
     await expect(badges).toHaveCount(1);
-    await expect(badges.getByTestId('acceleration')).toHaveCount(1);
-    await expect(badges.getByTestId('data-as-of')).toHaveCount(1);
+    await expect(badges.locator('.tile-freshness__label')).toHaveText('Live');
+    await expect(badges).toHaveAttribute('title', /^Live query · as of /);
+    // The time kept for a screen reader, out of sight (rule 1's room for the title).
+    await expect(badges.locator('.visually-hidden time')).toHaveAttribute('datetime', /^\d{4}-/);
     expect(
       await style(
         badges,
@@ -1923,21 +1926,25 @@ test.describe('T252: a chart tile’s badges, head and incomplete state', () => 
         'font-size',
         'padding-left',
         'border-radius',
+        'column-gap',
       ),
     ).toEqual({
-      height: '22px',
+      height: '20px',
       'background-color': await token(page, 'bg-subtle', 'background-color'),
       color: await token(page, 'text-secondary'),
       'font-size': '12px',
-      'padding-left': '8px',
+      'padding-left': '7px',
       'border-radius': '999px',
+      'column-gap': '5px',
     });
-    // Its parts are its text, with no pill of their own inside it (T252's review).
-    for (const part of ['acceleration', 'data-as-of'])
-      expect(await style(badges.getByTestId(part), 'padding-left', 'background-color')).toEqual({
-        'padding-left': '0px',
-        'background-color': 'rgba(0, 0, 0, 0)',
-      });
+    // Its dot, 6 px, in its ink; no pill inside it (T252's review).
+    expect(
+      await style(badges.locator('.tile-freshness__dot'), 'width', 'height', 'background-color'),
+    ).toEqual({
+      width: '6px',
+      height: '6px',
+      'background-color': await token(page, 'text-secondary', 'background-color'),
+    });
     // The prototype's head is 20–22 px; "Table view" made it 24 (mismatch 9).
     expect((await head.boundingBox())?.height).toBeLessThanOrEqual(22);
   });

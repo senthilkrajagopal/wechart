@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactNode,
 } from 'react';
 
 /**
@@ -64,6 +65,10 @@ export type MenuEntry =
       readonly label: string;
       readonly entries: readonly MenuEntry[];
       readonly disabled?: string | undefined;
+      /** A second line under its label, as design 08's Data as of footer (T681). */
+      readonly detail?: ReactNode;
+      /** An icon before it, the footer's clock (T681). */
+      readonly icon?: ReactNode;
     }
   | {
       readonly kind: 'group';
@@ -79,7 +84,21 @@ export type MenuEntry =
    * says of an answer (T273). An item that is off, so the arrows reach it and
    * a screen reader reads it in turn, with no reason to give.
    */
-  | { readonly kind: 'text'; readonly key: string; readonly text: string };
+  | {
+      readonly kind: 'text';
+      readonly key: string;
+      readonly text: string;
+      /** A heading line, its words strong (design 08 state D's "Answered by the database"; T681). */
+      readonly heading?: boolean;
+      /** The live dot before it, as state D's heading has it. */
+      readonly dot?: boolean;
+      /** Words under it, smaller. */
+      readonly sub?: string;
+      /** A key-value line's key, beside the text ("Data as of"). */
+      readonly term?: string;
+      /** The text is this moment: drawn as a `<time>` (AC-148's line, T681). */
+      readonly dateTime?: string;
+    };
 
 /** Why the menu is closing: Escape at its top, Tab, or an item that ran. */
 export type MenuClose = 'escape' | 'tab' | 'selected';
@@ -290,7 +309,17 @@ export function Menu({
             className="menu__separator"
           />
         );
-      case 'text':
+      case 'text': {
+        const words =
+          entry.dateTime === undefined ? (
+            entry.text
+          ) : (
+            <time dateTime={entry.dateTime} data-testid="data-as-of">
+              {entry.text}
+            </time>
+          );
+        const plain =
+          entry.heading !== true && entry.sub === undefined && entry.term === undefined;
         return (
           <div
             key={entry.key}
@@ -298,11 +327,34 @@ export function Menu({
             tabIndex={-1}
             data-key={entry.key}
             aria-disabled
-            className="menu__item menu__text"
+            className={`menu__item menu__text${entry.heading === true ? ' menu__text--heading' : ''}${entry.term === undefined ? '' : ' menu__text--kv'}`}
           >
-            {entry.text}
+            {plain ? (
+              words
+            ) : (
+              <>
+                {/* Spaces between the parts, so a screen reader's words part
+                    where the eye's lines do; a flex or grid box drops them. */}
+                {entry.dot === true ? <span className="menu__dot" aria-hidden="true" /> : null}
+                {entry.term === undefined ? null : (
+                  <>
+                    <span className="menu__term">{entry.term}</span>{' '}
+                  </>
+                )}
+                <span className="menu__lines">
+                  <span className="menu__main">{words}</span>
+                  {entry.sub === undefined ? null : (
+                    <>
+                      {' '}
+                      <span className="menu__sub-line">{entry.sub}</span>
+                    </>
+                  )}
+                </span>
+              </>
+            )}
           </div>
         );
+      }
       case 'group':
         return (
           <div
@@ -335,7 +387,19 @@ export function Menu({
                 setOpenKey(open ? undefined : entry.key);
               }}
             >
-              {entry.label}
+              {entry.icon === undefined ? null : (
+                <span className="menu__icon" aria-hidden="true">
+                  {entry.icon}
+                </span>
+              )}
+              {entry.detail === undefined ? (
+                entry.label
+              ) : (
+                <span className="menu__lines">
+                  <span className="menu__main">{entry.label}</span>{' '}
+                  <span className="menu__detail">{entry.detail}</span>
+                </span>
+              )}
               <span aria-hidden="true" className="menu__chevron">
                 {' ›'}
               </span>

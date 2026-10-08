@@ -122,8 +122,9 @@ test('a drilled tile says what served its own answer, not the rollup that served
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
   const tile = page.locator('[data-tile="tile-monthly_orders"]');
-  const served = tile.getByTestId('acceleration');
-  await expect(served).toHaveText(/Accelerated/);
+  // The tile's one badge, "✓ Pre-agg · 3m" or "● Live" (T681; design 04 note 4).
+  const served = tile.getByTestId('tile-freshness');
+  await expect(served).toHaveText(/^Pre-agg/);
 
   const marked = async () => {
     await tile.getByRole('button', { name: /^Actions for / }).click();
@@ -140,8 +141,8 @@ test('a drilled tile says what served its own answer, not the rollup that served
     .click();
 
   await expect(tile.getByTestId('drill-crumb')).toBeVisible();
-  await expect(served).toHaveText(/Live/);
-  await expect(served).not.toHaveText(/Accelerated/);
+  await expect(served).toHaveText(/^Live/);
+  await expect(served).not.toHaveText(/Pre-agg/);
   // Nor does its Data as of name the rollup.
   await tile.getByRole('button', { name: /^Actions for / }).click();
   await tile
@@ -156,7 +157,7 @@ test('a drilled tile says what served its own answer, not the rollup that served
 
   // Back: the chart, served by its rollup again.
   await tile.getByTestId('drill-crumb').getByRole('button', { name: '← Back' }).click();
-  await expect(served).toHaveText(/Accelerated/);
+  await expect(served).toHaveText(/^Pre-agg/);
 });
 
 test('a tile served from a pre-aggregation says so with its age, and one from the database says live', async ({
@@ -167,17 +168,25 @@ test('a tile served from a pre-aggregation says so with its age, and one from th
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
 
-  const accelerated = page.locator('[data-tile="tile-monthly_orders"]').getByTestId('acceleration');
-  await expect(accelerated).toHaveText(/Accelerated · built .+ ago/);
+  // Design 04 note 4 (T681): "✓ Pre-agg · 3m", the build's age in a word, the
+  // rest in its tooltip: the rollup's name, the time to the second, how long
+  // the answer took, and how long ago it was built.
+  const accelerated = page
+    .locator('[data-tile="tile-monthly_orders"]')
+    .getByTestId('tile-freshness');
+  // Its words with the time, for a screen reader reading the tile.
+  await expect(accelerated).toHaveText(/^Pre-agg · \d+[smhdw] · as of .*\d{2}:\d{2}:\d{2}$/);
   // Its icon and its words, never colour alone.
-  await expect(accelerated.locator('[data-icon="accelerated"]')).toHaveCount(1);
-  await expect(accelerated).toHaveAttribute('title', /monthly_orders\.by_status_month/);
+  await expect(accelerated.locator('[data-icon="ok"]')).toHaveCount(1);
+  await expect(accelerated).toHaveAttribute(
+    'title',
+    /^Pre-aggregation monthly_orders\.by_status_month · as of .+ \d{2}:\d{2}:\d{2} \(.*\d{2}:\d{2}:\d{2} UTC\) · \d+ ms · built .+ ago$/,
+  );
 
-  // Shown as the prototype's badge is, the age in a word ("16m"), so a
-  // half-width tile keeps its title readable and its Table view clear of the
-  // corner controls (T014's review).
+  // So a half-width tile keeps its title readable and its Table view clear
+  // of the corner controls (T014's review).
   const tile = page.locator('[data-tile="tile-monthly_orders"]');
-  await expect(accelerated.locator('.acceleration__short')).toHaveText(/^\d+[smhdw]$/);
+  await expect(accelerated.locator('.tile-freshness__label')).toHaveText(/^Pre-agg · \d+[smhdw]$/);
   const heading = await tile
     .getByRole('heading', { name: 'monthly_orders by status' })
     .boundingBox();
@@ -187,10 +196,14 @@ test('a tile served from a pre-aggregation says so with its age, and one from th
   const refresh = await tile.getByRole('button', { name: /^Refresh / }).boundingBox();
   expect((table?.x ?? 0) + (table?.width ?? 0)).toBeLessThanOrEqual(refresh?.x ?? 0);
 
-  const live = page.locator('[data-tile="tile-orders"]').getByTestId('acceleration');
-  await expect(live).toHaveText(/Live/);
-  await expect(live).not.toHaveText(/Accelerated/);
-  await expect(live.locator('[data-icon="live"]')).toHaveCount(1);
+  const live = page.locator('[data-tile="tile-orders"]').getByTestId('tile-freshness');
+  await expect(live.locator('.tile-freshness__label')).toHaveText('Live');
+  await expect(live).not.toHaveText(/Pre-agg/);
+  await expect(live.locator('.tile-freshness__dot')).toHaveCount(1);
+  await expect(live).toHaveAttribute(
+    'title',
+    /^Live query · as of .+ \d{2}:\d{2}:\d{2} \(.*\d{2}:\d{2}:\d{2} UTC\) · \d+ ms · no pre-aggregation$/,
+  );
 });
 
 /**
@@ -209,8 +222,8 @@ test('refreshing a tile a pre-aggregation serves says its data is as of the last
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
   const accelerated = page.locator('[data-tile="tile-monthly_orders"]');
   const live = page.locator('[data-tile="tile-orders"]');
-  await expect(accelerated.getByTestId('acceleration')).toHaveText(/Accelerated/);
-  await expect(live.getByTestId('acceleration')).toHaveText(/Live/);
+  await expect(accelerated.getByTestId('tile-freshness')).toHaveText(/^Pre-agg/);
+  await expect(live.getByTestId('tile-freshness')).toHaveText(/^Live/);
 
   await accelerated.hover();
   await accelerated.getByRole('button', { name: /^Refresh / }).click();
@@ -258,8 +271,8 @@ test('Data as of says what served a tile, how fresh it is and where that is set'
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
   const accelerated = page.locator('[data-tile="tile-monthly_orders"]');
   const live = page.locator('[data-tile="tile-orders"]');
-  await expect(accelerated.getByTestId('acceleration')).toHaveText(/Accelerated/);
-  await expect(live.getByTestId('acceleration')).toHaveText(/Live/);
+  await expect(accelerated.getByTestId('tile-freshness')).toHaveText(/^Pre-agg/);
+  await expect(live.getByTestId('tile-freshness')).toHaveText(/^Live/);
   const asOf = async (tile: typeof live) => {
     await tile.getByRole('button', { name: /^Actions for / }).click();
     await tile.getByRole('menuitem', { name: /^Data as of \d/ }).click();
@@ -267,6 +280,12 @@ test('Data as of says what served a tile, how fresh it is and where that is set'
   };
 
   // A pre-aggregation's answer: what it is, when built, when it runs next.
+  // The footer's second line names it, with its interval (T681; design 08, pin 10).
+  await accelerated.getByRole('button', { name: /^Actions for / }).click();
+  await expect(
+    accelerated.getByRole('menuitem', { name: /^Data as of \d/ }).locator('.menu__detail'),
+  ).toHaveText('⚡Pre-aggregation · every hour');
+  await page.keyboard.press('Escape');
   let menu = await asOf(accelerated);
   await expect(menu.getByRole('menuitem')).toHaveText([
     'Pre-aggregation monthly_orders.by_status_month',
@@ -304,11 +323,19 @@ test('Data as of says what served a tile, how fresh it is and where that is set'
     /\/model\/files\/cubes%2Fmonthly_orders\.yml\?cube=monthly_orders&tab=pre_aggregations$/,
   );
 
-  // The database's answer is said to be the database's, and why not a rollup.
+  // The database's answer is said to be the database's, and why not a rollup:
+  // design 08 state D, with the time to the second (T681).
   await page.goto(`/explore/dashboards/${id}`);
-  menu = await asOf(live);
+  // The footer on two lines, with its clock (design 08, pin 10).
+  await live.getByRole('button', { name: /^Actions for / }).click();
+  const footer = live.getByRole('menuitem', { name: /^Data as of \d/ });
+  await expect(footer.locator('.menu__icon svg')).toHaveCount(1);
+  await expect(footer.locator('.menu__detail')).toHaveText('Live · from the database');
+  await footer.click();
+  menu = live.getByRole('menu', { name: /^Data as of \d/ });
   await expect(menu.getByRole('menuitem')).toHaveText([
-    'Answered by the database, not a pre-aggregation',
+    'Answered by the database No pre-aggregation matched this chart’s query.',
+    /^Data as of (Today|Yesterday|\d{1,2} [A-Z][a-z]{2}) \d{2}:\d{2}:\d{2} when Cube answered$/,
     'Refresh now',
     'Why not accelerated?',
   ]);

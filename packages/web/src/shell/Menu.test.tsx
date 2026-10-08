@@ -300,3 +300,66 @@ describe('the tile menu', () => {
     expect(document.getElementById(described ?? '')?.textContent).toBe('Ctrl/⌘+Enter adds it');
   });
 });
+
+/**
+ * T681 (design 08, pin 10 and state D; DSH-21): the Data as of footer on two
+ * lines with its clock, and the submenu's heading and key-value line, each
+ * still a line the arrows reach and a screen reader reads in turn.
+ */
+describe('the menu’s two-line footer and its lines of information (T681)', () => {
+  it('draws a submenu’s second line and icon, its name both lines', async () => {
+    menu([
+      {
+        kind: 'submenu',
+        key: 'as-of',
+        label: 'Data as of 09:27',
+        detail: 'Live · from the database',
+        icon: <svg data-icon="clock" />,
+        entries: [{ kind: 'item', key: 'r', label: 'Refresh now', onSelect: vi.fn() }],
+      },
+    ]);
+    const item = screen.getByRole('menuitem', { name: /^Data as of 09:27/ });
+    expect(item.querySelector('.menu__icon svg')?.getAttribute('data-icon')).toBe('clock');
+    expect(item.querySelector('.menu__lines')?.textContent).toBe(
+      'Data as of 09:27 Live · from the database',
+    );
+    expect(item.querySelector('.menu__detail')?.textContent).toBe('Live · from the database');
+    await userEvent.keyboard('{ArrowRight}');
+    expect(focused()).toBe('Refresh now');
+  });
+
+  it('draws a heading line and a key-value line, each reached in turn, with its time', async () => {
+    menu([
+      {
+        kind: 'text',
+        key: 'h',
+        text: 'Answered by the database',
+        heading: true,
+        dot: true,
+        sub: 'No pre-aggregation matched this chart’s query.',
+      },
+      {
+        kind: 'text',
+        key: 'kv',
+        term: 'Data as of',
+        text: 'Today 09:27:42',
+        sub: 'when Cube answered',
+        dateTime: '2026-09-25T09:27:42.000Z',
+      },
+      { kind: 'item', key: 'r', label: 'Refresh now', onSelect: vi.fn() },
+    ]);
+    expect(focused()).toBe('Answered by the database No pre-aggregation matched this chart’s query.');
+    const heading = screen.getAllByRole('menuitem')[0]!;
+    expect(heading.className).toBe('menu__item menu__text menu__text--heading');
+    // State D's live dot before it, for the eye only.
+    expect(heading.querySelector('.menu__dot')?.getAttribute('aria-hidden')).toBe('true');
+    await userEvent.keyboard('{ArrowDown}');
+    expect(focused()).toBe('Data as of Today 09:27:42 when Cube answered');
+    const time = document.activeElement?.querySelector('time');
+    expect(time?.getAttribute('datetime')).toBe('2026-09-25T09:27:42.000Z');
+    expect(time?.getAttribute('data-testid')).toBe('data-as-of');
+    expect(document.activeElement?.querySelector('.menu__term')?.textContent).toBe('Data as of');
+    await userEvent.keyboard('{ArrowDown}');
+    expect(focused()).toBe('Refresh now');
+  });
+});

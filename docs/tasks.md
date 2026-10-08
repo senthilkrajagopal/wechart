@@ -9303,7 +9303,7 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **AC-148 holds with design 04 note 4.** The head's clock moves into the badge's tooltip, but AC-148's text needs no change if T681 lands DSH-01 and DSH-21 together. The tile menu's Data as of submenu then shows the time to the second, as design 08 state D draws it, and AC-148's test reads it there.
     - **Questions for the user: 53** (46, and design 10's 7). Each critique lists its own with options. Explore's Q7 was settled by design 15 (R37), and the components critique's Q1 narrowed to list heads, both from the cold review. The model critique's Q2 is recorded in backlog §6(a) at the coordinator's direction. The tasks below name the questions they wait on; the coordinator batches them.
     - **status.md is stale.** It lists as "left to build" items whose tasks are ticked (T331, T348, T498, T515, T473). Backlog §6(c)'s "design 03's Propose, History and version line" is unblocked, since the proposal chain T349–T358 has landed. T698 updates both.
-- [ ] T681 (AC-352, AC-148) A tile's freshness as design 04 note 4 draws it, and the tile menu's Data as of as design 08 draws it *(added 2026-10-08 by T406)*
+- [x] T681 (AC-352, AC-148) A tile's freshness as design 04 note 4 draws it, and the tile menu's Data as of as design 08 draws it *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/tiles/{ChartTile,DataAsOf,AccelerationBadge}.tsx`, `packages/web/src/dashboard/{dataAsOf.ts,TileViewMenu.tsx}` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/refresh.spec.ts`, `e2e/acceleration.spec.ts`
   - Findings: DSH-01, DSH-21, DSH-23 (`docs/design/critiques/2026-10-08-dashboard.md`).
   - Failing test: the head says "● Live" or "✓ Pre-agg · 3m" alone, with the time to the second in the badge's tooltip ("Live query · as of … · n ms · no pre-aggregation"). The menu's footer has two lines with the clock. The submenu has state D's "Data as of: Today 09:27:42 / when Cube answered". AC-148's refresh test reads the submenu's time to the second.
@@ -9313,6 +9313,41 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **chart-editor-Q5:** the word is "Live" everywhere ("● Live", paired with "✓ Pre-agg"), as the head already says.
     - **dashboard-Q1:** Table view moves into ⋯ as "View as table", and every chart of 4 or fewer series draws end-point direct labels (design 04 pins 5–6). Rule 5 then holds through the labels, and AC-178 through ⋯. It may land with this task.
   - Depends on: T477
+  - **Built 2026-10-08: DSH-01, DSH-21 and DSH-23 together,** so AC-148 stays met.
+    - **dashboard-Q1 is not built yet.** Its two halves must land together: rule 5 holds once Table view leaves the head only if charts of 4 or fewer series carry direct labels.
+    - The labels need ECharts' end-point labels. The coordinator had `docs/research/echarts-end-labels.md` written (feat/xcube 8d4e0328), with its calls on the doc's open points, and it lands as a T681 follow-up.
+    - **The review (FAIL, one real bug, fixed):**
+      - **The badge shrank to an empty pill before it moved to the foot.** It was shrinkable down to `min-width: 0`, and the head's placement measures it as drawn. It is `flex: none` now, as design 04's `.fresh` is, so it goes to the foot whole. `tile-head.spec.ts` now measures its whole width as its least, and checks its word is never cut.
+      - Minor notes taken up:
+        - `dataAsOf` says nothing for a time that isn't one, rather than throw on `toISOString`.
+        - State D's heading has its live dot.
+        - The badge's other-day and no-time forms are tested.
+        - The badge's 5 px gap is asserted exactly.
+        - The T477 time check accepts a rollup's tooltip too.
+      - **Kept as built:**
+        - The footer reads "Data as of 09:04", not design 08's "09:04 today". T477's one format has a bare clock mean today.
+        - `DataAsOf.tsx` stays with its own tests, though nothing imports it.
+        - For T690, a note: `elapsedOf` on `useQuery`'s data is lost to structural sharing after the first fetch, so measure it in the `queryFn`.
+    - **The badge (DSH-01, DSH-23).** `tiles/FreshnessBadge.tsx` draws the tile's one badge: "● Live", or "✓ Pre-agg · 3m" in the status colour with the check. It is design 04's `.fresh`: 20 px, padding 0 7, a 5 px gap, a 6 px dot.
+      - Its tooltip: "Live query · as of ‹exact time with UTC› · 42 ms · no pre-aggregation", or "Pre-aggregation ‹name› · as of … · 12 ms · built 3 minutes ago". The time is exact with UTC, as T477's Q9 has every tooltip's.
+      - It takes no focus (dashboard-Q9). A screen reader reading the tile hears the time with the word, from a visually hidden `<time>`.
+      - The time and "as of" no longer show in the head. `DataAsOf.tsx` is left with its own tests, used nowhere now.
+    - **How long the answer took.** `loadTile` measures from the first ask to the answer, polls included. It keeps the figure beside the answer (`elapsedOf`), not in it, so Cube's answer is unchanged. `answerMetaOf` carries it as `elapsedMs`.
+    - **The footer (DSH-21, design 08 pin 10).** Data as of is two lines with the clock: "Data as of 09:04", then "● Live · from the database" or "⚡ Pre-aggregation · every hour" (Schedules' words, where the rollup runs on a clock).
+    - **State D's submenu.** "Answered by the database" (strong), with "No pre-aggregation matched this chart's query." under it. Then a key-value line, "Data as of · Today 09:27:42 · when Cube answered", as a `<time>`. Then Refresh now and Why not accelerated?.
+      - Each line is a menu line the arrows reach, so AC-148's time to the second is reachable by keyboard.
+      - `refresh.spec.ts` reads it there now, opening the submenu with → from the keyboard.
+      - State C's submenu is unchanged.
+    - **The menu.** `Menu` gains a submenu's `icon` and `detail` (a second line), and a text line's `heading`, `sub`, `term` and `dateTime`. Spaces between the parts keep a screen reader's words apart.
+    - **Tests changed with the design.** These e2e tests encoded the head's old "● Live · as of 09:15:34" badge, the old 22 px pill, the "Accelerated" word, or the old tooltip:
+      - `acceleration.spec.ts` (AC-013, AC-245, AC-238);
+      - `design-conformance.spec.ts` (T252's badge: now design 04's sizes);
+      - `consistency.spec.ts` (T477's tile time);
+      - `no-horizontal-scroll.spec.ts`;
+      - `markings.spec.ts`;
+      - `refresh.spec.ts` (AC-148, now read from the submenu).
+
+      Each now asserts the new design as exactly. `dataAsOf.test.ts`'s database case asserts state D's lines and the footer's second line. `DataAsOf.test.tsx`, `editHead.test.tsx`, `refreshTile.test.tsx` and `refreshPage.test.tsx` read the badge.
 - [ ] T682 (AC-352, AC-199, AC-245, AC-247) The tile ⋯ menu's groups, order, heading and rows as design 08 draws them *(added 2026-10-08 by T406)*
   - Files: `packages/web/src/dashboard/TileViewMenu.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/tile-menu.spec.ts`
   - Findings: DSH-18, DSH-19, DSH-20, DSH-22.

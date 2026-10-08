@@ -43,6 +43,15 @@ export interface ScheduleSaid {
   readonly sql?: string;
 }
 
+/** The Data as of footer and its submenu, as the tile menu draws them. */
+export interface DataAsOfSaid {
+  readonly label: string;
+  /** The footer's second line (design 08, pin 10; T681). */
+  readonly detail: string;
+  readonly served: 'live' | 'pre-aggregation';
+  readonly entries: MenuEntry[];
+}
+
 export function dataAsOf(
   {
     answered,
@@ -69,11 +78,15 @@ export function dataAsOf(
   now: Date,
   // As every moment is written (T477), never the browser's locale.
   timeOf: (date: Date) => string = (date) => whenOf(date, now),
-): { label: string; entries: MenuEntry[] } | undefined {
+  /** The moment to the second, as design 08 state D writes it: "Today 09:27:42" (T681). */
+  secondsOf: (date: Date) => string = (date) => whenOf(date, now, { seconds: true }),
+): DataAsOfSaid | undefined {
   if (answered === undefined) return undefined;
   const used = usedOf(answered);
-  const lastRefresh =
+  // A time that doesn't read as one is no time (T681's review): never "NaN".
+  const read =
     answered.lastRefreshTime === undefined ? undefined : new Date(answered.lastRefreshTime);
+  const lastRefresh = read === undefined || Number.isNaN(read.getTime()) ? undefined : read;
   const at = lastRefresh ?? used?.builtAt;
   if (at === undefined && used === undefined) return undefined;
   const label = at === undefined ? 'Data as of' : `Data as of ${timeOf(at)}`;
@@ -90,15 +103,39 @@ export function dataAsOf(
           },
         ];
 
+  /**
+   * Design 08 state D: who answered, then when, to the second — when Cube
+   * answered. The line a keyboard reaches with the time a refresh moves on,
+   * the badge's tooltip being the pointer's (AC-148 with design 04 note 4;
+   * T681).
+   */
   if (used === undefined)
     return {
       label,
+      detail: 'Live · from the database',
+      served: 'live',
       entries: [
         {
           kind: 'text',
           key: 'database',
-          text: 'Answered by the database, not a pre-aggregation',
+          text: 'Answered by the database',
+          heading: true,
+          dot: true,
+          sub: 'No pre-aggregation matched this chart’s query.',
         },
+        { kind: 'separator', key: 'when' },
+        ...(at === undefined
+          ? []
+          : [
+              {
+                kind: 'text' as const,
+                key: 'as-of',
+                term: 'Data as of',
+                text: secondsOf(at),
+                sub: 'when Cube answered',
+                dateTime: at.toISOString(),
+              },
+            ]),
         { kind: 'separator', key: 'actions' },
         ...refresh,
         { kind: 'item', key: 'why-not', label: 'Why not accelerated?', onSelect: onWhyNot },
@@ -125,6 +162,13 @@ export function dataAsOf(
       : `${schedule.shortName}.${used.id.slice(used.id.lastIndexOf('.') + 1)}`;
   return {
     label,
+    // "Pre-aggregation · every hour" (design 08, pin 10), in Schedules' words
+    // where it runs on a clock (T551); its other states are the submenu's.
+    detail:
+      schedule !== undefined && /^(Every|Hourly|Daily|At)\b/.test(schedule.when)
+        ? `Pre-aggregation · ${lowerFirst(schedule.when)}`
+        : 'Pre-aggregation',
+    served: 'pre-aggregation',
     entries: [
       text('name', `Pre-aggregation ${name}`),
       ...(used.builtAt === undefined ? [] : [text('built', `Last built ${timeOf(used.builtAt)}`)]),

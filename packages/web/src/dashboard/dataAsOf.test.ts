@@ -129,15 +129,85 @@ describe('what Data as of says', () => {
       },
       NOW,
       (date) => date.toISOString().slice(11, 16),
+      (date) => `Today ${date.toISOString().slice(11, 19)}`,
     );
 
     expect(said?.label).toBe('Data as of 09:19');
+    // The footer's second line (design 08, state D; T681, DSH-21).
+    expect(said?.detail).toBe('Live · from the database');
+    expect(said?.served).toBe('live');
+    // State D: its heading, then the time to the second, when Cube answered,
+    // which a keyboard reaches (AC-148 with design 04 note 4; T681).
     expect(words(said?.entries ?? [])).toEqual([
-      'Answered by the database, not a pre-aggregation',
+      'Answered by the database',
+      '(separator)',
+      'Today 09:19:00',
       '(separator)',
       'Refresh now',
       'Why not accelerated?',
     ]);
+    expect(said?.entries[0]).toEqual({
+      kind: 'text',
+      key: 'database',
+      text: 'Answered by the database',
+      heading: true,
+      dot: true,
+      sub: 'No pre-aggregation matched this chart’s query.',
+    });
+    expect(said?.entries[2]).toEqual({
+      kind: 'text',
+      key: 'as-of',
+      term: 'Data as of',
+      text: 'Today 09:19:00',
+      sub: 'when Cube answered',
+      dateTime: '2026-09-25T09:19:00.000Z',
+    });
+  });
+
+  it('says no time where Cube’s isn’t one, rather than fail or say NaN (T681’s review)', () => {
+    const said = dataAsOf(
+      {
+        answered: { lastRefreshTime: 'not a time' },
+        schedules: [],
+        onRefresh: vi.fn(),
+        onWhyNot: vi.fn(),
+        onOpen: vi.fn(),
+      },
+      NOW,
+    );
+    expect(said).toBeUndefined();
+  });
+
+  it('says a pre-aggregation’s schedule on the footer’s second line, where it is known (T681)', () => {
+    const said = dataAsOf(
+      {
+        answered: {
+          usedPreAggregations: { t: { preAggregationId: 'a.b', lastUpdatedAt: NOW.getTime() } },
+        },
+        schedules: [{ id: 'a.b', cube: 'a', when: 'Every 1 hour', every: '1 hour' }],
+        onRefresh: vi.fn(),
+        onWhyNot: vi.fn(),
+        onOpen: vi.fn(),
+      },
+      NOW,
+      (date) => date.toISOString().slice(11, 16),
+    );
+    expect(said?.detail).toBe('Pre-aggregation · every 1 hour');
+    expect(said?.served).toBe('pre-aggregation');
+    const unknown = dataAsOf(
+      {
+        answered: {
+          usedPreAggregations: { t: { preAggregationId: 'a.b', lastUpdatedAt: NOW.getTime() } },
+        },
+        schedules: 'loading',
+        onRefresh: vi.fn(),
+        onWhyNot: vi.fn(),
+        onOpen: vi.fn(),
+      },
+      NOW,
+      (date) => date.toISOString().slice(11, 16),
+    );
+    expect(unknown?.detail).toBe('Pre-aggregation');
   });
 
   it('says so when a pre-aggregation’s schedule cannot be read, rather than guess one', () => {

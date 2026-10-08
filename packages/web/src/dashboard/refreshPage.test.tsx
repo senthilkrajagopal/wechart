@@ -105,7 +105,9 @@ function page(client: QueryClient) {
 }
 
 const newClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
-const asOf = () => screen.getByTestId('data-as-of').getAttribute('datetime');
+// The answer's time, as the tile's badge carries it (T681; its time to the second).
+const asOf = () =>
+  screen.getByTestId('tile-freshness').querySelector('time')?.getAttribute('datetime');
 
 describe('refreshing a tile, on the page', () => {
   it('cannot be asked while the dashboard’s charts are still loading', async () => {

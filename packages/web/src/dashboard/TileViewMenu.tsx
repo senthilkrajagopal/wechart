@@ -2,6 +2,8 @@ import { csvOf, exportNoteOf, rowsText, type DrillOption, type RenderSpec } from
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 
 import { Menu, type MenuEntry } from '../shell/Menu';
+// The clock every History button carries is the footer's too (design 08, pin 10).
+import { HistoryIcon } from '../workspaces/history/HistoryPanel';
 import { StateLine, StatusIcon, type StateKind } from '../shell/StatusIcon';
 import { chartSvg, drawnChartIn, imageFileName, surfaceOf, svgToPng } from '../tiles/chartImage';
 
@@ -157,7 +159,17 @@ export function TileViewMenu({
    * (`dataAsOf`), asked only while the menu is open. Absent, or answering
    * nothing, before there is an answer to date.
    */
-  dataAsOf?: (() => { label: string; entries: MenuEntry[] } | undefined) | undefined;
+  dataAsOf?:
+    | (() =>
+        | {
+            label: string;
+            entries: MenuEntry[];
+            /** Its second line and who served it (T681; design 08, pin 10). */
+            detail?: string;
+            served?: 'live' | 'pre-aggregation';
+          }
+        | undefined)
+    | undefined;
   /**
    * Why the tile draws no chart just now — a limited tile waiting for a
    * marking — so there is no image of it to make (T272's review); or, with no
@@ -954,7 +966,31 @@ export function TileViewMenu({
         ? []
         : [
             { kind: 'separator', key: 'before-as-of' },
-            { kind: 'submenu', key: 'as-of', label: said.label, entries: said.entries },
+            {
+              kind: 'submenu',
+              key: 'as-of',
+              label: said.label,
+              entries: said.entries,
+              // Two lines with the clock (T681; design 08, pin 10): when,
+              // then who served it.
+              icon: <HistoryIcon />,
+              ...(said.detail === undefined
+                ? {}
+                : {
+                    detail: (
+                      <>
+                        {said.served === 'pre-aggregation' ? (
+                          <span className="menu__bolt" aria-hidden="true">
+                            ⚡
+                          </span>
+                        ) : (
+                          <span className="menu__dot" aria-hidden="true" />
+                        )}
+                        {said.detail}
+                      </>
+                    ),
+                  }),
+            },
           ];
     })(),
   ];

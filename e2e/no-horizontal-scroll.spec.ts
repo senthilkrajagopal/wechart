@@ -163,7 +163,7 @@ test.describe('T250: below 1,024 px, a dashboard is for reading', () => {
     // The badge says the whole of itself in its tooltip, however little room it has.
     await expect(statusTile.getByTestId('tile-freshness')).toHaveAttribute(
       'title',
-      /^Live · Data as of /,
+      /^Live query · as of /,
     );
     // The canvas does not scroll sideways.
     expect((await overflowOf(page)).canvas).toBe(0);
@@ -181,17 +181,20 @@ test.describe('T250: below 1,024 px, a dashboard is for reading', () => {
     // Side by side again, six columns each.
     expect(notes.y).toBe(status.y);
     await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
-    // With room, the freshness badge's parts keep the prototype's 4 px apart
-    // (T250's review: its gap stopped applying to inline parts).
+    // With room, the freshness badge's dot and word keep design 04's 5 px apart
+    // (T681; T250's review: its gap stopped applying to inline parts). Its
+    // words for a screen reader are out of sight, and out of the measure.
     const gaps = await page
       .locator('[data-tile="tile-status"]')
       .getByTestId('tile-freshness')
       .evaluate((badge) => {
-        const parts = [...badge.children].map((part) => part.getBoundingClientRect());
+        const parts = [...badge.children]
+          .filter((part) => !part.classList.contains('visually-hidden'))
+          .map((part) => part.getBoundingClientRect());
         return parts.slice(1).map((part, at) => part.left - (parts[at]?.right ?? 0));
       });
     expect(gaps.length).toBeGreaterThan(0);
-    for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual(3);
+    for (const gap of gaps) expect(Math.round(gap)).toBe(5);
   });
 });
 
@@ -269,7 +272,8 @@ test('a three-column chart tile keeps its title beside its badges at 1,440 px (T
   });
   await page.goto(`/explore/dashboards/${id}`);
   const tile = page.locator('[data-tile="tile-narrow"]');
-  await expect(tile.getByTestId('data-as-of')).toBeVisible({ timeout: 15_000 });
+  // Its answer in: the one freshness badge shows (T681).
+  await expect(tile.getByTestId('tile-freshness')).toBeVisible({ timeout: 15_000 });
   const room = await titleRoom(tile);
   expect(room.whole || room.width >= 64).toBe(true);
 });

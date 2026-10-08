@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
 import { IN_MY_WORKSPACE } from './workspace';
 
@@ -26,12 +26,34 @@ function loadsFrom(page: Page): { query: unknown; cache?: string }[] {
   return asked;
 }
 
+/**
+ * The time to the second, where a keyboard reads it: the tile menu's Data as
+ * of submenu, "Data as of · Today 09:27:42 · when Cube answered" (design 08
+ * state D). The head's badge says only "● Live", the time in its tooltip
+ * (T681; design 04 note 4; the dashboard critique's AC-148 note).
+ */
+async function asOfIn(tile: Locator): Promise<{ text: string; at: string }> {
+  await tile.getByRole('button', { name: /^Actions for / }).click();
+  try {
+    await tile.getByRole('menuitem', { name: /^Data as of \d/ }).press('ArrowRight');
+    const time = tile.getByRole('menu', { name: /^Data as of \d/ }).getByTestId('data-as-of');
+    return {
+      text: (await time.textContent()) ?? '',
+      at: (await time.getAttribute('datetime')) ?? '',
+    };
+  } finally {
+    // Closed again, the submenu and then the menu, however it went.
+    await tile.page().keyboard.press('Escape');
+    await tile.page().keyboard.press('Escape');
+  }
+}
+
 test('refreshing a chart asks Cube again and shows the newer data-as-of time', async ({ page }) => {
   await page.goto('/explore/dashboards/seed-root-dashboard-1');
   const tile = page.locator('[data-tile="tile-status"]');
-  const asOf = tile.getByTestId('data-as-of');
-  await expect(asOf).toHaveText(/^Data as of \d{1,2}:\d{2}:\d{2}/);
-  const before = await asOf.getAttribute('datetime');
+  await expect(tile.getByTestId('tile-freshness')).toHaveText(/^Live/);
+  const before = await asOfIn(tile);
+  expect(before.text).toMatch(/^(Today|Yesterday|\d{1,2} [A-Z][a-z]{2}) \d{2}:\d{2}:\d{2}$/);
 
   // A second on, so a newer answer has a later time to show.
   await page.waitForTimeout(1100);
@@ -39,8 +61,10 @@ test('refreshing a chart asks Cube again and shows the newer data-as-of time', a
   await tile.getByRole('button', { name: /^Refresh / }).click();
 
   await expect(async () => {
-    const after = await asOf.getAttribute('datetime');
-    expect(Date.parse(after ?? '')).toBeGreaterThan(Date.parse(before ?? ''));
+    const after = await asOfIn(tile);
+    expect(Date.parse(after.at)).toBeGreaterThan(Date.parse(before.at));
+    // To the second, so the newer time reads differently too.
+    expect(after.text).not.toBe(before.text);
   }).toPass({ timeout: 10_000 });
   // Asked past Cube's cache, and only this tile's chart (one query, however
   // many times it was polled).
@@ -115,17 +139,16 @@ test('refreshing a filtered chart asks its filtered query again, and shows that 
   );
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
   const tile = page.locator('[data-tile="tile-orders"]');
-  const asOf = tile.getByTestId('data-as-of');
   await expect(tile.getByRole('button', { name: 'Refresh Orders by status' })).toBeEnabled();
-  const before = await asOf.getAttribute('datetime');
+  const before = await asOfIn(tile);
 
   await page.waitForTimeout(1100);
   const asked = loadsFrom(page);
   await tile.getByRole('button', { name: 'Refresh Orders by status' }).click();
 
   await expect(async () => {
-    const after = await asOf.getAttribute('datetime');
-    expect(Date.parse(after ?? '')).toBeGreaterThan(Date.parse(before ?? ''));
+    const after = await asOfIn(tile);
+    expect(Date.parse(after.at)).toBeGreaterThan(Date.parse(before.at));
   }).toPass({ timeout: 10_000 });
   // What the tile draws is asked again — with its filter — past Cube's cache.
   expect(asked.length).toBeGreaterThan(0);
