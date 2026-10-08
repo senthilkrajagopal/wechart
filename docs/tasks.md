@@ -13408,7 +13408,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - No unit test proposes a cube of a taken name together with a new data source. The check runs before any data source lands, and `landed-names.test.ts` would catch it moving.
       - A data source's edit-copy approval with the name check on is shown only on the full stack, by `e2e/security/shared-change.ts`'s `changeSharedSource`.
 
-- [ ] T734 (AC-249) Generate cubes suggests a name in the grammar, editable before saving
+- [x] T734 (AC-249) Generate cubes suggests a name in the grammar, editable before saving
   - Files: where the scaffold's answer is read (`packages/api/src/model/introspection.ts`, or `GenerateCubes.tsx`; whichever the research on Cube's scaffold names supports), each with its test, `e2e/security/generate-in-workspace.spec.ts`
   - Failing test:
     - Following R73, tables `user__events`, `class` and `2024_orders` are suggested as cubes `user_events`, `t_class` and `t_2024_orders`: `__` becomes `_`, and a reserved word or a leading digit gets a `t_` prefix. The file and any join to it from another generated cube follow the suggested name.
@@ -13429,11 +13429,10 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - `model/suggestNames.test.ts`: the three examples, a joined batch renamed together, and a batch already in the grammar left untouched.
       - `model/introspection.test.ts`: the route answers `class` as `t_class` in `t_class.yml`.
       - `routes/generate-names.test.ts`: a generated cube's name edited before its first save is held to the grammar, then said only as in use, and a free name saves. This passed on T703's and T705's checks as they were; it shows the edit is checked like any draft's name.
-    - **Not done: the e2e on the image.** The sample database has no table whose name breaks the grammar, so `generate-in-workspace.spec.ts` can't generate one. There are two ways to get one, both outside my brief, so they go to the coordinator:
-      - add a table such as `generate."1_<project>_orders"` to `infra/sample-db/generate.sql` and re-seed;
-      - have the spec make and drop it itself through `docker exec wechart-sample-db psql`, as `e2e/security/sql-runner.spec.ts` already does.
-
-      The task stays unticked until that is settled.
+    - The e2e on the image, by the coordinator's call (2026-10-08): `infra/sample-db/generate.sql` gains `generate."2026_orders"` (a leading digit), which joins `generate."class"` (a reserved word), for fresh installs.
+      - The security suite's stack preparation (`e2e/security/prepare-stack.mjs`) runs that block of the file on a sample database made before it. The block starts at its marker and is made only of `CREATE TABLE IF NOT EXISTS`, so nothing in a shared database is dropped or changed. The script refuses a block holding `DROP`, `ALTER`, `DELETE` or `TRUNCATE`.
+      - `generate-in-workspace.spec.ts`: the tables are generated as `t_2026_orders` and `t_class`, and the orders cube's join is `t_class` with `{t_class…}` references and no `{class…}` left. The `t_class` draft's name is edited in the model editor: `Class__2` is said in Problems and Save is held, then a free name is taken in its code and Save is offered. Nothing is saved, so no state is shared between browser projects. It passed on chrome with a fresh API server, which ran the stack preparation; phase-1 `generate-cubes.spec.ts` still passes.
+    - AC-249 is not ticked: T727 is still open.
 
 ### AC-353: R70's identity warning (with T509)
 

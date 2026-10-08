@@ -166,6 +166,83 @@ test.describe('generating cubes into My workspace (T492, AC-350)', () => {
     }
   });
 
+  /**
+   * T734 (AC-249; R73): tables whose names break the grammar
+   * (`generate."2026_orders"`, a leading digit, which joins `generate."class"`,
+   * a reserved word; infra/sample-db/generate.sql) are generated as
+   * `t_2026_orders` and `t_class`, the join rewritten to the suggested name.
+   * Added as drafts, a name is edited in the model editor before any save,
+   * and checked as any draft's is. Nothing is saved, so nothing is shared
+   * between browser projects.
+   */
+  test('suggests names in the grammar, rewrites the join, and the name is edited before saving', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    const id = await rootDefault(page.request);
+    await page.goto(`/explore/data-sources/${id}`);
+    await page.getByRole('button', { name: 'Generate cubes…' }).click();
+    const pane = page.getByRole('dialog', { name: 'Generate cubes' });
+    await pane.getByRole('radio', { name: 'generate', exact: true }).check();
+    await pane.getByRole('button', { name: 'Next: Tables' }).click();
+    const tables = pane.getByRole('table', { name: 'Tables in generate' });
+    const search = pane.getByRole('searchbox', { name: 'Search tables' });
+    for (const table of ['2026_orders', 'class']) {
+      await search.fill(table);
+      await tables.getByRole('checkbox', { name: table, exact: true }).check();
+    }
+    await pane.getByRole('button', { name: 'Generate 2 cubes' }).click();
+
+    // Each under its suggested name and file; the orders cube's join to it renamed.
+    const orders = pane.getByRole('region', { name: 'cubes/t_2026_orders.yml' });
+    const classes = pane.getByRole('region', { name: 'cubes/t_class.yml' });
+    await expect(orders.locator('.generate-pane__status')).toHaveText('Ready');
+    await expect(classes.locator('.generate-pane__status')).toHaveText('Ready');
+    const details = orders.locator(':scope > details');
+    if ((await details.getAttribute('open')) === null)
+      await details.locator(':scope > summary').click();
+    await orders.locator('.generate-pane__yaml > summary').click();
+    const yaml = orders.getByRole('textbox', { name: /, as generated$/ });
+    await yaml.scrollIntoViewIfNeeded();
+    await expect(yaml).toContainText('name: t_2026_orders');
+    await expect(yaml).toContainText('- name: t_class');
+    await expect(yaml).toContainText('{t_class');
+    await expect(yaml).not.toContainText('{class');
+
+    // To the shared root, as drafts in My workspace: the class cube opened.
+    await pane
+      .getByRole('tree', { name: 'Target folder' })
+      .getByRole('treeitem', { name: 'Shared' })
+      .click();
+    await pane.getByRole('button', { name: 'Add 2 cubes as drafts' }).click();
+    await pane.getByRole('button', { name: 'Open cubes/t_class.yml' }).click();
+    const name = page
+      .getByRole('region', { name: 'Cube t_class' })
+      .getByRole('tabpanel')
+      .getByLabel('Name', { exact: true });
+    const save = page.getByRole('button', { name: 'Save', exact: true });
+    const problems = page.getByRole('region', { name: 'Problems' });
+    const code = page.getByRole('textbox', { name: 'cubes/t_class.yml, as YAML' });
+
+    // Edited outside the grammar: said, and Save held.
+    await name.fill('Class__2');
+    await expect(problems.getByRole('listitem')).toContainText([
+      'Cube Class__2: “Class__2” isn’t a name: start with a letter, then use letters, digits and single underscores, not ending in one, at most 40 characters.',
+    ]);
+    await expect(save).toBeDisabled();
+
+    // Edited to a free name in the grammar: taken in its code, and Save offered.
+    const own = `classes_${test.info().project.name}`;
+    await page
+      .getByRole('region', { name: 'Cube Class__2' })
+      .getByRole('tabpanel')
+      .getByLabel('Name', { exact: true })
+      .fill(own);
+    await expect(code).toContainText(`name: ${own}`);
+    await expect(problems).not.toContainText('isn’t a name');
+    await expect(save).toBeEnabled();
+  });
+
   test('from the data source’s ⋯ in Explore', async ({ page }) => {
     await rootDefault(page.request);
     await page.goto('/explore');

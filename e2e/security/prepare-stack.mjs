@@ -10,6 +10,7 @@
  * global setup and web servers in (research/test-stack.md, T320 addendum).
  */
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -41,3 +42,40 @@ const psql = (sql) =>
 if (psql(`SELECT 1 FROM pg_database WHERE datname = '${DATABASE}'`).trim() !== '1') {
   psql(`CREATE DATABASE ${DATABASE}`);
 }
+
+/**
+ * The sample database's tables whose names break the grammar (T734, AC-249):
+ * `infra/sample-db/generate.sql`'s R73 block, from its marker to its end,
+ * run on a sample database made before it was added. Every statement in it
+ * is `CREATE TABLE IF NOT EXISTS`: nothing is dropped or changed.
+ */
+const MARKER = '-- R73 names (T734, AC-249)';
+const generateSql = readFileSync(
+  new URL('../../infra/sample-db/generate.sql', import.meta.url),
+  'utf8',
+);
+const r73 = generateSql.slice(generateSql.indexOf(MARKER));
+if (!r73.startsWith(MARKER) || /\b(DROP|ALTER|DELETE|TRUNCATE)\b/i.test(r73))
+  throw new Error('generate.sql’s R73 block is missing, or does more than create tables.');
+execFileSync(
+  'docker',
+  [
+    'exec',
+    '-i',
+    'wechart-sample-db',
+    'psql',
+    '-U',
+    'sample',
+    '-d',
+    'sample',
+    '-v',
+    'ON_ERROR_STOP=1',
+    '-q',
+  ],
+  {
+    cwd: REPO_ROOT,
+    input: r73,
+    encoding: 'utf8',
+    stdio: ['pipe', 'pipe', 'inherit'],
+  },
+);

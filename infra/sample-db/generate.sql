@@ -70,3 +70,20 @@ CREATE TABLE generate.every_loss (
   count          integer NOT NULL,
   "Visit Count"  integer NOT NULL
 );
+
+-- R73 names (T734, AC-249): tables whose names break the grammar, for the
+-- cubes Generate cubes suggests in it. "2026_orders" (a leading digit, as
+-- t_2026_orders) joins "class" (a reserved word, as t_class), so the join's
+-- rewrite is seen too. Generated and edited, never published, so one pair
+-- serves every browser project. IF NOT EXISTS: the security suite's stack
+-- preparation (e2e/security/prepare-stack.mjs) runs this block on a sample
+-- database made before it, and never drops anything.
+CREATE TABLE IF NOT EXISTS generate."class" (
+  id    integer PRIMARY KEY,
+  name  text NOT NULL
+);
+CREATE TABLE IF NOT EXISTS generate."2026_orders" (
+  id        integer PRIMARY KEY,
+  class_id  integer NOT NULL REFERENCES generate."class" (id),
+  total     numeric(10, 2) NOT NULL
+);
