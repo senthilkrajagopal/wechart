@@ -509,4 +509,54 @@ describe('a model copied into the folder a dashboard’s copy made (T763, AC-279
     expect(await workspaceFolders()).toBe(foldersBefore);
     await getDb().deleteFrom('model_files').where('folder_id', '=', into).execute();
   });
+
+  /**
+   * T763's review: My workspace's root, as the dashboard's copy names it when
+   * the user's copy is there (`mine`), takes a model as it takes a data
+   * source; and a file the folder already holds at that path is never
+   * written over.
+   */
+  it('copies into My workspace’s root by its name `mine`, and never over a file the folder holds at that path', async () => {
+    const ROOTED = `${MARK}_rooted`;
+    const HELD = `${MARK}_held`;
+    await files().write([
+      { folderId: ids.sales, path: pathOf(ROOTED), content: cube(ROOTED) },
+      { folderId: ids.sales, path: pathOf(HELD), content: cube(HELD) },
+    ]);
+    stub.holdItems(MODEL, [
+      { folderId: 'fviewing', name: REGIONS, kind: 'cube', yaml: cube(REGIONS) },
+      { folderId: 'fglimpsed', name: GLIMPSED, kind: 'cube', yaml: cube(GLIMPSED) },
+      { folderId: 'fsales', name: ROOTED, kind: 'cube', yaml: cube(ROOTED) },
+      { folderId: 'fsales', name: HELD, kind: 'cube', yaml: cube(HELD) },
+    ]);
+
+    const rooted = await copyInto(ids.sales, pathOf(ROOTED), 'mine');
+    expect(rooted.statusCode, rooted.body).toBe(201);
+    // Named in the answer as My workspace's root is named to the browser (T523).
+    expect(rooted.json<{ folderId: string }>().folderId).toBe('mine');
+    expect((await files().inFolders([ids.workspace])).map((file) => file.path)).toContain(
+      pathOf(ROOTED),
+    );
+
+    // A file of that path there already, the user's own: kept as it is.
+    const project = await as('writer', {
+      method: 'POST',
+      url: '/api/documents',
+      payload: { kind: 'folder', title: `Held ${MARK}`, folderId: ids.workspace },
+    });
+    const into = project.json<{ id: string }>().id;
+    made.push({ kind: 'folder', id: into });
+    const mine = `${cube(HELD)}      - name: mine\n        type: count\n`;
+    await files().write([{ folderId: into, path: pathOf(HELD), content: mine }]);
+    const over = await copyInto(ids.sales, pathOf(HELD), into);
+    expect(over.statusCode, over.body).toBe(409);
+    expect((await files().inFolders([into])).map((file) => [file.path, file.content])).toEqual([
+      [pathOf(HELD), mine],
+    ]);
+    await getDb()
+      .deleteFrom('model_files')
+      .where('folder_id', 'in', [into, ids.workspace])
+      .where('path', 'in', [pathOf(HELD), pathOf(ROOTED)])
+      .execute();
+  });
 });

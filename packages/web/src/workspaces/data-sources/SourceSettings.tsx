@@ -895,7 +895,9 @@ function InCube({ id }: { id: string }) {
   const instances = withinTheHour(view, now);
   return (
     <div className="source-settings__cube">
-      <CubeState view={view} />
+      {/* Counted and their errors said by the hour as of now, as the table is
+          (AC-161; T365's review of group 3's step). */}
+      <CubeState view={view.state === 'unlanded' ? view : { ...view, instances }} />
       {instances.length === 0 ? null : (
         <>
           <TableScroll label="Cube instances">

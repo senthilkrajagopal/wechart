@@ -387,6 +387,10 @@ test.describe('Explore and the top bar by role (T331; AC-001, AC-192, AC-194)', 
       await expect(chip(page)).toHaveText('Your access: Read-write');
       await expect(head(page).getByRole('button', { name: 'Rename' })).toBeVisible();
       await open(page, names.roles);
+      // Still none, the root's access long answered (its View only chip above):
+      // refused, not still being asked (T761's review).
+      await expect(chip(page)).toHaveText('Your access: Read-write');
+      await expect(head(page).getByRole('button', { name: 'Rename' })).toHaveCount(0);
       await expect(contents(page)).toContainText(
         'To add a dashboard, chart, model or data source here, create it in My workspace with this folder as its target.',
       );

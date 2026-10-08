@@ -4058,8 +4058,8 @@ export function buildServer({
      * AC-368): copied into the folder the dashboard's copy made, a folder of
      * the user's own workspace, rather than a project folder of its own.
      */
-    const into = body?.into;
-    if (into !== undefined && (typeof into !== 'string' || into === ''))
+    const sent = body?.into;
+    if (sent !== undefined && (typeof sent !== 'string' || sent === ''))
       throw new BadRequest('Name the folder to copy it into as { into }.');
     if (typeof folderId !== 'string' || folderId === '' || typeof path !== 'string' || path === '')
       throw new BadRequest(
@@ -4074,6 +4074,9 @@ export function buildServer({
       return reply.code(403).send({
         error: 'You have no workspace: only read-write members and Super-Admins have one.',
       });
+    // My workspace's root as an answer names it: `mine`, as a data source's
+    // copy takes it (T523's review; T763's review).
+    const into = sent === MY_WORKSPACE_ID ? own : sent;
     if ((await workspaceRootOf(folderId)) !== null)
       throw new BadRequest('It is in a workspace already: edit it there.');
     const missing = { error: `There’s no model file ${path} here, or it isn’t yours to see.` };
@@ -4083,6 +4086,7 @@ export function buildServer({
     if (file === undefined) return reply.code(404).send(missing);
     if (
       typeof into === 'string' &&
+      into !== own &&
       ((await workspaceRootOf(into)) !== own || (await docs.get?.('folder', into)) == null)
     )
       throw new BadRequest('A model is copied into a folder of your own workspace.');
@@ -4098,6 +4102,17 @@ export function buildServer({
        * deleted meanwhile is never made again unmarked (T543's review).
        */
       const held = await modelStore.inFolders(await workspaceFolderIds(own));
+      // Never over another file the folder holds at that path, which its write
+      // would replace (T763's review): their copy of it already there opens.
+      if (
+        typeof into === 'string' &&
+        held.some(
+          (each) => each.folderId === into && each.path === path && each.origin?.id !== file.id,
+        )
+      )
+        return reply.code(409).send({
+          error: `That folder of your workspace holds a file at ${path} already, so it wasn’t copied there.`,
+        });
       const useOnly =
         !mayWrite(seen, folderId) && !held.some((each) => each.origin?.id === file.id);
       const target =

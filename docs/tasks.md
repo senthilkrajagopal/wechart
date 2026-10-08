@@ -6810,6 +6810,9 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - older reports not shown: the clock step, and `cube-state.test.ts`'s hour;
     - the type never changed, saved or proposed: `data-sources.spec.ts` "changes its copy…" ("The type is fixed…"), `access/data-sources.test.ts`, `repos/data-sources.test.ts` and `routes/workspace-copy-source.test.ts`;
     - an instance whose driver outlives the hour keeps reporting: xcube's heartbeat (`xcube-bc18f82c01.md`, "connections.ts L365-375"), asked for above.
+  - **The review (one round), fixed:**
+    - The In Cube tab still counted reports older than the hour ("2 Cube instances reported within the hour") under a table that no longer listed them: `CubeState` was given the API's answer, unfiltered. It now gets the instances within the hour as of now, as the table does (`SourceSettings.tsx`). The step's new check, that nothing is said to have "reported within the hour", went red first.
+    - The step checked the rows against the version the page itself reads. It now also requires that version to be past the one before the change.
 
 ## P2.8 Bookmarks (F31)
 
@@ -14298,6 +14301,7 @@ These tasks are what group 3's check of the open criteria found missing. Each is
     - **Explore** (`folderRole.ts`, `mayRenameFolder`; `ExplorePage.tsx`): Rename beside the heading needs the folder's role and the holding folder's access answering them (`rightFrom`), asked of it whenever a shared folder is open; always in the user's own workspace, and with sign-in off. A row's Rename in the open folder is the open folder's to give, as before.
     - **The existing e2e changed with the amendment:** `explore-roles.spec.ts`'s writer asserted Rename beside Roles, which the root holds and they only view; it now asserts none there, and Rename beside Inner, which Roles holds.
     - **Tests, passing:** `direct.test.ts` (refused by `PATCH` and `PUT` with nothing changed; the description still theirs; a subfolder of /W renamed; a Super-Admin renames /W) with the whole `src/access` (293) under the lock; `folderRole.test.ts` (2) and Explore's unit tests (244); in Chrome against compose's xcube, `explore-roles`, `access` and `deleting` (53); with sign-in off, `explore.spec.ts` and `explore-rename-move.spec.ts`.
+  - **The review (one round), fixed:** `explore-roles.spec.ts`'s "no Rename beside Roles" could pass while the root's access was still being asked. It is checked again on coming back to Roles from Inner, long after the root's access answered. Noted, not changed: a folder at no folder (`folderId` null), which only phase 1's unfiled folders are, is renamed by no one with sign-in on; the user accepted those may be unreachable.
   - **AC-291 ticked.** Each clause shown:
     - applied at once, and only with read-write: `access/direct.test.ts` (T329's tests and this task's), `explore-roles.spec.ts` (subfolders made, renamed), `access.spec.ts` (groups set on a subfolder), `deleting.spec.ts` and `isolation.spec.ts`;
     - a move needs both folders, and one leaving a reference off its path is refused: `direct.test.ts`, `routes/move-paths.test.ts` and `move-paths.spec.ts` (T714, T715);
@@ -14317,6 +14321,10 @@ These tasks are what group 3's check of the open criteria found missing. Each is
     - **The dialog** (`EditInWorkspaceDialog.tsx`): the offer's models are listed unticked first under "Also copy, only if you'll change them", each "Model · <folder path>". The ticked ones are copied after the dashboard and its data sources, into the dashboard copy's folder; a second try copies only what's left.
     - **Found and fixed:** the dialog dropped the first folder of every path it showed. The offer gives paths below the shared root (`export.ts`'s `pathOf`), and the dialog took a leading "Shared" off them, so a data source in /Finance read "Data source · Shared". Its unit test's fixture had paths the API never gives; it now has the offer's shape, which turned the test red until the dialog was fixed.
     - **Tests:** `use-only-copy.test.ts` (an edit copy and a use-only copy each `into` the folder, no project folder made; `into` a shared folder refused), with `workspace-copy` and `workspace-models` under the lock; `EditInWorkspaceDialog.test.tsx` (11); the full web suite (2644); in Chrome against compose's xcube, `workspace-edit-models.spec.ts` and `workspace-edit.spec.ts` (8).
+  - **The review (one round, FAIL), fixed:**
+    - A model copied `into` a folder could be written over a file the folder already held at its path; the write is an upsert by folder and path. It is now refused (409), and the file is kept. Under one name per item, with each file named for its cube, two offered models can't share a path, but the user's own file there could.
+    - `into: 'mine'`, which the dialog sends when the user's dashboard copy is already at My workspace's root, was refused (400). It is taken as their workspace's root, as the data source's copy takes it.
+    - Both red first in `use-only-copy.test.ts`'s new case, then passing with the file's other 6.
   - **AC-279 ticked.** `workspace-edit-models.spec.ts`: a dashboard copied with nothing ticked brings its library chart, as a copy, and no model or data source. With its model ticked, the model's copy is in the dashboard copy's project folder, and the dashboard shows the writer's chart copy. `workspace-copy.test.ts` shows local and library charts copied (T344).
 
 - [ ] T764 (AC-320) Show a folder's grant and its revocation reaching every Cube instance within 60 seconds, on docker-desktop's Cube pods

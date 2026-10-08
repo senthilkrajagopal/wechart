@@ -209,11 +209,13 @@ async function moveTo(request: APIRequestContext, database: string) {
  * landed version, live; its head line says the same. Looked at an hour and a
  * minute later, by the page's clock, no instance's report is shown.
  */
-async function liveOnItsPage(page: Page) {
-  // The connection's version xcube holds now, as Cube's use of it says it.
+async function liveOnItsPage(page: Page, before: number) {
+  // The connection's version xcube holds now, as Cube's use of it says it:
+  // past the one before the change (T365's review of group 3's step).
   const { version } = (await (
     await page.request.get(`/api/data-sources/${sourceId}/cube-state`)
   ).json()) as { version: number };
+  expect(version).toBeGreaterThan(before);
   const look = async () => {
     await page.goto(`/explore/data-sources/${sourceId}`);
     const main = page.getByRole('main');
@@ -242,6 +244,8 @@ async function liveOnItsPage(page: Page) {
   const later = await look();
   await expect(later.panel.getByTestId('cube-state')).toBeVisible();
   await expect(later.panel.getByRole('table', { name: 'Cube instances' })).toHaveCount(0);
+  // Nor counted (T365's review of group 3's step): no instance "reported within the hour".
+  await expect(later.panel).not.toContainText('reported within the hour');
   await expect(later.main.locator('.source-settings__cube-use')).toHaveText(
     'Cube uses these settings',
   );
@@ -303,10 +307,15 @@ test.describe('a data source changed in place (T501, AC-161)', () => {
 
     // Moved to another database: once live, never the old one again. Cube's
     // own answer is the new target's at once, not its cache of the old.
+    const versionBefore = (
+      (await (await request.get(`/api/data-sources/${sourceId}/cube-state`)).json()) as {
+        version: number;
+      }
+    ).version;
     await moveTo(request, 'template1');
     expect(await read(request, { rollup: false })).toEqual({ db: 'template1' });
     // And said so on its page, with no restart (AC-161).
-    await liveOnItsPage(page);
+    await liveOnItsPage(page, versionBefore);
     // The rollup answers "not built yet" at most, until it is built anew.
     const before = await read(request);
     if (before.db === undefined)
