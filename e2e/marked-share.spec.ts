@@ -532,7 +532,10 @@ test('a partly marked heatmap cell is outlined dashed, and a combo, a trellis, a
       id: 'tile-combo',
       title: 'Combo',
       chartType: 'combo',
-      measures: ['orders.total_amount', 'orders.count'],
+      // Two metrics of one scale, both money: a combo draws one scale, its
+      // first metric's, and leaves a metric on another out (R67, T510), so
+      // a count beside the amount would draw no line to mark.
+      measures: ['orders.total_amount', 'orders.average_amount'],
       dimensions: ['products.category'],
     },
     {
