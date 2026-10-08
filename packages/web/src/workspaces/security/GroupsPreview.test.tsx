@@ -154,9 +154,20 @@ describe('previewing as groups (T438, AC-166; design 08, state E)', () => {
         expect.stringMatching(/^orders · everything/),
       ]),
     );
+    // The folders with their eye or pencil; the cubes, as drawn, with none (T699, SEC-27).
     expect(
       rows().map((row) => row.querySelector('[data-icon]')?.getAttribute('data-icon')),
-    ).toEqual(['eye', undefined, 'warn', 'ok']);
+    ).toEqual(['eye', undefined, undefined, undefined]);
+    // Each cube and view by its name, in bold, as state E writes "**orders** · everything".
+    expect(rows()[3]?.querySelector('b')?.textContent).toBe('orders');
+    // Opening straight on its sections: no heading repeating the tab's name (SEC-27).
+    const pane = screen.getByRole('region', { name: 'Preview as groups' });
+    expect(within(pane).queryAllByRole('heading', { level: 2 })).toHaveLength(0);
+    expect(
+      within(pane)
+        .getAllByRole('heading', { level: 3 })
+        .map((each) => each.textContent),
+    ).toEqual(['Groups', 'What these groups reach', 'Dashboard to preview']);
 
     await addGroup('finance');
     // Each group its own parameter (T438's review).

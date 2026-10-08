@@ -23,19 +23,12 @@ import {
   type ProposalDetail,
   type ProposalItem,
 } from './review';
-import { folderText, KIND_LABEL, REVIEWS_QUERY } from './reviews';
+import { folderText, KIND_ICON, KIND_LABEL, REVIEWS_QUERY } from './reviews';
 import { SettingsDiff } from './SettingsDiff';
 import { YamlDiff } from './YamlDiff';
 
-/** Each kind's icon chip, as Explore's New menu draws them (design 05, pin 2). */
-const KIND_ICON: Readonly<
-  Record<keyof typeof KIND_LABEL, { readonly icon: string; readonly chip: string }>
-> = {
-  dashboard: { icon: '▦', chip: 'ic-dash' },
-  chart: { icon: '◢', chip: 'ic-chart' },
-  model: { icon: '◇', chip: 'ic-model' },
-  'data-source': { icon: '◍', chip: 'ic-source' },
-};
+/** A fixed-width dashboard's page width, as `.dashboard-page[data-width='fixed']` draws it. */
+const FIXED_WIDTH = 1440;
 
 /** "WW" for Wren Writer: the avatar's letters (design 05, pin 5). */
 function initialsOf(name: string): string {
@@ -279,10 +272,10 @@ export function ReviewView({
                   {initialsOf(proposal.author.name)}
                 </span>
                 <p data-testid="review-author">
+                  {/* The name, then the time on a line of its own (pin 5; T699, SEC-26). */}
                   <span className="review-view__author-name">{proposal.author.name}</span>
                   <span className="review-view__author-when">
-                    {' '}
-                    · {momentText(proposal.proposedAt, now)}
+                    {momentText(proposal.proposedAt, now)}
                   </span>
                 </p>
               </div>
@@ -359,7 +352,7 @@ export function ReviewView({
 function StateOf({ proposal }: { readonly proposal: ProposalDetail }) {
   const [kind, text] =
     proposal.status === 'open'
-      ? (['run', 'Waiting for review'] as const)
+      ? (['idle', 'Waiting for review'] as const)
       : proposal.status === 'approved'
         ? (['ok', 'Approved'] as const)
         : proposal.status === 'rejected'
@@ -436,6 +429,7 @@ function ItemPreview({
   readonly item: ProposalItem;
 }) {
   const [showing, setShowing] = useState<'proposed' | 'current'>('proposed');
+  const [size, setSize] = useState<'fit' | 'actual'>('fit');
   const open = proposal.status === 'open';
   /**
    * What the folder has now, set against it while it waits: once decided,
@@ -470,7 +464,8 @@ function ItemPreview({
     );
   }, [item.kind, item.snapshot, open, against, held, current.data]);
 
-  if (item.kind === 'data-source') return <SettingsDiff item={item} alone={!open} />;
+  if (item.kind === 'data-source')
+    return <SettingsDiff item={item} alone={!open} testable={open && proposal.mayApprove} />;
   // A model's YAML against the folder's file now (T350; design 05, state G).
   if (item.kind === 'model') {
     const proposed = typeof item.snapshot['content'] === 'string' ? item.snapshot['content'] : '';
@@ -490,6 +485,13 @@ function ItemPreview({
     );
   }
   const folder = folderText(item.landsInPath);
+  const proposedDocument = dashboardOf({ body: item.snapshot } as StoredDocument);
+  /**
+   * The width its readers' page lays it out at: a fixed dashboard's 1,440 px,
+   * as its page draws it; a fluid one's, this window's (T699).
+   */
+  const readersWidth =
+    proposedDocument.settings.width === 'fixed' ? FIXED_WIDTH : window.innerWidth;
   return (
     <div className="review-view__preview">
       <div className="review-view__switch">
@@ -519,23 +521,52 @@ function ItemPreview({
             ? `Drawn read-only, as readers in ${folder} would see it.`
             : 'As proposed, read-only.'}
         </p>
+        {/* Fit, or Actual size: at the width its readers' page lays it out at (pin 3; T699, SEC-21). */}
+        {item.kind === 'dashboard' ? (
+          <div role="group" aria-label="Size" className="seg review-view__size">
+            {(
+              [
+                ['fit', 'Fit'],
+                ['actual', 'Actual size'],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={size === value}
+                onClick={() => {
+                  setSize(value);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
       {item.kind === 'dashboard' ? (
-        showing === 'current' && against !== null ? (
-          <CurrentDashboard id={against.id} version={nowVersion} />
-        ) : (
-          <ReviewMarks.Provider value={marks}>
-            <ReadOnlyDashboard
-              crumbs={false}
-              cacheKey={`proposal:${proposal.id}:${item.id}`}
-              dashboardId={item.id}
-              document={dashboardOf({ body: item.snapshot } as StoredDocument)}
-              heldCharts={held}
-              // Its reviewer can't open the author's copy: its queries are for the proposal (T340).
-              item={{ kind: 'proposal', id: proposal.id }}
-            />
-          </ReviewMarks.Provider>
-        )
+        <div className="review-view__canvas" data-size={size}>
+          <div
+            className="review-view__frame"
+            style={size === 'actual' ? { width: `${String(readersWidth)}px` } : undefined}
+          >
+            {showing === 'current' && against !== null ? (
+              <CurrentDashboard id={against.id} version={nowVersion} />
+            ) : (
+              <ReviewMarks.Provider value={marks}>
+                <ReadOnlyDashboard
+                  crumbs={false}
+                  cacheKey={`proposal:${proposal.id}:${item.id}`}
+                  dashboardId={item.id}
+                  document={proposedDocument}
+                  heldCharts={held}
+                  // Its reviewer can't open the author's copy: its queries are for the proposal (T340).
+                  item={{ kind: 'proposal', id: proposal.id }}
+                />
+              </ReviewMarks.Provider>
+            )}
+          </div>
+        </div>
       ) : (
         <ChartPreview
           key={showing}

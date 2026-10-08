@@ -4361,13 +4361,42 @@ code.schedules__sub { font-family: var(--wc-font-code); }
   text-decoration: none;
   border-bottom: 2px solid transparent;
 }
+/* As design 08 spaces the page (T699, SEC-13): its title 14 px under the top
+   bar, its parts 10 px apart; its note at 12/16 across the content (SEC-14);
+   the policies' identifiers in the code face (SEC-15) and "No policy" in the
+   secondary colour (SEC-16). */
+.security-workspace--tabs { gap: 10px; margin-top: calc(14px - var(--wc-surface-padding)); }
+.security-workspace--tabs .info-bar { max-width: none; font-size: 12px; line-height: 16px; }
+.security-workspace td.is-code { font-family: var(--wc-font-code); font-size: 12px; }
+.security-workspace td.policies__none { color: var(--wc-text-secondary); }
+/* Preview as groups on its tab, the window's height under the tabs and never
+   scrolling the page (T466's review; security-Q1): the pane takes what's left. */
+.security-workspace--tabs:has(> .groups-preview) {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--wc-app-bar-height) - 14px - 16px);
+}
+.security-workspace--tabs > .groups-preview.admin-pane {
+  position: static;
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  overflow: auto;
+}
+/* Preview as groups' fields at 28/12, as design 08 draws them (CMP-08). */
+.groups-preview input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']) {
+  height: 28px;
+  min-height: 28px;
+  box-sizing: border-box;
+  font-size: 12px;
+}
+.groups-preview h3 label { font: inherit; color: inherit; letter-spacing: inherit; }
 .security-tabs > a:hover { color: var(--wc-text-primary); }
 .security-tabs > a[aria-current='page'] { color: var(--wc-accent); border-bottom-color: var(--wc-accent); }
 
 /* The audit trail (T369; design 08): the list, and beside it the open
    record's inspector, 360 px. */
 .audit-trail { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
-.audit-trail--open { grid-template-columns: minmax(0, 1fr) 360px; }
 .audit-trail__list { display: grid; gap: 10px; min-width: 0; }
 /* A SQL run's SQL, its literals replaced (T534; design 15, state J1): the code face, wrapped. */
 .audit-trail__sql {
@@ -4621,27 +4650,60 @@ code.schedules__sub { font-family: var(--wc-font-code); }
 .admin-pane__close { display: inline-flex; order: 99; margin: 0 -8px 0 auto; }
 /* What the list leaves out below 1,024 px, said in the sheet there only (G8; T611). */
 .jobs-narrow { display: none; }
+/* The record docked as design 08 draws it (pin 7; T699, SEC-01 to SEC-03): 380 px
+   at the window's right, its full height under the top bar, white with a left
+   rule, each part a 14/16 section with a rule under it. */
+.audit-trail--open { grid-template-columns: minmax(0, 1fr) calc(380px - var(--wc-surface-padding)); }
 .audit-trail__inspector {
-  position: sticky;
-  top: 16px;
-  display: grid;
-  gap: 12px;
-  padding: 14px 16px;
-  border: 1px solid var(--wc-border-subtle);
-  border-radius: 8px;
+  position: fixed;
+  top: var(--wc-app-bar-height);
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  box-sizing: border-box;
+  width: 380px;
+  overflow: auto;
+  border-left: 1px solid var(--wc-border-subtle);
   background: var(--wc-bg-surface);
 }
+.audit-trail__inspector > * { margin: 0; padding: 14px 16px; border-bottom: 1px solid var(--wc-border-subtle); }
+.audit-trail__inspector > :last-child { border-bottom: 0; }
+.audit-trail__inspector > .audit-trail__inspector-head { padding-bottom: 0; border-bottom: 0; }
 .audit-trail__inspector-head { display: flex; justify-content: space-between; align-items: center; }
-.audit-trail__inspector-head h3 { display: inline-flex; gap: 6px; align-items: center; margin: 0; font-size: var(--wc-text-sm-size); }
-.audit-trail__inspector-where { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
+.audit-trail__inspector-head h3 { display: inline-flex; gap: 6px; align-items: center; margin: 0; font-size: var(--wc-text-sm-size); font-weight: 600; }
+.audit-trail__inspector-where { font-size: 12px; color: var(--wc-text-secondary); }
 .audit-trail__utc { color: var(--wc-text-muted); }
-.audit-trail__groups h4 { margin: 0 0 4px; font-size: 12px; font-weight: 600; }
-.audit-trail__before-after { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 4px 8px; font-size: 12px; }
-.audit-trail__before-after > span:nth-child(odd) { color: var(--wc-text-secondary); }
-.audit-trail__before-after code { font-family: var(--wc-font-code); }
-.audit-trail__before-after ins { text-decoration: none; color: var(--wc-status-success); font-family: var(--wc-font-code); }
-.audit-trail__before-after del { color: var(--wc-status-error); font-family: var(--wc-font-code); }
-.audit-trail__tested { margin: 0; font-size: 12px; color: var(--wc-text-secondary); }
+.audit-trail__kv { grid-template-columns: 80px minmax(0, 1fr); gap: 6px 12px; font-size: 12px; line-height: 16px; }
+.audit-trail__kv dd { font-size: 12px; line-height: 16px; }
+.audit-trail__kv code { font-family: var(--wc-font-code); font-size: 12px; }
+.audit-trail__groups { display: grid; gap: 8px; }
+.audit-trail__groups h4 {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--wc-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.audit-trail__before-after { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.audit-trail__column { display: block; margin-bottom: 4px; font-size: 12px; line-height: 16px; color: var(--wc-text-secondary); }
+.audit-trail__glist { display: grid; gap: 2px; font: 400 12px/20px var(--wc-font-code); }
+.audit-trail__glist ins { text-decoration: none; color: var(--wc-status-success); }
+.audit-trail__glist del { color: var(--wc-status-error); }
+.badge.audit-trail__replaced { gap: 4px; height: 22px; border: 0; background: var(--wc-bg-subtle); font-weight: 400; }
+.audit-trail__replaced svg { color: var(--wc-text-secondary); }
+.audit-trail__tested { margin: 0; font-size: 12px; }
+/* The rows on one line, 34 px, as design 08's table (SEC-04, SEC-10); identities
+   in the code face (SEC-05); each event's icon secondary (SEC-06). */
+.audit-trail__table td { height: 34px; white-space: nowrap; }
+.audit-trail__table td code { font-family: var(--wc-font-code); font-size: 12px; }
+.audit-trail__event svg { color: var(--wc-text-secondary); }
+.link-button.audit-trail__summary { min-height: 0; padding: 0; white-space: nowrap; }
+.audit-trail__chips > .audit-trail__count { margin-left: auto; }
+@media (max-width: 1023px) {
+  .audit-trail__inspector { position: static; width: auto; border: 1px solid var(--wc-border-subtle); border-radius: 6px; }
+}
 /* A schedule setting that kept its value (T505; design 16, I1). */
 .audit-trail__unchanged { color: var(--wc-text-secondary); }
 .audit-trail__breaks { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
@@ -4653,15 +4715,53 @@ code.schedules__sub { font-family: var(--wc-font-code); }
    360 px summary, as the audit trail's. */
 .reviews { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; }
 .reviews__list { display: grid; gap: 12px; min-width: 0; }
+/* Design 05 state D's tabs (T699, SEC-17, SEC-18): flush with the title, on no
+   ground of their own; the count an accent pill, white 12/600, 18 px. */
+.edit-sidebar__tabs.reviews__tabs { padding: 0; background: none; }
 .reviews__tab-count {
   display: inline-block;
+  box-sizing: border-box;
   min-width: 18px;
+  height: 18px;
   padding: 0 5px;
-  border-radius: 9px;
-  background: var(--wc-bg-accent-soft);
+  border-radius: 999px;
+  background: var(--wc-accent);
+  color: var(--wc-text-on-accent);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
+/* Each item with its kind's icon before its title (SEC-24). */
+.reviews__item-cell { display: flex; gap: 8px; align-items: center; }
+/* The summary as state D's inspector: its icon in the head, sections headed in
+   design 05's .sect h3, Open review last (SEC-23). */
+.reviews__summary-head { gap: 8px; }
+.reviews__summary-head h2 { flex: 1; }
+.reviews__summary .reviews__label {
+  color: var(--wc-text-secondary);
+  line-height: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.reviews__summary .reviews__by { color: var(--wc-text-primary); font-size: var(--wc-text-sm-size); }
+/* Fit or Actual size (design 05 pin 3; SEC-21): the canvas scrolls at Actual size. */
+.review-view__size { margin-left: auto; }
+.review-view__canvas { min-width: 0; overflow-x: auto; }
+/* "Proposed by": the time on a line of its own (pin 5; SEC-26). */
+.review-view__author-when { display: block; }
+/* Test connection under a proposed data source's settings (state H; SEC-22). */
+.review-settings__test {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-top: 1px solid var(--wc-border-subtle);
+}
+.review-settings__tested { display: inline-flex; gap: 6px; align-items: center; margin: 0; font-size: 12px; font-weight: 600; }
+.review-settings__tested:empty { display: none; }
 .reviews__none { margin: 0; color: var(--wc-text-secondary); }
 .reviews__item { font-weight: 600; text-align: left; }
 .reviews__yours {

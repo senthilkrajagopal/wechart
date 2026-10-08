@@ -47,6 +47,7 @@ const RECORDS = [
         { setting: 'Password', before: null, after: 'replaced' },
       ],
       testId: 't-1',
+      testedAt: today(14, 21, 7),
     },
   },
   {
@@ -209,12 +210,112 @@ describe('the audit trail (T369, AC-295)', () => {
     );
   });
 
+  /** T699 (AC-295, AC-343; design 08 pins 3–6, the critique's SEC-05 to SEC-09). */
+  it('draws its rows, filters and count as design 08 does', async () => {
+    serve({ first: { records: RECORDS, total: 6787, retentionDays: 365 } });
+    open();
+    const rows = await within(
+      await screen.findByRole('table', { name: 'Audit trail' }),
+    ).findAllByRole('row');
+
+    // Identities in the code face (pin 6), and a group named in a summary too (pin 4).
+    expect(within(rows[2]!).getAllByRole('cell')[1]?.querySelector('code')?.textContent).toBe(
+      'ada@corp.example',
+    );
+    expect(
+      within(rows[2]!)
+        .getByRole('button', { name: 'Added read-write group emea-analysts' })
+        .querySelector('code')?.textContent,
+    ).toBe('emea-analysts');
+    // Design 08's glyphs (pin 5): a database, a padlock, a sign-in arrow.
+    expect(
+      rows
+        .slice(1)
+        .map((row) => row.querySelector('.audit-trail__event svg')?.getAttribute('data-icon')),
+    ).toEqual(['db', 'lock', 'login']);
+    // The count at the chips row's end, written with a comma (pin 3).
+    const count = screen.getByText('6,787 records · newest first');
+    expect(count.closest('.audit-trail__chips')).not.toBeNull();
+    // The Time choices in the design's order (pin 2).
+    expect(
+      [...(screen.getByLabelText('Time') as HTMLSelectElement).options].map((each) => each.text),
+    ).toEqual(['Last 24 hours', 'Last 7 days', 'Last 30 days', 'All', 'Custom']);
+    // User a combobox of the identities in the records (pin 2).
+    const user = screen.getByRole('combobox', { name: 'User' }) as HTMLInputElement;
+    expect(user.placeholder).toBe('Anyone');
+    const list = document.getElementById(user.getAttribute('list') ?? '');
+    expect([...(list?.querySelectorAll('option') ?? [])].map((each) => each.value)).toEqual([
+      'ada@corp.example',
+      'wren@corp.example',
+    ]);
+  });
+
+  it('draws the other icons as design 08 does: a proposal sent, a rejection, a restore (pin 5)', async () => {
+    const one = (id: string, event: string) => ({ ...RECORDS[2], id, event, summary: event });
+    serve({
+      first: {
+        records: [
+          one('a', 'proposal'),
+          one('b', 'rejection'),
+          one('c', 'restore'),
+          one('d', 'approval'),
+        ],
+        total: 4,
+        retentionDays: 365,
+      },
+    });
+    open();
+    const rows = await within(
+      await screen.findByRole('table', { name: 'Audit trail' }),
+    ).findAllByRole('row');
+    expect(
+      rows
+        .slice(1)
+        .map((row) => row.querySelector('.audit-trail__event svg')?.getAttribute('data-icon')),
+    ).toEqual(['send', 'xo', 'hist', 'check']);
+  });
+
+  it('names the user chosen in its address once the people are read, as on a reload (T699’s review)', async () => {
+    serve();
+    open({ ...NO_FILTERS, user: 'ada' });
+    await screen.findByRole('table', { name: 'Audit trail' });
+    // The people list answers after the first render: the field still follows the filter.
+    await waitFor(() => {
+      expect((screen.getByRole('combobox', { name: 'User' }) as HTMLInputElement).value).toBe(
+        'ada@corp.example',
+      );
+    });
+  });
+
+  it('takes an identity typed before the people are read as the filter once they are', async () => {
+    const asked = serve();
+    let answer: (people: Response) => void = () => undefined;
+    const people = new Promise<Response>((resolve) => {
+      answer = resolve;
+    });
+    const served = globalThis.fetch;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) =>
+        String(input) === '/api/audit/people' ? people : served(input),
+      ),
+    );
+    open();
+    await screen.findByRole('table', { name: 'Audit trail' });
+    await userEvent.type(screen.getByRole('combobox', { name: 'User' }), 'ada@corp.example');
+    answer(Response.json([{ key: 'ada', name: 'Ada Admin', identity: 'ada@corp.example' }]));
+    await waitFor(() => {
+      expect(lastQuery(asked).get('users')).toBe('ada');
+    });
+  });
+
   it('asks for the filters chosen, and shows each as a chip that removes it', async () => {
     const asked = serve();
     open();
     await screen.findByRole('table', { name: 'Audit trail' });
 
-    await userEvent.selectOptions(screen.getByLabelText('User'), 'ada');
+    // User is a combobox now: an identity typed or picked from its list (T699, pin 2).
+    await userEvent.type(screen.getByRole('combobox', { name: 'User' }), 'ada@corp.example');
     const eventButton = screen.getByRole('button', { name: /^Event/ });
     await userEvent.click(eventButton);
     await userEvent.click(screen.getByRole('checkbox', { name: 'Access change' }));
@@ -330,12 +431,19 @@ describe('the audit trail (T369, AC-295)', () => {
         `Today 11:48:03 \\((\\d{1,2} [A-Z][a-z]{2} )?${pad(at.getUTCHours())}:48:03 UTC\\)$`,
       ),
     );
+    // By, in the code face (design 08's inspector; T699, SEC-03).
+    expect(
+      within(inspector).getByText('By').nextElementSibling?.querySelector('code')?.textContent,
+    ).toBe('ada@corp.example');
     const readWrite = within(inspector).getByRole('group', { name: 'Read-write groups' });
-    expect(within(readWrite).getByText('Before').nextElementSibling?.textContent).toBe(
-      'sales-emea-rw old-rw',
-    );
+    // Before and After as two columns, a group to a line (T699, SEC-12).
+    const listOf = (column: string) =>
+      [...(within(readWrite).getByText(column).nextElementSibling?.children ?? [])].map(
+        (line) => line.textContent,
+      );
+    expect(listOf('Before')).toEqual(['sales-emea-rw', 'old-rw']);
+    expect(listOf('After')).toEqual(['sales-emea-rw', '+ emea-analysts', 'old-rw']);
     const after = within(readWrite).getByText('After').nextElementSibling!;
-    expect(after.textContent).toBe('sales-emea-rw + emea-analysts old-rw');
     // A group taken away, struck through (design 08, state B).
     expect(after.querySelector('del')?.textContent).toBe('old-rw');
     expect(inspector.textContent).toContain('Records can’t be edited or deleted here.');
@@ -366,6 +474,16 @@ describe('the audit trail (T369, AC-295)', () => {
         ),
     ).toEqual([[], ['Host', 'pg-replica-1', 'pg-replica-2'], ['Password', '—', 'Replaced']]);
     expect(inspector.textContent).toContain('Saved after a passing test');
+    // "Replaced" as a badge with its padlock, and the test's time with its icon
+    // (state A; T699, SEC-11 and security-Q6).
+    const replaced = within(settings).getByText('Replaced');
+    expect(replaced.classList.contains('badge')).toBe(true);
+    expect(replaced.querySelector('svg')?.getAttribute('data-icon')).toBe('lock');
+    const tested = within(inspector).getByText(/^Saved after a passing test/);
+    expect(tested.textContent).toBe('Saved after a passing test · 14:21:07');
+    expect(tested.closest('.state-line')?.querySelector('svg')?.getAttribute('data-icon')).toBe(
+      'ok',
+    );
   });
 
   it('shows a refused publish’s every break, named, and what its user was shown (T427, AC-322; state B)', async () => {
@@ -967,9 +1085,11 @@ describe('the audit trail (T369, AC-295)', () => {
     expect(lastQuery(asked).get('since')).toBe(since);
 
     // Another filter, then back: the first page each time.
-    await userEvent.selectOptions(screen.getByLabelText('User'), 'ada');
+    // User a combobox (T699): an identity typed, then cleared.
+    const user = screen.getByRole('combobox', { name: 'User' });
+    await userEvent.type(user, 'ada@corp.example');
     expect(lastQuery(asked).get('after')).toBeNull();
-    await userEvent.selectOptions(screen.getByLabelText('User'), '');
+    await userEvent.clear(user);
     await waitFor(() =>
       expect(summaries()).toEqual([
         'Host changed; password replaced',

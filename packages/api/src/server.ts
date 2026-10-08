@@ -1421,6 +1421,22 @@ export function buildServer({
                   // Frozen while it waits in one (T541, AC-388).
                   submitted: async (id: string) =>
                     (await proposals.openFor('data-source', id)) !== null,
+                  // Tested from its review by one who may approve it, as the
+                  // proposals' own routes say who may (T699; design 05, state H).
+                  review: async (request: FastifyRequest, id: string) => {
+                    const open = await proposals.openFor('data-source', id);
+                    if (open === null) return undefined;
+                    const user = userOf(request);
+                    if (!user.superAdmin) {
+                      // A folder deleted since counts as its groups were then (T540, AC-389).
+                      const seen = await visibilityOf(request);
+                      const gone = await deletedWritable(request);
+                      const writes = (folderId: string) =>
+                        seen === undefined || mayWrite(seen, folderId) || gone.has(folderId);
+                      if (!open.items.every((item) => writes(item.landsIn))) return undefined;
+                    }
+                    return { proposedAt: open.proposedAt };
+                  },
                 }),
             // A copy's project folder (T523, AC-368), as a dashboard's copy makes one.
             ...(docs === undefined

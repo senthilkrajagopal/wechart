@@ -43,7 +43,8 @@ test.describe('the audit trail, as a Super-Admin sees it', () => {
         .evaluateAll((all) => all.map((time) => time.getAttribute('datetime') ?? ''));
       expect(times.length).toBeGreaterThan(1);
       expect(times).toEqual(times.toSorted().toReversed());
-      await main.getByLabel('User').selectOption({ label: 'super@wechart.test' });
+      // User a combobox of the identities in the records (pin 2; T699).
+      await main.getByRole('combobox', { name: 'User' }).fill('super@wechart.test');
       // The Event picker's kinds only when it's opened.
       const kinds = main.getByRole('checkbox', { name: 'Access change' });
       await expect(kinds).toBeHidden();
@@ -76,6 +77,18 @@ test.describe('the audit trail, as a Super-Admin sees it', () => {
         /^Set read-write groups here, no longer inherited: sales-rw; set read-only groups here, no longer inherited: sales-ro$/,
       ]);
       await expect(main.getByText('1 record · newest first')).toBeVisible();
+      // As design 08 draws its rows (T699, SEC-04 to SEC-06, SEC-10): 34 px on one
+      // line, the identity in the code face, the event's icon in the secondary colour.
+      expect((await row.boundingBox())?.height).toBe(34);
+      await expect(row.getByRole('cell').nth(1).locator('code')).toHaveCSS(
+        'font-family',
+        /^"IBM Plex Mono"/,
+      );
+      const secondary = await main
+        .getByText('1 record · newest first')
+        .evaluate((element) => getComputedStyle(element).color);
+      await expect(row.locator('.audit-trail__event svg')).toHaveCSS('color', secondary);
+      expect((await row.getByRole('button').boundingBox())?.height ?? 99).toBeLessThanOrEqual(20);
 
       // Kept on reload (AC-002), and linked straight to.
       await page.reload();
@@ -90,6 +103,26 @@ test.describe('the audit trail, as a Super-Admin sees it', () => {
         'Inherited',
       );
       await expect(inspector).toContainText('Records can’t be edited or deleted here.');
+      // Docked as design 08 draws it (T699, SEC-01 to SEC-03): 380 px at the
+      // window's right, its full height under the top bar, a left rule, no radius;
+      // its heading at 600; an 80 px key column.
+      const viewport = page.viewportSize()!;
+      const box = (await inspector.boundingBox())!;
+      const bar = (await page.getByRole('banner').boundingBox())!;
+      expect([box.width, box.x + box.width, box.y, box.y + box.height]).toEqual([
+        380,
+        viewport.width,
+        bar.y + bar.height,
+        viewport.height,
+      ]);
+      await expect(inspector).toHaveCSS('border-top-left-radius', '0px');
+      await expect(inspector).toHaveCSS('border-left-width', '1px');
+      await expect(inspector.getByRole('heading', { level: 3 })).toHaveCSS('font-weight', '600');
+      expect((await inspector.locator('dt').first().boundingBox())?.width).toBe(80);
+      // Before and After side by side.
+      const before = (await inspector.getByText('Before').first().boundingBox())!;
+      const after = (await inspector.getByText('After').first().boundingBox())!;
+      expect([after.y === before.y, after.x > before.x]).toEqual([true, true]);
 
       // The retention said (pin 8).
       await expect(main).toContainText('Records older than 1 year are removed.');

@@ -124,6 +124,53 @@ describe('a data source’s settings diff (T356, state H)', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  /** T699 (design 05, state H; the critique's SEC-22): Test connection runs the proposed settings. */
+  it('offers a decider Test connection of the proposed settings, saying when they passed as proposed', async () => {
+    const passedAt = new Date();
+    passedAt.setHours(14, 21, 0, 0);
+    const ranAt = new Date();
+    ranAt.setHours(14, 30, 5, 0);
+    const asked: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        asked.push(`${init?.method ?? 'GET'} ${url}`);
+        if (url === '/api/data-sources/ws-copy/review-test')
+          return Promise.resolve(
+            init?.method === 'POST'
+              ? Response.json({
+                  ok: true,
+                  checks: [{ id: 'connect', status: 'passed', durationMs: 5 }],
+                  ranAt: ranAt.toISOString(),
+                })
+              : Response.json({ passedAt: passedAt.toISOString() }),
+          );
+        return Promise.resolve(new Response('{}', { status: 404 }));
+      }),
+    );
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <SettingsDiff item={item({})} testable />
+      </QueryClientProvider>,
+    );
+
+    const said = await screen.findByTestId('review-test');
+    await vi.waitFor(() => expect(said.textContent).toBe('Passed when proposed · 14:21'));
+    expect(said.querySelector('svg')?.getAttribute('data-icon')).toBe('ok');
+    const run = screen.getByRole('button', { name: 'Test connection' });
+    run.click();
+    await vi.waitFor(() => expect(said.textContent).toBe('Passed · 14:30'));
+    expect(asked).toContain('POST /api/data-sources/ws-copy/review-test');
+  });
+
+  it('offers no test where it isn’t testable: one who may not decide, or decided', async () => {
+    shown(item({}));
+    await screen.findByRole('table', { name: 'Settings, current and proposed' });
+    expect(screen.queryByRole('button', { name: 'Test connection' })).toBeNull();
+  });
+
   it('shows a new one’s settings alone, its credentials entered', async () => {
     shown(item({ replaces: null, secretChanges: { password: 'new' } }));
     const table = await screen.findByRole('table', { name: 'Settings, proposed' });

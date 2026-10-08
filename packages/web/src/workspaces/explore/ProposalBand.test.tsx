@@ -73,6 +73,9 @@ describe('the band on the author’s item (T358, AC-290)', () => {
     expect(band.textContent).toContain(
       'Waiting for review since 14:05 · proposed to Sales / EMEA.',
     );
+    // Its lead in bold, with the idle clock, as state M draws it (T699, SEC-20, SEC-25).
+    expect(band.querySelector('b')?.textContent).toBe('Waiting for review since 14:05');
+    expect(band.querySelector('svg')?.getAttribute('data-icon')).toBe('idle');
     expect(within(band).getByRole('link', { name: 'View proposal' }).getAttribute('href')).toBe(
       '/reviews?tab=mine&selected=p1',
     );

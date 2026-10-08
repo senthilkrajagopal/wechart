@@ -136,7 +136,7 @@ describe('the Reviews page (T355, AC-287)', () => {
         .getAllByRole('cell')
         .map((cell) => cell.textContent),
     ).toEqual([
-      'Revenue overview',
+      '▦Revenue overview',
       'Dashboard',
       'Sales / EMEA',
       'Wren Writer',
@@ -144,8 +144,14 @@ describe('the Reviews page (T355, AC-287)', () => {
       '+1 chart',
       'Waiting for review',
     ]);
-    expect(within(rows[1]!).getAllByRole('cell')[0]!.textContent).toBe('sales_dwYours');
+    expect(within(rows[1]!).getAllByRole('cell')[0]!.textContent).toBe('◍sales_dwYours');
     expect(within(rows[1]!).getAllByRole('cell')[4]!.textContent).toBe('Yesterday');
+    // Each item with its kind's icon before its title (state D; T699, SEC-24), and
+    // waiting with the idle clock (SEC-20).
+    expect(rows.map((row) => row.querySelector('.itemicon')?.textContent)).toEqual(['▦', '◍']);
+    expect(
+      within(rows[0]!).getAllByRole('cell')[6]!.querySelector('svg')?.getAttribute('data-icon'),
+    ).toBe('idle');
     // The tab says how many.
     expect(screen.getByRole('tab', { name: 'To review 2' }).getAttribute('aria-selected')).toBe(
       'true',
@@ -160,9 +166,17 @@ describe('the Reviews page (T355, AC-287)', () => {
     expect(within(summary).getByTestId('review-where').textContent).toBe(
       'Dashboard → Sales / EMEA · replaces version 7 · with +1 chart',
     );
-    expect(within(summary).getByTestId('review-by').textContent).toBe(
-      'Proposed by Wren Writer · Today 14:05',
-    );
+    // As state D draws it (T699, SEC-23): its kind's icon in the head; Proposed by
+    // and What changed as sections; Open review last.
+    expect(summary.querySelector('header .itemicon')?.textContent).toBe('▦');
+    expect(
+      within(summary)
+        .getAllByRole('heading', { level: 3 })
+        .map((heading) => heading.textContent),
+    ).toEqual(['Proposed by', 'What changed']);
+    expect(within(summary).getByTestId('review-by').textContent).toBe('Wren Writer · Today 14:05');
+    const open = within(summary).getByRole('link', { name: 'Open review' });
+    expect(summary.lastElementChild?.contains(open)).toBe(true);
     // As written, its lines kept.
     expect(within(summary).getByTestId('review-description').textContent).toBe(
       'Adds a monthly EMEA revenue chart by country.\nAvg order value now uses the mean.',
@@ -233,6 +247,10 @@ describe('the Reviews page (T355, AC-287)', () => {
     serve(200, { toReview: [], mine: [] });
     shown();
     expect(await screen.findByText('Nothing is waiting for you to review.')).not.toBeNull();
+    // No count at 0, as the top bar's pill hides it (state C; security-Q5, T699).
+    expect(
+      screen.getByRole('tab', { name: 'To review' }).querySelector('.reviews__tab-count'),
+    ).toBeNull();
     await userEvent.click(screen.getByRole('tab', { name: 'My proposals' }));
     expect(
       screen.getByText(

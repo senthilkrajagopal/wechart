@@ -8,6 +8,7 @@ import { CalcRequestSummary, CalcRequestsPanel } from './CalcRequestsPanel';
 import {
   folderText,
   includesText,
+  KIND_ICON,
   KIND_LABEL,
   proposedText,
   REVIEWS_QUERY,
@@ -55,7 +56,8 @@ export function ReviewsPage({
     refocus.current = null;
   }, [view.selected]);
   const tabs: [ReviewsTab, string, number | undefined][] = [
-    ['to-review', 'To review', lists.data?.toReview.length],
+    // No count at 0, as the top bar's pill hides it (state C; security-Q5, T699).
+    ['to-review', 'To review', lists.data?.toReview.length || undefined],
     ['mine', 'My proposals', undefined],
     // Asked of the folders the user may change (T383, AC-050).
     ['requests', 'Calculation requests', undefined],
@@ -146,7 +148,14 @@ export function ReviewsPage({
                     const open = row.id === view.selected;
                     return (
                       <tr key={row.id} className={open ? 'is-selected' : undefined}>
-                        <td>
+                        <td className="reviews__item-cell">
+                          {/* Its kind's icon before its title, as state D draws it (T699, SEC-24). */}
+                          <span
+                            className={`itemicon ${KIND_ICON[row.kind].chip}`}
+                            aria-hidden="true"
+                          >
+                            {KIND_ICON[row.kind].icon}
+                          </span>
                           <button
                             type="button"
                             ref={(button) => {
@@ -265,6 +274,10 @@ function Summary({
   return (
     <section id={id} ref={box} className="admin-pane reviews__summary" aria-label={row.title}>
       <header className="reviews__summary-head">
+        {/* Its kind's icon, as state D's inspector heads it (T699, SEC-23). */}
+        <span className={`itemicon ${KIND_ICON[row.kind].chip}`} aria-hidden="true">
+          {KIND_ICON[row.kind].icon}
+        </span>
         <h2 ref={heading} tabIndex={-1}>
           {row.title}
         </h2>
@@ -280,15 +293,10 @@ function Summary({
       <p className="reviews__where" data-testid="review-where">
         {whereOf(row)}
       </p>
-      {/* The item itself, and Approve and Reject, are in its review view (T356). */}
-      <a
-        className={`btn btn-sm${row.status === 'open' ? ' btn-primary' : ''}`}
-        href={`/reviews/${encodeURIComponent(row.id)}`}
-      >
-        {row.status === 'open' ? 'Open review' : 'Open'}
-      </a>
+      {/* Proposed by and What changed as sections, Open review last, as state D draws it (T699, SEC-23). */}
+      <h3 className="reviews__label">Proposed by</h3>
       <p className="reviews__by" data-testid="review-by">
-        Proposed by {row.author.name} · {proposedText(row.proposedAt, now)}
+        {row.author.name} · {proposedText(row.proposedAt, now)}
       </p>
       <h3 className="reviews__label">What changed</h3>
       <p
@@ -314,6 +322,15 @@ function Summary({
           ) : null}
         </>
       )}
+      {/* The item itself, and Approve and Reject, are in its review view (T356). */}
+      <div className="reviews__open">
+        <a
+          className={`btn btn-sm${row.status === 'open' ? ' btn-primary' : ''}`}
+          href={`/reviews/${encodeURIComponent(row.id)}`}
+        >
+          {row.status === 'open' ? 'Open review' : 'Open'}
+        </a>
+      </div>
     </section>
   );
 }

@@ -102,9 +102,10 @@ export function ProposalBand({
     // aren't in it (decision 2)~~ none can be made until it is withdrawn.
     return (
       <div role="status" aria-label="Proposal" className="proposal-band">
-        <StatusIcon kind="run" />
+        {/* The idle clock and a bold lead, as state M draws it (T699, SEC-20, SEC-25). */}
+        <StatusIcon kind="idle" />
         <p>
-          Waiting for review since {whenText(proposal.proposedAt, now)} · proposed to{' '}
+          <b>Waiting for review since {whenText(proposal.proposedAt, now)}</b> · proposed to{' '}
           {folderText(landsIn)}. It can’t be changed while it waits: withdraw its proposal to change
           it, then propose it again.
         </p>

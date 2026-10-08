@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ThemeProvider } from '../../shell/ThemeProvider';
@@ -8,8 +8,9 @@ import { SecuritySurface } from './SecuritySurface';
 /**
  * T500 (AC-295, AC-265; design 08 of 2026-09-27, state D; T500's review):
  * Security's gate. A Super-Admin opens its tabs; anyone else signed in gets
- * the same Not found as a missing page; with sign-in off, phase 1's one page
- * at `/security`; and when who is signed in can't be read, nothing of it.
+ * the same Not found as a missing page; with sign-in off, the same tabs, the
+ * single user's (security-Q1, T699); and when who is signed in can't be read,
+ * nothing of it.
  */
 function answering(me: { status: number; body?: unknown }) {
   vi.stubGlobal(
@@ -68,15 +69,21 @@ describe('Security’s gate (T500)', () => {
     expect(await heading()).toBe('Not found');
   });
 
-  it('is phase 1’s page with sign-in off, at /security alone', async () => {
+  /** T699 (security-Q1, R76): with sign-in off, the same tabs as a Super-Admin's. */
+  it('opens its tabs with sign-in off, Preview as groups at its address', async () => {
     answering(single);
     open('policies');
-    expect(await heading()).toBe('Access policies');
+    expect(await heading()).toBe('Security');
   });
 
-  it('has no Preview address with sign-in off, nor any address it doesn’t know', async () => {
+  it('opens Preview as groups with sign-in off, but no address it doesn’t know', async () => {
     answering(single);
     open('preview');
+    expect(await heading()).toBe('Security');
+    expect(screen.getByRole('region', { name: 'Preview as groups' }).tagName).toBe('SECTION');
+    cleanup();
+    answering(single);
+    open(undefined);
     expect(await heading()).toBe('Not found');
   });
 

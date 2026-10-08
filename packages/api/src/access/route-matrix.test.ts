@@ -1884,6 +1884,32 @@ const CASES: Record<string, Case> = {
           `${who} testing ${place}'s`,
         );
   },
+  // T699: a proposed one's review test answers only a decider of the open
+  // proposal it waits in; none waits here, so it is refused to everyone
+  // (who may decide is `routes/proposal-freeze.test.ts`'s).
+  'GET /api/data-sources/:id/review-test': async () => {
+    for (const place of PLACES)
+      for (const who of WHO)
+        refused(
+          await ask(who, {
+            method: 'GET',
+            url: `/api/data-sources/${at[place].source}/review-test`,
+          }),
+          `${who} reading the review test of ${place}'s, waiting in no proposal`,
+        );
+  },
+  'POST /api/data-sources/:id/review-test': async () => {
+    for (const place of PLACES)
+      for (const who of WHO)
+        refused(
+          await ask(who, {
+            method: 'POST',
+            url: `/api/data-sources/${at[place].source}/review-test`,
+            payload: {},
+          }),
+          `${who} testing ${place}'s from a review, waiting in no proposal`,
+        );
+  },
   'POST /api/data-sources/test': everyone({
     method: 'POST',
     url: '/api/data-sources/test',

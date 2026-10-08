@@ -59,13 +59,19 @@ describe('the preview banner (T438, AC-166)', () => {
     expect(screen.getByTestId('preview-banner').textContent).toContain('{"groups":["sales"]}');
   });
 
-  it('keeps phase 1’s context, word for word, with sign-in off', () => {
+  /** T699 (security-Q1, R76): Preview as groups with sign-in off too, under the same banner. */
+  it('names the groups and the dashboard with sign-in off too, as design 08 draws it', () => {
     const shown = banner('off', { groups: ['sales'] }, 'Revenue overview');
-    expect(shown.textContent).toContain('Previewing as {"groups":["sales"]}.');
+    expect(shown.textContent).toBe('Previewing as sales · Revenue overviewStop preview');
+    expect(shown.querySelector('a')?.textContent).toBe('Stop preview');
+    expect(shown.className).toContain('preview-banner--groups');
+  });
+
+  it('keeps phase 1’s words for any other context with sign-in off', () => {
+    const shown = banner('off', { groups: ['sales'], region: 'EMEA' });
+    expect(shown.textContent).toContain('Previewing as {"groups":["sales"],"region":"EMEA"}.');
     expect(shown.querySelector('a')?.textContent).toBe('Exit preview');
-    // Phase 1's bar, not design 08's, its words as they were (T630's review).
     expect(shown.className).not.toContain('preview-banner--groups');
-    expect(shown.textContent).not.toContain('Revenue overview');
   });
 
   it('shows any other context as it is, even signed in', () => {

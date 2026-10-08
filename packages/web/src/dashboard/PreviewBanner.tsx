@@ -45,8 +45,9 @@ function groupsOnly(context: Readonly<Record<string, unknown>>): readonly string
  *
  * With sign-in on, a preview is as groups (T438; design 08, state E, as
  * drawn since T630): the eye, "Previewing as sales-ro and emea-viewers ·
- * Revenue overview", and Stop preview as a button, on the accent. Sign-in
- * off keeps phase 1's bar and context, word for word.
+ * Revenue overview", and Stop preview as a button, on the accent; with
+ * sign-in off too since T699. Any other context keeps phase 1's bar and
+ * context, word for word.
  */
 export function PreviewBanner({
   context,
@@ -61,7 +62,9 @@ export function PreviewBanner({
   // Who is signed in, as the sign-in gate left it; none outside a client.
   const client = useContext(QueryClientContext);
   const me = client?.getQueryData<Me>(ME_QUERY.queryKey);
-  const groups = me?.security === 'oidc' ? groupsOnly(context) : undefined;
+  // As groups with sign-in off too, Security's preview being the same in both
+  // modes (security-Q1, R76; T699); phase 1's words for any other context.
+  const groups = me === undefined ? undefined : groupsOnly(context);
   // The same address without the preview: a link, so it can be opened and
   // read as one.
   const exit = new URL(window.location.href);

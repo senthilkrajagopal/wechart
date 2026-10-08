@@ -244,11 +244,13 @@ describe('what the audit trail records (T368, AC-294)', () => {
     expect(
       (await recorded(['data-source-change'])).filter((each) => each.item?.id === id),
     ).toHaveLength(1);
+    const beforeTest = Date.now();
     const tested = await as('writer', {
       method: 'POST',
       url: `/api/data-sources/${id}/test`,
       payload: change,
     });
+    const afterTest = Date.now();
     const saved = await as('writer', {
       method: 'PUT',
       url: `/api/data-sources/${id}`,
@@ -280,6 +282,10 @@ describe('what the audit trail records (T368, AC-294)', () => {
     expect(records[1]?.details).toMatchObject({
       testId: tested.json<{ testId: string }>().testId,
     });
+    // And when that test passed, which state A shows ("· 14:21:07"; security-Q6, T699).
+    const testedAt = Date.parse(String(records[1]?.details?.['testedAt']));
+    expect(testedAt).toBeGreaterThanOrEqual(beforeTest - 1000);
+    expect(testedAt).toBeLessThanOrEqual(afterTest + 1000);
     // No credential is kept (AC-298): no envelope's key id, nor any stretch of
     // its ciphertext or key, in any record this file made.
     const kept = JSON.stringify(

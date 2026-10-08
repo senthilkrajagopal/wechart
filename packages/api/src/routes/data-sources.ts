@@ -199,6 +199,7 @@ export function registerDataSources(
     audit,
     withdraw,
     submitted,
+    review,
     projects,
     switches,
     sqlRunner,
@@ -256,6 +257,14 @@ export function registerDataSources(
     readonly withdraw?: (request: FastifyRequest, id: string) => Promise<unknown>;
     /** Whether one waits in an open proposal, and so is frozen (T541, AC-388). */
     readonly submitted?: (id: string) => Promise<boolean>;
+    /**
+     * The open proposal one waits in, where the request's user may approve
+     * it, with when it was proposed; none otherwise (T699; design 05, state H).
+     */
+    readonly review?: (
+      request: FastifyRequest,
+      id: string,
+    ) => Promise<{ readonly proposedAt: Date } | undefined>;
     /**
      * "Edit in my workspace"'s project folders (T523, AC-368). Set with
      * `ownWorkspace`.
@@ -569,6 +578,65 @@ export function registerDataSources(
       });
     }
   };
+
+  /**
+   * A proposed data source tested from its review (T699; design 05, state H,
+   * "Test connection runs the proposed settings in Cube"): for one who may
+   * approve the proposal it waits in, frozen there (T541), so its stored
+   * settings are those proposed. Anyone else, or once it waits no more: as
+   * for one that isn't there. GET says when its settings last passed as
+   * proposed: its newest passing test of them, run before it was proposed.
+   */
+  const underReview = async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const proposed = review === undefined ? undefined : await review(request, id);
+    const source = proposed === undefined ? undefined : await store.get(id);
+    if (proposed === undefined || source == null) {
+      await reply.status(404).send({ error: 'There is no such proposal to test.' });
+      return undefined;
+    }
+    return { source, proposed };
+  };
+  app.get('/api/data-sources/:id/review-test', USER, async (request, reply) => {
+    const found = await underReview(request, reply);
+    if (found === undefined) return reply;
+    const passed = (await tests?.history(found.source.id))?.find(
+      (each) =>
+        each.ok &&
+        each.asStored &&
+        each.settings === found.source.settingsPrint &&
+        each.ranAt.getTime() <= found.proposed.proposedAt.getTime(),
+    );
+    return { passedAt: passed?.ranAt.toISOString() ?? null };
+  });
+  app.post('/api/data-sources/:id/review-test', USER, async (request, reply) => {
+    const found = await underReview(request, reply);
+    if (found === undefined) return reply;
+    const stored = await store.sealedOf(found.source.id);
+    const answer = await run(reply, {
+      driver: found.source.driver,
+      authMethod: found.source.authMethod,
+      fields: found.source.fields,
+      sealed: stored.sealed,
+    });
+    if (answer === undefined) return reply;
+    // Kept in its history as any test of its stored settings is (AC-163).
+    const user = request.wechartUser;
+    const kept = await tests
+      ?.record(found.source.id, {
+        ok: answer.ok,
+        checks: answer.checks,
+        fields: found.source.fields,
+        asStored: true,
+        settings: found.source.settingsPrint,
+        by: user === null ? null : { key: user.key, name: user.name },
+      })
+      .catch((error: unknown) => {
+        request.log.warn({ err: error }, 'could not keep a connection test in its history');
+        return undefined;
+      });
+    return { ...answer, ranAt: (kept?.ranAt ?? new Date()).toISOString() };
+  });
 
   /**
    * Whether every running Cube instance uses its stored settings (T365,
@@ -995,10 +1063,19 @@ export function registerDataSources(
         updated,
         Object.keys(change.sealed ?? {}),
       );
-      // With the test it was saved from, which the trail's record names (design 08 state A).
+      // With the test it was saved from, and when it passed, which the trail's
+      // record names (design 08 state A, "· 14:21:07"; security-Q6, T699).
+      const testedAt =
+        taken === undefined
+          ? undefined
+          : await tests!
+              .history(source.id)
+              .then((all) => all.find((each) => each.id === taken.testId)?.ranAt.toISOString())
+              .catch(() => undefined);
       await recordChange(request, updated, said.summary, {
         changes: said.changes,
         ...(taken === undefined ? {} : { testId: taken.testId }),
+        ...(testedAt === undefined ? {} : { testedAt }),
       });
       if (relogin) {
         await recordChange(

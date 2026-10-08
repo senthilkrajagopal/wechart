@@ -10,6 +10,7 @@ import { closeDb, getDb } from '../db/client';
 import { catalog } from '../repos/catalog';
 import { connectionTestStore } from '../repos/connection-tests';
 import { dataSourceStore } from '../repos/data-sources';
+import { deletedFolderStore } from '../repos/deleted-folders';
 import { documents, type DocumentKind } from '../repos/documents';
 import { folderAccessStore } from '../repos/folder-access';
 import { proposalStore } from '../repos/proposals';
@@ -63,6 +64,7 @@ const sources = () => dataSourceStore(getDb());
 const made: { kind: DocumentKind; id: string }[] = [];
 let cookie = '';
 let superCookie = '';
+let readerCookie = '';
 const ids = { sales: '', source: '', board: '', chart: '', copy: '' };
 let app: FastifyInstance;
 
@@ -128,9 +130,17 @@ beforeAll(async () => {
     connectionTests: connectionTestStore(getDb()),
     proposals: proposalStore(getDb()),
     versions: versionStore(getDb()),
+    // A folder deleted since a proposal to it, kept for its deciders (T540, AC-389).
+    deletedFolders: deletedFolderStore(getDb()),
+    // xcube's connection test, faked: every check passes (T699's review test).
+    connectionTest: async () => ({
+      ok: true,
+      checks: [{ id: 'connect', status: 'passed', durationMs: 5 }],
+    }),
   });
   cookie = await signIn(app, USERS['writer']!);
   superCookie = await signIn(app, USERS['super']!);
+  readerCookie = await signIn(app, USERS['reader']!);
   ids.board = await mine('dashboard', 'Board');
   ids.chart = await mine('chart', 'Chart');
   const copied = await as({
@@ -327,5 +337,132 @@ describe('a submitted item is frozen until its proposal is withdrawn (T541, AC-3
       payload: { description: `Changed ${MARK}` },
     });
     expect(saved.statusCode, saved.body).toBe(200);
+  });
+});
+
+/**
+ * T699 (AC-343; design 05, state H; the critique's SEC-22): a decider tests a
+ * proposed data source's settings, the copy waiting frozen in its proposal,
+ * and is told when they last passed as proposed. No one else may: answered as
+ * for one that isn't there, and nothing once it waits no more.
+ */
+describe('testing a proposed data source from its review (T699)', () => {
+  const reviewTest = (method: 'GET' | 'POST', who: string) =>
+    app.inject({
+      method,
+      url: `/api/data-sources/${ids.copy}/review-test`,
+      headers: { cookie: who },
+      ...(method === 'POST' ? { payload: {} } : {}),
+    });
+
+  it('runs its settings for a decider, and says when they passed as proposed', async () => {
+    const before = Date.now();
+    const tested = await as({
+      method: 'POST',
+      url: `/api/data-sources/${ids.copy}/test`,
+      payload: {},
+    });
+    expect(tested.statusCode, tested.body).toBe(200);
+    const after = Date.now();
+    const proposalId = await propose('data-source', ids.copy);
+    try {
+      const passed = await reviewTest('GET', superCookie);
+      expect(passed.statusCode, passed.body).toBe(200);
+      const passedAt = Date.parse(passed.json<{ passedAt: string }>().passedAt);
+      expect(passedAt).toBeGreaterThanOrEqual(before - 1000);
+      expect(passedAt).toBeLessThanOrEqual(after + 1000);
+
+      const ran = await reviewTest('POST', superCookie);
+      expect(ran.statusCode, ran.body).toBe(200);
+      expect(ran.json()).toMatchObject({
+        ok: true,
+        checks: [{ id: 'connect', status: 'passed', durationMs: 5 }],
+      });
+      expect(Number.isNaN(Date.parse(ran.json<{ ranAt: string }>().ranAt))).toBe(false);
+
+      // One who may not decide it: as for one that isn't there.
+      expect((await reviewTest('GET', readerCookie)).statusCode).toBe(404);
+      expect((await reviewTest('POST', readerCookie)).statusCode).toBe(404);
+    } finally {
+      await withdraw(proposalId);
+    }
+    // Waiting no more: nothing to test from a review.
+    expect((await reviewTest('POST', superCookie)).statusCode).toBe(404);
+  });
+
+  it('lets a decider of a folder deleted since test it, as they may approve it (T540, AC-389; T699’s review)', async () => {
+    const gone = randomUUID();
+    await docs().create({
+      kind: 'folder',
+      id: gone,
+      body: {
+        title: `Gone ${MARK}`,
+        folderId: 'root',
+        owner: 'admin',
+        access: { readOnly: null, readWrite: ['sales-rw'] },
+      },
+    });
+    made.push({ kind: 'folder', id: gone });
+    const original = (
+      await sources().create({
+        folderId: gone,
+        name: `gone_${MARK}`,
+        driver: 'postgres',
+        authMethod: 'password',
+        fields: { host: 'gone-db', port: 5432, database: 'gone', user: 'cube', ssl: false },
+        sealed: { password: sealed },
+      })
+    ).id;
+    const copied = await as({
+      method: 'POST',
+      url: `/api/data-sources/${original}/copy`,
+      payload: { timeZone: TEST_TIME_ZONE },
+    });
+    expect(copied.statusCode, copied.body).toBeLessThan(300);
+    const copy = copied.json<{ id: string }>().id;
+    try {
+      const tested = await as({
+        method: 'POST',
+        url: `/api/data-sources/${copy}/test`,
+        payload: {},
+      });
+      expect(tested.statusCode, tested.body).toBe(200);
+      const proposalId = await propose('data-source', copy);
+      try {
+        // Its folder deleted since, its source with it.
+        await sources().remove(original);
+        const removed = await app.inject({
+          method: 'DELETE',
+          url: `/api/documents/folder/${gone}`,
+          headers: { cookie: superCookie },
+        });
+        expect(removed.statusCode, removed.body).toBe(204);
+
+        // The writer may still approve it, as its folder's groups were: so may they test it.
+        const read = await app.inject({
+          method: 'GET',
+          url: `/api/proposals/${proposalId}`,
+          headers: { cookie },
+        });
+        expect(read.json<{ mayApprove: boolean }>().mayApprove).toBe(true);
+        const passed = await app.inject({
+          method: 'GET',
+          url: `/api/data-sources/${copy}/review-test`,
+          headers: { cookie },
+        });
+        expect(passed.statusCode, passed.body).toBe(200);
+      } finally {
+        await withdraw(proposalId);
+      }
+    } finally {
+      await sources().remove(copy);
+      await getDb().deleteFrom('proposals').where('target_folder_id', '=', gone).execute();
+      // Its record as deleted, kept for the proposal: gone with it.
+      await getDb()
+        .deleteFrom('documents')
+        .where('kind', '=', 'deleted-folder')
+        .where('id', '=', gone)
+        .execute();
+    }
   });
 });

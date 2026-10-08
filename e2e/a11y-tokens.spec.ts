@@ -427,7 +427,12 @@ test("Security's dashboard results meet AA contrast in the dark theme (AC-005)",
   page,
 }) => {
   // Another list of links nothing had styled: browser blue on a dark card.
-  await openInTheme(page, '/security', 'dark');
+  // Preview as groups, its own tab with sign-in off too since T699 (security-Q1):
+  // a group chosen first, as a dashboard is previewed as one.
+  await openInTheme(page, '/security/preview', 'dark');
+  const picker = page.getByRole('combobox', { name: 'AD group' });
+  await picker.fill('sales');
+  await picker.press('Enter');
   await page.getByRole('searchbox', { name: /dashboard/i }).fill('Company');
   await expect(page.getByRole('link', { name: /Company dashboard/ }).first()).toBeVisible();
 

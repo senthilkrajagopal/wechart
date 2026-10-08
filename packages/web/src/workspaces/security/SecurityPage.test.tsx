@@ -99,11 +99,15 @@ describe('Security in tabs, with sign-in on (T500)', () => {
         'Access comes from AD groups set on folders: Cube refuses a folder’s cubes to anyone without one of its groups. Within that, the access policies below, written in the model, decide rows and members.',
       ),
     ).toBeTruthy();
-    expect(await screen.findByRole('table', { name: 'Access policies' })).toBeTruthy();
-    // A cube with no policy is open within its folder's groups, not to all (state F).
-    expect(screen.getByTestId('policies-open').textContent).toBe(
-      'No policy: open within its folder’s groups: orders.',
-    );
+    const table = await screen.findByRole('table', { name: 'Access policies' });
+    expect(table.tagName).toBe('TABLE');
+    // A cube with no policy is open within its folder's groups, not to all: a
+    // row of its own, as state F draws it (T699, SEC-16; security-Q2).
+    expect(
+      within(within(table).getByRole('row', { name: /^orders / }))
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent),
+    ).toEqual(['orders', 'No policy: open within its folder’s groups', '', '', '', '', '']);
     // The preview is its own tab, not a pane beside the list.
     expect(screen.queryByRole('region', { name: 'Preview a security context' })).toBeNull();
   });
@@ -158,13 +162,32 @@ describe('Security in tabs, with sign-in on (T500)', () => {
     expect(screen.queryByRole('table', { name: 'Access policies' })).toBeNull();
   });
 
-  it('stays phase 1’s one page with sign-in off', async () => {
+  /**
+   * T699 (AC-166, AC-343; security-Q1, R76): with sign-in off, the same tabs,
+   * Preview as groups among them; phase 1's floating JSON pane and its "Find
+   * a dashboard" (UX-085) are gone.
+   */
+  it('is the same tabs with sign-in off, Preview as groups in place of phase 1’s JSON pane', async () => {
     page();
 
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Access policies');
-    expect(screen.queryByRole('navigation', { name: 'Security' })).toBeNull();
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Security');
+    const tabs = screen.getByRole('navigation', { name: 'Security' });
+    expect(
+      within(tabs)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(['Policies', 'Preview as groups', 'Audit trail']);
     expect(await screen.findByRole('table', { name: 'Access policies' })).toBeTruthy();
-    expect(screen.getByRole('region', { name: 'Preview a security context' })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Preview a security context' })).toBeNull();
+    expect(screen.queryByLabelText('Find a dashboard')).toBeNull();
+    expect(screen.queryByLabelText('Security context (JSON)')).toBeNull();
+  });
+
+  it('previews as groups on its own tab with sign-in off too', async () => {
+    page({ tab: 'preview' });
+
+    expect(screen.getByRole('region', { name: 'Preview as groups' })).toBeTruthy();
+    expect(screen.queryByRole('table', { name: 'Access policies' })).toBeNull();
   });
 });
 
@@ -200,6 +223,8 @@ describe('the Security workspace’s policies', () => {
         'total_amount',
         'views/secured_orders.yml',
       ],
+      // Then the cubes and views with none, as rows (T699, SEC-16).
+      ['orders', 'No policy: open to every security context', '', '', '', '', ''],
     ]);
     expect(
       within(table)
@@ -211,9 +236,18 @@ describe('the Security workspace’s policies', () => {
   it('names the cubes and views with no policy as open, and the files it cannot read', async () => {
     page();
 
-    expect((await screen.findByTestId('policies-open')).textContent).toBe(
-      'No access_policy, so open to every security context: orders.',
-    );
+    // A row each, as state F draws "No policy" (T699, SEC-16; security-Q2): its
+    // name in the code face, the words in the secondary colour.
+    const table = await screen.findByRole('table', { name: 'Access policies' });
+    const open = within(table).getByRole('row', { name: /^orders / });
+    expect(
+      within(open)
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent),
+    ).toEqual(['orders', 'No policy: open to every security context', '', '', '', '', '']);
+    expect(within(open).getAllByRole('cell')[0]?.classList.contains('is-code')).toBe(true);
+    expect(within(open).getAllByRole('cell')[1]?.classList.contains('policies__none')).toBe(true);
+    expect(screen.queryByTestId('policies-open')).toBeNull();
     expect(screen.getByTestId('policies-unread').textContent).toBe(
       'Not read here: cubes/legacy.js (JavaScript). Any policies in these files are not listed.',
     );

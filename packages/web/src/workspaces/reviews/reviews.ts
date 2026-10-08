@@ -98,6 +98,16 @@ export const KIND_LABEL: Record<ReviewKind, string> = {
   model: 'Model',
 };
 
+/** Each kind's icon chip, as Explore's New menu draws them (design 05, pin 2 and state D). */
+export const KIND_ICON: Readonly<
+  Record<ReviewKind, { readonly icon: string; readonly chip: string }>
+> = {
+  dashboard: { icon: '▦', chip: 'ic-dash' },
+  chart: { icon: '◢', chip: 'ic-chart' },
+  model: { icon: '◇', chip: 'ic-model' },
+  'data-source': { icon: '◍', chip: 'ic-source' },
+};
+
 const PLURAL: Record<ReviewKind, string> = {
   dashboard: 'dashboards',
   chart: 'charts',
@@ -127,8 +137,9 @@ export function includesText(includes: ReviewRow['includes']): string {
  */
 export function statusOf(row: ReviewRow): { kind: StateKind; text: string } {
   switch (row.status) {
+    // The idle clock, as design 05 draws waiting (T699, SEC-20).
     case 'open':
-      return { kind: 'run', text: 'Waiting for review' };
+      return { kind: 'idle', text: 'Waiting for review' };
     case 'approved':
       return {
         kind: 'ok',

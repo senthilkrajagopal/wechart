@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
-import { exactOf, utcOf, whenOf as momentOf } from '../../shell/formatTime';
+import { clockOf, exactOf, utcOf, whenOf as momentOf } from '../../shell/formatTime';
 import { StateLine } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
 import { FOLDERS_QUERY, targetPathOf } from '../explore/folders';
@@ -35,11 +35,12 @@ export const EVENTS = [
 export type AuditEvent = (typeof EVENTS)[number][0];
 const EVENT_LABEL = Object.fromEntries(EVENTS) as Record<AuditEvent, string>;
 
+/** In design 08's order (pin 2; T699, SEC-08); All stays the default. */
 const TIMES = [
-  ['all', 'All'],
   ['day', 'Last 24 hours'],
   ['week', 'Last 7 days'],
   ['month', 'Last 30 days'],
+  ['all', 'All'],
   ['custom', 'Custom'],
 ] as const;
 export type AuditTime = (typeof TIMES)[number][0];
@@ -220,28 +221,87 @@ function periodOf(days: number): string {
   return days === 1 ? '1 day' : `${String(days)} days`;
 }
 
-/** Each event's icon beside its label, never colour alone (pin 5, rule 3). */
-function EventIcon({ event }: { event: AuditEvent }) {
-  const path: Record<AuditEvent, string> = {
-    'sign-in': 'M6 3h6v10H6M2 8h7M7 5.5 9.5 8 7 10.5',
-    'access-change': 'M4 7V5a4 4 0 0 1 8 0v2M3 7h10v7H3z',
-    proposal: 'M8 12V3M4.5 6.5 8 3l3.5 3.5M3 13h10',
-    approval: 'M3 8.5 6.5 12 13 4.5',
-    rejection: 'M4 4l8 8M12 4l-8 8',
-    restore: 'M3 8a5 5 0 1 0 1.5-3.5M3 2.5V5h2.5',
-    'data-source-change':
-      'M3 4c0-1.1 2.2-2 5-2s5 .9 5 2v8c0 1.1-2.2 2-5 2s-5-.9-5-2zM3 4c0 1.1 2.2 2 5 2s5-.9 5-2',
-    'publish-refused': 'M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2zM3.8 3.8l8.4 8.4',
+/**
+ * Each event's icon beside its label, never colour alone (pin 5, rule 3):
+ * design 08's glyphs (its `i-*` symbols; T699, SEC-06), named by them, and
+ * designs 15's and 16's for the kinds they add.
+ */
+const EVENT_ICONS: Record<AuditEvent, { name: string; paths: readonly string[]; width?: number }> =
+  {
+    'sign-in': {
+      name: 'login',
+      paths: ['M9 2.5h3.5a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H9M2 8h8M7 5l3 3-3 3'],
+      width: 1.4,
+    },
+    'access-change': {
+      name: 'lock',
+      paths: [
+        'M4.5 7h7a1.5 1.5 0 0 1 1.5 1.5v4a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 3 12.5v-4A1.5 1.5 0 0 1 4.5 7z',
+        'M5.5 7V5a2.5 2.5 0 0 1 5 0v2',
+      ],
+    },
+    proposal: { name: 'send', paths: ['M2 8l11-5-4 11-2-4.5z'], width: 1.4 },
+    approval: { name: 'check', paths: ['M3 8.5l3 3 7-7'], width: 1.7 },
+    rejection: {
+      name: 'xo',
+      paths: [
+        'M8 1.8a6.2 6.2 0 1 0 0 12.4A6.2 6.2 0 0 0 8 1.8z',
+        'M5.8 5.8l4.4 4.4M10.2 5.8l-4.4 4.4',
+      ],
+      width: 1.4,
+    },
+    restore: {
+      name: 'hist',
+      paths: ['M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.3 2.5v2.8h2.8', 'M8 5v3.2l2.2 1.4'],
+      width: 1.4,
+    },
+    'data-source-change': {
+      name: 'db',
+      paths: [
+        'M3 4c0-1.1 2.2-2 5-2s5 .9 5 2-2.2 2-5 2-5-.9-5-2z',
+        'M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2',
+      ],
+      width: 1.4,
+    },
+    'publish-refused': {
+      name: 'refused',
+      paths: ['M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2zM3.8 3.8l8.4 8.4'],
+    },
     // A terminal's prompt, as design 15 draws the SQL tab's.
-    'sql-run': 'M2.5 3.5h11v9h-11zM5 6.5 7 8l-2 1.5M8.5 10h2.5',
+    'sql-run': { name: 'sql', paths: ['M2.5 3.5h11v9h-11zM5 6.5 7 8l-2 1.5M8.5 10h2.5'] },
     // Design 16's: play, a struck circle, and a calendar (state I).
-    'build-started': 'M5 3.2v9.6L12.6 8z',
-    'build-cancelled': 'M8 1.8a6.2 6.2 0 1 0 0 12.4A6.2 6.2 0 0 0 8 1.8zM3.8 12.2l8.4-8.4',
-    'schedule-change': 'M2.2 3.2h11.6v10.6H2.2zM2.2 6.5h11.6M5.3 1.8v2.8M10.7 1.8v2.8M7.4 10h1.2',
+    'build-started': { name: 'play', paths: ['M5 3.2v9.6L12.6 8z'] },
+    'build-cancelled': {
+      name: 'cancel',
+      paths: ['M8 1.8a6.2 6.2 0 1 0 0 12.4A6.2 6.2 0 0 0 8 1.8zM3.8 12.2l8.4-8.4'],
+    },
+    'schedule-change': {
+      name: 'schedule',
+      paths: ['M2.2 3.2h11.6v10.6H2.2zM2.2 6.5h11.6M5.3 1.8v2.8M10.7 1.8v2.8M7.4 10h1.2'],
+    },
   };
+
+function EventIcon({ event }: { event: AuditEvent }) {
+  const icon = EVENT_ICONS[event];
   return (
-    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-      <path d={path[event]} fill="none" stroke="currentColor" strokeWidth="1.5" />
+    <svg
+      viewBox="0 0 16 16"
+      width="14"
+      height="14"
+      aria-hidden="true"
+      data-icon={icon.name}
+      className="audit-trail__icon"
+    >
+      {icon.paths.map((path) => (
+        <path
+          key={path}
+          d={path}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={icon.width ?? 1.5}
+          strokeLinejoin="round"
+        />
+      ))}
     </svg>
   );
 }
@@ -308,7 +368,7 @@ export function AuditTrail({
     onFilters(next);
   };
   /** The first filter, where focus goes when no chip is left to take it. */
-  const firstFilter = () => filterBar.current?.querySelector<HTMLElement>('select, button');
+  const firstFilter = () => filterBar.current?.querySelector<HTMLElement>('input, select, button');
   const chipRemovers = () => [
     ...(filterBar.current?.parentElement?.querySelectorAll<HTMLElement>(
       '.audit-trail__chips .filter-chip__remove',
@@ -364,18 +424,12 @@ export function AuditTrail({
         <div className="sources-filters audit-trail__filters" ref={filterBar}>
           <Pill label="User">
             {(id) => (
-              <select
+              <UserFilter
                 id={id}
-                value={filters.user ?? ''}
-                onChange={(event) => set({ ...filters, user: event.target.value || undefined })}
-              >
-                <option value="">Anyone</option>
-                {(people.data ?? []).map((each) => (
-                  <option key={each.key} value={each.key}>
-                    {who(each)}
-                  </option>
-                ))}
-              </select>
+                people={people.data ?? []}
+                chosen={filters.user}
+                onChoose={(user) => set({ ...filters, user })}
+              />
             )}
           </Pill>
           <EventPicker chosen={filters.events} onChoose={(events) => set({ ...filters, events })} />
@@ -450,9 +504,9 @@ export function AuditTrail({
           ) : null}
         </div>
 
-        {/* The active filters as chips that combine (pin 3). */}
-        {chips.length === 0 ? null : (
-          <div className="audit-trail__chips">
+        {/* The active filters as chips that combine, the count at the row's end (pin 3; T699, SEC-07). */}
+        <div className="audit-trail__chips">
+          {chips.length === 0 ? null : (
             <ul aria-label="Active filters">
               {chips.map((chip, at) => (
                 <li key={chip.label} className="filter-chip">
@@ -476,6 +530,8 @@ export function AuditTrail({
                 </li>
               ))}
             </ul>
+          )}
+          {chips.length === 0 ? null : (
             <button
               type="button"
               className="link-button"
@@ -483,8 +539,13 @@ export function AuditTrail({
             >
               Clear filters
             </button>
-          </div>
-        )}
+          )}
+          <p className="audit-trail__count" role="status">
+            {page.data === undefined
+              ? ''
+              : `${page.data.total.toLocaleString('en-US')} ${page.data.total === 1 ? 'record' : 'records'} · newest first`}
+          </p>
+        </div>
 
         {page.isError ? (
           // State C: Retry and Details (T474's review; direction.md rule 18).
@@ -507,12 +568,6 @@ export function AuditTrail({
             ))}
           </div>
         ) : null}
-        <p className="audit-trail__count" role="status">
-          {page.data === undefined
-            ? ''
-            : `${String(page.data.total)} ${page.data.total === 1 ? 'record' : 'records'} · newest first`}
-        </p>
-
         {page.data !== undefined && records.length === 0 ? (
           <p className="audit-trail__none">
             No records match these filters.{' '}
@@ -562,7 +617,8 @@ export function AuditTrail({
                           {when.shown}
                         </time>
                       </td>
-                      <td>{who(record.actor)}</td>
+                      {/* An identity, in the code face (pin 6; T699, SEC-05). */}
+                      <td>{record.actor === null ? '—' : <code>{who(record.actor)}</code>}</td>
                       <td>
                         <span className="audit-trail__event">
                           <EventIcon event={record.event} />
@@ -592,7 +648,7 @@ export function AuditTrail({
                           {...(record.id === openId ? { 'aria-controls': `${ids}-record` } : {})}
                           onClick={() => setOpenId(record.id === openId ? null : record.id)}
                         >
-                          {record.summary}
+                          <SummaryText record={record} />
                         </button>
                       </td>
                     </tr>
@@ -647,6 +703,100 @@ export function AuditTrail({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * A record's one-line summary, an access change's group identifiers in the
+ * code face, as design 08 writes "Added read-write group `emea-analysts`"
+ * (pin 4; T699, SEC-05).
+ */
+function SummaryText({ record }: { record: Record_ }) {
+  const details = record.details ?? {};
+  const named =
+    record.event === 'access-change'
+      ? [details['readWrite'], details['readOnly']]
+          .flatMap((change) => {
+            const { before, after } = (change ?? {}) as { before?: unknown; after?: unknown };
+            return [...(groupsOf(before) ?? []), ...(groupsOf(after) ?? [])];
+          })
+          .filter((group, at, all) => group !== '' && all.indexOf(group) === at)
+          .toSorted((a, b) => b.length - a.length)
+      : [];
+  if (named.length === 0) return <>{record.summary}</>;
+  const escaped = named.map((group) => group.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const parts = record.summary.split(new RegExp(`(?<![\\w-])(${escaped.join('|')})(?![\\w-])`));
+  return <>{parts.map((part, at) => (at % 2 === 1 ? <code key={at}>{part}</code> : part))}</>;
+}
+
+/**
+ * User, a combobox of the identities in the records (design 08 pin 2; T699,
+ * SEC-09): a native input with its list, so what is typed or picked is the
+ * filter once it names someone, and nothing typed is Anyone.
+ */
+function UserFilter({
+  id,
+  people,
+  chosen,
+  onChoose,
+}: {
+  id: string;
+  people: readonly Person[];
+  chosen: string | undefined;
+  onChoose: (user: string | undefined) => void;
+}) {
+  const listId = useId();
+  const shownOf = (key: string | undefined) => {
+    const person = people.find((each) => each.key === key);
+    return person === undefined ? '' : who(person);
+  };
+  // What's typed, following the filter where it changes elsewhere (a chip,
+  // Clear filters), and its person once the people are read, as on a reload
+  // with one chosen (T699's review), unless something else has been typed.
+  const shown = shownOf(chosen);
+  const [typed, setTyped] = useState(shown);
+  const [following, setFollowing] = useState({ chosen, shown });
+  if (following.chosen !== chosen || following.shown !== shown) {
+    if (following.chosen !== chosen || typed === following.shown) setTyped(shown);
+    setFollowing({ chosen, shown });
+  }
+  // An identity typed before the people were read is the filter once they
+  // are; the field then follows it, as it already says.
+  useEffect(() => {
+    const person = people.find((each) => who(each) === typed.trim());
+    if (person !== undefined && person.key !== chosen) onChoose(person.key);
+  }, [people, typed, chosen, onChoose]);
+  return (
+    <>
+      <input
+        id={id}
+        // With its list, a combobox (HTML's own role for it).
+        type="text"
+        list={listId}
+        placeholder="Anyone"
+        autoComplete="off"
+        value={typed}
+        onChange={(event) => {
+          const text = event.target.value;
+          setTyped(text);
+          if (text.trim() === '') {
+            setFollowing({ chosen: undefined, shown: '' });
+            onChoose(undefined);
+            return;
+          }
+          const person = people.find((each) => who(each) === text.trim());
+          if (person !== undefined && person.key !== chosen) {
+            setFollowing({ chosen: person.key, shown: who(person) });
+            onChoose(person.key);
+          }
+        }}
+      />
+      <datalist id={listId}>
+        {people.map((each) => (
+          <option key={each.key} value={who(each)} />
+        ))}
+      </datalist>
+    </>
   );
 }
 
@@ -808,9 +958,10 @@ function Inspector({ id, record, onClose }: { id: string; record: Record_; onClo
         {record.item === null ? '' : ` · ${record.item.title}`} · {when.shown}{' '}
         <span className="audit-trail__utc">({when.utc})</span>
       </p>
-      <dl className="source-settings__rows">
+      <dl className="source-settings__rows audit-trail__kv">
         <dt>By</dt>
-        <dd>{who(record.actor)}</dd>
+        {/* In the code face, as design 08's inspector has it (T699, SEC-03). */}
+        <dd>{record.actor === null ? '—' : <code>{who(record.actor)}</code>}</dd>
         {role === undefined ? null : (
           <>
             <dt>Role</dt>
@@ -880,7 +1031,11 @@ function Inspector({ id, record, onClose }: { id: string; record: Record_; onClo
           <Groups name="Read-only groups" change={details['readOnly']} />
         </>
       ) : record.event === 'data-source-change' && Array.isArray(details['changes']) ? (
-        <Settings changes={details['changes']} tested={typeof details['testId'] === 'string'} />
+        <Settings
+          changes={details['changes']}
+          tested={typeof details['testId'] === 'string'}
+          testedAt={typeof details['testedAt'] === 'string' ? details['testedAt'] : undefined}
+        />
       ) : record.event === 'publish-refused' && Array.isArray(details['breaks']) ? (
         <Breaks breaks={details['breaks']} shown={details['shown']} actor={record.actor} />
       ) : record.event === 'sql-run' ? (
@@ -968,43 +1123,44 @@ function Groups({ name, change }: { name: string; change: unknown }) {
   const is = groupsOf(after);
   const listed = (groups: string[] | null) =>
     groups === null ? 'Inherited' : groups.length === 0 ? 'None' : null;
+  // Before and After as two columns, a group to a line, as design 08's
+  // inspector draws them (T699, SEC-12).
   return (
     <div role="group" aria-label={name} className="audit-trail__groups">
       <h4>{name}</h4>
       <div className="audit-trail__before-after">
-        <span>Before</span>
-        <span>
-          {listed(was) ??
-            was!.map((group, at) => (
-              <span key={group}>
-                {at === 0 ? '' : ' '}
-                <code>{group}</code>
-              </span>
-            ))}
-        </span>
-        <span>After</span>
-        <span>
-          {listed(is) ?? [
-            ...is!.map((group, at) => {
-              const added = was !== null && !was.includes(group);
-              return (
-                <span key={group}>
-                  {at === 0 ? '' : ' '}
-                  {added ? <ins>+ {group}</ins> : <code>{group}</code>}
-                </span>
-              );
-            }),
-            // A group taken away, struck through (design 08, state B).
-            ...(was ?? [])
-              .filter((group) => !is!.includes(group))
-              .map((group) => (
-                <span key={`removed-${group}`}>
-                  {' '}
-                  <del>{group}</del>
-                </span>
-              )),
-          ]}
-        </span>
+        <div>
+          <span className="audit-trail__column">Before</span>
+          <span className="audit-trail__glist">
+            {listed(was) === null ? (
+              was!.map((group) => <code key={group}>{group}</code>)
+            ) : (
+              <span>{listed(was)}</span>
+            )}
+          </span>
+        </div>
+        <div>
+          <span className="audit-trail__column">After</span>
+          <span className="audit-trail__glist">
+            {listed(is) === null ? (
+              [
+                ...is!.map((group) =>
+                  was !== null && !was.includes(group) ? (
+                    <ins key={group}>+ {group}</ins>
+                  ) : (
+                    <code key={group}>{group}</code>
+                  ),
+                ),
+                // A group taken away, struck through (design 08, state B).
+                ...(was ?? [])
+                  .filter((group) => !is!.includes(group))
+                  .map((group) => <del key={`removed-${group}`}>{group}</del>),
+              ]
+            ) : (
+              <span>{listed(is)}</span>
+            )}
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -1131,7 +1287,15 @@ function ScheduleSettings({ settings }: { settings: readonly unknown[] }) {
 }
 
 /** A data-source change's settings, before and after; a secret only "Replaced" (state A). */
-function Settings({ changes, tested }: { changes: readonly unknown[]; tested: boolean }) {
+function Settings({
+  changes,
+  tested,
+  testedAt,
+}: {
+  changes: readonly unknown[];
+  tested: boolean;
+  testedAt?: string | undefined;
+}) {
   const rows = changes.filter(
     (each): each is { setting: string; before: string | null; after: string | null } =>
       typeof each === 'object' &&
@@ -1153,12 +1317,40 @@ function Settings({ changes, tested }: { changes: readonly unknown[]; tested: bo
             <tr key={row.setting}>
               <td>{row.setting}</td>
               <td>{row.before ?? '—'}</td>
-              <td>{row.after === 'replaced' ? 'Replaced' : (row.after ?? '—')}</td>
+              <td>
+                {row.after === 'replaced' ? (
+                  // A secret replaced, never shown: a badge with its padlock (state A; T699, SEC-11).
+                  <span className="badge audit-trail__replaced">
+                    <svg
+                      viewBox="0 0 16 16"
+                      width="12"
+                      height="12"
+                      aria-hidden="true"
+                      data-icon="lock"
+                    >
+                      <path
+                        d="M4.5 7h7a1.5 1.5 0 0 1 1.5 1.5v4a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 3 12.5v-4A1.5 1.5 0 0 1 4.5 7zM5.5 7V5a2.5 2.5 0 0 1 5 0v2"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      />
+                    </svg>
+                    Replaced
+                  </span>
+                ) : (
+                  (row.after ?? '—')
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
-      {tested ? <p className="audit-trail__tested">Saved after a passing test</p> : null}
+      {/* With its icon, and the test's time where the record keeps it (state A; security-Q6). */}
+      {tested ? (
+        <StateLine kind="ok" role="status" className="audit-trail__tested">
+          {`Saved after a passing test${testedAt === undefined ? '' : ` · ${clockOf(new Date(testedAt), { seconds: true })}`}`}
+        </StateLine>
+      ) : null}
     </>
   );
 }

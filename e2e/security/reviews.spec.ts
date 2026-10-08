@@ -99,7 +99,8 @@ test.describe('the proposals each user may decide (T355, AC-287)', () => {
       const table = page.getByRole('table', { name: 'To review' });
       const row = table.getByRole('row').filter({ hasText: TITLE });
       await expect(row.getByRole('cell')).toHaveText([
-        `${TITLE}Yours`,
+        // Its kind's icon before its title (state D; T699, SEC-24).
+        `◢${TITLE}Yours`,
         'Chart',
         `Reviews ${RUN}`,
         made.author,
@@ -114,11 +115,39 @@ test.describe('the proposals each user may decide (T355, AC-287)', () => {
         `Chart → Reviews ${RUN} · new in this folder`,
       );
       await expect(summary.getByTestId('review-description')).toHaveText(DESCRIPTION);
+      // Its sections headed as design 05's (T699, SEC-23); Chrome reads them as
+      // drawn, in capitals.
+      await expect(summary.getByRole('heading', { name: /^Proposed by$/i })).toHaveCSS(
+        'text-transform',
+        'uppercase',
+      );
       await expect(page).toHaveURL(new RegExp(`selected=${made.proposal}`));
       // The number is the list's.
       const { count, rows } = await countAndRows(page);
       expect(count).toBe(rows);
       expect(count).toBeGreaterThanOrEqual(1);
+      // As state D draws them (T699, SEC-17, SEC-18): the tabs flush with the title,
+      // on no ground of their own; the count an accent pill, white 12/600, 18 px.
+      const tabs = page.getByRole('tablist', { name: 'Reviews' });
+      await expect(tabs).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+      const title = (await page.getByRole('heading', { level: 1, name: 'Reviews' }).boundingBox())!;
+      const firstTab = (await tabs.getByRole('tab').first().boundingBox())!;
+      // The tab's own 10 px padding puts its words under the title's.
+      expect(Math.round(firstTab.x)).toBe(Math.round(title.x));
+      const pill = tabs.locator('.reviews__tab-count');
+      const accent = await page.evaluate(() => {
+        const probe = document.createElement('div');
+        probe.style.background = 'var(--wc-accent)';
+        document.body.append(probe);
+        const said = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return said;
+      });
+      await expect(pill).toHaveCSS('background-color', accent);
+      await expect(pill).toHaveCSS('color', 'rgb(255, 255, 255)');
+      await expect(pill).toHaveCSS('font-size', '12px');
+      await expect(pill).toHaveCSS('font-weight', '600');
+      await expect(pill).toHaveCSS('height', '18px');
 
       // Theirs, in every state.
       await page.getByRole('tab', { name: 'My proposals' }).click();
@@ -142,7 +171,7 @@ test.describe('the proposals each user may decide (T355, AC-287)', () => {
         .getByRole('table', { name: 'To review' })
         .getByRole('row')
         .filter({ hasText: TITLE });
-      await expect(row.getByRole('cell').first()).toHaveText(TITLE);
+      await expect(row.getByRole('cell').first()).toHaveText(`◢${TITLE}`);
       await expect(row.getByRole('cell').nth(3)).toHaveText(made.author);
       const { count, rows } = await countAndRows(page);
       expect(count).toBe(rows);

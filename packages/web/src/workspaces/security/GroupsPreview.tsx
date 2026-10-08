@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { Fragment, useId, useRef, useState } from 'react';
 
-import { StateLine, StatusIcon } from '../../shell/StatusIcon';
-import { DASHBOARD_LIMIT, modelHref, previewHref, useDashboards, VERDICTS } from './ContextPreview';
+import { StateLine } from '../../shell/StatusIcon';
+import { DASHBOARD_LIMIT, modelHref, previewHref, useDashboards } from './ContextPreview';
 import { AccessIcon } from '../explore/AccessChip';
 import { effectiveAccess, type Access, type AccessModel } from './policies';
 
@@ -135,9 +135,8 @@ export function GroupsPreview({
   };
 
   return (
+    // Straight on its sections, as state E draws it: the tab names it already (T699, SEC-27).
     <section className="groups-preview admin-pane" aria-label="Preview as groups">
-      <h2>Preview as groups</h2>
-
       {/* Groups, as chips, and the picker (state E). */}
       <div className="groups-preview__groups">
         <h3 id={`${ids.group}-heading`}>Groups</h3>
@@ -262,10 +261,10 @@ export function GroupsPreview({
                     data-testid={`access-${each.object}`}
                     className={at === 0 ? 'groups-preview__first-object' : undefined}
                   >
-                    <StatusIcon kind={VERDICTS[each.access].icon} />
-                    {/* On one line, as drawn: "orders · everything · no policy". */}
+                    {/* On one line, as drawn, the name in bold and no icon: "**orders** ·
+                        everything · no policy" (state E; T699, SEC-27). */}
                     <span>
-                      <span className="context-preview__object">{each.object}</span> ·{' '}
+                      <b className="context-preview__object">{each.object}</b> ·{' '}
                       <span className="context-preview__verdict">{GIVES[each.access]}</span> ·{' '}
                       <span className="groups-preview__why">{each.why}</span>
                       {each.paths.map((path) => (
@@ -290,9 +289,11 @@ export function GroupsPreview({
         )}
       </section>
 
-      {/* The dashboard to open as them. */}
-      <div className="field">
-        <label htmlFor={ids.find}>Dashboard to preview</label>
+      {/* The dashboard to open as them, a section as state E heads it (SEC-27). */}
+      <div className="field groups-preview__dashboard">
+        <h3>
+          <label htmlFor={ids.find}>Dashboard to preview</label>
+        </h3>
         <input
           id={ids.find}
           type="search"

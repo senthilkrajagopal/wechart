@@ -77,7 +77,11 @@ test('the Security workspace lists every access policy the model declares, as de
   page,
 }) => {
   await page.goto('/security');
-  await expect(page.getByRole('heading', { name: 'Access policies', level: 1 })).toBeVisible();
+  // With sign-in off, the same tabs as a Super-Admin's (T699, security-Q1): Policies first.
+  await expect(page.getByRole('heading', { name: 'Security', level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole('navigation', { name: 'Security' }).getByRole('link', { name: 'Policies' }),
+  ).toHaveAttribute('aria-current', 'page');
 
   const rows = page
     .getByRole('table', { name: 'Access policies' })
@@ -113,9 +117,15 @@ test('the Security workspace lists every access policy the model declares, as de
     'views/secured_orders.yml',
   ]);
   // The rest of the sample model has no policies: open, and said to be — the
-  // cube `orders` among them, and not the secured view (T171's review).
-  const open = (await page.getByTestId('policies-open').textContent()) ?? '';
-  const named = (open.split(': ')[1] ?? '').replace(/\.$/, '').split(', ');
+  // cube `orders` among them, and not the secured view (T171's review) — each
+  // a row of its own since T699 (SEC-16, security-Q2).
+  const open = page
+    .getByRole('table', { name: 'Access policies' })
+    .getByRole('row')
+    .filter({ hasText: 'No policy: open to every security context' });
+  const named = await open.evaluateAll((all) =>
+    all.map((row) => row.querySelector('td')?.textContent ?? ''),
+  );
   expect(named).toContain('orders');
   expect(named).not.toContain('secured_orders');
 });
@@ -137,11 +147,16 @@ test('a dashboard previewed as an edited security context runs as it, under a ba
   request,
 }) => {
   const { title } = await securedDashboard(request);
-  await page.goto('/security');
-  const preview = page.getByRole('region', { name: 'Preview a security context' });
-  const context = preview.getByLabel('Security context (JSON)');
-  await context.fill('{"groups": ["sales", "employees"]}');
-  await preview.getByLabel('Find a dashboard').fill(title);
+  // Preview as groups with sign-in off too, in place of phase 1's JSON pane
+  // (T699, security-Q1; AC-166 as amended: groups only).
+  await page.goto('/security/preview');
+  const preview = page.getByRole('region', { name: 'Preview as groups' });
+  const picker = preview.getByRole('combobox', { name: 'AD group' });
+  for (const group of ['sales', 'employees']) {
+    await picker.fill(group);
+    await picker.press('Enter');
+  }
+  await preview.getByRole('searchbox', { name: 'Dashboard to preview' }).fill(title);
 
   const asked: { context?: unknown }[] = [];
   page.on('request', (sent) => {
@@ -152,7 +167,7 @@ test('a dashboard previewed as an edited security context runs as it, under a ba
 
   // Named, and staying named.
   const banner = page.getByTestId('preview-banner');
-  await expect(banner).toContainText('Previewing as {"groups":["sales","employees"]}');
+  await expect(banner).toContainText(`Previewing as sales and employees · ${title}`);
   // The sales group's rows: shipped only.
   const tile = page.locator('[data-tile="tile-secured"]');
   await expect(tile.getByRole('table')).toContainText('shipped', { timeout: 15_000 });
@@ -168,7 +183,7 @@ test('a dashboard previewed as an edited security context runs as it, under a ba
 
   // Leaving the preview: wechart's own context again, which no policy grants.
   asked.length = 0;
-  await banner.getByRole('link', { name: 'Exit preview' }).click();
+  await banner.getByRole('link', { name: 'Stop preview' }).click();
   await expect(banner).toHaveCount(0);
   await expect(tile.getByRole('alert')).toBeVisible({ timeout: 15_000 });
   for (const body of asked) expect(body.context).toBeUndefined();
@@ -261,7 +276,10 @@ test('a previewed tile shows Cube’s SQL as the context, with the row filter it
  * nothing, a policy's source does not open Model, or the context is reset
  * after a preview.`
  *
- * With AC-228's Security half: the preview is a full-height pane beside the list.
+ * Since T699 (security-Q1) as Preview as groups with sign-in off too: groups
+ * as chips, the policies' groups as presets. AC-228's Security half, a list
+ * beside a full-height pane, is the audit trail's record (e2e/security/audit.spec.ts);
+ * the preview's pane is still the window's height.
  */
 test('Security presets a group’s context, says what it can read and why, and keeps it', async ({
   page,
@@ -269,44 +287,44 @@ test('Security presets a group’s context, says what it can read and why, and k
 }) => {
   const { title } = await securedDashboard(request);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/security');
-  const preview = page.getByRole('region', { name: 'Preview a security context' });
-  const policies = page.getByRole('table', { name: 'Access policies' });
-  await expect(policies).toBeVisible();
+  await page.goto('/security/preview');
+  const preview = page.getByRole('region', { name: 'Preview as groups' });
+  await expect(preview).toBeVisible();
 
-  // AC-228: a full-height pane beside the list — below the app bar, down to
-  // the window's bottom and not past it, and to the right of the policies.
+  // A full-height pane: below the app bar, down to the window's bottom and not past it.
   const box = await preview.boundingBox();
-  const table = await policies.boundingBox();
   expect(box?.y ?? 0).toBeGreaterThanOrEqual(48);
   const bottom = (box?.y ?? 0) + (box?.height ?? 0);
   expect(bottom).toBeGreaterThan(900 - 24);
   expect(bottom).toBeLessThanOrEqual(900);
-  expect(box?.x ?? 0).toBeGreaterThanOrEqual((table?.x ?? 0) + (table?.width ?? 0));
 
   // The finance preset, and what finance can read from each cube and view.
-  const presets = preview.getByRole('group', { name: 'Preset contexts' });
+  const presets = preview.getByRole('group', { name: 'Groups the policies name' });
   await presets.getByRole('button', { name: 'finance' }).click();
-  const context = preview.getByLabel('Security context (JSON)');
-  await expect(context).toHaveValue(/"finance"/);
-  const access = preview.getByRole('region', { name: 'Effective access' });
+  const chips = preview.getByRole('list', { name: 'Groups', exact: true });
+  await expect(chips.getByRole('listitem')).toHaveText(['finance']);
+  const access = preview.getByRole('list', { name: 'What these groups reach' });
   const secured = access.getByTestId('access-secured_orders');
-  await expect(secured).toContainText('Some members or rows');
+  await expect(secured).toContainText('some members or rows');
   await expect(secured).toContainText('count, status, ordered_at');
   await expect(secured).toContainText('masked: total_amount');
   // Every cube and view the model reads, each with its verdict.
   for (const object of ['customers', 'monthly_orders', 'order_summary', 'orders', 'products'])
     await expect(access.getByTestId(`access-${object}`)).toContainText(
-      'Everything No access policy: open to every context.',
+      `${object} · everything · No access policy: open to every context.`,
     );
   // The sales preset alone: its condition is unmet, so Cube grants nothing
   // (AC-167's test sees the same) — and the pane says so, and why.
+  await preview.getByRole('button', { name: 'Remove finance' }).click();
   await presets.getByRole('button', { name: 'sales' }).click();
-  await expect(secured).toContainText('Nothing');
+  await expect(secured).toContainText('nothing');
   await expect(secured).toContainText("only if { securityContext.groups.includes('employees') }");
   // A group no policy names gets nothing from the secured view, and is told why.
-  await context.fill('{"groups": ["marketing"]}');
-  await expect(secured).toContainText('Nothing');
+  await preview.getByRole('button', { name: 'Remove sales' }).click();
+  const picker = preview.getByRole('combobox', { name: 'AD group' });
+  await picker.fill('marketing');
+  await picker.press('Enter');
+  await expect(secured).toContainText('nothing');
   await expect(secured).toContainText('managers');
   // Its policy's file, from the access list, opens in Model.
   await expect(secured.getByRole('link', { name: 'views/secured_orders.yml' })).toHaveAttribute(
@@ -315,25 +333,31 @@ test('Security presets a group’s context, says what it can read and why, and k
   );
 
   // A search with no match says so.
-  const find = preview.getByLabel('Find a dashboard');
+  const find = preview.getByRole('searchbox', { name: 'Dashboard to preview' });
   await find.fill('no dashboard is called this');
-  await expect(preview.getByTestId('preview-no-match')).toContainText('No dashboard matches');
+  await expect(preview).toContainText('No dashboard matches “no dashboard is called this”.');
 
   // Kept through a preview: out to the dashboard and back.
-  await context.fill('{"groups": ["sales", "employees"]}');
+  await preview.getByRole('button', { name: 'Remove marketing' }).click();
+  for (const group of ['sales', 'employees']) {
+    await picker.fill(group);
+    await picker.press('Enter');
+  }
   await find.fill(title);
   await preview.getByRole('link', { name: `Preview ${title}` }).click();
   await expect(page.getByTestId('preview-banner')).toBeVisible();
-  await page.getByTestId('preview-banner').getByRole('link', { name: 'Exit preview' }).click();
-  await page.goto('/security');
+  await page.getByTestId('preview-banner').getByRole('link', { name: 'Stop preview' }).click();
+  await page.goto('/security/preview');
   await expect(
     page
-      .getByRole('region', { name: 'Preview a security context' })
-      .getByLabel('Security context (JSON)'),
-  ).toHaveValue('{"groups": ["sales", "employees"]}');
+      .getByRole('region', { name: 'Preview as groups' })
+      .getByRole('list', { name: 'Groups', exact: true })
+      .getByRole('listitem'),
+  ).toHaveText(['sales', 'employees']);
 
   // A policy's source opens its file in Model — the file itself, not only
   // its address.
+  await page.goto('/security');
   await page
     .getByRole('table', { name: 'Access policies' })
     .getByRole('link', { name: 'views/secured_orders.yml' })

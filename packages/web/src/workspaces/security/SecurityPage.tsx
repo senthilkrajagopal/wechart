@@ -6,7 +6,7 @@ import { TableScroll } from '../../shell/TableScroll';
 import { MODEL_FILES_QUERY } from '../model/FileList';
 import { AuditTrail, NO_FILTERS, type AuditFilters } from './AuditTrail';
 import { AuthWarning } from './AuthWarning';
-import { ContextPreview, modelHref } from './ContextPreview';
+import { modelHref } from './ContextPreview';
 import { GroupsPreview } from './GroupsPreview';
 import { Scopes } from './Scopes';
 import {
@@ -47,7 +47,7 @@ export function SecurityPage({
   };
   /**
    * With sign-in on, Security is the Super-Admins' tabs (T500; design 08).
-   * With it off, phase 1's one page stays: the policies, the preview beside.
+   * With it off, the single user's, the same tabs (security-Q1, T699).
    */
   readonly signedIn?: boolean;
   readonly tab?: SecurityTab;
@@ -72,16 +72,9 @@ export function SecurityPage({
     if (read.problem !== undefined) unread.push(`${file.path} (${read.problem})`);
   }
 
-  // The groups the policies name, to write a previewed context against.
+  // The groups the policies name, offered as presets to preview as.
   const groups = [...new Set(rows.flatMap(({ policy }) => policy.groups))];
 
-  const preview = (
-    <ContextPreview
-      groups={groups}
-      model={{ declared: rows, open: openObjects, reaches }}
-      unread={unread}
-    />
-  );
   const policies = (
     <>
       {/* Whether Cube refuses requests nobody signed (T175, AC-169): said
@@ -101,52 +94,43 @@ export function SecurityPage({
     </>
   );
 
-  if (signedIn)
-    return (
-      <div className="security-workspace security-workspace--tabs">
-        <h1 className="workspace-title">Security</h1>
-        {/* Tabs as places, each at its own address (pin 1, AC-002). */}
-        <nav aria-label="Security" className="security-tabs">
-          {TABS.map(([key, label, href]) => (
-            <a key={key} href={href} aria-current={key === tab ? 'page' : undefined}>
-              {label}
-            </a>
-          ))}
-        </nav>
-        {tab === 'audit' ? (
-          <AuditTrail
-            filters={audit?.filters ?? NO_FILTERS}
-            onFilters={audit?.onFilters ?? (() => undefined)}
-          />
-        ) : tab === 'preview' ? (
-          <>
-            {/* The model's state said here too: an empty preview isn't "no
-                cubes" while the files are read, or after they fail (T500's review). */}
-            {files.isPending ? (
-              <StateLine kind="run">Reading the model…</StateLine>
-            ) : files.isError ? (
-              <StateLine kind="err">{files.error.message}</StateLine>
-            ) : null}
-            {/* As groups, with sign-in on (T438; design 08, state E). */}
-            <GroupsPreview
-              model={{ declared: rows, open: openObjects, reaches }}
-              unread={unread}
-              policyGroups={groups}
-            />
-          </>
-        ) : (
-          policies
-        )}
-      </div>
-    );
-
+  // The same tabs with sign-in off as on: phase 1's floating JSON pane and
+  // its "Find a dashboard" are gone (security-Q1, R76; T699, UX-085).
   return (
-    <div className="security-layout">
-      <div className="security-workspace">
-        <h1 className="workspace-title">Access policies</h1>
-        {policies}
-      </div>
-      {preview}
+    <div className="security-workspace security-workspace--tabs">
+      <h1 className="workspace-title">Security</h1>
+      {/* Tabs as places, each at its own address (pin 1, AC-002). */}
+      <nav aria-label="Security" className="security-tabs">
+        {TABS.map(([key, label, href]) => (
+          <a key={key} href={href} aria-current={key === tab ? 'page' : undefined}>
+            {label}
+          </a>
+        ))}
+      </nav>
+      {tab === 'audit' ? (
+        <AuditTrail
+          filters={audit?.filters ?? NO_FILTERS}
+          onFilters={audit?.onFilters ?? (() => undefined)}
+        />
+      ) : tab === 'preview' ? (
+        <>
+          {/* The model's state said here too: an empty preview isn't "no
+                cubes" while the files are read, or after they fail (T500's review). */}
+          {files.isPending ? (
+            <StateLine kind="run">Reading the model…</StateLine>
+          ) : files.isError ? (
+            <StateLine kind="err">{files.error.message}</StateLine>
+          ) : null}
+          {/* As groups, with sign-in on (T438; design 08, state E). */}
+          <GroupsPreview
+            model={{ declared: rows, open: openObjects, reaches }}
+            unread={unread}
+            policyGroups={groups}
+          />
+        </>
+      ) : (
+        policies
+      )}
     </div>
   );
 }
@@ -181,9 +165,8 @@ function PolicyList({
           </p>
         )}
       </InfoBar>
-      {rows.length === 0 ? (
-        <p>The model declares no access policies.</p>
-      ) : (
+      {rows.length === 0 ? <p>The model declares no access policies.</p> : null}
+      {rows.length === 0 && open.length === 0 ? null : (
         <TableScroll label="Access policies">
           <table className="query-log" aria-label="Access policies">
             <thead>
@@ -200,12 +183,14 @@ function PolicyList({
             <tbody>
               {rows.map(({ policy, path }, index) => (
                 // Positions: one object may declare several policies for one group.
+                // Identifiers in the code face, as state F draws its cube, group and
+                // row filter (T699, SEC-15).
                 <tr key={`${path}:${String(index)}`}>
-                  <td className="query-log__query">{policy.object}</td>
-                  <td className="query-log__query">{groupsText(policy)}</td>
+                  <td className="query-log__query is-code">{policy.object}</td>
+                  <td className="query-log__query is-code">{groupsText(policy)}</td>
                   <td>{membersText(policy.memberLevel)}</td>
-                  <td>{rowsText(policy.rowLevel)}</td>
-                  <td className="query-log__query">{conditionsText(policy.conditions)}</td>
+                  <td className="is-code">{rowsText(policy.rowLevel)}</td>
+                  <td className="query-log__query is-code">{conditionsText(policy.conditions)}</td>
                   <td>{maskingText(policy.memberMasking)}</td>
                   <td className="query-log__query">
                     {/* Its file, opened in Model where it is authored (AC-232). */}
@@ -213,23 +198,26 @@ function PolicyList({
                   </td>
                 </tr>
               ))}
+              {/* Each cube and view with no policy, a row of its own as state F
+                  draws "No policy" (T699, SEC-16; security-Q2). */}
+              {open.map((name) => (
+                <tr key={`open:${name}`}>
+                  <td className="query-log__query is-code">{name}</td>
+                  <td className="policies__none">
+                    {signedIn
+                      ? 'No policy: open within its folder’s groups'
+                      : 'No policy: open to every security context'}
+                  </td>
+                  <td />
+                  <td />
+                  <td />
+                  <td />
+                  <td />
+                </tr>
+              ))}
             </tbody>
           </table>
         </TableScroll>
-      )}
-      {open.length === 0 ? null : (
-        // Warnings, with their icon (T183, AC-177); not live regions, being
-        // what the page says as it opens.
-        <p data-testid="policies-open" className="state-line">
-          <StatusIcon kind="warn" />
-          <span>
-            {/* With sign-in on, a cube without a policy is open only within
-                its folder's groups (design 08, state F). */}
-            {signedIn
-              ? `No policy: open within its folder’s groups: ${open.join(', ')}.`
-              : `No access_policy, so open to every security context: ${open.join(', ')}.`}
-          </span>
-        </p>
       )}
       {unread.length === 0 ? null : (
         // Their policies are not listed here, and are said not to be.

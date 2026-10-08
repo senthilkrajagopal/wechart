@@ -61,6 +61,32 @@ test.describe('Security, as a Super-Admin sees it', () => {
       'Access comes from AD groups set on folders: Cube refuses a folder’s cubes to anyone without one of its groups.',
     );
     await expect(main.getByRole('table', { name: 'Access policies' })).toBeVisible();
+    // As design 08 draws the page (T699, SEC-13 to SEC-16): its title 14 px under
+    // the top bar, its parts 10 px apart; the note at 12/16 across the content's
+    // width; identifiers in the code face; a cube with no policy a row, its words
+    // in the secondary colour.
+    const topBar = (await page.getByRole('banner').boundingBox())!;
+    const title = (await main.getByRole('heading', { level: 1 }).boundingBox())!;
+    expect(Math.round(title.y - (topBar.y + topBar.height))).toBe(14);
+    await expect(main.locator('.security-workspace')).toHaveCSS('row-gap', '10px');
+    const note = main.getByRole('note').filter({ hasText: 'Access comes from AD groups' });
+    await expect(note).toHaveCSS('font-size', '12px');
+    await expect(note).toHaveCSS('line-height', '16px');
+    const policies = main.getByRole('table', { name: 'Access policies' });
+    expect(Math.round((await note.boundingBox())!.width)).toBe(
+      Math.round((await main.locator('.security-workspace').boundingBox())!.width),
+    );
+    const none = policies.getByRole('row').filter({ hasText: 'No policy: open within' }).first();
+    await expect(none.getByRole('cell').first()).toHaveCSS('font-family', /^"IBM Plex Mono"/);
+    const secondary = await page.evaluate(() => {
+      const probe = document.createElement('div');
+      probe.style.color = 'var(--wc-text-secondary)';
+      document.body.append(probe);
+      const said = getComputedStyle(probe).color;
+      probe.remove();
+      return said;
+    });
+    await expect(none.getByRole('cell').nth(1)).toHaveCSS('color', secondary);
     // Not phase 1's sentence, which sign-in off keeps.
     await expect(main).not.toContainText(
       'The groups a request carries decide which of them apply.',
@@ -90,6 +116,14 @@ test.describe('Security, as a Super-Admin sees it', () => {
     // phase 1's JSON editor and "Find a dashboard" (state E; AC-166).
     const preview = main.getByRole('region', { name: 'Preview as groups' });
     await expect(preview.getByRole('combobox', { name: 'AD group' })).toBeVisible();
+    // Its fields at 28/12, as design 08's preview has them (T699, CMP-08).
+    for (const field of [
+      preview.getByRole('combobox', { name: 'AD group' }),
+      preview.getByRole('searchbox', { name: 'Dashboard to preview' }),
+    ]) {
+      await expect(field).toHaveCSS('height', '28px');
+      await expect(field).toHaveCSS('font-size', '12px');
+    }
     await expect(main.getByLabel('Security context (JSON)')).toHaveCount(0);
     await expect(main.getByLabel('Find a dashboard')).toHaveCount(0);
     await expect(main.getByRole('region', { name: 'Preview a security context' })).toHaveCount(0);

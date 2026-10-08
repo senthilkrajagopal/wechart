@@ -52,7 +52,8 @@ describe('the Reviews lists’ words (T355)', () => {
   });
 
   it('says each state in words, with who decided it, and the version it landed as', () => {
-    expect(statusOf(row({}))).toEqual({ kind: 'run', text: 'Waiting for review' });
+    // With the idle clock, as design 05 draws waiting, not running work's arc (T699, SEC-20).
+    expect(statusOf(row({}))).toEqual({ kind: 'idle', text: 'Waiting for review' });
     expect(statusOf(row({ status: 'approved', landedVersion: 3 }))).toEqual({
       kind: 'ok',
       text: 'Approved as version 3',

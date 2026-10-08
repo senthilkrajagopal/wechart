@@ -81,7 +81,8 @@ test.describe('one page frame (UX-109)', () => {
   test('a page with a docked pane is the window’s height, never scrolling it (T466’s review)', async ({
     page,
   }) => {
-    for (const path of ['/jobs', '/security']) {
+    // Security's pane is Preview as groups, on its own tab since T699 (security-Q1).
+    for (const path of ['/jobs', '/security/preview']) {
       await page.goto(path);
       await expect(page.locator('.admin-pane').first(), path).toBeVisible();
       expect(

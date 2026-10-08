@@ -370,6 +370,25 @@ test.describe('deciding a proposal in its review view (T356, AC-288)', () => {
       await expect(tile('t-new')).toHaveAttribute('data-review', 'new');
       await expect(tile('t-new').locator('.grid-tile__review-mark')).toHaveText('New');
       await expect(tile('t-text')).not.toHaveAttribute('data-review');
+      // Fit, or Actual size: at its readers' width, the canvas scrolling (pin 3; T699, SEC-21).
+      const size = pane.getByRole('group', { name: 'Size' });
+      await expect(size.getByRole('button', { name: 'Fit' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      const canvas = pane.locator('.review-view__canvas');
+      const fitWidth = (await pane.locator('.review-view__frame').boundingBox())!.width;
+      expect(Math.round(fitWidth)).toBe(Math.round((await canvas.boundingBox())!.width));
+      await size.getByRole('button', { name: 'Actual size' }).click();
+      // A fixed dashboard's 1,440 px page; a fluid one's, this window's.
+      const fixed =
+        (await pane.locator('[data-width]').first().getAttribute('data-width')) === 'fixed';
+      const readers = fixed ? 1440 : await page.evaluate(() => window.innerWidth);
+      expect(Math.round((await pane.locator('.review-view__frame').boundingBox())!.width)).toBe(
+        readers,
+      );
+      await expect(canvas).toHaveCSS('overflow-x', 'auto');
+      await size.getByRole('button', { name: 'Fit' }).click();
       await pane.getByRole('button', { name: 'Current (version 2)' }).click();
       await expect(pane.getByRole('heading', { name: BOARD, exact: true })).toBeVisible();
       await expect(pane.getByRole('tab', { name: `Notes ${RUN}` })).toHaveCount(0);
@@ -381,6 +400,12 @@ test.describe('deciding a proposal in its review view (T356, AC-288)', () => {
         `Adds a notes tab (${RUN}).`,
       );
       await expect(inspector.getByTestId('review-replaces')).toHaveText('Replaces version 2');
+      // The name, then the time on a line of its own, 12 px secondary (pin 5; T699, SEC-26).
+      const author = inspector.getByTestId('review-author');
+      const name = (await author.locator('.review-view__author-name').boundingBox())!;
+      const when = (await author.locator('.review-view__author-when').boundingBox())!;
+      expect(when.y).toBeGreaterThanOrEqual(name.y + name.height - 1);
+      await expect(author.locator('.review-view__author-when')).toHaveCSS('font-size', '12px');
 
       // Approve asks first (state I).
       await inspector.getByRole('button', { name: 'Approve', exact: true }).click();

@@ -199,6 +199,35 @@ describe('the review view (T356)', () => {
     expect(screen.getByTestId('drawn').getAttribute('data-marks')).toBe('{}');
   });
 
+  /** T699 (design 05, pin 3; the critique's SEC-21): Fit or Actual size. */
+  it('draws a dashboard to fit, or at the size its readers see it', async () => {
+    const fixed = proposal({});
+    const first = fixed.items[0]!;
+    shown({
+      ...fixed,
+      items: [
+        { ...first, snapshot: { ...first.snapshot, settings: { width: 'fixed' } } },
+        ...fixed.items.slice(1),
+      ],
+    });
+    await screen.findByTestId('drawn');
+    const size = screen.getByRole('group', { name: 'Size' });
+    const fit = within(size).getByRole('button', { name: 'Fit' });
+    const actual = within(size).getByRole('button', { name: 'Actual size' });
+    expect([fit.getAttribute('aria-pressed'), actual.getAttribute('aria-pressed')]).toEqual([
+      'true',
+      'false',
+    ]);
+    const frame = () => screen.getByTestId('drawn').closest('.review-view__frame') as HTMLElement;
+    expect(frame().style.width).toBe('');
+    await userEvent.click(actual);
+    // A fixed dashboard at the 1,440 px its readers' page draws it at, the canvas scrolling.
+    expect(actual.getAttribute('aria-pressed')).toBe('true');
+    expect(frame().style.width).toBe('1440px');
+    await userEvent.click(fit);
+    expect(frame().style.width).toBe('');
+  });
+
   // T440 (AC-323): a proposed item's field list is the proposal's overlay's.
   it('reads a proposed chart’s field list from the proposal', async () => {
     shown(proposal({}));
@@ -237,10 +266,11 @@ describe('the review view (T356)', () => {
   it('says who proposed it, when, what they said, and what it replaces where', async () => {
     shown(proposal({}));
     const inspector = await screen.findByRole('complementary', { name: 'About this proposal' });
-    expect(within(inspector).getByTestId('review-author').textContent).toBe(
-      // As every moment is written, the day before the view's "now" (T477; Q8).
-      'Wren Writer · Yesterday 14:05',
-    );
+    const author = within(inspector).getByTestId('review-author');
+    // As every moment is written, the day before the view's "now" (T477; Q8);
+    // the name, then the time on a line of its own (pin 5; T699, SEC-26).
+    expect(author.textContent).toBe('Wren WriterYesterday 14:05');
+    expect(author.querySelector('.review-view__author-when')?.textContent).toBe('Yesterday 14:05');
     expect(within(inspector).getByTestId('review-description').textContent).toBe(
       'Adds a monthly EMEA revenue chart.\nAvg order value uses the mean.',
     );
