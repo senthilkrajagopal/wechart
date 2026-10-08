@@ -13045,6 +13045,11 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - `global-names.spec.ts`, asked of xcube directly under wechart's service credential: a cube `Orders` landed in a folder while the root's `orders` has landed is refused. Nothing of it lands, and the answer holds no folder (AC-421, AC-424).
     - `verify.sh` on docker-desktop: the fresh install's root `default` is there and connects (AC-310).
   - Depends on: T700, T701
+  - *Follow-up 2026-10-08 (after T739; the coordinator's word):* `verify.sh`'s `remove_probe` goes through the API, never the metadata database.
+    - It removed a probe's model file by deleting its `model_files` rows by path. Since probes are named for their cubes (adb3b95f), that also matched a workspace draft of the probe. Its overlay was left holding the name (T739), and the root's landed probe stayed in xcube's published model.
+    - Now it removes any draft of the path in My workspace (its root and each folder in it) with `DELETE /api/model/files`, so the workspace's overlay is pushed without it. Then it removes the root's file the same way, which xcube checks and stops serving. It succeeds when the root's delete answers 200.
+    - The header no longer says the API never deletes a model file.
+    - Run against the docker-desktop release (`EXTRA_VALUES=deploy/helm/values/docker-desktop-security.yaml deploy/helm/verify.sh --no-install`): 42/42, "removed wechart-verify/wechart_verify_probe.yml again" among them.
 
 ### The API's name rules
 

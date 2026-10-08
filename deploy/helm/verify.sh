@@ -17,8 +17,9 @@
 #
 # The query check publishes one cube on PROBE_TABLE through wechart's API, as
 # the Model workspace does, asks the API for its count, and then removes the
-# file again from wechart's metadata database: the API publishes and never
-# deletes a model file, so that is the only way to leave the model as it was.
+# file again through the API's delete (`remove_probe`), never in the metadata
+# database: a row deleted there leaves xcube serving the cube, and a
+# workspace's overlay holding a draft of its name (T739).
 #
 # Step 6 (T447) checks that xcube serves the model: with no API replica and
 # Cube restarted, and with two API replicas. It signs one Cube token itself,
@@ -373,14 +374,26 @@ else
 fi
 
 # 5. A query from the web app reaches the data source the values name.
-meta_pod="$(k get pods -l "app.kubernetes.io/instance=$release,app.kubernetes.io/component=meta" \
-  -o jsonpath='{.items[0].metadata.name}')"
-meta_user="$(jq -r '.meta.user' <<< "$release_values")"
-meta_db="$(jq -r '.meta.database' <<< "$release_values")"
+# A probe's model file $1 (step 5's by default) removed through the API,
+# never in the database (T739): any draft of it left in My workspace first,
+# so the workspace's overlay is pushed without it, then the shared root's,
+# which xcube checks and stops serving. Succeeds when the root's is gone.
 remove_probe() {
-  # The official image trusts connections over its own socket (docs/research/postgres-image.md).
-  k exec "$meta_pod" -c postgres -- psql -U "$meta_user" -d "$meta_db" -v ON_ERROR_STOP=1 -qAt \
-    -c "delete from model_files where path = '${1:-$probe_path}' returning path" | grep -q .
+  local at status folder folders
+  at="$(jq -rn --arg p "${1:-$probe_path}" '$p | @uri')"
+  if [[ "${security:-false}" == true ]]; then
+    status="$(fetch "$url/api/folders")"
+    folders=''
+    if [[ "$status" == 200 ]]; then
+      folders="$(jq -r '.[] | select(.parentId == "mine") | .id' "$body")"
+    fi
+    for folder in mine $folders; do
+      # A 404 where none is: nothing to remove.
+      fetch_long -X DELETE "$url/api/model/files?folder=$folder&path=$at" > /dev/null
+    done
+  fi
+  status="$(fetch_long -X DELETE "$url/api/model/files?folder=root&path=$at")"
+  [[ "$status" == 200 ]]
 }
 
 # 6. xcube serves the model (T447). With every API replica stopped and Cube
