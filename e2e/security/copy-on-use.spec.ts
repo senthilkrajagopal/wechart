@@ -353,6 +353,15 @@ test.describe('as a read-only member of F (T527, T537, AC-263, AC-371)', () => {
     // What a reader may copy is still offered; a dashboard to copy to is not.
     await expect(copy.getByRole('menuitem').first()).toBeVisible();
     await expect(copy.getByRole('menuitem', { name: 'To dashboard…' })).toHaveCount(0);
+    // Nor an edit of the tile's chart: its pencil, or Edit chart in its ⋯ (T760's review).
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await expect(tile.getByRole('menu')).toHaveCount(0);
+    await expect(page.locator('[data-testid^="edit-chart-"]')).toHaveCount(0);
+    await tile.getByRole('button', { name: /^Actions for / }).click();
+    const menu = tile.getByRole('menu', { name: /^Actions for / });
+    await expect(menu.getByRole('menuitem').first()).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Edit chart' })).toHaveCount(0);
   });
 });
 

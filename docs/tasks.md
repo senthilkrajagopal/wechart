@@ -14279,6 +14279,7 @@ These tasks are what group 3's check of the open criteria found missing. Each is
     - **The chart page** offers Edit chart, Edit in my workspace and the Dashboard picker with Add to dashboard only with a workspace, and none until who is signed in is known.
     - **The dashboard:** `DashboardView` takes `mayCopyToDashboard` (offered unless said otherwise), and `DashboardPage` passes it only with a workspace.
     - **Tests:** `me.test.ts` (2); `DashboardView.test.tsx` (2: offered by default, not offered when refused); the e2e above, on Chrome against compose's xcube, with `workspace-edit` and `explore-roles` (54 passed). Sign-in off (the phase-1 suite, Chrome): `chart-page`, `library-chart`, and `markings.spec.ts` "Copy puts … the chart on another dashboard" still pass. The full web suite passes (2640).
+  - **The review (one round, PASS), fixed in a follow-up:** no test showed a reader gets no tile pencil or tile "Edit chart", which `editsElsewhere` hides; `copy-on-use.spec.ts`'s reader test now checks both. A reader on a chart with no fields was told "Use Edit chart to finish it."; with no workspace it now says only "This chart has no fields yet." The chart page no longer asks for `/api/workspace/dashboards` for one with none. Passing in Chrome: `copy-on-use` and `deleting`; with sign-in off, `chart-page` and `library-chart`.
   - **AC-277 ticked.** "My workspace" never appears to a reader: `workspaces.spec.ts` "has no My workspace in the tree", `explore-roles.spec.ts`'s reader tests, and `access/workspaces.test.ts` (no workspace; every create answers 403). No create or edit action appears: these tests, plus the reader tests in `workspace-edit` (no Edit, Edit in my workspace or settings), `access` (no Access button), `history` (no History), `data-sources` (pointed to Explore), `jobs-scope` (Jobs and Schedules not found) and `deleting` (no Delete).
 
 - [x] T761 (AC-291) A folder's rename needs read-write access to the folder holding it too
@@ -14297,6 +14298,15 @@ These tasks are what group 3's check of the open criteria found missing. Each is
     - a move needs both folders, and one leaving a reference off its path is refused: `direct.test.ts`, `routes/move-paths.test.ts` and `move-paths.spec.ts` (T714, T715);
     - a change touching models or data sources refused while a module it affects would fail: `binding.spec.ts` "a delete of a cube a chart or a cube references is refused…" and `deleting.spec.ts`'s refused model-file and data-source deletes; a folder's move by T715's check against xcube's tree;
     - a landed cube, view or data source isn't renamed: `fixed-names.spec.ts` and T706's and T722's API tests.
+
+- [ ] T763 (AC-279, AC-368, AC-283) Offer a dashboard's models in Edit in my workspace, unticked, and copy the ticked ones into the dashboard's project folder
+  - Files: `packages/api/src/server.ts` (the model copy's `into`), `packages/api/src/routes/workspace-copy.test.ts`, `packages/web/src/workspaces/explore/EditInWorkspaceDialog.tsx` (+ test), `e2e/security/workspace-edit.spec.ts`
+  - Failing test:
+    - `workspace-copy.test.ts`: a model copied `into` the folder a dashboard's copy made goes there, not into a project folder of its own: an edit copy from a folder the user writes, a use-only copy (R73) from one they only read. An `into` outside their own workspace is refused, and nothing is copied (AC-279, AC-368).
+    - `EditInWorkspaceDialog.test.tsx`: the dashboard's models are listed unticked under "Also copy, only if you'll change them", each with its folder's path, as design 04 state D draws them. Nothing ticked copies no model; a ticked one is copied after the dashboard, into its folder.
+    - `workspace-edit.spec.ts`, on the image: a dashboard copied with nothing ticked brings no model or data source and every chart it shows; with its model ticked, the model's copy is in the same project folder (AC-279).
+  - Q4, the coordinator's answer (b) of 2026-10-07: a model in a folder the user may only read is copied as a use-only copy, as "Use in my workspace" copies it (AC-283; R73: asked for no folder), into the dashboard's project folder.
+  - Found by group 3: the dialog offered data sources only ("Models join the list once workspaces hold them, T347"), and a model's copy always made a project folder of its own.
 
 - [ ] T762 (AC-429) List phase 1's bookmarks to Super-Admins with sign-in on
   - Files: `packages/api/src/server.ts` (the bookmarks listing), `packages/api/src/access/bookmarks.test.ts`, `e2e/security/bookmarks.spec.ts`

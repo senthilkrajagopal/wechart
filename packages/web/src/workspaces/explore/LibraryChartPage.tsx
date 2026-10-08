@@ -281,7 +281,8 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
    */
   const candidates = useQuery({
     queryKey: ['search', 'dashboards', viaWorkspace],
-    enabled: !me.isPending,
+    // Asked only of one who may add it somewhere (T760's review).
+    enabled: mayChange,
     queryFn: () =>
       getJson<{ id: string; title: string; kind: string }[]>(
         viaWorkspace ? '/api/workspace/dashboards' : '/api/folders/root/contents',
@@ -565,9 +566,12 @@ export function LibraryChartPage({ chartId }: LibraryChartPageProps) {
               {failure === undefined ? null : failure === NOTHING_CHOSEN ? (
                 // Not a failure: a chart not built yet — what to do next.
                 <StateLine kind="idle" testId="chart-page-empty">
-                  {localTo === undefined
-                    ? 'This chart has no fields yet. Use Edit chart to finish it.'
-                    : `This chart has no fields yet. Use Edit on ${home.data?.title ?? 'its dashboard'} to finish it.`}
+                  {/* Never pointing one with no workspace to an Edit they don't have (T760's review). */}
+                  {!mayChange
+                    ? 'This chart has no fields yet.'
+                    : localTo === undefined
+                      ? 'This chart has no fields yet. Use Edit chart to finish it.'
+                      : `This chart has no fields yet. Use Edit on ${home.data?.title ?? 'its dashboard'} to finish it.`}
                 </StateLine>
               ) : failure === CHART_MISSING ? (
                 <StateLine kind="idle">{CHART_MISSING}</StateLine>
