@@ -7,12 +7,12 @@ import type { Item } from '../xcube/items';
 import { bindChart, bindNames, chartRenamed, cubesOfChart, dashboardRenamed } from './bind';
 
 /**
- * T429, AC-272: WHEN a dashboard or chart is published into a folder, THE
- * SYSTEM SHALL bind each cube it names from that folder up to the root. It
- * asks xcube's resolver for the cube the chart starts from, and binds every
- * other cube the chart uses through the bindings that cube was published
- * with. A cube only in a descendant or a sibling folder is not available,
- * and a name found nowhere on the path is refused, naming it.
+ * T429, T711, AC-272: WHEN a dashboard or chart is published into a folder,
+ * THE SYSTEM SHALL bind each cube or view it names to the one item of that
+ * name, where that folder or one above it keeps it. xcube's resolver answers
+ * the item in any folder (research `xcube-256d632371.md`, 3.3); the path is
+ * wechart's rule. A cube only in a descendant or a sibling folder is refused,
+ * as is a name no item holds, naming it.
  *
  * With one name per item (R71; T709), every name is one item's and is
  * stored as it is, with no folder prefix. Against the stub xcube: the root
@@ -62,6 +62,11 @@ async function xcube() {
   return admin;
 }
 
+/** Each folder's path, nearest first, as xcube ids: where its items may bind (T711). */
+const ROOT = ['froot'];
+const A = ['fa', 'froot'];
+const AB = ['fab', 'fa', 'froot'];
+
 const chart = (source: string, ...members: string[]): ChartDefinition => ({
   source: { cube: source },
   wells: { measures: [`${source}.count`], dimensions: members, timeDimensions: [] },
@@ -72,15 +77,15 @@ describe('binding a chart’s cubes at publish (T429, AC-272)', () => {
     const admin = await xcube();
 
     // /A's and the root's, from /A/B; the root's in the root: nothing to store differently.
-    expect(await bindChart(admin, 'fab', chart('a_orders'))).toEqual({
+    expect(await bindChart(admin, AB, chart('a_orders'))).toEqual({
       kind: 'bound',
       renames: new Map(),
     });
-    expect(await bindChart(admin, 'fab', chart('sales'))).toEqual({
+    expect(await bindChart(admin, AB, chart('sales'))).toEqual({
       kind: 'bound',
       renames: new Map(),
     });
-    expect(await bindChart(admin, 'froot', chart('sales'))).toEqual({
+    expect(await bindChart(admin, ROOT, chart('sales'))).toEqual({
       kind: 'bound',
       renames: new Map(),
     });
@@ -92,7 +97,7 @@ describe('binding a chart’s cubes at publish (T429, AC-272)', () => {
   it('stores a name asked in another case as the item holds it', async () => {
     const admin = await xcube();
 
-    expect(await bindChart(admin, 'fab', chart('Sales'))).toEqual({
+    expect(await bindChart(admin, AB, chart('Sales'))).toEqual({
       kind: 'bound',
       renames: new Map([['Sales', 'sales']]),
     });
@@ -102,48 +107,66 @@ describe('binding a chart’s cubes at publish (T429, AC-272)', () => {
     const admin = await xcube();
 
     // /A/B/C's `deep` is beneath /A.
-    expect(await bindChart(admin, 'fa', chart('deep'))).toEqual({
+    expect(await bindChart(admin, A, chart('deep'))).toEqual({
       kind: 'refused',
       names: ['deep'],
     });
     // `widgets` is only /A/D's, /A/B's sibling.
-    expect(await bindChart(admin, 'fab', chart('widgets'))).toEqual({
+    expect(await bindChart(admin, AB, chart('widgets'))).toEqual({
       kind: 'refused',
       names: ['widgets'],
     });
-    expect(await bindChart(admin, 'fab', chart('sales', 'nowhere.name'))).toEqual({
+    expect(await bindChart(admin, AB, chart('sales', 'nowhere.name'))).toEqual({
       kind: 'refused',
       names: ['nowhere'],
     });
   });
 
-  it('binds another cube the chart uses as its source cube’s bindings have it, along their joins', async () => {
+  it('binds each other cube the chart uses by its own name too, held to the path', async () => {
     const admin = await xcube();
 
     // /A/B's `ab_lines` joins the root's `customers`, which joins `regions`.
-    expect(
-      await bindChart(admin, 'fab', chart('ab_lines', 'customers.name', 'regions.name')),
-    ).toEqual({ kind: 'bound', renames: new Map() });
+    expect(await bindChart(admin, AB, chart('ab_lines', 'customers.name', 'regions.name'))).toEqual(
+      { kind: 'bound', renames: new Map() },
+    );
+    // A second cube kept off the path is refused, though the first binds (T711).
+    expect(await bindChart(admin, AB, chart('ab_lines', 'widgets.name'))).toEqual({
+      kind: 'refused',
+      names: ['widgets'],
+    });
+    expect(await bindChart(admin, AB, chart('ab_lines', 'Regions.name'))).toEqual({
+      kind: 'bound',
+      renames: new Map([['Regions', 'regions']]),
+    });
   });
 
   it('refuses a name only a folder beneath holds', async () => {
     const admin = await xcube();
 
     // `deep` is only /A/B/C's, beneath /A/B.
-    expect(await bindChart(admin, 'fab', chart('deep'))).toEqual({
+    expect(await bindChart(admin, AB, chart('deep'))).toEqual({
       kind: 'refused',
       names: ['deep'],
+    });
+  });
+
+  it('refuses every name on a path holding no folder', async () => {
+    const admin = await xcube();
+
+    expect(await bindNames(admin, [], ['sales', 'regions'])).toEqual({
+      kind: 'refused',
+      names: ['sales', 'regions'],
     });
   });
 
   it('binds a dashboard’s own names by the resolver, and refuses one no folder on its path holds', async () => {
     const admin = await xcube();
 
-    expect(await bindNames(admin, 'fab', ['ab_lines', 'a_orders', 'regions'])).toEqual({
+    expect(await bindNames(admin, AB, ['ab_lines', 'a_orders', 'regions'])).toEqual({
       kind: 'bound',
       renames: new Map(),
     });
-    expect(await bindNames(admin, 'fab', ['sales', 'widgets'])).toEqual({
+    expect(await bindNames(admin, AB, ['sales', 'widgets'])).toEqual({
       kind: 'refused',
       names: ['widgets'],
     });

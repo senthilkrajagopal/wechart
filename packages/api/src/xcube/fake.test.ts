@@ -169,3 +169,26 @@ describe('the stub xcube’s names, one per model (T701)', () => {
     expect((await push({ upserts: [cube('fsales', 'orders')] })).kind).toBe('stored');
   });
 });
+
+/**
+ * T711 (AC-272): `POST …/resolve` answers the one item of a name, in any
+ * case and in any folder, by its stored name; the folder asked from is only
+ * checked to be in the tree (research `xcube-256d632371.md`, 3.3). Whether
+ * that item is on a path is wechart's rule.
+ */
+describe('the stub xcube’s resolve (T711)', () => {
+  it('answers the holder of a name wherever it is, off the folder’s path too', async () => {
+    const { stub, admin } = stubbed();
+    await admin.folders(TREE);
+    stub.holdItems('dev', [cube('fops', 'widgets'), cube('froot', 'orders')]);
+
+    expect(await admin.resolve('fsales', ['Widgets', 'orders', 'nothing'])).toEqual(
+      new Map([
+        ['Widgets', 'widgets'],
+        ['orders', 'orders'],
+        ['nothing', null],
+      ]),
+    );
+    await expect(admin.resolve('fgone', ['orders'])).rejects.toThrow();
+  });
+});

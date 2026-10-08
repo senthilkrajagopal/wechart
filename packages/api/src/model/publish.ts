@@ -1019,12 +1019,8 @@ export function registerModelPublishing(
         // it will hold is the draft's items alone, never its head's (T451's review).
         resolver:
           checked.changeset === undefined
-            ? await landedResolver(
-                undefined,
-                { upserts: itemsOf(draft, served.ids), deletes: [] },
-                served,
-              )
-            : await landedResolver(xcube, checked.changeset, served),
+            ? await landedResolver(undefined, { upserts: itemsOf(draft, served.ids), deletes: [] })
+            : await landedResolver(xcube, checked.changeset),
         commit: async () => {
           await modelFiles.write(
             plan.writes
@@ -1059,16 +1055,15 @@ export function registerModelPublishing(
 }
 
 /**
- * Names resolved as xcube will once a changeset lands (T451): its upserts in
- * their folders, its deletes gone, nearest first from a folder up to the
- * root (research 3a, `Scope.resolve`), so a proposal's charts bind to the
- * models landing with them before anything is written.
+ * Names resolved as xcube will once a changeset lands (T451, T711): its
+ * upserts in their folders, its deletes gone, each name the one item of it,
+ * so a proposal's charts bind to the models landing with them, held to their
+ * path, before anything is written.
  */
 async function landedResolver(
   /** The head the changeset goes over; none where it is sent whole. */
   xcube: XcubeAdmin | undefined,
   changeset: Changeset,
-  served: PublishedFolders,
 ): Promise<Pick<XcubeAdmin, 'resolve' | 'items'>> {
   const keyOf = (item: { folderId: string; name: string }) => `${item.folderId}/${item.name}`;
   const away = new Set([...changeset.deletes, ...changeset.upserts].map(keyOf));
@@ -1082,25 +1077,16 @@ async function landedResolver(
       bindings: {},
     })),
   ];
-  const parents = new Map(
-    [...served.parents].flatMap(([id, parent]) => {
-      const xcubeId = served.ids.get(id);
-      return xcubeId === undefined
-        ? []
-        : [[xcubeId, parent === null ? null : (served.ids.get(parent) ?? null)] as const];
-    }),
-  );
+  // As xcube's resolver answers (T711; research `xcube-256d632371.md`, 3.3):
+  // the one item of a name, in any case and any folder. The path is the binder's.
   return {
     items: () => Promise.resolve(items),
-    resolve: (folderId, names) =>
+    resolve: (_folderId, names) =>
       Promise.resolve(
         new Map(
           names.map((name) => {
-            for (const at of chainOf(folderId, parents)) {
-              const found = items.find((item) => item.folderId === at && item.name === name);
-              if (found !== undefined) return [name, found.fullName] as const;
-            }
-            return [name, null] as const;
+            const found = items.find((item) => item.name.toLowerCase() === name.toLowerCase());
+            return [name, found?.fullName ?? null] as const;
           }),
         ),
       ),

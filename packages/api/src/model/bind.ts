@@ -3,18 +3,17 @@ import { textRenamed, tokenMembersOf, type ChartDefinition } from '@wechart/core
 import type { XcubeAdmin } from '../xcube/client';
 
 /**
- * A chart's and a dashboard's cubes bound at publish (T429, AC-272; research
- * `xcube-slice-3a.md`, "POST …/resolve" and "GET …/items").
+ * A chart's and a dashboard's cubes bound at publish (T429, T711; AC-272;
+ * research `xcube-256d632371.md`, 3.3).
  *
- * The cube a chart starts from is asked of xcube's resolver, nearest first
- * from the folder the chart is published into up to the root: a descendant's
- * or a sibling's is never on that path. Every other cube the chart uses is
- * bound as the source cube's own bindings have it, followed along theirs, so
- * the chart joins as its cube does; one they don't reach is asked of the
- * resolver too. A name found nowhere on the path is refused, by name.
+ * Each cube or view an item names is the one item of that name (R71), asked
+ * of xcube's resolver, which answers it in any case and in any folder. It
+ * binds only where that item is kept in the item's folder or one above it
+ * (R72): a descendant's or a sibling's is refused, by name, as is a name no
+ * item holds. That rule is wechart's; xcube's resolver holds no path.
  *
- * What is stored is each cube's published name, which is its own name in
- * every folder (T709, AC-328; research `xcube-256d632371.md`, 1.1).
+ * What is stored is each cube's published name, its own in every folder
+ * (T709, AC-328), as the item holds it.
  */
 
 export type Binding =
@@ -55,61 +54,45 @@ export function cubesOfChart(chart: ChartDefinition): { source: string; others: 
 }
 
 /**
- * A chart's cubes bound in a folder, by its xcube id: the source by the
- * resolver, the rest by the source's bindings, then the resolver.
+ * A chart's cubes bound on a folder path: the one it starts from, then each
+ * other it names, each by its one name, held to the path (T711).
  */
-export async function bindChart(
+export function bindChart(
   xcube: Pick<XcubeAdmin, 'resolve' | 'items'>,
-  folderId: string,
+  /** xcube ids of the folder it is published into and each one above it, nearest first. */
+  path: readonly string[],
   chart: ChartDefinition,
 ): Promise<Binding> {
   const { source, others } = cubesOfChart(chart);
-  const bound = (await xcube.resolve(folderId, [source])).get(source);
-  if (bound === null || bound === undefined) return { kind: 'refused', names: [source] };
-
-  // What the source item bound at its publish, and what those bound, and so on.
-  const byFullName = new Map((await xcube.items()).map((item) => [item.fullName, item]));
-  const reached = new Map<string, string>();
-  const queue = [bound];
-  for (let at = 0; at < queue.length; at += 1) {
-    for (const [name, full] of Object.entries(byFullName.get(queue[at]!)?.bindings ?? {})) {
-      if (!reached.has(name)) reached.set(name, full);
-      if (!queue.includes(full)) queue.push(full);
-    }
-  }
-  const unreached = others.filter((name) => !reached.has(name));
-  if (unreached.length > 0)
-    for (const [name, full] of await xcube.resolve(folderId, unreached))
-      if (full !== null) reached.set(name, full);
-  const missing = others.filter((name) => !reached.has(name));
-  if (missing.length > 0) return { kind: 'refused', names: missing };
-
-  const renames = new Map<string, string>();
-  if (bound !== source) renames.set(source, bound);
-  for (const other of others) {
-    const full = reached.get(other)!;
-    if (full !== other) renames.set(other, full);
-  }
-  return { kind: 'bound', renames };
+  return bindNames(xcube, path, [source, ...others]);
 }
 
 /**
- * A dashboard's own cubes bound in a folder (T429, AC-272): each its filters'
- * members are of, by the resolver, having no source cube to follow.
+ * Names bound on a folder path (T429, T711; AC-272): each to the one item of
+ * that name where the path keeps it; refused, by the names asked, where no
+ * item holds one or it is kept off the path.
  */
 export async function bindNames(
-  xcube: Pick<XcubeAdmin, 'resolve'>,
-  folderId: string,
+  xcube: Pick<XcubeAdmin, 'resolve' | 'items'>,
+  /** xcube ids of the folder asked from and each one above it, nearest first. */
+  path: readonly string[],
   names: readonly string[],
 ): Promise<Binding> {
-  if (names.length === 0) return { kind: 'bound', renames: new Map() };
-  const found = await xcube.resolve(folderId, [...new Set(names)]);
-  const missing = [...found].filter(([, full]) => full === null).map(([name]) => name);
+  const asked = [...new Set(names)];
+  if (asked.length === 0) return { kind: 'bound', renames: new Map() };
+  // No folder to hold any of them: none binds.
+  if (path.length === 0) return { kind: 'refused', names: asked };
+  const found = await xcube.resolve(path[0]!, asked);
+  const held = await xcube.items();
+  const onPath = new Set(path);
+  const kept = (stored: string | null | undefined) =>
+    stored != null && held.some((item) => item.fullName === stored && onPath.has(item.folderId));
+  const missing = asked.filter((name) => !kept(found.get(name)));
   if (missing.length > 0) return { kind: 'refused', names: missing };
   const renames = new Map<string, string>();
-  for (const name of names) {
-    const full = found.get(name)!;
-    if (full !== name) renames.set(name, full);
+  for (const name of asked) {
+    const stored = found.get(name)!;
+    if (stored !== name) renames.set(name, stored);
   }
   return { kind: 'bound', renames };
 }

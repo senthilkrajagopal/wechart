@@ -2386,51 +2386,31 @@ export function buildServer({
     | { readonly kind: 'refused'; readonly names: readonly string[] }
     | { readonly kind: 'unreachable' };
   /**
-   * xcube's resolver as it will answer once a folder move is pushed (T537's
-   * review; research `xcube-slice-3a.md`, "POST …/resolve": nearest first,
-   * over the head's items): among the items in `from` and each folder above
-   * it up to the moved folder, then from the folder it moves into, up.
+   * A folder's path as xcube ids, nearest first, to the root (T711, AC-272):
+   * where an item published there may bind. With a folder move not yet
+   * written (T537's review), from `from` up to the moved folder, then from
+   * the folder it moves into, up.
    */
-  const movedResolver = async (
+  const bindingPathOf = (
     from: string,
-    moving: { readonly folder: string; readonly to: string },
-    ids: ReadonlyMap<string, string>,
-  ): Promise<Pick<XcubeAdmin, 'resolve' | 'items'>> => {
-    const admin = xcube!;
-    const parents = await parentsOf();
-    const below: string[] = [];
+    { ids, parents }: PublishedFolders,
+    moving?: { readonly folder: string; readonly to: string },
+  ): string[] => {
+    const path: string[] = [];
+    const seen = new Set<string>();
     for (
-      let at: string | null | undefined = from, steps = 0;
-      at != null && steps <= parents.size;
-      at = parents.get(at), steps += 1
+      let at: string | null | undefined = from;
+      at != null && !seen.has(at);
+      at =
+        at === moving?.folder
+          ? moving.to
+          : (parents.get(at) ?? (at === ROOT_FOLDER_ID ? null : ROOT_FOLDER_ID))
     ) {
+      seen.add(at);
       const xcubeId = ids.get(at);
-      if (xcubeId !== undefined) below.push(xcubeId);
-      if (at === moving.folder) break;
+      if (xcubeId !== undefined) path.push(xcubeId);
     }
-    const above = ids.get(moving.to);
-    return {
-      items: (options) => admin.items(options),
-      resolve: async (_folderId, names) => {
-        const held = await admin.items();
-        const found = new Map<string, string | null>();
-        const rest: string[] = [];
-        for (const name of names) {
-          const near = below
-            .map((folderId) =>
-              held.find((item) => item.folderId === folderId && item.name === name),
-            )
-            .find((item) => item !== undefined);
-          if (near === undefined) rest.push(name);
-          else found.set(name, near.fullName);
-        }
-        if (rest.length > 0) {
-          const answered = above === undefined ? new Map() : await admin.resolve(above, rest);
-          for (const name of rest) found.set(name, answered.get(name) ?? null);
-        }
-        return found;
-      },
-    };
+    return path;
   };
   const boundIn = async (
     kind: 'chart' | 'dashboard',
@@ -2439,8 +2419,7 @@ export function buildServer({
     /**
      * A folder move not yet written, which xcube's tree doesn't hold yet
      * (T537's review): `folder`, `folderId` or one above it, as if it were in
-     * `to`. Names resolve nearest first from `folderId` up to `folder`, then
-     * from `to` up, as xcube will resolve them once the move is pushed.
+     * `to`. Its path is from `folderId` up to `folder`, then from `to` up.
      */
     moving?: { readonly folder: string; readonly to: string },
     /** Names as they will resolve once a proposal's models land (T451). */
@@ -2456,16 +2435,16 @@ export function buildServer({
       return { kind: 'ok', body };
     if (kind === 'dashboard' && filterCubes.length === 0) return { kind: 'ok', body };
     try {
-      const ids = (await folders()).ids;
-      const xcubeId = ids.get(folderId);
+      const served = await folders();
+      const xcubeId = served.ids.get(folderId);
       if (xcubeId === undefined || (await xcube.revision()).mode !== 'items')
         return { kind: 'ok', body };
-      const resolver =
-        landing ?? (moving === undefined ? xcube : await movedResolver(folderId, moving, ids));
+      const resolver = landing ?? xcube;
+      const path = bindingPathOf(folderId, served, moving);
       const bind = () =>
         kind === 'chart'
-          ? bindChart(resolver, xcubeId, chart!)
-          : bindNames(resolver, xcubeId, filterCubes);
+          ? bindChart(resolver, path, chart!)
+          : bindNames(resolver, path, filterCubes);
       // A folder made a moment ago may not be in xcube's tree yet, its push
       // made after the answer: put it, and ask again (T429's review).
       const binding = await bind().catch(async (error: unknown) => {

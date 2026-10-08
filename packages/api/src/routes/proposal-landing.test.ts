@@ -846,6 +846,43 @@ describe('an approval binding an item otherwise than when it was proposed (T456)
     expect((landed!.body['chart'] as { source: { cube: string } }).source.cube).toBe(solo);
   });
 
+  /**
+   * Under R71 the case T456's refusal still meets (the coordinator's call,
+   * 2026-10-07): a cube the proposal binds to is deleted between its
+   * proposal and its approval. The approval is refused, naming the item and
+   * the name, and nothing lands. The binding's refusal (T502) says it, before
+   * the comparison with what it bound when proposed is reached.
+   */
+  it('is refused for a chart whose cube was deleted since it was proposed, and lands nothing', async () => {
+    const gone = `${MARK}_gone`;
+    await publishedIn(ids.sales, 'fsales', gone, measured(gone, 'margin'));
+    const { board, title } = await boardNaming(gone, ids.east);
+    const proposed = await propose('dashboard', board);
+    expect(proposed.statusCode, proposed.body).toBe(201);
+    const proposalId = proposed.json<{ id: string }>().id;
+
+    // Deleted from /Sales meanwhile, in the store and in xcube.
+    await files().remove(ids.sales, shared(gone));
+    expect(
+      await admin.applyChangeset({
+        baseRevision: stub.head(MODEL)?.revision ?? null,
+        upserts: [],
+        deletes: [{ folderId: 'fsales', name: gone }],
+      }),
+    ).toMatchObject({ kind: 'stored' });
+    const head = stub.head(MODEL)?.revision;
+    const refused = await approve(proposalId);
+    expect(refused.statusCode, refused.body).toBe(422);
+    expect(refused.json()).toEqual({
+      error: `No folder on the path of “Margin ${MARK}” holds “${gone}”, so nothing was approved.`,
+      names: [gone],
+    });
+    expect(await docs().named('dashboard', ids.east, title)).toBeNull();
+    expect(stub.head(MODEL)?.revision).toBe(head);
+    expect(await statusOf(proposalId)).toBe('open');
+    expect((await withdraw(proposalId)).statusCode).toBe(200);
+  });
+
   it('lands one whose items bind as they did when it was proposed', async () => {
     const steady = `${MARK}_steady`;
     await publishedIn(ids.sales, 'fsales', steady, measured(steady, 'margin'));

@@ -11,6 +11,7 @@ import { documents, type DocumentKind } from '../repos/documents';
 import { folderAccessStore } from '../repos/folder-access';
 import { proposalStore } from '../repos/proposals';
 import { versionStore } from '../repos/versions';
+import { CubeClient } from '../cube/client';
 import { buildServer } from '../server';
 import { removeProjectFolders, TEST_TIME_ZONE } from './project-folder.fixture';
 import { xcubeAdmin } from '../xcube/client';
@@ -52,7 +53,9 @@ const MARK = `pbind${randomUUID().slice(0, 8)}`;
 const docs = () => documents(getDb());
 const made: { kind: DocumentKind; id: string }[] = [];
 let sales = '';
+let ops = '';
 let cookie = '';
+let readerCookie = '';
 let app: FastifyInstance;
 
 beforeAll(async () => {
@@ -64,6 +67,20 @@ beforeAll(async () => {
     body: {
       owner: 'admin',
       title: `Sales ${MARK}`,
+      folderId: 'root',
+      // `reader` (`sales-ro`) sees /Sales's dashboards (T711, AC-263).
+      access: { readOnly: ['sales-ro'], readWrite: ['sales-rw'] },
+    },
+  });
+  // /Ops, /Sales's sibling: its cube is off /Sales's path (T711, AC-272).
+  ops = randomUUID();
+  made.push({ kind: 'folder', id: ops });
+  await docs().create({
+    kind: 'folder',
+    id: ops,
+    body: {
+      owner: 'admin',
+      title: `Ops ${MARK}`,
       folderId: 'root',
       access: { readOnly: null, readWrite: ['sales-rw'] },
     },
@@ -79,6 +96,7 @@ beforeAll(async () => {
   await admin.folders([
     { id: 'froot', parentId: null },
     { id: 'fsales', parentId: 'froot' },
+    { id: 'fops', parentId: 'froot' },
   ]);
   const cube = (folderId: string, name: string) => ({
     folderId,
@@ -86,10 +104,22 @@ beforeAll(async () => {
     kind: 'cube' as const,
     yaml: `cubes:\n  - name: ${name}\n    sql_table: public.${name}\n`,
   });
-  stub.holdItems('dev', [cube('froot', 'orders'), cube('fsales', 'sales_orders')]);
+  stub.holdItems('dev', [
+    cube('froot', 'orders'),
+    cube('fsales', 'sales_orders'),
+    cube('fops', 'ops_widgets'),
+  ]);
 
   app = buildServer({
     config: secured,
+    // A Cube answering every query with no rows, for a reader's tile (AC-263).
+    cube: new CubeClient({
+      apiUrl: secured.cubeApiUrl,
+      apiSecret: secured.cubeApiSecret,
+      securityContext: {},
+      fetchImpl: (async () =>
+        new Response(JSON.stringify({ data: [], annotation: {} }))) as typeof fetch,
+    }),
     sessions: pgSessionStore(getDb()),
     documents: docs(),
     catalog: catalog(getDb()),
@@ -102,14 +132,17 @@ beforeAll(async () => {
       ids: new Map([
         ['root', 'froot'],
         [sales, 'fsales'],
+        [ops, 'fops'],
       ]),
       parents: new Map<string, string | null>([
         ['root', null],
         [sales, 'root'],
+        [ops, 'root'],
       ]),
     }),
   });
   cookie = await signIn(app, USERS['writer']!);
+  readerCookie = await signIn(app, USERS['reader']!);
 });
 
 afterAll(async () => {
@@ -204,6 +237,111 @@ describe('an approval publishes, binding each item in its folder (T502, AC-272)'
     expect(inSales).toEqual([]);
     const proposal = await as({ method: 'GET', url: `/api/proposals/${proposalId}` });
     expect(proposal.json<{ status: string }>().status).toBe('open');
+  });
+
+  // T711 (AC-272): xcube answers `ops_widgets` wherever it is; the approval
+  // binds it only where /Sales's path keeps it, as a save does.
+  it('refuses one naming a cube kept only in a sibling folder, naming it, and lands nothing', async () => {
+    const { title, proposalId } = await proposed('ops_widgets');
+    const approved = await as({ method: 'POST', url: `/api/proposals/${proposalId}/approve` });
+    expect(approved.statusCode, approved.body).toBe(422);
+    expect(approved.json()).toEqual({
+      error: `No folder on the path of “${title}” holds “ops_widgets”, so nothing was approved.`,
+      names: ['ops_widgets'],
+    });
+    const proposal = await as({ method: 'GET', url: `/api/proposals/${proposalId}` });
+    expect(proposal.json<{ status: string }>().status).toBe('open');
+  });
+
+  /**
+   * T711 (AC-263): a reader of /Sales sees its dashboards, and their tiles
+   * query the cubes the dashboard's charts were bound to when it landed: the
+   * root's and /Sales's, by their own names. A cube none of them binds is
+   * refused before Cube is asked.
+   */
+  it('lets a reader of the folder query the cubes its landed dashboard’s charts were bound to', async () => {
+    const shared = randomUUID();
+    made.push({ kind: 'dashboard', id: shared });
+    await docs().create({
+      kind: 'dashboard',
+      id: shared,
+      body: { owner: 'admin', schemaVersion: 1, title: `Read ${MARK}`, folderId: sales, pages: [] },
+    });
+    const copied = await as({
+      method: 'POST',
+      url: '/api/workspace/copies',
+      payload: { kind: 'dashboard', id: shared, timeZone: TEST_TIME_ZONE },
+    });
+    expect(copied.statusCode, copied.body).toBe(201);
+    const copyId = copied.json<{ id: string }>().id;
+    const copy = (await docs().get('dashboard', copyId))!;
+    const tile = (id: string, cube: string) => ({
+      id,
+      body: {
+        schemaVersion: 1,
+        title: `On ${cube} ${MARK}`,
+        localToDashboardId: copyId,
+        chart: {
+          source: { cube },
+          wells: { measures: [`${cube}.count`], dimensions: [], timeDimensions: [] },
+        },
+      },
+      version: 0,
+    });
+    const [first, second] = [randomUUID(), randomUUID()];
+    const saved = await as({
+      method: 'PUT',
+      url: `/api/dashboards/${copyId}`,
+      payload: {
+        dashboard: {
+          body: {
+            ...copy.body,
+            pages: [
+              {
+                id: 'p1',
+                items: [
+                  { id: 't1', kind: 'chart', chartId: first },
+                  { id: 't2', kind: 'chart', chartId: second },
+                ],
+              },
+            ],
+          },
+          version: copy.version,
+        },
+        charts: [tile(first, 'sales_orders'), tile(second, 'orders')],
+      },
+    });
+    expect(saved.statusCode, saved.body).toBe(200);
+    const proposal = await as({
+      method: 'POST',
+      url: '/api/proposals',
+      payload: { kind: 'dashboard', id: copyId, description: `Read ${MARK}.` },
+    });
+    expect(proposal.statusCode, proposal.body).toBe(201);
+    const approved = await as({
+      method: 'POST',
+      url: `/api/proposals/${proposal.json<{ id: string }>().id}/approve`,
+    });
+    expect(approved.statusCode, approved.body).toBe(200);
+    // Bound as landed, each by its own name.
+    expect(
+      (await docs().localTo(shared))
+        .map((chart) => (chart.body['chart'] as { source: { cube: string } }).source.cube)
+        .sort(),
+    ).toEqual(['orders', 'sales_orders']);
+
+    const load = (measure: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/load',
+        headers: { cookie: readerCookie },
+        payload: { query: { measures: [measure] }, for: { kind: 'dashboard', id: shared } },
+      });
+    for (const measure of ['sales_orders.count', 'orders.count']) {
+      const answer = await load(measure);
+      expect(answer.statusCode, `${measure}: ${answer.body}`).toBe(200);
+    }
+    expect((await load('ops_widgets.count')).statusCode).toBe(403);
   });
 
   it('lands none of a dashboard’s items, and keeps no version, when a later one is refused (T502’s review)', async () => {

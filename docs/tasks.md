@@ -13189,7 +13189,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - **Tests:** `cubeSource.test.ts` (3; red on the prefix), `editedMembers.test.ts` (22; ten red on the prefix; the "nearer namesake hides" case, impossible under R71, became "a view off the edited cube's path binds none of it"), `ModelInFolder.test.tsx` (21; `shownMemberOf` from files; `homesOf`, a workspace copy listed first never taken, red before the fix; the warning's `not.toContain('femea__')` gave way to the stronger `toContain('… uses orders.count (Sales)')`), `pathCubes.test.ts` (9; green before, a refactor), `globalSearch.test.ts` (12). Full web suite 2593/2593.
     - **ACs not ticked:** AC-329 stays ticked (the picker's real surface is T718's and T732's); AC-328 is T728's.
 
-- [ ] T711 (AC-272, AC-263) Bind a chart's and a dashboard's cubes by name, to the one cube or view of that name on the item's folder path
+- [x] T711 (AC-272, AC-263) Bind a chart's and a dashboard's cubes by name, to the one cube or view of that name on the item's folder path
   - Files:
     - `packages/api/src/model/bind.ts`: `bindChart` and `bindNames` bind by name, held on the path;
     - `packages/api/src/xcube/client.ts`: `POST …/resolve`, kept or removed as the research says;
@@ -13203,6 +13203,16 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - an approval binds the same way.
     - `access/queries.test.ts`: a reader of /A/B's dashboard is admitted to each cube its charts bind (AC-263).
   - Depends on: T709
+  - **Done 2026-10-07.**
+    - **The stub xcube** answers as the image: `POST …/resolve` gives the one item of a name in any case and any folder, the folder asked only checked to be in the tree; a YAML reference binds the one item of its exact name (research `xcube-256d632371.md`, 3.1, 3.3). Its path walk (`resolveIn`) is gone.
+    - **`model/bind.ts`:** `bindChart` and `bindNames` take the item's path (xcube ids, nearest first) and bind each name the item uses (the chart's source and every other cube its members name, a dashboard's filters' and text tiles') to the item the resolver answers, only where a folder on the path keeps it (`GET …/items`' folder); otherwise refused, by the names asked. The source cube's bindings are no longer followed: a name is one item's, so they would give the same item.
+    - **`server.ts`:** `bindingPathOf` builds that path from the served tree (`folders().parents`), and for a folder move not yet written (T537) up to the moved folder, then from where it moves to; `movedResolver` is gone. `model/publish.ts`'s `landedResolver` (Files names `routes/proposals.ts`; it lives in `model/publish.ts`) answers by name in any case over the head with the changeset applied, holding no path.
+    - **Until T713** the stub binds a model's join, view segment or `extends` to an item off its path, where the image refuses it (`reference_range`): a test relying on that passes on the stub alone.
+    - **`POST …/resolve`** is kept, as the research says (3.3).
+    - **Tests:** `xcube/fake.test.ts`, "the stub xcube's resolve (T711)" (red before: the stub walked the path). With the stub path-blind, eight binding tests went red (a descendant's, a sibling's, a filter's and a text token's off-path cube bound), green once `bind.ts` held the path: `model/bind.test.ts` (8; and a second cube off the path refused though the first binds, a name in another case stored as its item holds it), `chart-binding.test.ts` (11), `routes/copy-on-use.test.ts` (16; T537's move path), `routes/proposal-bind.test.ts` (5; added after the review: an approval naming a cube kept only in a sibling folder is refused, naming it, the proposal still open; and AC-263's case, a reader of /Sales querying a dashboard landed by approval: its two charts bound to the root's and /Sales's cubes by their own names, each answered, and a cube none binds refused before Cube). The review also asked an empty path to refuse every name (`model/bind.test.ts`, 9). Named in Files as `access/queries.test.ts`; written in `proposal-bind.test.ts`, which has the stub xcube and a landing.
+    - **AC-321 under R71** (the coordinator's call): `proposal-landing.test.ts`, "is refused for a chart whose cube was deleted since it was proposed, and lands nothing". The binding's refusal (422, "No folder on the path of “…” holds “…”, so nothing was approved.") says it before T456's comparison with what was bound when proposed is reached, so T456's 409 "would bind otherwise" wording is reached by no case now (reported).
+    - Full API suite 1735/1735 (on feat/xcube with T705).
+    - **ACs not ticked:** AC-272's move clause is T714's; AC-263's move clause T714's and T715's.
 
 - [ ] T712 (AC-273) Bind a model's data sources by name, to the one data source of that name on the model's path; a cube that extends another runs on its parent's
   - Files: `packages/api/src/routes/workspace-models.ts`, `packages/api/src/xcube/refusal.ts` (xcube's data-source path refusal), `packages/api/src/routes/export.ts` (a cube's data source found by name, not nearest first), `packages/api/src/xcube/fake.ts`
