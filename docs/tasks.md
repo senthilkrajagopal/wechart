@@ -13380,7 +13380,16 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - **Tests:** `routes/import-models.test.ts` (new, 5, against the stub xcube): a landed name in another case mapped and a new one drafted, Review writing nothing; the draft through the overlay, going to Sales, Sales's own unchanged, the chart on the landed name, `created.models` 1; a draft's name mapped to it and a workspace-root path clash refused, the overlay untouched; off-path blocking, then landing on its path; xcube's refusal naming the file, nothing written. `routes/import.test.ts`: T513's review expectation is now the seeded cube's mapping (R71), the `warningsOf` case keeps only its path half (the cube-in-target half retired, as above), and a fresh name is "not imported yet" without xcube. `ImportPane.test.tsx`: File's list and the gone note (premise changed); T720's four (a draft's warning not blocking; a mapped model; both blocking warnings with the foot and the disabled Import; a refusal's parts). Red before, each. API 1812/1812, web 2615/2615, core 540/540.
     - **Left to T733:** `e2e/security/export-import.spec.ts` (its "Not imported yet" rows and counts). **To T736:** leaving out the charts that use an off-path mapped item. **To T721:** binding the drafted models' cubes to the data source chosen.
     - **Not ticked:** AC-357 waits for T736 and T733; AC-356 for T733's e2e; AC-424 is shown for the import in the tests above, on no rendered surface yet.
-    - **Not rolled back:** models are saved before the documents, so a failure creating the documents after a successful save would leave the drafted models in My workspace.
+    - **The review (FAIL), its fixes taken:**
+      - Every name a model declares is now asked (`heldItems`), not just the first file found holding any of them. A model with one name landed on the path and another landed off it is named by the one off it and blocks; before, it went through or not depending on the order the folders were read in.
+      - All together or none (AC-356): models are saved before the documents and, if the documents fail, taken back out of the workspace root and its overlay.
+      - The API case for a folder the importer can't see: mapped, `mappedTo.path` null, and the 409 naming no folder of it.
+      - Tests: `import-models.test.ts` (3 more). The first two were red before: one failed on 3 of 4 runs, as folder order decided it; the other was red outright. API 1815/1815.
+    - **Left as reported:**
+      - `path-in-workspace` blocks: the coordinator's call. AC-357's text warns "without blocking" of a same-named item in the workspace.
+      - A model holding one held name and one new name is mapped whole, so its new name doesn't land: a question.
+      - "Landed" means any shared folder's file here, but only xcube-served folders in `landedNames`.
+      - Two new models of one name in a file are refused only as xcube refuses them.
 
 - [ ] T736 (AC-357) An import blocked by an off-path mapped item can leave out the charts that use it, and their tiles
   - Files: `packages/api/src/routes/import.ts` (+ `import-models.test.ts`), `packages/web/src/workspaces/explore/import/ImportPane.tsx` (+ test)

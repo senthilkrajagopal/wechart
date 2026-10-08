@@ -53,10 +53,12 @@ const docs = () => documents(getDb());
 const files = () => modelFileStore(getDb());
 const sources = () => dataSourceStore(getDb());
 const made: { kind: DocumentKind; id: string }[] = [];
-const folders = { sales: '', ops: '' };
+const folders = { sales: '', ops: '', hidden: '' };
 let sourceId = '';
 let app: FastifyInstance;
 let stub: ReturnType<typeof fakeXcube>;
+/** The next write of the import's documents fails. */
+let failCreate = false;
 const cookies: Record<string, string> = {};
 
 /** A file as an export elsewhere makes it, its models as given; its chart on `<mark>_orders`. */
@@ -118,9 +120,11 @@ const FIRST = [
 ];
 
 beforeAll(async () => {
-  for (const [key, title] of [
-    ['sales', 'Sales'],
-    ['ops', 'Ops'],
+  for (const [key, title, groups] of [
+    ['sales', 'Sales', ['sales-rw']],
+    ['ops', 'Ops', ['sales-rw']],
+    // One the writer can't see (T720's review).
+    ['hidden', 'Hidden', [`${MARK}-nobody`]],
   ] as const) {
     const id = randomUUID();
     made.push({ kind: 'folder', id });
@@ -131,7 +135,7 @@ beforeAll(async () => {
         owner: 'admin',
         title: `${title} ${MARK}`,
         folderId: 'root',
-        access: { readOnly: ['sales-ro'], readWrite: ['sales-rw'] },
+        access: { readOnly: [], readWrite: [...groups] },
       },
     });
     folders[key] = id;
@@ -139,6 +143,7 @@ beforeAll(async () => {
   await files().write([
     { folderId: folders.sales, path: pathOf('orders'), content: cube(name('orders')) },
     { folderId: folders.ops, path: pathOf('ops'), content: cube(name('ops')) },
+    { folderId: folders.hidden, path: pathOf('secret'), content: cube(name('secret')) },
   ]);
   sourceId = (
     await sources().create({
@@ -162,15 +167,18 @@ beforeAll(async () => {
     { id: 'froot', parentId: null },
     { id: 'fsales', parentId: 'froot' },
     { id: 'fops', parentId: 'froot' },
+    { id: 'fhidden', parentId: 'froot' },
   ]);
   stub.holdItems(MODEL, [
     { folderId: 'fsales', name: name('orders'), kind: 'cube', yaml: cube(name('orders')) },
     { folderId: 'fops', name: name('ops'), kind: 'cube', yaml: cube(name('ops')) },
+    { folderId: 'fhidden', name: name('secret'), kind: 'cube', yaml: cube(name('secret')) },
   ]);
   const xids = new Map([
     ['root', 'froot'],
     [folders.sales, 'fsales'],
     [folders.ops, 'fops'],
+    [folders.hidden, 'fhidden'],
   ]);
   app = buildServer({
     config: {
@@ -193,7 +201,17 @@ beforeAll(async () => {
       },
     },
     sessions: pgSessionStore(getDb()),
-    documents: docs(),
+    // The documents as stored, but for one write made to fail (T720's review).
+    documents: {
+      ...docs(),
+      createTogether: async (creates: Parameters<ReturnType<typeof docs>['createTogether']>[0]) => {
+        if (failCreate) {
+          failCreate = false;
+          throw new Error('The documents could not be written.');
+        }
+        return docs().createTogether(creates);
+      },
+    },
     catalog: catalog(getDb()),
     folderAccess: folderAccessStore(getDb()),
     modelFiles: files(),
@@ -216,7 +234,7 @@ afterAll(async () => {
     .execute();
   await db
     .deleteFrom('model_files')
-    .where('folder_id', 'in', [folders.sales, folders.ops])
+    .where('folder_id', 'in', [folders.sales, folders.ops, folders.hidden])
     .execute();
   const boards = (
     await db
@@ -372,6 +390,68 @@ describe('the models of an imported file (T720, AC-357, AC-356)', () => {
     });
     expect(await everything()).toEqual(before);
     expect(stub.overlay(MODEL, workspaceOverlayIdOf(workspace))?.version).toBe(overlay);
+  });
+
+  // T720's review: all together or none (AC-356), the models taken back if the documents fail.
+  it('takes its models back out of My workspace when its documents can’t be written', async () => {
+    const lone = [{ path: pathOf('lone'), content: cube(name('lone')) }];
+    const before = await everything();
+    failCreate = true;
+    const failed = await land(exportFile(lone, `${MARK} lone`));
+    expect(failed.statusCode, failed.body).toBe(500);
+    expect(await everything()).toEqual(before);
+    expect(
+      (stub.overlay(MODEL, workspaceOverlayIdOf(workspace))?.upserts ?? []).map(
+        (item) => item.name,
+      ),
+    ).not.toContain(name('lone'));
+    // So it lands as new when tried again.
+    const again = await land(exportFile(lone, `${MARK} lone`));
+    expect(again.statusCode, again.body).toBe(201);
+    expect(again.json<{ created: Record<string, number> }>().created.models).toBe(1);
+  });
+
+  // T720's review (AC-357, AC-424): one in a folder the importer can't see is mapped, its folder unsaid.
+  it('maps one whose name is held in a folder the importer can’t see, naming no folder of it', async () => {
+    const unseen = [{ path: pathOf('secret_copy'), content: cube(name('secret')) }];
+    const reviewed = await review(exportFile(unseen, `${MARK} unseen`));
+    expect(modelsIn(reviewed.json<Reviewed>())).toEqual([
+      expect.objectContaining({
+        lands: 'not-imported',
+        mappedTo: { name: name('secret'), path: null },
+        held: true,
+        warnings: [{ kind: 'off-path' }],
+      }),
+    ]);
+    const answer = await land(exportFile(unseen, `${MARK} unseen`));
+    expect(answer.statusCode, answer.body).toBe(409);
+    expect(answer.body).not.toContain(`Hidden ${MARK}`);
+  });
+
+  // T720's review: every name a model declares is asked, not the first one found held.
+  it('blocks one of several names, one landed on the target’s path and one off it, naming the one off it', async () => {
+    const both = [
+      {
+        path: pathOf('both'),
+        content: `${cube(name('orders'))}  - name: ${name('ops')}\n    sql_table: public.${name('ops')}\n`,
+      },
+    ];
+    const reviewed = await review(exportFile(both, `${MARK} both`));
+    expect(modelsIn(reviewed.json<Reviewed>())).toEqual([
+      expect.objectContaining({
+        lands: 'not-imported',
+        mappedTo: { name: name('ops'), path: [`Ops ${MARK}`] },
+        held: true,
+        warnings: [{ kind: 'off-path' }],
+      }),
+    ]);
+    const before = await everything();
+    const answer = await land(exportFile(both, `${MARK} both`));
+    expect(answer.statusCode, answer.body).toBe(409);
+    expect(answer.json<{ error: string }>().error).toBe(
+      `“${name('ops')}” is the name of a cube or view that isn’t in Sales ${MARK} or a folder above it, so the imported charts there couldn’t use it. Choose a target on its path.`,
+    );
+    expect(await everything()).toEqual(before);
   });
 
   it('blocks it while a landed one of its name is off the target’s path', async () => {

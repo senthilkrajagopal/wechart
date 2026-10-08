@@ -223,15 +223,15 @@ export interface ImportAccess {
     titles: readonly { readonly kind: 'dashboard' | 'chart'; readonly title: string }[],
   ) => Promise<Holdings>;
   /**
-   * The cube or view an imported model's names already mean, if any
-   * (`HeldItem`, T720).
+   * The cube or view each of an imported model's names already means: one
+   * per name held (`HeldItem`, T720), none for a name nothing holds.
    */
-  readonly heldItem: (
+  readonly heldItems: (
     request: FastifyRequest,
     own: string,
     target: string,
     names: readonly string[],
-  ) => Promise<HeldItem | undefined>;
+  ) => Promise<readonly HeldItem[]>;
   /**
    * My workspace's models, where wechart holds them (xcube's overlays, T347);
    * absent, an imported model is listed and not imported.
@@ -245,6 +245,8 @@ export interface ImportAccess {
       target: string,
       files: readonly { readonly path: string; readonly content: string }[],
     ) => Promise<ModelsAnswer>;
+    /** A file taken back out of the workspace's root, and its overlay. */
+    readonly remove: (own: string, path: string) => Promise<ModelsAnswer>;
   };
   /**
    * Whether a chart the dashboard names and the file doesn't hold may stay
@@ -298,8 +300,9 @@ async function heldIn(
 }
 
 /**
- * Each of the file's models whose name is held, by its path in the file, with
- * the file's name that is (T720).
+ * Each of the file's models a name of which is held, by its path in the file:
+ * the holder Review names — one off the target's path where any is, so none
+ * goes unsaid (T720's review) — with the file's name for it (T720).
  */
 async function heldModelsIn(
   request: FastifyRequest,
@@ -312,7 +315,8 @@ async function heldModelsIn(
   for (const item of file.items)
     if (item.kind === 'model') {
       const names = namesDeclaredIn(item.content);
-      const holder = await access.heldItem(request, own, target, names);
+      const holders = await access.heldItems(request, own, target, names);
+      const holder = holders.find((each) => !each.onPath) ?? holders[0];
       if (holder !== undefined)
         held.set(item.path, {
           holder,
@@ -761,7 +765,13 @@ export function registerImport(app: FastifyInstance, access: ImportAccess): void
         });
       if (saved.status >= 300) return reply.code(saved.status).send(saved.body);
     }
-    await access.create(creates);
+    // All together or none (AC-356): the models go back out if the documents fail (T720's review).
+    try {
+      await access.create(creates);
+    } catch (failure) {
+      for (const model of landing) await access.models!.remove(own, model.path);
+      throw failure;
+    }
     return reply.code(201).send({
       dashboard: { id: boardId, title: dashboard.title },
       created: {

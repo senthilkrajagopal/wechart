@@ -2052,35 +2052,40 @@ export function buildServer({
        * and any case, else a draft of it in the importer's workspace. Its
        * folder is said only where the importer may see that folder's models.
        */
-      heldItem: async (request, own, target, names) => {
-        if (modelFiles?.all === undefined || modelStore === undefined) return undefined;
-        const keys = new Set(names.map(nameKey));
-        const declared = (content: string) =>
-          namesDeclaredIn(content).find((name) => keys.has(nameKey(name)));
+      heldItems: async (request, own, target, names) => {
+        if (modelFiles?.all === undefined || modelStore === undefined) return [];
+        // Each name asked, by its key, until a holder is found for it.
+        const asked = new Set(names.map(nameKey));
+        const held: { name: string; path: readonly string[] | null; onPath: boolean }[] = [];
+        const path = await importPathOf(target);
         for (const file of await modelFiles.all()) {
-          const name = declared(file.content);
           const folderId = file.folderId ?? ROOT_FOLDER_ID;
-          if (name === undefined || (await workspaceRootOf(folderId)) !== null) continue;
+          const found = namesDeclaredIn(file.content).filter((name) => asked.has(nameKey(name)));
+          if (found.length === 0 || (await workspaceRootOf(folderId)) !== null) continue;
           const seen = await visibilityOf(request);
           const sees = seen === undefined || seen.rights.get(folderId)?.kinds === 'all';
-          return {
-            name,
-            path: sees ? ((await pathsOf(request))(folderId) ?? []) : null,
-            onPath: (await importPathOf(target)).includes(folderId),
-          };
+          for (const name of found) {
+            asked.delete(nameKey(name));
+            held.push({
+              name,
+              path: sees ? ((await pathsOf(request))(folderId) ?? []) : null,
+              onPath: path.includes(folderId),
+            });
+          }
         }
-        for (const file of await modelStore.inFolders(await workspaceFolderIds(own))) {
-          const name = declared(file.content);
-          if (name === undefined) continue;
-          return {
-            name,
-            path: ['My workspace'],
-            onPath:
-              file.targetFolderId !== null &&
-              (await importPathOf(target)).includes(file.targetFolderId),
-          };
-        }
-        return undefined;
+        if (asked.size === 0) return held;
+        for (const file of await modelStore.inFolders(await workspaceFolderIds(own)))
+          for (const name of namesDeclaredIn(file.content).filter((each) =>
+            asked.has(nameKey(each)),
+          )) {
+            asked.delete(nameKey(name));
+            held.push({
+              name,
+              path: ['My workspace'],
+              onPath: file.targetFolderId !== null && path.includes(file.targetFolderId),
+            });
+          }
+        return held;
       },
       // Where the workspace holds models (T347): a new one lands in its root.
       ...(wsModels === undefined || modelStore === undefined
@@ -2091,6 +2096,7 @@ export function buildServer({
                 new Set((await modelStore.inFolders([own])).map((file) => file.path)),
               save: (own: string, target: string, files: readonly ModelFile[]) =>
                 wsModels.save(own, own, files, target),
+              remove: (own: string, path: string) => wsModels.remove(own, own, path),
             },
           }),
       keepsChart: async (request, chartId, own) => {
