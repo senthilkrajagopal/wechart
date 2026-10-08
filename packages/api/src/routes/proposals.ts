@@ -1123,7 +1123,8 @@ export function registerProposals(app: FastifyInstance, routes: ProposalRoutes):
           );
         const id = randomUUID();
         renames.set(chartId, id);
-        copies.push({ id, body: bound.body });
+        // Its names as the chart it copies has them: only asked, never rebound (T714).
+        copies.push({ id, body: copy });
       }
       return renames.size === 0
         ? body

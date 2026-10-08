@@ -344,6 +344,79 @@ describe('an approval publishes, binding each item in its folder (T502, AC-272)'
     expect((await load('ops_widgets.count')).statusCode).toBe(403);
   });
 
+  /**
+   * T714 (AC-371): a dashboard landing in /Sales that shows /Ops's library
+   * chart gets its own copy, which keeps the chart's names as it stores
+   * them: the approval only asks that its cube be on /Sales's path, and
+   * rebinds nothing.
+   */
+  it('lands a copy of a library chart kept off the dashboard’s path with the chart’s names as stored', async () => {
+    const library = randomUUID();
+    made.push({ kind: 'chart', id: library });
+    const definition = {
+      source: { cube: 'Orders' },
+      wells: { measures: ['Orders.count'], dimensions: [], timeDimensions: [] },
+    };
+    await docs().create({
+      kind: 'chart',
+      id: library,
+      body: {
+        owner: 'admin',
+        schemaVersion: 1,
+        title: `In Ops ${MARK}`,
+        folderId: ops,
+        chart: definition,
+      },
+    });
+    const shared = randomUUID();
+    made.push({ kind: 'dashboard', id: shared });
+    await docs().create({
+      kind: 'dashboard',
+      id: shared,
+      body: {
+        owner: 'admin',
+        schemaVersion: 1,
+        title: `Copies ${MARK}`,
+        folderId: sales,
+        pages: [],
+      },
+    });
+    const copied = await as({
+      method: 'POST',
+      url: '/api/workspace/copies',
+      payload: { kind: 'dashboard', id: shared, timeZone: TEST_TIME_ZONE },
+    });
+    expect(copied.statusCode, copied.body).toBe(201);
+    const copyId = copied.json<{ id: string }>().id;
+    // Shown as stored, not through a save, which would copy it then (T527).
+    const draft = (await docs().get('dashboard', copyId))!;
+    await docs().update({
+      kind: 'dashboard',
+      id: copyId,
+      body: {
+        ...draft.body,
+        pages: [{ id: 'p1', items: [{ id: 't1', kind: 'chart', chartId: library }] }],
+      },
+      expectedVersion: draft.version ?? 0,
+    });
+    const proposal = await as({
+      method: 'POST',
+      url: '/api/proposals',
+      payload: { kind: 'dashboard', id: copyId, description: `Copies ${MARK}.` },
+    });
+    expect(proposal.statusCode, proposal.body).toBe(201);
+
+    const approved = await as({
+      method: 'POST',
+      url: `/api/proposals/${proposal.json<{ id: string }>().id}/approve`,
+    });
+
+    expect(approved.statusCode, approved.body).toBe(200);
+    const own = await docs().localTo(shared);
+    expect(own).toHaveLength(1);
+    expect(own[0]!.body['chart']).toEqual(definition);
+  });
+
   it('lands none of a dashboard’s items, and keeps no version, when a later one is refused (T502’s review)', async () => {
     // A shared dashboard in /Sales, copied into writer's workspace, given an
     // own chart on `orders` (bound) and a filter on `widgets` (held nowhere).

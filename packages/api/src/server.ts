@@ -79,7 +79,13 @@ import { landedNamesOf, type Except } from './model/names';
 import { declaredIn } from './model/split';
 import type { PublicationStore } from './xcube/publications';
 import { registerModelPublishing } from './model/publish';
-import { referencesOf, usersOfCubes, type ReferenceDocument } from './model/references';
+import {
+  referencesOf,
+  strandedRefusal,
+  usersOfCubes,
+  type ReferenceDocument,
+  type Stranded,
+} from './model/references';
 import { searchable, visibleCounts, type Visibility } from './access/visible';
 import { aliasIn, aliasOut } from './access/workspace-alias';
 import type { Bookmark, BookmarkStore } from './repos/bookmarks';
@@ -2730,21 +2736,15 @@ export function buildServer({
     /** Each copy, bound in its folder. */
     readonly copies: readonly CopiedOnUse[];
   }
-  /** Why a move's copy couldn't be bound: the dashboard, its folder, the chart, the names. */
-  interface MoveRefusal {
-    readonly dashboard: unknown;
-    readonly folderId: string;
-    readonly chart: unknown;
-    readonly names: readonly string[];
-  }
   /**
    * Copy on move (T537, AC-371, amended 2026-10-01: "Copy on move +
    * approval"): with sign-in on, moving a library chart, a dashboard or a
    * folder leaves no shared dashboard showing a library chart kept off its
    * folder's path. Each one it would leave so gets its own copy, as copy on
-   * use makes one (T527), bound in the dashboard's folder; a name its path
-   * doesn't hold refuses the move, as it refuses a save. Asked before the
-   * move is written, of the tree as it will be.
+   * use makes one (T527), asked in the dashboard's folder; a name its path
+   * doesn't hold refuses the move, each such copy said as a stranded chart
+   * on its dashboard (T714, AC-425). Asked before the move is written, of the
+   * tree as it will be.
    *
    * A draft in a workspace is left for its next save, or its approval, to
    * copy (`copiesOnUse`, `land`): it is its author's, whom the mover can't
@@ -2759,7 +2759,8 @@ export function buildServer({
     readonly body?: Record<string, unknown>;
   }): Promise<
     | { readonly kind: 'ok'; readonly dashboards: readonly CopiedOnMove[] }
-    | ({ readonly kind: 'refused' | 'unreachable' } & MoveRefusal)
+    | { readonly kind: 'unreachable' }
+    | { readonly kind: 'refused'; readonly stranded: readonly Stranded[] }
   > => {
     if (security === 'off' || docs?.get === undefined) return { kind: 'ok', dashboards: [] };
     const parents = await parentsOf();
@@ -2804,6 +2805,7 @@ export function buildServer({
         .map((each) => each.id);
     }
     const dashboards: CopiedOnMove[] = [];
+    const stranded: Stranded[] = [];
     for (const id of affected) {
       const stored = await docs.get('dashboard', id).catch(() => null);
       if (stored === null) continue;
@@ -2828,15 +2830,19 @@ export function buildServer({
           copy.body,
           moved.kind === 'folder' ? { folder: moved.id, to: moved.to } : undefined,
         );
-        if (binding.kind !== 'ok')
-          return {
-            kind: binding.kind,
-            dashboard: body['title'],
-            folderId: home,
-            chart: copy.title,
-            names: binding.kind === 'refused' ? binding.names : [],
-          };
-        bound.push({ ...copy, body: binding.body });
+        if (binding.kind === 'unreachable') return { kind: 'unreachable' };
+        // Every one said, as the move's own carried charts are (T714's review).
+        if (binding.kind === 'refused')
+          stranded.push({
+            kind: 'chart',
+            id: copy.from,
+            title: String(copy.title ?? ''),
+            dashboard: String(body['title'] ?? ''),
+            folderId: folderIdOf(stored.body),
+            names: binding.names,
+          });
+        // Its names kept as the chart it copies stores them: a move rebinds nothing (T714).
+        else bound.push(copy);
       }
       dashboards.push({
         id,
@@ -2847,39 +2853,7 @@ export function buildServer({
         copies: bound,
       });
     }
-    return { kind: 'ok', dashboards };
-  };
-  /**
-   * A move's copies refused, answered as a save's binding is (T537): the
-   * dashboard and chart named where the mover may see the dashboard's
-   * folder, and only said to be in one they can't otherwise (T537's review,
-   * AC-322).
-   */
-  const moveRefused = (
-    reply: FastifyReply,
-    seen: Visibility | undefined,
-    refused: { readonly kind: 'refused' | 'unreachable' } & MoveRefusal,
-  ) => {
-    const named = seen === undefined || seen.rights.has(refused.folderId);
-    if (refused.kind === 'unreachable')
-      return reply.code(502).send({
-        error: named
-          ? `xcube could not be asked where the cubes of “${String(refused.chart)}” are, so nothing was moved.`
-          : 'xcube could not be asked where a chart’s cubes are, so nothing was moved.',
-      });
-    return reply.code(422).send(
-      named
-        ? {
-            error: `Moved, “${String(refused.dashboard)}” would show “${String(refused.chart)}” from off its folder’s path, and its own copy can’t be bound there: no folder on its path holds ${refused.names
-              .map((name) => `“${name}”`)
-              .join(', ')}. Nothing was moved.`,
-            names: refused.names,
-          }
-        : {
-            error:
-              'Moved, a dashboard in a folder you can’t see would show a chart from off its folder’s path, and its own copy can’t be bound there. Nothing was moved.',
-          },
-    );
+    return stranded.length === 0 ? { kind: 'ok', dashboards } : { kind: 'refused', stranded };
   };
   /**
    * What a move's answer says it copied (T537, AC-371): each dashboard that
@@ -2919,6 +2893,148 @@ export function buildServer({
         expectedVersion: dashboard.version,
       })),
   ];
+  /** A chart or a dashboard a move carries, and the folder whose path it uses once moved (T714). */
+  interface Carried {
+    readonly kind: 'chart' | 'dashboard';
+    readonly id: string;
+    readonly body: Record<string, unknown>;
+    /** Its folder once moved: its dashboard's, for a dashboard's own chart. */
+    readonly home: string | null;
+    /** Where it is kept now, its dashboard's for an own chart: whether the mover sees it. */
+    readonly folderId: string | null;
+    /** The title of the dashboard an own chart is on. */
+    readonly dashboard?: unknown;
+  }
+  const titleIn = (each: { readonly title?: string | null }, body: Record<string, unknown>) =>
+    String(each.title ?? body['title'] ?? '');
+  /** A dashboard's own charts, carried with it to `home` (T714). */
+  const ownChartsOf = async (
+    dashboardId: string,
+    dashboard: unknown,
+    home: string | null,
+    folderId: string | null,
+  ): Promise<Carried[]> =>
+    ((await cat?.referenceDocuments?.()) ?? [])
+      .filter((each) => each.kind === 'chart' && each.localToDashboardId === dashboardId)
+      .map((each) => ({
+        kind: 'chart',
+        id: each.id,
+        body: (each.body ?? {}) as Record<string, unknown>,
+        home,
+        folderId,
+        dashboard,
+      }));
+  /**
+   * What a folder's move carries (T714): every chart and dashboard in it or
+   * beneath it, and each such dashboard's own charts, each to stay where it is
+   * in the moved folder.
+   */
+  const carriedWith = async (folderId: string): Promise<Carried[]> => {
+    const parents = await parentsOf();
+    const beneath = (at: string | null) => {
+      for (let step = at, steps = 0; step != null && steps <= parents.size; steps += 1) {
+        if (step === folderId) return true;
+        step = parents.get(step) ?? null;
+      }
+      return false;
+    };
+    const all = (await cat?.referenceDocuments?.()) ?? [];
+    const boards = new Map(
+      all
+        .filter(
+          (each) =>
+            each.kind === 'dashboard' &&
+            beneath(folderIdOf((each.body ?? {}) as Record<string, unknown>)),
+        )
+        .map((each) => [each.id, each]),
+    );
+    const carried: Carried[] = [];
+    for (const each of all) {
+      if (each.kind !== 'chart' && each.kind !== 'dashboard') continue;
+      const body = (each.body ?? {}) as Record<string, unknown>;
+      if (each.localToDashboardId !== null) {
+        const board = boards.get(each.localToDashboardId);
+        if (board === undefined) continue;
+        const home = folderIdOf((board.body ?? {}) as Record<string, unknown>);
+        carried.push({
+          kind: 'chart',
+          id: each.id,
+          body,
+          home,
+          folderId: home,
+          dashboard: titleIn(board, (board.body ?? {}) as Record<string, unknown>),
+        });
+        continue;
+      }
+      const at = folderIdOf(body);
+      if (beneath(at)) carried.push({ kind: each.kind, id: each.id, body, home: at, folderId: at });
+    }
+    return carried;
+  };
+  /**
+   * What a move would strand (T714, AC-425): each carried chart or dashboard
+   * using a cube or view its path once moved doesn't keep. Nothing is
+   * rebound: each is only asked. None where every one keeps its cubes.
+   */
+  const strandedBy = async (
+    carried: readonly Carried[],
+    moving?: { readonly folder: string; readonly to: string },
+  ): Promise<
+    | undefined
+    | { readonly kind: 'unreachable' }
+    | { readonly kind: 'refused'; readonly stranded: readonly Stranded[] }
+  > => {
+    const stranded: Stranded[] = [];
+    for (const each of carried) {
+      const bound = await boundIn(each.kind, each.home, each.body, moving);
+      if (bound.kind === 'unreachable') return { kind: 'unreachable' };
+      if (bound.kind === 'refused')
+        stranded.push({
+          kind: each.kind,
+          id: each.id,
+          title: titleIn({}, each.body),
+          ...(each.dashboard === undefined ? {} : { dashboard: String(each.dashboard) }),
+          folderId: each.folderId,
+          names: bound.names,
+        });
+    }
+    return stranded.length === 0 ? undefined : { kind: 'refused', stranded };
+  };
+  /**
+   * A move's breaks, its carried items' and its copies' (T714's review), as
+   * one refusal; none where neither has one.
+   */
+  const strandedOfMove = (
+    checked: Awaited<ReturnType<typeof strandedBy>>,
+    onMove: Awaited<ReturnType<typeof copiesOnMove>>,
+  ): NonNullable<Awaited<ReturnType<typeof strandedBy>>> | undefined => {
+    if (checked?.kind === 'unreachable' || onMove.kind === 'unreachable')
+      return { kind: 'unreachable' };
+    const stranded = [
+      ...(checked?.stranded ?? []),
+      ...(onMove.kind === 'refused' ? onMove.stranded : []),
+    ];
+    return stranded.length === 0 ? undefined : { kind: 'refused', stranded };
+  };
+  /** A move refused for what it strands, named as the mover may see it (AC-322). */
+  const strandedAnswer = (
+    reply: FastifyReply,
+    seen: Visibility | undefined,
+    checked: NonNullable<Awaited<ReturnType<typeof strandedBy>>>,
+  ) =>
+    checked.kind === 'unreachable'
+      ? reply.code(502).send({
+          error:
+            'xcube could not be asked where the cubes this move carries are, so nothing was moved.',
+        })
+      : reply
+          .code(422)
+          .send(
+            strandedRefusal(
+              checked.stranded,
+              (folderId) => seen === undefined || sees(seen, folderId),
+            ),
+          );
   /**
    * The refusal, where the folder already has another dashboard of this
    * title (T336, AC-270): one of a name in a folder, and free across folders
@@ -4744,7 +4860,7 @@ export function buildServer({
       !(kind === 'chart' && typeof was.body['localToDashboardId'] === 'string')
         ? await copiesOnMove({ kind, id, to, body: written })
         : ({ kind: 'ok', dashboards: [] } as const);
-    if (onMove.kind !== 'ok') return moveRefused(reply, found.seen, onMove);
+    if (onMove.kind !== 'ok') return strandedAnswer(reply, found.seen, onMove);
     // No copy is worked out without a way to write it (T527's review).
     if (onMove.dashboards.length > 0 && docs.updateTogether === undefined)
       throw new BadRequest('Persistence is not configured');
@@ -5234,14 +5350,22 @@ export function buildServer({
       }
     };
 
-    // A folder moved: each shared dashboard in it it leaves showing a chart
-    // off its path gets its own copy, written with the move (T537, AC-371).
-    if (kind === 'folder' && body?.folderId !== undefined && docs.get && docs.updateTogether) {
+    // A folder moved keeps every cube its charts and dashboards use on their
+    // paths, or nothing moves (T714, AC-425), asked of the tree as it will be.
+    // Each shared dashboard in it it leaves showing a chart off its path gets
+    // its own copy, written with the move (T537, AC-371), whose cubes are
+    // asked the same; every break of either is said together.
+    if (kind === 'folder' && body?.folderId !== undefined && docs.get) {
       const stored = await docs.get('folder', id);
       if (stored !== null && folderIdOf(stored.body) !== body.folderId) {
-        const onMove = await copiesOnMove({ kind, id, to: body.folderId });
-        if (onMove.kind !== 'ok') return moveRefused(reply, found.seen, onMove);
-        if (onMove.dashboards.length > 0) {
+        const checked = await strandedBy(await carriedWith(id), { folder: id, to: body.folderId });
+        const onMove =
+          docs.updateTogether === undefined
+            ? ({ kind: 'ok', dashboards: [] } as const)
+            : await copiesOnMove({ kind, id, to: body.folderId });
+        const refused = strandedOfMove(checked, onMove);
+        if (refused !== undefined) return strandedAnswer(reply, found.seen, refused);
+        if (onMove.kind === 'ok' && onMove.dashboards.length > 0) {
           // As `relocate` writes it.
           const { description: _was, ...rest } = stored.body;
           void _was;
@@ -5265,10 +5389,11 @@ export function buildServer({
       }
     }
 
-    // Moved into a folder, a chart or a dashboard is published there: each
-    // cube it names bound on its new path, and a dashboard's own charts with
-    // it (T429's review, AC-272). Written together where any binding changes,
-    // or a dashboard it leaves gets a copy (T537).
+    // Moved into a folder, a chart or a dashboard keeps every cube it uses on
+    // its new path, a dashboard's own charts with it, or the move is refused,
+    // naming each it would strand (T714, AC-425, AC-272). A move rebinds
+    // nothing: each stored name stays as it is. Written together where a
+    // dashboard it leaves gets a copy (T537).
     if (kind !== 'folder' && body?.folderId !== undefined && docs.get && docs.updateTogether) {
       const stored = await docs.get(kind, id);
       if (stored !== null && folderIdOf(stored.body) !== body.folderId) {
@@ -5277,50 +5402,34 @@ export function buildServer({
           folderId: body.folderId,
           ...(title === undefined ? {} : { title }),
         };
-        const self = await boundIn(kind, body.folderId, moved);
-        if (self.kind !== 'ok') return bindingRefused(reply, kind, self);
-        const writes: {
-          kind: 'chart';
-          id: string;
-          body: Record<string, unknown>;
-          expectedVersion: number;
-        }[] = [];
-        if (kind === 'dashboard') {
-          const own = ((await cat?.referenceDocuments?.()) ?? []).filter(
-            (each) => each.kind === 'chart' && each.localToDashboardId === id,
-          );
-          for (const { id: chartId } of own) {
-            const chart = await docs.get('chart', chartId);
-            if (chart === null) continue;
-            const bound = await boundIn('chart', body.folderId, chart.body);
-            if (bound.kind !== 'ok') return bindingRefused(reply, 'chart', bound);
-            if (JSON.stringify(bound.body) !== JSON.stringify(chart.body))
-              writes.push({
-                kind: 'chart',
-                id: chartId,
-                body: bound.body,
-                expectedVersion: chart.version ?? 0,
-              });
-          }
-        }
+        const checked = await strandedBy([
+          {
+            kind,
+            id,
+            body: moved,
+            home: body.folderId,
+            folderId: folderIdOf(stored.body),
+          },
+          ...(kind === 'dashboard'
+            ? await ownChartsOf(id, moved['title'], body.folderId, folderIdOf(stored.body))
+            : []),
+        ]);
         // Each shared dashboard it leaves showing a chart off its path, the
         // moved one included, with its own copy (T537, AC-371). A dashboard's
-        // own chart goes where its dashboard goes, and leaves none.
+        // own chart goes where its dashboard goes, and leaves none. Every
+        // break, carried or a copy's, is said together (T714's review).
         const onMove =
           kind === 'chart' && typeof stored.body['localToDashboardId'] === 'string'
             ? ({ kind: 'ok', dashboards: [] } as const)
-            : await copiesOnMove({ kind, id, to: body.folderId, body: self.body });
-        if (onMove.kind !== 'ok') return moveRefused(reply, found.seen, onMove);
+            : await copiesOnMove({ kind, id, to: body.folderId, body: moved });
+        const refused = strandedOfMove(checked, onMove);
+        if (refused !== undefined) return strandedAnswer(reply, found.seen, refused);
+        if (onMove.kind !== 'ok') return reply;
         const showing = onMove.dashboards.find((dashboard) => dashboard.id === id)?.body;
-        if (
-          onMove.dashboards.length > 0 ||
-          writes.length > 0 ||
-          JSON.stringify(self.body) !== JSON.stringify(moved)
-        ) {
+        if (onMove.dashboards.length > 0) {
           const written = await together([
             ...copyWritesOf(onMove.dashboards, id),
-            ...writes,
-            { kind, id, body: showing ?? self.body, expectedVersion: stored.version ?? 0 },
+            { kind, id, body: showing ?? moved, expectedVersion: stored.version ?? 0 },
           ]);
           if (written === undefined) return reply;
           return { ...written.at(-1), ...copiedOnMove(found.seen, onMove.dashboards) };

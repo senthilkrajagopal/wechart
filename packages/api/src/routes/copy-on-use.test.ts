@@ -697,10 +697,20 @@ describe('copies bound where a moved folder goes (T537, AC-371, AC-272)', () => 
       url: `/api/documents/folder/${at.q2}`,
       payload: { folderId: at.r },
     });
+    // Said as every break a move makes is said (T714, AC-425): the chart, on
+    // the dashboard its copy would be, and the cube.
     expect(answer.statusCode, answer.body).toBe(422);
-    expect(answer.json<{ error: string; names: string[] }>()).toEqual({
-      error: `Moved, “On Q2 ${MARK}” would show “P’s widgets ${MARK}” from off its folder’s path, and its own copy can’t be bound there: no folder on its path holds “p_widgets”. Nothing was moved.`,
-      names: ['p_widgets'],
+    expect(answer.json()).toEqual({
+      error: `Moved, “P’s widgets ${MARK}” on “On Q2 ${MARK}” would use “p_widgets”, which isn’t in its folder or one above it. Nothing was moved.`,
+      stranded: [
+        {
+          kind: 'chart',
+          id: at.widgets,
+          title: `P’s widgets ${MARK}`,
+          dashboard: `On Q2 ${MARK}`,
+          names: ['p_widgets'],
+        },
+      ],
     });
     expect((await stored('folder', at.q2)).body['folderId']).toBe(at.p);
     expect(await stored('dashboard', onQ2)).toEqual(before);

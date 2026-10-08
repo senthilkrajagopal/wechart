@@ -245,17 +245,44 @@ describe('a chart or dashboard published into a folder, bound there (T429, AC-27
     // Its names bound as they were: moved, and nothing of it rewritten (T709).
     expect(written).toEqual([]);
     expect(relocated).toEqual([{ kind: 'chart', id: 'c1', folderId: 'b' }]);
+    // Said as a move's refusal says what it strands (T714, AC-425).
     expect(refused.statusCode).toBe(422);
     expect(refused.json()).toEqual({
-      error: 'No folder on this chart’s path holds “widgets”.',
-      names: ['widgets'],
+      error:
+        'Moved, “Sales” would use “widgets”, which isn’t in its folder or one above it. Nothing was moved.',
+      stranded: [{ kind: 'chart', id: 'c2', title: 'Sales', names: ['widgets'] }],
     });
     await app.close();
   });
 
-  it('binds a moved dashboard’s filters and its own charts in its new folder, together', async () => {
-    const { app, written, stored } = await serving();
-    // Stored in another case: the move stores each name as its item holds it.
+  it('refuses a move, moving nothing, while xcube can’t be asked (T714, AC-272)', async () => {
+    const { app, written, relocated, stored } = await serving({ down: true });
+    stored['c1'] = chartBody({ folderId: 'a' }, 'a_sales');
+
+    const refused = await app.inject({
+      method: 'PATCH',
+      url: '/api/documents/chart/c1',
+      payload: { folderId: 'b' },
+    });
+
+    expect(refused.statusCode).toBe(502);
+    expect(refused.json()).toEqual({
+      error:
+        'xcube could not be asked where the cubes this move carries are, so nothing was moved.',
+    });
+    expect(written).toEqual([]);
+    expect(relocated).toEqual([]);
+    await app.close();
+  });
+
+  /**
+   * A move rebinds nothing (T714, AC-425; R70's rebinding on move
+   * superseded): a dashboard whose filters and own charts keep their cubes on
+   * its new path is moved, each stored name as it was, though stored in
+   * another case than its cube's.
+   */
+  it('moves a dashboard whose filters and own charts keep their cubes on its new path, rewriting none', async () => {
+    const { app, written, relocated, stored } = await serving();
     stored['c1'] = chartBody({ localToDashboardId: 'd1' }, 'Sales');
     stored['d1'] = {
       title: 'Revenue',
@@ -270,24 +297,33 @@ describe('a chart or dashboard published into a folder, bound there (T429, AC-27
     });
 
     expect(moved.statusCode, moved.body).toBe(200);
-    expect(written).toEqual([
-      {
-        kind: 'chart',
-        id: 'c1',
-        body: chartBody({ localToDashboardId: 'd1' }, 'sales'),
-        expectedVersion: 5,
-      },
-      {
-        kind: 'dashboard',
-        id: 'd1',
-        body: {
-          title: 'Revenue',
-          folderId: 'a',
-          filters: [{ id: 'f1', widget: 'list', member: 'sales.region' }],
-        },
-        expectedVersion: 5,
-      },
-    ]);
+    // Moved, and nothing of it, or of its own chart, rewritten.
+    expect(written).toEqual([]);
+    expect(relocated).toEqual([{ kind: 'dashboard', id: 'd1', folderId: 'a' }]);
+    await app.close();
+  });
+
+  it('refuses moving a dashboard whose own chart would use a cube off its new path, naming both', async () => {
+    const { app, written, relocated, stored } = await serving();
+    stored['c1'] = chartBody({ localToDashboardId: 'd1' }, 'ab_sales');
+    stored['d1'] = { title: 'Revenue', folderId: 'b' };
+
+    const refused = await app.inject({
+      method: 'PATCH',
+      url: '/api/documents/dashboard/d1',
+      payload: { folderId: 'd' },
+    });
+
+    expect(refused.statusCode).toBe(422);
+    expect(refused.json()).toEqual({
+      error:
+        'Moved, “Sales” on “Revenue” would use “ab_sales”, which isn’t in its folder or one above it. Nothing was moved.',
+      stranded: [
+        { kind: 'chart', id: 'c1', title: 'Sales', dashboard: 'Revenue', names: ['ab_sales'] },
+      ],
+    });
+    expect(written).toEqual([]);
+    expect(relocated).toEqual([]);
     await app.close();
   });
 

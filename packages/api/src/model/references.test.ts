@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildServer } from '../server';
-import { referencesOf, usersOfCubes } from './references';
+import { referencesOf, strandedRefusal, usersOfCubes } from './references';
 
 /**
  * T147 / AC-141: WHEN the user edits a member that charts use, THE SYSTEM
@@ -266,5 +266,81 @@ describe('a text tile’s tokens as references', () => {
     expect(found.dashboards).toEqual([
       { id: 'd-text', title: 'Text', members: ['orders.status'], through: [] },
     ]);
+  });
+});
+
+/**
+ * T714 (AC-425, AC-322): a move that would leave a chart or a dashboard using
+ * a cube off its folder's path is refused, naming each such item and its
+ * cubes where the mover may see its folder, and only counting the rest.
+ */
+describe('a move’s stranded references, as the mover may see them (T714)', () => {
+  const seen = new Set(['b']);
+  const sees = (folderId: string | null) => folderId !== null && seen.has(folderId);
+
+  it('names a chart, a dashboard’s own chart and a dashboard, each with its cubes', () => {
+    expect(
+      strandedRefusal(
+        [
+          { kind: 'chart', id: 'c1', title: 'Sales', folderId: 'b', names: ['a_sales'] },
+          {
+            kind: 'chart',
+            id: 'c2',
+            title: 'Margin',
+            dashboard: 'Revenue',
+            folderId: 'b',
+            names: ['a_sales', 'a_costs'],
+          },
+          { kind: 'dashboard', id: 'd1', title: 'Revenue', folderId: 'b', names: ['a_sales'] },
+        ],
+        sees,
+      ),
+    ).toEqual({
+      error:
+        'Moved, “Sales” would use “a_sales”, which isn’t in its folder or one above it; “Margin” on “Revenue” would use “a_sales” and “a_costs”, which aren’t in its folder or one above it; “Revenue” would use “a_sales”, which isn’t in its folder or one above it. Nothing was moved.',
+      stranded: [
+        { kind: 'chart', id: 'c1', title: 'Sales', names: ['a_sales'] },
+        {
+          kind: 'chart',
+          id: 'c2',
+          title: 'Margin',
+          dashboard: 'Revenue',
+          names: ['a_sales', 'a_costs'],
+        },
+        { kind: 'dashboard', id: 'd1', title: 'Revenue', names: ['a_sales'] },
+      ],
+    });
+  });
+
+  it('counts those in folders the mover can’t see, naming neither them nor their cubes', () => {
+    const refusal = strandedRefusal(
+      [
+        { kind: 'chart', id: 'c1', title: 'Sales', folderId: 'b', names: ['a_sales'] },
+        { kind: 'chart', id: 'c3', title: 'Secret', folderId: 'h', names: ['h_cube'] },
+        { kind: 'dashboard', id: 'd3', title: 'Hidden', folderId: 'h', names: ['h_cube'] },
+      ],
+      sees,
+    );
+    expect(refusal).toEqual({
+      error:
+        'Moved, “Sales” would use “a_sales”, which isn’t in its folder or one above it. 2 charts or dashboards in folders you can’t see would use cubes off their folders’ paths. Nothing was moved.',
+      stranded: [{ kind: 'chart', id: 'c1', title: 'Sales', names: ['a_sales'] }],
+      hidden: 2,
+    });
+    expect(JSON.stringify(refusal)).not.toMatch(/Secret|Hidden|h_cube/);
+  });
+
+  it('says one it can’t name alone', () => {
+    expect(
+      strandedRefusal(
+        [{ kind: 'chart', id: 'c3', title: 'Secret', folderId: 'h', names: ['h_cube'] }],
+        sees,
+      ),
+    ).toEqual({
+      error:
+        'Moved, 1 chart or dashboard in a folder you can’t see would use a cube off its folder’s path. Nothing was moved.',
+      stranded: [],
+      hidden: 1,
+    });
   });
 });
