@@ -182,7 +182,7 @@ export const SECRETS_SEALED =
  * research `xcube-bc18f82c01.md`, Gotcha 6; `xcube-2d5ac86f24.md`, the
  * key-holder corner and Gotcha 2).
  */
-const KEY_HOLDERS: Partial<Record<DriverType, Readonly<Record<string, string>>>> = {
+export const KEY_HOLDERS: Partial<Record<DriverType, Readonly<Record<string, string>>>> = {
   bigquery: { credentials: 'key' },
   snowflake: { oauthToken: 'token' },
   dremio: { token: 'token' },

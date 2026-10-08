@@ -11718,7 +11718,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
       - Its "nearest first" wording for where a mapped or created data source binds becomes "the one data source of that name, held on the target's path".
     - **Tasks.** T719 maps the data sources, and T733 reworks T513's and T514's tests.
     - **When it is ticked.** This entry stays the umbrella. It is ticked with T720, T721, T733 and T359's sign-in-off parts.
-- [ ] T509 (AC-353) Warn that switching a data source's sign-in to a key or token rebuilds its rollups *(added 2026-09-28, from T506's review)*
+- [x] T509 (AC-353) Warn that switching a data source's sign-in to a key or token rebuilds its rollups *(added 2026-09-28, from T506's review)*
   - **Why.** T506 warns when a stored BigQuery key, or a Snowflake or Dremio token, is replaced. Switching the sign-in method to one of them also stores a new key holder, so it rebuilds the rollups in the same way. It said nothing.
   - Files: `packages/web/src/workspaces/data-sources/ConnectionForm.tsx` (+ test)
   - Failing test: `ConnectionForm.test.tsx`: on a saved source, choosing a sign-in method that uses a key or token shows T506's warning before Save; choosing a password method shows none (AC-353).
@@ -11728,6 +11728,7 @@ The reviews are in `docs/design/reviews/2026-09-27/`: `phase-1-recheck.md` and `
     - **This task's failing test no longer holds.** Its "choosing a password method shows none" contradicts the amended AC, since any change of sign-in method moves the identity.
     - **T725 takes this task over.** It starts from the WIP at `6d5e6a5` on `group4-close-2` ("warn before Save on any change that moves the connection identity"). This task is ticked when T725 is.
     - **R71 itself** changes nothing here. A landed data source's name is fixed (AC-423), so a name is never part of a change to warn about.
+    - *Ticked 2026-10-07 with T725*, whose tests show a switch to a key or token warned of, and a switch to a password too.
 - [x] T511 (AC-354, AC-355, AC-360) Export a dashboard: the pane, its dependencies ticked with what uses each, the hidden count, and one JSON file without secrets
   - Files: `packages/api/src/routes/export.ts` (+ test), `packages/web/src/dashboard/export/ExportPane.tsx` (+ test), the dashboard header's ⋯ menu, Explore's row menus, `e2e/security/export-import.spec.ts`
   - Failing test:
@@ -13307,7 +13308,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 
 ### AC-353: R70's identity warning (with T509)
 
-- [ ] T725 [P] (AC-353) Warn before Save that any change moving a data source's connection identity rebuilds its pre-aggregations
+- [x] T725 [P] (AC-353) Warn before Save that any change moving a data source's connection identity rebuilds its pre-aggregations
   - Files: from the WIP at `6d5e6a5` on `group4-close-2`: `packages/web/src/workspaces/data-sources/{ConnectionForm,SourceEditor}.tsx` (+ tests), `packages/core/src/data-sources/*` (`targetChanges`, the identity); `e2e/security/data-sources.spec.ts`
   - Failing test: `ConnectionForm.test.tsx` and `SourceEditor.test.tsx` (AC-353):
     - on a saved data source of any driver, changing its sign-in method, host, database, user or key holder shows the rebuild warning before Save;
@@ -13316,6 +13317,12 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 
     Research: `xcube-bc18f82c01.md`, "A connection's identity".
   - Depends on: none. It takes over T509's narrower test (see the note on T509).
+  - **Done 2026-10-07**, from the WIP at `6d5e6a5` (its code as it was; its `tasks.md` hunk not taken).
+    - `connectionSummary.ts`: `identityMoves` names what of a stored source's identity a change moves: its sign-in method; each connection or sign-in field it sends, but the TLS ones (`ssl`, `sslRejectUnauthorized`, `sslCa`, `sslCert`, `encrypt`, `trustServerCertificate`) and the secrets, changed, added or dropped; and a key holder entered (BigQuery's key, Snowflake's OAuth token, Dremio's token; `KEY_HOLDERS`, now exported from `ConnectionForm.tsx`). So port, warehouse, account and the like warn too, being in xcube's identity.
+    - `SourceEditor.tsx`: the foot, beside Save, says "Saving rebuilds this data source’s pre-aggregations: its host and database change." (and so on), and Save is described by it. **Moved from the WIP**, which said it in the Connection tab's "Test to save" panel: Save is pressed from any tab, and the foot is the one part every tab shows (the review's finding).
+    - The identity logic is in the web's `connectionSummary.ts`, not `packages/core` as Files named; `ConnectionForm.test.tsx` gained nothing, T506's cases there showing a stored key or token kept unless replaced.
+    - **Tests:** `SourceEditor.test.tsx`, "a change that moves the connection’s identity (T725…)" (5): host, database and user named, kept through a passing test, Save described by it; a switch of sign-in method (to a password too), and a token entered; a stored token replaced, beside T506's words; nothing for a password entered again, TLS or a name; nothing for a description alone. `connectionSummary.test.ts`, "what moves a connection’s identity" (3). e2e `security/data-sources.spec.ts` in Chrome, 12/12: a copy's database changed and tested says it beside Save on the Connection and General tabs, Save described by it; the Dremio source's database and replaced token say both.
+    - AC-353 ticked: its R42 half by T506's tests, which still pass, and its R70 half by these. T509 is ticked with it, as its note says.
 
 ### Refusals that never say where, across the API
 

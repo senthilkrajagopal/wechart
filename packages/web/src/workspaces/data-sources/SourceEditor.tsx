@@ -13,7 +13,7 @@ import {
   secretsToSeal,
   type ConnectionValues,
 } from './ConnectionForm';
-import { changesSince, storedValuesOf } from './connectionSummary';
+import { changesSince, identityMoves, storedValuesOf } from './connectionSummary';
 import {
   CHECK_LABELS,
   ConnectionChecks,
@@ -57,6 +57,22 @@ const printOf = (source: StoredSource, values: ConnectionValues) =>
 
 /** A time as the test line says it. */
 const clock = (at: Date) => at.toLocaleTimeString('en-GB');
+
+/** "A", "A and B", "A, B and C". */
+const listed = (names: readonly string[]) =>
+  names.length <= 1
+    ? (names[0] ?? '')
+    : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1] ?? ''}`;
+
+/** The rebuild warning's id: Save is described by it (T725). */
+const REBUILDS_ID = 'source-rebuilds';
+
+/**
+ * What a change that moves the connection's identity does, said before Save
+ * (T725, AC-353, R70): its rollups are rebuilt, and what moves it.
+ */
+const rebuildsSaid = (moves: readonly string[]) =>
+  `Saving rebuilds this data source’s pre-aggregations: its ${listed(moves)} ${moves.length === 1 ? 'changes' : 'change'}.`;
 
 /** A path of folders as the page names it: the root as Shared. */
 const pathText = (path: readonly { readonly title: string }[]) =>
@@ -124,6 +140,8 @@ export function useSourceEdit(source: StoredSource, { seal: given }: { seal?: Se
         );
 
   const changes = changesSince(source.driver, { values: initial, secrets: {} }, values);
+  /** What of its connection identity this change moves: each rebuilds its rollups (T725, R70). */
+  const moves = identityMoves(source.driver, source, values);
   const typed = name.trim();
   const nameChanged = typed !== source.name;
   /** As the API takes a name (the wizard's rule; `checkName`). */
@@ -282,6 +300,8 @@ export function useSourceEdit(source: StoredSource, { seal: given }: { seal?: Se
     kept,
     asked,
     changes,
+    /** Said before Save where the change moves the connection's identity (T725, R70). */
+    rebuilds: moves.length === 0 ? null : rebuildsSaid(moves),
     nameChanged,
     connects,
     count,
@@ -583,6 +603,14 @@ export function EditFoot({ edit }: { edit: SourceEdit }) {
           ? 'No unsaved changes'
           : `${edit.count === 1 ? '1 unsaved change' : `${String(edit.count)} unsaved changes`} · ${need}`}
       </span>
+      {edit.rebuilds === null ? null : (
+        // Beside Save on every tab, and read with it (T725, AC-353, R70): the
+        // foot is the one part of the page each tab shows.
+        <span id={REBUILDS_ID} className="field__warning">
+          <StatusIcon kind="warn" />
+          {edit.rebuilds}
+        </span>
+      )}
       <span className="source-settings__spacer" />
       <button type="button" className="btn" disabled={edit.count === 0} onClick={edit.discard}>
         Discard changes
@@ -591,6 +619,7 @@ export function EditFoot({ edit }: { edit: SourceEdit }) {
         type="button"
         className="btn btn-primary"
         disabled={!edit.canSave}
+        aria-describedby={edit.rebuilds === null ? undefined : REBUILDS_ID}
         onClick={() => void edit.save()}
       >
         {edit.busy === 'save'

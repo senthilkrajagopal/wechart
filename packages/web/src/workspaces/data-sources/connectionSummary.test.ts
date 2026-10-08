@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { initialValues, type ConnectionValues } from './ConnectionForm';
 import {
   changesSince,
+  identityMoves,
   signsInOf,
   storedRowsOf,
   storedValuesOf,
@@ -154,5 +155,71 @@ describe('a stored one’s settings, a row each', () => {
       ['Connect string', 'db:1521/x'],
       ['Signs in with', 'User and password, as u'],
     ]);
+  });
+});
+
+/**
+ * T725 (AC-353, R70): what of a stored data source's connection identity a
+ * change moves. xcube's identity is the sign-in method, the fields but the TLS
+ * ones, and a key holder; not a password or a private key (research
+ * `xcube-bc18f82c01.md`, "A connection's identity").
+ */
+describe('what moves a connection’s identity (T725, R70)', () => {
+  const stored = {
+    authMethod: 'password',
+    fields: { host: 'db', database: 'sales', user: 'cube', ssl: true },
+  };
+  const now = (fields: Record<string, unknown>, extra: Partial<ConnectionValues> = {}) => ({
+    ...storedValuesOf('postgres', 'password', stored.fields),
+    ...extra,
+    fields: { ...stored.fields, ...fields } as ConnectionValues['fields'],
+  });
+
+  it('is nothing for the settings as stored, TLS, or a password entered again', () => {
+    expect(identityMoves('postgres', stored, now({}))).toEqual([]);
+    expect(
+      identityMoves(
+        'postgres',
+        stored,
+        now(
+          { ssl: true, sslRejectUnauthorized: false, sslCa: 'PEM' },
+          { secrets: { password: 'fixture-password' } },
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it('names a field changed, filled in where none was stored, or dropped, in the form’s order', () => {
+    expect(identityMoves('postgres', stored, now({ port: 5432, user: 'reader' }))).toEqual([
+      'port',
+      'user',
+    ]);
+    expect(
+      identityMoves(
+        'postgres',
+        { ...stored, fields: { ...stored.fields, port: 5432 } },
+        now({ port: '' }),
+      ),
+    ).toEqual(['port']);
+  });
+
+  it('names the sign-in method, and a key holder entered, but not a client certificate', () => {
+    expect(
+      identityMoves(
+        'postgres',
+        stored,
+        now({ sslCert: 'PEM' }, { authMethod: 'client-certificate' }),
+      ),
+    ).toEqual(['sign-in method']);
+    expect(
+      identityMoves(
+        'bigquery',
+        { authMethod: 'service-account', fields: { projectId: 'acme' } },
+        {
+          ...storedValuesOf('bigquery', 'service-account', { projectId: 'acme' }),
+          secrets: { credentials: '{"type":"service_account"}' },
+        },
+      ),
+    ).toEqual(['key']);
   });
 });

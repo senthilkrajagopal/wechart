@@ -505,6 +505,17 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
       const beside = main.getByRole('region', { name: 'Test to save' });
       await expect(beside).toContainText('Every check passed', { timeout: 90_000 });
       await expect(save).toBeEnabled();
+      // Its database is part of its connection's identity: said before Save,
+      // beside it and read with it, that saving rebuilds its rollups, on any
+      // tab Save is pressed from (T725, AC-353, R70).
+      const rebuilds = 'Saving rebuilds this data source’s pre-aggregations: its database changes.';
+      const foot = main.locator('.source-settings__foot');
+      await expect(foot.getByText(rebuilds)).toBeVisible();
+      await expect(save).toHaveAccessibleDescription(rebuilds);
+      await tabs.getByRole('tab', { name: 'General' }).click();
+      await expect(foot.getByText(rebuilds)).toBeVisible();
+      await expect(save).toHaveAccessibleDescription(rebuilds);
+      await tabs.getByRole('tab', { name: /^Connection/ }).click();
       // A change after the pass clears it (pin 10), and undoing it brings it back.
       await panel.getByLabel('Database').fill('postgres2');
       await expect(save).toBeDisabled();
@@ -647,6 +658,15 @@ test.describe('Data sources, as each role sees them (T364, AC-157, AC-233)', () 
       await token.fill('e2e-fixture-token');
       await expect(panel.getByText(rebuilds)).toBeVisible();
       await expect(save).toBeDisabled();
+      // And beside Save: the database and the token move its connection's
+      // identity (T725, AC-353, R70).
+      await expect(
+        main
+          .locator('.source-settings__foot')
+          .getByText(
+            'Saving rebuilds this data source’s pre-aggregations: its database and token change.',
+          ),
+      ).toBeVisible();
 
       // Kept after all: the stored one again, and nothing to warn of.
       await panel.getByRole('button', { name: 'Keep the stored one' }).click();

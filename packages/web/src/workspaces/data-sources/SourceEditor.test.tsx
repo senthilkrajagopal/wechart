@@ -405,6 +405,122 @@ describe('a stored key or token (T506, AC-353)', () => {
   });
 });
 
+/**
+ * T725 (AC-353 as amended by R70): before Save, a change that moves the data
+ * source's connection identity says it rebuilds the data source's
+ * pre-aggregations. xcube's identity is the driver, the sign-in method, the
+ * connection's fields but its TLS ones, and a key holder (a BigQuery key, a
+ * Snowflake OAuth token, a Dremio token); a password or a private key isn't
+ * in it (research `xcube-bc18f82c01.md`, "A connection's identity"). A moved
+ * identity aliases the cubes and rebuilds their rollups (`xcube-2d5ac86f24.md`,
+ * "The base identity"; `xcube-919cff8c6e.md`). It takes over T509's narrower
+ * test, where a switch to a password said nothing.
+ */
+describe('a change that moves the connection’s identity (T725, AC-353, R70)', () => {
+  const rebuilds = (what: string) =>
+    `Saving rebuilds this data source’s pre-aggregations: its ${what}.`;
+  /** The foot, beside Save: the one part of the page every tab shows. */
+  const foot = () => document.querySelector<HTMLElement>('.source-settings__foot')!;
+  /** The warning, said before Save and read with it. */
+  const warned = () => within(foot()).queryByText(/^Saving rebuilds this data source/);
+
+  it('says where it connects changes it, naming each, and keeps saying it as Save is offered', async () => {
+    serve({
+      'POST /api/data-sources/ds-1/test': [{ body: passed('t-1') }],
+      'PUT /api/data-sources/ds-1': [{ body: { id: 'ds-1' } }],
+    });
+    open(stored());
+    expect(warned()).toBeNull();
+    const host = screen.getByLabelText(/^Host/);
+    await userEvent.clear(host);
+    await userEvent.type(host, 'db-2');
+    expect(within(foot()).getByText(rebuilds('host changes'))).toBeTruthy();
+    const database = screen.getByLabelText(/^Database/);
+    await userEvent.clear(database);
+    await userEvent.type(database, 'sales_eu');
+    const user = screen.getByLabelText(/^User/);
+    await userEvent.clear(user);
+    await userEvent.type(user, 'reader');
+    const warning = within(foot()).getByText(rebuilds('host, database and user change'));
+
+    // Asked again, tested, and still said as Save is offered, which it describes.
+    await userEvent.type(screen.getByLabelText(/^Password/), 'fixture-password');
+    await userEvent.click(testButton());
+    await screen.findByText('Every check passed');
+    expect(saveButton()).toHaveProperty('disabled', false);
+    expect(warning.isConnected).toBe(true);
+    expect(warning.id).not.toBe('');
+    expect(saveButton().getAttribute('aria-describedby')).toBe(warning.id);
+  });
+
+  it('says a switch of sign-in method changes it, to a password too, and a token entered', async () => {
+    open(
+      stored({
+        driver: 'snowflake',
+        authMethod: 'key-pair',
+        fields: { account: 'acme-eu', warehouse: 'reporting', database: 'sales', username: 'cube' },
+        secrets: { privateKey: { stored: true } },
+      }),
+    );
+    const methods = screen.getByRole('radiogroup', { name: 'Sign in with' });
+    await userEvent.click(within(methods).getByRole('radio', { name: 'Password' }));
+    expect(within(foot()).getByText(rebuilds('sign-in method changes'))).toBeTruthy();
+    await userEvent.click(within(methods).getByRole('radio', { name: 'OAuth token' }));
+    // OAuth names no user: the user goes with the key pair.
+    expect(within(foot()).getByText(rebuilds('sign-in method and user change'))).toBeTruthy();
+    await userEvent.type(screen.getByLabelText(/^OAuth token/), 'fixture-token');
+    expect(
+      within(foot()).getByText(rebuilds('sign-in method, user and token change')),
+    ).toBeTruthy();
+    // Back to its own: nothing moves it.
+    await userEvent.click(within(methods).getByRole('radio', { name: 'Key pair' }));
+    expect(warned()).toBeNull();
+  });
+
+  it('says a stored token replaced changes it, beside T506’s words on its field', async () => {
+    open(
+      stored({
+        driver: 'dremio',
+        authMethod: 'token',
+        fields: { host: 'dremio.internal', port: 9047, ssl: false },
+        secrets: { token: { stored: true } },
+      }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Replace the token' }));
+    expect(warned()).toBeNull();
+    await userEvent.type(screen.getByLabelText(/^Token/), 'fixture-token');
+    expect(within(foot()).getByText(rebuilds('token changes'))).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Replacing the token rebuilds this data source’s pre-aggregations, even when the new token is the same.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('says nothing for a password entered again, TLS or a name', async () => {
+    open(
+      stored({ fields: { host: 'db-1', port: 5432, database: 'sales', user: 'cube', ssl: true } }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Replace the password' }));
+    await userEvent.type(screen.getByLabelText(/^Password/), 'fixture-password');
+    await userEvent.click(screen.getByRole('switch', { name: /Verify the server/ }));
+    const name = screen.getByLabelText(/^Name/);
+    await userEvent.clear(name);
+    await userEvent.type(name, 'emea_replica_2');
+    expect(count()?.textContent).toMatch(/^\d+ unsaved changes/);
+    expect(warned()).toBeNull();
+    expect(saveButton().getAttribute('aria-describedby')).toBeNull();
+  });
+
+  it('says nothing for a change of its description alone', async () => {
+    open(stored());
+    await userEvent.type(screen.getByLabelText(/^Description/), 'Read replica for EMEA.');
+    expect(count()?.textContent).toMatch(/^1 unsaved change/);
+    expect(warned()).toBeNull();
+    expect(saveButton().getAttribute('aria-describedby')).toBeNull();
+  });
+});
+
 describe('discarding (T497’s review)', () => {
   it('puts every change back and leaves focus on the foot', async () => {
     open(stored());

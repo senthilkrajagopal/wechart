@@ -3,8 +3,10 @@ import { DRIVERS, type DriverField, type DriverType, type FieldValue } from '@we
 import {
   fieldLabel,
   fieldsToSend,
+  KEY_HOLDERS,
   methodLabel,
   methodsOf,
+  secretsToSeal,
   type ConnectionValues,
 } from './ConnectionForm';
 
@@ -194,4 +196,56 @@ export function changesSince(
       changes.push(labelOf(field.key));
   }
   return changes;
+}
+
+/**
+ * The fields xcube leaves out of a connection's identity: its TLS ones
+ * (research `xcube-bc18f82c01.md`, "A connection's identity").
+ */
+const OUT_OF_IDENTITY = new Set([
+  'ssl',
+  'sslRejectUnauthorized',
+  'sslCa',
+  'sslCert',
+  'encrypt',
+  'trustServerCertificate',
+]);
+
+/** A label in a sentence: "the host", but "the OAuth token" (T506). */
+const inSentence = (label: string) =>
+  /^[A-Z]{2}/.test(label) ? label : `${label.charAt(0).toLowerCase()}${label.slice(1)}`;
+
+/**
+ * What of a stored data source's connection identity these values move, in
+ * words, in order: its sign-in method; each connection field it sends but
+ * its TLS ones, changed, added or dropped; a key holder entered (a BigQuery
+ * key, a Snowflake OAuth token, a Dremio token). xcube's identity is these
+ * and the driver, and a password or a private key isn't in it; a moved one
+ * aliases the data source's cubes and rebuilds their rollups (T725, AC-353,
+ * R70; research `xcube-bc18f82c01.md`, "A connection's identity";
+ * `xcube-2d5ac86f24.md`, "The base identity").
+ */
+export function identityMoves(
+  driver: DriverType,
+  stored: { readonly authMethod: string; readonly fields: Readonly<Record<string, FieldValue>> },
+  now: ConnectionValues,
+): string[] {
+  const spec = DRIVERS[driver];
+  const every: DriverField[] = [
+    ...spec.connection,
+    ...spec.auth.flatMap((method) => method.fields),
+  ].filter((field, at, all) => all.findIndex((each) => each.key === field.key) === at);
+  const moves: string[] = [];
+  if (stored.authMethod !== now.authMethod) moves.push('sign-in method');
+  const sent = fieldsToSend(driver, now);
+  for (const field of every) {
+    if (field.secret || OUT_OF_IDENTITY.has(field.key)) continue;
+    if (text(stored.fields[field.key]) !== text(sent[field.key]))
+      moves.push(inSentence(fieldLabel(driver, field)));
+  }
+  for (const [key] of secretsToSeal(driver, now)) {
+    const noun = KEY_HOLDERS[driver]?.[key];
+    if (noun !== undefined) moves.push(noun);
+  }
+  return moves;
 }
