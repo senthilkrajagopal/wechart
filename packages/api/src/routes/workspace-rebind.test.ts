@@ -37,6 +37,7 @@ import { removeProjectFolders, TEST_TIME_ZONE } from './project-folder.fixture';
 const MARK = `rb${randomUUID().replaceAll('-', '').slice(0, 8)}`;
 const MODEL = `rbn-${MARK}`;
 const ORDERS = `${MARK}_orders`;
+const STOCK = `${MARK}_stock`;
 const cube = (name: string, extra = '') =>
   `cubes:\n  - name: ${name}\n    sql_table: public.${name}\n    measures:\n      - name: count\n        type: count\n${extra}`;
 
@@ -49,7 +50,16 @@ const cookies: Record<string, string> = {};
 const docs = () => documents(getDb());
 const files = () => modelFileStore(getDb());
 const made: { kind: DocumentKind; id: string }[] = [];
-const ids = { sales: '', ops: '', project: '', board: '', shared: '', workspace: '' };
+const ids = {
+  sales: '',
+  ops: '',
+  project: '',
+  board: '',
+  shared: '',
+  workspace: '',
+  // Where the workspace's copy of `orders` is kept (T716).
+  copy: '',
+};
 
 beforeAll(async () => {
   cubeServer = createServer((request, response) => {
@@ -126,6 +136,8 @@ beforeAll(async () => {
   }
   await files().write([
     { folderId: ids.sales, path: `cubes/${ORDERS}.yml`, content: cube(ORDERS) },
+    // A cube the workspace holds no copy of (T716).
+    { folderId: ids.sales, path: `cubes/${STOCK}.yml`, content: cube(STOCK) },
   ]);
   const xids = new Map([
     ['root', 'froot'],
@@ -144,7 +156,10 @@ beforeAll(async () => {
     { id: 'fsales', parentId: 'froot' },
     { id: 'fops', parentId: 'froot' },
   ]);
-  stub.holdItems(MODEL, [{ folderId: 'fsales', name: ORDERS, kind: 'cube', yaml: cube(ORDERS) }]);
+  stub.holdItems(MODEL, [
+    { folderId: 'fsales', name: ORDERS, kind: 'cube', yaml: cube(ORDERS) },
+    { folderId: 'fsales', name: STOCK, kind: 'cube', yaml: cube(STOCK) },
+  ]);
   app = buildServer({
     config: {
       cubeApiUrl,
@@ -260,7 +275,7 @@ const load = (who: string, item: { kind: string; id: string }) =>
     payload: { query: { measures: [`${ORDERS}.count`] }, for: item },
   });
 
-describe('a workspace item’s stored names, rebound in its previews (T542, AC-281)', () => {
+describe('a workspace item’s stored names in its previews, never rebound (T542, T716, AC-281)', () => {
   it('ask the landed cube while the workspace has none of the name', async () => {
     asked.length = 0;
     const answer = await load('writer', { kind: 'dashboard', id: ids.board });
@@ -281,11 +296,12 @@ describe('a workspace item’s stored names, rebound in its previews (T542, AC-2
       },
     });
     expect([200, 201], copied.body).toContain(copied.statusCode);
+    ids.copy = copied.json<{ folderId: string }>().folderId;
     const saved = await as('writer', {
       method: 'POST',
       url: '/api/model/publish',
       payload: {
-        folderId: copied.json<{ folderId: string }>().folderId,
+        folderId: ids.copy,
         files: [{ path: `cubes/${ORDERS}.yml`, content: cube(ORDERS, '    description: Mine\n') }],
         targetFolderId: ids.sales,
       },
@@ -308,6 +324,35 @@ describe('a workspace item’s stored names, rebound in its previews (T542, AC-2
     expect(body.data).toEqual([{ [`${ORDERS}.count`]: '7' }]);
     expect(Object.keys(body.annotation.measures)).toEqual([`${ORDERS}.count`]);
     expect(body.query.measures).toEqual([`${ORDERS}.count`]);
+  });
+
+  // T716 (AC-281): a name the workspace holds no copy of is the landed cube's, asked as it is.
+  it('ask a name the workspace holds no copy of as it is, the landed cube answering through the overlay', async () => {
+    const onStock = await boardIn(ids.project, ids.sales, STOCK);
+    asked.length = 0;
+    const answer = await as('writer', {
+      method: 'POST',
+      url: '/api/load',
+      payload: { query: { measures: [`${STOCK}.count`] }, for: { kind: 'dashboard', id: onStock } },
+    });
+    expect(answer.statusCode, answer.body).toBe(200);
+    expect(asked.at(-1)).toEqual({
+      query: { measures: [`${STOCK}.count`] },
+      overlay: workspaceOverlayIdOf(ids.workspace),
+    });
+    expect(answer.json<{ data: unknown[] }>().data).toEqual([{ [`${STOCK}.count`]: '7' }]);
+  });
+
+  // T716 (AC-281): the copy answers a tile made after it as one made before.
+  it('ask a tile made after the copy through the overlay too', async () => {
+    const later = await boardIn(ids.project, ids.sales);
+    asked.length = 0;
+    const answer = await load('writer', { kind: 'dashboard', id: later });
+    expect(answer.statusCode, answer.body).toBe(200);
+    expect(asked.at(-1)).toEqual({
+      query: { measures: [`${ORDERS}.count`] },
+      overlay: workspaceOverlayIdOf(ids.workspace),
+    });
   });
 
   it('show the SQL of the workspace’s copy, through the overlay', async () => {
@@ -365,6 +410,21 @@ describe('a workspace item’s stored names, rebound in its previews (T542, AC-2
       overlay: proposalOverlayIdOf(proposal.id),
     });
     expect(answer.json<{ data: unknown[] }>().data).toEqual([{ [`${ORDERS}.count`]: '7' }]);
+    // A name it holds no item of: the published model's, through the same overlay (T716).
+    asked.length = 0;
+    const published = await as('writer', {
+      method: 'POST',
+      url: '/api/load',
+      payload: {
+        query: { measures: [`${STOCK}.count`] },
+        for: { kind: 'proposal', id: proposal.id },
+      },
+    });
+    expect(published.statusCode, published.body).toBe(200);
+    expect(asked.at(-1)).toEqual({
+      query: { measures: [`${STOCK}.count`] },
+      overlay: proposalOverlayIdOf(proposal.id),
+    });
 
     const withdrawn = await as('writer', {
       method: 'POST',
@@ -372,5 +432,20 @@ describe('a workspace item’s stored names, rebound in its previews (T542, AC-2
       payload: {},
     });
     expect(withdrawn.statusCode, withdrawn.body).toBe(200);
+  });
+
+  // T716 (AC-281): with the copy gone, the landed cube of the name answers.
+  it('ask the landed cube once the workspace’s copy is discarded', async () => {
+    const discarded = await as('writer', {
+      method: 'DELETE',
+      url: `/api/model/files?folder=${ids.copy}&path=${encodeURIComponent(`cubes/${ORDERS}.yml`)}`,
+    });
+    expect(discarded.statusCode, discarded.body).toBeLessThan(300);
+
+    asked.length = 0;
+    const answer = await load('writer', { kind: 'dashboard', id: ids.board });
+    expect(answer.statusCode, answer.body).toBe(200);
+    expect(asked.at(-1)).toEqual({ query: { measures: [`${ORDERS}.count`] }, overlay: undefined });
+    expect(answer.json<{ data: unknown[] }>().data).toEqual([{ [`${ORDERS}.count`]: '7' }]);
   });
 });

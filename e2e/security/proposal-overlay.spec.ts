@@ -37,8 +37,9 @@ const fieldsOf = (database: string) => ({
   user: 'sample',
   ssl: false,
 });
-const made = { folder: '', xcubeId: '', source: '', copy: '', project: '', proposal: '' };
-const dimension = () => `${made.xcubeId}__${CUBE}.db`;
+const made = { folder: '', source: '', copy: '', project: '', proposal: '' };
+// Its own name in every folder (R71, T716).
+const dimension = () => `${CUBE}.db`;
 
 /** The review's query of the proposal, as its tiles ask: its status and rows. */
 async function review(request: APIRequestContext) {
@@ -103,7 +104,6 @@ test.describe('a proposal’s overlay (T440, AC-323)', () => {
         data: { kind: 'folder', title: FOLDER, folderId: 'root' },
       });
       made.folder = ((await folder.json()) as { id: string }).id;
-      made.xcubeId = `f${made.folder.replaceAll('-', '')}`;
       expect(
         (
           await request.put(`/api/folders/${made.folder}/access`, {

@@ -37,7 +37,6 @@ const fieldsOf = (database: string) => ({
 });
 const made = {
   folder: '',
-  xcubeId: '',
   source: '',
   shared: '',
   /** The writer's workspace items, and the project folders they went into. */
@@ -47,7 +46,6 @@ const made = {
   modelCopy: { folderId: '', path: '' },
   sourceCopy: '',
 };
-const full = (name: string) => `${made.xcubeId}__${name}`;
 
 /** Through My workspace and a proposal `super` approves (T451, AC-278). */
 async function publish(request: APIRequestContext, path: string, content: string) {
@@ -119,7 +117,6 @@ test.describe('My workspace’s overlay (T347, AC-323)', () => {
         data: { kind: 'folder', title: FOLDER, folderId: 'root' },
       });
       made.folder = ((await folder.json()) as { id: string }).id;
-      made.xcubeId = `f${made.folder.replaceAll('-', '')}`;
       expect(
         (
           await request.put(`/api/folders/${made.folder}/access`, {
@@ -272,12 +269,10 @@ test.describe('My workspace’s overlay (T347, AC-323)', () => {
       expect(board.status(), await board.text()).toBe(201);
       made.board = ((await board.json()) as { id: string }).id;
 
-      const query = { measures: [`${full(CUBE)}.n`] };
-      expect(await rows(request, 'dashboard', made.board, query)).toEqual([
-        { [`${full(CUBE)}.n`]: '7' },
-      ]);
+      const query = { measures: [`${CUBE}.n`] };
+      expect(await rows(request, 'dashboard', made.board, query)).toEqual([{ [`${CUBE}.n`]: '7' }]);
       expect(await rows(request, 'dashboard', made.shared, query)).toEqual([
-        { [`${full(CUBE)}.n`]: '1' },
+        { [`${CUBE}.n`]: '1' },
       ]);
     });
 
@@ -298,12 +293,12 @@ test.describe('My workspace’s overlay (T347, AC-323)', () => {
 
       // Design 10's picker (T475): My workspace's group first.
       const list = await cubePicker(page).open();
-      // This run's own, by its full name: other specs, running beside this
+      // This run's own, by its name: other specs, running beside this
       // one, add cubes of their own to the same writer's workspace (T543's
       // report), so the group's count isn't this test's to know.
       const mine = list
         .getByRole('group', { name: 'My workspace' })
-        .locator(`[data-cube="${full(CUBE)}"]`);
+        .locator(`[data-cube="${CUBE}"]`);
       await expect(mine).toHaveCount(1);
       // Pickable, with its path beside it.
       await expect(mine).not.toHaveAttribute('aria-disabled', 'true');
@@ -313,7 +308,7 @@ test.describe('My workspace’s overlay (T347, AC-323)', () => {
       // folder and unselectable, "hidden by your copy" (AC-342; design 10, state D).
       const original = list
         .getByRole('group', { name: FOLDER, exact: true })
-        .locator(`[data-cube="${full(CUBE)}"]`);
+        .locator(`[data-cube="${CUBE}"]`);
       await expect(original).toHaveAttribute('aria-disabled', 'true');
       await expect(original).toContainText(`${FOLDER} · hidden by your copy`);
     });
@@ -341,12 +336,12 @@ test.describe('My workspace’s overlay (T347, AC-323)', () => {
       });
       expect(changed.status(), await changed.text()).toBe(200);
 
-      const query = { dimensions: [`${full(DB_CUBE)}.db`] };
+      const query = { dimensions: [`${DB_CUBE}.db`] };
       expect(await rows(request, 'dashboard', made.board, query)).toEqual([
-        { [`${full(DB_CUBE)}.db`]: 'postgres' },
+        { [`${DB_CUBE}.db`]: 'postgres' },
       ]);
       expect(await rows(request, 'dashboard', made.shared, query)).toEqual([
-        { [`${full(DB_CUBE)}.db`]: 'sample' },
+        { [`${DB_CUBE}.db`]: 'sample' },
       ]);
     });
 
@@ -363,12 +358,12 @@ test.describe('My workspace’s overlay (T347, AC-323)', () => {
       expect((await request.delete(`/api/data-sources/${made.sourceCopy}`)).status()).toBe(204);
       made.sourceCopy = '';
 
+      expect(await rows(request, 'dashboard', made.board, { measures: [`${CUBE}.n`] })).toEqual([
+        { [`${CUBE}.n`]: '1' },
+      ]);
       expect(
-        await rows(request, 'dashboard', made.board, { measures: [`${full(CUBE)}.n`] }),
-      ).toEqual([{ [`${full(CUBE)}.n`]: '1' }]);
-      expect(
-        await rows(request, 'dashboard', made.board, { dimensions: [`${full(DB_CUBE)}.db`] }),
-      ).toEqual([{ [`${full(DB_CUBE)}.db`]: 'sample' }]);
+        await rows(request, 'dashboard', made.board, { dimensions: [`${DB_CUBE}.db`] }),
+      ).toEqual([{ [`${DB_CUBE}.db`]: 'sample' }]);
     });
   });
 });

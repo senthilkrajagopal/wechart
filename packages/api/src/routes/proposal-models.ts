@@ -21,11 +21,9 @@ import { keepsItsName } from './workspace-models';
  * approved or rejected together: landed apart, one would land naming a cube
  * its folder doesn't have, or not as it was drawn.
  *
- * By the full name the item holds, not its short name: the workspace's
- * previews rebind a stored name to the workspace's own cube of its short name
- * wherever that one goes (T542, AC-281), but an approval binds the item where
- * it lands (T502), so a model placed off the name's folder is never what the
- * landed item uses, and doesn't go with it (T542's review).
+ * By the name the item holds, which is its cube's in every folder (R71): the
+ * workspace's previews ask that name, and its own cube of the name answers
+ * wherever it is placed (T716, AC-281), as the landed one will once it lands.
  *
  * A small decision, overturnable: a model goes with the item where the item
  * names the cube the model makes, whether or not the folder already has a

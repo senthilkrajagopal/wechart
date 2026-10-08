@@ -38,7 +38,6 @@ import {
   queryItemOfParam,
   type QueryItem,
 } from './access/queries';
-import { answerRebound, memberBack, rebindsOf, reboundQuery } from './access/rebind';
 import { scopesOf } from './cube/scopes';
 import { healthOf, originOf } from './cube/health';
 import { MetaCache, MetaCachesByGroups } from './cube/meta-cache';
@@ -446,10 +445,12 @@ interface QueryScope {
     readonly id: string;
     /** Pushes it again: a workspace's, or a proposal's (T440). */
     readonly pushAgain: () => Promise<unknown>;
-    /** Its own cubes and views, by full name: what the workspace's models add or replace. */
+    /**
+     * Its own cubes and views, by name: what the workspace's models add or
+     * stand in for. A name it holds answers from it, any other from the
+     * landed item of that name; nothing is renamed (T716, R71).
+     */
     readonly names: ReadonlySet<string>;
-    /** The same, by short name: what a stored name of that short name is rebound to (T542). */
-    readonly rebinds: ReadonlyMap<string, string>;
     /** The version xcube took here, which an answer must be from at least. */
     readonly version?: number;
   };
@@ -2158,17 +2159,16 @@ export function buildServer({
     // The item it serves, checked before Cube is asked (T340, AC-268).
     const scope = await queryScope(request, reply, queryItemOf(body.for));
     if (scope === undefined) return reply;
-    // Its stored names rebound to the overlay's own cubes (T542, AC-281).
-    const rebound = reboundIn(scope, body.query);
-    if (await refusedOutside(reply, scope, rebound.query)) return reply;
+    if (await refusedOutside(reply, scope, body.query)) return reply;
 
     const requestId = String(request.headers['x-request-id'] ?? 'unknown');
     const startedAt = performance.now();
 
     try {
-      const result = answerRebound(
-        await cubeIn(request, scope).load(rebound.query, cache as CachePolicy | undefined, context),
-        rebound.back,
+      const result = await cubeIn(request, scope).load(
+        body.query,
+        cache as CachePolicy | undefined,
+        context,
       );
       const { accelerated, preAggregation } = accelerationOf(result);
       await record({
@@ -2206,9 +2206,7 @@ export function buildServer({
     // The item it serves, checked before Cube is asked (T340, AC-268).
     const scope = await queryScope(request, reply, queryItemOf(body.for));
     if (scope === undefined) return reply;
-    // Its stored names rebound to the overlay's own cubes (T542, AC-281).
-    const rebound = reboundIn(scope, body.query);
-    const query = rebound.query;
+    const query = body.query;
     if (await refusedOutside(reply, scope, query)) return reply;
     // One plan, or — for a query Cube runs as several — one per query; a
     // match only if a rollup serves every one, Cube's matching being
@@ -2236,11 +2234,7 @@ export function buildServer({
       // member's name stays beside its title for what matches on it.
       const name = titlesFrom(compiled);
       const miss = missOf(transformed, query, rollupsFrom(compiled), name);
-      // The member under the name the item holds (T542).
-      return {
-        matched: null,
-        miss: { ...miss, member: memberBack(miss.member, rebound.back), title: name(miss.member) },
-      };
+      return { matched: null, miss: { ...miss, title: name(miss.member) } };
     } catch (failure) {
       request.log.warn({ failure }, 'why a query is not served from a rollup could not be read');
       return { matched: null };
@@ -2263,10 +2257,8 @@ export function buildServer({
     // The item it serves, checked before Cube is asked (T340, AC-268).
     const scope = await queryScope(request, reply, queryItemOf(body.for));
     if (scope === undefined) return reply;
-    // Its stored names rebound to the overlay's own cubes (T542, AC-281).
-    const rebound = reboundIn(scope, body.query);
-    if (await refusedOutside(reply, scope, rebound.query)) return reply;
-    const planned = await cubeIn(request, scope).sql(rebound.query, context);
+    if (await refusedOutside(reply, scope, body.query)) return reply;
+    const planned = await cubeIn(request, scope).sql(body.query, context);
     const queries = (Array.isArray(planned) ? planned : [planned]).map((plan) => {
       const [sql, params] = (plan as { sql?: { sql?: [unknown, unknown] } } | null)?.sql?.sql ?? [];
       return { sql, params: Array.isArray(params) ? params : [] };
@@ -3590,16 +3582,6 @@ export function buildServer({
     return { allowed: scope.allowed, ...overlay };
   };
   /**
-   * A query as its scope's overlay rebinds it (T542, AC-281): each stored
-   * name whose short name the overlay holds names the overlay's own cube,
-   * and `back` puts the answer under the names the item holds. Without an
-   * overlay, as it is.
-   */
-  const reboundIn = (scope: QueryScope, query: Record<string, unknown>) =>
-    scope.overlay === undefined
-      ? { query, back: new Map<string, readonly string[]>() }
-      : reboundQuery(query, scope.overlay.rebinds);
-  /**
    * Cube as a request's user asks it for an item (T347, AC-323): from the
    * workspace's overlay where its scope names one — pushed again once, should
    * xcube find it gone — else as `cubeFor`.
@@ -3653,7 +3635,6 @@ export function buildServer({
     id: ensured.id,
     pushAgain,
     names: new Set(ensured.content.upserts.map((each) => each.name)),
-    rebinds: rebindsOf(ensured.content.upserts),
     ...(ensured.version === undefined ? {} : { version: ensured.version }),
   });
   /**

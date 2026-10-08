@@ -12,9 +12,10 @@ import { itemMessageOf } from './refusal';
  * proposal's (T440).
  *
  * The overlay holds the workspace's models, each placed in its target folder
- * — a copy's target is its origin's folder — so a name used in it resolves
- * among the overlay's items first and then along that folder's path, as
- * xcube resolves an overlay item's names (Gotcha 5); and every data source
+ * — a copy's target is its origin's folder. A name means one item (R71): the
+ * overlay's item of a name stands in for the landed one, wherever it is
+ * placed, and any other name is the landed item's (research
+ * `xcube-256d632371.md`, 2.6; T716). Every data source
  * the workspace holds, a copy under its original's folder and name, so the
  * workspace's previews query it in the original's place for every cube bound
  * to it, and a new one under its target (AC-280, AC-282).
