@@ -13562,7 +13562,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - `picker.spec.ts`'s own `__` names are reworked with T729, whose file it is (T475's and T633's tests to (b), the coordinator's call).
     - This entry names the references fix and AC-141 above, as the coordinator asked: T735 was not made, since the fix landed in the follow-up.
 
-- [ ] T729 (AC-272, AC-275, AC-371, AC-425) Rework the tests of T428, T429, T457 and T537 to bindings by name on the path
+- [x] T729 (AC-272, AC-275, AC-371, AC-425) Rework the tests of T428, T429, T457 and T537 to bindings by name on the path
   - Files: `e2e/security/binding.spec.ts`, `e2e/security/picker.spec.ts` (T429's and T457's binding cases), `e2e/security/copy-on-use.spec.ts`, `packages/api/src/routes/copy-on-use.test.ts`, `packages/api/src/model/references.test.ts`
   - Failing test:
     - `binding.spec.ts` (AC-275):
@@ -13576,6 +13576,27 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - a move or an approval still copies a library chart that would sit off the dashboard's path, and the copy keeps its cube names;
       - a move that would strand a cube is refused.
   - Depends on: T706, T711, T714
+  - *Noted (2026-10-08):*
+    - `binding.spec.ts`:
+      - A chart in /A/B/C on /A's `binding_orders_<run>` is stored by the cube's own name. Two landings (/A/B's cube of another name, and /A's cube with a new title), a move of /A/B/C beneath /A and a republish each leave it bound and answering as before.
+      - A delete of the cube is refused, naming the chart and the cube joining it. With the chart gone it is refused naming that cube alone, and then deletes apply.
+      - T428's rename case and its nearer `binding_orders` (one name per item) go.
+    - `copy-on-use.spec.ts`:
+      - G holds no `orders` of its own. Its chart is on the root's `orders`, kept in G, which F's reader can't see.
+      - Shown on F's dashboard, and when a chart F's dashboard shows is moved to G or a draft lands after such a move, it is the dashboard's own copy, keeping its cube's name.
+      - The chart moved to G keeps `orders`. T537's "rebound to G's own" step contradicted "a move rebinds nothing" (AC-425), and goes.
+      - A chart on G's own `copy_g_<run>` moved to F is refused, naming it, and nothing is moved (T714).
+    - `picker.spec.ts`: one cube per name, `picker_a/b/c_<run>` and `picker_widgets_<run>`, each with a title.
+      - T429: a chart in /A/B bound by its cube's own name, a sibling's refused, the picker listing /A/B's and /A's cubes by folder and title, and search by the cube's own name.
+      - T457: a chart's second cube bound by its own name as its source joins it, answering through the join; one only /A/B/C holds refused.
+      - T475's and T633's tests by the coordinator's call (b): reworked minimally to pass, with no hidden row, no `__`, cubes by folder, and /A's cube pickable. AC-342 is retired. T732 adds AC-428's "Your copy".
+    - `copy-on-use.test.ts` and `references.test.ts` already pass on R71's binding (T711, T714).
+    - On the image, in chrome: binding 2/2, copy-on-use 9/9, picker 7/7.
+    - Not run: `xcube-unreachable.spec.ts` (a save refused while xcube can't be reached). It stops compose's Cube, which my brief keeps me from doing. It builds no prefixed name.
+    - ACs not ticked:
+      - AC-272: its xcube-unreachable case is not run here.
+      - AC-425: its model, data-source and folder moves are T715's.
+      - AC-275 and AC-371 stay ticked.
 
 - [ ] T730 (AC-273, AC-310, AC-161, AC-353) Rework the tests of T435, T443, T497 and T506 to data sources named once, with `default` at the root only
   - Files: `e2e/security/data-source-binding.spec.ts` (T435), `e2e/security/root-default.spec.ts` and `deploy/helm/verify.sh` (T443), `e2e/security/data-sources.spec.ts` and `e2e/data-source.spec.ts` (T497, T506), `packages/web/src/workspaces/data-sources/{SourceEditor,ConnectionForm}.test.tsx`
@@ -13613,6 +13634,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - has no hidden row;
     - lists a workspace copy in the landed cube's place, marked.
   - Depends on: T718
+  - *Noted (2026-10-08, T729):* `picker.spec.ts`'s T475 and T633 tests were reworked minimally by T729, by the coordinator's call, so the file passes on the R71 image. They now show no hidden row, no `__`, cubes listed by folder, and /A's cube pickable. This task adds AC-428's "Your copy" to them.
 
 - [ ] T733 (AC-357, AC-358, AC-361) Rework the tests of T513 and T514 to imports that map landed names
   - Files: `e2e/security/export-import.spec.ts`, `packages/api/src/routes/import.test.ts`, `packages/web/src/workspaces/explore/import/{ImportSources,ImportPane}.test.tsx`

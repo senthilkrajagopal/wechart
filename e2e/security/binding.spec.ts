@@ -1,25 +1,27 @@
 import type { APIRequestContext } from '@playwright/test';
 
-import { inMyWorkspace, landed, proposedModel } from '../model-files';
+import { landed } from '../model-files';
 import { expect, test } from './fixtures';
 import { changeShared } from './shared-change';
 
 /**
- * T428, AC-275: WHEN a change to a model lands in a folder, THE SYSTEM SHALL
- * leave every other published item bound as it was published; an item
- * beneath a nearer new definition binds to it only when that item is next
- * published; a delete or rename of a name another published item still
- * references is refused, naming those items.
+ * T428, AC-275, reworked by T729 to R71's one name per item: WHEN a change to
+ * a model lands in a folder, a move included, THE SYSTEM SHALL leave every
+ * other published item bound as it was published; a delete of a name another
+ * published item still references is refused, naming those items. T428's
+ * rename case goes: a landed cube's name is never changed (AC-423, T706).
  *
  * Against compose's xcube, through the API as `super`, each run with its own
- * folders: /A publishes `binding_orders` and `binding_lines`, which joins it;
- * a chart is published in /A/B/C; then /A/B publishes its own
- * `binding_orders`. A shared chart is published by an approval of its copy,
+ * folders and names: /A publishes `binding_orders_<run>` and
+ * `binding_lines_<run>`, which joins it; a chart is published in /A/B/C on
+ * the orders cube. A shared chart is published by an approval of its copy,
  * never saved in place (T502, AC-278).
  */
 const RUN = Math.random().toString(36).slice(2, 8);
+const ORDERS = `binding_orders_${RUN}`;
+const LINES = `binding_lines_${RUN}`;
+const OTHER = `binding_other_${RUN}`;
 const ids = { a: '', b: '', c: '', chart: '' };
-const full = (folderId: string, name: string) => `f${folderId.replaceAll('-', '')}__${name}`;
 
 async function folder(request: APIRequestContext, title: string, parent: string) {
   const made = await request.post('/api/documents', {
@@ -29,12 +31,12 @@ async function folder(request: APIRequestContext, title: string, parent: string)
   return ((await made.json()) as { id: string }).id;
 }
 
-const cubeYaml = (name: string, joins: readonly string[] = [], empty = false) =>
+const cubeYaml = (name: string, joins: readonly string[] = [], title?: string) =>
   [
     'cubes:',
     `  - name: ${name}`,
-    // An empty one, where its answer must tell it from another of its name.
-    empty ? '    sql: "SELECT * FROM public.orders WHERE false"' : '    sql_table: public.orders',
+    ...(title === undefined ? [] : [`    title: ${title}`]),
+    '    sql_table: public.orders',
     '    measures:',
     '      - name: count',
     '        type: count',
@@ -65,9 +67,9 @@ async function publish(
   folderId: string,
   name: string,
   joins: string[] = [],
-  empty = false,
+  title?: string,
 ) {
-  const file = { path: `cubes/${name}.yml`, content: cubeYaml(name, joins, empty) };
+  const file = { path: `cubes/${name}.yml`, content: cubeYaml(name, joins, title) };
   expect(await landed(request, folderId, [file])).toEqual([file]);
 }
 
@@ -108,104 +110,89 @@ const deleteIn = (request: APIRequestContext, folderId: string, name: string) =>
 
 test.describe.configure({ mode: 'serial' });
 
-test.describe('published items stay bound until published again (T428, AC-275)', () => {
+test.describe('published items stay bound through any landing, a move included (T428, T729; AC-275)', () => {
   test.use({ role: 'super' });
 
-  test('a chart keeps /A’s cube when /A/B publishes its own, and takes /A/B’s when published again', async ({
+  test('a chart keeps querying its cube by its own name through landings and a move', async ({
     page,
   }) => {
     const request = page.request;
     ids.a = await folder(request, `Binding A ${RUN}`, 'root');
     ids.b = await folder(request, `Binding B ${RUN}`, ids.a);
     ids.c = await folder(request, `Binding C ${RUN}`, ids.b);
-    await publish(request, ids.a, 'binding_orders');
-    await publish(request, ids.a, 'binding_lines', ['binding_orders']);
+    await publish(request, ids.a, ORDERS);
+    await publish(request, ids.a, LINES, [ORDERS]);
 
     const made = await request.post('/api/documents', {
       data: { kind: 'chart', title: `Bound ${RUN}`, folderId: ids.c },
     });
     ids.chart = ((await made.json()) as { id: string }).id;
-    expect(await saveChart(request, 'binding_orders')).toEqual([
+    expect(await saveChart(request, ORDERS)).toEqual([
       { kind: 'chart', id: ids.chart, version: 2 },
     ]);
-    expect((await storedCube(request)).body.chart.wells.measures).toEqual([
-      `${full(ids.a, 'binding_orders')}.count`,
-    ]);
+    // Bound by the cube's own name: no folder prefix (AC-272, AC-328).
+    expect((await storedCube(request)).body.chart.wells.measures).toEqual([`${ORDERS}.count`]);
     const before = await answered(request);
     expect(before).toBeGreaterThan(0);
 
-    // /A/B's own, nearer, and empty: the chart, already published, is left
-    // as it was, and answers as it did.
-    await publish(request, ids.b, 'binding_orders', [], true);
+    // Landings: /A/B publishes a cube of its own, and /A's orders cube a new
+    // title. The chart, already published, is left as it was, and answers
+    // as it did.
+    await publish(request, ids.b, OTHER);
+    await publish(request, ids.a, ORDERS, [], `Orders ${RUN}`);
     const kept = await storedCube(request);
-    expect(kept.body.chart.wells.measures).toEqual([`${full(ids.a, 'binding_orders')}.count`]);
+    expect(kept.body.chart.wells.measures).toEqual([`${ORDERS}.count`]);
     expect(await answered(request)).toBe(before);
 
-    // Deleting /A's while the chart names it, and /A's `binding_lines` joins
-    // it, is refused, naming both: the cube from xcube's bindings (AC-365).
-    const refused = await deleteIn(request, ids.a, 'binding_orders');
-    expect(refused.status()).toBe(409);
+    // A move: /A/B/C, holding the chart, beneath /A, still on /A's path.
+    const moved = await request.patch(`/api/documents/folder/${ids.c}`, {
+      data: { folderId: ids.a },
+    });
+    expect(moved.status(), await moved.text()).toBe(200);
+    expect((await storedCube(request)).body.chart.wells.measures).toEqual([`${ORDERS}.count`]);
+    expect(await answered(request)).toBe(before);
+
+    // Published again, as it is: the same cube, the same answer.
+    const republished = await changeShared(request, 'chart', ids.chart, (body) => body);
+    expect(republished).toEqual([{ kind: 'chart', id: ids.chart, version: kept.version + 1 }]);
+    expect((await storedCube(request)).body.chart.wells.measures).toEqual([`${ORDERS}.count`]);
+    expect(await answered(request)).toBe(before);
+  });
+
+  test('a delete of a cube a chart or a cube references is refused, naming them, and one nothing uses applies', async ({
+    page,
+  }) => {
+    const request = page.request;
+    // The chart names it, and /A's lines cube joins it: refused, naming
+    // both, the cube from xcube's bindings (AC-365).
+    const refused = await deleteIn(request, ids.a, ORDERS);
+    expect(refused.status(), await refused.text()).toBe(409);
     expect(await refused.json()).toEqual({
-      error: `“binding_orders” is still used by the cube “binding_lines” and the chart “Bound ${RUN}”.`,
+      error: `“${ORDERS}” is still used by the cube “${LINES}” and the chart “Bound ${RUN}”.`,
       views: [],
-      cubes: [{ name: 'binding_lines', folderId: ids.a }],
+      cubes: [{ name: LINES, folderId: ids.a }],
       charts: [{ id: ids.chart, title: `Bound ${RUN}` }],
       dashboards: [],
       hidden: 0,
     });
 
-    // Not bound anew in place: its stored body saved again is refused (T502).
-    const inPlace = await request.put(`/api/documents/chart/${ids.chart}`, {
-      data: { version: kept.version, body: kept.body },
-    });
-    expect(inPlace.status(), await inPlace.text()).toBe(409);
-    expect(((await inPlace.json()) as { code: string }).code).toBe('shared_in_place');
-    // Published again — as it is, through its copy and an approval — it takes
-    // /A/B's, and answers from it.
-    const republished = await changeShared(request, 'chart', ids.chart, (body) => body);
-    expect(republished).toEqual([{ kind: 'chart', id: ids.chart, version: kept.version + 1 }]);
-    expect((await storedCube(request)).body.chart.wells.measures).toEqual([
-      `${full(ids.b, 'binding_orders')}.count`,
-    ]);
-    expect(await answered(request)).toBe(0);
-  });
-
-  test('a delete another model item is bound to is refused, naming it from xcube’s bindings, and one nothing uses applies', async ({
-    page,
-  }) => {
-    const request = page.request;
-    // Renaming /A/B's `binding_orders`, which the chart now names, is
-    // refused: its copy renamed in My workspace isn't proposed (T451).
-    const path = 'cubes/binding_orders.yml';
-    const copy = await inMyWorkspace(request, ids.b, [
-      { path, content: cubeYaml('binding_renamed') },
-    ]);
-    try {
-      const renamed = await proposedModel(request, copy.folderOf(path), path);
-      expect(renamed.status()).toBe(409);
-      expect(((await renamed.json()) as { error: string }).error).toBe(
-        `“binding_orders” is still used by the chart “Bound ${RUN}”.`,
-      );
-    } finally {
-      await copy.drop();
-    }
-
-    // /A's `binding_lines` joins /A's `binding_orders`: its delete is refused,
-    // naming the cube from xcube's bindings (T520, AC-365).
-    const refused = await deleteIn(request, ids.a, 'binding_orders');
-    expect(refused.status(), await refused.text()).toBe(409);
-    expect(await refused.json()).toEqual({
-      error: '“binding_orders” is still used by the cube “binding_lines”.',
+    // The chart gone, the lines cube is all that still joins it.
+    expect((await request.delete(`/api/documents/chart/${ids.chart}`)).status()).toBeLessThan(300);
+    const joined = await deleteIn(request, ids.a, ORDERS);
+    expect(joined.status(), await joined.text()).toBe(409);
+    expect(await joined.json()).toEqual({
+      error: `“${ORDERS}” is still used by the cube “${LINES}”.`,
       views: [],
-      cubes: [{ name: 'binding_lines', folderId: ids.a }],
+      cubes: [{ name: LINES, folderId: ids.a }],
       charts: [],
       dashboards: [],
       hidden: 0,
     });
 
-    // `binding_lines` itself nothing uses: deleted, and then `binding_orders` too.
-    expect((await deleteIn(request, ids.a, 'binding_lines')).status()).toBe(200);
-    expect((await deleteIn(request, ids.a, 'binding_orders')).status()).toBe(200);
+    // The lines cube itself nothing uses: deleted, and then the orders cube too.
+    expect((await deleteIn(request, ids.a, LINES)).status()).toBe(200);
+    expect((await deleteIn(request, ids.a, ORDERS)).status()).toBe(200);
+    expect((await deleteIn(request, ids.b, OTHER)).status()).toBe(200);
     const left = (await (await request.get(`/api/model/files?folder=${ids.a}`)).json()) as {
       files: unknown[];
     };
@@ -218,7 +205,7 @@ test.describe('published items stay bound until published again (T428, AC-275)',
         };
         return (meta.cubes ?? [])
           .map((cube) => cube.name)
-          .filter((name) => name.startsWith(full(ids.a, '')));
+          .filter((name) => [ORDERS, LINES, OTHER].includes(name));
       })
       .toEqual([]);
   });

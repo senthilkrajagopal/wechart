@@ -11,17 +11,18 @@ import { changeShared } from './shared-change';
  * folder its readers can't see, and xcube admits them to every cube it asks.
  *
  *   /Copy F <run>     read-only sales-ro, read-write sales-rw    the dashboard
- *   /Copy G <run>     read-write sales-rw                        a chart, on G's own `orders`
+ *   /Copy G <run>     read-write sales-rw                        a chart, on the root's `orders`
  *
- * G's chart is bound to G's `orders` (nearest first, AC-273). Shown on F's
- * dashboard as it is, the reader's tile would ask xcube for a cube in G,
- * which refuses them (AC-320). As F's own copy it lands bound on F's path:
- * the root's `orders`.
+ * Reworked by T729 to R71 (AC-371, AC-425): a name is one cube, so G holds no
+ * `orders` of its own. G's chart, on the root's `orders`, is kept in G,
+ * which F's reader can't see: shown on F's dashboard, it is F's own copy,
+ * keeping its cube's name. A move rebinds nothing.
  *
  * T537 (AC-371, amended 2026-10-01): so too when a chart F's dashboard shows
  * is moved to G, from Explore, which says which dashboard got its own copy;
  * and when an approval lands a dashboard showing a chart moved to G since it
- * was drafted.
+ * was drafted. And a chart on G's own cube, `copy_g_<run>`, isn't moved where
+ * that cube would be off its path (T714, AC-425).
  */
 const RUN = Math.random().toString(36).slice(2, 8);
 const ids = {
@@ -35,8 +36,11 @@ const ids = {
   later: '',
   draft: '',
   landed: '',
+  // T729's: a chart on G's own cube.
+  gChart: '',
 };
-const full = (folderId: string, name: string) => `f${folderId.replaceAll('-', '')}__${name}`;
+/** G's own cube, by its own name: one item per name (AC-421). */
+const G_CUBE = `copy_g_${RUN}`;
 
 type Stored = { body: Record<string, unknown>; version: number };
 const read = async (request: APIRequestContext, kind: string, id: string) =>
@@ -89,7 +93,7 @@ test.describe.configure({ mode: 'serial' });
 test.describe('copy on use (T527, AC-371)', () => {
   test.use({ role: 'super' });
 
-  test('makes a folder the reader reads, one they don’t, and a chart kept there on a cube of its own', async ({
+  test('makes a folder the reader reads, one they don’t, a cube of G’s own, and a chart kept in G', async ({
     page,
   }) => {
     const request = page.request;
@@ -103,7 +107,7 @@ test.describe('copy on use (T527, AC-371)', () => {
       expect(set.status(), await set.text()).toBe(200);
     }
     // Through My workspace and a proposal `super` approves (T451, AC-278).
-    const file = { path: 'cubes/orders.yml', content: cubeYaml('orders') };
+    const file = { path: `cubes/${G_CUBE}.yml`, content: cubeYaml(G_CUBE) };
     expect(await landed(request, ids.g, [file])).toEqual([file]);
 
     ids.chart = await made(request, {
@@ -118,11 +122,11 @@ test.describe('copy on use (T527, AC-371)', () => {
         wells: { measures: ['orders.count'], dimensions: [], timeDimensions: [] },
       },
     }));
-    // Bound in G, to G's own `orders`.
+    // Bound in G by the root's `orders` own name: no folder prefix (AC-272).
     const chart = (await read(request, 'chart', ids.chart)).body['chart'] as {
       source: { cube: string };
     };
-    expect(chart.source.cube).toBe(full(ids.g, 'orders'));
+    expect(chart.source.cube).toBe('orders');
     ids.board = await made(request, {
       kind: 'dashboard',
       title: `Copy board ${RUN}`,
@@ -130,7 +134,7 @@ test.describe('copy on use (T527, AC-371)', () => {
     });
   });
 
-  test('puts it on F’s dashboard as the dashboard’s own copy, bound on F’s path', async ({
+  test('puts it on F’s dashboard as the dashboard’s own copy, keeping its cube’s name', async ({
     page,
   }) => {
     const request = page.request;
@@ -193,12 +197,41 @@ test.describe('copy on use (T527, AC-371)', () => {
     const own = await read(request, 'chart', shown[1]!);
     expect(own.body['localToDashboardId']).toBe(ids.board);
     expect(own.body['title']).toBe(title);
-    // Bound on F's path, as the chart was before it moved.
+    // Its cube's name kept, as the chart was before it moved.
     expect(chartOf(own).source.cube).toBe('orders');
-    // The chart itself is G's now, bound to G's own.
+    // The chart itself is G's now, and rebound to nothing: a move rebinds
+    // nothing (T714, AC-425).
     const moved = await read(request, 'chart', ids.moving);
     expect(moved.body['folderId']).toBe(ids.g);
-    expect(chartOf(moved).source.cube).toBe(full(ids.g, 'orders'));
+    expect(chartOf(moved).source.cube).toBe('orders');
+  });
+
+  test('refuses moving a chart on G’s own cube where that cube is off its path, moving nothing (T714, AC-425)', async ({
+    page,
+  }) => {
+    const request = page.request;
+    const title = `G’s own ${RUN}`;
+    ids.gChart = await made(request, { kind: 'chart', title, folderId: ids.g });
+    await changeShared(request, 'chart', ids.gChart, (body) => ({
+      ...body,
+      chart: {
+        source: { cube: G_CUBE },
+        wells: { measures: [`${G_CUBE}.count`], dimensions: [], timeDimensions: [] },
+      },
+    }));
+    expect(chartOf(await read(request, 'chart', ids.gChart)).source.cube).toBe(G_CUBE);
+
+    const refused = await request.patch(`/api/documents/chart/${ids.gChart}`, {
+      data: { folderId: ids.f },
+    });
+    expect(refused.status(), await refused.text()).toBe(422);
+    expect(await refused.json()).toEqual({
+      error: `Moved, “${title}” would use “${G_CUBE}”, which isn’t in its folder or one above it. Nothing was moved.`,
+      stranded: [{ kind: 'chart', id: ids.gChart, title, names: [G_CUBE] }],
+    });
+    const after = await read(request, 'chart', ids.gChart);
+    expect(after.body['folderId']).toBe(ids.g);
+    expect(chartOf(after).source.cube).toBe(G_CUBE);
   });
 });
 
@@ -278,7 +311,7 @@ test.describe('as a read-write member, from the chart’s page (T527, AC-371)', 
     expect(shown).not.toBe(ids.later);
     const own = await read(request, 'chart', shown!);
     expect(own.body['localToDashboardId']).toBe(ids.landed);
-    // Bound on F's path, where it landed: the root's `orders`.
+    // Its cube's name kept, where it landed: the root's `orders`.
     expect(chartOf(own).source.cube).toBe('orders');
     await request.delete(`/api/documents/dashboard/${ids.draft}`);
     ids.draft = '';
@@ -322,11 +355,12 @@ test.describe('cleaning up', () => {
       ['chart', ids.chart],
       ['chart', ids.moving],
       ['chart', ids.later],
+      ['chart', ids.gChart],
     ] as const)
       if (id !== '') await request.delete(`/api/documents/${kind}/${id}`);
     if (ids.g !== '')
       await request.delete(
-        `/api/model/files?folder=${ids.g}&path=${encodeURIComponent('cubes/orders.yml')}`,
+        `/api/model/files?folder=${ids.g}&path=${encodeURIComponent(`cubes/${G_CUBE}.yml`)}`,
       );
     for (const id of [ids.f, ids.g])
       if (id !== '') await request.delete(`/api/documents/folder/${id}`);

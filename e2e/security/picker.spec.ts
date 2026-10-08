@@ -8,16 +8,26 @@ import { changeShared, proposeShared } from './shared-change';
 /**
  * T429, AC-329: WHEN the user picks a cube for a chart or dashboard, THE
  * SYSTEM SHALL offer only the cubes found on the item's own folder path, each
- * by its title with its folder path beside it, never by its prefixed name.
+ * by its title with its folder path beside it, never by a prefixed name.
  * `Fails when: the picker lists a cube from a descendant or sibling folder,
  * shows a prefixed name, or shows a cube without its folder path.`
  *
- * Against the compose stack's xcube, through the API as `super`: /A and /A/B
- * each publish a `picker_sales`, /A/B/C beneath /A/B another, and /A/D,
- * /A/B's sibling, the only `picker_widgets`. A chart in /A/B picks from
- * /A/B's `picker_sales` and the root's cubes, and nothing else.
+ * Reworked by T729 to R71's one name per item (AC-272): each folder's cube
+ * has a name of its own, and a chart binds it by that name. Against the
+ * compose stack's xcube, through the API as `super`: /A publishes
+ * `picker_a_<run>`, /A/B `picker_b_<run>`, /A/B/C beneath it
+ * `picker_c_<run>`, and /A/D, /A/B's sibling, `picker_widgets_<run>`. A
+ * chart in /A/B picks from /A's, /A/B's and the root's cubes, and nothing
+ * else.
  */
 const RUN = Math.random().toString(36).slice(2, 8);
+/** Each folder's cube, by its own name, and the title the picker shows it by. */
+const CUBES = {
+  a: { name: `picker_a_${RUN}`, title: 'Picker A cube' },
+  b: { name: `picker_b_${RUN}`, title: 'Picker B cube' },
+  c: { name: `picker_c_${RUN}`, title: 'Picker C cube' },
+  d: { name: `picker_widgets_${RUN}`, title: 'Picker widgets' },
+} as const;
 
 async function folder(request: APIRequestContext, title: string, parent: string) {
   const made = await request.post('/api/documents', {
@@ -28,11 +38,15 @@ async function folder(request: APIRequestContext, title: string, parent: string)
 }
 
 /** Through My workspace and a proposal `super` approves (T451, AC-278). */
-async function publish(request: APIRequestContext, folderId: string, name: string) {
+async function publish(
+  request: APIRequestContext,
+  folderId: string,
+  { name, title }: { name: string; title: string },
+) {
   const file = {
     path: `cubes/${name}.yml`,
     // A dimension too, for a dashboard filter to pick (T633).
-    content: `cubes:\n  - name: ${name}\n    sql_table: public.orders\n    measures:\n      - name: count\n        type: count\n    dimensions:\n      - name: status\n        sql: status\n        type: string\n`,
+    content: `cubes:\n  - name: ${name}\n    title: ${title}\n    sql_table: public.orders\n    measures:\n      - name: count\n        type: count\n    dimensions:\n      - name: status\n        sql: status\n        type: string\n`,
   };
   expect(await landed(request, folderId, [file])).toEqual([file]);
 }
@@ -62,7 +76,6 @@ test.describe.configure({ mode: 'serial' });
 test.describe('cubes bound and picked on a folder’s path (T429)', () => {
   test.use({ role: 'super' });
   const ids = { a: '', b: '', c: '', d: '' };
-  const bFull = () => `f${ids.b.replaceAll('-', '')}__picker_sales`;
 
   test('makes the folders and publishes their cubes', async ({ page }) => {
     const request = page.request;
@@ -70,18 +83,18 @@ test.describe('cubes bound and picked on a folder’s path (T429)', () => {
     ids.b = await folder(request, `Picker B ${RUN}`, ids.a);
     ids.c = await folder(request, `Picker C ${RUN}`, ids.b);
     ids.d = await folder(request, `Picker D ${RUN}`, ids.a);
-    await publish(request, ids.a, 'picker_sales');
-    await publish(request, ids.b, 'picker_sales');
-    await publish(request, ids.c, 'picker_sales');
-    await publish(request, ids.d, 'picker_widgets');
+    await publish(request, ids.a, CUBES.a);
+    await publish(request, ids.b, CUBES.b);
+    await publish(request, ids.c, CUBES.c);
+    await publish(request, ids.d, CUBES.d);
   });
 
   /**
-   * AC-272: `Fails when: a chart published in /A/B binds /A's sales while
-   * /A/B defines its own; binds a cube defined only in /A/B/C or a sibling;
-   * publishes with a name found nowhere on its path; …`
+   * AC-272, reworked by T729: `Fails when: … binds a cube defined only in
+   * /A/B/C or a sibling; publishes with a name found nowhere on its path; …`
+   * A chart binds a cube on its path by the cube's own name.
    */
-  test('stores a chart saved into /A/B bound to /A/B’s own cube, and refuses one naming only a sibling’s', async ({
+  test('stores a chart saved into /A/B bound by its cube’s own name, and refuses one naming only a sibling’s', async ({
     page,
   }) => {
     const request = page.request;
@@ -96,21 +109,21 @@ test.describe('cubes bound and picked on a folder’s path (T429)', () => {
       },
     });
 
-    const refused = await proposeShared(request, 'chart', id, withCube('picker_widgets'));
+    const refused = await proposeShared(request, 'chart', id, withCube(CUBES.d.name));
     expect(refused.approved.status()).toBe(422);
     expect(await refused.approved.json()).toEqual({
-      error: `No folder on the path of “Bound chart ${RUN}” holds “picker_widgets”, so nothing was approved.`,
-      names: ['picker_widgets'],
+      error: `No folder on the path of “Bound chart ${RUN}” holds “${CUBES.d.name}”, so nothing was approved.`,
+      names: [CUBES.d.name],
     });
     await refused.cleanUp();
 
-    const saved = await changeShared(request, 'chart', id, withCube('picker_sales'));
+    const saved = await changeShared(request, 'chart', id, withCube(CUBES.b.name));
     expect(saved).toEqual([{ kind: 'chart', id, version: 2 }]);
     const stored = (await (await request.get(`/api/documents/chart/${id}`)).json()) as {
       body: { chart: { source: { cube: string }; wells: { measures: string[] } } };
     };
-    expect(stored.body.chart.source.cube).toBe(bFull());
-    expect(stored.body.chart.wells.measures).toEqual([`${bFull()}.count`]);
+    expect(stored.body.chart.source.cube).toBe(CUBES.b.name);
+    expect(stored.body.chart.wells.measures).toEqual([`${CUBES.b.name}.count`]);
   });
 
   test('offers the cubes on a chart’s folder path, nearest first, each with its folder path and never a prefixed name (AC-329)', async ({
@@ -135,14 +148,16 @@ test.describe('cubes bound and picked on a folder’s path (T429)', () => {
         hidden: option.getAttribute('aria-disabled') === 'true',
       })),
     );
-    // /A/B's own `picker_sales`, by its title with /A/B's path; /A/B/C's not at all.
-    const sales = options.filter((option) => option.cube.endsWith('picker_sales'));
-    expect(sales.filter((option) => !option.hidden)).toEqual([
-      { cube: bFull(), group: AB, title: 'Picker Sales', path: AB, hidden: false },
+    // /A/B's and /A's, each by its title with its folder's path; /A/B/C's not at all.
+    const A = `Picker A ${RUN}`;
+    const own = options.filter((option) => option.cube.startsWith('picker_'));
+    expect(own).toEqual([
+      { cube: CUBES.b.name, group: AB, title: CUBES.b.title, path: AB, hidden: false },
+      { cube: CUBES.a.name, group: A, title: CUBES.a.title, path: A, hidden: false },
     ]);
-    expect(sales.some((option) => option.cube.includes(ids.c.replaceAll('-', '')))).toBe(false);
-    // No sibling's cube.
-    expect(options.some((option) => option.cube.endsWith('picker_widgets'))).toBe(false);
+    // No descendant's, and no sibling's cube.
+    expect(options.some((option) => option.cube === CUBES.c.name)).toBe(false);
+    expect(options.some((option) => option.cube === CUBES.d.name)).toBe(false);
     // The root's, under the root's name.
     expect(options).toContainEqual({
       cube: 'orders',
@@ -159,42 +174,42 @@ test.describe('cubes bound and picked on a folder’s path (T429)', () => {
   });
 
   /**
-   * T475, AC-342: WHEN a cube on the item's folder path is hidden by a nearer
-   * cube of the same name, THE SYSTEM SHALL list it in the cube picker dimmed
-   * and unselectable, saying which folder's cube hides it.
-   * `Fails when: a hidden farther cube is missing from the list, can be
-   * picked, or doesn't say what hides it.`
+   * T475, reworked by T729 to R71 (AC-342 retired: no two folders hold one
+   * name, so no cube on a path is hidden): each folder's cube on the path is
+   * listed under its folder, pickable, and none dimmed. T732 adds AC-428's
+   * "Your copy".
    */
-  test('lists /A’s picker_sales under /A, dimmed and unpickable, hidden by /A/B’s (AC-342)', async ({
+  test('lists /A’s cube under /A, pickable, with nothing dimmed (T475, reworked)', async ({
     page,
   }) => {
-    const id = await chartIn(page.request, ids.b, `Hidden chart ${RUN}`);
+    const id = await chartIn(page.request, ids.b, `Listed chart ${RUN}`);
     await page.goto(`/explore/charts/${id}/edit?new=true`);
     const picker = cubePicker(page);
     const list = await picker.open();
     const A = `Picker A ${RUN}`;
     const AB = `${A} / Picker B ${RUN}`;
     await expect(list.getByRole('group').first()).toHaveAttribute('aria-label', AB);
-    const hidden = list
+    const ofA = list
       .getByRole('group', { name: A, exact: true })
-      .locator(`[data-cube="f${ids.a.replaceAll('-', '')}__picker_sales"]`);
-    await expect(hidden).toHaveAttribute('aria-disabled', 'true');
-    await expect(hidden).toContainText(`${A} · hidden by Picker Sales in ${AB}`);
-    await expect(hidden).toHaveCSS('color', await hiddenColour(page));
-    // It can't be picked: the button still names none. Forced, as a person's
-    // click is: Playwright waits on a control that says it is disabled.
-    await hidden.click({ force: true });
-    await expect(picker.button).toHaveAttribute('data-value', '');
+      .locator(`[data-cube="${CUBES.a.name}"]`);
+    await expect(ofA).not.toHaveAttribute('aria-disabled', 'true');
+    await expect(ofA).not.toContainText('hidden by');
+    await expect(ofA).not.toHaveCSS('color', await hiddenColour(page));
+    await expect(list.locator('[aria-disabled="true"]')).toHaveCount(0);
+    expect(await list.textContent()).not.toContain('__');
+    // Picked, the button names it.
+    await ofA.click();
+    await expect(picker.button).toHaveAttribute('data-value', CUBES.a.name);
   });
 
   /**
-   * T633 (AC-329, AC-342; R64): a dashboard's filter picks its field from the
-   * cubes on the dashboard's path, as design 10's picker lists them: by
-   * folder, nearest first, each field with its cube and folder path, never a
-   * prefixed name; /A's cube, hidden by /A/B's, once, dimmed. A workspace
-   * dashboard to go to /A/B, as one is authored.
+   * T633 (AC-329; R64), reworked by T729 to R71 (AC-342 retired): a
+   * dashboard's filter picks its field from the cubes on the dashboard's
+   * path, as design 10's picker lists them: by folder, nearest first, each
+   * field with its cube and folder path, never a prefixed name, and none
+   * dimmed. A workspace dashboard to go to /A/B, as one is authored.
    */
-  test('a dashboard filter picks its field from the path’s cubes, by folder, a hidden one dimmed (T633)', async ({
+  test('a dashboard filter picks its field from the path’s cubes, by folder, none dimmed (T633)', async ({
     page,
   }) => {
     const made = await page.request.post('/api/documents', {
@@ -218,17 +233,18 @@ test.describe('cubes bound and picked on a folder’s path (T429)', () => {
       const AB = `${A} / Picker B ${RUN}`;
       const list = picker.list;
       await expect(list.getByRole('group').first()).toHaveAttribute('aria-label', AB);
-      await expect(list.locator(`[data-member="${bFull()}.status"]`)).toContainText(
-        `Picker Sales · ${AB}`,
+      await expect(list.locator(`[data-member="${CUBES.b.name}.status"]`)).toContainText(
+        `${CUBES.b.title} · ${AB}`,
       );
-      const hidden = list
-        .getByRole('group', { name: A, exact: true })
-        .locator(`[data-cube="f${ids.a.replaceAll('-', '')}__picker_sales"]`);
-      await expect(hidden).toHaveAttribute('aria-disabled', 'true');
-      await expect(hidden).toContainText(`${A} · hidden by Picker Sales in ${AB}`);
+      await expect(
+        list
+          .getByRole('group', { name: A, exact: true })
+          .locator(`[data-member="${CUBES.a.name}.status"]`),
+      ).toContainText(`${CUBES.a.title} · ${A}`);
+      await expect(list.locator('[aria-disabled="true"]')).toHaveCount(0);
       // No sibling's or descendant's cube, and never a prefixed name.
-      await expect(list.locator('[data-member*="picker_widgets"]')).toHaveCount(0);
-      await expect(list.locator(`[data-member^="f${ids.c.replaceAll('-', '')}__"]`)).toHaveCount(0);
+      await expect(list.locator(`[data-member^="${CUBES.d.name}."]`)).toHaveCount(0);
+      await expect(list.locator(`[data-member^="${CUBES.c.name}."]`)).toHaveCount(0);
       expect(await list.textContent()).not.toContain('__');
     } finally {
       await page.request.delete(`/api/documents/dashboard/${id}`);
@@ -246,15 +262,14 @@ test.describe('cubes bound and picked on a folder’s path (T429)', () => {
     await expect(page.getByRole('button', { name: /theme/i })).toBeVisible();
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k');
     const palette = page.getByRole('dialog', { name: /search/i });
-    await palette.getByRole('combobox').fill('picker_sales.count');
+    await palette.getByRole('combobox').fill(`${CUBES.b.name}.count`);
 
     const results = palette.getByRole('listbox', { name: 'Search results' });
     await expect(
       results.getByRole('option').filter({
-        // /A/B/C's own is found too: its path runs on past /A/B's. Its cube
-        // by title, never an id (T478, AC-220).
+        // Its cube by title, never an id (T478, AC-220).
         hasText: new RegExp(
-          `^MeasurePicker Sales CountCube Picker Sales · Shared / Picker A ${RUN} / Picker B ${RUN}$`,
+          `^Measure${CUBES.b.title} CountCube ${CUBES.b.title} · Shared / Picker A ${RUN} / Picker B ${RUN}$`,
         ),
       }),
     ).toHaveCount(1);
@@ -263,23 +278,18 @@ test.describe('cubes bound and picked on a folder’s path (T429)', () => {
   });
 
   /**
-   * T457, AC-272: a chart's second cube is bound through the bindings its
-   * source cube was published with, so it joins as its cube does: /A/B's
-   * `src` joins `other`, bound to /A's when `src` was published. A nearer
-   * `other` published in /A/B afterwards rebinds nothing (R31), so a chart
-   * published in /A/B then still binds /A's.
+   * T457, AC-272, reworked by T729: a chart's second cube is bound by its own
+   * name, as its source cube joins it: /A/B's `src` joins /A's `other`. A
+   * cube only /A/B/C defines is on no path of /A/B's.
    */
-  test('binds a chart’s second cube as its source cube was published bound, a nearer one since notwithstanding (T457)', async ({
+  test('binds a chart’s second cube by its own name, and refuses one off its path (T457)', async ({
     page,
   }) => {
     const request = page.request;
     const other = `picker_other_${RUN}`;
     const src = `picker_src_${RUN}`;
-    const full = (folderId: string, name: string) => `f${folderId.replaceAll('-', '')}__${name}`;
     await publishYaml(request, ids.a, other, cubeOf(other));
     await publishYaml(request, ids.b, src, cubeOf(src, other));
-    // The nearer one, after `src` was bound to /A's.
-    await publishYaml(request, ids.b, other, cubeOf(other));
 
     const id = await chartIn(request, ids.b, `Joined chart ${RUN}`);
     const saved = await changeShared(request, 'chart', id, (body) => ({
@@ -295,24 +305,21 @@ test.describe('cubes bound and picked on a folder’s path (T429)', () => {
         chart: { source: { cube: string }; wells: { measures: string[]; dimensions: string[] } };
       };
     };
-    expect(stored.body.chart.source.cube).toBe(full(ids.b, src));
-    expect(stored.body.chart.wells.measures).toEqual([`${full(ids.b, src)}.count`]);
-    // /A's, as `src` joins it, not /A/B's nearer one.
-    expect(stored.body.chart.wells.dimensions).toEqual([`${full(ids.a, other)}.id`]);
-    // While a chart starting from `other` itself takes the nearer, /A/B's:
-    // what differs above is `src`'s bindings, not a publish that didn't land.
-    const near = await chartIn(request, ids.b, `Near chart ${RUN}`);
-    await changeShared(request, 'chart', near, (body) => ({
-      ...body,
-      chart: {
-        source: { cube: other },
-        wells: { measures: [`${other}.count`], dimensions: [], timeDimensions: [] },
-      },
-    }));
-    const nearStored = (await (await request.get(`/api/documents/chart/${near}`)).json()) as {
-      body: { chart: { source: { cube: string } } };
-    };
-    expect(nearStored.body.chart.source.cube).toBe(full(ids.b, other));
+    expect(stored.body.chart.source.cube).toBe(src);
+    expect(stored.body.chart.wells.measures).toEqual([`${src}.count`]);
+    // /A's `other`, as `src` joins it, by its own name.
+    expect(stored.body.chart.wells.dimensions).toEqual([`${other}.id`]);
+    // And it answers through the join, by `other`'s own name. Its count:
+    // the key is a primary key, which Cube hides from queries' dimensions.
+    const answer = await request.post('/api/load', {
+      data: { query: { measures: [`${src}.count`, `${other}.count`] } },
+    });
+    expect(answer.status(), await answer.text()).toBe(200);
+    expect(
+      ((await answer.json()) as { data: Record<string, unknown>[] }).data.map((row) =>
+        Object.keys(row).sort(),
+      ),
+    ).toEqual([[`${other}.count`, `${src}.count`].sort()]);
 
     // A cube only /A/B/C, beneath /A/B, defines is on no path of /A/B's.
     const deep = `picker_deep_${RUN}`;
