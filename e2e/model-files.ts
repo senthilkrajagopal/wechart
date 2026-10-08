@@ -58,12 +58,19 @@ export async function proposedModel(
  * browsers sharing one user's workspace — the single user's with sign-in off,
  * a role's with it on — would put two there at once. A lock directory per
  * name, taken in order; one left by a worker that died is taken after three
- * minutes.
+ * minutes. Names compare without regard to case (AC-421), so `Orders` and
+ * `orders` take one lock.
  */
 async function holdNames(files: readonly ModelFileText[]): Promise<() => Promise<void>> {
   const names = [
     ...new Set(
-      files.flatMap((file) => /^\s*-\s+name:\s*(\S+)/m.exec(file.content)?.slice(1, 2) ?? []),
+      files.flatMap(
+        (file) =>
+          /^\s*-\s+name:\s*(\S+)/m
+            .exec(file.content)
+            ?.slice(1, 2)
+            .map((name) => name.toLowerCase()) ?? [],
+      ),
     ),
   ].sort();
   const held: string[] = [];

@@ -38,13 +38,23 @@ import { BASE_URL, expect, signInThroughDex, test } from './fixtures';
 const RUN = Math.random().toString(36).slice(2, 8);
 const names = { sales: `Sales ${RUN}`, emea: `EMEA ${RUN}` };
 const made = { sales: '', emea: '', files: [] as string[], region: false };
+/**
+ * Each cube's and view's name is the run's own: one name is held once across
+ * the system (T700, AC-421), and the browsers run this spec at once.
+ */
+const CUBE = {
+  customers: `t342_customers_${RUN}`,
+  orders: `t342_orders_${RUN}`,
+  summary: `t342_summary_${RUN}`,
+  region: `t342_region_${RUN}`,
+};
 const ORDERS = 'cubes/orders.yml';
-const CUSTOMERS = 'cubes/t342_customers.yml';
-const SUMMARY = 'views/t342_summary.yml';
-const REGION = 'cubes/t342_region.yml';
+const CUSTOMERS = `cubes/${CUBE.customers}.yml`;
+const SUMMARY = `views/${CUBE.summary}.yml`;
+const REGION = `cubes/${CUBE.region}.yml`;
 const CUSTOMERS_YAML = [
   'cubes:',
-  '  - name: t342_customers',
+  `  - name: ${CUBE.customers}`,
   '    sql_table: public.customers',
   '    dimensions:',
   '      - name: id',
@@ -65,12 +75,12 @@ const FILES = [
     path: ORDERS,
     content: [
       'cubes:',
-      '  - name: t342_orders',
+      `  - name: ${CUBE.orders}`,
       '    sql_table: public.orders',
       '    joins:',
-      '      - name: t342_customers',
+      `      - name: ${CUBE.customers}`,
       '        relationship: many_to_one',
-      "        sql: '{CUBE}.customer_id = {t342_customers}.id'",
+      `        sql: '{CUBE}.customer_id = {${CUBE.customers}}.id'`,
       '    dimensions:',
       '      - name: id',
       '        sql: id',
@@ -99,9 +109,9 @@ const FILES = [
     path: SUMMARY,
     content: [
       'views:',
-      '  - name: t342_summary',
+      `  - name: ${CUBE.summary}`,
       '    cubes:',
-      '      - join_path: t342_orders',
+      `      - join_path: ${CUBE.orders}`,
       '        includes: [count, status]',
       '',
     ].join('\n'),
@@ -194,7 +204,7 @@ test.describe('a model in its folder, read-only when shared (T342; AC-222, AC-13
       }
       const region = {
         path: REGION,
-        content: CUSTOMERS_YAML.replace('name: t342_customers', 'name: t342_region'),
+        content: CUSTOMERS_YAML.replace(`name: ${CUBE.customers}`, `name: ${CUBE.region}`),
       };
       made.region = true;
       expect(await landed(request, made.sales, [region])).toEqual([region]);
@@ -213,7 +223,7 @@ test.describe('a model in its folder, read-only when shared (T342; AC-222, AC-13
       await expect(page).toHaveURL(
         new RegExp(`/explore/folders/${made.emea}/models/cubes%2Forders\\.yml$`),
       );
-      await expect(yaml(page, ORDERS)).toContainText('name: t342_orders');
+      await expect(yaml(page, ORDERS)).toContainText(`name: ${CUBE.orders}`);
       await expect(yaml(page, ORDERS)).not.toContainText('name: orders');
       await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toHaveText(
         `Explore / Shared / ${names.sales} / ${names.emea} / Model / ${ORDERS}`,
@@ -221,7 +231,11 @@ test.describe('a model in its folder, read-only when shared (T342; AC-222, AC-13
 
       // The folder's files beside the editor, and only its own.
       await expect(tree(page).getByRole('link')).toHaveCount(3);
-      for (const name of [/^orders\.yml/, /^t342_customers\.yml/, /^t342_summary\.yml/])
+      for (const name of [
+        /^orders\.yml/,
+        new RegExp(`^${CUBE.customers}\\.yml`),
+        new RegExp(`^${CUBE.summary}\\.yml`),
+      ])
         await expect(tree(page).getByRole('link', { name })).toBeVisible();
       await expect(tree(page).getByRole('link', { name: /^orders\.yml/ })).toHaveAttribute(
         'aria-current',
@@ -233,12 +247,12 @@ test.describe('a model in its folder, read-only when shared (T342; AC-222, AC-13
         (window as unknown as { stayed?: boolean }).stayed = true;
       });
       await tree(page)
-        .getByRole('link', { name: /^t342_customers\.yml/ })
+        .getByRole('link', { name: new RegExp(`^${CUBE.customers}\\.yml`) })
         .click();
       await expect(page).toHaveURL(
-        new RegExp(`/explore/folders/${made.emea}/models/cubes%2Ft342_customers\\.yml$`),
+        new RegExp(`/explore/folders/${made.emea}/models/cubes%2F${CUBE.customers}\\.yml$`),
       );
-      await expect(yaml(page, CUSTOMERS)).toContainText('name: t342_customers');
+      await expect(yaml(page, CUSTOMERS)).toContainText(`name: ${CUBE.customers}`);
       expect(await page.evaluate(() => (window as unknown as { stayed?: boolean }).stayed)).toBe(
         true,
       );
@@ -287,14 +301,14 @@ test.describe('a model in its folder, read-only when shared (T342; AC-222, AC-13
 
       const orders = rowOf(ORDERS);
       await expect(orders.getByRole('cell').nth(1)).toHaveText('Cube');
-      await expect(orders.getByRole('cell').nth(2)).toHaveText('t342_orders');
+      await expect(orders.getByRole('cell').nth(2)).toHaveText(CUBE.orders);
       await orders.locator('.model-overview__members').hover();
       const tip = orders.getByRole('tooltip');
       await expect(tip).toBeVisible();
       for (const listed of [
         'Dimensions · id, status',
         'Measures · count',
-        'Joins · t342_customers',
+        `Joins · ${CUBE.customers}`,
         'Pre-aggs · by_status',
         'Segments · completed',
         'Hierarchies · status_levels',
@@ -302,12 +316,12 @@ test.describe('a model in its folder, read-only when shared (T342; AC-222, AC-13
         await expect(tip).toContainText(listed);
 
       const customers = rowOf(CUSTOMERS);
-      await expect(customers.getByRole('cell').nth(2)).toHaveText('t342_customers');
+      await expect(customers.getByRole('cell').nth(2)).toHaveText(CUBE.customers);
       const summary = rowOf(SUMMARY);
       await expect(summary.getByRole('cell').nth(1)).toHaveText('View');
-      await expect(summary.getByRole('cell').nth(2)).toHaveText('t342_summary');
+      await expect(summary.getByRole('cell').nth(2)).toHaveText(CUBE.summary);
       await expect(summary.locator('.model-overview__members')).toHaveText(
-        't342_orders.count, t342_orders.status',
+        `${CUBE.orders}.count, ${CUBE.orders}.status`,
       );
 
       // Never a prefixed name, anywhere on the page (AC-329).
@@ -319,9 +333,9 @@ test.describe('a model in its folder, read-only when shared (T342; AC-222, AC-13
       // before a rule tightened: xcube serves the text it was published with.
       storeAs(made.emea, CUSTOMERS, CUSTOMERS_YAML.replace('type: string', 'type: strng'));
       await page.goto(fileUrl(made.emea, ORDERS));
-      await expect(tree(page).getByRole('link', { name: /^t342_customers\.yml/ })).toContainText(
-        'problems',
-      );
+      await expect(
+        tree(page).getByRole('link', { name: new RegExp(`^${CUBE.customers}\\.yml`) }),
+      ).toContainText('problems');
       await expect(tree(page).getByRole('link', { name: /^orders\.yml/ })).not.toContainText(
         'problems',
       );
@@ -344,7 +358,7 @@ test.describe('a model in its folder, read-only when shared (T342; AC-222, AC-13
 
       // Sales' model, which writer only views (AC-262): read-only, with neither action (rule 71).
       await page.goto(fileUrl(made.sales, REGION));
-      await expect(yaml(page, REGION)).toContainText('name: t342_region');
+      await expect(yaml(page, REGION)).toContainText(`name: ${CUBE.region}`);
       await expect(form.getByText(`Read-only · in ${names.sales}`)).toBeVisible();
       await expect(page.getByRole('button', { name: 'Edit in my workspace' })).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Save & reload Cube' })).toHaveCount(0);

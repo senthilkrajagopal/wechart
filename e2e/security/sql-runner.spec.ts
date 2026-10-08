@@ -24,6 +24,8 @@ import {
  * API, as the tab's own requests are.
  */
 const RUN = Math.random().toString(36).slice(2, 8);
+/** The folder's data source: a name held once across the system (T700, AC-421). */
+const SOURCE = `warehouse_${RUN}`;
 const KEY = JSON.parse(
   readFileSync(new URL('../../infra/xcube/dev-credential-key.pub.jwk', import.meta.url), 'utf8'),
 ) as XcubeKey;
@@ -65,7 +67,7 @@ async function setUp(request: APIRequestContext) {
   const source = await request.post('/api/data-sources', {
     data: await testedSource(request, {
       folderId: world.folderId,
-      name: 'warehouse',
+      name: SOURCE,
       driver: 'postgres',
       authMethod: 'password',
       fields: FIELDS,
@@ -272,7 +274,7 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
     expect(second.status(), await second.text()).toBe(409);
     expect(await second.json()).toMatchObject({
       outcome: 'going',
-      going: { dataSource: { id: world.sourceId, name: 'warehouse' } },
+      going: { dataSource: { id: world.sourceId, name: SOURCE } },
     });
     expect(await (await page.request.get('/api/sql-runs/going')).json()).toMatchObject({
       going: { dataSource: { id: world.sourceId } },
@@ -313,7 +315,7 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
       const [newest] = ((await mine.json()) as { runs: Record<string, unknown>[] }).runs;
       expect(newest).toMatchObject({
         sql: `SELECT '${literal}' AS v, 7 AS n`,
-        dataSource: { id: world.sourceId, name: 'warehouse', inWorkspace: false },
+        dataSource: { id: world.sourceId, name: SOURCE, inWorkspace: false },
         outcome: 'finished',
         rowCount: 1,
       });
@@ -332,7 +334,7 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
         event: 'sql-run',
         actor: { name: 'Wren Writer' },
         folderId: world.folderId,
-        item: { kind: 'data-source', id: world.sourceId, title: 'warehouse' },
+        item: { kind: 'data-source', id: world.sourceId, title: SOURCE },
         details: {
           outcome: 'finished',
           rowCount: 1,
@@ -484,7 +486,9 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
           page.waitForEvent('download'),
           panel.getByRole('button', { name: 'Download CSV' }).click(),
         ]);
-        expect(download.suggestedFilename()).toMatch(/^warehouse-\d{4}-\d\d-\d\d-\d{6}\.csv$/);
+        expect(download.suggestedFilename()).toMatch(
+          new RegExp(`^${SOURCE}-\\d{4}-\\d\\d-\\d\\d-\\d{6}\\.csv$`),
+        );
         expect(readFileSync(await download.path(), 'utf8')).toBe('one,letter\r\n1,a\r\n');
         expect(posts).toHaveLength(1);
       } finally {
@@ -677,7 +681,7 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
         // Undo left alone: the run's SQL stays in the editor for what follows.
 
         await runs.getByRole('radio', { name: 'All' }).click();
-        await expect(runs.getByRole('listitem').first()).toContainText(`warehouse · SQL ${RUN}`);
+        await expect(runs.getByRole('listitem').first()).toContainText(`${SOURCE} · SQL ${RUN}`);
         await expect(runs.getByRole('listitem').first()).toContainText(/Today \d\d:\d\d/);
         // A run's link opens its data source on the SQL tab, the editor's text kept (T535's review).
         await page.goto(`/explore/data-sources/${world.sourceId}?tab=sql`);
@@ -702,7 +706,7 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
         .click();
       const panel = page.getByRole('tabpanel', { name: 'SQL' });
       await panel.getByRole('button', { name: 'Turn off' }).click();
-      const off = panel.getByRole('region', { name: 'The SQL runner is off for warehouse' });
+      const off = panel.getByRole('region', { name: `The SQL runner is off for ${SOURCE}` });
       await expect(off).toBeVisible();
       await expect(panel.locator('.sql-editor')).toHaveCount(0);
       // Said, and focus on Turn on… (design 15, keyboard).
@@ -711,7 +715,7 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
       );
       await expect(off.getByRole('button', { name: 'Turn on the SQL runner…' })).toBeFocused();
       await off.getByRole('button', { name: 'Turn on the SQL runner…' }).click();
-      const dialog = page.getByRole('dialog', { name: 'Turn on the SQL runner for warehouse?' });
+      const dialog = page.getByRole('dialog', { name: `Turn on the SQL runner for ${SOURCE}?` });
       await expect(dialog.getByRole('button', { name: 'Turn on' })).toBeDisabled();
       await dialog.getByRole('checkbox', { name: /I confirm that sample can only read/ }).check();
       await dialog.getByRole('button', { name: 'Turn on' }).click();
@@ -726,7 +730,7 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
       const { context, page, panel } = await onTab(browser);
       try {
         await typeSql(page, 'SELECT * FROM ');
-        const tree = panel.getByRole('region', { name: 'Tables in warehouse' });
+        const tree = panel.getByRole('region', { name: `Tables in ${SOURCE}` });
         const publicSchema = tree.getByRole('treeitem', { name: 'public', exact: true });
         await publicSchema.getByTestId('sql-schema-caret').click();
         // The sample's tables, and the one this spec made, as introspection lists them.
@@ -782,7 +786,7 @@ test.describe('SQL on a data source, through xcube (T532)', () => {
           panel.getByRole('table', { name: 'Result' }).getByRole('cell').nth(1),
         ).toHaveText('sample');
         // Its schema browser lists its own catalog, read in its workspace's overlay (T539, T547).
-        const tree = panel.getByRole('region', { name: 'Tables in warehouse' });
+        const tree = panel.getByRole('region', { name: `Tables in ${SOURCE}` });
         await tree
           .getByRole('treeitem', { name: 'public', exact: true })
           .getByTestId('sql-schema-caret')

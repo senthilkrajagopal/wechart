@@ -20,6 +20,8 @@ import { BASE_URL, expect, signInThroughDex, test, testedSource } from './fixtur
  * browser seals one: an envelope wechart keeps and never opens.
  */
 const RUN = Math.random().toString(36).slice(2, 8);
+/** The folder's data source: a name held once across the system (T700, AC-421). */
+const SOURCE = `warehouse_${RUN}`;
 /** The key the suite's API gives the browser: an envelope must be sealed to it. */
 const KEY = JSON.parse(
   readFileSync(new URL('../../infra/xcube/dev-credential-key.pub.jwk', import.meta.url), 'utf8'),
@@ -61,7 +63,7 @@ async function setUp(request: APIRequestContext) {
   const source = await request.post('/api/data-sources', {
     data: await testedSource(request, {
       folderId,
-      name: 'warehouse',
+      name: SOURCE,
       driver: 'postgres',
       authMethod: 'password',
       fields: FIELDS,
@@ -95,7 +97,7 @@ test('a folder lists its data source as a data source, built on its driver, and 
     await expect(row.getByRole('cell').nth(0)).toHaveText('Data source');
     await expect(row.getByRole('cell').nth(1)).toHaveText('PostgreSQL');
     await expect(row.locator('.itemicon')).toHaveAttribute('data-icon', 'data-source');
-    await expect(row).toContainText('warehouse');
+    await expect(row).toContainText(SOURCE);
 
     // Its settings say a secret is stored, never what it is (AC-164).
     const opened = await page.request.get(`/api/data-sources/${sourceId}`);
@@ -138,7 +140,7 @@ test('a data source lands in xcube as a connection, refused when its secret wonâ
   page,
 }) => {
   const { folderId, sourceId } = await setUp(page.request);
-  const name = `f${folderId.replaceAll('-', '')}__warehouse`;
+  const name = `f${folderId.replaceAll('-', '')}__${SOURCE}`;
   try {
     const held = (await connectionsOf(page.request)).find((each) => each.name === name);
     expect(held?.secrets).toEqual(['password']);

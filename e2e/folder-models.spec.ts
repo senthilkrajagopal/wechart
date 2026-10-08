@@ -32,8 +32,9 @@ test('a cube published into a new folder is served under the folder’s id, and 
   expect(made.status()).toBe(201);
   const { id } = (await made.json()) as { id: string };
   // Of this browser's own: the browsers share the single user's workspace,
-  // which holds a name once (T451's switch).
-  const name = `folder_orders_${testInfo.project.name}`;
+  // which holds a name once (T451's switch). And this run's: a rerun makes
+  // another folder, and a name lands once across the system (T700, AC-421).
+  const name = `folder_orders_${testInfo.project.name}_${Date.now().toString(36)}`;
 
   // Through My workspace and a proposal the single user approves (T451's switch; AC-254).
   const file = {
@@ -81,7 +82,9 @@ test('Schedules reads a folder rollup’s key SQL from its folder’s file', asy
   });
   expect(made.status()).toBe(201);
   const { id } = (await made.json()) as { id: string };
-  const cube = `t450_keyed_${testInfo.project.name}`;
+  // This run's: a rerun makes another folder, and a name lands once across
+  // the system (T700, AC-421).
+  const cube = `t450_keyed_${testInfo.project.name}_${Date.now().toString(36)}`;
   // Through My workspace and a proposal the single user approves (T451's switch; AC-254).
   const file = {
     path: `cubes/${cube}.yml`,

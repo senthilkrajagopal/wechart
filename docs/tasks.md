@@ -12962,7 +12962,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 
 ### Fresh start (R71 9: no migration)
 
-- [ ] T700 [P] (AC-421, AC-426, AC-310) Seed data and shared test fixtures in which no two items share a name: bare names, in the grammar, and only the root's `default`
+- [x] T700 [P] (AC-421, AC-426, AC-310) Seed data and shared test fixtures in which no two items share a name: bare names, in the grammar, and only the root's `default`
   - Files:
     - `packages/api/src/seed.ts` (+ `seed.test.ts`);
     - `infra/cube/model/**`, the root model the API seeds at start;
@@ -12978,6 +12978,17 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 
     The fixtures' names are shown by both suites passing on the R71 image (T702).
   - Depends on: none
+  - **Done 2026-10-07.**
+    - **The seed already held to it.** The root model (`infra/cube/model`) declares six cubes and two views, each once, in the grammar, none reserved; the development seed makes no data source, and the root's `default` comes only from the install Job's seeding (`seed-default.ts`, and `e2e/security/root-default.ts` in the security suite). So nothing of the seed changed, and the test passed as written: it guards the seed rather than having driven a change. `seed.test.ts`, "the development seed under one name per item" (2 tests): the root model's names, once each in any case, in the grammar, none reserved, the Jinja file read with its tags taken out; and no data source made by the seed. No root view uses `split: true`, so the test reads no split view's names.
+    - **The fixtures:**
+      - `e2e/model-files.ts`: `holdNames` locks a name in lower case, so `Orders` and `orders` take one lock (AC-421).
+      - `e2e/security/folder-data-sources.spec.ts` and `sql-runner.spec.ts`: each run's data source is `warehouse_<run>`, not `warehouse`. `folder-data-sources`'s T442 test still reads xcube's connection as `f<folder>__warehouse_<run>`: the prefix goes with T709.
+      - `e2e/security/model-in-folder.spec.ts` (T342's): its cubes and view are the run's own (`t342_customers_<run>` …), since the browsers each made the same names in their own folders.
+      - `e2e/folder-models.spec.ts`: `folder_orders_…` and `t450_keyed_…` carry the run, since a rerun makes another folder.
+      - `e2e/security/fixtures.ts` (`testedSource`) and `e2e/security/root-default.ts` needed nothing: the first names nothing, the second seeds only the root's `default`.
+    - **Left to the rework tasks, whose premise is two items of one name** (they fail on the R71 image until reworked): `data-source-binding.spec.ts` (`warehouse` in four folders, and `default` in /A and /A/B: T730, T708); `data-sources.spec.ts`'s nearer `parent_<run>` (T730); `binding.spec.ts` (T729); `copy-on-use.spec.ts`'s G `orders` (T729); `isolation.spec.ts` (T728); `picker.spec.ts` (T732); `publish-check.spec.ts`'s nearer `t451_other_<run>` (T728); `workspace-rebind.spec.ts` (T731); `use-only-copy.spec.ts` (T731, T717); `generate-cubes.spec.ts`'s refused `orders` (T727). `generate-in-workspace.spec.ts`'s `chrome_stores` is a table's name, shared by the browsers in one workspace (T724).
+    - **Not a namespace matter, noted:** on CI, Chrome and Edge both have `browserName` `chromium`, so root cubes named `<prefix>_${browserName}` (jobs, schedules, markings, model-schedule) are written by both at once, in one folder.
+    - Tests: `seed.test.ts` (4 pass); the full unit suite (core 535, web 2582; API 1687 of 1691: `route-matrix.test.ts`'s three time out under the full run and pass alone, and `jobs/history.test.ts`'s Super-Admin listing finds none of its builds, alone too, with no API source changed here); e2e in Chrome on the image then pinned (`v1.7.45-74c933bdb8`): `folder-models.spec.ts` 3/3, `security/model-in-folder`, `folder-data-sources` and `sql-runner` 27/28. The one failure, `sql-runner`'s "Cancelled after N s" (it showed "Cancelled at <time>"), is a run's duration, not a name: it fails the same alone.
 
 - [ ] T701 (AC-421, AC-424) Pin xcube's R71 image (to be published), and read its new refusals
   - Files:
