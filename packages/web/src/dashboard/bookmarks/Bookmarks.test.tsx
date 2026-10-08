@@ -389,6 +389,38 @@ describe('Mine and Shared (T367, AC-293)', () => {
   });
 
   /**
+   * T762 (AC-429): with sign-in on, a Super-Admin is listed phase 1's
+   * unshared bookmarks too: under Shared, labelled "Saved before sign-in",
+   * theirs to apply or copy and not to delete (the coordinator's call,
+   * 2026-10-08, overturnable). The API says which they are.
+   */
+  it('lists one saved before sign-in under Shared, so labelled, to apply or copy only', async () => {
+    const before = {
+      id: 'b9',
+      dashboardId: 'd1',
+      name: 'Old view',
+      state: STATE,
+      shared: false,
+      mine: false,
+      mayDelete: false,
+      sharedBy: '',
+      savedBeforeSignIn: true,
+    };
+    api(ok, () => [mine('b1', 'EMEA'), before]);
+    render(<Bookmarks dashboardId="d1" current={STATE} onApply={() => undefined} />);
+    const popover = await open();
+    await within(popover).findByRole('list', { name: 'Shared' });
+
+    expect(
+      rowOf(popover, 'Shared', 'Old view').querySelector('.bookmarks__visibility')?.textContent,
+    ).toBe('Saved before sign-in');
+    expect(offered(await actionsOf(popover, 'Shared', 'Old view'))).toEqual([
+      'Apply',
+      'Save a copy to mine…',
+    ]);
+  });
+
+  /**
    * T580 (AC-293, amended 2026-10-04 by R61): a Super-Admin may delete any
    * shared bookmark. Whether they may is the API's to say, as `mayDelete`.
    */

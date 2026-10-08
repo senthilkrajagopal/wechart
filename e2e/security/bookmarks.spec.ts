@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process';
+
 import type { APIRequestContext, Locator, Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
@@ -341,6 +343,64 @@ for (const role of ['writer', 'reader'] as const)
       await expect(names(popover, 'Mine')).toHaveText(role === 'writer' ? [NAME] : [NAME, READERS]);
     });
   });
+
+/**
+ * T762 (AC-429): a bookmark phase 1 saved, before sign-in, on this dashboard,
+ * whose owner is phase 1's single user (`admin`): written into the suite's
+ * own database as phase 1 wrote it, since no route makes one with sign-in on.
+ * A Super-Admin is shown it under Shared, "Saved before sign-in", to apply or
+ * copy; a reader who may see the dashboard is not shown it.
+ */
+test.describe('phase 1’s bookmark (T762, AC-429)', () => {
+  const OLD = `Phase one view ${RUN}`;
+  const bookmarkId = `0f0f0f0f-0000-4000-8000-${RUN.padStart(12, '0')}`;
+  const psql = (sql: string) =>
+    execFileSync(
+      'docker',
+      ['exec', 'wechart-meta', 'psql', '-U', 'wechart', '-d', 'wechart_security', '-Atc', sql],
+      { encoding: 'utf8' },
+    );
+  test.beforeAll(() => {
+    const body = JSON.stringify({
+      dashboardId: ids.dashboard,
+      title: OLD,
+      state: { page: 'p1', filters: {}, marks: {} },
+      owner: 'admin',
+    }).replace(/'/g, "''");
+    psql(`INSERT INTO documents (kind, id, body) VALUES ('bookmark', '${bookmarkId}', '${body}')`);
+  });
+  test.afterAll(() => {
+    psql(`DELETE FROM documents WHERE kind = 'bookmark' AND id = '${bookmarkId}'`);
+  });
+
+  test.describe('as a Super-Admin', () => {
+    test.use({ role: 'super' });
+
+    test('sees it under Shared, saved before sign-in, to apply or copy only', async ({ page }) => {
+      const popover = await bookmarks(page);
+      const old = row(popover, 'Shared', OLD);
+      await expect(old.locator('.bookmarks__visibility')).toHaveText('Saved before sign-in');
+      const menu = await actionsOf(page, old, OLD);
+      await expect(menu.getByRole('menuitem')).toHaveText(['Apply', 'Save a copy to mine…']);
+    });
+  });
+
+  test.describe('as reader, who may see the dashboard', () => {
+    test.use({ role: 'reader' });
+
+    test('isn’t shown it', async ({ page }) => {
+      const popover = await bookmarks(page);
+      await expect(popover.getByRole('button', { name: OLD, exact: true })).toHaveCount(0);
+      expect(
+        (
+          (await (await page.request.get(`/api/dashboards/${ids.dashboard}/bookmarks`)).json()) as {
+            bookmarks: { name: string }[];
+          }
+        ).bookmarks.map((each) => each.name),
+      ).not.toContain(OLD);
+    });
+  });
+});
 
 test.describe('cleaning up', () => {
   test.use({ role: 'super' });

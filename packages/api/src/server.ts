@@ -46,7 +46,7 @@ import type { SessionStore } from '@fastify/session';
 
 import { ADMIN, PUBLIC, registerGuard, registerRouteAccess, USER } from './auth/guard';
 import { registerSignIn, signInOptionsOf } from './auth/routes';
-import { Forbidden, registerUser, Unauthenticated, userOf } from './auth/user';
+import { Forbidden, registerUser, SINGLE_USER, Unauthenticated, userOf } from './auth/user';
 import { registerBuilds } from './jobs/build';
 import { registerBuildHistory } from './jobs/history';
 import { registerPartitions, rowStates } from './jobs/partitions';
@@ -6068,10 +6068,22 @@ export function buildServer({
       return reply;
     // Theirs (T366, AC-292), then those others share (T367, AC-293).
     const viewer = userOf(request);
+    const listed = await bookmarks.list(dashboardId, viewer.key);
+    // With sign-in on, a Super-Admin's list holds phase 1's too, saved by its
+    // single user before sign-in, unshared ones included (T762, AC-429). Its
+    // shared ones are everyone's already.
+    const phaseOne =
+      security === 'oidc' && viewer.superAdmin && viewer.key !== SINGLE_USER.key
+        ? (await bookmarks.list(dashboardId, SINGLE_USER.key)).filter(
+            (each) => each.owner === SINGLE_USER.key && !each.shared,
+          )
+        : [];
     return {
-      bookmarks: (await bookmarks.list(dashboardId, viewer.key)).map((each) =>
-        bookmarkFor(viewer, each),
-      ),
+      bookmarks: [
+        ...listed.map((each) => bookmarkFor(viewer, each)),
+        // Said as saved before sign-in (the coordinator's call, 2026-10-08).
+        ...phaseOne.map((each) => ({ ...bookmarkFor(viewer, each), savedBeforeSignIn: true })),
+      ],
     };
   });
 

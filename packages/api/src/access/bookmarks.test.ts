@@ -439,6 +439,57 @@ describe('shared bookmarks, signed in (T367, AC-293)', () => {
  * The migration: the bookmarks phase 1 saved named no owner, and were its one
  * user's, `admin`.
  */
+/**
+ * T762, AC-429: WHILE sign-in is on, THE SYSTEM SHALL list to Super-Admins, on
+ * the dashboard each belongs to, the bookmarks saved before sign-in was turned
+ * on, whose owner is phase 1's single user (`admin`), and to no one else. One
+ * its user shared is listed as AC-293 lists a shared bookmark.
+ */
+describe('phase 1’s bookmarks with sign-in on (T762, AC-429)', () => {
+  it('lists an unshared one to Super-Admins alone, and a shared one to everyone who may see the dashboard', async () => {
+    const store = bookmarkStore(getDb());
+    const unshared = await store.save({
+      dashboardId: dashboard,
+      name: 'Phase one, kept',
+      state: STATE,
+      owner: 'admin',
+    });
+    const shared = await store.save({
+      dashboardId: dashboard,
+      name: 'Phase one, shared',
+      state: STATE,
+      owner: 'admin',
+    });
+    expect((await store.change(dashboard, shared.id, 'admin', { shared: true }))?.shared).toBe(
+      true,
+    );
+    try {
+      const names = async (who: string) => (await listed(who)).map((each) => each.name);
+      expect(await names('super')).toEqual(
+        expect.arrayContaining(['Phase one, kept', 'Phase one, shared']),
+      );
+      // Said as saved before sign-in, theirs to apply or copy, not to delete
+      // (the coordinator's call, 2026-10-08, overturnable).
+      const kept = (await listed('super')).find((each) => each.name === 'Phase one, kept');
+      expect(kept).toEqual(
+        expect.objectContaining({
+          shared: false,
+          mine: false,
+          mayDelete: false,
+          savedBeforeSignIn: true,
+        }),
+      );
+      for (const who of ['writer', 'reader']) {
+        expect(await names(who), who).not.toContain('Phase one, kept');
+        expect(await names(who), who).toContain('Phase one, shared');
+      }
+    } finally {
+      await store.remove(dashboard, unshared.id, 'admin');
+      await store.remove(dashboard, shared.id, 'admin');
+    }
+  });
+});
+
 describe('phase 1’s bookmarks (T366)', () => {
   it('are given to phase 1’s one user', async () => {
     const id = randomUUID();

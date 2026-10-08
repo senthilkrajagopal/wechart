@@ -23,6 +23,11 @@ interface Saved {
   readonly mayDelete: boolean;
   /** Who shared it, on another's. */
   readonly sharedBy?: string;
+  /**
+   * Phase 1's, saved before sign-in was turned on, listed to a Super-Admin
+   * (T762, AC-429).
+   */
+  readonly savedBeforeSignIn?: boolean;
 }
 
 type Listed =
@@ -58,7 +63,10 @@ async function whyNot(response: Response): Promise<string> {
 
 function readSaved(raw: unknown): Saved | undefined {
   if (typeof raw !== 'object' || raw === null) return undefined;
-  const { id, name, state, shared, mine, mayDelete, sharedBy } = raw as Record<string, unknown>;
+  const { id, name, state, shared, mine, mayDelete, sharedBy, savedBeforeSignIn } = raw as Record<
+    string,
+    unknown
+  >;
   if (typeof id !== 'string' || typeof name !== 'string') return undefined;
   return {
     id,
@@ -68,6 +76,7 @@ function readSaved(raw: unknown): Saved | undefined {
     mine: mine === true,
     mayDelete: mayDelete === true,
     ...(typeof sharedBy === 'string' ? { sharedBy } : {}),
+    ...(savedBeforeSignIn === true ? { savedBeforeSignIn: true } : {}),
   };
 }
 
@@ -321,11 +330,13 @@ export function Bookmarks({
             </button>
             <span className="bookmarks__visibility">
               {bookmark.shared ? <PeopleIcon /> : <PersonIcon />}
-              {!bookmark.shared
-                ? 'Only me'
-                : bookmark.mine || bookmark.sharedBy === undefined || bookmark.sharedBy === ''
-                  ? 'Shared'
-                  : `Shared by ${bookmark.sharedBy}`}
+              {bookmark.savedBeforeSignIn === true
+                ? 'Saved before sign-in'
+                : !bookmark.shared
+                  ? 'Only me'
+                  : bookmark.mine || bookmark.sharedBy === undefined || bookmark.sharedBy === ''
+                    ? 'Shared'
+                    : `Shared by ${bookmark.sharedBy}`}
             </span>
             <MenuButton
               label={`Actions for ${bookmark.name}`}

@@ -1171,8 +1171,8 @@ Traces to: §P2.6 F, `[R12]`.
       Fails when: another user sees a bookmark its owner hasn't shared.
 - [x] AC-293 WHEN a user shares a bookmark, THE SYSTEM SHALL list it for everyone who may see the dashboard, labelled with who shared it, until its owner stops sharing or deletes it, or a Super-Admin deletes it. Only its owner SHALL be able to change or unshare it~~.~~, and only its owner or a Super-Admin SHALL be able to delete it (amended 2026-10-04, `[R61]`: an owner who can no longer open the dashboard can no longer remove a bookmark they shared, so a Super-Admin may).
       Fails when: someone who may see the dashboard doesn't see a shared bookmark, ~~or~~ someone other than its owner can change or unshare it, someone other than its owner or a Super-Admin can delete it, or a Super-Admin can't delete another user's shared bookmark (amended 2026-10-04, `[R61]`).
-- [ ] AC-429 WHILE sign-in is on, THE SYSTEM SHALL list to Super-Admins, on the dashboard each belongs to, the bookmarks saved before sign-in was turned on, whose owner is phase 1's single user, and SHALL list them to no one else (the user's 2026-09-27 answer to item 7, "Yes"; written 2026-10-07 by the coordinator).
-      Fails when: with sign-in on, a Super-Admin opening a dashboard doesn't see a bookmark phase 1 saved on it, or anyone who isn't a Super-Admin sees one.
+- [x] AC-429 WHILE sign-in is on, THE SYSTEM SHALL list to Super-Admins, on the dashboard each belongs to, the bookmarks saved before sign-in was turned on, whose owner is phase 1's single user, and SHALL list them to no one else (the user's 2026-09-27 answer to item 7, "Yes"; written 2026-10-07 by the coordinator). One its user shared is listed as AC-293 lists a shared bookmark (amended 2026-10-08, the coordinator's call, overturnable: its user chose to share it).
+      Fails when: with sign-in on, a Super-Admin opening a dashboard doesn't see a bookmark phase 1 saved on it, or anyone who isn't a Super-Admin sees one phase 1 didn't share (amended 2026-10-08).
 
 ## F32. Audit trail
 

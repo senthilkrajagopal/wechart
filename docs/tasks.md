@@ -14368,10 +14368,16 @@ These tasks are what group 3's check of the open criteria found missing. Each is
     - the 60 s reconcile repeats it, so the cube is never served.
     That is AC-330's failing state. The coordinator's call (B), 2026-10-08: xcube is asked for a read of its folder tree with parents, or an atomic snapshot carrying tree, connections and items. This task is built on that image. Until then the spec stays out of the suite, uncommitted, so the suite stays green. AC-330 stays open.
 
-- [ ] T762 (AC-429) List phase 1's bookmarks to Super-Admins with sign-in on
-  - Files: `packages/api/src/server.ts` (the bookmarks listing), `packages/api/src/access/bookmarks.test.ts`, `e2e/security/bookmarks.spec.ts`
+- [x] T762 (AC-429) List phase 1's bookmarks to Super-Admins with sign-in on
+  - Files: `packages/api/src/server.ts` (the bookmarks listing), `packages/api/src/access/bookmarks.test.ts`, `packages/web/src/dashboard/bookmarks/Bookmarks.tsx` (+ test), `e2e/security/bookmarks.spec.ts`
   - Failing test: `access/bookmarks.test.ts`: with sign-in on, a bookmark whose owner is phase 1's single user (`admin`) is listed on its dashboard for `super`, and for neither `writer` nor `reader`, who may see the dashboard (AC-429).
   - The user's 2026-09-27 answer to item 7: "Yes". Today a bookmark is listed for its owner alone, or for everyone once shared, so phase 1's are listed for no one.
+  - **Decided before it was built (the coordinator's calls, 2026-10-08, overturnable):** AC-429 covers phase 1's unshared bookmarks, and a shared one follows AC-293, its user having shared it (AC-429 amended). On the panel, one is listed under "Shared", labelled "Saved before sign-in", offering Apply and Save a copy to mine, and no Delete.
+  - **Done 2026-10-08.** Red first: the API listed no unshared phase-1 bookmark to `super`, then gave it no `savedBeforeSignIn`; the panel labelled it "Only me".
+    - **The API** (`server.ts`): with sign-in on, a Super-Admin's list on a dashboard also holds the unshared bookmarks whose owner is phase 1's single user (`SINGLE_USER`, `admin`), each with `savedBeforeSignIn: true`. They are listed after the rest, `mayDelete` false. No one else's list changes.
+    - **The panel** (`Bookmarks.tsx`): such a row says "Saved before sign-in". Its ⋯ offers what anyone else's does, Apply and Save a copy to mine.
+    - **Tests:** `access/bookmarks.test.ts` (13, under the lock): listed to `super` with its flag, to neither `writer` nor `reader`, and a shared one to everyone; `Bookmarks.test.tsx` (25); `e2e/security/bookmarks.spec.ts` (17, Chrome). Its new tests write one bookmark into the suite's own database as phase 1 wrote it, since no route makes one with sign-in on, and remove it after.
+  - **AC-429 ticked.**
 
 ## Phase 2 coverage: acceptance criterion → task
 
