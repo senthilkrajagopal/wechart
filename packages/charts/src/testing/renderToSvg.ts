@@ -28,9 +28,13 @@ import {
   TitleComponent,
   VisualMapComponent,
 } from 'echarts/components';
+import { LabelLayout } from 'echarts/features';
 import { SVGRenderer } from 'echarts/renderers';
 
 echarts.use([
+  // `labelLayout`'s overlap handling, as the app registers it (echarts.ts;
+  // research/echarts-end-labels.md, "Install").
+  LabelLayout,
   BarChart,
   BoxplotChart,
   LineChart,

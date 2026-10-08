@@ -80,3 +80,29 @@ describe('a chart tile’s head while editing (UX-032)', () => {
     expect(screen.getByTestId('toggle-table-view')).toBeTruthy();
   });
 });
+
+/**
+ * T681's follow-up (R76 dashboard-Q1; design 04 pin 5): on a dashboard, a
+ * tile's Table view is ⋯'s "View as table", not a button in its head, so the
+ * head is its title and its one badge. Its table still shows when asked.
+ */
+describe('a dashboard tile’s head, its Table view in ⋯ (dashboard-Q1)', () => {
+  it('draws no Table view button, and still draws its table when asked from ⋯', () => {
+    const { rerender } = render(
+      <ChartTile spec={area} title="Orders by month" served={served} tableToggle={false} />,
+    );
+    const head = screen.getByTestId('chart-tile').querySelector('.tile-head') as HTMLElement;
+    expect(within(head).queryAllByRole('button').length).toBe(0);
+    expect(screen.queryAllByTestId('toggle-table-view').length).toBe(0);
+    rerender(
+      <ChartTile
+        spec={area}
+        title="Orders by month"
+        served={served}
+        tableToggle={false}
+        tableView
+      />,
+    );
+    expect(screen.getAllByTestId('data-table').length).toBe(1);
+  });
+});

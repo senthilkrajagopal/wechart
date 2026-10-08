@@ -155,11 +155,16 @@ test.describe('T250: below 1,024 px, a dashboard is for reading', () => {
     await expect(menu.getByRole('menuitem', { name: 'View query' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Edit chart' })).toHaveCount(0);
     await page.keyboard.press('Escape');
-    // In the narrow head, Table view is an icon — still named, and titled for
-    // a pointer (T250's review).
-    const table = statusTile.getByRole('button', { name: 'Table view' });
-    await expect(table).toHaveAttribute('title', 'Table view');
-    expect((await table.boundingBox())?.width).toBe(24);
+    // Table view is ⋯'s, so the narrow head holds no button at all (T681's
+    // follow-up; R76 dashboard-Q1), and the menu offers it.
+    await expect(statusTile.getByRole('button', { name: 'Table view' })).toHaveCount(0);
+    await statusTile.getByTestId('tile-view-menu-tile-status').click();
+    await expect(
+      statusTile
+        .getByRole('menu', { name: /^Actions for / })
+        .getByRole('menuitem', { name: 'View as table', exact: true }),
+    ).toHaveCount(1);
+    await page.keyboard.press('Escape');
     // The badge says the whole of itself in its tooltip, however little room it has.
     await expect(statusTile.getByTestId('tile-freshness')).toHaveAttribute(
       'title',

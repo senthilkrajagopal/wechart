@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
 import { cubePicker } from './cubePicker';
+import { viewAs } from './tileMenu';
 import { wellPicker } from './wells';
 import { IN_MY_WORKSPACE, newInMyWorkspace } from './workspace';
 
@@ -405,7 +406,7 @@ test.describe('a quick calculation, computed in Cube and named on the chart (AC-
 
     const tile = page.locator('[data-tile="tile-running"]');
     await expect(tile.getByTestId('chart-canvas')).toBeVisible();
-    await tile.getByTestId('toggle-table-view').click();
+    await viewAs(tile, 'table');
     await expect(tile.getByRole('columnheader', { name: 'Orders Count (running total)' })).toBeVisible();
     for (const [at, value] of Object.entries({
       'Mar 2026': '31',

@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
 import { ownCubeFile } from './model-files';
+import { viewAs } from './tileMenu';
 import { IN_MY_WORKSPACE } from './workspace';
 
 /**
@@ -684,10 +685,10 @@ test('a trellis header marks its own panel once a filter has dropped the panels 
   const category = tile(page, 'tile-category');
   await expect(panels.getByTestId('chart-canvas')).toBeVisible();
   // The first panel as saved: the category of the trellis's first row.
-  const toggle = panels.getByTestId('toggle-table-view');
-  await toggle.click();
+  // From the tile's ⋯ (T681's follow-up; R76 dashboard-Q1).
+  await viewAs(panels, 'table');
   const firstRow = await panels.getByTestId('table-row').first().innerText();
-  await toggle.click();
+  await viewAs(panels, 'chart');
   await expect(panels.getByTestId('chart-canvas')).toBeVisible();
   const chosen = ['Components', 'Instruments'].find((name) => !firstRow.includes(name));
   const first = ['Components', 'Instruments'].find((name) => firstRow.includes(name));

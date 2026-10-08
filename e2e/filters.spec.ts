@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
 import { fieldPicker } from './cubePicker';
+import { viewAs } from './tileMenu';
 import { IN_MY_WORKSPACE } from './workspace';
 
 /**
@@ -321,7 +322,7 @@ test('a value re-queries the tiles in its scope, and a tab’s filter leaves the
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
 
   const sales = page.locator('[data-tile="tile-sales"]');
-  await sales.getByTestId('toggle-table-view').click();
+  await viewAs(sales, 'table');
   await expect(sales.getByTestId('table-row')).toHaveCount(3);
 
   const asked: Record<string, unknown>[] = [];
@@ -356,7 +357,7 @@ test('a value re-queries the tiles in its scope, and a tab’s filter leaves the
   // first value carries it.
   await page.getByRole('tab', { name: 'Operations' }).click();
   const operations = page.locator('[data-tile="tile-operations"]');
-  await operations.getByTestId('toggle-table-view').click();
+  await viewAs(operations, 'table');
   await expect(operations.getByTestId('table-row')).toHaveCount(3);
   for (const query of asked) expect(query['filters']).toBeDefined();
 });
@@ -463,7 +464,7 @@ test('the filters in effect are in the URL, and the URL opens with them', async 
   // Closed: under the page tabs (AC-187), an open popover lies over the tiles.
   await opened.keyboard.press('Escape');
   const sales = opened.locator('[data-tile="tile-sales"]');
-  await sales.getByTestId('toggle-table-view').click();
+  await viewAs(sales, 'table');
   await expect(sales.getByTestId('table-row')).toHaveCount(1);
   await expect(sales.getByTestId('table-row')).toContainText('shipped');
   await other.close();
@@ -616,7 +617,7 @@ test('a filter Cube cannot join to a tile leaves it unfiltered and marked; the o
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
   const customers = page.locator('[data-tile="tile-customers"]');
-  await customers.getByTestId('toggle-table-view').click();
+  await viewAs(customers, 'table');
   const everyCountry = await customers.getByTestId('table-row').count();
   expect(everyCountry).toBeGreaterThan(1);
 
@@ -662,7 +663,7 @@ test('a view takes a filter on a cube field it offers, by its own name for it', 
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
   const summary = page.locator('[data-tile="tile-summary"]');
-  await summary.getByTestId('toggle-table-view').click();
+  await viewAs(summary, 'table');
   await expect(summary.getByTestId('table-row')).toHaveCount(3);
 
   await open(pill(page, 'checkbox'));
@@ -725,7 +726,7 @@ test('clearing a filter returns every tile in its scope to the unfiltered result
   await page.goto(`/explore/dashboards/${id}`);
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
   const sales = page.locator('[data-tile="tile-sales"]');
-  await sales.getByTestId('toggle-table-view').click();
+  await viewAs(sales, 'table');
   await expect(sales.getByTestId('table-row')).toHaveCount(3);
 
   await open(pill(page, 'checkbox'));
@@ -740,6 +741,6 @@ test('clearing a filter returns every tile in its scope to the unfiltered result
   await page.keyboard.press('Escape');
   await page.getByRole('tab', { name: 'Operations' }).click();
   const operations = page.locator('[data-tile="tile-operations"]');
-  await operations.getByTestId('toggle-table-view').click();
+  await viewAs(operations, 'table');
   await expect(operations.getByTestId('table-row')).toHaveCount(3);
 });

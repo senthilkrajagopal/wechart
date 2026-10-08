@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { cubePicker } from './cubePicker';
 import { chartGone } from './store';
+import { viewAs } from './tileMenu';
 import { IN_MY_WORKSPACE, landedAs, seedDashboardCopy, shared } from './workspace';
 
 /**
@@ -1506,7 +1507,7 @@ test('a save failure does not hand the scrollbar back to the window', async ({ p
  */
 /** The first row's value in the column a tile's table view heads by that title (AC-220). */
 async function tableValue(tile: import('@playwright/test').Locator, title: string) {
-  await tile.getByTestId('toggle-table-view').click();
+  await viewAs(tile, 'table');
   const headers = await tile.locator('thead th').allTextContents();
   const column = headers.indexOf(title);
   expect(column).toBeGreaterThanOrEqual(0);
@@ -1646,7 +1647,7 @@ test('a time axis and a time column are written by their granularity, never as a
   expect(drawn.filter((text) => RAW.test(text))).toEqual([]);
   expect(drawn.some((text) => DAY.test(text))).toBe(true);
 
-  await tile.getByTestId('toggle-table-view').click();
+  await viewAs(tile, 'table');
   await expect(tile.getByTestId('table-row').first()).toBeVisible();
   // The time's column, found by its header — its title (AC-220), with its
   // grain — rather than by its place. One column: the bucket, not the bucket

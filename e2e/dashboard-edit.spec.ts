@@ -256,7 +256,15 @@ test('while editing, a chart tile’s head names its kind, not its freshness or 
   await page.goto(await dashboardOf(page));
   const tile = page.locator('[data-tile="tile-status"]');
   await expect(tile.getByTestId('tile-freshness')).toBeVisible();
-  await expect(tile.getByTestId('toggle-table-view')).toBeVisible();
+  // Its Table view is ⋯'s in view mode (T681's follow-up; R76 dashboard-Q1).
+  await expect(tile.getByTestId('toggle-table-view')).toHaveCount(0);
+  await tile.getByRole('button', { name: /^Actions for / }).click();
+  await expect(
+    tile
+      .getByRole('menu', { name: /^Actions for / })
+      .getByRole('menuitem', { name: 'View as table', exact: true }),
+  ).toHaveCount(1);
+  await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(page.getByRole('toolbar', { name: 'Dashboard editing' })).toBeVisible();

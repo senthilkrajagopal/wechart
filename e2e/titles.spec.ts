@@ -21,6 +21,23 @@ const API = 'http://localhost:4100/api';
 /** An internal member name of the sample model's, as a person must never read it. */
 const INTERNAL = /\b(orders|customers)\.[a-z_]+/;
 
+/**
+ * The texts of a chart's legend: drawn in the band above the plot, where the
+ * series' direct labels at their ends are not (T681's follow-up; R76
+ * dashboard-Q1).
+ */
+const legendIn = (canvas: Locator) =>
+  canvas.evaluate((node) => {
+    const svg = node.querySelector('svg');
+    if (svg === null) return [];
+    const top = svg.getBoundingClientRect().top;
+    return [...svg.querySelectorAll('text')]
+      .filter((text) => text.getBoundingClientRect().top - top < 28)
+      .map((text) => text.textContent ?? '');
+  });
+const timesIn = (texts: readonly string[], name: string) =>
+  texts.filter((text) => text === name).length;
+
 async function openEditorOnOrders(page: Page) {
   await page.goto('/explore/charts/seed-chart-empty/edit');
   await cubePicker(page).selectOption({ label: 'Orders' });
@@ -188,13 +205,12 @@ test('a KPI reads its short title, a two-cube legend full ones, and a marking ch
   const kpi = page.locator('[data-tile="tile-kpi"]');
   await expect(kpi.getByTestId('kpi-label')).toHaveText('Count');
 
-  // Two sources, so neither is evident: each by its full title.
-  const two = page
-    .locator('[data-tile="tile-two"]')
-    .getByTestId('chart-canvas')
-    .locator('svg text');
-  await expect(two.filter({ hasText: /^Orders Count$/ })).toHaveCount(1);
-  await expect(two.filter({ hasText: /^Customers Count$/ })).toHaveCount(1);
+  // Two sources, so neither is evident: each by its full title, once in the
+  // legend (and again at its end, as a direct label).
+  const twoCanvas = page.locator('[data-tile="tile-two"]').getByTestId('chart-canvas');
+  const two = twoCanvas.locator('svg text');
+  await expect.poll(async () => timesIn(await legendIn(twoCanvas), 'Orders Count')).toBe(1);
+  await expect.poll(async () => timesIn(await legendIn(twoCanvas), 'Customers Count')).toBe(1);
   await expect(two.filter({ hasText: /^Count$/ })).toHaveCount(0);
   await expect(two.filter({ hasText: INTERNAL })).toHaveCount(0);
 
@@ -242,8 +258,10 @@ test('a library chart’s page draws a one-source legend by short titles', async
   });
 
   await page.goto(`/explore/charts/${chart.id}`);
-  const written = page.locator('.chart-page__tile').getByTestId('chart-canvas').locator('svg text');
-  await expect(written.filter({ hasText: /^Average Amount$/ })).toHaveCount(1);
-  await expect(written.filter({ hasText: /^Total Amount$/ })).toHaveCount(1);
+  const canvas = page.locator('.chart-page__tile').getByTestId('chart-canvas');
+  const written = canvas.locator('svg text');
+  // Once in the legend (and again at its end, as a direct label: T681's follow-up).
+  await expect.poll(async () => timesIn(await legendIn(canvas), 'Average Amount')).toBe(1);
+  await expect.poll(async () => timesIn(await legendIn(canvas), 'Total Amount')).toBe(1);
   await expect(written.filter({ hasText: INTERNAL })).toHaveCount(0);
 });

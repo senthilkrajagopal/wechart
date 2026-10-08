@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
+import { viewAs } from './tileMenu';
 import { IN_MY_WORKSPACE } from './workspace';
 
 /**
@@ -134,12 +135,12 @@ const tile = (page: Page, id: string) => page.locator(`[data-tile="${id}"]`);
 
 /** The values a tile's table view shows, which is what it drew. */
 async function valuesIn(target: Locator) {
-  const toggle = target.getByTestId('toggle-table-view');
-  await toggle.click();
+  // From the tile's ⋯ (T681's follow-up; R76 dashboard-Q1).
+  await viewAs(target, 'table');
   await expect(target.getByTestId('table-row').first()).toBeVisible();
   const rows = await target.getByTestId('table-row').allInnerTexts();
   // Back to the chart, which is what the highlight is drawn on.
-  await toggle.click();
+  await viewAs(target, 'chart');
   await expect(target.getByTestId('chart-canvas')).toBeVisible();
   return rows;
 }

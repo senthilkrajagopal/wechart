@@ -32,6 +32,7 @@ import { lineOption, isLineType } from './series/line';
 import { fitPieLabels, pieOption, isPieType } from './series/pie';
 import { scatterOption, isScatterType } from './series/scatter';
 import { isTreemapType, treemapOption } from './series/treemap';
+import { withDirectLabels } from './layout/directLabels';
 import { PROTOTYPE_GRID } from './layout/grid';
 import type { EChartsOption } from './theme';
 
@@ -148,8 +149,11 @@ export function optionFor(given: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): E
     grid: { ...PROTOTYPE_GRID, ...(option['grid'] as object | undefined) },
   });
 
-  if (isBarType(spec.chartType)) return drawn(onGrid(barOption(spec, canvas)));
-  if (isLineType(spec.chartType)) return drawn(onGrid(lineOption(spec)));
+  // Bars, lines and areas of 2 to 4 series name each where it ends, last, on
+  // the series and grid as drawn (T681's follow-up; R76 dashboard-Q1).
+  if (isBarType(spec.chartType))
+    return withDirectLabels(drawn(onGrid(barOption(spec, canvas))), spec);
+  if (isLineType(spec.chartType)) return withDirectLabels(drawn(onGrid(lineOption(spec))), spec);
   if (isScatterType(spec.chartType)) return drawn(onGrid(scatterOption(spec)));
   // Its labels laid out last, for the box Customize's legend leaves it (T395).
   if (isPieType(spec.chartType)) return fitPieLabels(drawn(pieOption(spec)), canvas);

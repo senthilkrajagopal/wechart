@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
+import { viewAs } from './tileMenu';
 import { IN_MY_WORKSPACE } from './workspace';
 
 /**
@@ -254,7 +255,7 @@ test('a link tile opens another dashboard carrying the filters, and a web addres
   await filterBar.locator('button[aria-expanded]').click();
   await expect(filterBar.getByRole('checkbox', { name: 'shipped' })).toBeChecked();
   const orders = page.locator('[data-tile="tile-orders"]');
-  await orders.getByTestId('toggle-table-view').click();
+  await viewAs(orders, 'table');
   await expect(orders.getByTestId('table-row')).toHaveCount(1);
   await expect(orders.getByTestId('table-row')).toContainText('shipped');
   // Kept in the target's own terms: its URL names its own filter.

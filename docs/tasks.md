@@ -9314,8 +9314,43 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - **dashboard-Q1:** Table view moves into ⋯ as "View as table", and every chart of 4 or fewer series draws end-point direct labels (design 04 pins 5–6). Rule 5 then holds through the labels, and AC-178 through ⋯. It may land with this task.
   - Depends on: T477
   - **Built 2026-10-08: DSH-01, DSH-21 and DSH-23 together,** so AC-148 stays met.
-    - **dashboard-Q1 is not built yet.** Its two halves must land together: rule 5 holds once Table view leaves the head only if charts of 4 or fewer series carry direct labels.
-    - The labels need ECharts' end-point labels. The coordinator had `docs/research/echarts-end-labels.md` written (feat/xcube 8d4e0328), with its calls on the doc's open points, and it lands as a T681 follow-up.
+    - **dashboard-Q1, built 2026-10-08 as a T681 follow-up,** on `docs/research/echarts-end-labels.md` (feat/xcube 8d4e0328) and the coordinator's calls on its open points:
+      - **Table view in ⋯.** A dashboard tile's head has no Table view button (`ChartTile`'s `tableToggle={false}` from `DashboardView`); its table is ⋯'s "View as table", and "View as chart" brings the chart back. The chart editor's preview and the chart page keep their button. The e2e that pressed the button on a dashboard tile use ⋯ now (`e2e/tileMenu.ts`'s `viewAs`), the keyboard path included (`keyboard-coverage.spec.ts`).
+      - **Direct labels** (`packages/charts/src/layout/directLabels.ts`), on a bar, line or area chart of 2 to 4 series:
+        - a line or area by `endLabel`, at its last non-null point, a stacked area's on its band's top edge;
+        - a bar by a label on its last non-null item, placed by the doc's §3A table: a stacked bar's beside its segment (`right`), a grouped bar's over its bar (`outside`, `shiftX`), an hbar's past its bar (`outside`), a stacked hbar's over it (`top`);
+        - `labelLayout: { moveOverlap, hideOverlap: true }`; a name hidden where it would meet another, which the legend still names;
+        - in the legend's ink, `valueAnimation: false`, room added to `grid.right` where the labels sit outside the plot, measured with `getTextRect`, cut short past 120 px (wechart's choice, a third of a half-width tile's 360 px);
+        - the bar width estimate and the category labels' room both take the added room off the plot;
+        - never on a trellis, nor on a chart Customize labels with its values;
+        - each name once, on the series it belongs to:
+          - a marked share's parts, drawn as series of their own under their series' name, are not counted as more series;
+          - a partly marked bar is named over its rest, at the last category any of its parts has a value in;
+          - a marked share's line is named on its total;
+          - a cross-filter share drawn over a bar is no series.
+        - Grouped vertical bars keep 17 px above the plot (`DIRECT_LABEL_TOP`), so the tallest bar's name is never cut off at the top.
+      - **The review (FAIL, three real bugs, fixed):**
+        - A partly marked bar's name sat on its marked foot, or went missing with nothing marked.
+        - A cross-filter share counted as a series.
+        - A line's Customize value labels joined the names' chart-wide overlap layout.
+
+        Also fixed:
+        - the category labels' room counts each series once;
+        - grouped bars keep room above;
+        - the stacked-area test now tells the band's top edge from its raw value;
+        - the trellis test checks item labels too;
+        - new cases cover the share, the split bar, a line's value labels and a hidden fifth series.
+
+        `optionFor.test.ts`'s grid-top case now adds `DIRECT_LABEL_TOP` to the legend's room.
+      - **Left to the coordinator:**
+        - Rule 5 for 2 to 4 series combo, scatter-by-colour and box-plot charts: they get no direct labels, and their table is now one menu away rather than a head button.
+        - The 120 px cap on a name is wechart's choice, not a design figure.
+      - One series has none: its title and axis name it, and it has no legend (AC-038).
+      - **Tests:** `directLabels.test.ts` draws each case in ECharts' SSR, the doc's asks included: trailing nulls, a stacked area, and 4 close series kept 12 px apart. The SSR harness registers `LabelLayout`, as the app does. `direct-labels.spec.ts` checks the seed's tiles in the browser, and the table one menu away and back.
+      - **Tests changed with it:**
+        - `seriesOrder.test.ts` reads the legend's names in its top band, not the series' labels.
+        - `chart-editor.spec.ts` takes the legend's entry as the last of its name, and counts the value labels by their figures.
+        - `DataAsOf.tsx` and its tests are gone, at the coordinator's word. Their two tile cases moved to `FreshnessBadge.test.tsx`.
     - **The review (FAIL, one real bug, fixed):**
       - **The badge shrank to an empty pill before it moved to the foot.** It was shrinkable down to `min-width: 0`, and the head's placement measures it as drawn. It is `flex: none` now, as design 04's `.fresh` is, so it goes to the foot whole. `tile-head.spec.ts` now measures its whole width as its least, and checks its word is never cut.
       - Minor notes taken up:

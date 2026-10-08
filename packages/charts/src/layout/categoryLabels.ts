@@ -17,6 +17,7 @@ import { format } from 'echarts/core';
 import type { RenderSpec } from '@wechart/core';
 
 import { plotEdgesOf } from '../customize';
+import { directLabelRoom, seriesNamesOf } from './directLabels';
 import { categoryAxisPx, type Canvas } from '../series/bar';
 import type { EChartsOption } from '../theme';
 import { CHART_FONT } from '../themed';
@@ -62,7 +63,14 @@ export function labelRoom(
   const names = ((option.series as { name?: unknown }[] | undefined) ?? []).map((one) =>
     String(one.name ?? ''),
   );
-  const span = categoryAxisPx(canvas, false, plotEdgesOf(spec, names)) / data.length;
+  const edges = plotEdgesOf(spec, names);
+  // Less the room direct labels take at the right (T681's follow-up), by the
+  // chart's own series, each once.
+  const span =
+    categoryAxisPx(canvas, false, {
+      ...edges,
+      right: edges.right + directLabelRoom(spec, seriesNamesOf(option)),
+    }) / data.length;
   return { axis, count: data.length, width, height, span };
 }
 

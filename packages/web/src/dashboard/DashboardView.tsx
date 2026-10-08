@@ -808,6 +808,9 @@ function TileBody({
           kind={editing === true ? `Chart · ${CHART_TYPE_NAMES[spec.chartType]}` : undefined}
           {...(tableView === undefined ? {} : { tableView })}
           {...(onTableViewChange === undefined ? {} : { onTableViewChange })}
+          // Its table is ⋯'s "View as table", not a button in its head (T681's
+          // follow-up; R76 dashboard-Q1; design 04 pin 5).
+          tableToggle={false}
           {...(tile.h === undefined ? {} : { height: tile.h * ROW_UNIT_PX })}
           {...(onItemClick === undefined ? {} : { onItemClick })}
           {...(onShapeMark === undefined ? {} : { onShapeMark })}

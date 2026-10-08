@@ -57,11 +57,19 @@ async function statuses(request: APIRequestContext): Promise<string[]> {
 }
 
 /** The legend's names as read along it, in a drawn chart. */
+// The legend's, in the band above the plot: not the series' direct labels at
+// their ends (T681's follow-up; R76 dashboard-Q1).
 const legendOf = (chart: Locator, names: readonly string[]) =>
   chart.evaluate(
     (node, among) =>
       [...node.querySelectorAll('svg text')]
-        .filter((text) => among.includes(text.textContent ?? ''))
+        .filter(
+          (text) =>
+            among.includes(text.textContent ?? '') &&
+            text.getBoundingClientRect().top -
+              (node.querySelector('svg')?.getBoundingClientRect().top ?? 0) <
+              28,
+        )
         .map((text) => ({ name: text.textContent ?? '', x: text.getBoundingClientRect().x }))
         .sort((a, b) => a.x - b.x)
         .map((entry) => entry.name),

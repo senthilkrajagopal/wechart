@@ -517,13 +517,25 @@ test('a tile’s table can be reached and scrolled from the keyboard', async ({ 
     return Math.max(0, Math.round(canvas.getBoundingClientRect().bottom - inner));
   });
   expect(overrun).toBe(0);
-  const toggle = tile.getByTestId('toggle-table-view');
-  await toggle.focus();
+  // Its table from ⋯'s "View as table", by keys alone (T681's follow-up;
+  // R76 dashboard-Q1): Enter on ⋯, the arrows to the item, Enter.
+  const more = tile.getByRole('button', { name: /^Actions for / });
+  await more.focus();
+  await page.keyboard.press('Enter');
+  const asTable = tile
+    .getByRole('menu', { name: /^Actions for / })
+    .getByRole('menuitem', { name: 'View as table', exact: true });
+  for (let step = 0; step < 30; step += 1) {
+    if (await asTable.evaluate((node) => node === document.activeElement)) break;
+    await page.keyboard.press('ArrowDown');
+  }
+  await expect(asTable).toBeFocused();
   await page.keyboard.press('Enter');
   const table = tile.getByRole('region', { name: /, table$/ });
   await expect(table).toBeVisible();
 
-  await toggle.focus();
+  // The menu gives focus back to ⋯, and Tab goes on into the table.
+  await expect(more).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(table).toBeFocused();
   // Its ring whole, inside a tile that clips.

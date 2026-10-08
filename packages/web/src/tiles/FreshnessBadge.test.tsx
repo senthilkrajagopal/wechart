@@ -1,7 +1,9 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import type { RenderSpec } from '@wechart/core';
+import { render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { clockOrWhenOf, exactOf } from '../shell/formatTime';
+import { ChartTile } from './ChartTile';
 import { FreshnessBadge } from './FreshnessBadge';
 
 /**
@@ -89,5 +91,73 @@ describe('the tile’s one freshness badge (T681)', () => {
     expect(screen.getByTestId('tile-freshness').getAttribute('title')).toBe(
       `Live query · as of ${exact(ANSWERED_AT)} · no pre-aggregation`,
     );
+  });
+});
+
+/**
+ * T154 / AC-148 on the tile itself, moved here from `DataAsOf.test.tsx` with
+ * the component it tested (T681's follow-up): the head's badge carries the
+ * answer's time, to the second, and its exact moment as its datetime.
+ */
+const spec = (rows: RenderSpec['rows']): RenderSpec => ({
+  chartType: 'bar',
+  encoding: { x: ['orders.status'], y: ['orders.count'] },
+  rows,
+});
+
+describe('when a chart’s data is from, on its tile', () => {
+  beforeEach(() => {
+    // A drawn chart's canvas watches its own size, which jsdom cannot.
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('is in the tile head, to the second, with the exact time as its datetime', () => {
+    // Today's data, so the clock alone (T477): the tile reads the real clock.
+    const at = new Date();
+    at.setHours(10, 32, 18, 0);
+    render(
+      <ChartTile
+        title="Orders"
+        spec={spec([{ 'orders.status': 'shipped', 'orders.count': 3 }])}
+        asOf={at.toISOString()}
+        served={{ lastRefreshTime: at.toISOString() }}
+      />,
+    );
+    const head = screen.getByTestId('chart-tile').querySelector('.tile-head');
+    const badge = within(head as HTMLElement).getByTestId('tile-freshness');
+    const asOf = badge.querySelector('time');
+    expect(asOf?.getAttribute('datetime')).toBe(at.toISOString());
+    // One 24-hour clock (T477; the coordinator's Q10).
+    expect(asOf?.textContent).toBe('10:32:18');
+    // Its tooltip the exact local time with UTC beside it (T477; Q9).
+    expect(badge.getAttribute('title')).toBe(`Live query · as of ${exactOf(at)} · no pre-aggregation`);
+  });
+
+  it('is shown for an answer with no rows too — a refresh can come back empty', () => {
+    render(
+      <ChartTile
+        spec={spec([])}
+        asOf="2026-09-21T10:32:18.000Z"
+        served={{ lastRefreshTime: '2026-09-21T10:32:18.000Z' }}
+      />,
+    );
+    expect(
+      screen.getByTestId('tile-freshness').querySelector('time')?.getAttribute('datetime'),
+    ).toBe('2026-09-21T10:32:18.000Z');
+  });
+
+  it('is left out where there is no answer to say it of', () => {
+    render(<ChartTile spec={spec([{ 'orders.count': 1 }])} />);
+    expect(screen.queryAllByTestId('tile-freshness').length).toBe(0);
   });
 });

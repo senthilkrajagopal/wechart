@@ -59,6 +59,12 @@ export interface ChartTileProps {
   readonly tableView?: boolean;
   readonly onTableViewChange?: (showing: boolean) => void;
   /**
+   * Its head's Table view button. A dashboard's tiles have none: their table
+   * is ⋯'s "View as table" (T681's follow-up; R76 dashboard-Q1), and their
+   * charts of 4 or fewer series name each at its end (rule 5).
+   */
+  readonly tableToggle?: boolean;
+  /**
    * A new answer is on its way — a filter changed (AC-078). What is drawn
    * stays, marked busy, rather than giving way to a skeleton: that would
    * unmount the tile and drop a reader's table view with it.
@@ -186,6 +192,7 @@ export function ChartTile({
   height,
   tableView,
   onTableViewChange,
+  tableToggle = true,
   busy,
   inEffect,
   title,
@@ -342,7 +349,7 @@ export function ChartTile({
         {heading}
         {inFoot ? null : badge}
         {editing ? kindTag : inFoot ? null : dataAsOf}
-        {canSwitch ? (
+        {canSwitch && tableToggle ? (
           <button
             type="button"
             className="btn-ghost btn-sm tile-head__action"

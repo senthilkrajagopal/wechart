@@ -10,6 +10,7 @@ import { seriesOf, type RenderSpec } from '@wechart/core';
 
 import { colourFor } from '../colours';
 import { inSeriesOrder, plotEdgesOf, seriesOrderOf } from '../customize';
+import { directLabelRoom } from '../layout/directLabels';
 import { PROTOTYPE_GRID } from '../layout/grid';
 import { DEFAULT_SURFACE, MARK, type EChartsOption } from '../theme';
 
@@ -83,16 +84,16 @@ export function barOption(spec: RenderSpec, canvas: Canvas = DEFAULT_CANVAS): EC
    * it (AC-210): 243 grouped bars at a tile's width once drew blank axes, each
    * bar painted out by its own gap.
    */
+  const names = series.map((one) => one.name);
+  const edges = plotEdgesOf(spec, names);
   const gap = gapFor(
     laidBarWidth(
-      categoryAxisPx(
-        canvas,
-        horizontal,
-        plotEdgesOf(
-          spec,
-          series.map((one) => one.name),
-        ),
-      ),
+      categoryAxisPx(canvas, horizontal, {
+        ...edges,
+        // Less the room direct labels take at the right (T681's follow-up):
+        // under rather than over, as below.
+        right: edges.right + directLabelRoom(spec, names),
+      }),
       categories.length,
       stacked ? 1 : Math.max(1, series.length),
     ),

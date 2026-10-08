@@ -4,6 +4,7 @@ import { CHART_TYPES, type RenderSpec } from '@wechart/core';
 
 import countries from './geo/countries-50m.geo.json';
 import { registerCountries } from './geo/countryMap';
+import { DIRECT_LABEL_TOP } from './layout/directLabels';
 import { DRAWABLE_TYPES, isDrawable, optionFor } from './optionFor';
 import {
   cellsOf,
@@ -184,10 +185,12 @@ describe('a chart on axes', () => {
     };
     const topOf = (options: Record<string, unknown>) =>
       (optionFor({ ...twoSeries, options })['grid'] as { top?: unknown }).top;
-    expect(topOf({})).toBe(32);
-    expect(topOf({ legend: { show: false } })).toBe(12);
-    expect(topOf({ legend: { position: 'bottom' } })).toBe(12);
-    expect(topOf({ legend: { position: 'right' } })).toBe(12);
+    // Over the legend's room, a grouped bar's names over its tallest bars
+    // take theirs (T681's follow-up; R76 dashboard-Q1).
+    expect(topOf({})).toBe(32 + DIRECT_LABEL_TOP);
+    expect(topOf({ legend: { show: false } })).toBe(12 + DIRECT_LABEL_TOP);
+    expect(topOf({ legend: { position: 'bottom' } })).toBe(12 + DIRECT_LABEL_TOP);
+    expect(topOf({ legend: { position: 'right' } })).toBe(12 + DIRECT_LABEL_TOP);
   });
 
   it('draws its axis labels down to 8 px from the foot, not 80', () => {

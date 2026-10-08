@@ -379,16 +379,16 @@ test.describe('T203: the dashboard header, page tabs and tiles', () => {
       color: await token(page, 'text-primary'),
     });
 
-    // The table view: a small ghost button in the head (.btn.ghost.sm).
-    const toggle = tile.getByTestId('toggle-table-view');
-    expect(
-      await style(toggle, 'height', 'font-size', 'background-color', 'border-top-color'),
-    ).toEqual({
-      height: '24px',
-      'font-size': '12px',
-      'background-color': 'rgba(0, 0, 0, 0)',
-      'border-top-color': 'rgba(0, 0, 0, 0)',
-    });
+    // The table view: ⋯'s "View as table", no button in the head (T681's
+    // follow-up; R76 dashboard-Q1; design 04 pin 5).
+    await expect(tile.locator('.tile-head').first().getByRole('button')).toHaveCount(0);
+    await tile.getByRole('button', { name: /^Actions for / }).click();
+    await expect(
+      tile
+        .getByRole('menu', { name: /^Actions for / })
+        .getByRole('menuitem', { name: 'View as table', exact: true }),
+    ).toHaveCount(1);
+    await page.keyboard.press('Escape');
 
     // .tile-actions .iconbtn { width: 26px; height: 26px } over .iconbtn
     // { border: 1px solid transparent; border-radius: 6px; background: none }

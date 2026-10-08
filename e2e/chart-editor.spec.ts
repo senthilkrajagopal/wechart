@@ -1217,11 +1217,13 @@ test('the Customize tab moves the legend, writes data labels and lets the axis l
 
   // The legend, from above the plot to its right: its entry for the average,
   // by the measure's short title, the chart being one source's (AC-220, T403).
+  // The legend's, drawn after the series: the series' own direct label at
+  // its last bar bears the same name (T681's follow-up; R76 dashboard-Q1).
   const legendEntry = () =>
     canvas
       .locator('svg text')
       .filter({ hasText: /^Average Amount$/ })
-      .first();
+      .last();
   const plotBox = await canvas.boundingBox();
   const above = await legendEntry().boundingBox();
   expect((above?.y ?? 0) - (plotBox?.y ?? 0)).toBeLessThan(40);
@@ -1230,8 +1232,11 @@ test('the Customize tab moves the legend, writes data labels and lets the axis l
     .poll(async () => ((await legendEntry().boundingBox())?.x ?? 0) - (plotBox?.x ?? 0))
     .toBeGreaterThan((plotBox?.width ?? 0) * 0.6);
 
-  // Data labels: each bar's value written on it, where none was.
-  const labels = () => canvas.locator('svg text').allTextContents();
+  // Data labels: each bar's value written on it, where none was. Counted by
+  // the texts that are figures: the series' names at their last bars give
+  // way to the values (T681's follow-up; R76 dashboard-Q1).
+  const labels = async () =>
+    (await canvas.locator('svg text').allTextContents()).filter((text) => /\d/.test(text));
   const before = await labels();
   await page.getByLabel('Data labels').check();
   await expect.poll(async () => (await labels()).length).toBeGreaterThan(before.length + 5);

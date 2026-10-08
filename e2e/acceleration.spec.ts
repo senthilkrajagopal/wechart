@@ -183,8 +183,9 @@ test('a tile served from a pre-aggregation says so with its age, and one from th
     /^Pre-aggregation monthly_orders\.by_status_month · as of .+ \d{2}:\d{2}:\d{2} \(.*\d{2}:\d{2}:\d{2} UTC\) · \d+ ms · built .+ ago$/,
   );
 
-  // So a half-width tile keeps its title readable and its Table view clear
-  // of the corner controls (T014's review).
+  // So a half-width tile keeps its title readable (T014's review), and its
+  // head clear of the corner controls: Table view is ⋯'s since T681's
+  // follow-up (R76 dashboard-Q1), and the badge ends before ↻ begins.
   const tile = page.locator('[data-tile="tile-monthly_orders"]');
   await expect(accelerated.locator('.tile-freshness__label')).toHaveText(/^Pre-agg · \d+[smhdw]$/);
   const heading = await tile
@@ -192,9 +193,10 @@ test('a tile served from a pre-aggregation says so with its age, and one from th
     .boundingBox();
   expect(heading?.width ?? 0).toBeGreaterThanOrEqual(96);
   await tile.hover();
-  const table = await tile.getByTestId('toggle-table-view').boundingBox();
+  await expect(tile.getByTestId('toggle-table-view')).toHaveCount(0);
+  const badge = await accelerated.boundingBox();
   const refresh = await tile.getByRole('button', { name: /^Refresh / }).boundingBox();
-  expect((table?.x ?? 0) + (table?.width ?? 0)).toBeLessThanOrEqual(refresh?.x ?? 0);
+  expect((badge?.x ?? 0) + (badge?.width ?? 0)).toBeLessThanOrEqual(refresh?.x ?? 0);
 
   const live = page.locator('[data-tile="tile-orders"]').getByTestId('tile-freshness');
   await expect(live.locator('.tile-freshness__label')).toHaveText('Live');

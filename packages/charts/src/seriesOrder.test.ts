@@ -56,10 +56,13 @@ function stackOf(svg: string): string[] {
     .map((mark) => byColour[mark.fill] ?? mark.fill);
 }
 
-/** The legend's names, as read along it. */
+/**
+ * The legend's names, as read along it: in its top 32 px band (legend.ts),
+ * not the series' direct labels at their ends (T681's follow-up).
+ */
 const legendOf = (svg: string) =>
   labelsOf(svg)
-    .filter((label) => label.text in COLOURS)
+    .filter((label) => label.text in COLOURS && label.y < 32)
     .sort((a, b) => a.x - b.x)
     .map((label) => label.text);
 
@@ -120,9 +123,10 @@ describe('series in the order set in Customize (T392, AC-300)', () => {
       palette: ['#123456', '#abcdef', '#0f9d58'],
       ...(seriesOrder === undefined ? {} : { options: { seriesOrder } }),
     });
+    // Along the legend, in its top 32 px band, not over the bars (T681's follow-up).
     const listed = (spec: RenderSpec) =>
       labelsOf(svgOf(spec))
-        .filter((label) => /^\d{4}$/.test(label.text))
+        .filter((label) => /^\d{4}$/.test(label.text) && label.y < 32)
         .sort((a, b) => a.x - b.x)
         .map((label) => label.text);
 

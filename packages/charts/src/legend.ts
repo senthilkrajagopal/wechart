@@ -43,6 +43,25 @@ export function seriesCount(spec: RenderSpec): number {
 }
 
 /**
+ * How a chart writes the name of each thing it colours, as its legend and
+ * its direct labels (T681's follow-up) both say it: a category or a member
+ * of the split, one of time by its granularity (AC-188); a series per
+ * measure by the measure's title (AC-220), its short one in a one-source
+ * chart (T403). A pie's slices come already written, by every value they are
+ * grouped by (AC-221): none.
+ */
+export function seriesNameWriter(spec: RenderSpec): ((value: unknown) => string) | undefined {
+  const named = COLOURED_BY_CATEGORY.includes(spec.chartType)
+    ? memberOn(spec.encoding, 'x')
+    : memberOn(spec.encoding, 'color');
+  return PIE_TYPES.includes(spec.chartType)
+    ? undefined
+    : named === undefined && spec.titles !== undefined
+      ? (value: unknown) => labelOf(spec, String(value ?? ''))
+      : modelWriter(spec, named);
+}
+
+/**
  * The legend for a chart, or nothing.
  *
  * Top by default, which direction.md sets and which keeps the legend out of
@@ -58,17 +77,7 @@ export function legendFor(spec: RenderSpec): EChartsOption {
    * entry's name and keeps the name itself, so the entry still matches its
    * series (research/echarts.md).
    */
-  const named = COLOURED_BY_CATEGORY.includes(spec.chartType)
-    ? memberOn(spec.encoding, 'x')
-    : memberOn(spec.encoding, 'color');
-  // A series per measure is named by the measure's title (AC-220), its short
-  // one in a one-source chart (T403); a pie's slices come already written,
-  // by every value they are grouped by (AC-221).
-  const write = PIE_TYPES.includes(spec.chartType)
-    ? undefined
-    : named === undefined && spec.titles !== undefined
-      ? (value: unknown) => labelOf(spec, String(value ?? ''))
-      : modelWriter(spec, named);
+  const write = seriesNameWriter(spec);
 
   return {
     legend: {
