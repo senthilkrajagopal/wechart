@@ -1,4 +1,4 @@
-import { DRIVERS, DRIVER_TYPES, type DriverType } from '@wechart/core';
+import { DRIVERS, DRIVER_TYPES, nameInUse, nameKey, type DriverType } from '@wechart/core';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
   useCallback,
@@ -248,12 +248,15 @@ const driverName = (dbType: string) => {
   return driver === undefined ? dbType : DRIVERS[driver].label;
 };
 
-/** What a generated file clashes with: the file, or a cube or view the model declares. */
+/**
+ * What a generated file clashes with: the file, or a name the model holds,
+ * said only as in use (T724, AC-424), its file never named.
+ */
 interface Clash {
+  /** The file that clashes; for a name, the generated file's own. */
   readonly path: string;
-  /** The cube or view of the same name, when that is the clash. */
+  /** The generated cube's or view's name, when that is the clash. */
   readonly name?: string;
-  readonly kind?: 'cube' | 'view';
   /** In My workspace, the shared folder the file is in, when it is that folder's (T492). */
   readonly folderId?: string;
 }
@@ -347,23 +350,21 @@ function clashesWith(
 ): Map<string, Clash[]> {
   const folderOf = (file: Held) => (file.folderId === undefined ? {} : { folderId: file.folderId });
   const paths = new Map(existing.map((file) => [file.path, folderOf(file)] as const));
-  const names = new Map<string, { kind: 'cube' | 'view'; path: string; folderId?: string }>();
-  for (const file of existing)
-    for (const { kind, name } of objectsOf(file.path, file.content).objects)
-      if (!names.has(name)) names.set(name, { kind, path: file.path, ...folderOf(file) });
+  // In any case, and said only as in use: never which file holds it (T724, AC-424).
+  const names = new Set(
+    existing.flatMap((file) =>
+      objectsOf(file.path, file.content).objects.map(({ name }) => nameKey(name)),
+    ),
+  );
   const clashes = new Map<string, Clash[]>();
   for (const file of created) {
-    const byName = objectsOf(file.path, file.content).objects.flatMap(({ name }) => {
-      const found = names.get(name);
-      return found === undefined ? [] : [{ name, ...found }];
-    });
     const atPath = paths.get(file.path);
     const said: Clash[] = [
       // "The model": the store's files and the unpublished drafts (T276's review).
-      ...(atPath !== undefined && !byName.some((clash) => clash.path === file.path)
-        ? [{ path: file.path, ...atPath }]
-        : []),
-      ...byName,
+      ...(atPath !== undefined ? [{ path: file.path, ...atPath }] : []),
+      ...objectsOf(file.path, file.content)
+        .objects.filter(({ name }) => names.has(nameKey(name)))
+        .map(({ name }) => ({ path: file.path, name })),
     ];
     if (said.length > 0) clashes.set(file.path, said);
   }
@@ -1541,15 +1542,13 @@ export function GenerateCubes({
                                         the model.
                                       </>
                                     ) : (
-                                      <>
-                                        <span className="is-code">{clash.name}</span> is already a{' '}
-                                        {clash.kind} in{' '}
-                                        <span className="is-code">{clash.path}</span>.
-                                      </>
+                                      // In use, never where (T724, AC-424).
+                                      nameInUse(clash.name)
                                     )}
                                   </p>
                                   <div className="generate-pane__actions">
-                                    {clash.folderId !== undefined ? (
+                                    {clash.name !== undefined ? null : clash.folderId !==
+                                      undefined ? (
                                       // The folder's, from My workspace: opened there, in a
                                       // new tab, the pane and its generation kept (T492).
                                       <a

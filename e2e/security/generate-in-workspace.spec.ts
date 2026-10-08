@@ -1,5 +1,6 @@
 import type { APIRequestContext } from '@playwright/test';
 
+import { landed } from '../model-files';
 import { expect, test } from './fixtures';
 import { seedRootDefault } from './root-default';
 
@@ -90,6 +91,79 @@ test.describe('generating cubes into My workspace (T492, AC-350)', () => {
       );
     expect(await paths('/api/model/files?folder=mine')).toContain(PATH);
     expect(await paths('/api/model/files')).not.toContain(PATH);
+  });
+
+  /**
+   * T724 (AC-249, AC-424): a generated cube whose name has landed is refused,
+   * said only as in use. In the pane, against the folder it goes to, with no
+   * way to its holder's file; and on Save, against a folder the pane doesn't
+   * read, with nothing saved.
+   */
+  test('a landed name is said only as in use, in the pane and on Save', async ({ page }) => {
+    test.setTimeout(240_000);
+    const request = page.request;
+    await removeDraft(request);
+    const id = await rootDefault(request);
+    const run = `gw${Math.random().toString(36).slice(2, 7)}`;
+    const made = await request.post('/api/documents', {
+      data: { kind: 'folder', title: `Stores ${run}`, folderId: 'root' },
+    });
+    expect(made.status(), await made.text()).toBe(201);
+    const holder = ((await made.json()) as { id: string }).id;
+    const held = {
+      path: `cubes/stores_${run}.yml`,
+      content:
+        'cubes:\n  - name: chrome_stores\n    sql_table: generate.chrome_stores\n\n    measures:\n      - name: count\n        type: count\n',
+    };
+    try {
+      expect(await landed(request, holder, [held])).toEqual([held]);
+
+      await page.goto(`/explore/data-sources/${id}`);
+      await page.getByRole('button', { name: 'Generate cubes…' }).click();
+      const pane = page.getByRole('dialog', { name: 'Generate cubes' });
+      await pane.getByRole('radio', { name: 'generate', exact: true }).check();
+      await pane.getByRole('button', { name: 'Next: Tables' }).click();
+      await pane.getByRole('searchbox', { name: 'Search tables' }).fill('chrome_stores');
+      await pane
+        .getByRole('table', { name: 'Tables in generate' })
+        .getByRole('checkbox', { name: 'chrome_stores' })
+        .check();
+      await pane.getByRole('button', { name: 'Generate 1 cube' }).click();
+
+      // To the folder that holds it: marked as in use, and nothing of where.
+      const tree = pane.getByRole('tree', { name: 'Target folder' });
+      await tree.getByRole('treeitem', { name: `Stores ${run}` }).click();
+      const stores = pane.getByRole('region', { name: PATH });
+      await expect(stores.locator('.generate-pane__status')).toHaveText('Clashes');
+      await expect(
+        stores.locator('.generate-pane__file-body > .generate-pane__note.is-err p'),
+      ).toHaveText(['The name “chrome_stores” is already in use.']);
+      await expect(stores.getByRole('link', { name: /^Open / })).toHaveCount(0);
+      await expect(stores).not.toContainText(held.path);
+
+      // To the shared root, whose files don't hold it: added, then refused on Save.
+      await tree.getByRole('treeitem', { name: 'Shared' }).click();
+      await expect(stores.locator('.generate-pane__status')).not.toHaveText('Clashes');
+      await pane.getByRole('button', { name: 'Add 1 cube as a draft' }).click();
+      await pane.getByRole('button', { name: `Open ${PATH}` }).click();
+      await page.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(page.getByRole('alert').filter({ hasText: 'already in use' })).toHaveText(
+        'The name “chrome_stores” is already in use, so nothing was saved.',
+        { timeout: 60_000 },
+      );
+      const paths = (
+        (await (await request.get('/api/model/files?folder=mine')).json()) as {
+          files: { path: string }[];
+        }
+      ).files.map((each) => each.path);
+      expect(paths).not.toContain(PATH);
+    } finally {
+      await request.delete(
+        `/api/model/files?folder=${encodeURIComponent(holder)}&path=${encodeURIComponent(held.path)}`,
+        { timeout: 90_000 },
+      );
+      await request.delete(`/api/documents/folder/${holder}`);
+    }
   });
 
   test('from the data source’s ⋯ in Explore', async ({ page }) => {

@@ -1,3 +1,4 @@
+import { nameInUse, nameKey } from '@wechart/core';
 import { parse } from 'yaml';
 
 import type { ModelFile } from '../server';
@@ -9,7 +10,8 @@ import type { CompileError } from './validate';
  * (research/cube/introspection-api.md, "Scaffold ignores the existing model"):
  * a generated file may have a stored file's path, which publishing would
  * overwrite, or declare a cube or view the model has already — cubes and
- * views share one namespace in Cube. Each clash names what it clashes with.
+ * views share one namespace in Cube. A file's clash names the file; a
+ * name's says only that the name is in use, in any case (T724, AC-424).
  *
  * The names are read from the stored YAML files, and from Cube's compiled
  * model (`/v1/meta?extended`: each cube's and view's `fileName`,
@@ -71,28 +73,18 @@ export function clashesOf(
   compiled: readonly Compiled[] = [],
 ): CompileError[] {
   const paths = new Set(stored.map((file) => file.path));
-  const names = new Map<string, { kind: 'cube' | 'view'; path: string }>();
-  for (const file of stored)
-    for (const { kind, name } of declared(file))
-      if (!names.has(name)) names.set(name, { kind, path: file.path });
-  for (const { kind, name, path } of compiled)
-    if (!names.has(name)) names.set(name, { kind, path });
-  return created.flatMap((file) => {
-    const byName = declared(file).flatMap(({ name }) => {
-      const found = names.get(name);
-      return found === undefined ? [] : [{ name, ...found }];
-    });
-    // A stored file a name clash already names needs no second word.
-    const byPath =
-      paths.has(file.path) && !byName.some((clash) => clash.path === file.path)
-        ? [{ path: file.path, message: `${file.path} is already in the model store.` }]
-        : [];
-    return [
-      ...byPath,
-      ...byName.map(({ name, kind, path }) => ({
-        path: file.path,
-        message: `\`${name}\` is already a ${kind} in ${path}.`,
-      })),
-    ];
-  });
+  // In any case, and said only as in use, never where (T724; AC-249, AC-424).
+  const names = new Set<string>([
+    ...stored.flatMap((file) => declared(file).map(({ name }) => nameKey(name))),
+    ...compiled.map(({ name }) => nameKey(name)),
+  ]);
+  return created.flatMap((file) => [
+    // The file that clashes is named: it is the folder's it goes to.
+    ...(paths.has(file.path)
+      ? [{ path: file.path, message: `${file.path} is already in the model store.` }]
+      : []),
+    ...declared(file)
+      .filter(({ name }) => names.has(nameKey(name)))
+      .map(({ name }) => ({ path: file.path, message: nameInUse(name) })),
+  ]);
 }

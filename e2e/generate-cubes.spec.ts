@@ -321,22 +321,27 @@ test('a generated cube the model already has is marked, named, and refused, and 
   // Marked, with its status and a bar naming the cube it clashes with; adding refused, saying why.
   const orders = pane.getByRole('region', { name: 'cubes/orders.yml' });
   await expect(orders.locator('.generate-pane__status')).toHaveText('Clashes');
+  // The file named; the name said only as in use, never where (T724, AC-424).
   await expect(
     orders.locator('.generate-pane__file-body > .generate-pane__note.is-err p'),
-  ).toHaveText('orders is already a cube in cubes/orders.yml.');
+  ).toHaveText([
+    'cubes/orders.yml is already in the model.',
+    'The name “orders” is already in use.',
+  ]);
   // The root's file, opened in a tab of its own: the pane and its generation
   // stay here in My workspace (T451's switch).
   const theRoots = orders.getByRole('link', { name: 'Open cubes/orders.yml' });
   await expect(theRoots).toHaveAttribute('href', '/model/files/cubes%2Forders.yml');
   await expect(theRoots).toHaveAttribute('target', '_blank');
-  await expect(pane.locator('.source-pane__foot-note')).toHaveText('Resolve 1 clash first');
+  await expect(pane.locator('.source-pane__foot-note')).toHaveText('Resolve 2 clashes first');
   const add = pane.getByRole('button', { name: 'Add 1 cube as a draft' });
   await expect(add).toHaveAttribute('aria-disabled', 'true');
   await add.click({ force: true });
   await expect(pane.getByText('Added 1 cube as a draft.')).toHaveCount(0);
 
-  // Whatever the browser sends, the API refuses it, naming the cube it has:
-  // saved into My workspace to go to the root, as the pane would.
+  // Whatever the browser sends, the API refuses it, naming the file and
+  // saying the name is in use: saved into My workspace to go to the root, as
+  // the pane would.
   const scaffold = (await (
     await request.post('/api/introspection/sources/default/scaffold', {
       data: { tables: [{ schema: 'public', table: 'orders' }] },
@@ -354,7 +359,8 @@ test('a generated cube the model already has is marked, named, and refused, and 
     422,
     {
       errors: [
-        { path: 'cubes/orders.yml', message: '`orders` is already a cube in cubes/orders.yml.' },
+        { path: 'cubes/orders.yml', message: 'cubes/orders.yml is already in the model store.' },
+        { path: 'cubes/orders.yml', message: 'The name “orders” is already in use.' },
       ],
     },
   ]);

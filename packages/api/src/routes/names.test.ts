@@ -334,7 +334,7 @@ describe('data sources, cubes and model files: one of a name in a folder (T336, 
     expect(clashing.statusCode, clashing.body).toBe(422);
     expect(
       clashing.json<{ errors: { message: string }[] }>().errors.map((each) => each.message),
-    ).toEqual([`\`${stock}\` is already a cube in cubes/stock.yml.`]);
+    ).toEqual([`The name “${stock}” is already in use.`]);
     const after = await files().list(folders.b);
     expect(after.find((file) => file.path === 'cubes/stock.yml')).toEqual(before);
     expect(after.map((file) => file.path)).not.toContain(`cubes/${stock}.yml`);

@@ -659,14 +659,9 @@ describe('publishing generated cubes (AC-249)', () => {
       {
         errors: [
           { path: 'cubes/orders.yml', message: 'cubes/orders.yml is already in the model store.' },
-          {
-            path: 'cubes/sales_orders.yml',
-            message: '`orders` is already a cube in cubes/orders.yml.',
-          },
-          {
-            path: 'cubes/summary.yml',
-            message: '`summary` is already a view in views/summary.yml.',
-          },
+          // A name said only as in use, never where (T724, AC-424).
+          { path: 'cubes/sales_orders.yml', message: 'The name “orders” is already in use.' },
+          { path: 'cubes/summary.yml', message: 'The name “summary” is already in use.' },
         ],
       },
     ]);
@@ -711,14 +706,8 @@ describe('publishing generated cubes (AC-249)', () => {
       422,
       {
         errors: [
-          {
-            path: 'cubes/public_orders.yml',
-            message: '`orders` is already a cube in cubes/orders.js.',
-          },
-          {
-            path: 'cubes/public_lines.yml',
-            message: '`lines` is already a cube in cubes/lines.yml.',
-          },
+          { path: 'cubes/public_orders.yml', message: 'The name “orders” is already in use.' },
+          { path: 'cubes/public_lines.yml', message: 'The name “lines” is already in use.' },
         ],
       },
     ]);
@@ -727,7 +716,9 @@ describe('publishing generated cubes (AC-249)', () => {
     await app.close();
   });
 
-  it('names the cube once when its file and its name are the same stored file’s', async () => {
+  // T724 (AC-249, AC-424): the file that clashes is named, and the name is
+  // said as in use, never as that file's.
+  it('names the file, and says the name is in use, when both are the same stored file’s', async () => {
     const store = memory([ORDERS]);
     const { cube } = cubeReading();
     const app = serve({ config, modelFiles: store, cube });
@@ -738,7 +729,8 @@ describe('publishing generated cubes (AC-249)', () => {
       422,
       {
         errors: [
-          { path: 'cubes/orders.yml', message: '`orders` is already a cube in cubes/orders.yml.' },
+          { path: 'cubes/orders.yml', message: 'cubes/orders.yml is already in the model store.' },
+          { path: 'cubes/orders.yml', message: 'The name “orders” is already in use.' },
         ],
       },
     ]);
@@ -819,7 +811,7 @@ describe('publishing generated cubes (AC-249)', () => {
       422,
       {
         errors: [
-          { path: 'cubes/lines.yml', message: '`lines` is already a cube in cubes/lines.js.' },
+          { path: 'cubes/lines.yml', message: 'The name “lines” is already in use.' },
           {
             path: 'views/summary.yml',
             message: 'views/summary.yml is already in the model store.',
@@ -1694,7 +1686,8 @@ describe('publishing into a folder (T452)', () => {
         {
           path: 'cubes/orders_again.yml',
           folderId: 'sales',
-          message: '`sales_orders` is already a cube in cubes/sales_orders.yml.',
+          // Said only as in use, never where (T724, AC-424).
+          message: 'The name “sales_orders” is already in use.',
         },
       ],
     });

@@ -19,6 +19,7 @@ import { PROPOSAL_BINDINGS, proposalBindingStore } from '../repos/proposal-bindi
 import { proposalStore } from '../repos/proposals';
 import { versionStore } from '../repos/versions';
 import { buildServer } from '../server';
+import { declaredIn } from '../model/split';
 import { xcubeAdmin, type XcubeAdmin } from '../xcube/client';
 import { fakeXcube, FAKE_ADMIN_TOKEN } from '../xcube/fake';
 import { itemsOf } from '../xcube/items';
@@ -322,11 +323,20 @@ describe('a draft model’s name, when it is made and renamed (T705, AC-422, AC-
       payload: { kind: 'model', id: file.id },
     });
     expect(proposed.statusCode, proposed.body).toBe(201);
-    await as('writer', {
+    // Approved, it lands over its original, never refused its name nor beside it
+    // (AC-422's edit copy; for its tick with T724).
+    const approved = await as('super', {
       method: 'POST',
-      url: `/api/proposals/${proposed.json<{ id: string }>().id}/reject`,
+      url: `/api/proposals/${proposed.json<{ id: string }>().id}/approve`,
       payload: {},
     });
+    expect(approved.statusCode, approved.body).toBe(200);
+    const landed = (await files().inFolders([ids.sales])).filter((each) =>
+      declaredIn(each.content).some(({ name }) => name === SEED),
+    );
+    expect(landed.map(({ path, content }) => ({ path, content }))).toEqual([
+      { path: shared(SEED), content: changed },
+    ]);
   });
 });
 

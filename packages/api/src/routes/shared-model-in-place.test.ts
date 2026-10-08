@@ -276,10 +276,8 @@ describe('with sign-in off, by the single user too (T451’s switch; AC-254, R52
     expect(byName.statusCode, byName.body).toBe(422);
     expect(byName.json()).toEqual({
       errors: [
-        {
-          path: `cubes/${CUBE}_again.yml`,
-          message: `\`${CUBE}\` is already a cube in ${PATH}.`,
-        },
+        // Said only as in use, never where (T724, AC-424).
+        { path: `cubes/${CUBE}_again.yml`, message: `The name “${CUBE}” is already in use.` },
       ],
     });
     const byPath = await generate(PATH, `${CUBE}_other`);

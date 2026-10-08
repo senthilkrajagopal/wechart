@@ -13073,6 +13073,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - A proposal whose clash only xcube sees, as in a race, is refused the same way.
     - `global-names.spec.ts`, on the image: two workspaces each propose a draft of one new name. The first approval lands it. The second is refused, and nothing of it lands (AC-422).
   - Depends on: T701, T702
+  - *Noted (2026-10-08), known and accepted:* two approvals racing so that only xcube sees the clash can leave a proposal's data source landed: data sources land first (R52), before xcube refuses the model. This is a concurrent-change edge case, which the user's standing rule accepts for now and keeps from being hardened further (the coordinator, 2026-10-08). AC-422 is ticked with T724: its sequential cases are each shown by a passing test, namely made, renamed and proposed (T705's `draft-names.test.ts`), a later approval refused with nothing landed (this task's `landed-names.test.ts` and `global-names.spec.ts`), and the edit copy (T705's `draft-names.test.ts` and `use-only-copy.test.ts`).
 
 - [x] T705 (AC-422, AC-424, AC-282, AC-270, AC-271) Check a draft's name when it is made, renamed and proposed: against every landed name and the workspace's other drafts, never another workspace's; an edit copy keeps its original's name
   - Files:
@@ -13365,11 +13366,11 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - The model editor now lists a cube's or view's name outside the grammar at its name, as an error marked `holds`, and Save waits for it. Unlike what Cube would refuse (AC-136), it is wechart's own rule, which the API refuses anyway.
     - Tests: `validate.test.ts`, `publish.test.ts`, `names.test.ts` (core), `NewSourceWizard`, `SourceEditor`, `ProposeFlow` and `DecisionPanel`. On the image, `global-names.spec.ts` "a draft cube’s name in the model editor": Save is held for `Orders__2`, and `orders` is refused as in use with one POST sent.
     - The Files list named `ProposeDialog.tsx` and `Refusal.tsx`. Neither needed a change: the refusal reaches `ProposeFlow` and `DecisionPanel` as the API's `error`, never as `Refusal`'s breaks.
-    - AC-426 ticked: with T703, T708 and this, every surface refuses a name outside the grammar. AC-422 is left unticked: approvals racing past wechart's check, where only xcube sees the clash, could leave a proposal's data source landed (raised at T704). AC-424 waits on T724 and T726.
+    - AC-426 ticked: with T703, T708 and this, every surface refuses a name outside the grammar. AC-422 was left unticked here for the approval race raised at T704; it is ticked with T724, the race accepted (see T704's note). AC-424 waits on T724 and T726.
 
 ### Generate cubes
 
-- [ ] T724 (AC-249, AC-424) Refuse a generated cube whose name has landed in any folder, or is another draft's in the workspace, in any case, saying only that it is in use
+- [x] T724 (AC-249, AC-424) Refuse a generated cube whose name has landed in any folder, or is another draft's in the workspace, in any case, saying only that it is in use
   - Files: `packages/api/src/model/clashes.ts`, `packages/api/src/routes/workspace-models.ts` (the generated save), `packages/web/src/workspaces/model/GenerateCubes.tsx` (+ test), `e2e/security/generate-in-workspace.spec.ts`
   - Failing test:
     - `GenerateCubes.test.tsx` and `routes/generate-names.test.ts` (new), against a landed `orders` in any folder or a draft of it in the workspace:
@@ -13377,6 +13378,18 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - a generated file whose file name the target folder holds is refused, naming that file (AC-249, AC-424).
     - `generate-in-workspace.spec.ts`, on the image: the same in the pane.
   - Depends on: T705
+  - *Noted (2026-10-08):*
+    - `clashesOf` compares names in any case and says a name only as in use (core's `nameInUse`). Its file clash still names the file, and is said beside a name clash rather than in place of it. A generated `orders.yml` that declares `orders` therefore gets both: "cubes/orders.yml is already in the model store." and "The name “orders” is already in use."
+    - The workspace save's check against every landed name and the workspace's drafts is T705's, which a generated save reaches after `clashesOf`. `routes/generate-names.test.ts` shows it for generated files: a landed name in a folder the user can't see, the target folder's name, as written and in another case, another draft's name, and the target's file name.
+    - The pane does the same: a name clash says only that the name is in use, in any case, with no link to its holder's file. A file clash keeps its Open link.
+    - Existing tests of T276, T336 and T451 held to the old "`x` is already a cube in path" wording now hold to the new one: `publish.test.ts`, `names.test.ts`, `shared-model-in-place.test.ts`, `GenerateCubes.test.tsx` and `e2e/generate-cubes.spec.ts`.
+    - On the image (`generate-in-workspace.spec.ts`): the pane marks `chrome_stores` as in use against the folder that holds it. Generated to the root instead, it is refused on Save, and nothing is saved.
+    - Not done here, and not tasked: AC-249's R73 suggestions (`user__events` to `user_events`, `class` to `t_class`, `2024_orders` to `t_2024_orders`), and the generated name being editable before saving. AC-249 stays unticked for them and for T727.
+    - A folder's second cube of a name in a direct publish (`redeclaredIn`) still names the file that has it. That is T726's sweep.
+    - AC-422 ticked here, at the coordinator's word (2026-10-08). Its sequential cases each have a passing test, see T704's note. The edit copy's case now approves and lands over its original in `draft-names.test.ts`. The simultaneous race is known and accepted, under the user's rule on concurrent changes as the coordinator reads it. That rule was recorded for overwritten concurrent saves, so applying it to this case is worth confirming with the user.
+    - Known thin coverage, from the review:
+      - No unit test proposes a cube of a taken name together with a new data source. The check runs before any data source lands, and `landed-names.test.ts` would catch it moving.
+      - A data source's edit-copy approval with the name check on is shown only on the full stack, by `e2e/security/shared-change.ts`'s `changeSharedSource`.
 
 ### AC-353: R70's identity warning (with T509)
 
@@ -13572,7 +13585,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
 | AC-347 | T489 | AC-348 | T490 | AC-349 | T491 |
 | AC-350 | T492 | AC-351 | T493 | AC-249 (again, drafts) | T488 |
 | AC-420 | T600 | AC-189, AC-235 (again, amended `[R60]`) | T451 | AC-254 (again, models) | T451 |
-| AC-421 | T700, T701, T702, T704 | AC-422 | T704, T705, T723 | AC-423 | T706, T722 |
+| AC-421 | T700, T701, T702, T704 | AC-422 | T704, T705, T723, T724 | AC-423 | T706, T722 |
 | AC-424 | T701, T702, T704, T705, T723, T724, T726 | AC-425 | T713, T714, T715, T729 | AC-426 | T700, T703, T708, T723 |
 | AC-427 | T707 | AC-428 | T718, T732 | | |
 

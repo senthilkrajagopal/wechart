@@ -457,7 +457,8 @@ describe('generating cubes from a data source (AC-139)', () => {
     const { dialog, onShow, onAdded } = pane({
       existing: [
         { path: 'cubes/chrome_stores.yml', content: 'cubes:\n  - name: stores\n' },
-        { path: 'views/visits.yml', content: 'views:\n  - name: chrome_visits\n' },
+        // In another case: names compare in any (T724, AC-421).
+        { path: 'views/visits.yml', content: 'views:\n  - name: Chrome_Visits\n' },
       ],
     });
     const tables = await toTables(dialog);
@@ -473,7 +474,8 @@ describe('generating cubes from a data source (AC-139)', () => {
     expect(clashOf(stores)).toBe('cubes/chrome_stores.yml is already in the model.');
     expect(stores.querySelector('.generate-pane__status')?.textContent).toBe('Clashes');
     const visits = within(dialog).getByRole('region', { name: 'cubes/chrome_visits.yml' });
-    expect(clashOf(visits)).toBe('chrome_visits is already a view in views/visits.yml.');
+    // A name said only as in use, never where (T724, AC-424).
+    expect(clashOf(visits)).toBe('The name “chrome_visits” is already in use.');
     expect(within(dialog).getByRole('note').textContent).toBe(
       '2 of 2 cubes clash with the model. Nothing is added while a cube clashes.Leave out clashing tables',
     );
@@ -488,9 +490,13 @@ describe('generating cubes from a data source (AC-139)', () => {
     expect(onAdded).not.toHaveBeenCalled();
     expect(asked.some((each) => each.url === '/api/model/publish')).toBe(false);
 
-    // Open the file it clashes with, beside the pane.
-    await userEvent.click(within(visits).getByRole('button', { name: 'Open views/visits.yml' }));
-    expect(onShow).toHaveBeenCalledWith('views/visits.yml');
+    // Open the file it clashes with, beside the pane; a name's holder is never offered.
+    expect(within(visits).queryByRole('button', { name: /^Open / })).toBeNull();
+    expect(visits.textContent).not.toContain('views/visits.yml');
+    await userEvent.click(
+      within(stores).getByRole('button', { name: 'Open cubes/chrome_stores.yml' }),
+    );
+    expect(onShow).toHaveBeenCalledWith('cubes/chrome_stores.yml');
     // Leave a table out: the rest generated again, without it.
     await userEvent.click(within(stores).getByRole('button', { name: 'Leave this table out' }));
     await vi.waitFor(() => {
@@ -1098,11 +1104,16 @@ describe('generating cubes in My workspace (T492, AC-350)', () => {
    */
   it('marks a cube the folder chosen has, and adds nothing while it clashes', async () => {
     api(undefined, undefined, {
-      'f-sales': [{ path: 'cubes/stores.yml', content: STORES }],
+      'f-sales': [
+        { path: 'cubes/stores.yml', content: STORES },
+        // A file of the generated one's path (T724: the file is named, a name never is).
+        { path: 'cubes/chrome_visits.yml', content: 'cubes:\n  - name: other_visits\n' },
+      ],
     });
     const { dialog, onAdded } = pane({ workspace: { targets } });
     await reviewed(dialog);
     const stores = within(dialog).getByRole('region', { name: 'cubes/chrome_stores.yml' });
+    const visits = within(dialog).getByRole('region', { name: 'cubes/chrome_visits.yml' });
     // Shared's has neither: both ready.
     const tree = within(dialog).getByRole('tree', { name: 'Target folder' });
     await userEvent.click(within(tree).getByRole('treeitem', { name: 'Shared' }));
@@ -1116,11 +1127,15 @@ describe('generating cubes in My workspace (T492, AC-350)', () => {
     expect(
       stores.querySelector('.generate-pane__file-body > .generate-pane__note.is-err p')
         ?.textContent,
-    ).toBe('chrome_stores is already a cube in cubes/stores.yml.');
-    // Its file is the folder's, not My workspace's: opened there, in a new
-    // tab, so the pane and its generation stay as they are.
-    const open = within(stores).getByRole('link', { name: 'Open cubes/stores.yml' });
-    expect(open.getAttribute('href')).toBe('/explore/folders/f-sales/models/cubes%2Fstores.yml');
+    ).toBe('The name “chrome_stores” is already in use.');
+    // Never where: no link to the file that holds it (T724, AC-424).
+    expect(within(stores).queryByRole('link', { name: /^Open / })).toBeNull();
+    // A file of its path is the folder's, not My workspace's: opened there,
+    // in a new tab, so the pane and its generation stay as they are.
+    const open = within(visits).getByRole('link', { name: 'Open cubes/chrome_visits.yml' });
+    expect(open.getAttribute('href')).toBe(
+      '/explore/folders/f-sales/models/cubes%2Fchrome_visits.yml',
+    );
     expect(open.getAttribute('target')).toBe('_blank');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Add 2 cubes as drafts' }));
     expect(onAdded).not.toHaveBeenCalled();
