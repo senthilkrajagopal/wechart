@@ -194,12 +194,11 @@ export function FilterBar(props: FilterBarProps) {
 
 /**
  * What a filter picks its field from, as design 10's grouped picker lists it
- * (T633; AC-329, AC-342; R64): the cubes on the dashboard's folder path, by
- * folder, nearest first (`pickerGroupsOf`, as the chart editor's, T475). Each
- * cube's fields that fit the widget are rows, by their titles, with the cube
- * and its folder path beside them. A farther cube a nearer one of its name
- * hides is one row, dimmed, saying what hides it: its fields can't be
- * picked, and listing each of them would say nothing more.
+ * (T633; AC-329; R64): the cubes on the dashboard's folder path, by folder,
+ * nearest first (`pickerGroupsOf`, as the chart editor's, T475). Each cube's
+ * fields that fit the widget are rows, by their titles, with the cube and its
+ * folder path beside them; the user's workspace copy's marked "Your copy", in
+ * the landed cube's place (T718, AC-428). Nothing is hidden (AC-342 retired).
  */
 export function useFieldGroups(
   dashboard: DashboardDocument,
@@ -229,30 +228,14 @@ export function useFieldGroups(
         label: group.label,
         rows: group.rows.flatMap((row): PathPickerRow[] => {
           const kind = row.cube.isView ? ('view' as const) : ('cube' as const);
-          if (row.hiddenBy !== undefined) {
-            // Said only where it has a field this filter could take (T633's review):
-            // a workspace copy's original is in the folders' own meta.
-            const own = membersOf(meta.data, row.cube.name);
-            const its = own.length > 0 ? own : membersOf(published.data, row.cube.name);
-            if (membersFor(widget, its).length === 0) return [];
-            return [
-              {
-                key: row.key,
-                value: row.cube.name,
-                title: row.cube.title,
-                kind,
-                path: group.label ?? '',
-                hiddenBy: row.hiddenBy,
-                data: { cube: row.cube.name },
-              },
-            ];
-          }
+          // The user's copy's fields marked as theirs, in the landed cube's place (T718, AC-428).
           return membersFor(widget, membersOf(meta.data, row.cube.name)).map((member) => ({
             key: `${row.key}/${member.name}`,
             value: member.name,
             title: member.title,
             kind,
             path: group.label === undefined ? row.cube.title : `${row.cube.title} · ${group.label}`,
+            chip: row.yours === true ? 'Your copy' : undefined,
             data: { member: member.name },
           }));
         }),
@@ -260,7 +243,7 @@ export function useFieldGroups(
       .filter((group) => group.rows.length > 0);
     /**
      * A field named by its title wherever the model has it, listed or not —
-     * one on a cube a nearer one now hides, say (AC-272: never rebound) — and
+     * one on a cube off the dashboard's path, say (AC-272: never rebound) — and
      * else by its short name in words, never its prefixed name (AC-329;
      * T633's review, as the chart editor's T475).
      */

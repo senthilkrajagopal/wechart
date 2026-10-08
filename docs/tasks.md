@@ -13330,7 +13330,7 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
     - **Left:** AC-050's text says a request carries its chart and fails "stored without the chart reference"; a use-only copy's request now has none (reported, for the spec).
     - **ACs not ticked:** AC-283 keeps T731.
 
-- [ ] T718 (AC-428, AC-329) List the user's workspace copy in the cube picker in place of the landed cube, marked as theirs
+- [x] T718 (AC-428, AC-329) List the user's workspace copy in the cube picker in place of the landed cube, marked as theirs
   - Files: `packages/web/src/editor/{PathPicker,CubePicker,FieldList}.tsx`, `packages/web/src/filters/FilterBar.tsx` (the hidden-by rows go: AC-342 is retired), `packages/web/src/shell/styles.ts`, `e2e/security/picker.spec.ts`
   - Failing test:
     - `CubePicker.test.tsx` and `fieldPicker.test.tsx`, with a workspace copy of `orders` (AC-428, AC-329):
@@ -13340,6 +13340,12 @@ Read-only SQL on a data source's own connection, or on Cube Store, through xcube
       - each cube shows its title, with its folder path.
     - `picker.spec.ts`, on the image: the same in the chart editor and in a dashboard filter's "Filter on" (AC-428).
   - Depends on: T710, T716
+  - **Done 2026-10-08.**
+    - **The web:** `editor/pathCubes.ts`'s `pickerGroupsOf` hides nothing (one item of a name, R71; AC-342 retired). For a workspace item, the cubes new in its workspace are "My workspace"'s; its copy of a landed cube is listed in that cube's folder group, in its place, marked `yours`. `PathPicker` loses its dimmed, unpickable rows and draws an optional chip beside a row's title; `CubePicker` and the "Filter on" field rows (`filters/FilterBar.tsx`) say "Your copy". `shell/styles.ts`: `.cube-picker__chip` in design 03's tree chip style (`.file .tag`: 600 11/16, muted ink, a 1 px strong border, 3 px corners, 0 4 px); the `.is-hidden` styles go. Comments of `FieldList.tsx` and `FilterBar.tsx` brought to it.
+    - **Tests, reworked from AC-342's premise** (its dimmed rows, `aria-disabled`, `is-hidden`, the unpickable click and the keys skipping them all go with it, each replaced by its inverse): `pathCubes.test.ts` (groups with none hidden; a workspace item's copy in /A's place, "Your copy", its name once, its new cube in My workspace; red before), `CubePicker.test.tsx` (the copy's chip, none dimmed, the copy picked; red before), `FieldList.test.tsx` and `fieldPicker.test.tsx` (fixtures on one name per item; the copy in the landed cube's place, marked). e2e `security/workspace-overlay.spec.ts` on the R71 image, 7/7 in Chrome: in a workspace chart's picker the copy is listed once, in its folder, with "Your copy" in design 03's chip style (its font, border, corners and inks asserted), nothing disabled, and picked. Web suite 2606/2606.
+    - **Moved to T732:** `picker.spec.ts`, the chart editor's and the "Filter on" picker's on the image (T732 reworks that spec and `e2e/cubePicker.ts`).
+    - **Left, as R72 has it:** a workspace copy of a landed cube off the item's path is listed nowhere (a reference stays on its path), while a cube new in the workspace going elsewhere is still listed under My workspace; untested either way.
+    - **ACs not ticked:** AC-428 keeps T732's "Filter on" on the image; AC-329 stays ticked.
 
 ### Imports (with T508 and its model import in progress)
 

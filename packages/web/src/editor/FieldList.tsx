@@ -121,8 +121,8 @@ export function FieldList({
   // The folders, for the path the picker offers (T429, AC-329).
   const folders = useQuery({ ...FOLDERS_QUERY, enabled: folderId !== undefined });
   // For a workspace item, the folders' own cubes: its overlay holds its copy
-  // in place of the cube it copies, which the picker lists as hidden by the
-  // copy (T475's review, AC-342).
+  // in place of the cube it copies, which the picker lists in that cube's
+  // place, "Your copy" (T475's review; T718, AC-428).
   const published = useQuery({ ...metaQueryOf(undefined), enabled: workspace !== undefined });
 
   if (meta.isPending) return <StateLine kind="run">Loading the model…</StateLine>;
@@ -137,8 +137,8 @@ export function FieldList({
   }
 
   const cubes = cubesFrom(meta.data);
-  // The cubes on the chart's folder path, by folder, nearest first, a farther
-  // one of a name a nearer one holds listed as hidden (AC-329, AC-342; T475).
+  // The cubes on the chart's folder path, by folder, nearest first, the
+  // user's copy in its landed cube's place (AC-329, AC-428; T475, T718).
   // The chart's own cube is named on the button whether listed or not.
   const groups = pickerGroupsOf(
     cubes,

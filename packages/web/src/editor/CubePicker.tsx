@@ -2,13 +2,12 @@ import { PathPicker } from './PathPicker';
 import type { PickerGroup } from './pathCubes';
 
 /**
- * The chart editor's cube picker (T475; AC-329, AC-342; 2026-09-27 design
- * 10, state D): "Cube or view" names the one chosen, and opens on a "Search
- * cubes and views" box over the cubes on the item's path, grouped by folder,
- * nearest first. Each is listed by its title, C for a cube or V for a view,
- * with its folder path beside it, never its prefixed name. A farther cube a
- * nearer one of its name hides is listed dimmed and can't be picked, saying
- * what hides it, so its absence from the chart's binding is no mystery.
+ * The chart editor's cube picker (T475; AC-329; 2026-09-27 design 10, state
+ * D): "Cube or view" names the one chosen, and opens on a "Search cubes and
+ * views" box over the cubes on the item's path, grouped by folder, nearest
+ * first. Each is listed by its title, C for a cube or V for a view, with its
+ * folder path beside it. The user's workspace copy of a landed cube is listed
+ * in that cube's place with a "Your copy" chip (T718, AC-428).
  *
  * Design 10's grouped picker (`PathPicker`), over cubes.
  */
@@ -41,7 +40,7 @@ export function CubePicker({
           title: row.cube.title,
           kind: row.cube.isView ? ('view' as const) : ('cube' as const),
           path: group.label ?? '',
-          hiddenBy: row.hiddenBy,
+          chip: row.yours === true ? 'Your copy' : undefined,
           data: { cube: row.cube.name },
         })),
       }))}

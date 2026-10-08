@@ -7,31 +7,16 @@ import { cubesOnPath, pickerGroupsOf } from './pathCubes';
 /**
  * T429, AC-329: WHEN the user picks a cube for a chart or dashboard, THE
  * SYSTEM SHALL offer only the cubes found on the item's own folder path, each
- * by its title with its folder path beside it, never by its prefixed name.
+ * by its title with its folder path beside it.
  *
- * /A (`fa`) holds a `sales`, /A/B (`fab`) its own, /A/B/C (`fabc`) beneath it
- * another, and /A/D (`fad`), /A/B's sibling, the only `widgets`; the root
- * holds `sales` and `customers`.
+ * The folders: /A (`fa`), /A/B (`fab`), /A/B/C (`fabc`) beneath it, and /A/D
+ * (`fad`), /A/B's sibling.
  */
 const folders: FolderNode[] = [
   { id: 'a', title: 'A', parentId: 'root', itemCount: 0, xcubeId: 'fa' },
   { id: 'b', title: 'B', parentId: 'a', itemCount: 0, xcubeId: 'fab' },
   { id: 'c', title: 'C', parentId: 'b', itemCount: 0, xcubeId: 'fabc' },
   { id: 'd', title: 'D', parentId: 'a', itemCount: 0, xcubeId: 'fad' },
-];
-const cube = (folderId: string, shortName: string, title: string): CubeSummary => ({
-  name: folderId === 'froot' ? shortName : `${folderId}__${shortName}`,
-  title,
-  isView: false,
-  xcube: { folderId, shortName },
-});
-const cubes = [
-  cube('froot', 'sales', 'Sales'),
-  cube('froot', 'customers', 'Customers'),
-  cube('fa', 'sales', 'Sales'),
-  cube('fab', 'sales', 'Sales'),
-  cube('fabc', 'sales', 'Sales'),
-  cube('fad', 'widgets', 'Widgets'),
 ];
 
 /**
@@ -132,60 +117,59 @@ describe('the cubes on an item’s folder path (T429, T710; AC-329, AC-328)', ()
 });
 
 /**
- * T475 (AC-329, AC-342; 2026-09-27 design 10, state D): the picker's groups,
- * by folder along the item's path, nearest first, each named by its path
- * below Shared (the root as "Shared"); a farther cube of a name a nearer one
- * holds is listed too, unselectable, saying which folder's cube hides it.
+ * T475 (AC-329), as T718 has it (AC-428; R71, R72; AC-342 retired): one item
+ * of a name, so nothing on a path is hidden. A workspace item's own new
+ * cubes come first; the user's copy of a landed cube is listed in the landed
+ * one's place, marked as theirs.
  */
-describe('the cube picker’s groups (T475, AC-342)', () => {
+describe('the cube picker’s groups (T475, T718, AC-428)', () => {
   const shown = (groups: ReturnType<typeof pickerGroupsOf>) =>
     groups.map((group) => ({
       label: group.label,
-      rows: group.rows.map((row) => `${row.cube.title}${row.hiddenBy ? ` · ${row.hiddenBy}` : ''}`),
+      rows: group.rows.map((row) => `${row.cube.title}${row.yours === true ? ' · Your copy' : ''}`),
     }));
 
-  it('groups the path’s cubes nearest first, the farther of a name hidden by the nearer', () => {
-    expect(shown(pickerGroupsOf(cubes, 'b', folders))).toEqual([
-      { label: 'A / B', rows: ['Sales'] },
-      { label: 'A', rows: ['Sales · hidden by Sales in A / B'] },
-      { label: 'Shared', rows: ['Sales · hidden by Sales in A / B', 'Customers'] },
+  it('groups the path’s cubes nearest first, each folder’s own, none hidden', () => {
+    expect(shown(pickerGroupsOf(onPaths, 'b', folders))).toEqual([
+      { label: 'A / B', rows: ['AB lines'] },
+      { label: 'A', rows: ['A orders'] },
+      { label: 'Shared', rows: ['Sales', 'Customers'] },
     ]);
   });
 
   it('says nothing of a descendant’s or a sibling’s cubes', () => {
-    const rows = pickerGroupsOf(cubes, 'b', folders).flatMap((group) => group.rows);
-    expect(rows.map((row) => row.cube.name)).not.toContain('fabc__sales');
-    expect(rows.map((row) => row.cube.name)).not.toContain('fad__widgets');
+    const rows = pickerGroupsOf(onPaths, 'b', folders).flatMap((group) => group.rows);
+    expect(rows.map((row) => row.cube.name)).not.toContain('deep');
+    expect(rows.map((row) => row.cube.name)).not.toContain('widgets');
   });
 
   /**
    * As the API answers a workspace item (T475's review): its overlay's meta
-   * holds the copy in place of the folder's cube, under the same name, so
-   * the published one comes from the folder's own meta, `published`.
+   * holds the copy in place of the landed cube, under the same name; the
+   * folders' own meta, `published`, holds the landed one.
    */
-  it('puts a workspace item’s own cubes first, the published one its copy replaced “hidden by your copy”', () => {
+  it('lists a workspace item’s copy in the landed cube’s place, marked as theirs, and its new cubes first', () => {
     const inWorkspace: FolderNode[] = [
       ...folders,
       { id: 'w', title: 'project-2026-10-01-0900', parentId: 'mine', itemCount: 0, xcubeId: null },
     ];
-    const copy: CubeSummary = { ...cube('fab', 'sales', 'Sales (mine)'), inWorkspace: true };
-    const newOne: CubeSummary = { ...cube('fab', 'customers', 'My customers'), inWorkspace: true };
-    // The overlay's meta: the copy where /A/B's was, and a new cube of the
-    // root's `customers` name.
-    const overlay = [...cubes.filter((each) => each.name !== 'fab__sales'), copy, newOne];
-    expect(shown(pickerGroupsOf(overlay, 'w', inWorkspace, 'b', cubes))).toEqual([
-      { label: 'My workspace', rows: ['Sales (mine)', 'My customers'] },
-      { label: 'A / B', rows: ['Sales · hidden by your copy'] },
-      { label: 'A', rows: ['Sales · hidden by your copy'] },
-      {
-        label: 'Shared',
-        rows: ['Sales · hidden by your copy', 'Customers · hidden by My customers in My workspace'],
-      },
+    const copy: CubeSummary = {
+      ...kept('fa', 'a_orders', 'A orders (mine)'),
+      inWorkspace: true,
+    };
+    const newOne: CubeSummary = { ...kept('fab', 'my_lines', 'My lines'), inWorkspace: true };
+    const overlay = [...onPaths.filter((each) => each.name !== 'a_orders'), copy, newOne];
+    const groups = pickerGroupsOf(overlay, 'w', inWorkspace, 'b', onPaths);
+    expect(shown(groups)).toEqual([
+      { label: 'My workspace', rows: ['My lines'] },
+      { label: 'A / B', rows: ['AB lines'] },
+      { label: 'A', rows: ['A orders (mine) · Your copy'] },
+      { label: 'Shared', rows: ['Sales', 'Customers'] },
     ]);
-    // Each row its own key, the copy and its original sharing a name.
-    const keys = pickerGroupsOf(overlay, 'w', inWorkspace, 'b', cubes).flatMap((group) =>
-      group.rows.map((row) => row.key),
-    );
+    // `a_orders` once, the copy; each row its own key.
+    const rows = groups.flatMap((group) => group.rows);
+    expect(rows.filter((row) => row.cube.name === 'a_orders')).toHaveLength(1);
+    const keys = rows.map((row) => row.key);
     expect(new Set(keys).size).toBe(keys.length);
   });
 

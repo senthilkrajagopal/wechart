@@ -11,8 +11,8 @@ export interface PathPickerRow {
   readonly kind: 'cube' | 'view';
   /** What is written at its right: its folder path, or its cube's and its path. */
   readonly path: string;
-  /** "hidden by …": listed dimmed and unpickable (AC-342). */
-  readonly hiddenBy?: string | undefined;
+  /** A chip beside its title: "Your copy" for the user's workspace copy (T718, AC-428). */
+  readonly chip?: string | undefined;
   /** `data-*` attributes, for the specs that find a row by its name. */
   readonly data?: Readonly<Record<string, string>> | undefined;
 }
@@ -30,11 +30,12 @@ const GUTTER = 16;
  * Design 10's grouped picker (2026-09-27, state D; T475, T633): a button
  * named by its label and the one chosen, opening on a search box over rows
  * grouped by folder along the item's path, nearest first. Each row has a C or
- * V chip, its title, and its path at the right; one a nearer cube hides is
- * dimmed and can't be picked, saying what hides it (AC-342).
+ * V chip, its title, and its path at the right; the user's workspace copy of
+ * a landed cube a "Your copy" chip beside its title (T718, AC-428). Nothing
+ * is hidden: a name is one item's (R71; AC-342 retired).
  *
  * The APG combobox with a list popup, its box in the popup: Down and Up move
- * through what can be picked, Enter picks, Escape closes; focus goes back to
+ * through the rows, Enter picks, Escape closes; focus goes back to
  * the button either way. The list is drawn fixed to the window under the
  * button, so a scrolling pane around it doesn't cut it short.
  */
@@ -99,7 +100,7 @@ export function PathPicker({
   /** What can be picked, in the order listed: the keys move through these. */
   const pickable = [
     ...(clear === undefined ? [] : [clear]),
-    ...shown.flatMap((group) => group.rows).filter((row) => !row.hiddenBy),
+    ...shown.flatMap((group) => group.rows),
   ];
   /** By its row's own key: a workspace copy shares its original's name (T475's review). */
   const optionId = (key: string) => `${ids}-option-${key}`;
@@ -162,13 +163,11 @@ export function PathPicker({
   const openList = () => {
     place();
     setActive(
-      groups.flatMap((group) => group.rows).find((row) => row.value === value && !row.hiddenBy)
-        ?.key ?? null,
+      groups.flatMap((group) => group.rows).find((row) => row.value === value)?.key ?? null,
     );
     setOpen(true);
   };
   const choose = (row: PathPickerRow) => {
-    if (row.hiddenBy) return;
     onChoose(row.value);
     close();
   };
@@ -326,18 +325,13 @@ export function PathPicker({
                       // Never focused: the box keeps focus and names the active one (APG).
                       tabIndex={-1}
                       aria-selected={row.key === active}
-                      aria-disabled={row.hiddenBy === undefined ? undefined : true}
                       {...Object.fromEntries(
                         Object.entries(row.data ?? {}).map(([name, said]) => [
                           `data-${name}`,
                           said,
                         ]),
                       )}
-                      className={
-                        row.hiddenBy === undefined
-                          ? 'cube-picker__option'
-                          : 'cube-picker__option is-hidden'
-                      }
+                      className="cube-picker__option"
                       // Picked by pointer as by Enter; the box keeps focus till then.
                       onMouseDown={(event) => {
                         event.preventDefault();
@@ -348,10 +342,10 @@ export function PathPicker({
                         {row.kind === 'view' ? 'V' : 'C'}
                       </span>
                       <span className="cube-picker__title">{row.title}</span>
-                      <span className="cube-picker__path">
-                        {row.path}
-                        {row.hiddenBy === undefined ? '' : ` · ${row.hiddenBy}`}
-                      </span>
+                      {row.chip === undefined ? null : (
+                        <span className="cube-picker__chip">{row.chip}</span>
+                      )}
+                      <span className="cube-picker__path">{row.path}</span>
                     </div>
                   ))}
                 </div>

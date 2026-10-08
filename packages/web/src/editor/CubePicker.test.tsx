@@ -6,28 +6,28 @@ import { CubePicker } from './CubePicker';
 import type { PickerGroup } from './pathCubes';
 
 /**
- * T475 (AC-329, AC-342; 2026-09-27 design 10, state D): the chart editor's
- * cube picker, drawn as the design draws it. "Cube or view" opens a list with
- * a "Search cubes and views" box; the cubes on the item's path grouped by
- * folder, nearest first, each by its title with C or V and its path beside
- * it; a farther cube a nearer one hides listed dimmed and unselectable,
- * saying what hides it. The APG combobox keys: Down and Up move, skipping
- * what can't be picked; Enter picks; Escape closes, back on the button.
+ * T475 (AC-329; 2026-09-27 design 10, state D), as T718 has it (AC-428;
+ * R71, R73; AC-342 retired): the chart editor's cube picker. "Cube or view"
+ * opens a list with a "Search cubes and views" box; the cubes on the item's
+ * path grouped by folder, nearest first, each by its title with C or V and
+ * its path beside it, none dimmed. The user's workspace copy of a landed
+ * cube is listed in its place, marked "Your copy". The APG combobox keys:
+ * Down and Up move; Enter picks; Escape closes, back on the button.
  */
 const cube = (name: string, title: string, isView = false) => ({ name, title, isView });
-const row = (group: string, one: ReturnType<typeof cube>, hiddenBy?: string) => ({
+const row = (group: string, one: ReturnType<typeof cube>, yours = false) => ({
   cube: one,
   key: `${group}/${one.name}`,
-  ...(hiddenBy === undefined ? {} : { hiddenBy }),
+  ...(yours ? { yours: true as const } : {}),
 });
 const GROUPS: readonly PickerGroup[] = [
-  { label: 'Sales / EMEA', rows: [row('Sales / EMEA', cube('femea__returns', 'Returns'))] },
-  { label: 'Sales', rows: [row('Sales', cube('fsales__pipeline', 'Pipeline', true))] },
+  { label: 'Sales / EMEA', rows: [row('Sales / EMEA', cube('returns', 'Returns'))] },
+  { label: 'Sales', rows: [row('Sales', cube('pipeline', 'Pipeline', true))] },
   {
     label: 'Shared',
     rows: [
       row('Shared', cube('customers', 'Customers')),
-      row('Shared', cube('orders', 'Orders'), 'hidden by Orders in Sales / EMEA'),
+      row('Shared', cube('orders', 'Orders (mine)'), true),
     ],
   },
 ];
@@ -45,7 +45,7 @@ function show(value = '') {
   return { onChoose, button: screen.getByRole('button', { name: /^Cube or view/ }) };
 }
 
-describe('the cube picker (T475, AC-329, AC-342)', () => {
+describe('the cube picker (T475, T718, AC-329, AC-428)', () => {
   it('names the cube chosen, or asks for one', () => {
     show('customers');
     expect(screen.getByRole('button', { name: /^Cube or view/ }).textContent).toContain(
@@ -77,20 +77,22 @@ describe('the cube picker (T475, AC-329, AC-342)', () => {
       'CReturnsSales / EMEA',
       'VPipelineSales',
       'CCustomersShared',
-      'COrdersShared · hidden by Orders in Sales / EMEA',
+      'COrders (mine)Your copyShared',
     ]);
   });
 
-  // AC-342: listed dimmed and unselectable, saying which folder's cube hides it.
-  it('lists a hidden cube dimmed and unselectable, saying what hides it', async () => {
+  // T718 (AC-428): the copy in the landed cube's place, marked "Your copy", and picked as any is.
+  it('lists the user’s copy in the landed cube’s place, marked as theirs, and none dimmed', async () => {
     const { button, onChoose } = show();
     await userEvent.click(button);
-    const hidden = screen.getByRole('option', { name: /^Orders/ });
-    expect(hidden.getAttribute('aria-disabled')).toBe('true');
-    expect(hidden.className).toContain('is-hidden');
-    await userEvent.click(hidden);
-    expect(onChoose).not.toHaveBeenCalled();
-    expect(screen.getByRole('listbox').tagName).toBe('DIV');
+    const options = screen.getAllByRole('option');
+    expect(options.filter((option) => option.getAttribute('aria-disabled') === 'true')).toEqual([]);
+    expect(options.filter((option) => option.className.includes('is-hidden'))).toEqual([]);
+    const yours = screen.getByRole('option', { name: /^Orders \(mine\)/ });
+    const chip = yours.querySelector('.cube-picker__chip');
+    expect(chip?.textContent).toBe('Your copy');
+    await userEvent.click(yours);
+    expect(onChoose).toHaveBeenCalledWith('orders');
   });
 
   it('picks by pointer, closing back on its button', async () => {
@@ -102,14 +104,13 @@ describe('the cube picker (T475, AC-329, AC-342)', () => {
     expect(document.activeElement).toBe(button);
   });
 
-  it('picks from the keyboard, skipping what can’t be picked, and narrows by title', async () => {
+  it('picks from the keyboard, and narrows by title', async () => {
     const { button, onChoose } = show();
     button.focus();
     await userEvent.keyboard('{ArrowDown}');
     const search = screen.getByRole('combobox', { name: 'Search cubes and views' });
     expect(document.activeElement).toBe(search);
-    await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}');
-    // Customers, the last that can be picked: Orders is skipped.
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}');
     const active = document.getElementById(search.getAttribute('aria-activedescendant') ?? '');
     expect(active?.textContent).toContain('Customers');
     await userEvent.keyboard('{Enter}');
@@ -121,7 +122,7 @@ describe('the cube picker (T475, AC-329, AC-342)', () => {
       'VPipelineSales',
     ]);
     await userEvent.keyboard('{ArrowDown}{Enter}');
-    expect(onChoose).toHaveBeenLastCalledWith('fsales__pipeline');
+    expect(onChoose).toHaveBeenLastCalledWith('pipeline');
   });
 
   // T475's review: closed by a press outside, it opens afresh, not on what was typed.

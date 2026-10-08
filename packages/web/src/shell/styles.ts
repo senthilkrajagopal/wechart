@@ -8414,11 +8414,16 @@ input.chart-editor__title:not([type='checkbox']):not([type='radio']):not([type='
 }
 .cube-picker__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cube-picker__path { margin-left: auto; flex: none; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
-/* Hidden by a nearer cube of its name (AC-342): dimmed, and no pointer. */
-.cube-picker__option.is-hidden { color: var(--wc-text-muted); cursor: default; }
-.cube-picker__option.is-hidden:hover { background: none; }
-.cube-picker__option.is-hidden .cube-picker__kind { opacity: 0.6; }
-.cube-picker__option.is-hidden .cube-picker__path { color: var(--wc-text-muted); }
+/* "Your copy" beside the user's workspace copy (T718, AC-428; R73): design 03's
+   tree chip, ".file .tag": 600 11/16, muted, a 1 px strong border, 3 px corners. */
+.cube-picker__chip {
+  flex: none;
+  padding: 0 4px;
+  border: 1px solid var(--wc-border-strong);
+  border-radius: 3px;
+  color: var(--wc-text-muted);
+  font: 600 11px/16px Inter, system-ui, sans-serif;
+}
 .cube-picker__none { margin: 10px; font-size: var(--wc-text-xs-size); color: var(--wc-text-secondary); }
 /* A filter's "No field", above the groups (T633). */
 .cube-picker__clear { color: var(--wc-text-secondary); border-bottom: 1px solid var(--wc-border-subtle); }

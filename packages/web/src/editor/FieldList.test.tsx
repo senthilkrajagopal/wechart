@@ -7,11 +7,12 @@ import { WorkspaceItemContext } from '../query/meta';
 import { FieldList } from './FieldList';
 
 /**
- * T475's review (AC-342; 2026-09-27 design 10, state D): a workspace item's
- * field list is its overlay's (`/api/meta?for=`), which holds the item's copy
- * of a cube in place of the one it copies, under the same name. The picker
- * still lists the published one in its folder, dimmed, "hidden by your copy",
- * read from the folders' own meta (`/api/meta`).
+ * T475's review (2026-09-27 design 10, state D), as T718 has it (AC-428;
+ * AC-342 retired): a workspace item's field list is its overlay's
+ * (`/api/meta?for=`), which holds the item's copy of a cube in place of the
+ * one it copies, under the same name. The picker lists the copy in the
+ * landed cube's place, in its folder (read from the folders' own meta,
+ * `/api/meta`), marked "Your copy"; nothing is dimmed.
  */
 const xcubeCube = (name: string, title: string, folderId: string, workspace = false) => ({
   name,
@@ -40,12 +41,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('a workspace item’s cube picker (T475’s review, AC-342)', () => {
-  it('lists the published cube its copy replaced in its folder, hidden by your copy', async () => {
+describe('a workspace item’s cube picker (T475’s review, T718, AC-428)', () => {
+  it('lists its copy in the landed cube’s place, marked “Your copy”, and the landed one not at all', async () => {
     answering({
       '/api/meta?for=chart%3Ac1': {
         cubes: [
-          xcubeCube('orders', 'Orders', 'froot', true),
+          xcubeCube('orders', 'Orders (mine)', 'froot', true),
           xcubeCube('customers', 'Customers', 'froot'),
         ],
       },
@@ -77,9 +78,10 @@ describe('a workspace item’s cube picker (T475’s review, AC-342)', () => {
         within(list)
           .getAllByRole('option')
           .map((option) => option.textContent),
-      ).toEqual(['COrdersMy workspace', 'COrdersShared · hidden by your copy', 'CCustomersShared']),
+      ).toEqual(['COrders (mine)Your copyShared', 'CCustomersShared']),
     );
-    expect(within(list).getAllByRole('option')[1]?.getAttribute('aria-disabled')).toBe('true');
+    for (const option of within(list).getAllByRole('option'))
+      expect(option.getAttribute('aria-disabled')).toBeNull();
   });
 
   // AC-329: never a prefixed name, not even for a cube the model no longer has.

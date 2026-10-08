@@ -276,7 +276,12 @@ test.describe('My workspace’s overlay (T347, AC-323)', () => {
       ]);
     });
 
-    test('offers the workspace’s cube first in a workspace chart’s picker (AC-329, AC-323)', async ({
+    /**
+     * T718 (AC-428; R73; AC-342 retired): the workspace's copy is listed in
+     * the landed cube's place, in its folder, marked "Your copy", once, and
+     * pickable; nothing is dimmed.
+     */
+    test('lists the workspace’s copy in the landed cube’s place in a workspace chart’s picker, marked as theirs (AC-428)', async ({
       page,
     }) => {
       const chart = await page.request.post('/api/documents', {
@@ -291,26 +296,40 @@ test.describe('My workspace’s overlay (T347, AC-323)', () => {
       made.chart = ((await chart.json()) as { id: string }).id;
       await page.goto(`/explore/charts/${made.chart}/edit?new=true`);
 
-      // Design 10's picker (T475): My workspace's group first.
       const list = await cubePicker(page).open();
-      // This run's own, by its name: other specs, running beside this
-      // one, add cubes of their own to the same writer's workspace (T543's
-      // report), so the group's count isn't this test's to know.
-      const mine = list
-        .getByRole('group', { name: 'My workspace' })
-        .locator(`[data-cube="${CUBE}"]`);
-      await expect(mine).toHaveCount(1);
-      // Pickable, with its path beside it.
-      await expect(mine).not.toHaveAttribute('aria-disabled', 'true');
-      await expect(mine).toContainText('My workspace');
-      await expect(list.getByRole('group').first()).toHaveAttribute('aria-label', 'My workspace');
-      // The folder's own, which the copy replaces in the overlay, listed in its
-      // folder and unselectable, "hidden by your copy" (AC-342; design 10, state D).
-      const original = list
+      // By its name, this run's own: other specs add cubes of their own to the
+      // same writer's workspace (T543's report). Listed once, in its folder.
+      const rows = list.locator(`[data-cube="${CUBE}"]`);
+      await expect(rows).toHaveCount(1);
+      const yours = list
         .getByRole('group', { name: FOLDER, exact: true })
         .locator(`[data-cube="${CUBE}"]`);
-      await expect(original).toHaveAttribute('aria-disabled', 'true');
-      await expect(original).toContainText(`${FOLDER} · hidden by your copy`);
+      await expect(yours).toHaveCount(1);
+      const chip = yours.locator('.cube-picker__chip');
+      await expect(chip).toHaveText('Your copy');
+      // Design 03's tree chip, `.file .tag` (R73): 600 11/16, muted, a 1 px strong border, 3 px corners.
+      const ink = (token: string) =>
+        page.evaluate((name) => {
+          const probe = document.createElement('span');
+          probe.style.color = `var(${name})`;
+          document.body.append(probe);
+          const colour = getComputedStyle(probe).color;
+          probe.remove();
+          return colour;
+        }, token);
+      await expect(chip).toHaveCSS('font-size', '11px');
+      await expect(chip).toHaveCSS('font-weight', '600');
+      await expect(chip).toHaveCSS('line-height', '16px');
+      await expect(chip).toHaveCSS('border-top-width', '1px');
+      await expect(chip).toHaveCSS('border-top-left-radius', '3px');
+      await expect(chip).toHaveCSS('padding-left', '4px');
+      await expect(chip).toHaveCSS('color', await ink('--wc-text-muted'));
+      await expect(chip).toHaveCSS('border-top-color', await ink('--wc-border-strong'));
+      await expect(yours.locator('.cube-picker__path')).toHaveText(FOLDER);
+      await expect(list.locator('[aria-disabled="true"]')).toHaveCount(0);
+      // Picked as any is.
+      await yours.click();
+      await expect(cubePicker(page).button).toHaveAttribute('data-value', CUBE);
     });
 
     test('answers from a data source copied in and pointed at another database, the folder’s from its own (AC-280)', async ({
