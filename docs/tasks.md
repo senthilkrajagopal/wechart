@@ -9208,7 +9208,281 @@ The `[moved to phase 2]` tasks above are superseded by the tasks below, which ca
     - e2e, Chrome: `security/calc-requests.spec.ts` 5/5. Its new steps failed on the missing question, and on the focus left on the page with `useReturnFocus` taken out.
 - [ ] T406 (AC-187) Re-run the design critique on every surface and tick AC-187 only on measured conformance
   - Files and failing test: as T225 (above), with the phase-2 surfaces added (AC-187).
-  - Depends on: T330, T348, T356, T364, T369
+  - Depends on: T330, T348, T356, T364, T369; for its re-run, T681–T699 and T742
+  - **Step 1, done 2026-10-08: the critique.** T406 stays open, and AC-187 unticked. Its failing test, T225's ("the `design-critic` report finds no `STRUCTURE` or AC-187 finding"), fails on what the critique found: 156 findings besides those already covered, one of them (EXP-01) fixed since by T741. They are planned below as T681–T699 and T742. Step 2, once they land, is T406's own: the critique run again over the same surfaces, ticking T406 and AC-187 if it finds nothing.
+    - **What it covered.** Every surface, judged against the approved designs (`docs/design/reviews/status.md`, and designs 13–16), the prototype, and direction.md §3–5. The later design wins where two disagree (R37). Folded in, at the coordinator's direction:
+      - AC-352's surfaces: 2026-09-24 designs 01, 02, and 04–06. Its seventh, Schedules (design 07), is drawn again by 2026-10-01 design 16, which wins (R37).
+      - **Jobs and Schedules, not judged again here:** 2026-09-24 design 07, and 2026-09-27 design 10's Jobs and Schedules parts, are superseded by design 16 (approved R56). The design 16 audit of 2026-10-07 (during T610) planned their differences as T611–T613 (AC-399), which the Jobs and Schedules agent is building. T476's schedule pane and Jobs' and Schedules' pills are among them.
+      - **Design 10's other surfaces**, the bookmarks and the cube picker (with Filter on's picker, which reuses it, R64), are judged in `2026-10-08-design-10.md`.
+      - **Design 15** is judged on what its captures reached (the SQL tab with the runner off). Its screen 1 and states A–J need a source to run SQL on, and are built (T535, T539, T536, T545–T549); the re-run captures them.
+      - AC-344's Model workspace differences;
+      - T476's deferred control sizes (its Q1, Q2 and Q5 surfaces);
+      - design 04 note 4, which is built as drawn (the coordinator's call), in T681.
+    - **How it was done.**
+      - Captures of the running app, taken with a Super-Admin under the e2e lock:
+        - with sign-in off, at 1,440 × 900, with some at 1,024 × 768 and 390 × 844;
+        - with sign-in on, at 1,440 × 900.
+      - Each capture saved a screenshot and every visible element's box and computed styles.
+      - Seven `design-critic` agents judged them, one per group of surfaces, without picking any new values.
+    - **The critiques**, in `docs/design/critiques/`:
+
+      | File | Findings | Questions |
+      |---|---|---|
+      | `2026-10-08-chart-editor.md` | EDI-01–25 | 9 |
+      | `2026-10-08-dashboard.md` | DSH-01–23 | 9 |
+      | `2026-10-08-model-workspace.md` | MOD-01–07 | 4 |
+      | `2026-10-08-data-sources.md` | SRC-01–23 | 6 |
+      | `2026-10-08-explore-access-signin.md` | EXP-01–27 | 8 |
+      | `2026-10-08-security-reviews.md` | SEC-01–27 | 6 |
+      | `2026-10-08-components.md` (AC-187's component rules) | CMP-01–13 | 5 |
+      | `2026-10-08-design-10.md` (bookmarks, the cube picker; added from the cold review) | D10-01–13 | 7 |
+
+      Each finding gives the design's value with its line or pin, the app's measured value, and whether a task, backlog entry or decision already covers it.
+    - **Recorded with it:**
+      - AC-344's Fails-when gets AC-352's escape (the coordinator's direction).
+      - Backlog §6(a) gets the Model workspace's differences that tasks.md alone gave reasons for: the head without `model/`, Format as text, the tab strip's spacing, the 676:524 split, and T451's read-only state, which has no design.
+      - "Hide" and the stacked editor below 1,024 px were already in §6(a).
+    - **AC-148 holds with design 04 note 4.** The head's clock moves into the badge's tooltip, but AC-148's text needs no change if T681 lands DSH-01 and DSH-21 together. The tile menu's Data as of submenu then shows the time to the second, as design 08 state D draws it, and AC-148's test reads it there.
+    - **Questions for the user: 53** (46, and design 10's 7). Each critique lists its own with options. Explore's Q7 was settled by design 15 (R37), and the components critique's Q1 narrowed to list heads, both from the cold review. The model critique's Q2 is recorded in backlog §6(a) at the coordinator's direction. The tasks below name the questions they wait on; the coordinator batches them.
+    - **status.md is stale.** It lists as "left to build" items whose tasks are ticked (T331, T348, T498, T515, T473). Backlog §6(c)'s "design 03's Propose, History and version line" is unblocked, since the proposal chain T349–T358 has landed. T698 updates both.
+- [ ] T681 (AC-352, AC-148) A tile's freshness as design 04 note 4 draws it, and the tile menu's Data as of as design 08 draws it *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/tiles/{ChartTile,DataAsOf,AccelerationBadge}.tsx`, `packages/web/src/dashboard/{dataAsOf.ts,TileViewMenu.tsx}` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/refresh.spec.ts`, `e2e/acceleration.spec.ts`
+  - Findings: DSH-01, DSH-21, DSH-23 (`docs/design/critiques/2026-10-08-dashboard.md`).
+  - Failing test: the head says "● Live" or "✓ Pre-agg · 3m" alone, with the time to the second in the badge's tooltip ("Live query · as of … · n ms · no pre-aggregation"). The menu's footer has two lines with the clock. The submenu has state D's "Data as of: Today 09:27:42 / when Cube answered". AC-148's refresh test reads the submenu's time to the second.
+  - Waits on: the dashboard critique's Q9 (badge focusable). Q1 (Table view) may land with it.
+  - Depends on: T477
+- [ ] T682 (AC-352, AC-199, AC-245, AC-247) The tile ⋯ menu's groups, order, heading and rows as design 08 draws them *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/dashboard/TileViewMenu.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/tile-menu.spec.ts`
+  - Findings: DSH-18, DSH-19, DSH-20, DSH-22.
+  - Failing test: design 08's three groups in order, with R63's and R66's rows in the marking group. The three-line heading with the swatch. Icons on the rows; each disabled row's reason; the Details panel checkbox; "View marked rows…" with its ellipsis; the Ctrl+M hints. One "View … rows" item at a time.
+  - Waits on: the dashboard critique's Q6 (the menu's width, and its length past the cap). `acceleration.spec.ts:252` is the test to settle with it (T680).
+  - Depends on: T681
+- [ ] T683 (AC-352, AC-187) The dashboard view's remaining differences: whole-number count axes, a table tile's row count, the KPI ramp, and backlog §1's residuals *(added 2026-10-08 by T406)*
+  - Files: the chart renderer's options (`packages/web/src/charts/…`), `packages/web/src/tiles/{ChartTile,Kpi}.tsx`, `packages/web/src/dashboard/edit/…`, `packages/web/src/shell/styles.ts` (+ tests), `e2e/dashboard.spec.ts`
+  - Findings: DSH-02, DSH-03, DSH-04, CMP-09, CMP-10, CMP-11, CMP-12, CMP-13.
+  - Failing test:
+    - a count or count_distinct axis has whole-number ticks;
+    - a table tile's head reads "626 rows · first 100";
+    - a lone KPI is drawn at `text-kpi-solo`;
+    - the edit sidebar's palette rows 8 px apart, and template rows 50 px (CMP-09);
+    - "← Explore" with the prototype's 1 px transparent border, the folder crumb a plain muted span, and "+ Page tab" with border 0 and a 2 px bottom (CMP-10);
+    - the filter pill's value control with no border or ground, height 28, at 600, padding 0, radius 0 (CMP-11);
+    - legend at the left with 10 × 10 round swatches 8 px apart, bars at most 36 px wide with 4 px rounded ends (CMP-12);
+    - link and image tiles with no padding, border or ground; button links at radius 6, 600 for primary; text links at 600 (CMP-13).
+  - Waits on: the dashboard critique's Q3 (the KPI label) and Q4 (a table tile's row height); the components critique's Q2 (the pill label's weight).
+  - Depends on: none
+- [ ] T684 (AC-187, AC-352) One button rule and one pressed state: every `.btn` 32/14, item heads at one height with History first, and the designs' `.btn.pressed` *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/shell/styles.ts`, `packages/web/src/dashboard/DashboardView.tsx`, `packages/web/src/workspaces/data-sources/SourceSettings.tsx`, `packages/web/src/workspaces/explore/ExplorePage.tsx` (+ tests), `e2e/consistency.spec.ts`
+  - Findings: CMP-01, CMP-02, CMP-03, DSH-05, EXP-13, EXP-23 (the button), SRC-04, and the pressed tokens of EDI-14 and EXP-02.
+  - Failing test:
+    - a `button.btn` measures 32 px with padding 0 12 at 14/400;
+    - the dashboard's head reads History, Bookmarks, then Edit in my workspace, all 32 px, with ⋯ a 32 px icon button (2026-09-27 design 04 state E, design 13);
+    - the data source's head reads History, Generate cubes…, then Edit in my workspace, all 32 px, with ⋯ a 32 px icon button (design 15:424; "Generate cubes…" per R57);
+    - History pressed, `.seg`'s pressed segment and Access pressed all draw accent-soft, the accent border and ink, at 600;
+    - Access closed is a ghost.
+  - Waits on: the components critique's Q1 (⋯ in list heads), and the dashboard critique's Q2 (the header: design 04 pin 1 or state E), for those items.
+  - Depends on: none
+- [ ] T685 (AC-352, AC-070, AC-073) The dashboard settings page as design 05 draws it *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/dashboard/settings/SettingsPage.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/dashboard.spec.ts`
+  - Findings: DSH-06, DSH-07, DSH-08, DSH-09, DSH-10.
+  - Failing test:
+    - the workspace band shows over Settings;
+    - the mode cards have their illustration, the gestures as keycaps, the foot's links, and design 05's words, with the intro and the info line;
+    - the bar says "· 1 unsaved change" beside the title, then "Esc cancels";
+    - the current nav row has the accent edge;
+    - General's controls are 28/12;
+    - the discard question names what changed.
+  - Waits on: the dashboard critique's Q5 (design 05's metrics or the prototype's).
+  - Depends on: T684 (the bar's buttons)
+- [ ] T686 (AC-352, AC-126, AC-022) The chart page as design 06 draws it, with "Add to a dashboard…" as its picker *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/workspaces/explore/LibraryChartPage.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/chart-page.spec.ts`
+  - Findings: DSH-11, DSH-12, DSH-13, DSH-14, DSH-15, DSH-16.
+  - Failing test:
+    - ⋯ holds Open ‹dashboard›, Copy link, View query, Download CSV, and Delete chart… where it's allowed;
+    - an Updated section;
+    - the crumbs step to the dashboard;
+    - "Local chart · only on ‹dashboard›", with Lives on as an item row;
+    - the tile head's row count;
+    - the pane and the type badge as drawn ("Bar, grouped · auto");
+    - "＋ Add to a dashboard…" opens a searchable picker.
+  - Waits on: the dashboard critique's Q7 (what takes the place of the two in-place edit buttons).
+  - Depends on: T681 (the tile head's badge, which the chart page's tile shares)
+- [ ] T687 (AC-354, AC-360, AC-352) The Export pane docks beside the dashboard, which narrows, as design 13 draws it *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/dashboard/export/ExportPane.tsx`, `packages/web/src/shell/styles.ts`, `e2e/export.spec.ts`
+  - Findings: DSH-17.
+  - Failing test: with Export open, the dashboard's header and tiles end at the pane's left edge, and the ⋯ shows pressed.
+  - Waits on: the dashboard critique's Q8 (empty groups).
+  - Depends on: T684 (the header's buttons beside the pane)
+- [ ] T688 (AC-352, AC-187) The chart editor's inspector, field list and type gallery as design 01 and the prototype draw them *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/editor/{ChartEditor,FieldList,Wells,ChartTypeGallery}.tsx` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/chart-editor.spec.ts`
+  - Findings: EDI-03, EDI-04, EDI-05, EDI-08, EDI-09, EDI-11, EDI-14, EDI-24, EDI-25 (`docs/design/critiques/2026-10-08-chart-editor.md`).
+  - Failing test:
+    - joined cubes are listed as groups, "· via join";
+    - dimension rows show their distinct counts;
+    - Cube or view is the inspector's first field;
+    - three ruled sections;
+    - the wells' tags, labels and size;
+    - the "+" picker has its filter, groups, used rows marked "✓ in chart", and the keyboard foot;
+    - "The rest" doesn't clip, and its label is in the `.lbl` style;
+    - the gallery's cards have their icons and words.
+  - Waits on: the chart editor critique's Q1 ("The rest" and "Result limit"), Q7 (joined members' names) and Q8 (Customize); the components critique's Q3 (the title field at 15 px), for those items.
+  - Depends on: T684 (the pressed segment)
+- [ ] T689 (AC-352, AC-028, AC-029, AC-217) The recommendation in the inspector: the type card, quick picks, the Recommended card, "Why this recommendation?" and the aggregation menu, as design 01 draws them *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/editor/{ChartTypeCard,WhyThisChart,Wells}.tsx` (+ tests), `e2e/chart-editor.spec.ts`
+  - Findings: EDI-06, EDI-07, EDI-10, EDI-12.
+  - Failing test:
+    - the card names the drawn form with its icon, then "Chosen manually · Change…";
+    - quick picks with Auto;
+    - the Recommended card only when the pick differs, with a reason built from the data and Use;
+    - the Why checklist collapsed last, with its link to every rule;
+    - the measure's tag offers the aggregations the model allows.
+  - Waits on: the chart editor critique's Q2 (AC-217), Q3 (AC-029) and Q6 (aggregations or calculations on the tag).
+  - Depends on: T688 (the inspector's sections)
+- [ ] T690 (AC-352, AC-036, AC-147, AC-301) The results drawer and the answer's facts as design 02 draws them *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/editor/{ResultsDrawer,ChartEditor}.tsx` (+ tests), `packages/web/src/shell/styles.ts`, `e2e/chart-editor.spec.ts`
+  - Findings: EDI-01, EDI-02, EDI-13, EDI-15, EDI-16, EDI-17, EDI-18, EDI-19, EDI-20, EDI-21, EDI-22, EDI-23.
+  - Failing test:
+    - the head's two badges ("Raw query", "n rows · n ms");
+    - the rollup note in the badge's tooltip and Acceleration;
+    - the status line above the preview;
+    - the drawer opens at 240 and resizes from 160 px to half the canvas;
+    - counts and dots on its tabs;
+    - Copy, Download CSV, and the row and ms line;
+    - the grid's "#", chips and swatches;
+    - columns in the wells' order;
+    - Cube query's JSON | SQL with Copy and its foot;
+    - the cap note and Acceleration's panel styled as drawn;
+    - the collapsed strip keeps its count.
+  - Waits on: the chart editor critique's Q4 (AC-147), Q5 ("Live" or "Raw query") and Q9 (a local chart's ownership chip in the head), for those items.
+  - Depends on: T681 (the badge's words, which the head's badges share)
+- [ ] T691 (AC-344, AC-343, AC-187) The Model workspace's remaining differences and the shared pane chrome of Generate cubes and the data source wizard *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/workspaces/model/{FileTree,FileList,GenerateCubes}.tsx`, `packages/web/src/workspaces/data-sources/NewSourceWizard.tsx`, `packages/web/src/shell/styles.ts` (+ tests), `e2e/model-design.spec.ts`, `e2e/consistency.spec.ts`
+  - Findings: MOD-01, MOD-02, MOD-03, MOD-04, MOD-05, MOD-06; SRC-01, SRC-12, SRC-13, SRC-14, SRC-16; SRC-05's wizard glyphs.
+  - Failing test:
+    - section headings and step numbers are 12 px;
+    - the pane's head is 44 px, with a 32 px ✕ icon button and the person icon;
+    - radios are 16 px;
+    - the tree's Jinja row is one 28 px row, with its tag at the right;
+    - the overview's Jinja kind is the tag;
+    - the overview's insets and column widths;
+    - the rail's even separators and muted steps;
+    - the 32 px mark;
+    - the chosen-type bar as drawn;
+    - "+ Data source" stays enabled, with its ring, while the pane is open.
+  - Waits on: the model critique's Q3 ("All published"'s colour) and Q4 (comment lines tinted at rest), for those two items only.
+  - Depends on: T684 (the pane head's icon button)
+- [ ] T692 (AC-343, AC-344, AC-192, AC-282, AC-356) Making things in My workspace: the New menu as design 13 state G draws it, and the target folder as design 04 states A and B draw it *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/workspaces/explore/{CreateMenu,NewItemDialog}.tsx` (+ tests), `e2e/explore.spec.ts`
+  - Findings: MOD-07, EXP-06, EXP-08.
+  - Failing test:
+    - the menu has its head "New in My workspace", its groups and dividers, Folder's "no target", and Import's "from a file";
+    - New dashboard, chart, cube or view asks "Target folder · required" as a tree of full paths, preselected when there's one;
+    - its help line, and its note naming the folder;
+    - past ten folders, a filter.
+  - Depends on: none
+- [ ] T693 (AC-187, AC-343, AC-369, AC-370) Explore's list, head, tree and menus as designs 14 and 04 draw them *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/workspaces/explore/{ExplorePage,FolderContents,FolderTree}.tsx`, `packages/web/src/shell/{MenuButton.tsx,styles.ts}` (+ tests), `e2e/design-conformance.spec.ts`, `e2e/explore.spec.ts`
+  - Findings: EXP-02, EXP-03, EXP-04, EXP-05, EXP-07, EXP-10, EXP-11, EXP-12, EXP-14, EXP-25, EXP-26, EXP-27 (`docs/design/critiques/2026-10-08-explore-access-signin.md`).
+  - Failing test:
+    - Show at 28 px on accent-soft;
+    - names at 14/600, with models and data sources at 13 px in the code face;
+    - menus' items 30/14 at their designs' widths;
+    - Owner "—" for folders and the author for models;
+    - the footnote in text-secondary;
+    - an empty folder's 34 px row;
+    - one header row with Access open;
+    - the Access head at 44 px;
+    - the Type column in text-primary;
+    - a row's ⋯ at 24 × 24.
+  - Waits on: the Explore critique's Q2 (tree text size), Q3 (the tree with sign-in off), Q4 (Show in My workspace) and Q5 (the header with a panel docked), for those items.
+  - Depends on: T684 (Access's ghost and pressed states)
+- [ ] T694 (AC-343, AC-278, AC-284, AC-289, AC-281) Each row's ⋯ by its kind and place, and My workspace's rows on two lines *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/workspaces/explore/FolderContents.tsx` (+ test), `packages/web/src/shell/styles.ts`, `e2e/explore.spec.ts`, `e2e/security/workspace-edit.spec.ts`
+  - Findings: EXP-09, EXP-15.
+  - Failing test:
+    - a shared dashboard's ⋯ is Open, Open my copy or Edit in my workspace, History, Export…, then Rename and Move to…, then Delete…;
+    - a draft's ⋯ starts with "Propose to ‹folder›…";
+    - a waiting item offers "View proposal";
+    - workspace rows are 44 px, the name over its origin and target.
+  - Depends on: T693 (the list's names and spacing)
+- [ ] T695 (AC-289, AC-343) The History panel as design 06 draws it: docked full height, its rows, and the current version always listed *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/workspaces/history/HistoryPanel.tsx` (+ test), `packages/api/src/…/history` if the current version isn't returned, `packages/web/src/shell/styles.ts`, `e2e/security/history.spec.ts`
+  - Findings: EXP-21, EXP-22, EXP-24, SRC-22.
+  - Failing test:
+    - the panel is docked at 360 px full height, with a 44 px head, h2 16/22, a 32 px close, and the limit note pinned at the foot;
+    - an item with a kept version lists its newest, tagged Current, as design 06 pin 3 draws it; an item at "version 1" with nothing kept shows what Q6 decides (listed as Current, or a line saying none is kept yet);
+    - rows under rules, with the time at the right and View · More · Propose restoring… as link buttons.
+  - First, find why the panel was empty for a version-1 dashboard and a version-1 data source. Was it the content made before proposals, or an API gap?
+  - Waits on: the Explore critique's Q6 and the data sources critique's Q5, the same question (an item with no kept version). Explore's Q7 is settled by design 15 (History stays in the head).
+  - Depends on: T684 (History's pressed state)
+- [ ] T696 (AC-187, AC-004, AC-252, AC-254, AC-287, AC-304) The app bar, the account menu and the single-user chip as design 09 draws them *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/shell/{AppShell,AccountMenu}.tsx`, `packages/web/src/workspaces/reviews/ReviewsControl.tsx`, `packages/web/src/shell/styles.ts` (+ tests), `e2e/shell.spec.ts`, `e2e/consistency.spec.ts`, `docs/phase-2/backlog.md` §6(a) (its "Explore and the top bar below 1,024 px: neither review designs them" is half answered: design 09 state H draws the top bar)
+  - Findings: CMP-04, CMP-05, CMP-06, CMP-07, EXP-16, EXP-17, EXP-18, SEC-18, SEC-19, SRC-23.
+  - Failing test:
+    - Reviews at 14/400, with the inbox icon, its count pill at 12/18/600 filled with the accent, and `.reviews.on` on its page;
+    - the chip at 28 px with its chevron, and its menu's heading and sentence;
+    - the account button 36 px, and its menu at 280 with the identity in the code face, the accent Super-Admin badge, and Sign out as a 30/14 item with its icon;
+    - icon buttons and the search never shrink;
+    - below 1,024, state H's order.
+  - Waits on: the Explore critique's Q1 (the avatar beside the chip), Q8 (the access chip with sign-in off); the components critique's Q4 (1,024–1,279) and Q5 (11 px against the floor).
+  - Depends on: none
+- [ ] T697 (AC-251, AC-253, AC-343) wechart's own pages after signing out, when sign-in fails, and when no group list comes back, as design 09 states C–E draw them *(added 2026-10-08 by T406)*
+  - Files: `packages/api/src/auth/routes.ts` (+ test), `packages/web/src/shell/SignInPages.tsx` (+ test), `e2e/security/sign-in.spec.ts`
+  - Findings: EXP-19, EXP-20.
+  - Failing test:
+    - Sign out lands on "You've signed out of wechart." with "Sign in again";
+    - a failed callback lands on "wechart couldn't sign you in." with Details and "Try again", never JSON;
+    - a sign-in without groups lands on state E's page with "Sign out".
+  - Depends on: none
+- [ ] T698 (AC-343, AC-284, AC-374, AC-187) A data source's pages as designs 03 and 15 draw them: Propose and the version line, the frame, the editor, Test to save, the save bar, and the SQL tab's off panel *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/workspaces/data-sources/{SourceSettings,SourceEditor,connectionTest,SqlRunner,DataSourcesList}.tsx`, `packages/web/src/shell/{InfoBar.tsx,styles.ts}` (+ tests), `docs/phase-2/backlog.md` §6(c), `docs/design/reviews/status.md`, `e2e/security/data-sources.spec.ts`, `e2e/security/sql-runner.spec.ts`
+  - Findings: SRC-02, SRC-03, SRC-05 (head and SQL icons), SRC-06, SRC-07, SRC-08, SRC-09, SRC-10, SRC-11, SRC-15, SRC-17, SRC-18, SRC-19, SRC-20, SRC-21 (`docs/design/critiques/2026-10-08-data-sources.md`).
+  - Failing test:
+    - a workspace copy's head has "Propose to ‹folder›…" as its primary, disabled with unsaved changes and saying why;
+    - the version line reads "· approved ‹date› by ‹name›";
+    - the white head band, with the tabs across its foot;
+    - the badges as drawn;
+    - the editor's widths and grouping;
+    - Test to save at 420 px on bg-surface with "Not run" pending;
+    - the save bar pinned to the window's foot;
+    - the stored field and link buttons as drawn;
+    - the segment at 28;
+    - notes at 12/16;
+    - In Cube's one line;
+    - the off panel at 16/600 with the off icon, the login in the code face, and the folder's groups named.
+  - Clear backlog §6(c)'s "design 03's Propose, History and version line", and correct status.md's stale rows.
+  - Waits on: the data sources critique's Q1 (cell padding), Q2 (Used by with none), Q3 (an empty list), Q4 (bold at 700) and Q6 (the item mark), for those items.
+  - Depends on: T684 (the head's buttons)
+- [ ] T699 (AC-343, AC-165, AC-166, AC-169, AC-287, AC-290, AC-294, AC-295, AC-187) Security, the audit trail and reviews as designs 08 and 05 draw them *(added 2026-10-08 by T406)*
+  - Files: `packages/web/src/workspaces/security/{AuditTrail,SecurityPage,GroupsPreview}.tsx`, `packages/web/src/workspaces/security/policies.ts`, `packages/web/src/workspaces/reviews/{ReviewsPage,ReviewView,SettingsDiff}.tsx`, `packages/web/src/workspaces/reviews/reviews.ts`, `packages/web/src/workspaces/explore/ProposalBand.tsx`, `packages/web/src/shell/styles.ts` (+ tests), `e2e/security/audit.spec.ts`, `e2e/security/reviews.spec.ts`, `e2e/security/review-view.spec.ts`
+  - Findings: SEC-01 to SEC-17 and SEC-20 to SEC-27 (`docs/design/critiques/2026-10-08-security-reviews.md`); CMP-08.
+  - Failing test:
+    - the audit record docks as the drawn 380 px pane, its heading at 600, an 80 px key column, and Before and After in two columns;
+    - the audit rows on one line at 34 px, with identities and groups in the code face;
+    - secondary event icons, with design 08's glyphs;
+    - the count on the chips row, with a comma;
+    - the Time options in the design's order;
+    - User as a combobox;
+    - Policies' note, code face and "No policy" row;
+    - Reviews' tab strip flush and transparent, with its accent count;
+    - "Waiting for review" with the idle clock;
+    - Fit | Actual size and Test connection in the review view;
+    - the summary's order and icons;
+    - the band's bold lead;
+    - Preview as groups without its repeated heading;
+    - Security's preview fields at 28/12.
+  - Waits on: the security critique's Q1 (Security with sign-in off), Q2 (Policies' columns), Q3 (cell padding and filter heights), Q4 ("Publish refused"), Q5 (the count at 0) and Q6 (a test's time in its record).
+  - Depends on: none
+- [ ] T742 (AC-329, AC-343, AC-293, AC-187) Design 10's cube picker and Bookmarks as drawn: every item's cubes under their folder with their paths, the pickers' search box, and the Bookmarks popover *(added 2026-10-08 by T406, from its cold review: design 10 hadn't been judged)*
+  - Files: `packages/web/src/editor/{CubePicker,PathPicker,pathCubes}.ts(x)`, the chart route's `folderId` (`packages/web/src/router/routes.tsx`), `packages/web/src/dashboard/bookmarks/Bookmarks.tsx`, `packages/web/src/shell/styles.ts` (+ tests), `e2e/field-list.spec.ts`, `e2e/security/bookmarks.spec.ts`
+  - Findings: D10-01 to D10-11 (`docs/design/critiques/2026-10-08-design-10.md`); D10-12 is T684's.
+  - Failing test:
+    - a Shared chart's picker lists its cubes under "Shared", each with "Shared" at the right, as Filter on's already does;
+    - the pickers' search text starts after its icon and a 6 px gap;
+    - the C/V chip per the components critique's Q5;
+    - the Bookmarks footer, row dates, button icon and chevron, the popover's border-subtle edge, the 8 px gap, 10 px above "Shared", the menu's words, and a row's ⋯ as a 24 px icon button, per Q1–Q5.
+  - Waits on: the design 10 critique's Q1–Q7.
+  - Depends on: none
 - [x] T741 (AC-199, AC-245, AC-187, AC-231) A tile menu opened before its tile's answer is placed again as it grows; Explore's spacing as design 14 draws it; two layout tests re-based on their designs *(added 2026-10-08: the coordinator's calls on T680's three reported tests)*
   - Files: `packages/web/src/dashboard/TileViewMenu.tsx`, `packages/web/src/shell/styles.ts`, `e2e/tile-menu.spec.ts`, `e2e/admin.spec.ts`, `e2e/design-conformance.spec.ts`
   - **The tile menu, a product defect.** The coordinator's call for `acceleration.spec.ts:252` was (a), to reach "Data as of" by keyboard, unless a product defect was found. One was:
@@ -14484,5 +14758,7 @@ These tasks are what group 3's check of the open criteria found missing. Each is
 | AC-141, AC-329 (again, the naming work's regressions) | T738 | AC-132, AC-344 (again, T481 after T722) | T738 | AC-313, AC-356, AC-357 (again, races under one name per item) | T738 |
 | AC-277 (again, group 3) | T760 | AC-291 (again, a folder's rename) | T761 | AC-429 | T762 |
 | AC-279 (again, its models) | T763 | AC-320 (again, every instance) | T764 | | |
+| AC-304, AC-034 (again, T680's layout fixes) | T680 | AC-187 (T406's critique of 2026-10-08) | T681, T683, T684, T688, T691, T693, T696, T698, T699, T742 | AC-352 (T406's critique) | T681–T690 |
+| AC-343 (T406's critique) | T691–T699, T742 | AC-344 (T406's critique) | T691, T692 | AC-148 (again, with design 04 note 4) | T681 |
 
 AC-009, AC-136 and AC-137 are ticked from phase 1. ~~They stay ticked until slice 3 changes how publishing works; T426 and T432 then reword them and retest them (R28 Q9).~~ They keep their wording and their ticks while their tests pass: T447 re-runs them against xcube at slice 2's cut-over, and T426 and T432 again in slice 3 (2026-09-26, `[R29]`). AC-235 was unticked by R29 and is ticked again by T445 and T447.

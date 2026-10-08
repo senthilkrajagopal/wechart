@@ -250,6 +250,14 @@ R37 asks for both UI reviews' designs to be built, with the 2026-09-27 ones winn
   - state B's "Keep as details tile".
 - **2026-09-24 design 03, note 4:** "Hide" rather than "Edit in form anyway". Claude chose it because the form now keeps comments (T482).
 - **Model editor below 1,024 px:** MW-26's overlay, or today's stacking (T396).
+- **The Model workspace's differences from 2026-09-24 design 03, built with reasons recorded only in tasks.md** (T406, 2026-10-08; the coordinator's direction to record them here; `docs/design/critiques/2026-10-08-model-workspace.md`, Q2). Each waits on the user, to keep as built or to build as drawn:
+  - **The editor's head without `model/`:** the design writes "model/cubes/orders.yml"; the app writes the path as the address names it, "cubes/orders.yml" (T479, T494; AC-002).
+  - **Format as a text field:** the design draws a select, "(not set)"; the app takes typed text, because Cube also takes d3 format specifiers, which a select can't hold (T494; research `data-modeling.md`, Formats).
+  - **The tab strip's spacing:** the design draws padding 0 8 with a 2 px gap, and tabs padded 0 9; the app has 8 px and no gap. T470 recorded that they don't fit at the design's spacing, with 29 px to spare at the app's; the 2026-10-08 critique's arithmetic gives the design's spacing 30 px more, an overflow of 1 px.
+  - **The 676:524 split:** the design's drawing is 676:524, and its note 8 says "1.15 fr : 1 fr" (642:558); the app follows the drawing, because the tabs don't fit at 642 (T470).
+  - **A shared model file, read-only, with "Edit in my workspace" (T451):** no design draws it. The nearest is 2026-09-27 design 03 state A (data source settings: a 32 px "Edit in my workspace" and a 22 px bg-subtle badge on a meta line). Options: keep it as built; carry state A's badge and button over; or have a design drawn.
+  - Also recorded only in tasks.md, and asked with these: "Checked against Cube's rules as you type" for the design's "Checked with Cube's validator on every change"; code at 12/16 for the design's 12/19 (direction §3 says 12/16); Refresh as a titled group, the time zone's wording and Title's placeholder; Description with no placeholder.
+  - Not here: the 12 px badges, which D5 records and design 12 (later) draws.
 - ~~**2026-09-27 design 05, state M:** the rejected band's Dismiss. Is it kept for the user (on every device, until the item is proposed again) or for the session only? The design doesn't say. T358 draws the band (T353's review, 2026-09-28).~~ *Answered 2026-09-28 (R42.1): until proposed again, for the user on every device.*
 - **MW-13:** the proposed empty-list line.
 - **2026-09-27 design 01, approve 11:** whether to ask vendors for permission to show their logos (T472 uses monograms).
