@@ -950,6 +950,10 @@ Questions are Claude's; answers are the user's, verbatim.
 - Q: Which world map detail should the country map use? A: "Medium detail, 242 countries (Recommended)"
 - Q: A cube in a folder's model doesn't name a data source. Which one should it use? A: "Folder source named 'default' (Recommended)"
 
+**R70 — a moved folder's bindings, and which data-source changes warn of a rebuild** (2026-10-07, the user)
+- Q (from group 3's AC-263 pass): a moved folder's own charts keep their bindings (AC-275, no rebinding). xcube admits a query by the cube's folder, so a reader granted only on the new path is refused those tiles. A: "Rebind on move (Recommended)". *A move rebinds the moved folder's items along its new path, as copy-on-move does for copies. Where a name doesn't resolve on the new path, the move is refused, naming the items. This is an exception to "no rebinding", for moves only.*
+- Q (from T509's review): changing a saved data source's connection identity rebuilds its rollups (research `xcube-bc18f82c01.md`, "A connection's identity"). Which changes warn? A: "Any identity change (Recommended)". *Before Save, warn on any change that moves the identity: the sign-in method, host, database, user or key holder. AC-353 is amended accordingly.*
+
 **R69 — when Auto may leave a metric out** (2026-10-07, the user)
 - Q (from T510): should Auto also avoid a form that drops a metric of the same scale, such as a KPI of two counts? A: "Only across scales (Recommended)". *As built: metrics on different scales are never drawn on one axis. Elsewhere a metric a form can't draw has its pill say "not drawn", offering Small multiples and Table.*
 
