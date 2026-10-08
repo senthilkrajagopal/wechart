@@ -65,7 +65,11 @@ function serve(stored: StoredSource, extra: Record<string, unknown> = {}) {
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       asked.push(`${init?.method ?? 'GET'} ${url}`);
-      if (url in extra) return Response.json(extra[url]);
+      // null: refused, as for one who may not see it.
+      if (url in extra)
+        return extra[url] === null
+          ? new Response(null, { status: 404 })
+          : Response.json(extra[url]);
       if (url === `/api/data-sources/${stored.id}`) return Response.json(stored);
       if (url === '/api/me') return Response.json({ ...ME, security: 'oidc' });
       if (url === '/api/data-sources') return Response.json([]);
@@ -171,7 +175,16 @@ describe('a workspace copy proposes itself from its head (SRC-02; pin 3, AC-284)
 
 describe('its head and version line as design 03 draws them (SRC-03, SRC-06, SRC-07; Q6)', () => {
   it('marks it “◍”, says a shared one’s version and who approved it, with its access badge’s eye', async () => {
-    serve(source());
+    // Its approval in its own answer (T698 follow-up).
+    serve(
+      source({
+        approved: {
+          version: 3,
+          at: '2026-09-24T09:40:00.000Z',
+          by: { key: 'ada', name: 'Ada Admin' },
+        },
+      }),
+    );
     open('ds-1');
     await screen.findByRole('heading', { level: 1, name: 'emea_replica' });
     // The item-kind mark, not the driver's monogram (data-sources-Q6).
@@ -187,6 +200,29 @@ describe('its head and version line as design 03 draws them (SRC-03, SRC-06, SRC
     expect(access.querySelector('svg[data-icon="eye"]')).not.toBeNull();
     // The driver an outlined badge.
     expect(head().querySelector('.badge.line')?.textContent).toBe('PostgreSQL');
+  });
+
+  it('says who approved it to a view-only reader, whose history is none, from its own answer (T698 follow-up; note J)', async () => {
+    serve(
+      source({
+        canWrite: false,
+        approved: {
+          version: 3,
+          at: '2026-09-24T09:40:00.000Z',
+          by: { key: 'ada', name: 'Ada Admin' },
+        },
+      } as Partial<StoredSource>),
+      // Not theirs: the history answers as for none.
+      { '/api/history/data-source/ds-1': null },
+    );
+    open('ds-1');
+    await screen.findByRole('heading', { level: 1, name: 'emea_replica' });
+    await waitFor(() => {
+      expect(document.querySelector('.source-settings__version')?.textContent).toBe(
+        'Version 3 · approved 24 Sep by Ada Admin',
+      );
+    });
+    expect(screen.queryByRole('button', { name: 'History' })).toBeNull();
   });
 
   it('says a copy’s version once, as where it was copied from', async () => {

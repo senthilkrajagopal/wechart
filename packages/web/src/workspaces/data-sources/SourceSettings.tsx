@@ -4,7 +4,7 @@ import { DRIVERS, type DriverType, type FieldValue } from '@wechart/core';
 import { useEffect, useId, useRef, useState, type MouseEvent } from 'react';
 
 import { ME_QUERY } from '../../shell/me';
-import { exactOf, whenOf } from '../../shell/formatTime';
+import { dayOf, exactOf, whenOf } from '../../shell/formatTime';
 import { shortAgo, shortDay } from '../../shell/relativeAge';
 import { StateLine, StatusIcon } from '../../shell/StatusIcon';
 import { TableScroll } from '../../shell/TableScroll';
@@ -86,6 +86,15 @@ export interface StoredSource {
   readonly sqlRunner?: Pick<SqlRunnerState, 'on' | 'confirmedBy' | 'confirmedAt'>;
   /** Its SQL tab, as this user may use it (T535); none where the API runs no SQL. */
   readonly sqlAccess?: Pick<SqlRunnerState, 'tab' | 'runs' | 'why' | 'needsSwitch'>;
+  /**
+   * Its current version as kept: when, and who approved it (T698 follow-up;
+   * design 03 note J), to anyone who may read it; none where none was kept.
+   */
+  readonly approved?: {
+    readonly version: number;
+    readonly at: string;
+    readonly by: { readonly key: string; readonly name: string } | null;
+  };
 }
 
 interface HistoryTest {
@@ -307,12 +316,25 @@ function Settings({ source }: { source: StoredSource }) {
           path: [SHARED_ROOT.title, ...source.targetPath.map((folder) => folder.title)],
         }
       : undefined;
-  /** Its version, and who approved it when, where its history says (state A; SRC-03). */
-  const kept = history.data?.versions.find((each) => each.current);
+  /**
+   * Its version, and who approved it when (state A; SRC-03), from its own
+   * answer, so a view-only reader, whose history is none, reads it too (T698
+   * follow-up; note J). The day alone, as History writes it.
+   */
+  const approved =
+    source.approved === undefined || source.approved.version !== source.version
+      ? undefined
+      : source.approved;
+  const approvedDay =
+    approved === undefined ? '' : dayOf(new Date(approved.at), new Date(approved.at));
   const versionLine = (
     <span className="source-settings__version">
       Version {String(source.version)}
-      {kept === undefined || kept.version !== source.version ? '' : ` · ${approvedText(kept)}`}
+      {approved === undefined
+        ? ''
+        : approved.by === null
+          ? ` · saved ${approvedDay}`
+          : ` · approved ${approvedDay} by ${approved.by.name}`}
     </span>
   );
   const health = (

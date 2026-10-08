@@ -200,6 +200,7 @@ export function registerDataSources(
     withdraw,
     submitted,
     review,
+    approvalOf,
     projects,
     switches,
     sqlRunner,
@@ -265,6 +266,22 @@ export function registerDataSources(
       request: FastifyRequest,
       id: string,
     ) => Promise<{ readonly proposedAt: Date } | undefined>;
+    /**
+     * Its current version as kept, when and by whom it was approved, for its
+     * page's line to anyone who may read it, its history theirs or not (T698
+     * follow-up; design 03 state A and note J). None where none was kept.
+     */
+    readonly approvalOf?: (
+      id: string,
+      version: number,
+    ) => Promise<
+      | {
+          readonly version: number;
+          readonly at: Date;
+          readonly by: { readonly key: string; readonly name: string } | null;
+        }
+      | undefined
+    >;
     /**
      * "Edit in my workspace"'s project folders (T523, AC-368). Set with
      * `ownWorkspace`.
@@ -530,8 +547,10 @@ export function registerDataSources(
     const source = await reached(request, reply, 'read');
     if (source === undefined) return reply;
     const pathOf = await listing.pathOf();
+    const approved = await approvalOf?.(source.id, source.version);
     return {
       ...viewOf(source),
+      ...(approved === undefined ? {} : { approved }),
       ...(switches === undefined ? {} : { sqlRunner: await runnerOf(source) }),
       ...(sqlRunner === undefined ? {} : { sqlAccess: await sqlAccessOf(request, source) }),
       folderPath: pathOf(source.folderId),

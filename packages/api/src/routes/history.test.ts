@@ -56,6 +56,13 @@ const made: { kind: DocumentKind; id: string }[] = [];
 const cookies: Record<string, string> = {};
 const ids = { sales: '', board: '', local: '', library: '' };
 const ada = { key: 'ada', name: 'Ada Admin' };
+/** A password as sealed to xcube, for a data source made here. */
+const SEALED = {
+  v: 1,
+  kid: 'kid-1',
+  enc: Buffer.alloc(32, 'enc-history').toString('base64url'),
+  ct: Buffer.alloc(272, 'ct-history').toString('base64url'),
+};
 const mo = { key: 'mo', name: 'Mo Manager' };
 let app: FastifyInstance;
 let writerKey = '';
@@ -678,6 +685,56 @@ describe('an item’s history (T354, AC-289)', () => {
     expect(answer.statusCode, answer.body).toBe(409);
     expect(answer.json()).toEqual({ error: `The name “${name}” is already in use.` });
     expect(await sources().get(there.id)).toEqual(there);
+  });
+
+  it('says a data source’s current version, its day and who approved it, to a reader who sees no history (T698 follow-up; design 03 note J)', async () => {
+    // In the root: the writer sees it from /Sales below, view only.
+    const source = await sources().create({
+      folderId: 'root',
+      name: `approved_${MARK}`,
+      driver: 'postgres',
+      authMethod: 'password',
+      fields: { host: 'db', port: 5432, database: 'sales', user: 'cube', ssl: false },
+      sealed: { password: SEALED as never },
+    });
+    try {
+      await keep('data-source', source.id, source.version, {
+        body: { name: `approved_${MARK}`, driver: 'postgres' },
+      });
+      // Its history is not theirs to read, as before.
+      expect(
+        (await as('writer', { method: 'GET', url: `/api/history/data-source/${source.id}` }))
+          .statusCode,
+      ).toBe(404);
+      const read = await as('writer', { method: 'GET', url: `/api/data-sources/${source.id}` });
+      expect(read.statusCode, read.body).toBe(200);
+      const { approved } = read.json<{
+        approved?: { version: number; at: string; by: { name: string } | null };
+      }>();
+      expect(approved?.version).toBe(source.version);
+      expect(approved?.by).toEqual({ key: ada.key, name: ada.name });
+      expect(Number.isNaN(Date.parse(approved?.at ?? ''))).toBe(false);
+    } finally {
+      await sources().remove(source.id);
+    }
+  });
+
+  it('says no approval for a data source whose version none was kept for', async () => {
+    const source = await sources().create({
+      folderId: 'root',
+      name: `unkept_${MARK}`,
+      driver: 'postgres',
+      authMethod: 'password',
+      fields: { host: 'db', port: 5432, database: 'sales', user: 'cube', ssl: false },
+      sealed: { password: SEALED as never },
+    });
+    try {
+      const read = await as('writer', { method: 'GET', url: `/api/data-sources/${source.id}` });
+      expect(read.statusCode, read.body).toBe(200);
+      expect(read.json<{ approved?: unknown }>().approved).toBeUndefined();
+    } finally {
+      await sources().remove(source.id);
+    }
   });
 
   it('tags the newest version current when a rename has moved the item on since (T354’s review)', async () => {

@@ -1372,6 +1372,19 @@ export function buildServer({
       store: dataSources,
       // Each change recorded (T368, AC-294).
       ...(audit === undefined ? {} : { audit }),
+      // Its current version's approval, on its own page's line (T698 follow-up;
+      // design 03 note J): the one History tags current, as its route does.
+      ...(versions === undefined
+        ? {}
+        : {
+            approvalOf: async (id: string, current: number) => {
+              const kept = await versions.list('data-source', id);
+              const shown = kept.find((each) => each.version === current) ?? kept[0];
+              return shown === undefined
+                ? undefined
+                : { version: shown.version, at: shown.at, by: shown.approver };
+            },
+          }),
       ...(sqlRunnerSwitches === undefined ? {} : { switches: sqlRunnerSwitches }),
       ...(sqlRuns === undefined ? {} : { sqlRuns }),
       // SQL run through xcube (T532): a workspace's data source in its overlay (T347).
